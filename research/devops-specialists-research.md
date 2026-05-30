@@ -1,338 +1,827 @@
 ---
-title: devops-specialists-research
+title: ricerca-specialista-devops
+aliases:
+  - DevOps specialist research synthesis
+  - Ricerca DevOps specialist
+  - DevOps specialist per xtrm e Mercury
 date_created: 2026-05-30
 date_modified: 2026-05-30
 ---
 
-# DevOps specialist research synthesis
+# Ricerca sullo specialista DevOps per xtrm e Mercury
 
-## Executive summary
+## Sintesi esecutiva
 
-AWS DevOps Agent evidence says product is **incident-response + prevention layer**, not generic chat wrapper. It wants topology, telemetry, deployment context, repos, and runbooks; it lives in a **dual-console model** with Agent Spaces as blast-radius boundaries; it starts on alerts/tickets; it publishes findings into Slack/ServiceNow and can open AWS Support cases; it can also ingest custom tools through MCP ([AWS docs](https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent.md), accessed 2026-05-30; local analyses in `inbox/transcripts/*.analysis.md`).
+La ricerca sulle fonti non-YouTube, letta insieme alle tre analisi già prodotte sui video di AWS DevOps Agent, porta a una conclusione abbastanza netta: un vero DevOps agent non dovrebbe essere pensato come “un altro agente che sa lanciare comandi Docker”. La forma più potente è diversa. È uno strato operativo che unisce topologia dei servizi, telemetria, cronologia dei deployment, repository, runbook, stato dei job, costo dei modelli, allarmi e capacità di spiegare cosa sta succedendo prima di toccare la produzione.
 
-Terraform Docker tutorial is smaller but important: it frames infra work as **build / change / destroy** lifecycle in code, which maps cleanly to VPS/container provisioning and repeatable deploy modules ([HashiCorp Docker tutorial](https://developer.hashicorp.com/terraform/tutorials/docker-get-started), accessed 2026-05-30).
+AWS DevOps Agent è utile soprattutto come modello mentale. Il suo valore non è soltanto che usa un LLM, ma che inserisce il LLM dentro una cornice operativa: **Agent Spaces** per delimitare il raggio d’azione, integrazioni con sistemi di osservabilità, integrazioni con repository e CI/CD, flussi di investigazione incidenti, prevenzione proattiva e interfaccia web costruita per operatori. La lezione per xtrm/Mercury è che lo specialista DevOps deve nascere con confini chiari, prove osservabili e autorizzazioni graduali.
 
-Grafana MCP + Prometheus MCP make observability wireable as agent tools, but with sharp auth/transport boundaries: Grafana MCP uses service-account token or basic auth, supports stdio/SSE/streamable-http, tool scoping, read-only mode, and TLS; Prometheus MCP exposes PromQL/query discovery over stdio/http/sse, with auth, timeout, stateless HTTP, and token-savings knobs ([Grafana MCP docs](https://grafana.com/docs/grafana/latest/developer-resources/mcp.md), accessed 2026-05-30; [Grafana configure](https://grafana.com/docs/grafana/latest/developer-resources/mcp/configure/authentication.md), [transports](https://grafana.com/docs/grafana/latest/developer-resources/mcp/configure/transports-and-addresses.md), [tools ref](https://grafana.com/docs/grafana/latest/developer-resources/mcp/reference/mcp-tools-table.md), accessed 2026-05-30; [Prometheus MCP README](https://github.com/pab1it0/prometheus-mcp-server), accessed 2026-05-30).
+Terraform, invece, va inteso come il mattone “Infrastructure as Code”: non sostituisce Docker Compose, non sostituisce Prometheus, non sostituisce il DevOps specialist. Serve a descrivere e mantenere in modo ripetibile parti dell’infrastruttura: VPS, DNS, firewall, reti, volumi, bucket, secret reference, eventualmente anche dashboard e alert se si usano i provider giusti. La sua utilità non è “fare deploy dell’app”, ma rendere ricostruibile il terreno su cui l’app gira.
 
-Recommendation: **do not wire AWS DevOps Agent directly as prod VPS mutator**. Use it as model/UX reference and as read-only/curated investigation plane. For xtrm/Mercury, start with a **dedicated devops-specialist primitive** (can live beside specialists-service at first) plus a **gitboard/xtrm DevOps page**. Add event/schedule wakeups on deploys, incidents, drift, queue/cost thresholds. Split deployment-specialist and database-specialist out early; DevOps owns platform, release, observability, cost, and rollback; DB specialist owns schema/migrations/replication/backups.
+Grafana MCP e Prometheus MCP completano il quadro: rendono possibile dare a un agente accesso controllato a metriche, dashboard, alert, log e query PromQL. Questo è il canale naturale attraverso cui uno specialista DevOps può osservare Mercury senza dover ricevere ogni volta dump manuali di log o screenshot. Però sono strumenti da trattare con prudenza: credenziali, permessi, cardinalità delle metriche, timeout delle query e separazione tra read-only e write-capable sono parti centrali del design.
 
-## Source inventory
+La raccomandazione finale è: **non collegare AWS DevOps Agent direttamente come controller mutante del VPS**. Usarlo come riferimento di architettura e UX, ma costruire per xtrm/Mercury un primitivo più controllato: uno specialista DevOps dedicato, inizialmente read-first e human-in-the-loop, con una pagina DevOps in gitboard/futuro xtrm console, integrazione Prometheus/Grafana MCP, configurazioni per-repo di deployment, e un modello di wakeup a eventi e schedulazione. Solo più avanti, quando substrate sarà maturo, questo può diventare un nodo lungo-vivente.
 
-| Source | What it contributes | Key APIs / concepts | Relevance to xtrm / Mercury |
+## Inventario delle fonti
+
+| Fonte | Cosa contribuisce | Concetti / API principali | Rilevanza per xtrm / Mercury |
 |---|---|---|---|
-| `1-projects/xtrm/research/devops-specialists.md` | Local design brief; names target responsibilities and current gaps | DevOps scope, per-repo deploy specialist, wakeup primitive, IoT/IaC gap, database specialist gap | Primary project-specific constraints and desired end state |
-| `inbox/transcripts/Introducing-AWS-DevOps-Agent-Amazon-Web-Services.analysis.md` | Launch framing, core product model, integrations, and prevention loop | always-on incident response, topology graph, Slack/ServiceNow, custom MCP, support cases | Strong evidence for UI/UX and operating model |
-| `inbox/transcripts/AWS-reInvent-2025-Move-beyond-reactive-Transform-cloud-ops-with-AWS-DevOps-Agent-COP362.analysis.md` | Demo-level evidence for agent spaces, trust-first autonomy, prevention, pricing, and cross-tool integration | agent space blast radius, read-only posture, subagents, Kiro handoff, usage caps | Best evidence for trust model and human-in-loop workflow |
-| `inbox/transcripts/Diving-Deep-on-AWS-DevOps-Agent-AWS-Tech-Tales.analysis.md` | GA-era refinements, transport/telemetry breadth, parallel investigations, prompt steering, cost math | agent-space IAM, MCP servers, read-only mode, service account-style thinking, cost/credits | Best evidence for ops ergonomics and boundaries |
-| [AWS DevOps Agent docs](https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent.md) | Canonical product model and architecture | Agent Spaces, topology graph, CloudWatch/Dynatrace/Datadog/New Relic/Splunk, GitHub/GitLab, Slack/ServiceNow, AWS Support, custom MCP | Primary source for current AWS behavior |
-| [Terraform Docker tutorial](https://developer.hashicorp.com/terraform/tutorials/docker-get-started) | Declarative resource lifecycle for Docker infra | build/change/destroy, IaC workflow, variables/outputs | Model for VPS/container provisioning discipline |
-| [Grafana MCP docs](https://grafana.com/docs/grafana/latest/developer-resources/mcp.md) + config pages | Observability agent bridge and auth/transport model | dashboards, alerts, incidents, datasources, service-account token, stdio/SSE/streamable-http, read-only mode, TLS, RBAC | Strong fit for xtrm monitoring surface |
-| [Prometheus MCP README](https://github.com/pab1it0/prometheus-mcp-server) | PromQL tool server implementation | execute_query, execute_range_query, list_metrics, metadata, targets, auth, request timeout, stateless HTTP | Strong fit for per-repo metrics / token telemetry |
+| `1-projects/xtrm/research/devops-specialists.md` | Brief locale e intenzione progettuale originale | DevOps specialist, per-repo deploy specialist, pulse emitter, gap IaC/IoT, gap database specialist | È il documento di vincolo: dice quali problemi Mercury vuole risolvere, non solo cosa esiste fuori |
+| `inbox/transcripts/Introducing-AWS-DevOps-Agent-Amazon-Web-Services.analysis.md` | Presentazione del modello AWS DevOps Agent | always-on incident response, topology graph, Slack/ServiceNow, MCP custom tools, escalation | Evidenza utile per il modello operativo e il posizionamento del prodotto |
+| `inbox/transcripts/AWS-reInvent-2025-Move-beyond-reactive-Transform-cloud-ops-with-AWS-DevOps-Agent-COP362.analysis.md` | Demo e framing più ricco | Agent Spaces, blast radius, read-only posture, subagent paralleli, pricing/caps, support handoff | Fonte migliore per capire fiducia, UX e human-in-the-loop |
+| `inbox/transcripts/Diving-Deep-on-AWS-DevOps-Agent-AWS-Tech-Tales.analysis.md` | Dettagli più tecnici su integrazioni e operatività | MCP servers, IAM, read-only mode, prompt steering, parallel investigations, costo | Fonte migliore per confini, ergonomia operativa e costi |
+| [AWS DevOps Agent docs](https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent.html) | Documentazione canonica del prodotto | Agent Spaces, topology graph, CloudWatch, Dynatrace, Datadog, New Relic, Splunk, GitHub/GitLab, Slack, ServiceNow, AWS Support, custom MCP | Modello canonico di come un vendor ha incapsulato un agente operativo |
+| [Terraform Docker tutorial](https://developer.hashicorp.com/terraform/tutorials/docker-get-started) | Miniatura didattica del ciclo IaC | `init`, `plan`, `apply`, `destroy`, provider Docker, risorse dichiarative | Utile per spiegare come trasformare operazioni manuali in infrastruttura descritta come codice |
+| [Grafana MCP server docs](https://grafana.com/docs/grafana/latest/developer-resources/mcp/) | Ponte tra agente e osservabilità Grafana | dashboard, alert, incidenti, datasource, token di servizio, stdio/SSE/streamable HTTP, read-only mode, TLS | Fortissimo fit con la futura pagina DevOps e con uno specialista read-first |
+| [Prometheus MCP server](https://github.com/pab1it0/prometheus-mcp-server) | Ponte tra agente e PromQL | `execute_query`, `execute_range_query`, `list_metrics`, metadata, targets, auth, timeout, stateless HTTP | Fit naturale per metriche di job, code, container, costi token, LSP, Dolt, MCP |
+| Ispezione locale di `/home/dawid/projects/mercury/infra` | Stack centrale Mercury già operativo | Traefik, Prometheus, Grafana, Loki, Promtail, Alertmanager, exporter, cAdvisor, network Docker esterne, health-report | Mostra dove il DevOps specialist può agganciarsi subito |
+| Ispezione locale di `/home/dawid/projects/mercury/market-data` | Stack applicativo reale con database e feed critici | TimescaleDB, QuestDB, migrazioni, data feed, snapshot feed, options feed, Rust tick ingestor, API, MCP server, backup | Esempio concreto di repo dove Terraform + DevOps specialist possono ridurre drift e rischio deploy |
 
-## AWS DevOps Agent model distilled
+## Il modello AWS DevOps Agent, distillato
 
-### Operating model
+### Non è una chat: è un sistema operativo per incidenti
 
-**Facts**
+La cosa più importante da portare a casa da AWS DevOps Agent è che l’agente non viene presentato come una chat generica a cui si chiede “perché è rotto?”. Viene inserito dentro un sistema di contesto. AWS parla di risorse, relazioni, osservabilità, repository, pipeline CI/CD, strumenti esterni e support cases. In altre parole, il modello è: quando arriva un alert o un ticket, l’agente non parte da zero; entra in un ambiente dove conosce già la topologia e può interrogare fonti operative.
 
-- AWS says DevOps Agent is a “frontier agent” that “resolves and proactively prevents incidents,” improves reliability/performance, and works by learning resources/relationships, using observability tools, skills, code repos, and CI/CD pipelines ([AWS docs](https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent.md), accessed 2026-05-30).
-- The docs describe a **dual-console architecture**: admins use AWS Management Console to create/manage Agent Spaces; operators use the DevOps Agent web app for investigations and prevention ([AWS docs](https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent.md), accessed 2026-05-30).
-- Agent Spaces are logical containers for access scope; the service builds a topology graph and starts investigating immediately on alert or support ticket ([AWS docs](https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent.md), accessed 2026-05-30).
-- The local analyses add trust-first details: read/list/describe posture, parallel subagents, support escalation, “co-worker” framing, and roadmap toward actions later.
+Questo è il salto qualitativo rispetto a un agente CLI che riceve soltanto un prompt e qualche log. Il valore nasce dal fatto che il sistema ha già una rappresentazione dei collegamenti: servizio A dipende da database B, il deployment X è avvenuto dieci minuti prima dell’aumento di errori, il container Y ha cambiato immagine, il dashboard Z mostra saturazione. Il LLM diventa utile perché interpreta questi segnali insieme.
 
-**Inference for xtrm**
-
-- DevOps specialist should be **workspace- and repo-scoped**, not global.
-- Operator UX must show current blast radius, current signal source, current deploy version, and current recommendation confidence.
-- Human approval stays in loop until tool trust and rollback coverage are proven.
+Per xtrm/Mercury questo significa che il DevOps specialist deve avere una memoria operativa strutturata. Non basta dargli accesso a `docker ps`. Deve sapere quali repo esistono, quali container sono normali, quali metriche sono canoniche, quali alert sono rumore, quali runbook sono autorizzati, quale deployment è l’ultimo, quali rollback sono possibili.
 
-### UI/UX lessons
+### Agent Spaces come lezione sul blast radius
 
-- Web app, not terminal, is the primary ops surface.
-- Chat must be **page-context aware**: topology view, investigation view, prevention view.
-- Investigation output should show: evidence trail, ruled-out hypotheses, timeline, mitigation, rollback, and follow-up hardening.
-- Multi-incident handling should be first-class, not one monolithic chat thread.
-- Prompt steering matters; vague prompts should request more context, not hallucinate certainty.
-
-### Data/context requirements
+AWS usa il concetto di Agent Space per delimitare lo scope. Questo è un dettaglio fondamentale. Un DevOps agent senza perimetro diventa pericoloso perché può mescolare ambienti, account, repo e responsabilità. Un Agent Space è, concettualmente, una stanza operativa con confini di accesso, contesto e responsabilità.
 
-- Telemetry: logs, metrics, traces, alarms.
-- Deployment history: CI/CD events, release versions, rollout timestamps, rollback markers.
-- Topology: resources and their relationships; account boundaries; service maps.
-- Code context: repo diffs, recent merges, build artifacts, tests, ownership metadata.
-- Human context: runbooks, steering files, support tickets, incident history, feedback.
-- External context: third-party telemetry and ticketing; custom MCP tools for non-AWS stacks.
-
-### Integrations
-
-- Built-ins: CloudWatch, Dynatrace, Datadog, New Relic, Splunk; GitHub/GitLab; Slack; ServiceNow; AWS Support; custom MCP ([AWS docs](https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent.md), accessed 2026-05-30).
-- Transcript evidence adds: support-case style workflow, Kiro handoff, Graph/knowledge-graph topology, prevention scans, and the “one click pull AWS Support engineer into investigation” pattern.
-
-### Reusable vs AWS-specific
-
-**Reusable**
-- Topology graph as reasoning substrate.
-- Read-first / human-in-loop investigation flow.
-- Evidence-rich RCA + mitigation + rollback bundle.
-- Historical incident mining for prevention.
-- MCP as adapter layer for custom telemetry and tools.
-
-**AWS-specific**
-- Agent Spaces / AWS console management.
-- AWS account + IAM centric access model.
-- AWS Support integration.
-- Native CloudWatch and AWS service topology.
-- AWS pricing / preview caps.
-
-## Terraform / IaC
-
-### What the Docker tutorial demonstrates
-
-The Docker tutorial is a plain IaC pattern: **build, change, destroy Docker infrastructure using Terraform** with step-by-step CLI lessons ([HashiCorp Docker tutorial](https://developer.hashicorp.com/terraform/tutorials/docker-get-started), accessed 2026-05-30). The important signal is not Docker itself; it is that container infra should be treated as declarative state, with lifecycle, variables, and outputs.
-
-### Mapping to VPS / container provisioning for xtrm / Mercury
-
-Use Terraform for:
-- VPS instance provisioning
-- network / firewall / security-group state
-- Docker host bootstrap
-- volumes / persistent storage
-- DNS and load balancer wiring
-- per-env secrets references
-- reproducible teardown / recreate paths
-
-Meaning: for Mercury, DevOps should own the **repeated host+container substrate**, not one-off shell provisioning.
-
-### DevOps specialist vs future IoT/IaC specialist
-
-**DevOps specialist owns**
-- deployment pipelines
-- host/container provisioning primitives
-- rollout / rollback / health checks
-- infra drift detection
-- observability and cost telemetry
-- service-level release policy
-
-**Future IoT/IaC specialist owns**
-- device/edge fleet provisioning
-- edge config lifecycle
-- remote firmware/config rollout
-- field telemetry ingestion
-- device health + edge recovery
-
-So: DevOps handles platform delivery; IoT/IaC handles edge fleet behavior.
-
-## Observability / MCP
-
-### Grafana MCP capabilities
-
-Grafana MCP exposes AI access to Grafana for **metrics, logs, dashboards, alert rules, incidents, Sift, deeplinks, and datasource-backed queries** ([Grafana MCP docs](https://grafana.com/docs/grafana/latest/developer-resources/mcp.md), accessed 2026-05-30). Config docs add:
-- auth via **service account token** (recommended) or username/password
-- transports: **stdio**, **SSE**, **streamable-http**
-- tool allow/deny and **read-only mode**
-- client/server TLS and multi-org headers
-- Grafana **9.0+** for full functionality ([authentication](https://grafana.com/docs/grafana/latest/developer-resources/mcp/configure/authentication.md), [transports](https://grafana.com/docs/grafana/latest/developer-resources/mcp/configure/transports-and-addresses.md), [configure](https://grafana.com/docs/grafana/latest/developer-resources/mcp/configure.md), [tools ref](https://grafana.com/docs/grafana/latest/developer-resources/mcp/reference/mcp-tools-table.md), accessed 2026-05-30).
+In Mercury l’equivalente dovrebbe essere una combinazione di:
 
-### Prometheus MCP capabilities
+- repo o gruppo di repo;
+- ambiente (`local`, `staging`, `vps-prod`);
+- tool permessi;
+- dashboard e alert rilevanti;
+- comandi consentiti;
+- runbook associati;
+- identità/segreti accessibili;
+- regole di escalation.
 
-Prometheus MCP server provides:
-- `execute_query` / `execute_range_query`
-- metric discovery (`list_metrics`)
-- metadata and target inspection (`get_metric_metadata`, `get_targets`)
-- auth via username/password, bearer token, or mTLS
-- transports: `stdio`, `http`, `sse`
-- `PROMETHEUS_REQUEST_TIMEOUT`, stateless HTTP mode, tool prefixing, and optional link suppression to save context tokens ([Prometheus MCP README](https://github.com/pab1it0/prometheus-mcp-server), accessed 2026-05-30).
-
-### Likely integration risks
-
-- **Cardinality blow-up**: PromQL on noisy labels can burn context and latency.
-- **Auth sprawl**: too many service tokens / headers / orgs.
-- **Tool overexposure**: Grafana MCP has write-capable tools; xtrm needs strict allowlists and likely read-only defaults.
-- **Token bloat**: disable links when needed; summarize metric names before raw query dumps.
-- **Timeouts / hanging queries**: keep request timeouts small; Prometheus MCP already exposes this knob.
-- **Freshness mismatch**: logs and metrics may lag jobs/worktrees/Dolt state.
-- **Cross-env confusion**: same metric names across repos/environments need explicit tool prefixes and labels.
-
-### Metrics/dashboards the DevOps specialist needs
-
-For specialists-service / jobs / worktrees / Dolt / LSP / MCP / token-cost telemetry, track at minimum:
-- active specialists
-- running jobs / waiting jobs / queue depth
-- job latency, failure rate, retry count
-- worktree count, age, dirty state, stale branch count
-- Dolt server count, availability, replication lag, backup age
-- LSP instance count, startup failures, memory/CPU, crash loops
-- MCP server uptime, request latency, error count, tool-call volume
-- token usage by repo, model, workflow, and time window
-- cost per job / per workflow / per repo
-- deployment count, rollback count, health-check pass rate
-- orphan process count, cleanup backlog, stuck runner count
+Uno specialista DevOps per `market-data` non dovrebbe automaticamente avere gli stessi poteri su `infra`, `treasury-cb` o `darth-feedor`. Può leggere segnali cross-stack, ma le azioni devono essere circoscritte.
 
-## DevOps specialist responsibility model
+### UI/UX: una pagina operativa, non solo terminale
 
-### CI/CD vs monitoring
+Le analisi dei video indicano che AWS punta molto sulla UI. Questo non è cosmetico. Per operazioni e incidenti, una UI buona riduce il carico cognitivo: mostra timeline, servizi coinvolti, ipotesi, evidenze, mitigazioni e follow-up.
 
-Keep them separate but connected:
-- **CI/CD** owns build, test, release, deploy, rollback, and promotion policy.
-- **Monitoring/observability** owns signal collection, dashboards, alerts, and diagnosis.
-- **DevOps specialist** bridges them: use alerts to trigger analysis, use analysis to harden pipelines.
+Per xtrm questo rafforza l’idea di una pagina DevOps in gitboard/futuro xtrm console. La pagina dovrebbe mostrare almeno:
 
-If one agent owns both blindly, it will either mutate too much or observe too little.
+- deployment attivi e ultimi deployment per repo;
+- health check falliti;
+- incidenti aperti o investigazioni recenti;
+- code e job specialistici;
+- worktree sporchi o vecchi;
+- consumo token e costo per job/repo;
+- stato Dolt, LSP, MCP e database;
+- pulsanti di wakeup manuale;
+- suggerimenti del DevOps specialist;
+- percorso di rollback per servizio.
 
-### Platform engineering scope
+Il terminale resta utile per l’operatore esperto, ma la superficie decisionale deve essere visiva e sintetica.
 
-From the local note and AWS/Grafana evidence, platform engineering should include:
-- container orchestration / service discovery
-- secrets / access control / audit logs
-- restart policies / retries / health checks
-- queue and worker management
-- backup / restore / disaster recovery
-- capacity planning and cost telemetry
-- developer experience commands
-- deployment guards and release policy
-- observability and alert routing
-
-### Boundaries: deployment specialist vs broader DevOps specialist vs database specialist
-
-- **Deployment specialist**: per-repo release logic, environment wiring, rollout safety, repo-specific deploy hooks.
-- **DevOps specialist**: shared platform, multi-repo observability, incident response, cost, SLOs, job runners, infra drift, wakeups.
-- **Database specialist**: schema, migrations, replication, backup/restore, query perf, data consistency, failure recovery.
-
-These should not collapse into one giant “ops” agent.
-
-### Per-repo specialist config / deployment model
-
-Each repo should export a small config that declares:
-- deploy command(s)
-- allowed direct shell commands
-- required pre-checks and post-checks
-- target dashboards and alert rules
-- service ownership / on-call path
-- rollback command
-- environment labels
-- MCP sources and secrets scope
-
-That makes specialist behavior reproducible across repos.
-
-## Architecture recommendation for xtrm / Mercury
-
-### Wire AWS DevOps Agent directly to VPS stack?
-
-**No** as direct production controller. Use it as:
-- design reference
-- UI/UX benchmark
-- investigation pattern benchmark
-- optional read-only model for custom telemetry adapters
-
-Reason: AWS docs + transcript analyses show the product still leans on safe, curated, read-first behavior. Direct mutation control across VPS services before guardrails exist is wrong blast radius.
-
-### specialists-service container vs dedicated devops-specialist container
-
-- **Short term**: keep inside specialists-service only if tools are minimal and scope is one repo.
-- **Preferred**: create a **dedicated devops-specialist container** once it needs stable Prometheus/Grafana/MCP access, worktree context, and deploy hooks.
-- specialists-service can remain orchestration layer; devops-specialist is the operational brain.
-
-### gitboard / future xtrm console DevOps page
-
-Yes. Needed now.
-
-That page should show:
-- active deployments
-- failed health checks
-- active incidents / investigations
-- queue depth / jobs
-- worktree state
-- token spend and cost burn
-- Dolt/LSP/MCP health
-- manual wakeups / scheduled sweeps
-- last deploy per repo and rollback path
-
-### Wakeup model after deploys and during incidents
-
-Use **event + schedule**:
-- event: post-deploy, failed health check, queue spike, token spike, orphan process, incident page
-- schedule: periodic sweep, prevention scan, drift scan, cost scan
-
-This matches the local “pulse emitter” primitive. Long-running node can come later.
-
-### Minimal first primitive vs long-running substrate node
-
-- **Phase 1**: stateless-ish event worker + persisted state.
-- **Phase 2**: long-running substrate node once you need continuous background scanning, multi-repo memory, and self-tuning prevention.
-
-Do not start with always-on daemon as default.
-
-## Implementation roadmap
-
-### Phase 0 — research validation
-- Inventory repos, services, worktrees, runners, telemetry, deploy commands.
-- Identify canonical dashboards and alert sources.
-- Define allowed command surface and escalation rules.
-
-### Phase 1 — primitive/manual workflow
-- One repo, one deploy path, one DevOps page.
-- Manual wakeups only.
-- Read-only investigations first.
-- Record before/after evidence.
-
-### Phase 2 — metrics + dashboards
-- Wire Grafana + Prometheus MCP.
-- Add token/cost dashboards.
-- Add queue/worktree/LSP/Dolt dashboards.
-- Add alerts for health, backlog, and spend.
-
-### Phase 3 — gated deployment workflow
-- Introduce `make spdeploy` or equivalent.
-- Add hooks/extensions that block direct `docker compose up` when unsafe.
-- Require pre/post health checks and rollback hooks.
-- Add per-repo deployment specialist config.
-
-### Phase 4 — substrate / long-running node
-- Promote to persistent node with scheduled prevention scans.
-- Keep memory of incidents and remediations.
-- Coordinate across repos and services.
-- Add learned policies, not just static scripts.
-
-## Risks, unknowns, follow-up questions
-
-### Risks
-- direct shell/docker bypass of deploy policy
-- auth leakage through MCP tokens/headers
-- false positives from noisy observability labels
-- stale telemetry vs live job/worktree state
-- agent write-capability creep
-- cost blow-up from broad PromQL queries
-- per-repo config drift
-
-### Unknowns
-- which repo owns canonical deploy hooks
-- which dashboard becomes source of truth
-- what the minimum safe command allowlist is
-- how to version specialist configs
-- whether Dolt should be read-only in first phase
-- whether LSP lifecycle belongs in DevOps or platform ops
-
-### Follow-up research questions
-- What exact metrics do current repos already emit?
-- Which commands must be blocked globally vs per repo?
-- Should Grafana MCP be read-only by default for xtrm?
-- Which incidents should wake the specialist immediately vs batch later?
-- What is the clean boundary between deployment specialist and database specialist in Mercury?
-
-## Concrete beads / issues to create next
-
-| Priority | Proposed title | Description |
+### Read-first, human-in-the-loop
+
+Le fonti AWS insistono su un comportamento inizialmente prudente: investigazione, spiegazione, raccomandazione, eventualmente escalation. Questo è esattamente il pattern corretto per Mercury. La prima versione dello specialista DevOps dovrebbe essere read-first: leggere Prometheus, Grafana, Docker, file di health, log, bead, stato Git, stato worktree, stato processi; produrre diagnosi e piano; solo dopo, con policy chiare, eseguire azioni limitate.
+
+Le azioni scriventi dovrebbero essere promosse per gradi:
+
+1. nessuna azione, solo report;
+2. azioni locali reversibili, come raccogliere diagnostica;
+3. restart controllato di un servizio non critico;
+4. deploy tramite comando gated;
+5. rollback automatico con soglie forti;
+6. mutazioni infrastrutturali solo tramite Terraform plan/apply approvato.
+
+Questo evita che l’agente diventi un “sudo randomizzato”.
+
+## Terraform e Infrastructure as Code nel quadro DevOps
+
+Il tutorial Docker di Terraform è piccolo, ma didatticamente utile perché mostra il ciclo essenziale: si dichiara una risorsa, si inizializza il provider, si pianifica, si applica, si distrugge. La sostanza non è “Terraform sa creare container Docker”; la sostanza è che l’infrastruttura viene trattata come stato dichiarativo.
+
+In Mercury oggi esistono già molte operazioni infrastrutturali codificate, ma distribuite fra documentazione, Makefile, Docker Compose e memoria operativa. Per esempio in `infra/DEPLOY.md` sono descritti passaggi per creare DNS, configurare Cloudflare, installare Docker, creare reti Docker, configurare firewall e avviare stack. Molte di queste operazioni sono state scritte bene, ma restano istruzioni procedurali: una persona deve leggerle ed eseguirle.
+
+Terraform trasformerebbe una parte di quel sapere in codice eseguibile e verificabile. Non tutto. Docker Compose resta perfetto per descrivere i servizi applicativi. Ma risorse come DNS Cloudflare, firewall, bucket R2, server VPS, record, volumi esterni, network condivisi e forse provisioning Grafana/alert possono diventare risorse dichiarative.
+
+La frase chiave è: **Docker Compose descrive cosa gira dentro l’host; Terraform descrive pezzi del mondo in cui quell’host e quei servizi esistono**.
+
+## Osservabilità via Grafana MCP e Prometheus MCP
+
+### Grafana MCP
+
+Grafana MCP è importante perché trasforma Grafana da dashboard umano-centrica a sorgente interrogabile da agente. Può esporre dashboard, alert, incidenti, datasource e query. La documentazione menziona token di servizio, basic auth, transport `stdio`, `SSE` e `streamable-http`, modalità read-only, allow/deny dei tool e TLS.
+
+Per Mercury il default dovrebbe essere severo: token di servizio dedicato, permessi minimi, read-only mode dove possibile, e tool allowlist. Uno specialista DevOps non deve poter modificare dashboard e alert nella prima fase. Deve poter leggere, correlare e spiegare.
+
+Esempio di uso sano:
+
+- “mostrami gli alert attivi”;
+- “dammi i pannelli principali del dashboard market-data”;
+- “trova il datasource Prometheus giusto”;
+- “apri un deeplink al grafico rilevante”;
+- “riassumi cosa è cambiato negli ultimi 30 minuti”.
+
+Esempio da evitare nella prima fase:
+
+- “modifica alert rule in produzione”;
+- “crea dashboard automaticamente”;
+- “cambia datasource”;
+- “scrivi annotazioni senza conferma”.
+
+### Prometheus MCP
+
+Prometheus MCP è il ponte più diretto alle metriche. Espone query istantanee, query su range, lista metriche, metadata e target. Per un DevOps specialist questo è il modo naturale di rispondere a domande come:
+
+- quali container stanno consumando più CPU;
+- quale servizio ha riavvii recenti;
+- se un endpoint è sparito dai target;
+- se la latenza è aumentata dopo un deployment;
+- se una coda cresce;
+- se il consumo token/costo supera budget;
+- se i job specialistici restano troppo in waiting.
+
+Il rischio è la cardinalità. Un agente che lancia PromQL larghe può generare output ingestibile. Per questo servono query predefinite, dashboard canonici, nomi metriche normalizzati, timeout brevi e sintesi progressiva: prima scoprire metriche, poi query mirata, poi range limitato.
+
+### Metriche minime per xtrm/Mercury
+
+Lo specialista DevOps dovrebbe poter vedere almeno:
+
+- numero di specialisti attivi;
+- job running/waiting/error;
+- durata media dei job;
+- processi orfani;
+- worktree aperti, vecchi, sporchi;
+- server Dolt attivi e stato backup/sync;
+- LSP attivi, crash, memoria;
+- MCP server uptime, errori, latenza;
+- uso token per modello/repo/workflow;
+- costo stimato per job e per repo;
+- container restart count;
+- stato database TimescaleDB/QuestDB/Postgres;
+- backup age;
+- deployment timestamp e health post-deploy.
+
+## Modello di responsabilità dello specialista DevOps
+
+### CI/CD e monitoring sono separati, ma collegati
+
+La domanda nel brief originale era: CI/CD è separato dal monitoring? Sì, concettualmente sì. CI/CD è la pipeline che porta una modifica dal commit alla produzione: build, test, scan, artifact, deploy, health check, rollback. Monitoring è il sistema che osserva il comportamento dopo e durante l’esecuzione: metriche, log, alert, dashboard, SLO.
+
+Ma DevOps vive proprio nel ponte tra i due. Un alert post-deploy deve poter dire: “questo errore è iniziato cinque minuti dopo il commit X, nel servizio Y, con immagine Z, e il rollback sicuro è il comando W”. Senza CI/CD, il monitoring vede sintomi ma non sa quale cambiamento li ha causati. Senza monitoring, la CI/CD può deployare correttamente qualcosa che degrada in produzione.
+
+Per Mercury conviene tenere moduli distinti:
+
+- deployment specialist: conosce il repo e il rilascio;
+- monitoring/observability: raccoglie segnali;
+- DevOps specialist: correla, decide, propone, coordina;
+- database specialist: protegge schema, dati e backup.
+
+### Confini tra DevOps specialist, deployment specialist e database specialist
+
+**Deployment specialist** per-repo:
+
+- sa costruire e rilasciare quel repo;
+- conosce test obbligatori;
+- conosce health check post-deploy;
+- sa rollbackare;
+- sa quali comandi sono vietati;
+- gestisce `make spdeploy` o equivalente.
+
+**DevOps specialist** cross-platform:
+
+- conosce lo stato complessivo della piattaforma;
+- monitora code, runner, container, LSP, Dolt, MCP, Grafana, Prometheus;
+- sveglia deployment specialist o database specialist quando serve;
+- produce RCA e prevenzione;
+- mantiene la pagina DevOps;
+- guarda costo e capacità.
+
+**Database specialist**:
+
+- schema e migrazioni;
+- backup/restore;
+- replica;
+- performance query;
+- consistenza dati;
+- sicurezza dati;
+- runbook per recovery.
+
+Fondere tutto in un solo agente produrrebbe un “super-operatore” troppo ampio. Meglio orchestrare specialisti più stretti.
+
+## Raccomandazione architetturale per xtrm/Mercury
+
+### AWS DevOps Agent diretto sul VPS?
+
+No, non come controller di produzione. Può essere usato come ispirazione, benchmark o eventualmente piano read-only/curated, ma non dovrebbe ricevere subito poteri mutanti sul VPS. Il motivo è il raggio d’azione: Mercury ha molti repo, reti Docker condivise, database persistenti, segreti, feed dati e servizi MCP. Prima vanno costruiti perimetro, osservabilità, rollback e policy.
+
+La via migliore è costruire un DevOps specialist nativo per xtrm/Mercury, modellato sulle lezioni AWS ma adattato alla realtà locale.
+
+### Container dedicato o dentro specialists-service?
+
+Nel breve periodo lo specialista può vivere dentro `specialists-service` se opera come agente read-only e usa pochi strumenti. Ma appena deve avere accesso stabile a Prometheus/Grafana MCP, worktree, deploy hooks, Docker socket controllato e segreti separati, conviene un container dedicato.
+
+Il container dedicato permette:
+
+- confini di rete più chiari;
+- secret mount dedicati;
+- tool allowlist più stretta;
+- osservabilità propria;
+- policy per ambiente;
+- riavvio indipendente;
+- audit separato.
+
+`specialists-service` resta orchestratore. `devops-specialist` diventa il cervello operativo.
+
+### Pagina DevOps in gitboard/futuro xtrm console
+
+Sì, serve. Dovrebbe diventare la console di stato operativo. Non deve necessariamente essere complessa nella prima versione. Anche una pagina con stato deployment, health, alert, costi token, code, worktree e pulsanti wakeup sarebbe già molto utile.
+
+Il punto non è solo visualizzare. È creare una superficie condivisa tra umano e agente. Quando il DevOps specialist dice “vedo aumento errori su mmd-api dopo deploy”, la UI deve mostrare il grafico, il commit, il container, il log e l’azione proposta.
+
+### Wakeup a eventi e schedulazione
+
+Il brief originale parla di un pulse emitter. È il pattern giusto. Lo specialista non deve essere sempre sveglio per forza. Prima può essere risvegliato da eventi:
+
+- post-deploy;
+- health check fallito;
+- alert Prometheus;
+- crescita coda/job waiting;
+- aumento consumo token;
+- processo orfano;
+- Dolt/LSP/MCP fuori soglia;
+- backup vecchio;
+- drift Terraform;
+- divergenza Git pericolosa.
+
+E da schedulazioni:
+
+- sweep mattutino;
+- controllo post-market;
+- report costo giornaliero;
+- scansione drift settimanale;
+- verifica backup;
+- prevenzione incidenti.
+
+## Esempi concreti da Mercury infra e market-data
+
+### Stato osservato in `mercury/infra`
+
+`/home/dawid/projects/mercury/infra` è già molto vicino al ruolo di piattaforma centrale. Il `docker-compose.yml` espone Traefik, API gateway, Prometheus, Grafana, Loki, Promtail, Alertmanager, exporter Postgres/Redis, node-exporter e cAdvisor. Ha reti esterne condivise (`mercury_dev_network`, `mmd-network`, `treasury-network`, `website-network`) e volumi persistenti nominati (`mercury_platform_prometheus`, `mercury_platform_grafana`, `mercury_traefik_acme`, ecc.). Il `Makefile` crea manualmente le reti Docker e avvia lo stack. `DEPLOY.md` documenta provisioning VPS, Cloudflare, DNS, token, UFW e comandi Docker.
+
+Questo è un caso perfetto in cui Terraform può migliorare la parte “fuori da Compose”. Docker Compose deve continuare a descrivere i servizi. Terraform può invece assumere responsabilità su:
+
+- record DNS Cloudflare;
+- token/secret references dove possibile;
+- firewall/UFW o regole cloud se il provider VPS le espone;
+- bucket R2 per backup;
+- volumi esterni critici se si decide di gestirli dichiarativamente;
+- directory e file bootstrap tramite provider appropriati o script controllati;
+- maybe Grafana dashboards/alert se si usa provider Grafana e si accetta quel perimetro;
+- inventario VPS e output utili al deployment.
+
+Esempio: oggi `DEPLOY.md` dice di creare record Cloudflare manualmente. Terraform potrebbe contenere:
+
+```hcl
+resource "cloudflare_dns_record" "api" {
+  zone_id = var.cloudflare_zone_id
+  name    = "api"
+  content = var.vps_ipv4
+  type    = "A"
+  proxied = true
+}
+```
+
+Il beneficio non è digitare meno. Il beneficio è che un `terraform plan` mostra se DNS reale e DNS desiderato divergono.
+
+### Stato osservato in `mercury/market-data`
+
+`/home/dawid/projects/mercury/market-data` è un repo applicativo molto più ricco: TimescaleDB, QuestDB, servizio migrazioni, data feed, snapshot feed, options feed, tick ingestor Rust, API, MCP server, backup service e tester d’integrazione. Ha database persistenti, feed schedulati, volumi esterni e dipendenze cross-repo come il bind mount verso `barchart-scraper` e Sierra Chart data.
+
+Qui Terraform non dovrebbe sostituire il compose applicativo. Sarebbe eccessivo e poco ergonomico. Però potrebbe migliorare tre cose:
+
+1. **Prerequisiti esterni**: reti Docker esterne, volumi esterni, directory host per bind mount, bucket backup, DNS/route per API/MCP.
+2. **Drift detection**: verificare che ciò che il repo si aspetta esista davvero sul VPS.
+3. **Ambiente replicabile**: se si crea una seconda VPS o staging, i prerequisiti non vengono ricostruiti a memoria.
+
+Per esempio `market-data/docker-compose.yml` usa volumi esterni come `mercury_tick_state` e `mercury_appuser_home`, e bind mount assoluti come `/home/dawid/projects/mercury/sierra-vps/sierra_data/SierraChart/Data`. Queste dipendenze oggi sono conoscenza implicita del VPS. Terraform o un modulo IaC leggero potrebbe dichiararle come prerequisiti e produrre output/checklist.
+
+### Come si inserisce il DevOps specialist in questi due repo
+
+Nel caso `infra`, il DevOps specialist è quasi il proprietario naturale: è il repo che contiene la piattaforma osservabile. Qui lo specialista dovrebbe leggere Prometheus/Grafana, verificare salute di Traefik, Alertmanager, Loki, exporter, cAdvisor, e generare report operativi. Potrebbe anche proporre modifiche di dashboard o alert, ma non applicarle senza review.
+
+Nel caso `market-data`, invece, lo specialista DevOps dovrebbe coordinarsi con un deployment specialist per-repo e con un database specialist. Se `mmd-snapshot-feed` va in errore, DevOps legge alert, log e metriche; se sospetta migrazione schema, chiama database specialist; se serve redeploy, chiama deployment specialist o usa `make spdeploy` quando esisterà.
+
+Esempio di flusso futuro:
+
+```text
+Git push su market-data
+  ↓
+CI passa test + typecheck + security scan
+  ↓
+Deployment specialist esegue make spdeploy
+  ↓
+DevOps specialist viene svegliato post-deploy
+  ↓
+Prometheus/Grafana: verifica error rate, restart, latency, DB health
+  ↓
+Se tutto ok: annota deployment come sano
+  ↓
+Se degrada: propone rollback o coinvolge DB specialist
+```
+
+## Roadmap operativa
+
+### Fase 0 — validazione ricerca e inventario
+
+- Inventariare repo Mercury e servizi effettivamente attivi.
+- Mappare per ogni repo: deploy command, rollback, health check, dashboard, alert, owner.
+- Decidere quali comandi Docker diretti sono permessi e quali devono passare da `make spdeploy`.
+- Identificare metriche già disponibili e metriche mancanti.
+- Stabilire confini tra DevOps, deployment specialist e database specialist.
+
+### Fase 1 — primitivo manuale
+
+- Creare una prima definizione `devops-specialist` read-only.
+- Far leggere allo specialista `SERVICE_HEALTH.md`, Prometheus, Grafana e `docker compose ps` controllato.
+- Aggiungere una pagina DevOps minima a gitboard/xtrm console.
+- Aggiungere wakeup manuale: “investiga market-data”, “investiga infra”, “post-deploy check”.
+
+### Fase 2 — metriche e dashboard
+
+- Integrare Grafana MCP in read-only.
+- Integrare Prometheus MCP con query allowlist.
+- Aggiungere metriche mancanti per specialisti, job, worktree, Dolt, LSP, MCP, token/costi.
+- Creare dashboard canonici per `infra`, `market-data`, specialists-service e costi.
+
+### Fase 3 — deployment gated
+
+- Introdurre `make spdeploy` per repo.
+- Bloccare o scoraggiare `docker compose up` diretto fuori dai runbook autorizzati.
+- Prevedere pre-check, deploy, post-check, rollback.
+- Generare un record deployment leggibile dal DevOps specialist.
+
+### Fase 4 — Terraform/IaC MVP
+
+- Non partire da tutto il mondo. Partire da Cloudflare DNS + bucket backup + inventario prerequisiti Docker.
+- Aggiungere `terraform plan` come controllo drift, non come mutazione automatica.
+- Applicare solo con conferma umana.
+- Collegare output Terraform alla pagina DevOps.
+
+### Fase 5 — nodo substrate lungo-vivente
+
+- Promuovere lo specialista a nodo con memoria operativa.
+- Wakeup schedulati e a evento.
+- Prevenzione incidenti basata su storico.
+- Coordinamento automatico con deployment/database/security specialist.
+
+## Rischi e domande aperte
+
+### Rischi
+
+- dare capacità mutanti troppo presto;
+- mischiare repo e ambienti;
+- esporre token Grafana/Prometheus/Cloudflare;
+- interrogare Prometheus con query troppo larghe;
+- creare drift tra Compose, Terraform e documentazione;
+- rendere `make spdeploy` un wrapper opaco invece di un gate verificabile;
+- confondere infrastruttura host con deploy applicativo;
+- rompere volumi persistenti se Terraform viene usato senza disciplina.
+
+### Domande aperte
+
+- Qual è il primo repo candidato per `make spdeploy`?
+- La pagina DevOps deve vivere in gitboard attuale o nel futuro xtrm console?
+- Quali metriche specialist/job sono già esposte e quali vanno aggiunte?
+- Grafana MCP va montato nel devops-specialist container o esposto come servizio MCP centrale?
+- Terraform state dove va tenuto: locale cifrato, S3/R2, Terraform Cloud, altro backend?
+- Chi approva `terraform apply` in produzione?
+- Database specialist deve essere un MCP dedicato o uno specialista con strumenti SQL limitati?
+
+## Beads proposti
+
+| Priorità | Titolo proposto | Descrizione |
 |---|---|---|
-| P0 | Define DevOps specialist boundary and command surface | Lock scope: read-only investigation, allowed deploy actions, forbidden direct docker commands, escalation rules |
-| P0 | Add DevOps page to gitboard / xtrm console | Build incident/deploy/queue/token/cost dashboard and wakeup controls |
-| P0 | Prototype Prometheus + Grafana MCP wiring | Expose metrics/dashboards/alerts for specialists-service, jobs, worktrees, Dolt, LSP, MCP |
-| P1 | Design per-repo deployment specialist config | Per-repo deploy hooks, checks, rollback path, alert bindings, source inventory |
-| P1 | Implement `make spdeploy` gated deploy flow | Replace ad hoc docker commands with validated deploy primitive and hooks |
-| P1 | Add token/cost telemetry dashboard | Track token use, cost per job, cost per repo, model usage, and budget alerts |
-| P2 | Create event/schedule pulse emitter | Wake specialist on deploys, incidents, drift, queue spikes, and schedule |
-| P2 | Decide database specialist MCP scope | Define DB specialist ownership, tool surface, and data-safety boundaries |
-| P2 | Evaluate dedicated devops-specialist container | Compare against specialists-service embedding for blast radius and observability |
+| P0 | Definire confini e command surface del DevOps specialist | Bloccare scope, permessi, read-only default, escalation, comandi vietati e comandi consentiti |
+| P0 | Aggiungere pagina DevOps a gitboard / xtrm console | Mostrare deploy, incidenti, health, code, token/costi, Dolt/LSP/MCP, wakeup manuali |
+| P0 | Prototipare Prometheus + Grafana MCP read-only | Esporre metriche e dashboard a uno specialista senza poteri mutanti |
+| P1 | Disegnare configurazione deployment per-repo | Ogni repo dichiara deploy, rollback, health check, dashboard, alert, owner |
+| P1 | Implementare `make spdeploy` per un repo pilota | Sostituire deploy manuale con flusso gated pre/post-check |
+| P1 | Aggiungere dashboard token/costi | Tracciare costo per job, modello, repo e workflow |
+| P2 | Creare pulse emitter eventi/schedule | Svegliare DevOps specialist su deploy, incidenti, drift, queue spike e schedule |
+| P2 | Definire scope del database specialist | Separare schema/migrazioni/backup/restore da DevOps generico |
+| P2 | Valutare container dedicato devops-specialist | Confrontare embedding in specialists-service vs container dedicato |
+| P2 | Prototipare Terraform MVP per Mercury infra | Gestire Cloudflare DNS, bucket backup e prerequisiti VPS in modalità plan-first |
 
-## Bottom line
+# Guida operazionale a Terraform
 
-Use AWS DevOps Agent as **reference architecture for ops cognition**, not as direct control-plane authority. For xtrm/Mercury, the right shape is: **dedicated DevOps specialist primitive + Gitboard DevOps page + Prometheus/Grafana MCP + per-repo deployment specialization + event-driven wakeups**. Long-running substrate node comes later.
+## Che cos’è Terraform
+
+Terraform è uno strumento di Infrastructure as Code. Questa definizione può sembrare astratta, quindi conviene tradurla in termini pratici: Terraform ti permette di scrivere in file di testo lo stato desiderato di una parte dell’infrastruttura, poi confronta quei file con ciò che esiste davvero e produce un piano di cambiamento.
+
+La cosa più importante è che Terraform non ragiona come uno script imperativo. Uno script dice: “fai questo, poi questo, poi questo”. Terraform dice: “questo oggetto deve esistere con queste proprietà”. Poi è Terraform a decidere quali operazioni sono necessarie per arrivarci.
+
+Questa differenza è enorme. Se in uno script hai:
+
+```bash
+docker network create mmd-network
+```
+
+lo script prova a creare una rete. Se la rete esiste già, devi gestire tu l’errore o aggiungere `|| true`. In Terraform invece dichiari una risorsa, e lo state dice se quella risorsa è già gestita, se va creata, se va modificata o se è sparita.
+
+## Il ciclo mentale: desiderato, reale, differenza
+
+Terraform lavora su tre livelli:
+
+1. **Configurazione desiderata**: i file `.tf`.
+2. **Stato conosciuto**: il file di state, che mappa risorse Terraform a risorse reali.
+3. **Mondo reale**: provider esterni come Docker, Cloudflare, AWS, Grafana, VPS provider.
+
+Quando esegui `terraform plan`, Terraform legge la configurazione, legge lo state, interroga i provider, e calcola la differenza. Il risultato è un piano:
+
+```text
+Plan: 3 to add, 1 to change, 0 to destroy.
+```
+
+Questo piano è il momento più importante del workflow. È il punto in cui l’umano e, in futuro, il DevOps specialist possono verificare se Terraform sta per fare qualcosa di sensato.
+
+## Provider
+
+Un provider è il plugin che sa parlare con un sistema esterno. Terraform da solo non sa creare un record DNS o un container. Lo sa fare tramite provider.
+
+Esempi:
+
+- provider Docker: parla con Docker;
+- provider Cloudflare: gestisce DNS, zone, record;
+- provider AWS: gestisce EC2, S3, IAM, VPC;
+- provider Grafana: gestisce dashboard, datasource, alert;
+- provider PostgreSQL: può gestire ruoli, database, privilegi;
+- provider random: genera password o stringhe casuali.
+
+Esempio minimalista:
+
+```hcl
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+  }
+}
+
+provider "docker" {}
+```
+
+Qui si sta dicendo: questo progetto usa il provider Docker.
+
+## Resource
+
+Una resource è un oggetto gestito. Può essere un container, un record DNS, una VM, un bucket, un firewall rule, un dashboard.
+
+Esempio con Docker:
+
+```hcl
+resource "docker_image" "nginx" {
+  name = "nginx:latest"
+}
+
+resource "docker_container" "web" {
+  name  = "example-web"
+  image = docker_image.nginx.image_id
+
+  ports {
+    internal = 80
+    external = 8080
+  }
+}
+```
+
+Questo dice: voglio un’immagine nginx e un container che la usa. Se il container non esiste, Terraform lo crea. Se cambi porta o immagine, Terraform calcola cosa modificare.
+
+## Data source
+
+Una data source non crea nulla. Legge qualcosa che esiste già. È utile quando vuoi collegarti a infrastruttura esistente senza prenderne piena proprietà.
+
+Esempio concettuale:
+
+```hcl
+data "cloudflare_zone" "mercury" {
+  name = "mercuryintelligence.net"
+}
+```
+
+Qui Terraform non crea la zona. La trova e usa il suo ID per creare record.
+
+## Variabili
+
+Le variabili rendono il progetto riutilizzabile.
+
+```hcl
+variable "vps_ipv4" {
+  type        = string
+  description = "Indirizzo IPv4 pubblico del VPS Mercury"
+}
+```
+
+Poi puoi usarla:
+
+```hcl
+resource "cloudflare_dns_record" "api" {
+  zone_id = var.cloudflare_zone_id
+  name    = "api"
+  content = var.vps_ipv4
+  type    = "A"
+  proxied = true
+}
+```
+
+Le variabili possono arrivare da file `.tfvars`, environment variables o CLI. I segreti non vanno committati.
+
+## Output
+
+Gli output sono valori che Terraform espone dopo `apply`.
+
+```hcl
+output "api_url" {
+  value = "https://api.mercuryintelligence.net"
+}
+```
+
+Per Mercury, gli output potrebbero essere utili alla pagina DevOps:
+
+- IP VPS;
+- domini gestiti;
+- bucket backup;
+- nomi volumi;
+- endpoint Grafana/Prometheus;
+- record DNS attivi.
+
+## State
+
+Lo state è il cuore delicato di Terraform. È il file che dice: “questa resource Terraform corrisponde a questa risorsa reale”. Senza state, Terraform non sa cosa controlla.
+
+Esempio mentale:
+
+```text
+cloudflare_dns_record.api -> record id abc123
+docker_network.mmd -> network id 4f2...
+```
+
+Per un progetto personale locale, si può iniziare con state locale. Per produzione e più macchine, serve molta più disciplina. Se lo state viene sincronizzato male tra VPS e laptop, si rischiano piani sbagliati. Nel tuo caso, dato che usi Syncthing tra VPS e macchine locali, **lo state Terraform non dovrebbe essere sincronizzato alla leggera**. Meglio un backend remoto esplicito, o una regola molto chiara: un solo luogo applica, gli altri leggono.
+
+In pratica:
+
+- non committare `terraform.tfstate`;
+- non affidarlo a Syncthing senza lock;
+- usare un backend remoto quando si passa a produzione;
+- proteggere lo state perché può contenere segreti.
+
+## I comandi essenziali
+
+### `terraform init`
+
+Inizializza il progetto, scarica provider, configura backend.
+
+```bash
+terraform init
+```
+
+Si esegue all’inizio e quando cambi provider/backend.
+
+### `terraform fmt`
+
+Formatta i file.
+
+```bash
+terraform fmt
+```
+
+### `terraform validate`
+
+Controlla sintassi e coerenza base.
+
+```bash
+terraform validate
+```
+
+### `terraform plan`
+
+Mostra cosa succederebbe.
+
+```bash
+terraform plan
+```
+
+In produzione, questo dovrebbe essere obbligatorio e salvato come artifact.
+
+### `terraform apply`
+
+Applica davvero.
+
+```bash
+terraform apply
+```
+
+Per flussi più controllati:
+
+```bash
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+### `terraform destroy`
+
+Distrugge le risorse gestite.
+
+```bash
+terraform destroy
+```
+
+Questo comando va trattato come pericoloso. In un DevOps specialist dovrebbe essere hard-denied o richiedere conferma umana forte.
+
+## Come Terraform potrebbe migliorare Mercury infra
+
+Nel repo `mercury/infra`, Terraform potrebbe iniziare da ciò che oggi è documentato in `DEPLOY.md` ma ancora manuale.
+
+### Caso 1: DNS Cloudflare
+
+Oggi il deploy guide elenca record `@`, `www`, `api`, `mcp`, `monitor`, `traefik`, `portainer`. Questi sono perfetti per Terraform.
+
+Esempio concettuale:
+
+```hcl
+locals {
+  mercury_records = toset([
+    "@",
+    "www",
+    "api",
+    "mcp",
+    "monitor",
+    "traefik",
+    "portainer",
+  ])
+}
+
+resource "cloudflare_dns_record" "mercury_a" {
+  for_each = local.mercury_records
+
+  zone_id = var.cloudflare_zone_id
+  name    = each.key
+  content = var.vps_ipv4
+  type    = "A"
+  proxied = true
+}
+```
+
+Beneficio operativo: se un record manca, è puntato all’IP sbagliato o è proxyato male, `terraform plan` lo mostra.
+
+### Caso 2: prerequisiti Docker esterni
+
+`infra/Makefile` crea reti esterne:
+
+```bash
+docker network create mercury_dev_network
+docker network create mmd-network
+docker network create treasury-network
+docker network create website-network
+```
+
+Terraform potrebbe gestire o almeno verificare queste reti. Però qui bisogna scegliere: se Docker Compose e Makefile già funzionano bene, si può iniziare usando Terraform solo come documentazione/check dei prerequisiti, non come owner totale.
+
+### Caso 3: bucket backup R2
+
+`market-data` ha un backup service con credenziali R2. La creazione del bucket e policy può essere gestita via Terraform, se si decide di formalizzarla. Questo è un buon candidato perché è infrastruttura esterna e critica.
+
+### Caso 4: Grafana dashboards e alert
+
+Grafana ha provider Terraform. In futuro si potrebbero versionare dashboard e alert. Ma questa è una seconda fase: prima leggere con Grafana MCP, poi decidere se gestire dashboard/alert come codice. Il rischio è creare drift tra dashboard modificate a mano e dashboard gestite da Terraform.
+
+## Come Terraform potrebbe migliorare market-data
+
+`market-data` è un esempio eccellente di repo dove l’applicazione è già Docker Compose-heavy e non va riscritta in Terraform. Il miglioramento sta nei bordi.
+
+### Prerequisiti espliciti
+
+`market-data/docker-compose.yml` dipende da:
+
+- rete esterna `mmd-network`;
+- rete esterna `mercury_dev_network`;
+- rete esterna `mercury_platform`;
+- volumi persistenti `mercury_timescaledb_data`, `mercury_tick_state`, `mercury_appuser_home`, `mercury_questdb_data`, `mercury_backup_data`;
+- path host `/home/dawid/projects/mercury/barchart-scraper`;
+- path host `/home/dawid/projects/mercury/sierra-vps/sierra_data/SierraChart/Data`;
+- segreti in `.env`;
+- API cross-stack come `econ-api`, `econ_calendar_api`, `host.docker.internal`.
+
+Terraform o un modulo IaC può rendere questi prerequisiti espliciti, verificabili e replicabili.
+
+### Ambiente staging
+
+Se domani vuoi un secondo ambiente staging, manualmente dovresti ricordarti reti, volumi, record, porte, path, bucket e segreti. Terraform può creare una variante parametrizzata:
+
+```hcl
+variable "environment" {
+  type    = string
+  default = "staging"
+}
+```
+
+E poi nominare risorse in modo coerente:
+
+```hcl
+locals {
+  prefix = "mercury-${var.environment}"
+}
+```
+
+Questo riduce il rischio di staging che accidentalmente tocca produzione.
+
+### Drift detection pre-deploy
+
+Un futuro `make spdeploy` potrebbe fare:
+
+```bash
+terraform plan -detailed-exitcode
+```
+
+Semantica:
+
+- exit `0`: nessun drift;
+- exit `2`: ci sono cambiamenti;
+- exit `1`: errore.
+
+Se c’è drift inatteso, il deployment specialist si ferma e chiama il DevOps specialist.
+
+## Come il DevOps specialist userebbe Terraform
+
+Il DevOps specialist non dovrebbe partire con `terraform apply` automatico. Dovrebbe usare Terraform così:
+
+1. leggere il modulo Terraform;
+2. eseguire `terraform fmt -check`;
+3. eseguire `terraform validate`;
+4. eseguire `terraform plan`;
+5. sintetizzare il piano in linguaggio umano;
+6. evidenziare distruzioni, sostituzioni, cambiamenti DNS/firewall/volumi;
+7. chiedere approvazione;
+8. solo in fase matura, applicare piani allowlisted.
+
+Esempio di output desiderato:
+
+```text
+Terraform plan summary:
+- 1 DNS record will change: api.mercuryintelligence.net -> 159.195.49.110
+- 0 resources will be destroyed
+- 0 persistent volumes affected
+- 0 firewall rules removed
+Risk: LOW
+Recommendation: safe to apply after DNS check
+```
+
+Se invece vede:
+
+```text
+- docker_volume.mercury_timescaledb_data will be destroyed
+```
+
+allora deve fermarsi immediatamente.
+
+## Regole di sicurezza per Terraform in xtrm/Mercury
+
+1. `terraform destroy` vietato agli agenti.
+2. `terraform apply` solo con piano salvato e approvazione umana.
+3. Stato remoto o locale protetto, mai sincronizzato casualmente via Syncthing.
+4. Nessun segreto in `.tf` o `.tfvars` committati.
+5. Moduli separati per DNS, backup, VPS, Grafana, Docker prereq.
+6. Produzione e staging con state separati.
+7. Ogni piano deve essere riassunto dal DevOps specialist.
+8. Ogni risorsa persistente deve avere policy di protezione.
+9. Le risorse database/volumi non si distruggono senza procedura manuale.
+10. Terraform non sostituisce backup e restore testati.
+
+## Primo MVP consigliato
+
+Il primo MVP Terraform per Mercury non dovrebbe provare a gestire tutti i container. Dovrebbe essere piccolo:
+
+```text
+infra/terraform/
+  cloudflare-dns/
+  r2-backups/
+  docker-prereqs/
+```
+
+Con obiettivo:
+
+- dichiarare DNS Cloudflare principali;
+- dichiarare bucket R2 backup;
+- verificare/creare reti Docker esterne se si decide;
+- produrre output leggibili dalla pagina DevOps;
+- usare `plan` come controllo drift.
+
+Questo darebbe valore subito senza mettere a rischio il runtime applicativo.
+
+## Conclusione operazionale
+
+Terraform è il registro dichiarativo del terreno. Docker Compose è il runtime dei servizi. Prometheus/Grafana sono gli occhi. Il DevOps specialist è il coordinatore che legge questi segnali, capisce il rischio e propone o esegue azioni controllate. In Mercury la sequenza più sicura è: osservabilità prima, specialist read-only poi, deployment gated dopo, Terraform plan-first per il perimetro infrastrutturale, apply automatico solo molto più avanti.
