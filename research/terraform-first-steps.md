@@ -348,6 +348,54 @@ Il secondo ruolo, più maturo, è gestire parte dell’osservabilità come codic
 
 La sequenza sana è: prima rendere Grafana leggibile dal DevOps specialist via Grafana MCP in read-only. Poi identificare quali dashboard e alert sono canonici. Solo dopo valutare “Grafana as code” con Terraform. Non partire gestendo tutto Grafana in Terraform se la pratica operativa non è ancora stabile.
 
+Per i due MCP concreti da considerare, i riferimenti sono:
+
+- [Grafana MCP server — Grafana documentation](https://grafana.com/docs/grafana/latest/developer-resources/mcp/)
+- [Prometheus MCP server — GitHub `pab1it0/prometheus-mcp-server`](https://github.com/pab1it0/prometheus-mcp-server)
+
+Il ruolo di questi MCP non è identico. Grafana MCP è più vicino all’esperienza operativa umana: dashboard, datasource, alert, incidenti, link ai pannelli e contesto visivo. Prometheus MCP è più vicino alla query grezza: PromQL, target, metric metadata, query istantanee e range query. In un DevOps specialist maturo, Grafana MCP serve per orientarsi e produrre spiegazioni leggibili; Prometheus MCP serve per verificare ipotesi precise.
+
+### Metriche dai container e metriche mancanti
+
+Sì: molte metriche possono essere estratte direttamente dai container in esecuzione. In `infra` questa funzione esiste già in gran parte grazie a cAdvisor, node-exporter e agli exporter. cAdvisor può vedere CPU, memoria, rete, filesystem, stato e presenza dei container. node-exporter guarda l’host. Gli exporter Postgres/Redis aggiungono metriche specifiche per database e cache. Questo significa che, anche se un servizio applicativo non espone `/metrics`, il DevOps specialist può comunque sapere se il container esiste, se consuma troppa memoria, se si riavvia, se è sparito, se satura CPU o se il nodo ha pressione disco/memoria.
+
+Però le metriche container-level non bastano. Un container può essere vivo e sano dal punto di vista Docker ma sbagliato dal punto di vista applicativo. `mmd-data-feed` può essere running ma non aggiornare dati freschi. `mmd-mcp-server` può essere running ma restituire errori sulle tool call. TimescaleDB può essere up ma avere lag, lock, query lente o hypertable non aggiornate. QuestDB può rispondere ma non ricevere tick recenti.
+
+Questa è la distinzione operativa più importante:
+
+```text
+Metriche container-level:
+  il processo esiste? consuma risorse? si riavvia? è raggiungibile a livello runtime?
+
+Metriche application-level:
+  il servizio sta facendo il lavoro giusto? i dati sono freschi? le query rispondono? gli strumenti MCP danno risultati corretti?
+```
+
+Il lavoro del DevOps specialist non è scegliere una delle due. Deve correlare entrambe. Se un feed non aggiorna dati ma il container è running, il problema non è “Docker down”; è logica applicativa, credenziali, upstream, database, scheduler o dati input. Se invece un container crasha ogni trenta secondi, la priorità è runtime/deploy.
+
+Per questo `infra` dovrebbe includere una sezione di investigazione metriche mancanti. Non basta chiedere “quali metriche abbiamo?”. Bisogna chiedere “quali domande operative non possiamo ancora rispondere?”. Esempi:
+
+```text
+- Qual è l'età dell'ultimo candle scritto da mmd-data-feed?
+- Quando è arrivato l'ultimo tick in QuestDB?
+- Quante tool call MCP falliscono per tipo di errore?
+- Qual è la latenza p95 delle API market-data?
+- Qual è l'età dell'ultimo backup riuscito?
+- Quali container hanno restart nelle ultime 1h/24h?
+- Quali job specialistici restano waiting oltre soglia?
+- Quali LSP/Dolt/MCP processi sono duplicati o orfani?
+```
+
+Le prime risposte possono arrivare dai container e dagli exporter già presenti. Le risposte più utili, però, richiedono metriche applicative dedicate: endpoint `/metrics`, health report strutturati, textfile collector di node-exporter, query custom Postgres exporter, log Loki con label coerenti, oppure piccoli exporter per servizi specifici.
+
+In questa prospettiva, Terraform non “estrae” metriche. Terraform dichiara l’infrastruttura dell’osservabilità: datasource, bucket, reti, volumi, DNS, eventualmente dashboard/alert più avanti. Prometheus/cAdvisor/exporter raccolgono metriche. Grafana le visualizza. Gli MCP le rendono interrogabili dall’agente. Il DevOps specialist trasforma tutto questo in diagnosi.
+
+### Stato attuale della documentazione rispetto al repo `infra`
+
+Questo documento descrive ciò che dovrebbe essere integrato in `infra`, ma non significa che il repo `/home/dawid/projects/mercury/infra` sia già stato modificato con tutti questi dettagli. Al momento la conoscenza è stata salvata qui come nota operativa e come proposta di architettura. Il passo successivo sarebbe creare una issue nel repo `infra` per aggiungere una sezione o un documento dedicato, per esempio `docs/terraform-first-steps.md` o `docs/devops-specialist-observability.md`, e poi implementare i primi moduli Terraform in modo incrementale.
+
+Quando si porterà questa conoscenza dentro `infra`, il documento dovrebbe coprire almeno tre aree: il contratto Terraform della piattaforma, l’integrazione MCP per Grafana/Prometheus, e una matrice di metriche mancanti. La matrice è importante perché impedisce di confondere “abbiamo cAdvisor” con “abbiamo osservabilità completa”. cAdvisor dice molto sul container; non dice, da solo, se un feed finanziario sta producendo dati corretti.
+
 ### Bucket, backup e disaster recovery
 
 `infra` è anche il posto giusto per dichiarare risorse di backup condivise. Se `market-data` usa R2 per backup, se altri repo avranno bucket propri, se servono policy di retention o lifecycle, è meglio che la visione complessiva viva in `infra`. Un modulo Terraform `r2-backups` può dichiarare bucket per servizio e ambiente, produrre output e diventare input per i runbook.
