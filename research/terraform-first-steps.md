@@ -262,6 +262,159 @@ output "market_data_contract" {
 
 Il DevOps specialist può leggere questi output e usarli come contratto operativo. La pagina DevOps potrebbe mostrarli come “risorse attese” o “ambiente corrente”.
 
+
+## Come si inserisce nel repo `infra`
+
+Il repo `infra` ha una natura diversa da `market-data`. Se `market-data` è un servizio applicativo con un proprio runtime, `infra` è già il centro operativo della piattaforma Mercury. Dentro `infra` vivono Traefik, Prometheus, Grafana, Loki, Promtail, Alertmanager, exporter, cAdvisor, configurazioni di routing, configurazioni di monitoraggio, reti condivise e documentazione di deploy del VPS. Per questo motivo Terraform si inserisce in `infra` in modo più diretto e più naturale.
+
+In `market-data`, Terraform dovrebbe restare intorno al servizio. In `infra`, invece, Terraform può diventare parte della forma ufficiale della piattaforma. Non perché debba sostituire `docker-compose.yml`, ma perché molte responsabilità di `infra` sono già responsabilità infrastrutturali: DNS, Cloudflare, prerequisiti VPS, reti comuni, bucket, esposizione pubblica, osservabilità e stato condiviso fra più stack.
+
+La regola resta la stessa: Compose continua a descrivere i container che girano sul VPS. Terraform descrive ciò che deve esistere perché quella piattaforma abbia senso e sia ricostruibile.
+
+### DNS e Cloudflare
+
+Il primo punto in cui Terraform si inserisce bene in `infra` è Cloudflare. Nel deploy guide di Mercury sono documentati i record del dominio `mercuryintelligence.net`: root, `www`, `api`, `mcp`, `monitor`, `traefik`, `portainer` e altri sottodomini possibili. Oggi questo sapere vive nella documentazione e nella configurazione reale di Cloudflare. Funziona, ma richiede che l’operatore ricordi che Cloudflare è la fonte effettiva dei record.
+
+Terraform può trasformare questi record in codice. Questo significa che il dominio pubblico della piattaforma diventa verificabile. Se un record punta a un vecchio IP, se il proxy Cloudflare è disattivato quando dovrebbe essere attivo, se manca un sottodominio, `terraform plan` lo mostra. Non devi scoprirlo perché un endpoint non risponde.
+
+Un frammento concettuale sarebbe:
+
+```hcl
+locals {
+  mercury_records = toset([
+    "@",
+    "www",
+    "api",
+    "mcp",
+    "monitor",
+    "traefik",
+    "portainer",
+  ])
+}
+
+resource "cloudflare_dns_record" "mercury_a" {
+  for_each = local.mercury_records
+
+  zone_id = var.cloudflare_zone_id
+  name    = each.key
+  content = var.vps_ipv4
+  type    = "A"
+  proxied = true
+}
+```
+
+Il valore operativo non è scrivere meno click nella UI. Il valore è poter chiedere, in ogni momento: “il DNS reale coincide con quello dichiarato?”. Per un DevOps specialist questa è una fonte di verità molto più forte di una nota manuale.
+
+### Il confine con Traefik
+
+Terraform non dovrebbe sostituire Traefik. Traefik è il reverse proxy runtime: legge configurazioni, riceve traffico, termina TLS, instrada verso container e network Docker. Terraform può però gestire il livello sopra Traefik: DNS, eventuali regole Cloudflare, e forse alcuni prerequisiti del certificato come il token DNS-01 o le zone attese.
+
+Il confine operativo dovrebbe essere questo:
+
+```text
+Terraform  -> record DNS, Cloudflare, prerequisiti esterni
+Traefik    -> routing HTTP/TLS dentro il VPS
+Compose    -> container Traefik e servizi collegati
+Prometheus -> metriche Traefik e salute runtime
+```
+
+Se `api.mercuryintelligence.net` non funziona, il DevOps specialist dovrebbe poter camminare lungo la catena. Prima controlla Terraform/Cloudflare: il record esiste e punta al VPS? Poi Traefik: la route esiste e il certificato è sano? Poi Docker: il servizio target è sulla rete giusta? Poi Prometheus/Grafana: il servizio risponde e non genera errori?
+
+Questo è il motivo per cui `infra` è il posto giusto per centralizzare Terraform. Il problema non è solo di un repo applicativo; è della piattaforma che collega tutti i repo.
+
+### Reti Docker condivise
+
+`infra/docker-compose.yml` partecipa a più reti: `mercury_dev_network`, `mmd-network`, `treasury-network`, `website-network` e la rete `mercury_platform`. Queste reti sono il tessuto connettivo fra stack diversi. `market-data` entra in `mmd-network`, `darth-feedor` usa `mercury_dev_network`, il sito usa `website-network`, Traefik deve poter raggiungere più mondi.
+
+Oggi il Makefile di `infra` crea reti con comandi Docker. Questo è pragmatico e funziona. Ma a livello di piattaforma queste reti sono abbastanza importanti da meritare una dichiarazione Terraform o almeno un preflight Terraform. Se una rete manca, non è un dettaglio locale: rompe il routing cross-stack. Se una rete viene rinominata, un servizio può diventare invisibile a Traefik o agli exporter.
+
+Terraform in `infra` potrebbe dichiarare le reti condivise, oppure potrebbe almeno essere usato per verificare che il set delle reti piattaforma sia quello atteso. Nel tempo, la cosa più pulita è che `infra` diventi owner di queste reti. I repo applicativi le consumano come `external: true`, ma non le creano. Questo evita che ogni repo abbia il proprio `make networks` con interpretazioni leggermente diverse.
+
+### Volumi della piattaforma
+
+`infra` ha volumi persistenti propri: dati Prometheus, dati Grafana, ACME storage di Traefik, log Traefik, dati Loki, dati Alertmanager. Anche qui Terraform può essere utile, ma con la stessa cautela vista per `market-data`: i volumi persistenti non devono essere distrutti automaticamente.
+
+Il caso più delicato è `traefik_acme`, perché contiene materiale legato ai certificati. Anche Prometheus e Grafana sono importanti: perdere Prometheus significa perdere storico metriche; perdere Grafana significa perdere stato o configurazioni se non sono interamente provisioned. Loki conserva log; Alertmanager può avere stato operativo.
+
+Terraform potrebbe dichiarare questi volumi con `prevent_destroy`, rendendoli parte del contratto della piattaforma. Il DevOps specialist, leggendo il piano, dovrebbe bloccare immediatamente qualunque cambiamento distruttivo su questi volumi.
+
+### Osservabilità come risorsa di piattaforma
+
+`infra` contiene Prometheus, Grafana, Loki, Promtail, Alertmanager, exporter Postgres, Redis exporter, node-exporter e cAdvisor. Questo significa che `infra` non è solo un repo di deploy; è il sistema nervoso della piattaforma. Qui Terraform può avere due ruoli diversi.
+
+Il primo ruolo è gestire prerequisiti esterni e stato di piattaforma, come DNS, bucket e reti. Questo è il ruolo da adottare subito.
+
+Il secondo ruolo, più maturo, è gestire parte dell’osservabilità come codice: datasource Grafana, dashboard, alert rule, forse contact point e folder. Questo è possibile con provider Grafana, ma va introdotto con calma. Se oggi dashboard e alert vengono modificati manualmente nella UI, mettere Terraform sopra senza strategia può creare conflitto: Terraform potrebbe sovrascrivere modifiche manuali o mostrare drift continuo.
+
+La sequenza sana è: prima rendere Grafana leggibile dal DevOps specialist via Grafana MCP in read-only. Poi identificare quali dashboard e alert sono canonici. Solo dopo valutare “Grafana as code” con Terraform. Non partire gestendo tutto Grafana in Terraform se la pratica operativa non è ancora stabile.
+
+### Bucket, backup e disaster recovery
+
+`infra` è anche il posto giusto per dichiarare risorse di backup condivise. Se `market-data` usa R2 per backup, se altri repo avranno bucket propri, se servono policy di retention o lifecycle, è meglio che la visione complessiva viva in `infra`. Un modulo Terraform `r2-backups` può dichiarare bucket per servizio e ambiente, produrre output e diventare input per i runbook.
+
+La parte importante è non confondere “bucket esiste” con “backup funziona”. Terraform può dichiarare e verificare il bucket. Prometheus, health-report o un restore test devono verificare che i backup arrivino e siano ripristinabili. Il DevOps specialist deve vedere entrambe le cose: contratto infrastrutturale e prova runtime.
+
+### VPS bootstrap e prerequisiti host
+
+`infra/DEPLOY.md` contiene molti passaggi di bootstrap: installazione Docker, strumenti base, UFW, Cloudflare, nomi dominio, directory, clone repo, tmux, chiavi SSH. Non tutto questo deve entrare subito in Terraform. Alcune cose sono più adatte ad Ansible o a script idempotenti. Però Terraform può comunque gestire il livello provider, se il VPS provider espone API: server, firewall cloud, DNS, IP, volumi block storage, eventuali snapshot.
+
+Per il VPS attuale, il primo passo non è necessariamente “Terraform crea il server”. Il primo passo più realistico è “Terraform descrive ciò che intorno al server deve esistere”. In futuro, se si vuole poter ricreare Mercury su un VPS nuovo, allora Terraform può salire di livello e gestire anche provisioning del server e risorse cloud.
+
+### Il ruolo di `infra` come fonte di verità cross-repo
+
+La conseguenza architetturale è che `infra` dovrebbe diventare la fonte di verità per i prerequisiti condivisi. I repo applicativi, come `market-data`, dovrebbero dichiarare nel loro README o in un piccolo file contratto quali prerequisiti consumano. Ma la creazione e la verifica delle risorse condivise dovrebbe vivere in `infra`.
+
+Una struttura possibile è:
+
+```text
+infra/terraform/
+  modules/
+    cloudflare-dns/
+    docker-networks/
+    platform-volumes/
+    r2-backups/
+    grafana-foundation/
+  envs/
+    prod/
+    staging/
+```
+
+In questa struttura, `market-data` non si porta dietro tutto Terraform. Dice semplicemente: “io dipendo da `mmd-network`, `mercury_timescaledb_data`, `mercury_questdb_data`, bucket backup X, endpoint MCP Y”. `infra` è il luogo che assicura che queste cose esistano e siano coerenti.
+
+### Preflight DevOps per `infra`
+
+Il preflight di `infra` è più ampio del preflight di un repo applicativo. Prima di deployare modifiche a `infra`, il DevOps specialist dovrebbe controllare il piano Terraform, ma anche lo stato della piattaforma esistente. Un deploy di `infra` può toccare Traefik, Prometheus, Grafana o Alertmanager: se qualcosa va storto, perdi osservabilità o routing per più servizi.
+
+Un buon preflight dovrebbe dire:
+
+```text
+- DNS Cloudflare allineato
+- reti Docker condivise presenti
+- volumi Traefik/Prometheus/Grafana/Loki protetti
+- nessuna risorsa persistente in destroy
+- Prometheus healthy prima del deploy
+- Grafana reachable prima del deploy
+- Alertmanager healthy prima del deploy
+- Traefik route principali sane prima del deploy
+```
+
+Dopo il deploy, lo specialista deve verificare gli stessi segnali. Se aggiorni Traefik, controlli certificati, route e metriche. Se aggiorni Prometheus, controlli target e regole. Se aggiorni Grafana, controlli datasource e dashboard. Se aggiorni Alertmanager, controlli che gli alert vengano ancora consegnati.
+
+### Primo MVP Terraform per `infra`
+
+Il primo MVP per `infra` dovrebbe essere piccolo e non distruttivo. Io partirei da tre moduli: Cloudflare DNS, reti Docker condivise, bucket backup. Subito dopo aggiungerei volumi piattaforma con `prevent_destroy`. Solo più avanti guarderei Grafana provider o provisioning VPS completo.
+
+L’obiettivo del primo MVP non è fare “automazione totale”. È ottenere un comando che dica se la piattaforma esterna è allineata:
+
+```bash
+cd infra/terraform/envs/prod
+terraform plan
+```
+
+Se il piano è vuoto, il terreno è coerente. Se il piano mostra drift, il DevOps specialist lo spiega. Se il piano propone distruzioni, il deploy si blocca.
+
+Questa è la forma corretta di adozione: Terraform entra prima come specchio e contratto, poi come strumento di mutazione controllata.
+
 ## Dove mettere Terraform
 
 Ci sono due possibilità.
