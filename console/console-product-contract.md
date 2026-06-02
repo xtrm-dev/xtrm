@@ -2,8 +2,9 @@
 title: xtrm Console Product Contract
 project: xtrm
 area: console
-status: draft
+status: current-working-contract
 created: 2026-06-02
+updated: 2026-06-02
 tags:
   - xtrm
   - gitboard
@@ -29,9 +30,11 @@ The console is not a generic dashboard and not a collection of embedded apps. It
 1. This note: product role, UX contract, information architecture.
 2. The `Visual Contract` section below: canonical light-first design baseline for the console.
 3. `docs/backend-redesign.md`: materialization, API, storage, and naming architecture.
-4. Future light working mocks derived from this contract. The previous dark mock is deprecated as a visual authority.
+4. The complete HTML working example at `apps/gitboard/design-mocks/post-roadmap-console.html`.
 5. `~/dev/specialists/docs/design/roadmap/specialists-roadmap.md`: specialist runtime direction.
 6. `~/dev/specialists/docs/design/substrate/*`: Substrate/data-model context, not the UI authority.
+
+The previous dark mock is deprecated as a visual authority, but some of its stronger structural ideas remain canonical after being translated into this contract: especially the Evidence surface as a dense proof ledger rather than a flat list.
 
 ## Product Role
 
@@ -118,6 +121,16 @@ Runtime component health should usually be an inline popover, not a drawer.
 
 Evidence is the trust layer of the console.
 
+Evidence must read as a ledger of proof, not as a generic activity list. The preferred structure is:
+
+- **Verdict packet**: compact summary of scope, quality, tests, release/readiness, and reviewer confidence.
+- **Proof rows**: clickable rows with a left semantic rail, proof identity, human-readable result, and linked artifacts.
+- **Artifact stack**: screenshots, traces, test output, command proof, logs, and generated files.
+- **Diff proof**: changed files and inline diff preview when available, with an escape hatch to GitHub/local git.
+- **Regression contract**: explicit anti-regression rule when the evidence proves a behavior that must not disappear.
+
+This structure applies in both the Evidence top-level surface and the drawer Evidence tab. The drawer can be more compressed, but it must not drop verdicts, tests, artifacts, trace, or diff proof when those exist.
+
 A completed chain or run should make these visible without leaving the dashboard:
 
 - specialist role and model
@@ -137,6 +150,10 @@ A completed chain or run should make these visible without leaving the dashboard
 Important anti-regression rule:
 
 **Terminal feed and run result are both mandatory.** One must never replace the other.
+
+Evidence-specific anti-regression rule:
+
+**Evidence must connect verdict, proof, artifact, and diff.** Showing only a PASS/FAIL chip without the supporting proof is not acceptable.
 
 ## Specialist Activity Contract
 
@@ -338,7 +355,8 @@ Before merging any console UI change, verify:
 - Run result exists separately from terminal feed.
 - Run result markdown renders correctly.
 - Expanded feed/result sections do not trap content in tiny scroll boxes.
-- Evidence shows verdicts and tests where available.
+- Evidence shows verdicts, tests, artifacts, trace, and diff proof where available.
+- Evidence uses ledger structure: verdict packet, proof rows, artifact stack, and regression contract.
 - Relationship visibility matches or improves on Graph view.
 - Drawer opens as overlay and does not squash the viewport.
 - Filters operate over the complete corpus, not a partial live set.
@@ -346,24 +364,41 @@ Before merging any console UI change, verify:
 - Source freshness/degraded state is visible when data may be stale.
 - Color usage respects the semantic accent set; the agent palette is never used decoratively as background or gradient.
 
-## Open Questions
+## Locked Decisions
 
-- Should Evidence be a top-level tab immediately, or first a drawer tab plus specialist detail section?
-- Should diffs be rendered inline in the console or linked to GitHub/local git first?
-- Should verdicts have a normalized schema (`scope`, `quality`, `tests`, `release`) before Substrate?
-- Should memories appear as evidence, as close-out metadata, or both?
-- What is the minimum useful customer-facing version of this contract?
+- Evidence is both a top-level surface and a drawer tab. The top-level surface is the ledger; the drawer tab is the compact proof packet for the selected entity.
+- Diffs should render inline when short enough to inspect comfortably and link out to GitHub/local git for deeper review.
+- Verdicts should use a provisional normalized schema before Substrate: `scope`, `quality`, `tests`, `release`, plus optional `confidence` and `reviewer`.
+- Memories can appear in both places: as close-out metadata on sessions and as evidence when they encode an anti-regression rule, lesson, or design decision.
+- The minimum useful customer-facing version is: Issues + Specialists + Evidence + Drawer + GitHub links + source freshness. Observability and Sessions can deepen later, but the trust loop must exist from day one.
 
-## Working Mock
+## Remaining Open Questions
 
-Current light-canonical mock:
+- Should `Session` become a first-class Substrate kind or a materialized view over prompts, chains, commits, and memories?
+- Which artifact storage path becomes canonical for screenshots and generated verification files?
+- How much inline diff is too much before the console should hand off to GitHub/local git?
+
+## Complete HTML Example
+
+The complete product/design example is the HTML mock:
 
 - Gitboard route: `/gitboard/design-preview`
 - Repo file: `apps/gitboard/design-mocks/post-roadmap-console.html`
+- Screenshot: `apps/gitboard/design-mocks/post-roadmap-console.png`
 
-This mock now follows the xtrm Console Quiet light baseline. It demonstrates drawer role, entity switching, Operations as distinct from Observability, Evidence as trust layer, Sessions as first-class workblocks, and post-roadmap/pre-substrate vocabulary.
+This HTML is not a sketch fragment. It is the current complete example for a designer to inspect and critique. It should be treated as the visual and interaction reference for the pre-Substrate console direction.
 
-It remains a mock, not production implementation. It is the current visual reference until the real app surfaces are rebuilt against this contract.
+It demonstrates:
+
+- xtrm Console Quiet light baseline.
+- Drawer as overlay entity inspector.
+- Entity switching across chain, issue, evidence, role, template, memory, and session.
+- Operations as distinct from Observability.
+- Evidence as proof ledger: verdict packet, proof rows, artifact stack, diff proof, and regression contract.
+- Sessions as first-class workblocks.
+- Post-roadmap/pre-Substrate vocabulary.
+
+It remains a mock, not production implementation. When the real app diverges from it, update either the implementation or this contract explicitly; do not let a silent third design emerge.
 
 ## Derived Specs
 
