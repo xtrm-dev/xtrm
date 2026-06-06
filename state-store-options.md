@@ -1,9 +1,9 @@
 ---
 title: state-store-options
 date_created: Saturday, June 6th 2026, 5:48:54 pm
-date_modified: Saturday, June 6th 2026, 5:53:47 pm
+date_modified: Saturday, June 6th 2026, 10:00:00 pm
 created: 2026-06-06T17:48
-updated: 2026-06-06T17:53
+updated: 2026-06-06T22:34
 ---
 
 ![[Pasted image 20260606175047.png]]
@@ -14,7 +14,7 @@ updated: 2026-06-06T17:53
 > separating it into **deployment tiers**. The storage choice is not one decision — it
 > follows the tier (single user → team → company), all of which want web access to the
 > console + DevOps + AgentOps optimization suite.
-> Companion docs: `substrate-it-rev11.md` §13 (single-store + daemon), §17 (API faces),
+> Companion docs: `substrate_design_it.md` §13 (single-store + daemon), §17 (API faces),
 > `specialist-agentops-suite.md` (the optimization suite this serves).
 ---
 
@@ -52,8 +52,8 @@ substrate doc already made (§13) stays intact at the bottom.
    │   → SQLite (WAL)                                          │
    └──────────────────────────────────────────────────────────┘
 ```
-**Bottom tier — local runtime (authoritative).** Unchanged from `substrate-it-rev11.md`
--13.2: one local SQLite (WAL) file behind one daemon, routing all projects/worktrees on the
+**Bottom tier — local runtime (authoritative).** Unchanged from `substrate_design_it.md`
+§13.2: one local SQLite (WAL) file behind one daemon, routing all projects/worktrees on the
 machine by `project_id`. This is where the truth is written. It must stay local because the
 whole §13.2 design exists to *avoid* the networked-server failure modes that burned bd
 (Dolt corruption, "9 servers", "database not found in worktree"). Solo users never need
@@ -66,6 +66,15 @@ upward** into it; the shared tier is a **read-mostly projection plus team-level 
 (comments, approvals, optimization decisions), never the source of truth for runtime state.
 This is exactly the §17.3 "materialize vs read-live" fork applied at the deployment seam:
 local stays read-live-authoritative; the team/company view is materialized upward.
+
+**Bottom-tier ownership (decided 2026-06-06).** The local daemon, SQLite file, and Unix
+socket protocol are owned by `packages/core/` in the xtrm monorepo. The daemon binary is
+`xt daemon` (started idempotently). Domain packages (substrate, channels, specialists,
+console) hard-import `@xtrm/core` at compile time for the `StateClient` library and
+talk to the daemon over the socket at runtime — none of them opens `bun:sqlite` directly
+on `state.db`. The same `StateClient` interface is intended to grow a `SupabaseStateClient`
+implementation for the top tier so domain code stays unchanged across tiers. See
+`monorepo-migration.md §3.0` for the package layout reasoning.
 ---
 
 ## 2. Storage per tier
@@ -174,3 +183,31 @@ updated: 2026-06-06T17:49
   (Ties to §17.3: curate, don't mirror everything.)
 - **n8n's place** — orchestrates between `sp serve` (local script specialists) and the shared
   Supabase tier; it is glue, not a store.
+
+## 9. Decision log
+
+**2026-06-06 — Path 1 confirmed.** SQLite + custom `xt daemon` + Unix socket is the bottom
+tier for the foreseeable horizon. Reasoning summary: solo-user UX values low resource
+footprint (~50MB RAM vs ~500MB–1GB for local Supabase stack), instant startup, offline-first,
+and avoidance of the bd→Dolt "networked runtime" failure mode. Top tier (Supabase) remains
+the path for team/company, accessed via projection upward.
+
+**Revisit candidates** (do not re-litigate without these triggers):
+
+- **Path 3 (libSQL/Turso embedded + sync).** Same SQLite-compatible engine across both
+  tiers, native bidirectional sync, removes the dual-schema cost. Rejected for now due to
+  ecosystem maturity (libSQL is significantly younger than SQLite). Revisit if: (a) libSQL
+  proves stable in production deployments comparable to Postgres, OR (b) the SQLite→Postgres
+  schema drift in Path 1 becomes painful in practice (duplicated DDL maintenance, query
+  divergence).
+
+- **Path 5 (schema-portable multi-impl `StateClient`).** Postgres-compatible SQL subset,
+  deploy choice at `xt init` (SQLite-light vs Supabase-local), domain code unchanged.
+  Rejected for now due to three-impl maintenance + test surface (SQLite, Supabase-local,
+  Supabase-cloud). Revisit if: (a) team-tier becomes concrete and solo+team UX divergence
+  emerges as friction, OR (b) Path 1's projection sync logic grows beyond ~500 LOC and
+  starts feeling like premature infrastructure.
+
+Paths 2 (Supabase locally everywhere) and 4 (Supabase managed everywhere) are not on the
+revisit list — their rejections are structural (resource overhead, offline-loss), not
+maturity-bound.

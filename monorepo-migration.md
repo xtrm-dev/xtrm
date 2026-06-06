@@ -1,8 +1,8 @@
 ---
 date_created: Friday, June 5th 2026, 11:13:49 pm
-date_modified: Saturday, June 6th 2026, 8:30:00 pm
+date_modified: Saturday, June 6th 2026, 10:00:00 pm
 created: 2026-06-05T23:14
-updated: 2026-06-06T20:30
+updated: 2026-06-06T22:34
 title: monorepo-migration
 ---
 
@@ -11,14 +11,14 @@ title: monorepo-migration
 > Status: exploration draft, revised 2026-06-06. Captures the git/worktree/packaging strategy
 > for folding `xtrm-tools` (core), `specialists`, `gitboard` (console), and the greenfield
 > `channels` + `substrate` packages into a single `xtrm` umbrella monorepo.
-> Source of truth for the *design*: `docs/design/substrate/substrate-it-rev11.md`
+> Source of truth for the *design*: `~/second-mind/1-projects/xtrm/substrate/substrate_design_it.md`
 > §"Layout del progetto" (the monorepo is already a committed design decision there).
 > This doc covers the part the design is silent on: the git mechanics under a
 > worktree-heavy workflow.
 
 ## 1. The monorepo is already decided
 
-`substrate-it-rev11.md` §"Layout del progetto" commits to a five-package monorepo,
+`substrate_design_it.md` §"Layout del progetto" commits to a five-package monorepo,
 published as separate npm packages, importing each other in-repo:
 
 | Package | Binary | Owns |
@@ -138,6 +138,36 @@ Greenfield packages (no graft):
 - `packages/channels/` — start at 0.1.0
 - `packages/substrate/` — start at 0.1.0
 
+### 3.0 Daemon binary and state engine ownership
+
+`packages/core/` owns the **state engine + daemon process + socket protocol**
+in addition to bootstrap/worktree/install/update. The daemon binary is
+**`xt daemon`** (started idempotently by any CLI that needs the socket).
+`sb`, `sp`, `ch` are CLI clients that talk to the daemon via Unix socket
+(`~/.xtrm/state.sock`). No domain package (substrate, channels, specialists,
+console) imports `bun:sqlite` directly — they all go through `@xtrm/core`'s
+`StateClient` library at compile time and over the socket at runtime.
+
+This separates two ownership axes that the earlier substrate design
+conflated:
+
+- **Infrastructure ownership** (file state.db, daemon engine, socket
+  protocol, schema registry, transaction serialization) → `packages/core/`
+- **Domain schema ownership** (containers/issues for substrate, channel_* for
+  channels, specialist_jobs/forensic for specialists) → respective packages,
+  each authoritative for its own namespaced tables, through the core API
+
+Why this matters for the migration: gitboard's current
+`apps/gitboard/src/core/xtrm-store.ts` + `Materializer` is general-purpose
+engine code that writes `substrate_*`, `specialist_*`, `github_*`,
+`xtrm_forensic_events`. It is cross-domain by nature. When migrated, it lands
+in `packages/core/state/` and `packages/core/materializer/`, not in
+`packages/substrate/`. The split between infra and domain is already implicit
+in gitboard's code organization — the migration makes it explicit.
+
+See `state-store-options.md` for the bottom-tier (this daemon) vs top-tier
+(future Supabase projection) two-tier architecture.
+
 ### 3.1 Skills/hooks/policies location
 
 Open: do skills/hooks/policies live at **repo root** (umbrella, copied from
@@ -154,6 +184,36 @@ that already exists today between `xtrm-tools/skills/` and consumer-repo
 This makes `xt install` an idempotent internal operation: `xt install --self`
 syncs `packages/core/skills/` → `.claude/skills/`, run on every fresh worktree
 bootstrap.
+
+Same pattern applies to the **state engine**: `packages/core/state/` holds
+the daemon source; `xt daemon start` lights it up on `~/.xtrm/state.sock`,
+idempotent (no-op if already running).
+
+### 3.2 Channels dependency on core
+
+The earlier design (rev11) declared channels `→ {}` (zero-dep leaf) on the
+grounds that channels is "una primitiva di messaging pura che non sa nulla
+dei worktree, quindi resta massimamente riutilizzabile". With state.db owned
+by core, channels needs the StateClient to persist messages, so the DAG
+becomes:
+
+```
+console → {all}
+specialists → {channels, substrate, core}
+substrate → {channels, core}
+channels → {core}      ← was →{}
+core → {}
+```
+
+**Decision (2026-06-06):** accept `channels → {core}`. The zero-dep purity
+was a theoretical property; no external consumer uses channels outside xtrm
+in any near-term horizon. If a future need emerges, the split is mechanical:
+keep `@xtrm/channels` as a pure in-memory primitive (reducer/messaging types,
+no persistence), and add `@xtrm/channels-state` as the adapter that brings
+in `@xtrm/core` for persistence. Domain consumers (specialists, console)
+import the adapter; embedded consumers can keep importing the pure library.
+This split is **not done now** — it adds a sixth package and complicates the
+DAG for a benefit no one will collect in the visible roadmap.
 
 ## 4. Diagnose xtrm-tools bloat before the graft
 
@@ -390,3 +450,22 @@ GitHub Actions that today sync skills/hooks/policies from `xtrm-tools` to
 - [ ] Implement sparse worktree bootstrap in `xt` (`workspace-closure` +
   filtered install).
 - [ ] Push deprecation notes to legacy repo READMEs once each is sunset.
+
+## 11. State store alternatives considered
+
+The `packages/core/` state engine (§3.0) commits to **SQLite + custom daemon +
+Unix socket** as the bottom tier. This was a deliberate choice between five
+options. Recording them here so future revisits do not re-litigate without
+context.
+
+| Path | Bottom tier | Top tier | Decision |
+|---|---|---|---|
+| **1 — SQLite + `xt daemon` + socket** *(chosen)* | SQLite WAL local + custom daemon | Supabase Postgres (projection upward) | **selected 2026-06-06** |
+| 2 — Supabase locally via `supabase-cli` | Supabase Docker compose locally (~500MB–1GB RAM, 10–30s startup) | Supabase hosted | rejected: bottom-tier overhead too high for solo dev UX; violates bd→Dolt "no networked runtime" lesson at a milder severity |
+| 3 — libSQL/Turso embedded + sync | libSQL embedded (SQLite-compatible) + sync to Turso server | libSQL server or Supabase | **revisit candidate** — same engine across tiers, native sync; rejected for now due to ecosystem maturity (libSQL is younger than SQLite); reconsider if dual-schema cost of Path 1 emerges in practice |
+| 4 — Supabase managed everywhere | — (always cloud) | Supabase hosted | rejected: no offline, no local privacy, vendor dependency |
+| 5 — Schema-portable, multi-impl `StateClient` | Choice at `xt init`: SQLite-light or Supabase-local | Supabase hosted | **revisit candidate** — single mental model of schema (Postgres-compatible subset), deploy choice at boot; rejected for now due to three-impl maintenance + test surface; reconsider if Path 1 dual-schema bottom-vs-top drift becomes painful |
+
+See `state-store-options.md` for the full reasoning. Path 3 and Path 5 are
+the most defensible revisit candidates if the dual-schema cost of Path 1 +
+top-tier Supabase becomes load-bearing.

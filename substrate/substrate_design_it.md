@@ -1,6 +1,8 @@
 ---
 date_created: Tuesday, May 26th 2026, 9:03:46 am
-date_modified: Tuesday, June 2nd 2026, 1:35:00 pm
+date_modified: Saturday, June 6th 2026, 10:40:51 pm
+created: 2026-05-26T18:05
+updated: 2026-06-06T22:40
 ---
 # Substrate: Containers, Issues e ciclo di vita del Seed
 
@@ -18,7 +20,7 @@ date_modified: Tuesday, June 2nd 2026, 1:35:00 pm
 > tutta la parte console è da ripensare con cura. ~/dev/gitboard esiste ma è un primitivo. Ottima l'idea del drawer, deve però essere più informativo, contenere dettagli su "come siamo arrivati fin qui" - non so come spiegarlo, ma il lineage va ricostruito con cura. Stile dash0-dashscope. minimal.
 > - Il session-close report che viene generato alla fine di una sessione  orchestratore deve diventare entità integrata nel sistema substrate, e le jobs/issues/commit/pr o qualunque evento svolto nella sessione ora giù è riportato, ma questo report diventa un collante, e lo tracciamo nel sistema (in futuro console sarà cliccabile per dettagli su singole entities listate o permette  apertura in drawer, ad esempio.
 > - [[aws-agentcore-observability-official-docs]] - cosa possiamo pensare di integrare in substrate, o più broad-thinking, in sistema di observability e farlo davvero solido, ancor più di ora?
-> - è ambigua la distinzione tra participant_id e job_id: un agente ha appena compreso che due run distinte di un executor all'interno di un container non hanno un job diverso, pare, ma questa ambiguità è critica.
+> - è ambigua la distinzione tra participant_id e job_id: un agente ha appena compreso che due run distinte di un executor all'interno di un container non hanno un job diverso, pare, ma questa ambiguità è critica. (tecnicamente risolto)
 > - codex per "sbaglio" in un mockup ha inserito una cosa molto interessante, ovvero una tab del drawer chiamata **evidence** dove pare aver messo il verdict reviewer/coordinator, con i test che sono passati per una determinata chain, con il diff e col i commit allegati, molto interessante da integrare. Il design è in [[console-product-contract]].
 > - > **[design-note 2026-06-02] §6.7 expansion candidate — issue relationships under-drilled relative to centrality.**
   >
@@ -54,19 +56,41 @@ date_modified: Tuesday, June 2nd 2026, 1:35:00 pm
 
 | Package | Binario | Possiede (codice + schema) |
 |---|---|---|
-| **core** (ex `xtrm-tools`) | `xt` | Bootstrap del progetto, gestione worktree, install / update / doctor |
+| **core** (ex `xtrm-tools`) | `xt` (+ `xt daemon`) | Bootstrap del progetto, gestione worktree, install/update/doctor, **state engine + daemon + Unix socket protocol** (`~/.xtrm/state.db`, `~/.xtrm/state.sock`), **skills/hooks/policies SOT** |
 | **substrate** | `sb` | Issues, containers, plans, collisions, validator, pulse/triggers, provenance/ownership, memory |
 | **channels** | lib (+ `ch`) | La primitiva channel: messages, subscriptions, reducer/after-hook, authority, participant subscription |
 | **specialists** | `sp` | Specialist run, job lifecycle, tether, telemetry |
 | **console** | — (web app) | La dashboard (read-only) |
 
-La direzione delle dipendenze è aciclica: console → {all}; specialists → {channels, substrate, core}; substrate → {channels, core}; channels → {} (standalone — una primitiva di messaging pura che non sa nulla dei worktree, quindi resta massimamente riutilizzabile); core → {}.
+La direzione delle dipendenze è aciclica: console → {all}; specialists → {channels, substrate, core}; substrate → {channels, core}; channels → {core} (importa StateClient da core per persistere i messaggi nel daemon; vedi `monorepo-migration.md §3.2` per la trade-off rispetto alla purezza zero-dep originale); core → {}.
 
-**Uno store, un daemon, un socket.** Nonostante i cinque package, il *runtime* è un singolo database SQLite (WAL) servito da un daemon su un unico Unix socket: `~/.xtrm/state.db`. Il design multi-store precedente (DB `.sb`/`.sp` separati) viene abbandonato — xtrm espone la propria API (la console e i nostri tool sono i suoi primi consumer), quindi l’API è la superficie di separazione, non i file su disco. Un db, un processo, un riferimento è più semplice da usare e rimuove le modalità di fallimento da coordinamento inter-daemon.
+**Uno store, un daemon, un socket.** Nonostante i cinque package, il *runtime* è un singolo database SQLite (WAL) servito da un daemon su un unico Unix socket: `~/.xtrm/state.db`, `~/.xtrm/state.sock`. Il design multi-store precedente (DB `.sb`/`.sp` separati) viene abbandonato — xtrm espone la propria API (la console e i nostri tool sono i suoi primi consumer), quindi l’API è la superficie di separazione, non i file su disco. Un db, un processo, un riferimento è più semplice da usare e rimuove le modalità di fallimento da coordinamento inter-daemon.
 
-La separazione che conta è **ownership nel codice, non separazione dei file**: ogni package possiede lo schema delle proprie tabelle ed è l’unico codice che le scrive. Le tabelle sono namespaced per dominio (`containers`/`issues`/… sono di substrate; `channel_*` sono di channels; `jobs`/`runner_events`/… sono di specialists). Un utente che non usa una parte del sistema ha semplicemente tabelle vuote — costo zero. La disciplina **nessuna foreign key tra domini; correlazione solo tramite ID opaco** viene mantenuta anche se è un solo db — è ciò che permette agli store di essere ri-separati in futuro (sharding, un futuro in cui specialists gira su una macchina diversa) senza redesign. Il meglio di entrambi: separazione nel codice, semplicità di un solo store a runtime.
+**Ownership del daemon (revisione 2026-06-06).** Il daemon, il file `state.db`, e il protocollo socket sono **ownership di `packages/core/`**, non di substrate. Il binary del daemon è **`xt daemon`** (startato idempotente da qualsiasi CLI che apre il socket). Substrate, channels, specialists, console sono tutti pari **client** del socket — nessuno di loro apre `bun:sqlite` direttamente sul file. Hard dep da `@xtrm/core` per tutti i package = compile-time import della `StateClient` lib + tipi condivisi; il data path runtime è sempre via socket.
+
+Questo separa due assi di ownership che la formulazione precedente confondeva:
+
+- **Infrastructure ownership** (file `state.db`, daemon engine, socket protocol, schema registry, transaction serialization): `packages/core/`.
+- **Domain schema ownership** (`containers`/`issues` per substrate, `channel_*` per channels, `jobs`/`runner_events`/`xtrm_forensic_events` per specialists): rispettivo package, authoritative per il proprio namespace attraverso l'API core.
+
+Mappa la realtà del codice di gitboard attuale: `apps/gitboard/src/core/xtrm-store.ts` + `Materializer` è codice general-purpose che scrive `substrate_*`, `specialist_*`, `github_*`, `xtrm_forensic_events` — cross-domain by nature. Quando migra nel monorepo va in `packages/core/state/` + `packages/core/materializer/`, non in `packages/substrate/`. Lo split infra/domain è già implicito in gitboard; la migrazione lo rende esplicito. Vedi `monorepo-migration.md §3.0` per il dettaglio della collocazione nel monorepo.
+
+La separazione che conta è **ownership nel codice, non separazione dei file**: ogni package di dominio possiede lo schema delle proprie tabelle ed è l’unico codice che le scrive (attraverso l'API core). Le tabelle sono namespaced per dominio. Un utente che non usa una parte del sistema ha semplicemente tabelle vuote — costo zero. La disciplina **nessuna foreign key tra domini; correlazione solo tramite ID opaco** viene mantenuta anche se è un solo db — è ciò che permette agli store di essere ri-separati in futuro (sharding, un futuro in cui specialists gira su una macchina diversa) senza redesign. Inoltre, è ciò che rende possibile la proiezione upward verso il top-tier shared store (Supabase) per setup team/company — vedi §13.3.
 
 La CLI non espone mai il nome del package (`xt skills update`, non `xt core skills update`).
+
+### Deployment tiers (sintesi 2026-06-06)
+
+Il "uno store, un daemon, un socket" descritto sopra è il **bottom tier (local runtime, always present, authoritative)** di un'architettura a due tier. Il **top tier (shared/web)** è opzionale e si attiva quando il sistema scala da solo-user a team/company:
+
+| Tier | Store | Quando |
+|---|---|---|
+| **Bottom** (sempre presente, authoritative) | SQLite + `xt daemon` + socket locale (`packages/core/` owned) | Solo user, single machine — sempre |
+| **Top** (opzionale, projection upward) | Supabase Postgres (managed o self-host) | Team / company — aggiunto quando serve auth, multi-user, web console multi-tenant |
+
+Il bottom tier resta authoritative anche con il top tier attivo: writes runtime (job lifecycle, container open/close, channel messages, forensic events) vivono sempre prima sul daemon locale, poi vengono proiettati upward via sync. Il top tier è **read-mostly projection + team-level writes** (commenti, approvazioni, decisioni di ottimizzazione), mai source of truth per runtime state. La disciplina "no FK cross-domain, correlation by opaque ID" (§13.1) è ciò che rende la proiezione triviale: le righe SQLite si trasferiscono 1:1 in Postgres senza join che esplodono.
+
+La scelta del bottom tier come SQLite + custom daemon (anziché Supabase locale, libSQL, o schema-portable multi-impl) è stata fatta consapevolmente — privilegia low resource footprint, instant startup, offline-first, e l'evitamento della lezione bd→Dolt sui networked runtime store. Path alternative considerate e i loro revisit triggers sono documentate in `state-store-options.md §9`. Il documento canonical per il top tier resta `state-store-options.md` (companion doc).
 
 ---
 
@@ -1973,7 +1997,7 @@ Il runtime modella le entities. La dashboard le rivela. L'orchestrator e il node
 
 > **Status: draft.** Le forme a livello endpoint sono rimandate. Ma la *shape* sotto — tre faces, un native monotonic cursor, correlazione opaque, una read-live bias per substrate — è decisa abbastanza da costruirci sopra.
 
-substrate è un **local long-running daemon**, uno per macchina, sole owner e sole writer di `state.db` (§13.2). È authoritative e read-write per il suo dominio (issues, containers, plans, collisions, validator). Questo è ciò che lo distingue da una *projection*: una projection è una copia read-only ricostruibile; l'engine *owns the truth*. L'authoring è nativo in substrate, non write-through verso qualche altro store. I suoi tre clients leggono la stessa surface: la `sb` CLI, la xtrm console, e l'orchestrator. Una source of truth, tre readers.
+substrate è il **domain layer authoritative** per issues, containers, plans, collisions, validator, e memory. Non è il daemon — il daemon è `xt daemon` (core-owned, §13.2). Substrate è un client del daemon come gli altri package di dominio, ma è authoritative per il proprio schema namespaced: nessun altro package scrive `containers`/`issues`/`plans`/… Questo è ciò che lo distingue da una *projection*: una projection è una copia read-only ricostruibile; substrate *owns the truth* per il suo dominio. L'authoring è nativo in substrate, non write-through verso qualche altro store. I suoi tre clients leggono la stessa surface: la `sb` CLI, la xtrm console, e l'orchestrator. Una source of truth (per dominio), tre readers.
 
 ### 17.1 Tre faces
 
