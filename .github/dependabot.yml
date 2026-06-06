@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # GitHub Actions used across the monorepo
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Root npm / pnpm workspace (will pick up workspaces once packages land)
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    versioning-strategy: increase-if-necessary
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+      types:
+        patterns: ["@types/*"]
+
+  # Add a block per package as they land, e.g.:
+  # - package-ecosystem: npm
+  #   directory: /packages/core
+  #   schedule: { interval: weekly, day: monday }

@@ -1,0 +1,22 @@
+# CODEOWNERS — automatic review requests on PRs.
+# Syntax: <pattern>  <owner1> <owner2>
+# Last matching rule wins.
+
+# Default: everything is owned by the org admin until packages land
+*                          @Jaggerxtrm
+
+# Docs ownership (canonical design surface)
+/docs/                     @Jaggerxtrm
+/docs/substrate/           @Jaggerxtrm
+/docs/telemetry/           @Jaggerxtrm
+/docs/channels/            @Jaggerxtrm
+
+# CI / repo machinery
+/.github/                  @Jaggerxtrm
+/.gitignore                @Jaggerxtrm
+/LICENSE                   @Jaggerxtrm
+
+# Add per-package owners as they land, e.g.:
+# /packages/core/          @<core-team>
+# /packages/specialists/   @<specialists-team>
+# /apps/console/           @<console-team>

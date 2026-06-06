@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/xtrm-dev/xtrm/security/advisories/new
+    about: Report security issues privately. Do not open public issues.
+  - name: Atlassian Jira (xtrm project)
+    url: https://xtrmxt.atlassian.net/jira/software/projects/KAN
+    about: Internal project tracking — preferred for active development tasks.
