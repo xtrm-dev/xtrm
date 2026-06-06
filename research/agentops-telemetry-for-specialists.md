@@ -1,3 +1,7 @@
+---
+date_created: Sunday, May 31st 2026, 12:35:24 pm
+date_modified: Sunday, May 31st 2026, 1:38:04 pm
+---
 # AgentOps telemetry for specialists
 
 ## Summary
@@ -63,7 +67,8 @@ Recommended panels:
 
 - active specialists / running jobs / waiting jobs
 - tool-call latency by tool and repo
-- token usage and USD burn by job, repo, model
+- token usage and USD burn by job, repo, model (usd no, just token)
+- */nice to have: token/kb payload usage by tool use and output*
 - queue depth + wait time
 - MCP error rate and `tool_error` rate
 - worktree drift / dirty worktrees / stale worktrees

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>JS test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 48px; line-height: 1.6; }
+    #load { padding: 10px 14px; border-radius: 6px; font-weight: 600; }
+    .pending { background: #ffe0e0; color: #a00; }
+    .ok { background: #d4f7d4; color: #060; }
+    button { font-size: 18px; padding: 12px 22px; margin-top: 24px; cursor: pointer; }
+    #click { font-size: 22px; font-weight: 700; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>JavaScript diagnostic</h1>
+
+  <p>Test 1 — does any script run at all (on page load)?</p>
+  <div id="load" class="pending">If you read THIS red text, JavaScript did NOT run on load.</div>
+
+  <p style="margin-top:32px">Test 2 — do click handlers fire?</p>
+  <button id="btn">Click me</button>
+  <div id="click">— not clicked yet —</div>
+
+  <script>
+    // Test 1: prove the script executes at all
+    var load = document.getElementById("load");
+    load.className = "ok";
+    load.textContent = "JavaScript ran on load ✓  (" + new Date().toLocaleTimeString() + ")";
+
+    // Test 2: prove event listeners work
+    document.getElementById("btn").addEventListener("click", function () {
+      var c = document.getElementById("click");
+      c.textContent = "Click handler fired ✓  " + new Date().toLocaleTimeString();
+      c.style.color = "#060";
+      document.body.style.background = "#f3fff3";
+    });
+  </script>
+</body>
+</html>

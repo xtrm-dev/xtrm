@@ -1,0 +1,2584 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>xtrm console - canonical drawer quality mock</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-soft: #f1f5f9;
+      --surface-raised: #f8fafc;
+      --line-faint: rgba(15, 23, 42, 0.055);
+      --line-soft: rgba(15, 23, 42, 0.085);
+      --line: rgba(15, 23, 42, 0.145);
+      --line-strong: rgba(15, 23, 42, 0.24);
+      --text: #0f172a;
+      --text-2: #334155;
+      --muted: #64748b;
+      --faint: #94a3b8;
+      --blue: #3a5fce;
+      --green: #2f8d5e;
+      --amber: #8c4a1f;
+      --red: #c84d3c;
+      --violet: #5a51b8;
+      --terminal: #12161b;
+      --terminal-2: #191f26;
+      --terminal-text: #cbd3dd;
+      --terminal-muted: #7d8795;
+      --terminal-green: #58c3a5;
+      --terminal-blue: #8fb0ff;
+      --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+      --drawer-shadow: -16px 0 48px -16px rgba(15, 23, 42, 0.18);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-ui);
+      font-size: 12.5px;
+      letter-spacing: 0;
+      line-height: 1.42;
+      overflow: hidden;
+    }
+    button, input, select { color: inherit; font: inherit; }
+    button { cursor: pointer; }
+    .mono, code, pre { font-family: var(--font-mono); }
+    .muted { color: var(--muted); }
+    .secondary { color: var(--text-2); }
+
+    .app {
+      --sidebar-w: 204px;
+      display: grid;
+      grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+      grid-template-rows: 40px 36px minmax(0, 1fr);
+      height: 100vh;
+      min-width: 1180px;
+    }
+    .app.sidebar-collapsed { --sidebar-w: 50px; }
+    .topnav-item { align-items: center; background: transparent; border: 0; border-radius: 4px; color: var(--text-2); cursor: pointer; display: inline-flex; font-size: 12px; gap: 5px; padding: 5px 8px; white-space: nowrap; }
+    .topnav-item .ic { font-size: 15px; }
+    .topnav-item:hover { background: var(--surface-soft); }
+    .topnav-item.is-active { background: rgba(58, 95, 206, 0.10); color: var(--blue); font-weight: 600; }
+    .topbar2 { align-items: center; background: var(--surface); border-bottom: 1px solid var(--line-soft); display: flex; gap: 2px; grid-column: 1 / -1; grid-row: 2; min-width: 0; overflow-x: auto; padding: 0 10px; }
+    .topbar2 .ctx { align-items: center; display: none; gap: 2px; }
+    .topbar2 .ctx.is-active { display: flex; }
+    .ctx-item { align-items: center; background: transparent; border: 0; border-radius: 4px; color: var(--text-2); cursor: pointer; display: inline-flex; font-size: 11.5px; gap: 5px; padding: 4px 8px; white-space: nowrap; }
+    .ctx-item .ic { font-size: 14px; }
+    .ctx-item:hover { background: var(--surface-soft); }
+    .ctx-item.is-active { background: rgba(58, 95, 206, 0.10); color: var(--blue); }
+    .ctx-div { background: var(--line-faint); flex: none; height: 14px; margin: 0 5px; width: 1px; }
+    .sidebar { background: #f8f9fb; border-right: 1px solid var(--line-soft); grid-column: 1; grid-row: 3; min-height: 0; overflow-y: auto; padding: 10px 8px; }
+    .side-title { color: var(--faint); font-size: 10px; font-weight: 740; letter-spacing: 0.05em; margin: 0 0 4px; padding: 0 6px; text-transform: uppercase; }
+    .side-title:not(:first-child) { margin-top: 12px; }
+    .side-item { align-items: center; background: transparent; border: 0; border-radius: 4px; color: var(--text-2); cursor: pointer; display: flex; font-size: 12px; gap: 8px; min-height: 26px; padding: 0 8px; width: 100%; }
+    .side-item .ic { color: var(--muted); flex: none; font-size: 14px; }
+    .side-item .count { color: var(--faint); font-family: var(--font-mono); font-size: 10px; margin-left: auto; }
+    .side-item .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .side-item:hover { background: var(--surface-soft); }
+    .side-item.is-active { background: rgba(58, 95, 206, 0.10); color: var(--blue); }
+    .app.sidebar-collapsed .side-title { display: none; }
+    .app.sidebar-collapsed .side-item { justify-content: center; gap: 0; padding: 0; }
+    .app.sidebar-collapsed .side-item .lbl, .app.sidebar-collapsed .side-item .count { display: none; }
+    .side-chiprow { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 7px; }
+    .side-chiprow .chip { cursor: pointer; }
+    .app.sidebar-collapsed .side-filters { display: none !important; }
+    .ctx-sections { align-items: center; display: inline-flex; gap: 2px; }
+
+    .ic { display: inline-block; fill: none; flex: none; height: 1em; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; vertical-align: -0.14em; width: 1em; }
+
+    .topbar {
+      align-items: center;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line-soft);
+      display: flex;
+      gap: 3px;
+      grid-column: 1 / -1;
+      min-width: 0;
+      padding: 0 10px;
+    }
+    .topbar .brand { margin-right: 6px; }
+    .brand { align-items: center; display: flex; gap: 8px; font-weight: 730; }
+    .brand-mark { background: var(--blue); border-radius: 2px; height: 8px; width: 8px; }
+    .crumbs { align-items: center; display: flex; gap: 7px; min-width: 0; white-space: nowrap; }
+    .crumbs b { font-weight: 720; }
+    .crumbs span { color: var(--muted); }
+    .topbar .search {
+      align-items: center;
+      background: var(--surface-soft);
+      border: 1px solid var(--line-faint);
+      border-radius: 4px;
+      color: var(--muted);
+      display: flex;
+      gap: 7px;
+      height: 28px;
+      margin-left: auto;
+      padding: 0 9px;
+      width: 168px;
+    }
+    .topbar .search input { background: transparent; border: 0; color: var(--text-2); min-width: 0; outline: 0; width: 100%; }
+    .top-actions { align-items: center; display: flex; gap: 3px; }
+    .icon-btn {
+      align-items: center;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      color: var(--text-2);
+      display: inline-flex;
+      font-size: 16px;
+      height: 28px;
+      justify-content: center;
+      width: 28px;
+    }
+    .icon-btn:hover { background: var(--surface-soft); }
+    .icon-btn.is-active { background: rgba(58, 95, 206, 0.10); border-color: rgba(58, 95, 206, 0.20); color: var(--blue); }
+
+    .primary-rail {
+      background: #f8f9fb;
+      border-right: 1px solid var(--line-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      grid-column: 1;
+      grid-row: 2;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 8px 6px;
+    }
+    .nav-toggle {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      font-size: 16px;
+      height: 30px;
+      justify-content: center;
+      margin-bottom: 4px;
+    }
+    .nav-toggle:hover { background: var(--surface-soft); }
+    .nav-item {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+      color: var(--text-2);
+      cursor: pointer;
+      display: flex;
+      font-size: 12.5px;
+      gap: 11px;
+      min-height: 32px;
+      padding: 0 10px;
+      white-space: nowrap;
+    }
+    .nav-item .ic { font-size: 16px; }
+    .nav-item:hover { background: var(--surface-soft); }
+    .nav-item.is-active { background: rgba(58, 95, 206, 0.10); color: var(--blue); font-weight: 600; }
+    .nav-item .lbl { overflow: hidden; text-overflow: ellipsis; }
+    .app.rail-collapsed .nav-item { justify-content: center; gap: 0; padding: 0; }
+    .app.rail-collapsed .nav-item .lbl { display: none; }
+    .subnav {
+      background: #f8f9fb;
+      border-right: 1px solid var(--line-soft);
+      display: flex;
+      flex: none;
+      flex-direction: column;
+      gap: 1px;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 8px 7px;
+      width: 186px;
+    }
+    .app.subnav-collapsed .subnav { width: 48px; }
+    .subnav-toggle {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      font-size: 16px;
+      height: 28px;
+      justify-content: center;
+      margin-bottom: 4px;
+    }
+    .subnav-toggle:hover { background: var(--surface-soft); }
+    .subnav-group {
+      color: var(--faint);
+      font-size: 10px;
+      font-weight: 740;
+      letter-spacing: 0.05em;
+      padding: 8px 8px 4px;
+      text-transform: uppercase;
+    }
+    .subnav-item {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+      color: var(--text-2);
+      cursor: pointer;
+      display: flex;
+      font-size: 12px;
+      gap: 9px;
+      min-height: 28px;
+      padding: 0 8px;
+      white-space: nowrap;
+    }
+    .subnav-item .ic { font-size: 15px; }
+    .subnav-item:hover { background: var(--surface-soft); }
+    .subnav-item.is-active { background: rgba(58, 95, 206, 0.10); color: var(--blue); }
+    .subnav-item .lbl { overflow: hidden; text-overflow: ellipsis; }
+    .app.subnav-collapsed .subnav-group { display: none; }
+    .app.subnav-collapsed .subnav-item { justify-content: center; gap: 0; padding: 0; }
+    .app.subnav-collapsed .subnav-item .lbl { display: none; }
+    .surface.with-subnav.is-active { display: flex; }
+    .surface.with-subnav .main { flex: 1; min-width: 0; }
+    .rail-title, .subnav-title {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      font-size: 13px;
+      font-weight: 700;
+      gap: 9px;
+      margin-bottom: 4px;
+      min-height: 32px;
+      padding: 0 10px;
+      width: 100%;
+    }
+    .rail-title:hover, .subnav-title:hover { background: var(--surface-soft); }
+    .rail-title .chev, .subnav-title .chev { color: var(--muted); font-size: 15px; margin-left: auto; }
+    .app.rail-collapsed .rail-title { justify-content: center; gap: 0; padding: 0; }
+    .app.rail-collapsed .rail-title .lbl, .app.rail-collapsed .rail-title .chev { display: none; }
+    .app.subnav-collapsed .subnav-title { justify-content: center; gap: 0; padding: 0; }
+    .app.subnav-collapsed .subnav-title .lbl { display: none; }
+    .app.subnav-collapsed .subnav-title .chev { margin-left: 0; }
+    .side-title {
+      color: var(--faint);
+      font-size: 10px;
+      font-weight: 740;
+      letter-spacing: 0.05em;
+      margin: 0 0 8px;
+      text-transform: uppercase;
+    }
+    .dot { border-radius: 50%; display: inline-block; height: 6px; width: 6px; }
+    .dot.blue { background: var(--blue); }
+    .dot.green { background: var(--green); }
+    .dot.amber { background: var(--amber); }
+    .workspace-shell {
+      grid-column: 2;
+      grid-row: 3;
+      min-height: 0;
+      min-width: 0;
+      position: relative;
+    }
+    .surface {
+      display: none;
+      inset: 0;
+      min-height: 0;
+      min-width: 0;
+      position: absolute;
+    }
+    .surface.is-active { display: block; }
+    .main {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(520px, 1fr) 310px;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      padding: 12px 12px 36px 16px;
+    }
+    .page-title {
+      align-items: end;
+      display: flex;
+      gap: 14px;
+      grid-column: 1 / -1;
+      min-width: 0;
+    }
+    .eyebrow {
+      color: var(--faint);
+      display: block;
+      font-size: 10px;
+      font-weight: 740;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 20px; letter-spacing: 0; line-height: 1.08; }
+    h2 { font-size: 15px; letter-spacing: 0; }
+    h3 { font-size: 13px; letter-spacing: 0; }
+    .page-title p { color: var(--text-2); max-width: 520px; }
+    .role-filter {
+      background: rgba(58, 95, 206, 0.08);
+      border: 1px solid rgba(58, 95, 206, 0.20);
+      color: var(--blue);
+      margin-left: auto;
+      min-height: 28px;
+      padding: 0 10px;
+    }
+
+    .kpis {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--line-faint);
+      border-radius: 4px;
+      min-height: 76px;
+      padding: 10px 11px;
+    }
+    .kpi span:first-child { color: var(--faint); display: block; font-size: 10px; font-weight: 740; text-transform: uppercase; }
+    .kpi b { display: block; font-size: 22px; line-height: 1.15; margin-top: 6px; }
+    .kpi em { color: var(--muted); display: block; font-style: italic; margin-top: 3px; }
+
+    .query-panel {
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 4px;
+      display: grid;
+      gap: 10px;
+      min-height: 0;
+      padding: 10px;
+    }
+    .panel-head {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+    }
+    .panel-head small { color: var(--muted); }
+    .query-grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1.5fr repeat(3, minmax(0, 1fr));
+    }
+    .query-field {
+      background: var(--surface-raised);
+      border: 1px solid var(--line-faint);
+      display: grid;
+      gap: 5px;
+      min-height: 58px;
+      padding: 7px 9px;
+    }
+    .query-field label {
+      color: var(--faint);
+      font-size: 10px;
+      font-weight: 740;
+      text-transform: uppercase;
+    }
+    .query-field input, .query-field select {
+      background: transparent;
+      border: 0;
+      min-width: 0;
+      outline: 0;
+    }
+    .chart-card, .table-card, .rail-card {
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      border-radius: 4px;
+      min-width: 0;
+    }
+    .chart-card { display: grid; gap: 8px; padding: 10px; }
+    .chart-frame {
+      background:
+        linear-gradient(to right, var(--line-faint) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--line-faint) 1px, transparent 1px);
+      background-size: 52px 1px, 1px 32px;
+      border: 1px solid var(--line-faint);
+      height: 184px;
+      padding: 8px;
+    }
+    svg { display: block; height: 100%; width: 100%; }
+    .legend { align-items: center; color: var(--text-2); display: flex; gap: 12px; font-size: 11px; }
+    .legend span { align-items: center; display: inline-flex; gap: 5px; }
+    .legend i { display: inline-block; height: 6px; width: 6px; }
+    .legend .b { background: var(--blue); }
+    .legend .g { background: var(--green); }
+    .legend .a { background: var(--amber); }
+    .lower-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      min-height: 0;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    th, td {
+      border-top: 1px solid var(--line-faint);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--faint);
+      font-size: 10px;
+      font-weight: 740;
+      text-transform: uppercase;
+    }
+    td { color: var(--text-2); }
+    td b { color: var(--text); }
+    .row-selected { background: #f4f7ff; box-shadow: inset 2px 0 0 var(--blue); }
+    .chip {
+      border: 1px solid var(--line-soft);
+      border-radius: 3px;
+      display: inline-flex;
+      gap: 5px;
+      min-height: 22px;
+      padding: 2px 7px;
+      white-space: nowrap;
+    }
+    .chip.blue { background: rgba(58, 95, 206, 0.08); border-color: rgba(58, 95, 206, 0.20); color: var(--blue); }
+    .chip.green { background: rgba(47, 141, 94, 0.08); border-color: rgba(47, 141, 94, 0.20); color: var(--green); }
+    .chip.amber { background: rgba(140, 74, 31, 0.08); border-color: rgba(140, 74, 31, 0.22); color: var(--amber); }
+    .chip.red { background: rgba(200, 77, 60, 0.08); border-color: rgba(200, 77, 60, 0.20); color: var(--red); }
+    .stack { display: grid; gap: 8px; }
+    .rail-list { display: grid; gap: 0; padding: 8px 10px 10px; }
+    .rail-item {
+      border-left: 2px solid var(--line);
+      display: grid;
+      gap: 4px;
+      padding: 8px 0 8px 10px;
+    }
+    .rail-item.green { border-left-color: var(--green); }
+    .rail-item.amber { border-left-color: var(--amber); }
+    .rail-item.blue { border-left-color: var(--blue); }
+    .rail-item b { color: var(--text); }
+
+    .underlay-fade {
+      background: rgba(253, 253, 253, 0.68);
+      bottom: 0;
+      cursor: pointer;
+      left: 0;
+      position: absolute;
+      right: 0;
+      top: 0;
+      z-index: 4;
+    }
+
+    .drawer {
+      background: var(--surface);
+      border-left: 1px solid var(--line);
+      box-shadow: var(--drawer-shadow);
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      height: 100%;
+      min-width: 0;
+      overflow: hidden;
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 50vw;
+      max-width: 720px;
+      z-index: 5;
+    }
+    .drawer-head {
+      border-bottom: 1px solid var(--line-soft);
+      display: grid;
+      gap: 8px;
+      padding: 14px 16px 10px;
+    }
+    .drawer-kicker {
+      align-items: center;
+      color: var(--muted);
+      display: flex;
+      gap: 8px;
+      min-width: 0;
+    }
+    .drawer-title-row {
+      align-items: start;
+      display: flex;
+      gap: 14px;
+    }
+    .drawer-title { min-width: 0; }
+    .drawer-title h2 {
+      font-size: 18px;
+      line-height: 1.18;
+    }
+    .drawer-title h2 em {
+      font-family: var(--font-ui);
+      font-size: 19px;
+      font-style: italic;
+      font-weight: 500;
+    }
+    .drawer-actions { align-items: center; display: flex; gap: 7px; margin-left: auto; }
+    .btn {
+      background: var(--surface-raised);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      min-height: 28px;
+      padding: 0 10px;
+    }
+    .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .tags { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
+    .drawer-tabs {
+      align-items: stretch;
+      border-bottom: 1px solid var(--line-soft);
+      display: flex;
+      min-width: 0;
+      padding: 0 14px;
+    }
+    .drawer-tabs button {
+      background: transparent;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      color: var(--text-2);
+      min-height: 38px;
+      padding: 0 10px;
+    }
+    .drawer-tabs button.is-active {
+      border-bottom-color: var(--blue);
+      color: var(--text);
+      font-weight: 720;
+    }
+    .drawer-body {
+      min-height: 0;
+      overflow: auto;
+      padding: 14px 16px 24px;
+    }
+    .tab-panel { display: none; }
+    .tab-panel.is-active { display: block; }
+    .drawer-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: minmax(0, 1fr) 280px;
+    }
+    .section {
+      border-left: 2px solid var(--blue);
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding-left: 10px;
+    }
+    .section.green { border-left-color: var(--green); }
+    .section.amber { border-left-color: var(--amber); }
+    .section.violet { border-left-color: var(--violet); }
+    .section.red { border-left-color: var(--red); }
+    .section h3 { font-size: 15px; }
+    .kv-grid {
+      display: grid;
+      gap: 10px 18px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-top: 8px;
+    }
+    .kv { display: grid; gap: 3px; }
+    .kv span { color: var(--muted); font-size: 10px; font-weight: 740; text-transform: uppercase; }
+    .kv b { font-family: var(--font-mono); font-weight: 650; }
+    .callout {
+      background: var(--surface-raised);
+      border: 1px solid var(--line-soft);
+      color: var(--text-2);
+      padding: 10px;
+    }
+    .acceptance {
+      display: grid;
+      gap: 7px;
+      grid-template-columns: 80px minmax(0, 1fr);
+    }
+    .acceptance b { font-family: var(--font-mono); font-size: 11px; }
+    .artifact-list, .evidence-list, .memory-list { display: grid; gap: 6px; }
+    .artifact, .evidence-row, .memory {
+      background: var(--surface-raised);
+      border-left: 2px solid var(--blue);
+      display: grid;
+      gap: 3px;
+      padding: 8px 10px;
+    }
+    .artifact.green, .evidence-row.green, .memory.green { border-left-color: var(--green); }
+    .artifact.amber, .evidence-row.amber { border-left-color: var(--amber); }
+    .artifact code, .evidence-row code { color: var(--text); font-size: 11px; }
+    .contract {
+      background: var(--surface-raised);
+      border: 1px solid var(--line);
+      color: var(--text-2);
+      padding: 10px 12px;
+      white-space: pre-wrap;
+    }
+    .contract .minus { color: var(--red); }
+    .contract .plus { color: var(--green); }
+
+    .run {
+      border-left: 3px solid var(--green);
+      display: grid;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding-left: 10px;
+    }
+    .run.waiting { border-left-color: var(--amber); }
+    .run-head {
+      align-items: center;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+    }
+    .run-meta {
+      align-items: center;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .disclosure {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      color: var(--text-2);
+      display: flex;
+      gap: 7px;
+      justify-content: space-between;
+      padding: 4px 0;
+      text-align: left;
+      width: 100%;
+    }
+    .disclosure b { color: var(--text); }
+    .disclosure span:last-child { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+    .terminal {
+      background: var(--terminal);
+      border: 1px solid #2a3039;
+      border-radius: 4px;
+      color: var(--terminal-text);
+      overflow: visible;
+    }
+    .terminal-status {
+      align-items: center;
+      background: var(--terminal-2);
+      border-bottom: 1px solid #2a3039;
+      color: var(--terminal-muted);
+      display: flex;
+      gap: 8px;
+      min-height: 31px;
+      padding: 0 10px;
+      text-transform: uppercase;
+    }
+    .terminal pre {
+      margin: 0;
+      overflow: visible;
+      padding: 10px;
+      white-space: pre-wrap;
+    }
+    .t-green { color: var(--terminal-green); }
+    .t-blue { color: var(--terminal-blue); }
+    .t-muted { color: var(--terminal-muted); }
+    .result {
+      background: #fbfcfd;
+      border: 1px solid var(--line);
+      color: var(--text-2);
+      font-family: var(--font-mono);
+      padding: 10px;
+    }
+    .result h4 { color: var(--text); font-family: var(--font-ui); font-size: 13px; margin: 0 0 7px; }
+    .result ul { margin: 7px 0 0 18px; padding: 0; }
+    .forensics {
+      background: #fbfcfd;
+      border-left: 2px solid var(--violet);
+      display: grid;
+      gap: 5px;
+      padding: 8px 0 8px 10px;
+    }
+    .event {
+      align-items: center;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 158px minmax(0, 1fr) 64px;
+      min-height: 24px;
+    }
+    .event span { color: var(--text-2); font-family: var(--font-mono); font-size: 10.5px; }
+    .event code { color: var(--text); font-size: 11px; }
+    .event .redaction { color: var(--green); font-family: var(--font-ui); text-align: right; }
+    .event .prom { color: var(--blue); }
+    .forensics-filters { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 4px; }
+    .forensics-filters .chip { cursor: pointer; }
+    .job-card { display: flex; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+    .job-rail { flex: none; width: 3px; }
+    .job-rail.green { background: var(--green); }
+    .job-rail.blue { background: var(--blue); }
+    .job-body { flex: 1; min-width: 0; }
+    .job-head { align-items: center; display: flex; gap: 9px; flex-wrap: wrap; padding: 8px 13px; }
+    .id-chip { align-items: center; background: var(--surface-soft); border: 1px solid var(--line-faint); border-radius: 4px; display: inline-flex; gap: 8px; padding: 3px 9px; }
+    .id-chip .div { color: var(--line-strong); }
+    .id-chip .role { font-weight: 650; }
+    .id-chip .sub { color: var(--text-2); }
+    .id-chip .sub.dim { color: var(--muted); }
+    .status-word { color: var(--muted); }
+    .pill { align-items: center; border-radius: 3px; display: inline-flex; font-size: 11.5px; font-weight: 650; gap: 4px; padding: 1px 8px; }
+    .pill.green { background: rgba(47, 141, 94, 0.10); color: var(--green); }
+    .pill.blue { background: rgba(58, 95, 206, 0.10); color: var(--blue); }
+    .pill .dot { background: currentColor; border-radius: 50%; height: 6px; width: 6px; }
+    .job-metrics { color: var(--text-2); margin-left: auto; }
+    .job-metrics b { color: var(--text); font-weight: 650; }
+    .job-metrics .sep { color: var(--muted); }
+    .job-metrics .link { border-bottom: 1px solid rgba(47, 141, 94, 0.4); color: var(--green); cursor: pointer; }
+    .job-row { align-items: center; background: transparent; border: 0; border-top: 1px solid var(--line-faint); color: var(--text-2); cursor: pointer; display: flex; gap: 10px; padding: 7px 13px; text-align: left; width: 100%; }
+    .job-row .more { align-items: center; color: var(--text-2); display: inline-flex; gap: 5px; margin-left: auto; }
+    .job-files { border-top: 1px solid var(--line-faint); padding: 9px 13px; }
+    .files-head { align-items: center; color: var(--text-2); display: flex; gap: 7px; margin-bottom: 6px; }
+    .files-head .count { color: var(--muted); }
+    .files-head .delta { margin-left: auto; }
+    .file-row { align-items: center; border-top: 1px solid var(--line-faint); display: flex; gap: 8px; padding: 4px 0; }
+    .file-row:first-of-type { border-top: 0; }
+    .file-row .path { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-row .fdelta { margin-left: auto; white-space: nowrap; }
+    .diff-box { border: 1px solid var(--line-faint); border-radius: 4px; margin-top: 9px; overflow: hidden; }
+    .diff-box .diff-head { background: var(--surface-soft); border-bottom: 1px solid var(--line-faint); color: var(--muted); font-size: 11px; padding: 5px 9px; }
+    .diff-box pre { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.55; margin: 0; padding: 7px 9px; white-space: pre-wrap; }
+    .result-zone { background: var(--surface-soft); border-top: 1px solid var(--line-faint); padding: 9px 13px; }
+    .result-zone .label { color: var(--muted); font-size: 10px; font-weight: 740; letter-spacing: 0.05em; margin-right: 8px; text-transform: uppercase; }
+    .result-zone .body { color: var(--text); }
+    .feed-shell { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 4px; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; }
+    .feed-filters { align-items: center; border-bottom: 1px solid var(--line-faint); display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 12px; }
+    .feed-filters .chip { cursor: pointer; }
+    .feed-timeline { min-height: 0; overflow: auto; }
+    .feed-day { background: var(--surface-soft); border-bottom: 1px solid var(--line-faint); color: var(--muted); font-size: 11px; font-weight: 650; padding: 5px 14px; }
+    .feed-row { border-left: 2px solid transparent; border-top: 1px solid var(--line-faint); }
+    .feed-day + .feed-row { border-top: 0; }
+    .feed-row:hover { background: var(--surface-soft); }
+    .feed-row.is-expanded { background: var(--surface-soft); }
+    .feed-row.green { border-left-color: var(--green); }
+    .feed-row.violet { border-left-color: var(--violet); }
+    .feed-row.blue { border-left-color: var(--blue); }
+    .feed-row.red { border-left-color: var(--red); }
+    .feed-row.amber { border-left-color: var(--amber); }
+    .feed-row.gray { border-left-color: var(--line-strong); }
+    .feed-line { align-items: center; column-gap: 8px; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto 24px; min-height: 34px; padding-right: 10px; }
+    .feed-time { color: var(--muted); font-size: 11px; padding-left: 12px; }
+    .feed-id-line { align-items: baseline; display: flex; gap: 6px; min-width: 0; }
+    .feed-id-line .id { font-size: 12.5px; font-weight: 650; }
+    .feed-id-line .sepf { color: var(--muted); }
+    .feed-id-line .title { color: var(--text); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .seg-chip { align-items: center; background: var(--surface-soft); border: 1px solid var(--line-faint); border-radius: 3px; display: inline-flex; font-size: 10.5px; gap: 5px; padding: 1px 7px; }
+    .seg-chip .sl { color: var(--line-strong); }
+    .seg-chip .k { color: var(--muted); }
+    .feed-chev { align-items: center; background: transparent; border: 0; color: var(--muted); cursor: pointer; display: flex; justify-content: center; }
+    .feed-dossier { display: grid; gap: 7px; padding: 2px 14px 11px 56px; }
+    .feed-dossier .line { align-items: center; display: flex; font-size: 12px; gap: 8px; }
+    .chip.violet { background: rgba(90, 81, 184, 0.10); border-color: rgba(90, 81, 184, 0.22); color: var(--violet); }
+    .diffbar { border-radius: 3px; display: flex; height: 5px; margin-bottom: 6px; overflow: hidden; }
+    .diffbar span { display: block; }
+    .gh-row { align-items: center; color: var(--text-2); display: flex; font-size: 12px; gap: 8px; padding: 7px 0; }
+    .gh-row .label { color: var(--muted); font-size: 10px; font-weight: 740; letter-spacing: 0.05em; text-transform: uppercase; width: 84px; }
+    /* GitHub view — inherited from legacy gitboard (StatsHeader, event taxonomy, commits) */
+    .gh-stats { align-items: center; background: var(--surface-soft); border-bottom: 1px solid var(--line-faint); display: flex; flex-wrap: wrap; padding: 7px 14px; }
+    .gh-stat { align-items: center; color: var(--muted); display: inline-flex; font-size: 11.5px; gap: 4px; }
+    .gh-stat b { color: var(--text); font-weight: 650; }
+    .gh-dot { color: var(--line-strong); margin: 0 9px; }
+    .ev-ico { align-items: center; color: var(--muted); display: inline-flex; justify-content: center; }
+    .feed-row.green .ev-ico { color: var(--green); }
+    .feed-row.violet .ev-ico { color: var(--violet); }
+    .feed-row.blue .ev-ico { color: var(--blue); }
+    .feed-row.red .ev-ico { color: var(--red); }
+    .feed-row.amber .ev-ico { color: var(--amber); }
+    #surface-github .feed-line { grid-template-columns: 22px 40px minmax(0, 1fr) auto 24px; }
+    .commit-list { margin-top: 2px; }
+    .commit-row { align-items: center; border-top: 1px solid var(--line-faint); display: flex; font-size: 12px; gap: 7px; padding: 6px 0; }
+    .commit-row:first-child { border-top: 0; }
+    .commit-sha { color: var(--blue); flex-shrink: 0; font-family: var(--font-mono); font-size: 11.5px; }
+    .commit-subject { color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .commit-toggle { background: transparent; border: 0; color: var(--muted); cursor: pointer; display: inline-flex; flex-shrink: 0; }
+    .commit-row.is-open .commit-toggle .ic { transform: rotate(180deg); }
+    .commit-body { display: none; }
+    .commit-row.is-open + .commit-body { display: block; }
+    .commit-body pre { background: var(--surface-soft); border-radius: 3px; color: var(--text-2); font-family: var(--font-mono); font-size: 11px; margin: 3px 0 7px; padding: 7px 9px; white-space: pre-wrap; word-break: break-word; }
+    /* Evidence — proof ledger (§7) */
+    .ev-cards { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .ev-card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 4px; display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; }
+    .ev-card .lbl { color: var(--muted); font-size: 10px; font-weight: 740; letter-spacing: 0.05em; text-transform: uppercase; }
+    .ev-card .val { font-size: 18px; font-weight: 680; }
+    .ev-card .sub { color: var(--muted); font-size: 11px; }
+    .ev-card.green .val { color: var(--green); }
+    .ev-card.amber .val { color: var(--amber); }
+    .ev-card.red .val { color: var(--red); }
+    .ledger { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 4px; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; }
+    .ledger-scroll { min-height: 0; overflow: auto; }
+    .proof-row { align-items: stretch; border-left: 2px solid transparent; border-top: 1px solid var(--line-faint); display: grid; grid-template-columns: minmax(0, 1fr) 32px; }
+    .proof-row:first-of-type { border-top: 0; }
+    .proof-row.green { border-left-color: var(--green); }
+    .proof-row.amber { border-left-color: var(--amber); }
+    .proof-row.red { border-left-color: var(--red); }
+    .proof-row:hover { background: var(--surface-soft); }
+    .proof-row.is-expanded { background: var(--surface-soft); }
+    .proof-main { background: transparent; border: 0; color: inherit; cursor: pointer; display: grid; gap: 4px; padding: 9px 13px; text-align: left; width: 100%; }
+    .proof-id-line { align-items: baseline; display: flex; flex-wrap: wrap; gap: 7px; }
+    .proof-id-line .mono { font-weight: 650; }
+    .proof-id-line .ts { color: var(--muted); font-size: 11px; margin-left: auto; }
+    .proof-result { color: var(--text-2); font-size: 12px; }
+    .proof-result b { color: var(--text); }
+    .proof-arts { align-items: center; display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+    .proof-expand-btn { align-items: center; background: transparent; border: 0; border-left: 1px solid var(--line-faint); color: var(--muted); cursor: pointer; display: flex; justify-content: center; }
+    .proof-row.is-expanded .proof-expand-btn .ic { transform: rotate(180deg); }
+    .proof-dossier { display: none; }
+    .proof-row.is-expanded .proof-dossier { display: grid; gap: 8px; grid-column: 1 / -1; padding: 2px 14px 13px 15px; }
+    .regress { background: var(--surface-soft); border-left: 3px solid var(--amber); border-radius: 4px; padding: 8px 10px; }
+    .regress .rlabel { color: var(--amber); font-size: 10px; font-weight: 740; letter-spacing: 0.05em; text-transform: uppercase; }
+    .regress pre { color: var(--text-2); font-family: var(--font-mono); font-size: 11px; margin: 4px 0 0; white-space: pre-wrap; }
+    /* Graph — ported from legacy gitboard Graph view (.g-*), adapted to mock tokens */
+    .g-app { display: flex; flex-direction: column; gap: 0; height: 100%; overflow: auto; padding: 16px 20px; font-size: 12.5px; }
+    .g-hd { align-items: baseline; border-bottom: 1px solid var(--line-soft); display: flex; flex-wrap: wrap; gap: 14px; padding-bottom: 12px; }
+    .g-path { color: var(--text-2); font-family: var(--font-mono); font-size: 12px; }
+    .g-path b { color: var(--text); font-weight: 600; }
+    .g-path-sl { color: var(--muted); margin: 0 1px; }
+    .g-sub { color: var(--muted); font-family: var(--font-mono); font-size: 11px; font-style: italic; }
+    .g-spacer { flex: 1; }
+    .g-cnt { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+    .g-cnt b { color: var(--text-2); font-weight: 600; }
+    .g-cnt em { color: var(--muted); font-style: italic; }
+    .g-hd-toggles { display: inline-flex; gap: 6px; }
+    .g-hd-tog { align-items: center; background: transparent; border: 1px solid var(--line-soft); border-radius: 4px; color: var(--muted); cursor: pointer; display: inline-flex; font-size: 10px; gap: 5px; padding: 2px 7px; }
+    .g-hd-tog.is-on { color: var(--text-2); }
+    .g-hd-tog-dot { border-radius: 50%; flex: none; height: 7px; width: 7px; }
+    .g-hd-tog-dot.edge-parent-child { background: var(--muted); }
+    .g-hd-tog-dot.edge-related { background: var(--blue); }
+    .g-hd-tog-dot.state-deferred { background: var(--faint); }
+    .g-now { background: var(--surface-soft); border: 1px solid var(--line-soft); border-radius: 6px; margin-top: 14px; padding: 10px 12px; }
+    .g-now-lbl { align-items: baseline; color: var(--blue); display: flex; font-family: var(--font-mono); font-size: 10px; font-weight: 600; gap: 6px; letter-spacing: 0.08em; margin-bottom: 6px; text-transform: uppercase; }
+    .g-now-rows { display: flex; flex-direction: column; gap: 4px; }
+    .g-clusters { display: grid; gap: 14px; margin-top: 14px; }
+    .g-cluster { background: var(--surface-soft); border-radius: 4px; padding: 6px 8px; }
+    .g-cluster-hd { align-items: baseline; color: var(--muted); display: flex; font-family: var(--font-mono); font-size: 10.5px; gap: 6px; margin-bottom: 10px; }
+    .g-cluster-ttl { align-items: baseline; color: var(--text); display: inline-flex; font-weight: 600; gap: 4px; }
+    .g-cluster-ep { color: var(--violet); }
+    .g-cluster-meta { color: var(--muted); display: inline-flex; font-style: italic; gap: 6px; margin-left: auto; }
+    .g-cluster-tag { border: 1px solid var(--line-soft); font-size: 9px; font-weight: 600; letter-spacing: 0.04em; padding: 0 4px; text-transform: uppercase; }
+    .g-cluster-tag.p0 { border-color: var(--red); color: var(--red); }
+    .g-cluster-tag.run { border-color: var(--blue); color: var(--blue); }
+    .g-pane { min-height: 120px; position: relative; width: 100%; }
+    .g-edges { inset: 0; position: absolute; z-index: 1; }
+    .g-node { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 3px; color: var(--text-2); cursor: pointer; display: grid; grid-template-rows: auto auto; padding: 5px 8px 5px 9px; position: relative; row-gap: 1px; width: 260px; z-index: 2; }
+    .g-node::before { background: var(--muted); border-radius: 2px 0 0 2px; bottom: 1px; content: ""; left: 1px; position: absolute; top: 1px; width: 3px; }
+    .g-node[data-p="0"]::before { background: var(--red); }
+    .g-node[data-p="1"]::before { background: var(--amber); }
+    .g-node.act { box-shadow: 0 0 0 2px rgba(58, 95, 206, 0.14); }
+    .g-node-abs { position: absolute; }
+    .g-node-identity { align-items: baseline; display: inline-flex; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
+    .g-node-class { align-items: center; display: inline-flex; font-size: 10px; gap: 5px; min-width: 0; overflow: hidden; white-space: nowrap; }
+    .g-id { color: var(--text); flex: 0 0 auto; font-family: var(--font-mono); font-size: 11px; font-weight: 600; }
+    .g-node .g-sep, .g-orow .g-sep { color: var(--line-strong); font-family: var(--font-mono); font-size: 11px; }
+    .g-tt { color: var(--text); flex: 1; font-size: 11px; font-style: italic; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .g-pri { flex: 0 0 auto; font-size: 10px; font-weight: 700; }
+    .g-type { flex: 0 0 auto; font-size: 10px; letter-spacing: 0.06em; }
+    .g-state { color: var(--text-2); flex: 0 0 auto; font-size: 10px; }
+    .g-ag { align-items: center; background: var(--surface-soft); border: 1px solid var(--line-soft); border-radius: 3px; color: var(--muted); display: inline-flex; font-family: var(--font-mono); font-size: 9px; font-style: italic; gap: 3px; padding: 1px 5px; }
+    .g-ag-dot { background: var(--muted); border-radius: 50%; flex: none; height: 4px; width: 4px; }
+    .g-ag b { color: inherit; font-style: normal; font-weight: 600; }
+    .g-ag.exec { color: var(--blue); } .g-ag.exec .g-ag-dot { background: var(--blue); }
+    .g-ag.review { color: var(--green); } .g-ag.review .g-ag-dot { background: var(--green); }
+    .g-ag.test { color: var(--amber); } .g-ag.test .g-ag-dot { background: var(--amber); }
+    .g-node-inline, .g-node-wide { max-width: 100%; width: auto; }
+    .g-orphans-strip { border-top: 1px dashed var(--line-soft); margin-top: 14px; padding-top: 10px; }
+    .g-orphans-hd { align-items: baseline; color: var(--muted); display: flex; font-family: var(--font-mono); font-size: 10.5px; gap: 8px; margin-bottom: 6px; }
+    .g-orphans-ttl { color: var(--text-2); letter-spacing: 0.04em; text-transform: uppercase; }
+    .g-orphans-grid { display: grid; gap: 4px 8px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+    .g-orow { border: 1px solid var(--line-faint); border-radius: 3px; cursor: pointer; display: grid; grid-template-rows: auto auto; padding: 5px 10px 5px 11px; position: relative; row-gap: 1px; }
+    .g-orow::before { background: var(--muted); border-radius: 2px 0 0 2px; bottom: 1px; content: ""; left: 0; position: absolute; top: 1px; width: 3px; }
+    .g-orow[data-p="0"]::before { background: var(--red); }
+    .g-orow[data-p="1"]::before { background: var(--amber); }
+    .g-orow:hover { background: var(--surface-soft); }
+    .g-buckets { border-top: 1px solid var(--line-soft); display: flex; flex-wrap: wrap; margin-top: 12px; padding-top: 10px; }
+    .g-bucket { border-right: 1px solid var(--line-soft); padding: 0 16px; }
+    .g-bucket:first-child { padding-left: 0; }
+    .g-bucket:last-child { border-right: 0; }
+    .g-bucket summary { align-items: baseline; color: var(--muted); cursor: pointer; display: flex; font-family: var(--font-mono); font-size: 10.5px; gap: 6px; list-style: none; }
+    .g-bucket summary::-webkit-details-marker { display: none; }
+    .g-bucket-ttl { color: var(--text-2); }
+    .g-bucket-list { display: grid; gap: 4px; margin-top: 8px; min-width: 240px; }
+    .g-foot { align-items: baseline; border-top: 1px solid var(--line-soft); color: var(--muted); display: flex; flex-wrap: wrap; font-family: var(--font-mono); font-size: 10px; gap: 14px; margin-top: 12px; padding-top: 10px; }
+    .g-foot b { color: var(--text-2); font-weight: 600; }
+    .g-foot kbd { background: var(--surface-soft); border: 1px solid var(--line-soft); border-radius: 3px; font-family: var(--font-mono); font-size: 9px; padding: 0 4px; }
+    .g-edge-path { fill: none; stroke: var(--line-strong); stroke-width: 1.4; }
+    .g-edge-path.related { stroke: var(--blue); stroke-dasharray: 4 3; opacity: 0.8; }
+    .g-edge-lbl { fill: var(--muted); font-family: var(--font-mono); font-size: 9px; font-style: italic; }
+    .comp-list { display: grid; gap: 6px; }
+    .comp-step { align-items: center; display: flex; gap: 10px; }
+    .comp-step .lab { color: var(--muted); flex: 1; }
+    .pulse-row { align-items: center; border-top: 1px solid var(--line-faint); display: flex; gap: 9px; font-size: 12px; padding: 6px 0; }
+    .pulse-row:first-child { border-top: 0; }
+    .pulse-row .dir { color: var(--muted); font-size: 10px; font-weight: 740; letter-spacing: 0.04em; text-transform: uppercase; width: 26px; }
+    .pulse-row .pbody { color: var(--text-2); flex: 1; }
+    .wf-row { align-items: center; display: grid; grid-template-columns: 130px 1fr 64px; gap: 10px; padding: 4px 0; font-size: 11.5px; }
+    .wf-track { background: var(--surface-soft); border-radius: 3px; height: 13px; overflow: hidden; }
+    .wf-track span { display: block; height: 100%; }
+    .list-shell { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 4px; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; }
+    .filter-chips { align-items: center; border-bottom: 1px solid var(--line-faint); display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 12px; }
+    .filter-chips .chip { cursor: pointer; }
+    .list-scroll { min-height: 0; overflow: auto; }
+    .list-group { color: var(--faint); font-size: 10px; font-weight: 740; letter-spacing: 0.05em; padding: 8px 12px 3px; text-transform: uppercase; }
+    .chain-row { align-items: center; border-left: 2px solid transparent; border-top: 1px solid var(--line-faint); cursor: pointer; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto 22px; padding: 9px 12px; }
+    .chain-row:hover { background: var(--surface-soft); }
+    .chain-row.is-active { background: var(--surface-soft); border-left-color: var(--blue); }
+    .chain-row.green { border-left-color: var(--green); }
+    .chain-row.amber { border-left-color: var(--amber); }
+    .chain-id-line { align-items: baseline; display: flex; gap: 6px; min-width: 0; }
+    .chain-id-line .id { font-weight: 650; }
+    .chain-id-line .title { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chain-meta { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .chain-roles { align-items: center; color: var(--muted); display: flex; gap: 8px; font-size: 11px; }
+    .chain-roles .r { align-items: center; display: inline-flex; gap: 3px; }
+    .chain-count { color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .detail-pane { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 4px; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; }
+    .detail-head { align-items: center; border-bottom: 1px solid var(--line-faint); display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 13px; }
+    .detail-body { min-height: 0; overflow: auto; padding: 12px 13px; }
+    .jobline { align-items: center; border-top: 1px solid var(--line-faint); display: flex; gap: 8px; padding: 8px 0; }
+    .jobline:first-child { border-top: 0; }
+    .placeholder { align-items: center; color: var(--muted); display: flex; flex-direction: column; gap: 9px; height: 100%; justify-content: center; }
+    .placeholder .ic { color: var(--faint); }
+    .ph-title { color: var(--text); font-size: 17px; font-weight: 600; }
+    .ph-sub { font-size: 12.5px; }
+    .diff {
+      background: #fbfcfd;
+      border: 1px solid var(--line);
+      color: var(--text-2);
+      padding: 10px;
+      white-space: pre-wrap;
+    }
+    .diff .add { color: var(--green); }
+    .diff .del { color: var(--red); }
+    .lineage {
+      display: grid;
+      gap: 8px;
+    }
+    .relation {
+      align-items: center;
+      background: var(--surface-raised);
+      border: 0;
+      border-left: 2px solid var(--line-strong);
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 110px 1fr 92px;
+      min-height: 42px;
+      padding: 7px 9px;
+      text-align: left;
+      width: 100%;
+    }
+    .relation.green { border-left-color: var(--green); }
+    .relation.blue { border-left-color: var(--blue); }
+    .relation.amber { border-left-color: var(--amber); }
+
+    .issues-main {
+      grid-template-columns: minmax(560px, 1fr) 300px;
+      padding-bottom: 24px;
+    }
+    .issue-feed-shell {
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: 0;
+    }
+    .feed-searchbar {
+      align-items: center;
+      border-bottom: 1px solid var(--line-faint);
+      display: flex;
+      gap: 8px;
+      min-height: 36px;
+      padding: 0 10px;
+    }
+    .feed-searchbar input {
+      background: transparent;
+      border: 0;
+      min-width: 0;
+      outline: 0;
+      width: 100%;
+    }
+    .issue-feed {
+      min-height: 0;
+      overflow: auto;
+      padding: 6px 0 18px;
+    }
+    .feed-section-title {
+      align-items: center;
+      color: var(--muted);
+      display: flex;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      gap: 6px;
+      min-height: 28px;
+      padding: 0 12px;
+    }
+    .issue-row {
+      border-left: 2px solid transparent;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 32px;
+      min-height: 52px;
+      position: relative;
+    }
+    .issue-row.is-expanded {
+      background: #fbfcfd;
+      border-left-color: var(--blue);
+    }
+    .issue-row.is-child { margin-left: 22px; }
+    .issue-row.is-blocked-child { border-left-color: var(--amber); }
+    .issue-row-main {
+      background: transparent;
+      border: 0;
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      padding: 8px 8px 8px 12px;
+      text-align: left;
+    }
+    .issue-identity {
+      align-items: center;
+      display: flex;
+      gap: 7px;
+      min-width: 0;
+    }
+    .issue-identity .id {
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-weight: 720;
+      white-space: nowrap;
+    }
+    .issue-identity .title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .issue-classification {
+      align-items: center;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      font-size: 11px;
+      min-width: 0;
+    }
+    .dep-chip {
+      align-items: center;
+      border: 1px solid var(--line-faint);
+      color: var(--text-2);
+      display: inline-flex;
+      font-family: var(--font-mono);
+      gap: 4px;
+      min-height: 18px;
+      padding: 0 5px;
+    }
+    .agent-badge {
+      align-items: center;
+      background: transparent;
+      border: 1px solid rgba(58, 95, 206, 0.20);
+      color: var(--blue);
+      display: inline-flex;
+      gap: 4px;
+      min-height: 18px;
+      padding: 0 5px;
+    }
+    .issue-expand-btn {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      color: var(--muted);
+      display: inline-flex;
+      justify-content: center;
+      min-width: 32px;
+    }
+    .issue-dossier {
+      grid-column: 1 / -1;
+      padding: 0 14px 14px;
+    }
+    .dossier-stack { display: grid; gap: 0; }
+    .dossier-head {
+      align-items: start;
+      display: flex;
+      gap: 10px;
+      padding: 10px 0 6px;
+    }
+    .dossier-meta-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-left: auto;
+    }
+    .dossier-section {
+      display: grid;
+      gap: 7px;
+      margin-top: 12px;
+    }
+    .dossier-section-title {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 740;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .dossier-body-text {
+      color: var(--text-2);
+      max-width: 860px;
+    }
+    .dossier-body-text code {
+      background: var(--surface-soft);
+      color: var(--text);
+      padding: 1px 4px;
+    }
+    .dossier-list, .audit-log {
+      border: 1px solid var(--line-faint);
+      display: grid;
+    }
+    .dossier-list div, .audit-row {
+      align-items: center;
+      border-top: 1px solid var(--line-faint);
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 120px minmax(0, 1fr) 100px;
+      min-height: 28px;
+      padding: 0 8px;
+    }
+    .dossier-list div:first-child, .audit-row:first-child { border-top: 0; }
+    .dependency-tree {
+      border-left: 2px solid var(--line);
+      display: grid;
+      gap: 6px;
+      padding-left: 10px;
+    }
+    .dependency-tree .node {
+      align-items: center;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 132px minmax(0, 1fr) 82px;
+    }
+
+    @media (max-width: 1100px) {
+      .app { min-width: 960px; }
+      .drawer { width: 64%; }
+      .main { grid-template-columns: minmax(0, 1fr); }
+      .right-column { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" focusable="false"><defs>
+    <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></symbol>
+    <symbol id="ic-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.3 1.3M17.1 17.1l1.3 1.3M18.4 5.6L17.1 6.9M6.9 17.1l-1.3 1.3"/></symbol>
+    <symbol id="ic-inspector" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M15 5v14"/></symbol>
+    <symbol id="ic-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="ic-feed" viewBox="0 0 24 24"><circle cx="6.5" cy="17.5" r="1.3"/><path d="M5 12a7 7 0 0 1 7 7"/><path d="M5 6a13 13 0 0 1 13 13"/></symbol>
+    <symbol id="ic-issues" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.3"/></symbol>
+    <symbol id="ic-specialists" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></symbol>
+    <symbol id="ic-operations" viewBox="0 0 24 24"><path d="M4 7h8M16 7h4M4 12h4M12 12h8M4 17h10M18 17h2"/><circle cx="14" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="17" r="2"/></symbol>
+    <symbol id="ic-evidence" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></symbol>
+    <symbol id="ic-graph" viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17" cy="6" r="2.4"/><circle cx="17" cy="18" r="2.4"/><path d="M8.2 10.9l6.6-3.7M8.2 13.1l6.6 3.7"/></symbol>
+    <symbol id="ic-github" viewBox="0 0 24 24"><circle cx="7" cy="6" r="2.4"/><circle cx="7" cy="18" r="2.4"/><circle cx="17" cy="9" r="2.4"/><path d="M7 8.4v7.2M17 11.4c0 3.2-4 2.4-4 6.2"/></symbol>
+    <symbol id="ic-observability" viewBox="0 0 24 24"><path d="M3 12h3.5l2-5 3 10 2.2-6 1.3 1h6"/></symbol>
+    <symbol id="ic-sessions" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.2l3 1.8"/></symbol>
+    <symbol id="ic-terminal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10l3 2-3 2M12.5 15h4"/></symbol>
+    <symbol id="ic-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="5" r="2.2"/><path d="M8 19h6a3 3 0 0 0 0-6h-4a3 3 0 0 1 0-6h6"/></symbol>
+    <symbol id="ic-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></symbol>
+    <symbol id="ic-gavel" viewBox="0 0 24 24"><path d="M3 21h8"/><path d="M5.5 13.5l5-5M11.5 7.5l5 5M9 5l5 5"/><path d="M13.5 4.5l4 4-2.5 2.5-4-4z"/></symbol>
+    <symbol id="ic-bars" viewBox="0 0 24 24"><path d="M5 20V11M12 20V5M19 20v-6"/></symbol>
+    <symbol id="ic-flame" viewBox="0 0 24 24"><path d="M12 3c1 4-3 5-3 9a3 3 0 0 0 6 0c0-1.5-.7-2.3-1-3 2 1 3.5 3 3.5 5.2A6 6 0 0 1 6 19c0-4.5 4.5-6.5 6-16z"/></symbol>
+    <symbol id="ic-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z"/></symbol>
+    <symbol id="ic-server" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="7" rx="1.5"/><rect x="4" y="13" width="16" height="7" rx="1.5"/><path d="M7.5 7.5h.01M7.5 16.5h.01"/></symbol>
+    <symbol id="ic-chevrons-left" viewBox="0 0 24 24"><path d="M13 6l-6 6 6 6M19 6l-6 6 6 6"/></symbol>
+    <symbol id="ic-check" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></symbol>
+    <symbol id="ic-chevron-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="ic-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="ic-git-merge" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="9" r="2.4"/><path d="M6 8.4v7.2M18 11.4c0 3.6-4.5 2.4-6.5 4.6"/></symbol>
+    <symbol id="ic-circle-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.3"/></symbol>
+    <symbol id="ic-panel-left" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v14"/></symbol>
+    <symbol id="ic-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></symbol>
+    <symbol id="ic-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.2l3 1.8"/></symbol>
+    <symbol id="ic-play" viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></symbol>
+    <symbol id="ic-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="ic-git-commit" viewBox="0 0 24 24"><path d="M12 3v6M12 15v6"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="ic-git-pull-request" viewBox="0 0 24 24"><circle cx="7" cy="6" r="2.2"/><circle cx="7" cy="18" r="2.2"/><path d="M7 8.2v7.6"/><circle cx="17" cy="18" r="2.2"/><path d="M17 15.8V9a3 3 0 0 0-3-3h-3"/><path d="M13 3.5 10.5 6 13 8.5"/></symbol>
+    <symbol id="ic-git-pull-request-closed" viewBox="0 0 24 24"><circle cx="7" cy="6" r="2.2"/><circle cx="7" cy="18" r="2.2"/><path d="M7 8.2v7.6"/><circle cx="17" cy="18" r="2.2"/><path d="M17 15.8V10"/><path d="M14.6 4.2 19.4 9M19.4 4.2l-4.8 4.8"/></symbol>
+    <symbol id="ic-git-branch" viewBox="0 0 24 24"><circle cx="7" cy="6" r="2.2"/><circle cx="7" cy="18" r="2.2"/><path d="M7 8.2v7.6"/><circle cx="17" cy="6" r="2.2"/><path d="M17 8.2c0 5.2-10 1.8-10 7.6"/></symbol>
+    <symbol id="ic-tag" viewBox="0 0 24 24"><path d="M3 12 11 4h8v8l-8 8z"/><circle cx="15.3" cy="8.7" r="1.2"/></symbol>
+    <symbol id="ic-star" viewBox="0 0 24 24"><path d="M12 4l2.3 4.9 5.2.6-3.9 3.5 1.1 5.1L12 19.8 7.3 22.6l1.1-5.1-3.9-3.5 5.2-.6z"/></symbol>
+    <symbol id="ic-repo" viewBox="0 0 24 24"><path d="M7 4h10v13H7a2 2 0 0 0-2 2V6a2 2 0 0 1 2-2z"/><path d="M5 19a2 2 0 0 1 2-2h10v4"/></symbol>
+    <symbol id="ic-link-external" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8"/><path d="M18 13.5V18a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 18V9a1.5 1.5 0 0 1 1.5-1.5H12"/></symbol>
+    <symbol id="ic-code-review" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l3-4M16 21l-3-4"/><path d="M8 10.6 10 12.6 14 8.6"/></symbol>
+  </defs></svg>
+  <div class="app">
+    <header class="topbar">
+      <button class="icon-btn" id="sidebar-toggle" aria-label="collapse sidebar"><svg class="ic"><use href="#ic-panel-left"/></svg></button>
+      <div class="brand"><span class="brand-mark"></span><span>xtrm</span></div>
+      <button class="topnav-item" data-parent="feed"><svg class="ic"><use href="#ic-feed"/></svg>Feed</button>
+      <button class="topnav-item" data-parent="issues"><svg class="ic"><use href="#ic-issues"/></svg>Issues</button>
+      <button class="topnav-item" data-parent="specialists"><svg class="ic"><use href="#ic-specialists"/></svg>Specialists</button>
+      <button class="topnav-item is-active" data-parent="operations"><svg class="ic"><use href="#ic-operations"/></svg>Operations</button>
+      <button class="topnav-item" data-parent="github"><svg class="ic"><use href="#ic-github"/></svg>GitHub</button>
+      <label class="search"><svg class="ic"><use href="#ic-search"/></svg><input value="search" aria-label="Search" /></label>
+      <div class="top-actions">
+        <button class="icon-btn" aria-label="toggle theme"><svg class="ic"><use href="#ic-theme"/></svg></button>
+        <button class="icon-btn is-active" id="inspector-toggle" aria-label="toggle inspector"><svg class="ic"><use href="#ic-inspector"/></svg></button>
+      </div>
+    </header>
+
+    <div class="topbar2" aria-label="Surfaces of the active section">
+      <div class="ctx" data-parent-ctx="feed">
+        <button class="ctx-item" data-surface-button="feed"><svg class="ic"><use href="#ic-feed"/></svg>Feed</button>
+      </div>
+      <div class="ctx" data-parent-ctx="issues">
+        <button class="ctx-item" data-surface-button="issues"><svg class="ic"><use href="#ic-issues"/></svg>Issues</button>
+        <button class="ctx-item" data-surface-button="graph"><svg class="ic"><use href="#ic-graph"/></svg>Graph</button>
+      </div>
+      <div class="ctx" data-parent-ctx="specialists">
+        <button class="ctx-item" data-surface-button="specialists"><svg class="ic"><use href="#ic-specialists"/></svg>Specialists</button>
+      </div>
+      <div class="ctx is-active" data-parent-ctx="operations">
+        <button class="ctx-item is-active" data-surface-button="operations"><svg class="ic"><use href="#ic-operations"/></svg>Operations</button>
+        <button class="ctx-item" data-surface-button="evidence"><svg class="ic"><use href="#ic-evidence"/></svg>Evidence</button>
+        <button class="ctx-item" data-surface-button="observability"><svg class="ic"><use href="#ic-observability"/></svg>Observability</button>
+        <button class="ctx-item" data-surface-button="sessions"><svg class="ic"><use href="#ic-sessions"/></svg>Sessions</button>
+        <button class="ctx-item" data-surface-button="terminal"><svg class="ic"><use href="#ic-terminal"/></svg>Terminal</button>
+        <span class="ctx-sections" data-sections-for="operations">
+          <span class="ctx-div"></span>
+          <button class="ctx-item"><svg class="ic"><use href="#ic-specialists"/></svg>Specialist health</button>
+          <button class="ctx-item"><svg class="ic"><use href="#ic-route"/></svg>Chain throughput</button>
+          <button class="ctx-item"><svg class="ic"><use href="#ic-gavel"/></svg>Gate verdicts</button>
+          <button class="ctx-item is-active"><svg class="ic"><use href="#ic-bars"/></svg>Token usage</button>
+          <button class="ctx-item"><svg class="ic"><use href="#ic-flame"/></svg>Escalations</button>
+          <button class="ctx-item"><svg class="ic"><use href="#ic-server"/></svg>Runtime</button>
+        </span>
+      </div>
+      <div class="ctx" data-parent-ctx="github">
+        <button class="ctx-item" data-surface-button="github"><svg class="ic"><use href="#ic-github"/></svg>GitHub</button>
+      </div>
+    </div>
+
+    <aside class="sidebar" aria-label="Query lab">
+      <div class="side-title">Scopes</div>
+      <button class="side-item is-active"><svg class="ic"><use href="#ic-circle-dot"/></svg><span class="lbl">all xtrm</span><span class="count">19</span></button>
+      <button class="side-item"><svg class="ic"><use href="#ic-specialists"/></svg><span class="lbl">specialists</span><span class="count">7</span></button>
+      <button class="side-item"><svg class="ic"><use href="#ic-github"/></svg><span class="lbl">gitboard</span><span class="count">3</span></button>
+      <button class="side-item"><svg class="ic"><use href="#ic-graph"/></svg><span class="lbl">substrate</span><span class="count">4</span></button>
+      <div class="side-filters" data-filters-for="feed" style="display:none">
+        <div class="side-title">Filters</div>
+        <div class="side-chiprow"><span class="chip blue">all</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-specialists"/></svg>specialists</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-github"/></svg>github</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-issues"/></svg>issues</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-terminal"/></svg>logs</span></div>
+      </div>
+      <div class="side-filters" data-filters-for="issues" style="display:none">
+        <div class="side-title">Filters</div>
+        <div class="side-chiprow"><span class="chip blue">all</span><span class="chip">in progress</span><span class="chip">ready</span><span class="chip">open</span><span class="chip">closed</span></div>
+      </div>
+      <div class="side-filters" data-filters-for="specialists" style="display:none">
+        <div class="side-title">Filters</div>
+        <div class="side-chiprow"><span class="chip blue">all</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-play"/></svg>running</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-clock"/></svg>waiting</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-check"/></svg>done</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-x"/></svg>failed</span></div>
+      </div>
+      <div class="side-filters" data-filters-for="evidence" style="display:none">
+        <div class="side-title">Filters</div>
+        <div class="side-chiprow"><span class="chip blue">all proof</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-check"/></svg>passed</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-alert"/></svg>partial</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-x"/></svg>failed</span></div>
+        <div class="side-chiprow"><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-gavel"/></svg>verdicts</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-shield"/></svg>tests</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-git-commit"/></svg>diffs</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-evidence"/></svg>artifacts</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-flame"/></svg>regressions</span></div>
+      </div>
+      <div class="side-filters" data-filters-for="github" style="display:none">
+        <div class="side-title">Filters</div>
+        <div class="side-chiprow"><span class="chip blue">all</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-git-pull-request"/></svg>PRs</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-git-commit"/></svg>commits</span><span class="chip"><svg class="ic" style="font-size:11px"><use href="#ic-tag"/></svg>releases</span></div>
+      </div>
+      <div class="side-title">Saved queries</div>
+      <button class="side-item"><svg class="ic"><use href="#ic-observability"/></svg><span class="lbl">role_success_p95</span></button>
+      <button class="side-item"><svg class="ic"><use href="#ic-bars"/></svg><span class="lbl">template_cost_by_day</span></button>
+      <button class="side-item"><svg class="ic"><use href="#ic-alert"/></svg><span class="lbl">debug_failures</span></button>
+      <div class="side-title">Fields</div>
+      <button class="side-item"><svg class="ic"><use href="#ic-circle-dot"/></svg><span class="lbl">participant_role</span></button>
+      <button class="side-item"><svg class="ic"><use href="#ic-route"/></svg><span class="lbl">chain_template</span></button>
+      <button class="side-item"><svg class="ic"><use href="#ic-clock"/></svg><span class="lbl">duration_seconds</span></button>
+      <button class="side-item"><svg class="ic"><use href="#ic-bars"/></svg><span class="lbl">tokens_total</span></button>
+    </aside>
+
+    <main class="workspace-shell">
+      <section class="surface is-active" id="surface-operations">
+      <section class="main" aria-label="Operations query lab">
+        <div class="page-title">
+          <div>
+            <span class="eyebrow">AgentOps console</span>
+            <h1>Operations query lab</h1>
+            <p>Native AgentOps dashboard with editable queries, fields, grouping, and chart panels. Clicking a row opens the canonical drawer without squashing the workbench.</p>
+          </div>
+          <button class="role-filter">all roles</button>
+        </div>
+
+        <section class="stack">
+          <div class="kpis">
+            <div class="kpi"><span>specialists active</span><b>12</b><em>5 roles · 3 models</em></div>
+            <div class="kpi"><span>chains in flight</span><b>18</b><em>+3 vs 1h</em></div>
+            <div class="kpi"><span>failure rate 24h</span><b>3.8%</b><em>-0.4 vs avg</em></div>
+            <div class="kpi"><span>forensic coverage</span><b>72%</b><em>catalog growing</em></div>
+          </div>
+
+          <div class="query-panel">
+            <div class="panel-head"><h2>Job duration by role</h2><small>query: p95 duration grouped by participant_role · editable</small></div>
+            <div class="query-grid">
+              <div class="query-field"><label>Query</label><input value="histogram_quantile(0.95, sum(rate(xtrm_job_duration_seconds_bucket[5m])) by (le, participant_role))" /></div>
+              <div class="query-field"><label>Group by</label><select><option>participant_role</option><option>chain_template</option><option>model</option></select></div>
+              <div class="query-field"><label>Range</label><select><option>24h</option><option>7d</option><option>30d</option></select></div>
+              <div class="query-field"><label>Render</label><select><option>line</option><option>table</option><option>stat</option></select></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-frame">
+                <svg viewBox="0 0 700 180" role="img" aria-label="duration chart">
+                  <polyline fill="none" stroke="#3a5fce" stroke-width="2.4" points="8,132 58,126 108,130 158,104 208,116 258,76 308,92 358,58 408,74 458,45 508,56 558,38 608,50 692,42" />
+                  <polyline fill="none" stroke="#2f8d5e" stroke-width="1.8" points="8,152 58,146 108,149 158,136 208,140 258,126 308,131 358,118 408,124 458,112 508,118 558,105 608,110 692,101" />
+                  <polyline fill="none" stroke="#8c4a1f" stroke-width="1.8" points="8,142 58,136 108,138 158,126 208,130 258,116 308,121 358,104 408,109 458,96 508,101 558,90 608,94 692,88" />
+                </svg>
+              </div>
+              <div class="legend"><span><i class="b"></i>duration p95</span><span><i class="g"></i>review pass</span><span><i class="a"></i>escalation pressure</span></div>
+            </div>
+          </div>
+
+          <div class="lower-grid">
+            <section class="table-card">
+              <div class="panel-head" style="padding:10px;"><h2>Chain throughput</h2><small>per template · click row opens drawer</small></div>
+              <table>
+                <thead><tr><th>Template</th><th>Chains</th><th>Done</th><th>Esc.</th><th>P50</th><th>P95</th></tr></thead>
+                <tbody>
+                  <tr><td><b>code-standard</b></td><td>18</td><td>16</td><td>0</td><td>4m12s</td><td>10m09s</td></tr>
+                  <tr class="row-selected"><td><b>debug</b><br><span class="muted">opened in drawer</span></td><td>5</td><td>4</td><td>1</td><td>6m02s</td><td>12m44s</td></tr>
+                  <tr><td><b>code-with-tests</b></td><td>7</td><td>6</td><td>0</td><td>7m38s</td><td>15m10s</td></tr>
+                  <tr><td><b>security-deep</b></td><td>1</td><td>1</td><td>0</td><td>12m21s</td><td>12m21s</td></tr>
+                </tbody>
+              </table>
+            </section>
+            <section class="rail-card">
+              <div class="panel-head" style="padding:10px;"><h2>Failure clusters</h2><small>memory type:failure</small></div>
+              <div class="rail-list">
+                <div class="rail-item amber"><b>scope mixed auth and logging</b><span class="muted">3 instances · 12h · watch</span></div>
+                <div class="rail-item green"><b>reviewer rejected stale AC</b><span class="muted">2 instances · mitigated</span></div>
+                <div class="rail-item blue"><b>debugger could not isolate root</b><span class="muted">1 instance · open</span></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <aside class="right-column stack">
+          <section class="rail-card">
+            <div class="panel-head" style="padding:10px;"><h2>Evidence packets</h2><small>latest</small></div>
+            <div class="rail-list">
+              <div class="rail-item green"><b>specialist live-feed integration</b><span class="muted">verdict pass · tests pass · diff attached</span></div>
+              <div class="rail-item amber"><b>debug chain template</b><span class="muted">operator pending · hard cap reached</span></div>
+              <div class="rail-item blue"><b>substrate bridge</b><span class="muted">schema note · followup open</span></div>
+            </div>
+          </section>
+          <section class="rail-card">
+            <div class="panel-head" style="padding:10px;"><h2>Recent objects</h2><small>drawer targets</small></div>
+            <div class="rail-list">
+              <div class="rail-item blue"><b class="mono">chain:forge-70el</b><span>specialist live-feed integration</span></div>
+              <div class="rail-item green"><b class="mono">bead:unitAI-kgxod</b><span>structured forensic events in Gitboard</span></div>
+              <div class="rail-item amber"><b class="mono">epic:console-roadmap</b><span>pre-substrate dashboard contract</span></div>
+            </div>
+          </section>
+        </aside>
+      </section>
+
+      <div class="underlay-fade" style="display:none"></div>
+
+      <aside class="drawer" aria-label="Bead Inspector" style="display:none">
+        <header class="drawer-head">
+          <div class="drawer-kicker"><span>xtrm</span><span>/</span><span>chain</span><span>/</span><span class="mono">chain:forge-70el</span></div>
+          <div class="drawer-title-row">
+            <div class="drawer-title">
+              <h2><span class="mono">chain:forge-70el</span> / <em>specialist live-feed integration</em></h2>
+            </div>
+            <div class="drawer-actions"><button class="btn">Copy ID</button><button class="btn">Open trace</button><button class="btn primary">Review evidence</button></div>
+          </div>
+          <div class="tags">
+            <span class="chip blue">kind:chain</span>
+            <span class="chip green">state:working</span>
+            <span class="chip">template:code-standard</span>
+            <span class="chip">trace:tr-chain-70el</span>
+            <span class="chip">tokens:143k</span>
+            <span class="chip amber" title="stima non autoritativa - USD deferred (piani subscription)">est. cost ~$0.81</span>
+          </div>
+        </header>
+
+        <nav class="drawer-tabs" aria-label="Chain inspector tabs">
+          <button class="is-active" data-tab="composition">Composition</button>
+          <button data-tab="activity">Activity</button>
+          <button data-tab="channel">Channel</button>
+          <button data-tab="outcome">Outcome</button>
+          <button data-tab="trace">Trace</button>
+          <button data-tab="diff">Diff</button>
+          <button data-tab="memories">Memories</button>
+        </nav>
+
+        <div class="drawer-body">
+          <section class="tab-panel is-active" id="tab-composition">
+            <section class="section">
+              <h3>Resolved chain · code-standard</h3>
+              <p class="secondary">Layer-1 domain steps with Layer-2 mandatory gates overlaid. Each step shows role, class, and whether it blocks. This is a Chain Drawer — its tabs differ from the Issue Drawer (polymorphism, §11.0).</p>
+            </section>
+            <section class="section">
+              <h3>Layer 1 · domain steps</h3>
+              <div class="comp-list">
+                <div class="comp-step"><span class="seg-chip"><span class="k">executor</span><span class="sl">/</span><span>step</span><span class="sl">/</span><span>writer</span></span><span class="lab">implement</span><span class="chip green">done</span></div>
+                <div class="comp-step"><span class="seg-chip"><span class="k">reviewer</span><span class="sl">/</span><span>gate</span><span class="sl">/</span><span style="color:var(--red)">blocking</span></span><span class="lab">review</span><span class="chip green">pass</span></div>
+                <div class="comp-step"><span class="seg-chip"><span class="k">test-runner</span><span class="sl">/</span><span>step</span><span class="sl">/</span><span>verify</span></span><span class="lab">tests</span><span class="chip">next</span></div>
+              </div>
+            </section>
+            <section class="section violet">
+              <h3>Layer 2 · mandatory gates</h3>
+              <div class="comp-list">
+                <div class="comp-step"><span class="seg-chip"><span class="k">code-sanity</span><span class="sl">/</span><span>gate</span><span class="sl">/</span><span style="color:var(--red)">blocking</span></span><span class="lab">overlaid on every writer step</span></div>
+                <div class="comp-step"><span class="seg-chip"><span class="k">security-auditor</span><span class="sl">/</span><span>gate</span><span class="sl">/</span><span>advisory</span></span><span class="lab">non-blocking</span></div>
+              </div>
+            </section>
+          </section>
+
+          <section class="tab-panel" id="tab-activity">
+            <div class="job-card">
+              <div class="job-rail green"></div>
+              <div class="job-body">
+                <div class="job-head">
+                  <span class="id-chip"><span class="role" style="color:var(--green)">reviewer</span><span class="div">/</span><span class="sub">forge-70el</span><span class="div">/</span><span class="sub dim">gpt-5.4-mini</span></span>
+                  <span class="status-word">done</span>
+                  <span class="pill green"><svg class="ic"><use href="#ic-check"/></svg>passed</span>
+                  <span class="job-metrics"><b>59</b> tests <span class="sep">·</span> <span class="link">7 files</span> <span class="sep">·</span> 5m 12s <span class="sep">·</span> <b>143k</b> tok</span>
+                </div>
+                <button class="job-row" type="button"><span>executor <span style="color:var(--muted)">→</span> reviewer</span><span class="more">24 events <svg class="ic" style="font-size:13px"><use href="#ic-chevron-right"/></svg></span></button>
+                <div class="job-files">
+                  <div class="files-head"><span class="mono" style="color:var(--muted)">v</span><span>Files touched</span><span class="count">7</span><span class="delta"><span style="color:var(--green)">+188</span> <span style="color:var(--red)">−24</span></span></div>
+                  <div class="file-row"><span class="path">components/specialists/BeadActivityPane.tsx</span><span class="fdelta"><span style="color:var(--green)">+42</span> <span style="color:var(--red)">−8</span></span></div>
+                  <div class="file-row"><span class="path">api/routes/specialists.ts</span><span class="fdelta"><span style="color:var(--green)">+15</span> <span style="color:var(--red)">−2</span></span></div>
+                  <div class="file-row"><span class="path">specialist/forensic-events.ts</span><span class="fdelta"><span style="color:var(--green)">+88</span></span></div>
+                  <div class="file-row" style="color:var(--muted);">+ 4 more</div>
+                  <div class="diff-box">
+                    <div class="diff-head">BeadActivityPane.tsx</div>
+                    <pre><span style="color:var(--red)">- &lt;TerminalFeed job={job} /&gt;</span>
+<span style="color:var(--green)">+ &lt;ForensicStream job={job} live={running} /&gt;</span>
+<span style="color:var(--green)">+ &lt;ResultZone text={resultText} /&gt;</span></pre>
+                  </div>
+                </div>
+                <div class="result-zone">
+                  <span class="label">Result</span><span class="body">Forensic stream and result stay as separate evidence; the stream replaces the raw terminal dump.</span>
+                </div>
+              </div>
+            </div>
+            <div class="job-card">
+              <div class="job-rail blue"></div>
+              <div class="job-body">
+                <div class="job-head">
+                  <span class="id-chip"><span class="role" style="color:var(--blue)">executor</span><span class="div">/</span><span class="sub">forge-70el</span><span class="div">/</span><span class="sub dim">gpt-5.4-mini</span></span>
+                  <span class="pill blue"><span class="dot"></span>running</span>
+                  <span class="job-metrics"><b>8.4k</b> tok</span>
+                </div>
+                <div class="forensics" style="border-left:0; padding:4px 13px 9px;">
+                  <div class="event"><code>job.started</code><span>pid 4821 · git</span><span class="redaction">clean</span></div>
+                  <div class="event"><code>tool.call.completed</code><span>bash · 312ms</span><span class="redaction">clean</span></div>
+                  <div class="event"><code>turn.completed</code><span>8.4k tok</span><span class="redaction">clean</span></div>
+                  <div class="event"><span class="muted" style="font-family:var(--font-ui);">streaming…</span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="tab-panel" id="tab-outcome">
+            <div class="drawer-grid">
+              <div>
+                <section class="section green">
+                  <h3>Verdict packet</h3>
+                  <div class="tags"><span class="chip green">scope PASS</span><span class="chip green">quality PASS</span><span class="chip green">tests PASS</span></div>
+                  <div class="acceptance"><b>close</b><span>Chain finalized PASS after the reviewer gate. Worktree merged to feat/forensic-json.</span></div>
+                  <div class="acceptance"><b>reason</b><span>All Layer-1 steps done, Layer-2 gates cleared; review.verdict.pass.</span></div>
+                </section>
+                <section class="section">
+                  <h3>Memories distilled at close</h3>
+                  <div class="memory-list">
+                    <div class="memory green"><b>best_practice</b><span class="secondary">Forensic stream replaces the raw terminal dump as the live view; keep the result in its own zone.</span></div>
+                  </div>
+                </section>
+                <section class="section">
+                  <h3>Followups</h3>
+                  <div class="lineage">
+                    <button class="relation amber"><code>unitAI-0gdjp</code><span><b>Formalize AgentOps event catalog</b><br><span class="muted">discovered-from this chain</span></span><span>open</span></button>
+                  </div>
+                </section>
+              </div>
+              <aside>
+                <section class="section violet">
+                  <h3>Artifacts</h3>
+                  <div class="artifact-list">
+                    <div class="artifact green"><code>verdict:review.pass</code><span class="muted">no regressions accepted</span></div>
+                    <div class="artifact"><code>commit:9f3a1c2</code><span class="muted">merged to feat/forensic-json</span></div>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </section>
+
+          <section class="tab-panel" id="tab-diff">
+            <section class="section">
+              <h3>Exact proof diff</h3>
+              <pre class="diff"><span class="del">- &lt;TerminalFeed job={job} /&gt;</span>
+<span class="add">+ &lt;Disclosure label="terminal feed" expanded={feedExpanded}&gt;</span>
+<span class="add">+   &lt;TerminalTranscript text={feedText} noInnerScroll /&gt;</span>
+<span class="add">+ &lt;/Disclosure&gt;</span>
+<span class="add">+ &lt;Disclosure label="run result" expanded={resultExpanded}&gt;</span>
+<span class="add">+   &lt;ResultMarkdown text={resultText} fitWidth /&gt;</span>
+<span class="add">+ &lt;/Disclosure&gt;</span>
+<span class="add">+ &lt;ForensicTimeline events={feedEvents} /&gt;</span></pre>
+            </section>
+          </section>
+
+          <section class="tab-panel" id="tab-channel">
+            <section class="section">
+              <h3>Channel · pulse log</h3>
+              <p class="secondary">Incoming and outgoing pulses for this chain, plus cross-chain pulses from the coordinator.</p>
+              <div style="margin-top:6px;">
+                <div class="pulse-row"><span class="dir" style="color:var(--green)">in</span><span class="pbody">job pulse · executor activation</span><span class="muted">19:10:02</span></div>
+                <div class="pulse-row"><span class="dir" style="color:var(--blue)">out</span><span class="pbody">turn_end · ready for review</span><span class="muted">19:15:48</span></div>
+                <div class="pulse-row"><span class="dir" style="color:var(--green)">in</span><span class="pbody">verdict · review.pass from reviewer</span><span class="muted">19:16:05</span></div>
+                <div class="pulse-row"><span class="dir" style="color:var(--blue)">out</span><span class="pbody">finalize · chain closed PASS</span><span class="muted">19:16:20</span></div>
+              </div>
+            </section>
+          </section>
+          <section class="tab-panel" id="tab-trace">
+            <section class="section">
+              <h3>Trace · OTel waterfall</h3>
+              <p class="secondary">Chain span with per-job child spans. <span class="mono">trace:tr-chain-70el</span></p>
+              <div style="margin-top:8px;">
+                <div class="wf-row"><span>chain forge-70el</span><div class="wf-track"><span style="width:100%;background:var(--blue)"></span></div><span class="muted">5m20s</span></div>
+                <div class="wf-row"><span>executor</span><div class="wf-track"><span style="margin-left:2%;width:46%;background:var(--green)"></span></div><span class="muted">2m26s</span></div>
+                <div class="wf-row"><span>reviewer</span><div class="wf-track"><span style="margin-left:50%;width:44%;background:var(--green)"></span></div><span class="muted">2m20s</span></div>
+                <div class="wf-row"><span>test-runner</span><div class="wf-track"><span style="margin-left:92%;width:8%;background:var(--amber)"></span></div><span class="muted">next</span></div>
+              </div>
+            </section>
+          </section>
+
+          <section class="tab-panel" id="tab-memories">
+            <section class="section green">
+              <h3>Operator memories</h3>
+              <div class="memory-list">
+                <div class="memory green"><b>Drawer is canonical bead detail</b><span class="secondary">Inline feed is fast preview. Drawer owns all historical runs, evidence, lineage, memories, GitHub links, and followups.</span></div>
+                <div class="memory"><b>Quality bar</b><span class="secondary">Previous evidence and operations mock detail level is the floor. Object-first drift is not canonical.</span></div>
+              </div>
+            </section>
+          </section>
+        </div>
+      </aside>
+      </section>
+
+      <section class="surface" id="surface-issues">
+        <section class="main issues-main" aria-label="Issues feed with Bead Inspector">
+          <div class="page-title">
+            <div>
+              <span class="eyebrow">Beads console</span>
+              <h1>Issues feed</h1>
+              <p>The feed remains the fast inline surface from <span class="mono">IssueFeed.tsx</span>. Row click expands the inline dossier in place (default peek); the chevron and the ID chip open the canonical Bead Inspector drawer.</p>
+            </div>
+            <button class="role-filter">open + closed</button>
+          </div>
+
+          <section class="issue-feed-shell">
+            <label class="feed-searchbar"><span class="mono">/</span><input value="unitAI-kgxod specialist feed" aria-label="Search beads" /></label>
+            <div class="issue-feed">
+              <div class="feed-section-title"><svg class="ic" style="font-size:13px"><use href="#ic-chevron-right"/></svg><span>in progress:2</span></div>
+              <article class="issue-row is-expanded">
+                <button class="issue-row-main" type="button">
+                  <span class="issue-identity"><span class="id">unitAI-kgxod</span><span class="muted">/</span><span class="title">Gitboard: render specialist feed from structured forensic events</span></span>
+                  <span class="issue-classification">
+                    <span class="seg-chip"><span class="k">feature</span><span class="sl">/</span><span>in progress</span><span class="sl">/</span><span style="color:var(--blue)">P1</span></span><span>updated 18m</span>
+                    <span class="dep-chip">tracks unitAI-60w93.15</span><span class="agent-badge">reviewer/job-done</span><span class="muted">· 4 runs</span>
+                  </span>
+                </button>
+                <button class="issue-expand-btn" type="button" aria-label="Collapse unitAI-kgxod inline dossier"><svg class="ic"><use href="#ic-chevron-down"/></svg></button>
+                <section class="issue-dossier">
+                  <div class="dossier-stack">
+                    <div class="dossier-head">
+                      <div>
+                        <span class="issue-identity"><span class="id">unitAI-kgxod</span><span class="muted">/</span><span class="title">structured forensic feed rendering</span></span>
+                        <div class="issue-classification"><span class="seg-chip"><span class="k">feature</span><span class="sl">/</span><span>in progress</span><span class="sl">/</span><span>P1</span></span><span>owner: console</span></div>
+                      </div>
+                      <div class="dossier-meta-strip"><span class="chip blue">type:feature</span><span class="chip green">source:sqlite</span><span class="chip">project:gitboard</span></div>
+                    </div>
+                    <section class="dossier-section">
+                      <div class="dossier-section-title">Description</div>
+                      <div class="dossier-body-text">Render specialist feed from structured forensic events in Gitboard while keeping the existing terminal transcript. The drawer must reconstruct this dossier and add historical runs, evidence, lineage, memories, GitHub links, and followups.</div>
+                    </section>
+                    <section class="dossier-section">
+                      <div class="dossier-section-title">Specialist activity</div>
+                      <div class="dossier-list">
+                        <div><code>reviewer/job-done</code><span>Verified terminal feed + markdown result + forensic timeline.</span><span class="chip green">done</span></div>
+                        <div><code>executor/job-waiting</code><span>Waiting for operator input after feed endpoint audit.</span><span class="chip amber">waiting</span></div>
+                      </div>
+                    </section>
+                    <section class="dossier-section">
+                      <div class="dossier-section-title">Notes</div>
+                      <div class="dossier-body-text">Inline expanded dossier stays lightweight. Drawer is canonical for reopening closed linked beads and past specialist runs.</div>
+                    </section>
+                    <section class="dossier-section">
+                      <div class="dossier-section-title">Labels</div>
+                      <div class="tags"><span class="chip blue">console</span><span class="chip green">traceability</span><span class="chip">specialists</span><span class="chip">pre-substrate</span></div>
+                    </section>
+                    <section class="dossier-section">
+                      <div class="dossier-section-title">Related</div>
+                      <div class="dossier-list">
+                        <div><code>unitAI-60w93.15</code><span>Migrate gitboard specialist feed consumers to forensic JSON.</span><span>closed</span></div>
+                        <div><code>unitAI-0gdjp</code><span>Define AgentOps event catalog for xtrm observability.</span><span>open</span></div>
+                      </div>
+                    </section>
+                    <section class="dossier-section">
+                      <div class="dossier-section-title">Audit log</div>
+                      <div class="audit-log">
+                        <div class="audit-row"><code>status_change</code><span>executor marked implementation ready for review</span><span>Jun 4</span></div>
+                        <div class="audit-row"><code>tool_call</code><span>bunx vitest run dashboard drawer tests</span><span>Jun 4</span></div>
+                      </div>
+                    </section>
+                    <section class="dossier-section">
+                      <div class="dossier-section-title">Dependency tree</div>
+                      <div class="dependency-tree">
+                        <div class="node"><code>tracks</code><span>unitAI-60w93.15 / forensic JSON backend endpoint</span><span>closed</span></div>
+                        <div class="node"><code>related</code><span>unitAI-69s6t / substrate telemetry design revision</span><span>open</span></div>
+                        <div class="node"><code>parent</code><span>epic:console-roadmap / pre-substrate dashboard contract</span><span>open</span></div>
+                      </div>
+                    </section>
+                  </div>
+                </section>
+              </article>
+
+              <article class="issue-row is-child is-blocked-child">
+                <button class="issue-row-main" type="button">
+                  <span class="issue-identity"><span class="id">unitAI-0gdjp</span><span class="muted">/</span><span class="title">Define AgentOps event catalog for xtrm observability</span></span>
+                  <span class="issue-classification"><span class="seg-chip"><span class="k">task</span><span class="sl">/</span><span>open</span><span class="sl">/</span><span style="color:var(--amber)">P2</span></span><span>event catalog</span><span class="dep-chip">blocks kgxod polish</span></span>
+                </button>
+                <button class="issue-expand-btn" type="button" aria-label="Expand unitAI-0gdjp inline dossier"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+              </article>
+
+              <div class="feed-section-title"><svg class="ic" style="font-size:13px"><use href="#ic-chevron-down"/></svg><span>open:9, ready:4</span></div>
+              <article class="issue-row">
+                <button class="issue-row-main" type="button">
+                  <span class="issue-identity"><span class="id">forge-70el</span><span class="muted">/</span><span class="title">Specialist live-feed integration</span></span>
+                  <span class="issue-classification"><span class="seg-chip"><span class="k">task</span><span class="sl">/</span><span>ready</span><span class="sl">/</span><span style="color:var(--blue)">P2</span></span><span>chain:forge-70el</span><span class="dep-chip">related kgxod</span></span>
+                </button>
+                <button class="issue-expand-btn" type="button"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+              </article>
+              <article class="issue-row">
+                <button class="issue-row-main" type="button">
+                  <span class="issue-identity"><span class="id">console-roadmap</span><span class="muted">/</span><span class="title">Pre-substrate dashboard contract</span></span>
+                  <span class="issue-classification"><span class="seg-chip"><span class="k">epic</span><span class="sl">/</span><span>open</span><span class="sl">/</span><span style="color:var(--violet)">P1</span></span><span>3 children</span></span>
+                </button>
+                <button class="issue-expand-btn" type="button"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+              </article>
+              <div class="feed-section-title"><svg class="ic" style="font-size:13px"><use href="#ic-chevron-right"/></svg><span>closed:14</span></div>
+              <article class="issue-row">
+                <button class="issue-row-main" type="button">
+                  <span class="issue-identity"><span class="id">unitAI-60w93.15</span><span class="muted">/</span><span class="title">Migrate gitboard specialist feed consumers to forensic JSON</span></span>
+                  <span class="issue-classification"><span class="seg-chip"><span class="k">task</span><span class="sl">/</span><span>closed</span><span class="sl">/</span><span>P1</span></span><span>4 runs</span><span class="agent-badge">history available</span></span>
+                </button>
+                <button class="issue-expand-btn" type="button"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+              </article>
+            </div>
+          </section>
+
+          <aside class="right-column stack">
+            <section class="rail-card">
+              <div class="panel-head" style="padding:10px;"><h2>Drawer contract</h2><small>bead-centric</small></div>
+              <div class="rail-list">
+                <div class="rail-item blue"><b>Row click</b><span class="muted">expands inline dossier in place (default peek)</span></div>
+                <div class="rail-item green"><b>Chevron / ID</b><span class="muted">opens Bead Inspector drawer</span></div>
+                <div class="rail-item amber"><b>Specialist chip</b><span class="muted">opens Activity with job highlighted</span></div>
+              </div>
+            </section>
+          </aside>
+        </section>
+
+        <div class="underlay-fade" style="display:none"></div>
+
+        <aside class="drawer" aria-label="Bead Inspector" style="display:none">
+          <header class="drawer-head">
+            <div class="drawer-kicker"><span>xtrm</span><span>/</span><span>bead</span><span>/</span><span class="mono">unitAI-kgxod</span></div>
+            <div class="drawer-title-row">
+              <div class="drawer-title">
+                <h2><span class="mono">unitAI-kgxod</span> / <em>Render specialist feed from structured forensic events</em></h2>
+              </div>
+              <div class="drawer-actions"><button class="btn">Back</button><button class="btn">Copy ID</button><button class="btn primary">Open Activity</button></div>
+            </div>
+            <div class="tags"><span class="chip blue">kind:bead</span><span class="chip green">state:in-progress</span><span class="chip">project:gitboard</span><span class="chip">runs:4</span></div>
+          </header>
+          <nav class="drawer-tabs" aria-label="Bead inspector tabs">
+            <button class="is-active" data-bead-tab="overview">Overview</button>
+            <button data-bead-tab="lineage">Lineage</button>
+            <button data-bead-tab="activity">Activity</button>
+            <button data-bead-tab="evidence">Evidence</button>
+            <button data-bead-tab="github">GitHub</button>
+            <button data-bead-tab="memories">Memories</button>
+            <button data-bead-tab="followups">Followups</button>
+          </nav>
+          <div class="drawer-body">
+            <section class="tab-panel is-active bead-panel" id="bead-tab-overview">
+              <section class="section">
+                <h3>Overview reconstructs inline dossier</h3>
+                <p class="secondary">The first drawer tab starts from the exact expanded feed dossier: description, specialist activity, notes, labels, related beads, audit log, and dependency tree. The drawer adds persistence, navigation, and deeper tabs.</p>
+              </section>
+              <section class="section green">
+                <h3>Description / contract</h3>
+                <div class="result"><h4>Contract</h4><p>Render structured forensic events for specialist feeds in Gitboard while preserving terminal feed and result markdown. Closed linked beads must be navigable and their historical runs reopenable.</p></div>
+              </section>
+              <section class="section">
+                <h3>Inline dossier parity</h3>
+                <div class="dossier-list">
+                  <div><code>Description</code><span>same content as expanded feed body</span><span>present</span></div>
+                  <div><code>Notes</code><span>operator context and implementation constraints</span><span>present</span></div>
+                  <div><code>Labels</code><span>console, traceability, specialists, pre-substrate</span><span>present</span></div>
+                  <div><code>Audit log</code><span>status changes and tool calls</span><span>present</span></div>
+                  <div><code>Dependency tree</code><span>tracks, related, parent/epic links</span><span>present</span></div>
+                </div>
+              </section>
+            </section>
+            <section class="tab-panel bead-panel" id="bead-tab-lineage">
+              <section class="section">
+                <h3>Lineage</h3>
+                <div class="lineage">
+                  <button class="relation green"><code>tracks unitAI-60w93.15</code><span><b>Forensic JSON backend endpoint</b><br><span class="muted">closed bead · click opens its runs in this drawer</span></span><span>closed</span></button>
+                  <button class="relation amber"><code>related unitAI-0gdjp</code><span><b>AgentOps event catalog</b><br><span class="muted">future event taxonomy for forensic timeline</span></span><span>open</span></button>
+                  <button class="relation blue"><code>parent console-roadmap</code><span><b>Pre-substrate dashboard contract</b><br><span class="muted">epic/container context</span></span><span>open</span></button>
+                  <button class="relation"><code>chain forge-70el</code><span><b>Specialist live-feed integration chain</b><br><span class="muted">opens chain viewer, bead links stay drawer targets</span></span><span>working</span></button>
+                </div>
+              </section>
+            </section>
+            <section class="tab-panel bead-panel" id="bead-tab-activity">
+              <div class="job-card">
+                <div class="job-rail green"></div>
+                <div class="job-body">
+                  <div class="job-head">
+                    <span class="id-chip"><span class="role" style="color:var(--green)">reviewer</span><span class="div">/</span><span class="sub">unitAI-kgxod</span><span class="div">/</span><span class="sub dim">gpt-5.4-mini</span></span>
+                    <span class="status-word">done</span>
+                    <span class="pill green"><svg class="ic"><use href="#ic-check"/></svg>passed</span>
+                    <span class="job-metrics"><b>59</b> tests <span class="sep">·</span> <span class="link">7 files</span> <span class="sep">·</span> 5m 12s</span>
+                  </div>
+                  <button class="job-row" type="button"><span>executor <span style="color:var(--muted)">→</span> reviewer</span><span class="more">24 events <svg class="ic" style="font-size:13px"><use href="#ic-chevron-right"/></svg></span></button>
+                  <div class="result-zone">
+                    <span class="label">Result</span><span class="body">Feed event rendering is integrated. The forensic stream and the result stay separate, each with its own space.</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section class="tab-panel bead-panel" id="bead-tab-evidence">
+              <section class="section green"><h3>Evidence packet</h3><div class="tags"><span class="chip green">scope PASS</span><span class="chip green">tests PASS</span><span class="chip green">visual PASS</span></div></section>
+              <section class="section amber"><h3>Regression contract</h3><pre class="contract"><span class="minus">- drawer replaces issue dossier with unrelated chain object</span>
+<span class="plus">+ drawer starts from issue dossier and adds deeper tabs</span>
+<span class="plus">+ activity preserves terminal feed and markdown result</span></pre></section>
+            </section>
+            <section class="tab-panel bead-panel" id="bead-tab-github"><section class="section"><h3>GitHub</h3><div class="artifact-list"><div class="artifact"><code>PR #38</code><span class="muted">feat/unitAI-60w93-15-forensic-json</span></div></div></section></section>
+            <section class="tab-panel bead-panel" id="bead-tab-memories"><section class="section green"><h3>Memories</h3><div class="memory-list"><div class="memory green"><b>Drawer canonical</b><span class="secondary">Bead details live here; inline feed remains preview.</span></div></div></section></section>
+            <section class="tab-panel bead-panel" id="bead-tab-followups"><section class="section"><h3>Followups</h3><div class="lineage"><button class="relation amber"><code>unitAI-0gdjp</code><span><b>Formalize AgentOps event catalog</b><br><span class="muted">needed as forensic events grow</span></span><span>open</span></button></div></section></section>
+          </div>
+        </aside>
+      </section>
+
+      <section class="surface" id="surface-feed">
+        <section class="main" style="grid-template-columns: minmax(0, 1fr);" aria-label="Feed">
+          <div class="page-title">
+            <div>
+              <span class="eyebrow">Cross-source activity</span>
+              <h1>Feed</h1>
+              <p>One unified timeline across specialists, issues, GitHub and logs. Each row is an activity rollup; click opens the relevant drawer. The GitHub Activity tab is this same timeline scoped to one repo.</p>
+            </div>
+            <button class="role-filter">all xtrm</button>
+          </div>
+          <section class="feed-shell">
+            <div class="feed-filters">
+              <span class="muted" style="font-size:11px;">all xtrm · 312 events · filters in the sidebar</span>
+            </div>
+            <div class="feed-timeline">
+              <div class="feed-day">Today</div>
+              <article class="feed-row green is-expanded">
+                <div class="feed-line">
+                  <span class="feed-time">09:42</span>
+                  <span class="feed-id-line"><span class="id">forge-70el</span><span class="sepf">/</span><span class="title">reviewer passed</span></span>
+                  <span class="seg-chip"><svg class="ic" style="font-size:13px; color:var(--muted)"><use href="#ic-specialists"/></svg><span class="sl">/</span><span style="color:var(--green)">pass</span><span class="sl">/</span><span style="color:var(--blue)">reviewer</span></span>
+                  <button class="feed-chev" type="button" aria-label="collapse"><svg class="ic"><use href="#ic-chevron-down"/></svg></button>
+                </div>
+                <div class="feed-dossier">
+                  <div class="line"><svg class="ic" style="color:var(--green); font-size:14px"><use href="#ic-check"/></svg><span><b style="color:var(--green)">pass</b> <span class="muted">· 59 tests · 5m 12s · 143k tok</span></span></div>
+                  <div class="line" style="font-size:11.5px;color:var(--text-2);"><span class="muted">files</span><span><span style="color:var(--green)">+188</span> <span style="color:var(--red)">−24</span> · 7</span><span class="muted">·</span><span>executor → reviewer</span></div>
+                  <div><button class="btn" type="button" style="font-size:11.5px; color:var(--blue); display:inline-flex; align-items:center; gap:5px;">Open in drawer <svg class="ic" style="font-size:13px"><use href="#ic-chevron-right"/></svg></button></div>
+                </div>
+              </article>
+              <article class="feed-row violet">
+                <div class="feed-line">
+                  <span class="feed-time">09:38</span>
+                  <span class="feed-id-line"><span class="id">gitboard</span><span class="sepf">/</span><span class="title">merged PR #38 feat/forensic-json</span></span>
+                  <span class="seg-chip"><svg class="ic" style="font-size:13px; color:var(--muted)"><use href="#ic-git-merge"/></svg><span class="sl">/</span><span style="color:var(--violet)">merged</span><span class="sl">/</span><span><span style="color:var(--green)">+142</span> <span style="color:var(--red)">−18</span></span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+              <article class="feed-row blue">
+                <div class="feed-line">
+                  <span class="feed-time">09:31</span>
+                  <span class="feed-id-line"><span class="id">unitAI-kgxod</span><span class="sepf">/</span><span class="title">moved to in review</span></span>
+                  <span class="seg-chip"><svg class="ic" style="font-size:13px; color:var(--muted)"><use href="#ic-circle-dot"/></svg><span class="sl">/</span><span style="color:var(--blue)">P1</span><span class="sl">/</span><span style="color:var(--amber)">in review</span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+              <article class="feed-row red">
+                <div class="feed-line">
+                  <span class="feed-time">09:15</span>
+                  <span class="feed-id-line"><span class="id">forge-9xet</span><span class="sepf">/</span><span class="title">executor failed — hard cap reached</span></span>
+                  <span class="seg-chip"><svg class="ic" style="font-size:13px; color:var(--muted)"><use href="#ic-specialists"/></svg><span class="sl">/</span><span style="color:var(--red)">error</span><span class="sl">/</span><span style="color:var(--blue)">executor</span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+              <div class="feed-day">Yesterday</div>
+              <article class="feed-row gray">
+                <div class="feed-line">
+                  <span class="feed-time">18:20</span>
+                  <span class="feed-id-line"><span class="id">gitboard</span><span class="sepf">/</span><span class="title">pushed 3 commits to main</span></span>
+                  <span class="seg-chip"><svg class="ic" style="font-size:13px; color:var(--muted)"><use href="#ic-git-merge"/></svg><span class="sl">/</span><span>push</span><span class="sl">/</span><span>3 commits</span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+              <article class="feed-row amber">
+                <div class="feed-line">
+                  <span class="feed-time">17:55</span>
+                  <span class="feed-id-line"><span class="id">forge-12a</span><span class="sepf">/</span><span class="title">debug chain escalated to operator</span></span>
+                  <span class="seg-chip"><svg class="ic" style="font-size:13px; color:var(--muted)"><use href="#ic-specialists"/></svg><span class="sl">/</span><span style="color:var(--amber)">escalated</span><span class="sl">/</span><span style="color:var(--blue)">debugger</span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+            </div>
+          </section>
+        </section>
+      </section>
+
+      <section class="surface" id="surface-github">
+        <section class="main" style="grid-template-columns: minmax(0, 1fr);" aria-label="GitHub">
+          <div class="page-title">
+            <div>
+              <span class="eyebrow">GitHub activity</span>
+              <h1>GitHub</h1>
+              <p>The same unified timeline engine as Feed, scoped to <span class="mono">source=github</span> and the selected repo. Each row carries its event-type icon; clicking a PR, commit, or release opens the GitHub drawer.</p>
+            </div>
+            <button class="role-filter">gitboard</button>
+          </div>
+          <section class="feed-shell">
+            <div class="gh-stats">
+              <span class="gh-stat"><svg class="ic" style="font-size:13px"><use href="#ic-feed"/></svg><b>312</b> Events</span>
+              <span class="gh-dot">·</span>
+              <span class="gh-stat"><svg class="ic" style="font-size:13px"><use href="#ic-git-commit"/></svg><b>64</b> Pushes</span>
+              <span class="gh-dot">·</span>
+              <span class="gh-stat"><svg class="ic" style="font-size:13px"><use href="#ic-git-pull-request"/></svg><b>11</b> PRs</span>
+              <span class="gh-dot">·</span>
+              <span class="gh-stat"><svg class="ic" style="font-size:13px"><use href="#ic-git-commit"/></svg><b>198</b> Commits</span>
+              <span class="gh-dot">·</span>
+              <span class="gh-stat"><svg class="ic" style="font-size:13px"><use href="#ic-repo"/></svg><b>3</b> Repos</span>
+            </div>
+            <div class="feed-filters"><span class="muted" style="font-size:11px;">gitboard · 86 events · filters in the sidebar</span></div>
+            <div class="feed-timeline">
+              <div class="feed-day">Today</div>
+              <article class="feed-row violet is-expanded">
+                <div class="feed-line">
+                  <span class="ev-ico"><svg class="ic" style="font-size:15px"><use href="#ic-git-merge"/></svg></span>
+                  <span class="feed-time">09:38</span>
+                  <span class="feed-id-line"><span class="id">#38</span><span class="sepf">/</span><span class="title">merged feat/forensic-json into main</span></span>
+                  <span class="seg-chip"><span style="color:var(--violet)">merged</span><span class="sl">/</span><span><span style="color:var(--green)">+142</span> <span style="color:var(--red)">−18</span></span><span class="sl">/</span><span>7 files</span></span>
+                  <button class="feed-chev" type="button" aria-label="collapse"><svg class="ic"><use href="#ic-chevron-down"/></svg></button>
+                </div>
+                <div class="feed-dossier">
+                  <div class="line"><svg class="ic" style="color:var(--violet); font-size:14px"><use href="#ic-git-merge"/></svg><span><b style="color:var(--violet)">merged</b> <span class="muted">· feat: render forensic JSON feed · squash · by reviewer-bot</span></span></div>
+                  <div class="line" style="font-size:11.5px;color:var(--text-2);"><span class="muted">diff</span><span><span style="color:var(--green)">+142</span> <span style="color:var(--red)">−18</span> · 7 files · 3 commits</span><span class="muted">·</span><span>checks <span style="color:var(--green)">passed</span></span></div>
+                  <div><button class="btn" type="button" style="font-size:11.5px; color:var(--blue); display:inline-flex; align-items:center; gap:5px;">Open in drawer <svg class="ic" style="font-size:13px"><use href="#ic-chevron-right"/></svg></button></div>
+                </div>
+              </article>
+              <article class="feed-row amber">
+                <div class="feed-line">
+                  <span class="ev-ico"><svg class="ic" style="font-size:15px"><use href="#ic-code-review"/></svg></span>
+                  <span class="feed-time">09:31</span>
+                  <span class="feed-id-line"><span class="id">#38</span><span class="sepf">/</span><span class="title">review approved by reviewer-bot</span></span>
+                  <span class="seg-chip"><span style="color:var(--amber)">review</span><span class="sl">/</span><span style="color:var(--green)">approved</span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+              <article class="feed-row gray">
+                <div class="feed-line">
+                  <span class="ev-ico"><svg class="ic" style="font-size:15px"><use href="#ic-git-commit"/></svg></span>
+                  <span class="feed-time">08:50</span>
+                  <span class="feed-id-line"><span class="id">main</span><span class="sepf">/</span><span class="title">pushed 3 commits</span></span>
+                  <span class="seg-chip"><span>push</span><span class="sl">/</span><span>3 commits</span><span class="sl">/</span><span><span style="color:var(--green)">+88</span> <span style="color:var(--red)">−12</span></span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+              <article class="feed-row green">
+                <div class="feed-line">
+                  <span class="ev-ico"><svg class="ic" style="font-size:15px"><use href="#ic-git-pull-request"/></svg></span>
+                  <span class="feed-time">08:12</span>
+                  <span class="feed-id-line"><span class="id">#39</span><span class="sepf">/</span><span class="title">opened chore/telemetry-projection</span></span>
+                  <span class="seg-chip"><span style="color:var(--green)">opened</span><span class="sl">/</span><span>draft</span><span class="sl">/</span><span><span style="color:var(--green)">+64</span> <span style="color:var(--red)">−3</span></span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+              <div class="feed-day">Yesterday</div>
+              <article class="feed-row violet">
+                <div class="feed-line">
+                  <span class="ev-ico"><svg class="ic" style="font-size:15px"><use href="#ic-tag"/></svg></span>
+                  <span class="feed-time">18:20</span>
+                  <span class="feed-id-line"><span class="id">v0.4.0</span><span class="sepf">/</span><span class="title">released — forensic console GA</span></span>
+                  <span class="seg-chip"><span style="color:var(--violet)">release</span><span class="sl">/</span><span>tag</span><span class="sl">/</span><span>v0.4.0</span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+              <article class="feed-row red">
+                <div class="feed-line">
+                  <span class="ev-ico"><svg class="ic" style="font-size:15px"><use href="#ic-git-pull-request-closed"/></svg></span>
+                  <span class="feed-time">17:40</span>
+                  <span class="feed-id-line"><span class="id">#36</span><span class="sepf">/</span><span class="title">closed spike/substrate-bridge without merge</span></span>
+                  <span class="seg-chip"><span style="color:var(--red)">closed</span><span class="sl">/</span><span>not merged</span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+              <article class="feed-row gray">
+                <div class="feed-line">
+                  <span class="ev-ico"><svg class="ic" style="font-size:15px"><use href="#ic-git-branch"/></svg></span>
+                  <span class="feed-time">16:05</span>
+                  <span class="feed-id-line"><span class="id">gitboard</span><span class="sepf">/</span><span class="title">created branch feat/console-evidence</span></span>
+                  <span class="seg-chip"><span>branch</span><span class="sl">/</span><span>created</span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+              <article class="feed-row blue">
+                <div class="feed-line">
+                  <span class="ev-ico"><svg class="ic" style="font-size:15px"><use href="#ic-issues"/></svg></span>
+                  <span class="feed-time">15:30</span>
+                  <span class="feed-id-line"><span class="id">#41</span><span class="sepf">/</span><span class="title">opened issue: drawer polymorphism contract</span></span>
+                  <span class="seg-chip"><span style="color:var(--blue)">issue</span><span class="sl">/</span><span style="color:var(--green)">opened</span></span>
+                  <button class="feed-chev" type="button" aria-label="open drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                </div>
+              </article>
+            </div>
+          </section>
+        </section>
+
+        <div class="underlay-fade" style="display:none"></div>
+
+        <aside class="drawer" aria-label="GitHub PR" style="display:none">
+          <header class="drawer-head">
+            <div class="drawer-kicker"><span>xtrm</span><span>/</span><span>github</span><span>/</span><span class="mono">gitboard</span><span>/</span><span class="mono">PR #38</span></div>
+            <div class="drawer-title-row">
+              <div class="drawer-title"><h2><span class="mono">#38</span> / <em>feat: forensic JSON feed</em></h2></div>
+              <div class="drawer-actions"><button class="btn">Copy id</button><button class="btn primary"><svg class="ic" style="font-size:13px"><use href="#ic-link-external"/></svg> View on GitHub</button></div>
+            </div>
+            <div class="tags"><span class="chip violet">merged</span><span class="chip">gitboard</span><span class="chip">feat/forensic-json → main</span><span class="chip"><span style="color:var(--green)">+142</span> <span style="color:var(--red)">−18</span> · 7 files</span></div>
+          </header>
+          <nav class="drawer-tabs" aria-label="PR tabs">
+            <button class="is-active" data-tab="gh-overview">Overview</button><button data-tab="gh-commits">Commits</button><button data-tab="gh-files">Files</button><button data-tab="gh-checks">Checks</button><button data-tab="gh-linked">Linked</button>
+          </nav>
+          <div class="drawer-body">
+            <section class="tab-panel is-active" id="tab-gh-overview">
+              <div class="diffbar"><span style="width:89%; background:var(--green)"></span><span style="width:11%; background:var(--red)"></span></div>
+              <div style="display:flex; gap:10px; font-size:11.5px; margin-bottom:14px;"><span style="color:var(--green)">+142</span><span style="color:var(--red)">−18</span><span class="muted">7 files changed · 3 commits</span></div>
+              <section class="section violet">
+                <h3>Description</h3>
+                <p class="secondary">Renders the specialist feed from structured forensic events while keeping the rendered result. Replaces the raw terminal dump with the normalized stream.</p>
+              </section>
+              <div class="gh-row"><span class="label">Branch</span><span class="mono" style="font-size:11.5px;">feat/forensic-json <span class="muted">→</span> main</span></div>
+              <div class="gh-row"><span class="label">Linked issue</span><button class="relation blue" style="max-width:340px;"><code>unitAI-60w93.15</code><span><b>Forensic JSON backend endpoint</b><br><span class="muted">opens the Issue Drawer</span></span><span>closed</span></button></div>
+              <div class="gh-row"><span class="label">Reviews</span><span style="color:var(--green); display:inline-flex; align-items:center; gap:5px;"><svg class="ic"><use href="#ic-check"/></svg>1 approved · reviewer-bot</span></div>
+              <div class="gh-row"><span class="label">Checks</span><span style="color:var(--green); display:inline-flex; align-items:center; gap:5px;"><svg class="ic"><use href="#ic-check"/></svg>3 / 3 passed</span></div>
+            </section>
+
+            <section class="tab-panel" id="tab-gh-commits">
+              <section class="section">
+                <h3>3 commits</h3>
+                <div class="commit-list">
+                  <div class="commit-row"><span class="commit-sha">9f3a1c2</span><span class="commit-subject">feat: render forensic JSON feed</span><button class="commit-toggle" type="button" aria-label="expand commit"><svg class="ic" style="font-size:13px"><use href="#ic-chevron-down"/></svg></button></div>
+                  <div class="commit-body"><pre>feat: render forensic JSON feed
+
+Replaces the raw terminal dump with a normalized event stream while
+keeping the rendered markdown result in its own zone.
+
+- add ForensicStream component
+- wire GET /jobs/:id/feed-events
+- redaction-aware event rows</pre></div>
+                  <div class="commit-row"><span class="commit-sha">4b7e0d1</span><span class="commit-subject">refactor: extract diffstat bar into shared component</span><button class="commit-toggle" type="button" aria-label="expand commit"><svg class="ic" style="font-size:13px"><use href="#ic-chevron-down"/></svg></button></div>
+                  <div class="commit-body"><pre>refactor: extract diffstat bar into shared component
+
+Reused by EventDetail and the new ForensicStream files block.</pre></div>
+                  <div class="commit-row"><span class="commit-sha">a18c5f3</span><span class="commit-subject">test: cover feed-events normalization</span><button class="commit-toggle" type="button" aria-label="expand commit"><svg class="ic" style="font-size:13px"><use href="#ic-chevron-down"/></svg></button></div>
+                  <div class="commit-body"><pre>test: cover feed-events normalization
+
+59 cases over legacy timeline → xtrm.forensic.v1 envelope.</pre></div>
+                </div>
+              </section>
+            </section>
+
+            <section class="tab-panel" id="tab-gh-files">
+              <section class="section">
+                <div class="files-head"><svg class="ic" style="font-size:13px"><use href="#ic-repo"/></svg><span>Files changed</span><span class="count">7</span><span class="delta"><span style="color:var(--green)">+142</span> <span style="color:var(--red)">−18</span></span></div>
+                <div class="file-row"><span class="path">dashboard/components/specialists/BeadActivityPane.tsx</span><span class="fdelta"><span style="color:var(--green)">+42</span> <span style="color:var(--red)">−8</span></span></div>
+                <div class="file-row"><span class="path">dashboard/components/github/EventDetail.tsx</span><span class="fdelta"><span style="color:var(--green)">+31</span> <span style="color:var(--red)">−6</span></span></div>
+                <div class="file-row"><span class="path">api/routes/specialists.ts</span><span class="fdelta"><span style="color:var(--green)">+15</span> <span style="color:var(--red)">−2</span></span></div>
+                <div class="file-row"><span class="path">core/forensic-events.ts</span><span class="fdelta"><span style="color:var(--green)">+54</span></span></div>
+                <div class="file-row" style="color:var(--muted);">+ 3 more</div>
+              </section>
+            </section>
+
+            <section class="tab-panel" id="tab-gh-checks">
+              <section class="section">
+                <h3>Checks · 3 / 3 passed</h3>
+                <div class="gh-row"><span style="color:var(--green); display:inline-flex; align-items:center; gap:6px;"><svg class="ic"><use href="#ic-check"/></svg>CI / build</span><span class="muted" style="margin-left:auto; font-size:11.5px;">passed · 1m 48s</span></div>
+                <div class="gh-row"><span style="color:var(--green); display:inline-flex; align-items:center; gap:6px;"><svg class="ic"><use href="#ic-check"/></svg>lint + typecheck</span><span class="muted" style="margin-left:auto; font-size:11.5px;">passed · 42s</span></div>
+                <div class="gh-row"><span style="color:var(--green); display:inline-flex; align-items:center; gap:6px;"><svg class="ic"><use href="#ic-check"/></svg>tests</span><span class="muted" style="margin-left:auto; font-size:11.5px;">59 passed · 2m 05s</span></div>
+              </section>
+            </section>
+
+            <section class="tab-panel" id="tab-gh-linked">
+              <section class="section">
+                <h3>Linked objects</h3>
+                <div class="lineage">
+                  <button class="relation blue"><code>unitAI-60w93.15</code><span><b>Forensic JSON backend endpoint</b><br><span class="muted">tracked by this PR · opens Issue Drawer</span></span><span>closed</span></button>
+                  <button class="relation green"><code>chain:forge-70el</code><span><b>specialist live-feed integration</b><br><span class="muted">produced this PR · opens Chain Drawer</span></span><span>working</span></button>
+                </div>
+              </section>
+            </section>
+          </div>
+        </aside>
+      </section>
+
+      <section class="surface" id="surface-specialists">
+        <section class="main" style="grid-template-columns: minmax(360px, 1fr) minmax(0, 1.45fr); grid-template-rows: auto minmax(0, 1fr);" aria-label="Specialists cockpit">
+          <div class="page-title">
+            <div>
+              <span class="eyebrow">Chain cockpit</span>
+              <h1>Specialists</h1>
+              <p>Active and historical chains with job traceability. Select a chain to inspect its jobs; filters operate over the complete historical corpus (§8).</p>
+            </div>
+            <button class="role-filter">all roles</button>
+          </div>
+
+          <section class="list-shell">
+            <div class="filter-chips">
+              <span class="muted" style="font-size:11px;">14 chains · 2 active · filters in the sidebar</span>
+            </div>
+            <div class="list-scroll">
+              <div class="list-group">Active · 2</div>
+              <article class="chain-row green is-active">
+                <div>
+                  <div class="chain-id-line"><span class="id">forge-70el</span><span class="muted">/</span><span class="title">specialist live-feed integration</span></div>
+                  <div class="chain-meta">
+                    <span class="seg-chip"><svg class="ic" style="font-size:13px; color:var(--muted)"><use href="#ic-route"/></svg><span>code-standard</span><span class="sl">/</span><span>working</span><span class="sl">/</span><span style="color:var(--blue)">reviewer gate</span></span>
+                    <span class="chain-roles"><span class="r"><svg class="ic" style="font-size:13px; color:var(--green)"><use href="#ic-check"/></svg>executor</span><span class="r"><span class="dot blue"></span>reviewer</span><span class="r"><svg class="ic" style="font-size:13px; color:var(--faint)"><use href="#ic-circle"/></svg>test-runner</span></span>
+                  </div>
+                </div>
+                <span class="chain-count">24 events</span>
+                <button class="feed-chev" type="button" aria-label="open chain"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+              </article>
+              <article class="chain-row amber">
+                <div>
+                  <div class="chain-id-line"><span class="id">forge-9xet</span><span class="muted">/</span><span class="title">migrate gitboard into apps/console</span></div>
+                  <div class="chain-meta">
+                    <span class="seg-chip"><svg class="ic" style="font-size:13px; color:var(--muted)"><use href="#ic-route"/></svg><span>debug</span><span class="sl">/</span><span style="color:var(--amber)">escalated</span><span class="sl">/</span><span>operator</span></span>
+                    <span class="chain-roles"><span class="r"><svg class="ic" style="font-size:13px; color:var(--green)"><use href="#ic-check"/></svg>executor</span><span class="r"><svg class="ic" style="font-size:13px; color:var(--red)"><use href="#ic-x"/></svg>debugger</span></span>
+                  </div>
+                </div>
+                <span class="chain-count">31 events</span>
+                <button class="feed-chev" type="button" aria-label="open chain"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+              </article>
+              <div class="list-group">Historical · 12</div>
+              <article class="chain-row">
+                <div>
+                  <div class="chain-id-line"><span class="id">forge-12a</span><span class="muted">/</span><span class="title">forensic JSON backend endpoint</span></div>
+                  <div class="chain-meta">
+                    <span class="seg-chip"><svg class="ic" style="font-size:13px; color:var(--muted)"><use href="#ic-route"/></svg><span>code-with-tests</span><span class="sl">/</span><span>closed</span><span class="sl">/</span><span style="color:var(--green)">pass</span></span>
+                    <span class="chain-roles"><span class="r"><svg class="ic" style="font-size:13px; color:var(--green)"><use href="#ic-check"/></svg>executor</span><span class="r"><svg class="ic" style="font-size:13px; color:var(--green)"><use href="#ic-check"/></svg>reviewer</span><span class="r"><svg class="ic" style="font-size:13px; color:var(--green)"><use href="#ic-check"/></svg>test-runner</span></span>
+                  </div>
+                </div>
+                <span class="chain-count">40 events</span>
+                <button class="feed-chev" type="button" aria-label="open chain"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+              </article>
+              <article class="chain-row">
+                <div>
+                  <div class="chain-id-line"><span class="id">129e44</span><span class="muted">/</span><span class="title">specialist feed backend migration</span></div>
+                  <div class="chain-meta">
+                    <span class="seg-chip"><svg class="ic" style="font-size:13px; color:var(--muted)"><use href="#ic-route"/></svg><span>code-standard</span><span class="sl">/</span><span>closed</span><span class="sl">/</span><span style="color:var(--green)">pass</span></span>
+                    <span class="chain-roles"><span class="r"><svg class="ic" style="font-size:13px; color:var(--green)"><use href="#ic-check"/></svg>executor</span><span class="r"><svg class="ic" style="font-size:13px; color:var(--green)"><use href="#ic-check"/></svg>reviewer</span></span>
+                  </div>
+                </div>
+                <span class="chain-count">18 events</span>
+                <button class="feed-chev" type="button" aria-label="open chain"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+              </article>
+            </div>
+          </section>
+
+          <section class="detail-pane">
+            <div class="detail-head">
+              <span class="id-chip"><span class="role" style="color:var(--green)">forge-70el</span><span class="div">/</span><span class="sub">code-standard</span><span class="div">/</span><span class="sub dim">working</span></span>
+              <span class="status-word">reviewer gate</span>
+              <span class="muted" style="margin-left:auto; font-size:11px;">24 events · 143k tok</span>
+            </div>
+            <div class="detail-body">
+              <section class="section">
+                <h3>Jobs in order</h3>
+                <div>
+                  <div class="jobline"><span class="id-chip"><span class="role" style="color:var(--green)">reviewer</span><span class="div">/</span><span class="sub">job-done</span></span><span class="pill green"><svg class="ic"><use href="#ic-check"/></svg>passed</span><span class="muted" style="margin-left:auto; font-size:11.5px;">5m 12s · 143k tok</span></div>
+                  <div class="jobline"><span class="id-chip"><span class="role" style="color:var(--blue)">executor</span><span class="div">/</span><span class="sub">job-running</span></span><span class="pill blue"><svg class="ic"><use href="#ic-play"/></svg>running</span><span class="muted" style="margin-left:auto; font-size:11.5px;">8.4k tok · live</span></div>
+                  <div class="jobline"><span class="id-chip"><span class="role" style="color:var(--muted)">test-runner</span><span class="div">/</span><span class="sub">pending</span></span><span class="muted" style="font-size:11.5px;">next gate</span></div>
+                </div>
+              </section>
+              <div><button class="btn" type="button" style="display:inline-flex; align-items:center; gap:6px;"><svg class="ic" style="font-size:14px"><use href="#ic-inspector"/></svg>Open chain drawer</button></div>
+            </div>
+          </section>
+        </section>
+      </section>
+
+      <section class="surface" id="surface-evidence">
+        <section class="main" style="grid-template-columns: minmax(0, 1fr);" aria-label="Evidence ledger">
+          <div class="page-title">
+            <div>
+              <span class="eyebrow">Trust layer</span>
+              <h1>Evidence</h1>
+              <p>A ledger of proof — verdicts, tests, diffs, artifacts and regression rules tied to each chain and run (§7). Row click expands the proof inline; the chevron opens the entity drawer focused on Evidence.</p>
+            </div>
+            <button class="role-filter">chain forge-70el</button>
+          </div>
+
+          <section class="stack">
+            <div class="ev-cards">
+              <div class="ev-card green"><span class="lbl">verdict</span><span class="val">PASS</span><span class="sub">scope · quality · release</span></div>
+              <div class="ev-card green"><span class="lbl">tests</span><span class="val">59 / 59</span><span class="sub">vitest · 0 failing</span></div>
+              <div class="ev-card amber"><span class="lbl">findings</span><span class="val">2</span><span class="sub">1 advisory · 1 resolved</span></div>
+              <div class="ev-card"><span class="lbl">artifacts</span><span class="val">7</span><span class="sub">diff · trace · logs · result</span></div>
+            </div>
+
+            <section class="ledger">
+              <div class="feed-filters">
+                <span class="muted" style="font-size:11px;">chain + run scope · 42 proofs · filters in the sidebar</span>
+              </div>
+              <div class="ledger-scroll">
+                <article class="proof-row green is-expanded">
+                  <button class="proof-main" type="button">
+                    <div class="proof-id-line"><span class="mono">verdict:review.pass</span><span class="chip green"><svg class="ic"><use href="#ic-check"/></svg>PASS</span><span class="ts">Jun 5 · 19:16</span></div>
+                    <div class="proof-result"><b>Chain forge-70el finalized PASS</b> — scope, quality and tests cleared at the reviewer gate; worktree merged to feat/forensic-json.</div>
+                    <div class="proof-arts"><span class="chip">diff</span><span class="chip">59 tests</span><span class="chip">commit 9f3a1c2</span><span class="chip">PR #38</span></div>
+                  </button>
+                  <button class="proof-expand-btn" type="button" aria-label="open evidence drawer"><svg class="ic"><use href="#ic-chevron-down"/></svg></button>
+                  <section class="proof-dossier">
+                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;"><svg class="ic" style="color:var(--green); font-size:14px"><use href="#ic-check"/></svg><span><b style="color:var(--green)">PASS</b> <span class="muted">· scope · quality · tests · release ready · reviewer confidence high</span></span></div>
+                    <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-2);"><span class="muted">metrics</span><span>59 tests · 5m 12s · 143k tok</span><span class="muted">·</span><span>executor → reviewer</span></div>
+                    <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-2);"><span class="muted">files</span><span><span style="color:var(--green)">+188</span> <span style="color:var(--red)">−24</span> · 7 changed</span></div>
+                    <div><button class="btn" type="button" style="font-size:11.5px; color:var(--blue); display:inline-flex; align-items:center; gap:5px;">Open in drawer <svg class="ic" style="font-size:13px"><use href="#ic-chevron-right"/></svg></button></div>
+                  </section>
+                </article>
+
+                <article class="proof-row green">
+                  <button class="proof-main" type="button">
+                    <div class="proof-id-line"><span class="mono">tests:vitest</span><span class="chip green"><svg class="ic"><use href="#ic-check"/></svg>PASS</span><span class="ts">Jun 5 · 19:14</span></div>
+                    <div class="proof-result"><b>59 passed, 0 failing</b> — dashboard drawer + feed-events normalization suite.</div>
+                    <div class="proof-arts"><span class="chip">command proof</span><span class="chip">2m 05s</span><span class="chip">log</span></div>
+                  </button>
+                  <button class="proof-expand-btn" type="button" aria-label="open evidence drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                  <section class="proof-dossier">
+                    <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-2);"><span class="muted">command</span><span class="mono">bunx vitest run dashboard</span></div>
+                  </section>
+                </article>
+
+                <article class="proof-row amber">
+                  <button class="proof-main" type="button">
+                    <div class="proof-id-line"><span class="mono">verdict:review.partial</span><span class="chip amber"><svg class="ic"><use href="#ic-alert"/></svg>PARTIAL</span><span class="ts">Jun 5 · 14:02</span></div>
+                    <div class="proof-result"><b>Debug chain forge-9xet — 1 advisory finding</b> — scope mixed auth and logging; reviewer requested split before merge.</div>
+                    <div class="proof-arts"><span class="chip">1 finding</span><span class="chip">trace</span><span class="chip">escalated</span></div>
+                  </button>
+                  <button class="proof-expand-btn" type="button" aria-label="open evidence drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                  <section class="proof-dossier">
+                    <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-2);"><span class="muted">finding</span><span>scope mixed auth and logging — non-blocking, split advised</span></div>
+                  </section>
+                </article>
+
+                <article class="proof-row red">
+                  <button class="proof-main" type="button">
+                    <div class="proof-id-line"><span class="mono">tests:integration</span><span class="chip red"><svg class="ic"><use href="#ic-x"/></svg>FAIL</span><span class="ts">Jun 4 · 17:38</span></div>
+                    <div class="proof-result"><b>spike/substrate-bridge — 3 failing</b> — schema drift in materialized view; closed without merge.</div>
+                    <div class="proof-arts"><span class="chip">3 failing</span><span class="chip">log</span><span class="chip">PR #36</span></div>
+                  </button>
+                  <button class="proof-expand-btn" type="button" aria-label="open evidence drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                  <section class="proof-dossier">
+                    <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-2);"><span class="muted">reason</span><span>materialized schema out of sync with projection contract</span></div>
+                  </section>
+                </article>
+
+                <article class="proof-row amber">
+                  <button class="proof-main" type="button">
+                    <div class="proof-id-line"><span class="mono">mem:anti-regression</span><span class="chip"><svg class="ic"><use href="#ic-shield"/></svg>rule</span><span class="ts">Jun 5 · 19:16</span></div>
+                    <div class="proof-result"><b>Forensic stream must not replace the run result</b> — both stay separate (§7.3). Distilled at chain close as a best-practice memory.</div>
+                    <div class="proof-arts"><span class="chip">regression contract</span><span class="chip">mem:best_practice</span></div>
+                  </button>
+                  <button class="proof-expand-btn" type="button" aria-label="open evidence drawer"><svg class="ic"><use href="#ic-chevron-right"/></svg></button>
+                  <section class="proof-dossier">
+                    <div class="regress"><span class="rlabel">anti-regression</span><pre>- &lt;TerminalFeed job={job} /&gt;            (raw dump replaced the result)
++ &lt;ForensicStream live={running} /&gt;     (stream is the live view)
++ &lt;ResultZone text={resultText} /&gt;      (result keeps its own zone)</pre></div>
+                  </section>
+                </article>
+              </div>
+            </section>
+          </section>
+        </section>
+
+        <div class="underlay-fade" style="display:none"></div>
+
+        <aside class="drawer" aria-label="Evidence" style="display:none">
+          <header class="drawer-head">
+            <div class="drawer-kicker"><span>xtrm</span><span>/</span><span>chain</span><span>/</span><span class="mono">forge-70el</span><span>/</span><span>evidence</span></div>
+            <div class="drawer-title-row">
+              <div class="drawer-title"><h2><span class="mono">verdict:review.pass</span> / <em>specialist live-feed integration</em></h2></div>
+              <div class="drawer-actions"><button class="btn">Copy ID</button><button class="btn">Open trace</button><button class="btn primary">Open chain</button></div>
+            </div>
+            <div class="tags"><span class="chip green">scope PASS</span><span class="chip green">quality PASS</span><span class="chip green">tests PASS</span><span class="chip green">release ready</span><span class="chip">confidence high</span></div>
+          </header>
+          <nav class="drawer-tabs" aria-label="Evidence tabs">
+            <button class="is-active" data-tab="ev-proof">Proof</button><button data-tab="ev-artifacts">Artifacts</button><button data-tab="ev-diff">Diff</button>
+          </nav>
+          <div class="drawer-body">
+            <section class="tab-panel is-active" id="tab-ev-proof">
+              <section class="section green">
+                <h3>Verdict packet</h3>
+                <div class="acceptance"><b>close</b><span>Chain finalized PASS after the reviewer gate. Worktree merged to feat/forensic-json.</span></div>
+                <div class="acceptance"><b>reason</b><span>All Layer-1 steps done, Layer-2 gates cleared; review.verdict.pass with high confidence.</span></div>
+              </section>
+              <section class="section">
+                <h3>Tests</h3>
+                <div class="gh-row"><span style="color:var(--green); display:inline-flex; align-items:center; gap:6px;"><svg class="ic"><use href="#ic-check"/></svg>vitest</span><span class="muted" style="margin-left:auto; font-size:11.5px;">59 passed · 0 failing · 2m 05s</span></div>
+                <div class="gh-row"><span class="label">command</span><span class="mono" style="font-size:11.5px;">bunx vitest run dashboard</span></div>
+              </section>
+              <section class="section">
+                <h3>Linked</h3>
+                <div class="lineage">
+                  <button class="relation blue"><code>unitAI-kgxod</code><span><b>render specialist feed from forensic events</b><br><span class="muted">acceptance criteria · opens Issue Drawer</span></span><span>in review</span></button>
+                  <button class="relation violet"><code>PR #38</code><span><b>feat: forensic JSON feed</b><br><span class="muted">merged · opens GitHub Drawer</span></span><span>merged</span></button>
+                </div>
+              </section>
+            </section>
+
+            <section class="tab-panel" id="tab-ev-artifacts">
+              <section class="section violet">
+                <h3>Artifact stack</h3>
+                <div class="artifact-list">
+                  <div class="artifact green"><code>verdict:review.pass</code><span class="muted">no regressions accepted</span></div>
+                  <div class="artifact"><code>trace:tr-chain-70el</code><span class="muted">OTel waterfall · 5m20s</span></div>
+                  <div class="artifact"><code>tests:vitest.log</code><span class="muted">59 passed · command proof</span></div>
+                  <div class="artifact"><code>result.md</code><span class="muted">markdown run result · own zone</span></div>
+                  <div class="artifact"><code>commit:9f3a1c2</code><span class="muted">merged to feat/forensic-json</span></div>
+                </div>
+              </section>
+            </section>
+
+            <section class="tab-panel" id="tab-ev-diff">
+              <section class="section">
+                <div class="files-head"><svg class="ic" style="font-size:13px"><use href="#ic-repo"/></svg><span>Changed files</span><span class="count">7</span><span class="delta"><span style="color:var(--green)">+188</span> <span style="color:var(--red)">−24</span></span></div>
+                <div class="file-row"><span class="path">dashboard/components/specialists/BeadActivityPane.tsx</span><span class="fdelta"><span style="color:var(--green)">+42</span> <span style="color:var(--red)">−8</span></span></div>
+                <div class="file-row"><span class="path">core/forensic-events.ts</span><span class="fdelta"><span style="color:var(--green)">+88</span></span></div>
+                <div class="file-row"><span class="path">api/routes/specialists.ts</span><span class="fdelta"><span style="color:var(--green)">+15</span> <span style="color:var(--red)">−2</span></span></div>
+              </section>
+              <section class="section">
+                <h3>Inline diff</h3>
+                <pre class="diff"><span class="del">- &lt;TerminalFeed job={job} /&gt;</span>
+<span class="add">+ &lt;ForensicStream job={job} live={running} /&gt;</span>
+<span class="add">+ &lt;ResultZone text={resultText} /&gt;</span></pre>
+              </section>
+              <section class="section">
+                <h3>Regression contract</h3>
+                <div class="regress"><span class="rlabel">must not regress</span><pre>- raw terminal dump as the live view
++ forensic stream is the live view; result keeps its own zone</pre></div>
+              </section>
+            </section>
+          </div>
+        </aside>
+      </section>
+      <section class="surface" id="surface-graph">
+        <div class="g-app">
+          <header class="g-hd">
+            <span class="g-path"><b>gitboard</b><span class="g-path-sl">/</span><b>graph</b></span>
+            <span class="g-sub">— per-cluster panes · click a node to open its drawer</span>
+            <span class="g-spacer"></span>
+            <span class="g-cnt"><b>14</b> nodes · <b>11</b> edges · <b>1</b> running<em> · 1 cluster · 4 orphans · 9 hidden</em></span>
+            <span class="g-hd-toggles">
+              <button class="g-hd-tog is-on" type="button"><span class="g-hd-tog-dot edge-parent-child"></span><span>parent-child</span><span class="g-hd-tog-state">on</span></button>
+              <button class="g-hd-tog is-on" type="button"><span class="g-hd-tog-dot edge-related"></span><span>related</span><span class="g-hd-tog-state">on</span></button>
+              <button class="g-hd-tog" type="button"><span class="g-hd-tog-dot state-deferred"></span><span>deferred</span><span class="g-hd-tog-state">off</span></button>
+            </span>
+          </header>
+
+          <section class="g-now">
+            <div class="g-now-lbl"><svg class="ic" style="font-size:12px"><use href="#ic-play"/></svg>now · 1 running</div>
+            <div class="g-now-rows">
+              <div class="g-node g-node-inline g-node-wide act" data-p="1" role="button" tabindex="0">
+                <div class="g-node-identity"><span class="g-id">unitAI-kgxod</span><span class="g-sep">/</span><span class="g-tt">render specialist feed from forensic events</span></div>
+                <div class="g-node-class"><span class="g-pri" style="color:var(--blue)">P1</span><span class="g-type" style="color:var(--blue)">feature</span><span class="g-state">in progress</span><span class="g-sep">·</span><span class="g-ag review"><span class="g-ag-dot"></span><b>reviewer</b>/job-done</span></div>
+              </div>
+            </div>
+          </section>
+
+          <div class="g-clusters">
+            <section class="g-cluster">
+              <div class="g-cluster-hd">
+                <span class="g-cluster-ttl"><svg class="ic" style="font-size:12px; color:var(--violet)"><use href="#ic-route"/></svg>console-roadmap</span>
+                <span class="g-cluster-sep">·</span>
+                <em class="g-cluster-meta"><span class="g-cluster-tag p0">P0</span><span class="g-cluster-tag run">running</span>5 edges</em>
+              </div>
+              <div class="g-pane" style="height:300px;">
+                <svg class="g-edges" aria-hidden="true">
+                  <defs>
+                    <marker id="g-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker>
+                  </defs>
+                  <path class="g-edge-path" d="M160 54 L160 116" marker-end="url(#g-arrow)"/>
+                  <path class="g-edge-path" d="M290 35 C352 35 360 91 416 91" marker-end="url(#g-arrow)"/>
+                  <path class="g-edge-path" d="M290 139 C352 139 360 91 416 91" marker-end="url(#g-arrow)"/>
+                  <path class="g-edge-path" d="M160 158 L160 222" marker-end="url(#g-arrow)"/>
+                  <path class="g-edge-path related" d="M290 139 C352 162 360 223 416 223" marker-end="url(#g-arrow)"/>
+                  <text class="g-edge-lbl" x="166" y="92">parent</text>
+                  <text class="g-edge-lbl" x="344" y="56">parent</text>
+                  <text class="g-edge-lbl" x="346" y="128">tracks</text>
+                  <text class="g-edge-lbl" x="166" y="196">blocks</text>
+                  <text class="g-edge-lbl" x="344" y="200">related</text>
+                </svg>
+                <div class="g-node g-node-abs" data-p="1" style="left:30px; top:16px;" role="button" tabindex="0">
+                  <div class="g-node-identity"><span class="g-id">console-roadmap</span><span class="g-sep">/</span><span class="g-tt">pre-substrate dashboard contract</span></div>
+                  <div class="g-node-class"><span class="g-pri" style="color:var(--violet)">P1</span><span class="g-type" style="color:var(--violet)">epic</span><span class="g-state">open</span></div>
+                </div>
+                <div class="g-node g-node-abs act" data-p="1" style="left:30px; top:120px;" role="button" tabindex="0">
+                  <div class="g-node-identity"><span class="g-id">unitAI-kgxod</span><span class="g-sep">/</span><span class="g-tt">render specialist feed</span></div>
+                  <div class="g-node-class"><span class="g-pri" style="color:var(--blue)">P1</span><span class="g-type" style="color:var(--blue)">feature</span><span class="g-state">in progress</span><span class="g-sep">·</span><span class="g-ag review"><span class="g-ag-dot"></span><b>reviewer</b></span></div>
+                </div>
+                <div class="g-node g-node-abs" data-p="1" style="left:420px; top:72px;" role="button" tabindex="0">
+                  <div class="g-node-identity"><span class="g-id">unitAI-60w93.15</span><span class="g-sep">/</span><span class="g-tt">forensic JSON backend endpoint</span></div>
+                  <div class="g-node-class"><span class="g-pri" style="color:var(--green)">P1</span><span class="g-type" style="color:var(--green)">task</span><span class="g-state">closed</span></div>
+                </div>
+                <div class="g-node g-node-abs" data-p="2" style="left:30px; top:226px;" role="button" tabindex="0">
+                  <div class="g-node-identity"><span class="g-id">unitAI-0gdjp</span><span class="g-sep">/</span><span class="g-tt">define AgentOps event catalog</span></div>
+                  <div class="g-node-class"><span class="g-pri" style="color:var(--amber)">P2</span><span class="g-type" style="color:var(--green)">task</span><span class="g-state">blocked</span></div>
+                </div>
+                <div class="g-node g-node-abs" data-p="2" style="left:420px; top:204px;" role="button" tabindex="0">
+                  <div class="g-node-identity"><span class="g-id">forge-70el</span><span class="g-sep">/</span><span class="g-tt">specialist live-feed integration</span></div>
+                  <div class="g-node-class"><span class="g-pri" style="color:var(--blue)">P2</span><span class="g-type" style="color:var(--green)">task</span><span class="g-state">ready</span></div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="g-orphans-strip">
+            <div class="g-orphans-hd"><span class="g-orphans-ttl">orphans</span><em>4 · no edges</em></div>
+            <div class="g-orphans-grid">
+              <div class="g-orow" data-p="2" role="button" tabindex="0">
+                <div class="g-node-identity"><span class="g-id">unitAI-69s6t</span><span class="g-sep">/</span><span class="g-tt">substrate telemetry design revision</span></div>
+                <div class="g-node-class"><span class="g-pri" style="color:var(--blue)">P2</span><span class="g-type" style="color:var(--blue)">feature</span><span class="g-state">open</span></div>
+              </div>
+              <div class="g-orow" data-p="1" role="button" tabindex="0">
+                <div class="g-node-identity"><span class="g-id">unitAI-12d4</span><span class="g-sep">/</span><span class="g-tt">prometheus projection contract</span></div>
+                <div class="g-node-class"><span class="g-pri" style="color:var(--amber)">P1</span><span class="g-type" style="color:var(--green)">task</span><span class="g-state">open</span></div>
+              </div>
+              <div class="g-orow" data-p="3" role="button" tabindex="0">
+                <div class="g-node-identity"><span class="g-id">unitAI-8h2k</span><span class="g-sep">/</span><span class="g-tt">grafana board export</span></div>
+                <div class="g-node-class"><span class="g-pri" style="color:var(--muted)">P3</span><span class="g-type" style="color:var(--muted)">chore</span><span class="g-state">open</span></div>
+              </div>
+              <div class="g-orow" data-p="2" role="button" tabindex="0">
+                <div class="g-node-identity"><span class="g-id">unitAI-3b9c</span><span class="g-sep">/</span><span class="g-tt">fix gate verdict double-count</span></div>
+                <div class="g-node-class"><span class="g-pri" style="color:var(--blue)">P2</span><span class="g-type" style="color:var(--red)">bug</span><span class="g-state">open</span></div>
+              </div>
+            </div>
+          </section>
+
+          <div class="g-buckets">
+            <details class="g-bucket">
+              <summary><svg class="ic" style="font-size:11px"><use href="#ic-chevron-right"/></svg><svg class="ic" style="font-size:12px; color:var(--green)"><use href="#ic-check"/></svg><span class="g-bucket-ttl">closed</span><em>6</em></summary>
+              <div class="g-bucket-list">
+                <div class="g-orow" data-p="2" role="button" tabindex="0"><div class="g-node-identity"><span class="g-id">forge-12a</span><span class="g-sep">/</span><span class="g-tt">forensic JSON backend endpoint</span></div><div class="g-node-class"><span class="g-pri" style="color:var(--green)">P2</span><span class="g-type" style="color:var(--green)">task</span><span class="g-state">closed</span></div></div>
+                <div class="g-orow" data-p="2" role="button" tabindex="0"><div class="g-node-identity"><span class="g-id">129e44</span><span class="g-sep">/</span><span class="g-tt">specialist feed backend migration</span></div><div class="g-node-class"><span class="g-pri" style="color:var(--green)">P2</span><span class="g-type" style="color:var(--green)">task</span><span class="g-state">closed</span></div></div>
+              </div>
+            </details>
+            <details class="g-bucket">
+              <summary><svg class="ic" style="font-size:11px"><use href="#ic-chevron-right"/></svg><svg class="ic" style="font-size:12px"><use href="#ic-circle"/></svg><span class="g-bucket-ttl">deferred</span><em>3</em></summary>
+              <div class="g-bucket-list">
+                <div class="g-orow" data-p="4" role="button" tabindex="0"><div class="g-node-identity"><span class="g-id">unitAI-5f1a</span><span class="g-sep">/</span><span class="g-tt">substrate bridge schema</span></div><div class="g-node-class"><span class="g-pri" style="color:var(--muted)">P4</span><span class="g-type" style="color:var(--blue)">feature</span><span class="g-state">deferred</span></div></div>
+              </div>
+            </details>
+          </div>
+
+          <footer class="g-foot">
+            <span>clusters sorted by <b>connectedness desc</b></span>
+            <span>orphans sorted by <b>priority, age</b></span>
+            <span class="g-spacer"></span>
+            <span><kbd>p</kbd> parent-child · <kbd>r</kbd> related · <kbd>d</kbd> deferred</span>
+          </footer>
+        </div>
+
+        <div class="underlay-fade" style="display:none"></div>
+
+        <aside class="drawer" aria-label="Graph node" style="display:none">
+          <header class="drawer-head">
+            <div class="drawer-kicker"><span>xtrm</span><span>/</span><span>bead</span><span>/</span><span class="mono">unitAI-kgxod</span></div>
+            <div class="drawer-title-row">
+              <div class="drawer-title"><h2><span class="mono">unitAI-kgxod</span> / <em>render specialist feed from forensic events</em></h2></div>
+              <div class="drawer-actions"><button class="btn">Copy ID</button><button class="btn primary">Open issue</button></div>
+            </div>
+            <div class="tags"><span class="chip blue">type:feature</span><span class="chip">P1</span><span class="chip amber">in progress</span><span class="chip green">reviewer/job-done</span></div>
+          </header>
+          <nav class="drawer-tabs" aria-label="Graph node tabs">
+            <button class="is-active" data-tab="gn-node">Node</button><button data-tab="gn-relations">Relations</button><button data-tab="gn-activity">Activity</button>
+          </nav>
+          <div class="drawer-body">
+            <section class="tab-panel is-active" id="tab-gn-node">
+              <section class="section">
+                <h3>Description</h3>
+                <p class="secondary">Render specialist feed from structured forensic events in Gitboard while keeping the rendered result. This node sits in the console-roadmap cluster, tracked by the forensic JSON endpoint.</p>
+              </section>
+              <div class="gh-row"><span class="label">cluster</span><span>console-roadmap · 5 edges</span></div>
+              <div class="gh-row"><span class="label">specialist</span><span style="color:var(--green); display:inline-flex; align-items:center; gap:5px;"><svg class="ic"><use href="#ic-check"/></svg>reviewer/job-done</span></div>
+            </section>
+            <section class="tab-panel" id="tab-gn-relations">
+              <section class="section">
+                <h3>Edges</h3>
+                <div class="lineage">
+                  <button class="relation violet"><code>console-roadmap</code><span><b>pre-substrate dashboard contract</b><br><span class="muted">parent · epic</span></span><span>open</span></button>
+                  <button class="relation green"><code>unitAI-60w93.15</code><span><b>forensic JSON backend endpoint</b><br><span class="muted">tracks · task</span></span><span>closed</span></button>
+                  <button class="relation amber"><code>unitAI-0gdjp</code><span><b>define AgentOps event catalog</b><br><span class="muted">blocks · task</span></span><span>blocked</span></button>
+                  <button class="relation blue"><code>forge-70el</code><span><b>specialist live-feed integration</b><br><span class="muted">related · chain</span></span><span>ready</span></button>
+                </div>
+              </section>
+            </section>
+            <section class="tab-panel" id="tab-gn-activity">
+              <section class="section">
+                <h3>Specialist runs</h3>
+                <div class="jobline"><span class="id-chip"><span class="role" style="color:var(--green)">reviewer</span><span class="div">/</span><span class="sub">job-done</span></span><span class="pill green"><svg class="ic"><use href="#ic-check"/></svg>passed</span><span class="muted" style="margin-left:auto; font-size:11.5px;">5m 12s · 143k tok</span></div>
+                <div class="jobline"><span class="id-chip"><span class="role" style="color:var(--blue)">executor</span><span class="div">/</span><span class="sub">job-running</span></span><span class="pill blue"><svg class="ic"><use href="#ic-play"/></svg>running</span><span class="muted" style="margin-left:auto; font-size:11.5px;">8.4k tok · live</span></div>
+              </section>
+            </section>
+          </div>
+        </aside>
+      </section>
+      <section class="surface" id="surface-observability"><div class="placeholder"><svg class="ic" style="font-size:30px"><use href="#ic-observability"/></svg><div class="ph-title">Observability</div><div class="ph-sub">Backend health — not yet mocked, coming next</div></div></section>
+      <section class="surface" id="surface-sessions"><div class="placeholder"><svg class="ic" style="font-size:30px"><use href="#ic-sessions"/></svg><div class="ph-title">Sessions</div><div class="ph-sub">Operator workblocks — not yet mocked, coming next</div></div></section>
+      <section class="surface" id="surface-terminal"><div class="placeholder"><svg class="ic" style="font-size:30px"><use href="#ic-terminal"/></svg><div class="ph-title">Terminal</div><div class="ph-sub">Command surface — not yet mocked, coming next</div></div></section>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      const app = document.querySelector(".app");
+      let sidebarManual = false;
+
+      const activeSurface = () => document.querySelector(".surface.is-active");
+      const drawerOf = (s) => (s ? s.querySelector(".drawer") : null);
+      const scrimOf = (s) => (s ? s.querySelector(".underlay-fade") : null);
+      const drawerOpen = () => { const d = drawerOf(activeSurface()); return !!d && d.style.display !== "none"; };
+
+      function syncShell() {
+        const open = drawerOpen();
+        if (!sidebarManual) app.classList.toggle("sidebar-collapsed", open);
+        const it = document.getElementById("inspector-toggle");
+        if (it) it.classList.toggle("is-active", open);
+      }
+
+      function setDrawer(open) {
+        const s = activeSurface();
+        const d = drawerOf(s), scrim = scrimOf(s);
+        if (!d) return;
+        d.style.display = open ? "" : "none";
+        if (scrim) scrim.style.display = open ? "" : "none";
+        sidebarManual = false;
+        syncShell();
+      }
+
+      // Two-level nav: bar 1 = parents, bar 2 = child surfaces of the active parent.
+      const PARENT_OF = {
+        feed: "feed",
+        issues: "issues", graph: "issues",
+        specialists: "specialists",
+        operations: "operations", evidence: "operations", observability: "operations", sessions: "operations", terminal: "operations",
+        github: "github"
+      };
+
+      function activateSurface(id) {
+        const parent = PARENT_OF[id] || id;
+        document.querySelectorAll(".surface").forEach((s) => s.classList.toggle("is-active", s.id === "surface-" + id));
+        document.querySelectorAll("[data-parent]").forEach((b) => b.classList.toggle("is-active", b.getAttribute("data-parent") === parent));
+        document.querySelectorAll(".topbar2 .ctx").forEach((c) => c.classList.toggle("is-active", c.getAttribute("data-parent-ctx") === parent));
+        document.querySelectorAll("[data-surface-button]").forEach((b) => b.classList.toggle("is-active", b.getAttribute("data-surface-button") === id));
+        document.querySelectorAll("[data-sections-for]").forEach((s) => { s.style.display = s.getAttribute("data-sections-for") === id ? "" : "none"; });
+        document.querySelectorAll("[data-filters-for]").forEach((g) => { g.style.display = g.getAttribute("data-filters-for") === id ? "" : "none"; });
+        sidebarManual = false;
+        syncShell();
+      }
+
+      // One delegated handler on document — nothing to "fail to attach".
+      document.addEventListener("click", (e) => {
+        const t = e.target;
+
+        // Primary nav: parent (bar 1) opens its default surface; child (bar 2) switches surface
+        const parentBtn = t.closest("[data-parent]");
+        if (parentBtn) { activateSurface(parentBtn.getAttribute("data-parent")); return; }
+        const navBtn = t.closest("[data-surface-button]");
+        if (navBtn) { activateSurface(navBtn.getAttribute("data-surface-button")); return; }
+        const secBtn = t.closest(".ctx-sections .ctx-item");
+        if (secBtn) { secBtn.parentElement.querySelectorAll(".ctx-item").forEach((b) => b.classList.toggle("is-active", b === secBtn)); return; }
+
+        // Shell toggles
+        if (t.closest("#sidebar-toggle")) { sidebarManual = true; app.classList.toggle("sidebar-collapsed"); return; }
+        if (t.closest("#inspector-toggle")) { setDrawer(!drawerOpen()); return; }
+        if (t.closest(".underlay-fade")) { setDrawer(false); return; }
+
+        // Chain-drawer tabs (Operations: Composition / Activity / …)
+        const opTab = t.closest("[data-tab]");
+        if (opTab) {
+          const v = opTab.getAttribute("data-tab");
+          const surf = opTab.closest(".surface") || document;
+          surf.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("is-active", b === opTab));
+          surf.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("is-active", p.id === "tab-" + v));
+          return;
+        }
+        // Bead-drawer tabs (Issues)
+        const beadTab = t.closest("[data-bead-tab]");
+        if (beadTab) {
+          const v = beadTab.getAttribute("data-bead-tab");
+          const surf = beadTab.closest(".surface") || document;
+          surf.querySelectorAll("[data-bead-tab]").forEach((b) => b.classList.toggle("is-active", b === beadTab));
+          surf.querySelectorAll(".bead-panel").forEach((p) => p.classList.toggle("is-active", p.id === "bead-tab-" + v));
+          return;
+        }
+        // GitHub commits: expand / collapse a commit body
+        const commitRow = t.closest("#surface-github .commit-row");
+        if (commitRow) { commitRow.classList.toggle("is-open"); return; }
+
+        // ---- Row gestures (the pre-redesign behaviour, restored) ----
+        // Issues: chevron / ID open the Bead drawer; row body expands the inline dossier (§5.5)
+        if (t.closest("#surface-issues .issue-expand-btn")) { setDrawer(true); return; }
+        const issueMain = t.closest("#surface-issues .issue-row-main");
+        if (issueMain) { issueMain.closest(".issue-row").classList.toggle("is-expanded"); return; }
+
+        // Evidence: chevron opens the Evidence drawer; row body expands the inline proof dossier (§7 / §5.5)
+        if (t.closest("#surface-evidence .proof-expand-btn")) { setDrawer(true); return; }
+        const proofMain = t.closest("#surface-evidence .proof-main");
+        if (proofMain) { proofMain.closest(".proof-row").classList.toggle("is-expanded"); return; }
+
+        // Graph: header toggles flip on/off; clicking a node chip or orphan opens its drawer (parity with legacy openSidebar)
+        const gTog = t.closest("#surface-graph .g-hd-tog");
+        if (gTog) { gTog.classList.toggle("is-on"); const st = gTog.querySelector(".g-hd-tog-state"); if (st) st.textContent = gTog.classList.contains("is-on") ? "on" : "off"; return; }
+        if (t.closest("#surface-graph .g-node, #surface-graph .g-orow")) { setDrawer(true); return; }
+
+        // Feed: a row toggles its inline dossier
+        const feedRow = t.closest("#surface-feed .feed-row");
+        if (feedRow) { feedRow.classList.toggle("is-expanded"); return; }
+
+        // GitHub: a PR / commit row opens the GitHub drawer
+        if (t.closest("#surface-github .feed-row")) { setDrawer(true); return; }
+
+        // Operations: a recent-object / drawer-target opens the Chain drawer
+        if (t.closest("#surface-operations .rail-item")) { setDrawer(true); return; }
+
+        // Specialists: a chain row selects it (master-detail, no drawer)
+        const spRow = t.closest("#surface-specialists .chain-row");
+        if (spRow) { document.querySelectorAll("#surface-specialists .chain-row").forEach((r) => r.classList.toggle("is-active", r === spRow)); return; }
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "]" && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); setDrawer(!drawerOpen()); }
+      });
+
+      activateSurface("operations");
+    })();
+  </script>
+</body>
+</html>

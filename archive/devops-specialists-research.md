@@ -4,8 +4,8 @@ aliases:
   - DevOps specialist research synthesis
   - Ricerca DevOps specialist
   - DevOps specialist per xtrm e Mercury
-date_created: 2026-05-30
-date_modified: 2026-05-30
+date_created: Saturday, May 30th 2026, 8:56:47 pm
+date_modified: Sunday, May 31st 2026, 9:32:38 pm
 ---
 
 # Ricerca sullo specialista DevOps per xtrm e Mercury
@@ -24,18 +24,18 @@ La raccomandazione finale è: **non collegare AWS DevOps Agent direttamente come
 
 ## Inventario delle fonti
 
-| Fonte | Cosa contribuisce | Concetti / API principali | Rilevanza per xtrm / Mercury |
-|---|---|---|---|
-| `1-projects/xtrm/research/devops-specialists.md` | Brief locale e intenzione progettuale originale | DevOps specialist, per-repo deploy specialist, pulse emitter, gap IaC/IoT, gap database specialist | È il documento di vincolo: dice quali problemi Mercury vuole risolvere, non solo cosa esiste fuori |
-| `inbox/transcripts/Introducing-AWS-DevOps-Agent-Amazon-Web-Services.analysis.md` | Presentazione del modello AWS DevOps Agent | always-on incident response, topology graph, Slack/ServiceNow, MCP custom tools, escalation | Evidenza utile per il modello operativo e il posizionamento del prodotto |
-| `inbox/transcripts/AWS-reInvent-2025-Move-beyond-reactive-Transform-cloud-ops-with-AWS-DevOps-Agent-COP362.analysis.md` | Demo e framing più ricco | Agent Spaces, blast radius, read-only posture, subagent paralleli, pricing/caps, support handoff | Fonte migliore per capire fiducia, UX e human-in-the-loop |
-| `inbox/transcripts/Diving-Deep-on-AWS-DevOps-Agent-AWS-Tech-Tales.analysis.md` | Dettagli più tecnici su integrazioni e operatività | MCP servers, IAM, read-only mode, prompt steering, parallel investigations, costo | Fonte migliore per confini, ergonomia operativa e costi |
-| [AWS DevOps Agent docs](https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent.html) | Documentazione canonica del prodotto | Agent Spaces, topology graph, CloudWatch, Dynatrace, Datadog, New Relic, Splunk, GitHub/GitLab, Slack, ServiceNow, AWS Support, custom MCP | Modello canonico di come un vendor ha incapsulato un agente operativo |
-| [Terraform Docker tutorial](https://developer.hashicorp.com/terraform/tutorials/docker-get-started) | Miniatura didattica del ciclo IaC | `init`, `plan`, `apply`, `destroy`, provider Docker, risorse dichiarative | Utile per spiegare come trasformare operazioni manuali in infrastruttura descritta come codice |
-| [Grafana MCP server docs](https://grafana.com/docs/grafana/latest/developer-resources/mcp/) | Ponte tra agente e osservabilità Grafana | dashboard, alert, incidenti, datasource, token di servizio, stdio/SSE/streamable HTTP, read-only mode, TLS | Fortissimo fit con la futura pagina DevOps e con uno specialista read-first |
-| [Prometheus MCP server](https://github.com/pab1it0/prometheus-mcp-server) | Ponte tra agente e PromQL | `execute_query`, `execute_range_query`, `list_metrics`, metadata, targets, auth, timeout, stateless HTTP | Fit naturale per metriche di job, code, container, costi token, LSP, Dolt, MCP |
-| Ispezione locale di `/home/dawid/projects/mercury/infra` | Stack centrale Mercury già operativo | Traefik, Prometheus, Grafana, Loki, Promtail, Alertmanager, exporter, cAdvisor, network Docker esterne, health-report | Mostra dove il DevOps specialist può agganciarsi subito |
-| Ispezione locale di `/home/dawid/projects/mercury/market-data` | Stack applicativo reale con database e feed critici | TimescaleDB, QuestDB, migrazioni, data feed, snapshot feed, options feed, Rust tick ingestor, API, MCP server, backup | Esempio concreto di repo dove Terraform + DevOps specialist possono ridurre drift e rischio deploy |
+| Fonte                                                                                                                   | Cosa contribuisce                                   | Concetti / API principali                                                                                                                  | Rilevanza per xtrm / Mercury                                                                       |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `1-projects/xtrm/research/devops-specialists.md`                                                                        | Brief locale e intenzione progettuale originale     | DevOps specialist, per-repo deploy specialist, pulse emitter, gap IaC/IoT, gap database specialist                                         | È il documento di vincolo: dice quali problemi Mercury vuole risolvere, non solo cosa esiste fuori |
+| `inbox/transcripts/Introducing-AWS-DevOps-Agent-Amazon-Web-Services.analysis.md`                                        | Presentazione del modello AWS DevOps Agent          | always-on incident response, topology graph, Slack/ServiceNow, MCP custom tools, escalation                                                | Evidenza utile per il modello operativo e il posizionamento del prodotto                           |
+| `inbox/transcripts/AWS-reInvent-2025-Move-beyond-reactive-Transform-cloud-ops-with-AWS-DevOps-Agent-COP362.analysis.md` | Demo e framing più ricco                            | Agent Spaces, blast radius, read-only posture, subagent paralleli, pricing/caps, support handoff                                           | Fonte migliore per capire fiducia, UX e human-in-the-loop                                          |
+| `inbox/transcripts/Diving-Deep-on-AWS-DevOps-Agent-AWS-Tech-Tales.analysis.md`                                          | Dettagli più tecnici su integrazioni e operatività  | MCP servers, IAM, read-only mode, prompt steering, parallel investigations, costo                                                          | Fonte migliore per confini, ergonomia operativa e costi                                            |
+| [AWS DevOps Agent docs](https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent.html)           | Documentazione canonica del prodotto                | Agent Spaces, topology graph, CloudWatch, Dynatrace, Datadog, New Relic, Splunk, GitHub/GitLab, Slack, ServiceNow, AWS Support, custom MCP | Modello canonico di come un vendor ha incapsulato un agente operativo                              |
+| [Terraform Docker tutorial](https://developer.hashicorp.com/terraform/tutorials/docker-get-started)                     | Miniatura didattica del ciclo IaC                   | `init`, `plan`, `apply`, `destroy`, provider Docker, risorse dichiarative                                                                  | Utile per spiegare come trasformare operazioni manuali in infrastruttura descritta come codice     |
+| [Grafana MCP server docs](https://grafana.com/docs/grafana/latest/developer-resources/mcp/)                             | Ponte tra agente e osservabilità Grafana            | dashboard, alert, incidenti, datasource, token di servizio, stdio/SSE/streamable HTTP, read-only mode, TLS                                 | Fortissimo fit con la futura pagina DevOps e con uno specialista read-first                        |
+| [Prometheus MCP server](https://github.com/pab1it0/prometheus-mcp-server)                                               | Ponte tra agente e PromQL                           | `execute_query`, `execute_range_query`, `list_metrics`, metadata, targets, auth, timeout, stateless HTTP                                   | Fit naturale per metriche di job, code, container, costi token, LSP, Dolt, MCP                     |
+| Ispezione locale di `/home/dawid/projects/mercury/infra`                                                                | Stack centrale Mercury già operativo                | Traefik, Prometheus, Grafana, Loki, Promtail, Alertmanager, exporter, cAdvisor, network Docker esterne, health-report                      | Mostra dove il DevOps specialist può agganciarsi subito                                            |
+| Ispezione locale di `/home/dawid/projects/mercury/market-data`                                                          | Stack applicativo reale con database e feed critici | TimescaleDB, QuestDB, migrazioni, data feed, snapshot feed, options feed, Rust tick ingestor, API, MCP server, backup                      | Esempio concreto di repo dove Terraform + DevOps specialist possono ridurre drift e rischio deploy |
 
 ## Il modello AWS DevOps Agent, distillato
 
@@ -97,6 +97,7 @@ Le azioni scriventi dovrebbero essere promosse per gradi:
 6. mutazioni infrastrutturali solo tramite Terraform plan/apply approvato.
 
 Questo evita che l’agente diventi un “sudo randomizzato”.
+*/nota_operatore: come proposto sopra, ambiente staging - una zona dove l'agente può fare quello che vuole, una copia dei servizi "safe" su cui poter lavorare*
 
 ## Terraform e Infrastructure as Code nel quadro DevOps
 
@@ -189,6 +190,7 @@ Per Mercury conviene tenere moduli distinti:
 - sa rollbackare;
 - sa quali comandi sono vietati;
 - gestisce `make spdeploy` o equivalente.
+*/andrebbe messo a pr merge to master, o prima, alla creazione di pr come una action?*
 
 **DevOps specialist** cross-platform:
 
@@ -198,7 +200,7 @@ Per Mercury conviene tenere moduli distinti:
 - produce RCA e prevenzione;
 - mantiene la pagina DevOps;
 - guarda costo e capacità.
-
+*/uno solo che monitora l'intero stack è troppo poco credo, devono essere container units chain o node*
 **Database specialist**:
 
 - schema e migrazioni;
@@ -218,7 +220,7 @@ Fondere tutto in un solo agente produrrebbe un “super-operatore” troppo ampi
 No, non come controller di produzione. Può essere usato come ispirazione, benchmark o eventualmente piano read-only/curated, ma non dovrebbe ricevere subito poteri mutanti sul VPS. Il motivo è il raggio d’azione: Mercury ha molti repo, reti Docker condivise, database persistenti, segreti, feed dati e servizi MCP. Prima vanno costruiti perimetro, osservabilità, rollback e policy.
 
 La via migliore è costruire un DevOps specialist nativo per xtrm/Mercury, modellato sulle lezioni AWS ma adattato alla realtà locale.
-
+*/creare il devops specialist e permettergli di creare/proporre quello che manca, per-repo, e globalmente, in collaborazione con la coppia orchestrator+operator?*
 ### Container dedicato o dentro specialists-service?
 
 Nel breve periodo lo specialista può vivere dentro `specialists-service` se opera come agente read-only e usa pochi strumenti. Ma appena deve avere accesso stabile a Prometheus/Grafana MCP, worktree, deploy hooks, Docker socket controllato e segreti separati, conviene un container dedicato.
@@ -235,12 +237,14 @@ Il container dedicato permette:
 
 `specialists-service` resta orchestratore. `devops-specialist` diventa il cervello operativo.
 
+*/allora terrei specialists-service come servizio che alimenta le pipeline programmatiche come le summarizations, e creare il container devops dall'inizio. all'interno del suo container lui può avere la sua copia del progetto su cui operare in modo sicuro.*
+
 ### Pagina DevOps in gitboard/futuro xtrm console
 
 Sì, serve. Dovrebbe diventare la console di stato operativo. Non deve necessariamente essere complessa nella prima versione. Anche una pagina con stato deployment, health, alert, costi token, code, worktree e pulsanti wakeup sarebbe già molto utile.
 
 Il punto non è solo visualizzare. È creare una superficie condivisa tra umano e agente. Quando il DevOps specialist dice “vedo aumento errori su mmd-api dopo deploy”, la UI deve mostrare il grafico, il commit, il container, il log e l’azione proposta.
-
+*/questo signigica che ogni dashboard name o metrica visibile all'agente deve essere esattamente la stessa per l'umano, no renames decorativi*
 ### Wakeup a eventi e schedulazione
 
 Il brief originale parla di un pulse emitter. È il pattern giusto. Lo specialista non deve essere sempre sveglio per forza. Prima può essere risvegliato da eventi:

@@ -1,8 +1,16 @@
 ---
 date_created: Friday, May 29th 2026, 6:19:13 pm
-date_modified: Saturday, May 30th 2026, 11:38:51 am
+date_modified: Monday, June 1st 2026, 5:33:50 pm
 title: devops-specialists
 ---
+## links
+- [[agentops-telemetry-for-specialists]]
+- [[devops-query-surfaces-mcp-architecture]]
+- [[sre-telemetry-patterns-for-mercury]]
+- [[terraform-first-steps]]
+- vps: /home/dawid/dev/specialists/docs/design/substrate/devops-platform-engineering-prd.md
+*/operator_notes: il devops agent di aws utilizza subagents per raccogliere dati e farsi aiutare. Significa che dovrebbe essere nel nostro caso uno specialists di "alto livello" di capacità come il dispatch di ulteriori specialist oppure che dobbiamo definire delle identità di specialist più helper e dedicati a raccogliere determinate metriche, più leggeri del principal-devops specialist. Potrebbe essere un node ed esserne il coordinator? il node-coordinator può fare dispatch di chains dedicate, nuovi node quando necessario. oppure teniamo il coordinator con il suo contratto attuale e semplicemente il devops propone escalation, quando necessario, per cui sono entrambi potenti e coordinano insieme la task devops.*
+
 The specialists roster currently is missing a specialized devops agent. AWS Devops agent is been recently released, and it is very powerful. The pipeline that was built for it is amazing, they have a full UI and ux very well scoped, which goes beyond our current terminal only + light ~/dev/gitboard app stack. The idea is first to wire the devops agent to the vps stack, very powerful. Then to decide: wire it with specialists-service container? Create a specific devops-specialist container (with a clone of the repository to investigate) with access to the prometheus metrics (which is quite complete, but definitely has to be expanded telemetry, so a first exploration pass on all the mercury repos would be needed, and the process requires to be standardized) - and another thing: expand our "gitboard" (future xtrm console) with a dedicated devops page that is connected with the infra side, and the devops agent integrated.
 This cleanly integrates with the fact that we want to adopt datadog like dashbaoards, prometheus and grafana integrations (via mcp, custom tools).
 The devops specialists i think should be also per-repo export in deploying, or perhaps, a new deploying specialist emerges from the research scope.
