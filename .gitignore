@@ -1,0 +1,39 @@
+# Node / package managers
+node_modules/
+.pnpm-store/
+.pnp.*
+pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+.turbo/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Obsidian leftovers (vault history may have shipped these)
+.obsidian/
+.trash/
+
+# Local env
+.env
+.env.local
+.env.*.local
+
+# Worktree / agent runtime
+.xtrm/
+.specialists/
+.wolf/
+.beads/
+.pi/
+
+# Syncthing
+*.sync-conflict-*
