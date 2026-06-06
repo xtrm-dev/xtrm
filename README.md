@@ -35,3 +35,7 @@ Domain packages hard-import `@xtrm/core` for `StateClient`; they speak to the da
 ## History
 
 `docs/` carries the full git history of the vault `~/second-mind/1-projects/xtrm/`, extracted via `git filter-repo --subdirectory-filter 1-projects/xtrm` (`devjournal.md` excluded as personal). Package source code will be grafted in via `git filter-repo --to-subdirectory-filter <pkg>` + `git merge --allow-unrelated-histories` from upstream repos (`specialists`, `xtrm-tools`, …) — see migration doc.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for onboarding, branching, PR workflow, and house style. Security policy lives in [`SECURITY.md`](SECURITY.md).
