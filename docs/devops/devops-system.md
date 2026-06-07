@@ -12,6 +12,7 @@ absorbs:
   - specialists/docs/telemetry/agentops-event-catalog
   - specialists/docs/telemetry/forensic-event-contract
   - specialists/docs/telemetry/prometheus-projection-contract
+<<<<<<< Updated upstream
 <<<<<<< HEAD
 date_modified: Sunday, June 7th 2026, 7:37:09 am
 created: 2026-06-07T02:22
@@ -19,6 +20,9 @@ updated: 2026-06-07T07:23
 =======
 date_modified: Sunday, June 7th 2026, 7:56 am
 >>>>>>> origin/main
+=======
+date_modified: Sunday, June 7th 2026, 8:08 am
+>>>>>>> Stashed changes
 ---
 
 # DevOps System — design canonico (xtrm + Mercury)
@@ -409,7 +413,7 @@ la telemetria AgentOps corrente:
 - **pre-wired but not live** → MCP forensic normalization/projection;
 - **future emitters/integrations** → live MCP emitter, service-skills/process-health/pulse native emitters, infra topology graph, DevOps specialist persona, MCP query orchestration, journal/recommendation UX, substrate-native channels/evidence.
 
-### 7.3 DevOps telemetry-query answer contract
+### 7.2 DevOps telemetry-query answer contract
 
 Quando `devops-sre` risponde a una domanda operativa ("Dolt è sano?", "perché la coda cresce?",
 "questo deploy ha degradato la latenza?"), la risposta non è testo libero. È un **answer packet**
@@ -522,9 +526,135 @@ Console rendering:
 - provide drill-down links after aggregate panels, preserving opaque IDs outside metric labels;
 - show recommended actions with their substrate class and approval requirement.
 
+### 7.3 Cross-repo integration contract
+
+La linea cross-repo è: **specialists/substrate produce signals → infra scrape/store/route →
+console renderizza e permette drill-down → DevOps specialist produce query answers/recommendations**.
+Ogni passaggio ha un owner unico; nessun repo deve duplicare il ruolo dell'altro.
+
+```mermaid
+flowchart LR
+  S["specialists / substrate\nforensic events + Prometheus projection"] --> I["mercury/infra\nscrape, storage, alert routing, Grafana/Loki"]
+  I --> Q["query surfaces\nGrafana MCP, Prometheus MCP, Loki, infra-wrapper"]
+  Q --> C["gitboard / xtrm console\npanels, evidence drawer, approvals"]
+  C --> D["devops-sre\nquery_answer.v1 + recommendations"]
+  D --> B["bd / substrate\nadvisor, followup, gate, root"]
+  B -. "accepted work" .-> S
+  B -. "infra work" .-> I
+  B -. "console work" .-> C
+```
+
+Ownership matrix:
+
+| Layer | Owner | Produces | Consumes | Must not do |
+|---|---|---|---|---|
+| Runtime events | `dev/specialists`, future substrate/channels | `xtrm.forensic.v1`, `sp forensic`, `sp feed/log --json`, `sp metrics`, `/metrics` | beads, runtime state, Pi/MCP/tool events | scrape infra, build Grafana dashboards, invent console UX |
+| Infra telemetry | `mercury/infra` | Prometheus scrape config, Grafana/Loki datasources, alerts, query MCP, infra-wrapper MCP | metrics projection, service/app exporters, Terraform/Compose state | mutate specialists semantics, expose generic shell MCP |
+| Console | `dev/gitboard` / future xtrm console | datasource descriptors, panels, evidence drawer, approval UX, journal/recommendation UX | Prometheus/Grafana/Loki/forensic/query-answer packets | create fake metrics, hide missing telemetry |
+| DevOps specialist | `dev/specialists` role contracts + console runtime | `xtrm.devops.query_answer.v1`, advisor/followup/gate/root recommendations | console context, query surfaces, service skills, forensic evidence | mutate production directly, bypass owner repo |
+
+Signal contract:
+
+| Signal class | Source of truth | Aggregate surface | Drill-down surface | Missing-signal owner |
+|---|---|---|---|---|
+| AgentOps job state/result/duration | specialists runtime state + forensic events | `xtrm_job_state`, `xtrm_jobs_total`, duration histograms | `sp forensic`, `sp feed/log --json`, console evidence drawer | `dev/specialists` |
+| Chain/gate/evidence health | chain/bridge events + forensic evidence refs | `xtrm_chains_total`, `xtrm_chain_duration_seconds`, `xtrm_gate_verdicts_total`, `xtrm_evidence_refs_total` | forensic events, bd chain/molecule, report links | `dev/specialists` / substrate |
+| Tool/MCP failures | tool/MCP forensic events | `xtrm_tool_*`, `xtrm_mcp_operations_total` | forensic event correlation, MCP query result body | emitter owner; infra only routes/scrapes |
+| Host/container/app health | Mercury service exporters, node/cAdvisor/app metrics | Prometheus/Grafana panels | Grafana/Loki/infra-wrapper state | `mercury/infra` or service repo |
+| Logs/traces | Loki/OTel/source backend | dashboards only as summaries | Loki/trace links, forensic correlation | owning backend/repo |
+| Runbook/service knowledge | service skills + service registry | freshness/drift counters once emitted | service skill path and failure-mode row | `dev/xtrm-tools` machinery + owning service |
+| Terraform/deploy/backup state | infra-wrapper MCP / Terraform state / deploy records | bounded gauges/counters when standardized | plan summary, drift summary, backup verification | `mercury/infra` |
+
+Interface rules:
+
+- Prometheus carries **aggregates only**; forensic/log/trace surfaces carry opaque IDs and exact evidence.
+- Console starts from aggregate panels and asks for drill-down explicitly; it must not group panels by opaque IDs.
+- `query_answer.v1` is the handoff object between DevOps specialist and console. It may reference Grafana/Prometheus/Loki/forensic/service-skill evidence, but it does not embed raw logs or raw result payloads.
+- Missing signals become `missing_telemetry[]` plus an owner repo. If operator accepts the recommendation, it materializes as `class:followup` in that owner repo.
+- Write-capable operations (`terraform apply`, restart, deploy, dashboard mutation, alert mutation) require a separate gated chain and human approval until a later autonomy level is explicitly granted.
+
+First integration order:
+
+1. Specialists runtime signals are already the strongest base: expose/scrape `sp metrics --prometheus` or `/metrics` and preserve forensic drill-down.
+2. Infra wires scrape/storage/alerts without adding forbidden labels or opaque IDs.
+3. Console implements datasource/evidence contract and renders job state, terminal result rate, duration, context pressure, tool/MCP errors, and evidence refs.
+4. DevOps specialist consumes console/query surfaces and emits `query_answer.v1`.
+5. Only after the read path works, add infra-wrapper MCP for non-telemetry state and deploy/Terraform gates.
+
+Open follow-up routing:
+
+- upstream specialists signal/exporter gaps → child bead under `unitAI-60w93` or runtime telemetry epic;
+- infra scrape/Grafana/Loki/query-MCP gaps → `mercury/infra`;
+- console datasource/evidence/panel gaps → `dev/gitboard` / xtrm console track;
+- role/materialization/policy gaps → `unitAI-eoqxp` children or substrate design.
+
+### 7.4 DevOps recommendation and escalation taxonomy
+
+Il DevOps participant non crea issue arbitrarie. Emette `proposal` o `escalation` con evidence;
+orchestrator/substrate materializza la classe giusta. Questa tabella è la decisione operativa
+per i finding DevOps:
+
+| Situation | Materialization | Relationship | Approval | Example |
+|---|---|---|---|---|
+| Finding utile ma non bloccante per il lavoro corrente | `class:advisor` evidence/journal | stays inside current container/channel | no | "queue depth is elevated but below gate threshold" |
+| Miglioramento fuori scope, non urgente | `class:followup` | `discovered-from:<current-root>` | no, unless promoted | "add backup freshness metric" |
+| Safety/SLO blocker della chain corrente | unsatisfied `class:gate` or inserted gate step | blocks current root/step | yes for bypass | "post-deploy error rate breached threshold" |
+| Mitigazione operativa proposta, non ancora accettata | recommendation with `class:followup` candidate | `discovered-from` incident/root | operator accept required to execute | "restart non-critical worker after drain" |
+| Lavoro standalone accettato dall'operatore | promote to `class:root` | new root; may track original incident | yes | "implement bounded Terraform drift exporter" |
+| Validazione post-work da ruolo DevOps | `class:gate` | blocks merge/close until satisfied | no bypass without reason | "SRE post-deploy health PASS required" |
+| Long-running preventive signal | node journal + optional `class:followup` | pulse lineage; no chain block | no | "weekly service-skills drift found stale runbook" |
+
+Recommendation packet minimum fields:
+
+```json
+{
+  "schema": "xtrm.devops.recommendation.v1",
+  "status": "PROPOSED|ACCEPTED|REJECTED|CLOSED|COMPLETED",
+  "class": "advisor|followup|gate|root",
+  "title": "Operator-readable recommendation",
+  "reason": "Why this exists now.",
+  "risk": "low|medium|high|critical",
+  "owner_repo": "dev/specialists|mercury/infra|dev/gitboard|service repo",
+  "requires_approval": true,
+  "evidence_refs": [
+    {
+      "kind": "forensic_event|metric_query|mcp_query_result|dashboard|runbook|policy_decision|eval_result|token_usage_summary|deployment|rca",
+      "ref": "opaque link/id/body pointer; never a metric label",
+      "summary": "bounded evidence summary"
+    }
+  ],
+  "materialization": {
+    "relationship": "discovered-from|tracks|blocks|relates-to",
+    "target": "issue/container/pulse id when known"
+  }
+}
+```
+
+Evidence rules:
+
+- `forensic_event`, `metric_query`, `dashboard`, `deployment`, `rca`, and `runbook` are valid today.
+- `mcp_query_result` is valid when a live MCP/query surface produced the evidence; if the source is not live, record it under `missing_telemetry`, not as evidence.
+- `policy_decision` is required for any recommendation that crosses an action boundary (`terraform_apply`, `docker_restart`, `dashboard_write`, `secret_read`, `repo_write`).
+- `eval_result` is required when the recommendation claims an automated quality/safety assessment.
+- `token_usage_summary` is token-first; USD cost is allowed only with explicit billing/pricing provenance.
+
+Relationship rules:
+
+- Use `discovered-from` for recommendations spawned by an incident, query answer, or chain.
+- Use `blocks` only for active safety gates that must stop current work.
+- Use `tracks` for durable incident/postmortem threads that remain connected to a long-running operational concern.
+- Use `relates-to` for weak provenance or background context; do not use it as a blocker.
+
+Close/promotion rules:
+
+- `advisor` evidence can close with the container; it does not become durable work unless promoted.
+- `followup` remains non-blocking until an operator or policy promotes it.
+- `gate` must be satisfied, explicitly bypassed with reason, or converted into a blocking remediation chain.
+- `root` requires a normal work contract and its own chain; DevOps recommendation text is input, not implementation authority.
+
 ---
 
-### 7.2 Research refresh `unitAI-eoqxp.1` — findings parked, not execution priority
+### 7.5 Research refresh `unitAI-eoqxp.1` — findings parked, not execution priority
 
 **Status 2026-06-04.** The mandatory DevOps/platform research refresh is complete and linked to the board, but the module is **not** the next implementation priority. DevOps now has enough design evidence to avoid re-discovery; execution should wait until the more foundational tracks are closed enough: substrate, channels, specialists telemetry, then the specialists roadmap/runtime cleanup.
 
