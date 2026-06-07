@@ -29,9 +29,9 @@ writing `xtrm.forensic.v1` records. It complements:
   correlation, and event-family rules.
 - `docs/telemetry/prometheus-projection-contract.md` — low-cardinality metrics
   projected from forensic events and runtime state.
-- `/home/dawid/second-mind/1-projects/xtrm/substrate/substrate_design_it.md` —
+- `/home/dawid/dev/xtrm/docs/substrate/substrate_design_it.md` —
   broad substrate design and lineage/evidence model.
-- `/home/dawid/second-mind/1-projects/xtrm/devops/devops-system.md` — DevOps /
+- `/home/dawid/dev/xtrm/docs/devops/devops-system.md` — DevOps /
   AgentOps vertical design.
 
 The catalog is implementation-ready but not a mandate to implement every emitter
@@ -358,4 +358,3 @@ Before adding a new event name:
    shape for the emitter.
 6. If it projects to metrics, update `prometheus-projection-contract.md` and
    parser/label validation.
-

@@ -24,7 +24,7 @@ created: 2026-06-04T05:00
 ## Design context
 
 This is the shipped specialists-side implementation contract for the canonical
-DevOps design in `/home/dawid/second-mind/1-projects/xtrm/devops/devops-system.md`.
+DevOps design in `/home/dawid/dev/xtrm/docs/devops/devops-system.md`.
 Use it as the concrete AgentOps forensic/evidence layer: rich events, identity,
 correlation, redaction, and future journal/recommendation drill-down. Do not use
 this document as the whole DevOps PRD; it is the implemented telemetry substrate

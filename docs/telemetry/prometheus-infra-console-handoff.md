@@ -21,7 +21,7 @@ created: 2026-06-04T05:00
 
 This handoff turns the xtrm telemetry contracts into ownership boundaries for infra, Grafana, and console work.
 It is the shipped bridge from the canonical DevOps design
-`/home/dawid/second-mind/1-projects/xtrm/devops/devops-system.md` to the
+`/home/dawid/dev/xtrm/docs/devops/devops-system.md` to the
 implemented specialists telemetry surfaces in `docs/telemetry/`.
 
 - Metrics contract: `docs/telemetry/prometheus-projection-contract.md`
