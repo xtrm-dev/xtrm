@@ -12,7 +12,9 @@ absorbs:
   - specialists/docs/telemetry/agentops-event-catalog
   - specialists/docs/telemetry/forensic-event-contract
   - specialists/docs/telemetry/prometheus-projection-contract
-date_modified: Thursday, June 4th 2026, 1:02 am
+date_modified: Sunday, June 7th 2026, 7:23:24 am
+created: 2026-06-07T02:22
+updated: 2026-06-07T07:23
 ---
 
 # DevOps System — design canonico (xtrm + Mercury)
@@ -26,6 +28,7 @@ date_modified: Thursday, June 4th 2026, 1:02 am
 >
 > Indice: [[xtrm-MOC]] · substrate: [[substrate_design_it]] · chain primitive: [[chains]] · telemetria: bead `60w93.1`.
 
+> *operators_note: Quando la parte infra e cloud esterno lands, la pagina devops vera e propria dovrà essere estremamente informativa. In modo straordinario e particolare dovrà render delle full view "simil chat" nel viewport principale, con progresso chiaro ed espandibile (una sorta di modifica della versione del progresso della chain nel drawer). Chiaramente visibile il motivo della run, dell'incident, della escalation, creazione della scene di grafana ad hoc (per ora Grafana senza ricreare un sistema da 0, molto complesso). La stessa cosa in realtà vale anche per agentops, è una esperienza a se stante e completa.*
 ---
 
 ## 0. Cos'è — e cosa NON è
@@ -234,12 +237,12 @@ Il design DevOps non riparte da zero: la prima parte concreta è già materializ
 in `~/dev/specialists`. Questi documenti sono il riferimento implementativo per
 la telemetria AgentOps corrente:
 
-| Documento / stato | Ruolo nel design DevOps |
-|---|---|
-| `/home/dawid/dev/specialists/docs/telemetry/forensic-event-contract.md` — aggiornato 2026-06-04 | Contract `xtrm.forensic.v1`: eventi forensi ricchi, identity a 5 layer, correlation IDs, redaction, famiglie evento, session/trace/conversation discipline, e status implementativo shipped. È la fonte per journal, evidence drawer, RCA e recommendation traceability. |
-| `/home/dawid/dev/specialists/docs/telemetry/prometheus-projection-contract.md` — aggiornato 2026-06-04 | Proiezione aggregate/low-cardinality da forensic/runtime state verso Prometheus. Include `sp metrics --prometheus`, `sp serve` `GET /metrics`, token-first semantics, identity/policy/eval counters, e MCP operation counter pre-wiring. |
-| `/home/dawid/dev/specialists/docs/telemetry/prometheus-infra-console-handoff.md` — shipped PR #107 | Handoff operativo: cosa deve fare `mercury/infra`, cosa deve mostrare gitboard/console, come drillare dai pannelli aggregate agli eventi forensi. |
-| `/home/dawid/dev/specialists/docs/telemetry/agentops-event-catalog.md` — aggiornato 2026-06-04 | Catalogo eventi AgentOps: job, chain/epic, review/gates, tool/command, process/worktree, MCP, service-skills, pulse, identity/policy/eval, token usage, evidence kinds. È l'indice operativo per nuovi emitter. |
+| Documento / stato                                                                                      | Ruolo nel design DevOps                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/home/dawid/dev/specialists/docs/telemetry/forensic-event-contract.md` — aggiornato 2026-06-04        | Contract `xtrm.forensic.v1`: eventi forensi ricchi, identity a 5 layer, correlation IDs, redaction, famiglie evento, session/trace/conversation discipline, e status implementativo shipped. È la fonte per journal, evidence drawer, RCA e recommendation traceability. |
+| `/home/dawid/dev/specialists/docs/telemetry/prometheus-projection-contract.md` — aggiornato 2026-06-04 | Proiezione aggregate/low-cardinality da forensic/runtime state verso Prometheus. Include `sp metrics --prometheus`, `sp serve` `GET /metrics`, token-first semantics, identity/policy/eval counters, e MCP operation counter pre-wiring.                                 |
+| `/home/dawid/dev/specialists/docs/telemetry/prometheus-infra-console-handoff.md` — shipped PR #107     | Handoff operativo: cosa deve fare `mercury/infra`, cosa deve mostrare gitboard/console, come drillare dai pannelli aggregate agli eventi forensi.                                                                                                                        |
+| `/home/dawid/dev/specialists/docs/telemetry/agentops-event-catalog.md` — aggiornato 2026-06-04         | Catalogo eventi AgentOps: job, chain/epic, review/gates, tool/command, process/worktree, MCP, service-skills, pulse, identity/policy/eval, token usage, evidence kinds. È l'indice operativo per nuovi emitter.                                                          |
 
 **Superfici specialists già materializzate (status 2026-06-04):**
 

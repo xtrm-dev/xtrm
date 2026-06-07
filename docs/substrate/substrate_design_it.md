@@ -2,7 +2,7 @@
 date_created: Tuesday, May 26th 2026, 9:03:46 am
 date_modified: Saturday, June 6th 2026, 10:40:51 pm
 created: 2026-05-26T18:05
-updated: 2026-06-06T22:40
+updated: 2026-06-07T06:44
 ---
 # Substrate: Containers, Issues e ciclo di vita del Seed
 

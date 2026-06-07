@@ -7,7 +7,7 @@
   "baseFontSizeAction": true,
   "showViewHeader": true,
   "baseFontSize": 17,
-  "interfaceFontFamily": "Segoe UI",
+  "interfaceFontFamily": "Inter",
   "nativeMenus": false,
   "monospaceFontFamily": "MesloLGS NF",
   "enabledCssSnippets": []
