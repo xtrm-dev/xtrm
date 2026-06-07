@@ -3,7 +3,7 @@ title: Prometheus Projection Contract
 scope: telemetry-prometheus-projection
 category: reference
 version: 1.0.0
-updated: 2026-06-06T16:03
+updated: 2026-06-07T07:36
 source_of_truth_for:
   - xtrm Prometheus metric projection
   - specialists AgentOps metrics
@@ -24,7 +24,7 @@ created: 2026-06-04T05:00
 ## Design context
 
 This is the shipped specialists-side metrics projection for the canonical DevOps
-design in `/home/dawid/second-mind/1-projects/xtrm/devops/devops-system.md`. It
+design in `/home/dawid/dev/xtrm/docs/devops/devops-system.md`. It
 turns AgentOps forensic/runtime state into low-cardinality Prometheus metrics for
 infra dashboards and alerts. For exact event evidence and journal/recommendation
 drill-down, link back to `docs/telemetry/forensic-event-contract.md`.

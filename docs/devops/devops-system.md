@@ -12,9 +12,13 @@ absorbs:
   - specialists/docs/telemetry/agentops-event-catalog
   - specialists/docs/telemetry/forensic-event-contract
   - specialists/docs/telemetry/prometheus-projection-contract
-date_modified: Sunday, June 7th 2026, 7:23:24 am
+<<<<<<< HEAD
+date_modified: Sunday, June 7th 2026, 7:37:09 am
 created: 2026-06-07T02:22
 updated: 2026-06-07T07:23
+=======
+date_modified: Sunday, June 7th 2026, 7:56 am
+>>>>>>> origin/main
 ---
 
 # DevOps System — design canonico (xtrm + Mercury)
@@ -189,6 +193,146 @@ vieta comandi `docker` diretti**. (DX: infra astratta dietro interfacce stabili.
 → 3 restart controllato servizio non critico → 4 deploy via comando gated → 5 rollback automatico con
 soglie forti → 6 mutazioni infra solo via Terraform plan/apply approvato. *Evita il "sudo randomizzato".*
 
+### 5.1 Shape del team DevOps
+
+Il modulo DevOps è un **team verticale**, non una persona unica. Il coordinamento può essere fatto
+da un `devops`/SRE lead o da un futuro node coordinator, ma ogni ruolo conserva confini propri,
+tool surface propria e output contract proprio.
+
+| Ruolo | Classe | Permessi iniziali | Input principali | Output |
+|---|---|---|---|---|
+| `devops-sre` / `monitor` | ops, advisor/gate | READ_ONLY | Prometheus/Grafana/Loki, `sp forensic`, `sp metrics`, service skills, pulse | triage, RCA, mitigazione proposta, follow-up, escalation |
+| `deployer` | delivery/root/gate | MEDIUM/HIGH gated | repo, CI, artifact, deploy history, health checks | deploy plan, preflight, rollout, rollback plan, post-deploy report |
+| `iac-terraform` | infra/gate | READ_ONLY → gated apply | Terraform/OpenTofu module, state summary, policy, env | `fmt`/`validate`/`plan` summary, risk diff, approval packet |
+| `database` | data/gate | READ_ONLY → gated maintenance | schema, migrations, backups, query plans, service skill | migration risk, restore path, perf finding, DB runbook update |
+| `security-devops` | safety/gate | READ_ONLY | dependency/image/secrets/IaC scan, exposed service map | PASS/PARTIAL/FAIL, safety blocker, remediation requirement |
+| `cost-capacity` | ops/advisor | READ_ONLY | token/model metrics, queue depth, CPU/RAM/disk, retention | capacity recommendation, budget warning, scaling follow-up |
+| `service-skills-sync` | knowledge maintenance | MEDIUM docs-only | GitNexus drift, service registry, health check tables | updated service skill, drift evidence, runbook freshness signal |
+
+La regola: **SRE decide cosa sta succedendo; deployer cambia il sistema; IaC descrive il terreno;
+security/database/cost diventano gate o advisor quando il rischio li chiama.**
+
+### 5.2 Compartimentalizzazione
+
+Ogni ruolo ha tre confini espliciti:
+
+- **Evidence boundary:** da dove può leggere. Esempio: `devops-sre` legge metriche/log/eventi;
+  `deployer` legge build/deploy state; `database` legge solo superfici DB allowlisted.
+- **Action boundary:** cosa può fare senza umano. Default: nessuna mutazione prod. Le mutazioni
+  diventano possibili solo in chain gated con piano, validazione e rollback.
+- **Materialization boundary:** quale artefatto emette. `advisor` per findings live, `followup`
+  per raccomandazioni, `gate` per approvazioni/safety blockers, `root` solo quando l'operatore
+  accetta lavoro standalone.
+
+### 5.3 Chain reattiva: alert → RCA → mitigazione proposta
+
+Usare una **chain** quando c'è un evento discreto da chiudere: alert, incident, failed deploy,
+drift pericoloso, regressione post-release.
+
+```mermaid
+flowchart LR
+  A["pulse: alert / ticket / failed health-check"] --> B["devops-sre: triage"]
+  B --> C{"Incident actionable?"}
+  C -- "no" --> D["journal: skipped / noisy / duplicate"]
+  C -- "yes" --> E["devops-sre + helpers: RCA"]
+  E --> F["mitigation proposal + evidence refs"]
+  F --> G{"Risk domain"}
+  G -- "code" --> H["debugger/executor chain"]
+  G -- "deploy" --> I["deployer gate"]
+  G -- "infra" --> J["iac-terraform gate"]
+  G -- "data" --> K["database gate"]
+  G -- "security" --> L["security-devops gate"]
+  H --> M["test-runner / health-check"]
+  I --> M
+  J --> N["human approval"]
+  K --> N
+  L --> N
+  N --> M
+  M --> O["postmortem + follow-up + service-skill update"]
+```
+
+Minimum output della chain:
+
+- query window, metric/log selectors, dashboards/panels consultati;
+- ipotesi scartate con motivazione;
+- root cause o confidence-bounded unknown;
+- mitigation spec con rollback;
+- owner repo e bead/follow-up proposto;
+- evidence refs verso forensic events, metric query, log query, deploy event, service skill.
+
+### 5.4 Chain delivery: deploy controllato
+
+Usare una **chain** per deploy perché ha inizio/fine chiari e una checklist verificabile.
+
+```mermaid
+sequenceDiagram
+  participant Dev as dev/executor
+  participant Dep as deployer
+  participant Sec as security-devops
+  participant IaC as iac-terraform
+  participant SRE as devops-sre
+  participant Op as operator
+
+  Dev->>Dep: request deploy via make spdeploy
+  Dep->>Dep: build/test/scan/preflight
+  Dep->>Sec: safety gate when risk >= medium
+  Dep->>IaC: plan gate when terrain changes
+  IaC-->>Op: approval packet for apply-class actions
+  Op-->>Dep: approve / reject
+  Dep->>Dep: rollout or abort
+  Dep->>SRE: post-deploy pulse
+  SRE->>SRE: compare pre/post SLI, errors, saturation
+  SRE-->>Dev: PASS, rollback recommendation, or follow-up bead
+```
+
+Il deploy non dovrebbe passare da comandi liberi (`docker compose up`, `terraform apply`,
+restart manuali). Il percorso canonico è `make spdeploy` o equivalente per-repo, con log,
+forensic event e health-check post-deploy.
+
+### 5.5 Node preventivo: operatività continua
+
+Usare un **node** quando il lavoro è di osservazione continua, memoria operativa e prevenzione.
+Il node non applica fix: crea pulse, findings e follow-up.
+
+```mermaid
+flowchart TB
+  N["devops preventive node"] --> A["scheduled sweep"]
+  N --> B["event pulse intake"]
+  A --> C["service health + service-skills drift"]
+  A --> D["capacity / cost / queue / orphan jobs"]
+  A --> E["backup freshness / Terraform drift"]
+  B --> F["post-deploy regression watch"]
+  B --> G["alert clustering"]
+  C --> H["advisor journal"]
+  D --> H
+  E --> H
+  F --> I["follow-up or gate"]
+  G --> I
+  H --> J["operator console + evidence drawer"]
+  I --> J
+```
+
+Node cadence iniziale:
+
+- daily posture sweep per AgentOps interno;
+- post-deploy watch su ogni deploy event;
+- weekly service-skills drift check;
+- weekly Terraform drift/readiness summary;
+- budget/capacity report quando metriche token/queue/storage superano soglie.
+
+### 5.6 Regole di sequenziamento
+
+- **Prima telemetry, poi specialist.** Il DevOps specialist consuma `xtrm.forensic.v1`,
+  Prometheus projection, event catalog e service skills; non inventa un secondo telemetry layer.
+- **Prima read-only, poi gated action.** Le prime versioni producono raccomandazioni; ogni mutazione
+  richiede chain, gate e approval.
+- **Chain per incident/deploy; node per prevenzione.** Se deve chiudersi con un verdict, è chain.
+  Se deve svegliarsi e accumulare memoria, è node.
+- **Il pulse collega Dev e Ops.** Deploy event, alert, drift, backup stale, queue growth e postmortem
+  sono tutti pulse; il pulse decide quale chain o node si sveglia.
+- **Evidence-first.** Ogni decisione deve poter drillare a forensic event, metric query, log query,
+  service-skill runbook o deploy record.
+
 ---
 
 ## 6. Knowledge substrate — service skills (gitnexus-enhanced)
@@ -264,6 +408,119 @@ la telemetria AgentOps corrente:
 - **shipped now** → forensic envelope, AgentOps event catalog, metric projection, `/metrics`, CLI query, token-first semantics, session correlation;
 - **pre-wired but not live** → MCP forensic normalization/projection;
 - **future emitters/integrations** → live MCP emitter, service-skills/process-health/pulse native emitters, infra topology graph, DevOps specialist persona, MCP query orchestration, journal/recommendation UX, substrate-native channels/evidence.
+
+### 7.3 DevOps telemetry-query answer contract
+
+Quando `devops-sre` risponde a una domanda operativa ("Dolt è sano?", "perché la coda cresce?",
+"questo deploy ha degradato la latenza?"), la risposta non è testo libero. È un **answer packet**
+renderizzabile da console, verificabile da infra, e drillabile nei log/eventi.
+
+Ordine delle superfici:
+
+1. **Grafana MCP** — prima scelta per dashboard, datasource, alert, incident, deeplink.
+2. **Prometheus MCP / `sp metrics --prometheus` / `/metrics`** — probe preciso su metriche aggregate.
+3. **Loki/LogQL via Grafana** — log bounded per finestra e selector.
+4. **`sp forensic`, `sp feed/log --json`** — drill-down forense con ID opachi solo nel body/correlation.
+5. **infra-wrapper MCP read-only** — solo stato non-telemetrico: Compose, Terraform drift, backup, DNS, deployment gate.
+6. **service skill** — runbook/failure-mode table per interpretare il segnale.
+
+Il contratto deve separare ciò che è **osservato**, ciò che è **inferito**, e ciò che è **missing telemetry**.
+Una risposta con dati mancanti non può diventare PASS: al massimo `UNKNOWN` + follow-up per aggiungere
+il segnale nel repo proprietario.
+
+```json
+{
+  "schema": "xtrm.devops.query_answer.v1",
+  "question": "Is Dolt healthy?",
+  "scope": {
+    "repo": "specialists",
+    "service": "dolt",
+    "environment": "local",
+    "time_window": {
+      "from": "2026-06-07T05:00:00Z",
+      "to": "2026-06-07T05:30:00Z"
+    }
+  },
+  "verdict": {
+    "status": "PASS|DEGRADED|FAIL|UNKNOWN",
+    "confidence": "low|medium|high",
+    "summary": "One-paragraph operator-readable answer."
+  },
+  "evidence": [
+    {
+      "kind": "metric_query",
+      "source": "prometheus|grafana|sp_metrics",
+      "query": "xtrm_processes{process_kind=\"dolt\"}",
+      "window": "30m",
+      "observed": "bounded result summary",
+      "link": "dashboard or query deeplink when available"
+    },
+    {
+      "kind": "forensic_event",
+      "source": "sp forensic",
+      "selector": {
+        "event_family": "process",
+        "event_name": "process.health.degraded"
+      },
+      "observed": "event count / latest event summary"
+    },
+    {
+      "kind": "runbook_link",
+      "source": "service-skill",
+      "path": "service skill or runbook path",
+      "observed": "which failure-mode row was used"
+    }
+  ],
+  "missing_telemetry": [
+    {
+      "signal": "backup_freshness_seconds",
+      "owner_repo": "mercury/infra",
+      "impact": "Cannot distinguish healthy idle state from missing backup evidence.",
+      "followup_kind": "class:followup"
+    }
+  ],
+  "recommended_actions": [
+    {
+      "class": "advisor|followup|gate|root",
+      "action": "Create follow-up bead to add bounded backup freshness metric.",
+      "owner_repo": "mercury/infra",
+      "requires_approval": false,
+      "risk": "low"
+    }
+  ],
+  "correlation": {
+    "pulse_id": "opaque; body only",
+    "chain_id": "opaque; body only",
+    "trace_id": "opaque; body only"
+  }
+}
+```
+
+Field rules:
+
+- `verdict.status=PASS` requires enough positive evidence for the asked scope and no blocking missing signal.
+- `DEGRADED` means service still works but one SLI/SLO, queue, process, cost, or freshness signal is outside the normal band.
+- `FAIL` means user/operator outcome is broken or safety gate blocks continuation.
+- `UNKNOWN` is a first-class answer when the telemetry contract cannot prove health.
+- `evidence[].observed` is a bounded summary, not raw log text or raw metric dumps.
+- `correlation` may carry `job_id`, `chain_id`, `trace_id`, `mcp_session_id`, etc.; those IDs never become Prometheus labels.
+- `recommended_actions[].class` maps directly to substrate materialization: `advisor`, `followup`, `gate`, or `root`.
+
+Query discipline:
+
+- Always include time window, environment, repo/service scope, and selector/query text.
+- Prefer aggregate metrics before log/forensic drill-down.
+- Use bounded label sets: `service_name`, `repo`, `participant_kind`, `participant_role`, `state`, `result`, `tool_name`, `mcp_server`, `mcp_method`.
+- Never group by `job_id`, `bead_id`, `chain_id`, `participant_id`, `trace_id`, raw path, raw command, raw URL, raw error text, prompt text, token, or credential.
+- If the agent needs non-telemetry state, use a narrow infra-wrapper question (`terraform_drift_summary`, `compose_service_state`, `backup_freshness`) rather than shell.
+
+Console rendering:
+
+- show `verdict.status`, confidence, one-line summary, and time window first;
+- show evidence grouped by kind: metrics, logs, forensic events, runbook, dashboard;
+- show missing telemetry as explicit gaps, not hidden caveats;
+- provide drill-down links after aggregate panels, preserving opaque IDs outside metric labels;
+- show recommended actions with their substrate class and approval requirement.
 
 ---
 

@@ -24,8 +24,13 @@
     "3-resources/github/lavoro-su-orgs.md": "cfb3e7d975d2c14052632fb467e79eff378376e5ec1f288e3aa002e1727cd8f5",
     "1-projects/xtrm/console/design-session-handoff.md": "f6404918da52901567d071e0f19d6fa80a60a38f8d14e4677b33c001a6992b6b",
     "console/console-product-contract.md": "2b826c38174fc2acbfa21201ae6c715d1ccaa1447d7cb94fe21181766c5ce940",
-    "substrate/substrate_design_it.md": "cb4f3259a0a85be7ee21bb33cd1b50175ca1dd5cb6f553b5c1b926d45915632d",
+    "substrate/substrate_design_it.md": "264065410aa51a64de1cdea639d53d77426939eaac7d3adcdc311d89b8fc429b",
     "devops/dashboard-grafana-dump-chatgpt.md": "6afd05b027313966cb879985a6bf86c035c16601c06a14cdf6c85c5b9f712c40",
-    "devops/devops-system.md": "e3d88ec1b9109c7c16609b94753be089a5be31420bc6560e1b45cd8f4d2c95fb"
+    "devops/devops-system.md": "e3d88ec1b9109c7c16609b94753be089a5be31420bc6560e1b45cd8f4d2c95fb",
+    "telemetry/agentops-event-catalog.md": "9fdd505aa6d49a103742b2947117c96d83e3cacdeb9222ae44ee45a594d40763",
+    "telemetry/forensic-event-contract.md": "0d8daeb684fe6e45afe848a305eef4194f1f8e055a53bc984cda060bfa28a99f",
+    "telemetry/prometheus-infra-console-handoff.md": "3bf8165e775a1d200a45e669413408f1401a60dfface964297491849057d70f5",
+    "telemetry/prometheus-projection-contract.md": "b46aba118b0a15c66f69e68daa912a3d4f9f206d186c855fc769f4fc7b7e9858",
+    "conflict-files-obsidian-git.md": "3eb9d1596e6aae3f207d08e10fbb2c33f2dac64dc6e1d8cc40cc59f1dd2e5c8b"
   }
 }
