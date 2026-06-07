@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "type": "folder",
+      "ctime": 1744807020175,
+      "path": "0_note_task"
+    },
+    {
+      "type": "file",
+      "ctime": 1745643194141,
+      "path": "1_projects/01_#mercury/plan_app_idea_organized_better.md"
+    },
+    {
+      "type": "folder",
+      "ctime": 1749114149628,
+      "path": "3-resources/02-cli-cmd-wsl-api",
+      "title": "02_CLI_scripts"
+    },
+    {
+      "type": "file",
+      "ctime": 1772694002975,
+      "path": "@backlog.tasks.md"
+    },
+    {
+      "type": "file",
+      "ctime": 1772755592420,
+      "path": "1-projects/Mercury/market-data/mmd-sprints-plans.md",
+      "title": "mmd-sprints-plans"
+    }
+  ]
+}

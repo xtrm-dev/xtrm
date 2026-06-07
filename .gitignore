@@ -19,8 +19,8 @@ build/
 .vscode/
 *.swp
 
-# Obsidian leftovers (vault history may have shipped these)
-.obsidian/
+# Obsidian — track config + plugins under docs/.obsidian/, but never per-machine UI state.
+# Per-vault noise patterns live in docs/.obsidian/.gitignore (see that file).
 .trash/
 
 # Local env

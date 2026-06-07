@@ -1,0 +1,17 @@
+{
+  "defaultColor": "#8A5CF5",
+  "defaultShape": "CIRCLE",
+  "shapes": [],
+  "indicators": [
+    {
+      "dataPath": "1-projects",
+      "color": "#8A5CF5",
+      "shape": "RING"
+    },
+    {
+      "dataPath": "1-projects/xtrm",
+      "color": "#8A5CF5",
+      "shape": "SQUARE"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "cascadeColors": false,
+  "colorBackground": true,
+  "palette": [
+    {
+      "id": "C3MBqWiGA04yisOJ0E8dl",
+      "name": "",
+      "value": "#c8ff00"
+    }
+  ],
+  "fileColors": [
+    {
+      "path": "_history.md",
+      "color": "C3MBqWiGA04yisOJ0E8dl"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+# Per-machine UI state — never share across machines.
+workspace.json
+workspace-mobile.json
+workspace.json.backup
+
+# Caches and indexes that rebuild on first open.
+cache/
+**/cache/
+graph.json.backup
+
+# Per-machine sensitive plugin data (e.g. obsidian-git credentials, API keys).
+# Add specific files here as you discover them; safer to gitignore aggressively.
+plugins/obsidian-git/data.json
+
+# Sync conflict files from any source (Syncthing residue, merge conflicts).
+*.sync-conflict-*
+
+# OS / editor noise
+.DS_Store

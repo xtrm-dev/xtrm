@@ -1,0 +1,114 @@
+{
+  "shellPath": "",
+  "startupCommand": "",
+  "fontSize": 14,
+  "fontFamily": "Menlo, Monaco, 'Courier New', monospace",
+  "lineHeight": 1,
+  "theme": "obsidian-dark",
+  "backgroundColor": "",
+  "cursorBlink": true,
+  "cursorStyle": "block",
+  "copyOnSelect": true,
+  "scrollback": 5000,
+  "ribbonIcon": "terminal",
+  "defaultLocation": "bottom",
+  "notifyOnCompletion": false,
+  "notificationSound": "beep",
+  "notificationVolume": 50,
+  "searchShortcut": "Ctrl+Alt+F",
+  "persistBuffer": true,
+  "recentSessionsMax": 10,
+  "recentSessions": [
+    {
+      "name": "Terminal 1",
+      "color": "",
+      "cwd": "/home/dawid/second-mind",
+      "bufferSerial": "sh-5.3$ cd\r\nsh-5.3$ cd 1-projects\r\nsh: cd: 1-projects: No such file or directory\r\nsh-5.3$ ls\r\n AGENTS.md\u001b[14C     Maestro_0.2.2_amd64.AppImage     specialists\r\n Applications\u001b[11C    'ML-classification context.pdf'   Sync\r\n data\u001b[19C     Music\u001b[22C      sync-docs-eval.html\r\n dawid-desktop\u001b[10C     nltk_data\u001b[18C      Templates\r\n Desktop\u001b[16C     node_modules\u001b[15C      tinyclaw-workspace\r\n dev\u001b[20C     package.json\u001b[15C      tmux.conf.inspect\r\n Documents\u001b[14C     package-lock.json\u001b[10C      tools\r\n dotfiles_candidates.txt     Pictures\u001b[19C      venezuela-precious-metals-analysis.pdf\r\n Downloads\u001b[14C     projects\u001b[19C      Videos\r\n Firefox_wallpaper.png\u001b[2C     Public\u001b[21C      warptmp.bNh8VD\r\n go\u001b[21C     README.md\u001b[18C      workflow-agentico-front-agent.pdf\r\n handoff_dotfiles_setup.md   second-mind\u001b[16C     'YFinance MCP Server - Complete Architecture & Phases.pdf'\r\n liquidity-trap.pdf\u001b[5C    'second-mind (Copy)'\r\n logs\u001b[19C     snap\r\nsh-5.3$ cd secondmind\r\nsh: cd: secondmind: No such file or directory\r\nsh-5.3$ cd second-mind\r\nsh-5.3$ bash\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: A/home/dawid/.pyenv/bin:/home/dawid/.local/bin:/home/dawid/.local/bin:/home/dawid/bin:/app/bin:/usr/bin:/app/bin:/app/texlive/bin:/app/texlive/bin/x86_64-linux:/app/texlive/bin/aarch64-linux:/usr/local/go/bin: No such file or directory\r\n/home/dawid/.pyenv/libexec/pyenv-rehash: line 197: /home/dawid/.pyenv/pyenv.d/rehash/conda.bash: No such file or directory\r\nbash: eval: line 45: syntax error near unexpected token `;'\r\nbash: eval: line 45: `  activate|deactivate|rehash|shell)'\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\Eexport': command not found\r\n/home/dawid/.pyenv/plugins/pyenv-virtualenv/bin/pyenv-sh-activate: line 47: : No such file or directory\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\E\\\\': command not found\r\nbash-5.3$ ls\r\n 00-development-log.md\r\n 1-projects\r\n 2026-03-25.md\r\n 2026-05-03.md\r\n 2-areas\r\n 3-resources\r\n 4-archives\r\n AGENTS.md\r\n agentworkflows\r\n'Announcing the Agent2Agent Protocol (A2A) - Google Developers Blog.md'\r\n @backlog.tasks.md\r\n @backlog.tasks.sync-conflict-20260525-013612-IV52GQ7.md\r\n CLAUDE.md\r\n cookies.txt\r\n create_mercury_intel_docx.py\r\n data\r\n dev-log.md\r\n dev-notes.md\r\n _DOC_COMPLETI\r\n'e1Jvgv3ogIQ.it 1.txt'\r\n e1Jvgv3ogIQ.it.txt\r\n emojiclean.py\r\n github-recovery-codes.txt\r\n git_summary_short.sync-conflict-20260504-145438-IV52GQ7.txt\r\n git_summary_short.txt\r\n'Harness engineering mail.md'\r\n hints_analisi_mercati.md\r\n _history_backup.md\r\n _history.md\r\n home-sync.md\r\n ideas\r\n inbox\r\n install-claude-desktop.md\r\n lesson6script2.md\r\n lesson-pipeline\r\n logs\r\n mcp_config.json\r\n'Mercury - general [1365749040158871596] (after 2025-05-03).csv'\r\n Mercury-Intelligence-Venezuela-Report.docx\r\n'messaggio street.md.bak'\r\n models.json\r\n notes\r\n package-lock.json\r\n package-lock.sync-conflict-20260504-145439-IV52GQ7.json\r\n passwords.md\r\n'Pasted image 20260424175447.png'\r\n plantuml-diagrams\r\n plantUML-template.md\r\n'Projects to dev Migration.md'\r\n prova.md\r\n pyPI-credentials.md\r\n reports\r\n Report_Sintesi_Fed_Mercati_Monetari.md\r\n schedule.ics\r\n'Senza nome.md'\r\n shadow-debug.log\r\n shadow-debug.sync-conflict-20260504-145439-IV52GQ7.log\r\n sipora9845@dropeso.com.md\r\n specialists-orchestration-friction-2026-05-05.md\r\n Templates\r\n testa.md\r\n test.md\r\n test_note_mcp.md\r\n test-qwen-untracked.md\r\n test-shadow-observer.md\r\n test.sql\r\n'The Ultimate Tourist Guide to Bondistan.pdf'\r\n Unorganized\r\n'Untitled 1.md'\r\n'Untitled (2).md'\r\n Untitled.md\r\n website-utili-trading.md\r\n XX0-experiment_AI\r\n'ZMawN97EetI.it 1.txt'\r\n ZMawN97EetI.it.txt\r\n/home/dawid/.pyenv/plugins/pyenv-virtualenv/bin/pyenv-sh-activate: line 47: : No such file or directory\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\E\\\\': command not found\r\nbash-5.3$ cd second-mind\r\nbash: cd: second-mind: No such file or directory\r\n/home/dawid/.pyenv/plugins/pyenv-virtualenv/bin/pyenv-sh-activate: line 47: : No such file or directory\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\E\\\\': command not found\r\nbash-5.3$ \u001b[?2004h",
+      "closedAt": 1779966477742
+    },
+    {
+      "name": "Terminal 1",
+      "color": "",
+      "cwd": "/home/dawid/second-mind",
+      "bufferSerial": "sh-5.3$ pi\r\nsh: pi: command not found\r\nsh-5.3$ zsh\r\nsh: zsh: command not found\r\nsh-5.3$ bash\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: A/home/dawid/.pyenv/bin:/home/dawid/.local/bin:/home/dawid/.local/bin:/home/dawid/bin:/app/bin:/usr/bin:/app/bin:/app/texlive/bin:/app/texlive/bin/x86_64-linux:/app/texlive/bin/aarch64-linux:/usr/local/go/bin: No such file or directory\r\n/home/dawid/.pyenv/libexec/pyenv-rehash: line 197: /home/dawid/.pyenv/pyenv.d/rehash/conda.bash: No such file or directory\r\nbash: eval: line 45: syntax error near unexpected token `;'\r\nbash: eval: line 45: `  activate|deactivate|rehash|shell)'\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\Eexport': command not found\r\n/home/dawid/.pyenv/plugins/pyenv-virtualenv/bin/pyenv-sh-activate: line 47: : No such file or directory\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\E\\\\': command not found\r\nbash-5.3$ pi\r\nbash: pi: command not found\r\n/home/dawid/.pyenv/plugins/pyenv-virtualenv/bin/pyenv-sh-activate: line 47: : No such file or directory\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\E\\\\': command not found\r\nbash-5.3$ zsh\r\nbash: zsh: command not found\r\n/home/dawid/.pyenv/plugins/pyenv-virtualenv/bin/pyenv-sh-activate: line 47: : No such file or directory\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\E\\\\': command not found\r\nbash-5.3$ \u001b[?2004h",
+      "closedAt": 1779947029647
+    },
+    {
+      "name": "Terminal 1",
+      "color": "",
+      "cwd": "/home/dawid/second-mind",
+      "bufferSerial": "\r\n\u001b[33mTerminal binaries not installed.\r\n\u001b[0mGo to Settings → Terminal to download them.\r\nsh-5.3$ \u001b[?2004h",
+      "closedAt": 1779946996643
+    },
+    {
+      "name": "Terminal 1",
+      "color": "",
+      "cwd": "/home/dawid/second-mind",
+      "bufferSerial": "\r\n\u001b[33mTerminal binaries not installed.\r\n\u001b[0mGo to Settings → Terminal to download them.\u001b[1B\u001b[43D",
+      "closedAt": 1779946990237
+    }
+  ],
+  "enableClaudeIntegration": false,
+  "claudeSessionsDir": "",
+  "claudeRegistryPath": "claude-sessions.md",
+  "claudeSessionsMax": 25,
+  "tabColorTintsBackground": true,
+  "tabColors": [
+    {
+      "name": "None",
+      "value": "",
+      "tintStrength": 0,
+      "builtin": true
+    },
+    {
+      "name": "Vermilion",
+      "value": "#FC3634",
+      "tintStrength": 12,
+      "builtin": true
+    },
+    {
+      "name": "Sky Blue",
+      "value": "#25D0F7",
+      "tintStrength": 12,
+      "builtin": true
+    },
+    {
+      "name": "Gold",
+      "value": "#FFD700",
+      "tintStrength": 12,
+      "builtin": true
+    },
+    {
+      "name": "Mint",
+      "value": "#18BC9C",
+      "tintStrength": 12,
+      "builtin": true
+    },
+    {
+      "name": "Azure",
+      "value": "#007BFF",
+      "tintStrength": 12,
+      "builtin": true
+    },
+    {
+      "name": "Purple",
+      "value": "#A991D4",
+      "tintStrength": 12,
+      "builtin": true
+    }
+  ],
+  "tabBarPosition": "top",
+  "wikiLinkAutocomplete": false,
+  "wikiLinkInsertMode": "wikilink",
+  "lastViewState": {
+    "tabs": [
+      {
+        "name": "Terminal 1",
+        "color": "",
+        "cwd": "/home/dawid/second-mind",
+        "bufferSerial": "sh-5.3$ cd\r\nsh-5.3$ cd 1-projects\r\nsh: cd: 1-projects: No such file or directory\r\nsh-5.3$ ls\r\n AGENTS.md\u001b[14C     Maestro_0.2.2_amd64.AppImage     specialists\r\n Applications\u001b[11C    'ML-classification context.pdf'   Sync\r\n data\u001b[19C     Music\u001b[22C      sync-docs-eval.html\r\n dawid-desktop\u001b[10C     nltk_data\u001b[18C      Templates\r\n Desktop\u001b[16C     node_modules\u001b[15C      tinyclaw-workspace\r\n dev\u001b[20C     package.json\u001b[15C      tmux.conf.inspect\r\n Documents\u001b[14C     package-lock.json\u001b[10C      tools\r\n dotfiles_candidates.txt     Pictures\u001b[19C      venezuela-precious-metals-analysis.pdf\r\n Downloads\u001b[14C     projects\u001b[19C      Videos\r\n Firefox_wallpaper.png\u001b[2C     Public\u001b[21C      warptmp.bNh8VD\r\n go\u001b[21C     README.md\u001b[18C      workflow-agentico-front-agent.pdf\r\n handoff_dotfiles_setup.md   second-mind\u001b[16C     'YFinance MCP Server - Complete Architecture & Phases.pdf'\r\n liquidity-trap.pdf\u001b[5C    'second-mind (Copy)'\r\n logs\u001b[19C     snap\r\nsh-5.3$ cd secondmind\r\nsh: cd: secondmind: No such file or directory\r\nsh-5.3$ cd second-mind\r\nsh-5.3$ bash\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: A/home/dawid/.pyenv/bin:/home/dawid/.local/bin:/home/dawid/.local/bin:/home/dawid/bin:/app/bin:/usr/bin:/app/bin:/app/texlive/bin:/app/texlive/bin/x86_64-linux:/app/texlive/bin/aarch64-linux:/usr/local/go/bin: No such file or directory\r\n/home/dawid/.pyenv/libexec/pyenv-rehash: line 197: /home/dawid/.pyenv/pyenv.d/rehash/conda.bash: No such file or directory\r\nbash: eval: line 45: syntax error near unexpected token `;'\r\nbash: eval: line 45: `  activate|deactivate|rehash|shell)'\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\Eexport': command not found\r\n/home/dawid/.pyenv/plugins/pyenv-virtualenv/bin/pyenv-sh-activate: line 47: : No such file or directory\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\E\\\\': command not found\r\nbash-5.3$ ls\r\n 00-development-log.md\r\n 1-projects\r\n 2026-03-25.md\r\n 2026-05-03.md\r\n 2-areas\r\n 3-resources\r\n 4-archives\r\n AGENTS.md\r\n agentworkflows\r\n'Announcing the Agent2Agent Protocol (A2A) - Google Developers Blog.md'\r\n @backlog.tasks.md\r\n @backlog.tasks.sync-conflict-20260525-013612-IV52GQ7.md\r\n CLAUDE.md\r\n cookies.txt\r\n create_mercury_intel_docx.py\r\n data\r\n dev-log.md\r\n dev-notes.md\r\n _DOC_COMPLETI\r\n'e1Jvgv3ogIQ.it 1.txt'\r\n e1Jvgv3ogIQ.it.txt\r\n emojiclean.py\r\n github-recovery-codes.txt\r\n git_summary_short.sync-conflict-20260504-145438-IV52GQ7.txt\r\n git_summary_short.txt\r\n'Harness engineering mail.md'\r\n hints_analisi_mercati.md\r\n _history_backup.md\r\n _history.md\r\n home-sync.md\r\n ideas\r\n inbox\r\n install-claude-desktop.md\r\n lesson6script2.md\r\n lesson-pipeline\r\n logs\r\n mcp_config.json\r\n'Mercury - general [1365749040158871596] (after 2025-05-03).csv'\r\n Mercury-Intelligence-Venezuela-Report.docx\r\n'messaggio street.md.bak'\r\n models.json\r\n notes\r\n package-lock.json\r\n package-lock.sync-conflict-20260504-145439-IV52GQ7.json\r\n passwords.md\r\n'Pasted image 20260424175447.png'\r\n plantuml-diagrams\r\n plantUML-template.md\r\n'Projects to dev Migration.md'\r\n prova.md\r\n pyPI-credentials.md\r\n reports\r\n Report_Sintesi_Fed_Mercati_Monetari.md\r\n schedule.ics\r\n'Senza nome.md'\r\n shadow-debug.log\r\n shadow-debug.sync-conflict-20260504-145439-IV52GQ7.log\r\n sipora9845@dropeso.com.md\r\n specialists-orchestration-friction-2026-05-05.md\r\n Templates\r\n testa.md\r\n test.md\r\n test_note_mcp.md\r\n test-qwen-untracked.md\r\n test-shadow-observer.md\r\n test.sql\r\n'The Ultimate Tourist Guide to Bondistan.pdf'\r\n Unorganized\r\n'Untitled 1.md'\r\n'Untitled (2).md'\r\n Untitled.md\r\n website-utili-trading.md\r\n XX0-experiment_AI\r\n'ZMawN97EetI.it 1.txt'\r\n ZMawN97EetI.it.txt\r\n/home/dawid/.pyenv/plugins/pyenv-virtualenv/bin/pyenv-sh-activate: line 47: : No such file or directory\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\E\\\\': command not found\r\nbash-5.3$ cd second-mind\r\nbash: cd: second-mind: No such file or directory\r\n/home/dawid/.pyenv/plugins/pyenv-virtualenv/bin/pyenv-sh-activate: line 47: : No such file or directory\r\nbash: $'\\E]133': command not found\r\nbash: $'A\\E\\E]133': command not found\r\nbash: $'A\\E\\\\': command not found\r\nbash-5.3$ \u001b[?2004h"
+      }
+    ],
+    "activeIndex": 0
+  }
+}

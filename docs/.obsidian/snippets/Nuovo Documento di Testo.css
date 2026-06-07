@@ -1,0 +1,5 @@
+/* Cambia il colore del testo nel corpo delle note */
+body {
+    --text-normal: #dcdccc; /* Un grigio chiaro/crema rilassante */
+    --text-muted: #a0a0a0;  /* Colore per i testi meno importanti */
+}

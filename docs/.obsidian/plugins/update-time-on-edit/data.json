@@ -1,0 +1,27 @@
+{
+  "dateFormat": "yyyy-MM-dd'T'HH:mm",
+  "enableCreateTime": true,
+  "headerUpdated": "updated",
+  "headerCreated": "created",
+  "minMinutesBetweenSaves": 1,
+  "ignoreGlobalFolder": [],
+  "ignoreCreatedFolder": [],
+  "enableExperimentalHash": false,
+  "fileHashMap": {
+    "1-projects/xtrm/console/console-product-contract.md": "399e317d37acd7e23d4e2197452a15a54adc344244a9574aedc57b369b631cd8",
+    "inbox/inbox.links.md": "0e89e494c3c16df4b70b80546cadf6fc560f6337cc9ca3ef236a4ede9bd1d96e",
+    "1-projects/xtrm/devjournal.md": "460d09281cfb1f00a4f29fec1eac1d0772fa4a2286559be8b4ba0a14c18eeb79",
+    "@backlog.tasks.md": "30249a39b37eed161ebb8f37e94e9d958ab3d1c5c3157c23b3355f4b6f299257",
+    "1-projects/xtrm/channels/channels-forensic-attention-proposal.md": "8684b87ecd863fab676d35e8692531e2ca6e5e3ca8247e2ca3dd3b7bcd0c4202",
+    "1-projects/xtrm/monorepo-migration.md": "61c3def6afee7f20d2c55e3d3be797524e7522f34bb046cb1d153eb692289cbe",
+    "1-projects/xtrm/telemetry/prometheus-infra-console-handoff.md": "cb61c6cec3921c0c389340fb8c710cd89039fbe516bbdc9c0d0108f2ece6099e",
+    "1-projects/xtrm/telemetry/agentops-event-catalog.md": "90a6c018117f2ad420fccbbc55f90daff5aac2f424b7a0859a0817466f5bd761",
+    "1-projects/xtrm/telemetry/prometheus-projection-contract.md": "3505a7bb375c817b968a505686053f43df803b3abbc65d0314569cbe9c4cfbfa",
+    "1-projects/xtrm/telemetry/forensic-event-contract.md": "0dc269ae5aa050ae1388c625ab6558ba9682ea904e62622268f0d481672278a4",
+    "1-projects/xtrm/specialists/agentops-suite.md": "8c969c7cc060289ce4cadd14b4c60ab15879968f9591b5e9ff95fed46886eb9c",
+    "1-projects/xtrm/state-store-options.md": "a5bc8ff86068b72c276b18168a0eb2cd71628fd57f9617ae2b99957081221dd2",
+    "1-projects/xtrm/substrate/substrate_design_it.md": "436fd4e745b2346949cb40a99d98de78df3253e669cf0517e9a5ff3c25214a84",
+    "3-resources/github/lavoro-su-orgs.md": "cfb3e7d975d2c14052632fb467e79eff378376e5ec1f288e3aa002e1727cd8f5",
+    "1-projects/xtrm/console/design-session-handoff.md": "f6404918da52901567d071e0f19d6fa80a60a38f8d14e4677b33c001a6992b6b"
+  }
+}

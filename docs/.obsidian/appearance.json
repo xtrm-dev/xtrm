@@ -1,0 +1,14 @@
+{
+  "showRibbon": true,
+  "theme": "obsidian",
+  "cssTheme": "Gitsidian",
+  "accentColor": "",
+  "textFontFamily": "Arial",
+  "baseFontSizeAction": true,
+  "showViewHeader": true,
+  "baseFontSize": 17,
+  "interfaceFontFamily": "Segoe UI",
+  "nativeMenus": false,
+  "monospaceFontFamily": "MesloLGS NF",
+  "enabledCssSnippets": []
+}

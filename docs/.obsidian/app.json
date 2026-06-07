@@ -1,0 +1,25 @@
+{
+  "showLineNumber": true,
+  "foldIndent": true,
+  "readableLineLength": false,
+  "alwaysUpdateLinks": true,
+  "spellcheck": false,
+  "tabSize": 4,
+  "livePreview": true,
+  "pdfExportSettings": {
+    "includeName": true,
+    "pageSize": "A4",
+    "landscape": false,
+    "margin": "0",
+    "downscalePercent": 65
+  },
+  "strictLineBreaks": true,
+  "userIgnoreFilters": [
+    "4_archives/_secondMIND-VECCHIO/"
+  ],
+  "showUnsupportedFiles": true,
+  "rightToLeft": false,
+  "openBehavior": "",
+  "promptDelete": false,
+  "foldHeading": true
+}
