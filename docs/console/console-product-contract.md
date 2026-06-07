@@ -4,7 +4,7 @@ project: xtrm
 area: console
 status: current-working-contract
 created: 2026-06-02
-updated: 2026-06-07T04:33
+updated: 2026-06-07T04:21
 tags:
   - xtrm
   - gitboard
@@ -16,7 +16,7 @@ date_modified: Friday, June 5th 2026, 1:18:39 am
 ---
 ---
 
-title: xtrm Console Product Contract project: xtrm area: console status: current-working-contract revision: 27 (parent-sections nav · filters → sidebar) created: 2026-06-02 updated: 2026-06-06 supersedes:
+title: xtrm Console Product Contract project: xtrm area: console status: current-working-contract revision: 42 (Observe identity + DevOps/AgentOps build, query_answer + recommendation lifecycle — see §16; supersedes §6.4 interaction hue and §6.10 sans) created: 2026-06-02 updated: 2026-06-07 supersedes:
 
 - xtrm Console Product Contract rev 2026-06-02 (visual-contract section + IA section)
 - issue-drawer-spec.md (now §10 of this document)
@@ -124,16 +124,18 @@ Operations is built natively over OTel/Prom/Loki backends through the console's 
 
 The right drawer is **not a secondary afterthought**. It is the entity inspector and decision panel — and the navigation primitive of the entire console.
 
-### §5.1 Behavior [LOCKED]
+### §5.1 Behavior [LOCKED, revised rev 36 — non-modal]
 
-- Drawer opens as an overlay; **does not squash the main viewport**.
+- Drawer opens as an overlay panel docked right; **does not squash the main viewport**.
+- **NON-MODAL (rev 36, supersedes scrim + backdrop-close):** no scrim; the main view stays fully **interactive and scrollable** while the drawer is open. The operator can scroll lists, expand inline dossiers, and compare content next to the open inspector (the Datadog side-panel model).
+- **Retarget, don't reopen:** clicking another entity while the drawer is open **replaces the drawer content with that entity** (the §5.3 replace semantics, now the default gesture) — the drawer never has to be closed first.
+- **Close is explicit only:** X control in the drawer header, `]`, or Esc. Backdrop-click close is removed (there is no backdrop).
 - Main view stays as orientation/context; drawer owns detail, provenance, and actions.
 - Drawer can inspect any first-class entity from §3.
 - Preserves operator context when switching entities from inside lineage or evidence links.
 - Supports copy/open actions for IDs, branch, PR, trace, feed, artifact, and file references.
 - **Width:** `min(50vw, 720px)` (matches shipped `.bead-side-drawer`).
-- **Backdrop:** subtle scrim `--scrim` (light `rgba(253, 253, 253, 0.68)` / dark `rgba(0, 0, 0, 0.40)`), backdrop click closes.
-- **Shadow:** `--drawer-shadow` (light `-16px 0 48px -16px rgba(15, 23, 42, 0.18)` / dark `-12px 0 32px rgba(0, 0, 0, 0.45)`) — drawer is the only place shadow exists in the console.
+- **Shadow:** `--drawer-shadow` (light `-16px 0 48px -16px rgba(15, 23, 42, 0.18)` / dark `-12px 0 32px rgba(0, 0, 0, 0.45)`) — drawer is the only place shadow exists in the console. (`--scrim` is **deprecated**, §6.12.)
 - **Breadcrumb in header:** `xtrm / <kind> / <id>` always visible — the navigation context that survives entity switching.
 
 ### §5.2 Drawer kind polymorphism [LOCKED]
@@ -181,8 +183,8 @@ Per-surface mapping of click targets to drawer kinds:
 |Issues|issue row|Issue Drawer|adapts by class|
 |Specialists|chain row|Chain Drawer|primary|
 |Specialists|job row|Issue Drawer (the step-issue of that job)|each job is backed by a step-issue|
-|Operations|specialist health row (`executor`)|Role Drawer|new kind, see §11|
-|Operations|chain throughput row (`debug` template)|Chain Template Drawer|new kind, see §11|
+|Specialists · Roles (rev 39)|specialist health row (`executor`)|Role Drawer|new kind, see §11|
+|Specialists · Templates (rev 39)|chain throughput row (`debug` template)|Chain Template Drawer|new kind, see §11|
 |Operations|failure cluster|Memory Drawer|new kind, see §11|
 |Operations|active escalation row|Chain Drawer||
 |Operations|SRE-agent activity row|Chain Drawer||
@@ -259,28 +261,27 @@ Both variants must read as the same product at a glance. Structure is theme-inva
 
 ### §6.4 Color discipline [LOCKED]
 
-One semantic accent set, applied coherently:
+**One precise color identity** (rev 28, user palette). Five chromatic roles + one interaction accent; corporate-grade plain, Datadog-class restraint. **There is deliberately no green**: success is the calm dark cyan — only red and amber "shout".
 
-Values are the shipped production tokens (light canonical, dark from `.ide-shell[data-theme=dark]`).
-
-|Semantic|Var|Light|Dark|Use|
-|---|---|---|---|---|
-|accent|`--accent-blue`|`#3A5FCE`|`#7B9BE8`|interactive affordances, focus ring, primary button, selected row rail|
-|active/wip|`--graph-state-wip`|`#2566B8`|`#4D9DE0`|in-progress / running state|
-|success|`--graph-state-ready`|`#2F8D5E`|`#4FAA7F`|success, healthy state, gate PASS|
-|caution|`--graph-state-blocked`|`#8C4A1F`|`#B05E2C`|degraded but functional, gate PARTIAL|
-|warning|`--graph-priority-1`|`#C98A2C`|`#C98A2C`|P1, warning|
-|failure|`--accent-red` / `--graph-priority-0`|`#C84D3C`|`#D1847F`|failure, blocking issue, P0, gate FAIL, escalation|
-|deliberative|`--accent-purple`|`#5A51B8`|`#B69ADF`|design/research issues, planning, advisor class|
-|closed/muted|`--graph-state-closed`|`rgba(15,23,42,0.30)`|`rgba(255,255,255,0.28)`|closed / inactive state mark|
+|Role|Var|Light|Use|
+|---|---|---|---|
+|interaction|`--blue`|`#3A5FCE`|**only** nav attiva, links, selection, focus, primary buttons, selected filter chip. Never inside a status chip.|
+|state primary|`--green` (cyan)|`#155E75`|specialist activity + the live/settled axis: **running (solid)** / **pass · done · ok (tint)**|
+|alert|`--red`|`#DC2626`|fail / blocking / P0 / breached — solid|
+|warn|`--amber-fill` + `--amber`|`#FBBF24` fill (`#451A03` ink) / `#B45309` text|waiting / partial / escalated / P1|
+|special|`--violet`|`#7E22CE`|epic / merged / gate class — tint|
+|chip base|`--chip-base` + `--chip-line`|`#F8FAFC` / `#E2E8F0`|resting surface of every neutral chip|
 
 Discipline:
 
-- **Subtle background (≤10% alpha) only for semantic state pills and selected rows.** Never decoratively, never for category-coding.
-- **Categories carry meaning through icons, not colour.** Type / kind / source / template / evidence chips are **neutral**; colour (from the limited, theme-strong defined set above) is reserved for **semantic state** (status, verdict, priority) and diffstats `+/−`. This keeps the palette limited and consistent with the shipped app's restrained coloring (strong on both light and dark).
-- **Agent palette** (executor / reviewer / debugger / code-sanity / security-auditor / seconder / test-engineer) used **only as discrete dots and role chip text colors**. Never as background, gradient, or decorative fill.
+- **Form encodes urgency (the Datadog rule): SOLID = live or needs attention** (running, failed, escalated, breached — saturated fill, white or dark ink) · **TINT = settled state** (pass, merged, closed, blocked — ≤10–16% alpha bg + colored text + hairline border) · **NEUTRAL = metadata** (`--chip-base` bg, slate text).
+- **Blue/cyan role split is hard:** royal blue answers *"where can I go / what is selected"*; cyan answers *"what is the system doing"*. They never swap.
+- **Categories carry meaning through icons, not colour.** Type / kind / source / template / evidence chips are neutral; colour is reserved for semantic state (status, verdict, priority) and diffstats `+/−`.
+- **Agent roles** colored in cyan text + status dot only. Never as background fill.
 - **No gradients, orbs, mesh, glows, bokeh.**
-- Sparklines and micro-charts: hand-drawn SVG, single color, opacity ≤0.8. Not a chart library with its own theme.
+- Sparklines and micro-charts: hand-drawn SVG, single color, opacity ≤0.8.
+- Dark-theme pairs: to be derived at implementation (same roles, lifted values); the light set above is canonical.
+- *Graph exception:* the Graph surface keeps its legacy type/priority coloring (form fidelity, §9.1).
 
 ### §6.5 Chips [LOCKED]
 
@@ -290,8 +291,13 @@ Discipline:
 - Subtle background ≤10% alpha only for semantic state. Other chips are background-transparent.
 - Chips behave like **compact entity nodes** — clickable, identity-bearing — not decorative pill badges.
 - ID chip labels: mono. State chip labels: UI font.
-- **Segmented chip** `(a / b / c)` [LOCKED]: a single tight, light pill carrying 2-3 **slash-separated slots** for compact classification — one pill instead of several scattered chips. ~10.5px, padding `1px 7px`, 3px radius, subtle bg + hairline border; slashes in `--line-strong`. The first slot may be an **icon** (source: `robot` / `git-merge` / `issue-opened`); slots stay **neutral** — colour only on genuine semantic state or diffstats `+/−` (§6.4). Slots are **source-adaptive** (specialist `source / outcome / role`; github `source / state / diffstat`; issue `source / priority / state`). Standard across Feed rows, the activity-card header, and any dense classification. Matches the shipped `console-specialists-chain-row-chip` / `bead-label-chip` density (§9.1).
+- **Segmented chip** `(a / b / c)` [LOCKED, revised rev 32]: a single tight, light pill carrying 2-3 **slash-separated slots** for compact classification — one pill instead of several scattered chips. ~10.5px, padding `1px 7px`, 3px radius, subtle bg + hairline border; slashes in `--line-strong`. The first slot may be an **icon** (source: `robot` / `git-merge` / `issue-opened`). **Slots are strictly neutral**: the only coloured content allowed inside a slot is the diffstat `+/−` pair (§6.4) and the **cyan agent-role identity text** (roles are identity, not state). **Semantic state never rides inside a slot** — it leaves the seg-chip and becomes a **trailing status pill** (variant set below); priority leaves as a `prib`. This supersedes the rev-14 "colour on genuine semantic state in slots" allowance. Row anatomy everywhere: `seg-chip (source / meta, neutral) [+ prib] + status pill`. Standard across Feed rows, GitHub rows, Specialists chain rows, the activity-card header, and any dense classification.
+- **Status-pill variant set** [LOCKED, rev 32] — the three-tier rule typed as named variants (the §6.13 CVA mapping, one rule per variant): `run` (solid cyan + pulsing dot: running · working · in progress · in review) · `pass` (tint cyan: passed · done · closed) · `fail` (solid red: failed · error · breached) · `warn` (solid amber, dark ink: escalated · waiting on operator) · `part` (tint amber: partial · advisory) · `closed` (tint red: blocked · closed without merge) · `special` (tint violet: merged · release · gate · epic) · `idle` (neutral: next · queued · draft · open). A `sm` modifier (10px, `0 6px`) for in-row use. **Chips never carry state colours** — state is exclusively pill-shaped; the only chromatic chip is the solid-blue *selected filter* chip (interaction, §6.4).
 - **Icon slot** [LOCKED]: any chip may carry one leading **Octicon** (status / kind / source / evidence). **Status chips are icon + word** — redundant with colour for scannability and colour-blind accessibility (`check-circle` passed, `play` running, `clock` waiting, `flame` escalated, `x-circle` failed). **Kind / source / evidence chips are neutral**: the icon carries the category, never colour. No emoji, no character-glyph icons (§6.8).
+- **Three-tier form rule** (rev 28, §6.4): every chip is one of **status pill** (SOLID live / TINT settled), **entity chip** (neutral base, detail-rich), or **tag** (neutral, mono). The running pill carries a pulsing dot.
+- **Priority block `prib`** [LOCKED]: priority leaves the slash slots and becomes a leading **solid mini-block** — `P0` solid red, `P1` solid amber (dark ink), `P2+` neutral slate, epic = purple tint. Mono, 10px, 2px radius.
+- **Specialist entity chip** [LOCKED]: one compressed line, detail-rich — `[status dot] role (cyan, mono 650) / job-id (muted mono) / model (dim) · metrics`, with a trailing status pill (`running` solid · `pass` tint · `failed` solid red). This is the `id-chip` evolution; used in job cards, joblines, cockpit rows.
+- **Issue entity chip** [LOCKED]: one compressed line — `[prib] id (mono 650) / type (neutral; epic in purple) · state pill` (`in progress` solid cyan · `open` neutral · `closed` tint cyan · `blocked` tint red). Used in issue rows, feed rows, drawer headers.
 
 ### §6.6 IDs and refs [LOCKED]
 
@@ -364,7 +370,20 @@ What changes:
 - `.westworld-app` skin and the `.design-preview-container` override — redundant once §6 values *are* the shell's light theme (the mock then renders under the canonical light tokens, not a separate preview override).
 - Google Fonts `@import` — replace with self-hosted Inter + JetBrains Mono.
 
-**Drawer tokens** (§5.1) become theme pairs: `--scrim` light `rgba(253,253,253,0.68)` / dark `rgba(0,0,0,0.40)`; `--drawer-shadow` light `-16px 0 48px -16px rgba(15,23,42,0.18)` / dark `-12px 0 32px rgba(0,0,0,0.45)`. Drawer width aligns to the shipped `min(50vw, 720px)` (supersedes the earlier 56vw).
+**Drawer tokens** (§5.1): `--drawer-shadow` light `-16px 0 48px -16px rgba(15,23,42,0.18)` / dark `-12px 0 32px rgba(0,0,0,0.45)`. Drawer width aligns to the shipped `min(50vw, 720px)` (supersedes the earlier 56vw). `--scrim` is **deprecated as of rev 36** — the drawer is non-modal (§5.1), there is no backdrop.
+
+### §6.13 Implementation stack [OPEN — recommended for evaluation]
+
+Recommendation for the production implementation (not locked; to be validated by the implementing dev). Guiding constraint: a **visually dense** app — Datadog-class information density, compact rows, tight chips — with a fully custom identity (§6.4/§6.5). That constraint rules out opinionated component libraries (MUI / Ant / Mantine / Carbon: their spacing scales and look fight both our density and our identity) and points to the **headless + utility** standard:
+
+- **Tailwind CSS v4** as the token engine, not as the design system: §6.4 palette + §6.10 fonts + 3–4px radii become the `@theme` tokens; **density is encoded in the scale** (tight spacing steps, 10–12.5px type sizes as first-class tokens, compressed line-heights) so compactness is the default, not a per-component fight. Dark theme = token swap (§6.12).
+- **Radix UI primitives** (already in the codebase via `@radix-ui/react-collapsible`) for everything accessible we must not reinvent: `Dialog` → `DrawerShell` (§5.2.1: focus trap, Esc, aria), `Tabs` → drawer tab strips, `Tooltip` (e.g. the est-cost caveat), `DropdownMenu`, `Popover`.
+- **shadcn/ui** as the assembly pattern: Radix + Tailwind components **copied into the repo and owned**, restyled to this contract — never a themed dependency to fight.
+- **CVA (class-variance-authority)** to encode §6.5 as types: `<Chip variant="solid|tint|neutral" tone="state|alert|warn|special">`, `<Prib p={0|1|2} epic>`, and the specialist / issue **entity chips** as composed components. One design rule = one typed variant; no class drift.
+- **TanStack Table + TanStack Virtual** (headless) for the dense lists — issues feed, chain list, proof ledger, timelines (`ActivityTimeline` already virtualizes); headless keeps our row anatomy (§8.1) untouched.
+- Keep: **Primer Octicons** (§6.8), **ReactFlow** for Graph (§9.1 legacy form), hand-drawn single-color SVG micro-charts (§6.4 — no chart library themes).
+
+The contract stays the source of truth: Tailwind/CVA are how §6 materializes in code, never an alternative authority.
 
 ---
 
@@ -455,7 +474,7 @@ The **Feed** (§4 #1) is the ecosystem-level reverse-chronological stream — th
 **Row anatomy [LOCKED]** — the Feed reuses the **IssueFeed row language** (§9.1) plus a timeline gutter:
 
 - a **left time gutter** (~44px) for chronological scanning, and a **source-color left rail**;
-- a **single line**: identity (`entity-id / summary`) + one **segmented chip** `(source / outcome-or-state / meta)` (§6.5) — the classification collapsed into one tight light pill;
+- a **single line**: identity (`entity-id / summary`) + one **neutral segmented chip** `(source / meta)` plus a **trailing status pill** (and a `prib` where priority applies) per §6.5 rev 32 — state never inside the seg slots;
 - **gesture = the issue gesture (§5.5):** a **row click expands an inline mini-dossier** of the event (verdict + metrics + files + role path + "Open in drawer"); the **chevron / id opens the drawer** (target per source, §5.4).
 
 Color encodes outcome/source (pass green, fail red, escalated amber, PR-merge purple, issue blue, push neutral). Day-grouped headers (Today / Yesterday / date). Each row is an **activity rollup**, not a raw event. GitHub push rows use the inline commit-accordion as their mini-dossier; other rows show a source-appropriate mini-dossier.
@@ -504,8 +523,14 @@ These are the floor. Contract surfaces extend them; they do not replace or dupli
 
 The console navigation lives in **two horizontal top bars + a left context sidebar**, icons throughout (Octicon, §6.8). The two bars have **one semantic each — navigation only**; filtering never lives in a top bar.
 
-- **Top bar 1 — parent sections:** brand + five parents: **Feed · Issues · Specialists · Operations · GitHub**. Clicking a parent opens its default surface (the parent's own surface).
-- **Top bar 2 — child surfaces of the active parent:** Feed → Feed; Issues → Issues · **Graph**; Specialists → Specialists; Operations → Operations · **Evidence** · **Observability** · **Sessions** · **Terminal**; GitHub → GitHub. When the active child has in-surface sections (Operations → Specialist health · Chain throughput · Gate verdicts · Token usage · Escalations · Runtime), they append after a thin divider — still navigation, never filters. Bar 2 is therefore always populated and always means the same thing.
+- **Top bar 1 — parent sections:** brand + five parents: **Feed · Issues · Specialists · Operations · GitHub**. Clicking a parent opens its default surface (the parent's first child).
+- **Top bar 2 — child surfaces of the active parent [revised rev 39 — dedicated pages, not scroll anchors]:** the conceptual split is **Specialists = the workforce · Operations = running the system**:
+  - Feed → Feed; Issues → Issues · **Graph**; GitHub → GitHub.
+  - **Specialists → Cockpit · Roles · Templates** — instances (chains/jobs live), aggregates by role (rows → Role Drawer), aggregates by template (rows → Chain Template Drawer). Each is a dedicated page.
+  - **Operations → Overview · Explore · Economics · Incidents · Evidence · Observability · Sessions · Terminal** — Overview is the only composite page (pulse strip + failure clusters + escalations + runtime + SRE strip); Explore (§12.5), Economics and Incidents (§12.7) are dedicated pages.
+  - **In-surface section anchors survive only where a page is legitimately long** (Observability → Overview · Logs · Traces · Components, scroll-focus). The former Operations section anchors are gone — its content became real child pages.
+  - **Cross-page handoffs:** pulse-strip cells navigate to the dedicated page when their panel moved (specialists active → Roles, chains in flight → Templates, tokens → Economics); every panel's "Open in Explore" loads its query and switches to the Explore page.
+  - **Shared classifier drawers:** Role / Memory / Chain-Template drawers live outside the surfaces in a shared layer, reachable from any page (`data-open-drawer="<kind>"`) — cascades (e.g. Template → Failure Patterns → Memory) work across pages; switching surface closes them.
 - **Left sidebar — query lab + filters:** scopes, a **contextual Filters group for the active surface** (Feed → sources; Issues → states; Specialists → run states; Evidence → proof state + proof type; GitHub → event types), saved queries, and fields, each icon-styled. **Filtering lives here and only here** — the former per-surface filter chip rows (and the filter-style topbar2 blocks) are removed as duplicates. Exception: the Graph keeps its legacy in-surface header toggles (parent-child / related / deferred) because they are render lenses owned by the legacy form (§9.1).
 
 **Space management — drawer-aware [LOCKED]:** the left sidebar is **collapsible to icon-only** (toggle in top bar 1, `sidebar-left` icon; state persisted). **Opening the drawer auto-collapses the sidebar; closing restores it**; a manual toggle overrides. The **Inspector toggle** (top bar 1, `sidebar-right` icon, mirrored from the collapse icon) opens/closes the drawer at will (shortcut `]`). On narrow viewports the drawer is full-width.
@@ -804,6 +829,8 @@ All kinds render through the one `DrawerShell` primitive (§5.2.1): same overlay
 
 **Entity:** session — pending Substrate confirmation of `kind: session`, see §13.
 
+**Status (rev 35):** the mock demonstrates this kind provisionally (Sessions surface, `data-drawer="session"`, all 8 tabs below) — explicitly labelled provisional in the drawer header; the tab set locks only when substrate confirms.
+
 **Provisional tabs** (will lock when substrate confirms):
 
 - **Intent** — initial operator command/prompt, optional clarifications.
@@ -837,20 +864,21 @@ All kinds render through the one `DrawerShell` primitive (§5.2.1): same overlay
 
 The Operations surface is the AgentOps console. **Distinct from Observability** (§4.1).
 
-### §12.1 Layout [DRAFT]
+### §12.1 Layout [DRAFT, revised rev 37]
 
-Four zones (top-down):
+Five zones (top-down):
 
 1. **Top pulse strip** — single line of 6 ecosystem indicators: specialists active, chains in flight, failure rate 24h, token usage 24h, runtime health, escalations. (No USD; token usage replaces "daily spend" — cost is estimate-only, USD deferred.)
-2. **Scope tree** (left sidebar) — xtrm ecosystem scope: `all xtrm / specialists / substrate / channels / core / gitboard / runtime deps`.
-3. **Main panel grid** — 6 native panels (no Grafana iframes):
+2. **Scope tree** (left sidebar) — xtrm ecosystem scope: `all xtrm / specialists / substrate / channels / core / gitboard / runtime deps` — plus the **Datasources** group (§12.6).
+3. **Explore workbench** (§12.5) — the query surface; every panel round-trips into it.
+4. **Main panel grid** — 6 native panels (no Grafana iframes), each backed by a declared query with an **"Open in Explore"** action:
     - Specialist health by role
     - Chain throughput by chain_template
     - Failure pattern clustering
     - Token economics
     - Active escalations
     - Runtime backstage hygiene
-4. **SRE-agent activity strip** (bottom) — chains where the SRE-agent is investigating/sweeping the ecosystem itself.
+5. **SRE-agent activity strip** (bottom) — chains where the SRE-agent is investigating/sweeping the ecosystem itself.
 
 ### §12.2 Panel specifications [DRAFT]
 
@@ -874,9 +902,46 @@ The Operations page **does not embed Grafana iframes**. Native UI primitives que
 
 Backend stays: OTel + Prom + Loki, hosted in `mercury/infra` (per devops canon §0.1). Frontend is native xtrm.
 
+**Nuance (rev 41, from console-observability-spec §E.5/§E.9):** no iframes ≠ no Grafana. The console may **deeplink** to Grafana dashboards as evidence/escape-hatch references — "linked, not recreated as the authority". Datasource queries go through a **server-side proxy** (`/api/console/observability`); the browser never holds raw credentials; Grafana/MCP posture is read-only by default (§A.10).
+
 ### §12.4 Top pulse strip — no drawer [LOCKED]
 
 The 6 cells in the top strip are aggregates, not entities. Clicking them **scrolls and pulse-highlights** the relevant panel — does not open a drawer. This is the only click target in Operations that doesn't open a drawer; declaring it explicitly preserves the "every entity → drawer" rule (§5.4).
+
+### §12.5 Explore workbench [DRAFT, new rev 38]
+
+Operations is not a report; it is a **query surface** (the Grafana Explore model, rendered natively per §12.3). The Explore zone:
+
+- **Query row:** datasource picker (§12.6) · **Builder/Code toggle** — Builder composes label-filter chips (`chain_template = debug`) plus an operations pipeline (`rate 5m → sum by(participant_role)`); Code exposes the raw query (PromQL/LogQL) in mono.
+- **Actions:** Run query · **Query history** (recent queries, one click to restore) · Inspector (raw response) · **Split** (two result panes side by side over the same time range, for correlation).
+- **Results area:** one result set, three renders — **Chart / Table / Logs** — switchable without re-querying. Log rows reuse the §6.5 row language with severity rails; IDs in results are entity links (§6.6) and open drawers **without losing the query** (the §5.1 non-modal behavior is what makes this loop work).
+- **Panel round-trip [the key rule]:** every §12.2 panel declares its backing query; its **"Open in Explore"** action loads that query into the workbench. Dashboard panels and Explore are two views of the same query, never two systems.
+- Telemetry boundary unchanged (§17): aggregates from Prom projections; per-entity drill-down via forensic events / trace exemplars, never Prom labels.
+
+### §12.6 Datasource model [DRAFT, new rev 38 — grounded rev 41]
+
+Every panel and Explore query is a **`{datasource, query, render}`** triple. Datasources are first-class and user-extensible.
+
+**This is not net-new design (rev 41):** the wired contract already exists as **`ObserveDatasourceDescriptor`** + **`ObserveQueryRequest/Response`** (console-observability-spec, Slice A — shipped). This section adopts it:
+
+- **Datasource types (descriptor):** `prometheus` · `grafana` (deeplink/panel lookup) · `loki` · `otel_trace` · `specialists_forensic` · `substrate` · `aws_agentcore` · `static_fixture` — richer than the rev-38 sketch; the mock's sidebar list maps onto these.
+- **Query kinds (request):** `promql`, `logql`, `grafana_panel` lookup, `trace_lookup`, `forensic_events` query, plus `eval/recommendation/journal/runbook` lookups. Response carries `{status, range, freshness, data, evidence, diagnostics}` — **freshness and evidence are part of the query contract**, which is exactly what §7.2 source-freshness visibility needs.
+- **Posture:** server-side proxy, read-only by default, no credentials in the browser (§12.3 nuance).
+- **User-added:** the operator can register additional endpoints from the sidebar **Datasources** group; panels built on them sit next to the xtrm panels with identical chrome.
+- **Product stance:** the console is a **generic ops workbench whose default workspace is xtrm's own agentops**. A user wiring their stack into it gets a devops console; xtrm's specialists/chains/evidence are the preinstalled content, not a hard-coded limit.
+- Saved queries are first-class (sidebar), independent of which datasource they target.
+- **Dashboard-as-data (Slice B, open upstream):** panel/layout schema with validation; **agent-authored dashboard drafts require operator approval** (§E.6) — keep this rule when the workbench learns to save layouts.
+- Constraint: datasource plurality must never weaken the entity model — xtrm entities keep their drawers; foreign metrics render as panels without pretending to be entities.
+
+### §12.7 Incident analysis [DRAFT, new rev 38]
+
+The incident loop ties Operations and Observability together:
+
+- **Incident rows** (Operations section): derived from active escalations + correlated backend alerts (e.g. `INC-7 · github materializer behind · open 22m · 2 chains impacted`).
+- **Incident view:** correlated timeline = the Feed engine (§8.1) scoped to the incident window + involved entities (chains, memories, runtime components); actions: acknowledge · open followup (`class:followup`, `discovered-from` the incident) · resolve with reason.
+- **The cascade** is the §5.3 mechanism end-to-end: incident → Chain Drawer → Trace → Logs → Diff, all without closing the inspector (§5.1 non-modal).
+- Post-substrate, an incident is a candidate container kind (like session, §13) — decision deferred to the substrate design pass; pre-substrate it is a materialized view over escalations + alerts.
+- Status: contract-first (this section); mock demo in a later revision.
 
 ---
 
@@ -943,15 +1008,21 @@ This console contract implies the following fields/concepts that substrate shoul
 - **`evidence.trace_id`** + **`evidence.span_id`** — link evidence to OTel span where it was produced.
 - **`containers.trust_tier`** (devops canon §5) — six tiers from report-only to terraform apply. Could be derived from `autonomy_json`.
 
-Backend/data needs surfaced by the forensic-feed design (§8.1, §10.2), pre-substrate. **Ownership is split** (see `console/specialists-console-handoff.md`): the **specialists runtime** only *emits* the events it alone observes (the richness ceiling); **normalization to the `xtrm.forensic.v1` envelope, files/diff derivation from git, the read endpoints, and table-derived metrics live in the gitboard materializer**. The items below are the data the console reads, regardless of which side produces them:
+Backend/data needs surfaced by the forensic-feed design (§8.1, §10.2), pre-substrate. **Ownership is split** (see `console/specialists-console-handoff.md`): the **specialists runtime** only *emits* the events it alone observes (the richness ceiling); **normalization to the `xtrm.forensic.v1` envelope, files/diff derivation from git, the read endpoints, and table-derived metrics live in the gitboard materializer**.
 
-- **`GET /jobs/:job_id/feed-events`** — ordered, catalog-normalized `xtrm.forensic.v1` events for a job (today only the latest `result`/`terminal_output` event is exposed via `/result`). Backs the Activity forensic timeline; same admin gating as `/result`.
-- **Forensic normalization of `specialist_job_events`** — emit catalog `event_family`/`event_name` + body fields + redaction, not just `event_type IN ('result','terminal_output')`.
-- **Files/diff per run** — emit `command.completed{command_kind=git}`, `chain.ready_for_review{changed_paths_count}`, `worktree.merged{commit_sha, pr_id}`, and `diff`/`commit`/`pr` evidence refs carrying the changed-file list (path + added/removed counts) and diff hunks in the body/links. Paths and diff are high-cardinality — in the forensic body, never as Prometheus labels.
-- **`specialist_job_metrics` join** — `turns`/`tools`/`model` and token split are currently `NULL` in the xtrm jobs query (`loadJobs`); wire them for per-job meta and token economics.
-- **`GET /api/feed`** — cross-source time-ordered merge (specialist forensic + bead interactions + GitHub events) for the Feed surface.
+**Status reconciled against the wired telemetry/architecture docs (rev 41** — `docs/telemetry/*` + `docs/console/architecture/*`):
 
-These are constraints the console design produces on substrate. They should be discussed with the next substrate design pass before substrate schema freeze.
+- **`GET /api/specialists/jobs/:job_id/feed-events`** — **SHIPPED** (forensic-event-contract §2; canonical-envelope-first per console-architecture §6). Returns `{events: [xtrm.forensic.v1 envelope], cursor: {t_unix_ms, seq}}`. Backs the Activity forensic timeline.
+- **Forensic normalization of legacy `specialist_events`** — **SHIPPED**: the materializer's observability adapter dual-writes legacy rows wrapped in envelopes into `xtrm_forensic_events`; native emission via the shared emitter (`src/specialist/forensic-events.ts`). Remaining (forensic-event-contract §16): expand native source emission beyond persistence-time dual-write; live MCP emitters; migrate gitboard off text `sp feed` to `sp feed --json`.
+- **Files/diff per run** — **PARTIAL**: `diff`/`commit`/`pr` evidence refs land in `xtrm_evidence_refs`; full changed-file list + hunks materialization not yet done. Paths and diff stay in forensic body, never Prometheus labels (confirmed by the §3.2 forbidden-label list).
+- **`specialist_job_metrics` join** — **SHIPPED**: `turns`/`tools`/`token_split`/`context_usage_ratio`/`active_runtime_ms`/`wait_time_ms` are read by the materializer and projected to the API (never as Prom labels).
+- **`GET /api/feed`** — **EXISTS** (console-architecture §3/§8): cursor-paginated cross-source rollup `{rows: [{source, kind, repo_slug, title, summary, severity, status, redaction_status, drilldown}], cursor}`.
+- **Materializer freshness** — `materialization_state` table exists (cursor, last-success, failure flags); **no exported freshness metric yet** (planned, console-observability-spec §D.3.4). The Observability freshness panel reads the table via API meanwhile.
+- **Retirements:** `/api/beads` is retired → `/api/substrate/*`; `/beadboard` 404s (console-test-guards §4.5/§8).
+- **Metric reality is richer than this contract assumed:** beyond the §10.2/§12.2 set, the projection ships `xtrm_job_wait_seconds`, `xtrm_job_queue_depth`, `xtrm_job_state`, `xtrm_tool_calls_total`, `xtrm_pulses_total`/`xtrm_pulse_queue_depth`, `xtrm_worktrees`/`xtrm_worktree_age_seconds`, `xtrm_processes`/`xtrm_process_orphans_total`, `xtrm_service_skills_drift_total`, eval/identity/policy families (prometheus-projection-contract §5.1-5.10) — the Runtime backstage micro-cards and cockpit KPIs have real backing. Labels also carry `service_name`/`repo`/`participant_kind` (and `model_provider`/`model` on tokens) in addition to the ones named here.
+- **Forensic families are 21**, not the 8 sketched in §10.2: `job, turn, model, tool, mcp, identity, policy, eval, control, retry, compaction, error, result, git, process_health, service_skills, pulse, node, review, chain, epic, command` (worktree events live under `process_health`). Verified body fields: `tool.call.completed{tool_name, duration_ms, result_shape}` · `job.completed{elapsed_ms, active_runtime_ms, turns, result_ref}` · `review.verdict.partial{gate_kind, verdict, findings_count, blocking_count, evidence_refs}`.
+
+The remaining substrate asks (`containers.trace_id`, `containers.session_id`, `memories.created_by_chain`, `evidence.trace_id/span_id`, `containers.trust_tier`) still need the substrate design-pass acknowledgment before schema freeze.
 
 ---
 
@@ -979,6 +1050,8 @@ Before merging any console UI change, verify:
 - [ ] No iframes in Operations page; native UI primitives over OTel/Prom/Loki.
 - [ ] Top pulse strip cells scroll-focus their panel; do not open drawers.
 - [ ] Iconography: Octicon-only, no mixed families.
+
+**Convergence note (rev 41):** the shipped test suite already guards part of this checklist — `console-test-guards.md` §6 protects the IssueFeed row language, chip identity, dependency-tree expansion, the **non-modal drawer behavior** and the **ia-restructure** (dedicated child pages); the Operations Explore workbench is tracked as `forge-9xet.4` and the AgentOps panels as `forge-ow7c.4`. Mock and production are converging on the same contract.
 
 ---
 
@@ -1011,7 +1084,7 @@ These remain explicitly unresolved; either deferred to a later decision or waiti
 1. **Should `Session` become a first-class Substrate kind, or a materialized view** over prompts, chains, commits, and memories? Decision lives in the Substrate next-design-pass.
 2. **Which artifact storage path becomes canonical** for screenshots and generated verification files? Operations decision.
 3. **How much inline diff is too much** before the console should hand off to GitHub/local git? UX threshold to be validated in mock testing.
-4. **Drawer tab adaptation per kind** — the *contract* is locked (§11.0) and the mock now **demonstrates it**: the Operations drawer is a true **Chain Drawer** (Composition · Activity · Channel · Outcome · Trace · Diff · Memories) and the **GitHub Drawer** is shown (§11.6) — both with non-Issue tab sets. What remains: a **classifier-kind** demo (Role / Memory) in the mock, and the production implementation over `DrawerShell`.
+4. **Drawer tab adaptation per kind** — RESOLVED in the mock (rev 33-34): the Operations surface hosts **four drawer kinds** — Chain (§11.1), **Role** (§11.2, from the Specialist-health row), **Memory** (§11.4, from a failure cluster) and **Chain Template** (§11.3: Resolved Shape · Recent Instances · Failure Patterns · Configuration, from a Chain-throughput row) — plus the GitHub Drawer (§11.6). Every classifier kind renders its own tabs and header, never the Issue set (§11.0 acceptance); the template drawer's Failure Patterns even cascades into the Memory drawer. What remains is only the production implementation over `DrawerShell`.
 5. **Dark variant** — when to ship, and validation of all tokens on dark substrate. Validation pass required before public release.
 6. **Iconography in mock vs production** — RESOLVED: the mock now uses inline-SVG icons (sprite) throughout — nav, chips, status, disclosures — with no emoji and no character-glyph icons (§6.8). Production swaps the sprite for `@primer/octicons-react`.
 7. **`containers.trace_id` and related substrate field additions** (§15.1) need substrate design-pass acknowledgment before schema freeze.
@@ -1067,10 +1140,10 @@ When the real app diverges from it, **update either the implementation or this c
 
 The working mock is the visual reference but has known limitations not yet addressed:
 
-- **Drawer tab polymorphism not demonstrated** — clicking on a role/memory/template entity still shows Issue/Chain tabs. Production must implement true polymorphism per §5.2.
+- **Drawer tab polymorphism** — RESOLVED (rev 33-34): the mock demonstrates **all declared kinds with their own tab sets** — Chain, Role, Memory, Chain Template, GitHub, Issue (multi-drawer surfaces via `data-drawer` / `data-open-drawer="<kind>"`). Only Session (§11.5) remains, pending substrate confirmation (§13). Production must implement the same polymorphism over `DrawerShell` (§5.2.1).
 - **Iconography** — RESOLVED: the mock uses an inline-SVG icon sprite (nav, chips, status, disclosures); no emoji, no char-glyphs. Production swaps to `@primer/octicons-react`.
 - **Inter font not loaded** — fallback to system stack. Production must load Inter.
-- **Surface coverage** — mocked: Operations, Issues/Beads, Feed, GitHub, Specialists cockpit (master-detail). Still to mock: Evidence (top-level ledger), Graph, Observability, Sessions, Terminal.
+- **Surface coverage** — RESOLVED (rev 35): **all §4 surfaces are mocked** — Operations, Issues/Beads, Feed, GitHub, Specialists cockpit, Evidence (ledger), Graph, Observability (backend health: materializer freshness, ingest metrics, alerts), Sessions (workblock list + provisional Session Drawer), Terminal (command surface with entity-link note).
 - **Issues feed behavior is representative, not live** — the mock demonstrates row click vs chevron preview and drawer parity, but production must preserve the actual `IssueFeed.tsx` interaction semantics.
 - **Mobile breakpoint exists but is collapsed** — drawer becomes full-width below 1180px; this is acceptable for the prototype but production should validate on real mobile.
 - **Mock data inconsistencies** — minor (e.g., escalations metric says 2 but failure clusters show 3); cosmetic only.
@@ -1129,4 +1202,118 @@ The working mock is the visual reference but has known limitations not yet addre
 
 - **rev 27 (2026-06-06)** — **navigation coherence pass** (§9.2 rewritten). Diagnosis: topbar2 had three different semantics (sections / filters / empty) and duplicated in-surface filter chips. Decision (user): **parent-sections model** — bar 1 = **Feed · Issues · Specialists · Operations · GitHub**; bar 2 = **child surfaces of the active parent** (Issues → Graph; Operations → Evidence · Observability · Sessions · Terminal; Feed/Specialists/GitHub pure) + the active child's sections after a divider (Operations only). **Filtering moved to the query-lab sidebar** as a contextual Filters group per surface (Feed sources / Issue states / Specialist run states / Evidence proof state+type / GitHub event types); duplicated in-surface filter rows slimmed to count lines; Graph keeps its legacy header lenses. Mock rebuilt: two-level nav JS (`PARENT_OF` + `activateSurface`), contextual sections + sidebar filters visibility, all prior gestures preserved.
 
+- **rev 28 (2026-06-06)** — **chip identity pass** (§6.4 + §6.5 rewritten; user palette). New 5-role palette: `#F8FAFC` chip base · `#155E75` cyan = state primary (**no green by design**: running solid / pass tint) · `#DC2626` alert · `#FBBF24`/`#B45309` warn · `#7E22CE` special; royal blue `#3A5FCE` kept **for interaction only** (hard blue/cyan role split: "where can I go" vs "what is the system doing"). **Three-tier form rule**: SOLID = live/attention, TINT = settled, NEUTRAL = metadata. New primitives: **priority block `prib`** (P0 red / P1 amber / P2+ slate / epic purple), **specialist entity chip** (status dot + role/job/model · metrics + status pill), **issue entity chip** (prib + id/type + state pill), running pill with pulsing dot. Mock retokened and restyled (chips, pills, seg/id-chips, issue rows, feed roles, joblines); Graph keeps legacy coloring (form fidelity). Diffstat `+` now reads cyan per the no-green identity.
+
+- **rev 29 (2026-06-06)** — **drawer coverage fix**: Feed and Specialists promised the drawer (§5.4 targets, "Open in drawer" / "Open chain drawer" affordances) but had no drawer element in the mock. Added a **Feed event drawer** (Event · Activity, forensic stream) and a **Specialists Chain drawer** (Composition · Outcome) with scrims; introduced the generic `data-open-drawer` affordance (any button so marked opens the active surface's drawer); wired Feed chevron → drawer (row body keeps the inline dossier, §5.5) and Specialists chain-row chevron → drawer (row body keeps detail-pane selection). Every surface that promises a drawer now has one: Operations, Issues, Evidence, GitHub, Graph, Feed, Specialists.
+
+- **rev 30 (2026-06-06)** — **drawer consistency pass.** (1) The Specialists drawer is now the **full Chain Drawer** (Composition · Activity · Channel · Outcome · Trace · Diff · Memories) — same §11.1 kind already built for Operations, not a reduced copy; the compact 2-tab stub from rev 29 is gone. (2) **Drawer-head chips normalized to the rev-28 system**: category chips (`kind:*`, `type:*`, labels, sources) → neutral (icon optional); live states (`working`, `in progress`) → solid cyan pill with pulsing dot; priorities → `prib`; est. cost → neutral (caveat in tooltip); settled verdicts stay tints. Applied to the Chain, Bead, Graph-node and dossier heads.
+
+- **rev 31 (2026-06-06)** — added **§6.13 Implementation stack [OPEN]**: recommended (for open evaluation, not locked) headless + utility stack — Tailwind v4 as token engine with **density encoded in the scale** (the app is deliberately visually dense, Datadog-class), Radix primitives (Dialog→DrawerShell, Tabs, Tooltip), shadcn/ui copy-in assembly, CVA to type the §6.5 chip variants, TanStack Table/Virtual for dense lists; Octicons and ReactFlow stay. Opinionated component libraries explicitly ruled out (density + identity conflict). Contract remains the design authority.
+
+- **rev 32 (2026-06-07)** — **status-pill propagation pass** (§6.5 revised). (1) Pill variants renamed from colour names to **semantic names** (`run / pass / fail / warn / part / closed / special / idle` + `sm`), the direct §6.13 CVA mapping; the confusing `.pill.blue`-is-cyan drift is gone. (2) **State moved out of seg-chip slots** across Feed, GitHub, Specialists chain rows and the Issues dossier: slots stay neutral (source icon, template, meta, diffstat `+/−`, cyan agent-role identity), state is a trailing status pill, priority a `prib`; supersedes the rev-14 in-slot-state allowance; §8.1 row anatomy updated. (3) State-coloured `.chip.*` removed — verdict packets (scope/quality/tests PASS), Evidence proof rows (PASS/PARTIAL/FAIL), comp-steps (done/pass/next) and drawer-head states are pills; chips are exclusively neutral entity/tag forms (sole exception: solid-blue selected filter chip). (4) Form hygiene: `agent-badge` restyled neutral + cyan dot/role (was interaction-blue); `.job-metrics .link` now blue (links = interaction); chart polylines retokened off legacy hex greens; `btn:hover` / `.btn.quiet` variants; global `:focus-visible` blue ring; files-head char-glyph `v` → Octicon chevron; dead `.run` block CSS removed (collided with `.pill.run`); `.relation.violet` added.
+
+- **rev 33 (2026-06-07)** — **classifier-kind drawers demonstrated** (§18.4 → resolved). Operations now hosts three drawer kinds: a **Specialist health** panel (per-role table, §12.2) whose rows open the **Role Drawer** (§11.2: Overview with 7-day success bars + failure reasons · Recent Activity cascading to chains · **Identity Memories** via the identity-lens query · Configuration), and failure-cluster rows open the **Memory Drawer** (§11.4: Pattern · Instances · Cross-reference · Mitigation Followups · Lineage). Mock shell now supports **multiple drawer kinds per surface**: `data-drawer="<kind>"` on drawers, `data-open-drawer="<kind>"` on triggers (valueless = surface default), drawer-tab handling scoped to the owning drawer. §20.1 polymorphism limitation resolved; remaining classifier: Chain Template (§11.3).
+
+- **rev 34 (2026-06-07)** — **Chain Template Drawer mocked** (§11.3): Resolved Shape (Layer-1 debug steps + Layer-2 gates) · Recent Instances (cascade to Chain Drawer) · Failure Patterns (clusters under the template, cascading to the Memory drawer) · Configuration (`config/chains/debug.yaml` rendered + applies_when matcher). Opened from the Chain-throughput rows (`data-open-drawer="template"`), per the §5.4 mapping. With this, **every declared drawer kind except Session is demonstrated in the mock** (§18.4, §20.1 updated). Also: `#surface-operations > .main` scrolls (content outgrew the viewport after the Specialist-health panel).
+
+- **rev 35 (2026-06-07)** — **full §4 surface coverage in the mock.** (1) **Observability** (§4.1 backend side): backend KPIs, materializer-freshness table per source (state pills, github "behind"), ingest/daemon chart, backend-only alerts + OTel/Prom/Loki backends rail; no drawer (runtime health = popover per §5.2). (2) **Sessions** (§13): chronological workblock list (seg-chip counts + state pill) and the **provisional Session Drawer** (§11.5 OPEN, labelled as such) with all 8 tabs Intent → Next-session Handoff. (3) **Terminal**: command surface with bd/sp history, status bar, prompt line, and the entity-link rule made explicit (IDs in output open drawers, §6.6). With rev 33-35 the mock covers every surface and every drawer kind (Session provisional).
+
+- **rev 36 (2026-06-07)** — **drawer made NON-MODAL** (§5.1 revised, user direction after reviewing Grafana/Datadog references). Scrim and backdrop-close removed; the page stays interactive and scrollable with the inspector open; clicking another entity **retargets** the drawer (replace, §5.3); close is explicit only (injected X control, `]`, Esc). `--scrim` deprecated (§6.12). Mock: underlay elements removed, close control injected into every drawer, Escape wired.
+
+- **rev 37 (2026-06-07)** — **density pass on Operations, Specialists, Observability** (user direction: real Grafana/Datadog-class surfaces, not sparse reports). (1) **Operations** rebuilt to the five-zone §12.1: pulse strip (scroll-focus + flash, §12.4), **Explore workbench** (§12.5: Builder/Code, label chips + pipeline, Run/History/Inspector/Split, results as Chart/Table/Logs), full panel grid (Specialist health, Chain throughput, Failure clusters, **Token economics**, **Active escalations** with recommend/dispatch/approve, **Runtime backstage** 8 micro-cards with inline popovers), **SRE-agent strip**; topbar2 sections now scroll-focus their panels; every panel has "Open in Explore". (2) **Specialists**: cockpit KPI strip; the detail pane is per-chain and §10.2-fidelity — forge-70el (job cards with files+result, trace, pulses, evidence chips), forge-9xet (**waiting-on-operator block with the exact command** `sp resume … --cap +15m`, failed job with reason + last useful output — the §8 requirements made visible), historical (outcome + memories). (3) **Observability** gains bar-2 sections (Overview · Logs · Traces · Components): Loki-style logs (label filters, volume histogram, severity-railed rows, expandable label table), Tempo-style traces (rows + waterfall), and a Datadog-style **small-multiples Components grid**.
+
+- **rev 38 (2026-06-07)** — **§12.5-12.7 added [DRAFT]**, contract-first: **Explore workbench** (query row, results renders, panel round-trip rule), **Datasource model** (`{datasource, query, render}`; built-ins + user-added endpoints; the console as a generic ops workbench whose default workspace is xtrm's own agentops), **Incident analysis** (incident rows from escalations + alerts, correlated Feed-scoped timeline, cascade incident → chain → trace → logs → diff; candidate substrate kind deferred). Sidebar Datasources group mocked.
+
+- **rev 39 (2026-06-07)** — **bar-2 reorganized into dedicated pages** (§9.2 revised; user direction "le tab dedicate non esistono", option B chosen). Conceptual split: **Specialists = the workforce** (Cockpit · **Roles** · **Templates** — health and throughput promoted from Operations panels to pages, rows keep their classifier drawers); **Operations = running the system** (Overview · **Explore** · **Economics** · **Incidents** · Evidence · Observability · Sessions · Terminal). Operations Overview is the only composite page (pulse strip + failure clusters + escalations + runtime + SRE); the former scroll-anchor sections are gone. Pulse cells navigate cross-page (`data-go`); "Open in Explore" switches to the Explore page with the query loaded. **Shared classifier drawer layer**: Role/Memory/Template drawers moved outside the surfaces (`.shared-drawers`), reachable from any page, closed on surface switch — no duplication, cross-page cascades intact. §5.4 rows updated. Incidents page mocks two §12.7 rows (full incident view still to come).
+
+- **rev 40 (2026-06-07)** — **detail-recovery pass** after the rev-39 reorganization (user caught losses). Restored: Operations page-title (was stale "query lab"), the **p95 duration chart** (now on Roles, with Open-in-Explore), the **forensic coverage** KPI (now in Observability overview), and **Gate verdicts** as a real panel (Roles page — workforce quality, per gate kind, with the §10.2 prom query). Added the **inline incident view** (§12.7 first visual): INC-7 expands to the correlated timeline (Feed-engine-scoped loglines), involved-entity chips (chains, materializer, trace, memory) and cross-page jumps to Cockpit/Logs. Scroll enabled on all tall child pages.
+
+- **rev 41 (2026-06-07)** — **telemetry reconciliation pass** against the wired docs (`docs/telemetry/`: projection contract, forensic event contract, agentops event catalog, infra handoff; `docs/console/architecture/`: architecture, observability spec, test guards, scaffold preflight). §15.1 rewritten with statuses: `/api/specialists/jobs/:job_id/feed-events` **SHIPPED**, forensic normalization **SHIPPED** (dual-write + shared emitter), `specialist_job_metrics` join **SHIPPED**, `/api/feed` **EXISTS**, files/diff **PARTIAL** (evidence refs only), freshness metric not yet exported. Metric reality richer than assumed (wait/queue/state/tool/pulse/worktree/process/eval families; labels + `service_name`/`repo`/`participant_kind`, tokens + `model_provider`/`model`); forensic families are **21**; verified body fields noted. §12.6 grounded on the shipped **ObserveDatasourceDescriptor / ObserveQueryRequest** (Slice A) — datasource types and query kinds adopted, freshness+evidence in the query response; dashboard-as-data (Slice B) open upstream with the operator-approval rule for agent-authored drafts. §12.3 nuance: Grafana **deeplinks allowed**, embedding no; server-side query proxy, read-only posture. §16 convergence note: production test guards already protect the non-modal drawer, chip identity and ia-restructure; Explore = `forge-9xet.4`, AgentOps panels = `forge-ow7c.4`. `/api/beads` retired → `/api/substrate/*`. Mock: Explore datasource picker aligned to the descriptor types.
+
 Future revisions should update the relevant section in place and increment the revision number here; do not create parallel files.
+
+
+---
+
+## §16. Applied implementation — `xtrm-console-v2.html` (rev 42) [DRAFT — built & verified in mock]
+
+This section records **exactly what is built and validated** in the current visual companion `console/xtrm-console-v2.html` so the React app implements it 1:1. The v2 mock supersedes `xtrm-console.html` as the visual companion. Where a change touches a prior LOCKED decision, the **supersession is explicit and scoped** — nothing else in §1–§15 changes.
+
+### §16.1 Visual identity — "Observe" [supersedes §6.4 interaction hue, §6.10 sans, §6.11 radius numbers]
+
+- **Typeface:** **Geist** (UI sans) + **JetBrains Mono** (mono — unchanged, §6.10 scannability rule stands). Self-host in production; the mock loads them via Google Fonts.
+- **Colour roles (rev 42):** the five-role discipline and the SOLID-live / TINT-settled / NEUTRAL-metadata form rule (§6.4/§6.5) are **unchanged**; only two hues move, with no role lost:
+  | Role | rev 41 | **rev 42 (applied)** | Use |
+  |---|---|---|---|
+  | interaction / brand | royal blue `#3A5FCE` | **violet `oklch(0.50 0.205 291)`** | nav active, links, selection, focus, primary, selected filter chip |
+  | special (epic/merged/gate) | violet `#7E22CE` | **indigo `oklch(0.50 0.16 262)`** (the former interaction blue, repurposed) | tint only |
+  | activity / running / pass | cyan `#155E75` | cyan `#155E75` (unchanged) | running solid / pass tint |
+  | fail / warn | red / amber | red / amber (unchanged) | solid / tint |
+  Five distinct hues, Datadog-class restraint preserved; no green by design.
+- **Token layer:** one `:root` (light, canonical) + `html[data-theme="dark"]`. Accent tints are `--accent-soft|softer|line|ring|flash|focus|strong` (oklch with alpha). Dark = **near-black neutral** (`--bg:#0a0c0d`, `--surface:#14181a`), violet lifted. Theme-adaptive pill/badge tints use `color-mix(in oklab, var(--role) N%, …)` so one source var drives both themes.
+- **Radius:** `--radius-sm 4px`, `--radius-md 6px` (tempered from §6.11's 3–4px). **Status pills fully rounded (999px)** — the Observe signature; `prib` priority blocks stay square.
+- **Brand:** pulse-ring mark + wordmark `xtrm/console`.
+- **Display settings popover** (topbar, not a contract change): theme (light/dark), accent (violet/indigo/cyan/rose), density (cozy/compact/dense), typeface (Geist/Inter/Plex); persisted to `localStorage`. Defaults: **light · compact · Geist · violet**.
+
+### §16.2 Density & viewport-fill pattern [LOCKED in mock]
+
+- Default density **compact** (`--base-fs` 12.5/12/11.5 per tier). Stat/pulse tiles are **2-row compact** (label; then number + caption inline) — never tall squares.
+- **Every scrollable surface fills the viewport instead of leaving a void:** main grid `auto minmax(0,1fr)`; the primary data panel flexes to fill and its internal list/table region owns `overflow-y:auto`. Block panels that must not shrink below content use `minmax(auto,1fr)`. React: a layout primitive (header + fill region; the data region owns overflow).
+
+### §16.3 Navigation & IA changes [updates §4, §9.2]
+
+- **New top-nav parent `DevOps`** (infra/cloud — the §0 second face of the DevOps system), beside Operations.
+- **Operations secondary nav (final):** Overview · Run · Explore · Evidence · Observability · Sessions · Terminal.
+- **Economics folded into Explore** as a saved **"Cost"** results mode (token cost by template, alongside Chart/Table/Logs). The Economics tab is removed.
+- **Incidents unified** (§16.6): the standalone Operations·Incidents tab is removed; incidents live under DevOps·Incidents with an AgentOps/Infra filter.
+- **DevOps secondary nav:** Incidents · Topology · Dashboards · Recommendations. Right of the ctx bar: `env: prod` · `Agent Space · read-only` · time-range chips.
+
+### §16.4 Drawer system — global-by-kind + new kinds [extends §5.2 / §5.2.1]
+
+- **Resolution is global:** `data-open-drawer="<kind>"` opens `.drawer[data-drawer="<kind>"]` **anywhere in the document**; no-kind opens the active surface's own default drawer; switching surfaces closes any open drawer; **one drawer visible at a time (retarget, §5.3)**. This lets the new chat/RCA views feed the SAME drawers without forking a second inspector.
+- **Reusable kinds** (unchanged shells, now globally reachable): `bead` (Issue Inspector — now tagged `data-drawer="bead"`), `chain`, `role`, `memory`, `template`, `session`, `github`.
+- **New kinds** (same `DrawerShell`, config not fork):
+  - **`incident`** — Overview · Timeline · RCA · Mitigation · Evidence.
+  - **`plan`** (mitigation/recommendation) — Spec · Steps · Validation · Approvals. The **Steps** tab renders the plan materialized as **root + ordered step issues** (§0.2); each step opens the Bead drawer. Header carries the recommendation lifecycle stepper (§16.7) + `class:root` + risk.
+  - **`answer`** (`query_answer.v1`, §16.7) — single scroll: verdict · evidence-by-kind · missing-telemetry gaps · recommended actions.
+- **Chat-view ↔ drawer relationship** (resolves the "stepping on toes" concern): the chat/RCA stream is **orientation**; the drawer remains the **inspector** (§5). Every entity in a stream (ids, recommendation, memory, role, deploy, plan, chain) opens the appropriate drawer; the stream never duplicates drawer content.
+
+### §16.5 AgentOps Run console — Operations · Run [DRAFT]
+
+The chain-progress that lived only inside the Chain drawer is promoted to a **full-viewport chat-like "Run" view** (operator note in §0). 
+
+- **Reason-for-run banner** always visible: issue + acceptance criteria + template + state.
+- **Stream** = the chain's steps as messages: coordinator (resolved chain — L1 steps + L2 gates) → executor/writer (files touched + diff) → code-sanity gate → reviewer verdict → test-runner (live forensic events) → finalize. Avatar variant encodes role.
+- **Native viz rail** (NOT embedded, §12.3): Run vitals (token-burn line, step-duration bars, elapsed/tokens/cost/eta), Verdict packet, distilled memory.
+- **Chain selector:** the top chips select which active chain is live (swap banner + stream); ids in the banner open Chain/Bead/Memory drawers.
+
+### §16.6 DevOps module [DRAFT — the §0 infra/cloud face, native over OTel/Prom/Loki + coexisting Grafana]
+
+- **Incidents / RCA console** (reactive lane, §4/§5.3): reason-for-incident banner; chat-like loop **detect → triage (correlated timeline) → investigate (parallel hypotheses, discarded paths kept) → RCA (confidence) → mitigation plan (prepare→pre-validate→apply→post-validate→rollback) → approval gate → prevention (followup)**.
+  - **AgentOps / Infra filter** unifies both incident domains in one view. **Infra** (e.g. market-data latency) shows the **Grafana scene embed** + infra topology rail; **AgentOps** (e.g. github materializer behind) swaps to a **native Specialist-health rail** (no infra Grafana for a workforce incident). Selecting a domain/incident swaps both the chat view and the domain rail.
+  - **Autonomy ladder** (6 staged levels, §5) with the current level highlighted; **Agent Space scope** card (read-only / gated / out-of-scope — IAM-scoped blast radius); **DevOps team roster** card (devops-sre · deployer · iac-terraform · database · security-devops · cost-capacity · service-skills-sync, each with permission tier → Role drawer).
+  - Approval gate = Level-4 gated deploy; Approve flips to applied; "View plan diff" / the recommendation open the **Plan drawer**.
+- **Topology** — Mercury service map (4 tiers: Edge/DNS · Services · Data · Infra/Obs), health dots, dashed **blast-radius** edge; nodes open detail; a **service-skill runbook** card (health-check command + failure modes). This is the §4 reasoning substrate, distinct from the GitNexus code graph.
+- **Dashboards** — **embedded Grafana** panels (coexist-not-rebuild, §2): a grid of dark Grafana-styled panels, clearly foreign; the market-data p99 panel highlighted. Prod = real Grafana embed/deeplink (§12.3 nuance).
+- **Recommendations** (proactive lane) — clustered posture recommendations (Reliability · Capacity · Cost · Drift & backups) from the preventive node; each row = class badge (advisor/followup/gate) + risk + lifecycle status; opens the Plan drawer.
+
+### §16.7 Data contracts surfaced [DRAFT]
+
+- **`query_answer.v1`** (SRE answer object, rendered by the `answer` drawer): `verdict.status ∈ {PASS, DEGRADED, FAIL, UNKNOWN}` + confidence + one-line summary + scope/time-window; `evidence[]` **grouped by kind** (metric · forensic · dashboard · deployment · runbook); `missing_telemetry[]` rendered as **explicit gaps** (UNKNOWN/DEGRADED is a first-class, honest verdict — gaps are shown, never hidden, and a missing blocking signal cannot become PASS); `recommended_actions[]` each with substrate class + approval flag.
+- **`recommendation.v1` lifecycle:** `PROPOSED → ACCEPTED → COMPLETED` (· REJECTED · CLOSED) stepper in the Plan drawer header + `class` (advisor/followup/gate/root) + risk; **Approve advances PROPOSED→ACCEPTED**.
+
+### §16.8 Chip/pill discipline — applied corrections [enforces §6.5/§6.6]
+
+- Inline issue dossier **Related** beads: bead-chip format (mono id **link** + state **pill** closed/open) and **clickable → Bead drawer** (was raw `<code>` + bare text).
+- Inline **Specialist activity** rows: **seg-chip** role format (cyan mono role / slot) + trailing state pill, **clickable → Chain drawer** (the owning chain, §5.4).
+- Reaffirmed everywhere: **state is always a pill; IDs are mono links that open their drawer; roles are cyan identity inside a neutral seg-chip**.
+
+### §16.9 React implementation mapping [extends §6.13]
+
+- **Tokens:** the `:root`/`[data-theme]` var layer → Tailwind v4 `@theme` + a `data-theme` swap; accent presets + density tiers via the same var layer; settings popover → a small client store persisted to `localStorage`.
+- **DrawerShell:** one component; kind = config; `openDrawer(kind, id)` resolves globally; retarget + single-open. New kinds (`incident`/`plan`/`answer`) are tab/section configs over the same shell.
+- **Stream:** a `Stream` / `StreamMessage` component (avatar role variant + step tag + card), reused by DevOps Incidents and AgentOps Run.
+- **Typed objects + CVA:** `query_answer.v1` (verdict + evidence-by-kind + gaps) and `recommendation.v1` (class + lifecycle) as typed models with CVA-driven badges; rendered by the `answer` and `plan` drawers.
+- **Topology:** ReactFlow (§6.13) or the positioned-node + percentage-coordinate SVG-edge approach used in the mock.
+- **Grafana:** real embed/deeplink in prod (§2, §12.3) — keep it visibly foreign; native viz only for AgentOps.
+- **Viewport-fill:** a layout primitive (header + fill region; the data region owns overflow), per §16.2.
