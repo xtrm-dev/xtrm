@@ -28,29 +28,33 @@ File → Open folder as vault → ~/dev/xtrm/docs
 
 Open `docs/`, not the repo root — keeps `packages/`, `apps/`, `.github/` etc. out of the file explorer.
 
-### 3. Install the Obsidian Git plugin
+### 3. Trust the vault
 
-In Obsidian:
+The repo ships a pre-configured `.obsidian/` (35 plugins, themes, hotkeys, snippets baseline). On first open Obsidian shows:
 
-1. `Settings → Community plugins → Turn on community plugins` (first time only)
-2. `Browse` → search **Git** (author: Vinzent Zhao / denolehov)
-3. `Install` → `Enable`
+> **Trust author and enable plugins?**
 
-### 4. Configure the plugin
+Click **Trust author and enable plugins**. All plugins activate as configured.
 
-`Settings → Git`:
+If you'd rather start clean, click **Don't trust** — Obsidian will use defaults and you'll install/enable plugins manually.
 
-| Setting | Value |
+### 4. (Optional) Tune the obsidian-git plugin
+
+Plugin is pre-installed and pre-enabled. Defaults baked in: vault backup every 10 min, auto pull every 10 min, push on backup, pull on startup, commit message `vault: {{date}}` (`YYYY-MM-DD HH:mm:ss`).
+
+If you want to change them: `Settings → Git`.
+
+| Setting | Suggested value |
 |---|---|
 | Vault backup interval (minutes) | `10` |
 | Auto pull interval (minutes) | `10` |
-| Auto push | ON (called "Push on backup") |
+| Push on backup | ON |
 | Pull updates on startup | ON |
 | Commit message | `vault: {{date}}` |
 | Date placeholder format | `YYYY-MM-DD HH:mm:ss` |
 | Disable push | OFF |
 
-Tune intervals to taste. Lower = more responsive, more commits. `10` is a sane default.
+Lower intervals = more responsive, more commits.
 
 ### 5. SSH key (or token) on the machine
 
