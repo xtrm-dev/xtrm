@@ -1,6 +1,8 @@
 ---
 date_created: Tuesday, June 2nd 2026, 6:00:13 am
 date_modified: Tuesday, June 2nd 2026, 12:10:53 pm
+created: 2026-06-07T02:22
+updated: 2026-06-07T11:49
 ---
 # Specialists Runtime — Architectural Critique, Friction Audit, and Substrate-Aligned Patch Roadmap
 

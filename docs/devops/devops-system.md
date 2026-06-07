@@ -12,13 +12,9 @@ absorbs:
   - specialists/docs/telemetry/agentops-event-catalog
   - specialists/docs/telemetry/forensic-event-contract
   - specialists/docs/telemetry/prometheus-projection-contract
-<<<<<<< HEAD
-date_modified: Sunday, June 7th 2026, 7:37:09 am
 created: 2026-06-07T02:22
-updated: 2026-06-07T07:23
-=======
-date_modified: Sunday, June 7th 2026, 7:56 am
->>>>>>> origin/main
+updated: 2026-06-07T10:35
+date_modified: Sunday, June 7th 2026, 10:35:51 am
 ---
 
 # DevOps System — design canonico (xtrm + Mercury)
@@ -32,7 +28,9 @@ date_modified: Sunday, June 7th 2026, 7:56 am
 >
 > Indice: [[xtrm-MOC]] · substrate: [[substrate_design_it]] · chain primitive: [[chains]] · telemetria: bead `60w93.1`.
 
-> *operators_note: Quando la parte infra e cloud esterno lands, la pagina devops vera e propria dovrà essere estremamente informativa. In modo straordinario e particolare dovrà render delle full view "simil chat" nel viewport principale, con progresso chiaro ed espandibile (una sorta di modifica della versione del progresso della chain nel drawer). Chiaramente visibile il motivo della run, dell'incident, della escalation, creazione della scene di grafana ad hoc (per ora Grafana senza ricreare un sistema da 0, molto complesso). La stessa cosa in realtà vale anche per agentops, è una esperienza a se stante e completa.*
+> *operators_note: 
+> 1. Quando la parte infra e cloud esterno lands, la pagina devops vera e propria dovrà essere estremamente informativa. In modo straordinario e particolare dovrà render delle full view "simil chat" nel viewport principale, con progresso chiaro ed espandibile (una sorta di modifica della versione del progresso della chain nel drawer). Chiaramente visibile il motivo della run, dell'incident, della escalation, creazione della scene di grafana ad hoc (per ora Grafana senza ricreare un sistema da 0, molto complesso). La stessa cosa in realtà vale anche per agentops, è una esperienza a se stante e completa.
+> 2. Il devops agent, o comunque l'intera pipeline, è come se fossero una session di orchestrazione a se stante. Se un giorno decidiamo di permettere intereazione all'interno della app (ovvero una vera e propria chat) - allora con chi comunicherà l'utente? siccome devops rimane comunque una chain o un node, allora probabilmente l'user si interfaccia eventualmente direttamente con il coordinator, pertanto le sessioni coordinator likely vanno rese con persistenza di session di Pi, oppure espandendo sp chat in modo tale che la comunicazione e UX sia totalmente smooth e clean.*
 ---
 
 ## 0. Cos'è — e cosa NON è

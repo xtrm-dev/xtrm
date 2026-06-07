@@ -1,9 +1,9 @@
 {
   "showRibbon": true,
   "theme": "obsidian",
-  "cssTheme": "Gitsidian",
+  "cssTheme": "",
   "accentColor": "",
-  "textFontFamily": "Arial",
+  "textFontFamily": "Geist",
   "baseFontSizeAction": true,
   "showViewHeader": true,
   "baseFontSize": 17,
