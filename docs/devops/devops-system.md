@@ -13,7 +13,7 @@ absorbs:
   - specialists/docs/telemetry/forensic-event-contract
   - specialists/docs/telemetry/prometheus-projection-contract
 created: 2026-06-07T02:22
-updated: 2026-06-07T10:35
+updated: 2026-06-09T00:35
 date_modified: Sunday, June 7th 2026, 10:35:51 am
 ---
 
