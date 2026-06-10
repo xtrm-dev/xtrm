@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "grafana": {
+      "url": "http://infra-grafana-mcp:8090/mcp",
+      "via": "docker:infra-prometheus-mcp",
+      "transport": "streamable-http"
+    },
+    "prometheus": {
+      "url": "http://infra-prometheus-mcp:8091/mcp",
+      "via": "docker:infra-prometheus-mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
