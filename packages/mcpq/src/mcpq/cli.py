@@ -39,7 +39,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "server",
         help="server name from .mcpq.json (or `servers` to list configured entries)",
     )
-    sub = parser.add_subparsers(dest="op", required=True, metavar="OP")
+    # OP is required for real servers; not required when server == "servers".
+    # Validation happens in _dispatch so we can surface a clear error.
+    sub = parser.add_subparsers(dest="op", required=False, metavar="OP")
 
     list_tools = sub.add_parser("list-tools", help="list tools exposed by a server")
     list_tools.add_argument(
@@ -159,6 +161,11 @@ def _extract_error_text(result: dict[str, Any]) -> str:
 def _dispatch(args: argparse.Namespace) -> int:
     if args.server == "servers":
         return _cmd_servers()
+    if args.op is None:
+        raise _UserError(
+            f"missing operation for server {args.server!r}; "
+            f"choose one of: list-tools, describe, call"
+        )
     if args.op == "list-tools":
         return _cmd_list_tools(args)
     if args.op == "describe":
