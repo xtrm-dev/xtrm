@@ -37,3 +37,11 @@ build/
 
 # Syncthing
 *.sync-conflict-*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv-*/
+.smoke/
