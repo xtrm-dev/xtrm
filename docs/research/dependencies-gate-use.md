@@ -1,6 +1,8 @@
 ---
 date_created: Sunday, May 31st 2026, 10:32:36 am
 date_modified: Sunday, May 31st 2026, 10:33:46 am
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 Sì. Il problema non si risolve dicendo all’agente “usa package esistenti”. Quella regola è troppo debole. Devi renderla una fase obbligatoria del workflow, con evidenza scritta e con un hook che fallisce o blocca quando manca la giustificazione.
 

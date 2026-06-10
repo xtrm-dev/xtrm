@@ -1,8 +1,11 @@
 ---
-tags: [9]
+tags:
+  - 9
 title: chain_templates
 date_created: Monday, June 1st 2026, 7:14:27 pm
 date_modified: Monday, June 1st 2026, 7:14:34 pm
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 
 # Chain Templates — Canonical Reference

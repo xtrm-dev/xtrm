@@ -1,6 +1,8 @@
 ---
 date_created: Friday, May 29th 2026, 1:42:52 am
 date_modified: Friday, May 29th 2026, 2:01:25 am
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 Dopo AWS summit, molte altre cose sono saltate fuori nella stessa giornata, punti da esplorare e adottare assolutamente.
 [[aws summit]] - [[@backlog.tasks]] - [[inbox.links]] 

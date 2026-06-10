@@ -1,3 +1,7 @@
+---
+created: 2026-06-09T01:36
+updated: 2026-06-09T01:36
+---
 # Channels, Substrate Graph & Coordinator Projections — Consolidated Design Notes
 
 > Status: consolidated working draft from design session  

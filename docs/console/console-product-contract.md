@@ -1,5 +1,5 @@
 ---
-title: console-product-contract
+title: xtrm Console Product Contract
 project: xtrm
 area: console
 status: current-working-contract
@@ -11,37 +11,8 @@ tags:
   - console
   - design
   - substrate
-  - 1
-  - 2
 date_created: Tuesday, June 2nd 2026, 12:51:27 pm
 date_modified: Sunday, June 7th 2026, 11:50:01 am
----
----
-title: xtrm Console Product Contract
-project: xtrm
-area: console
-status: current-working-contract
-created: 2026-06-02
-updated: 2026-06-07T04:21
-tags:
-  - xtrm
-  - gitboard
-  - console
-  - design
-  - substrate
-date_created: Tuesday, June 2nd 2026, 12:51:27 pm
-date_modified: Friday, June 5th 2026, 1:18:39 am
----
----
-title: xtrm Console Product Contract project: xtrm area: console status: current-working-contract revision: 42 (Observe identity + DevOps/AgentOps build, query_answer + recommendation lifecycle — see §16; supersedes §6.4 interaction hue and §6.10 sans) created: 2026-06-02 updated: 2026-06-07 supersedes:
-- xtrm Console Product Contract rev 2026-06-02 (visual-contract section + IA section)
-- issue-drawer-spec.md (now §10 of this document)
-- visual-contract-light-rewrite.md (now §6 of this document) tags:
-- xtrm
-- gitboard
-- console
-- design
-- substrate
 ---
 
 # xtrm Console Product Contract — consolidated

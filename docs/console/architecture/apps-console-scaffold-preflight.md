@@ -1,3 +1,7 @@
+---
+created: 2026-06-07T04:16
+updated: 2026-06-09T01:35
+---
 # apps/console Scaffold Preflight
 
 Status: completed scaffold boundary reference.

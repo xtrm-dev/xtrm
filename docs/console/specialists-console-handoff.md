@@ -4,7 +4,7 @@ project: xtrm
 area: console
 status: handoff
 created: 2026-06-04
-updated: 2026-06-04
+updated: 2026-06-09T01:35
 source_of_truth_for:
   - "what the xtrm console needs, split by owner: specialists runtime emission vs gitboard materializer projection"
 related:

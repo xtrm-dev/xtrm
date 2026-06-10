@@ -1,3 +1,7 @@
+---
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
+---
 # Vault workflow
 
 > How to use this repo's `docs/` folder as an Obsidian vault, synced across machines via git only (no Syncthing).

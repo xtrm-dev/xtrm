@@ -2,6 +2,8 @@
 title: SRE telemetry patterns for Mercury
 date_created: 2026-05-31
 date_modified: 2026-05-31
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 
 # SRE telemetry patterns for Mercury

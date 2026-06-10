@@ -1,3 +1,7 @@
+---
+created: 2026-06-07T11:51
+updated: 2026-06-09T01:35
+---
 # Shepherd: Always-On Context Injection for Specialists
 
 > Status: Design draft (sequenced v0 → v2)

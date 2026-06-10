@@ -4,6 +4,8 @@ date_modified: Monday, June 1st 2026
 title: xtrm — Map of Content (MOC)
 type: MOC
 status: living
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 
 # 🗺 xtrm — Map of Content

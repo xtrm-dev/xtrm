@@ -2,6 +2,8 @@
 title: devops-query-surfaces-mcp-architecture
 date_created: Sunday, May 31st 2026, 12:35:24 pm
 date_modified: Sunday, May 31st 2026, 12:55:30 pm
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 
 # DevOps query surfaces and MCP architecture

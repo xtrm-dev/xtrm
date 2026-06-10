@@ -2,6 +2,8 @@
 title: specialists.scheme
 date_created: Tuesday, May 12th 2026, 7:26:49 am
 date_modified: Tuesday, May 12th 2026, 7:34:20 am
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 # Specialists as an Agent Mind
 

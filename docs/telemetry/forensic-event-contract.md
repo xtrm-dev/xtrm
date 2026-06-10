@@ -3,7 +3,7 @@ title: Forensic Telemetry Event Contract
 scope: telemetry-forensics
 category: reference
 version: 1.0.0
-updated: 2026-06-07T07:36
+updated: 2026-06-09T01:35
 source_of_truth_for:
   - xtrm forensic telemetry envelope
   - specialists runtime JSON events

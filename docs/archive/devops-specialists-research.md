@@ -6,6 +6,8 @@ aliases:
   - DevOps specialist per xtrm e Mercury
 date_created: Saturday, May 30th 2026, 8:56:47 pm
 date_modified: Sunday, May 31st 2026, 9:32:38 pm
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 
 # Ricerca sullo specialista DevOps per xtrm e Mercury
