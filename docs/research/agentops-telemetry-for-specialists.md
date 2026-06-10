@@ -1,6 +1,8 @@
 ---
 date_created: Sunday, May 31st 2026, 12:35:24 pm
 date_modified: Sunday, May 31st 2026, 1:38:04 pm
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 # AgentOps telemetry for specialists
 

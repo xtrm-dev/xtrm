@@ -3,7 +3,7 @@ title: Prometheus Infra and Console Handoff
 scope: telemetry-prometheus-handoff
 category: handoff
 version: 1.0.0
-updated: 2026-06-07T07:36
+updated: 2026-06-09T01:35
 source_of_truth_for:
   - AgentOps scrape ownership handoff
   - first dashboards and alerts for xtrm metrics

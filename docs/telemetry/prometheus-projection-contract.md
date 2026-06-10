@@ -3,7 +3,7 @@ title: Prometheus Projection Contract
 scope: telemetry-prometheus-projection
 category: reference
 version: 1.0.0
-updated: 2026-06-07T07:36
+updated: 2026-06-09T01:35
 source_of_truth_for:
   - xtrm Prometheus metric projection
   - specialists AgentOps metrics

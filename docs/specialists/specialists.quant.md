@@ -1,6 +1,8 @@
 ---
 date_created: Wednesday, May 13th 2026, 1:02:49 am
 date_modified: Wednesday, May 13th 2026, 1:03:59 am
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 Sì, questa rimappatura è corretta. È molto più solida della versione iniziale.
 

@@ -1,3 +1,7 @@
+---
+created: 2026-06-07T04:16
+updated: 2026-06-09T01:35
+---
 # Console Test Guards
 
 Status: current test guard checklist for cleanup, scaffold, and Console

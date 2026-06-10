@@ -3,7 +3,7 @@ title: AgentOps Event Catalog
 scope: telemetry-agentops-event-catalog
 category: reference
 version: 1.0.0
-updated: 2026-06-07T07:36
+updated: 2026-06-09T01:35
 source_of_truth_for:
   - xtrm AgentOps event names
   - forensic event family catalog

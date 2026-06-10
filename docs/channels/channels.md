@@ -2,6 +2,8 @@
 title: channels
 date_created: Monday, June 1st 2026, 7:11:07 pm
 date_modified: Monday, June 1st 2026, 7:11:18 pm
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 # Channels: A Reusable Inter-Specialist Communication Layer
 

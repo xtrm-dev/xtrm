@@ -2,6 +2,8 @@
 date_created: Friday, May 29th 2026, 6:19:13 pm
 date_modified: Monday, June 1st 2026, 5:33:50 pm
 title: devops-specialists
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 ## links
 - [[agentops-telemetry-for-specialists]]

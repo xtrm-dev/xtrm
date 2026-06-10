@@ -1,3 +1,7 @@
+---
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
+---
 # AWS DevOps Agent — official docs evidence
 
 Date: 2026-05-31

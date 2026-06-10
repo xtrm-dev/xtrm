@@ -1,6 +1,8 @@
 ---
 date_created: Monday, June 1st 2026, 5:50:05 pm
 date_modified: Tuesday, June 2nd 2026, 1:35:00 pm
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 > **Status 2026-06-02 — bridge-era note.** This note describes the current specialists bridge implementation, where `chain_id` is worktree-lineage/root-job derived. It is **not** the final substrate identity model. Substrate treats `chain_id` as an opaque correlation field; future bridge/substrate phases may make it a bd molecule id or `container_id`. Do not parse the shape in dashboards, telemetry, or alerts. See [[substrate/substrate_design_it]] §2.7/§2.8 and the forensic contract `docs/telemetry/forensic-event-contract.md`.
 

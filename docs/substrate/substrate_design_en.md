@@ -1,6 +1,8 @@
 ---
 date_created: Wednesday, May 27th 2026, 7:50:29 pm
 date_modified: Thursday, May 28th 2026, 7:40:02 am
+created: 2026-06-07T02:22
+updated: 2026-06-09T01:35
 ---
 
 > [!warning] STALE - NON canonico

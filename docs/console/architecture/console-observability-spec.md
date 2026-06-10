@@ -1,3 +1,7 @@
+---
+created: 2026-06-07T04:16
+updated: 2026-06-09T01:35
+---
 # Console Observability Spec
 
 Status: planning output covering the full `forge-ow7c` track, pre-implementation.
