@@ -1,6 +1,6 @@
 ---
 name: using-mcpq
-description: Use when the user asks to query a Docker-sidecar MCP server (Grafana MCP, Prometheus MCP, Loki MCP, Tempo MCP, etc.) from the CLI without paying the always-loaded `.mcp.json` tool-schema token tax, or when the user references `mcpq`, the `.mcpq.json` per-project config, or any subcommand surface (`servers`, `list-tools`, `describe`, `call`). Triggers on observability MCP queries from CLI, "discover MCP tools live", "call MCP tool from shell", "what tools does <server> have", "describe tool X on server Y", or any task that should hit an MCP server without wiring it into `.mcp.json`. Skill teaches the discovery workflow `list-tools → describe → call` and does NOT enumerate any server's tool catalog.
+description: Use this skill whenever the user wants to query an MCP server from the command line — run PromQL, search Grafana dashboards, list alert rules, describe an MCP tool's args, or call any MCP tool from the shell. Trigger on `mcpq`, `.mcpq.json`, "what tools does the prometheus mcp have", "search grafana dashboards from cli", "execute_query for up{job=...}", "list MCP servers configured in this project", "verify mcpq wiring", or whenever a `.mcpq.json` exists at the project root. Also use for accessing internal Docker-network MCP sidecars (no host port exposed) from the host without paying the per-session tool-schema cost of wiring them into `.mcp.json`. Do NOT trigger for installing/wiring an MCP into Claude Desktop, IDE clients, or the user's `.mcp.json` — this skill is the CLI alternative, not a setup guide.
 ---
 
 # Using mcpq
@@ -112,6 +112,21 @@ Fields: `server`, `subcommand`, `tool`, `duration_ms`, `outcome`
   `docker exec <container> python3 --version`.
 - **`tool 'X' returned error: ...`** — server-side error from the MCP tool,
   not from `mcpq`. Read the message; it's verbatim from the server.
+
+## Per-project verifier (recommended)
+
+When a project adds `.mcpq.json`, ship a parallel verifier so the wiring is
+durable across upstream image bumps. Reference implementation:
+`mercury-infra/scripts/verify_mcpq.py` + `make verify-mcpq`. Pattern:
+
+- Gate on sidecars-up via `docker ps`; skip cleanly (exit 0) when down
+- Run the canonical discovery loop against the live config
+- Assert shapes that prove the wiring — expected server names, tool counts,
+  required prefixes, one known happy-path call returning expected value
+- `--json` mode for CI / agents
+
+Live discovery is only useful if drift is noticed; a scripted verifier is
+what makes that durable.
 
 ## Security
 
