@@ -10,7 +10,7 @@ date_modified: Saturday, June 6th 2026, 1:43:16 am
 > Data: 2026-06-05.
 > Scopo: fissare le decisioni proposte prima di riallineare i documenti
 > canonici `channels` e `substrate`.
-> **Doc role: proposta storica (non normativa).** Risolte: Q3, Q4, Q5, Q7 (vedi pointer "Risolta" in §5). Ancora aperte: **Q1, Q2, Q6**. Il contratto normativo vive in `channels.md`.
+> **Doc role: proposta storica (non normativa).** Risolte: **tutte (Q1–Q7)** (vedi i pointer "Risolta" in §5; Q1/Q2/Q6 chiuse dall'audit 2026-06-11). Il contratto normativo vive in `channels.md`.
 
 ## 1. Domanda da risolvere
 
@@ -460,8 +460,12 @@ senza diventare credulone.
 
 1. Il catalogo eventi deve aggiungere una family dedicata `channel`, oppure la
    meccanica channel va rappresentata tramite `control`, `error` e `chain`?
+
+   > **Risolta** — vedi `channels.md` §10.5. Family meccanica dedicata `channel.*` (`channel.opened` / `message.posted` / `message.consumed` / `message.rejected` / `member.joined` / `member.left` / `epoch_bumped` / `closed`; `message.delivered` opzionale/sampled). I messaggi semantici emettono in parallelo il loro evento di dominio (es. `review.verdict.*`). Tenere la meccanica separata da `control`/`error`/`chain` evita di mescolare trasporto e dominio nel replay/drilldown.
 2. `audience.visibility` è sempre `chain` per chain channels, oppure servono
    valori più stretti come `targets`, `coordinator`, `private`?
+
+   > **Risolta** — vedi `channels.md` §5.4. Enum canonico `private | targets | chain | node | operator | public_audit` con default per-kind (container default = `chain`/`node`). `visibility` governa solo awareness e filtro della progress-card, mai l'autorità; il dereference resta soggetto a §10.3.
 3. La self-activation opportunistica deve creare un messaggio `proposal`, un
    forensic event `control.attention_requested`, o entrambi?
 
@@ -478,6 +482,8 @@ senza diventare credulone.
    > **Risolta** — vedi `channels.md` §11 (0.1). Sotto delivery unica il dual-write forensic + evidence entra già in 0.1 tramite lo shared envelope writer; `audience_json`, `forensic_event_ids` ed `evidence_refs` sono canonici nello schema 0.1.
 6. Qual è la policy esatta per un participant che dereferenzia evidence non
    presente nel suo step contract ma matching per scope-overlap?
+
+   > **Risolta** — vedi `channels.md` §10.3. Lo scope-overlap dà visibilità pointer/card e il *diritto di richiedere* evidence, non il dereference automatico: servono attivazione valida, `can_request_evidence`, passaggio di cap/cooldown/dedup, e — per evidence fuori dallo step contract — un grant di coordinator/judge/operator. Ogni richiesta/grant/deny/dereference è un forensic fact; il diniego torna `evidence_forbidden` o `attention_budget_exceeded`.
 7. Per il wakeup e delivery dei messaggi a tutti i partecipanti, il coordinator si occupa del routing? Il payload del progresso della chain viene passato allo specialist che si risveglia in automatico (quindi una sorta di "coda" dei progressi cached = qualunque specialist che si risveglia nella chain, lo riceve)
 
    > **Risolta** — vedi `channels-upgrade.md` §23. No, non è il coordinator a fare il routing: la projection è computata dall'**after-hook di runtime** (i pair/chain channel in 0.1 non hanno coordinator). Sì alla "coda cached": allo specialist che si sveglia viene *pushata* la card di progresso **visibility-filtered** (pointer-only) nel resume payload; il dettaglio si fa pull on-demand (`getProgressProjection` / `requestEvidence`).
