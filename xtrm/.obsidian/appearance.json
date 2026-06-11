@@ -1,0 +1,14 @@
+{
+  "showRibbon": true,
+  "theme": "obsidian",
+  "cssTheme": "",
+  "accentColor": "",
+  "textFontFamily": "Geist",
+  "baseFontSizeAction": true,
+  "showViewHeader": true,
+  "baseFontSize": 17,
+  "interfaceFontFamily": "Geist",
+  "nativeMenus": false,
+  "monospaceFontFamily": "MesloLGS NF",
+  "enabledCssSnippets": []
+}
