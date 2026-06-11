@@ -38,8 +38,16 @@ build/
 # Syncthing
 *.sync-conflict-*
 .claude/
- productivity (local working memory + dashboard)
+# productivity (local working memory + dashboard)
 /CLAUDE.md
 /TASKS.md
 /dashboard.html
 /memory/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv-*/
+.smoke/

@@ -1,0 +1,22 @@
+[
+  {"query": "ok i need to run promql against the local infra mcp sidecar to check if up{job=prometheus} is 1 from my shell — i remember we don't want to wire it into .mcp.json because of token bloat", "should_trigger": true},
+  {"query": "what tools does the prometheus mcp expose? i wanna see the full list before i pick one for a script", "should_trigger": true},
+  {"query": "describe the search_dashboards tool on grafana — what args does it take, especially does it have a folder filter", "should_trigger": true},
+  {"query": "im in ~/projects/mercury/infra and theres a .mcpq.json here, can you list the configured servers and check theyre both reachable", "should_trigger": true},
+  {"query": "i need to call mercury_execute_query with query 'rate(http_requests_total[5m])' against the prometheus sidecar from the cli, return json", "should_trigger": true},
+  {"query": "show me all dashboards tagged 'cadvisor' from grafana — i don't want to open the browser, just want the list in my terminal", "should_trigger": true},
+  {"query": "find me what alert rules are configured in grafana, run it from the shell — we have an mcpq setup here", "should_trigger": true},
+  {"query": "the upstream grafana mcp image got bumped to v0.16, can you re-verify our mcpq wiring still works against the new tool surface", "should_trigger": true},
+  {"query": "im writing a script that needs to query the prometheus mcp via mcpq, what's the --json output shape for tools/list and tools/call?", "should_trigger": true},
+  {"query": "list the mcp servers configured in this project — i think there's a config file somewhere at root", "should_trigger": true},
+  {"query": "i need to add the official grafana mcp server to my claude desktop config, can you help me wire it into ~/.claude/.mcp.json with the SA token from .env", "should_trigger": false},
+  {"query": "open the grafana dashboard at https://monitor.mercuryintelligence.net in my browser — i want to look at the latency panel for the last 4 hours", "should_trigger": false},
+  {"query": "deploy a new prometheus instance via docker compose with retention=60d and the existing scrape jobs from prometheus/prometheus.yml", "should_trigger": false},
+  {"query": "the prometheus-mcp container keeps crashing on startup with TOOL_PREFIX errors, can you check docker logs infra-prometheus-mcp and find the root cause", "should_trigger": false},
+  {"query": "write a python script that hits prometheus directly via /api/v1/query and prints up{job=prometheus} — no mcp involved, just raw HTTP requests", "should_trigger": false},
+  {"query": "i want to install fastmcp 3.x and add a custom tool that wraps our internal database query layer — can you scaffold the boilerplate?", "should_trigger": false},
+  {"query": "im building a new mcp server that exposes our market data API as MCP tools — what's the schema for tool annotations like readOnlyHint and destructiveHint?", "should_trigger": false},
+  {"query": "configure traefik to route monitor.mercuryintelligence.net to grafana with an ip allowlist and bearer auth via the dashboard middleware", "should_trigger": false},
+  {"query": "rename the variable foo_bar to fooBar across the entire codebase using gitnexus rename so we keep the call graph consistent", "should_trigger": false},
+  {"query": "fix the failing test in api-gateway/tests/test_auth.py — it's complaining about a None type subscript on the redis client", "should_trigger": false}
+]
