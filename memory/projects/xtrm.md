@@ -20,16 +20,16 @@ socket — they **never** open `state.db` directly. Single-scheduler invariant: 
 resumes; the mailbox is a control/audit channel, not a scheduler.
 
 ## Cross-cutting systems
-- **devops** — spans xt+sp+sb; NOT a package. Canonical: `xtrm/devops/devops-system.md`. Open decisions in §14. Lands late.
+- **devops** — spans xt+sp+sb; NOT a package. Canonical: `docs/devops/devops-system.md`. Open decisions in §14. Lands late.
 - **telemetry/forensic** — `xtrm.forensic.v1` envelope. Canonical (to create): `telemetry/forensic-event-contract.md`. Bead `60w93.1`.
 - **chains** — chain primitive; design inside substrate. Chain-templates as `.formula.json` (15 canonical, repo).
-- **shepherd/tether** — always-on context injection sidecar (design `xtrm/tether.md`, sequenced v0→v2).
+- **shepherd/tether** — always-on context injection sidecar (design `docs/tether.md`, sequenced v0→v2).
 
 ## Source-of-truth map (from xtrm-MOC.md, 2026-06-01)
-- **substrate** → canonical `xtrm/substrate/substrate_design_it.md` (IT). `substrate_design_en.md` = **STALE**.
-- **channels** → canonical `xtrm/channels/channels.md` (⚠️ repo copies still exist).
-- **chain-templates** → `xtrm/substrate/chain_templates.md` (⚠️ duplicated with repo; `.formula.json` stay in repo).
-- **devops** → `xtrm/devops/devops-system.md` (sources moved to `xtrm/archive/`).
+- **substrate** → canonical `docs/substrate/substrate_design_it.md` (IT). `substrate_design_en.md` = **STALE**.
+- **channels** → canonical `docs/channels/channels.md` (⚠️ repo copies still exist).
+- **chain-templates** → `docs/substrate/chain_templates.md` (⚠️ duplicated with repo; `.formula.json` stay in repo).
+- **devops** → `docs/devops/devops-system.md` (sources moved to `docs/archive/`).
 - **execution roadmap** → `repo:specialists-roadmap.md` (canonical for `kj651`).
 
 > Vault = thinking/deliberation/cross-repo. Repo = frozen SSOT that CI/agents/executors validate against.
@@ -50,11 +50,11 @@ resumes; the mailbox is a control/audit channel, not a scheduler.
 > Open question on record: **what lands first, substrate or channels?** (from `improvements.md`).
 
 ## Roadmap doc of note
-`xtrm/temp_roadmap.md` — "Specialists Runtime — Architectural Critique, Friction Audit, and
+`docs/temp_roadmap.md` — "Specialists Runtime — Architectural Critique, Friction Audit, and
 Substrate-Aligned Patch Roadmap." Canonical, consolidated source for the specialists cleanup effort
 (absorbed the old friction-audit + alignment docs). Decisions closed in its §0. Reviewed vs substrate rev10.
 
-## Key docs (in `xtrm/` vault unless noted)
+## Key docs (in `docs/` vault unless noted)
 - `xtrm-MOC.md` — map of content / index (read this first)
 - `substrate/substrate_design_it.md` — substrate spec (canonical, IT)
 - `channels/channels.md` — channel primitive
@@ -62,5 +62,4 @@ Substrate-Aligned Patch Roadmap." Canonical, consolidated source for the special
 - `console/console-product-contract.md` + `console/architecture/*`
 - `telemetry/forensic-event-contract.md`, `telemetry/agentops-event-catalog.md`
 - `devops/devops-system.md`
-- `research/*` — AWS AgentCore/DevOps observability, SRE telemetry, terraform, post-aws-summit
-- `improvements.md` — running idea inbox (post-AWS-summit explorations)
+- 

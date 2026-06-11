@@ -5,7 +5,8 @@
 
 ## Me
 Dawid — product / operator on **xtrm**, the closed-source umbrella monorepo for the xtrm product family.
-"Operator" running ~10 repos in parallel during the pre-substrate window, with **one collaborator**.
+"Operator" running ~10 repos in parallel during the pre-substrate window, with **one collaborator**
+(**Federico Della Savia**, "rico").
 Also owns **Mercury**, a separate market-data product **that xtrm is being tested on** (xtrm is
 dogfooded against Mercury's real work/repos).
 
@@ -29,7 +30,7 @@ and talk to the daemon over a Unix socket — they **never** open `state.db` dir
 | devops | — | cross-cutting (xt+sp+sb), **not** a 6th package; lands much later |
 | telemetry/forensic | — | `xtrm.forensic.v1` event envelope; forensic event contract |
 
-Current state: `packages/`, `apps/`, `data/` are empty scaffolding. Real content lives in the `xtrm/`
+Current state: `packages/`, `apps/`, `data/` are empty scaffolding. Real content lives in the `docs/`
 Obsidian vault (design docs, research, roadmap). Mid-migration from upstream repos (`specialists`,
 `xtrm-tools`, …) via `git filter-repo` grafts. On `main`, v0.1.0.
 
@@ -44,8 +45,8 @@ Obsidian vault (design docs, research, roadmap). Mid-migration from upstream rep
 | shepherd / tether | Always-on sidecar that force-injects context/memories into a specialist's next turn |
 | reviewer / runner / coordinator / mailbox / supervisor | Specialist-runtime roles |
 | GitNexus | Code-intelligence layer (impact graphs, related-symbol graphs) |
-| vault | The `xtrm/` Obsidian vault — deliberation/cross-repo thinking space |
-| MOC | Map of Content — `xtrm/xtrm-MOC.md`, the design-surface index |
+| vault | The `docs/` Obsidian vault — deliberation/cross-repo thinking space |
+| MOC | Map of Content — `docs/xtrm-MOC.md`, the design-surface index |
 | ordine | The decision log |
 
 ## Active work (agent work → beads; human work → Jira. see memory/projects/xtrm.md)
@@ -60,6 +61,16 @@ Obsidian vault (design docs, research, roadmap). Mid-migration from upstream rep
 - See `CONTRIBUTING.md` for branching/PR/house-style; `SECURITY.md` for policy.
 
 ## Preferences
-- When unsure whether a doc is canonical, check the MOC (`xtrm/xtrm-MOC.md`) first.
+- When unsure whether a doc is canonical, check the MOC (`docs/xtrm-MOC.md`) first.
 - Flag duplicated/stale docs rather than guessing which is authoritative.
 - Keep PM artifacts (specs, roadmaps, updates) consistent with the SSOT rule above.
+
+## Working norms — approval & agent activity (IMPORTANT)
+- **Jira is human-managed.** Agents tend to overdo it, so default to **read-only** on Jira.
+- I may **propose** Jira changes (new issues, edits, transitions, comments) — but **never create or
+  modify anything in Jira without my explicit approval.** Propose → I approve → then act.
+- **Agent/automated activity only when I explicitly ask for it**, not by default. You can suggest it;
+  I decide. This applies to spawning agent work, beads, runs, etc.
+- Jira account: Dawid Jagger (jagger.xtrm@gmail.com), locale IT. Site `xtrmxt.atlassian.net`,
+  cloudId `ef32e587-9bef-4079-9c6b-be7f7e49b041`, project **KAN** (the real board). Statuses in IT
+  (Da completare / In corso / In revisione). `IMPDI` project = Jira demo data, ignore.

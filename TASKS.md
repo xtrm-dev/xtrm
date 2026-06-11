@@ -1,20 +1,50 @@
 # Tasks
 
-> Working task list for **xtrm**. The canonical tracker is **beads** (`bd`); this file mirrors the
-> active threads at a glance and captures Cowork/PM-side todos. Seeded 2026-06-11 from the vault roadmap.
+> Working glance over **xtrm**. Two real trackers: **agent/robot work → beads (`bd`)**, **human work →
+> Jira (project KAN @ xtrmxt.atlassian.net)**. This file mirrors Jira read-only — it is NOT the source
+> of truth; don't edit Jira from here without Dawid's explicit approval. Synced 2026-06-11.
 
-## In progress
-- [ ] **`xtrm-h9hqg`** (P0) — bd auto-stage config flip + pre-commit shim (B-A1/A2/A3); hooksPath cases; bd/gitnexus version + migration verify
+## Human work — Jira KAN (mine + Federico's)
 
-## Next
-- [ ] **`60w93.1`** — create `telemetry/forensic-event-contract.md` → forensic v0
-- [ ] **`kj651`** — specialists-runtime cleanup + substrate alignment (canonical: `repo:specialists-roadmap.md`) — carried by another agent
-- [ ] Resolve open question: **substrate vs channels — what lands first?** (`improvements.md`)
-- [ ] Follow-on friction-audit work not in `xtrm-h9hqg`: B-A4 orphan-worktree cleanup, B-A5 test-runner `.worktrees/` excludes, B-A6 osv-scanner wrapper
+### 🔧 In progress (In corso)
+- [ ] **KAN-95** (Epic, *Dawid*) — xt-console e database materializer
+- [ ] **KAN-97** — pulizia repo: eliminare vecchi asset in `/apps` e `/packages`, lasciare solo `/apps/console`
+- [ ] **KAN-61** — integrare sezione Telemetry in `substrate_design_it` (dopo forensic contract)
+- [ ] **KAN-66** — ricerca: AgentOps interno per sorvegliare xt/sb/sp/ch/console
+- [ ] **KAN-8** (Epic) — Devops system (cross-cutting)
 
-## Later
-- [ ] **`eoqxp` / `infra-bnh`** — devops beads (devops module lands late)
-- [ ] Reconcile duplicated/STALE docs flagged in `xtrm-MOC.md` §7 (channels repo copies, chain-templates dup, `substrate_design_en` STALE)
+### 👀 In review (In revisione)
+- [ ] **KAN-91** (Story, *Dawid*) — modifica install `xt`: rimuovere bloat in CLAUDE.md, skill/template per bootstrap agente
+- [ ] **KAN-85** (*Federico*) — Shipped v0: testare la CLI + collegamento con `/planning` e `/test-planning`
+- [ ] **KAN-84** (Epic) — `xt spec` — bd-and-sp-native spec compiler
+- [ ] **KAN-72** — Telemetria v0 forensica (additiva, prima di substrate)
+- [ ] **KAN-70** — creare `telemetry/forensic-event-contract.md`
+- [ ] **KAN-9** (Epic) — Telemetry / Forensic event contract
+- [ ] **KAN-10** (Epic) — Vault & doc-map hygiene
+
+### 📋 To do — assigned / decisions (Da completare)
+- [ ] **KAN-65** — ⚖️ DECISIONE: **substrate vs channels — chi landa prima?** (the open question from `improvements.md`)
+- [ ] **KAN-93** (Story, *Dawid*) — stabilire regole su gestione Jira (the norms we're setting now)
+- [ ] **KAN-90** (Story, *Federico*) — creazione user config `~/.xtrm/` per specialists + altre config
+- [ ] **KAN-102** (*Federico*) — esplorare AutoScientists
+- [ ] **KAN-92** (Story) — setup doltlab per rico (share beads)
+
+### 📋 To do — backlog (Da completare, unassigned — selected)
+- [ ] **KAN-5** (Epic) Specialists Runtime V4 · **KAN-6** (Epic) Substrate design spec · **KAN-7** (Epic) Channels primitive · **KAN-11** (Epic) Research & adoption backlog · **KAN-86** (Epic) XTRM-01 · **KAN-99** (Epic) task-varie
+- [ ] Migration: **KAN-89** xtrm-tools → package `core`; **KAN-88** spostamento specialists + git history + pnpm; **KAN-77** commit/push delete+move (operator gate); **KAN-94** spostare docs/design/canonical in `docs/`
+- [ ] Vault hygiene: **KAN-78** pulire metriche container da `temp_roadmap.md`; **KAN-76** chiarire scopo `_repos/`; **KAN-75** archiviare candidate-archive; **KAN-62** uniformare naming chain-templates
+- [ ] Telemetry/devops: **KAN-73** proiezione metrics; **KAN-71** adattatore pulse su evento esterno; **KAN-68** chiudere decisioni aperte devops-system §14; **KAN-67** infra/cloud esterni
+- [ ] Research backlog: **KAN-82** SkillOpt · **KAN-83** hexstrike-ai · **KAN-81** agent-browser · **KAN-80** AutoScientists (quant) · **KAN-100** idee langchain/arxiv · **KAN-101** gitignore user artifact
+- [ ] Misc: **KAN-96** in lavorazione design · **KAN-98** "Dio KAN"
+
+> Full board: ~49 open issues in KAN. `IMPDI` project = Jira demo data, ignored.
+
+## Agent/robot work — beads (`bd`)
+- [ ] **`xtrm-h9hqg`** (P0, IN_PROGRESS) — bd auto-stage config flip + pre-commit shim (B-A1/A2/A3); hooksPath cases; bd/gitnexus version+migration verify
+- [ ] **`60w93.1`** — create forensic event contract → forensic v0 (mirrors KAN-70/72)
+- [ ] **`kj651`** — specialists-runtime cleanup + substrate alignment (canonical `repo:specialists-roadmap.md`) — carried by another agent
+- [ ] **`eoqxp` / `infra-bnh`** — devops beads (later)
 
 ## Done
 - [x] Bootstrap Cowork project memory for xtrm (CLAUDE.md + memory/) — 2026-06-11
+- [x] Connect Jira (read-only) + record collaborator (Federico) and KAN coordinates — 2026-06-11
