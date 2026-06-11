@@ -30,7 +30,7 @@
 | **chain** | A multi-step unit of work executed by specialists. |
 | **chain-template / `.formula.json`** | Reusable chain definitions; ~15 canonical templates live in the specialists repo (code). |
 | **bead** | A task/work item in the `bd` tracker, **for agent/robot work**. IDs like `xtrm-h9hqg`, `kj651`, `60w93.1`, `eoqxp.1`. Root beads vs step-beads. (Human work → Jira.) |
-| **shepherd** | Always-on sidecar that *forces* relevant memories/paths/scope reminders into a specialist's next turn (opt-out only). Design in `xtrm/tether.md`. |
+| **shepherd** | Always-on sidecar that *forces* relevant memories/paths/scope reminders into a specialist's next turn (opt-out only). Design in `docs/tether.md`. |
 | **tether** | The doc/codename for the shepherd context-injection design. |
 | **reviewer** | End-of-turn judgment over a specialist's output. |
 | **runner** | Executes the specialist job. |
@@ -46,8 +46,8 @@
 ## Vault / process
 | Term | Meaning |
 |---|---|
-| **vault** | The `xtrm/` Obsidian vault — deliberation, cross-repo thinking, `[[wikilinks]]`. History grafted from `~/second-mind/1-projects/xtrm/`. |
-| **MOC** | Map of Content (`xtrm/xtrm-MOC.md`) — index of the whole design surface, with each doc's home + status. |
+| **vault** | The `docs/` Obsidian vault — deliberation, cross-repo thinking, `[[wikilinks]]`. History grafted from `~/second-mind/1-projects/xtrm/`. |
+| **MOC** | Map of Content (`docs/xtrm-MOC.md`) — index of the whole design surface, with each doc's home + status. |
 | **ordine** | The decision log (`[[ordine]]`). |
 | **SSOT** | Single Source of Truth. Rule: package-owned + code implements against it → repo; cross-cutting/in-deliberation → vault. |
 | **canonico / canonical** | The authoritative copy of a doc. **STALE** = superseded, needs realign/archive. **candidate-archive** = likely to be archived. |
@@ -56,6 +56,4 @@
 ## Adjacent projects
 | Term | Meaning |
 |---|---|
-| **Mercury** | A separate market-data **product Dawid owns** (mercury-api, econ-*, mmd, treasury, doltlab, infra-* containers). **xtrm is being tested/dogfooded on Mercury** — Mercury's real repos and work are xtrm's proving ground. |
-| **xtrm-tools** | Upstream repo being grafted in; holds skills like `repo-bootstrap`. |
-| **xtrm-dev** | The GitHub organization. |
+| **Mercury** | A separate market-data **product Dawid owns** (mercury-api, econ-*, mmd, treasury, doltlab, infra-* containers). **xtrm is being tested/dogfooded on Mercury** — Mercury's real repos and work are xtrm's provin

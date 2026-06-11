@@ -7,14 +7,20 @@
 - 2FA expected. Onboarding canonical doc: `CONTRIBUTING.md`. Security policy: `SECURITY.md`.
 
 ## People
-- **Dawid** — operator / product. "Operator" throughout the docs = Dawid.
-- **One human collaborator** (name TBD — add here once known).
+- **Dawid** — operator / product. "Operator" throughout the docs = Dawid. Jira: Dawid Jagger (jagger.xtrm@gmail.com).
+- **Federico Della Savia** — the one human collaborator. Nickname **"rico"** (e.g. KAN-92 "setup doltlab per rico").
 - "Other agents" referenced (e.g. the agent carrying `kj651`) are AI specialists, not humans.
 
 ## Task tracking — two systems, by actor
 - **Beads (`bd`)** — agent/robot work only.
-- **Jira** (Atlassian connector) — human work, for Dawid + the collaborator. System of record for people.
-- Don't merge the two. When asked about "my tasks" / "our work", that means **Jira**.
+- **Jira** — human work, for Dawid + Federico. System of record for people.
+  - Site: **`xtrmxt.atlassian.net`** · cloudId `ef32e587-9bef-4079-9c6b-be7f7e49b041`.
+  - Project **`KAN`** (name "xtrm", software/next-gen) = the real board (~49 open as of 2026-06-11).
+  - Project **`IMPDI`** = Jira product-discovery sample board; its "Ideas" (Express checkout, VR travel, rewards…) are **Atlassian demo data**, not real work.
+  - Statuses are Italian: **Da completare** = To Do, **In corso** = In Progress, **In revisione** = In Review.
+  - Issue types: Epic, Story, Task, Subtask, Bug.
+- Don't merge the two. When asked about "my tasks" / "our work", that means **Jira KAN**.
+- **Read-only by default; propose before any write** (see CLAUDE.md working norms). Relevant meta-issue: **KAN-93** "stabilire regole su gestione jira" (assigned to Dawid).
 
 ## Stack
 - **Bun** ≥ 1.0 (runtime; `packages/core` will declare it), **pnpm** workspaces, **TypeScript**.
