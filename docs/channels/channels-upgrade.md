@@ -135,7 +135,7 @@ Canonical message addressing should use `audience`:
 
 Field meanings (`visibility`, `action_targets`, `suggested_watchers`, `scope_refs`, `urgency`) are canonicalized in **channels.md §5.4**.
 
-> **Q2 — still open.** The enumeration of `visibility` *values* and the per-kind defaults below are a working *proposal*, not yet settled (forensic-attention §5 Q2). Retained here until decided; do not treat them as canonical.
+> **Q2 — RESOLVED (2026-06-11 audit).** The `visibility` enum and per-kind defaults are now canonical in **channels.md §5.4** (`private | targets | chain | node | operator | public_audit`). The values below are retained as the rationale that fed that decision.
 
 Suggested `visibility` values:
 
@@ -238,6 +238,8 @@ The principle to preserve: avoid a single flat namespace — use families. `prop
 ---
 
 ## 7. v0 schema: canonical contract, minimal engine
+
+> ⚠️ **HISTORICAL / SUPERSEDED.** The canonical `channel_messages` schema is **channels.md §5.1**. The SQL below predates it and drifts (e.g. `target_participant_ids_json` / `target_job_ids_json` vs the canonical `audience_json` + `target_key` bridge, and it lacks the cursor model). Read it as decision-log only; implement against channels.md §5.1.
 
 A pragmatic v0 should still preserve the target ontology.
 

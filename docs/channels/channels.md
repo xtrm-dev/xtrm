@@ -65,7 +65,7 @@ CREATE TABLE channels (
   participants_json TEXT NOT NULL,   -- [{participant_id, participant_kind, participant_role, job_id, subscribe, emits}]
   stop_on_json TEXT NOT NULL,        -- ["judge.done","budget","idle:8"]
   max_turns_per_member INTEGER,
-  status TEXT NOT NULL,              -- 'open' | 'closed' | 'aborted'
+  status TEXT NOT NULL,              -- 'open' | 'draining' | 'closed' | 'aborted' (see §5.2)
   created_at_ms INTEGER NOT NULL,
   closed_at_ms INTEGER,
   close_reason TEXT
@@ -73,7 +73,7 @@ CREATE TABLE channels (
 CREATE TABLE channel_messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   channel_id TEXT NOT NULL,
-  seq INTEGER NOT NULL,
+  seq INTEGER NOT NULL,              -- per-channel DISPLAY ordinal only; NOT the delivery cursor (use id)
   author_kind TEXT NOT NULL,         -- 'specialist' | 'user' | 'system' | 'gate' | 'judge'
   author_key TEXT NOT NULL,          -- participant_id (L3); legacy column name retained
   author_job_id TEXT,
@@ -87,18 +87,19 @@ CREATE TABLE channel_messages (
   evidence_refs_json TEXT,           -- pointers to durable semantic payloads
   forensic_event_ids_json TEXT,      -- pointers to audit / drilldown facts
   provenance_json TEXT,              -- {sender_role_at_time, capability_scope, lineage_refs[]}
-  ts INTEGER NOT NULL,
-  UNIQUE(channel_id, seq)
+  ts INTEGER NOT NULL
 );
 CREATE TABLE channel_subscriptions (
   channel_id TEXT NOT NULL,
   participant_key TEXT NOT NULL,       -- participant_id; stable L3 cursor owner
-  last_seq_seen INTEGER NOT NULL DEFAULT 0,
+  last_seen_id INTEGER NOT NULL DEFAULT 0,  -- delivery cursor = table-wide channel_messages.id (NOT seq)
   paused INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (channel_id, participant_key)
 );
-CREATE INDEX channel_messages_channel_seq ON channel_messages(channel_id, seq);
+CREATE INDEX channel_messages_channel_id ON channel_messages(channel_id, id);
 ```
+
+**Cursor model (canonical).** The one delivery cursor is the table-wide autoincrement `channel_messages.id` — monotonic, allocated by SQLite (no `MAX(seq)+1`, no multi-writer race). `seq` is a per-channel **display ordinal only** (for `sp tail` readability), assigned best-effort in the insert transaction; correctness never depends on it and within-channel order is authoritatively `ORDER BY id`. `channel_subscriptions.last_seen_id` holds the highest `id` *successfully processed* (cursor-through-N, §5.5). All `readSince` / `markSeen` operate on `id`; a `seq` collision is cosmetic, never a delivery fault.
 
 #### Identity compatibility with substrate §2.7
 
@@ -124,12 +125,12 @@ Hierarchical IDs (`/`) make `sp ch list --node <id>` queries trivially implement
 Existing tables unchanged. `node_memory` becomes a **derived view** seeded by `kind=finding` messages with `confidence >= threshold`.
 ### 5.2 Lifecycle
 ```
-created -> open -> closed
+created -> open -> draining -> closed
               -> aborted
 ```
-A channel is `open` while at least one participant has unread messages or is `running`. The judge (or stop condition evaluator) closes it by writing a terminal `system.done` message.
+**Status vs drain.** `status` is the authoritative lifecycle state. `open` accepts writes. A terminal `system.done` (or a fired stop condition) moves the channel to `draining` **immediately**, even if participants still have unread messages: no new actionable writes are accepted, but receivers may still read and ack what remains. `closed` is set once all receivers have drained (or a close-grace elapses); `aborted` is abnormal termination. Terminal status is thus separate from the unread/running drain state — a channel can be `draining` with unread messages outstanding. Pruning excludes `open` and `draining` channels (§11).
 ### 5.3 Message Kinds (families + discriminated union)
-The canonical namespace is **families**: `work.*`, `control.*`, `system.*`, `runtime.*`. Every message body validates against a schema keyed by `kind`. Invalid messages are downgraded to `note` and do **not** trigger wakeups. Addressing is by `audience` (§5.1); `target_key` is the 0.1 bridge alias for `audience.action_targets[0]`. Short aliases (`turn`, `finding`, `verdict`, `steer`, `redirect`, `proposal`, `ack`, `escalation`, `error`) stay valid in the CLI and in this doc's prose/code for brevity.
+The canonical namespace is **families**: `work.*`, `control.*`, `system.*`, `runtime.*`. Every message body validates against a schema keyed by `kind`. Malformed or unauthorized messages follow the outcome classes in §10.1 (validation-reject / authority-reject / note-downgrade); none trigger wakeups. Addressing is by `audience` (§5.1); `target_key` is the 0.1 bridge alias for `audience.action_targets[0]`. Short aliases (`turn`, `finding`, `verdict`, `steer`, `redirect`, `proposal`, `ack`, `escalation`, `error`) stay valid in the CLI and in this doc's prose/code for brevity.
 
 | Family | Kind (alias) | Author | Body shape | Wakes |
 | --- | --- | --- | --- | --- |
@@ -165,9 +166,34 @@ The canonical namespace is **families**: `work.*`, `control.*`, `system.*`, `run
 ```
 A proposal may create work, request attention, or request evaluation. It may **never** grant authority or apply a config change.
 
+**`work.verdict` is single-target.** The validator requires exactly one `audience.action_targets` entry and one `work_refs.target_issue_id` per verdict. Reviewing N executors produces N verdict messages (one per target), keeping quorum/consensus, replay, remediation ownership, and edge derivation per-target unambiguous.
+
 **Anti-spam guarantee:** `work.turn` messages carry `{summary <= 500 chars, refs: {result_id, range}}`. Verbose reasoning lives in `specialist_results`. Peers dereference only when they need detail.
 ### 5.4 Subscription Model
-**Audience is the canonical addressing model** (`target_key` / `target_job_id` are 0.1 bridge aliases for `action_targets[0]`). Fields: `visibility` (who may know the event happened), `action_targets[]` (who should act, may be auto-woken), `suggested_watchers[]` (who may care, not forced to act), `scope_refs[]` (structured hints for relevance matching), `urgency` (whether soft attention may escalate). The enumeration of `visibility` *values* and the per-kind defaults are still open — see §12 Open Questions and the Q2-open proposal in `channels-upgrade.md` §4.
+**Audience is the canonical addressing model** (`target_key` / `target_job_id` are 0.1 bridge aliases for `action_targets[0]`). Fields: `visibility` (who may know the event happened), `action_targets[]` (who should act, may be auto-woken), `suggested_watchers[]` (who may care, not forced to act), `scope_refs[]` (structured hints for relevance matching), `urgency` (whether soft attention may escalate). **`visibility` values (canonical).** Who may *know* an event happened — awareness only, never authority:
+
+```text
+private       author, action_targets, coordinator/runtime
+targets       action_targets + coordinator/runtime
+chain         all authorized participants in the chain
+node          all authorized participants in the node
+operator      human/operator + coordinator
+public_audit  redacted, drilldown-visible fact only
+```
+
+**Per-kind default visibility** (container default = `chain` for chain/pair channels, `node` for node channels):
+
+```text
+work.turn / work.finding / work.verdict / work.proposal  -> container default
+control.steer / system.redirect                          -> targets
+control.attention_requested                              -> targets + coordinator/judge
+system.done / system.epoch_bump                          -> container default
+system.swap                                              -> node
+runtime.*                                                -> targets + coordinator/runtime
+public_audit                                             -> redacted facts only
+```
+
+**Inclusion rule.** Participant P may know a message iff P ∈ resolve(`visibility`): `private`→{author, action_targets, coordinator}; `targets`→{action_targets, coordinator}; `chain`/`node`→all authorized participants of that container; `operator`→{operator, coordinator}. `suggested_watchers` widen *awareness* (card/pointer) only — never `action_targets`. **Interaction with `chain.progress` (§5.9):** the ambient card handed to P on wake is the projection filtered to entries whose `visibility` resolves to include P. Visibility governs awareness/card filtering only; dereferencing full evidence still requires §10.3 policy, and authority is never derived from visibility.
 
 Each participant declares a subscription expression. Defaults are conservative (addressed messages + verdicts + system). Addressing resolves against `audience`: `:me` matches when `audience.action_targets` contains my `participant_id`; `:scope-overlap` matches when `audience.scope_refs` intersect my declared scope.
 Format: `kind[:target_filter]`
@@ -188,27 +214,38 @@ The existing waiting-loop tick gains one read. Read and ack are **separate opera
 Never mix state derivation and side effects in the same pass. Violating this means a crash between "enqueue resume" and `markSeen` re-triggers the LLM call on replay.
 ```ts
 // One ChannelClient instance per participant (authority lane). Never share across jobs.
-const newMessages = client.readSince(convId, myKey, lastSeq);  // cursor unchanged
-let highestProcessed = lastSeq;
+const newMessages = client.readSince(channelId, myId, lastSeenId);  // pure; cursor unchanged
+let highestProcessed = lastSeenId;
 for (const msg of newMessages) {
   // Re-read participant roles before any mutation when authority state may have changed.
-  if (msg.kind === 'system.epoch_bump') { await reloadParticipantRoles(convId); continue; }
-  if (msg.kind === 'steer'   && msg.target_key === myKey) enqueueResume(msg.body.instruction);
-  if (msg.kind === 'verdict' && msg.target_key === myKey) enqueueResume(formatVerdict(msg));
+  if (msg.kind === 'system.epoch_bump') { await reloadParticipantRoles(channelId); continue; }
+  if (msg.kind === 'control.steer'   && addressed(msg, myId)) emitResumeIntent(msg);
+  if (msg.kind === 'work.verdict'    && addressed(msg, myId)) emitResumeIntent(msg);
   if (msg.kind === 'system.done') terminate(msg);
-  if (msg.kind === 'system.redirect' && msg.target_key === myKey) enqueueResume(msg.body.instruction);
+  if (msg.kind === 'system.redirect' && addressed(msg, myId)) emitResumeIntent(msg);
   highestProcessed = msg.id;
 }
 // Ack only after all intended actions succeed. Cursor-through-N: advances to highest processed,
 // not highest received. A message that fails to enqueue does not advance the cursor.
-await client.markSeen(convId, myKey, highestProcessed);
+await client.markSeen(channelId, myId, highestProcessed);
 ```
+`addressed(msg, myId)` = `msg.audience.action_targets.includes(myId)` (the `target_key` bridge is read-only sugar). `emitResumeIntent(msg)` writes a **scheduler intent**, never a direct `enqueueResume`: for chains the scheduler is a trivial 1:1 resume, for nodes `node-supervisor` consumes the intent (§11, seam 2). There is no direct wake path in either kind.
 **Wake cycle contract (guaranteed execution order per tick):**
 1. `readSince(lastSeenId)` — observe, never mutate cursor
 2. Act only on messages addressed to this participant or matching subscription
-3. Enqueue resumes / terminations
+3. Emit resume *intents* to the scheduler / terminations (never a direct resume)
 4. `markSeen(highestProcessed)` — only after every intended action above succeeds
 5. If nothing actionable: stay silent — no empty `turn` messages
+**Idempotency keys (per side effect).** Each effectful after-hook action gates on a stable key before executing; replay re-checks the key and skips already-committed effects:
+```text
+resume intent      (channel_id, msg_id, target_participant_id)
+system.* emission  (channel_id, trigger_msg_id, system_kind)
+forensic write     forensic_event_id            // deterministic, caller-supplied
+evidence write     evidence_id                  // content-addressed / deterministic
+edge derivation    UNIQUE(edge_kind, from_issue_id, to_issue_id, channel_message_id)
+projection update  (container_id, last_message_id)        // watermark; recompute if behind
+judge timeout      (channel_id, last_actionable_msg_id)   // one system.continue per stall
+```
 ### 5.6 Topologies
 | Topology | Turn selection | Use case |
 | --- | --- | --- |
@@ -275,7 +312,7 @@ LIVE in 0.1 (exercised on the chain path)
   turn [relation=responds_to]   -> responds_to            (D4: core remediation link)
   system.redirect               -> redirects
   work_refs.spawned_issue_ids[] -> discovered_from (one edge per spawned issue)
-  multi-target                  -> one edge per target (UNIQUE includes to_issue_id)
+  multi-target                  -> one edge per target, UNIQUE includes to_issue_id (work.verdict is single-target, §5.3)
 
 DORMANT (registered in the dispatch, not exercised in 0.1)
   proposal.self_activation      -> discovered_from + requests_attention   (theme 2)
@@ -303,6 +340,7 @@ Each step is idempotent by its own key; the edge by `UNIQUE(edge_kind, from_issu
 endpoints resolvable + author_issue matches  -> full edge
 author_issue mismatch                        -> full edge, provenance endpoint_status
                                                 "unverified_endpoint"
+target_issue not in action_targets / step    -> full edge, provenance "unverified_endpoint" (target side)
 endpoints absent / unresolvable              -> no issue->issue edge; record on the
                                                 message's forensic event
                                                 derivation_skipped: missing_endpoints
@@ -311,12 +349,12 @@ The message is **never** rejected for a `work_refs` problem — derivation hygie
 **Rule.**
 ```text
 Only semantically relevant messages create graph edges.
-Every graph edge must point back to its source message, evidence, and forensic event.
+Every edge MUST link its source channel message and forensic event; it links evidence ONLY when the source is an evidence-producing message (verdict / finding). Non-evidence edges (e.g. redirects) carry message + forensic only.
 Edges, not raw messages, explain cross-issue causality.
 ```
 > Design rationale and the channel_message→edge thesis live in `channels-upgrade.md` §11 (decision log).
 ### 5.9 Progress Projection (substrate)
-The projection is the compact current state of a chain/node — **not a transcript**. Substrate owns and assembles it (it is a *join* of channel-derived progress entries + `work_graph_edges` + issue/step state + runtime budget/idle/member status). Channels own the stream; the projection is a **recomputable cache** (truth is the stream). It is computed by the **runtime after-hook** on every accepted `post()` — *not* the coordinator (pair/chain channels in 0.1 have no coordinator, yet must still have an awareness surface). Coordinator and specialists are both consumers.
+The projection is the compact current state of a chain/node — **not a transcript**. Substrate owns and assembles it (it is a *join* of channel-derived progress entries + `work_graph_edges` + issue/step state + runtime budget/idle/member status). Channels own the stream; the projection is a **recomputable cache** (truth is the stream). It is computed by the **runtime after-hook** on every accepted `post()` — *not* the coordinator (pair/chain channels in 0.1 have no coordinator, yet must still have an awareness surface). Coordinator and specialists are both consumers. **`container_id`:** chain/pair channels write `container_id=chain:<id>` (or `pair:<id>`); node channels and their sub-channels write the parent `container_id=node:<id>` while keeping a distinct `channel_id`, so one node projection aggregates its sub-channels.
 ```sql
 CREATE TABLE container_progress (
   container_id TEXT PRIMARY KEY,        -- chain:… / node:…
@@ -415,10 +453,10 @@ Only coordinator / judge / scheduler activates (system.redirect / scheduler inte
   "name": "executor",
   "permission": "MEDIUM",
   "channel": {
-    "subscribes": ["steer:me", "verdict:me", "finding:scope-overlap", "system.*"],
-    "emits": ["turn", "ack", "escalation"],
-    "cannot_emit": ["verdict", "system.done", "system.swap"],
-    "wakes_on": ["verdict.PARTIAL", "verdict.FAIL", "system.redirect"],
+    "subscribes": ["control.steer:me", "work.verdict:me", "work.finding:scope-overlap", "system.*"],
+    "emits": ["work.turn", "work.ack", "control.escalation"],
+    "cannot_emit": ["work.verdict", "system.done", "system.swap"],
+    "wakes_on": ["work.verdict.PARTIAL", "work.verdict.FAIL", "system.redirect"],
     "turn_summary_max_chars": 500
   }
 }
@@ -428,10 +466,10 @@ Reviewer:
 {
   "name": "reviewer",
   "channel": {
-    "subscribes": ["turn:peer", "system.*"],
-    "emits": ["verdict", "finding"],
-    "cannot_emit": ["system.done", "system.swap", "steer"],
-    "wakes_on": ["turn:peer"]
+    "subscribes": ["work.turn:peer", "system.*"],
+    "emits": ["work.verdict", "work.finding"],
+    "cannot_emit": ["system.done", "system.swap", "control.steer"],
+    "wakes_on": ["work.turn:peer"]
   }
 }
 ```
@@ -441,9 +479,11 @@ Judge (node coordinator):
   "name": "node-coordinator",
   "channel": {
     "role": "judge",
-    "subscribes": ["verdict", "finding", "proposal", "system.idle", "system.budget", "escalation"],
+    "subscribes": ["work.verdict", "work.finding", "work.proposal", "system.idle", "system.budget", "control.escalation"],
     "emits": ["system.continue", "system.done", "system.redirect", "system.swap"],
-    "decision_schema": "judge.decision.v1"
+    "decision_schema": "judge.decision.v1",
+    "judge_mode": "readonly",
+    "judge_execution": "classifier"
   }
 }
 ```
@@ -456,7 +496,9 @@ Judge (node coordinator):
   "swap":     { "out": "string", "in": "string" } | null
 }
 ```
-Judge prose lives in its `specialist_results`. Only the structured decision becomes a `system.*` message.
+Judge prose lives in its `specialist_results`. Only the structured decision becomes a `system.*` message. Specs declare canonical `family.kind` values; the short aliases (`turn`, `verdict`, `steer`, …) are CLI/prose sugar only (§5.3).
+
+`judge_mode`: `readonly` (0.1 — emits `done`/`continue`/`redirect` only) | `active` (0.2 — adds `swap`/`escalate`). `judge_execution`: `classifier` (cheap structured decision, default) | `full_turn` | `auto` (classifier, escalate to a full turn on ambiguity / high-risk). A read-only judge can never emit `system.swap` / `escalate`, regardless of `judge_execution`.
 
 ## 7. Node Config Schema (additions)
 
@@ -474,6 +516,8 @@ Judge prose lives in its `specialist_results`. Only the structured decision beco
 }
 ```
 Phased nodes (existing behavior) become a thin wrapper: `topology: turns` + per-phase member subsets. `wait-phase` and `spawn-member` remain as escape hatches but are no longer the primary mechanism.
+
+The node's judge runs `judge_mode: active` in 0.2 (may emit `swap`/`escalate`); chains in 0.1 use `judge_mode: readonly` (§6).
 
 ## 8. CLI Surface
 ### 8.1 New commands
@@ -553,17 +597,69 @@ Coordinator is now a **gatekeeper**, not a router.
 - Token-looking strings in body
 - Inbox emptiness or read-head position
 Unknown authority is no authority: when the validator cannot confirm a valid source, the message is rejected.
+
+**Outcome classes (distinct — not interchangeable).** A rejected write and a downgraded write are different facts:
+
+```text
+validation-reject  schema/family/kind invalid · body cap exceeded · bad audience/visibility
+                   -> NOT written to the stream; post() returns the §10.2 envelope;
+                      a runtime.message_rejected fact is written for audit
+authority-reject   sender lacks emits/role · cannot_emit · epoch revoked · not participant
+                   -> NOT written as the requested kind; §10.2 envelope returned;
+                      runtime.message_rejected written
+note-downgrade     well-formed, but body asserts authority/identity it cannot hold
+                   -> written as kind=note (content preserved, harmless); no wakeup, no edge
+```
+
+`runtime.message_rejected` is the *audit record* of a reject, not the rejected message itself. Downgrade-to-`note` is reserved for the body-text-authority case (step 5 above) — it is never a catch-all for malformed input.
 ### 10.2 Error Envelope
 `ChannelClient` errors return a structured envelope so callers know what to do next:
 ```ts
 {
   ok: false,
   error_code: 'message_too_large' | 'cannot_emit' | 'not_participant' | 'epoch_revoked'
-            | 'read_only' | 'rate_limited' | 'channel_closed' | 'body_cap_exceeded',
+            | 'read_only' | 'rate_limited' | 'channel_closed' | 'body_cap_exceeded' | 'invalid_audience' | 'invalid_visibility' | 'validation_failed' | 'attention_budget_exceeded' | 'evidence_forbidden',
   likely_cause: string,
-  next_safe_action: 'use_capture' | 'request_write_access' | 'rejoin' | 'backoff' | 'none'
+  next_safe_action: 'use_capture' | 'request_write_access' | 'rejoin' | 'backoff' | 'fix_audience' | 'request_grant' | 'none'
 }
 ```
+
+### 10.3 Evidence dereference (`requestEvidence`)
+Default is pointer-first: participants receive pointers/cards for non-actionable messages, not full payloads (§5.9, §5.10). Full evidence is dereferenced only when **all** hold:
+```text
+1. the requesting participant's activation (job_id) is valid for its participant_id
+2. P is permitted by the message visibility (§5.4)  OR  an operator override
+3. one of: the message addresses P · P's subscription matches · the evidence is listed
+   as an input in P's step contract · P's scope_refs overlap the message scope_refs
+4. attention_policy.can_request_evidence == true   (for scope-overlap requests)
+5. per-epoch cap / cooldown / dedup (§5.10) pass
+6. for scope-overlap outside the step contract: a coordinator / judge / operator grant
+```
+Scope-overlap grants pointer/card visibility and the **right to request** — never automatic full evidence. Every request, grant, deny, and dereference emits a forensic audit fact. Denial returns the §10.2 envelope with `evidence_forbidden` (`next_safe_action: request_grant`) or `attention_budget_exceeded` (`backoff`). Authority is never derived from body text or from visibility.
+
+### 10.4 `system.swap` state machine (0.2; receiver epoch handling built in 0.1)
+`system.swap` **unsubscribes and replaces** the outgoing participant — it does **not** kill the job. Hard kill stays the explicit operator path (`sp stop`). The active judge *requests* the swap; the scheduler *performs* it, in order:
+```text
+1. validate judge authority (may emit system.swap; not read-only)   // else authority-reject
+2. pause the outgoing participant's subscription (no new resume intents)
+3. mark outgoing participant status = replaced/waiting; block future resumes
+4. resolve the worktree lease: wait for the outgoing job to yield/complete;
+   if it holds dirty edits and will not yield, require operator stop (never force-kill)
+5. register the incoming participant (participants_json + subscription)
+6. emit system.epoch_bump -> every receiver calls reloadParticipantRoles before its
+   next mutation (seam 5; receiver side already built in 0.1)
+```
+**Producer ordering (pins seam 5):** steps 1–5 complete *before* the `system.epoch_bump` is written, so no receiver ever acts on stale roles.
+
+### 10.5 Forensic families (channel mechanics)
+Channel **delivery mechanics** emit a dedicated `channel.*` forensic family (audit facts, not domain meaning); semantic messages additionally emit their domain event (e.g. `review.verdict.*`). Mechanical family (live from 0.1):
+```text
+channel.opened            channel.message.posted      channel.message.consumed
+channel.message.rejected  channel.member.joined       channel.member.left
+channel.epoch_bumped      channel.closed
+channel.message.delivered   // optional / sampled — debug only
+```
+Every significant channel mutation dual-writes through the shared `xtrm.forensic.v1` envelope writer; no caller hand-builds event JSON. Keeping mechanics in `channel.*` (rather than overloading `control` / `error` / `chain`) stops replay and drilldown from collapsing transport with domain meaning.
 
 ## 11. Sequenced Implementation (0.1 → 0.2)
 
@@ -585,7 +681,7 @@ These hold from 0.1 forward and constrain 0.2:
 - **Worktree isolation preserved:** lateral steer between MEDIUM jobs requires either shared worktree owner OR explicit `can_steer_peers: true` in the sender's spec. Default is **off**.
 - **Message body cap:** 8 KB. Larger payloads must use the capture pattern (see §10). The error code `message_too_large` is returned with `next_safe_action: "use_capture"`.
 - **Spec is forward-compatible:** the `channel` block on a `.specialist.json` is the same shape across 0.1 and 0.2. Fields are added, never renamed or repurposed.
-- **Single scheduler per channel kind.** Pair-talk channels: the runner's channel read enqueues resumes directly. Node channels: the runner's channel read enqueues *intent* into a supervisor inbox; `node-supervisor` is the sole scheduler that decides whether and when to actually resume a member. Members never wake from a channel bypass while inside a node. This invariant prevents the node split-brain risk identified on bead `unitAI-jzhim`. **0.1 builds this indirection even for chains** (where the scheduler is a trivial 1:1 resume), so that 0.2 nodes plug in `node-supervisor` as the scheduler without re-wiring the wake path — see §11 Seams, seam 2.
+- **Single scheduler per channel kind.** Every channel read emits a resume *intent* to a scheduler — **never** a direct resume. Pair/chain channels: the scheduler is a trivial 1:1 resume of the intent. Node channels: the runner's channel read enqueues *intent* into a supervisor inbox; `node-supervisor` is the sole scheduler that decides whether and when to actually resume a member. Members never wake from a channel bypass while inside a node. This invariant prevents the node split-brain risk identified on bead `unitAI-jzhim`. **0.1 builds this indirection even for chains** (where the scheduler is a trivial 1:1 resume), so that 0.2 nodes plug in `node-supervisor` as the scheduler without re-wiring the wake path — see §11 Seams, seam 2.
 - **Read/ack separation:** `readSince` is pure observation and never advances any cursor. `markSeen(processedSeq)` is the only call that advances the read-head, and it advances only to the highest *successfully processed* message (cursor-through-N). A message that fails to enqueue a resume does not advance the cursor.
 - **Authority lane per participant:** one `ChannelClient` authority lane per `participant_id`, bound at runtime to the current `job_id` activation. Clients are not shared across participants. This scopes identity, cursor state, and capability checks to the owning participant while still allowing a fresh activation after respawn.
 - **Reducer purity:** Channel state (turn order, stop-condition evaluation, participant role lookup) is derived by a pure reducer over the message log. Side effects (resume enqueue, `system.*` writes) live in the after-hook and gate on idempotency keys. Replay of the reducer must never trigger external calls or LLM requests. This is the event-sourcing crash-recovery guarantee: a job that restarts mid-resume re-reads from `last_seen_id`, rebuilds state, and re-enqueues only actions that were not yet committed.
@@ -655,12 +751,20 @@ The module is one delivery, but 0.2's swarm behavior is independently disableabl
 
 ## 12. Open Questions
 
-1. **Channel per node, or channel per chain inside an epic?** Leaning per-node for self-managed; per-chain for traditional executor→reviewer. Allow both via `kind` field.
-2. **Verdict targeting when reviewer reviews multiple executors?** Either multi-target (`target_keys: []`) or one verdict message per target. Prefer the latter for replay clarity.
-3. **Should `system.swap` actually kill the outgoing job, or just unsubscribe it?** Default: unsubscribe + mark waiting; let user `sp stop` if needed. Less destructive.
+1. **Channel granularity — RESOLVED (2026-06-11 audit).** Both allowed via `channels.kind`: per-chain for traditional executor→reviewer (live 0.1), per-node for self-managed (0.2). `container_id` = `chain:<id>` for chain/pair channels; node channels and sub-channels carry parent `container_id=node:<id>` with a distinct `channel_id` (§5.1, §5.9).
+2. **Verdict targeting — RESOLVED.** One `work.verdict` per target; the validator requires exactly one `action_target` + one target issue id, and edge derivation emits one target edge per message (§5.3, §5.8).
+3. **`system.swap` kill vs unsubscribe — RESOLVED.** Unsubscribe + mark replaced, never kill; operator `sp stop` is the kill path. State machine in §10.4.
 4. **Cross-channel references** (epic-level coordinator watching multiple chain channels)? Possible via `epic` kind, deferred.
 5. **User identity in messages** — single `user` key, or per-CLI-invocation? Single for now; revisit if multi-user becomes real.
-6. **Judge model selection** — does the judge run a full specialist turn for every wake, or a lightweight classifier? Lightweight first (cheap call returning the decision schema); full turn behind a flag.
+6. **Judge model — RESOLVED.** Contract boundary is `decision_schema`; default execution is a lightweight classifier, full specialist turn behind a flag / `auto` escalation. Fields `judge_mode` / `judge_execution` (§6–7).
+
+**Residual open questions (raised by the 2026-06-11 audit; not yet decided):**
+
+7. **Evidence-grant record.** What durable ACL/grant table records evidence-request grants, denials, expiry, and operator overrides (§10.3)?
+8. **`scope_refs` grammar.** Exact matching semantics — file path, package, contract id, issue id, symbol — and how overlap is computed.
+9. **Epoch & cooldown defaults.** Default epoch boundaries and cooldown `K` for attention / self-activation (§5.10).
+10. **`seq` retention.** Keep `seq` purely for display ordering, or drop it now that `id` is the sole cursor (§5.1)?
+11. **Swap worktree-lease state machine.** Exact lease handling when the outgoing participant is running with dirty edits (§10.4 step 4).
 
 ## 13. Risks & Mitigations
 
@@ -672,6 +776,8 @@ The module is one delivery, but 0.2's swarm behavior is independently disableabl
 | Lateral steer abuse between MEDIUM jobs | Permission gate at router, `--force-job` reuse, per-spec `can_steer_peers` opt-in |
 | Rollout breakage of nodes/epics | Single-delivery build per §11; 0.2 swarm behavior independently disableable; node channel opt-in via `channel.enabled` |
 | Judge becoming a bottleneck | Wake-on filters narrow; lightweight decision call; quorum gating reduces wake frequency. Hard backstop: `judge_timeout:N` stop condition auto-emits `system.continue` if judge is silent for N ticks, making the judge eventually-consistent rather than a blocking gate (see §5.7). |
+
+**0.2 freeform default tuning envelope** (starting values, tuned at runtime per §11 — *not* contract): per-author cooldown 1 turn / 2 ticks; per-member turn cap 12; `idle:8`; `budget:turns=40`; oscillation damping after 3 no-progress cycles → judge nudge ladder. Hard caps live in the channel record; the soft numbers are iterated on real workflows.
 
 ## 14. Success Criteria (per phase)
 
@@ -693,3 +799,10 @@ The module is one delivery, but 0.2's swarm behavior is independently disableabl
 - `node_memory` derivation passes a shadow-write comparison before cutover.
 - No oscillation observed in freeform topology with 3+ members under standard cooldowns.
 - `sp tail <channel-id> --jq '.body.severity'` lets a human grep across a channel.
+
+## Appendix: Design Lineage
+Channels is an xtrm primitive — not a generic message bus, not a re-implemented LLM framework. Boundaries it must keep:
+- **Container-scoped, not a global bus.** A channel belongs to one chain/node container; there is no global subscribe. Cross-container coordination is **pulse**'s responsibility (`substrate_design_it.md` §2.3; node-cluster / pulse-mesh framing §4.5), never channel-watching — cross-channel watching stays out of scope (§11, §12.4).
+- **Identity is substrate's.** `participant_id` (L3) / `job_id` (L4) come from the substrate identity model (`substrate_design_it.md` §2.7); channels consume them, never mint them (§5.1).
+- **Layer boundary holds.** Channels deliver; substrate owns the work graph + projection; forensics/evidence are the audit/semantic layers; metrics are low-cardinality projections (no channel/job/issue IDs as labels).
+- **External agent frameworks are analogies only.** They may inform supervision / handoff / context shaping, never authority, replay, forensics, evidence, or metrics.
