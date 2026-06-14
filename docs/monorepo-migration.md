@@ -289,6 +289,32 @@ Step 2 can happen at any time — it's a fresh repo with no dependencies on lega
 state. Steps 3–5 each need their respective legacy repo's open work drained, but
 they can proceed independently (no shared rebase risk).
 
+### 5.1 Bridge whitelist, retirement criteria, per-Stage rollback (added 2026-06-13, premortem R3)
+
+> **Pair canonical:** [[substrate_design_it]] §13.8 (substrate-side framing — invariant, owner-of-cutover, MOC update trigger). This section is the **migration-side detail**: which bridges, when retired, how to roll back per Stage. Substrate references this section as authority on cutover mechanics.
+
+**Bridge whitelist (closed; additions require operator escalation).** During the legacy-repo sunset phase (Steps 3-5 above + the data migration in Step 13 of substrate §15), three bridges are permitted because each mitigates a specific failure mode operator workflow would otherwise hit. New bridge classes are NOT permitted — "we need a temporary X" routes through escalation, never through silent introduction.
+
+| Bridge | Failure mode mitigated | Owner-of-cutover | Retirement criterion (data-driven) |
+|---|---|---|---|
+| **`bd` read-only mirror in `state.db`** post Step 13 import | Operator muscle memory: `bd show <id>` queries still mentally indexed during first weeks | Operator + `bd-migrator` sub-agent | ≥30 days from Step 13 cutover AND <5 `bd` query forensic events/week observed in `state.db` |
+| **`sp`+`bd` shadow-write** during Step 13 dry-run window | Validation gap: substrate's issue validator (§6.3) may have edge cases bd silently accepted | Operator + `substrate-validator` sub-agent | 100% of new containers pass validator without shadow-discrepancies for 2 consecutive weeks; discrepancy log empty |
+| **GitHub materializer compatibility** (issue ↔ PR linkage during console rollout) | External readers (human reviewers, CI dashboards) still consume GitHub issue surface | Operator + console product lead | Console renders operational substitute for `gh issue list`/`gh issue view` AND team adoption ≥80% measured via reduction in `gh` CLI invocations across operator forensic events |
+
+**Per-Stage rollback table.** Each Stage of substrate §15 that touches persisted data has an explicit rollback path; presence of these gates is what makes the cutover *reversible* without making reversibility the default escape hatch.
+
+| Stage | Rollback mechanism | Trigger condition | Forensic evidence |
+|---|---|---|---|
+| **0** (kernel: daemon + store + socket) | Restart daemon from WAL backup snapshot taken pre-Stage | SQLite integrity check fails post-migration; daemon refuses to start; data corruption detected | `migration.rollback{stage:"0", trigger_condition, evidence_refs}` per forensic SSOT §6 |
+| **1** (issue schema + validator) | Revert schema migration, restore `bd` as authoritative reader | >2% of legacy issues land in `contract_state: invalid` *without* a documented refinement path | `migration.rollback{stage:"1", trigger_condition:"validator_floor_breach", ...}` |
+| **4** (container entity + lifecycle) | Mark all containers `archived: schema_v0`; revert to `bd` for issue tracking | Stage 1 validator gate didn't pass before Stage 4 started; container lifecycle test suite fails E2E | `migration.rollback{stage:"4", trigger_condition:"upstream_gate_failed", ...}` |
+| **4.5** (node-coordinator delivery demo) | Disable node kind in container catalog; node configs remain in repo but cannot pour | Demo fails any of: pulse-read, child-open, journal-survive-restart, deny-respect, failure_budget enforcement | `migration.rollback{stage:"4.5", trigger_condition:"demo_acceptance_failed", ...}` |
+| **13** (bd → substrate data migration) | Reload `bd` from pre-import backup snapshot; substrate issue store retained as read-only archive | <99% of imported issues reach `contract_state: complete` or `partial` (i.e. > 1% become `invalid` or `unknown`) | `migration.rollback{stage:"13", trigger_condition:"import_floor_breach", evidence_refs:[backup_sha]}` |
+
+**No rollback is "free."** Every rollback requires explicit operator approval, persisted as `operator_approval_id` in the `migration.rollback.triggered` body (forensic SSOT §6). The act of rolling back is itself permanent lineage; you cannot rollback the rollback silently.
+
+**MOC update trigger.** Every Stage that changes domain ownership (telemetry, console, issue store, state engine, ...) requires an `[[xtrm-MOC]]` edit in the same commit. A `xt doctor --moc-divergence` check (to be implemented as part of Stage 0's tooling) enforces this — preventing the drift class that bit us on 2026-06-13 when MOC said "forensic DA CREARE" while the contract was shipped six weeks earlier.
+
 ## 6. Worktrees under a (huge) monorepo
 
 Worktrees are orthogonal to monorepo vs polyrepo: a worktree is a checkout of one

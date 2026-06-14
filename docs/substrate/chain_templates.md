@@ -191,6 +191,13 @@ The canonical pipeline in this section maps directly to substrate primitives whe
 - The ddiff loop in §2.7 is the reducer's blocking-not-routine behavior (substrate §6.9.2 completeness contract).
 - The `seconder` gate is **not a fourth composition moment** (substrate §6.9.5 documents seed-time / dispatch-time / mid-run composition — three moments). It is a post-writer **evidence gate** using the existing §6.10 close-as-derivation pattern applied at intermediate-step granularity: writer's diff persists as evidence, the gate's predicate derives PASS / FAIL / UNCLEAR per dimension and overall, the chain advances or blocks per §3.1 reducer semantics. This is a clean instance of already-documented substrate patterns, not an architectural extension. The chain coordinator's borderline-judge role (§4.3 role 2) is where UNCLEAR verdicts at `high|critical` scrutiny route for coordinator-grade judgment.
 - Multi-writer chains (e.g. `code-with-tests`, §3.X) use substrate §6.9.6 sequential-writers semantics — writer-steps can be more than one *planned* (not only contingent restitch). The lease is passed on `agent_end` from one writer to the next. Reviewer attribution-per-writer is rendered in the Release Checklist; the channel reducer reads it to route ddiff fix-loop work to the correct writer-step.
+- **Coordinator role 5 — incident handler** (added 2026-06-13, substrate §4.3 role 5 + xtrm-1jp). Every template now carries an explicit `incident_policy` declaration alongside `coordinator_model`. The reducer detects mechanical failures (`runtime.participant_died`, `runtime.gate_unresponsive`, `runtime.worktree_diverged`, `runtime.evidence_ref_broken`, `runtime.pulse_delivery_failed`, `runtime.budget_exhausted_mid_step`, `runtime.recursion_cap` — channels §7); on classes the reducer cannot recover deterministically (or after `retry_budget` exhausts), it emits `chain.incident.opened` and the coordinator decides `retry_with_modifier` / `restitch_from_evidence:<ref>` / `escalate` / `verdict: failed` with explicit distillation. `closed:failed` is always a coordinator verdict, never a runtime fallthrough (substrate §3.1 invariant). When `coordinator_model: null`, the entity is still spawned but incident decisions follow a deterministic policy table declared in the template rather than LLM judgment — see per-template `incident_policy` blocks in §3.
+- **`failure_budget`** (per template; coordinator-enforced). Mirrors the node-coordinator failure budget pattern (substrate §4.2). Default bounds chain-relative rather than time-relative because chains are transient:
+  - `child_semantic_failures_per_chain` — default `2` (Iron ddiff loop = 1 acceptable cycle + 1 escalation gate; > 2 means scope/contract gap, escalate to operator).
+  - `child_transient_failures_per_chain` — default `5` (transient class per substrate §5.10; pi auto-retry envelope is the source of truth).
+  - `coordinator_respawns_per_chain` — default `3` (kill+respawn-via-journal §5.9 hard cap; > 3 means context-bleed, escalate).
+  - `consecutive_no_progress_steps` — default `2` (substrate §5.10 non-progress counters; resets on `agent_end` with new evidence).
+  Each template may override these via `failure_budget: { ... }`. Code-quick uses tighter bounds (no chain should fail twice on the same step), security-deep uses looser bounds (incident triage is expected work).
 Migration is naming + ownership-transfer; the canonical shape survives unchanged.
 ---
 
@@ -199,6 +206,21 @@ Migration is naming + ownership-transfer; the canonical shape survives unchanged
 **15 templates documented in this catalog**: 13 `.formula.json` files currently ship in `docs/design/roadmap/chain-templates/` (§3.1–§3.13 below) + 2 additional templates designed in this canon (`code-with-tests` §3.14 and `test-only` §3.15) that are **pending formula-file authoring** via `unitAI-f9kku` (blocked on `unitAI-sfwe1` shipping test-engineer + test-runner). Each `.formula.json` uses only `[package]`-tier specialists (cross-repo defaults). Per-repo extension is supported via `extends` (see `chain-templates/README.md` for the market-data `quant-validation` example). Until f9kku ships, the §3.14/§3.15 entries are *canon-documented but not yet pourable*; the dispatcher cannot pour them via `bd mol pour` until the formula files exist.
 The catalog is **evidence-backed** — every template name maps to a recurring chain shape observed in real session reports. New templates are added through the evolution protocol (§6), not on speculation.
 > **What the mermaid diagrams show.** The diagrams below show the **resolved canonical chain** for each template at its default scrutiny floor — i.e. *what runs when you pour this template at default severity*. Severity-conditional steps (e.g. `security-auditor` at `high+` for sensitive scope) are marked. The full step list per template comes from §2.1 (the canonical pipeline) modulated by §2.2 (severity tiers); the templates differ primarily in: the writer-role choice, the advisor steps prepended, and whether the chain includes a production diff at all.
+
+> **Incident policy by template (added 2026-06-13, substrate §4.3 role 5).** Each template's `coordinator_model` decides judgment on `chain.incident.opened` events from the reducer. The table below summarises bounds; per-section `**Incident policy.**` lines override these.
+>
+> | Template | `coordinator_model` | `failure_budget` overrides | Incident decision floor |
+> |---|---|---|---|
+> | `code-quick` | `null` (deterministic) | `child_semantic_failures_per_chain: 1`, `consecutive_no_progress_steps: 1` | First incident → escalate (no LLM judgment; cheap chain shouldn't bleed budget on triage) |
+> | `code-standard` | mid-tier LLM | default | First incident → retry_with_modifier; second → escalate |
+> | `code-with-advisors` | top-tier LLM | `coordinator_respawns_per_chain: 4` | Incidents are expected (broad scope); coordinator may restitch_from_evidence freely |
+> | `debug` | mid-tier LLM | `consecutive_no_progress_steps: 3` | Incidents during repro reproduction may signal root cause; coordinator may convert incident to discovered-from bug bead |
+> | `security-deep` | top-tier LLM | `child_semantic_failures_per_chain: 3`, `coordinator_respawns_per_chain: 4` | Incident triage is expected work; verify-don't-rush |
+> | `release-prep`, `doc-sync`, `memory-hygiene` | `null` | default | First incident → escalate (single-writer no-fix templates) |
+> | `triage`, `research-only`, `planning`, `premortem` | `null` | n/a (READ_ONLY chains; incidents are rare and operator-handled) | Escalate immediately |
+> | `restitch` | mid-tier LLM | `coordinator_respawns_per_chain: 5` | Restitch is recovery itself; coordinator has more headroom |
+> | `code-with-tests`, `test-only` | mid-tier LLM | default | Multi-writer lease passes (substrate §6.9.6); incidents attributed to current lease-holder |
+
 ### 3.1 `code-quick`
 ```mermaid
 flowchart LR

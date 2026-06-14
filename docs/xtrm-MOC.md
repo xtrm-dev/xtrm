@@ -34,7 +34,7 @@ CI/agenti/executor validano. **Decisione operatore:** lo spec substrate/channels
 | **Channels** | spostato in vault **`channels/`** (canonico). ⚠️ copie repo ancora presenti → vedi §7. |
 | **Chain-templates** | `substrate/chain_templates.md` (vault). ⚠️ duplicato col repo (citato canonico da `kj651`) + le `.formula.json` restano repo → vedi §7. |
 | **Devops** | NON 6° package. Sistema cross-cutting xt+sp+sb. canonico **`devops/`[[devops-system]]** (riconciliato, decisioni aperte §14). Fonti → `archive/`. |
-| **Telemetry forensic** | specialists-owned → repo `telemetry/forensic-event-contract.md` (DA CREARE, bead `60w93.1`, 4 fix annotati). Sezione substrate DOPO. |
+| **Telemetry forensic** | specialists-owned → SSOT `telemetry/forensic-event-contract.md` (**SHIPPED**). `xtrm.forensic.v1` attivo nel repo specialists (`src/specialist/forensic-events.ts`, `FORENSIC_SCHEMA_VERSION`, tabella `specialist_forensic_events`, CLI `sp forensic`). Sezione substrate §2.7/§2.8 marcata "owned by [[forensic-event-contract]]". |
 | **Chain identity** | in carico ad altro agente in `kj651`. Pensiero: [[chains]]. |
 | **Roadmap esecuzione** | `repo:specialists-roadmap.md` canonico per `kj651`. |
 
@@ -107,7 +107,7 @@ Vuoto — **a cosa serve?** (symlink ai repo?) → §7.
 | **substrate** | vault [[substrate_design_it]] | vault `research/` | `repo:specialists-roadmap.md` (`kj651`) |
 | **channels** | vault `channels/channels.md` | — | runtime channels package |
 | **devops** | vault [[devops-system]] | vault `research/` + `archive/` | beads `eoqxp`, `infra-bnh` |
-| **telemetry** | repo `telemetry/forensic-event-contract.md` (DA CREARE) + sezione substrate (dopo) | vault `research/*-telemetry-*` | bead `60w93.1` → forensic v0 |
+| **telemetry** | repo `telemetry/forensic-event-contract.md` (**SHIPPED**, SSOT) + sezione substrate §2.7/§2.8 owned-by-link | vault `research/*-telemetry-*` | `xtrm.forensic.v1` attivo nel repo specialists |
 | **chains (primitive)** | sezione in [[substrate_design_it]] | [[chains]] | `kj651` (altro agente) |
 
 ---
@@ -123,8 +123,8 @@ Vuoto — **a cosa serve?** (symlink ai repo?) → §7.
 - [x] Doc-map `kj651` corretto via **note di relocation** (substrate→vault, channels→vault; chain-templates invariato per ora — §7).
 - [x] `Senza nome.md` eliminato (resta da chiarire `_repos/`).
 - [ ] Verificare/archiviare `specialists.quant`, `specialists.scheme`, `darth-feedor-migration`, `html-design-example`, `dependencies-gate-use`.
-- [ ] Creare `telemetry/forensic-event-contract.md` (bead `60w93.1`).
-- [ ] Sezione Telemetry in [[substrate_design_it]] (DOPO il forensic contract).
+- [x] `telemetry/forensic-event-contract.md` SHIPPED come SSOT; `xtrm.forensic.v1` attivo nel repo specialists (`src/specialist/forensic-events.ts`, tabella `specialist_forensic_events`, CLI `sp forensic`).
+- [ ] Sezione Telemetry in [[substrate_design_it]] §2.7/§2.8 con esplicito "owned by [[forensic-event-contract]]" + riassunto di correlation/identity (NON duplicare la SSOT).
 - [ ] Commit/push delete+move nel repo specialists (operator gate).
 
 ---
