@@ -1,0 +1,324 @@
+<!doctype html>
+<html><head><meta charset=utf-8>
+<title>Premortem · substrate_design_it.md</title>
+<style>
+  :root { --fg:#1c1c1c; --muted:#666; --bg:#fafafa; --accent:#a23; --rule:#ddd; --code:#f0eee6; }
+  *{box-sizing:border-box}
+  body { font: 16px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; max-width:880px; margin:2em auto; padding:0 1.5em; color:var(--fg); background:var(--bg); }
+  h1 { font-size:2em; border-bottom:2px solid var(--accent); padding-bottom:.2em; }
+  h2 { font-size:1.4em; margin-top:2em; color:var(--accent); }
+  h3 { font-size:1.1em; color:#333; margin-top:1.4em; }
+  blockquote { border-left:4px solid var(--accent); padding:.5em 1em; margin:1em 0; background:#fff; color:var(--muted); font-style:italic; }
+  blockquote em { color:var(--fg); }
+  code { background:var(--code); padding:.1em .35em; border-radius:3px; font-size:.92em; }
+  pre { background:var(--code); padding:1em; border-radius:5px; overflow:auto; }
+  table { border-collapse:collapse; width:100%; margin:1em 0; }
+  th,td { border:1px solid var(--rule); padding:.5em .8em; text-align:left; vertical-align:top; }
+  th { background:#eee; }
+  td:first-child { width:3em; text-align:center; font-weight:bold; color:var(--accent); }
+  .meta { color:var(--muted); font-size:.9em; margin-top:.5em; }
+  .dive { margin-top:3em; padding-top:1em; border-top:1px solid var(--rule); }
+  .dive-title { color:#333; font-size:1.2em; }
+  hr { border:0; border-top:2px solid var(--accent); margin:3em 0; }
+  nav.toc { background:#fff; padding:1em 1.5em; border-radius:5px; border:1px solid var(--rule); }
+  nav.toc ol { margin:.3em 0; padding-left:1.5em; }
+  .header-meta { color:var(--muted); font-size:.95em; }
+</style>
+</head><body>
+
+<p class=header-meta>Premortem · run 2026-06-12 · 9 parallel <code>overthinker</code> deep-dives (<code>openai-codex/gpt-5.5</code>) · synthesis by main session</p>
+
+<h1>Premortem: substrate_design_it.md (Bozza rev. 12)</h1>
+<blockquote>Frame: it is <strong>December 2026</strong>. Substrate has failed. The 5-package monorepo</blockquote>
+<blockquote>(<code>core</code>/<code>substrate</code>/<code>channels</code>/<code>specialists</code>/<code>console</code>) exists. The daemon</blockquote>
+<blockquote>runs. Operators are still using <code>bd</code> + <code>sp</code> + GitHub for daily work.</blockquote>
+<blockquote>Why?</blockquote>
+<p>---</p>
+<h2>The single underlying assumption</h2>
+<blockquote>Architecture coherence in one designer's head will transfer to other operators</blockquote>
+<blockquote>through schemas, stage gates, and clean cutover — and that this will deliver</blockquote>
+<blockquote>operator relief faster than shipping targeted patches against the existing</blockquote>
+<blockquote><code>bd</code>+<code>sp</code> stack while substrate is being built in private.</blockquote>
+<p>Every one of the 9 failure stories below is a special case of this assumption.</p>
+<p>---</p>
+<h2>The 9 reasons it could fail</h2>
+<p>Each was deep-dived by an independent <code>overthinker</code> (gpt-5.5) run; raw outputs in<br><code>out-01.md</code> through <code>out-09.md</code>.</p>
+<h3>1. Stage 0 is not a stage — it's the hardest product in the system</h3>
+*(out-07)*
+<p>Stage 0 ships <strong>daemon + IPC protocol + SQLite migrations + identity/transactions<br>+ restart-stable session + cross-package schema registry + emitter idempotency</strong>.<br>That's not foundation — that's the kernel. Every later stage waits on it. There<br>is no kill switch, no degraded mode, no coexistence shim. Stage 0 either takes<br>8+ weeks or ships unsound and leaks races into every container.</p>
+<p>Either way, the calendar burns before stage 4 can show an operator anything.</p>
+<h3>2. Design drift outran implementation</h3>
+*(out-01)*
+<p>Rev 12 calls itself converged but the same pattern that produced rev 1→12 is<br>still wired in: implementation surprise → new doc section → new runtime concept<br>→ "convergence". There is no freeze rule. Each edge case becomes design input<br>instead of a merged PR. The doc has prestige; bugs become evidence the doc<br>needs one more section. Runtime never hardens.</p>
+<h3>3. The clean cutover never cuts</h3>
+*(out-08)*
+<p>Stage 13 is the only path to production truth (claims, deps, memories, close<br>semantics). There is <strong>no coexistence shim</strong> — operators must choose <code>bd</code> or<br>substrate. They will choose <code>bd</code> because work cannot pause. Substrate then<br>learns <code>bd</code>'s real behavior <strong>at the migration</strong> (<code>bd kv</code>, FTS5 quirks, dep-graph<br>edges, Stop-hook claim release, memory-ack batch closes) — exactly when there<br>is no rollback. Each gap blocks cutover instead of becoming one bridged edge.</p>
+<h3>4. Total rebuild instead of five targeted fixes</h3>
+*(out-09)*
+<p>The five real pains (claim weakness, chain implicitness, late collision discovery,<br>weak memory recall, unstructured <code>bd create</code>) get bundled behind daemon + store +<br>socket + packages + SDK + console. The first useful operator fix arrives at<br>stage 7 — <strong>after</strong> the existing pain has continued for six months. Five narrow<br>patches against <code>bd</code>+<code>sp</code> would have shipped relief inside stage 0's calendar<br>window without delaying a single line of substrate plumbing.</p>
+<h3>5. The node-coordinator is a load-bearing fiction</h3>
+*(out-02)*
+<p><code>participant_id</code>, <code>job_id</code>, <code>can_open_containers</code>, <code>autonomy_json</code>, pulse<br>emitter, capability model, SDK — all assume an autonomous reader. <strong>No stage in<br>the 13-stage plan gives the node-coordinator its own delivery gate.</strong> It is<br>"future semantic layer." Without one process that reads a pulse, evaluates<br><code>autonomy_json</code>, opens a child container, journals, survives restart, and<br>respects denial — the SDK is wrappers, the pulse emitter is logging, the<br>capability model is dead schema. Architecture sells autonomy and ships<br>bureaucracy.</p>
+<h3>6. The chain coordinator is over-specified</h3>
+*(out-05)*
+<p>One name hides three products: <strong>reducer, judge, supervisor</strong>. <code>coordinator_model:<br>null</code> is not a cost setting — it's a semantics change. The no-LLM reducer<br>passes clean chains and fails exactly where the coordinator was supposed to add<br>value (borderline evidence). LLM mode works but costs blow up at substrate's<br>chain volume. The runtime shape ends up as three modes:<br>cheap-no-judgment / expensive-with-judgment / off. By December most operators<br>have chosen off.</p>
+<h3>7. The two-tier story has no v0 for the top tier</h3>
+*(out-06)*
+<p>"No FK cross-domain, 1:1 row transfer, trivial projection." Trivial hides<br><strong>identity stability across machines, reader-side lineage reconstruction from<br>opaque IDs across the network, conflict handling on team-level writes, evidence<br>ref resolution when the referenced file lives on a different laptop, and<br>write-coalescing for high-volume <code>xtrm_forensic_events</code></strong>. None of these has a<br>v0. The bottom tier ships solo-user. The top tier never starts. The<br>team/company adoption story — which justified building five packages instead of<br>one — quietly dies.</p>
+<h3>8. Console deferred — substrate ships invisible</h3>
+*(out-03)*
+<p>§16 says runtime models the entities; dashboard reveals them. §14 defers the<br>dashboard, lineage drawer, and AWS-agentcore observability to downstream<br><code>gitboard</code> work. Stage 12 of the plan merges <code>sp feed -f</code> + <code>sb feed -f</code> — a<br>stream fusion, not an entity-aware dashboard. By December, chains exist in<br>SQLite with stable IDs, the collision matrix is populated, plan artifacts are<br>stored — and <strong>operators have no UI for any of it</strong>. They keep reading <code>sp<br>feed</code> and <code>bd show</code>. Substrate is backend truth nobody can see.</p>
+<h3>9. Author = implementer, no second eyes</h3>
+*(out-04)*
+<p>The doc carries absorbed operator-notes, closed round-3 audits triaged by the<br>author, and an unanswered "questions for next agent" §14.1. The dialogue<br>throughout reads as a single mind in conversation with itself. The vocabulary<br>(<code>seed</code>/<code>chain</code>/<code>wave</code>/<code>node</code>/<code>participant</code>/<code>job</code>/<code>tether</code>/<code>memory capability</code>)<br>fits the author's mental model perfectly — which is exactly why nobody else can<br>operate it on first contact. <strong>Clean cutover then removes the familiar escape<br>hatch (<code>bd</code>+<code>sp</code>+GitHub) before the new mental model has been transferred to<br>anyone outside the author's head.</strong></p>
+<p>---</p>
+<h2>Cross-cutting patterns (the synthesis)</h2>
+<p>Reading the 9 deep-dives side by side, four meta-pathologies emerge that no<br>single reason captures:</p>
+<h3>A. The "deferral compound"</h3>
+Every individual cure is deferred to "later": coexistence shim deferred, console
+deferred, top-tier deferred, node-coordinator demo deferred, external reviewers
+deferred. Each deferral is defensible alone. Stacked, they guarantee that
+<strong>no operator-perceptible value lands before stage 7 at the earliest</strong>, and the
+calendar runs out before that.
+<h3>B. Invisible + irreversible + unfamiliar</h3>
+Reason 8 (invisible), reason 3 (irreversible — no shim), and reason 9
+(unfamiliar — author-shaped vocabulary) <strong>multiply</strong>. An operator who can't
+see substrate, can't fall back to <code>bd</code>, and can't intuit the model has zero
+reasons to switch. Each pathology amplifies the others. Fixing one is not
+enough.
+<h3>C. Three abstractions are bundles, not entities</h3>
+Node-coordinator (#5), chain coordinator (#6), and two-tier projection (#7)
+share one shape: <strong>one name hides multiple products with different
+semantics, cost curves, and UX</strong>. The system cannot ship any one of them
+coherently because each needs different stage acceptance criteria than the
+plan provides.
+<h3>D. Stage acceptance ≠ operator adoption</h3>
+Even when each stage technically ships (chain container exists, validator
+passes, collisions recorded), no operator decision cites substrate output as
+authority. Runtime entities exist but are operationally dead. The 13-stage
+acceptance criteria measure plumbing, not adoption.
+<p>---</p>
+<h2>Plan revisions</h2>
+<p>These are the deltas that would change the December 2026 outcome. Ordered by<br>leverage (highest first).</p>
+<table><tr><th>#</th><th>Revision</th><th>Replaces</th></tr><tr><td>1</td><td><strong>Coexistence shim from day 1.</strong> Substrate reads <code>bd</code> state first; then shadows; then owns one narrow production loop; then expands. No stage 13 Big Bang.</td><td>Reason 3, partially 9</td></tr><tr><td>2</td><td><strong>Five narrow operator-facing patches inside stage 0.</strong> <code>sb chain ps</code>, claim-time validator hook, active-worktree collision watcher, embedding recall on <code>bd_memories</code>, <code>bd create</code> JSON schema. Each ships against the existing stack while plumbing is built.</td><td>Reason 4, partially 1</td></tr><tr><td>3</td><td><strong>Top-tier v0 is a stage 0 acceptance criterion.</strong> Two laptops, one shared project, one chain, one seed plan, one approval, one comment, one evidence ref, one collision event, Supabase reader reconstructs lineage. Not optional.</td><td>Reason 7</td></tr><tr><td>4</td><td><strong>No new stages until §14.1 is answered by a non-author.</strong> Force an external operator to classify 10 real issues to ≥80% agreement against author labels before stage 5 closes.</td><td>Reason 9, partially 2</td></tr><tr><td>5</td><td><strong>Stage-gate console against entities.</strong> No stage 7 collision matrix without <code>sb container ps</code>, <code>sb chain show</code>, and a lineage drawer that an operator uses for &gt;30% of status checks.</td><td>Reason 8</td></tr><tr><td>6</td><td><strong>Demote the chain coordinator</strong> to auditable reducer. LLM adjudication explicit, metered, opt-in per disputed transition. Never hide semantic change behind <code>coordinator_model: null</code>.</td><td>Reason 6</td></tr><tr><td>7</td><td><strong>One executable node-coordinator demo by stage 4.</strong> Long-running coordinator reads pulse → evaluates <code>autonomy_json</code> → opens child container → journals → survives restart → respects denial. If absent, freeze SDK/capability/identity surface.</td><td>Reason 5</td></tr><tr><td>8</td><td><strong>Hard freeze rule on the design doc.</strong> After rev 12: no new architecture absorbs without a merged-PR receipt for the prior section's runtime acceptance.</td><td>Reason 2</td></tr><tr><td>9</td><td><strong>Cut stage 0 scope</strong> to smallest append-only local event log + one write API + one read API + restart recovery + identity stability. Schema registry, multi-domain transaction semantics, pulse idempotency, migration locks → push past first chain-container demo.</td><td>Reason 1</td></tr></table>
+---
+<h2>Early warning signs (to watch in June–September 2026)</h2>
+<p>- Stage 0 consumes more than <strong>4 calendar weeks</strong> before first real chain<br>  container can be opened, advanced through lifecycle, killed, restarted, and<br>  recovered.<br>- <strong>Revision velocity &gt; shipped-runtime velocity:</strong> two or more new doc sections<br>  land while daemon + issue validator + chain container remain unused in<br>  daily work.<br>- More than <strong>30% of stage 1–4 implementation notes</strong> mention daemon workarounds<br>  ("retry", "restart required", "migration lock", "socket version", "orphan<br>  job", "race", "idempotency gap").<br>- No passing <strong>two-laptop Supabase demo</strong> by end of stage 0.<br>- No non-author dry-run achieves <strong>≥80% issue classification agreement</strong> with<br>  the author by stage 4.<br>- §14.1 "questions for next agent" still unanswered while new stages ship.<br>- <strong>&lt;30% of operator status checks</strong> use <code>sb container ps</code> / <code>sb container<br>  show</code> by end of stage 4; most still use <code>sp feed</code>, <code>bd show</code>, chat notes.<br>- Collision matrix has live rows for &gt;1 week but <strong>no daily operator decision<br>  cites collision output</strong> as reason for retargeting or splitting work.<br>- Any cutover checklist contains "pause xtrm work", "freeze <code>bd</code>", or more than<br>  one unsupported <code>bd</code> feature needed for daily close/claim.<br>- <code>coordinator_model: null</code> chains need <strong>&gt;10% manual override</strong> for <code>ready →<br>  closed</code> or disputed <code>coordinator.release</code>.<br>- Median coordinator tokens/wall-time per chain rising faster than specialist<br>  work time, especially on borderline-evidence chains.<br>- Stage 4 ships without one executable demo of node-coordinator reading a pulse<br>  and opening a child container.<br>- By end of June, no production command exists for <strong>at least one</strong> of the five<br>  narrow fixes (<code>sb chain ps</code>, claim validator hook, active-worktree collision<br>  watcher, embedding recall on memories, <code>bd create</code> JSON schema).<br></p>
+
+<hr>
+
+<h1>Appendix — Raw deep-dive transcripts</h1>
+<p class=meta>Each section below is the verbatim final output of one independent <code>overthinker</code> run scoped to a single failure reason. The model received only the shared premortem context plus its one assigned reason; the 9 ran in parallel with no awareness of each other.</p>
+
+<nav class=toc>
+<strong>Contents</strong>
+<ol>
+<li><a href='#dive-1'>R1 — Design drift outran implementation</a></li><li><a href='#dive-2'>R5 — Node-coordinator is load-bearing fiction</a></li><li><a href='#dive-3'>R8 — Console deferred / substrate invisible</a></li><li><a href='#dive-4'>R9 — Author = implementer, no second eyes</a></li><li><a href='#dive-5'>R6 — Chain coordinator over-specified</a></li><li><a href='#dive-6'>R7 — Two-tier story has no v0 for top tier</a></li><li><a href='#dive-7'>R2 — Stage 0 is the hardest product in the system</a></li><li><a href='#dive-8'>R3 — Clean cutover never cuts</a></li><li><a href='#dive-9'>R4 — Total rebuild instead of targeted fixes</a></li>
+</ol>
+</nav>
+
+
+<section class=dive id=dive-1>
+  <h2 class=dive-title>R1 — Design drift outran implementation</h2>
+  <h2>Phase 1 - Initial Analysis</h2>
+<p>Design drift failure starts from pattern: new concern enters doc, becomes new runtime concept, gets labeled convergence. Substrate scope already spans daemon, socket, SQLite authority, five packages, container lifecycle, validator, channels, tether, collision matrix, memory relevance, pulse layer, skill injection, participant SDK, console, migration. Serial sequencing makes drift lethal: stage 0 gates all later value.</p>
+<p>Main risk: implementation learning loop routes surprises into architecture revision, not shipping slice. Each edge case becomes design input. Runtime never hardens.</p>
+<h2>Phase 2 - Devil's Advocate</h2>
+<p>Counterpoint: absorbing concerns can prevent bad foundations. Chain coordinator, skill injection, issue relationships may be real missing primitives. Cutting scope too early could ship weak substrate requiring rewrite.</p>
+<p>But failure reason stays valid because plan has no freeze rule. No coexistence shim, no deferred console, no migration bridge, serial stages, same author/implementer. No external brake. Design has prestige; bugs become proof doc needs one more section.</p>
+<h2>Phase 3 - Synthesis</h2>
+<p>Root problem not ambition alone. Root problem: no boundary between architecture discovery and runtime delivery. Substrate treats implementation edge cases as requirements intake. That makes stage completion unstable. Stage 0–4 must become thin, frozen, ugly, measurable runtime before any new abstractions land.</p>
+<h2>Phase 4 - Final Refined Output</h2>
+<p>Recommendation: freeze substrate MVP around daemon, state.db, socket, issue validator, chain container only. New concerns become post-MVP beads unless blocking running chain container in production.</p>
+<h2>Final Answer</h2>
+<h3>The Failure Story</h3>
+<p>June 2026 started with <code>substrate_design_it.md</code> at Bozza revisione 12 and “converged.” Stage 0 began: daemon, <code>state.db</code>, Unix socket, five-package client boundary. First implementation week exposed protocol versioning, crash recovery, opaque-ID correlation, and SQLite migration questions. Instead of cutting scope, rev 13 added invariants and daemon lifecycle rules. Stage 0 took all June and most of July.</p>
+<p>July and August should have delivered stage 1 issue schema, stage 2 channels, stage 3 tether, and stage 4 chain container. Instead, stage 1 hit §6.7 issue-relationship ambiguity, stage 2 raised channel/domain-table ownership concerns, and stage 4 revived coordinator semantics: fresh-context spawning, kill+respawn, journal gap detection, <code>coordinator_model: null</code>. Each edge case became design work. Runtime PRs stalled behind “one more clarification.” Validator and chain lifecycle stayed demo-level; no operator used <code>sb container ps chain:X</code>.</p>
+<p>September through December collapsed into permanent draft mode. Collision matrix, plan artifacts, epic/wave kinds, advisor invites, small-model tether relevance, reconciler, console feed, and bd migration all depended on unfinished earlier stages. Since there was no coexistence shim, cutover risk rose every month. Operators kept using sp+bd+GitHub because it existed. Substrate became architecture vocabulary pasted onto tribal practice, not runtime substrate.</p>
+<h3>The Underlying Assumption</h3>
+<p>Designer assumed implementation discoveries could keep expanding architecture without consuming delivery runway or invalidating MVP freeze.</p>
+<h3>Early Warning Signs</h3>
+<p>- Revision velocity beats shipped runtime velocity: two or more new doc sections/operator-note absorptions land after stage 0 starts while daemon + issue validator + chain container remain unused in daily work.<br>- Implementation bugs get resolved as design revisions or new beads instead of merged code: “needs section,” “under-drilled,” or “post-revision clarification” appears more often than runtime PRs closing stage acceptance criteria.</p>
+</section>
+
+<section class=dive id=dive-2>
+  <h2 class=dive-title>R5 — Node-coordinator is load-bearing fiction</h2>
+  <h2>Phase 1 - Initial Analysis</h2>
+<p>Node-coordinator underwrites too much. Participant SDK, capability model, <code>autonomy_json</code>, pulse emitter, identity layers all assume autonomous reader exists.</p>
+<p>Sequencing hides risk. 13 stages never give node-coordinator own delivery gate. Chain-only runtime ships first; node remains future semantic layer.</p>
+<h2>Phase 2 - Devil's Advocate</h2>
+<p>Maybe node not needed for v1. Orchestrator can fake scheduling. Human can approve child containers. Daemon can own mechanical scheduling.</p>
+<p>Problem: then architecture sells autonomy but ships bureaucracy. Dead abstractions stay because future node “will need them.” Users pay complexity now for entity absent later.</p>
+<h2>Phase 3 - Synthesis</h2>
+<p>Failure mode: not technical impossibility alone. Governance failure. Design made node-coordinator load-bearing, then omitted near-term proof. Every abstraction got accepted as “for autonomy,” while autonomy never passed one end-to-end scenario.</p>
+<p>Real test: one long-running coordinator reads pulses, evaluates policy, opens child container, journals why, survives restart, respects denial. If absent by Stage 4, stop expanding SDK/capability/identity surface.</p>
+<h2>Final Answer</h2>
+<h3>The Failure Story</h3>
+<p>June–July went into Stage 0 and Stage 1: <code>xt daemon</code>, <code>state.db</code>, Unix socket, issue schema, validator. To avoid blocking, implementer kept node-coordinator out of scope and said chain containers would prove runtime shape first. By August, Stage 4 shipped chain lifecycle and fresh-context chain coordinator behavior, but only orchestrator read state. <code>participant_id</code>, <code>job_id</code>, <code>can_open_containers</code>, <code>autonomy_json</code>, and pulse idempotency landed as schema/API commitments without one process using them to autonomously open child containers.</p>
+<p>September–October exposed semantic scheduling as real product work, not plumbing. Every concrete node use case needed policy exceptions: when can coordinator open child wave, invite advisor, escalate issue, mutate plan artifact, or lease worktree? <code>autonomy_json</code> became permission DSL without owner, tests, or UX. Milestones kept moving node to “next quarter” while stages 7–12 added collision matrix, epic/wave containers, advisor rules, tether relevance, reconciler, and console feed. Each feature assumed future autonomous reader, but production still had orchestrator plus human convention.</p>
+<p>By December, Substrate had one source of truth and one real reader: orchestrator. Human used console as passive dashboard. Node-coordinator never existed as long-running actor. Participant SDK became wrappers for scripts and specialists. Pulse emitter became logging. Capability model became dead schema. Team learned new runtime vocabulary but still coordinated by tribal judgment, now with more tables and stricter gates.</p>
+<h3>The Underlying Assumption</h3>
+<p>Designer assumed autonomous semantic scheduling could be postponed because surrounding runtime contracts would make node-coordinator implementation straightforward later.</p>
+<h3>Early Warning Signs</h3>
+<p>- No executable demo by Stage 4 where node process reads pulse, evaluates <code>autonomy_json</code>, opens child container, records journal entry, survives restart, and denies forbidden action.<br>- PRs keep adding <code>participant_id</code>, <code>job_id</code>, <code>can_open_containers</code>, emitter/pulse, or SDK surfaces while every production caller remains orchestrator-owned.</p>
+</section>
+
+<section class=dive id=dive-3>
+  <h2 class=dive-title>R8 — Console deferred / substrate invisible</h2>
+  <h2>Phase 1 - Initial Analysis</h2>
+<p>Substrate fails because visibility arrives last, not first. Runtime entities become real in SQLite, but operators still consume <code>sp feed</code>, <code>bd show</code>, logs, prose notes. New architecture adds IDs, lifecycles, collisions, plans, lineage, but no entity-aware surface.</p>
+<p>Core mismatch: §16 says dashboard reveals runtime. §14 defers dashboard. Stage 12 gives merged feed, not dashboard. Adoption depends on seeing containers as objects, not believing daemon stores them.</p>
+<h2>Phase 2 - Devil's Advocate</h2>
+<p>CLI feed could be enough if operators prefer terminal. But failure reason says value claim is visual first-class entities: chains, collisions, plans, lineage. Stream fusion cannot show topology, causality, or collision heat.</p>
+<p>Backend-first could work if APIs stabilize before UI. But no coexistence shim plus clean cutover forces operators onto invisible substrate before trust forms. That turns validation into production pain.</p>
+<h2>Phase 3 - Synthesis</h2>
+<p>Real failure is sequencing, not console polish. Console is treated as downstream renderer, but for Substrate it is adoption-critical infrastructure. Without UI, runtime state has no operator affordance, so old tribal tools remain default.</p>
+<p>Fix would be stage-gating: no Stage 7 collision matrix, Stage 8 epic/wave, or Stage 13 migration without minimum entity-aware console slices.</p>
+<h2>Final Answer</h2>
+<h3>The Failure Story</h3>
+<p>June became daemon month. Stage 0 took three weeks longer than planned because Unix socket auth, SQLite locking, and feed durability consumed attention. By mid-July, Stage 1 validator and Stage 4 chain containers existed, but only as <code>sb</code> rows and JSON feed events. Operators could create <code>container_id</code>s, lifecycle moved <code>open → working</code>, and nobody looked at them except through logs.</p>
+<p>August and September made invisibility worse. Channels v0, tether v0, seed channel, plan artifacts, and approval landed as backend tables. Stage 7 collision matrix started recording file-level conflicts across worktrees, but no lineage drawer, no collision board, no container map existed. Operators still asked “which chain owns this file?” in chat, then checked <code>bd show</code>, <code>sp feed</code>, and git status. Collision data was correct but buried.</p>
+<p>October through December shipped more runtime without more sight. Epic/wave kinds, advisor invite rules, small-model tether relevance, and reconciler specialist added more entities and state transitions. Stage 12 only merged <code>sp feed -f</code> with <code>sb feed -f</code>, so console stayed stream-shaped, not entity-shaped. Clean cutover to substrate migration then felt like cost without payoff: more commands, more IDs, more schemas, same mental model. Substrate became backend truth nobody trusted because nobody could see chains, plans, collisions, or lineage as first-class runtime objects.</p>
+<h3>The Underlying Assumption</h3>
+<p>Designer assumed runtime entities become operationally real when modeled in database, not when operators can inspect, compare, and navigate them during work.</p>
+<h3>Early Warning Signs</h3>
+<p>- By end of Stage 4, fewer than 30% of active operator status checks use <code>sb container ps</code>, <code>sb container show</code>, or equivalent substrate-native views; most still use <code>sp feed</code>, <code>bd show</code>, chat notes, or git status.<br>- Collision matrix has live rows for more than one week, but no daily operator decision cites collision output as reason for retargeting, pausing, or splitting work.</p>
+</section>
+
+<section class=dive id=dive-4>
+  <h2 class=dive-title>R9 — Author = implementer, no second eyes</h2>
+  <h2>Phase 1 - Initial Analysis</h2>
+<p>Failure driver: single-mind architecture. Same author designs, audits, triages, implements, and validates substrate. No external user forced to understand model before implementation.</p>
+<p>Core risk: runtime names become private language. <code>seed</code>, <code>chain</code>, <code>wave</code>, <code>node</code>, <code>participant</code>, <code>job</code>, <code>tether</code>, <code>memory capability</code> all fit author workflow, not shared workflow.</p>
+<p>Likely collapse point: adoption, not daemon. SQLite, socket, lifecycle, validator can ship. Users still reject model because abstractions need author brain as decoder.</p>
+<h2>Phase 2 - Devil's Advocate</h2>
+<p>Counterpoint: solo authors can ship coherent systems faster. Second eyes can slow design, dilute vision, bikeshed names.</p>
+<p>But substrate is coordination architecture. Success requires multiple agents/operators understanding same runtime state. If only author can operate it, substrate fails stated purpose: replacing tribal practice.</p>
+<p>Worst sign: doc already contains self-dialogue artifacts: absorbed notes, closed audits, unused “questions for next agent.” Process simulated review without real reviewer.</p>
+<h2>Phase 3 - Synthesis</h2>
+<p>Technical implementation can succeed while product architecture fails. Substrate may reach stage 4 or 7, but runtime entities stay author-shaped. Clean cutover from <code>bd</code>/GitHub worsens failure because users lose familiar escape hatch before mental model proves transferable.</p>
+<p>Fix direction: force non-author comprehension before more stages. External operator must run dry workflow from issue intake → chain → plan artifact → collision response without author explaining terms.</p>
+<h2>Final Answer</h2>
+<h3>The Failure Story</h3>
+<p>June–July 2026, author finishes stage 0 daemon/state.db/socket and pushes stage 1 validator. Because same person wrote <code>substrate_design_it.md</code>, issue classifiers feel obvious: class/type/role maps cleanly to author habits. First real validation failures expose problem: future-self after <code>/compact</code> cannot tell whether work is <code>chain</code>, <code>wave</code>, or <code>node</code>, so issues get massaged until validator passes instead of becoming clearer.</p>
+<p>August–September, chain container and seed planning land. CLI works for author: <code>sb container ps chain:X</code>, plan artifacts, lifecycle transitions, worktree leases. Second operator tries one task and stalls at vocabulary boundary. Seed sounds like planning, chain sounds like execution, wave sounds like batch, node sounds like autonomous agent, but boundaries overlap in actual monorepo work. Participant SDK requires implicit knowledge: when to spawn specialist vs script vs coordinator, what <code>participant_id</code> means, when <code>job_id</code> changes, what tether should carry.</p>
+<p>October–December, clean cutover from <code>bd</code>/GitHub materializer removes old path before shared model exists. Collision matrix and channels produce more tables than confidence. Console is thin renderer, so it shows author-shaped state without teaching it. Runtime entities technically exist, but production use routes around them: operators write prose notes, ping author, or avoid substrate commands. Architecture replaces tribal practice with author tribe of one.</p>
+<h3>The Underlying Assumption</h3>
+<p>Designer assumed internal coherence in author’s head would transfer to other operators through names, schemas, and docs without real second-seat use.</p>
+<h3>Early Warning Signs</h3>
+<p>- Non-author dry-run cannot classify 10 real issues into container kind + class/type/role with ≥80% agreement against author labels.<br>- §14.1 “questions for next agent” remains unanswered by actual independent agent while stages continue shipping.</p>
+</section>
+
+<section class=dive id=dive-5>
+  <h2 class=dive-title>R6 — Chain coordinator over-specified</h2>
+  <h2>Phase 1 — Initial Analysis</h2>
+<p>Chain coordinator failed because one name hid multiple products: reducer, judge, supervisor. <code>coordinator_model: null</code> changed semantics, not cost setting. Borderline evidence needed judgment, so no-LLM mode failed where value mattered. LLM mode worked better, cost exploded. Off mode became default.</p>
+<h2>Phase 2 — Devil's Advocate</h2>
+<p>Maybe coordinator could survive if scoped to high-risk chains only. Maybe deterministic reducer handles normal chains, LLM handles exceptions. But design promised one always-on entity across many chains per day. That promise forced cost path into hot path, then operators rejected whole abstraction.</p>
+<h2>Phase 3 — Synthesis</h2>
+<p>Core flaw: capability bundle too dense. Fresh-context spawning, kill+respawn, journal gap detection, release atomicity, pulse hygiene, memory distillation, and judgment should not ship as one runtime shape. Split abstraction: deterministic chain monitor first; optional adjudicator later; memory closeout separate.</p>
+<h2>Phase 4 — Final Refined Output</h2>
+<p>Recommendation: demote chain coordinator from container judge to auditable reducer. Make LLM adjudication explicit, metered, opt-in per disputed transition. Never hide semantic change behind <code>coordinator_model: null</code>.</p>
+<h2>Final Answer</h2>
+<h3>The Failure Story</h3>
+<p>June–July went into stage 0 and stage 4 plumbing: daemon, socket, chain container lifecycle, journal events, <code>coordinator.release</code>, respawn hooks. §4.3 kept changing because every bug looked like missing coordinator behavior: fresh-context spawn for drift, gap detection for crashes, pulse hygiene for cross-chain leaks, memory distillation at close. By August, chain coordinator existed, but only as two half-working paths: <code>coordinator_model: null</code> reducer that could replay events, and LLM judge that could interpret messy evidence.</p>
+<p>September dogfood exposed break point. No-LLM reducer passed clean chains but failed borderline cases: partial test logs, ambiguous collision warnings, missing release evidence, specialists claiming “done” with dirty worktrees. Those were exact moments coordinator was supposed to decide. Operators stopped trusting ready/closed transitions unless LLM mode reviewed them. Cost jumped from near-zero to per-chain spend across many chains per day, plus latency from fresh-context spawning and two-compaction context rebuilds.</p>
+<p>October–November produced third runtime shape: coordinator off. Teams first disabled LLM mode for low-value chains, then disabled coordinator entirely after respawn bugs and false release blocks made it slower than tribal review. By December, “chain coordinator” meant cheap-no-judgment, expensive-with-judgment, or off, depending on operator mood. Console state became less trustworthy because lifecycle transitions no longer meant same thing across chains. Runtime entity never became production truth.</p>
+<h3>The Underlying Assumption</h3>
+<p>Designer assumed one coordinator abstraction could switch between deterministic reduction and semantic judgment without changing product semantics.</p>
+<h3>Early Warning Signs</h3>
+<p>- Dogfood metric: percentage of <code>coordinator_model: null</code> chains needing manual override for <code>ready → closed</code> or disputed <code>coordinator.release</code>; anything above 10% means reducer is not coordinator.<br>- Cost/latency metric: median coordinator tokens and wall time per chain rising faster than specialist work time, especially on borderline evidence chains.</p>
+</section>
+
+<section class=dive id=dive-6>
+  <h2 class=dive-title>R7 — Two-tier story has no v0 for top tier</h2>
+  <h2>Phase 1 - Initial Analysis</h2>
+<p>Failure center: top tier called “optional,” but adoption story depends on it. Local SQLite daemon can ship. Team/company substrate cannot.</p>
+<p>Cost mismatch: five packages, participant SDK, opaque IDs, channels, event layer, console feed all shaped for multi-actor runtime. No v0 validates projection, identity, lineage, comments, approvals, evidence refs, event volume.</p>
+<h2>Phase 2 - Devil's Advocate</h2>
+<p>Maybe solo-user v0 still valuable. But plan sells replacement for tribal team orchestration. Solo-only runtime becomes heavier bd/sp replacement.</p>
+<p>“No FK cross-domain” helps row copy. It does not solve meaning copy. Reader must rebuild lineage from opaque IDs across machines. Evidence refs break when source file lives elsewhere. Team writes create conflicts despite “read-mostly.”</p>
+<h2>Phase 3 - Synthesis</h2>
+<p>Root failure: top tier treated as deployment detail, not product slice. Projection must be tested as early architecture path, not post-stage-13 add-on.</p>
+<p>Fix path: define top-tier v0 before stage 1–4 harden schemas. Minimal slice: two laptops, one shared project, one chain, one seed plan, one approval, one comment, one evidence ref, one collision event, Supabase reader reconstructs lineage correctly.</p>
+<h2>Final Answer</h2>
+<h3>The Failure Story</h3>
+<p>June–August 2026: stage 0 consumed 10 weeks instead of 3. <code>xt daemon</code>, <code>state.db</code>, Unix socket clients, idempotency keys, and package boundaries got stable enough for solo use, but every decision assumed “top tier later.” No Supabase schema existed beyond “1:1 row transfer.” <code>participant_id</code> stayed locally derived, evidence refs pointed at local paths, and <code>xtrm_forensic_events</code> volume was never projected across machines.</p>
+<p>September–October: stages 1–4 shipped issue schema, validators, channels v0, tether v0, and chain containers. Solo demos looked real. First team trial failed fast: two laptops opened same project and produced different participant identities, approvals could not round-trip cleanly, lineage drawer had no network-resolvable graph, and comments/optimization decisions had no conflict model. “No FK cross-domain” made inserts easy but made reader-side reconstruction brittle; opaque IDs crossed network without enough resolver context.</p>
+<p>November–December: stages 5–7 tried to add seed plans and file-level collision matrix, but team projection blocked everything. Evidence refs pointed to files on somebody else’s worktree. High-volume forensic events overloaded naive row sync. Top-tier work became new architecture project, not v0 feature. Bottom tier shipped as solo-user runtime. Team/company adoption died quietly, leaving five-package complexity built for audience never reached.</p>
+<h3>The Underlying Assumption</h3>
+<p>Designer assumed local-first entities would become team/company entities by projection, without treating projection semantics as core runtime design.</p>
+<h3>Early Warning Signs</h3>
+<p>- No passing two-laptop Supabase demo by end of stage 0: same project, stable <code>participant_id</code>, one approval/comment, one evidence ref, lineage reconstructed from top tier.<br>- Top-tier notes still use words like “trivial,” “later,” or “1:1 row transfer” without schemas for conflict writes, evidence resolution, event coalescing, and identity derivation.</p>
+</section>
+
+<section class=dive id=dive-7>
+  <h2 class=dive-title>R2 — Stage 0 is the hardest product in the system</h2>
+  <h2>Phase 1 - Initial Analysis</h2>
+<p>Stage 0 carries hidden product: daemon, IPC protocol, migration system, locking, identity, transactions, versioning, restart behavior. Not foundation. Whole runtime kernel.</p>
+<p>Serial dependency makes delay fatal. Stages 1–13 wait. If Stage 0 slips, validators, chain containers, lifecycle, channels, tether, collision matrix all compress or build on unstable base.</p>
+<p>Core risk: Substrate tries replacing tribal practices with runtime entities, but first ships invisible plumbing. Operators see no value until Stage 4 minimum. Calendar burns before feedback.</p>
+<h2>Phase 2 - Devil's Advocate</h2>
+<p>Maybe robust daemon worth cost. Shared SQLite over socket prevents five packages corrupting state. Early shortcut could poison whole architecture.</p>
+<p>Counterpoint: six-month window cannot absorb custom IPC plus schema governance plus multi-client semantics. Existing bd→Dolt lesson warns against networked-store complexity, but plan repeats pattern locally. Unix socket smaller than network, not simple.</p>
+<p>Bigger critique: Stage 0 has no kill switch. No coexistence shim. No degraded mode. If daemon unstable, everything waits or patches around it.</p>
+<h2>Phase 3 - Synthesis</h2>
+<p>Failure reason strong. Stage 0 not one stage; it is database server, migration coordinator, process supervisor, domain boundary contract, event deduper. Each concern crosses packages. Each needs tests before runtime entities can be trusted.</p>
+<p>Most likely failure shape: either perfectionism delays visible substrate, or premature “good enough” leaks races into containers. Both end same: runtime entities never feel real. Operators keep using tribal sp+bd+GitHub flow because Substrate remains infrastructure project, not work system.</p>
+<p>Recommendation: cut Stage 0 scope to smallest append-only local event log plus one write API, then ship Stage 1–4 behind it. Push schema registry, pulse idempotency, multi-domain transaction semantics, and restart-stable identity hardening until chain container proves daily value.</p>
+<h2>Final Answer</h2>
+<h3>The Failure Story</h3>
+<p>June 2026 went into Stage 0 design closure: daemon lifecycle, file-lock launch, Unix socket framing, project registration, state.db ownership, schema registry. No operator-facing runtime entity shipped. By late July, schema migrations across core/substrate/channels/specialists/console became main blocker: each package wanted tables, but no FK cross-domain meant opaque IDs needed extra reconciliation rules. First “working” daemon could start and answer requests, but restart behavior orphaned active jobs and broke participant/job identity assumptions.</p>
+<p>August became transaction month. Container open, emitter/pulse dedup, and channel writes all needed serialized writes with idempotency keys. Race tests found duplicate chain containers when two clients opened same worktree lease. Fixes pushed socket protocol versioning and migration locks into Stage 0. September forced bad choice: harden daemon through October, or declare it good enough. Team chose “good enough” to unblock stages 1–4.</p>
+<p>October and November were patch months. Stage-1 validator stored issues, but daemon restarts required migration freezes. Chain container lifecycle existed, but <code>open → working</code> sometimes lost journal gaps after coordinator kill+respawn. Channels v0 wrote around transaction limitations with package-local retries. Tether v0 treated daemon state as eventually correct, so console showed stale jobs. By December, Substrate had infrastructure, not runtime trust. Operators stayed with sp+bd+GitHub because broken runtime entities cost more coordination than tribal practice.</p>
+<h3>The Underlying Assumption</h3>
+<p>Designer assumed Stage 0 was neutral plumbing that could be built once, quickly, before real product feedback, instead of being hardest runtime product in system.</p>
+<h3>Early Warning Signs</h3>
+<p>- Stage 0 consumes more than 4 calendar weeks before first real chain container can be opened, listed, advanced through lifecycle, killed, restarted, and recovered from daemon restart.<br>- More than 30% of Stage 1–4 implementation notes mention daemon workaround terms: “retry,” “restart required,” “migration lock,” “socket version,” “orphan job,” “race,” “idempotency gap.”</p>
+</section>
+
+<section class=dive id=dive-8>
+  <h2 class=dive-title>R3 — Clean cutover never cuts</h2>
+  <h2>Phase 1 - Initial Analysis</h2>
+<p>Substrate fails because adoption depends on one late Big Bang migration. Stage 13 carries production truth: active issues, claims, memories, deps, worktrees, close semantics. Earlier stages produce architecture, not workflow replacement.</p>
+<p>Core trap: no coexistence shim. Operators must choose bd or substrate. They choose bd because xtrm cannot pause.</p>
+<h2>Phase 2 - Devil's Advocate</h2>
+<p>Maybe clean cutover preserves simplicity. Shim can become permanent, duplicative, buggy. True.</p>
+<p>But migration at stage 13 means substrate learns bd reality last. Missing behaviors surface after months sunk. Clean cutover removes rollback path and user feedback loop.</p>
+<h2>Phase 3 - Synthesis</h2>
+<p>Failure not caused by SQLite, containers, or daemon. Failure caused by sequencing adoption after infrastructure. Runtime entities stay unreal because no live workflow depends on them before cutover.</p>
+<p>Better path would make substrate shadow bd first, then own one narrow production loop, then expand. No shim means no gradual truth transfer.</p>
+<h2>Final Answer</h2>
+<h3>The Failure Story</h3>
+<p>June went into stage 0: <code>xt daemon</code>, <code>state.db</code>, Unix socket, package boundaries. By July, stage 1 and stage 2 existed on paper and in tests: issue classifiers, Stage-1 validation, channels v0. But every real xtrm issue still lived in bd because claims, dependencies, memories, and close flow already worked there. Operators opened work in bd, then sometimes mirrored demos into substrate.</p>
+<p>August shipped chain-only containers and lifecycle states. <code>sb container ps chain:X</code> finally showed something, but it did not control real work because bd-managed worktrees and Stop-hook claim machinery still decided who owned tasks. September added seed plans and file collision matrix, but collisions were still resolved in daily bd/GitHub practice because substrate did not know enough about bd dependency edges or active leases to be authoritative.</p>
+<p>October and November exposed real cost. Console rendered substrate state, not production truth. Stage 13 migration drills failed one bd feature at time: <code>bd kv</code>, FTS5 memories, dependency graph quirks, batched closes with memory-ack, worktree ownership, claim release on Stop hooks. Because design rejected coexistence shim, each gap blocked cutover instead of becoming one bridged edge. By December, substrate was live only as parallel demo. Daily workflow stayed in bd. Runtime entities never became real because nobody could risk making them source of truth.</p>
+<h3>The Underlying Assumption</h3>
+<p>Designer assumed bd was data to migrate, not production behavior to preserve while substrate earned authority.</p>
+<h3>Early Warning Signs</h3>
+<p>- Stage 4 or later demos require manual copying from bd into substrate for claims, dependencies, worktrees, or memories.<br>- Any cutover checklist contains “pause xtrm work,” “freeze bd,” or more than one unsupported bd feature needed for daily close/claim flow.</p>
+</section>
+
+<section class=dive id=dive-9>
+  <h2 class=dive-title>R4 — Total rebuild instead of targeted fixes</h2>
+  <h2>Phase 1 - Initial Analysis</h2>
+<p>Substrate failure mode: architectural coherence beats operator relief. Five real pains get bundled behind daemon, store, socket, packages, identity, SDK, console. Small fixes lose priority because “throwaway” bd+sp stack marked dead.</p>
+<p>Main risk: stage-gated sequence makes first useful operator fix arrive late. Stage 7 collision matrix depends on stages 0–6. Existing pain continues during build.</p>
+<h2>Phase 2 - Devil's Advocate</h2>
+<p>Rebuild could be justified if isolated fixes create worse fragmentation. Thin wrappers might deepen tribal stack and make later migration harder.</p>
+<p>But plan rejects coexistence shim. That removes adoption bridge. Also author = implementer means design taste can outrun feedback from production use.</p>
+<h2>Phase 3 - Synthesis</h2>
+<p>Root failure: substrate optimizes for final-state purity, not time-to-relief. Existing stack already routes work. Fixes can attach there. Runtime platform should emerge after pressure-tested primitives, not before them.</p>
+<p>Best mitigation: ship five narrow patches now, then let substrate absorb proven behavior later.</p>
+<h2>Final Answer</h2>
+<h3>The Failure Story</h3>
+<p>June 2026 started with rev 12 “ready enough”, but implementation went straight into stage 0: daemon, <code>state.db</code>, Unix socket, package boundaries, migration shape. That work consumed June and July because every later stage needed stable connection semantics, schema ownership, crash behavior, and client API rules. Meanwhile existing bd+sp chains stayed implicit, claims stayed weak, collisions still appeared at integration, and memory recall still used FTS5.</p>
+<p>August delivered stage 1 and stage 2 in demo form: issue classifiers, Stage-1 validator, channels v0. But none sat in operator path because clean cutover was deferred until stage 13 and no coexistence shim existed. September added tether v0 and chain container lifecycle, but <code>sb container ps chain:X</code> still described substrate-only containers, not real sp dispatches. Operators kept using old commands, then manually mirrored outcomes into substrate test state when demos needed screenshots.</p>
+<p>By November, stage 7 collision matrix worked only for substrate-managed worktrees. Real work still started through bd+sp, so file locks missed most active branches. December postmortem showed substrate had five packages, identity tables, emitter dedup, plan artifacts, and promising console feeds, but original pain was unchanged in production. Five problems that needed five small patches had waited behind runtime replacement.</p>
+<h3>The Underlying Assumption</h3>
+<p>Designer assumed coherent runtime rebuild would deliver operator relief faster than shipping targeted fixes on existing bd+sp infrastructure.</p>
+<h3>Early Warning Signs</h3>
+<p>- By end of June, no production command exists for at least one narrow fix: <code>sb chain ps</code>, claim-time validator hook, active-worktree collision watcher, embedding recall on <code>bd_memories</code>, or <code>bd create</code> JSON schema.<br>- More commits land in daemon/package/identity/socket scaffolding than in operator-facing bd+sp hooks, while daily work still depends on manual chain naming, manual preflight, and late collision discovery.</p>
+</section>
+
+</body></html>

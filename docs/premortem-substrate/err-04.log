@@ -1,0 +1,10 @@
+
+[1mRunning [36moverthinker[0m[0m
+
+[2m[job started: 560dd4]
+[0m
+[32m✓[0m job 560dd4  0.0s
+
+[2mStatus: specialists ps 560dd4 --json[0m
+[2mEvents: specialists feed 560dd4[0m
+
