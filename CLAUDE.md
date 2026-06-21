@@ -50,10 +50,12 @@ Obsidian vault (design docs, research, roadmap). Mid-migration from upstream rep
 | ordine | The decision log |
 
 ## Active work (agent work → beads; human work → Jira. see memory/projects/xtrm.md)
-- **`xtrm-h9hqg`** — P0, IN_PROGRESS: bd auto-stage config flip + pre-commit shim (B-A1/A2/A3)
-- **`kj651`** — specialists-runtime cleanup + substrate alignment (canonical: `repo:specialists-roadmap.md`)
-- **`60w93.1`** — create forensic event contract → forensic v0
-- **`eoqxp` / `infra-bnh`** — devops beads (later)
+> Snapshot 2026-06-21 — see `docs/_meta/2026-06-21-design-reconciliation.md` for full picture.
+- **`unitAI-zadhq`** (specialists) — **P0 BLOCKER**: xtrm monorepo architecture decisions (daemon ownership, state tiers). Gates everything downstream.
+- **`unitAI-kj651`** (specialists) — HEAD epic: specialists-runtime cleanup + substrate alignment, 8 phases not yet started (canonical: `specialists/docs/design/roadmap/specialists-roadmap.md`)
+- **`60w93.1`** (xtrm) — forensic event contract (contract SHIPPED in specialists; bead tracks remaining nominal work)
+- **`eoqxp` / `infra-bnh`** (xtrm) — devops beads (later)
+- ~~`xtrm-h9hqg`~~ — closed 2026-05-27 per D25 (bd auto-stage shipped in `xt init`/`xt update`)
 
 ## Stack / conventions
 - Bun ≥ 1.0, pnpm workspaces, TypeScript. GitHub org **`xtrm-dev`** (teams: `core-team`, `console-team`,

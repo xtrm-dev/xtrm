@@ -8,7 +8,7 @@ updated: 2026-06-11T05:12
 # Channels: A Reusable Inter-Specialist Communication Layer
 
 > Status: Design draft (single delivery, two build phases 0.1 → 0.2)
-> Doc role: **canonical / normative spec.** Design rationale & decision-log: `channels-upgrade.md`. Original forensics/attention proposal (Q3–Q5, Q7 resolved; Q1, Q2, Q6 open): `channels-forensic-attention-proposal.md`.
+> Doc role: **canonical / normative spec.** Plain Italian reader guide: `channels_plain_it.md`. Design rationale & decision-log: `channels-upgrade.md`. Original forensics/attention proposal (Q3–Q5, Q7 resolved; Q1, Q2, Q6 open): `channels-forensic-attention-proposal.md`.
 > Scope: Add a reusable inter-specialist communication layer that powers pair-talk, lateral wakeups, human-in-the-loop steer, and (eventually) self-managed nodes.
 > Non-goal: Replace `specialist_results`, `node_memory`, or job lifecycle. This sits *between* them as connective tissue.
 > Sequencing note: One canonical contract, built and debugged as a single module. 0.1 brings up autonomous chains (full operational contract, chain path live); 0.2 activates freeform / self-managed nodes through seams 0.1 already built. These are an internal bring-up order, **not** separately-shipped gated versions. See §11 Sequenced Implementation. The critique that produced this design lives on bead `unitAI-jzhim`.
@@ -68,7 +68,8 @@ CREATE TABLE channels (
   status TEXT NOT NULL,              -- 'open' | 'draining' | 'closed' | 'aborted' (see §5.2)
   created_at_ms INTEGER NOT NULL,
   closed_at_ms INTEGER,
-  close_reason TEXT
+  close_reason TEXT,
+  next_seq INTEGER NOT NULL DEFAULT 1  -- display ordinal allocator; not a delivery cursor
 );
 CREATE TABLE channel_messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,7 +100,7 @@ CREATE TABLE channel_subscriptions (
 CREATE INDEX channel_messages_channel_id ON channel_messages(channel_id, id);
 ```
 
-**Cursor model (canonical).** The one delivery cursor is the table-wide autoincrement `channel_messages.id` — monotonic, allocated by SQLite (no `MAX(seq)+1`, no multi-writer race). `seq` is a per-channel **display ordinal only** (for `sp tail` readability), assigned best-effort in the insert transaction; correctness never depends on it and within-channel order is authoritatively `ORDER BY id`. `channel_subscriptions.last_seen_id` holds the highest `id` *successfully processed* (cursor-through-N, §5.5). All `readSince` / `markSeen` operate on `id`; a `seq` collision is cosmetic, never a delivery fault.
+**Cursor model (canonical).** The one delivery cursor is the table-wide autoincrement `channel_messages.id` — monotonic, allocated by SQLite (no `MAX(seq)+1` cursor, no multi-writer race). `seq` is a per-channel **display ordinal only** (for `sp tail` readability), allocated by incrementing `channels.next_seq` in the same single-daemon insert transaction. Correctness never depends on `seq` and within-channel order is authoritatively `ORDER BY id`. `channel_subscriptions.last_seen_id` holds the highest `id` *successfully processed* (cursor-through-N, §5.5). All `readSince` / `markSeen` operate on `id`; a `seq` collision is cosmetic, never a delivery fault.
 
 #### Identity compatibility with substrate §2.7
 
@@ -138,7 +139,7 @@ The canonical namespace is **families**: `work.*`, `control.*`, `system.*`, `run
 | work | `work.finding` (`finding`) | specialist, judge | `{severity, file?, line?, rule?, summary, refs}` | subscribers matching `wakes_on` / `scope-overlap` |
 | work | `work.verdict` (`verdict`) | reviewer, judge | `{verdict: PASS\|PARTIAL\|FAIL, summary, findings[]}` | `audience.action_targets` if subscribed |
 | work | `work.proposal` (`proposal`) | specialist | `{proposal_class, summary, …}` — see below | judge / coordinator |
-| work | `work.ack` (`ack`) | specialist | `{refs: [seq…], decision}` | proposal author (for quorum) |
+| work | `work.ack` (`ack`) | specialist | `{refs: [message_id…], display_refs?: [seq…], decision}` | proposal author (for quorum) |
 | control | `control.steer` (`steer`) | user, judge, peer | `{instruction}` | `audience.action_targets` |
 | control | `control.attention_requested` | specialist | `{reason, scope_refs, refs}` | coordinator |
 | control | `control.escalation` (`escalation`) | any | `{reason, refs}` | judge |
@@ -196,6 +197,15 @@ public_audit                                             -> redacted facts only
 **Inclusion rule.** Participant P may know a message iff P ∈ resolve(`visibility`): `private`→{author, action_targets, coordinator}; `targets`→{action_targets, coordinator}; `chain`/`node`→all authorized participants of that container; `operator`→{operator, coordinator}. `suggested_watchers` widen *awareness* (card/pointer) only — never `action_targets`. **Interaction with `chain.progress` (§5.9):** the ambient card handed to P on wake is the projection filtered to entries whose `visibility` resolves to include P. Visibility governs awareness/card filtering only; dereferencing full evidence still requires §10.3 policy, and authority is never derived from visibility.
 
 Each participant declares a subscription expression. Defaults are conservative (addressed messages + verdicts + system). Addressing resolves against `audience`: `:me` matches when `audience.action_targets` contains my `participant_id`; `:scope-overlap` matches when `audience.scope_refs` intersect my declared scope.
+
+**`scope_refs` grammar (canonical).** `scope_refs` are substrate scope hints, not a channel-private taxonomy. Storage uses a typed union; CLI/prose may accept `kind:ref` aliases, but writers normalize before insert:
+```json
+{ "kind": "file | package | contract | issue | symbol", "ref": "string", "repo": "optional", "qualifiers": {} }
+```
+0.1 accepts `file`, `package`, `contract`, and `issue`. `file` refs are normalized repo-relative paths; overlap is exact path or explicit directory-prefix (`src/foo/**`). `package`, `contract`, and `issue` overlap by exact id, with `package` prefix matching allowed only when the substrate package/workspace graph can prove the relationship. Unknown kinds are validation errors. Unresolved known refs may remain as pointer/card hints, but they do not grant evidence dereference.
+
+`symbol` is reserved for 0.2 because it requires GitNexus-backed graph semantics. 0.2 starts with exact fully-qualified-symbol match; graph adjacency (call/import/definition, capped depth) must be explicitly enabled by the substrate scope resolver. Channels only ask "do these normalized refs overlap?"; substrate owns normalization and ownership semantics.
+
 Format: `kind[:target_filter]`
 | Pattern | Meaning |
 | --- | --- |
@@ -416,12 +426,15 @@ contract-risk                       -> rung 1 or 2 by urgency
 max_attention_requests_per_epoch : 2   (cap rung 1)
 max_self_activations_per_epoch   : 1   (cap rung 2, tighter)
 cooldown                          : at most one attention / self-activation per K ticks
+                                    starting K = 2 event ticks / 1 participant turn
 dedup                             : repeated attention on the same scope_ref within an
                                     epoch collapses (do not re-flag the same thing)
 over-budget -> ChannelClient rejects with the §10.2 envelope
                error_code: attention_budget_exceeded, next_safe_action: backoff
                (recorded as runtime.message_rejected, never a silent drop)
 ```
+
+An **attention epoch** is the channel membership/capability epoch: it starts when the channel opens and resets only when the runtime writes `system.epoch_bump` (swap completion, capability revocation, or equivalent authority change). It is not a wall-clock cadence. An event tick means one reducer activation from `agent_end` / pulse / explicit command, aligned with substrate §3.1. Dedup keys are scoped by `(channel_id, participant_id, epoch, reason_class, scope_ref/evidence_ref)`. These are starting values in the §13 tuning style: runtime-tunable, not semantic truth. The bounds fields ship in 0.1; active noticing / self-activation loops stay dormant until 0.2.
 
 **Canonical `attention_policy`** (on the `.specialist.json` `channel` block):
 ```json
@@ -637,6 +650,32 @@ Default is pointer-first: participants receive pointers/cards for non-actionable
 ```
 Scope-overlap grants pointer/card visibility and the **right to request** — never automatic full evidence. Every request, grant, deny, and dereference emits a forensic audit fact. Denial returns the §10.2 envelope with `evidence_forbidden` (`next_safe_action: request_grant`) or `attention_budget_exceeded` (`backoff`). Authority is never derived from body text or from visibility.
 
+The durable grant record is substrate-owned DB state, not channel-local state and not a forensic-derived view. Channels call the substrate evidence validator at dereference time. Canonical row shape:
+```text
+evidence_access_grants(
+  grant_id,
+  container_id,
+  channel_id,
+  evidence_ref | evidence_scope_refs_json,
+  subject_participant_id,
+  subject_job_id_at_grant,
+  grantor_participant_id,
+  grantor_job_id,
+  grantor_kind,
+  scope_refs_json,
+  reason,
+  allowed_actions,
+  expires_at_ms,
+  revoked_at_ms,
+  revoked_by,
+  revocation_reason,
+  operator_override,
+  created_at_ms,
+  status
+)
+```
+`subject_participant_id` (L3) is the durable subject; `subject_job_id_at_grant` (L4) is audit/context and the validator still checks the current activation. Grants must have an expiry; the default policy is the shorter of channel close and the grantor's configured TTL. Revocation sets `revoked_at_ms` and moves `status` to `revoked`; expiry may be materialized eagerly or checked lazily. `operator_override` is an explicit DB flag on this row, never an assertion in `body_json`. Forensics record request/grant/deny/dereference/revoke/expire, but forensics are audit facts only.
+
 ### 10.4 `system.swap` state machine (0.2; receiver epoch handling built in 0.1)
 `system.swap` **unsubscribes and replaces** the outgoing participant — it does **not** kill the job. Hard kill stays the explicit operator path (`sp stop`). The active judge *requests* the swap; the scheduler *performs* it, in order:
 ```text
@@ -650,6 +689,23 @@ Scope-overlap grants pointer/card visibility and the **right to request** — ne
    next mutation (seam 5; receiver side already built in 0.1)
 ```
 **Producer ordering (pins seam 5):** steps 1–5 complete *before* the `system.epoch_bump` is written, so no receiver ever acts on stale roles.
+
+**Dirty worktree lease path.** The worktree lease is substrate state; channels only carry the swap request and epoch signal. If the outgoing participant does not hold the writer lease, the scheduler may replace it immediately. If it holds the lease, the scheduler waits for the job-level quiescence barrier (`waiting` / `done`) and checks the worktree:
+
+```text
+active -> swap_requested -> outgoing_paused
+
+no writer lease:
+  replaced -> incoming_registered -> system.epoch_bump
+
+writer lease, clean at yield:
+  lease_released -> replaced -> incoming_registered -> system.epoch_bump
+
+writer lease, dirty:
+  swap_blocked_dirty  (lease remains held by outgoing participant/job)
+```
+
+Dirty edits are never discarded and the scheduler never force-kills. While `swap_blocked_dirty`, the incoming participant is not granted that worktree. If the outgoing job will not yield, the only kill path is explicit operator `sp stop`; after stop, the dirty worktree remains preserved and the lease transfers only through an explicit operator action (`checkpoint`, `commit`, `stash`, or `takeover-dirty`, each audited). `system.epoch_bump` is written only after the final lease/participant mutation is committed and the incoming participant is registered.
 
 ### 10.5 Forensic families (channel mechanics)
 Channel **delivery mechanics** emit a dedicated `channel.*` forensic family (audit facts, not domain meaning); semantic messages additionally emit their domain event (e.g. `review.verdict.*`). Mechanical family (live from 0.1):
@@ -674,7 +730,7 @@ The cut runs along the chain/node boundary, because that is where the engineerin
 
 ### Design invariants across both phases
 These hold from 0.1 forward and constrain 0.2:
-- **Storage model:** `id INTEGER PRIMARY KEY AUTOINCREMENT` is the cursor. No `MAX(seq)+1` allocation; no multi-writer race. SQLite gives us monotonic ids for free.
+- **Storage model:** `id INTEGER PRIMARY KEY AUTOINCREMENT` is the cursor. `seq` is allocated from `channels.next_seq` for display only; no read/ack/replay path depends on it. SQLite gives us monotonic ids for free.
 - **Delivery semantics:** at-least-once. Cursor advances *after* the resume payload is enqueued on the receiver. Receivers dedupe by `(channel_id, msg_id)` in their job-local state.
 - **Crash recovery:** a receiver that crashes mid-resume re-reads from `last_seen_id` on restart. Duplicates are the receiver's problem, not the substrate's.
 - **DB churn safety:** channel messages are *not* prune candidates while their channel is open. Pruning rules in `observability-sqlite.ts` must exclude `channel_messages` whose `channel_id` is in `open` status.
@@ -682,7 +738,7 @@ These hold from 0.1 forward and constrain 0.2:
 - **Message body cap:** 8 KB. Larger payloads must use the capture pattern (see §10). The error code `message_too_large` is returned with `next_safe_action: "use_capture"`.
 - **Spec is forward-compatible:** the `channel` block on a `.specialist.json` is the same shape across 0.1 and 0.2. Fields are added, never renamed or repurposed.
 - **Single scheduler per channel kind.** Every channel read emits a resume *intent* to a scheduler — **never** a direct resume. Pair/chain channels: the scheduler is a trivial 1:1 resume of the intent. Node channels: the runner's channel read enqueues *intent* into a supervisor inbox; `node-supervisor` is the sole scheduler that decides whether and when to actually resume a member. Members never wake from a channel bypass while inside a node. This invariant prevents the node split-brain risk identified on bead `unitAI-jzhim`. **0.1 builds this indirection even for chains** (where the scheduler is a trivial 1:1 resume), so that 0.2 nodes plug in `node-supervisor` as the scheduler without re-wiring the wake path — see §11 Seams, seam 2.
-- **Read/ack separation:** `readSince` is pure observation and never advances any cursor. `markSeen(processedSeq)` is the only call that advances the read-head, and it advances only to the highest *successfully processed* message (cursor-through-N). A message that fails to enqueue a resume does not advance the cursor.
+- **Read/ack separation:** `readSince` is pure observation and never advances any cursor. `markSeen(processedId)` is the only call that advances the read-head, and it advances only to the highest *successfully processed* message id (cursor-through-N). A message that fails to enqueue a resume does not advance the cursor.
 - **Authority lane per participant:** one `ChannelClient` authority lane per `participant_id`, bound at runtime to the current `job_id` activation. Clients are not shared across participants. This scopes identity, cursor state, and capability checks to the owning participant while still allowing a fresh activation after respawn.
 - **Reducer purity:** Channel state (turn order, stop-condition evaluation, participant role lookup) is derived by a pure reducer over the message log. Side effects (resume enqueue, `system.*` writes) live in the after-hook and gate on idempotency keys. Replay of the reducer must never trigger external calls or LLM requests. This is the event-sourcing crash-recovery guarantee: a job that restarts mid-resume re-reads from `last_seen_id`, rebuilds state, and re-enqueues only actions that were not yet committed.
 - **Body-text authority is always rejected:** a message whose `body_json` asserts a role or identity is downgraded to `kind=note` at write time and does not trigger wakeups. Authority is verified from DB state only (see §10.1).
@@ -758,13 +814,13 @@ The module is one delivery, but 0.2's swarm behavior is independently disableabl
 5. **User identity in messages** — single `user` key, or per-CLI-invocation? Single for now; revisit if multi-user becomes real.
 6. **Judge model — RESOLVED.** Contract boundary is `decision_schema`; default execution is a lightweight classifier, full specialist turn behind a flag / `auto` escalation. Fields `judge_mode` / `judge_execution` (§6–7).
 
-**Residual open questions (raised by the 2026-06-11 audit; not yet decided):**
+**Residual questions raised by the 2026-06-11 audit — RESOLVED:**
 
-7. **Evidence-grant record.** What durable ACL/grant table records evidence-request grants, denials, expiry, and operator overrides (§10.3)?
-8. **`scope_refs` grammar.** Exact matching semantics — file path, package, contract id, issue id, symbol — and how overlap is computed.
-9. **Epoch & cooldown defaults.** Default epoch boundaries and cooldown `K` for attention / self-activation (§5.10).
-10. **`seq` retention.** Keep `seq` purely for display ordering, or drop it now that `id` is the sole cursor (§5.1)?
-11. **Swap worktree-lease state machine.** Exact lease handling when the outgoing participant is running with dirty edits (§10.4 step 4).
+7. **Evidence-grant record — RESOLVED.** Durable grant authority lives in substrate-owned `evidence_access_grants` DB state; forensics audit requests/grants/denials/dereferences but never become authority (§10.3).
+8. **`scope_refs` grammar — RESOLVED.** Typed union owned by substrate scope semantics: 0.1 supports `file`, `package`, `contract`, `issue`; 0.2 reserves `symbol` for GitNexus-backed graph adjacency (§5.4).
+9. **Epoch & cooldown defaults — RESOLVED.** An epoch is the channel membership/capability epoch and resets on `system.epoch_bump`; starting bounds are 2 attention requests, 1 self-activation, cooldown K = 2 event ticks / 1 participant turn (§5.10).
+10. **`seq` retention — RESOLVED.** Keep `seq` as stable per-channel display ordinal for `sp tail`; `id` remains the sole delivery cursor and replay/ack authority (§5.1).
+11. **Swap worktree-lease state machine — RESOLVED.** Dirty writer leases block automatic swap completion; edits are preserved, operator stop/takeover is explicit, and `system.epoch_bump` follows lease resolution + incoming registration (§10.4).
 
 ## 13. Risks & Mitigations
 
