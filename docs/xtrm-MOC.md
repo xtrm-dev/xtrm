@@ -34,7 +34,7 @@ CI/agenti/executor validano. **Decisione operatore:** lo spec substrate/channels
 | **Channels** | spostato in vault **`channels/`** (canonico). ⚠️ copie repo ancora presenti → vedi §7. |
 | **Chain-templates** | `substrate/chain_templates.md` (vault). ⚠️ duplicato col repo (citato canonico da `kj651`) + le `.formula.json` restano repo → vedi §7. |
 | **Devops** | NON 6° package. Sistema cross-cutting xt+sp+sb. canonico **`devops/`[[devops-system]]** (riconciliato, decisioni aperte §14). Fonti → `archive/`. |
-| **Telemetry forensic** | specialists-owned → repo `telemetry/forensic-event-contract.md` (DA CREARE, bead `60w93.1`, 4 fix annotati). Sezione substrate DOPO. |
+| **Telemetry forensic** | specialists-owned → SSOT `telemetry/forensic-event-contract.md` (**SHIPPED**). `xtrm.forensic.v1` attivo nel repo specialists (`src/specialist/forensic-events.ts`, `FORENSIC_SCHEMA_VERSION`, tabella `specialist_forensic_events`, CLI `sp forensic`). Sezione substrate §2.7/§2.8 marcata "owned by [[forensic-event-contract]]". |
 | **Chain identity** | in carico ad altro agente in `kj651`. Pensiero: [[chains]]. |
 | **Roadmap esecuzione** | `repo:specialists-roadmap.md` canonico per `kj651`. |
 
@@ -107,7 +107,7 @@ Vuoto — **a cosa serve?** (symlink ai repo?) → §7.
 | **substrate** | vault [[substrate_design_it]] | vault `research/` | `repo:specialists-roadmap.md` (`kj651`) |
 | **channels** | vault `channels/channels.md` | — | runtime channels package |
 | **devops** | vault [[devops-system]] | vault `research/` + `archive/` | beads `eoqxp`, `infra-bnh` |
-| **telemetry** | repo `telemetry/forensic-event-contract.md` (DA CREARE) + sezione substrate (dopo) | vault `research/*-telemetry-*` | bead `60w93.1` → forensic v0 |
+| **telemetry** | repo `telemetry/forensic-event-contract.md` (**SHIPPED**, SSOT) + sezione substrate §2.7/§2.8 owned-by-link | vault `research/*-telemetry-*` | `xtrm.forensic.v1` attivo nel repo specialists |
 | **chains (primitive)** | sezione in [[substrate_design_it]] | [[chains]] | `kj651` (altro agente) |
 
 ---
@@ -119,12 +119,15 @@ Vuoto — **a cosa serve?** (symlink ai repo?) → §7.
 - [x] Repo design ripulito (gzrx, shepherd, issuetracking, service-eval, test-writer, post-aws-summit).
 - [x] 2 research devops rimessi in `research/` + wikilink in [[devops-system]] §15.
 - [x] Channels + chain_templates spostati in vault.
-- [ ] **Risolvere duplicati repo↔vault** (channels, chain-templates) — §7.
+- [ ] **Risolvere duplicati repo↔vault** (channels, chain-templates) — §7 #1 #2 (decisione operatore).
 - [x] Doc-map `kj651` corretto via **note di relocation** (substrate→vault, channels→vault; chain-templates invariato per ora — §7).
-- [x] `Senza nome.md` eliminato (resta da chiarire `_repos/`).
-- [ ] Verificare/archiviare `specialists.quant`, `specialists.scheme`, `darth-feedor-migration`, `html-design-example`, `dependencies-gate-use`.
-- [ ] Creare `telemetry/forensic-event-contract.md` (bead `60w93.1`).
-- [ ] Sezione Telemetry in [[substrate_design_it]] (DOPO il forensic contract).
+- [x] `Senza nome.md` eliminato.
+- [x] `_repos/` rimosso (era vuoto).
+- [x] candidate-archive `specialists.quant`/`specialists.scheme`/`darth-feedor-migration`/`html-design-example` rimossi (verificato 2026-06-21).
+- [ ] Verificare/archiviare `dependencies-gate-use` (research, scope?).
+- [x] `telemetry/forensic-event-contract.md` SHIPPED come SSOT; `xtrm.forensic.v1` attivo nel repo specialists (`src/specialist/forensic-events.ts`, tabella `specialist_forensic_events`, CLI `sp forensic`).
+- [ ] Sezione Telemetry in [[substrate_design_it]] §2.7/§2.8 con esplicito "owned by [[forensic-event-contract]]" + riassunto di correlation/identity (NON duplicare la SSOT).
+- [x] **Roadmap reconciliation 2026-06-21**: `xtrm/docs/temp_roadmap.md` rimosso (era specialists-roadmap + ~885 righe garbage paste + §A premortem); §A.1–§A.5 portate in `specialists/docs/design/roadmap/specialists-roadmap.md`; `unitAI-sc03v` CLOSED. Vedi `_meta/2026-06-21-design-reconciliation.md`.
 - [ ] Commit/push delete+move nel repo specialists (operator gate).
 
 ---
@@ -137,14 +140,15 @@ Vuoto — **a cosa serve?** (symlink ai repo?) → §7.
 
 ---
 
-## 7. Drift & buchi da chiudere (verifica 2026-06-01)
+## 7. Drift & buchi da chiudere (verifica 2026-06-21)
 
-1. **channels duplicato** — vault `channels/` (canonico) vs `repo:docs/design/substrate/{channels.md,channels.html}`. Consigliato: eliminare/archiviare le copie repo (coerente con substrate). *Non tocco senza tuo via.*
-2. **chain-templates duplicato + canonico conteso** — vault `substrate/chain_templates.md` vs `repo:chain-templates.md` (+`.html`). Il repo è citato **CANONICO dal doc-map di `kj651`**; le `.formula.json` (codice) restano repo. Decidere: vault canonico (design) + repo mantiene formula.json + aggiornare doc-map `kj651`; oppure repo resta canonico e il vault è copia.
+1. **channels duplicato** — ✓ RISOLTO 2026-06-21: vault `channels/channels.md` (864 l, oggi) era >40% più grande della copia repo (617 l, 2026-05-26 stale). Copia repo sostituita con breadcrumb stub che punta al vault; `channels.html` rimosso.
+2. **chain-templates** — ✓ NON ERA UN DUPLICATO (verifica 2026-06-21): vault `substrate/chain_templates.md` = design doc; repo `roadmap/chain-templates/` = directory con 15 `.formula.json` + README (codice). Sono complementari, non duplicati. Resta solo divergenza cosmetica di naming (`_` vs `-`), deferred. Il MOC dichiarava un `repo:chain-templates.md` che non esiste.
 3. **`kj651` doc-map** — ✓ corretto via **note di relocation** (2026-06-01): substrate→vault canonico, channels→vault, chain-templates INVARIATO per ora (split irrisolto, vedi #2). La description resta com'è; la note prevale.
-4. **`_repos/` vuoto** — scopo? (symlink ai repo per navigazione Obsidian?).
+4. **`_repos/` vuoto** — ✓ RIMOSSO (verifica 2026-06-21).
 5. **`Senza nome.md`** — ✓ ELIMINATO.
-6. **`channels.html.md`** — doppia estensione (cosmetico).
-7. **candidate-archive ancora sparsi** — `specialists.quant`/`specialists.scheme` (vault root), `darth-feedor-migration`/`html-design-example` (repo), `dependencies-gate-use` (research, scope?).
+6. **`channels.html.md`** — ✓ NON ESISTE (verifica 2026-06-21: la cartella ha `channels.html` semplice — falso allarme MOC).
+7. **candidate-archive** — ✓ RISOLTO 2026-06-21: `specialists.quant`/`specialists.scheme`/`darth-feedor-migration`/`html-design-example` tutti rimossi. `dependencies-gate-use` (`research/`, 2026-05-31) **verificato come research valido attivo** — propone una rule/skill/enforcement per costringere agent a fare dependency-discovery prima di scrivere implementazioni custom in domini standardizzati (calendars, datetime, auth, retry, parsing, ecc.); resta in `research/`.
 8. **Bead-path** — le mandatory-reading di `eoqxp`/`60w93` ora risolvono (research ripristinato). ✓
 9. **Commit/push** repo specialists non fatto (tutto recuperabile da git fino ad allora).
+10. **Roadmap reconciliation (2026-06-21)** — ✓ `xtrm/docs/temp_roadmap.md` rimosso, §A portata in canonical specialists, `unitAI-sc03v` CLOSED. Vedi `_meta/2026-06-21-design-reconciliation.md`.

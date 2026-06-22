@@ -1,0 +1,10 @@
+
+[1mRunning [36moverthinker[0m[0m
+
+[2m[job started: f1251e]
+[0m
+[32m✓[0m job f1251e  0.0s
+
+[2mStatus: specialists ps f1251e --json[0m
+[2mEvents: specialists feed f1251e[0m
+

@@ -211,3 +211,75 @@ the path for team/company, accessed via projection upward.
 Paths 2 (Supabase locally everywhere) and 4 (Supabase managed everywhere) are not on the
 revisit list — their rejections are structural (resource overhead, offline-loss), not
 maturity-bound.
+
+---
+
+## 10. Inbound references and Stage 0 rollback (added 2026-06-13)
+
+This document is named as **owner-of** the kernel decisions by several other canonical docs.
+The list below makes the inbound surface explicit so future edits here know which sibling
+docs need a paired update.
+
+### 10.1 Who points at this doc as owner
+
+| Pointing doc | What it points at | What this doc owes them |
+|---|---|---|
+| [[substrate_design_it]] §13 (Modello dati / storage) | "Decisioni kernel: single-daemon/single-socket/single-db, WAL mode, lessons-learned dai per-progetto Dolt server di bd, locking model" | §0–§2 + §6 here cover all of these; ensure those sections stay authoritative if WAL/locking/file-layout changes |
+| [[substrate_design_it]] §15 Stage 0 row | "Stage 0 = substrate store + shared daemon + Unix socket protocol + project registration + file-lock launch — owned by [[state-store-options]] + [[monorepo-migration]]" | §10.2 below specifies the Stage 0 rollback predicate substrate §13.8 cites |
+| [[substrate_design_it]] §13.8 migration-gates Stage 0 row | "Stage 0 rollback = restart daemon from WAL backup. Trigger: corruption detection via integrity check fallita." | §10.2 below specifies *how* WAL backup + integrity check work in the kernel |
+| [[monorepo-migration]] §5.1 Stage 0 rollback row | Identical to substrate §13.8 (mirror) | Same — §10.2 is the kernel-side authoritative version |
+| [[monorepo-migration]] §3.0 + [[forensic-event-contract]] §4 | Both reference `packages/core/` as owner of the daemon binary, state engine, socket protocol | The bottom-tier ownership note in §1 covers this; if package ownership shifts, update both targets |
+| [[temp_roadmap]] §A.2 (bridge cost framework) "keeper" class | bd-layer patches retire at substrate Stage 13 (bd→substrate data migration), not at substrate landing | §7 (Migration / compatibility) here is the kernel-side framing of that lifecycle — keep it aligned with temp_roadmap's runway math |
+
+### 10.2 Stage 0 rollback — the kernel predicate
+
+Substrate §13.8 names the Stage 0 rollback trigger as "corruption detection via integrity
+check fallita" and the rollback mechanism as "restart daemon from WAL backup snapshot taken
+pre-Stage." This section specifies what those mean operationally so the rollback gate is
+testable, not aspirational.
+
+**Pre-Stage backup obligation.** Before any Stage 0 schema migration runs, the daemon takes
+a WAL checkpoint (`PRAGMA wal_checkpoint(TRUNCATE)`), then a hot-copy of `state.db` to
+`~/.xtrm/state.db.backup.pre-stage-<stage-id>-<utc-iso>`. The backup is taken under the
+daemon's exclusive lock — concurrent writers are blocked for the duration. The backup file
+is never modified after creation; its existence is the rollback target.
+
+**Integrity check predicate.** Post-migration, the daemon runs `PRAGMA integrity_check` and
+`PRAGMA foreign_key_check`. Both must return clean. Any error or warning row triggers the
+rollback path. The check is non-optional and runs synchronously before the daemon accepts
+new socket connections — a failed check means the daemon refuses to start, the operator
+sees the failure immediately, and the rollback gate engages.
+
+**Rollback mechanism.** Daemon stops, the live `state.db` (and its `-wal` / `-shm`
+siblings) are renamed to `state.db.failed.<utc-iso>` (preserved for forensic analysis, not
+deleted), the pre-Stage backup is renamed into place, and the daemon restarts. The
+operator approval required by substrate §13.8 ("every rollback requires explicit operator
+approval") is collected interactively at the daemon's startup banner — the daemon will not
+auto-restore from backup without a fresh operator confirmation. Forensic event
+`migration.rollback.triggered{stage:"0", trigger_condition:"integrity_check_failed",
+evidence_refs:[failed_db_path, backup_path], operator_approval_id}` is written to the
+restored state — this is the lineage record substrate §13.8 references.
+
+**WAL safety.** SQLite WAL is durable across crashes but not across file corruption — if
+the WAL itself is what failed integrity, the backup is the only recovery path. The
+backup-before-migration discipline above ensures this is always possible. The Stage 0
+runtime contract is: the kernel may lose at most one Stage's worth of state on rollback,
+never more.
+
+### 10.3 The "keeper" bridge class (cross-ref to temp_roadmap §A.2)
+
+The `bd` → substrate data migration is Stage 13 in substrate §15. Per [[temp_roadmap]]
+§A.2 "keeper" class, the `bd` read-only mirror in `state.db` is the unusual bridge that
+survives substrate's landing event — it retires only when Stage 13 lands successfully, not
+at Stage 0 / Stage 1. The kernel implications:
+
+- The `bd` mirror writes into substrate-domain tables (`bd_legacy_*` prefix) via the
+  daemon, but is **never** read by domain code at runtime — it is operator-facing only,
+  served through `bd compat` commands that route to the daemon's read-only API.
+- The mirror's retirement criterion (per [[monorepo-migration]] §5.1: "≥30 days from Stage
+  13 cutover AND <5 `bd` query forensic events/week observed in `state.db`") is evaluated
+  against forensic events the daemon writes when `bd compat` commands hit the mirror. This
+  is the data-driven predicate; nothing else.
+- When the mirror retires, the `bd_legacy_*` tables drop in a clean migration — the kernel
+  guarantee of "schema for inactive features costs zero" (§1) means nobody pays for the
+  empty tables in the meantime.
