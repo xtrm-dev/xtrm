@@ -21,6 +21,7 @@ Per-package changelogs:
 
 ### Added
 
+- **Dependency-bump policy decision package.** Adds `docs/devops/dependency-bump-policy.md`, locking the advisory-vs-blocking CI policy (OSV PR advisory with SECURITY_FORCED block, 7-day cooldown, push/schedule hard gates) and mapping the implementation board across xtrm-tools and specialists (`unitAI-3v5sn`).
 - **`packages/mcpq/` — new Python CLI** for querying Docker-network-only MCP
   servers from the host without paying the always-loaded `.mcp.json`
   tool-schema token tax. Live tool discovery, stdlib-only call path, two
