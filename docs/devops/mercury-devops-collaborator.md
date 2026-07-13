@@ -78,15 +78,15 @@ which live in a container.
 │  Operator's working clones at ~/projects/mercury/<repo>     │
 │  (untouched by the bot, never bind-mounted into container)  │
 │                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
+│  ┌─────────────────────────────────────────────────────┐    │
 │  │ mercury-devops container ("the collaborator")        │   │
-│  │                                                       │   │
+│  │                                                      │   │
 │  │  Toolchain (image-baked):                            │   │
 │  │   - sp + @jaggerxtrm/specialists (canonical)         │   │
 │  │   - bun, node, gh CLI                                │   │
 │  │   - claude-code CLI                                  │   │
 │  │   - serena, gitnexus binaries (pinned glibc-safe)    │   │
-│  │                                                       │   │
+│  │                                                      │   │
 │  │  State (named volumes, persistent across restarts):  │   │
 │  │   - /workspace/repos/<repo>      cloned forks        │   │
 │  │   - /workspace/beads             bot's own bd state  │   │

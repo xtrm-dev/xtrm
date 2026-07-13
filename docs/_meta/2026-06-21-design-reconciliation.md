@@ -9,13 +9,15 @@
 ## 0. TL;DR
 
 - **Channels (xtrm)** — design **LOCKED & AUDITED** (2026-06-11). Tutte le 11 open questions risolte. 2 modifiche uncommitted al working tree (`next_seq` + narrative cursor). Pronto per implementazione runtime appena substrate Stage 0 esiste.
-- **Substrate (xtrm)** — design **FROZEN** a livello architetturale (rev 10/12 post-premortem fold R2/R3/R5/R7/R9). 5 questioni minori deliberatamente deferrate. Stage 0 (daemon + state.db + socket) è il **gating critical path** di tutto il monorepo.
-- **Specialists roadmap** — `specialists-roadmap.md` è canonical (1145 linee, 2026-06-03). 8 fasi (P0–P7), **nessuna avviata**. È **lavoro di bridge** sul runtime corrente (no monorepo migration richiesta).
+- **Substrate (xtrm)** — design **FROZEN** a livello architetturale (rev 10/12 post-premortem fold R2/R3/R5/R7/R9). 5 questioni minori deliberatamente deferrate. Stage 0 (daemon + state.db + socket) è il **gating critical path** di tutto il monorepo.Manca totalmente la parte reale di runtime, linguaggio scelto, esplorazione a fondo di command surface e funzionalità reali.
+- **Specialists roadmap** — `specialists-roadmap.md` è canonical (1145 linee, 2026-06-03). 8 fasi (P0–P7), **nessuna avviata**. È **lavoro di bridge** sul runtime corrente (no monorepo migration richiesta). 
 - **Materializer / state.db** — design completo (collocazione: `packages/core/materializer/`, two-tier, three-face API). **Codice bloccato da Stage 0**. Realisticamente Stage 13.
-- **Console** — product contract LOCKED. `apps/console` **non ancora scaffolded**; preflight guidance pronta. Dipende da materializer.
+- **Console** — product contract LOCKED. `apps/console` **non ancora scaffolded**; preflight guidance pronta. Dipende da materializer. (esiste ~/dev/console v0 da migrare)
 - **Forensic v1** — contratto **SHIPPED** nel runtime specialists. Bead `60w93.1` (xtrm) ancora `IN_PROGRESS` per work nominale.
 - **Drift / stale**: `CLAUDE.md` cita `xtrm-h9hqg P0 IN_PROGRESS` ma il bead non esiste in beads (chiuso il 2026-05-27 per D25).
 - **Roadmap canonicità — RISOLTA per ispezione (vedi §2.1)**: i due file roadmap sono ~99% identici. `xtrm/docs/temp_roadmap.md` è `specialists-roadmap.md` + 885 righe di garbage paste (metriche Grafana duplicate ×2) + appendice premortem §A.1–§A.5 (44 righe utili). L'unica differenza reale di contenuto è Opp 18 che in xtrm/temp è **stale** ("to-do") mentre in specialists è "shipped". **Action**: portare §A in specialists-roadmap, cancellare il temp_roadmap, chiudere `unitAI-sc03v`.
+
+**ps: molto lavoro è stato fatto con xtmux, multiplexing, pertanto questo va integrato. Per esempio l'utilizzo dei channels tra sessioni orchestratore/subordinato. Fondamentalmente subordinato in multiplexing è praticamente un coordinator (chain, node). LEGGERE QUI IMPORTANTE E RIPRENDERE**
 
 ### Blocking decisions (le 3 vere)
 
