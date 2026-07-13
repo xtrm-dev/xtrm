@@ -12,10 +12,4 @@ related:
   - runbook-contract.md
 ---
 
-# Service Skills Expert — operational knowledge closed loop
-
-## 0. Decision
-
-Introduce `service-skills-expert` as the semantic owner of per-service operational knowledge.
-
-The role does not replace SRE triage, code review
+# Service
