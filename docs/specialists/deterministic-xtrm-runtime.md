@@ -1,4 +1,4 @@
-Original chat: https://chatgpt.com/share/6a62b189-a570-83eb-a7ec-52e2f5cb4390
+Original chat: https://chatgpt.com/share/6a62b189-a570-83eb-a7ec-52e2f5cb4390 - document: [[~/dev/xtrm/docs/specialists/specialists-execution-protocol.md]]
 - In the deterministic part where we check at the end if beads were updated, **Commit, result, beads - message-send** 
 	- Presence in beads etc should be runtime checked and marked OK/NOK, but shouldn't fail the job, they should escalate to the coordinator which could attempt a fix or this can be made programmatic.
 	- message-send feels like a bridge before channels land, need to see if that's the correct shape for it, maybe coordinator should receive message-send / get / obligation only if escalated, i'm not sure
