@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,14 +18,24 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).parent))
-from bootstrap import get_project_root, get_registry_path, load_registry, save_registry  # type: ignore[import-not-found]  # noqa: E402
+from bootstrap import get_project_root, load_registry, save_registry  # type: ignore[import-not-found]  # noqa: E402
 from drift_detector import scan_drift  # type: ignore[import-not-found]  # noqa: E402
+
+# PR1 verifier + PR2 gate lattice, imported in-process (no IPC / JSON round-trip). The
+# gate is the ONLY path to atomic_write: reconcile.py, the service-skills-sync specialist
+# and the auto-reconcile workflow all funnel through gated_write(), so the lattice cannot
+# be bypassed (research §2.7). REVISION 3: deterministic only — no residual LLM critic.
+from verifier import SourceCorpus, compute_gate, verify_candidate  # type: ignore[import-not-found]  # noqa: E402
+from verifier.gate import GateDecision, source_fingerprint  # type: ignore[import-not-found]  # noqa: E402
 
 DEFAULT_NANO_GPT_URL = "https://nano-gpt.com/api/v1/chat/completions"
 NANO_GPT_MODEL = os.environ.get("NANO_GPT_MODEL", "gpt-4o-mini")
 ALLOWED_NANO_GPT_HOSTS = {"nano-gpt.com"}
 SECRET_QUERY_PARAMS = {"api_key", "key", "token"}
 TOKEN_CHARS = 4
+
+GATE_COMPONENT = "reconcile-gate"
+GATE_EVENT = "gate_decision"
 
 
 @dataclass(frozen=True)
@@ -150,6 +161,145 @@ def atomic_write(path: Path, content: str) -> None:
     os.replace(temp_path, path)
 
 
+def gate_telemetry_path(state_root: Path) -> Path:
+    """Append-only gate-decision log: ``<root>/.xtrm/state/service-knowledge/events.jsonl``."""
+    return Path(state_root) / ".xtrm" / "state" / "service-knowledge" / "events.jsonl"
+
+
+def emit_gate_telemetry(
+    state_root: Path,
+    decision: GateDecision,
+    service_id: str,
+    duration_ms: float,
+    *,
+    critic_calls: int = 0,
+    critic_tokens: int = 0,
+    stream=None,
+) -> str:
+    """Emit one structured ``component=reconcile-gate`` line per gate decision.
+
+    REVISION 3 ships no residual LLM critic, so ``critic_calls`` / ``critic_tokens`` are
+    always 0 — the fields stay in the schema for forward compatibility. Best-effort: a
+    telemetry failure never breaks the reconcile.
+    """
+    record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "component": GATE_COMPONENT,
+        "event": GATE_EVENT,
+        "verdict": decision.verdict.value,
+        "service_id": service_id,
+        "invalid_count": decision.invalid_count,
+        "conflict_count": decision.conflict_count,
+        "unknown_count": decision.unknown_count,
+        "critic_calls": critic_calls,
+        "critic_tokens": critic_tokens,
+        "duration_ms": round(duration_ms, 3),
+    }
+    line = json.dumps(record, sort_keys=True)
+    try:
+        path = gate_telemetry_path(state_root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+    except OSError:
+        pass
+    if stream is not None:
+        print(line, file=stream)
+    return line
+
+
+def run_verifier(
+    candidate_path: Path,
+    current_path: Path,
+    territory: list[str],
+    refs: str,
+    *,
+    service_id: str,
+    source_root: Path,
+) -> tuple[Any, bool]:
+    """Run the PR1 verifier in-process with EVIDENCE_RACE detection.
+
+    The candidate is verified against the service territory's source of truth. Source SHAs
+    are fingerprinted at the start and end of the run; a mismatch means the source changed
+    mid-run and the verdicts are unreliable (``evidence_race=True`` -> invalidate + retry).
+    Returns ``(manifest, evidence_race)``.
+    """
+    candidate_text = Path(candidate_path).read_text(encoding="utf-8")
+    current_text = Path(current_path).read_text(encoding="utf-8") if Path(current_path).exists() else ""
+    globs = [g for g in (territory or []) if g]
+    source_root = Path(source_root)
+    fp_start = source_fingerprint(source_root, globs) if globs else ""
+    corpus = SourceCorpus.from_globs(source_root, globs) if globs else SourceCorpus(base_dir=source_root)
+    manifest = verify_candidate(
+        candidate_text,
+        current_text,
+        service_id=service_id,
+        corpus=corpus,
+        verified_at_ref=refs,
+        emit_telemetry=False,
+    )
+    fp_end = source_fingerprint(source_root, globs) if globs else ""
+    evidence_race = bool(globs) and fp_start != fp_end
+    return manifest, evidence_race
+
+
+def gated_write(
+    skill_path: Path,
+    candidate_text: str,
+    *,
+    service_id: str,
+    territory: list[str],
+    source_root: Path,
+    verified_at_ref: str = "",
+    dry_run: bool = False,
+    state_root: Path | None = None,
+    emit_telemetry: bool = True,
+) -> dict[str, Any]:
+    """Gate a candidate SKILL before any canonical write (research §2.7 lattice).
+
+    Writes the candidate to a temp path FIRST, runs the verifier, computes the gate, and
+    ONLY on PASS / PASS_WITH_ADVISORIES calls :func:`atomic_write`. EVIDENCE_RACE invalidates
+    + retries the whole verification once, then fails. Every decision emits one
+    ``component=reconcile-gate`` telemetry line. Returns a result dict carrying the verdict,
+    whether a write happened, the gate decision and the manifest.
+    """
+    started = time.perf_counter()
+    skill_path = Path(skill_path)
+    source_root = Path(source_root)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".candidate.md", delete=False) as handle:
+        handle.write(candidate_text)
+        candidate_path = Path(handle.name)
+    try:
+        manifest, evidence_race = run_verifier(
+            candidate_path, skill_path, territory, verified_at_ref, service_id=service_id, source_root=source_root
+        )
+        decision = compute_gate(manifest, evidence_race=evidence_race)
+        if decision.is_retryable:
+            # Source changed mid-run: invalidate + retry the whole verification once.
+            manifest, evidence_race = run_verifier(
+                candidate_path, skill_path, territory, verified_at_ref, service_id=service_id, source_root=source_root
+            )
+            decision = compute_gate(manifest, evidence_race=evidence_race)
+        duration_ms = (time.perf_counter() - started) * 1000.0
+        if emit_telemetry:
+            emit_gate_telemetry(state_root or source_root, decision, service_id, duration_ms)
+        written = False
+        if decision.is_writable and not dry_run:
+            atomic_write(skill_path, candidate_path.read_text(encoding="utf-8"))
+            written = True
+        return {
+            "verdict": decision.verdict.value,
+            "written": written,
+            "gate": decision.to_dict(),
+            "manifest": manifest.to_dict(),
+        }
+    finally:
+        try:
+            candidate_path.unlink()
+        except OSError:
+            pass
+
+
 def current_head(project_root: Path) -> str:
     result = subprocess.run(["git", "-C", str(project_root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
     return result.stdout.strip() if result.returncode == 0 else ""
@@ -235,7 +385,8 @@ def reconcile(options: ReconcileOptions) -> dict[str, Any]:
                 raise ValueError(f"missing skill_path for {drift.get('service_id', 'unknown')}")
             skill_path = project_root / skill_path_value
             source_path = project_root / str(drift["file_path"])
-            prompt = build_prompt(drift, skill_path.read_text(encoding="utf-8"), source_path.read_text(encoding="utf-8", errors="ignore"))
+            current_skill = skill_path.read_text(encoding="utf-8")
+            prompt = build_prompt(drift, current_skill, source_path.read_text(encoding="utf-8", errors="ignore"))
             projected_tokens = result["cost_tokens"] + estimate_tokens(prompt)
             if options.cost_limit_tokens is not None and projected_tokens > options.cost_limit_tokens:
                 result["status"] = "partial"
@@ -247,9 +398,40 @@ def reconcile(options: ReconcileOptions) -> dict[str, Any]:
                 result["status"] = "partial"
                 result["failed"].append({"file_path": drift.get("file_path"), "error": "cost limit exceeded after request"})
                 break
-            if not options.dry_run:
-                atomic_write(skill_path, llm_result.content)
-            result["reconciled_count"] += 1
+            # PR2 gate: the candidate is verified BEFORE any canonical write. Only
+            # PASS / PASS_WITH_ADVISORIES reach atomic_write; every other verdict is a
+            # no-write (research §2.7). The gate is unavoidable — this is the single write
+            # path shared by the specialist + the auto-reconcile workflow.
+            service = registry.get("services", {}).get(drift.get("service_id"))
+            territory = service.get("territory", []) if isinstance(service, dict) else []
+            gate_result = gated_write(
+                skill_path,
+                llm_result.content,
+                service_id=str(drift.get("service_id", "unknown")),
+                territory=territory,
+                source_root=project_root,
+                verified_at_ref=result.get("last_sync_ref_new") or "",
+                dry_run=options.dry_run,
+                state_root=project_root,
+            )
+            result.setdefault("gates", []).append({
+                "file_path": drift.get("file_path"),
+                "service_id": drift.get("service_id"),
+                "verdict": gate_result["verdict"],
+                "written": gate_result["written"],
+            })
+            if options.dry_run:
+                result["reconciled_count"] += 1
+                continue
+            if gate_result["written"]:
+                result["reconciled_count"] += 1
+            else:
+                result["status"] = "partial"
+                reasons = "; ".join(gate_result["gate"]["reasons"]) or "no reason recorded"
+                result["failed"].append({
+                    "file_path": drift.get("file_path"),
+                    "error": f"gate={gate_result['verdict']}: {reasons}",
+                })
         except Exception as exc:
             result["status"] = "partial"
             result["failed"].append({"file_path": drift.get("file_path"), "error": redact_exception(exc, options.api_key)})

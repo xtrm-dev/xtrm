@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""CLI entry point: ``python3 -m verifier ...`` (advisory mode — always exits 0).
+"""CLI entry point: ``python3 -m verifier ...``.
+
+Advisory mode (default) always exits 0 — the manifest carries the verdicts. With
+``--gate-mode`` the process computes the §2.7 gate lattice and exits non-zero on
+blocking verdicts (INVALID / CONFLICT / EVIDENCE_RACE) so CI can gate cleanly;
+INSUFFICIENT_EVIDENCE_HIGH_RISK exits 0 (the workflow opens a *draft* PR instead of
+failing the job).
 
 Invocation:
     python3 -m verifier --candidate <path> --current <path> \
@@ -15,6 +21,7 @@ always excluded from the source corpus so prose never verifies against itself.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -22,8 +29,9 @@ from pathlib import Path
 # from the sibling scripts/ dir (drift_detector.py path-resolution idiom).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from verifier import SourceCorpus, verify_candidate  # noqa: E402
+from verifier import SourceCorpus, compute_gate, verify_candidate  # noqa: E402
 from verifier.evidence_report import render_json, render_markdown  # noqa: E402
+from verifier.gate import GateDecision  # noqa: E402
 
 
 def _parse_refs(refs: str | None) -> str:
@@ -83,7 +91,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--service-id", default="", help="Service id (defaults to the candidate directory name)")
     parser.add_argument("--source-root", default="", help="Base dir for territory globs (defaults to candidate dir)")
     parser.add_argument("--no-telemetry", action="store_true", help="Suppress the stderr telemetry line")
+    parser.add_argument(
+        "--gate-mode",
+        action="store_true",
+        help="Emit the gate verdict and exit non-zero on blocking verdicts (INVALID/CONFLICT/EVIDENCE_RACE) for CI gating.",
+    )
     return parser
+
+
+def _render_gate_markdown(decision: GateDecision, manifest) -> str:
+    """Gate banner prepended to the human-readable report in --gate-mode."""
+    lines = [
+        f"# Gate Verdict — `{decision.verdict.value}`",
+        "",
+        f"- Writable: **{decision.is_writable}** (only PASS / PASS_WITH_ADVISORIES reach atomic_write)",
+        f"- Blocks PR: **{decision.blocks_pr}** · Draft PR: **{decision.is_draft_pr}** · Retryable: **{decision.is_retryable}**",
+        f"- Counts: invalid={decision.invalid_count} conflict={decision.conflict_count} "
+        f"unknown={decision.unknown_count} high_risk_unknown={decision.high_risk_unknown_count} advisories={decision.advisory_count}",
+        "- Reasons:",
+    ]
+    lines += [f"  - {reason}" for reason in decision.reasons]
+    lines += ["", "---", ""]
+    return "\n".join(lines) + render_markdown(manifest)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -108,6 +137,14 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     output = render_markdown(manifest) if args.output_format == "markdown" else render_json(manifest)
+    if args.gate_mode:
+        decision = compute_gate(manifest)
+        if args.output_format == "markdown":
+            output = _render_gate_markdown(decision, manifest)
+        else:
+            output = json.dumps({"gate": decision.to_dict(), "manifest": manifest.to_dict()}, indent=2)
+        print(output)
+        return decision.exit_code
     print(output)
     return 0  # advisory mode: verdict lives in the manifest, never in the exit code
 

@@ -2,6 +2,44 @@
 
 All notable changes to the `service-knowledge` package.
 
+## [0.4.0] - 2026-07-24
+
+### Added — PR2: deterministic verifier gate in reconcile.py + specialist parity
+- New `service_knowledge.scripts.verifier.gate` module: the §2.7 6-tier gate lattice
+  (`EVIDENCE_RACE` / `INVALID` / `CONFLICT` / `INSUFFICIENT_EVIDENCE_HIGH_RISK` /
+  `PASS_WITH_ADVISORIES` / `PASS`) with `compute_gate(manifest, evidence_race=...) ->
+  GateDecision`. Deterministic only — **no residual LLM critic** (REVISION 3; deferred to a
+  follow-up bead if measured verifier FN > 0.10). `critic_calls` / `critic_tokens` reserved in
+  the telemetry schema, pinned to 0.
+- `reconcile.py` now gates every SKILL write: the candidate is written to a temp path first,
+  the PR1 verifier runs in-process, the gate is computed, and **only `PASS` /
+  `PASS_WITH_ADVISORIES` reach `atomic_write`**. New helpers `run_verifier()` (with
+  EVIDENCE_RACE fingerprinting) and `gated_write()` (verify → gate → conditional write).
+- **Single write path / specialist parity:** `atomic_write` for SKILL content is reachable only
+  through `gated_write()`. The `service-skills-sync` specialist, the auto-reconcile workflow and
+  the manual CLI all funnel through `reconcile.py`, so a local run cannot bypass what CI
+  enforces. No override flag exists (guarded by `test_no_gate_bypass_flag_exists`).
+- **EVIDENCE_RACE:** source territory SHAs are fingerprinted at the start + end of each verifier
+  run; a mismatch invalidates + retries the whole run once, then fails.
+- Verifier CLI `--gate-mode`: emits the gate verdict (JSON `{gate, manifest}` or a Markdown
+  banner) and exits non-zero on blocking verdicts (`INVALID` / `CONFLICT` / `EVIDENCE_RACE`)
+  for clean CI gating; `INSUFFICIENT_EVIDENCE_HIGH_RISK` exits 0 (draft-PR path).
+- GHA workflow template `packages/service-knowledge/.github/workflows/service-skills-drift-sweep.yml`:
+  runs the gate **before** `peter-evans/create-pull-request`, publishes `manifest.json` +
+  `report.md` as the `service-skills-verify` artifact, adds a `service-skills-verify` status
+  check, fails on `INVALID`/`CONFLICT`/`EVIDENCE_RACE`, and opens a draft `do-not-merge` PR on
+  `INSUFFICIENT_EVIDENCE_HIGH_RISK`. `PASS` never auto-merges (canary policy is PR5b).
+- Gate telemetry: one `component=reconcile-gate` line per decision to
+  `.xtrm/state/service-knowledge/events.jsonl` (`event=gate_decision`, verdict + counts +
+  service_id + duration_ms; no claim text).
+- Docs: `docs/devops/service-knowledge-verifier-gate.md` (lattice + CI gate + override path).
+
+### Fixed
+- Package now ships `scripts/verifier/schema/*.json` (and the verifier subpackage explicitly) in
+  the wheel. Previously the manifest jsonschema was omitted from non-editable installs, which
+  would break `validate_manifest()` / the gate at runtime once `reconcile.py` imports the
+  verifier in-process.
+
 ## [0.3.0] - 2026-07-24
 
 ### Added — PR3: per-repo FTS5 evidence index + read-only MCP tools + cataloger reframe
