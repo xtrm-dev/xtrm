@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-xtrm-xtrm-dli-14",
+  "query_or_task": "security-auditor: re-audit PR3 path and webhook fixes",
+  "touched_paths": [
+    ".xtrm/skills/default/xtrm/"
+  ],
+  "expected_services": [
+    "xtrm"
+  ],
+  "required_evidence": [
+    ".xtrm/skills/default/xtrm/SKILL.md"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-dli.14@xtrm"
+  ]
+}

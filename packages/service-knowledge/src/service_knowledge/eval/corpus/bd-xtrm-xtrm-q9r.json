@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-xtrm-xtrm-q9r",
+  "query_or_task": "bootstrap.get_registry_path: probe <pack>/service-skills/service-registry.json (drift detector L0)",
+  "touched_paths": [
+    "packages/service-knowledge/src/service-knowledge.py"
+  ],
+  "expected_services": [
+    "service-knowledge"
+  ],
+  "required_evidence": [
+    "packages/service-knowledge/src/service-knowledge.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-q9r@xtrm"
+  ]
+}

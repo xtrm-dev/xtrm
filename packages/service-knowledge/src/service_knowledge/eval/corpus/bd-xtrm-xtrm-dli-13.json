@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-xtrm-xtrm-dli-13",
+  "query_or_task": "test-runner: verify PR3 after security fixes",
+  "touched_paths": [
+    "packages/runners/src/runners.py"
+  ],
+  "expected_services": [
+    "runners"
+  ],
+  "required_evidence": [
+    "packages/runners/src/runners.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-dli.13@xtrm"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-core-xtrm-a0bwi",
+  "query_or_task": "release: v0.10.5 \u2014 fail-open service-skills wrapper",
+  "touched_paths": [
+    "packages/service-knowledge/src/service-knowledge.py"
+  ],
+  "expected_services": [
+    "service-knowledge"
+  ],
+  "required_evidence": [
+    "packages/service-knowledge/src/service-knowledge.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-a0bwi@core"
+  ]
+}

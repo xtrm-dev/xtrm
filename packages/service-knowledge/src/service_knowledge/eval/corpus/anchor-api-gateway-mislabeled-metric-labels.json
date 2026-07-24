@@ -1,0 +1,20 @@
+{
+  "case_id": "api-gateway-mislabeled-metric-labels",
+  "query_or_task": "Enumerate api-gateway http_request_duration_seconds metric labels",
+  "touched_paths": ["services/api-gateway/metrics.py"],
+  "expected_services": ["api-gateway"],
+  "required_evidence": [
+    "services/api-gateway/metrics.py",
+    "services/api-gateway/SKILL.md"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [
+    "grep -n 'Histogram\\|Counter\\|Gauge' services/api-gateway/metrics.py"
+  ],
+  "cross_repo_required": false,
+  "outcome": "conflict_detected",
+  "expected_verifier": "CONFLICT",
+  "provenance": ["incident:2026-07-api-gateway-runbook-drift", "bead:xtrm-56flm"],
+  "regression_class": "wrong-label-set",
+  "notes": "Skill enumerated wrong Prometheus label set on http_request_duration_seconds histogram."
+}

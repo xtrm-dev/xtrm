@@ -1,0 +1,68 @@
+name: service-knowledge eval — weekly baseline
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/service-knowledge
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install package (editable, no extras)
+        run: |
+          pip install -e .
+
+      - name: Run eval harness
+        run: |
+          mkdir -p .beads/eval-reports
+          python -m service_knowledge.eval.harness run \
+            --corpus src/service_knowledge/eval/corpus/ \
+            --output-dir .beads/eval-reports/ \
+            --consumer-root "$PWD"
+
+      - name: Upload weekly report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-knowledge-eval-report
+          path: packages/service-knowledge/.beads/eval-reports/*.md
+          if-no-files-found: error
+
+      - name: Sticky comment weekly summary on tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRACKING_ISSUE_TITLE: "service-knowledge eval baseline — weekly reports"
+        run: |
+          set -euo pipefail
+          REPORT=$(ls -t .beads/eval-reports/*.md 2>/dev/null | head -1 || true)
+          if [ -z "$REPORT" ]; then
+            echo "no eval report generated; skipping sticky comment"
+            exit 0
+          fi
+          ISSUE_NUM=$(gh issue list --search "$TRACKING_ISSUE_TITLE in:title" \
+            --json number,title \
+            --jq ".[] | select(.title == \"$TRACKING_ISSUE_TITLE\") | .number" | head -1)
+          if [ -z "$ISSUE_NUM" ]; then
+            ISSUE_NUM=$(gh issue create --title "$TRACKING_ISSUE_TITLE" \
+              --body "Weekly service-knowledge eval reports. Sticky-commented by CI." \
+              --label "service-knowledge,eval" --json number --jq .number || true)
+          fi
+          if [ -n "$ISSUE_NUM" ]; then
+            gh issue comment "$ISSUE_NUM" \
+              --body "$(printf '## Weekly eval — %s\n\n%s\n' "$(date -u +%Y-W%V)" "$(cat "$REPORT")")" || true
+          else
+            echo "warn: tracking issue could not be located or created; skipping comment"
+          fi
