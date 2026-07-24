@@ -5,9 +5,10 @@ kept in sync with code via a GitNexus-aware drift engine. Elevated from the vend
 `service-skills` machinery to a standalone package with its own CLI, versioning, release
 cadence, and CHANGELOG. **Not** routed through `xt update --apply`.
 
-- **Package:** `~/dev/xtrm/packages/service-knowledge` (v0.1.0)
+- **Package:** `~/dev/xtrm/packages/service-knowledge` (v0.3.0)
 - **Reframe spec:** [`docs/research/kb-knowledge-base-svc.md`](../research/kb-knowledge-base-svc.md)
 - **CHANGELOG:** `~/dev/xtrm/packages/service-knowledge/CHANGELOG.md`
+- **Index & MCP retrieval:** [`service-knowledge-index.md`](./service-knowledge-index.md) (PR3)
 
 ## Install / update / status
 
@@ -30,7 +31,8 @@ service-knowledge remove                 # uninstall machinery + cache + hooks
   from `<repo>-services`).
 - Wires Claude SessionStart (cataloger) / PreToolUse (activator) / PostToolUse (drift) hooks
   into `.claude/settings.json`, pointing at the project-local machinery.
-- Creates the empty `.xtrm/cache/service-knowledge.sqlite` (PR3 populates the FTS5 schema).
+- Creates `.xtrm/cache/service-knowledge.sqlite`; PR3 (v0.3.0) populates the FTS5 schema —
+  run `service-knowledge index build` to fill it (see the index doc).
 - Emits per-invocation telemetry (`component=sk-cli`) to
   `.xtrm/state/service-knowledge/install.jsonl`.
 
@@ -50,5 +52,7 @@ legacy name is dropped next cycle.
 
 ## Roadmap
 
-v0.1.0 is lift-and-shift + rename + CLI scaffolding. The reframe machinery (verifier, FTS5
-index, `knowledge_*` MCP tools, activator upgrade, eval, telemetry backend) lands in PR1–5.
+v0.1.0 was lift-and-shift + rename + CLI scaffolding. **v0.3.0 (PR3)** adds the per-repo FTS5
+evidence index + three read-only `knowledge_*` MCP tools + the cataloger reframe — see
+[`service-knowledge-index.md`](./service-knowledge-index.md). The verifier (PR1/PR2), activator
+upgrade (PR4) and eval/telemetry backend (PR5) land in their own PRs.

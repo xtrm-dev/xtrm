@@ -1,6 +1,30 @@
-"""MCP tool scaffold for service-knowledge.
+"""Read-only MCP tools for the service-knowledge index (research §3.8).
 
-PR3 lands three ``knowledge_*`` MCP tools here (query / context / impact over the
-service-knowledge FTS5 index). Empty in v0.1.0 — the package boundary is reserved so
-the import surface is stable from the first release.
+Three tools ship in PR3; ``knowledge_probes`` and ``knowledge_conflicts`` are deferred to
+follow-up beads (advisory extras, low value at MVP) and are documented as such in the API
+surface. There is deliberately no ``answer()`` endpoint — the layer returns evidence only.
 """
+from __future__ import annotations
+
+from typing import Any, Callable
+
+from service_knowledge.mcp import knowledge_evidence_for_files, knowledge_get, knowledge_search
+
+# name -> module (each exposes TOOL_NAME, DESCRIPTION, PARAMETERS, run)
+TOOL_MODULES = (knowledge_search, knowledge_get, knowledge_evidence_for_files)
+
+DEFERRED_TOOLS = ("knowledge_probes", "knowledge_conflicts")
+
+
+def tool_registry() -> dict[str, Callable[..., Any]]:
+    return {module.TOOL_NAME: module.run for module in TOOL_MODULES}
+
+
+def tool_specs() -> list[dict[str, Any]]:
+    return [
+        {"name": module.TOOL_NAME, "description": module.DESCRIPTION, "parameters": module.PARAMETERS}
+        for module in TOOL_MODULES
+    ]
+
+
+__all__ = ["tool_registry", "tool_specs", "TOOL_MODULES", "DEFERRED_TOOLS"]
