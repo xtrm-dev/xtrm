@@ -1,0 +1,25 @@
+{
+  "case_id": "bd-core-xtrm-q9z1",
+  "query_or_task": "orchestrate(release): xtrm-tools + specialists worktree-symlink-removal \u2014 release + sweep + changelog + session report",
+  "touched_paths": [
+    "packages/orchestrator/src/orchestrator.py"
+  ],
+  "expected_services": [
+    "orchestrator",
+    "specialists",
+    "xtrm",
+    "worktree",
+    "changelog-keeper"
+  ],
+  "required_evidence": [
+    "packages/orchestrator/src/orchestrator.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": true,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-q9z1@core"
+  ]
+}

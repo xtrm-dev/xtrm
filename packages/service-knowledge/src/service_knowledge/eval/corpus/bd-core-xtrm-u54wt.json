@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-core-xtrm-u54wt",
+  "query_or_task": "Service Skills v2 RELEASE-READY: foolproof update + collision/shadow fixes + Pi/docs/tests reconcile",
+  "touched_paths": [
+    "packages/sync-docs/src/sync-docs.py"
+  ],
+  "expected_services": [
+    "sync-docs"
+  ],
+  "required_evidence": [
+    "packages/sync-docs/src/sync-docs.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-u54wt@core"
+  ]
+}

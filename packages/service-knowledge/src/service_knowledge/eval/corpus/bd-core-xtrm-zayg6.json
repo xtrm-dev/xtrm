@@ -1,0 +1,22 @@
+{
+  "case_id": "bd-core-xtrm-zayg6",
+  "query_or_task": "Service-skills hook paths use CLAUDE_PROJECT_DIR \u2014 dead after xt migrate skills",
+  "touched_paths": [
+    "packages/service-knowledge/src/service-knowledge.py"
+  ],
+  "expected_services": [
+    "service-knowledge",
+    "xtrm"
+  ],
+  "required_evidence": [
+    "packages/service-knowledge/src/service-knowledge.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": true,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-zayg6@core"
+  ]
+}

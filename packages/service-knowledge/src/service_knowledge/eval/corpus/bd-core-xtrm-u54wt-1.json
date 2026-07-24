@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-core-xtrm-u54wt-1",
+  "query_or_task": "Fix runtime materializer collision: discovery honors frontmatter name",
+  "touched_paths": [
+    ".xtrm/skills/default/xtrm/"
+  ],
+  "expected_services": [
+    "xtrm"
+  ],
+  "required_evidence": [
+    ".xtrm/skills/default/xtrm/SKILL.md"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-u54wt.1@core"
+  ]
+}

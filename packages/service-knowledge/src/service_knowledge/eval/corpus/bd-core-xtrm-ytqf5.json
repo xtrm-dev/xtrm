@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-core-xtrm-ytqf5",
+  "query_or_task": "Ack git-cliff rollout: tune scopes + reconcile CHANGELOG",
+  "touched_paths": [
+    "packages/changelog-keeper/src/changelog-keeper.py"
+  ],
+  "expected_services": [
+    "changelog-keeper"
+  ],
+  "required_evidence": [
+    "packages/changelog-keeper/src/changelog-keeper.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-ytqf5@core"
+  ]
+}

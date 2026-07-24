@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-core-xtrm-y0tdg-1-16",
+  "query_or_task": "executor: fix six v2 layout regression clusters",
+  "touched_paths": [
+    ".xtrm/skills/default/xtrm/"
+  ],
+  "expected_services": [
+    "xtrm"
+  ],
+  "required_evidence": [
+    ".xtrm/skills/default/xtrm/SKILL.md"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-y0tdg.1.16@core"
+  ]
+}

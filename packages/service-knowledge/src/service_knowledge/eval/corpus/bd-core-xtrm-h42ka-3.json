@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-core-xtrm-h42ka-3",
+  "query_or_task": "pr-reviewer: final verdict Core PR #425",
+  "touched_paths": [
+    "packages/reviewer/src/reviewer.py"
+  ],
+  "expected_services": [
+    "reviewer"
+  ],
+  "required_evidence": [
+    "packages/reviewer/src/reviewer.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-h42ka.3@core"
+  ]
+}

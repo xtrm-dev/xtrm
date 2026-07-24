@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-core-xtrm-tafu",
+  "query_or_task": "CLI test baseline: handle missing optional registry skills realpath",
+  "touched_paths": [
+    ".xtrm/skills/default/xtrm/"
+  ],
+  "expected_services": [
+    "xtrm"
+  ],
+  "required_evidence": [
+    ".xtrm/skills/default/xtrm/SKILL.md"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-tafu@core"
+  ]
+}

@@ -2,6 +2,65 @@
 
 All notable changes to the `service-knowledge` package.
 
+## [0.6.0] - 2026-07-25
+
+### Added — PR5a: eval corpus + telemetry + alert-to-service routing
+- Labeled evaluation corpus at `src/service_knowledge/eval/corpus/` (85 cases including
+  the 3 mandated api-gateway regression anchors: invented redaction key set, wrong
+  redaction literal, mislabeled `http_request_duration_seconds` label set). Every
+  case carries the 8-field §3.9 schema (`query_or_task`, `touched_paths`,
+  `expected_services`, `required_evidence`, `forbidden_evidence`, `expected_probes`,
+  `cross_repo_required`, `outcome`) plus `expected_verifier` and non-empty
+  `provenance`. Cases are drawn from real closed bd issues + merged PRs across
+  `~/dev/core` and `~/dev/xtrm`, with a small synthetic-alert tail. Corpus size
+  meets the ≥80-case floor; the 3 regression anchors are covered.
+- `service_knowledge.eval.metrics` — the 12 §3.9 metrics as pure functions
+  (routing precision/recall, retrieval precision@K/recall@K, citation-utilization
+  rate, ignored-activation rate, stale-claim escape rate, conflict detection
+  recall, verifier FP/FN rates, probe execution rate, time-to-first-correct-
+  diagnostic proxy, tokens per successful task) with a `THRESHOLDS` map for the
+  green/yellow/red status gate.
+- `service_knowledge.eval.harness` — CLI (`python -m service_knowledge.eval.harness
+  run --corpus <dir> --output-dir <dir>`) that loads the corpus, calls the shipped
+  retrieval + verifier surfaces (falling back to a labels-echo stub when the live
+  index is absent — keeps CI runnable without a warm index), computes all metrics,
+  and emits `<output-dir>/YYYY-WW.md` with per-metric threshold status,
+  unclassified-failure list, and corpus-expansion suggestions.
+- `service_knowledge.mcp.incident_routing` — thin advisory-only wrapper: takes an
+  Alertmanager-shape payload → extracts hinted service/query tokens → calls
+  `knowledge_search` → returns the top-K services + probes as an evidence
+  bundle. Never mutates; the PR5b canary policy will build on this surface.
+- `.github/workflows/eval-weekly.yml` — cron (Mondays 06:00 UTC) +
+  `workflow_dispatch`. Installs the package, runs the harness, uploads the
+  weekly report as an artifact, and sticky-comments the summary on the tracking
+  issue `service-knowledge eval baseline — weekly reports` (auto-created on
+  first run).
+- `install/git-hooks/post_merge_reindex.py` — post-merge default-branch hook
+  invoking `service-knowledge index rebuild` with a 90s budget (60s target +
+  30s slack). Silent no-op off default branch, when no registry present, or
+  when the CLI is missing. Never fails the merge.
+- Verifier telemetry side-channel: `scripts/verifier/telemetry.py` now writes
+  the same per-run record it already prints to stderr to
+  `.xtrm/state/service-knowledge/events.jsonl` (`component=verifier`), matching
+  the emission surfaces of `knowledge-index` (PR3) and `activator` (PR4). Root
+  is resolved via `SERVICE_KNOWLEDGE_CONSUMER_ROOT` env or CWD; best-effort,
+  never raises into the caller. No raw claim text, no source content — only
+  claim_id-level aggregates + content hashes (matches the pre-existing shape).
+- Six new test modules under `src/service_knowledge/eval/tests/`:
+  `test_corpus_schema.py`, `test_harness_e2e.py`, `test_regression_anchors.py`,
+  `test_baseline_thresholds.py`, `test_incident_routing.py`,
+  `test_telemetry_shape.py`.
+
+### Notes
+- Baseline metrics on the shipped 85-case corpus (harness in stub-fallback mode
+  because no live index is present in the eval sandbox): routing_precision 1.0,
+  retrieval_precision@5 1.0, stale_claim_escape_rate 0, verifier FP/FN 0. Once
+  a warm index runs the harness live, these degrade to real-world values — the
+  first weekly workflow run establishes the real baseline for PR5b canary
+  threshold selection.
+- Canary auto-merge is deliberately out of scope for PR5a; it ships in PR5b
+  (bead xtrm-56flm.7) once operator ratifies thresholds.
+
 ## [0.5.0] - 2026-07-24
 
 ### Added — PR4: dispatch integration + PreToolUse activator upgrade (retrieval + narrow blocking)

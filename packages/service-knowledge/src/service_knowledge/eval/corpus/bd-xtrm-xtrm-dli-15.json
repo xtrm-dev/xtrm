@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-xtrm-xtrm-dli-15",
+  "query_or_task": "reviewer: verify published PR3 target branch and PR",
+  "touched_paths": [
+    "packages/reviewer/src/reviewer.py"
+  ],
+  "expected_services": [
+    "reviewer"
+  ],
+  "required_evidence": [
+    "packages/reviewer/src/reviewer.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-dli.15@xtrm"
+  ]
+}

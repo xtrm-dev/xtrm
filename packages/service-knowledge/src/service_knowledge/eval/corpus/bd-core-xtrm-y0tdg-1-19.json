@@ -1,0 +1,21 @@
+{
+  "case_id": "bd-core-xtrm-y0tdg-1-19",
+  "query_or_task": "executor: repair root-suite v2 layout regressions",
+  "touched_paths": [
+    ".xtrm/skills/default/xtrm/"
+  ],
+  "expected_services": [
+    "xtrm"
+  ],
+  "required_evidence": [
+    ".xtrm/skills/default/xtrm/SKILL.md"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "bd:xtrm-y0tdg.1.19@core"
+  ]
+}
