@@ -16,6 +16,7 @@ registry, so it can never drift from the registered services.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -24,13 +25,37 @@ from typing import Any
 
 # Sibling import (consolidated scripts/ dir).
 sys.path.insert(0, str(Path(__file__).parent))
-from bootstrap import (  # noqa: E402  # type: ignore[import-not-found]
+from bootstrap import (  # type: ignore[import-not-found]
     RootResolutionError,
     get_pack_path,
     get_project_root,
     get_umbrella_dir,
     load_registry,
 )
+
+CACHE_REL = Path(".xtrm") / "cache" / "service-knowledge.sqlite"
+OKF_SCHEMA_VERSION = 1
+
+
+def read_index_state(project_root: str) -> dict[str, Any]:
+    """Read sk_index_state via stdlib sqlite3 (umbrella generator stays package-independent)."""
+    db = Path(project_root) / CACHE_REL
+    if not db.exists():
+        return {}
+    try:
+        import sqlite3
+
+        conn = sqlite3.connect(db)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT source_ref, schema_version, generator_version, index_hash, item_count, built_at "
+            "FROM sk_index_state WHERE id=1"
+        ).fetchone()
+        conn.close()
+        return dict(row) if row else {}
+    except (OSError, sqlite3.Error):
+        return {}
+
 
 SEMANTIC_START = "<!-- SEMANTIC_START -->"
 SEMANTIC_END = "<!-- SEMANTIC_END -->"
@@ -83,7 +108,52 @@ def _services_table(services: dict[str, dict[str, Any]]) -> str:
     return "\n".join(rows)
 
 
-def generate_umbrella(registry: dict[str, Any], repo_name: str, existing: str | None = None) -> str:
+def _okf_envelopes(services: dict[str, dict[str, Any]], repo_name: str) -> list[dict[str, Any]]:
+    """One OKF-compatible envelope per service (research §3.3 minimal shared schema)."""
+    envelopes = []
+    for sid in sorted(services):
+        info = services[sid]
+        envelopes.append({
+            "schema_version": OKF_SCHEMA_VERSION,
+            "id": f"service:{sid}",
+            "kind": "service",
+            "repo": repo_name,
+            "service_id": sid,
+            "title": info.get("name", sid),
+            "description": info.get("description", info.get("name", sid)),
+            "source": {"path": info.get("skill_path", ""), "ref": info.get("last_sync_ref", "")},
+            "territory": info.get("territory", []),
+            "authority": "curated",
+            "status": "active",
+        })
+    return envelopes
+
+
+def _index_provenance(index_state: dict[str, Any], services: dict[str, dict[str, Any]], repo_name: str) -> str:
+    """Regenerated index-provenance + OKF per-item block (lives OUTSIDE the SEMANTIC block)."""
+    if not index_state:
+        return (
+            "## Knowledge Index\n\n"
+            "_No index built yet. Run `service-knowledge index build` to enable ranked, "
+            "citation-backed retrieval over these services._"
+        )
+    envelopes = _okf_envelopes(services, repo_name)
+    envelope_lines = "\n".join(f"  {json.dumps(env, ensure_ascii=False)}" for env in envelopes)
+    return (
+        "## Knowledge Index\n\n"
+        f"- generator_version: `{index_state.get('generator_version', '')}`\n"
+        f"- index_hash: `{index_state.get('index_hash', '')}`\n"
+        f"- source_ref: `{index_state.get('source_ref', '')}`\n"
+        f"- schema_version: `{index_state.get('schema_version', '')}`\n"
+        f"- items: {index_state.get('item_count', 0)} · built: {index_state.get('built_at', '')}\n\n"
+        "OKF per-service envelopes (one JSON object per line):\n\n"
+        "```jsonl\n"
+        f"{envelope_lines}\n"
+        "```"
+    )
+
+
+def generate_umbrella(registry: dict[str, Any], repo_name: str, existing: str | None = None, index_state: dict[str, Any] | None = None) -> str:
     """Render the umbrella SKILL.md for ``repo_name`` from ``registry``.
 
     Pure: identical inputs (including the existing SEMANTIC block) -> identical output.
@@ -92,6 +162,7 @@ def generate_umbrella(registry: dict[str, Any], repo_name: str, existing: str | 
     name = repo_skill_name(repo_name)
     semantic_inner = extract_semantic_block(existing)
     table = _services_table(services)
+    provenance = _index_provenance(index_state or {}, services, repo_name)
     count = len(services)
 
     return f"""---
@@ -126,6 +197,8 @@ gitnexus impact <symbol> --direction upstream   # blast radius across services
 
 Per-service runnable health checks live in each service skill's `scripts/health_probe.py`.
 
+{provenance}
+
 <!-- SEMANTIC_START -->
 {semantic_inner}
 <!-- SEMANTIC_END -->
@@ -143,11 +216,11 @@ within the SEMANTIC block — everything else is regenerated.*
 """
 
 
-def write_umbrella(umbrella_path: Path, registry: dict[str, Any], repo_name: str) -> bool:
+def write_umbrella(umbrella_path: Path, registry: dict[str, Any], repo_name: str, index_state: dict[str, Any] | None = None) -> bool:
     """Write/refresh the umbrella at ``umbrella_path``, preserving its SEMANTIC block.
     Returns True if the file content changed."""
     existing = umbrella_path.read_text(encoding="utf-8") if umbrella_path.exists() else None
-    content = generate_umbrella(registry, repo_name, existing)
+    content = generate_umbrella(registry, repo_name, existing, index_state)
     if existing == content:
         return False
     umbrella_path.parent.mkdir(parents=True, exist_ok=True)
@@ -170,12 +243,13 @@ def main() -> None:
         print("Error: unable to resolve pack path. Set XTRM_PACK or leave only one pack under .xtrm/skills.", file=sys.stderr)
         sys.exit(1)
     registry = load_registry(project_root)
+    index_state = read_index_state(project_root)
     umbrella_dir = get_umbrella_dir(project_root)
     if umbrella_dir is None:
         print("Error: unable to resolve the per-repo umbrella directory.", file=sys.stderr)
         sys.exit(1)
     umbrella_path = umbrella_dir / "SKILL.md"
-    changed = write_umbrella(umbrella_path, registry, repo_name)
+    changed = write_umbrella(umbrella_path, registry, repo_name, index_state)
     rel = umbrella_path.relative_to(project_root) if umbrella_path.is_relative_to(Path(project_root)) else umbrella_path
     print(f"{'generated' if changed else 'unchanged'}: {rel}")
     sys.exit(0)

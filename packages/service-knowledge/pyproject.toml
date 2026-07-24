@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "service-knowledge"
-version = "0.2.0"
+version = "0.3.0"
 description = "First-class operational service-knowledge package: per-service expert skill packages kept in sync with code via a GitNexus-aware drift engine. Own CLI, own lifecycle."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,6 +26,8 @@ classifiers = [
 # boundary is correct from the first release; PR3 imports it for vault-backed secrets.
 # The CLI itself is stdlib-only and must NOT depend on xtrm/bd/sp/xt/xtmux.
 dependencies = [
+  "jsonschema>=4.0",
+  "markdown-it-py>=4.0",
   "pyyaml>=6.0",
   "vaultctl>=0.1.0,<0.2",
 ]

@@ -6,6 +6,6 @@ versioning, release cadence, and CHANGELOG. Install into a service-hosting repo 
 ``service-knowledge install``; it is not routed through ``xt update --apply``.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 __all__ = ["__version__"]
