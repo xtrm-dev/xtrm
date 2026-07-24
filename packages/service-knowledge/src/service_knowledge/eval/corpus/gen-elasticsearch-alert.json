@@ -1,0 +1,51 @@
+{
+  "id": "gen-elasticsearch-alert",
+  "provenance": {
+    "type": "alert",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#16)",
+    "bead": "xtrm-56flm.6",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "alert",
+  "query_or_task": "elasticsearch HighLatency alert firing — which service owns it and what is the runbook?",
+  "touched_paths": [
+    "elasticsearch/config.yml"
+  ],
+  "expected_services": [
+    "elasticsearch"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_elasticsearch_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — elasticsearch"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Routed to elasticsearch; runbook probes surfaced.",
+  "service_defs": {
+    "elasticsearch": {
+      "description": "elasticsearch operational service.",
+      "territory": [
+        "elasticsearch/**"
+      ],
+      "triggers": [
+        "elasticsearch",
+        "elasticsearch",
+        "alert",
+        "health"
+      ],
+      "overview": "elasticsearch handles its slice of the stack; see elasticsearch/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "id": "regression-api-gateway-wrong-claims",
+  "provenance": {
+    "type": "verifier-fixture",
+    "ref": "packages/service-knowledge/src/service_knowledge/scripts/verifier/tests/fixtures/api-gateway",
+    "bead": "xtrm-56flm.2",
+    "resolves": "in-repo",
+    "synthetic": false,
+    "note": "Anchor regression #1 from the observed api-gateway/runners specialist failure: wrong redaction-key / metric-label claims. Verifier must block the malformed change."
+  },
+  "category": "regression",
+  "query_or_task": "Specialist edited api-gateway redaction config and asserted a wrong redaction placeholder; route to the owning service and verify the change before it lands.",
+  "touched_paths": ["source/metrics.py"],
+  "expected_services": ["api-gateway"],
+  "required_evidence": ["CRITICAL REQUIREMENTS", "Data Flows"],
+  "forbidden_evidence": ["STALE_REDACTION_PLACEHOLDER_LEGACY"],
+  "expected_probes": ["Health probe — api-gateway"],
+  "cross_repo_required": false,
+  "outcome": "Routed to api-gateway; malformed claim change blocked by the verifier gate.",
+  "service_defs": {
+    "api-gateway": {
+      "description": "Inbound HTTP proxy; redaction + metric labels are correctness-critical.",
+      "territory": ["source/**"],
+      "triggers": ["api-gateway", "redaction", "http_request_duration_seconds"],
+      "overview": "api-gateway proxies inbound HTTP and redacts sensitive headers.",
+      "extra_sections": "\n## CRITICAL REQUIREMENTS\nThe complete set of redaction keys is: `authorization`, `cookie`, `x-request-id`.\nThe redaction placeholder is `[REDACTED]`.\n\n## Data Flows\nThe `http_request_duration_seconds` metric carries labels `method` and `status` only.\n"
+    }
+  },
+  "verifier": {
+    "service_id": "api-gateway",
+    "expect_block": true,
+    "verified_at_ref": "621b73c",
+    "candidate": "# API Gateway\n\nThe redaction placeholder is \"[REDACTED]\".\n",
+    "current": "---\nservice_id: api-gateway\n---\n# API Gateway\n<!-- SEMANTIC_START -->\nThe redaction placeholder is \"[REDACTED]\".\n<!-- SEMANTIC_END -->\n",
+    "corpus_files": {
+      "source/metrics.py": "REDACTION_PLACEHOLDER = \"[REDACTED]\"\nREQUEST_LABELS = (\"method\", \"status\")\n"
+    }
+  }
+}

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "service-knowledge"
-version = "0.5.0"
+version = "0.6.0"
 description = "First-class operational service-knowledge package: per-service expert skill packages kept in sync with code via a GitNexus-aware drift engine. Own CLI, own lifecycle."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -51,4 +51,8 @@ service_knowledge = [
   "install/*.json",
   "install/*.md",
   "install/git-hooks/*.py",
+  "eval/corpus/*.json",
+  "eval/corpus/*.py",
+  "eval/reports/*.md",
+  "eval/reports/*.json",
 ]

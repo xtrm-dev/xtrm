@@ -1,0 +1,51 @@
+{
+  "id": "gen-postgres-merged-pr",
+  "provenance": {
+    "type": "pr",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#13)",
+    "bead": "xtrm-56flm.4",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "merged-pr",
+  "query_or_task": "Operational change to postgres: tune the connection pool",
+  "touched_paths": [
+    "postgres/config.yml"
+  ],
+  "expected_services": [
+    "postgres"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_postgres_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — postgres"
+  ],
+  "cross_repo_required": false,
+  "outcome": "PR merged; postgres pool tuned and verified against source.",
+  "service_defs": {
+    "postgres": {
+      "description": "postgres operational service.",
+      "territory": [
+        "postgres/**"
+      ],
+      "triggers": [
+        "postgres",
+        "postgres",
+        "alert",
+        "health"
+      ],
+      "overview": "postgres handles its slice of the stack; see postgres/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

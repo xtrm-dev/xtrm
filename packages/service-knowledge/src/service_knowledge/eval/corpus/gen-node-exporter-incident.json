@@ -1,0 +1,51 @@
+{
+  "id": "gen-node-exporter-incident",
+  "provenance": {
+    "type": "incident",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#14)",
+    "bead": "xtrm-56flm.1",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "incident",
+  "query_or_task": "Post-incident review: node-exporter outage last week — what claims are now stale?",
+  "touched_paths": [
+    "node-exporter/config.yml"
+  ],
+  "expected_services": [
+    "node-exporter"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_node_exporter_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — node-exporter"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Stale node-exporter claims flagged for re-verification.",
+  "service_defs": {
+    "node-exporter": {
+      "description": "node-exporter operational service.",
+      "territory": [
+        "node-exporter/**"
+      ],
+      "triggers": [
+        "node-exporter",
+        "nodeexporter",
+        "alert",
+        "health"
+      ],
+      "overview": "node-exporter handles its slice of the stack; see node-exporter/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

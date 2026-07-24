@@ -1,0 +1,51 @@
+{
+  "id": "gen-rabbitmq-alert",
+  "provenance": {
+    "type": "alert",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#17)",
+    "bead": "xtrm-56flm.1",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "alert",
+  "query_or_task": "rabbitmq HighLatency alert firing — which service owns it and what is the runbook?",
+  "touched_paths": [
+    "rabbitmq/config.yml"
+  ],
+  "expected_services": [
+    "rabbitmq"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_rabbitmq_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — rabbitmq"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Routed to rabbitmq; runbook probes surfaced.",
+  "service_defs": {
+    "rabbitmq": {
+      "description": "rabbitmq operational service.",
+      "territory": [
+        "rabbitmq/**"
+      ],
+      "triggers": [
+        "rabbitmq",
+        "rabbitmq",
+        "alert",
+        "health"
+      ],
+      "overview": "rabbitmq handles its slice of the stack; see rabbitmq/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

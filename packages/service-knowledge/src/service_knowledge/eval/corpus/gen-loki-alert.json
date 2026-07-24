@@ -1,0 +1,51 @@
+{
+  "id": "gen-loki-alert",
+  "provenance": {
+    "type": "alert",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#14)",
+    "bead": "xtrm-56flm",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "alert",
+  "query_or_task": "loki HighLatency alert firing — which service owns it and what is the runbook?",
+  "touched_paths": [
+    "loki/config.yml"
+  ],
+  "expected_services": [
+    "loki"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_loki_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — loki"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Routed to loki; runbook probes surfaced.",
+  "service_defs": {
+    "loki": {
+      "description": "loki operational service.",
+      "territory": [
+        "loki/**"
+      ],
+      "triggers": [
+        "loki",
+        "loki",
+        "alert",
+        "health"
+      ],
+      "overview": "loki handles its slice of the stack; see loki/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

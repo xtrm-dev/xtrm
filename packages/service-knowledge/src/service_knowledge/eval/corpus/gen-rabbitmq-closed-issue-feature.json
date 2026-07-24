@@ -1,0 +1,51 @@
+{
+  "id": "gen-rabbitmq-closed-issue-feature",
+  "provenance": {
+    "type": "bd-issue",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#15)",
+    "bead": "xtrm-56flm.6",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "closed-issue-feature",
+  "query_or_task": "Add a new receiver to rabbitmq without breaking existing routing",
+  "touched_paths": [
+    "rabbitmq/config.yml"
+  ],
+  "expected_services": [
+    "rabbitmq"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_rabbitmq_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — rabbitmq"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Feature added to rabbitmq with routing preserved.",
+  "service_defs": {
+    "rabbitmq": {
+      "description": "rabbitmq operational service.",
+      "territory": [
+        "rabbitmq/**"
+      ],
+      "triggers": [
+        "rabbitmq",
+        "rabbitmq",
+        "alert",
+        "health"
+      ],
+      "overview": "rabbitmq handles its slice of the stack; see rabbitmq/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "id": "gen-redis-merged-pr",
+  "provenance": {
+    "type": "pr",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#18)",
+    "bead": "xtrm-56flm.2",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "merged-pr",
+  "query_or_task": "Operational change to redis: tune the connection pool",
+  "touched_paths": [
+    "redis/config.yml"
+  ],
+  "expected_services": [
+    "redis"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_redis_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — redis"
+  ],
+  "cross_repo_required": false,
+  "outcome": "PR merged; redis pool tuned and verified against source.",
+  "service_defs": {
+    "redis": {
+      "description": "redis operational service.",
+      "territory": [
+        "redis/**"
+      ],
+      "triggers": [
+        "redis",
+        "redis",
+        "alert",
+        "health"
+      ],
+      "overview": "redis handles its slice of the stack; see redis/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

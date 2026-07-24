@@ -352,6 +352,41 @@ def _emit_telemetry(project_root: Path, record: dict[str, Any]) -> None:
         pass
 
 
+def _record_retrieval_event(
+    project_root: Path, service_id: str, bundle: dict[str, Any] | None, duration_ms: float
+) -> None:
+    """Best-effort row into sk_retrieval_events for every activator invocation (§3.7 telemetry).
+
+    Mirrors the index query-path audit row so the retrieval table reflects activator-driven
+    retrieval too. Never raises: a missing/broken index degrades silently (advisory layer).
+    """
+    try:
+        from service_knowledge.index import schema, telemetry  # type: ignore[import-not-found]
+    except (ImportError, OSError, RuntimeError, ValueError, TypeError, KeyError):
+        return
+    try:
+        conn = schema.connect(Path(project_root))
+    except Exception:  # sqlite3.DatabaseError et al. — broken/absent index
+        return
+    try:
+        bundle_hash = str((bundle or {}).get("evidence_hash", ""))
+        candidate_count = len((bundle or {}).get("items", []) or [])
+        conn.execute(
+            "INSERT INTO sk_retrieval_events(query_hash, service_ids_matched, top_score, "
+            "candidate_count, bundle_hash, duration_ms, source_ref) VALUES (?,?,?,?,?,?,?)",
+            (telemetry.query_hash(f"activator:{service_id}"), json.dumps([service_id]), None,
+             candidate_count, bundle_hash, round(duration_ms, 2), "activator"),
+        )
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def _resolve_paths(tool_name: str, tool_input: dict, service_data: dict) -> list[str]:
     """Paths to retrieve evidence for: the file path, or the service territory for Bash."""
     if tool_name in READ_FILE_TOOLS or tool_name in WRITE_FILE_TOOLS:
@@ -651,6 +686,7 @@ def main() -> None:
 
     duration_ms = round((time.perf_counter() - started) * 1000.0, 2)
     bundle_id = (retrieval.bundle or {}).get("bundle_id")
+    _record_retrieval_event(project_root, service_id, retrieval.bundle, duration_ms)
     _emit_telemetry(
         project_root,
         {

@@ -10,13 +10,14 @@ from collections.abc import Callable
 from typing import Any
 
 from service_knowledge.mcp import (
+    incident_routing,
     knowledge_evidence_for_files,
     knowledge_get,
     knowledge_search,
 )
 
 # name -> module (each exposes TOOL_NAME, DESCRIPTION, PARAMETERS, run)
-TOOL_MODULES = (knowledge_search, knowledge_get, knowledge_evidence_for_files)
+TOOL_MODULES = (knowledge_search, knowledge_get, knowledge_evidence_for_files, incident_routing)
 
 DEFERRED_TOOLS = ("knowledge_probes", "knowledge_conflicts")
 

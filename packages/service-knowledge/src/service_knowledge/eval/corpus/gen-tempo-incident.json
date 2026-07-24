@@ -1,0 +1,51 @@
+{
+  "id": "gen-tempo-incident",
+  "provenance": {
+    "type": "incident",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#14)",
+    "bead": "xtrm-56flm.6",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "incident",
+  "query_or_task": "Post-incident review: tempo outage last week — what claims are now stale?",
+  "touched_paths": [
+    "tempo/config.yml"
+  ],
+  "expected_services": [
+    "tempo"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_tempo_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — tempo"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Stale tempo claims flagged for re-verification.",
+  "service_defs": {
+    "tempo": {
+      "description": "tempo operational service.",
+      "territory": [
+        "tempo/**"
+      ],
+      "triggers": [
+        "tempo",
+        "tempo",
+        "alert",
+        "health"
+      ],
+      "overview": "tempo handles its slice of the stack; see tempo/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

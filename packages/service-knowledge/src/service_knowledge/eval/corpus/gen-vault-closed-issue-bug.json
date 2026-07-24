@@ -1,0 +1,51 @@
+{
+  "id": "gen-vault-closed-issue-bug",
+  "provenance": {
+    "type": "bd-issue",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#14)",
+    "bead": "xtrm-56flm.3",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "closed-issue-bug",
+  "query_or_task": "Diagnose why vault is returning errors after the last deploy",
+  "touched_paths": [
+    "vault/config.yml"
+  ],
+  "expected_services": [
+    "vault"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_vault_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — vault"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Root-caused vault failure to a config regression; fix identified.",
+  "service_defs": {
+    "vault": {
+      "description": "vault operational service.",
+      "territory": [
+        "vault/**"
+      ],
+      "triggers": [
+        "vault",
+        "vault",
+        "alert",
+        "health"
+      ],
+      "overview": "vault handles its slice of the stack; see vault/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

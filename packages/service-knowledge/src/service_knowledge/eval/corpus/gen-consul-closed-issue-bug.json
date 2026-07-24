@@ -1,0 +1,51 @@
+{
+  "id": "gen-consul-closed-issue-bug",
+  "provenance": {
+    "type": "bd-issue",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#13)",
+    "bead": "xtrm-56flm.1",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "closed-issue-bug",
+  "query_or_task": "Diagnose why consul is returning errors after the last deploy",
+  "touched_paths": [
+    "consul/config.yml"
+  ],
+  "expected_services": [
+    "consul"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_consul_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — consul"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Root-caused consul failure to a config regression; fix identified.",
+  "service_defs": {
+    "consul": {
+      "description": "consul operational service.",
+      "territory": [
+        "consul/**"
+      ],
+      "triggers": [
+        "consul",
+        "consul",
+        "alert",
+        "health"
+      ],
+      "overview": "consul handles its slice of the stack; see consul/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

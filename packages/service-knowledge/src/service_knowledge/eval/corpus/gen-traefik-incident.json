@@ -1,0 +1,51 @@
+{
+  "id": "gen-traefik-incident",
+  "provenance": {
+    "type": "incident",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#16)",
+    "bead": "xtrm-56flm.3",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "incident",
+  "query_or_task": "Post-incident review: traefik outage last week — what claims are now stale?",
+  "touched_paths": [
+    "traefik/config.yml"
+  ],
+  "expected_services": [
+    "traefik"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_traefik_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — traefik"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Stale traefik claims flagged for re-verification.",
+  "service_defs": {
+    "traefik": {
+      "description": "traefik operational service.",
+      "territory": [
+        "traefik/**"
+      ],
+      "triggers": [
+        "traefik",
+        "traefik",
+        "alert",
+        "health"
+      ],
+      "overview": "traefik handles its slice of the stack; see traefik/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

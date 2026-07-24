@@ -1,0 +1,51 @@
+{
+  "id": "gen-grafana-closed-issue-feature",
+  "provenance": {
+    "type": "bd-issue",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#13)",
+    "bead": "xtrm-56flm.5",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "closed-issue-feature",
+  "query_or_task": "Add a new receiver to grafana without breaking existing routing",
+  "touched_paths": [
+    "grafana/config.yml"
+  ],
+  "expected_services": [
+    "grafana"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_grafana_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — grafana"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Feature added to grafana with routing preserved.",
+  "service_defs": {
+    "grafana": {
+      "description": "grafana operational service.",
+      "territory": [
+        "grafana/**"
+      ],
+      "triggers": [
+        "grafana",
+        "grafana",
+        "alert",
+        "health"
+      ],
+      "overview": "grafana handles its slice of the stack; see grafana/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

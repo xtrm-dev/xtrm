@@ -1,0 +1,51 @@
+{
+  "id": "gen-minio-alert",
+  "provenance": {
+    "type": "alert",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#18)",
+    "bead": "xtrm-56flm.3",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "alert",
+  "query_or_task": "minio HighLatency alert firing — which service owns it and what is the runbook?",
+  "touched_paths": [
+    "minio/config.yml"
+  ],
+  "expected_services": [
+    "minio"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_minio_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — minio"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Routed to minio; runbook probes surfaced.",
+  "service_defs": {
+    "minio": {
+      "description": "minio operational service.",
+      "territory": [
+        "minio/**"
+      ],
+      "triggers": [
+        "minio",
+        "minio",
+        "alert",
+        "health"
+      ],
+      "overview": "minio handles its slice of the stack; see minio/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

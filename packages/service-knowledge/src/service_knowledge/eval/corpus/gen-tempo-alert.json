@@ -1,0 +1,51 @@
+{
+  "id": "gen-tempo-alert",
+  "provenance": {
+    "type": "alert",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#13)",
+    "bead": "xtrm-56flm.5",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "alert",
+  "query_or_task": "tempo HighLatency alert firing — which service owns it and what is the runbook?",
+  "touched_paths": [
+    "tempo/config.yml"
+  ],
+  "expected_services": [
+    "tempo"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_tempo_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — tempo"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Routed to tempo; runbook probes surfaced.",
+  "service_defs": {
+    "tempo": {
+      "description": "tempo operational service.",
+      "territory": [
+        "tempo/**"
+      ],
+      "triggers": [
+        "tempo",
+        "tempo",
+        "alert",
+        "health"
+      ],
+      "overview": "tempo handles its slice of the stack; see tempo/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

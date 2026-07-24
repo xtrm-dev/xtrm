@@ -1,0 +1,51 @@
+{
+  "id": "gen-elasticsearch-merged-pr",
+  "provenance": {
+    "type": "pr",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#15)",
+    "bead": "xtrm-56flm.5",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "merged-pr",
+  "query_or_task": "Operational change to elasticsearch: tune the connection pool",
+  "touched_paths": [
+    "elasticsearch/config.yml"
+  ],
+  "expected_services": [
+    "elasticsearch"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_elasticsearch_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — elasticsearch"
+  ],
+  "cross_repo_required": false,
+  "outcome": "PR merged; elasticsearch pool tuned and verified against source.",
+  "service_defs": {
+    "elasticsearch": {
+      "description": "elasticsearch operational service.",
+      "territory": [
+        "elasticsearch/**"
+      ],
+      "triggers": [
+        "elasticsearch",
+        "elasticsearch",
+        "alert",
+        "health"
+      ],
+      "overview": "elasticsearch handles its slice of the stack; see elasticsearch/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

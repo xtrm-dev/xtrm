@@ -1,0 +1,40 @@
+{
+  "id": "regression-runners-wrong-commands",
+  "provenance": {
+    "type": "verifier-fixture",
+    "ref": "packages/service-knowledge/src/service_knowledge/scripts/verifier/tests/fixtures/runners",
+    "bead": "xtrm-56flm.2",
+    "resolves": "in-repo",
+    "synthetic": false,
+    "note": "Anchor regression #2 from the observed api-gateway/runners specialist failure: wrong runner commands / metric-label claims. Verifier must block the malformed change."
+  },
+  "category": "regression",
+  "query_or_task": "Specialist produced a wrong runner restart command and a wrong runner_jobs_total label set; route to the owning service and verify before landing.",
+  "touched_paths": ["source/compose.yaml"],
+  "expected_services": ["runners"],
+  "required_evidence": ["Architecture", "Data Flows"],
+  "forbidden_evidence": ["STALE_RUNNER_RESTART_COMMAND_LEGACY"],
+  "expected_probes": ["Health probe — runners"],
+  "cross_repo_required": false,
+  "outcome": "Routed to runners; malformed claim change blocked by the verifier gate.",
+  "service_defs": {
+    "runners": {
+      "description": "CI runner fleet; runner-exporter exposes runner metrics.",
+      "territory": ["source/**"],
+      "triggers": ["runners", "runner-exporter", "runner_jobs_total"],
+      "overview": "The CI runner fleet executes pipeline jobs.",
+      "extra_sections": "\n## Architecture\nThe `runner-exporter` service exposes runner metrics.\n\n## Data Flows\nThe `runner_jobs_total` metric carries labels `queue` and `result`.\n"
+    }
+  },
+  "verifier": {
+    "service_id": "runners",
+    "expect_block": true,
+    "verified_at_ref": "621b73c",
+    "candidate": "# Runners\n\nThe `runner_jobs_total` metric carries labels `queue` and `result`.\n",
+    "current": "---\nservice_id: runners\n---\n# Runners\n<!-- SEMANTIC_START -->\nThe `runner_jobs_total` metric carries labels `queue` and `result`.\n<!-- SEMANTIC_END -->\n",
+    "corpus_files": {
+      "source/compose.yaml": "services:\n  runner-exporter:\n    image: runner-exporter:latest\n",
+      "source/metrics.py": "RUNNER_JOB_LABELS = (\"queue\", \"result\")\n"
+    }
+  }
+}

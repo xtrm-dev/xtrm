@@ -355,12 +355,19 @@ def search(consumer_root: Path, ctx: QueryContext) -> dict[str, Any]:
 
 def get_item(consumer_root: Path, item_id: str) -> dict[str, Any] | None:
     """Fetch one item by id (knowledge_get); includes the full-skill link."""
+    started = time.perf_counter()
     conn = schema.connect(consumer_root)
     try:
         item = _load_item_row(conn, item_id)
         if item is None:
+            _record_get_event(conn, consumer_root, f"item:{item_id}", [], None, started)
             return None
         item["skill_link"] = item.get("skill_rel_path", "")
+        _record_get_event(
+            conn, consumer_root, f"item:{item_id}",
+            [str(item.get("service_id", ""))] if item.get("service_id") else [],
+            None, started,
+        )
         return item
     finally:
         conn.close()
@@ -379,12 +386,14 @@ def get_full_skill(consumer_root: Path, skill_rel_path: str) -> dict[str, Any] |
     except (OSError, ValueError):
         return None
 
+    started = time.perf_counter()
     conn = schema.connect(consumer_root)
     try:
         row = conn.execute(
             "SELECT rel_path, title, body, status FROM documents WHERE source_id=? AND rel_path=?",
             ("service-knowledge", rel_path.as_posix()),
         ).fetchone()
+        _record_get_event(conn, consumer_root, f"skill:{rel_path.as_posix()}", [], None, started)
         return dict(row) if row is not None else None
     finally:
         conn.close()
@@ -414,3 +423,33 @@ def _record_retrieval_event(
          len(ranked), bundle_hash, round(duration_ms, 2), source_ref),
     )
     conn.commit()
+
+
+def _record_get_event(
+    conn: sqlite3.Connection,
+    consumer_root: Path,
+    ref: str,
+    service_ids: list[str],
+    top_score: float | None,
+    started: float,
+) -> None:
+    """Record a knowledge_get / get_full_skill access as a retrieval event (§3.7 telemetry).
+
+    The raw id/path is hashed into ``query_hash`` (no raw text persisted); ``source_ref`` carries
+    the access kind so get-events are distinguishable from search-events in the audit trail.
+    """
+    duration_ms = (time.perf_counter() - started) * 1000.0
+    qhash = telemetry.query_hash(ref)
+    source_ref = _index_source_ref(conn)
+    kind = ref.split(":", 1)[0]
+    conn.execute(
+        "INSERT INTO sk_retrieval_events(query_hash, service_ids_matched, top_score, "
+        "candidate_count, bundle_hash, duration_ms, source_ref) VALUES (?,?,?,?,?,?,?)",
+        (qhash, json.dumps(service_ids), top_score, 1, "", round(duration_ms, 2), f"{kind}:{source_ref}"),
+    )
+    conn.commit()
+    telemetry.emit(
+        consumer_root, "get",
+        query_hash=qhash, service_ids_matched=service_ids,
+        candidate_count=1, duration_ms=round(duration_ms, 2), source_ref=source_ref, kind=kind,
+    )

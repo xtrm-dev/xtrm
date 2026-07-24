@@ -1,0 +1,38 @@
+{
+  "id": "regression-alertmanager-stale-webhook",
+  "provenance": {
+    "type": "verifier-fixture",
+    "ref": "packages/service-knowledge/src/service_knowledge/scripts/verifier/tests/fixtures/alertmanager",
+    "bead": "xtrm-56flm.2",
+    "resolves": "in-repo",
+    "synthetic": false,
+    "note": "Anchor regression #3 from the observed api-gateway/runners specialist failure: stale alertmanager webhook claim. Stale claim must NOT escape into the bundle; malformed change must be blocked."
+  },
+  "category": "regression",
+  "query_or_task": "A past answer cited a stale alertmanager Discord webhook receiver; route to the owning service, surface current evidence, and verify the change before landing.",
+  "touched_paths": ["alertmanager/alertmanager.yml"],
+  "expected_services": ["alertmanager"],
+  "required_evidence": ["Service Overview", "Deploy & Runbook"],
+  "forbidden_evidence": ["STALE_DISCORD_WEBHOOK_LEGACY_RECEIVER"],
+  "expected_probes": ["Health probe — alertmanager"],
+  "cross_repo_required": false,
+  "outcome": "Routed to alertmanager; stale webhook claim absent from bundle; malformed change blocked.",
+  "service_defs": {
+    "alertmanager": {
+      "description": "Alert routing for the monitoring stack.",
+      "territory": ["alertmanager/**"],
+      "triggers": ["alertmanager", "discord", "webhook", "alert"],
+      "overview": "Alertmanager deduplicates and groups alerts, then routes them to receivers."
+    }
+  },
+  "verifier": {
+    "service_id": "alertmanager",
+    "expect_block": true,
+    "verified_at_ref": "621b73c",
+    "candidate": "# Alertmanager\n\nThe Discord webhook receiver posts alerts to #ops-alerts.\n",
+    "current": "---\nservice_id: alertmanager\n---\n# Alertmanager\n<!-- SEMANTIC_START -->\nThe Discord webhook receiver posts alerts to #ops-alerts.\n<!-- SEMANTIC_END -->\n",
+    "corpus_files": {
+      "alertmanager/alertmanager.yml": "route:\n  receiver: discord\nreceivers:\n  - name: discord\n"
+    }
+  }
+}

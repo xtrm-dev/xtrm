@@ -2,6 +2,46 @@
 
 All notable changes to the `service-knowledge` package.
 
+## [0.6.0] - 2026-07-24
+
+### Added — PR5a: eval corpus + telemetry dashboards + alert-to-service routing
+- Labeled eval corpus at `src/service_knowledge/eval/corpus/`: 88 cases (≥ 80 floor) spanning the
+  §3.9 source categories (closed issues bug+feature, merged PRs, real alerts, incidents, drift
+  history, diagnostics, past wrong-command questions) fanned over the 17-service mercury-infra
+  shape, plus the **three anchor regression cases** from the observed api-gateway/runners specialist
+  failure (`regression-api-gateway-wrong-claims`, `regression-runners-wrong-commands`,
+  `regression-alertmanager-stale-webhook`). Every case carries the full §3.9 label set
+  (`query_or_task`, `touched_paths`, `expected_services`, `required_evidence`, `forbidden_evidence`,
+  `expected_probes`, `cross_repo_required`, `outcome`) and a provenance permalink.
+- Eval harness (`service_knowledge.eval.harness`): materializes a throwaway consumer from the corpus,
+  builds the real FTS5 index, drives every case through `index.evidence_for_files` (routing +
+  retrieval + probes + stale-claim escape) and the PR1 verifier gate (FP/FN accounting), and
+  aggregates the **twelve §3.9 metrics** (`service_knowledge.eval.metrics`, exact §3.9 names +
+  green/yellow/red threshold bands). CLI: `service-knowledge eval run --corpus … --out …`.
+- Weekly report renderer (`service_knowledge.eval.report`): raw values, week-over-week delta,
+  threshold status, and corpus-expansion suggestions from unclassified failures. Written to
+  `.beads/eval-reports/YYYY-WW.md` (+ JSON sidecar). Baseline week-0 sample report included.
+- Retrieval telemetry now covers **every** retrieval surface: `knowledge_get` / `get_full_skill`
+  append a `sk_retrieval_events` row + a `component=knowledge-index event=get` line (hashed ref, no
+  raw text), and every `skill_activator` invocation appends a best-effort `sk_retrieval_events` row
+  (`source_ref=activator`). `knowledge_search` / `evidence_for_files` already recorded via PR3.
+- Verifier FP/FN accounting hooks (`scripts/verifier/accounting.py`): confusion-matrix classification
+  + `component=verifier-accounting` telemetry, used by the harness for the §3.9 FP/FN rates.
+- New MCP tool `incident_routing` (advisory only): Alertmanager-shaped payload → `knowledge_search`
+  → top-K candidate services + runbook probes + §3.2 evidence bundle. Label-named services get a
+  routing bonus over noisy lexical matches. Performs **no mutation** (canary policy is PR5b).
+- `.github/workflows/eval-weekly.yml`: Monday cron + `workflow_dispatch` running the harness,
+  publishing the report as an artifact and sticky-commenting the summary on a long-lived tracking
+  issue (`EVAL_TRACKING_ISSUE`). Structured telemetry: one `component=eval-harness` line per run +
+  one per computed metric.
+
+### Notes
+- Post-merge reindex stays wired via PR3's `_rebuild_knowledge_index` hook (advisory, ≤ 60s budget
+  enforced by `index/tests/test_timing.py` on the 17-service consumer); real mercury-infra +
+  wave-2 consumer measurement is an operator step.
+- Input to PR5b: baseline metric bands in `eval/metrics.py THRESHOLDS` inform canary thresholds.
+- 90-day telemetry retention: inherits the `.beads/` / `.xtrm/state/` default (no separate policy).
+
 ## [0.5.0] - 2026-07-24
 
 ### Added — PR4: dispatch integration + PreToolUse activator upgrade (retrieval + narrow blocking)

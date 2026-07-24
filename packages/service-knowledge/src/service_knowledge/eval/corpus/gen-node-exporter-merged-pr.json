@@ -1,0 +1,51 @@
+{
+  "id": "gen-node-exporter-merged-pr",
+  "provenance": {
+    "type": "pr",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#18)",
+    "bead": "xtrm-56flm.6",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "merged-pr",
+  "query_or_task": "Operational change to node-exporter: tune the connection pool",
+  "touched_paths": [
+    "node-exporter/config.yml"
+  ],
+  "expected_services": [
+    "node-exporter"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_node_exporter_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — node-exporter"
+  ],
+  "cross_repo_required": false,
+  "outcome": "PR merged; node-exporter pool tuned and verified against source.",
+  "service_defs": {
+    "node-exporter": {
+      "description": "node-exporter operational service.",
+      "territory": [
+        "node-exporter/**"
+      ],
+      "triggers": [
+        "node-exporter",
+        "nodeexporter",
+        "alert",
+        "health"
+      ],
+      "overview": "node-exporter handles its slice of the stack; see node-exporter/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}

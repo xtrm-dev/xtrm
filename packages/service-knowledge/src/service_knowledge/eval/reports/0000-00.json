@@ -1,0 +1,50 @@
+{
+  "week": "0000-00",
+  "corpus_version": "v0.6.0-baseline",
+  "case_count": 88,
+  "values": {
+    "service_routing": {
+      "precision": 0.9072164948453608,
+      "recall": 1.0
+    },
+    "retrieval_precision_at_k": 0.9505494505494505,
+    "retrieval_recall_at_k": 0.6705426356589147,
+    "citation_utilization_rate": null,
+    "ignored_activation_rate": null,
+    "stale_claim_escape_rate": 0.0,
+    "conflict_detection_recall": null,
+    "verification_false_positive_rate": null,
+    "verification_false_negative_rate": 0.0,
+    "probe_execution_rate": 1.0,
+    "time_to_first_correct_diagnostic": null,
+    "tokens_per_successful_task": null
+  },
+  "status": {
+    "service_routing": "green",
+    "retrieval_precision_at_k": "green",
+    "retrieval_recall_at_k": "yellow",
+    "citation_utilization_rate": "unknown",
+    "ignored_activation_rate": "unknown",
+    "stale_claim_escape_rate": "green",
+    "conflict_detection_recall": "unknown",
+    "verification_false_positive_rate": "unknown",
+    "verification_false_negative_rate": "green",
+    "probe_execution_rate": "green",
+    "time_to_first_correct_diagnostic": "unknown",
+    "tokens_per_successful_task": "unknown"
+  },
+  "measurable": {
+    "service_routing": 88,
+    "retrieval_precision_at_k": 88,
+    "retrieval_recall_at_k": 88,
+    "citation_utilization_rate": 0,
+    "ignored_activation_rate": 0,
+    "stale_claim_escape_rate": 88,
+    "conflict_detection_recall": 0,
+    "verification_false_positive_rate": 0,
+    "verification_false_negative_rate": 3,
+    "probe_execution_rate": 88,
+    "time_to_first_correct_diagnostic": 0,
+    "tokens_per_successful_task": 0
+  }
+}

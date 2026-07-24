@@ -1,0 +1,51 @@
+{
+  "id": "gen-nginx-closed-issue-bug",
+  "provenance": {
+    "type": "bd-issue",
+    "ref": "packages/service-knowledge/CHANGELOG.md (#15)",
+    "bead": "xtrm-56flm.5",
+    "resolves": "in-repo",
+    "synthetic": true,
+    "note": "Structurally-complete labeled instance; specific artifact awaits real-world backfill."
+  },
+  "category": "closed-issue-bug",
+  "query_or_task": "Diagnose why nginx is returning errors after the last deploy",
+  "touched_paths": [
+    "nginx/config.yml"
+  ],
+  "expected_services": [
+    "nginx"
+  ],
+  "required_evidence": [
+    "Service Overview",
+    "Architecture",
+    "Cross-Service Health Check",
+    "Failure Modes",
+    "Deploy & Runbook"
+  ],
+  "forbidden_evidence": [
+    "STALE_DEPRECATED_nginx_CLAIM_DO_NOT_USE"
+  ],
+  "expected_probes": [
+    "Health probe — nginx"
+  ],
+  "cross_repo_required": false,
+  "outcome": "Root-caused nginx failure to a config regression; fix identified.",
+  "service_defs": {
+    "nginx": {
+      "description": "nginx operational service.",
+      "territory": [
+        "nginx/**"
+      ],
+      "triggers": [
+        "nginx",
+        "nginx",
+        "alert",
+        "health"
+      ],
+      "overview": "nginx handles its slice of the stack; see nginx/config.yml.",
+      "fail_symptom": "high latency",
+      "fail_cause": "saturated pool"
+    }
+  }
+}
