@@ -11,17 +11,16 @@ from __future__ import annotations
 import math
 import subprocess
 
-from service_knowledge.index import _compat  # noqa: F401  (ensures scripts/ importable)
-from service_knowledge.index import ranking
+import drift_detector  # type: ignore[import-not-found]
 
-import drift_detector  # type: ignore[import-not-found]  # noqa: E402
+from service_knowledge.index import ranking
 
 
 def git_head(repo: str) -> str:
     """Current HEAD sha (reuses drift_detector's helper); empty string when unavailable."""
     try:
         return drift_detector._git_head(repo)
-    except Exception:
+    except (OSError, subprocess.SubprocessError, ValueError, RuntimeError):
         return ""
 
 

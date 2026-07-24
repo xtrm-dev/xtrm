@@ -15,23 +15,26 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from service_knowledge.index import (
+    _compat,  # noqa: F401  (must initialize script imports first)
+    schema,
+)
 from service_knowledge.index import bundle as _bundle
 from service_knowledge.index import query as _query
-from service_knowledge.index import schema
-from service_knowledge.index.builder import build, BuildStats
+from service_knowledge.index.builder import BuildStats, build
 from service_knowledge.index.query import QueryContext, RankedItem
 
 __all__ = [
-    "build",
     "BuildStats",
-    "search",
-    "get_item",
-    "get_full_skill",
-    "evidence_for_files",
-    "build_bundle",
     "QueryContext",
     "RankedItem",
+    "build",
+    "build_bundle",
     "connect",
+    "evidence_for_files",
+    "get_full_skill",
+    "get_item",
+    "search",
 ]
 
 

@@ -25,7 +25,7 @@ from typing import Any
 
 # Sibling import (consolidated scripts/ dir).
 sys.path.insert(0, str(Path(__file__).parent))
-from bootstrap import (  # noqa: E402  # type: ignore[import-not-found]
+from bootstrap import (  # type: ignore[import-not-found]
     RootResolutionError,
     get_pack_path,
     get_project_root,
@@ -53,7 +53,7 @@ def read_index_state(project_root: str) -> dict[str, Any]:
         ).fetchone()
         conn.close()
         return dict(row) if row else {}
-    except Exception:
+    except (OSError, sqlite3.Error):
         return {}
 
 

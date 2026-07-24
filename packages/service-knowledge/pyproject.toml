@@ -26,6 +26,8 @@ classifiers = [
 # boundary is correct from the first release; PR3 imports it for vault-backed secrets.
 # The CLI itself is stdlib-only and must NOT depend on xtrm/bd/sp/xt/xtmux.
 dependencies = [
+  "jsonschema>=4.0",
+  "markdown-it-py>=4.0",
   "pyyaml>=6.0",
   "vaultctl>=0.1.0,<0.2",
 ]

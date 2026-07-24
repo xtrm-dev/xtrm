@@ -62,7 +62,7 @@ def _project_root() -> Path:
         )
         if r.returncode == 0 and r.stdout.strip():
             return Path(r.stdout.strip())
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         pass
     return Path.cwd()
 
@@ -75,7 +75,7 @@ def _current_branch(root: Path) -> str:
         )
         if r.returncode == 0:
             return r.stdout.strip()
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         pass
     return ""
 
@@ -90,7 +90,7 @@ def _default_branch(root: Path) -> str:
         if r.returncode == 0 and r.stdout.strip():
             # e.g. "origin/main" -> "main"
             return r.stdout.strip().split("/", 1)[-1]
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         pass
     return ""
 
@@ -126,7 +126,7 @@ def _auto_reconcile(root: Path) -> tuple[bool, str]:
     operator/agent can pick up where the automation left off.
     """
     if os.environ.get(AUTO_RECONCILE_ENV, "").lower() not in {"1", "true", "yes", "on"}:
-        return (False, "opt-in disabled (set %s=1 to enable)" % AUTO_RECONCILE_ENV)
+        return (False, f"opt-in disabled (set {AUTO_RECONCILE_ENV}=1 to enable)")
 
     sp = shutil.which("sp")
     if not sp:
@@ -144,9 +144,9 @@ def _auto_reconcile(root: Path) -> tuple[bool, str]:
     cmd = [
         sp, "script", "service-skills-sync",
         "--template-field", "script_template",
-        "--vars", "repo=%s" % root.name,
-        "--vars", "pack=%s" % pack,
-        "--vars", "cwd=%s" % str(root),
+        "--vars", f"repo={root.name}",
+        "--vars", f"pack={pack}",
+        "--vars", f"cwd={root}",
         "--allow-local-scripts",
         "--allow-write-capable",
         "--json",
@@ -159,23 +159,23 @@ def _auto_reconcile(root: Path) -> tuple[bool, str]:
     try:
         r = _run_sp_subprocess(cmd, env, (timeout_ms / 1000) + 60)
     except subprocess.TimeoutExpired:
-        return (False, "sp script timed out after %ds" % (timeout_ms // 1000))
-    except Exception as exc:
-        return (False, "sp script invocation failed: %s" % exc)
+        return (False, f"sp script timed out after {timeout_ms // 1000}s")
+    except OSError as exc:
+        return (False, f"sp script invocation failed: {exc}")
 
     if r.returncode != 0:
-        return (False, "sp script exit=%d stderr=%s" % (r.returncode, r.stderr.strip()[:300]))
+        return (False, f"sp script exit={r.returncode} stderr={r.stderr.strip()[:300]}")
 
     try:
         payload = json.loads(r.stdout)
     except json.JSONDecodeError as exc:
-        return (False, "sp script returned non-JSON stdout: %s" % exc)
+        return (False, f"sp script returned non-JSON stdout: {exc}")
 
     if not payload.get("success"):
         err = payload.get("error", "unspecified")
-        return (False, "sp script success=false error=%s" % err)
+        return (False, f"sp script success=false error={err}")
 
-    return (True, "sp script success: %s" % payload.get("meta", {}).get("trace_id", "(no trace)"))
+    return (True, f"sp script success: {payload.get('meta', {}).get('trace_id', '(no trace)')}")
 
 
 def _append_runlog(root: Path, line: str) -> None:
@@ -185,7 +185,7 @@ def _append_runlog(root: Path, line: str) -> None:
         log.parent.mkdir(parents=True, exist_ok=True)
         with log.open("a", encoding="utf-8") as fh:
             fh.write(line.rstrip("\n") + "\n")
-    except Exception:
+    except OSError:
         pass
 
 
@@ -213,7 +213,7 @@ def _rebuild_knowledge_index(root: Path) -> None:
         from service_knowledge import index  # type: ignore[import-not-found]
 
         index.build(root)
-    except Exception:
+    except (ImportError, OSError, RuntimeError, ValueError, TypeError, KeyError):
         pass
 
 def main() -> int:
@@ -238,7 +238,7 @@ def main() -> int:
     sys.path.insert(0, str(_SCRIPTS_DIR))
     try:
         from drift_detector import scan_drift  # type: ignore[import-not-found]
-    except Exception:
+    except (ImportError, OSError, RuntimeError, ValueError, TypeError, KeyError):
         # Machinery not importable (skills not installed) — nothing to do.
         return 0
 
@@ -247,7 +247,7 @@ def main() -> int:
         # semantic tiering is the librarian's job (/updating-service-skills). Force the cheap
         # mtime path so a default-branch merge can never trigger gitnexus fan-out (xtrm-08i0b).
         drift = scan_drift(project_root=str(root), use_gitnexus=False)
-    except Exception:
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError):
         return 0
 
     if not drift:
@@ -258,32 +258,31 @@ def main() -> int:
     try:
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_text(
-            "service-skills drift detected post-merge on '%s'\n"
-            "services: %s\n"
-            "files: %d\n"
-            "action: run /updating-service-skills (service-skills-sync) to reconcile + stamp last_sync_ref\n"
-            % (branch or default or "default", ", ".join(services), len(drift)),
+            f"service-skills drift detected post-merge on '{branch or default or 'default'}'\n"
+            f"services: {', '.join(services)}\n"
+            f"files: {len(drift)}\n"
+            "action: run /updating-service-skills (service-skills-sync) to reconcile + stamp last_sync_ref\n",
             encoding="utf-8",
         )
-    except Exception:
+    except OSError:
         pass
 
-    print("")
+    print()
     print("⚠  service-skills drift detected at the post-merge reconciliation point.")
-    print("   %d drifted file(s) across service(s): %s" % (len(drift), ", ".join(services)))
+    print(f"   {len(drift)} drifted file(s) across service(s): {', '.join(services)}")
 
     ok, msg = _auto_reconcile(root)
     if ok:
-        print("   ✓ auto-reconcile via sp script service-skills-sync — %s" % msg)
+        print(f"   ✓ auto-reconcile via sp script service-skills-sync — {msg}")
         print("   the specialist removes the pending marker on success.")
-        _append_runlog(root, "OK %s | services=%s | %s" % (branch or default or "-", ",".join(services), msg))
+        _append_runlog(root, f"OK {branch or default or '-'} | services={','.join(services)} | {msg}")
     else:
         print("   Reconcile with /updating-service-skills (the service-skills-sync specialist),")
         print("   which syncs the drifted SKILL.md and advances last_sync_ref.")
-        print("   (pending marker: %s)" % MARKER_REL)
-        print("   (auto-reconcile skipped: %s)" % msg)
-        _append_runlog(root, "SKIP %s | services=%s | %s" % (branch or default or "-", ",".join(services), msg))
-    print("")
+        print(f"   (pending marker: {MARKER_REL})")
+        print(f"   (auto-reconcile skipped: {msg})")
+        _append_runlog(root, f"SKIP {branch or default or '-'} | services={','.join(services)} | {msg}")
+    print()
     return 0
 
 

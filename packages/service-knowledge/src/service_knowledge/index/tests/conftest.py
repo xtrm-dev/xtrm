@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
-import sys
 
 # Make the standalone machinery scripts (cataloger, umbrella_generator) importable as
 # top-level modules — they rely on a sys.path insert of their own dir, replicated here.
