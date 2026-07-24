@@ -2,6 +2,8 @@
 the legacy 'Available expert personas' output stays behind --legacy for one release cycle."""
 from __future__ import annotations
 
+import subprocess
+
 import cataloger  # type: ignore[import-not-found]
 
 from service_knowledge import index
@@ -34,3 +36,14 @@ def test_index_health_states(alertmanager_consumer, monkeypatch):
     index.build(alertmanager_consumer)
     # ok right after build (source_ref == HEAD)
     assert cataloger.read_index_health(str(alertmanager_consumer))["state"] == "ok"
+
+    # Any later HEAD makes derived catalog health stale until rebuild.
+    marker = alertmanager_consumer / "alertmanager" / "catalog-health-check.txt"
+    marker.write_text("changed\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(alertmanager_consumer), "add", "-A"], check=True,
+                   capture_output=True)
+    subprocess.run(["git", "-C", str(alertmanager_consumer), "commit", "-qm", "advance HEAD"],
+                   check=True, capture_output=True)
+    stale = cataloger.read_index_health(str(alertmanager_consumer))
+    assert stale["state"] == "stale"
+    assert stale["source_ref"] != stale["head"]
