@@ -22,13 +22,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import bootstrap  # type: ignore[import-not-found]
 from vaultctl.store import search as vaultctl_search
 
-from service_knowledge.index import _compat  # noqa: F401  (ensures scripts/ importable)
 from service_knowledge.index import freshness as freshness_mod
 from service_knowledge.index import ranking, schema, telemetry
-
-import bootstrap  # type: ignore[import-not-found]  # noqa: E402
 
 _VERDICT_VERIFIED = {"verified", "pass", "verified_pass", "supported"}
 _VERDICT_INSUFFICIENT = {"insufficient_evidence", "insufficient", "unknown"}

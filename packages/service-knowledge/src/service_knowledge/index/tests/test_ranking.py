@@ -3,9 +3,9 @@ lattice, authority tiers and territory routing. The weighted sum is a pure funct
 ordering is fully deterministic given the five signal values."""
 from __future__ import annotations
 
+from service_knowledge import index
 from service_knowledge.index import query as query_mod
 from service_knowledge.index import ranking
-from service_knowledge import index
 
 
 def test_weights_sum_to_one():
@@ -15,11 +15,11 @@ def test_weights_sum_to_one():
 def test_controlled_five_candidate_order():
     """Five candidates with hand-set T/L/I/A/F — expected order is by descending weighted score."""
     candidates = {
-        "A": dict(territory=1.0, lexical=0.8, intent=1.0, authority=1.0, freshness=1.0),   # territory-owned, curated+verified, fresh
-        "B": dict(territory=0.7, lexical=1.0, intent=0.6, authority=0.8, freshness=0.9),   # explicit service, auto+verified
-        "C": dict(territory=0.3, lexical=0.9, intent=0.5, authority=0.3, freshness=0.5),   # trigger match, unverified
-        "D": dict(territory=0.0, lexical=0.7, intent=0.4, authority=1.0, freshness=0.2),   # no territory, verified but stale
-        "E": dict(territory=0.0, lexical=0.6, intent=0.2, authority=0.2, freshness=0.1),   # memory, weak everywhere
+        "A": {"territory": 1.0, "lexical": 0.8, "intent": 1.0, "authority": 1.0, "freshness": 1.0},   # territory-owned, curated+verified, fresh
+        "B": {"territory": 0.7, "lexical": 1.0, "intent": 0.6, "authority": 0.8, "freshness": 0.9},   # explicit service, auto+verified
+        "C": {"territory": 0.3, "lexical": 0.9, "intent": 0.5, "authority": 0.3, "freshness": 0.5},   # trigger match, unverified
+        "D": {"territory": 0.0, "lexical": 0.7, "intent": 0.4, "authority": 1.0, "freshness": 0.2},   # no territory, verified but stale
+        "E": {"territory": 0.0, "lexical": 0.6, "intent": 0.2, "authority": 0.2, "freshness": 0.1},   # memory, weak everywhere
     }
     scored = {name: ranking.weighted_score(**sig) for name, sig in candidates.items()}
     order = sorted(scored, key=scored.get, reverse=True)

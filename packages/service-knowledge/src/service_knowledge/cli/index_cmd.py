@@ -12,9 +12,9 @@ import sys
 from dataclasses import asdict
 
 from service_knowledge import index
+from service_knowledge.cli.common import resolve_consumer_root
 from service_knowledge.index import query as query_mod
 from service_knowledge.index import schema
-from service_knowledge.cli.common import resolve_consumer_root
 
 
 def _print_json(payload: object) -> None:
@@ -81,17 +81,23 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     nested = parser.add_subparsers(dest="index_command", metavar="<action>")
 
     for action in ("build", "rebuild"):
-        nested.add_parser(action, help="Full rebuild of the derived index.",
-                          description="Full rebuild of the derived index.")
+        action_parser = nested.add_parser(action, help="Full rebuild of the derived index.",
+                                          description="Full rebuild of the derived index.")
+        action_parser.add_argument("--path", default=argparse.SUPPRESS,
+                                   help="Consumer repo root (default: git toplevel of cwd).")
 
     q = nested.add_parser("query", help="Run a read-only retrieval query.")
+    q.add_argument("--path", default=argparse.SUPPRESS,
+                   help="Consumer repo root (default: git toplevel of cwd).")
     q.add_argument("query", help="Free-text query (alert, metric, concept, path).")
     q.add_argument("--service-id", default=None, dest="service_id")
     q.add_argument("--paths", default=None, help="Comma-separated file paths for territory routing.")
     q.add_argument("--limit", type=int, default=7)
     q.add_argument("--bundle", action="store_true", help="Emit a §3.2 evidence bundle instead of raw results.")
 
-    nested.add_parser("stats", help="Show index_state + item counts.")
+    stats = nested.add_parser("stats", help="Show index_state + item counts.")
+    stats.add_argument("--path", default=argparse.SUPPRESS,
+                       help="Consumer repo root (default: git toplevel of cwd).")
     parser.set_defaults(index_command=None)
 
 

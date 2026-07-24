@@ -26,7 +26,12 @@ from pathlib import Path
 # bootstrap.py is a sibling in this consolidated scripts/ dir (no cross-skill hop).
 sys.path.insert(0, str(Path(__file__).parent))
 
-from bootstrap import RootResolutionError, get_service_skill_path_str, list_services  # noqa: E402
+from bootstrap import (
+    RegistryError,
+    RootResolutionError,
+    get_service_skill_path_str,
+    list_services,
+)
 
 CACHE_REL = Path(".xtrm") / "cache" / "service-knowledge.sqlite"
 
@@ -99,7 +104,7 @@ def generate_catalog(*, legacy: bool = False) -> str:
     """Generate the service catalog XML block (empty string on any failure — never break start)."""
     try:
         services = list_services()
-    except (RootResolutionError, Exception):
+    except (OSError, RegistryError, RootResolutionError, ValueError):
         return ""
 
     if not services:

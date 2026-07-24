@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from service_knowledge.index import schema
 from service_knowledge import index
+from service_knowledge.index import schema
 
 
 def _items(conn):

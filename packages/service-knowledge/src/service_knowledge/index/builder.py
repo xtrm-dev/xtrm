@@ -21,26 +21,25 @@ import hashlib
 import json
 import re
 import sqlite3
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import bootstrap  # type: ignore[import-not-found]
 from vaultctl.core.models import SourceConfig
 from vaultctl.store import indexer as vaultctl_indexer
 from vaultctl.store.link_resolver import slugify
 
 from service_knowledge import __version__
-from service_knowledge.index import _compat  # noqa: F401  (ensures scripts/ importable)
 from service_knowledge.index import citations as citations_mod
 from service_knowledge.index import claims as claims_mod
 from service_knowledge.index import freshness as freshness_mod
 from service_knowledge.index import probes as probes_mod
 from service_knowledge.index import ranking, schema, secrets, telemetry
 from service_knowledge.index.markdown_sections import parse_skill
-
-import bootstrap  # type: ignore[import-not-found]  # noqa: E402
 
 VAULTCTL_SOURCE_ID = "service-knowledge"
 # Bounded to per-service SKILLs under a services/ dir — never machinery reference skills.
@@ -131,8 +130,10 @@ class _ItemWriter:
     ) -> None:
         scrubbed = secrets.scrub(text)
         scrubbed_desc = secrets.scrub(description or text[:240])
-        tags_text = " ".join(sorted(set(tags or [])))
-        literals = _literals(service_id, title, tags_text, section_path)
+        scrubbed_title = secrets.scrub(title).text
+        tags_text = secrets.scrub(" ".join(sorted(set(tags or [])))).text
+        scrubbed_section_path = secrets.scrub(section_path).text
+        literals = _literals(service_id, scrubbed_title, tags_text, scrubbed_section_path)
         self.conn.execute(
             """
             INSERT INTO sk_items(
@@ -152,9 +153,9 @@ class _ItemWriter:
               related_ids=excluded.related_ids, updated_at=excluded.updated_at
             """,
             (
-                item_id, kind, repo, service_id, title, scrubbed_desc.text, scrubbed.text,
+                item_id, kind, repo, service_id, scrubbed_title, scrubbed_desc.text, scrubbed.text,
                 literals, tags_text, source_path, source_ref, source_hash, authority, status,
-                risk, json.dumps(territory or []), json.dumps(triggers or []), section_path,
+                risk, json.dumps(territory or []), json.dumps(triggers or []), scrubbed_section_path,
                 skill_rel_path, claim_type, json.dumps(verification or {}),
                 json.dumps(related_ids or []), _utc_now(),
             ),
@@ -164,7 +165,7 @@ class _ItemWriter:
         self.conn.execute(
             "INSERT INTO sk_items_fts(title, description, text, tags, literals, sk_item_id, service_id) "
             "VALUES (?,?,?,?,?,?,?)",
-            (title, scrubbed_desc.text, scrubbed.text, tags_text, literals, item_id, service_id),
+            (scrubbed_title, scrubbed_desc.text, scrubbed.text, tags_text, literals, item_id, service_id),
         )
         self.conn.execute("DELETE FROM sk_citations WHERE item_id=?", (item_id,))
         for citation in citations or []:
@@ -178,9 +179,29 @@ class _ItemWriter:
 
 
 def _index_vaultctl_documents(conn: sqlite3.Connection, consumer_root: Path) -> None:
-    """Reuse vaultctl's indexer for the whole-SKILL document + link-graph layer."""
-    source = SourceConfig(id=VAULTCTL_SOURCE_ID, root=consumer_root, include_glob=VAULTCTL_INCLUDE_GLOB)
-    vaultctl_indexer.index_source(conn, source, full=True)
+    """Reuse vaultctl's indexer for scrubbed whole-SKILL documents and link graph."""
+    with tempfile.TemporaryDirectory(prefix="service-knowledge-vaultctl-") as staging:
+        staging_root = Path(staging)
+        for source_path in consumer_root.glob(VAULTCTL_INCLUDE_GLOB):
+            if not source_path.is_file():
+                continue
+            relative_path = source_path.relative_to(consumer_root)
+            if secrets.should_skip_file(str(relative_path)):
+                continue
+            try:
+                text = source_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            target_path = staging_root / relative_path
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(secrets.scrub(text).text, encoding="utf-8")
+
+        source = SourceConfig(
+            id=VAULTCTL_SOURCE_ID,
+            root=staging_root,
+            include_glob=VAULTCTL_INCLUDE_GLOB,
+        )
+        vaultctl_indexer.index_source(conn, source, full=True)
 
 
 def _service_skill_rel_path(service: dict[str, Any], service_id: str, consumer_root: Path) -> str:
@@ -189,7 +210,7 @@ def _service_skill_rel_path(service: dict[str, Any], service_id: str, consumer_r
         return str(skill_path)
     try:
         return bootstrap.get_service_skill_path_str(service_id, str(consumer_root))
-    except Exception:
+    except (bootstrap.BootstrapError, OSError, ValueError):
         return f"{service_id}/SKILL.md"
 
 
@@ -392,7 +413,7 @@ def _compute_index_hash(conn: sqlite3.Connection) -> str:
     ).fetchall()
     digest = hashlib.sha256()
     for row in rows:
-        digest.update(f"{row['id']}|{row['kind']}|{row['status']}|{row['source_hash']}\n".encode("utf-8"))
+        digest.update(f"{row['id']}|{row['kind']}|{row['status']}|{row['source_hash']}\n".encode())
     return "sha256:" + digest.hexdigest()
 
 

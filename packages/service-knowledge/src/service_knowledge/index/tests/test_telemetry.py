@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import json
 
-from service_knowledge.index import paths, telemetry
 from service_knowledge import index
+from service_knowledge.index import paths, telemetry
 
 
 def test_query_hash_is_stable_and_not_raw():

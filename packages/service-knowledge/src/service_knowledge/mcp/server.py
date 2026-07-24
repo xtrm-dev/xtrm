@@ -8,6 +8,7 @@ read ``{"tool": <name>, "args": {...}}`` per line, write ``{"result": ...}`` (or
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 from typing import Any
 
@@ -26,7 +27,7 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
         return {"result": tools[method](**args)}
     except TypeError as exc:
         return {"error": f"bad arguments for {method}: {exc}"}
-    except Exception as exc:  # boundary: MCP server must return errors, not crash the pipe
+    except (AttributeError, KeyError, OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
         return {"error": f"{method} failed: {exc}"}
 
 

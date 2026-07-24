@@ -6,9 +6,14 @@ surface. There is deliberately no ``answer()`` endpoint — the layer returns ev
 """
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from service_knowledge.mcp import knowledge_evidence_for_files, knowledge_get, knowledge_search
+from service_knowledge.mcp import (
+    knowledge_evidence_for_files,
+    knowledge_get,
+    knowledge_search,
+)
 
 # name -> module (each exposes TOOL_NAME, DESCRIPTION, PARAMETERS, run)
 TOOL_MODULES = (knowledge_search, knowledge_get, knowledge_evidence_for_files)
@@ -27,4 +32,4 @@ def tool_specs() -> list[dict[str, Any]]:
     ]
 
 
-__all__ = ["tool_registry", "tool_specs", "TOOL_MODULES", "DEFERRED_TOOLS"]
+__all__ = ["DEFERRED_TOOLS", "TOOL_MODULES", "tool_registry", "tool_specs"]
