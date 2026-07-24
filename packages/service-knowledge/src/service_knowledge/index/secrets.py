@@ -32,6 +32,13 @@ _SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("github_token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,255}\b")),
     ("slack_token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
     ("slack_webhook", re.compile(r"https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+")),
+    ("discord_webhook", re.compile(
+        r"https://discord(?:app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9._-]+"
+    )),
+    ("generic_webhook_assignment", re.compile(
+        r"(?i)(?P<prefix>\b(?:[A-Za-z_][A-Za-z0-9_]*_)?WEBHOOK_URL\s*[:=]\s*)"
+        r"(?P<quote>[\"']?)(?P<value>[^\"'\s,;]+)(?P<suffix>[\"']?)"
+    )),
     ("private_key_block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----")),
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")),
     ("url_credential", _URL_CREDENTIAL),
@@ -60,5 +67,13 @@ def scrub(text: str) -> ScrubResult:
     for kind, pattern in _SECRET_PATTERNS:
         if pattern.search(redacted):
             found.append(kind)
-            redacted = pattern.sub(REDACTION, redacted)
+            redacted = pattern.sub(_redact_match, redacted)
     return ScrubResult(text=redacted, kinds=tuple(sorted(set(found))))
+
+
+def _redact_match(match: re.Match[str]) -> str:
+    groups = match.groupdict()
+    prefix = groups.get("prefix")
+    if prefix is None:
+        return REDACTION
+    return f'{prefix}{groups["quote"]}{REDACTION}{groups["suffix"]}'

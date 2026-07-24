@@ -27,7 +27,10 @@ PARAMETERS = {
 
 def run(item_id: str | None = None, skill_path: str | None = None,
         consumer_root: str | None = None, **_: Any) -> dict[str, Any]:
-    root = resolve_consumer_root(consumer_root)
+    try:
+        root = resolve_consumer_root(consumer_root)
+    except ValueError as exc:
+        return {"error": str(exc)}
     if item_id:
         item = index.get_item(root, item_id)
         if item is None:

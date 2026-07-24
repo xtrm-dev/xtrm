@@ -93,9 +93,10 @@ def make_consumer(root: Path, services: dict[str, dict]) -> Path:
 
 
 @pytest.fixture
-def alertmanager_consumer(tmp_path: Path) -> Path:
+def alertmanager_consumer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """One service whose 'discord webhook' detail lives in a SECTION (not the registry desc)."""
     repo = tmp_path / "am-infra"
+    monkeypatch.setenv("SERVICE_KNOWLEDGE_ROOT", str(repo))
     umb = repo / ".xtrm" / "skills" / "infra" / "service-knowledge"
     svc = umb / "services" / "alertmanager"
     svc.mkdir(parents=True)

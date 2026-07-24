@@ -10,6 +10,8 @@ def test_secret_values_absent_from_all_searchable_layers(alertmanager_consumer):
         "AKIAIOSFODNN7EXAMPLE",
         "ghp_1234567890abcdefghijklmnopqrstuv",
         "redis://:supersecretpw@redis.example.test:6379/0",
+        "https://discord.com/api/webhooks/123456789/discord-secret-token",
+        "https://hooks.example.test/generic-secret-token",
     )
     skill = (
         alertmanager_consumer
@@ -20,7 +22,9 @@ def test_secret_values_absent_from_all_searchable_layers(alertmanager_consumer):
         + "\n## Credentials\n"
         + "aws_access_key_id = AKIAIOSFODNN7EXAMPLE\n"
         + "token: ghp_1234567890abcdefghijklmnopqrstuv\n"
-        + "cache: redis://:supersecretpw@redis.example.test:6379/0\n",
+        + "cache: redis://:supersecretpw@redis.example.test:6379/0\n"
+        + 'DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/123456789/discord-secret-token"\n'
+        + "ALERT_WEBHOOK_URL: https://hooks.example.test/generic-secret-token\n",
         encoding="utf-8",
     )
 
@@ -45,3 +49,10 @@ def test_secret_values_absent_from_all_searchable_layers(alertmanager_consumer):
     for secret in secrets:
         result = index.search(alertmanager_consumer, secret)
         assert all(secret not in str(row) for row in result["results"])
+
+    skill = index.get_full_skill(
+        alertmanager_consumer,
+        ".xtrm/skills/infra/service-knowledge/services/alertmanager/SKILL.md",
+    )
+    assert skill is not None
+    assert all(secret not in skill["body"] for secret in secrets)

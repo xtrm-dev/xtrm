@@ -51,6 +51,31 @@ def test_knowledge_get_tool(alertmanager_consumer):
     assert response["result"]["item"]["kind"] == "section"
 
 
+def test_knowledge_get_rejects_untrusted_skill_paths(alertmanager_consumer, tmp_path):
+    index.build(alertmanager_consumer)
+    outside = tmp_path / "outside.txt"
+    outside.write_text("PLANTED-ARBITRARY-READ", encoding="utf-8")
+    for skill_path in ("../outside.txt", str(outside), "alertmanager/alertmanager.yml"):
+        response = mcp_server.handle(
+            {"tool": "knowledge_get", "args": {
+                "skill_path": skill_path, "consumer_root": str(alertmanager_consumer)}})
+        assert "error" in response.get("result", response)
+        assert "PLANTED-ARBITRARY-READ" not in json.dumps(response)
+
+
+def test_knowledge_get_rejects_alternate_consumer_root(alertmanager_consumer, tmp_path):
+    index.build(alertmanager_consumer)
+    alternate = tmp_path / "alternate"
+    alternate.mkdir()
+    planted = alternate / "secret.txt"
+    planted.write_text("PLANTED-ALTERNATE-ROOT", encoding="utf-8")
+    response = mcp_server.handle(
+        {"tool": "knowledge_get", "args": {
+            "skill_path": "SKILL.md", "consumer_root": str(alternate)}})
+    assert "error" in response.get("result", response)
+    assert "PLANTED-ALTERNATE-ROOT" not in json.dumps(response)
+
+
 def test_unknown_tool_errors():
     assert "error" in mcp_server.handle({"tool": "knowledge_probes"})
 

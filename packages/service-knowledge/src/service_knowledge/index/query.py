@@ -367,20 +367,25 @@ def get_item(consumer_root: Path, item_id: str) -> dict[str, Any] | None:
 
 
 def get_full_skill(consumer_root: Path, skill_rel_path: str) -> dict[str, Any] | None:
-    """Return the full SKILL.md text via vaultctl's document layer (knowledge_get full skill)."""
+    """Return scrubbed, indexed SKILL.md content for a safe repo-relative path."""
+    if not isinstance(skill_rel_path, str):
+        return None
+    rel_path = Path(skill_rel_path)
+    if rel_path.is_absolute() or rel_path.name != "SKILL.md" or ".." in rel_path.parts:
+        return None
+    root = Path(consumer_root).resolve()
+    try:
+        (root / rel_path).resolve(strict=False).relative_to(root)
+    except (OSError, ValueError):
+        return None
+
     conn = schema.connect(consumer_root)
     try:
         row = conn.execute(
             "SELECT rel_path, title, body, status FROM documents WHERE source_id=? AND rel_path=?",
-            ("service-knowledge", skill_rel_path),
+            ("service-knowledge", rel_path.as_posix()),
         ).fetchone()
-        if row is None:
-            abs_path = Path(consumer_root) / skill_rel_path
-            if abs_path.exists():
-                return {"rel_path": skill_rel_path, "title": abs_path.stem,
-                        "body": abs_path.read_text(encoding="utf-8", errors="replace"), "status": None}
-            return None
-        return dict(row)
+        return dict(row) if row is not None else None
     finally:
         conn.close()
 
