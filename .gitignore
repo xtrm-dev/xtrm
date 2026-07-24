@@ -64,7 +64,3 @@ __pycache__/
 .xtrm/cache/
 .xtrm/statusline-claim
 .pi/skills/
-# bd worktree
-.worktrees/xtrm-56flm.3/xtrm-56flm.3-executor/
-# bd worktree
-.worktrees/xtrm-dli/xtrm-dli-executor/
