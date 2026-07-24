@@ -1,0 +1,8 @@
+Original chat: https://chatgpt.com/share/6a62b189-a570-83eb-a7ec-52e2f5cb4390
+- In the deterministic part where we check at the end if beads were updated, **Commit, result, beads - message-send** 
+	- Presence in beads etc should be runtime checked and marked OK/NOK, but shouldn't fail the job, they should escalate to the coordinator which could attempt a fix or this can be made programmatic.
+	- message-send feels like a bridge before channels land, need to see if that's the correct shape for it, maybe coordinator should receive message-send / get / obligation only if escalated, i'm not sure
+	- read [github.com/xtrm-dev/core/docs/channels/channels.md] for overlaps and making sure we're not bridging something that would shortly land;
+	- i agree strongly that the executor shouldn't do commits itself, but must be made an efficient way because in the past there were problems with automatization of this part, for example starting from a base branch that was dirty or anyways the worktree is dirty, and automated commit was wrong;
+- beads features are underused in some parts, for example: 
+	- there should be an owner section on the bead, it could be put there the name id or whatever that reconduces the bead to the actual agent that worked on it;
