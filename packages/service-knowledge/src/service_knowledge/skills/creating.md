@@ -3,7 +3,7 @@
 
 > Detailed **create** flow for the `service-skills` router. Invoked via `/service-skills` (create) or `/creating-service-skills` muscle-memory.
 >
-> **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.claude/skills/service-skills/scripts/` (the active view of this skill).
+> **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.xtrm/skills/default/service-knowledge/scripts/` (the active view of this skill).
 
 ## Role: The Architect
 
@@ -27,15 +27,15 @@ technologies and auto-populates official documentation links.
 
 ```bash
 # Create a skeleton for a service
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/scaffolder.py" \
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/scaffolder.py" \
   create <service-id> <territory-path> "<description>"
 
 # Example
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/scaffolder.py" \
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/scaffolder.py" \
   create auth-service src/auth/ "JWT authentication and session management"
 ```
 
-The skeleton creates at `.claude/skills/<service-id>/`:
+The skeleton creates at `.xtrm/skills/<pack>/service-knowledge/services/<service-id>/`:
 - `SKILL.md` with `[PENDING RESEARCH]` markers
 - `scripts/health_probe.py` stub
 - `scripts/log_hunter.py` stub
@@ -47,14 +47,14 @@ The skeleton creates at `.claude/skills/<service-id>/`:
 Classify the service type to determine which specialist script to add:
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/deep_dive.py" \
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/deep_dive.py" \
   classify <territory-path>
 ```
 
 Print the full Phase 2 research agenda:
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/deep_dive.py" \
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/deep_dive.py" \
   questions <service-type>
 ```
 
@@ -329,7 +329,7 @@ service territory (from `service-registry.json`). If it does, it injects:
 
 ```
 [Service Skill] You are about to work with the '<service-id>' service territory.
-  Load the expert skill before proceeding: Read .claude/skills/<service-id>/SKILL.md
+  Load the expert skill before proceeding: Read .xtrm/skills/<pack>/service-knowledge/services/<service-id>/SKILL.md
   The skill contains: operational knowledge, failure modes, diagnostic scripts,
   and the correct methods for managing this service.
   Do not use ad-hoc approaches (raw SQL, improvised docker commands) when the
@@ -348,7 +348,7 @@ Check `.claude/settings.json` contains a `PreToolUse` entry:
 "PreToolUse": [{
   "matcher": "Read|Write|Edit|Glob|Grep|Bash",
   "hooks": [{"type": "command",
-    "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/skill_activator.py\""}]
+    "command": "python3 \"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/skill_activator.py\""}]
 }]
 ```
 
@@ -357,7 +357,7 @@ If missing, run the installer again or add it manually.
 ### Verify the service is registered
 
 ```bash
-python3 .claude/skills/service-skills/scripts/cataloger.py
+python3 .xtrm/skills/default/service-knowledge/scripts/cataloger.py
 ```
 
 The service should appear in the output catalog. If not, the territory may not
@@ -371,7 +371,7 @@ After completing Phase 3, confirm:
 ✅ Hook registered: '<service-id>' skill is now auto-activated.
 
 Whenever you (or I) work with files in <territory> or run commands mentioning
-'<service-id>', I will automatically load .claude/skills/<service-id>/SKILL.md
+'<service-id>', I will automatically load .xtrm/skills/<pack>/service-knowledge/services/<service-id>/SKILL.md
 and apply its expert knowledge — including using the correct diagnostic scripts
 instead of ad-hoc queries.
 ```
@@ -426,7 +426,7 @@ After successful completion:
 **Territory**: <file patterns>
 **Specialist Script**: <script-name.py>
 **Health Strategy**: <strategy>
-**Skill Path**: `.claude/skills/<service-id>/SKILL.md`
+**Skill Path**: `.xtrm/skills/<pack>/service-knowledge/services/<service-id>/SKILL.md`
 **Official Docs**: <detected technologies>
 
 **Phase 2 Status**: Complete
@@ -446,7 +446,7 @@ After successful completion:
 ## Tool Restrictions
 
 Write to:
-- ✅ `.claude/skills/<service-id>/` (new skill packages)
+- ✅ `.xtrm/skills/<pack>/service-knowledge/services/<service-id>/` (new skill packages)
 - ✅ `.claude/skills/service-registry.json` (registration)
 
 Do not:

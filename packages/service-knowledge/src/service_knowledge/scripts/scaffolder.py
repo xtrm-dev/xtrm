@@ -20,7 +20,7 @@ sys.path.insert(0, str(script_dir))
 
 from bootstrap import RootResolutionError, get_pack_path, get_project_root, get_service_skill_dir, register_service  # noqa: E402
 
-CONTRACT_PATH = Path(__file__).parent.parent / "references" / "service_skill_contract.json"
+CONTRACT_PATH = Path(__file__).parent.parent / "contracts" / "service_skill_contract.json"
 
 SERVICE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-_]{0,63}$")
 
