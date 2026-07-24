@@ -30,6 +30,21 @@ def test_freshness_decays_with_commits(infra_consumer):
     assert math.isclose(score, 0.5, rel_tol=1e-6)
 
 
+def test_freshness_ignores_unrelated_commits(infra_consumer):
+    first = subprocess.run(["git", "-C", str(infra_consumer), "rev-parse", "HEAD"],
+                           capture_output=True, text=True, check=True).stdout.strip()
+    unrelated = infra_consumer / "prometheus" / "config.yml"
+    unrelated.write_text("key: unrelated\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(infra_consumer), "add", "-A"], check=True,
+                   capture_output=True)
+    subprocess.run(["git", "-C", str(infra_consumer), "commit", "-qm", "unrelated change"],
+                   check=True, capture_output=True)
+
+    score, changed = freshness.compute(str(infra_consumer), first, ["alertmanager/**"])
+    assert changed == 0
+    assert score == 1.0
+
+
 def test_freshness_absent_ref():
     score, changed = freshness.compute("/nonexistent", "", ["x/**"])
     assert changed is None

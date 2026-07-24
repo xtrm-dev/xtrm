@@ -25,6 +25,14 @@ def test_rebuild_and_query_emit_events(alertmanager_consumer):
     assert components == {"knowledge-index"}
     assert "rebuild" in events
     assert "query" in events
+    rebuild = next(record for record in records if record["event"] == "rebuild")
+    assert {"source_ref", "item_count", "services_count", "candidate_count",
+            "duration_ms", "index_hash", "generator_version"} <= rebuild.keys()
+    query = next(record for record in records if record["event"] == "query")
+    assert {"query_hash", "service_ids_matched", "top_score", "candidate_count",
+            "duration_ms", "source_ref"} <= query.keys()
+    assert query["query_hash"] == telemetry.query_hash("discord webhook")
+    assert query["service_ids_matched"] == ["alertmanager"]
     # raw query text never logged
     for record in records:
         assert "discord webhook" not in json.dumps(record)
