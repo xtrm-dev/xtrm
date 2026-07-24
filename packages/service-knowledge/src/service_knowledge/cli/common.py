@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from service_knowledge import __version__
@@ -319,3 +320,81 @@ def remove_machinery(root: Path) -> list[str]:
         cache.unlink()
         touched.append(CACHE_REL.as_posix())
     return touched
+
+
+def ensure_runtime_gitignored(root: Path) -> list[str]:
+    """Keep per-invocation telemetry + cache out of git so re-running install produces no
+    tracked diff. Adds ``.xtrm/state/service-knowledge/`` to the root .gitignore when not
+    already ignored (``.xtrm/cache/`` is usually ignored already). Idempotent."""
+    pattern = ".xtrm/state/service-knowledge/"
+    probe = root / ".xtrm" / "state" / "service-knowledge" / "install.jsonl"
+    try:
+        ignored = subprocess.run(
+            ["git", "check-ignore", "-q", str(probe)],
+            cwd=root, capture_output=True, timeout=5,
+        ).returncode == 0
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        ignored = False
+    if ignored:
+        return []
+    gi = root / ".gitignore"
+    nl = chr(10)
+    existing = gi.read_text(encoding="utf-8") if gi.exists() else ""
+    if pattern in existing or any(line.strip() == pattern.strip("/") for line in existing.splitlines()):
+        return []
+    suffix = "" if (existing == "" or existing.endswith(nl)) else nl
+    gi.write_text(existing + suffix + pattern + nl, encoding="utf-8")
+    return [".gitignore"]
+
+
+# --- orchestration ------------------------------------------------------------
+def apply(root: Path, event: str) -> tuple[str | None, list[str], float]:
+    """Full idempotent apply: vendor machinery, migrate umbrellas, wire hooks, install
+    git hooks, ensure cache, emit telemetry. Shared by ``install`` and ``update``."""
+    from service_knowledge.cli import telemetry
+
+    t0 = time.monotonic()
+    from_version = read_installed_version(root)
+    touched: list[str] = []
+    touched += vendor_machinery(root)
+    touched += migrate_umbrellas(root)
+    touched += wire_hooks(root)
+    touched += install_git_hooks(root)
+    touched += ensure_cache(root)
+    touched += ensure_runtime_gitignored(root)
+    duration_ms = (time.monotonic() - t0) * 1000.0
+    deduped = sorted(set(touched))
+    telemetry.emit(
+        root, event,
+        from_version=from_version, to_version=__version__,
+        files_touched=deduped, duration_ms=duration_ms,
+    )
+    return from_version, deduped, duration_ms
+
+
+def unwire_hooks(root: Path) -> list[str]:
+    """Strip service-knowledge/service-skills machinery hooks from .claude/settings.json.
+    Idempotent. Returns ['.claude/settings.json'] when the file changed."""
+    settings_path = root / ".claude" / "settings.json"
+    if not settings_path.exists():
+        return []
+    try:
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    hooks = settings.get("hooks", {})
+    changed = False
+    scripts = ("cataloger.py", "skill_activator.py", "drift_detector.py")
+    for event in list(hooks.keys()):
+        kept = [e for e in hooks[event] if not any(_is_machinery_hook(e, sc) for sc in scripts)]
+        if len(kept) != len(hooks[event]):
+            changed = True
+        if kept:
+            hooks[event] = kept
+        else:
+            del hooks[event]
+    if not changed:
+        return []
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return [".claude/settings.json"]
+
