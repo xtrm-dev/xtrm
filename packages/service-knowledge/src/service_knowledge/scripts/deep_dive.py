@@ -18,7 +18,7 @@ from pathlib import Path
 script_dir = Path(__file__).parent
 sys.path.insert(0, str(script_dir))
 
-CONTRACT_PATH = Path(__file__).parent.parent / "references" / "service_skill_contract.json"
+CONTRACT_PATH = Path(__file__).parent.parent / "contracts" / "service_skill_contract.json"
 
 
 # ---------------------------------------------------------------------------

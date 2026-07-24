@@ -90,8 +90,17 @@ def install_git_hooks(project_root: Path) -> None:
     except Exception:
         hooks_path = ""
 
-    active_hooks_dir = (Path(hooks_path) if Path(hooks_path).is_absolute() else project_root / hooks_path) if hooks_path else (project_root / ".git" / "hooks")
-    activation_targets = {project_root / ".git" / "hooks", active_hooks_dir}
+    if hooks_path:
+        active_hooks_dir = Path(hooks_path) if Path(hooks_path).is_absolute() else project_root / hooks_path
+    else:
+        # Use git-resolved hooks path — handles linked worktrees where .git is a file not a dir
+        import subprocess
+        try:
+            resolved = subprocess.check_output(["git", "-C", str(project_root), "rev-parse", "--git-path", "hooks"], text=True).strip()
+            active_hooks_dir = Path(resolved) if Path(resolved).is_absolute() else project_root / resolved
+        except Exception:
+            active_hooks_dir = project_root / ".git" / "hooks"
+    activation_targets = {active_hooks_dir}
 
     for hooks_dir in activation_targets:
         hooks_dir.mkdir(parents=True, exist_ok=True)

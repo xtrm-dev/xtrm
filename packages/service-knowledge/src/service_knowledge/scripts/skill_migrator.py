@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-CONTRACT_PATH = Path(__file__).resolve().parents[1] / "references" / "service_skill_contract.json"
+CONTRACT_PATH = Path(__file__).resolve().parents[1] / "contracts" / "service_skill_contract.json"
 SEMANTIC_START = "<!-- SEMANTIC_START -->"
 SEMANTIC_END = "<!-- SEMANTIC_END -->"
 HEADING_PATTERN = r"^##\s+(.*)$"

@@ -113,7 +113,7 @@ def _resolve_pack(root: Path) -> str | None:
         for pack in sorted(packs.iterdir()):
             if not pack.is_dir() or pack.name in {"default", "optional", "user", "active", "local-legacy"}:
                 continue
-            if (pack / "service-skills" / "service-registry.json").exists() or (pack / "service-registry.json").exists():
+            if (pack / "service-skills" / "service-registry.json").exists() or (pack / "service-knowledge" / "service-registry.json").exists() or (pack / "service-registry.json").exists():
                 return pack.name
     return None
 
@@ -199,7 +199,7 @@ def _has_registry(root: Path) -> bool:
             for pack in packs.iterdir():
                 if not pack.is_dir() or pack.name in {"default", "optional", "user", "active", "local-legacy"}:
                     continue
-                if (pack / "service-skills" / "service-registry.json").exists() or (pack / "service-registry.json").exists():
+                if (pack / "service-skills" / "service-registry.json").exists() or (pack / "service-knowledge" / "service-registry.json").exists() or (pack / "service-registry.json").exists():
                     return True
     return (root / "service-registry.json").exists() or (root / ".claude" / "skills" / "service-registry.json").exists()
 
