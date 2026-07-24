@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-
 _HOOK_PATH = (
     Path(__file__).resolve().parents[3]
     / "service_knowledge"
