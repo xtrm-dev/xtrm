@@ -14,6 +14,15 @@ from pathlib import Path
 
 from .claim_extractor import extract_claims
 from .diff_parser import parse_diff
+from .gate import (
+    BLOCKING_VERDICTS,
+    WRITABLE_VERDICTS,
+    GateDecision,
+    GateVerdict,
+    compute_gate,
+    corpus_fingerprint,
+    source_fingerprint,
+)
 from .manifest import (
     SCHEMA_VERSION,
     VERIFIER_ID,
@@ -116,6 +125,13 @@ __all__ = [
     "IMPLEMENTED_TYPES",
     "DEFERRED_TYPES",
     "SourceCorpus",
+    "GateDecision",
+    "GateVerdict",
+    "WRITABLE_VERDICTS",
+    "BLOCKING_VERDICTS",
+    "compute_gate",
+    "corpus_fingerprint",
+    "source_fingerprint",
     "claim_id",
     "content_hash",
     "load_canonical_headings",

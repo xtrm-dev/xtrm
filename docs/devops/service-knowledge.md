@@ -5,10 +5,11 @@ kept in sync with code via a GitNexus-aware drift engine. Elevated from the vend
 `service-skills` machinery to a standalone package with its own CLI, versioning, release
 cadence, and CHANGELOG. **Not** routed through `xt update --apply`.
 
-- **Package:** `~/dev/xtrm/packages/service-knowledge` (v0.3.0)
+- **Package:** `~/dev/xtrm/packages/service-knowledge` (v0.4.0)
 - **Reframe spec:** [`docs/research/kb-knowledge-base-svc.md`](../research/kb-knowledge-base-svc.md)
 - **CHANGELOG:** `~/dev/xtrm/packages/service-knowledge/CHANGELOG.md`
 - **Index & MCP retrieval:** [`service-knowledge-index.md`](./service-knowledge-index.md) (PR3)
+- **Verifier write gate:** [`service-knowledge-verifier-gate.md`](./service-knowledge-verifier-gate.md) (PR2)
 
 ## Install / update / status
 
