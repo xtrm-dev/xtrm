@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "service-knowledge"
+version = "0.1.0"
+description = "First-class operational service-knowledge package: per-service expert skill packages kept in sync with code via a GitNexus-aware drift engine. Own CLI, own lifecycle."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "xtrm" }]
+keywords = ["service-knowledge", "skills", "drift", "gitnexus", "devops"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Documentation",
+]
+# vaultctl is the ONLY cross-package dependency. Declared at v0.1.0 so the package
+# boundary is correct from the first release; PR3 imports it for vault-backed secrets.
+# The CLI itself is stdlib-only and must NOT depend on xtrm/bd/sp/xt/xtmux.
+dependencies = [
+  "vaultctl>=0.1.0,<0.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+service-knowledge = "service_knowledge.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+service_knowledge = [
+  "py.typed",
+  "scripts/*.py",
+  "contracts/*.json",
+  "skills/*.md",
+  "install/*.py",
+  "install/*.json",
+  "install/*.md",
+  "install/git-hooks/*.py",
+]
