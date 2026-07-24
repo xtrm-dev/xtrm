@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -26,8 +27,11 @@ from service_knowledge.dispatch.promotion import validate_promotion
 
 def _load_services(consumer_root: Path) -> dict:
     try:
-        from service_knowledge.index import _compat  # noqa: F401  (puts scripts/ on sys.path)
         import bootstrap  # type: ignore[import-not-found]
+
+        from service_knowledge.index import (
+            _compat,  # noqa: F401  (puts scripts/ on sys.path)
+        )
 
         return bootstrap.load_registry(str(consumer_root)).get("services", {})
     except (ImportError, OSError, RuntimeError, ValueError, TypeError, KeyError):
@@ -37,7 +41,9 @@ def _load_services(consumer_root: Path) -> dict:
 def _cmd_validate(args: argparse.Namespace) -> int:
     body = sys.stdin.read() if args.body == "-" else Path(args.body).read_text(encoding="utf-8")
     services = _load_services(Path(args.root))
-    decision = validate_promotion(body, services)
+    decision = validate_promotion(
+        body, services, consumer_root=Path(args.root), env=dict(os.environ)
+    )
     print(json.dumps(
         {
             "allowed": decision.allowed,

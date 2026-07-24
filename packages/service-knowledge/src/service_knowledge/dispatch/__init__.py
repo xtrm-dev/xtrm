@@ -26,24 +26,34 @@ from service_knowledge.dispatch.evidence import (
     strip_marker,
 )
 from service_knowledge.dispatch.promotion import (
+    GATE_EFFECTIVE_ENV,
+    GATE_EFFECTIVE_FILE_REL,
     PROMOTION_GATE_COMPONENT,
     PromotionDecision,
+    ensure_gate_activated,
     extract_section,
+    resolve_gate_effective,
     scope_matched_services,
+    scope_path_tokens,
     validate_promotion,
 )
 
 __all__ = [
+    "GATE_EFFECTIVE_ENV",
+    "GATE_EFFECTIVE_FILE_REL",
     "MARKER_CLOSE",
     "MARKER_OPEN_PREFIX",
     "PROMOTION_GATE_COMPONENT",
     "PromotionDecision",
     "attach_marker",
     "bundle_identity",
+    "ensure_gate_activated",
     "extract_section",
     "find_marker",
     "render_marker_block",
+    "resolve_gate_effective",
     "scope_matched_services",
+    "scope_path_tokens",
     "strip_marker",
     "validate_promotion",
 ]
