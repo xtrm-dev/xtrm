@@ -24,10 +24,13 @@ def _retrieval(ok: bool, *, available: bool = True, bundle=None, error=None) -> 
 
 
 OK_BUNDLE = {"items": [], "routing": {"matched_services": ["api-gateway"]}, "conflicts_and_caveats": []}
+# A blocking caveat must be conflicted AND high-risk AND a prerequisite (conflicts_with edge).
 CONFLICT_BUNDLE = {
     "items": [],
     "routing": {"matched_services": ["api-gateway"]},
-    "conflicts_and_caveats": [{"status": "conflicted", "risk": "high", "title": "bad claim"}],
+    "conflicts_and_caveats": [
+        {"status": "conflicted", "risk": "high", "conflicts_with": "claim:other", "title": "bad claim"}
+    ],
 }
 
 
@@ -69,10 +72,17 @@ def test_write_broken_index_exempt_path_does_not_block():
     assert decision.action != "block"
 
 
-def test_write_machinery_absent_does_not_block():
-    # available=False (pip package not importable in a standalone hook) must never block.
+def test_write_machinery_absent_blocks_registered_territory():
+    # Unavailable retrieval (machinery not importable) must BLOCK registered Write/Edit — the gate
+    # demands evidence; only exempt bd-tracking paths or an override defuse it.
     decision = sa.decide("Write", retrieval=_retrieval(False, available=False, error="no import"),
                          is_bash=False, mutating=False, override=False, exempt=False, **KW)
+    assert decision.action == "block"
+
+
+def test_write_machinery_absent_exempt_path_does_not_block():
+    decision = sa.decide("Write", retrieval=_retrieval(False, available=False, error="no import"),
+                         is_bash=False, mutating=False, override=False, exempt=True, **KW)
     assert decision.action != "block"
 
 
@@ -82,10 +92,24 @@ def test_readonly_bash_never_blocks_even_broken():
     assert decision.action != "block"
 
 
-def test_mutating_bash_blocks_on_conflicted_high_risk():
+def test_mutating_bash_blocks_on_conflicted_high_risk_prerequisite():
     decision = sa.decide("Bash", retrieval=_retrieval(True, bundle=CONFLICT_BUNDLE), is_bash=True,
                          mutating=True, override=False, exempt=False, **KW)
     assert decision.action == "block"
+
+
+@pytest.mark.parametrize("caveat", [
+    {"status": "conflicted", "risk": "high", "title": "no prerequisite edge"},  # missing conflicts_with
+    {"status": "conflicted", "risk": "low", "conflicts_with": "claim:x"},  # not high-risk
+    {"status": "invalidated", "risk": "high", "conflicts_with": "claim:x"},  # not conflicted
+    {"status": "stale", "risk": "high", "conflicts_with": "claim:x"},  # not conflicted
+])
+def test_mutating_bash_does_not_block_without_all_three_predicates(caveat):
+    bundle = {"items": [], "routing": {"matched_services": ["api-gateway"]},
+              "conflicts_and_caveats": [caveat]}
+    decision = sa.decide("Bash", retrieval=_retrieval(True, bundle=bundle), is_bash=True,
+                         mutating=True, override=False, exempt=False, **KW)
+    assert decision.action != "block"
 
 
 def test_mutating_bash_conflict_override_defuses():

@@ -6,23 +6,31 @@ A bead whose SCOPE references a registered service territory must carry ``matche
 ``contract:draft``. Missing ``evidence_bundle_id`` with ``matched_services`` present is advisory
 (the index may not be built for that service yet).
 
-Backward compat: beads created before the gate's effective cutoff are carried over — the gate
-applies to draft → ready transitions from the moment PR4 merges, not retroactively.
+Backward compat: beads created before the gate's activation are carried over — the gate applies
+to draft → ready transitions from the moment it is activated in a deployment, not retroactively.
+
+Activation is injectable / deploy-effective (NO midnight hardcode): the effective cutoff resolves
+from ``$SERVICE_KNOWLEDGE_GATE_EFFECTIVE`` (ISO-8601) or the per-repo marker file
+``.xtrm/state/service-knowledge/gate-effective``. With neither present the gate is inactive and
+every bead carries over (advisory) — it never blocks until a deployment opts in.
 """
 from __future__ import annotations
 
 import fnmatch
+import os
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from service_knowledge.dispatch.evidence import find_marker
 
 PROMOTION_GATE_COMPONENT = "bead-validator"
 
-# PR4 merge cutoff (UTC). Beads created strictly before this are in-flight and carried over.
-PROMOTION_GATE_EFFECTIVE = datetime(2026, 7, 24)
+# Injectable activation surface (deploy-effective, not a hardcoded midnight cutoff).
+GATE_EFFECTIVE_ENV = "SERVICE_KNOWLEDGE_GATE_EFFECTIVE"
+GATE_EFFECTIVE_FILE_REL = ".xtrm/state/service-knowledge/gate-effective"
 
 _PATH_TOKEN_RE = re.compile(r"[A-Za-z0-9_./\-*]+/[A-Za-z0-9_./\-*]+")
 _SECTION_RE_TEMPLATE = r"(?ims)^\s*(?:##\s*)?{name}\b[^\n]*\n(?P<body>.*?)(?=^\s*(?:##\s*)?[A-Z][A-Z_ ]{{2,}}\s*:?\s*$|\Z)"
@@ -40,6 +48,71 @@ class PromotionDecision:
     advisory: bool = False
     decision: str = "allow"  # allow | block | advisory | override
     extra: dict[str, Any] = field(default_factory=dict)
+
+
+def _parse_iso(raw: str | None) -> datetime | None:
+    """Parse an ISO-8601 timestamp (truncating sub-microsecond precision) to a naive datetime."""
+    if not raw:
+        return None
+    text = re.sub(r"(\.\d{6})\d+", r"\1", str(raw).strip())
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+
+
+def resolve_gate_effective(
+    consumer_root: Path | str | None = None,
+    *,
+    env: dict[str, str] | None = None,
+    gate_effective: datetime | None = None,
+) -> datetime | None:
+    """Resolve the gate's effective cutoff, or ``None`` when the gate is not activated.
+
+    Order: explicit ``gate_effective`` → ``$SERVICE_KNOWLEDGE_GATE_EFFECTIVE`` → the per-repo
+    ``gate-effective`` marker file. ``None`` means "inactive" (every bead carries over).
+    """
+    if gate_effective is not None:
+        return gate_effective
+    resolved = _parse_iso((os.environ if env is None else env).get(GATE_EFFECTIVE_ENV))
+    if resolved is not None:
+        return resolved
+    if consumer_root is not None:
+        path = Path(consumer_root) / GATE_EFFECTIVE_FILE_REL
+        try:
+            if path.exists():
+                resolved = _parse_iso(path.read_text(encoding="utf-8"))
+                if resolved is not None:
+                    return resolved
+        except OSError:
+            pass
+    return None
+
+
+def ensure_gate_activated(
+    consumer_root: Path | str,
+    *,
+    env: dict[str, str] | None = None,
+    now: datetime | None = None,
+) -> datetime:
+    """Return the effective cutoff, stamping the deploy marker on first activation.
+
+    Self-bootstrapping: the first promotion check in a deployment stamps "now" into the marker
+    file, so beads created before that moment carry over and later beads are gated. An env var or
+    an existing marker always wins over the lazy stamp.
+    """
+    resolved = resolve_gate_effective(consumer_root, env=env)
+    if resolved is not None:
+        return resolved
+    stamp = now if now is not None else datetime.now(timezone.utc).replace(tzinfo=None)
+    path = Path(consumer_root) / GATE_EFFECTIVE_FILE_REL
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(stamp.isoformat() + "\n", encoding="utf-8")
+    except OSError:
+        pass
+    return stamp
 
 
 def _territory_base(pattern: str) -> str:
@@ -67,9 +140,14 @@ def extract_section(body: str, name: str) -> str:
     return match.group("body").strip() if match else ""
 
 
+def scope_path_tokens(scope_text: str) -> list[str]:
+    """Path-like tokens extracted from a SCOPE section (conservative: must contain a ``/``)."""
+    return _PATH_TOKEN_RE.findall(scope_text or "")
+
+
 def scope_matched_services(scope_text: str, services: dict[str, Any]) -> list[str]:
     """Registered service_ids whose territory overlaps any path-like token in ``scope_text``."""
-    tokens = _PATH_TOKEN_RE.findall(scope_text or "")
+    tokens = scope_path_tokens(scope_text)
     matched: list[str] = []
     for service_id, data in services.items():
         territory = (data or {}).get("territory", []) or []
@@ -106,12 +184,7 @@ def _parse_created_at(body: str) -> datetime | None:
     match = re.search(r"(?im)^\s*created(?:_at)?\s*:\s*(?P<value>.+?)\s*$", body or "")
     if not match:
         return None
-    raw = match.group("value").strip().replace("Z", "+00:00")
-    try:
-        parsed = datetime.fromisoformat(raw)
-    except ValueError:
-        return None
-    return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+    return _parse_iso(match.group("value"))
 
 
 def validate_promotion(
@@ -120,12 +193,15 @@ def validate_promotion(
     *,
     created_at: datetime | None = None,
     gate_effective: datetime | None = None,
+    consumer_root: Path | str | None = None,
+    env: dict[str, str] | None = None,
 ) -> PromotionDecision:
     """Decide whether a bead may leave ``contract:draft``.
 
     Refuse when SCOPE touches a registered territory but no ``matched_services`` is attached.
     Advisory when ``matched_services`` is attached but ``evidence_bundle_id`` is absent.
-    Beads created before ``gate_effective`` (default: PR4 cutoff) are carried over.
+    Beads created before the resolved activation cutoff are carried over; with no cutoff resolved
+    (gate inactive in this deployment) every bead carries over.
     """
     body = bd_show_text or ""
     scope_text = extract_section(body, "SCOPE") or body
@@ -138,7 +214,18 @@ def validate_promotion(
             decision="allow",
         )
 
-    effective = gate_effective if gate_effective is not None else PROMOTION_GATE_EFFECTIVE
+    effective = resolve_gate_effective(consumer_root, env=env, gate_effective=gate_effective)
+    if effective is None:
+        return PromotionDecision(
+            allowed=True,
+            reason=(
+                "promotion gate not activated in this deployment "
+                f"(set {GATE_EFFECTIVE_ENV} or write {GATE_EFFECTIVE_FILE_REL}); carried over"
+            ),
+            touched_services=touched,
+            advisory=True,
+            decision="allow",
+        )
     stamp = created_at if created_at is not None else _parse_created_at(body)
     if stamp is not None and stamp < effective:
         return PromotionDecision(

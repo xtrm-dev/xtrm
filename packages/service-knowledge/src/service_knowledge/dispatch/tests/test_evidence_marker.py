@@ -71,15 +71,16 @@ def test_dispatch_smoke_create_promote_dispatch(gateway_consumer):
     assert bundle["routing"]["matched_services"] == ["api-gateway"]
 
     # 1. create: bead body with a SCOPE touching the territory, no bundle yet -> gate refuses.
+    gate = datetime(2026, 7, 24)
     bead_body = "# Bead: fix rate limiting\n\n## SCOPE\napi-gateway/src/ratelimit.go\n"
-    refused = validate_promotion(bead_body, SERVICES, created_at=datetime(2026, 8, 1))
+    refused = validate_promotion(bead_body, SERVICES, created_at=datetime(2026, 8, 1), gate_effective=gate)
     assert refused.allowed is False
 
     # 2. dispatch: attach the evidence bundle to the bead body (marker block).
     dispatched_body = attach_marker(bead_body, bundle)
 
     # 3. promote: gate now passes because matched_services + bundle_id are attached.
-    promoted = validate_promotion(dispatched_body, SERVICES, created_at=datetime(2026, 8, 1))
+    promoted = validate_promotion(dispatched_body, SERVICES, created_at=datetime(2026, 8, 1), gate_effective=gate)
     assert promoted.allowed is True
     assert promoted.evidence_bundle_id
 
