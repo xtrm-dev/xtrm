@@ -287,15 +287,21 @@ def migrate_umbrellas(root: Path) -> list[str]:
 # --- git hooks + cache --------------------------------------------------------
 def install_git_hooks(root: Path) -> list[str]:
     """Delegate to the vendored install-service-knowledge.py --hooks-only (non-blocking
-    pre-commit/pre-push/post-merge reminders). Returns ['.githooks/*'] when it ran."""
+    pre-commit/pre-push/post-merge reminders). Reports ``.githooks`` touched only when a
+    hook file actually changed, so idempotent re-runs report zero touches."""
     installer = machinery_dir(root) / "install" / "install-service-knowledge.py"
     if not installer.exists():
         return []
+    hook_files = [root / ".githooks" / n for n in ("pre-commit", "pre-push", "post-merge")]
+    before = {h: h.read_bytes() for h in hook_files if h.exists()}
     r = subprocess.run(
         ["python3", str(installer), "--hooks-only"],
         cwd=root, capture_output=True, text=True, check=False,
     )
-    return [".githooks"] if r.returncode == 0 else []
+    if r.returncode != 0:
+        return []
+    after = {h: h.read_bytes() for h in hook_files if h.exists()}
+    return [".githooks"] if before != after else []
 
 
 def ensure_cache(root: Path) -> list[str]:
