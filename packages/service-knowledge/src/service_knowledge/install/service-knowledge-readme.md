@@ -37,7 +37,7 @@ All commands accept `--path <repo-root>` (default: git toplevel of cwd).
 | Hook | Type | Trigger | Script |
 |---|---|---|---|
 | SessionStart | Claude | session opens | `scripts/cataloger.py` — injects `<project_service_catalog>` |
-| PreToolUse | Claude | Read/Write/Edit/Glob/Grep/Bash | `scripts/skill_activator.py` — territory → load-skill reminder |
+| PreToolUse | Claude | Read/Write/Edit/Glob/Grep/Bash | `scripts/skill_activator.py` — territory → inject §3.2 evidence bundle (narrow §3.7 blocking) |
 | PostToolUse | Claude | Write/Edit | `scripts/drift_detector.py check-hook` — drift notification |
 | pre-commit / pre-push / post-merge | Git | commit/push/merge | non-blocking doc + staleness + drift-sweep reminders |
 
