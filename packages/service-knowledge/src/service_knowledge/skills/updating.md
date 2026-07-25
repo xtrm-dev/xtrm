@@ -49,7 +49,7 @@ Use '/updating-service-knowledge' to sync the Database Expert documentation.
 > `--hooks-only` step). On a default-branch merge it runs the scan below, and on drift
 > it prints a notice and drops a pending marker at `.xtrm/.service-knowledge-drift-pending`.
 > The hook only **surfaces** drift — it never auto-runs a model-backed specialist — so
-> reconcile by running `/updating-service-knowledge` (the `service-skills-sync` specialist),
+> reconcile by running `/updating-service-knowledge` (the `service-knowledge-sync` specialist),
 > which syncs the drifted SKILL.md and advances `last_sync_ref`. The in-session
 > PostToolUse nudge is the proactive signal; this post-merge sweep is the guaranteed
 > backstop so drift can no longer accumulate silently.

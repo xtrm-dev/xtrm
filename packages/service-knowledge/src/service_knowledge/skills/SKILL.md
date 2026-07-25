@@ -20,15 +20,10 @@ deploy/runbook, and diagnostic scripts — that agents load on demand instead of
 the service every session. This router tells you **which flow to run** and points at the
 detailed reference for each.
 
-> **Naming note.** The package that ships all of this is called **`service-knowledge`** (own CLI,
-> own release cadence, `pipx`-installable). This machinery *skill* keeps its original
-> `service-skills` name and its `/service-skills` / `/creating-service-knowledge` /
-> `/using-service-knowledge` / `/updating-service-knowledge` slash-command triggers unchanged, purely to
-> preserve muscle memory across the rename — expect the package name in installer output, CLI, and
-> repo layout, but keep typing the same slash commands you always have.
->
 > **Two skills at different layers:**
-> - **This machinery skill** (`service-skills`) — the create/use/update/scope tooling.
+> - **This machinery skill** (`service-knowledge`) — the create/use/update/scope tooling.
+>   Triggers: `/service-knowledge`, `/creating-service-knowledge`, `/using-service-knowledge`,
+>   `/updating-service-knowledge`, `/scope`.
 > - **The per-repo umbrella** (`<repo>-services`) — one generated skill per repo that maps that
 >   repo's services and links their per-service skills. Repo-qualified name avoids collision.
 
