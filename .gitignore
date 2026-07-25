@@ -37,20 +37,6 @@ build/
 
 # Syncthing
 *.sync-conflict-*
-.claude/
-# productivity (local working memory + dashboard)
-/CLAUDE.md
-/TASKS.md
-/dashboard.html
-/memory/
-
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-.venv-*/
-.smoke/
 
 # Beads / Dolt files (added by bd init)
 .dolt/
@@ -58,9 +44,10 @@ __pycache__/
 .beads-credential-key
 .beads/proxieddb/
 
-# xtrm runtime state (per-machine, do not track)
-.xtrm/skills/state.json
-.xtrm/worktrees/
-.xtrm/cache/
-.xtrm/statusline-claim
-.pi/skills/
+.specialists/jobs/
+.specialists/ready/
+.specialists/db/*.db
+.specialists/db/*.db-wal
+.specialists/db/*.db-shm
+# bd worktree
+.worktrees/xtrm-2m3.10/xtrm-2m3.10-executor/
