@@ -17,6 +17,10 @@
         "mcp"
       ],
       "env": {}
+    },
+    "specialists": {
+      "command": "specialists",
+      "args": []
     }
   }
 }
