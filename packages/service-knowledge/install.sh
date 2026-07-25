@@ -52,7 +52,9 @@ if [ -z "${VAULTCTL_DIR:-}" ] || [ ! -f "$VAULTCTL_DIR/pyproject.toml" ]; then
   VAULTCTL_DIR="$DEFAULT_VAULTCTL"
 fi
 
-# 3. install (editable so `git pull` here or in vaultctl updates the CLI)
+# 3. install (editable so `git pull` here updates the CLI). pyproject.toml
+# does NOT declare vaultctl as a dep (it's a sibling local repo, not on PyPI),
+# so pipx resolves the remaining PyPI deps cleanly on this step.
 info "installing service-knowledge (editable) via pipx"
 pipx install --force --editable "$PKG_DIR"
 
