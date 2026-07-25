@@ -134,7 +134,45 @@ verdict — either rewrite the affected section or justify leaving it (cite the 
 - Update `territory` / sync fields in `service-registry.json` if scope expanded.
 - **Preserve `<!-- SEMANTIC_START --> ... <!-- SEMANTIC_END -->` blocks verbatim.**
 
-### Step 5 — Mark as synced
+### Step 5 — Verifier gate (before you save)
+
+**Every proposed SKILL update goes through the deterministic 13-claim-type verifier before
+`atomic_write` runs.** This is not an optional lint — the `reconcile.py` driver invokes it
+internally and refuses to write on a blocking verdict. Six-tier gate lattice; only `PASS` and
+`PASS_WITH_ADVISORIES` are writable. Blockers: `INVALID` / `CONFLICT` / `EVIDENCE_RACE`.
+`INSUFFICIENT_EVIDENCE_HIGH_RISK` opens a draft PR for human review.
+
+The reconcile flow you'll normally run wraps all of this:
+
+```bash
+python3 -m service_knowledge.scripts.reconcile --dry-run    # preview candidates + verdicts
+python3 -m service_knowledge.scripts.reconcile              # apply writable diffs
+```
+
+To verify one SKILL manually (interactive debugging):
+
+```bash
+SKILL=.xtrm/skills/<pack>/service-knowledge/services/<service-id>/SKILL.md
+python3 -m service_knowledge.scripts.verifier \
+    --candidate "$SKILL" --current "$SKILL" \
+    --territory '<glob>' --source-root . \
+    --output-format json --gate-mode
+```
+
+Concept: `service-knowledge help verifier`.
+
+### Step 6 — Rebuild the FTS5 index
+
+Retrieval surfaces (`knowledge_search` / `knowledge_get` / `knowledge_evidence_for_files`) and
+the PreToolUse activator all read the index. Without a rebuild they keep serving the pre-update
+version:
+
+```bash
+service-knowledge index build
+service-knowledge index stats
+```
+
+### Step 7 — Mark as synced
 
 ```bash
 python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/drift_detector.py" \

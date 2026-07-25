@@ -63,6 +63,30 @@ You:  [Catalog shows db-expert matches]
       [Apply Senior Database Engineer persona and expertise]
 ```
 
+### 2.25 Search Evidence, Not Just Titles (FTS5 + MCP tools)
+
+The catalog is a **name list** — enough to activate an expert whose name you already
+recognize. When the task doesn't name a service directly (an alert with an unfamiliar
+label, a stack trace pointing at an unclear file, a symptom that could be one of several
+services), reach for the evidence index instead of guessing from titles.
+
+Two surfaces read the same per-repo FTS5 index at `.xtrm/cache/service-knowledge.sqlite`:
+
+- **CLI**: `service-knowledge index query "<text>"` — free-text ranked hits; add
+  `--paths <file[,file]>` to bias by territory, `--service-id <id>` to restrict,
+  `--bundle` for the §3.2 evidence-bundle shape.
+- **MCP tools** (read-only, sub-10ms):
+  - `knowledge_search` — ranked evidence bundle for free text
+  - `knowledge_get` — one item by `item_id` or `skill_path`
+  - `knowledge_evidence_for_files` — evidence bundle for a list of touched paths
+    (what the PreToolUse activator uses internally)
+
+Both return evidence, never conclusions — the ranked hits tell you *which* SKILL(s) to
+`Read` in the next step. Prefer these over grep for any question about which service owns a
+symptom or a path.
+
+Concept help: `service-knowledge help mcp`, `service-knowledge help activator`.
+
 ### 2.5 Navigate with the Graph, Not Just Globs
 
 The registry maps a service to its territory **globs** — enough to *find* the skill, but

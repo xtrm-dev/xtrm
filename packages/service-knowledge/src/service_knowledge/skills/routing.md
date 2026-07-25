@@ -63,9 +63,23 @@ Using the registry output, reason about which service(s) the task involves. Matc
 - Config file or directory mentioned (`routes.yml` → traefik, `prometheus.yml` → prometheus)
 - Container name mentioned (`infra-*`)
 
-**Refine with the graph when the symbol/flow is ambiguous.** Territory globs route by file
-path; when a task names a *symbol* or *behavior* rather than a path, confirm ownership with
-GitNexus before committing the scope (the `scope.py` footer prints these when an index exists):
+**Refine with evidence + graph when the symbol/flow is ambiguous.** Territory globs route by
+file path; when a task names a *symbol* or *behavior* rather than a path, confirm ownership
+before committing the scope.
+
+The fastest first cut is the FTS5 evidence index (same substrate the PreToolUse activator
+uses):
+
+```bash
+service-knowledge index query "<task concept>"
+service-knowledge index query "" --paths <file[,file]>
+# From an MCP host:
+#   knowledge_evidence_for_files(paths=[...])
+#   knowledge_search(query="...")
+```
+
+Then confirm with the code graph when needed (the `scope.py` footer prints these when an
+index exists):
 
 ```bash
 gitnexus query "<task concept>" --repo <name>      # which execution flow / service owns it
