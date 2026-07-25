@@ -1,9 +1,9 @@
 
 # Scoping Service Skills ( /scope )
 
-> Detailed **scope / route** flow (intent detection, scope plan, regression-test binding) for the `service-skills` router.
+> Detailed **scope / route** flow (intent detection, scope plan, regression-test binding) for the `service-knowledge` router.
 >
-> **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.claude/skills/service-skills/scripts/` (the active view of this skill).
+> **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.xtrm/skills/default/service-knowledge/scripts/` (the active view of this skill).
 
 Ground every task in the right expert context **before any files are touched**.
 
@@ -21,7 +21,7 @@ in the conversation.
 Run this at the start, before deep task reasoning:
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/scope.py"
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/scope.py"
 ```
 
 This outputs every registered service: ID, container, territory paths, skill path,

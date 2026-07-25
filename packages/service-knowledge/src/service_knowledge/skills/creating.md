@@ -1,7 +1,7 @@
 
 # Creating Service Skills
 
-> Detailed **create** flow for the `service-skills` router. Invoked via `/service-skills` (create) or `/creating-service-skills` muscle-memory.
+> Detailed **create** flow for the `service-knowledge` router. Invoked via `/service-skills` (create) or `/creating-service-skills` muscle-memory.
 >
 > **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.xtrm/skills/default/service-knowledge/scripts/` (the active view of this skill).
 
@@ -105,7 +105,7 @@ The generated SKILL.md's sections, order, and the `<!-- SEMANTIC_START/END -->` 
 region are defined by `references/service_skill_contract.json`. Do not invent, drop, or
 reorder headings — the scaffolder and the drift-sync specialist both validate against it.
 To upgrade an *existing* pre-devops skill to the current section set, run
-`updating-service-skills/scripts/skill_migrator.py <SKILL.md>` (idempotent; preserves the
+`.xtrm/skills/default/service-knowledge/scripts/skill_migrator.py <SKILL.md>` (idempotent; preserves the
 semantic block).
 
 #### Required Research Sections
@@ -319,7 +319,7 @@ section of the generated SKILL.md. Verify these links are correct during Phase 2
 
 Once the skill is complete, verify that the `PreToolUse` skill activator hook is
 wired in the project's `.claude/settings.json`. It should already be there if
-you ran `install-service-skills.py` — but confirm it, and explain it to the user.
+you ran `install-service-knowledge.py` — but confirm it, and explain it to the user.
 
 ### What the hook does
 

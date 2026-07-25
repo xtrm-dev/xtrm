@@ -14,7 +14,7 @@ allowed-tools: Bash(python3 *), Read, Grep, Glob, Write
 
 # Service Skills
 
-The single entry point for a project's **service-skills** system. Each service gets a
+The single entry point for a project's **service-knowledge** system. Each service gets a
 dedicated expert package — architecture, data flows, failure modes, runnable health checks,
 deploy/runbook, and diagnostic scripts — that agents load on demand instead of re-deriving
 the service every session. This router tells you **which flow to run** and points at the
@@ -65,7 +65,7 @@ scope flow in [references/routing.md](references/routing.md) (intent workflows, 
 regression-test binding).
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/scope.py"   # registry + routing footer
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/scope.py"   # registry + routing footer
 ```
 
 ---
@@ -96,7 +96,7 @@ the single point where code is final. Drift is measured **semantically** since e
 [references/updating.md](references/updating.md).
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/drift_detector.py" scan
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/drift_detector.py" scan
 ```
 
 ---
@@ -117,7 +117,7 @@ All machinery scripts live together under `scripts/` (no cross-skill imports):
 | `scope.py` | Registry read + routing footer for the scope flow |
 
 Install machinery (hooks + settings + git-hooks) lives under `install/`; see
-[install/service-skills-readme.md](install/service-skills-readme.md).
+[install/service-knowledge-readme.md](install/service-knowledge-readme.md).
 
 `umbrella_generator.py` renders the per-repo umbrella (below).
 
@@ -126,7 +126,7 @@ Install machinery (hooks + settings + git-hooks) lives under `install/`; see
 ## Per-Repo Umbrella (generated)
 
 Each repo gets **one** umbrella skill — `name: <repo>-services` — at
-`.xtrm/skills/<pack>/service-skills/SKILL.md`. It is **generated from
+`.xtrm/skills/<pack>/service-knowledge/SKILL.md`. It is **generated from
 `service-registry.json`** (service table + cross-service health + navigation) so it
 can never drift from the registered services. The human cross-service narrative lives
 in a `<!-- SEMANTIC_START -->` / `<!-- SEMANTIC_END -->` block preserved verbatim across
@@ -136,7 +136,7 @@ regeneration — edit only there.
 python3 scripts/umbrella_generator.py <repo-name>   # regenerate (idempotent)
 ```
 
-`install-service-skills.py` regenerates the umbrella on install/upgrade. Load the
+`install-service-knowledge.py` regenerates the umbrella on install/upgrade. Load the
 umbrella first when a task spans services; it links each per-service skill.
 
 ---
@@ -145,7 +145,7 @@ umbrella first when a task spans services; it links each per-service skill.
 
 ```bash
 cd ~/projects/my-project
-python3 /path/to/xtrm-tools/skills/service-skills/install/install-service-skills.py
+python3 /path/to/xtrm/packages/service-knowledge/src/service_knowledge/install/install-service-knowledge.py
 ```
 
 Idempotent — wires `settings.json` hooks (SessionStart catalog · PreToolUse activator ·

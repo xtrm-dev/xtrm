@@ -1,9 +1,9 @@
 
 # Updating Service Skills
 
-> Detailed **update / drift-sync** flow for the `service-skills` router.
+> Detailed **update / drift-sync** flow for the `service-knowledge` router.
 >
-> **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.claude/skills/service-skills/scripts/` (the active view of this skill).
+> **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.xtrm/skills/default/service-knowledge/scripts/` (the active view of this skill).
 
 ## Role: The Librarian
 
@@ -45,9 +45,9 @@ Use '/updating-service-skills' to sync the Database Expert documentation.
 >
 > **Automatic backstop (xtrm-jcmub).** A managed `post-merge` git hook
 > (`post_merge_drift_sweep.py`) is wired into every service-registry repo on the
-> foolproof path (`xt update --apply` / `xt init`, via the service-skills installer's
+> foolproof path (`xt update --apply` / `xt init`, via the service-knowledge installer's
 > `--hooks-only` step). On a default-branch merge it runs the scan below, and on drift
-> it prints a notice and drops a pending marker at `.xtrm/.service-skills-drift-pending`.
+> it prints a notice and drops a pending marker at `.xtrm/.service-knowledge-drift-pending`.
 > The hook only **surfaces** drift — it never auto-runs a model-backed specialist — so
 > reconcile by running `/updating-service-skills` (the `service-skills-sync` specialist),
 > which syncs the drifted SKILL.md and advances `last_sync_ref`. The in-session
@@ -57,7 +57,7 @@ Use '/updating-service-skills' to sync the Database Expert documentation.
 ### Step 1 — Scan for all drift (gitnexus-default)
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/drift_detector.py" scan
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/drift_detector.py" scan
 ```
 
 `scan` uses **gitnexus by default**: a cheap mtime walk pre-filters candidates, then a
@@ -96,13 +96,13 @@ Read: .claude/skills/<service-id>/SKILL.md
 ```
 
 The skill's section structure is defined by the canonical contract
-`creating-service-skills/references/service_skill_contract.json` (SSOT). If the file
+`../contracts/service_skill_contract.json` (SSOT). If the file
 predates the devops sections (no `Cross-Service Health Check` / `Failure Modes` /
 `Deploy & Runbook`), run the **migrator** first to add the missing skeleton without
 touching human content:
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/skill_migrator.py" \
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/skill_migrator.py" \
   .claude/skills/<service-id>/SKILL.md
 ```
 
@@ -137,7 +137,7 @@ verdict — either rewrite the affected section or justify leaving it (cite the 
 ### Step 5 — Mark as synced
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/drift_detector.py" \
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/drift_detector.py" \
   sync <service-id>
 ```
 
