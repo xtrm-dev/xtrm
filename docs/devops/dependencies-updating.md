@@ -16,7 +16,7 @@ future_artifacts:
 
 Questo documento definisce una capability agentica per gestire dependency updates, vulnerabilità, GitHub Actions hardening e regression monitoring dopo bump di dipendenze. La prima versione non deve partire come nuovo prodotto completo né come comando `xt` prematuro. La v0 deve essere una skill strutturata, `updating-dependencies/SKILL.md`, invocabile dagli agenti in modo ripetibile. Il comando `xt`, eventuale, va progettato solo dopo avere osservato casi reali e stabilizzato il primo livello deterministico.
 
-La tesi di fondo è semplice: il problema non è aggiornare pacchetti, ma aggiornare pacchetti senza perdere contesto. Un bump automatico cieco riduce il backlog ma può introdurre breaking change, regressioni o supply-chain risk. Un sistema corretto deve collegare lockfile diff, SBOM, advisory, changelog, release age, usage map, service-skills, CI, deploy event e osservabilità post-deploy.
+La tesi di fondo è semplice: il problema non è aggiornare pacchetti, ma aggiornare pacchetti senza perdere contesto. Un bump automatico cieco riduce il backlog ma può introdurre breaking change, regressioni o supply-chain risk. Un sistema corretto deve collegare lockfile diff, SBOM, advisory, changelog, release age, usage map, service-knowledge, CI, deploy event e osservabilità post-deploy.
 
 Il sistema non modifica `deployer` e `devops-sre` per adattarli alle dependency updates. La dependency update genera soltanto un issue/case scoped come derivato da un bump. Il deployer continua a fare delivery controllata; SRE continua a fare osservabilità, RCA ed escalation. La specializzazione dependency vive prima del deploy, produce evidenza e passa contesto.
 
@@ -62,7 +62,7 @@ Quinto: evidence-first materialization. Ogni verdict deve produrre evidenza legg
 
 `devops-sre` resta responsabile di runtime observability, regression watch, RCA, mitigation proposal ed escalation. Dopo un dependency bump osserva i segnali OTel/Prometheus/Grafana/Loki collegati al deploy event.
 
-`service-skills-sync` e `librarian` mantengono aggiornate le service-skills. Il drift non è solo architetturale: anche le dependency surfaces, test canonici e runbook post-update possono driftare.
+`service-knowledge-sync` e `librarian` mantengono aggiornate le service-knowledge. Il drift non è solo architetturale: anche le dependency surfaces, test canonici e runbook post-update possono driftare.
 
 ## 5. Fonte dati e gerarchia di ricerca
 
@@ -271,7 +271,7 @@ flowchart TB
 
 ## 12. Service-skills integration
 
-Le service-skills sono il documentation substrate operativo degli agenti. Per dependency updates serve una sezione standard `Dependency Surface`, mantenuta dal librarian e aggiornata dal dependency workflow quando emergono nuovi dati.
+Le service-knowledge sono il documentation substrate operativo degli agenti. Per dependency updates serve una sezione standard `Dependency Surface`, mantenuta dal librarian e aggiornata dal dependency workflow quando emergono nuovi dati.
 
 Sezione proposta dentro ogni service skill:
 
@@ -299,7 +299,7 @@ Sezione proposta dentro ogni service skill:
 ### Missing Signals / Known Gaps
 ```
 
-La skill non deve aggiornare le service-skills a mano in modo indiscriminato. Deve proporre un patch o follow-up quando trova drift: dipendenza critica non documentata, test canonico mancante, health-check obsoleto, post-deploy watch signal assente, nuova GitHub Action ad alto blast radius.
+La skill non deve aggiornare le service-knowledge a mano in modo indiscriminato. Deve proporre un patch o follow-up quando trova drift: dipendenza critica non documentata, test canonico mancante, health-check obsoleto, post-deploy watch signal assente, nuova GitHub Action ad alto blast radius.
 
 ```mermaid
 flowchart LR
@@ -309,7 +309,7 @@ flowchart LR
   C -->|No| E["Emit follow-up: add Dependency Surface"]
   D --> F["Upgrade dossier"]
   F --> G{"New knowledge found?"}
-  G -->|Yes| H["librarian/service-skills-sync proposal"]
+  G -->|Yes| H["librarian/service-knowledge-sync proposal"]
   G -->|No| I["No docs update"]
 ```
 
@@ -463,7 +463,7 @@ Scrivere uno script o harness locale che produce `dependency_update_case.json` d
 
 ### v0.2 — service-skill enrichment
 
-Aggiungere sezione `Dependency Surface` alle service-skills più importanti. Il librarian propone aggiornamenti quando una dependency update scopre drift o segnali mancanti.
+Aggiungere sezione `Dependency Surface` alle service-knowledge più importanti. Il librarian propone aggiornamenti quando una dependency update scopre drift o segnali mancanti.
 
 ### v1 — PR comment automation
 
@@ -485,7 +485,7 @@ Solo dopo casi reali: stabilizzare UX, console evidence drawer, multi-repo depen
 
 Il valore non è “trova vulnerabilità”. Quello è già coperto da molti scanner. Il valore è ridurre il costo umano di aggiornare correttamente senza rompere produzione.
 
-La wedge più forte è: dependency PR → usage-aware remediation → deploy safety → runtime evidence → service-skills update. Questo chiude il ciclo tra SCA, repo graph, docs, CI/CD, OTel e runbook. Gli strumenti esistenti spesso coprono pezzi separati; il prodotto agentico ha valore se rende la remediation operativa, verificabile e tracciabile.
+La wedge più forte è: dependency PR → usage-aware remediation → deploy safety → runtime evidence → service-knowledge update. Questo chiude il ciclo tra SCA, repo graph, docs, CI/CD, OTel e runbook. Gli strumenti esistenti spesso coprono pezzi separati; il prodotto agentico ha valore se rende la remediation operativa, verificabile e tracciabile.
 
 Il posizionamento corretto è strato agentico sopra strumenti esistenti, non sostituto di Datadog/Snyk/GitHub/Sonatype/Socket/JFrog. Deve comporre scanner, docs, telemetry e service knowledge in un decision loop.
 
@@ -499,10 +499,10 @@ La profondità dell’artifact diff npm/PyPI va esplorata. Per v0 bastano warnin
 
 La futura command surface `xt` deve restare subordinata ai casi reali. Prima skill, poi schema, poi automation, poi CLI.
 
-La watch spec OTel deve essere minimalmente portabile: error rate, latency, saturation, restarts, job failures, exception fingerprints, trace errors. Le metriche specifiche servizio arrivano dalle service-skills.
+La watch spec OTel deve essere minimalmente portabile: error rate, latency, saturation, restarts, job failures, exception fingerprints, trace errors. Le metriche specifiche servizio arrivano dalle service-knowledge.
 
 ## 21. Compact operating contract
 
 Una dependency update è accettabile solo quando esiste un case con evidenza. Il case deve spiegare cosa cambia, dove è usato, quale rischio security/supply-chain esiste, quali test coprono il cambiamento, quale servizio è impattato, quale gate serve, quale watch post-deploy va attivato e quale ruolo deve agire dopo.
 
-La dependency capability prepara il terreno. Il deployer cambia il sistema. SRE osserva il sistema. Substrate mantiene lineage, issue scope, gate e follow-up. Le service-skills accumulano memoria operativa.
+La dependency capability prepara il terreno. Il deployer cambia il sistema. SRE osserva il sistema. Substrate mantiene lineage, issue scope, gate e follow-up. Le service-knowledge accumulano memoria operativa.
