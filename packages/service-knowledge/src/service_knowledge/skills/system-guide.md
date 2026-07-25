@@ -40,6 +40,17 @@ Without scripts, a skill is documentation only. Without documentation, scripts h
 
 ## 2. System Architecture
 
+> **What changed in v0.4–v0.7.** The three original components below (Builder / Health
+> Checker / Generated Skills) are the *authoring loop*. The reframe added a second axis —
+> a **serving loop** — that turns those authored SKILLs into an evidence surface: a
+> deterministic verifier gates every SKILL write, an FTS5 evidence index lets agents
+> retrieve claims in sub-10ms, three read-only MCP tools (`knowledge_search`,
+> `knowledge_get`, `knowledge_evidence_for_files`) expose that index, a PreToolUse
+> activator narrows-blocks edits to the wrong expert, and a canary policy governs when
+> deterministically-verified drift can auto-merge. See `service-knowledge help` for the
+> concept explainers (`workflow · verifier · mcp · activator · eval · canary · telemetry`).
+> The rest of this section is the authoring loop as-was.
+
 ### Three Components
 
 **A. The Builder (`service-skill-builder`)**

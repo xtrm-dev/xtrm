@@ -1,9 +1,9 @@
 
 # Using Service Skills
 
-> Detailed **discover / activate** flow for the `service-skills` router.
+> Detailed **discover / activate** flow for the `service-knowledge` router.
 >
-> **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.claude/skills/service-skills/scripts/` (the active view of this skill).
+> **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.xtrm/skills/default/service-knowledge/scripts/` (the active view of this skill).
 
 ## Role: The Concierge
 
@@ -41,7 +41,7 @@ When a user asks about a service or starts a related task, check whether a
 If no catalog was injected (e.g. first run, no services registered), generate one:
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/cataloger.py"
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/cataloger.py"
 ```
 
 ### 2. Activate an Expert Persona
@@ -62,6 +62,30 @@ You:  [Catalog shows db-expert matches]
       [Read .claude/skills/db-expert/SKILL.md]
       [Apply Senior Database Engineer persona and expertise]
 ```
+
+### 2.25 Search Evidence, Not Just Titles (FTS5 + MCP tools)
+
+The catalog is a **name list** — enough to activate an expert whose name you already
+recognize. When the task doesn't name a service directly (an alert with an unfamiliar
+label, a stack trace pointing at an unclear file, a symptom that could be one of several
+services), reach for the evidence index instead of guessing from titles.
+
+Two surfaces read the same per-repo FTS5 index at `.xtrm/cache/service-knowledge.sqlite`:
+
+- **CLI**: `service-knowledge index query "<text>"` — free-text ranked hits; add
+  `--paths <file[,file]>` to bias by territory, `--service-id <id>` to restrict,
+  `--bundle` for the §3.2 evidence-bundle shape.
+- **MCP tools** (read-only, sub-10ms):
+  - `knowledge_search` — ranked evidence bundle for free text
+  - `knowledge_get` — one item by `item_id` or `skill_path`
+  - `knowledge_evidence_for_files` — evidence bundle for a list of touched paths
+    (what the PreToolUse activator uses internally)
+
+Both return evidence, never conclusions — the ranked hits tell you *which* SKILL(s) to
+`Read` in the next step. Prefer these over grep for any question about which service owns a
+symptom or a path.
+
+Concept help: `service-knowledge help mcp`, `service-knowledge help activator`.
 
 ### 2.5 Navigate with the Graph, Not Just Globs
 
@@ -103,7 +127,7 @@ The catalog injection is not handled by skill frontmatter hooks. Configure it in
     "SessionStart": [{
       "hooks": [{
         "type": "command",
-        "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/cataloger.py\""
+        "command": "python3 \"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/cataloger.py\""
       }]
     }]
   }
@@ -127,4 +151,4 @@ Read-only — no write access:
 
 ## Per-repo umbrella (load first for cross-service tasks)
 
-Each repo has a generated umbrella skill `<repo>-services` at `.xtrm/skills/<pack>/service-skills/SKILL.md` — the service map + cross-service health story. When a task spans services, load the umbrella first; it links every per-service skill. It is regenerated from the registry (`umbrella_generator.py`); only its `<!-- SEMANTIC_START -->` block is hand-edited.
+Each repo has a generated umbrella skill `<repo>-services` at `.xtrm/skills/<pack>/service-knowledge/SKILL.md` — the service map + cross-service health story. When a task spans services, load the umbrella first; it links every per-service skill. It is regenerated from the registry (`umbrella_generator.py`); only its `<!-- SEMANTIC_START -->` block is hand-edited.

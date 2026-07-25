@@ -1,7 +1,7 @@
 
 # Creating Service Skills
 
-> Detailed **create** flow for the `service-skills` router. Invoked via `/service-skills` (create) or `/creating-service-skills` muscle-memory.
+> Detailed **create** flow for the `service-knowledge` router. Invoked via `/service-skills` (create) or `/creating-service-skills` muscle-memory.
 >
 > **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.xtrm/skills/default/service-knowledge/scripts/` (the active view of this skill).
 
@@ -10,6 +10,24 @@
 You are the **Service Skills Architect**. Your job is to produce complete, operational
 skill packages for project services — not stubs, not placeholders. The output must be
 immediately useful to any agent working on the service.
+
+---
+
+## Before You Scaffold — Territory-Overlap Check
+
+Before creating a new SKILL, check whether the intended territory is already covered.
+Scaffolding on top of an existing service produces a phantom expert and confuses the
+activator's routing.
+
+```bash
+# What already claims these paths?
+service-knowledge index query "<concept>" --paths <candidate-territory>
+# From an MCP host:
+#   knowledge_evidence_for_files(paths=[...])
+```
+
+If any of the ranked hits owns overlapping territory, either extend that SKILL instead of
+creating a new one, or narrow the new territory so it does not overlap.
 
 ---
 
@@ -105,7 +123,7 @@ The generated SKILL.md's sections, order, and the `<!-- SEMANTIC_START/END -->` 
 region are defined by `references/service_skill_contract.json`. Do not invent, drop, or
 reorder headings — the scaffolder and the drift-sync specialist both validate against it.
 To upgrade an *existing* pre-devops skill to the current section set, run
-`updating-service-skills/scripts/skill_migrator.py <SKILL.md>` (idempotent; preserves the
+`.xtrm/skills/default/service-knowledge/scripts/skill_migrator.py <SKILL.md>` (idempotent; preserves the
 semantic block).
 
 #### Required Research Sections
@@ -315,11 +333,57 @@ section of the generated SKILL.md. Verify these links are correct during Phase 2
 
 ---
 
-## Phase 3: Hook Registration (After Phase 2)
+## Phase 3: Finalize — Index · Verify · Hook · Publish
 
-Once the skill is complete, verify that the `PreToolUse` skill activator hook is
-wired in the project's `.claude/settings.json`. It should already be there if
-you ran `install-service-skills.py` — but confirm it, and explain it to the user.
+Once Phase 2 is complete, run these four steps in order. Skipping any of them leaves the
+new SKILL invisible to the shipped machinery.
+
+### Step A — Rebuild the FTS5 evidence index
+
+The index is what `knowledge_search`, `knowledge_get`, `knowledge_evidence_for_files`, and the
+PreToolUse activator all read. Until you rebuild, the new SKILL is invisible to them:
+
+```bash
+service-knowledge index build
+service-knowledge index stats           # confirm item count and source_ref updated
+```
+
+Sanity-check retrieval on the new territory:
+
+```bash
+service-knowledge index query "<a symptom or concept the new SKILL covers>"
+service-knowledge index query "" --paths <a-file-inside-territory>
+```
+
+The new service should appear in the top hits. If it doesn't, the SKILL's `triggers:` /
+`territory:` frontmatter is too narrow — fix it and re-`index build`.
+
+### Step B — Verifier smoke (fresh-write gate)
+
+Run the deterministic claim verifier against the just-written SKILL to catch bad
+initial content before it ships. Compare the new SKILL to itself as the "current" —
+this exercises the structural validator and extracts every claim, letting you see
+whether any claim fails against source-of-truth:
+
+```bash
+SKILL=.xtrm/skills/<pack>/service-knowledge/services/<service-id>/SKILL.md
+python3 -m service_knowledge.scripts.verifier \
+    --candidate "$SKILL" --current "$SKILL" \
+    --territory '<territory-glob>' \
+    --source-root . \
+    --output-format json --gate-mode
+```
+
+Concept: `service-knowledge help verifier`. Any `INVALID` / `CONFLICT` /
+`EVIDENCE_RACE` verdict is a hard blocker — fix the SKILL and re-verify. Structural
+validator failures ("N structural error(s) in candidate") mean the SKILL doesn't
+conform to the `service_skill_contract.json` section spec.
+
+### Step C — Hook registration
+
+Verify that the `PreToolUse` skill activator hook is wired in the project's
+`.claude/settings.json`. It should already be there if you ran
+`install-service-knowledge.py` — but confirm it, and explain it to the user.
 
 ### What the hook does
 

@@ -1,9 +1,9 @@
 
 # Scoping Service Skills ( /scope )
 
-> Detailed **scope / route** flow (intent detection, scope plan, regression-test binding) for the `service-skills` router.
+> Detailed **scope / route** flow (intent detection, scope plan, regression-test binding) for the `service-knowledge` router.
 >
-> **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.claude/skills/service-skills/scripts/` (the active view of this skill).
+> **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.xtrm/skills/default/service-knowledge/scripts/` (the active view of this skill).
 
 Ground every task in the right expert context **before any files are touched**.
 
@@ -21,7 +21,7 @@ in the conversation.
 Run this at the start, before deep task reasoning:
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/scope.py"
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/scope.py"
 ```
 
 This outputs every registered service: ID, container, territory paths, skill path,
@@ -63,9 +63,23 @@ Using the registry output, reason about which service(s) the task involves. Matc
 - Config file or directory mentioned (`routes.yml` → traefik, `prometheus.yml` → prometheus)
 - Container name mentioned (`infra-*`)
 
-**Refine with the graph when the symbol/flow is ambiguous.** Territory globs route by file
-path; when a task names a *symbol* or *behavior* rather than a path, confirm ownership with
-GitNexus before committing the scope (the `scope.py` footer prints these when an index exists):
+**Refine with evidence + graph when the symbol/flow is ambiguous.** Territory globs route by
+file path; when a task names a *symbol* or *behavior* rather than a path, confirm ownership
+before committing the scope.
+
+The fastest first cut is the FTS5 evidence index (same substrate the PreToolUse activator
+uses):
+
+```bash
+service-knowledge index query "<task concept>"
+service-knowledge index query "" --paths <file[,file]>
+# From an MCP host:
+#   knowledge_evidence_for_files(paths=[...])
+#   knowledge_search(query="...")
+```
+
+Then confirm with the code graph when needed (the `scope.py` footer prints these when an
+index exists):
 
 ```bash
 gitnexus query "<task concept>" --repo <name>      # which execution flow / service owns it

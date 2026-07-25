@@ -14,14 +14,21 @@ allowed-tools: Bash(python3 *), Read, Grep, Glob, Write
 
 # Service Skills
 
-The single entry point for a project's **service-skills** system. Each service gets a
+The single entry point for a project's **service-knowledge** system. Each service gets a
 dedicated expert package — architecture, data flows, failure modes, runnable health checks,
 deploy/runbook, and diagnostic scripts — that agents load on demand instead of re-deriving
 the service every session. This router tells you **which flow to run** and points at the
 detailed reference for each.
 
-> **Two skills share the `service-skills` name by design, at different layers:**
-> - **This machinery skill** (`service-skills`) — the create/use/update/scope tooling. Shipped once.
+> **Naming note.** The package that ships all of this is called **`service-knowledge`** (own CLI,
+> own release cadence, `pipx`-installable). This machinery *skill* keeps its original
+> `service-skills` name and its `/service-skills` / `/creating-service-skills` /
+> `/using-service-skills` / `/updating-service-skills` slash-command triggers unchanged, purely to
+> preserve muscle memory across the rename — expect the package name in installer output, CLI, and
+> repo layout, but keep typing the same slash commands you always have.
+>
+> **Two skills at different layers:**
+> - **This machinery skill** (`service-skills`) — the create/use/update/scope tooling.
 > - **The per-repo umbrella** (`<repo>-services`) — one generated skill per repo that maps that
 >   repo's services and links their per-service skills. Repo-qualified name avoids collision.
 
@@ -65,8 +72,46 @@ scope flow in [references/routing.md](references/routing.md) (intent workflows, 
 regression-test binding).
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/scope.py"   # registry + routing footer
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/scope.py"   # registry + routing footer
 ```
+
+---
+
+## Evidence-First Retrieval (FTS5 index + MCP tools)
+
+Every registered SKILL.md, its sections, claims, probes, and citations are indexed into a per-repo
+FTS5 database at `.xtrm/cache/service-knowledge.sqlite` (built by `service-knowledge install`;
+rebuild any time with `service-knowledge index build`). Ranking:
+`0.40·T + 0.30·L + 0.15·I + 0.10·A + 0.05·F` (territory · BM25 lexical · intent · authority · freshness).
+Sub-10ms on the reference corpus.
+
+Two surfaces read the same index:
+
+- **CLI**: `service-knowledge index query "<text>"` — quick shell probe (add `--paths` to bias by
+  territory, `--service-id` to restrict, `--bundle` for the §3.2 evidence-bundle shape).
+- **MCP tools** (read-only, exposed by the shipped MCP server):
+  - `knowledge_search` — ranked evidence bundle from free text
+  - `knowledge_get` — single item by `item_id` or `skill_path`
+  - `knowledge_evidence_for_files` — evidence for a list of touched paths (what the PreToolUse
+    activator calls internally)
+
+Reach for the index/tools **before** grep whenever the symptom → service mapping is unclear, when
+proposing a new SKILL that might overlap existing territory, or when routing an incident. Use the
+graph (below) for structural navigation once the right expert is loaded.
+
+---
+
+## Verifier Gate (v0.4)
+
+Every proposed SKILL.md update — from any flow, including a fresh Phase-2 write — is evaluated
+against source-of-truth by a deterministic 13-claim-type verifier before `atomic_write` runs.
+Six-tier gate lattice; only `PASS` and `PASS_WITH_ADVISORIES` are writable. Blocking verdicts
+(`INVALID` / `CONFLICT` / `EVIDENCE_RACE`) halt the write; `INSUFFICIENT_EVIDENCE_HIGH_RISK` opens
+a draft PR for human review. The `update` flow calls it via `scripts/reconcile.py`; the `create`
+flow calls it as a Phase-3 smoke to catch bad initial content.
+
+Concept: `service-knowledge help verifier`. Standalone invocation:
+`python3 -m service_knowledge.scripts.verifier --candidate new.md --current old.md --territory 'x/**' --gate-mode`.
 
 ---
 
@@ -96,7 +141,7 @@ the single point where code is final. Drift is measured **semantically** since e
 [references/updating.md](references/updating.md).
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/drift_detector.py" scan
+python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/drift_detector.py" scan
 ```
 
 ---
@@ -117,7 +162,7 @@ All machinery scripts live together under `scripts/` (no cross-skill imports):
 | `scope.py` | Registry read + routing footer for the scope flow |
 
 Install machinery (hooks + settings + git-hooks) lives under `install/`; see
-[install/service-skills-readme.md](install/service-skills-readme.md).
+[install/service-knowledge-readme.md](install/service-knowledge-readme.md).
 
 `umbrella_generator.py` renders the per-repo umbrella (below).
 
@@ -126,7 +171,7 @@ Install machinery (hooks + settings + git-hooks) lives under `install/`; see
 ## Per-Repo Umbrella (generated)
 
 Each repo gets **one** umbrella skill — `name: <repo>-services` — at
-`.xtrm/skills/<pack>/service-skills/SKILL.md`. It is **generated from
+`.xtrm/skills/<pack>/service-knowledge/SKILL.md`. It is **generated from
 `service-registry.json`** (service table + cross-service health + navigation) so it
 can never drift from the registered services. The human cross-service narrative lives
 in a `<!-- SEMANTIC_START -->` / `<!-- SEMANTIC_END -->` block preserved verbatim across
@@ -136,18 +181,39 @@ regeneration — edit only there.
 python3 scripts/umbrella_generator.py <repo-name>   # regenerate (idempotent)
 ```
 
-`install-service-skills.py` regenerates the umbrella on install/upgrade. Load the
+`install-service-knowledge.py` regenerates the umbrella on install/upgrade. Load the
 umbrella first when a task spans services; it links each per-service skill.
 
 ---
 
 ## Installation
 
+Two layers — install the CLI once per host, then bootstrap each consumer repo.
+
+**Host-level (once):**
+
 ```bash
-cd ~/projects/my-project
-python3 /path/to/xtrm-tools/skills/service-skills/install/install-service-skills.py
+git clone https://github.com/xtrm-dev/xtrm ~/dev/xtrm
+cd ~/dev/xtrm/packages/service-knowledge
+./install.sh              # or ./install.sh --system-pipx to apt-install pipx too
+```
+
+The installer uses `pipx --editable`, auto-clones `vaultctl` if missing, and puts
+`service-knowledge` on `$PATH`. See `service-knowledge help install` for details.
+
+**Per-repo (once per consumer):**
+
+```bash
+cd <your-service-hosting-repo>
+service-knowledge install
+service-knowledge status                 # confirm
+service-knowledge index build            # (auto-run by install; explicit is fine)
 ```
 
 Idempotent — wires `settings.json` hooks (SessionStart catalog · PreToolUse activator ·
-PostToolUse drift), activates git hooks, and migrates already-installed skills to the current
-section contract. Safe to re-run after upgrades.
+PostToolUse drift), activates git hooks, migrates already-installed skills to the current section
+contract, and builds the FTS5 evidence index. Safe to re-run after upgrades (or run
+`service-knowledge update`).
+
+**Auto-merge canary** (v0.7): disabled by default. `service-knowledge canary status` shows the
+current state and enable-gate thresholds; `service-knowledge help canary` explains the policy.
