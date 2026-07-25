@@ -61,6 +61,43 @@ def test_install_migrates_and_is_idempotent(consumer_repo: Path) -> None:
         assert after[k] == v, f"not idempotent: {k}"
 
 
+def test_install_repairs_stale_service_skills_hook_path(consumer_repo: Path) -> None:
+    assert main(["install", "--path", str(consumer_repo)]) == 0
+    hook = consumer_repo / ".githooks/post-merge"
+    hook.write_text(
+        hook.read_text().replace("/service-knowledge/", "/service-skills/"),
+        encoding="utf-8",
+    )
+
+    assert main(["update", "--path", str(consumer_repo)]) == 0
+    content = hook.read_text()
+    assert "/service-skills/" not in content
+    assert "/service-knowledge/install/git-hooks/post_merge_drift_sweep.py" in content
+
+
+def test_installed_post_merge_hook_uses_service_knowledge_flow(consumer_repo: Path) -> None:
+    assert main(["install", "--path", str(consumer_repo)]) == 0
+    source = consumer_repo / "db/state.txt"
+    source.parent.mkdir(parents=True)
+    source.write_text("changed\n", encoding="utf-8")
+    subprocess.run(["git", "add", "db/state.txt"], cwd=consumer_repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "change db"], cwd=consumer_repo, check=True)
+
+    result = subprocess.run(
+        [str(consumer_repo / ".githooks/post-merge")],
+        cwd=consumer_repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    marker = consumer_repo / ".xtrm/.service-knowledge-drift-pending"
+    assert marker.exists()
+    assert "service-knowledge-sync" in marker.read_text()
+    assert not (consumer_repo / ".xtrm/.service-skills-drift-pending").exists()
+
+
 def test_status_reports_installed(consumer_repo: Path, capsys) -> None:
     main(["install", "--path", str(consumer_repo)])
     capsys.readouterr()

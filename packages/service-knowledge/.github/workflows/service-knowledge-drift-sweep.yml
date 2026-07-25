@@ -1,8 +1,8 @@
-# service-skills drift sweep — deterministic verifier gate (service-knowledge v0.4.0, PR2)
+# service-knowledge drift sweep — deterministic verifier gate (service-knowledge v0.4.0, PR2)
 #
 # TEMPLATE: GitHub Actions only reads `.github/workflows/` at a repo root, so this file ships
 # inside the package as the canonical template. A consumer adopts it by copying it to their
-# own `<repo>/.github/workflows/service-skills-drift-sweep.yml`.
+# own `<repo>/.github/workflows/service-knowledge-drift-sweep.yml`.
 #
 # Flow (research §2.7 gate lattice — deterministic only, REVISION 3, no LLM critic):
 #   1. reconcile.py generates each candidate SKILL to a temp path and runs the PR1 verifier
@@ -12,12 +12,12 @@
 #      INSUFFICIENT_EVIDENCE_HIGH_RISK opens a DRAFT PR labelled `do-not-merge`;
 #      PASS / PASS_WITH_ADVISORIES open a normal PR (never auto-merged — canary policy is PR5b).
 #   3. manifest.json + the Markdown evidence report are published as artifacts and the
-#      `service-skills-verify` status check surfaces the verdict on the PR for human reviewers.
+#      `service-knowledge-verify` status check surfaces the verdict on the PR for human reviewers.
 #
 # Telemetry: every gate decision appends one `component=reconcile-gate` line to
 # `.xtrm/state/service-knowledge/events.jsonl` (grep by component for the audit trail).
 
-name: service-skills-drift-sweep
+name: service-knowledge-drift-sweep
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ permissions:
   checks: write
 
 concurrency:
-  group: service-skills-drift-sweep
+  group: service-knowledge-drift-sweep
   cancel-in-progress: false
 
 jobs:
@@ -78,7 +78,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: service-skills-verify
+          name: service-knowledge-verify
           path: |
             manifest.json
             report.md
@@ -86,27 +86,27 @@ jobs:
             .xtrm/state/service-knowledge/events.jsonl
           if-no-files-found: warn
 
-      - name: service-skills-verify (status check)
+      - name: service-knowledge-verify (status check)
         if: always()
         uses: LouisBrunner/checks-action@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: service-skills-verify
+          name: service-knowledge-verify
           status: completed
           conclusion: ${{ steps.gate.outputs.exit_code == '0' && 'success' || 'failure' }}
           output: |
-            {"summary":"Gate verdict: ${{ steps.gate.outputs.verdict }}. See the service-skills-verify artifact for the per-claim manifest + evidence report."}
+            {"summary":"Gate verdict: ${{ steps.gate.outputs.verdict }}. See the service-knowledge-verify artifact for the per-claim manifest + evidence report."}
 
       - name: Sticky comment on blocking verdict (no PR)
         if: steps.gate.outputs.exit_code != '0'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          header: service-skills-verify
+          header: service-knowledge-verify
           message: |
-            ## ❌ service-skills verifier gate: `${{ steps.gate.outputs.verdict }}`
+            ## ❌ service-knowledge verifier gate: `${{ steps.gate.outputs.verdict }}`
 
             The deterministic verifier blocked this sweep — **no PR was opened**.
-            See the `service-skills-verify` artifact (`manifest.json` / `report.md`) for the
+            See the `service-knowledge-verify` artifact (`manifest.json` / `report.md`) for the
             per-claim verdicts, evidence paths and complete-set comparisons.
 
       - name: Fail job on INVALID / CONFLICT / EVIDENCE_RACE
@@ -121,7 +121,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore(service-knowledge): reconcile service SKILL drift (gate=${{ steps.gate.outputs.verdict }})"
-          branch: service-skills-drift-sweep
+          branch: service-knowledge-drift-sweep
           title: "chore(service-knowledge): reconcile service SKILL drift [${{ steps.gate.outputs.verdict }}]"
           draft: ${{ steps.gate.outputs.verdict == 'INSUFFICIENT_EVIDENCE_HIGH_RISK' }}
           labels: |

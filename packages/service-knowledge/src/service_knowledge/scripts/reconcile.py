@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standalone service-skills drift reconciler for zero-install runners."""
+"""Standalone service-knowledge drift reconciler for zero-install runners."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from bootstrap import get_project_root, load_registry, save_registry  # type: ig
 from drift_detector import scan_drift  # type: ignore[import-not-found]  # noqa: E402
 
 # PR1 verifier + PR2 gate lattice, imported in-process (no IPC / JSON round-trip). The
-# gate is the ONLY path to atomic_write: reconcile.py, the service-skills-sync specialist
+# gate is the ONLY path to atomic_write: reconcile.py, the service-knowledge-sync specialist
 # and the auto-reconcile workflow all funnel through gated_write(), so the lattice cannot
 # be bypassed (research §2.7). REVISION 3: deterministic only — no residual LLM critic.
 from verifier import SourceCorpus, compute_gate, verify_candidate  # type: ignore[import-not-found]  # noqa: E402
@@ -327,7 +327,7 @@ def _canary_evaluate(manifest, decision, *, state_root):  # type: ignore[no-unty
     treated as canary OFF.
     """
     try:
-        from service_knowledge.canary.decision import DISABLED_SNAPSHOT, evaluate
+        from service_knowledge.canary.decision import evaluate
     except ImportError:  # pragma: no cover - vendored path
         return False, "canary_module_unavailable", {"enabled": False, "classes": []}
     return evaluate(manifest, decision, state_root=Path(state_root))

@@ -78,6 +78,11 @@ def install_git_hooks(project_root: Path) -> None:
         if marker not in content:
             hook_path.write_text(content + snippet, encoding="utf-8")
             print(f"{GREEN}  ✓{NC} {hook_path.relative_to(project_root)}")
+        elif snippet not in content:
+            start = content.index(marker)
+            end = content.find("\n# [jaggers]", start + len(marker))
+            hook_path.write_text(content[:start] + snippet.lstrip("\n") + content[end if end >= 0 else len(content):], encoding="utf-8")
+            print(f"{GREEN}  ✓{NC} updated: {hook_path.name}")
         else:
             print(f"{YELLOW}  ○{NC} already installed: {hook_path.name}")
 
@@ -94,7 +99,6 @@ def install_git_hooks(project_root: Path) -> None:
         active_hooks_dir = Path(hooks_path) if Path(hooks_path).is_absolute() else project_root / hooks_path
     else:
         # Use git-resolved hooks path — handles linked worktrees where .git is a file not a dir
-        import subprocess
         try:
             resolved = subprocess.check_output(["git", "-C", str(project_root), "rev-parse", "--git-path", "hooks"], text=True).strip()
             active_hooks_dir = Path(resolved) if Path(resolved).is_absolute() else project_root / resolved
