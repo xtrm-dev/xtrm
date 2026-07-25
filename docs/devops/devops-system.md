@@ -37,7 +37,7 @@ date_modified: Sunday, June 7th 2026, 10:35:51 am
 
 - **DevOps = sistema/dominio cross-cutting su `xt`+`sp`+`sb`** (+ infra/gitboard). **NON è un 6° package.**
 - **Due facce:**
-  - **(A) AgentOps interno** — sorvegliare l'ecosistema xtrm stesso (xt, sb, sp, channels, console): job, token, worktree, dolt, LSP, MCP, drift service-skills, processi orfani.
+  - **(A) AgentOps interno** — sorvegliare l'ecosistema xtrm stesso (xt, sb, sp, channels, console): job, token, worktree, dolt, LSP, MCP, drift service-knowledge, processi orfani.
   - **(B) Infra/cloud esterno** — Mercury stack, Prometheus/Grafana/Loki, Terraform, deploy, VPS/AWS.
 - **NON è "un agente che lancia comandi Docker".** È uno **strato operativo** che unisce
   topologia dei servizi, telemetria, cronologia deployment, repo, runbook, stato job, costo
@@ -52,7 +52,7 @@ date_modified: Sunday, June 7th 2026, 10:35:51 am
 | `mercury/infra` | Prometheus, Grafana, Loki, Alertmanager, exporters, Traefik, reti/volumi Docker, Terraform/IaC, l'MCP query server (cresce con la telemetria) |
 | `dev/specialists` | runtime telemetry, semantica devops/deployer specialist, substrate orchestration |
 | `dev/gitboard` (→ xtrm console) | UX console operativa, pannelli datasource-backed |
-| `dev/xtrm-tools` (core `xt`) | machinery service-skills (drift detector, librarian hooks, installer) |
+| `dev/xtrm-tools` (core `xt`) | machinery service-knowledge (drift detector, librarian hooks, installer) |
 
 **Regola di design:** il devops **consuma e compone** la telemetria infra; non forka una
 definizione di monitoring parallela. Quando manca un segnale, lo **propone nel repo proprietario**
@@ -205,7 +205,7 @@ tool surface propria e output contract proprio.
 | `database` | data/gate | READ_ONLY → gated maintenance | schema, migrations, backups, query plans, service skill | migration risk, restore path, perf finding, DB runbook update |
 | `security-devops` | safety/gate | READ_ONLY | dependency/image/secrets/IaC scan, exposed service map | PASS/PARTIAL/FAIL, safety blocker, remediation requirement |
 | `cost-capacity` | ops/advisor | READ_ONLY | token/model metrics, queue depth, CPU/RAM/disk, retention | capacity recommendation, budget warning, scaling follow-up |
-| `service-skills-sync` | knowledge maintenance | MEDIUM docs-only | GitNexus drift, service registry, health check tables | updated service skill, drift evidence, runbook freshness signal |
+| `service-knowledge-sync` | knowledge maintenance | MEDIUM docs-only | GitNexus drift, service registry, health check tables | updated service skill, drift evidence, runbook freshness signal |
 
 La regola: **SRE decide cosa sta succedendo; deployer cambia il sistema; IaC descrive il terreno;
 security/database/cost diventano gate o advisor quando il rischio li chiama.**
@@ -296,7 +296,7 @@ Il node non applica fix: crea pulse, findings e follow-up.
 flowchart TB
   N["devops preventive node"] --> A["scheduled sweep"]
   N --> B["event pulse intake"]
-  A --> C["service health + service-skills drift"]
+  A --> C["service health + service-knowledge drift"]
   A --> D["capacity / cost / queue / orphan jobs"]
   A --> E["backup freshness / Terraform drift"]
   B --> F["post-deploy regression watch"]
@@ -314,7 +314,7 @@ Node cadence iniziale:
 
 - daily posture sweep per AgentOps interno;
 - post-deploy watch su ogni deploy event;
-- weekly service-skills drift check;
+- weekly service-knowledge drift check;
 - weekly Terraform drift/readiness summary;
 - budget/capacity report quando metriche token/queue/storage superano soglie.
 
@@ -340,14 +340,14 @@ Il devops ha bisogno di conoscenza operativa **per-servizio**, non solo metriche
 **Architecture, Data Flows, Cross-Service Health Check (bash runnable), Failure Modes (symptom/cause/fix),
 Troubleshooting**. È l'analogo diretto di **runbook + per-service topology** dell'agente AWS (§4).
 
-- Il **librarian `service-skills-sync`** mantiene questi sync col drift del codice via **gitnexus**
+- Il **librarian `service-knowledge-sync`** mantiene questi sync col drift del codice via **gitnexus**
   (`detect_changes`/`impact`/`context`) + Serena, gated da `drift_detector.py` pre-scan e hook
   PostToolUse/pre-commit/post-merge.
 - **La machinery (drift detector, post-merge sweep) è un participant deterministico** (substrate
   `script`/`service`, zero token), candidato a emettere telemetria/pulse → primo consumatore concreto
   del forensic contract (`60w93`). **Il librarian resta LLM** (riconciliazione semantica).
 - Le health-check commands + failure-mode tables sono esattamente ciò che l'**RCA loop consuma**.
-- Bead di riferimento: `xtrm-tkqjn` (default service-skills-set devops-aware + gitnexus-aware) — già
+- Bead di riferimento: `xtrm-tkqjn` (default service-knowledge-set devops-aware + gitnexus-aware) — già
   realizzato dalla catena reliability `0p7bp/jcmub/q7436/lg9km` (oggi su main, non ancora rilasciata).
 
 > Le service skills sono **la documentation e il primitivo del devops system.**
@@ -384,7 +384,7 @@ la telemetria AgentOps corrente:
 | `/home/dawid/dev/specialists/docs/telemetry/forensic-event-contract.md` — aggiornato 2026-06-04        | Contract `xtrm.forensic.v1`: eventi forensi ricchi, identity a 5 layer, correlation IDs, redaction, famiglie evento, session/trace/conversation discipline, e status implementativo shipped. È la fonte per journal, evidence drawer, RCA e recommendation traceability. |
 | `/home/dawid/dev/specialists/docs/telemetry/prometheus-projection-contract.md` — aggiornato 2026-06-04 | Proiezione aggregate/low-cardinality da forensic/runtime state verso Prometheus. Include `sp metrics --prometheus`, `sp serve` `GET /metrics`, token-first semantics, identity/policy/eval counters, e MCP operation counter pre-wiring.                                 |
 | `/home/dawid/dev/specialists/docs/telemetry/prometheus-infra-console-handoff.md` — shipped PR #107     | Handoff operativo: cosa deve fare `mercury/infra`, cosa deve mostrare gitboard/console, come drillare dai pannelli aggregate agli eventi forensi.                                                                                                                        |
-| `/home/dawid/dev/specialists/docs/telemetry/agentops-event-catalog.md` — aggiornato 2026-06-04         | Catalogo eventi AgentOps: job, chain/epic, review/gates, tool/command, process/worktree, MCP, service-skills, pulse, identity/policy/eval, token usage, evidence kinds. È l'indice operativo per nuovi emitter.                                                          |
+| `/home/dawid/dev/specialists/docs/telemetry/agentops-event-catalog.md` — aggiornato 2026-06-04         | Catalogo eventi AgentOps: job, chain/epic, review/gates, tool/command, process/worktree, MCP, service-knowledge, pulse, identity/policy/eval, token usage, evidence kinds. È l'indice operativo per nuovi emitter.                                                          |
 
 **Superfici specialists già materializzate (status 2026-06-04):**
 
@@ -405,7 +405,7 @@ la telemetria AgentOps corrente:
 
 - **shipped now** → forensic envelope, AgentOps event catalog, metric projection, `/metrics`, CLI query, token-first semantics, session correlation;
 - **pre-wired but not live** → MCP forensic normalization/projection;
-- **future emitters/integrations** → live MCP emitter, service-skills/process-health/pulse native emitters, infra topology graph, DevOps specialist persona, MCP query orchestration, journal/recommendation UX, substrate-native channels/evidence.
+- **future emitters/integrations** → live MCP emitter, service-knowledge/process-health/pulse native emitters, infra topology graph, DevOps specialist persona, MCP query orchestration, journal/recommendation UX, substrate-native channels/evidence.
 
 ### 7.3 DevOps telemetry-query answer contract
 
