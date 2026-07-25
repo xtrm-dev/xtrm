@@ -1,0 +1,76 @@
+Metadata-Version: 2.4
+Name: service-knowledge
+Version: 0.5.0
+Summary: First-class operational service-knowledge package: per-service expert skill packages kept in sync with code via a GitNexus-aware drift engine. Own CLI, own lifecycle.
+Author: xtrm
+License: MIT
+Keywords: service-knowledge,skills,drift,gitnexus,devops
+Classifier: Development Status :: 3 - Alpha
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Software Development :: Documentation
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: jsonschema>=4.0
+Requires-Dist: markdown-it-py>=4.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: vaultctl<0.2,>=0.1.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7; extra == "dev"
+
+# service-knowledge
+
+First-class operational **service-knowledge** package. Gives an agent persistent,
+repo-specific operational knowledge about your services — architecture, data flows,
+failure modes, runnable health checks, deploy/runbook, and diagnostic scripts — kept in
+sync with the code via a GitNexus-aware drift engine.
+
+Elevated from the vendored `service-skills` machinery (previously shipped **into** consumer
+repos via `xt update --apply`) to a standalone package with its **own CLI, versioning,
+release cadence, and CHANGELOG**. Not routed through `xt update --apply`.
+
+## Install
+
+```bash
+pip install service-knowledge
+cd <your-service-hosting-repo>
+service-knowledge install
+```
+
+## CLI
+
+```
+service-knowledge install   # vendor + migrate + wire hooks (idempotent)
+service-knowledge update    # pull installed package version (no diff if current)
+service-knowledge status    # report install state
+service-knowledge migrate   # one-time service-skills -> service-knowledge rename
+service-knowledge remove    # uninstall machinery + cache + hooks
+```
+
+## Package layout
+
+```
+src/service_knowledge/
+├── cli/         # install · update · status · migrate · remove (stdlib argparse)
+├── scripts/     # the 11 machinery scripts (cataloger, drift_detector, skill_activator, …)
+├── contracts/   # service_skill_contract.json (SKILL.md section SSOT)
+├── skills/      # reference SKILLs (creating, using, updating, routing, system-guide, …)
+├── install/     # install-service-knowledge.py + settings.json + git-hooks/
+└── mcp/         # scaffold; PR3 lands the knowledge_* MCP tools
+```
+
+## Dependencies
+
+Stdlib-only CLI. The only cross-package dependency is **vaultctl** (declared at v0.1.0;
+wired in PR3 for vault-backed secrets). The CLI does **not** depend on xtrm/bd/sp/xt/xtmux.
+
+## Status
+
+v0.1.0 — lift-and-shift + rename + CLI scaffolding. The reframe machinery (verifier, FTS5
+index, MCP tools, activator upgrade, eval, telemetry backend) lands in PR1–5. See
+`docs/research/kb-knowledge-base-svc.md` in the xtrm repo for the full reframe spec.
