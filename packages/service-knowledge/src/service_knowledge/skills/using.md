@@ -112,7 +112,7 @@ blast-radius precision. The graph is an enhancement, never a hard dependency.
 
 If no registered expert covers the user's need:
 1. Inform the user no expert exists for this domain
-2. Offer to create one: "I can create a service skill using `/creating-service-skills`"
+2. Offer to create one: "I can create a service skill using `/creating-service-knowledge`"
 
 ---
 
@@ -144,8 +144,8 @@ Read-only — no write access:
 
 ## Related Skills
 
-- `/creating-service-skills` — Scaffold new expert personas
-- `/updating-service-skills` — Sync skills when implementation drifts
+- `/creating-service-knowledge` — Scaffold new expert personas
+- `/updating-service-knowledge` — Sync skills when implementation drifts
 
 ---
 

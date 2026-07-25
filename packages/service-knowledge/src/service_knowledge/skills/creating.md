@@ -1,7 +1,7 @@
 
 # Creating Service Skills
 
-> Detailed **create** flow for the `service-knowledge` router. Invoked via `/service-skills` (create) or `/creating-service-skills` muscle-memory.
+> Detailed **create** flow for the `service-knowledge` router. Invoked via `/service-knowledge` (create) or `/creating-service-knowledge` as the specific create trigger.
 >
 > **Path model:** `.claude/skills/<service>/SKILL.md` shown below is the **Claude-Code view** (a symlink). The canonical home for per-service skills is under `.xtrm/skills/<pack>/` — scripts resolve it via `bootstrap.get_service_skill_path_str`. Machinery scripts live at `.xtrm/skills/default/service-knowledge/scripts/` (the active view of this skill).
 
@@ -529,5 +529,5 @@ Do not:
 
 ## Related Skills
 
-- `/using-service-skills` — Discover and activate expert personas at session start
-- `/updating-service-skills` — Sync skills when implementation drifts
+- `/using-service-knowledge` — Discover and activate expert personas at session start
+- `/updating-service-knowledge` — Sync skills when implementation drifts
