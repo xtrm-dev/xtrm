@@ -3,6 +3,427 @@
 
 ### Added
 
+- **Service-knowledge v0.1.0 — new xtrm package (PR0 lift-and-shift) [xtrm-56flm.6] (#13)** ([2d91be9](https://github.com/xtrm-dev/xtrm/commit/2d91be93be0c33b4d86237e044ce34cea74307d4)) — 2026-07-24 15:04
+
+  PR0 of xtrm-56flm epic — new first-class xtrm package.
+
+  Adds packages/service-knowledge/ (v0.1.0) with:
+  - Own CLI (install/update/status/migrate/remove/telemetry) — NOT routed
+  through xt update
+  - All 11 machinery scripts moved from
+  xtrm-dev/core/.claude/skills/service-skills/scripts/ (byte-copies;
+  separate repos = cannot preserve git history)
+  - Reference SKILLs, contracts (service_skill_contract.json v1.0.0),
+  install hooks, MCP scaffold
+  - Depends on vaultctl (declared) — used starting PR3
+
+  Tag v0.1.0 pushed. Sibling PRs: xtrm-dev/core retirement,
+  mercuryintelligence/infra migration (#247), xtrm-dev/specialists
+  relocation (pending — escalated: commit landed on local master, needs
+  operator judgment).
+
+
+- **V0.2.0 — claim verifier foundations [xtrm-56flm.1] (#15)** ([93a3dc9](https://github.com/xtrm-dev/xtrm/commit/93a3dc9443e093b78dcfe5401c32d9ad2cdb53b3)) — 2026-07-24 17:24
+
+  PR1 of the knowledge-base reframe. See commit message for module
+  breakdown. Bumps v0.1.1 → v0.2.0. Bead: xtrm-56flm.1
+
+
+- **V0.3.0 — per-repo FTS5 index + 3 MCP tools + cataloger reframe [xtrm-56flm.3] (#16)** ([d864562](https://github.com/xtrm-dev/xtrm/commit/d86456269b817bd8ab3ce732ace56849387668c9)) — 2026-07-24 19:17
+
+  ## Summary
+  - add vaultctl-backed per-repo SQLite FTS5 evidence index at
+  `.xtrm/cache/service-knowledge.sqlite`
+  - expose exactly 3 read-only MCP tools: `knowledge_search`,
+  `knowledge_get`, `knowledge_evidence_for_files`
+  - add interpretable T/L/I/A/F ranking, provenance, freshness, telemetry,
+  cataloger/index-health reframe, umbrella provenance, CLI, post-merge
+  rebuild, and docs
+  - bump service-knowledge `0.2.0` → `0.3.0`
+
+  ## Verification
+  - 127 package tests pass
+  - targeted Ruff passes for PR3 index/MCP/CLI/cataloger/umbrella/hook
+  surfaces
+  - security re-audit PASS: arbitrary-read and webhook-secret findings
+  fixed
+  - obligations scan CLEAN
+  - net diff restricted to `packages/service-knowledge/**` and
+  `docs/devops/**`
+
+  ## Tracking
+  Core bead `xtrm-56flm.3` remains IN_PROGRESS pending operator merge.
+  Deferred follow-ups: `xtrm-56flm.3.1` (`knowledge_probes`) and
+  `xtrm-56flm.3.2` (`knowledge_conflicts`).
+
+
+- **V0.4.0 deterministic verifier gate [xtrm-56flm.2] (#17)** ([ac5bb56](https://github.com/xtrm-dev/xtrm/commit/ac5bb5644228020cacc38474f0b09b0f637acac1)) — 2026-07-24 19:57
+
+
+- **V0.5.0 — dispatch integration + activator upgrade [xtrm-56flm.4] (#18)** ([621b73c](https://github.com/xtrm-dev/xtrm/commit/621b73c3ff2703d3f23083450262f4db0243d547)) — 2026-07-24 20:47
+
+  ## Summary
+
+  PR4 of the service-knowledge reframe (bead **xtrm-56flm.4**): the
+  retrieval surface shipped in PR3 becomes *demanded* rather than passive.
+  `skill_activator.py` no longer nags "please read SKILL.md" — on a
+  territory match it invokes `knowledge_evidence_for_files` and injects
+  the §3.2 evidence bundle straight into the PreToolUse context. Dispatch
+  pipeline attaches the bundle to the bead body via a well-defined marker
+  so downstream specialists see it in `bd show`. Contract-promotion gate
+  refuses draft→ready when SCOPE touches a registered territory with no
+  `matched_services` attached.
+
+  Version bump: `0.4.0 → 0.5.0`.
+
+  ## What's in the diff
+
+  - **Activator behavior replaced**
+  (`packages/service-knowledge/src/service_knowledge/scripts/skill_activator.py`)
+  — matcher unchanged; injects evidence bundle instead of reminder; narrow
+  §3.7 block matrix.
+  - **New `service_knowledge.dispatch` module** — evidence-bundle →
+  bead-body renderer with marker `<!-- knowledge:evidence:BUNDLE_ID
+  -->…<!-- /knowledge:evidence -->`, promotion gate (`validate_promotion`
+  + CLI `python3 -m service_knowledge.dispatch validate`), telemetry
+  emitter.
+  - **Block matrix**:
+  - Read / Glob / Grep → evidence-inject, **never** block (even on broken
+  index).
+  - Write / Edit in registered territory → block **only** if retrieval
+  fails.
+    - Bash read-only → evidence-inject, don't block.
+  - Bash mutating (`rm`/`mv`/`docker rm`/`systemctl`/`kubectl apply`/`gh
+  pr merge` …) → bundle + conflict-check; block on conflicted high-risk
+  claim.
+    - PostToolUse → telemetry only, never blocks.
+  - **Operator override**: `OVERRIDE_KNOWLEDGE_BUNDLE=1` proceeds with
+  warning; override event recorded.
+  - **Structured telemetry**: JSONL to
+  `.xtrm/state/service-knowledge/events.jsonl` with
+  `component=activator|dispatch|bead-validator`,
+  `decision=inject|block|allow|override`, `override_reason?`,
+  `duration_ms`.
+  - **LOUD failure messages**: which service, which territory, which
+  bundle expected, why retrieval failed — no silent skips.
+  - **No session cache** (deferred per SCOPE — every PreToolUse
+  re-fetches).
+  - **No bd-schema change** — promotion gate is a regex-on-`bd show`
+  wrapper; bd-tracking paths (`.beads/**`, `.xtrm/state`, `.xtrm/cache`)
+  are exempt from blocks so the gate cannot lock itself out.
+
+  ## Companion PR
+
+  Specialist `task_template` update (task 8) lives on
+  `xtrm-dev/specialists` branch
+  `feature/xtrm-56flm.4.1-coordinator-evidence` (commit `09fd7047`) —
+  separate PR.
+
+  ## Test plan
+
+  Pytest — 67/67 pass (`python3 -m pytest
+  packages/service-knowledge/src/service_knowledge/dispatch/tests/`):
+
+  - [x] Block-matrix unit tests: every (tool, territory-match,
+  index-state) combination → expected decision
+  - [x] Activator integration: PreToolUse on Write in registered territory
+  → bundle injected
+  - [x] Activator integration: PreToolUse on Write with broken index →
+  block with actionable message
+  - [x] Bead promotion: SCOPE touches registered territory + no
+  `matched_services` → refused with reason
+  - [x] Override path: `OVERRIDE_KNOWLEDGE_BUNDLE=1` + Write → warns,
+  proceeds, override event in telemetry
+  - [x] Regression: Read/Glob/Grep never block, even on broken index
+  - [x] Regression: existing in-flight beads NOT retroactively refused on
+  promotion
+
+  ## Non-goals (deferred)
+
+  - No session cache (measure latency first)
+  - No bd schema change / no bd migration
+  - No auto-remediation / no auto-merge behavior change (PR5)
+  - No new MCP tools (PR3 shipped them; this PR only calls them)
+
+  Bead **xtrm-56flm.4** stays open pending operator merge.
+
+
+- **V0.6.0 — eval corpus + telemetry + alert-to-service [xtrm-56flm.5] (#19)** ([0d3b3f6](https://github.com/xtrm-dev/xtrm/commit/0d3b3f61b831342c0ed3e5db9f48d4728b540e41)) — 2026-07-24 22:07
+
+  PR5a. Ships the measurement layer for the service-knowledge reframe.
+
+  ## What lands
+
+  - **85-case labeled corpus** at
+  `packages/service-knowledge/src/service_knowledge/eval/corpus/`
+  including the 3 mandated api-gateway regression anchors (invented
+  redaction key set, wrong redaction literal, mislabeled
+  `http_request_duration_seconds` label set). Sourced from real closed
+  `bd` issues + merged PRs across `~/dev/core` and `~/dev/xtrm`, plus a
+  small synthetic-alert tail. Every case has the 8-field §3.9 schema +
+  `expected_verifier` + non-empty `provenance`.
+  - **`service_knowledge.eval.metrics`** — the 12 §3.9 metrics as pure
+  functions; `THRESHOLDS` map drives the report's green/yellow/red status
+  column.
+  - **`service_knowledge.eval.harness`** — CLI: `python -m
+  service_knowledge.eval.harness run --corpus <dir> --output-dir <dir>`.
+  Loads corpus, calls shipped retrieval + verifier (labels-echo stub
+  fallback when live index absent — keeps CI runnable without a warm
+  index), emits `YYYY-WW.md`. Emits `component=eval-harness` telemetry
+  lines (one per run + one per metric).
+  - **`service_knowledge.mcp.incident_routing`** — thin advisory-only
+  Alertmanager-payload → `knowledge_search` → top-K services + probes
+  bundle. No mutations.
+  - **`.github/workflows/eval-weekly.yml`** — cron (Mon 06:00 UTC) +
+  `workflow_dispatch`. Uploads report artifact + sticky-comments summary
+  on the tracking issue "service-knowledge eval baseline — weekly reports"
+  (auto-created on first run).
+  - **`install/git-hooks/post_merge_reindex.py`** — post-merge
+  default-branch reindex (60s target, 90s cap). Silent no-op off default
+  branch, when no registry present, or when CLI missing. Never fails the
+  merge.
+  - **Verifier telemetry side-channel**: `scripts/verifier/telemetry.py`
+  now also writes the per-run record to
+  `.xtrm/state/service-knowledge/events.jsonl` (`component=verifier`)
+  matching the emission surfaces of PR3 (`knowledge-index`) and PR4
+  (`activator`). No raw claim text, no source content — only claim_id
+  aggregates + content hashes.
+  - **Six new pytest modules** covering: corpus schema (≥30 case floor +
+  provenance), harness E2E (report has all metrics), regression anchors (3
+  anchor cases present + verifier catches api-gateway fixture), baseline
+  thresholds (routing precision ≥ 0.80, retrieval precision@5 ≥ 0.60,
+  stale escape ≤ 0.05, verifier FP ≤ 0.05, FN ≤ 0.10), incident routing
+  smoke, telemetry-shape/PII checks.
+
+  Bumps `VERSION` 0.5.0 → 0.6.0.
+
+  ## Out of scope by design
+
+  - Canary auto-merge policy → PR5b (bead `xtrm-56flm.7`).
+  - Verifier claim-type additions → PR1 follow-up, not driven yet.
+  - Cross-repo aggregation switch → follow-up if metrics demand it.
+
+  ## Test plan
+
+  - `pytest packages/service-knowledge/` — 238 passing locally (including
+  the 11 new eval tests).
+  - Harness smoke: `python -m service_knowledge.eval.harness run --corpus
+  … --output-dir …` produced `2026-Wxx.md` with all 12 metric rows,
+  threshold statuses, and telemetry lines in `events.jsonl`.
+  - Verifier telemetry: env `SERVICE_KNOWLEDGE_CONSUMER_ROOT=<tmp>`
+  produces a `component=verifier`/`event=run` line alongside the
+  pre-existing stderr line.
+  - Weekly workflow: needs a `workflow_dispatch` run to establish the real
+  baseline once a warm index is available in CI.
+
+  ## Bead
+
+  `xtrm-56flm.5` — stays OPEN pending operator merge.
+
+
+- **V0.7.0 — canary policy + gated auto-merge switch [xtrm-56flm.7] (#20)** ([d7d4e22](https://github.com/xtrm-dev/xtrm/commit/d7d4e226fa4535048e3057d959dc2f466070adf7)) — 2026-07-25 10:23
+
+  PR5b. Ships the canary policy doc + mechanism to enable per-class
+  auto-merge, without enabling it. v1.0.0 reserved for the
+  operator-authorized enable moment. See commit for module breakdown.
+  Bead: xtrm-56flm.7
+
+
+### Fixed
+
+- **V0.1.1 — 5 P1 Codex findings post-#13 merge (#14)** ([4cd724b](https://github.com/xtrm-dev/xtrm/commit/4cd724b645298399d92bab2a196031d716146759)) — 2026-07-24 15:07
+
+  Fast-follow to #13. Resolves 5 P1 Codex findings the PR shipped with.
+  All are shipping bugs (crashes/wrong paths/missing dep) that would hit
+  any consumer running install/scaffold/migrate.
+
+  Details in commit message. Bumps v0.1.0 → v0.1.1.
+
+
+- **Install.sh vaultctl dep resolution (#25)** ([59ac519](https://github.com/xtrm-dev/xtrm/commit/59ac5194a063d0706112878fd1ca03f290308ded)) — 2026-07-25 13:15
+
+  `./install.sh` failed with `No matching distribution found for
+  vaultctl<0.2,>=0.1.0`. Root cause: pyproject.toml declared `vaultctl` as
+  a PyPI dependency, but it lives in a sibling local repo and is NOT
+  published to PyPI. pipx tried to resolve it during initial install,
+  before the subsequent `pipx inject --editable` step could add it.
+
+  **Fix**
+  - Drop `vaultctl` from pyproject.toml `dependencies`. Documented in the
+  comment: install.sh is the supported path; manual pipx users get a
+  snippet to inject vaultctl editably.
+  - Clean up install.sh comment to reflect the new reality.
+
+  **Smoke test** (fresh Debian 13, pipx from apt)
+  ```
+  $ ./install.sh
+  ==> installing service-knowledge (editable) via pipx
+    installed package service-knowledge 0.7.0
+  ==> injecting vaultctl (editable) into the service-knowledge venv
+    injected package vaultctl into venv service-knowledge
+  ==> installed: service-knowledge 0.7.0
+
+  $ service-knowledge --version
+  service-knowledge 0.7.0
+
+  $ service-knowledge help topics
+  Available help topics: …
+  ```
+
+
+### Project maintenance
+
+- **Rich CLI help surface + install.sh + README rewrite (#21)** ([82cce27](https://github.com/xtrm-dev/xtrm/commit/82cce272ae255a6b219d6738b131bcae5d1779a0)) — 2026-07-25 12:05
+
+  ## Summary
+
+  Ships a proper help surface for the standalone \`service-knowledge\`
+  CLI, plus the installer + README rewrite the v0.7.0 branch auto-saved.
+
+  **CLI help surface** (new)
+
+  - \`service-knowledge --help\` — top-level epilog with common workflows
+  and pointer to concept help
+  - Every subcommand \`--help\` — argparse epilog with description + 2-3
+  examples (\`install\`/\`update\`/\`status\`/\`migrate\`/\`remove\` and
+  the nested \`index\`/\`canary\` actions)
+  - **New \`service-knowledge help <topic>\` subcommand** — 10 concept
+  explainers (workflow · install · bootstrap · index · verifier · mcp ·
+  activator · eval · canary · telemetry). \`help topics\` (or bare
+  \`help\`) lists them; unknown topic errors with the index to stderr,
+  exit 2
+
+  All content in the new \`cli/_help.py\` module. Stdlib argparse only, no
+  new deps.
+
+  **Installer** (was auto-saved on the v0.7.0 branch)
+
+  \`install.sh\` at package root — pipx-based one-command installer,
+  editable, \`--system-pipx\` bootstraps pipx via apt.
+
+  **README rewrite** (was auto-saved on the v0.7.0 branch)
+
+  Full rewrite to cover the v0.7.0 surface: verifier + FTS5 index + MCP
+  tools + activator + eval harness + canary + telemetry. Old README was
+  v0.1.0-era.
+
+  ## Test plan
+  - [x] All help paths smoke-tested locally on the mercury-infra reference
+  install
+  - [x] \`./install.sh\` smoke-installed with pipx; \`service-knowledge
+  --version\` returns 0.7.0 after
+
+  🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+  ---------
+
+
+- **Restore pre-session orchestrator worktree state (#22)** ([6330413](https://github.com/xtrm-dev/xtrm/commit/6330413d9e34fdf083a3d1ce23e9bfe1e9ab7c55)) — 2026-07-25 12:12
+
+  Restores tooling scaffolding (`.agents/`, `.claude/hooks/`,
+  `.claude/settings.json`, `.claude/skills` symlink, `.codex/`,
+  `.mcp.json`, `AGENTS.md`, `CLAUDE.md`, `.gitignore` updates) that
+  pre-existed on the xtrm worktree before the service-knowledge CLI-help
+  session but hadn't been committed. Merged from two overlapping stashes
+  (`pre-session-xtrm-worktree-dirty-2026-07-25` and
+  `pre-2m3-orchestrator-state-from-session-start`).
+
+
+- **Adapt machinery skills to v0.4-v0.7 substrate (#23)** ([d19d0d6](https://github.com/xtrm-dev/xtrm/commit/d19d0d61201e304d6033807902a39d38fe0f5fef)) — 2026-07-25 12:40
+
+  ## Summary
+
+  The reference SKILLs under
+  \`packages/service-knowledge/src/service_knowledge/skills/\` still
+  described the pre-reframe flow — sync brings them in line with the
+  shipped v0.4–v0.7 machinery (verifier gate, FTS5 evidence index, MCP
+  tools, narrow-blocking activator, canary policy) and sweeps residual
+  \`service-skills\` path references left over from before the package
+  rename.
+
+  **Content additions** (per file)
+
+  - **SKILL.md** (router): new \"Evidence-First Retrieval\" (T/L/I/A/F
+  ranking, CLI + 3 MCP tools) and \"Verifier Gate\" sections; rewritten
+  \"Installation\" for host-level (\`install.sh\` + pipx) and per-repo
+  layers; rewritten naming-note explaining the package-renamed /
+  slash-commands-kept split
+  - **creating.md**: new \"Before You Scaffold — Territory-Overlap Check\"
+  (uses \`knowledge_evidence_for_files\` / \`index query --paths\`); Phase
+  3 renamed \"Finalize\" with 4 ordered steps: A. Rebuild FTS5 index, B.
+  Verifier smoke on fresh SKILL, C. Hook, D. Communicate
+  - **updating.md**: new Step 5 (verifier gate — reconcile.py refuses to
+  write on blocking verdicts) + Step 6 (rebuild index so retrieval +
+  activator see updates)
+  - **using.md**: new \"Search Evidence, Not Just Titles\" section between
+  \"Activate an Expert\" and \"Navigate with the Graph\"
+  - **system-guide.md**: short \"what changed in v0.4-v0.7\" callout
+  separating authoring loop from serving loop
+
+  **Text sweep** — sedded stale paths and self-refs:
+  - \`.claude/skills/service-skills/scripts/\` →
+  \`.xtrm/skills/default/service-knowledge/scripts/\`
+  - Umbrella umbrella path, install script name, drift-pending marker,
+  migrator path, contracts path
+  - Descriptive \"service-skills router / installer / system\" →
+  \"service-knowledge …\"
+
+  **Deliberately kept** — slash-command muscle memory
+  (\`/service-skills\`, \`/creating-service-skills\`,
+  \`/using-service-skills\`, \`/updating-service-skills\`) and the
+  SKILL.md \`name:\` frontmatter so existing invocations don't break.
+
+  ## Test plan
+  - [x] All shipped machinery referenced in the diff verified to exist
+  (\`service-knowledge index/canary/help\` subcommands,
+  \`service_knowledge.scripts.verifier/reconcile\`, three MCP tools)
+  - [x] \`grep -c service-skills\` on the 5 flow files drops to
+  slash-command / frontmatter residue only (which we keep intentionally)
+  - [x] Diff scope confined to
+  \`packages/service-knowledge/src/service_knowledge/skills/*.md\`
+
+  🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+  ---------
+
+
+- **Rename slash commands to /service-knowledge (#24)** ([aeae776](https://github.com/xtrm-dev/xtrm/commit/aeae77622c40cc077cc89cae60743db01d9dab96)) — 2026-07-25 13:00
+
+  Completes the package rename. The half-rename (`service-knowledge`
+  package, `/service-skills` invocations) was documented as "muscle memory
+  preservation" but reads as inconsistency. Full rename now.
+
+  - Frontmatter `name: service-skills` → `service-knowledge`
+  - Description trigger list updated
+  - 5 flow files: `/service-skills` → `/service-knowledge`,
+  `/creating-service-skills` → `/creating-service-knowledge`, `/using-...`
+  → `/using-...`, `/updating-...` → `/updating-...`
+  - Removed the "Naming note" block from SKILL.md (no longer applicable)
+  - `service-skills-sync specialist` → `service-knowledge-sync specialist`
+  (paired with xtrm-dev/specialists PR)
+
+  ---------
+
+
+- **Sweep service-skills → service-knowledge in arch prose (#26)** ([4b4ce12](https://github.com/xtrm-dev/xtrm/commit/4b4ce124b39fc1c4cc1b87bf41c07dac7a41febb)) — 2026-07-25 14:34
+
+  Post-rename cleanup for the two Italian devops architecture docs
+  (`docs/devops/devops-system.md` + `dependencies-updating.md`) that still
+  carried pre-reframe references to the package name and the pre-rename
+  `service-skills-sync` specialist.
+
+  Purely textual — no diagrams / config / code touched. Rename order was
+  `-sync` first then bare `-skills` so the sync-suffix wasn't clobbered
+  mid-token.
+
+  ---------
+
+
+
+## [Unreleased]
+
+### Added
+
 - **Phase A — protocol client, via-mode dispatch, .mcpq.json discovery** ([e9c483f](https://github.com/xtrm-dev/xtrm/commit/e9c483f81d71f0a490eed0dbca26949e9ca09514)) — 2026-06-10 01:59
 
   - validation.py: URL scheme + host check (F-1 SSRF), header CRLF/NUL guard
