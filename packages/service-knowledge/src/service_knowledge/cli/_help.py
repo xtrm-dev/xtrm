@@ -269,14 +269,14 @@ port bindings, network attachments, health-check commands, metric names,
 alert names, script invocations, literal strings, path assertions).
 
 Six-tier gate lattice:
-  INVALID
-  CONFLICT
-  EVIDENCE_RACE
-  INSUFFICIENT_EVIDENCE_HIGH_RISK
-  PASS_WITH_ADVISORIES
-  PASS
+  INVALID                          blocking
+  CONFLICT                         blocking
+  EVIDENCE_RACE                    blocking
+  INSUFFICIENT_EVIDENCE_HIGH_RISK  non-blocking, non-writable (opens draft PR)
+  PASS_WITH_ADVISORIES             writable
+  PASS                             writable
 
-INVALID / CONFLICT / EVIDENCE_RACE = blocking. The others allow write.
+Only PASS and PASS_WITH_ADVISORIES flow through to `atomic_write`.
 
 Standalone invocation:
   python3 -m service_knowledge.scripts.verifier \\

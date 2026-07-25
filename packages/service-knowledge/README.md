@@ -23,9 +23,12 @@ cd ~/dev/xtrm/packages/service-knowledge
 
 The script:
 1. Ensures `pipx` is available (or apt-installs it with `--system-pipx`).
-2. `pipx install --editable` this package.
-3. Injects `vaultctl` (the only cross-package dep) into the same venv, editable.
-4. Runs `pipx ensurepath` so `~/.local/bin` lands on `$PATH` for future shells.
+2. Auto-clones `vaultctl` (the only cross-package dep) into a sibling of
+   the `xtrm` checkout (default: `~/dev/vaultctl`) if it isn't already
+   present. Override the location with `VAULTCTL_DIR=/your/path`.
+3. `pipx install --editable` this package.
+4. Injects the vaultctl checkout into the same venv, editable.
+5. Runs `pipx ensurepath` so `~/.local/bin` lands on `$PATH` for future shells.
 
 Any push to this repo (or to `vaultctl`) updates the installed CLI automatically —
 no reinstall.
@@ -96,7 +99,7 @@ operator action once the eval thresholds are met:
 
 ```bash
 service-knowledge canary status                  # show current state + thresholds
-service-knowledge canary enable --classes docs
+service-knowledge canary enable --classes literal,path
 service-knowledge canary disable
 ```
 
@@ -120,6 +123,10 @@ loop is allowed to write it. Extracts 13 claim types from a candidate SKILL.md, 
 each against territory globs, and returns a 6-tier gate verdict:
 
 `INVALID · CONFLICT · EVIDENCE_RACE · INSUFFICIENT_EVIDENCE_HIGH_RISK · PASS_WITH_ADVISORIES · PASS`
+
+Only `PASS` and `PASS_WITH_ADVISORIES` are writable. `INVALID` / `CONFLICT` /
+`EVIDENCE_RACE` are blocking; `INSUFFICIENT_EVIDENCE_HIGH_RISK` is non-blocking
+but non-writable — it opens a draft PR for human review instead of reconciling.
 
 Invoke standalone:
 

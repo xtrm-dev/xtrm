@@ -40,10 +40,16 @@ if ! command -v pipx >/dev/null; then
   fi
 fi
 
-# 2. vaultctl (only cross-package dep)
+# 2. vaultctl (only cross-package dep — lives in its own repo)
 if [ -z "${VAULTCTL_DIR:-}" ] || [ ! -f "$VAULTCTL_DIR/pyproject.toml" ]; then
-  die "vaultctl source not found. Set VAULTCTL_DIR=/path/to/vaultctl and re-run.
-    Expected default: $PKG_DIR/../../../vaultctl"
+  DEFAULT_VAULTCTL="$(cd "$PKG_DIR/../../.." 2>/dev/null && pwd || true)/vaultctl"
+  info "vaultctl source not found at $DEFAULT_VAULTCTL — cloning it"
+  if ! git clone https://github.com/xtrm-dev/vaultctl "$DEFAULT_VAULTCTL"; then
+    die "git clone https://github.com/xtrm-dev/vaultctl failed.
+    Clone it manually and either place it at $DEFAULT_VAULTCTL
+    or set VAULTCTL_DIR=/your/path and re-run."
+  fi
+  VAULTCTL_DIR="$DEFAULT_VAULTCTL"
 fi
 
 # 3. install (editable so `git pull` here or in vaultctl updates the CLI)
