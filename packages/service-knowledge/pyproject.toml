@@ -22,14 +22,17 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Topic :: Software Development :: Documentation",
 ]
-# vaultctl is the ONLY cross-package dependency. Declared at v0.1.0 so the package
-# boundary is correct from the first release; PR3 imports it for vault-backed secrets.
+# vaultctl is the ONLY cross-package dependency. It lives in its own sibling
+# repo (github.com/xtrm-dev/vaultctl) and is NOT published to PyPI, so it is
+# NOT listed here — declaring it would break `pipx install --editable .`.
+# Consumers get it via `install.sh` (pipx inject --editable), which is the
+# supported installer path. Manual pipx users: `pipx inject --editable
+# service-knowledge /path/to/vaultctl` after `pipx install --editable .`.
 # The CLI itself is stdlib-only and must NOT depend on xtrm/bd/sp/xt/xtmux.
 dependencies = [
   "jsonschema>=4.0",
   "markdown-it-py>=4.0",
   "pyyaml>=6.0",
-  "vaultctl>=0.1.0,<0.2",
 ]
 
 [project.optional-dependencies]
