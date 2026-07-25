@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Post-merge service-skills drift sweep (xtrm-jcmub).
+Post-merge service-knowledge drift sweep (xtrm-jcmub).
 
-The canonical reconciliation point for service-skills drift is a merge onto the
+The canonical reconciliation point for service-knowledge drift is a merge onto the
 default branch (master/main) — that is the single moment the code is final, and the
 v2 design measures drift semantically from each service's `last_sync_ref`
 (committed range `last_sync_ref..HEAD`). The in-session PostToolUse nudge is
@@ -14,12 +14,12 @@ This hook is the proactive backstop. On a default-branch merge it:
      default branch (feature-branch merges are skipped per the documented cadence),
   2. runs the cost-bounded `drift_detector.scan_drift` over `last_sync_ref..HEAD`,
   3. on drift: prints a prominent, actionable notice and drops a pending marker
-     at `.xtrm/.service-skills-drift-pending` so the next agent session / operator
-     runs the reconciliation (`/updating-service-skills`, the service-skills-sync
-     specialist).
+     at `.xtrm/.service-knowledge-drift-pending` so the next agent session / operator
+     runs the reconciliation (`/updating-service-knowledge`, the
+     service-knowledge-sync specialist).
   4. opt-in auto-reconcile (xtrm-tg33i): if `XTRM_AUTO_RECONCILE_DRIFT=1` is set
      AND `sp` is on PATH AND a pack is resolvable, the hook invokes
-     `sp script service-skills-sync` with `--allow-local-scripts
+     `sp script service-knowledge-sync` with `--allow-local-scripts
      --allow-write-capable` and lets the specialist remove the marker on success.
      This is gated behind an env var because earlier policy forbade git hooks
      from running model-backed specialists; the explicit opt-in flips that for
@@ -43,12 +43,12 @@ from pathlib import Path
 _HOOK_DIR = Path(__file__).resolve().parent
 _SCRIPTS_DIR = _HOOK_DIR.parent.parent / "scripts"
 
-MARKER_REL = Path(".xtrm") / ".service-skills-drift-pending"
+MARKER_REL = Path(".xtrm") / ".service-knowledge-drift-pending"
 DEFAULT_BRANCHES = {"main", "master"}
 AUTO_RECONCILE_ENV = "XTRM_AUTO_RECONCILE_DRIFT"
 AUTO_RECONCILE_TIMEOUT_MS_ENV = "XTRM_AUTO_RECONCILE_TIMEOUT_MS"
 AUTO_RECONCILE_TIMEOUT_MS_DEFAULT = 600_000
-RUNLOG_REL = Path(".xtrm") / ".service-skills-auto-reconcile.log"
+RUNLOG_REL = Path(".xtrm") / ".service-knowledge-auto-reconcile.log"
 
 
 def _project_root() -> Path:
@@ -119,7 +119,7 @@ def _resolve_pack(root: Path) -> str | None:
 
 
 def _auto_reconcile(root: Path) -> tuple[bool, str]:
-    """Invoke `sp script service-skills-sync` to reconcile drift. Returns (success, message).
+    """Invoke `sp script service-knowledge-sync` to reconcile drift. Returns (success, message).
 
     Gates: opt-in via XTRM_AUTO_RECONCILE_DRIFT=1, `sp` on PATH, resolvable pack.
     Failure modes return (False, reason) — the caller logs but does NOT remove the marker so
@@ -142,7 +142,7 @@ def _auto_reconcile(root: Path) -> tuple[bool, str]:
         timeout_ms = AUTO_RECONCILE_TIMEOUT_MS_DEFAULT
 
     cmd = [
-        sp, "script", "service-skills-sync",
+        sp, "script", "service-knowledge-sync",
         "--template-field", "script_template",
         "--vars", f"repo={root.name}",
         "--vars", f"pack={pack}",
@@ -244,7 +244,7 @@ def main() -> int:
 
     try:
         # Surface-only: the post-merge sweep just needs to DETECT drift and drop a marker;
-        # semantic tiering is the librarian's job (/updating-service-skills). Force the cheap
+        # semantic tiering is the librarian's job (/updating-service-knowledge). Force the cheap
         # mtime path so a default-branch merge can never trigger gitnexus fan-out (xtrm-08i0b).
         drift = scan_drift(project_root=str(root), use_gitnexus=False)
     except (OSError, RuntimeError, ValueError, TypeError, KeyError):
@@ -258,26 +258,26 @@ def main() -> int:
     try:
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_text(
-            f"service-skills drift detected post-merge on '{branch or default or 'default'}'\n"
+            f"service-knowledge drift detected post-merge on '{branch or default or 'default'}'\n"
             f"services: {', '.join(services)}\n"
             f"files: {len(drift)}\n"
-            "action: run /updating-service-skills (service-skills-sync) to reconcile + stamp last_sync_ref\n",
+            "action: run /updating-service-knowledge (service-knowledge-sync) to reconcile + stamp last_sync_ref\n",
             encoding="utf-8",
         )
     except OSError:
         pass
 
     print()
-    print("⚠  service-skills drift detected at the post-merge reconciliation point.")
+    print("⚠  service-knowledge drift detected at the post-merge reconciliation point.")
     print(f"   {len(drift)} drifted file(s) across service(s): {', '.join(services)}")
 
     ok, msg = _auto_reconcile(root)
     if ok:
-        print(f"   ✓ auto-reconcile via sp script service-skills-sync — {msg}")
+        print(f"   ✓ auto-reconcile via sp script service-knowledge-sync — {msg}")
         print("   the specialist removes the pending marker on success.")
         _append_runlog(root, f"OK {branch or default or '-'} | services={','.join(services)} | {msg}")
     else:
-        print("   Reconcile with /updating-service-skills (the service-skills-sync specialist),")
+        print("   Reconcile with /updating-service-knowledge (the service-knowledge-sync specialist),")
         print("   which syncs the drifted SKILL.md and advances last_sync_ref.")
         print(f"   (pending marker: {MARKER_REL})")
         print(f"   (auto-reconcile skipped: {msg})")

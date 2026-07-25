@@ -109,7 +109,6 @@ def get_pack_path(project_root: str | None = None) -> Path | None:
         env_root = os.environ.get("CLAUDE_PROJECT_DIR")
         project_root = env_root or get_project_root()
 
-    root = Path(project_root)
     packs_root = _packs_root(project_root)
     env_pack = os.environ.get("XTRM_PACK")
 
@@ -356,9 +355,9 @@ def _gitnexus_repo_name(project_root: str | None = None) -> str:
     """Resolve the repo label gitnexus indexed under — the MAIN worktree's basename.
 
     In a linked git worktree ``get_project_root()`` returns the worktree dir, whose basename
-    (e.g. ``market-data-uh1r-service-skills-sync``) gitnexus has NOT indexed; injecting it as
+    (e.g. ``market-data-uh1r-service-knowledge-sync``) gitnexus has NOT indexed; injecting it as
     ``--repo`` makes every gitnexus call fail → drift silently degrades to mtime-only tiering.
-    The service-skills-sync librarian ALWAYS runs in such an auto-provisioned worktree, so it
+    The service-knowledge-sync librarian ALWAYS runs in such an auto-provisioned worktree, so it
     would otherwise never get semantic enrichment. ``git rev-parse --git-common-dir`` points at
     the shared (main) ``.git``; its parent is the indexed checkout (xtrm-vvhfs). Falls back to the
     local basename on any git failure. ``GITNEXUS_REPO`` still wins when explicitly set.

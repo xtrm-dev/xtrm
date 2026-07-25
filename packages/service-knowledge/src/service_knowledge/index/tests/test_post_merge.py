@@ -50,3 +50,25 @@ def test_rebuild_failure_never_breaks_hook(post_merge_hook, monkeypatch, tmp_pat
 
     monkeypatch.setattr(index, "build", fail)
     post_merge_hook._rebuild_knowledge_index(tmp_path)
+
+
+def test_auto_reconcile_invokes_service_knowledge_specialist(post_merge_hook, monkeypatch, tmp_path):
+    calls: list[list[str]] = []
+    monkeypatch.setenv(post_merge_hook.AUTO_RECONCILE_ENV, "1")
+    monkeypatch.setattr(post_merge_hook.shutil, "which", lambda command: "/usr/bin/sp")
+    monkeypatch.setattr(post_merge_hook, "_resolve_pack", lambda root: "infra")
+
+    def run(cmd, env, timeout_s):
+        calls.append(cmd)
+        return types.SimpleNamespace(
+            returncode=0,
+            stdout='{"success": true, "meta": {"trace_id": "trace-1"}}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(post_merge_hook, "_run_sp_subprocess", run)
+
+    assert post_merge_hook._auto_reconcile(tmp_path) == (True, "sp script success: trace-1")
+    assert calls[0][2] == "service-knowledge-sync"
+    assert post_merge_hook.MARKER_REL == Path(".xtrm/.service-knowledge-drift-pending")
+    assert post_merge_hook.RUNLOG_REL == Path(".xtrm/.service-knowledge-auto-reconcile.log")
