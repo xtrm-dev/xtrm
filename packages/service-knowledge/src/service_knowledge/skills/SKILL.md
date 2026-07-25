@@ -1,13 +1,13 @@
 ---
-name: service-skills
+name: service-knowledge
 description: >-
   Operational service-knowledge system for a project's services. One skill that
   creates, discovers, activates, updates, and scopes per-service expert skill
   packages (SKILL.md + diagnostic scripts + references), kept in sync with the
   code via a GitNexus-aware drift engine. Use when onboarding to a service,
   routing a task to the right expert, scaffolding a missing skill, or syncing a
-  skill after the implementation drifted. Triggers: /service-skills,
-  /creating-service-skills, /using-service-skills, /updating-service-skills,
+  skill after the implementation drifted. Triggers: /service-knowledge,
+  /creating-service-knowledge, /using-service-knowledge, /updating-service-knowledge,
   /scope, or any task that touches a registered service territory.
 allowed-tools: Bash(python3 *), Read, Grep, Glob, Write
 ---
@@ -22,8 +22,8 @@ detailed reference for each.
 
 > **Naming note.** The package that ships all of this is called **`service-knowledge`** (own CLI,
 > own release cadence, `pipx`-installable). This machinery *skill* keeps its original
-> `service-skills` name and its `/service-skills` / `/creating-service-skills` /
-> `/using-service-skills` / `/updating-service-skills` slash-command triggers unchanged, purely to
+> `service-skills` name and its `/service-skills` / `/creating-service-knowledge` /
+> `/using-service-knowledge` / `/updating-service-knowledge` slash-command triggers unchanged, purely to
 > preserve muscle memory across the rename — expect the package name in installer output, CLI, and
 > repo layout, but keep typing the same slash commands you always have.
 >
@@ -38,9 +38,9 @@ detailed reference for each.
 
 | You want to… | Flow | Reference | Trigger |
 |---|---|---|---|
-| Stand up a new service skill (scaffold + deep dive) | **create** | [references/creating.md](references/creating.md) | `/creating-service-skills` |
-| Find & activate the right expert for a task | **use** | [references/using.md](references/using.md) | `/using-service-skills` (auto at session start) |
-| Sync a skill after the code changed (drift) | **update** | [references/updating.md](references/updating.md) | `/updating-service-skills` (auto on Write/Edit) |
+| Stand up a new service skill (scaffold + deep dive) | **create** | [references/creating.md](references/creating.md) | `/creating-service-knowledge` |
+| Find & activate the right expert for a task | **use** | [references/using.md](references/using.md) | `/using-service-knowledge` (auto at session start) |
+| Sync a skill after the code changed (drift) | **update** | [references/updating.md](references/updating.md) | `/updating-service-knowledge` (auto on Write/Edit) |
 | Scope a task to the right service(s) before touching files | **scope** | [references/routing.md](references/routing.md) | `/scope "task"` |
 
 Supporting references: [system-guide.md](references/system-guide.md) (how the whole system fits

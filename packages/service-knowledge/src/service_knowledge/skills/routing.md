@@ -27,7 +27,7 @@ python3 "$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/scop
 This outputs every registered service: ID, container, territory paths, skill path,
 and description. If the registry is missing, report:
 
-> "No service-registry.json found at this project. Run /creating-service-skills first."
+> "No service-registry.json found at this project. Run /creating-service-knowledge first."
 
 ---
 
@@ -239,13 +239,13 @@ Commit the test in the same commit as the fix.
 If no registered service matches the task:
 
 1. Report: `"No registered skill covers this area."`
-2. Offer: `"I can create one — use /creating-service-skills."`
+2. Offer: `"I can create one — use /creating-service-knowledge."`
 3. Fall back to general expert mode (no skill enforcement).
 
 ---
 
 ## Related Skills
 
-- `/using-service-skills` — Passive catalog at session start
-- `/creating-service-skills` — Scaffold new expert skill packages
-- `/updating-service-skills` — Sync skills after implementation drift
+- `/using-service-knowledge` — Passive catalog at session start
+- `/creating-service-knowledge` — Scaffold new expert skill packages
+- `/updating-service-knowledge` — Sync skills after implementation drift
