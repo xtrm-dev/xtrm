@@ -10,7 +10,7 @@ import argparse
 import sys
 
 from service_knowledge import __version__
-from service_knowledge.cli import index_cmd, install, migrate, remove, status, update
+from service_knowledge.cli import canary_cmd, index_cmd, install, migrate, remove, status, update
 
 _SUBCOMMANDS = {
     "install": (install.run, "Install service-knowledge into a consumer repo (vendor + migrate + wire hooks)."),
@@ -19,6 +19,7 @@ _SUBCOMMANDS = {
     "migrate": (migrate.run, "One-time rename of the service-skills umbrella to service-knowledge."),
     "remove": (remove.run, "Uninstall machinery + cache + hooks (keeps your per-service knowledge)."),
     "index": (index_cmd.run, "Build / query / inspect the per-repo FTS5 evidence index."),
+    "canary": (canary_cmd.run, "Manage the per-repo auto-merge canary (status | enable | disable)."),
 }
 
 
@@ -30,12 +31,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"service-knowledge {__version__}")
     sub = parser.add_subparsers(dest="command", metavar="<command>")
     for name, (_fn, help_text) in _SUBCOMMANDS.items():
-        if name == "index":
-            continue  # registered below with nested build|rebuild|query|stats actions
+        if name in ("index", "canary"):
+            continue  # registered below with nested actions
         sp = sub.add_parser(name, help=help_text, description=help_text)
         sp.add_argument("--path", default=None, help="Consumer repo root (default: git toplevel of cwd).")
-    # `index` carries nested actions (build|rebuild|query|stats); register it separately.
+    # `index` and `canary` carry nested actions; register them separately.
     index_cmd.register(sub)
+    canary_cmd.register(sub)
     return parser
 
 

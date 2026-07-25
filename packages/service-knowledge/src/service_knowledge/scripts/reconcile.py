@@ -28,6 +28,12 @@ from drift_detector import scan_drift  # type: ignore[import-not-found]  # noqa:
 from verifier import SourceCorpus, compute_gate, verify_candidate  # type: ignore[import-not-found]  # noqa: E402
 from verifier.gate import GateDecision, source_fingerprint  # type: ignore[import-not-found]  # noqa: E402
 
+# Canary policy (bead xtrm-56flm.7, package v0.7.0). Lazy-imported inside the
+# helper so this file still works in the vendored consumer copy where the
+# package isn't installed as `service_knowledge` — ImportError there is
+# treated as canary OFF.
+
+
 DEFAULT_NANO_GPT_URL = "https://nano-gpt.com/api/v1/chat/completions"
 NANO_GPT_MODEL = os.environ.get("NANO_GPT_MODEL", "gpt-4o-mini")
 ALLOWED_NANO_GPT_HOSTS = {"nano-gpt.com"}
@@ -287,17 +293,44 @@ def gated_write(
         if decision.is_writable and not dry_run:
             atomic_write(skill_path, candidate_path.read_text(encoding="utf-8"))
             written = True
+        # Canary read-out (bead xtrm-56flm.7): decide whether the just-written diff
+        # is eligible for auto-merge under the ratified per-class policy. Fail-closed
+        # on any doubt (state file missing / malformed / claim class not enabled /
+        # verdict not PASS / env override off). The write itself already happened —
+        # this only controls the downstream auto-merge branch vs. normal PR.
+        auto_merge, canary_reason, canary_state = _canary_evaluate(
+            manifest,
+            decision,
+            state_root=state_root or source_root,
+        )
         return {
             "verdict": decision.verdict.value,
             "written": written,
             "gate": decision.to_dict(),
             "manifest": manifest.to_dict(),
+            "auto_merge": auto_merge,
+            "canary": {"reason": canary_reason, "state": canary_state},
         }
     finally:
         try:
             candidate_path.unlink()
         except OSError:
             pass
+
+
+def _canary_evaluate(manifest, decision, *, state_root):  # type: ignore[no-untyped-def]
+    """Return ``(auto_merge, reason, state_snapshot)`` for a gated write.
+
+    Delegates to :func:`service_knowledge.canary.decision.evaluate`. Import is
+    lazy so this file still loads in the vendored consumer copy where the
+    package is not installed as ``service_knowledge`` — an ImportError there is
+    treated as canary OFF.
+    """
+    try:
+        from service_knowledge.canary.decision import DISABLED_SNAPSHOT, evaluate
+    except ImportError:  # pragma: no cover - vendored path
+        return False, "canary_module_unavailable", {"enabled": False, "classes": []}
+    return evaluate(manifest, decision, state_root=Path(state_root))
 
 
 def current_head(project_root: Path) -> str:
