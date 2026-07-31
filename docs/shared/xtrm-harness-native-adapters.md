@@ -2,6 +2,9 @@
 
 ## Claude MCP and Pi Native Extension Evaluation, Verification and Decomposition
 
+**FOR MCP, 2.0 WAS RELEASED SO BEFORE ANYTHING GETS IMPLEMENTED FROM HERE, IT SHOULD BE VERIFIED**
+
+
 **Status:** proposal for independent verification and decomposition
 **Date:** 24 July 2026
 **Program relationship:** independent from the Specialists modernization roadmap and from the CLI program, but blocked on a stable CLI outcome contract for production adoption
