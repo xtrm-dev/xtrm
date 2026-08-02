@@ -1,40 +1,47 @@
 # XTRM Local Coordinator Bootstrap
 
-**Use with:** `docs/shared/xtrm-current-execution-plan.md` and `.json`  
-**Purpose:** give the main local coordinator an exact first-run protocol for compiling the current plan into repository-local Beads without duplicating work or dispatching later roadmap scope prematurely.
+**Use with:** `xtrm-current-execution-plan.md`, `.json`, and `xtrm-jira-reconciliation-packet.json`  
+**Purpose:** compile the current programme into repository-local Beads without duplicate work, false cross-repository hierarchy or premature dispatch.
 
 ## Mandate
 
 You are the main implementation coordinator for the XTRM deterministic-runtime wave.
 
-Your job is to reconcile existing Beads and current repository state, create only the first executable programme packet, and orchestrate implementation through reviewable repository-owned PRs.
+Your job is to:
 
-You do not redesign the roadmap. You do not treat Jira as implementation truth. You do not create a cross-repository parent-child hierarchy that Beads cannot honestly own.
+- reconcile current releases, code and existing Beads;
+- create only the first executable programme packet;
+- enforce the promotion gates from the current execution plan;
+- orchestrate implementation through repository-owned PRs and coordinated releases.
 
-## Canonical input
+You do not redesign the roadmap. You do not treat Jira as execution truth. You do not create a cross-repository parent-child graph that no single Beads database owns.
+
+## Canonical inputs
 
 Read in this order:
 
 1. `docs/shared/xtrm-current-execution-plan.md`
 2. `docs/shared/xtrm-current-execution-plan.json`
-3. affected repository code and current releases
-4. `xtrm-dev/specialists/docs/design/roadmap/enhanced-prd.md`
-5. `specialist-execution-protocol.md`
-6. chain-template canon and executable formula files
-7. existing repository-local Beads
+3. `docs/shared/xtrm-jira-reconciliation-packet.json`
+4. current repository code and releases
+5. `xtrm-dev/specialists/docs/design/roadmap/current-release-snapshot.md`
+6. `enhanced-prd.md`
+7. `specialist-execution-protocol.md`
+8. chain-template canon and formula files
+9. existing repository-local Beads
 
-If current code contradicts the current execution plan, stop implementation, capture the evidence and update the plan first.
+If current code contradicts the plan, stop implementation, record the evidence and update the current-state ledger first.
 
-## Non-negotiable authority boundaries
+## Authority boundaries
 
 - Beads owns executable work contracts, dependencies, claims and completion.
 - Specialists owns Specialist jobs, progress and results.
 - xtmux owns messages, obligations, monitors, wakes and runtime identity.
-- Core owns launch, install and managed configuration.
+- Core owns launch, installation and managed configuration.
 - Git owns branch, commit and integration truth.
 - A compiled and persisted `ResolvedChain` owns chain topology.
 - A pure reducer owns deterministic next-transition computation.
-- The coordinator handles bounded semantic judgment; it does not become a second scheduler.
+- The coordinator handles bounded semantic judgment; it is not a second scheduler.
 
 ## First-run protocol
 
@@ -51,22 +58,29 @@ xtrm-dev/xtrm
 
 Record:
 
-- current default-branch SHA;
+- default-branch SHA;
 - latest released package/tag;
 - commits since release;
 - last 20 merged PRs;
 - open implementation PRs;
-- current Beads epics and in-progress claims relevant to R0/I1/E1/C1/D1.
+- current Beads epics and active claims related to R0/I1/E1/C1/D1.
 
-The expected release baseline is Core `0.11.4`, Specialists `3.21.2`, xtmux `0.2.3`. Treat any difference as a reconciliation event.
+Expected release baseline:
 
-### 2. Audit existing Beads before creating anything
+```text
+Core        0.11.4
+Specialists 3.21.2
+xtmux       0.2.3
+```
 
-Search semantically and by known labels/terms:
+Any difference is a reconciliation event, not a detail to ignore.
+
+### 2. Audit existing Beads before creation
+
+Search semantically and by terms:
 
 ```text
 command outcome
-CLI outcome
 next_actions
 execution protocol
 execution profile
@@ -89,32 +103,32 @@ Classify every match:
 
 ```text
 reuse unchanged
-update scope
+update residual scope
 split delivered/residual
 supersede
 unrelated
 ```
 
-Never create a new root merely because the symbolic plan ID is new.
+A new symbolic workstream ID does not justify a duplicate Bead.
 
-### 3. Verify Beads capabilities
+### 3. Verify installed Beads capabilities
 
-Before writes, verify the installed Beads version and actual support for:
+Before writes, verify the actual installed binary and support for:
 
-- atomic graph creation/dry-run;
-- formula/molecule operations;
+- atomic graph dry-run/creation;
+- formula and molecule operations;
 - gate types and fan-in semantics;
-- cross-project or external references;
-- supported dependency types;
+- external/cross-project references;
+- dependency vocabulary;
 - metadata JSON;
-- claim pools/statuses;
+- claims and custom statuses;
 - shared Dolt project identity.
 
-Do not copy commands from old plans when the installed binary differs.
+Do not copy commands from an old roadmap when the installed CLI differs.
 
-### 4. Build a proposed mapping
+### 4. Produce the symbolic-to-real mapping
 
-Create a reviewed mapping before live issue creation:
+Create and review:
 
 ```json
 {
@@ -127,6 +141,11 @@ Create a reviewed mapping before live issue creation:
     "Jaggerxtrm/xtmux": {}
   },
   "symbolic_to_bead": {
+    "R0.1": [],
+    "R0.2": [],
+    "R0.3": [],
+    "R0.4": [],
+    "R0.5": [],
     "I1.1": [],
     "I1.2": [],
     "I1.3": [],
@@ -148,25 +167,23 @@ Create a reviewed mapping before live issue creation:
 }
 ```
 
-Each entry carries repository, real Bead ID, disposition and evidence link.
+Each mapping entry includes repository, real Bead ID, disposition and evidence link.
 
-### 5. Review the proposed graph
+### 5. Review graph before live creation
 
-Run the installed graph dry-run/validation path. Inspect:
+Run the installed graph validation path and inspect:
 
 - cycles;
 - parent-child correctness;
-- hard sequencing versus mere relation;
-- cross-repository release gates;
-- collision risk across files and contracts;
+- hard sequencing versus relation;
+- release gates;
+- file/contract collisions;
 - acceptance coverage;
-- which tasks are independently claimable.
+- first claimable work.
 
-No live implementation dispatch before the graph is reviewed.
+No implementation dispatch before this review.
 
 ## Repository-owned programme structure
-
-Do not create one fake umbrella Epic with children in other databases.
 
 ### `xtrm-dev/xtrm`
 
@@ -174,7 +191,7 @@ Create or reuse one coordination/index root only.
 
 Responsibilities:
 
-- current execution plan ownership;
+- R0 current-plan ownership;
 - release and authority reconciliation;
 - Jira/Beads/GitHub mapping;
 - cross-repository gate index;
@@ -188,21 +205,21 @@ Create or reuse:
 
 ```text
 Epic: deterministic command outcomes — xtmux
-  I1.1 xtmux command inventory and compatibility evidence
-  I1.2 command-outcome contract and first coordination slice
-  I1.2 tests: human/JSON/exit/idempotency/security compatibility
-  release gate: publish supported xtmux version
+  I1.1 command inventory and compatibility evidence
+  I1.2 coordination outcome vertical slice
+  contract/security/compatibility fixtures
+  release gate
 ```
 
-One Bead per reviewable PR boundary, not per command.
+One Bead per reviewable PR boundary, not one per command.
 
 ### `xtrm-dev/specialists`
 
-Create or reuse separate repository-owned roots:
+Create or reuse:
 
 ```text
 Epic: deterministic command outcomes — Specialists
-  I1.1 Specialists command inventory
+  I1.1 command inventory
   I1.3 run/feed/result/resume/stop/integration outcomes
 
 Epic: minimum specialists.execution.v1
@@ -225,7 +242,7 @@ Epic: reducer and coordinator shadow mode
   D1.4 coordinator shadow integration
 ```
 
-The last Epic is blocked by the production promotion prerequisites from I1/E1/C1.
+D1 is blocked by `GATE-COMPOSE`. D1.4 is blocked by `GATE-DO0`.
 
 ### `xtrm-dev/core`
 
@@ -233,108 +250,118 @@ Create or reuse:
 
 ```text
 Epic: deterministic launcher outcomes
-  I1.1 Core launcher/topology/merge inventory
+  I1.1 launcher/topology/merge inventory
   I1.4 Pi/Claude launch and integration-handoff outcomes
-  compatibility fixtures against xtmux and Specialists
+  cross-runtime compatibility fixtures
 
 Placeholder Epic: XT Codex runtime integration
-  capability audit only initially
-  production launcher blocked by I1.4 contract approval
+  read-only capability audit first
+  production launcher blocked by GATE-IFACE
 ```
 
-## First claimable wave
+## First claimable audit wave
 
-After graph approval, these four evidence tasks may be claimed in parallel:
+After graph approval, claim in parallel:
 
-1. **xtmux I1.1** — command inventory, exact output/exit fixtures and compatibility ADR input.
-2. **Specialists E1.1 audit/schema** — map current runner phases to the minimum execution-profile contract; no behavioral rewrite yet.
-3. **Specialists C1.1 audit** — prove formula validity, package/install gap and catalog ownership; no production dispatch yet.
-4. **Core I1.1** — launcher/topology/merge output inventory and current consumer matrix.
+1. **xtmux I1.1** — exact output/exit fixtures and compatibility ADR evidence.
+2. **Specialists E1.1 audit/schema** — map current runner phases to minimum execution-profile contract; no behavior rewrite.
+3. **Specialists C1.1 audit** — formula validity, package/install gap and catalog ownership; no production dispatch.
+4. **Core I1.1** — launcher/topology/merge output inventory and consumer matrix.
 
-Recommended fan-out:
+Use read-only agents. Each report must include file:line evidence, released-versus-source distinction and proposed cuts.
 
-```text
-main coordinator
-├── xtmux explorer/auditor
-├── Specialists execution-protocol explorer
-├── Specialists chain-template explorer
-└── Core launcher explorer
-```
+Then run one synthesis/reviewer pass before implementation Beads become claimable.
 
-Use read-only agents for this wave. Each report must include file:line evidence, release-versus-source distinction and proposed cuts.
-
-Then run one synthesis/reviewer pass to approve the contract boundaries before implementation Beads become claimable.
-
-## Implementation order after the audit wave
+## Exact implementation order
 
 ```text
-xtmux I1.2
-→ Specialists I1.3 and Core I1.4
+I1.1
+→ I1.2
+→ I1.3 and I1.4
+→ GATE-IFACE
 
 E1.1
-→ E1.2 and E1.3 in parallel
+→ E1.2 and E1.3
 → E1.4
 
 C1.1
 → C1.2
 → C1.3
 → C1.4
-→ C1.5, gated by I1.3 and E1.4
 
-I1.3 + E1.4 + C1.5
+GATE-IFACE + E1.4 + C1.4
+→ C1.5
+→ GATE-COMPOSE
+
+GATE-COMPOSE
 → D1.1
 → D1.2
 → D1.3
-→ D1.4 shadow
+
+R0.2 + R0.3 + R0.4 + R0.5 + D1.3 + GATE-COMPOSE
+→ GATE-DO0
+→ D1.4 coordinator shadow
+
+D1.4 + Eval Core promotion evidence
+→ GATE-AUTH
 ```
 
-Do not substitute date order for dependency order.
+Do not replace dependency order with document or issue creation date.
+
+## Gate semantics
+
+### `GATE-IFACE`
+
+Requires approved command outcomes, consumer fixtures and released-trio public-command smoke.
+
+Authorizes:
+
+- thin adapters consuming outcomes;
+- later scheduler intents referencing stable commands.
+
+Does not authorize chain automation.
+
+### `GATE-COMPOSE`
+
+Requires `GATE-IFACE`, E1.4 and C1.5 manual composition fixture.
+
+Authorizes:
+
+- manual `sp chain review|insert|approve|show`;
+- observe-only execution of approved shapes.
+
+Does not authorize automatic next-step dispatch.
+
+### `GATE-DO0`
+
+Requires:
+
+- R0.2–R0.5 closed;
+- `GATE-COMPOSE`;
+- D1.3;
+- released-trio end-to-end fixture.
+
+Authorizes deterministic scheduler intents and coordinator shadow mode only.
+
+### `GATE-AUTH`
+
+Requires coordinator shadow plus accepted Eval Core precision, parity, override, recovery and rollback evidence.
+
+Only this gate may promote selected policies to warn/enforce or explicit automatic advancement.
 
 ## Shared-contract rules
 
-For schemas, reducers and public output contracts:
+For public schemas, reducers and output contracts:
 
-- one named implementation owner;
+- one implementation owner;
 - one independent reviewer;
 - one test/evidence owner;
 - golden fixtures committed with the contract;
-- compatibility and migration notes in the same PR;
-- no parallel editing of the same canonical file;
+- migration/compatibility notes in the same PR;
+- no parallel writers to one canonical file;
 - no production promotion from documentation-only evidence.
 
-## Release gates
-
-### Gate I1
-
-A coordinated released trio proves command outcomes and consumer compatibility.
-
-### Gate E1
-
-Every managed activation validates contract, output and evidence before terminal state; terminal side effects are idempotent.
-
-### Gate C1
-
-Templates are installed, compiled by one pure compiler, persisted and reviewable; approved topology cannot mutate silently.
-
-### Gate DO0
-
-A released-trio end-to-end run proves:
-
-```text
-root contract
-→ ResolvedChain
-→ approved shape
-→ exact dispatch intent
-→ minimum execution protocol
-→ validated result
-→ reducer next transition
-→ integration evidence
-→ terminal cleanup
-```
-
-No automatic coordinator authority before DO0.
-
-## Deferred programme handling
+## Deferred programmes
 
 Create placeholder epics with entry criteria only for:
 
@@ -346,21 +373,21 @@ Create placeholder epics with entry criteria only for:
 - Agent Workspace;
 - Operational Knowledge System;
 - TypeScript 7;
-- remaining code-intelligence work.
+- code-intelligence residual.
 
-Do not create executable child Beads until their entry criteria are satisfied. This prevents the local board from presenting future work as immediately claimable.
+Do not create executable children until entry gates pass.
 
-## Mandatory handoff after planning
+## Mandatory planning handoff
 
-Return to the operator:
+Return:
 
-1. exact real Beads IDs by repository;
+1. real Beads IDs by repository;
 2. reuse/split/supersede decisions;
 3. dependency graph and first claimable tasks;
-4. owners and expected PR boundaries;
-5. release gates;
-6. remaining unresolved authority questions;
-7. files created or modified;
-8. a statement that no later-wave implementation was dispatched.
+4. owners and PR boundaries;
+5. gate representations;
+6. unresolved authority questions;
+7. files created/modified;
+8. confirmation that no later-wave implementation was dispatched.
 
-The first implementation dispatch begins only after this handoff is reviewed.
+Implementation begins only after this handoff is reviewed.
