@@ -120,9 +120,16 @@ A web agent cannot treat `~/dev/xtrm/docs/shared/...` as a durable reference. Be
 ### K2 — deterministic outcome spine
 
 **Owner:** Core contract owner.  
-**Programme dependency:** consume and complete the generic launcher contract established by `I1.4`; do not make production Codex a prerequisite of `I1.4` or `GATE-IFACE`.
+**Programme dependency:** consume and complete the generic launcher contract established by `I1.4`; preserve the full `I1.1 → I1.2 → I1.3/I1.4 → GATE-IFACE` proof path; do not make production Codex a prerequisite of any part of that path.
 
-`I1.4` and `GATE-IFACE` are proven by released Pi/Claude behavior, the generic launcher/outcome schema and the affected public-command fixtures. KAN-127 then binds Codex to that stable contract. This separation prevents a circular gate in which `xt codex` would have to be production-ready before the gate that authorizes production harness adapters.
+`I1.4` supplies the released Pi/Claude launcher and generic Core outcome contract that Codex consumes. The programme then proves `GATE-IFACE` through its existing complete evidence set:
+
+- the approved command-outcome contract from `I1.1`;
+- the xtmux coordination vertical slice from `I1.2`;
+- Specialists and Core consumer compatibility fixtures from `I1.3` and `I1.4`;
+- released-trio smoke of the affected public commands.
+
+Those are programme-wide non-Codex prerequisites. KAN-127 binds Codex to the resulting stable contract after the gate; it does not replace or narrow the gate evidence. This separation prevents a circular gate in which `xt codex` would have to be production-ready before the gate that authorizes production harness adapters.
 
 Define the additive launch outcome required by Codex and existing harnesses. It must carry, where applicable:
 
@@ -260,7 +267,9 @@ K0
 ├── K3-xtmux
 └── K3-Specialists
 
-programme I1.4
+programme I1.1
+→ programme I1.2
+→ programme I1.3/I1.4
 → programme GATE-IFACE
 
 K3-Core + K3-xtmux + K3-Specialists
@@ -288,8 +297,8 @@ None of those companions may silently redefine the K2 contracts.
 
 | Programme node | KAN-127 / Beads responsibility |
 |---|---|
-| `I1.4` | released Pi/Claude and generic Core launcher outcome contract that Codex consumes; it does not require production `xt codex` |
-| `GATE-IFACE` | external prerequisite for production Codex promotion; it does not depend on production `xt codex` |
+| `I1.1/I1.2/I1.3/I1.4` | complete programme proof path: approved contract, xtmux vertical slice, Specialists/Core consumer fixtures, released Pi/Claude launcher outcome, and affected-command smoke; none requires production `xt codex` |
+| `GATE-IFACE` | external prerequisite proven by the complete programme evidence set and released-trio public-command smoke; it does not depend on production `xt codex` |
 | `A1.1` | exact installed-version and capability verification |
 | `A1.5` | XT Codex parity implementation and release evidence |
 | `P1` | not part of KAN-127; later product surfaces consume released outcomes |
