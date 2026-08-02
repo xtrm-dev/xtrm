@@ -237,7 +237,7 @@ Rejected result:
 ```text
 REJECTED target_not_live
 No message was persisted because pane %31 is not a live target.
-
+  
 Inspect:
   xtmux topology --json
 ```
