@@ -42,8 +42,11 @@
     "I1",
     "E1",
     "C1",
+    "GATE-COMPOSE",
     "D1",
+    "GATE-DO0",
     "V1",
+    "GATE-AUTH",
     "A1",
     "P1"
   ],
@@ -56,17 +59,17 @@
       "jira": ["KAN-84", "KAN-85", "KAN-110", "KAN-115", "KAN-116", "KAN-117", "KAN-118", "KAN-119", "KAN-120", "KAN-121", "KAN-122", "KAN-123", "KAN-124", "KAN-125"],
       "dependencies": [],
       "parallelizable": false,
-      "deliverables": [
-        "merge current execution plan",
-        "refresh PRD release snapshot",
-        "reconcile Jira projection",
-        "publish Jira-Beads-GitHub mapping",
-        "mark superseded plans"
+      "children": [
+        {"id": "R0.1", "title": "Merge current plan graph and coordinator bootstrap", "dependencies": []},
+        {"id": "R0.2", "title": "Refresh PRD release and capability snapshot", "dependencies": ["R0.1"]},
+        {"id": "R0.3", "title": "Reconcile Jira residual scopes and statuses", "dependencies": ["R0.1"]},
+        {"id": "R0.4", "title": "Publish Jira Beads GitHub traceability map", "dependencies": ["R0.2", "R0.3"]},
+        {"id": "R0.5", "title": "Mark historical and superseded plans", "dependencies": ["R0.2"]}
       ],
       "exit_criteria": [
-        "current release ledger is authoritative",
-        "each active Jira item has a residual-only scope",
-        "local Beads mapping is reviewed"
+        "release ledger is authoritative",
+        "active Jira items describe residual scope only",
+        "repository Beads mapping is reviewed"
       ]
     },
     {
@@ -82,7 +85,7 @@
           "id": "I1.1",
           "title": "Command inventory and compatibility ADR",
           "owners": ["Jaggerxtrm/xtmux", "xtrm-dev/specialists", "xtrm-dev/core"],
-          "dependencies": [],
+          "dependencies": ["R0.1"],
           "mode": "evidence-only"
         },
         {
@@ -121,26 +124,10 @@
       "dependencies": ["R0.1"],
       "parallelizable": true,
       "children": [
-        {
-          "id": "E1.1",
-          "title": "Execution-profile schema",
-          "dependencies": []
-        },
-        {
-          "id": "E1.2",
-          "title": "PREPARE reducer",
-          "dependencies": ["E1.1"]
-        },
-        {
-          "id": "E1.3",
-          "title": "FINALIZE reducer",
-          "dependencies": ["E1.1"]
-        },
-        {
-          "id": "E1.4",
-          "title": "Terminal actions and idempotency",
-          "dependencies": ["E1.2", "E1.3"]
-        }
+        {"id": "E1.1", "title": "Execution-profile schema", "dependencies": ["R0.1"]},
+        {"id": "E1.2", "title": "PREPARE reducer", "dependencies": ["E1.1"]},
+        {"id": "E1.3", "title": "FINALIZE reducer", "dependencies": ["E1.1"]},
+        {"id": "E1.4", "title": "Terminal actions and idempotency", "dependencies": ["E1.2", "E1.3"]}
       ],
       "non_goals": [
         "prompt redesign",
@@ -161,40 +148,19 @@
       "owners": ["xtrm-dev/specialists"],
       "jira": ["KAN-84", "KAN-119", "KAN-124"],
       "dependencies": ["R0.1"],
-      "promotion_dependencies": ["I1.2", "I1.3", "E1.4"],
       "parallelizable": true,
       "children": [
-        {
-          "id": "C1.1",
-          "title": "Package and validate chain-template catalog",
-          "dependencies": []
-        },
-        {
-          "id": "C1.2",
-          "title": "Pure ResolvedChain compiler",
-          "dependencies": ["C1.1"]
-        },
-        {
-          "id": "C1.3",
-          "title": "Persist draft and approved ResolvedChain",
-          "dependencies": ["C1.2"]
-        },
-        {
-          "id": "C1.4",
-          "title": "Thin Beads materializer",
-          "dependencies": ["C1.3"]
-        },
-        {
-          "id": "C1.5",
-          "title": "sp chain review insert approve show",
-          "dependencies": ["C1.3", "C1.4", "I1.3", "E1.4"]
-        }
+        {"id": "C1.1", "title": "Package and validate chain-template catalog", "dependencies": ["R0.1"]},
+        {"id": "C1.2", "title": "Pure ResolvedChain compiler", "dependencies": ["C1.1"]},
+        {"id": "C1.3", "title": "Persist draft and approved ResolvedChain", "dependencies": ["C1.2"]},
+        {"id": "C1.4", "title": "Thin Beads materializer", "dependencies": ["C1.3"]},
+        {"id": "C1.5", "title": "sp chain review insert approve show", "dependencies": ["C1.3", "C1.4", "I1.3", "E1.4"]}
       ],
       "exit_criteria": [
         "one canonical compiler",
         "approved topology is frozen",
         "no duplicate DAG",
-        "templates are shipped through a supported install path"
+        "templates ship through a supported install path"
       ]
     },
     {
@@ -203,29 +169,13 @@
       "priority": "P0",
       "owners": ["xtrm-dev/specialists"],
       "jira": ["KAN-119", "KAN-120", "KAN-124"],
-      "dependencies": ["I1.3", "E1.4", "C1.5"],
+      "dependencies": ["GATE-COMPOSE"],
       "parallelizable": false,
       "children": [
-        {
-          "id": "D1.1",
-          "title": "Authoritative evidence projection",
-          "dependencies": []
-        },
-        {
-          "id": "D1.2",
-          "title": "Pure chain reducer",
-          "dependencies": ["D1.1"]
-        },
-        {
-          "id": "D1.3",
-          "title": "Exact idempotent scheduler intents",
-          "dependencies": ["D1.2"]
-        },
-        {
-          "id": "D1.4",
-          "title": "Coordinator consumes reducer in shadow mode",
-          "dependencies": ["D1.3"]
-        }
+        {"id": "D1.1", "title": "Authoritative evidence projection", "dependencies": ["GATE-COMPOSE"]},
+        {"id": "D1.2", "title": "Pure chain reducer", "dependencies": ["D1.1"]},
+        {"id": "D1.3", "title": "Exact idempotent scheduler intents", "dependencies": ["D1.2"]},
+        {"id": "D1.4", "title": "Coordinator consumes reducer in shadow mode", "dependencies": ["GATE-DO0"]}
       ],
       "exit_criteria": [
         "next transition derives only from persisted evidence",
@@ -235,14 +185,14 @@
     },
     {
       "id": "V1",
-      "title": "Evaluation, deterministic context, prompts and memory",
+      "title": "Evaluation deterministic context prompts and memory",
       "priority": "P1",
       "owners": ["xtrm-dev/specialists", "Jaggerxtrm/console"],
       "jira": ["KAN-117", "KAN-121", "KAN-122", "KAN-123", "KAN-124"],
       "dependencies": ["D1.2"],
       "parallelizable": true,
       "children": [
-        {"id": "V1.1", "title": "Telemetry integrity closure", "dependencies": []},
+        {"id": "V1.1", "title": "Telemetry integrity closure", "dependencies": ["R0.1"]},
         {"id": "V1.2", "title": "Eval Core", "dependencies": ["V1.1", "D1.2"]},
         {"id": "V1.3", "title": "Deterministic chain context and handoffs", "dependencies": ["D1.3"]},
         {"id": "V1.4", "title": "Prompt and output-contract experiments", "dependencies": ["V1.2", "V1.3"]},
@@ -255,14 +205,14 @@
       "priority": "P1",
       "owners": ["xtrm-dev/core", "xtrm-dev/specialists", "Jaggerxtrm/xtmux"],
       "jira": ["NEW:XTRM deterministic interfaces and harness integration", "NEW:XT Codex runtime integration"],
-      "dependencies": ["I1.3", "I1.4"],
+      "dependencies": ["GATE-IFACE"],
       "parallelizable": true,
       "children": [
-        {"id": "A1.1", "title": "Claude MCP and Pi capability verification", "dependencies": []},
-        {"id": "A1.2", "title": "Thin XTRM native tools", "dependencies": ["A1.1", "I1.3", "I1.4"]},
+        {"id": "A1.1", "title": "Claude MCP and Pi capability verification", "dependencies": ["R0.1"]},
+        {"id": "A1.2", "title": "Thin XTRM native tools", "dependencies": ["A1.1", "GATE-IFACE"]},
         {"id": "A1.3", "title": "Pi Runtime Unification residual", "dependencies": ["A1.1"]},
         {"id": "A1.4", "title": "pi-extensible-workflows integration", "dependencies": ["A1.2", "A1.3"]},
-        {"id": "A1.5", "title": "XT Codex production parity", "dependencies": ["I1.4", "A1.1"]}
+        {"id": "A1.5", "title": "XT Codex production parity", "dependencies": ["A1.1", "I1.4"]}
       ]
     },
     {
@@ -271,32 +221,97 @@
       "priority": "P2",
       "owners": ["Jaggerxtrm/console", "Jaggerxtrm/xtmux", "xtrm-dev/core"],
       "jira": ["KAN-123", "NEW:XTRM Agent Workspace", "NEW:XTRM Operational Knowledge System"],
-      "dependencies": ["V1.2", "I1.4"],
+      "dependencies": ["V1.2", "GATE-IFACE"],
       "parallelizable": true,
       "children": [
         {"id": "P1.1", "title": "Console eval and promotion views", "dependencies": ["V1.2"]},
-        {"id": "P1.2", "title": "Agent Workspace read-only shell", "dependencies": ["I1.4", "D1.3"]},
-        {"id": "P1.3", "title": "Controlled Agent Workspace actions", "dependencies": ["P1.2", "I1.4"]},
+        {"id": "P1.2", "title": "Agent Workspace read-only shell", "dependencies": ["D1.3", "GATE-IFACE"]},
+        {"id": "P1.3", "title": "Controlled Agent Workspace actions", "dependencies": ["P1.2", "GATE-IFACE"]},
         {"id": "P1.4", "title": "Operational Knowledge System read-only layer", "dependencies": ["V1.2"]}
       ]
     }
   ],
-  "production_promotion_gate": {
-    "id": "GATE-DO0",
-    "dependencies": ["I1.2", "I1.3", "E1.4", "C1.5"],
-    "requirements": [
-      "versioned contract resolves to one deterministic ResolvedChain",
-      "approved shape is persisted and inspectable",
-      "dispatch is an exact idempotent scheduler intent",
-      "participant executes through minimum specialists.execution.v1",
-      "output and required evidence are validated before terminal state",
-      "terminal handoff notification and cleanup are idempotent",
-      "next transition derives from persisted evidence",
-      "waiting failure restitch and escalation are explicit",
-      "packed-install and cross-repository released-trio smoke pass",
-      "no duplicate mutable authority exists"
-    ]
-  },
+  "gates": [
+    {
+      "id": "GATE-IFACE",
+      "title": "Deterministic public interface promotion",
+      "dependencies": ["I1.2", "I1.3", "I1.4"],
+      "authorizes": [
+        "thin adapters consume command outcomes",
+        "scheduler intents reference stable public commands"
+      ],
+      "does_not_authorize": [
+        "chain automatic advancement",
+        "coordinator authority"
+      ],
+      "requirements": [
+        "approved additive command-outcome contract",
+        "stable status reason code IDs side effects and argv next actions",
+        "consumer compatibility fixtures",
+        "released-trio public-command smoke"
+      ]
+    },
+    {
+      "id": "GATE-COMPOSE",
+      "title": "Manual deterministic composition promotion",
+      "dependencies": ["GATE-IFACE", "E1.4", "C1.5"],
+      "authorizes": [
+        "manual sp chain review insert approve show",
+        "observe-only execution of approved shapes"
+      ],
+      "does_not_authorize": [
+        "automatic next-step dispatch",
+        "coordinator warn or enforce authority"
+      ],
+      "requirements": [
+        "minimum activation protocol",
+        "packaged catalog and pure compiler",
+        "persisted draft and approved shape",
+        "manual composition fixture",
+        "no silent approved-topology mutation"
+      ]
+    },
+    {
+      "id": "GATE-DO0",
+      "title": "Deterministic orchestration foundation",
+      "dependencies": ["GATE-COMPOSE", "D1.3"],
+      "authorizes": [
+        "deterministic scheduler intents",
+        "coordinator shadow mode"
+      ],
+      "does_not_authorize": [
+        "broad automatic enforcement",
+        "automatic coordinator release authority"
+      ],
+      "requirements": [
+        "versioned contract resolves to one ResolvedChain",
+        "approved shape is persisted and inspectable",
+        "dispatch is an exact idempotent scheduler intent",
+        "participant executes through minimum specialists.execution.v1",
+        "output and evidence validate before terminal state",
+        "terminal handoff notification and cleanup are idempotent",
+        "next transition derives from persisted evidence",
+        "waiting failure retry restitch and escalation are explicit",
+        "packed-install and released-trio end-to-end smoke pass",
+        "no duplicate mutable authority exists"
+      ]
+    },
+    {
+      "id": "GATE-AUTH",
+      "title": "Coordinator and policy authority promotion",
+      "dependencies": ["D1.4", "V1.2"],
+      "authorizes": [
+        "selected observe policies move to warn or enforce",
+        "explicitly approved automatic advancement paths"
+      ],
+      "requirements": [
+        "accepted precision and parity",
+        "bounded false-positive and override rates",
+        "recovery and rollback evidence",
+        "reproducible promotion report"
+      ]
+    }
+  ],
   "supporting_lanes": [
     {
       "id": "S-TS7",
@@ -319,8 +334,8 @@
     }
   ],
   "forbidden_early_work": [
-    "production sp chain approve before GATE-DO0",
-    "automatic advancement before pure reducer",
+    "automatic chain advancement before GATE-DO0",
+    "coordinator warn enforce authority before GATE-AUTH",
     "workflow mutation adapters before idempotency",
     "prompt promotion before Eval Core",
     "automatic memory writes before precision calibration",
