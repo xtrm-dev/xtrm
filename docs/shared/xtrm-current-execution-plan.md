@@ -13,47 +13,39 @@ This document is the current sequencing and dispatch authority for the pre-Subst
 
 It does not replace:
 
-- `xtrm-dev/specialists/docs/design/roadmap/enhanced-prd.md`, which remains the accepted requirements and success-criteria canon;
-- `specialist-execution-protocol.md`, which defines the lifecycle of one managed Specialist activation;
+- `xtrm-dev/specialists/docs/design/roadmap/enhanced-prd.md`, the accepted requirements and success-criteria canon;
+- `specialist-execution-protocol.md`, the semantic lifecycle of one managed Specialist activation;
 - the chain-template canon, which defines collaboration topology;
 - repository code, released packages, Beads or Git evidence.
 
-It exists because a large PRD must not simultaneously serve as requirements catalogue, release ledger, implementation sequence, operational manual and Jira board.
+It exists because the PRD must not simultaneously act as requirements catalogue, release ledger, implementation sequence, operational manual and Jira board.
 
-The authority order for current-state and execution decisions is:
+Current-state authority order:
 
 ```text
-released package and current repository code
-→ executable contracts and tests
+released packages and current repository code
+→ executable schemas, tests and public contracts
 → this current execution plan
 → canonical PRD and semantic design documents
 → Jira portfolio projection
 → historical plans and chat artifacts
 ```
 
-Jira identifies and communicates programme work. Beads remains the implementation source of truth for executable tasks, dependencies, claims, acceptance and completion evidence.
+Jira communicates programme state. Beads owns executable tasks, dependencies, claims, acceptance and completion evidence.
 
 ## 2. Released baseline
 
-The supported trio verified for this reconciliation is:
+| Repository | Released package | Release cut | Default-branch drift |
+|---|---:|---|---|
+| Core | `xtrm-tools 0.11.4` | `xtrm-dev/core#535`, `9b823f80` | none |
+| Specialists | `@jaggerxtrm/specialists 3.21.2` | `xtrm-dev/specialists#240`, `c1e660ab` | one release-maintenance commit only |
+| xtmux | `@jaggerxtrm/xtmux 0.2.3` | `Jaggerxtrm/xtmux#89`, `12d6709e` | none |
 
-| Repository | Released package | Release cut |
-|---|---:|---|
-| Core | `xtrm-tools 0.11.4` | PR `xtrm-dev/core#535`, commit `9b823f80` |
-| Specialists | `@jaggerxtrm/specialists 3.21.2` | PR `xtrm-dev/specialists#240`, commit `c1e660ab` |
-| xtmux | `@jaggerxtrm/xtmux 0.2.3` | PR `Jaggerxtrm/xtmux#89`, commit `12d6709e` |
+Implementation agents must refresh releases and default heads before dispatch. Source-only behavior is not a released capability.
 
-Default-branch drift after these cuts:
+## 3. Closed architecture decisions
 
-- Core: none.
-- xtmux: none.
-- Specialists: one non-runtime release-maintenance commit adding `CHANGELOG.md` to future npm tarballs and compacting changelog rendering.
-
-Any implementation agent must refresh these versions and heads before dispatch. A source-only capability is not a released capability.
-
-## 3. Closed architectural decisions
-
-### 3.1 Separate the four layers
+### 3.1 Four separate layers
 
 ```text
 programme planning
@@ -69,11 +61,9 @@ operator interaction
   commands, messages, monitors, results and exact next actions
 ```
 
-The following surfaces operate at different layers and must not become competing workflow engines:
-
 | Surface | Responsibility |
 |---|---|
-| `/spec-dispatch` | conversational routing, release/recent-work check, scope and sprint shaping |
+| `/spec-dispatch` | conversational routing, release/recent-work audit, scope and sprint shaping |
 | `xt spec` | durable specification lifecycle, validation, apply, reconciliation and archive |
 | `/planning` | programme work graph in Beads |
 | chain templates | topology for executing one root task |
@@ -81,25 +71,27 @@ The following surfaces operate at different layers and must not become competing
 | xtmux | durable local attention, messages, obligations, monitors, wakes and runtime identity |
 | coordinator | bounded semantic judgment over deterministic reducer output |
 
+These surfaces may share contracts. They must not become competing workflow engines.
+
 ### 3.2 The PRD is not the implementation sequence
 
-The broad Specialists PRD remains canonical for outcomes and acceptance. It does not authorize starting all work packages concurrently.
+The PRD remains canonical for outcomes and acceptance. It does not authorize starting all work packages concurrently.
 
 The critical path is:
 
 ```text
-released-trio truth and authority freeze
-→ deterministic outcomes for existing public commands
-→ minimum specialists.execution.v1 runtime shell
-→ chain-template compiler and persisted ResolvedChain
-→ pure evidence-driven reducer and exact scheduler intents
-→ bounded coordinator in shadow mode
-→ evaluation, prompt and memory promotion
-→ harness-native adapters and workflow runtimes
-→ Console and Agent Workspace action surfaces
+release and authority reconciliation
+→ deterministic public command outcomes
+→ minimum specialists.execution.v1 shell
+→ chain compiler and persisted ResolvedChain
+→ manual composition gate
+→ evidence reducer and scheduler intents
+→ coordinator shadow mode
+→ evaluation-driven authority promotion
+→ adapters and product surfaces
 ```
 
-### 3.3 No duplicate authority
+### 3.3 One authority per concern
 
 | Concern | Authority |
 |---|---|
@@ -108,12 +100,12 @@ released-trio truth and authority freeze
 | Messages, obligations, monitors, wakes and pane identity | xtmux |
 | Interactive launch, installation and managed configuration | Core |
 | Branch, commit and merge truth | Git |
-| Chain topology | canonical template compiled to a persisted `ResolvedChain` |
-| Next transition | pure chain reducer consuming persisted evidence |
-| Semantic exceptions | coordinator or operator within explicit authority |
-| Product/Jira visibility | Jira and Console materializations |
+| Chain topology | canonical template compiled to persisted `ResolvedChain` |
+| Deterministic next transition | pure reducer consuming persisted evidence |
+| Semantic exceptions | coordinator/operator within explicit authority |
+| Portfolio/product visibility | Jira and materialized read models |
 
-No work package may introduce a second store, scheduler, message registry, job lifecycle or merge authority for any row above.
+No work package may introduce a second mutable store, scheduler, message registry, job lifecycle or merge authority for these concerns.
 
 ## 4. Delivered capability ledger
 
@@ -124,19 +116,19 @@ Delivered:
 - `xt spec draft|validate|doctor|apply|status|archive`;
 - XML `<change-contract>` generation and spec apply/reconciliation state;
 - `/spec-dispatch`, `/planning` and `/test-planning`;
-- interactive `xt pi` and `xt claude` role/subordinate launch contracts;
+- interactive `xt pi` and `xt claude` role/subordinate launches;
 - runtime-origin and coordinator lineage;
 - read-only `xt topology` projection and views;
 - shared `@xtrm/contracts` schemas;
-- release, install, skill, hook and runtime-compatibility hardening;
+- release, install, skill, hook and compatibility hardening;
 - unified native Pi tool rendering.
 
 Not delivered:
 
 - `xtrm.command-outcome.v1`;
 - `xt codex`;
-- a canonical chain compiler or reducer;
-- native XTRM coordination/Specialist Pi tools;
+- canonical chain compiler/reducer;
+- native XTRM coordination/Specialist tools;
 - `pi-extensible-workflows` integration.
 
 ### 4.2 Specialists 3.21.2
@@ -147,22 +139,22 @@ Delivered:
 - deterministic replay ordering;
 - `sp result`, `feed`, `status`, `integration record/list`, `render-task`, `render-bead`;
 - runtime-origin and coordinator ancestry;
-- terminal parent notifications for `done`, `error` and `cancelled`;
+- terminal parent notification for `done`, `error` and `cancelled`;
 - interactive `chain-coordinator` bridge persona;
 - forensic and Prometheus foundations;
-- background/help/release audit closure work.
+- background/help/release audit closure.
 
 Not delivered:
 
-- executable `specialists.execution.v1` profiles and reducer;
-- `sp chain review|approve|insert|wire-edges`;
+- executable `specialists.execution.v1` profiles and reducers;
+- `sp chain review|approve|insert|show|wire-edges`;
 - persisted `ResolvedChain`;
-- pure chain reducer and scheduler intents;
-- logical-session schema and recovery classifier;
+- evidence-driven chain reducer and scheduler intents;
+- logical sessions and recovery classifier;
 - Eval Core and `sp eval`;
 - three-lens memory.
 
-The current coordinator contains an explicit resolver TODO and manually describes the role sequence. It is a bridge persona, not the completed coordinator runtime.
+The current coordinator includes an explicit resolver TODO and manually describes the role sequence. It is a bridge persona, not the completed KAN-120 runtime.
 
 ### 4.3 xtmux 0.2.3
 
@@ -173,19 +165,19 @@ Delivered:
 - runtime/session/pane/role/branch/worktree/parent identity;
 - canonical Beads lifecycle streaming;
 - Pi, Claude and Codex lifecycle hooks;
-- bounded capture, monitor projection and orphan cleanup;
+- bounded capture, terminal monitor projection and orphan cleanup;
 - reply/FYI, receipt and fulfilment semantics.
 
 Not delivered:
 
-- common command outcome schema with stable reason codes and executable next actions;
+- common command-outcome schema with stable reason codes and executable next actions;
 - native XTRM harness adapters;
 - graphical Agent Workspace;
 - Core-owned `xt codex` launch, despite xtmux Codex observation support.
 
 ## 5. `xt spec` disposition
 
-`xt spec` is a shipped v0 planning front end and must not be planned again as net-new work.
+`xt spec` is a released v0 planning front end. It must not be planned again as net-new work.
 
 Current flow:
 
@@ -193,91 +185,85 @@ Current flow:
 spec.yaml
 → validate and readiness probe
 → XML change contract
-→ create one planner bead
+→ create planner bead
 → dispatch planner Specialist
 → persist apply sidecar
 → reconcile produced epic/children
 → hand off to `sp chain review`
 ```
 
-Residual work:
+Residual scope:
 
-- replace the current raw planner-bead boundary only where verified Beads primitives provide a better atomic operation;
-- connect the produced root tasks to the canonical chain compiler;
-- ensure `sp chain review` exists before advertising the handoff as operational;
-- retain `xt spec` as programme planning, not execution topology.
+- use better Beads-native creation primitives only where verified installed capabilities improve atomicity;
+- connect produced root tasks to the canonical chain compiler;
+- implement `sp chain review` before advertising the handoff as operational;
+- retain `xt spec` as programme planning, not participant topology.
 
 Jira disposition:
 
-- close the shipped child `KAN-85` after an installed-release smoke;
-- close or mark delivered the v0 portion of `KAN-84`;
-- move compiler/composition residual into `KAN-119`;
-- do not create another independent `xt spec` programme.
+- close `KAN-85` after installed-release smoke;
+- mark the KAN-84 v0 surface delivered;
+- move compiler/composition residual to `KAN-119`;
+- create no second `xt spec` programme.
 
 ## 6. Chain-template disposition
 
 Fifteen `.formula.json` source assets exist. They are not yet a released orchestration product.
 
-Current gaps:
+Gaps:
 
-- templates are stored under the roadmap/design tree rather than a supported package/install path;
-- the released Specialists CLI has no `chain` command;
-- `review`, `approve`, `insert` and semantic-edge wiring remain planned;
-- no persisted `ResolvedChain` exists;
-- template selection remains guidance rather than one authoritative compiler;
-- the minimum participant execution protocol is not enforced.
+- unsupported package/install location;
+- no released `sp chain` command family;
+- no authoritative selection/compiler boundary;
+- no persisted `ResolvedChain`;
+- no enforced minimum activation protocol;
+- no evidence reducer.
 
-Templates may be developed as pure source assets now. They may not be promoted as production-default orchestration until the promotion gate in Section 10 passes.
+Template/catalog and pure compiler work may begin immediately. Production dispatch and automatic advancement may not.
 
-## 7. Workstream graph
+## 7. Workstreams
 
-Symbolic IDs below are stable planning IDs. Repository-local planning agents map them to real Beads IDs and record that mapping in this document or a generated companion index.
+Symbolic IDs below are stable planning identifiers. Local planning maps them to real repository-owned Beads IDs.
 
 ### R0 — release and authority reconciliation
 
-**Owner:** `xtrm-dev/xtrm`, with evidence from all three runtime repositories.  
-**Purpose:** establish one current execution ledger and remove stale projections before implementation dispatch.
+**Owner:** `xtrm-dev/xtrm`.
 
 | ID | Deliverable |
 |---|---|
-| R0.1 | Merge this current execution plan and machine-readable graph |
-| R0.2 | Refresh PRD release snapshot and landed-capability ledger |
-| R0.3 | Reconcile Jira `KAN-84/85`, `KAN-110`, `KAN-115–125` |
-| R0.4 | Publish Jira↔Beads↔GitHub traceability mapping |
-| R0.5 | Mark historical/superseded plans explicitly |
+| R0.1 | merge current execution plan, graph and coordinator bootstrap |
+| R0.2 | refresh PRD release snapshot and landed-capability ledger |
+| R0.3 | reconcile Jira KAN-84/85, KAN-110 and KAN-115–125 |
+| R0.4 | publish Jira↔Beads↔GitHub mapping |
+| R0.5 | mark historical and superseded plans |
 
-R0.1 is sufficient to start the independent Wave 1 audit lanes. R0.2–R0.5 must close before production promotion of the chain runtime.
+R0.1 unlocks evidence-only audit lanes. R0.2–R0.5 must close before deterministic orchestration is promoted.
 
-### I1 — deterministic command outcomes
+### I1 — deterministic public command outcomes
 
 **Primary owner:** xtmux.  
-**Companion owners:** Specialists and Core.  
-**Source design:** `xtrm-cli-actionable-outcomes-and-followups.md`.
+**Companions:** Specialists and Core.  
+**Source:** `xtrm-cli-actionable-outcomes-and-followups.md`.
 
-#### I1.1 Verification and inventory
+#### I1.1 Command inventory and compatibility ADR
 
-Evidence-only pass across released commands:
+Evidence-only inventory across released commands:
 
 ```text
-repository
-command
-mutation_or_query
-human output
-JSON output
+mutation/query classification
+human and JSON output
 stdout/stderr contract
 exit codes
-stable IDs
+stable identifiers
 current follow-up semantics
 known consumers
-compatibility risk
+breaking-change risk
 candidate disposition
 ```
 
-No production schema change before this inventory and compatibility ADR.
+#### I1.2 xtmux coordination vertical slice
 
-#### I1.2 xtmux first vertical slice
-
-Commands:
+Initial commands:
 
 ```text
 message-send
@@ -290,7 +276,7 @@ message-get
 obligations list
 ```
 
-Target outcome:
+Target additive contract:
 
 ```json
 {
@@ -325,26 +311,25 @@ integration record/list
 Initial commands:
 
 ```text
-pi/claude launcher result
+Pi/Claude launch result
 topology
 merge/integration handoff
-future codex launcher
+future Codex launch result
 ```
 
 ### E1 — minimum `specialists.execution.v1`
 
 **Owner:** Specialists.
 
-Do not begin with the entire PRD. Implement the smallest deterministic shell that every later chain requires.
+Implement the smallest deterministic shell required by all later chains.
 
-#### E1.1 Execution profile schema
+#### E1.1 Execution-profile schema
 
-A Specialist selects a versioned profile declaring:
+A versioned profile declares:
 
 - phase applicability;
 - permission posture;
-- contract requirements;
-- evidence requirements;
+- contract and evidence requirements;
 - output schema;
 - commit policy;
 - allowed overrides.
@@ -354,11 +339,10 @@ A Specialist selects a versioned profile declaring:
 Runtime-owned:
 
 - context and identity resolution;
-- contract/readiness validation;
+- structural contract/readiness validation;
 - mandatory-rule resolution and receipt;
 - capability validation;
-- execution-profile selection;
-- explicit blocked/waiting states.
+- explicit blocked and waiting states.
 
 #### E1.3 FINALIZE reducer
 
@@ -374,47 +358,41 @@ Runtime-owned:
 
 - append Bead handoff;
 - send typed parent notification;
-- emit forensic events;
-- release only resources owned by the activation;
-- make replay safe and duplicate terminal processing harmless.
+- emit forensic evidence;
+- release owned resources only;
+- make replay and duplicate terminal processing safe.
 
-Memory experiments, prompt redesign and semantic grading are not prerequisites for E1.
+Prompt redesign, memory and semantic grading are non-goals for E1.
 
 ### C1 — chain compiler and durable spine
 
 **Primary owner:** Specialists.  
-**Dependency:** schema work may start in parallel; production promotion depends on I1 and E1.
+**Development:** pure schema/compiler work may run parallel to I1/E1.  
+**Promotion:** composition CLI requires I1.3 and E1.4.
 
 #### C1.1 Package and validate template catalog
 
-- move or generate the canonical catalog into a supported package/install path;
-- validate formulas and catalog membership in CI;
-- make version/build identity explicit;
-- preserve per-repo extension search paths.
+- supported package/install path;
+- CI formula/catalog validation;
+- explicit catalog version/build identity;
+- per-repo extension resolution retained.
 
 #### C1.2 Pure compiler
-
-Input:
 
 ```text
 root contract
 + scrutiny
 + scope/surface classification
-+ selected template or explicit override
-+ installed catalog version
++ selected template or override
++ catalog version
+→ ResolvedChain draft
 ```
 
-Output:
-
-```text
-ResolvedChain draft
-```
-
-The compiler is pure. It performs no shelling, Beads mutation, tmux work or model call.
+No shelling, Beads mutation, tmux or model call.
 
 #### C1.3 Persisted `ResolvedChain`
 
-Minimum shape:
+Minimum contract:
 
 ```json
 {
@@ -443,14 +421,14 @@ Minimum shape:
 
 ```text
 approved ResolvedChain
-→ molecule/root/step/gate operations
+→ verified molecule/root/step/gate operations
 → stable Beads IDs
-→ persisted links back into ResolvedChain
+→ links persisted back into ResolvedChain
 ```
 
-The materializer uses verified installed Beads capabilities. It does not invent a parallel dependency graph.
+It must not invent a second dependency graph.
 
-#### C1.5 Composition CLI
+#### C1.5 Manual composition CLI
 
 ```text
 sp chain review <root>
@@ -459,20 +437,21 @@ sp chain approve <root>
 sp chain show <root> [--json]
 ```
 
-Review writes a draft. Insert mutates only a draft. Approve freezes topology. Per-step execution updates status and evidence pointers but never silently rewrites the approved shape.
+Review creates a draft. Insert mutates draft only. Approve freezes topology. Runtime evidence updates step status but never silently changes the approved shape.
 
-### D1 — reducer and scheduler intents
+### D1 — evidence reducer and scheduler intents
 
-**Owner:** Specialists.
+**Owner:** Specialists.  
+**Entry gate:** `GATE-COMPOSE`.
 
-#### D1.1 Evidence projection
+#### D1.1 Authoritative evidence projection
 
-Normalize only authoritative facts:
+Normalize only:
 
 - validated job result;
 - gate verdict;
-- Beads readiness and status;
-- Git/integration evidence;
+- Beads readiness/status;
+- Git and integration evidence;
 - pending human gate;
 - retry/incident state.
 
@@ -485,11 +464,11 @@ ResolvedChain
 + zero or more scheduler intents
 ```
 
-The reducer performs no side effects.
+No side effects.
 
 #### D1.3 Exact scheduler intents
 
-Examples:
+Example:
 
 ```json
 {
@@ -501,62 +480,39 @@ Examples:
 }
 ```
 
-Other intents include wait, request-input, retry, restitch, escalate, record-integration and terminalize.
+Other intents: wait, request-input, retry, restitch, escalate, record-integration and terminalize.
 
 #### D1.4 Coordinator shadow mode
 
-Update `chain-coordinator` to consume reducer output rather than carrying the workflow in prompt prose.
+The coordinator consumes reducer output rather than encoding the chain in prompt prose.
 
-The coordinator may:
-
-- make bounded semantic judgments;
-- propose permitted step insertion;
-- escalate ambiguity;
-- explain deterministic decisions.
-
-It may not:
-
-- invent a new scheduler;
-- skip mandatory gates;
-- infer completion from terminal output;
-- mutate an approved chain outside explicit authority.
-
-Close/release authority remains shadow-only until Eval Core supports promotion.
+It may make bounded semantic judgments, propose permitted insertion, escalate ambiguity and explain deterministic decisions. It may not invent scheduling, skip mandatory gates or mutate approved topology outside explicit authority.
 
 ### V1 — telemetry, evaluation, context, prompts and memory
 
 #### V1.1 Telemetry integrity closure
 
-Complete and prove `telemetry-integrity-v1` against raw forensic evidence.
+Prove `telemetry-integrity-v1` against raw forensic evidence.
 
 #### V1.2 Eval Core
 
-- eval storage;
-- candidate fingerprints;
-- deterministic and model grader interfaces;
-- historical backfill and completeness markers;
-- compare/promotion reports;
+- eval storage and candidate fingerprints;
+- deterministic/model grader interfaces;
+- historical completeness/backfill;
+- compare and promotion reports;
 - observe-only initial operation.
 
 #### V1.3 Deterministic chain context and handoffs
 
-Every participant receives:
-
-- chain/root/step identity;
-- role/class/position;
-- effective scrutiny;
-- stable upstream pointers;
-- pending gates;
-- worktree identity;
-- explicit partial/missing preload state.
+Every participant receives chain/root/step identity, role/class/position, effective scrutiny, stable upstream pointers, pending gates, worktree identity and explicit partial/missing context state.
 
 #### V1.4 Prompt and output-contract programme
 
-Only after V1.1/V1.2 and the chain spine are stable:
+Only after V1.1/V1.2 and stable chain/runtime contracts:
 
 - one generated machine-readable output contract;
 - prompt/procedure/context responsibility cleanup;
-- paired or factorial prompt × model experiments;
+- paired/factorial prompt × model experiments;
 - evidence-gated promotion.
 
 #### V1.5 Three-lens memory
@@ -565,23 +521,18 @@ Only after retrieval and pollution can be measured:
 
 - herd, workgroup and identity lenses;
 - pull-based retrieval;
-- proposal/shadow close-time distillation;
+- proposal/shadow distillation;
 - precision, pollution, duplication and reuse metrics.
 
 ### A1 — harness-native integrations
 
-**Dependency:** I1 command outcomes and idempotency are stable.
+**Entry:** stable I1 contracts and idempotency.
 
 #### A1.1 Capability verification
 
-- Claude MCP task/background/wake behavior;
-- current Specialists MCP boundary;
-- Pi background-runtime comparison;
-- installed-version and security evidence.
+Claude MCP tasks/background/wake behavior, Specialists MCP boundary, Pi background-runtime comparison and installed-version/security evidence.
 
 #### A1.2 Thin native tools
-
-Initial tools:
 
 ```text
 xtrm_coordination_send
@@ -594,148 +545,143 @@ xtrm_specialist_resume
 xtrm_specialist_stop
 ```
 
-Adapters invoke authoritative XTRM operations and retain no private durable state.
+Adapters retain no private durable authority.
 
 #### A1.3 Pi Runtime Unification residual
 
-Create one canonical decision/closure record covering:
-
-- current upstream Pi package usage;
-- remaining embedded/RPC/coding-agent duplication;
-- package/agent versus package/coding-agent decision;
-- transport ownership;
-- obsolete paths to delete;
-- release and rollback evidence.
+Canonical decision/closure record for upstream Pi packages, embedded/RPC duplication, package/agent versus package/coding-agent, transport ownership, obsolete paths, release and rollback.
 
 #### A1.4 `pi-extensible-workflows`
 
-Integrate only through public extension APIs after idempotency and worktree-ownership checks pass.
+Integrate through public extension APIs only after replay idempotency and worktree ownership are proven.
 
-Workflow-local replay, checkpoint and budget remain owned by the workflow runtime. XTRM jobs, messages, Beads and Git remain XTRM authorities.
+#### A1.5 XT Codex parity
 
-#### A1.5 XT Codex production parity
-
-- Core `xt codex` launcher and capability matrix;
-- xtmux lifecycle/session/pane identity;
-- deterministic non-interactive assignment;
-- parity fixtures with Pi and Claude;
-- no duplicate task or message store.
-
-A read-only capability prototype may run earlier. Production promotion depends on I1.
+Core `xt codex`, xtmux lifecycle identity, deterministic assignment and parity fixtures. Read-only prototype may start early; production depends on I1.4.
 
 ### P1 — product surfaces
 
-#### P1.1 Console eval and promotion views
+#### P1.1 Console evaluation and promotion views
 
-Complete the KAN-123 read model after event/eval contracts stabilize.
+Complete KAN-123 after event/eval contracts stabilize.
 
 #### P1.2 Agent Workspace read-only shell
 
-First release:
+Topology graph, pane/session navigation, embedded terminal, exact message/result/evidence inspection and Beads chain status. No hidden mutation.
 
-- topology graph;
-- pane/session navigation;
-- embedded terminal;
-- exact message/result/evidence inspection;
-- Beads root/chain status;
-- no hidden mutations.
+#### P1.3 Controlled Agent Workspace actions
 
-#### P1.3 Controlled action surfaces
-
-Add actions only by consuming command outcomes and explicit authority. No UI-specific orchestration logic.
+Consume command outcomes and explicit authority. No UI-specific orchestration logic.
 
 #### P1.4 Operational Knowledge System
 
-Start with read-only provenance, freshness and operator query contracts. Automated remediation requires a separate authorization gate.
+Read-only provenance, freshness and query contracts first. Automated remediation requires a separate authorization gate.
 
-## 8. Dependencies
+## 8. Dependency graph and promotion gates
 
-Hard dependency graph:
+### 8.1 Parallel audit start
 
 ```text
 R0.1
 ├── I1.1
 ├── E1.1
 ├── C1.1
-├── V1.1
-├── A1.1
-└── XT Codex read-only prototype
-
-I1.1 → I1.2 → I1.3/I1.4
-E1.1 → E1.2/E1.3 → E1.4
-C1.1 → C1.2 → C1.3 → C1.4 → C1.5
-
-I1.2 + I1.3 + E1.4 + C1.5
-→ production chain promotion gate
-→ D1.1 → D1.2 → D1.3 → D1.4
-
-D1.2 + V1.1
-→ V1.2
-
-D1.3 + V1.2
-→ V1.3 → V1.4/V1.5
-
-I1 complete + idempotency proof
-→ A1.2 → A1.3/A1.4/A1.5
-
-V1.2 + stable public contracts
-→ P1.1/P1.2 → P1.3
+├── V1.1 audit
+├── A1.1 audit
+└── XT Codex read-only capability audit
 ```
 
-TypeScript 7 and remaining code-intelligence work are supporting lanes. They do not block I1–D1 unless a measured compatibility failure affects the exact implementation seam.
+### 8.2 Interface gate
+
+```text
+I1.1 → I1.2 → I1.3/I1.4
+```
+
+`GATE-IFACE` requires:
+
+- approved command-outcome contract;
+- xtmux vertical slice;
+- Specialists and Core consumer compatibility fixtures;
+- released-trio smoke of the affected public commands.
+
+Passing `GATE-IFACE` authorizes thin adapters and later scheduler intents to consume these outcomes. It does not authorize chain automation.
+
+### 8.3 Activation and composition gate
+
+```text
+E1.1 → E1.2/E1.3 → E1.4
+C1.1 → C1.2 → C1.3 → C1.4
+GATE-IFACE + E1.4 + C1.4 → C1.5
+```
+
+`GATE-COMPOSE` requires:
+
+- released command outcomes for relevant Specialists commands;
+- minimum activation protocol;
+- packaged catalog and pure compiler;
+- persisted draft/approved shape;
+- manual review/insert/approve/show fixture;
+- no automatic next-step dispatch.
+
+Passing `GATE-COMPOSE` authorizes manual deterministic composition and observe-only execution. It does not authorize automatic advancement or coordinator authority.
+
+### 8.4 Deterministic orchestration gate
+
+```text
+GATE-COMPOSE
+→ D1.1
+→ D1.2
+→ D1.3
+→ released-trio end-to-end fixture
+```
+
+`GATE-DO0` requires:
+
+1. versioned root contract resolves to one deterministic `ResolvedChain`;
+2. approved shape is persisted and inspectable;
+3. dispatch is an exact idempotent scheduler intent;
+4. participant runs through minimum `specialists.execution.v1`;
+5. output/evidence are validated before terminal state;
+6. handoff, notification and cleanup are idempotent;
+7. reducer derives next transition from persisted evidence;
+8. wait/failure/retry/restitch/escalation are explicit;
+9. progress/result/integration evidence remain authoritative;
+10. packed-install and cross-repository released-trio smoke pass;
+11. no duplicate mutable authority exists.
+
+Passing `GATE-DO0` authorizes deterministic scheduler intents and coordinator shadow mode. It does not authorize broad automatic enforcement.
+
+### 8.5 Authority-promotion gate
+
+```text
+GATE-DO0
+→ D1.4 shadow
+→ V1.1/V1.2
+→ measured promotion report
+```
+
+`GATE-AUTH` requires accepted precision, parity, override, recovery and false-positive evidence.
+
+Only `GATE-AUTH` may promote selected coordinator/reducer policies from observe/shadow to warn/enforce or automatic advancement.
 
 ## 9. Parallel dispatch model
 
-After R0.1, these lanes may run concurrently:
+After R0.1:
 
-| Lane | Maximum initial fan-out | Work |
+| Lane | Initial fan-out | Scope |
 |---|---:|---|
-| Interface | 3 | I1.1 per repository, then one synthesis |
-| Execution protocol | 2 | profile/schema and PREPARE/FINALIZE boundary audit |
-| Chain compiler | 2 | formula/catalog audit and pure schema/compiler design |
-| Evaluation | 1 | storage/telemetry current-state audit |
-| Codex | 1 | capability and launcher parity audit only |
-| Supporting | 1 | TypeScript 7 or code-intelligence residual, never both if host capacity is constrained |
+| Interface | 3 | I1.1 per runtime repository, then one synthesis |
+| Execution protocol | 2 | profile/schema and PREPARE/FINALIZE audit |
+| Chain compiler | 2 | catalog/package audit and pure schema/compiler design |
+| Evaluation | 1 | telemetry/eval current-state audit |
+| Codex | 1 | read-only capability and parity audit |
+| Supporting | 1 | TypeScript 7 or code-intelligence residual if host capacity permits |
 
-Do not dispatch multiple agents to modify the same shared contract simultaneously. One owner writes; independent agents review and test.
+One owner writes each shared contract. Independent agents review and test it. Do not dispatch parallel writers to the same canonical schema or reducer.
 
-## 10. Production promotion gate
+## 10. First local implementation packet
 
-The deterministic orchestration foundation may be promoted only when a released trio proves:
-
-1. a versioned root contract resolves to one deterministic `ResolvedChain`;
-2. the approved shape is persisted and inspectable;
-3. dispatch is emitted as an exact idempotent scheduler intent;
-4. the selected participant runs through the minimum execution protocol;
-5. output and required evidence are validated before terminal state;
-6. result, Bead handoff, parent notification and cleanup are idempotent;
-7. the reducer selects the next eligible transition from persisted evidence;
-8. waiting/failure/restitch/escalation are explicit states;
-9. progress is available through structured feed and complete result retrieval;
-10. Git integration remains independently verified;
-11. no duplicate mutable graph or authority was introduced;
-12. packed-install and live cross-repository smoke pass against released artifacts.
-
-Until this gate passes, templates and coordinator automation remain source/observe/shadow features.
-
-## 11. Local agent execution protocol
-
-Every local coordinator implementing this plan must:
-
-1. refresh releases, default heads and recent merged PRs in every affected repository;
-2. run `/spec-dispatch` against this document;
-3. separate audit closure from new feature work;
-4. create or reconcile one umbrella Beads epic per programme lane, not per Markdown document;
-5. group tasks by reviewable PR/release boundary;
-6. record symbolic workstream ID in every root Bead;
-7. produce and review the dependency graph before live creation;
-8. keep Jira as a portfolio mirror rather than copying every leaf Bead;
-9. require independent review and test evidence for shared schemas/reducers;
-10. stop if current code contradicts this ledger and update the ledger before continuing.
-
-### First local planning packet
-
-The first implementation board should contain only:
+Create executable Beads leaves only for:
 
 ```text
 Epic A — deterministic public interfaces
@@ -757,77 +703,92 @@ Epic C — chain compiler and durable spine
   C3 Beads materializer
   C4 review/insert/approve/show CLI
 
-Epic D — production promotion fixture
-  D0 cross-repo fixture harness
-  D1 reducer and scheduler-intent tests
-  D2 released-trio end-to-end promotion run
+Epic D — deterministic orchestration fixture and reducer
+  D0 cross-repository fixture harness
+  D1 evidence projection and pure reducer
+  D2 scheduler intents
+  D3 released-trio DO0 run
+  D4 coordinator shadow integration
 ```
 
-Do not create the full V1/A1/P1 backlog as executable leaves yet. Keep later programmes as placeholder epics with entry criteria only, preventing premature local dispatch.
+Later V1/A1/P1 programmes remain placeholder epics with entry criteria only. They must not appear claimable before their gates pass.
 
-## 12. Jira reconciliation packet
+No fictitious cross-repository parent-child hierarchy is allowed. Each repository owns its own executable roots; `xtrm-dev/xtrm` owns the index and cross-repository release gates.
+
+## 11. Jira reconciliation packet
 
 Apply after Atlassian access is available.
 
-### Existing issues
-
 | Jira | Mutation |
 |---|---|
-| KAN-84 | mark v0 delivered; move native compiler/composition residual to KAN-119; retain historical provenance |
-| KAN-85 | run installed-release smoke, then transition Done |
-| KAN-110 | record phases 1–3 delivered; split remaining pyright/upstream isolation into a narrow residual |
-| KAN-114 | relate/fold into KAN-121 and KAN-124 after typed-context decision |
-| KAN-115 | transition In Progress; replace release snapshot with 0.11.4/0.2.3/3.21.2 and link this plan |
-| KAN-116 | transition In Progress; reduce to unfinished G02 capability pin, approved graph and WP→Beads mapping |
-| KAN-117 | transition In Progress; separate delivered telemetry foundation from missing Eval Core |
-| KAN-118 | transition In Progress; record assignment/notification delivered and focus residual on logical sessions/recovery |
-| KAN-119 | set Highest and make next critical implementation task; own compiler, `ResolvedChain` and planning integration |
-| KAN-120 | record bridge persona delivered; retain resolver/reducer/entry/incident/close-time residual |
-| KAN-121 | mark partial; block prompt promotion on Eval Core and stable chain/runtime contracts |
-| KAN-122 | keep To Do; add V1 entry criteria |
-| KAN-123 | keep To Do; clarify Console eval scope and distinguish Agent Workspace |
-| KAN-124 | transition In Progress or partial; execute deterministic context with KAN-119/D1 |
-| KAN-125 | detach from KAN-115 critical path and relate as non-blocking supporting lane |
+| KAN-84 | mark v0 delivered; move compiler/composition residual to KAN-119 |
+| KAN-85 | installed-release smoke, then Done |
+| KAN-110 | record phases 1–3 delivered; split pyright/upstream residual |
+| KAN-114 | fold/relate to KAN-121 and KAN-124 after typed-context decision |
+| KAN-115 | In Progress; update release ledger and link this plan |
+| KAN-116 | In Progress; retain unfinished G02, approved graph and WP→Beads mapping |
+| KAN-117 | In Progress; separate delivered telemetry foundation from Eval Core |
+| KAN-118 | In Progress; record assignment/notifications delivered, focus on recovery |
+| KAN-119 | Highest and next critical implementation item; own compiler and `ResolvedChain` |
+| KAN-120 | record bridge persona delivered; retain reducer/entry/incident/close residual |
+| KAN-121 | partial; block prompt promotion on Eval Core and stable runtime contracts |
+| KAN-122 | keep To Do with V1 entry criteria |
+| KAN-123 | keep To Do; distinguish Console eval scope from Agent Workspace |
+| KAN-124 | partial/In Progress; execute deterministic context with C1/D1 |
+| KAN-125 | detach from critical path and relate as non-blocking supporting lane |
 
-### New portfolio epics
-
-Create only these missing programmes:
+Create only these missing portfolio programmes:
 
 1. **XTRM deterministic interfaces and harness integration** — I1 and later A1.
-2. **XT Codex runtime integration** — if the local Epic is not already mirrored elsewhere.
+2. **XT Codex runtime integration** — if the local Epic is not already mirrored.
 3. **XTRM Agent Workspace** — P1.2/P1.3.
 4. **XTRM Operational Knowledge System** — P1.4.
 
 Create one bounded Archon comparison Task related to KAN-119/KAN-120. Do not create an Archon production-runtime Epic.
 
-## 13. Work that must not start yet
+## 12. Work that must not start early
 
 Do not productionize:
 
-- `sp chain approve` before I1 and E1 are stable;
-- automatic chain advancement before the pure reducer exists;
-- native workflow mutations before idempotency exists;
-- prompt rewrites before Eval Core;
-- automatic memory writes before calibrated precision;
+- automatic chain advancement before `GATE-DO0`;
+- coordinator warn/enforce authority before `GATE-AUTH`;
+- workflow mutation adapters before idempotency;
+- prompt promotion before Eval Core;
+- automatic memory writes before precision calibration;
 - Agent Workspace mutation controls before command outcomes;
 - a second `xt spec` implementation;
 - Archon as an XTRM authority;
 - monorepo migration as a prerequisite;
-- Substrate-owned abstractions recreated as heavyweight bridge daemons without measured need.
+- heavyweight bridge daemons without measured need.
+
+## 13. Local coordinator rules
+
+Every local coordinator must:
+
+1. refresh releases, heads and recent merged PRs;
+2. run `/spec-dispatch` against this document;
+3. inspect/reconcile existing Beads before creation;
+4. verify installed Beads capabilities before writes;
+5. group work by reviewable PR/release boundary;
+6. record symbolic workstream IDs in root Beads;
+7. review the dependency graph before live creation;
+8. keep Jira as a portfolio mirror, not a leaf-task clone;
+9. require independent review and test evidence for schemas/reducers;
+10. update this ledger before continuing if code contradicts it.
 
 ## 14. Definition of programme control
 
-This programme is under control when:
+The programme is under control when:
 
-- every active Jira epic maps to a canonical document and real Beads roots;
-- every delivered capability is marked released, source-only or experimental;
-- local agents can identify the first claimable work without reading the whole PRD;
-- no root task can dispatch before its required gates are present;
+- every active Jira epic maps to canonical documents and real repository Beads roots;
+- every capability is marked released, source-only, experimental or residual;
+- agents can identify first claimable work without reading the complete PRD;
+- no root dispatches before required gates exist;
 - every cross-repository change has an explicit coordinated-release gate;
-- current execution state is updated after every release wave;
-- superseded plans cannot be mistaken for active authority.
+- this plan is refreshed after each release wave;
+- superseded documents cannot be mistaken for active authority.
 
-The immediate implementation centre is the seam:
+The immediate implementation centre is:
 
 ```text
 approved root contract
@@ -837,4 +798,4 @@ approved root contract
 → evidence-driven next transition
 ```
 
-Everything else either feeds that seam, evaluates it, adapts it or presents it.
+Everything else feeds, evaluates, adapts or presents this seam.
