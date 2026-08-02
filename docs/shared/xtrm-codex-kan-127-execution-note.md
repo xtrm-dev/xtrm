@@ -119,7 +119,10 @@ A web agent cannot treat `~/dev/xtrm/docs/shared/...` as a durable reference. Be
 
 ### K2 — deterministic outcome spine
 
-**Owner:** Core contract owner, aligned with programme workstream `I1.4`.
+**Owner:** Core contract owner.  
+**Programme dependency:** consume and complete the generic launcher contract established by `I1.4`; do not make production Codex a prerequisite of `I1.4` or `GATE-IFACE`.
+
+`I1.4` and `GATE-IFACE` are proven by released Pi/Claude behavior, the generic launcher/outcome schema and the affected public-command fixtures. KAN-127 then binds Codex to that stable contract. This separation prevents a circular gate in which `xt codex` would have to be production-ready before the gate that authorizes production harness adapters.
 
 Define the additive launch outcome required by Codex and existing harnesses. It must carry, where applicable:
 
@@ -145,11 +148,11 @@ Rules:
 - an outcome never fabricates an authoritative mutation;
 - the schema is shared only when Claude, Pi and Codex would otherwise duplicate non-trivial validation.
 
-A contract-only Core release may be required before sibling repositories consume a packaged schema.
+A contract-only Core release may be required before sibling repositories consume a packaged schema. The programme `GATE-IFACE` can be reviewed and passed independently of completion of the experimental K3 Codex slices.
 
 ### K3 — parallel first vertical slices
 
-K2 unlocks three repository-owned implementation roots in parallel.
+A stable K2 candidate unlocks three repository-owned implementation roots in parallel. They may be developed and tested before the programme gate, but remain experimental until `GATE-IFACE` has passed.
 
 #### K3-Core — experimental interactive launcher
 
@@ -202,9 +205,12 @@ After the K3 contracts stabilize:
 
 Policy review, Serena conflict cleanup and live legacy-hook reconciliation can run in parallel where they do not change the contracts under implementation.
 
-### K5 — `GATE-IFACE` and parity promotion
+### K5 — Codex parity promotion after `GATE-IFACE`
 
-Production promotion requires the programme-wide deterministic interface gate plus the Codex-specific matrix.
+Production promotion requires both:
+
+1. the programme-wide `GATE-IFACE` has already passed for the generic harness-facing outcome contracts; and
+2. the Codex-specific K3/K4 parity matrix passes against those stable contracts.
 
 Required evidence:
 
@@ -254,9 +260,14 @@ K0
 ├── K3-xtmux
 └── K3-Specialists
 
+programme I1.4
+→ programme GATE-IFACE
+
 K3-Core + K3-xtmux + K3-Specialists
 → K4
-→ K5 / GATE-IFACE
+
+programme GATE-IFACE + K4
+→ K5 Codex parity promotion
 → K6
 → K7 optional
 ```
@@ -277,8 +288,8 @@ None of those companions may silently redefine the K2 contracts.
 
 | Programme node | KAN-127 / Beads responsibility |
 |---|---|
-| `I1.4` | existing Core Pi/Claude launcher outcome contract that Codex must consume |
-| `GATE-IFACE` | promotion gate for stable harness-facing outcomes |
+| `I1.4` | released Pi/Claude and generic Core launcher outcome contract that Codex consumes; it does not require production `xt codex` |
+| `GATE-IFACE` | external prerequisite for production Codex promotion; it does not depend on production `xt codex` |
 | `A1.1` | exact installed-version and capability verification |
 | `A1.5` | XT Codex parity implementation and release evidence |
 | `P1` | not part of KAN-127; later product surfaces consume released outcomes |
@@ -291,7 +302,8 @@ The web/local coordinator must revise `xtrm-ozknq` so that:
 - K0–K2 are explicit predecessors rather than prose assumptions;
 - K3 uses three repository-owned roots connected by companion relations;
 - K4 children name exact prerequisites and release boundaries;
-- K5 is a real blocked gate with fixtures, not a generic final-test task;
+- the programme `GATE-IFACE` is represented as an external prerequisite, not as a child that depends on production Codex;
+- K5 is a real blocked Codex-promotion gate with fixtures, not a generic final-test task;
 - K6 records the cross-repository release order;
 - K7 children remain non-claimable placeholders until parity is released;
 - every child states owner repository, validation, negative proof and release boundary;
