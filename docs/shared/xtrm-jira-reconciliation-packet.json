@@ -1,0 +1,367 @@
+{
+  "schema_version": "xtrm.jira-reconciliation-packet.v1",
+  "generated_at": "2026-08-02T16:14:00+02:00",
+  "site": "xtrmxt.atlassian.net",
+  "project": "KAN",
+  "source_plan": "docs/shared/xtrm-current-execution-plan.md",
+  "execution_truth": "repository-local Beads",
+  "status": "ready-to-apply-after-live-reread",
+  "preconditions": [
+    "reconnect Atlassian and resolve current cloud id",
+    "read every target issue and current workflow transitions",
+    "deduplicate new issues by exact summary and plan label",
+    "verify PR 31 is merged or use its final immutable commit link",
+    "do not mirror repository-local leaf Beads into Jira",
+    "record actual issue keys created back into the current execution plan mapping"
+  ],
+  "labels": {
+    "programme": "xtrm-deterministic-runtime",
+    "plan": "current-execution-plan-v1",
+    "release_baseline": "xtrm-trio-0.11.4-3.21.2-0.2.3"
+  },
+  "apply_order": [
+    "existing_issue_freshness",
+    "new_portfolio_epics",
+    "relationships",
+    "status_transitions",
+    "completion_comments"
+  ],
+  "existing_issues": [
+    {
+      "key": "KAN-84",
+      "last_observed_status": "In review",
+      "desired_status": "Done after KAN-85 installed-release smoke and residual transfer",
+      "priority": "High",
+      "mutation": "replace monolithic scope with delivered-v0 and residual sections",
+      "delivered": [
+        "released xt spec draft validate doctor apply status archive",
+        "spec schema and XML change-contract generation",
+        "planner bead dispatch apply sidecar reconciliation and archive lifecycle"
+      ],
+      "residual_move_to": ["KAN-119"],
+      "residual": [
+        "canonical chain compiler boundary",
+        "supported chain-template packaging",
+        "sp chain review approve insert show",
+        "Beads-native materializer after capability verification"
+      ],
+      "comment": "Core 0.11.4 contains the xt spec v0 command family. Close v0 after installed smoke; execution-composition residual is governed by KAN-119 and the current execution plan."
+    },
+    {
+      "key": "KAN-85",
+      "last_observed_status": "In review",
+      "desired_status": "Done",
+      "priority": "High",
+      "pre_transition_checks": [
+        "install or invoke Core 0.11.4 supported artifact",
+        "smoke xt spec draft validate doctor apply --dry-run status archive help",
+        "record exact commands and package identity"
+      ],
+      "comment": "Installed-release smoke passed for the shipped xt spec v0 surface; remaining composition/runtime work is tracked under KAN-119."
+    },
+    {
+      "key": "KAN-110",
+      "last_observed_status": "Done",
+      "desired_status": "Done with delivered-phase note and separate residual task",
+      "priority": "Medium",
+      "delivered": [
+        "Serena disabled for selected read-only roles",
+        "ownership-safe orphan process-group cleanup",
+        "one streamable-HTTP Serena daemon per repository root"
+      ],
+      "residual": [
+        "pyright workspaceFolders feasibility and implementation",
+        "per-session active-project isolation or upstream disposition",
+        "reconcile with native TypeScript LSP direction"
+      ],
+      "create_residual_summary": "Complete the code-intelligence residual after Serena pooling",
+      "comment": "KAN-110 phases 1-3 are released in Core. Preserve the Done issue as delivered history and create one narrow residual instead of reopening the broad original Epic."
+    },
+    {
+      "key": "KAN-114",
+      "last_observed_status": "To do",
+      "desired_status": "To do pending ownership decision",
+      "priority": "Medium",
+      "mutation": "add relation to KAN-121 and KAN-124; do not implement as standalone prompt injection yet",
+      "decision_required": "determine whether skill selection belongs in typed runtime context, Beads metadata or prompt injection",
+      "comment": "Retain proposal status. Resolve ownership with output-contract/prompt work and deterministic chain context before implementation."
+    },
+    {
+      "key": "KAN-115",
+      "last_observed_status": "To do",
+      "desired_status": "In progress",
+      "priority": "Highest",
+      "mutation": "replace stale release snapshot and make the current execution plan the sequencing projection",
+      "release_baseline": {
+        "core": "0.11.4",
+        "specialists": "3.21.2",
+        "xtmux": "0.2.3"
+      },
+      "delivered_foundation": [
+        "interactive launch and assignment foundations",
+        "runtime-origin and coordinator ancestry",
+        "structured progress and exact result surfaces",
+        "terminal parent notifications",
+        "xtmux durable coordination runtime",
+        "forensic and topology foundations"
+      ],
+      "critical_path": ["I1", "E1", "C1", "D1", "V1"],
+      "comment": "Programme is materially in progress. Jira remains the portfolio projection; current sequencing and release truth are in the XTRM current execution plan."
+    },
+    {
+      "key": "KAN-116",
+      "last_observed_status": "To do",
+      "desired_status": "In progress",
+      "priority": "Highest",
+      "delivered": [
+        "canonical PRD and later v3.2 reconciliation",
+        "Core audit closure programme",
+        "release coherence and current execution packet"
+      ],
+      "residual": [
+        "installed Beads capability pin and fixtures",
+        "approved symbolic-to-real Beads graph mapping",
+        "acceptance coverage index",
+        "no-duplicate-backlog proof"
+      ],
+      "comment": "Reduce KAN-116 to the unfinished G02/program-graph gate. Do not re-plan already delivered documentation and release reconciliation."
+    },
+    {
+      "key": "KAN-117",
+      "last_observed_status": "To do",
+      "desired_status": "In progress",
+      "priority": "Highest",
+      "delivered": [
+        "five-layer forensic identity bridge",
+        "structured run/feed events and deterministic replay ordering",
+        "Prometheus and forensic foundations",
+        "candidate build identity foundations"
+      ],
+      "residual": [
+        "telemetry-integrity-v1 proof",
+        "Eval Core storage and interfaces",
+        "historical completeness and backfill",
+        "compare and promotion reports"
+      ],
+      "comment": "Split delivered telemetry foundation from the still-unimplemented Eval Core. Evaluation remains observe-only until promotion evidence exists."
+    },
+    {
+      "key": "KAN-118",
+      "last_observed_status": "To do",
+      "desired_status": "In progress",
+      "priority": "Highest",
+      "delivered": [
+        "interactive task rendering and launcher readiness",
+        "Pi and Claude role launch foundations",
+        "runtime identity tracking",
+        "terminal parent notifications"
+      ],
+      "residual": [
+        "logical-session identity distinct from tmux and job activation",
+        "recovery classifier",
+        "safe resume and duplicated-side-effect reconciliation",
+        "session-recovery-v1 crash fixtures"
+      ],
+      "comment": "Focus the residual issue on logical sessions and recovery rather than recreating assignment/notification capabilities already released."
+    },
+    {
+      "key": "KAN-119",
+      "last_observed_status": "To do",
+      "desired_status": "To do until local graph approval, then In progress",
+      "priority": "Highest",
+      "mutation": "make this the next critical runtime implementation item",
+      "scope": [
+        "package and validate chain-template catalog",
+        "pure ResolvedChain compiler",
+        "draft and approved shape persistence",
+        "thin Beads materializer",
+        "manual sp chain review insert approve show",
+        "planning and xt spec integration without duplicate workflow authority"
+      ],
+      "entry_gate": "R0.1 merged and repository-local graph approved",
+      "comment": "KAN-119 owns the missing deterministic seam between approved root contracts and persisted execution topology."
+    },
+    {
+      "key": "KAN-120",
+      "last_observed_status": "To do",
+      "desired_status": "To do",
+      "priority": "Highest",
+      "delivered": ["interactive chain-coordinator bridge persona"],
+      "residual": [
+        "consume pure reducer output",
+        "entry and composition readiness gate",
+        "incident retry restitch escalation semantics",
+        "close-time checks and journal",
+        "shadow then measured authority promotion"
+      ],
+      "blocked_by": ["GATE-COMPOSE", "D1.3"],
+      "comment": "The persona is released, but the prompt still carries a resolver TODO. Do not treat the persona as the coordinator runtime."
+    },
+    {
+      "key": "KAN-121",
+      "last_observed_status": "To do",
+      "desired_status": "To do",
+      "priority": "High",
+      "delivered": [
+        "selected prompt progressive-disclosure work",
+        "shared schema and output-contract foundations",
+        "selected command/help drift gates"
+      ],
+      "residual": [
+        "one generated machine-readable output contract",
+        "prompt procedure context responsibility cleanup",
+        "paired or factorial experiments",
+        "evidence-gated prompt and model promotion"
+      ],
+      "blocked_by": ["V1.2", "V1.3"],
+      "comment": "Record partial foundation but keep residual To Do. Prompt promotion cannot precede Eval Core and stable chain context."
+    },
+    {
+      "key": "KAN-122",
+      "last_observed_status": "To do",
+      "desired_status": "To do",
+      "priority": "High",
+      "entry_gate": "V1.2 Eval Core and V1.3 deterministic context",
+      "scope": [
+        "herd workgroup and identity query lenses",
+        "pull-based bounded retrieval",
+        "proposal/shadow close-time distillation",
+        "precision pollution duplication and reuse metrics"
+      ],
+      "comment": "Keep later-wave status. Do not create automatic memory writes before precision can be measured."
+    },
+    {
+      "key": "KAN-123",
+      "last_observed_status": "To do",
+      "desired_status": "To do",
+      "priority": "Medium",
+      "mutation": "clarify that this issue owns Console eval and promotion views, not the general Agent Workspace",
+      "blocked_by": ["V1.2"],
+      "comment": "Preserve Console as a materialized read model. Create the broader Agent Workspace as a separate product Epic."
+    },
+    {
+      "key": "KAN-124",
+      "last_observed_status": "To do",
+      "desired_status": "To do until C1/D1 begins, then In progress",
+      "priority": "Highest",
+      "delivered": [
+        "runtime-origin and parent identity",
+        "stable result and integration pointers",
+        "terminal handoff and notification foundations"
+      ],
+      "residual": [
+        "chain root step role class and position context",
+        "effective scrutiny and pending gate context",
+        "explicit partial preload state",
+        "structured downstream-useful handoff contract"
+      ],
+      "related_to": ["KAN-119", "KAN-120"],
+      "comment": "Execute deterministic context alongside the chain spine and reducer, not as an isolated prompt-only programme."
+    },
+    {
+      "key": "KAN-125",
+      "last_observed_status": "To do",
+      "desired_status": "To do",
+      "priority": "Medium",
+      "mutation": "remove from KAN-115 critical-path completion and relate as a supporting measurement lane",
+      "comment": "TypeScript 7 remains repository-by-repository and evidence-gated. It must not block I1 through D1 unless a measured toolchain incompatibility affects the active seam."
+    }
+  ],
+  "new_portfolio_epics": [
+    {
+      "dedupe_summary": "XTRM deterministic interfaces and harness integration",
+      "issue_type": "Epic",
+      "priority": "Highest",
+      "labels": ["xtrm-deterministic-runtime", "current-execution-plan-v1", "interfaces"],
+      "objective": "Make public XTRM mutations return deterministic machine outcomes, then build thin Claude/Pi integrations that consume those outcomes without duplicating runtime authority.",
+      "scope": [
+        "I1 command inventory compatibility ADR and xtrm.command-outcome.v1",
+        "xtmux first vertical slice",
+        "Specialists and Core adoption",
+        "later thin native tools",
+        "Pi Runtime Unification residual and workflow integration after interface gate"
+      ],
+      "success": [
+        "stable statuses reason codes IDs side effects and argv next actions",
+        "consumer compatibility fixtures",
+        "released-trio public-command smoke",
+        "adapters retain no private durable state"
+      ],
+      "non_goals": [
+        "new workflow engine",
+        "new message or job store",
+        "automatic chain advancement"
+      ]
+    },
+    {
+      "dedupe_summary": "XT Codex runtime integration",
+      "issue_type": "Epic",
+      "priority": "High",
+      "labels": ["xtrm-deterministic-runtime", "current-execution-plan-v1", "codex"],
+      "objective": "Provide Core-owned deterministic Codex launch and xtmux lifecycle parity without introducing a separate XTRM authority.",
+      "entry_gate": "I1.4 approved for production; read-only capability audit may start earlier",
+      "scope": [
+        "Codex capability matrix",
+        "xt codex launcher and assignment result",
+        "xtmux identity observation messaging wake and recovery parity",
+        "Pi Claude Codex compatibility fixtures"
+      ]
+    },
+    {
+      "dedupe_summary": "XTRM Agent Workspace",
+      "issue_type": "Epic",
+      "priority": "Medium",
+      "labels": ["xtrm-product", "current-execution-plan-v1", "agent-workspace"],
+      "objective": "Create a visual orchestration and terminal workspace around existing Core xtmux Specialists Beads and Git contracts.",
+      "entry_gate": "read-only shell after stable public contracts; mutation actions after GATE-IFACE and explicit authority mapping",
+      "first_scope": [
+        "topology graph",
+        "pane and session navigation",
+        "embedded terminal",
+        "exact message result and evidence inspection",
+        "Beads root and chain status"
+      ],
+      "non_goals": ["UI-specific scheduler", "duplicate state store", "hidden mutations"]
+    },
+    {
+      "dedupe_summary": "XTRM Operational Knowledge System",
+      "issue_type": "Epic",
+      "priority": "Medium",
+      "labels": ["xtrm-product", "current-execution-plan-v1", "oks"],
+      "objective": "Implement the canonical operational-knowledge design with provenance freshness and operator query contracts.",
+      "first_scope": ["read-only ingestion", "provenance", "freshness", "operator query surfaces"],
+      "non_goals": ["automatic remediation without separate authorization"]
+    }
+  ],
+  "new_supporting_items": [
+    {
+      "dedupe_summary": "Run the read-only Archon comparison against the deterministic XTRM chain seam",
+      "issue_type": "Task",
+      "priority": "Medium",
+      "labels": ["experiment", "current-execution-plan-v1", "archon"],
+      "related_to": ["KAN-119", "KAN-120"],
+      "entry_gate": "D1.2 pure reducer available",
+      "non_goals": ["Archon production authority", "production mutation workflow"]
+    },
+    {
+      "dedupe_summary": "Complete the code-intelligence residual after Serena pooling",
+      "issue_type": "Task",
+      "priority": "Medium",
+      "labels": ["code-intelligence", "current-execution-plan-v1", "supporting-lane"],
+      "related_to": ["KAN-110", "KAN-125"],
+      "scope": ["pyright multi-root", "session isolation", "native TypeScript LSP disposition"]
+    }
+  ],
+  "relationships": [
+    {"from": "NEW:XTRM deterministic interfaces and harness integration", "to": "KAN-115", "type": "relates"},
+    {"from": "NEW:XT Codex runtime integration", "to": "NEW:XTRM deterministic interfaces and harness integration", "type": "relates"},
+    {"from": "NEW:XTRM Agent Workspace", "to": "KAN-123", "type": "relates"},
+    {"from": "NEW:XTRM Operational Knowledge System", "to": "KAN-122", "type": "relates"},
+    {"from": "KAN-119", "to": "KAN-120", "type": "blocks"},
+    {"from": "KAN-119", "to": "KAN-124", "type": "relates"},
+    {"from": "KAN-117", "to": "KAN-121", "type": "blocks"},
+    {"from": "KAN-117", "to": "KAN-122", "type": "blocks"},
+    {"from": "KAN-125", "to": "KAN-115", "type": "relates-not-blocks"}
+  ],
+  "completion_rule": "After every mutation, add one evidence comment naming released versions, canonical plan path, real Beads root IDs when available, and the next unmet gate."
+}
