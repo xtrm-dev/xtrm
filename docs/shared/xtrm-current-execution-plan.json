@@ -154,7 +154,7 @@
         {"id": "C1.2", "title": "Pure ResolvedChain compiler", "dependencies": ["C1.1"]},
         {"id": "C1.3", "title": "Persist draft and approved ResolvedChain", "dependencies": ["C1.2"]},
         {"id": "C1.4", "title": "Thin Beads materializer", "dependencies": ["C1.3"]},
-        {"id": "C1.5", "title": "sp chain review insert approve show", "dependencies": ["C1.3", "C1.4", "I1.3", "E1.4"]}
+        {"id": "C1.5", "title": "sp chain review insert approve show", "dependencies": ["C1.3", "C1.4", "E1.4", "GATE-IFACE"]}
       ],
       "exit_criteria": [
         "one canonical compiler",
@@ -212,7 +212,7 @@
         {"id": "A1.2", "title": "Thin XTRM native tools", "dependencies": ["A1.1", "GATE-IFACE"]},
         {"id": "A1.3", "title": "Pi Runtime Unification residual", "dependencies": ["A1.1"]},
         {"id": "A1.4", "title": "pi-extensible-workflows integration", "dependencies": ["A1.2", "A1.3"]},
-        {"id": "A1.5", "title": "XT Codex production parity", "dependencies": ["A1.1", "I1.4"]}
+        {"id": "A1.5", "title": "XT Codex production parity", "dependencies": ["A1.1", "GATE-IFACE"]}
       ]
     },
     {
@@ -274,7 +274,7 @@
     {
       "id": "GATE-DO0",
       "title": "Deterministic orchestration foundation",
-      "dependencies": ["GATE-COMPOSE", "D1.3"],
+      "dependencies": ["R0.2", "R0.3", "R0.4", "R0.5", "GATE-COMPOSE", "D1.3"],
       "authorizes": [
         "deterministic scheduler intents",
         "coordinator shadow mode"
