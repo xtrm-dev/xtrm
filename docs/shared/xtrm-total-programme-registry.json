@@ -1,0 +1,376 @@
+{
+  "schema_version": "xtrm.total-programme-completion.v1",
+  "snapshot_at": "2026-08-07T17:52:00+02:00",
+  "scope": "entire XTRM programme across xtrm, Core, Specialists, xtmux, accepted designs, research, conversations and trackers",
+  "status_vocabulary": [
+    "DELIVERED_RELEASED",
+    "DELIVERED_SOURCE_ONLY",
+    "OPEN_IMPLEMENTATION",
+    "PARTIAL",
+    "PLANNED",
+    "DESIGN_ONLY",
+    "NEEDS_DECISION",
+    "DORMANT_UNTIL_PREREQUISITE",
+    "TRANSFERRED_TO_OTHER_OWNER",
+    "SUPERSEDED",
+    "REJECTED",
+    "RETIRED",
+    "NOT_APPLICABLE",
+    "UNVERIFIED",
+    "MISSING_TRACKING"
+  ],
+  "truth_dimensions": [
+    "source_state",
+    "release_state",
+    "deployment_state",
+    "promotion_state",
+    "design_state"
+  ],
+  "authority_order": [
+    "released_artifacts_and_released_trio_smoke",
+    "default_branch_code_schemas_tests_contracts",
+    "open_prs_and_local_worktrees",
+    "xtrm_current_execution_plan_and_release_snapshots",
+    "accepted_prd_roadmap_and_focused_reconciliation_notes",
+    "substrate_and_channels_normative_designs",
+    "repository_local_beads",
+    "jira_and_confluence_projection",
+    "historical_plans_research_and_workspace_conversations"
+  ],
+  "repositories": {
+    "xtrm": {
+      "repo": "xtrm-dev/xtrm",
+      "default_branch": "main",
+      "source_state": "PARTIAL",
+      "release_state": "UNVERIFIED",
+      "open_programme_prs": [33],
+      "landed_programme_prs": [31, 32],
+      "key_paths": [
+        "docs/shared/xtrm-current-execution-plan.md",
+        "docs/shared/xtrm-current-execution-plan.json",
+        "docs/shared/xtrm-local-coordinator-bootstrap.md",
+        "docs/shared/xtrm-jira-reconciliation-packet.json",
+        "docs/shared/xtrm-codex-kan-127-execution-note.md",
+        "docs/substrate/substrate_design_en.md",
+        "docs/channels/channels.md",
+        "docs/channels/channels-upgrade.md",
+        "docs/channels/channels-forensic-attention-proposal.md"
+      ],
+      "notes": [
+        "PR 33 is architectural reconciliation only; its 2026-08-04 current-state audit is superseded by this registry snapshot.",
+        "packages/service-knowledge is a first-class programme lane and requires current package/release/deployment reconciliation."
+      ]
+    },
+    "core": {
+      "repo": "xtrm-dev/core",
+      "default_branch": "main",
+      "source_state": "PARTIAL",
+      "release_state": "DELIVERED_RELEASED",
+      "known_release": "0.11.4",
+      "deployment_state": "PARTIAL",
+      "open_prs_of_programme_interest": [533, 545],
+      "recent_landed_prs": [537, 539, 540, 541, 542, 543],
+      "notes": [
+        "xtrm.command-outcome.v1 is landed source truth.",
+        "Core K4 Codex distribution parity and active Serena retirement are merged.",
+        "xt worktree reap is merged.",
+        "PR 545 addresses committed-artifact deployment freshness after observed stale local checkouts.",
+        "Source is materially ahead of the 0.11.4 package baseline."
+      ]
+    },
+    "specialists": {
+      "repo": "xtrm-dev/specialists",
+      "default_branch": "master",
+      "source_state": "PARTIAL",
+      "release_state": "DELIVERED_RELEASED",
+      "known_release": "3.21.2",
+      "deployment_state": "UNVERIFIED",
+      "open_prs_of_programme_interest": [243],
+      "recent_landed_prs": [244, 245, 246, 247, 248, 250],
+      "notes": [
+        "Codex role/render and K4 launch-outcome/result parity are merged.",
+        "Active Serena runtime retirement is merged.",
+        "Review-chain semantic hardening is merged.",
+        "Fifteen formulas exist but no production compiler/resolver/reducer chain runtime is evidenced.",
+        "Source is ahead of the 3.21.2 package baseline."
+      ]
+    },
+    "xtmux": {
+      "repo": "Jaggerxtrm/xtmux",
+      "default_branch": "main",
+      "source_state": "OPEN_IMPLEMENTATION",
+      "release_state": "DELIVERED_RELEASED",
+      "known_release": "0.2.3",
+      "deployment_state": "PARTIAL",
+      "open_prs_of_programme_interest": [90, 96],
+      "recent_landed_prs": [91, 92, 93, 94, 95],
+      "notes": [
+        "K1 characterization, K3 Codex adapter and EVAL-01 evidence are merged.",
+        "Monitor liveness/poller work is merged.",
+        "PR 96 is the current K4 Codex lifecycle/recovery/distribution implementation and identifies itself as the last KAN-127 critical-path implementation item.",
+        "PR 96 lacked an independent Codex review at its checkpoint because review quota was exhausted.",
+        "Source is ahead of the 0.2.3 package baseline."
+      ]
+    }
+  },
+  "programme_lanes": [
+    {
+      "id": "P-DET",
+      "name": "Deterministic interface contracts",
+      "status": "PARTIAL",
+      "owners": ["core", "specialists"],
+      "evidence": ["core PR 537", "xtrm PR 31"],
+      "residuals": ["verify/land minimum specialists.execution.v1 where still absent", "release compatible interfaces", "use structured contracts as the only future chain machine boundary"],
+      "next_gate": "GATE-COMPOSE prerequisites"
+    },
+    {
+      "id": "P-KAN127",
+      "name": "XT Codex parity",
+      "status": "OPEN_IMPLEMENTATION",
+      "owners": ["core", "specialists", "xtmux"],
+      "evidence": ["core PRs 536-540,542", "specialists PRs 245-248", "xtmux PRs 91-93,96"],
+      "dependencies": ["xtmux PR 96"],
+      "residuals": ["cross-repository K4 observation/parity packet", "K5 explicit promotion", "K6 ordered compatibility releases", "released-trio smoke"],
+      "next_gate": "K5"
+    },
+    {
+      "id": "P-CHAIN",
+      "name": "Deterministic chain and formula runtime",
+      "status": "PLANNED",
+      "owners": ["specialists", "core", "xtmux", "xtrm"],
+      "authority": ["specialists formula assets", "xtrm docs/substrate/chain_templates.md", "xtrm PR 31", "xtrm PR 33"],
+      "constraints": ["no new central ChainRun authority", "deterministic structure around probabilistic agents", "bounded explicit review loops", "evidence-driven advancement"],
+      "residuals": ["pure compiler", "persisted ResolvedChain", "manual review/approve/show", "minimum activation protocol", "evidence reducer", "scheduler intents", "recovery/idempotency", "released-trio fixture"],
+      "preferred_fixture": "quant/math declarative pipeline",
+      "next_gate": "GATE-COMPOSE"
+    },
+    {
+      "id": "P-SUB",
+      "name": "Substrate",
+      "status": "DESIGN_ONLY",
+      "owners": ["xtrm"],
+      "authority": ["docs/substrate/substrate_design_en.md", "Substrate premortem corpus"],
+      "constraints": ["bridge must be Substrate-shaped", "do not assume target daemon/store already exists", "no K2.5/global interpreter invention"],
+      "residuals": ["future container/issue/participant/activation runtime", "migration from bridge authorities", "independent review according to design freeze rules"]
+    },
+    {
+      "id": "P-CHAN",
+      "name": "Channels",
+      "status": "DESIGN_ONLY",
+      "owners": ["xtrm", "xtmux"],
+      "authority": ["docs/channels/channels.md", "docs/channels/channels-upgrade.md", "docs/channels/channels-forensic-attention-proposal.md"],
+      "constraints": ["typed communication not lifecycle truth", "no second job/result store", "current xtmux coordination is bridge authority"],
+      "residuals": ["compiler-resolved compatibility fields", "runtime activation after deterministic foundation", "progress/attention/judge reconciliation"]
+    },
+    {
+      "id": "P-PULSE",
+      "name": "Pulse, emitter and progress semantics",
+      "status": "DESIGN_ONLY",
+      "owners": ["xtrm"],
+      "constraints": ["pulse requests reevaluation", "validated evidence authorizes transition", "commands are not automatically emitters", "emitters require bounded registered capability and idempotency"],
+      "dependencies": ["P-CHAIN", "P-SUB", "P-CHAN"]
+    },
+    {
+      "id": "P-CORE",
+      "name": "Core control-plane completion",
+      "status": "PARTIAL",
+      "owners": ["core"],
+      "residuals": ["KAN-127 promotion/release", "resolve PR 545", "verify remaining worktree/index follow-ups", "documentation/naming reconciliation"],
+      "evidence": ["PR 543 worktree reclamation", "PR 545 deploy-gap open"]
+    },
+    {
+      "id": "P-SP",
+      "name": "Specialists runtime completion",
+      "status": "PARTIAL",
+      "owners": ["specialists"],
+      "residuals": ["chain composition/reducer integration", "re-audit historical quarantine defects before creating new work", "release current source capabilities"],
+      "evidence": ["PR 248 Serena retirement", "PR 250 review-chain hardening"]
+    },
+    {
+      "id": "P-XTMUX",
+      "name": "xtmux coordination runtime completion",
+      "status": "PARTIAL",
+      "owners": ["xtmux"],
+      "residuals": ["complete/review PR 96", "verify K4 matrix", "reconcile fresh-db concurrent-open flake", "release packaging and deployment"],
+      "evidence": ["PR 93 EVAL-01", "PR 95 monitor liveness", "PR 96 open"]
+    },
+    {
+      "id": "P-REVIEW",
+      "name": "Review-chain quality and deterministic QA",
+      "status": "DELIVERED_SOURCE_ONLY",
+      "owners": ["specialists"],
+      "evidence": ["specialists PR 250"],
+      "constraints": ["future chain engine consumes reviewer contracts rather than duplicating them"]
+    },
+    {
+      "id": "P-TOPO",
+      "name": "Topology, lineage and operator projection",
+      "status": "DELIVERED_SOURCE_ONLY",
+      "owners": ["core", "xtmux"],
+      "evidence": ["Core aggregated topology viewer", "xtmux topology lineage publication"],
+      "constraints": ["never infer completion from terminal prose", "future UI consumes projection instead of becoming authority"]
+    },
+    {
+      "id": "P-UI",
+      "name": "Console and xtmux visual workspace",
+      "status": "UNVERIFIED",
+      "owners": ["xtrm", "core", "xtmux"],
+      "origin": ["workspace UI/UX design discussions", "existing Console/materializer work"],
+      "intent": ["tmux wrapper", "orchestrator/child layout", "nested specialist graph", "session/pane switching", "Beads/run controls", "deterministic run visibility", "web/Electron decision"],
+      "residuals": ["live implementation audit", "authority mapping", "select product shell after audit"]
+    },
+    {
+      "id": "P-MEM",
+      "name": "Memory evolution",
+      "status": "DESIGN_ONLY",
+      "owners": ["core", "xtrm"],
+      "authority": ["core/docs/design/memory-system-r6g.md"],
+      "constraints": ["r6g is research/design, not plan of record", "do not infer a global Substrate-memory ontology"],
+      "residuals": ["audit current implementation", "reconcile Beads/Dolt versus project memory versus retrieval/indexing", "define any close/distillation packet only after evidence"]
+    },
+    {
+      "id": "P-KNOW",
+      "name": "Service knowledge and operational knowledge",
+      "status": "PARTIAL",
+      "owners": ["xtrm", "specialists", "core"],
+      "evidence": ["xtrm PR 13 and subsequent service-knowledge progression"],
+      "residuals": ["verify exact current package version", "verify deployment", "reconcile Core retirement/migration", "reconcile Specialists roles and OKS/DevOps documentation"]
+    },
+    {
+      "id": "P-NATIVE-PI",
+      "name": "Native Pi tools and extensible workflows",
+      "status": "DESIGN_ONLY",
+      "owners": ["core", "specialists", "xtmux"],
+      "origin": ["xtrm-native-pi-tools-pi-extensible-workflows-integration-2026-07-30.md", "workspace research"],
+      "constraints": ["CLI authority -> native Pi tools -> durable xtmux/Specialists state", "no second workflow engine", "no fork by default"],
+      "residuals": ["locate/reconcile current code", "determine whether any prototype landed", "position after deterministic interface work"]
+    },
+    {
+      "id": "P-PI-RUNTIME",
+      "name": "Pi runtime and bridge modernization",
+      "status": "NEEDS_DECISION",
+      "owners": ["core", "specialists"],
+      "origin": ["Pi RPC vs JSON discussion", "packages/agent vs packages/coding-agent evaluation", "runtime bridge modernization discussions"],
+      "residuals": ["current upstream/API audit", "current local runtime audit", "decision record before migration"]
+    },
+    {
+      "id": "P-OBS",
+      "name": "Observability, forensics and evaluation",
+      "status": "PARTIAL",
+      "owners": ["core", "specialists", "xtmux", "xtrm"],
+      "evidence": ["xtmux event journal", "Specialists observability", "EVAL-01", "topology projections", "xtrm.forensic.v1 design family"],
+      "residuals": ["canonical event taxonomy crosswalk", "evaluation/promotion evidence", "future forensic twins", "Console consumption without duplicate authority"]
+    },
+    {
+      "id": "P-DEVOPS",
+      "name": "DevOps, service skills and operational reliability",
+      "status": "PARTIAL",
+      "owners": ["core", "xtrm"],
+      "evidence": ["deploy-monitor", "capacity-reclaim", "worktree reap", "release smoke and service-knowledge work"],
+      "residuals": ["resolve PR 545", "reconcile OKS/service-skills documentation", "verify deployed host freshness and scheduled maintenance"]
+    },
+    {
+      "id": "P-REL",
+      "name": "Release, packaging and CI",
+      "status": "PARTIAL",
+      "owners": ["core", "specialists", "xtmux"],
+      "known_released_trio": {"core": "0.11.4", "specialists": "3.21.2", "xtmux": "0.2.3"},
+      "residuals": ["KAN-127 K5/K6", "ordered compatibility releases", "clean-install released-trio smoke", "deployment freshness evidence"]
+    },
+    {
+      "id": "P-MONO",
+      "name": "Monorepo and naming convergence",
+      "status": "PLANNED",
+      "owners": ["xtrm", "core", "specialists", "xtmux"],
+      "constraints": ["XTRM is whole stack", "Core is component", "xtrm-tools is transitional npm package name"],
+      "evidence": ["open README PRs core 533 / specialists 243 / xtmux 90"],
+      "residuals": ["locate current migration tracker", "refresh/merge/close stale README PRs", "sequence actual repository/package consolidation"]
+    },
+    {
+      "id": "P-MCP",
+      "name": "MCP evolution and external integration",
+      "status": "DESIGN_ONLY",
+      "owners": ["xtrm"],
+      "origin": ["MCP 2.0 research and tool-surface discussions"],
+      "constraints": ["do not import Mercury-specific MCP redesign into XTRM without explicit dependency"],
+      "residuals": ["identify actual XTRM-facing MCP seams", "link only bounded dependencies"]
+    },
+    {
+      "id": "P-PROV",
+      "name": "Agent identity and provenance",
+      "status": "UNVERIFIED",
+      "owners": ["xtrm", "core", "xtmux"],
+      "origin": ["workspace discussions about web/local/Jira/GitHub provenance"],
+      "residuals": ["crosswalk runtime identity with external actor identity", "account/comment provenance strategy", "audit-schema linkage"],
+      "constraints": ["do not create a parallel execution identity authority"]
+    },
+    {
+      "id": "P-DOC",
+      "name": "Documentation freshness and authority",
+      "status": "PARTIAL",
+      "owners": ["xtrm", "core", "specialists", "xtmux"],
+      "evidence": ["xtrm PR 31", "specialists PR 244", "open PRs 33/533/243/90"],
+      "residuals": ["supersede stale current-state claims", "resolve stale README PRs", "label normative vs research vs snapshot docs"]
+    },
+    {
+      "id": "P-ARCHON",
+      "name": "Archon and external orchestration research",
+      "status": "DESIGN_ONLY",
+      "owners": ["xtrm"],
+      "constraints": ["reference/inspiration only", "not adopted as replacement for Core/Specialists/xtmux/Beads/main orchestrator/Substrate"],
+      "residuals": ["retain useful workflow/UI comparisons", "close or archive obsolete adoption proposals"]
+    }
+  ],
+  "gates": [
+    {"id": "GATE-IFACE", "state": "PASSED_EARLIER", "meaning": "stable deterministic interfaces may be consumed"},
+    {"id": "K5", "state": "PENDING", "meaning": "explicit Codex parity promotion after complete K4 evidence"},
+    {"id": "K6", "state": "PENDING", "meaning": "ordered compatibility release wave and released-trio verification"},
+    {"id": "GATE-COMPOSE", "state": "PENDING", "meaning": "manual deterministic chain composition only"},
+    {"id": "GATE-DO0", "state": "PENDING", "meaning": "reducer/scheduler foundation and coordinator shadow"},
+    {"id": "GATE-AUTH", "state": "PENDING", "meaning": "measured promotion of selected automatic authority"}
+  ],
+  "residual_graph": [
+    ["xtmux#96", "KAN127_K4_cross_repo_observation"],
+    ["KAN127_K4_cross_repo_observation", "K5"],
+    ["K5", "K6"],
+    ["K6", "released_trio_smoke"],
+    ["released_trio_smoke", "C1_chain_compiler"],
+    ["C1_chain_compiler", "GATE-COMPOSE"],
+    ["GATE-COMPOSE", "D1_reducer_scheduler"],
+    ["D1_reducer_scheduler", "GATE-DO0"],
+    ["GATE-DO0", "measured_eval_and_coordinator_shadow"],
+    ["measured_eval_and_coordinator_shadow", "GATE-AUTH"]
+  ],
+  "active_side_work": [
+    {"id": "core#545", "status": "OPEN_IMPLEMENTATION", "relation": "deployment truth guard"},
+    {"id": "xtrm#33", "status": "OPEN_IMPLEMENTATION", "relation": "focused chain/Substrate/Channels/pulse reconciliation"},
+    {"id": "core#533", "status": "OPEN_IMPLEMENTATION", "relation": "stale README architecture draft"},
+    {"id": "specialists#243", "status": "OPEN_IMPLEMENTATION", "relation": "stale README architecture draft"},
+    {"id": "xtmux#90", "status": "OPEN_IMPLEMENTATION", "relation": "stale README architecture draft"}
+  ],
+  "mandatory_next_audits": [
+    "complete workspace conversation and Markdown artifact inventory",
+    "live Jira/Confluence freshness and missing-tracking reconciliation",
+    "repository-local Beads graphs and active assignments",
+    "local unpublished worktrees/branches/artifacts",
+    "Console/UI implementation state",
+    "native Pi workflow experiment state",
+    "Pi runtime modernization state",
+    "monorepo migration tracker/state",
+    "memory implementation state beyond r6g research",
+    "exact service-knowledge package release/deployment state",
+    "historical Specialists quarantine defects against current master"
+  ],
+  "completion_criteria": [
+    "every discovered programme item has a valid disposition and owner",
+    "every accepted residual implementation item has durable tracking and acceptance evidence",
+    "no UNVERIFIED, MISSING_TRACKING or unresolved conflict remains on an active programme path",
+    "required delivered capabilities have release and deployment evidence, not only merged source",
+    "bridge authorities and Substrate/Channels target semantics are reconciled without duplicate lifecycle owners",
+    "automatic authority is promoted only through explicit evidence gates",
+    "obsolete designs and drafts have explicit supersession/retirement relations",
+    "Jira/Confluence/Beads/GitHub projections are reconciled at the correct authority level",
+    "released runtime set passes clean-install/integration smoke",
+    "independent review can reconstruct the residual graph and reach the same dispositions"
+  ]
+}
