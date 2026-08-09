@@ -1,7 +1,7 @@
 # XTRM Current Execution Plan
 
 **Status:** canonical current execution plan  
-**Last reconciled:** 2026-08-02, Europe/Rome  
+**Last reconciled:** 2026-08-09, Europe/Rome  
 **Programme:** XTRM  
 **Repositories:** `xtrm-dev/core`, `xtrm-dev/specialists`, `Jaggerxtrm/xtmux`, `xtrm-dev/xtrm`  
 **Jira projection:** project `KAN`  
@@ -799,3 +799,34 @@ approved root contract
 ```
 
 Everything else feeds, evaluates, adapts or presents this seam.
+
+## 15. 2026-08-09 v1 termination amendment
+
+This section is the current sequencing amendment derived from the accepted runtime reconciliation. It supplements the existing workstream descriptions without creating a competing plan.
+
+The immediate critical path is:
+
+```
+RUN 0 document reconciliation
+→ Pi v0.84.1 compatibility closure
+→ KAN-127 K5 parity promotion
+→ K6 published compatibility releases
+→ clean-install released-trio smoke
+→ specialists.execution.v1 runtime semantics
+→ ChainTemplate compiler and persisted ResolvedChain
+→ manual composition gate
+→ quant/math vertical fixture
+→ evidence reducer, scheduler intents and runtime delivery
+→ Eval Core, deterministic context and memory v1
+→ Channels v1 bridge, pulse and attention compatibility
+→ measured authority gate
+→ final released-artifact E2E and deployment freshness
+```
+
+RUN 0 is not complete from documentation alone. The single completion ledger at docs/shared/xtrm-v1-completion-ledger.md is the disposition index. Repository-local Beads remain executable truth, and no residual may be implemented by inventing a second cross-repository work graph.
+
+The target Substrate runtime and migration are explicitly deferred by accepted gate for this campaign. Substrate design patches, including separate work-causality and execution-lineage projections, remain mandatory; the bridge must stay compatible with the target semantics.
+
+Each implementation packet must carry a stable ID, owning repository, authority reference, current baseline, exact missing behavior, dependencies, scope/non-goals, acceptance and negative tests, E2E checkpoint, rollback/compatibility rule and release consequence. Completion claims must separately identify design, source, release, deployment/operator and promotion state.
+
+The plan now requires a cross-document contradiction review across the PRD, roadmap, execution protocol, chain canon, Channels, memory, Substrate compatibility, command outcomes, adapters, JSON graph and completion ledger before GATE-R0 can pass.
