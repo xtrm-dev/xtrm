@@ -1,7 +1,7 @@
 {
   "schema_version": "xtrm.current-execution-plan.v1",
-  "last_reconciled": "2026-08-02T16:14:00+02:00",
-  "status": "canonical-current-plan",
+  "last_reconciled": "2026-08-09T00:00:00+02:00",
+  "status": "canonical-current-plan-amended-for-v1-termination",
   "authority": {
     "requirements": "xtrm-dev/specialists/docs/design/roadmap/enhanced-prd.md",
     "activation_protocol": "xtrm-dev/specialists/docs/design/execution-protocol-design/specialist-execution-protocol.md",
@@ -38,33 +38,83 @@
     }
   },
   "critical_path": [
-    "R0",
-    "I1",
-    "E1",
-    "C1",
+    "RUN0-document-reconciliation",
+    "PI-v0.84.1",
+    "KAN127-K5",
+    "KAN127-K6",
+    "released-trio-smoke",
+    "E1-specialists.execution.v1",
+    "C1-compiler-ResolvedChain",
     "GATE-COMPOSE",
-    "D1",
-    "GATE-DO0",
-    "V1",
+    "quant-math-fixture",
+    "D1-reducer-scheduler-delivery",
+    "Eval-Core-context-memory-v1",
+    "Channels-v1-bridge",
     "GATE-AUTH",
-    "A1",
-    "P1"
+    "FINAL-published-artifact-E2E",
+    "deployment-freshness"
   ],
   "workstreams": [
     {
       "id": "R0",
       "title": "Release and authority reconciliation",
       "priority": "P0",
-      "owners": ["xtrm-dev/xtrm"],
-      "jira": ["KAN-84", "KAN-85", "KAN-110", "KAN-115", "KAN-116", "KAN-117", "KAN-118", "KAN-119", "KAN-120", "KAN-121", "KAN-122", "KAN-123", "KAN-124", "KAN-125"],
+      "owners": [
+        "xtrm-dev/xtrm"
+      ],
+      "jira": [
+        "KAN-84",
+        "KAN-85",
+        "KAN-110",
+        "KAN-115",
+        "KAN-116",
+        "KAN-117",
+        "KAN-118",
+        "KAN-119",
+        "KAN-120",
+        "KAN-121",
+        "KAN-122",
+        "KAN-123",
+        "KAN-124",
+        "KAN-125"
+      ],
       "dependencies": [],
       "parallelizable": false,
       "children": [
-        {"id": "R0.1", "title": "Merge current plan graph and coordinator bootstrap", "dependencies": []},
-        {"id": "R0.2", "title": "Refresh PRD release and capability snapshot", "dependencies": ["R0.1"]},
-        {"id": "R0.3", "title": "Reconcile Jira residual scopes and statuses", "dependencies": ["R0.1"]},
-        {"id": "R0.4", "title": "Publish Jira Beads GitHub traceability map", "dependencies": ["R0.2", "R0.3"]},
-        {"id": "R0.5", "title": "Mark historical and superseded plans", "dependencies": ["R0.2"]}
+        {
+          "id": "R0.1",
+          "title": "Merge current plan graph and coordinator bootstrap",
+          "dependencies": []
+        },
+        {
+          "id": "R0.2",
+          "title": "Refresh PRD release and capability snapshot",
+          "dependencies": [
+            "R0.1"
+          ]
+        },
+        {
+          "id": "R0.3",
+          "title": "Reconcile Jira residual scopes and statuses",
+          "dependencies": [
+            "R0.1"
+          ]
+        },
+        {
+          "id": "R0.4",
+          "title": "Publish Jira Beads GitHub traceability map",
+          "dependencies": [
+            "R0.2",
+            "R0.3"
+          ]
+        },
+        {
+          "id": "R0.5",
+          "title": "Mark historical and superseded plans",
+          "dependencies": [
+            "R0.2"
+          ]
+        }
       ],
       "exit_criteria": [
         "release ledger is authoritative",
@@ -76,35 +126,63 @@
       "id": "I1",
       "title": "Deterministic public command outcomes",
       "priority": "P0",
-      "owners": ["Jaggerxtrm/xtmux", "xtrm-dev/specialists", "xtrm-dev/core"],
-      "jira": ["NEW:XTRM deterministic interfaces and harness integration"],
-      "dependencies": ["R0.1"],
+      "owners": [
+        "Jaggerxtrm/xtmux",
+        "xtrm-dev/specialists",
+        "xtrm-dev/core"
+      ],
+      "jira": [
+        "NEW:XTRM deterministic interfaces and harness integration"
+      ],
+      "dependencies": [
+        "R0.1"
+      ],
       "parallelizable": true,
       "children": [
         {
           "id": "I1.1",
           "title": "Command inventory and compatibility ADR",
-          "owners": ["Jaggerxtrm/xtmux", "xtrm-dev/specialists", "xtrm-dev/core"],
-          "dependencies": ["R0.1"],
+          "owners": [
+            "Jaggerxtrm/xtmux",
+            "xtrm-dev/specialists",
+            "xtrm-dev/core"
+          ],
+          "dependencies": [
+            "R0.1"
+          ],
           "mode": "evidence-only"
         },
         {
           "id": "I1.2",
           "title": "xtmux command-outcome vertical slice",
-          "owners": ["Jaggerxtrm/xtmux"],
-          "dependencies": ["I1.1"]
+          "owners": [
+            "Jaggerxtrm/xtmux"
+          ],
+          "dependencies": [
+            "I1.1"
+          ]
         },
         {
           "id": "I1.3",
           "title": "Specialists command-outcome adoption",
-          "owners": ["xtrm-dev/specialists"],
-          "dependencies": ["I1.1", "I1.2"]
+          "owners": [
+            "xtrm-dev/specialists"
+          ],
+          "dependencies": [
+            "I1.1",
+            "I1.2"
+          ]
         },
         {
           "id": "I1.4",
           "title": "Core launcher and handoff outcome adoption",
-          "owners": ["xtrm-dev/core"],
-          "dependencies": ["I1.1", "I1.2"]
+          "owners": [
+            "xtrm-dev/core"
+          ],
+          "dependencies": [
+            "I1.1",
+            "I1.2"
+          ]
         }
       ],
       "exit_criteria": [
@@ -119,15 +197,49 @@
       "id": "E1",
       "title": "Minimum specialists.execution.v1 shell",
       "priority": "P0",
-      "owners": ["xtrm-dev/specialists"],
-      "jira": ["KAN-115", "KAN-118", "KAN-121", "KAN-124"],
-      "dependencies": ["R0.1"],
+      "owners": [
+        "xtrm-dev/specialists"
+      ],
+      "jira": [
+        "KAN-115",
+        "KAN-118",
+        "KAN-121",
+        "KAN-124"
+      ],
+      "dependencies": [
+        "R0.1"
+      ],
       "parallelizable": true,
       "children": [
-        {"id": "E1.1", "title": "Execution-profile schema", "dependencies": ["R0.1"]},
-        {"id": "E1.2", "title": "PREPARE reducer", "dependencies": ["E1.1"]},
-        {"id": "E1.3", "title": "FINALIZE reducer", "dependencies": ["E1.1"]},
-        {"id": "E1.4", "title": "Terminal actions and idempotency", "dependencies": ["E1.2", "E1.3"]}
+        {
+          "id": "E1.1",
+          "title": "Execution-profile schema",
+          "dependencies": [
+            "R0.1"
+          ]
+        },
+        {
+          "id": "E1.2",
+          "title": "PREPARE reducer",
+          "dependencies": [
+            "E1.1"
+          ]
+        },
+        {
+          "id": "E1.3",
+          "title": "FINALIZE reducer",
+          "dependencies": [
+            "E1.1"
+          ]
+        },
+        {
+          "id": "E1.4",
+          "title": "Terminal actions and idempotency",
+          "dependencies": [
+            "E1.2",
+            "E1.3"
+          ]
+        }
       ],
       "non_goals": [
         "prompt redesign",
@@ -145,16 +257,57 @@
       "id": "C1",
       "title": "Chain compiler and durable spine",
       "priority": "P0",
-      "owners": ["xtrm-dev/specialists"],
-      "jira": ["KAN-84", "KAN-119", "KAN-124"],
-      "dependencies": ["R0.1"],
+      "owners": [
+        "xtrm-dev/specialists"
+      ],
+      "jira": [
+        "KAN-84",
+        "KAN-119",
+        "KAN-124"
+      ],
+      "dependencies": [
+        "R0.1"
+      ],
       "parallelizable": true,
       "children": [
-        {"id": "C1.1", "title": "Package and validate chain-template catalog", "dependencies": ["R0.1"]},
-        {"id": "C1.2", "title": "Pure ResolvedChain compiler", "dependencies": ["C1.1"]},
-        {"id": "C1.3", "title": "Persist draft and approved ResolvedChain", "dependencies": ["C1.2"]},
-        {"id": "C1.4", "title": "Thin Beads materializer", "dependencies": ["C1.3"]},
-        {"id": "C1.5", "title": "sp chain review insert approve show", "dependencies": ["C1.3", "C1.4", "E1.4", "GATE-IFACE"]}
+        {
+          "id": "C1.1",
+          "title": "Package and validate chain-template catalog",
+          "dependencies": [
+            "R0.1"
+          ]
+        },
+        {
+          "id": "C1.2",
+          "title": "Pure ResolvedChain compiler",
+          "dependencies": [
+            "C1.1"
+          ]
+        },
+        {
+          "id": "C1.3",
+          "title": "Persist draft and approved ResolvedChain",
+          "dependencies": [
+            "C1.2"
+          ]
+        },
+        {
+          "id": "C1.4",
+          "title": "Thin Beads materializer",
+          "dependencies": [
+            "C1.3"
+          ]
+        },
+        {
+          "id": "C1.5",
+          "title": "sp chain review insert approve show",
+          "dependencies": [
+            "C1.3",
+            "C1.4",
+            "E1.4",
+            "GATE-IFACE"
+          ]
+        }
       ],
       "exit_criteria": [
         "one canonical compiler",
@@ -167,15 +320,47 @@
       "id": "D1",
       "title": "Evidence reducer and coordinator shadow mode",
       "priority": "P0",
-      "owners": ["xtrm-dev/specialists"],
-      "jira": ["KAN-119", "KAN-120", "KAN-124"],
-      "dependencies": ["GATE-COMPOSE"],
+      "owners": [
+        "xtrm-dev/specialists"
+      ],
+      "jira": [
+        "KAN-119",
+        "KAN-120",
+        "KAN-124"
+      ],
+      "dependencies": [
+        "GATE-COMPOSE"
+      ],
       "parallelizable": false,
       "children": [
-        {"id": "D1.1", "title": "Authoritative evidence projection", "dependencies": ["GATE-COMPOSE"]},
-        {"id": "D1.2", "title": "Pure chain reducer", "dependencies": ["D1.1"]},
-        {"id": "D1.3", "title": "Exact idempotent scheduler intents", "dependencies": ["D1.2"]},
-        {"id": "D1.4", "title": "Coordinator consumes reducer in shadow mode", "dependencies": ["GATE-DO0"]}
+        {
+          "id": "D1.1",
+          "title": "Authoritative evidence projection",
+          "dependencies": [
+            "GATE-COMPOSE"
+          ]
+        },
+        {
+          "id": "D1.2",
+          "title": "Pure chain reducer",
+          "dependencies": [
+            "D1.1"
+          ]
+        },
+        {
+          "id": "D1.3",
+          "title": "Exact idempotent scheduler intents",
+          "dependencies": [
+            "D1.2"
+          ]
+        },
+        {
+          "id": "D1.4",
+          "title": "Coordinator consumes reducer in shadow mode",
+          "dependencies": [
+            "GATE-DO0"
+          ]
+        }
       ],
       "exit_criteria": [
         "next transition derives only from persisted evidence",
@@ -187,47 +372,170 @@
       "id": "V1",
       "title": "Evaluation deterministic context prompts and memory",
       "priority": "P1",
-      "owners": ["xtrm-dev/specialists", "Jaggerxtrm/console"],
-      "jira": ["KAN-117", "KAN-121", "KAN-122", "KAN-123", "KAN-124"],
-      "dependencies": ["D1.2"],
+      "owners": [
+        "xtrm-dev/specialists",
+        "Jaggerxtrm/console"
+      ],
+      "jira": [
+        "KAN-117",
+        "KAN-121",
+        "KAN-122",
+        "KAN-123",
+        "KAN-124"
+      ],
+      "dependencies": [
+        "D1.2"
+      ],
       "parallelizable": true,
       "children": [
-        {"id": "V1.1", "title": "Telemetry integrity closure", "dependencies": ["R0.1"]},
-        {"id": "V1.2", "title": "Eval Core", "dependencies": ["V1.1", "D1.2"]},
-        {"id": "V1.3", "title": "Deterministic chain context and handoffs", "dependencies": ["D1.3"]},
-        {"id": "V1.4", "title": "Prompt and output-contract experiments", "dependencies": ["V1.2", "V1.3"]},
-        {"id": "V1.5", "title": "Three-lens memory", "dependencies": ["V1.2", "V1.3"]}
+        {
+          "id": "V1.1",
+          "title": "Telemetry integrity closure",
+          "dependencies": [
+            "R0.1"
+          ]
+        },
+        {
+          "id": "V1.2",
+          "title": "Eval Core",
+          "dependencies": [
+            "V1.1",
+            "D1.2"
+          ]
+        },
+        {
+          "id": "V1.3",
+          "title": "Deterministic chain context and handoffs",
+          "dependencies": [
+            "D1.3"
+          ]
+        },
+        {
+          "id": "V1.4",
+          "title": "Prompt and output-contract experiments",
+          "dependencies": [
+            "V1.2",
+            "V1.3"
+          ]
+        },
+        {
+          "id": "V1.5",
+          "title": "Three-lens memory",
+          "dependencies": [
+            "V1.2",
+            "V1.3"
+          ]
+        }
       ]
     },
     {
       "id": "A1",
       "title": "Harness-native integrations",
       "priority": "P1",
-      "owners": ["xtrm-dev/core", "xtrm-dev/specialists", "Jaggerxtrm/xtmux"],
-      "jira": ["NEW:XTRM deterministic interfaces and harness integration", "NEW:XT Codex runtime integration"],
-      "dependencies": ["GATE-IFACE"],
+      "owners": [
+        "xtrm-dev/core",
+        "xtrm-dev/specialists",
+        "Jaggerxtrm/xtmux"
+      ],
+      "jira": [
+        "NEW:XTRM deterministic interfaces and harness integration",
+        "NEW:XT Codex runtime integration"
+      ],
+      "dependencies": [
+        "GATE-IFACE"
+      ],
       "parallelizable": true,
       "children": [
-        {"id": "A1.1", "title": "Claude MCP and Pi capability verification", "dependencies": ["R0.1"]},
-        {"id": "A1.2", "title": "Thin XTRM native tools", "dependencies": ["A1.1", "GATE-IFACE"]},
-        {"id": "A1.3", "title": "Pi Runtime Unification residual", "dependencies": ["A1.1"]},
-        {"id": "A1.4", "title": "pi-extensible-workflows integration", "dependencies": ["A1.2", "A1.3"]},
-        {"id": "A1.5", "title": "XT Codex production parity", "dependencies": ["A1.1", "GATE-IFACE"]}
+        {
+          "id": "A1.1",
+          "title": "Claude MCP and Pi capability verification",
+          "dependencies": [
+            "R0.1"
+          ]
+        },
+        {
+          "id": "A1.2",
+          "title": "Thin XTRM native tools",
+          "dependencies": [
+            "A1.1",
+            "GATE-IFACE"
+          ]
+        },
+        {
+          "id": "A1.3",
+          "title": "Pi Runtime Unification residual",
+          "dependencies": [
+            "A1.1"
+          ]
+        },
+        {
+          "id": "A1.4",
+          "title": "pi-extensible-workflows integration",
+          "dependencies": [
+            "A1.2",
+            "A1.3"
+          ]
+        },
+        {
+          "id": "A1.5",
+          "title": "XT Codex production parity",
+          "dependencies": [
+            "A1.1",
+            "GATE-IFACE"
+          ]
+        }
       ]
     },
     {
       "id": "P1",
       "title": "Operator and product surfaces",
       "priority": "P2",
-      "owners": ["Jaggerxtrm/console", "Jaggerxtrm/xtmux", "xtrm-dev/core"],
-      "jira": ["KAN-123", "NEW:XTRM Agent Workspace", "NEW:XTRM Operational Knowledge System"],
-      "dependencies": ["V1.2", "GATE-IFACE"],
+      "owners": [
+        "Jaggerxtrm/console",
+        "Jaggerxtrm/xtmux",
+        "xtrm-dev/core"
+      ],
+      "jira": [
+        "KAN-123",
+        "NEW:XTRM Agent Workspace",
+        "NEW:XTRM Operational Knowledge System"
+      ],
+      "dependencies": [
+        "V1.2",
+        "GATE-IFACE"
+      ],
       "parallelizable": true,
       "children": [
-        {"id": "P1.1", "title": "Console eval and promotion views", "dependencies": ["V1.2"]},
-        {"id": "P1.2", "title": "Agent Workspace read-only shell", "dependencies": ["D1.3", "GATE-IFACE"]},
-        {"id": "P1.3", "title": "Controlled Agent Workspace actions", "dependencies": ["P1.2", "GATE-IFACE"]},
-        {"id": "P1.4", "title": "Operational Knowledge System read-only layer", "dependencies": ["V1.2"]}
+        {
+          "id": "P1.1",
+          "title": "Console eval and promotion views",
+          "dependencies": [
+            "V1.2"
+          ]
+        },
+        {
+          "id": "P1.2",
+          "title": "Agent Workspace read-only shell",
+          "dependencies": [
+            "D1.3",
+            "GATE-IFACE"
+          ]
+        },
+        {
+          "id": "P1.3",
+          "title": "Controlled Agent Workspace actions",
+          "dependencies": [
+            "P1.2",
+            "GATE-IFACE"
+          ]
+        },
+        {
+          "id": "P1.4",
+          "title": "Operational Knowledge System read-only layer",
+          "dependencies": [
+            "V1.2"
+          ]
+        }
       ]
     }
   ],
@@ -235,7 +543,11 @@
     {
       "id": "GATE-IFACE",
       "title": "Deterministic public interface promotion",
-      "dependencies": ["I1.2", "I1.3", "I1.4"],
+      "dependencies": [
+        "I1.2",
+        "I1.3",
+        "I1.4"
+      ],
       "authorizes": [
         "thin adapters consume command outcomes",
         "scheduler intents reference stable public commands"
@@ -254,7 +566,11 @@
     {
       "id": "GATE-COMPOSE",
       "title": "Manual deterministic composition promotion",
-      "dependencies": ["GATE-IFACE", "E1.4", "C1.5"],
+      "dependencies": [
+        "GATE-IFACE",
+        "E1.4",
+        "C1.5"
+      ],
       "authorizes": [
         "manual sp chain review insert approve show",
         "observe-only execution of approved shapes"
@@ -274,7 +590,14 @@
     {
       "id": "GATE-DO0",
       "title": "Deterministic orchestration foundation",
-      "dependencies": ["R0.2", "R0.3", "R0.4", "R0.5", "GATE-COMPOSE", "D1.3"],
+      "dependencies": [
+        "R0.2",
+        "R0.3",
+        "R0.4",
+        "R0.5",
+        "GATE-COMPOSE",
+        "D1.3"
+      ],
       "authorizes": [
         "deterministic scheduler intents",
         "coordinator shadow mode"
@@ -299,7 +622,10 @@
     {
       "id": "GATE-AUTH",
       "title": "Coordinator and policy authority promotion",
-      "dependencies": ["D1.4", "V1.2"],
+      "dependencies": [
+        "D1.4",
+        "V1.2"
+      ],
       "authorizes": [
         "selected observe policies move to warn or enforce",
         "explicitly approved automatic advancement paths"
@@ -316,21 +642,29 @@
     {
       "id": "S-TS7",
       "title": "TypeScript 7 migration",
-      "jira": ["KAN-125"],
+      "jira": [
+        "KAN-125"
+      ],
       "critical_path": false
     },
     {
       "id": "S-CODE-INTEL",
       "title": "Code-intelligence residual after Serena pooling",
-      "jira": ["KAN-110"],
+      "jira": [
+        "KAN-110"
+      ],
       "critical_path": false
     },
     {
       "id": "S-ARCHON",
       "title": "Read-only Archon comparison",
-      "jira": ["NEW:bounded experiment task"],
+      "jira": [
+        "NEW:bounded experiment task"
+      ],
       "critical_path": false,
-      "dependencies": ["D1.2"]
+      "dependencies": [
+        "D1.2"
+      ]
     }
   ],
   "forbidden_early_work": [
@@ -343,5 +677,37 @@
     "second xt spec implementation",
     "Archon as XTRM authority",
     "monorepo migration as prerequisite"
-  ]
+  ],
+  "amendment_2026_08_09": {
+    "authority": "docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md",
+    "completion_ledger": "docs/shared/xtrm-v1-completion-ledger.md",
+    "gate_state": "GATE-R0=DOCUMENTS_PATCHED_PENDING_REVIEW; all later gates pending",
+    "explicit_exclusion": "Substrate runtime and migration deferred by accepted gate; design compatibility patches remain mandatory",
+    "absorbed_inputs": [
+      "xtrm#33",
+      "xtrm#34",
+      "mercuryintelligence/program#75"
+    ],
+    "packet_requirements": [
+      "stable_work_id",
+      "owning_repository",
+      "authority_ref",
+      "baseline",
+      "missing_behavior",
+      "dependencies",
+      "scope_and_non_goals",
+      "acceptance_tests",
+      "negative_proofs",
+      "e2e_checkpoint",
+      "rollback_compatibility",
+      "release_consequence"
+    ],
+    "truth_dimensions": [
+      "design",
+      "source",
+      "release",
+      "deployment_operator",
+      "promotion"
+    ]
+  }
 }
