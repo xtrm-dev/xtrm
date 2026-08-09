@@ -1,0 +1,62 @@
+{
+  "schema_version": "xtrm.v1.final-completion-ledger.v1",
+  "reconciled": "2026-08-09T00:00:00+02:00",
+  "authority": {
+    "execution_truth": "repository-local Beads",
+    "source_truth": "default-branch Git",
+    "release_truth": "published artifacts",
+    "programme_ledger": "docs/shared/xtrm-v1-completion-ledger.md"
+  },
+  "single_master_ledger": "docs/shared/xtrm-v1-completion-ledger.md",
+  "absorbed_inputs": [
+    "xtrm#33",
+    "xtrm#34",
+    "mercuryintelligence/program#75"
+  ],
+  "explicit_exclusion": {
+    "substrate_runtime_and_migration": "DEFERRED_BY_EXPLICIT_GATE"
+  },
+  "gates": {
+    "GATE_R0": "DOCUMENTS_PATCHED_PENDING_REVIEW",
+    "GATE_PI84": "PENDING",
+    "K5": "PENDING",
+    "K6": "PENDING",
+    "GATE_COMPOSE": "PENDING",
+    "GATE_DO0": "PENDING",
+    "GATE_AUTH": "PENDING",
+    "FINAL": "PENDING"
+  },
+  "packets": [
+    "SP-PRD-01",
+    "SP-RMAP-01",
+    "SP-EXEC-01",
+    "SP-CHAIN-01",
+    "SP-EVAL-01",
+    "SP-PI-01",
+    "CORE-MEM-01",
+    "XTRM-CHAN-01",
+    "XTRM-CHAN-02",
+    "XTRM-SUB-01",
+    "XTRM-OUT-01",
+    "XTRM-ADAPT-01",
+    "XTRM-PI-01",
+    "XTRM-PLAN-01",
+    "XTRM-UI-01",
+    "XTRM-REG-01",
+    "XTRM-DRAFT-01",
+    "XTRM-DRAFT-02"
+  ],
+  "implementation_residuals": [
+    "PI-v0.84.1",
+    "KAN-127-K5-K6",
+    "specialists.execution.v1",
+    "ChainTemplate-ResolvedChain",
+    "D1-reducer-scheduler-delivery",
+    "quant-fixture",
+    "Eval-Core-context-prompts",
+    "Memory-WP-M01-M08",
+    "Channels-v1-bridge",
+    "pulse-attention-projections"
+  ],
+  "next_action": "map residuals onto existing repository-local Beads after local evidence delta; do not create a cross-repository mega-epic"
+}
