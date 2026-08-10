@@ -1,6 +1,6 @@
 # board-audit — install & operational manual
 
-`board-audit` exposes a simple user-facing handoff/reconcile workflow over the existing deterministic Beads export and guarded round-trip primitives.
+`board-audit` exposes a simple user-facing handoff/reconcile workflow over deterministic Beads export and guarded round-trip primitives.
 
 The normal workflow is intentionally three commands:
 
@@ -25,20 +25,27 @@ board-audit handoff xtrm-123
 
 ```text
 fetch origin
-→ resolve/create transport branch board-audit/xtrm-123
+→ resolve transport branch board-audit/xtrm-123
+→ capture its exact remote SHA when it already exists
+→ create a local staging branch from current origin/HEAD (normally origin/main)
+→ restore only prior .xtrm/board-audit/** artifacts when this is a repeat handoff
 → create isolated worktree with bd worktree create
 → board-audit --export --bead xtrm-123
 → board-audit-roundtrip prepare <package>
 → update .xtrm/board-audit/index.json
 → commit generated handoff artifacts
-→ push board-audit/xtrm-123
+→ normal push for first handoff, exact --force-with-lease rewrite for repeat handoff
 → bd worktree remove
 → delete the local staging branch
 ```
 
-The Beads-managed worktree shares the same authoritative Beads database as the main repository through Git common-directory discovery. No copied database or redirect file is created.
+The Beads-managed worktree shares the same authoritative Beads/Dolt database as the main repository through Git common-directory discovery. No copied database or redirect file is created.
 
-The worktree itself is ephemeral and lives outside the repository under the user's cache directory. The durable interchange artifacts live on the transport branch under `.xtrm/board-audit/`.
+The worktree itself is ephemeral and lives outside the repository under the user's cache directory. The durable interchange artifacts live on the remote transport branch under `.xtrm/board-audit/`.
+
+The transport branch is an artifact transport surface, not a long-lived code-development branch. Repeat handoffs are rebuilt from the current remote default branch and carry forward only `.xtrm/board-audit/**`. This prevents stale application/code ancestry from accumulating on old transport branches.
+
+When a repeat handoff rewrites `board-audit/<id>`, the push uses an exact lease tied to the remote SHA observed after fetch. If another actor modifies the transport branch after that fetch, the push fails rather than overwriting the concurrent edit.
 
 A successful command ends with output similar to:
 
@@ -52,11 +59,17 @@ A successful command ends with output similar to:
 Tell ChatGPT: "leggi export xtrm-123"
 ```
 
-`handoff` may commit and push **only the transport-branch interchange artifacts**. It does not commit or switch the user's current working branch.
+`handoff` may commit and push only transport-branch interchange artifacts. It does not commit or switch the user's current working branch and does not mutate Beads.
 
 ### 2. Edit remotely
 
-A GitHub-connected agent reads the transport branch and edits only:
+A GitHub-connected agent first resolves the current artifact through:
+
+```text
+.xtrm/board-audit/index.json
+```
+
+and edits only:
 
 ```text
 desired_issues
@@ -71,6 +84,8 @@ issues.<id>.source
 
 `new_comments` contains text only and compiles to native `bd comments add`, so author/timestamp provenance remains Beads-owned.
 
+Normal consumers should not search timestamped export directories manually. `index.json` is the deterministic lookup surface.
+
 ### 3. Reconcile without mutation
 
 ```bash
@@ -80,12 +95,23 @@ board-audit reconcile xtrm-123
 This fetches the latest `board-audit/xtrm-123` transport branch into another isolated Beads-managed worktree and runs:
 
 ```text
-validate
-→ fresh three-way diff (base/current/desired)
+validate immutable source/edit contract
+→ fresh three-way reconciliation (base/current/desired)
+→ print exact issue/dependency/comment delta
 → guarded apply dry-run
 ```
 
 No Beads mutation occurs. The caller stays on the same branch.
+
+The three-way inputs are:
+
+```text
+base     = immutable issues.<id>.source from the exported package
+current  = fresh local bd export --all from authoritative Beads/Dolt
+desired  = edited desired_issues/new_comments from the transport artifact
+```
+
+Disjoint concurrent changes are preserved. Conflicting edits to the same ordinary field fail closed.
 
 ### 4. Apply explicitly
 
@@ -95,7 +121,24 @@ After reviewing the reconcile output:
 board-audit reconcile xtrm-123 --execute
 ```
 
-This repeats validation/reconciliation against fresh local Beads state, then runs the guarded apply and post-apply verification. Successful execution marks the transport index entry `applied` and pushes that transport metadata.
+This repeats validation/reconciliation against fresh local Beads state, then runs the guarded apply and post-apply verification.
+
+Executed apply performs:
+
+```text
+fresh export
+→ validate/reconcile again
+→ bd import --dry-run --json for issue rows
+→ stop unless --execute
+→ capture dependency-cycle baseline
+→ real issue upsert
+→ native dependency removals/rewires and comment additions
+→ capture cycles again and reject newly introduced cycles
+→ fresh export
+→ verify intended delta
+→ mark transport index state applied
+→ push applied transport metadata
+```
 
 `--execute` is the only high-level path that mutates Beads.
 
@@ -109,13 +152,22 @@ The stable lookup surface is:
 
 Schema: `xtrm.board-audit.index.v1`.
 
-Each bead/root maps to its current transport branch, export directory, manifest, immutable package, editable package, base digest, selected-record count and handoff state. This removes timestamp/glob discovery from the normal UX and gives GitHub-connected agents a deterministic pointer to the current artifact.
+Each bead/root maps to its current transport branch, export directory, manifest, immutable package, editable package, base digest, selected-record count and handoff state.
+
+Typical states are:
+
+```text
+prepared  handoff exists and may be edited/reconciled
+applied   desired state was executed and post-apply verification succeeded
+```
+
+On successful execute the index also records `applied_at`.
 
 Handoffs made before the index existed remain readable: `reconcile` falls back to the newest matching `.editable.json` on the transport branch.
 
 ## Safety properties
 
-Beads remains authoritative. Git is the transport/provenance plane for snapshots and desired-state proposals, not a replacement database.
+Beads/Dolt remains authoritative. Git is the transport/provenance plane for snapshots and desired-state proposals, not a replacement database.
 
 The high-level flow preserves the round-trip safety contract:
 
@@ -127,12 +179,37 @@ The high-level flow preserves the round-trip safety contract:
 - overlapping same-field changes fail closed;
 - import runs dry-run first;
 - `--allow-stale` is never generated;
+- exact force-with-lease protects repeat transport-branch publication;
 - dependency-cycle deltas are checked on executed apply;
-- executed apply finishes with fresh export and intent verification.
+- executed apply finishes with fresh export and intent verification;
+- failed handoff/reconcile retains its worktree/staging branch for recovery rather than deleting evidence.
 
 Exit codes inherited from the round-trip layer are: `0` success, `2` invalid/unsupported/command failure, `3` reconciliation conflict, `4` post-apply verification/new-cycle failure.
 
-If handoff/reconcile fails after creating its isolated worktree, the tool deliberately retains that worktree and staging branch and prints their locations for recovery rather than deleting potentially useful evidence.
+## Operational validation
+
+The high-level path has been exercised against a real repository-local Beads/Dolt board, not only synthetic fixtures.
+
+The first complete live round-trip used `xtrm-2zd` and covered:
+
+```text
+local Beads/Dolt
+→ board-audit handoff
+→ GitHub transport branch + index
+→ remote desired-state edit
+→ board-audit reconcile
+→ conflict-free three-way diff
+→ dry-run
+→ board-audit reconcile --execute
+→ existing issue updates
+→ new child issue creation
+→ dependency rewiring
+→ native comment append
+→ post-apply verification
+→ index state = applied
+```
+
+This trial also exposed and led to the transport freshness rule above: repeat handoffs are rebuilt from current `origin/HEAD` and preserve only interchange artifacts, protected by an exact force-with-lease.
 
 ## Advanced / low-level primitives
 
@@ -183,12 +260,15 @@ Audit bundles live under `.xtrm/board-audit/audits/`.
 ## Files
 
 ```text
-packages/board-audit/board-audit              # user-facing dispatcher
-packages/board-audit/board-audit-flow.py      # handoff/reconcile orchestration
+packages/board-audit/board-audit               # user-facing dispatcher
+packages/board-audit/board-audit-transport.py  # fresh-from-main transport policy + exact lease handling
+packages/board-audit/board-audit-flow.py       # generic handoff/reconcile orchestration
 packages/board-audit/board-audit-core          # low-level exporter/audit implementation
-packages/board-audit/board-audit-roundtrip.py # reconciliation/compiler/apply engine
-packages/board-audit/ROUNDTRIP.md
+packages/board-audit/board-audit-roundtrip.py  # reconciliation/compiler/apply engine
+packages/board-audit/ROUNDTRIP.md               # complete low-level safety contract
 ```
+
+`board-audit-transport.py` owns the user-facing transport policy. It delegates the generic reconciliation machinery to `board-audit-flow.py` while enforcing fresh default-branch ancestry and lease-protected transport rewrites.
 
 ## Installation
 
@@ -203,7 +283,7 @@ ln -sf "$(pwd)/packages/board-audit/board-audit" ~/.local/bin/board-audit
 ln -sf "$(pwd)/packages/board-audit/board-audit-roundtrip.py" ~/.local/bin/board-audit-roundtrip
 ```
 
-`board-audit-flow.py` is invoked through `board-audit` and does not need its own global command.
+The Python orchestration modules are invoked through `board-audit` and do not need their own global commands.
 
 Regression checks:
 
@@ -215,6 +295,6 @@ python3 -m unittest discover -s packages/board-audit/tests -p 'test_*.py' -v
 
 ## GitHub Actions direction
 
-The current CI remains non-mutative. It validates syntax, export semantics, round-trip semantics, Git ignore boundaries and the high-level worktree handoff/reconcile flow.
+The current CI remains non-mutative. It validates syntax, export semantics, round-trip semantics, Git ignore boundaries, high-level worktree handoff/reconcile behavior, and transport freshness/lease policy.
 
 A later protected Actions mutation flow can consume the same transport/index contract, but interactive local `handoff`/`reconcile` does not depend on Actions.
