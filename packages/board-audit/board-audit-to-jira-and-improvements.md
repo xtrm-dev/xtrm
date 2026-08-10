@@ -1,0 +1,2 @@
+Sarebbe utile estendere le funzionalità di board-audit per dei comandi che:
+- data una epic o bead ne permette l'estrazione, mantenendo la forma esatta, mostrando il DAG e le dependencies, i corpus, e lo trasforma in una ticket jira mantenendo il titolo della epic parent o issue se singola. Include i comandi beads e la forma eventuale per improatare successivamente determinate modifiche tramite una eventuale pr, creando i file pronti per import in determinata repo. Include link alla repo esatta e la struttura di dove il risultante file va messo. 
