@@ -609,7 +609,7 @@ Passing `GATE-IFACE` authorizes thin adapters and later scheduler intents to con
 ### 8.3 Activation and composition gate
 
 ```text
-E1.1 → E1.2/E1.3 → E1.4
+E1.1 → E1.2/E1.3 → R1 runtime-semantics closure → E1.4
 C1.1 → C1.2 → C1.3 → C1.4
 GATE-IFACE + E1.4 + C1.4 → C1.5
 ```
@@ -632,6 +632,7 @@ GATE-COMPOSE
 → D1.1
 → D1.2
 → D1.3
+→ GATE-DO0
 → released-trio end-to-end fixture
 ```
 
@@ -814,9 +815,11 @@ RUN 0 document reconciliation
 → clean-install released-trio smoke
 → specialists.execution.v1 runtime semantics
 → ChainTemplate compiler and persisted ResolvedChain
+→ GATE-IFACE
 → manual composition gate
 → quant/math vertical fixture
 → evidence reducer, scheduler intents and runtime delivery
+→ GATE-DO0
 → Eval Core, deterministic context and memory v1
 → Channels v1 bridge, pulse and attention compatibility
 → measured authority gate
