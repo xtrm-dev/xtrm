@@ -1,0 +1,36 @@
+name: board-audit tests
+
+on:
+  push:
+    paths:
+      - "packages/board-audit/**"
+      - ".github/workflows/board-audit-tests.yml"
+  pull_request:
+    paths:
+      - "packages/board-audit/**"
+      - ".github/workflows/board-audit-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python syntax
+        run: python -m py_compile packages/board-audit/board-audit-roundtrip.py
+
+      - name: Shell syntax
+        run: bash -n packages/board-audit/board-audit
+
+      - name: Round-trip unit tests
+        run: python -m unittest discover -s packages/board-audit/tests -p 'test_*.py' -v

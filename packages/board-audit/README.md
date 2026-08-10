@@ -1,138 +1,203 @@
 # board-audit — install & operational manual
 
-A one-shot script that exports the local `bd` board + relevant merged PRs into a single ChatGPT-web-friendly bundle for periodic board audits.
+`board-audit` has three deliberately separated surfaces: the original board/PR audit bundle, a lossless structured Beads work-package export, and a guarded round-trip reconciler that lets a human or model propose edits and compile them back to local Beads.
 
-**Extracted from** the 2026-07-22 infra ChatGPT audit workstream (bd `infra-1evu`, `infra-koe2`, `infra-bkr7`, `infra-0chg`, `infra-4co7`).
+Canonical files:
 
----
-
-## Install (any host)
-
-Prereqs: `bd` (beads), `gh` (GitHub CLI, authenticated), `python3`.
-
-```bash
-# 1. Drop the script somewhere on PATH.
-mkdir -p ~/bin
-cp board-audit ~/bin/board-audit
-chmod +x ~/bin/board-audit
-
-# 2. If ~/bin is not on your interactive PATH (typical on Fedora zsh without
-#    ~/.zshrc PATH tweaks), symlink into ~/.local/bin which usually is:
-mkdir -p ~/.local/bin
-ln -sf ~/bin/board-audit ~/.local/bin/board-audit
-
-# 3. Sanity-check.
-which board-audit
-board-audit --help 2>/dev/null || echo "(script has no --help; run inside a git repo to actually invoke)"
+```text
+packages/board-audit/board-audit
+packages/board-audit/board-audit-roundtrip.py
+packages/board-audit/ROUNDTRIP.md
 ```
 
-Verify it can reach GitHub:
+## Prerequisites
+
+Structured export/round-trip require `bd`, `python3`, and a Git working tree. Audit mode additionally requires authenticated `gh`.
 
 ```bash
 gh auth status
-# → "Logged in to github.com as <you>"
-```
-
-And `bd`:
-
-```bash
 bd stats
 ```
 
-## Run
+## Structured work-package export
+
+Every structured export starts from one canonical acquisition:
 
 ```bash
-cd <any-mercury-repo>       # git working tree with bd + gh set up
+bd export --all
+```
+
+There is no arbitrary `bd list --limit N` ceiling and no N× `bd show` hydration loop. Filtering and graph reconstruction happen locally from that immutable snapshot.
+
+```bash
+board-audit --export --open
+board-audit --export --all
+board-audit --export --epic xtrm-123
+board-audit --export --bead xtrm-456
+```
+
+`--open` means non-terminal work rather than literal `status=open`; active `in_progress`/`blocked` work stays included. Closed ancestors required to understand an active subtree are retained as `context-only`. A non-epic task with children is also a work-package root.
+
+Output:
+
+```text
+/tmp/board-audit-<repo>/export-YYYYMMDDTHHMMSS/
+├── raw-beads.jsonl
+├── manifest.json
+└── work-packages/
+    ├── <root-id>__<slug-title>.json
+    └── ...
+```
+
+`raw-beads.jsonl` remains the direct Beads snapshot. `manifest.json` records repository/version/source command, record counts, SHA-256 provenance, selected scope and package diagnostics. Each work package uses schema `xtrm.board-audit.work-package.v1`, preserves every source field under `issues.<id>.source`, separates parent-child hierarchy from the wider dependency graph, and retains external/dangling relation diagnostics.
+
+Structured export contains data only; it does not embed the large audit prompt.
+
+## Editable round-trip
+
+Prepare one work package:
+
+```bash
+python3 packages/board-audit/board-audit-roundtrip.py prepare \
+  /tmp/board-audit-xtrm/export-.../work-packages/xtrm-123__title.json
+```
+
+The `.editable.json` artifact has this contract:
+
+```text
+issues.<id>.source     immutable, hashed base evidence
+desired_issues.<id>    desired planning/content state
+new_comments.<id>      proposed comment text strings
+```
+
+Only `desired_issues` and `new_comments` are editor/model surfaces. The immutable base is hash-checked before reconciliation.
+
+For existing beads, v1 supports edits to title, description, design, acceptance criteria, notes, spec ID, priority, issue type, estimate, external reference, metadata, labels and dependency/relationship edges. Operational state remains losslessly visible but read-only: existing status/lifecycle, assignee/owner, lease/heartbeat, scheduling, storage/persistence, compaction, gate/event and provenance/timestamp fields cannot be changed through this import path.
+
+Historical comment objects are also read-only. A model that wants to add a comment writes only text in `new_comments`; the compiler emits native:
+
+```bash
+bd comments add <id> "<text>"
+```
+
+so local Beads assigns the actual author and timestamp. This prevents an uploaded artifact from forging comment provenance.
+
+New desired issues may specify planning/content fields and an explicit ID; status is not editor-controlled. The compiler supplies conservative defaults when absent: `open`, priority 2, type `task`.
+
+## Reconcile before mutation
+
+```bash
+python3 packages/board-audit/board-audit-roundtrip.py validate package.editable.json
+python3 packages/board-audit/board-audit-roundtrip.py diff package.editable.json
+```
+
+The reconciler compares:
+
+```text
+base     original work-package source
+current  fresh bd export --all
+desired  edited artifact
+```
+
+Disjoint concurrent changes survive. If current and desired changed the same ordinary field differently, compilation stops instead of overwriting either side. Labels use set deltas, metadata uses per-key reconciliation, dependencies use typed graph-edge deltas, and proposed comments remain a separate append plane.
+
+For deterministic/offline tests, commands that require current state accept `--current-jsonl path/to/export.jsonl`.
+
+## Compile and inspect
+
+```bash
+python3 packages/board-audit/board-audit-roundtrip.py compile-import package.editable.json
+# alias:
+python3 packages/board-audit/board-audit-roundtrip.py compile-apply package.editable.json
+```
+
+Generated directory:
+
+```text
+beads-import.jsonl
+changes.json
+apply-plan.json
+apply.sh
+```
+
+Only actual issue-row changes/new rows enter `beads-import.jsonl`; a comment-only proposal therefore needs no issue import. `apply-plan.json` includes changed IDs, actual import IDs and native follow-up commands.
+
+Beads import merges auxiliary records, so exact removals are compiled separately: labels via `bd update --remove-label`, dependency pair changes via `bd dep remove` plus necessary re-adds, and proposed comments via `bd comments add`.
+
+## Apply
+
+Dry-run is the default:
+
+```bash
+python3 packages/board-audit/board-audit-roundtrip.py apply package.editable.json
+```
+
+Actual mutation requires:
+
+```bash
+python3 packages/board-audit/board-audit-roundtrip.py apply package.editable.json --execute
+```
+
+The tool freshly exports current Beads, reconciles, runs `bd import --dry-run --json` when issue rows exist, and stops unless `--execute` is explicit. Executed apply captures `bd dep cycles --json` before/after, fails if the proposal introduced a new scheduling cycle, re-exports Beads, and verifies the user-intended delta.
+
+It never generates `bd import --allow-stale`. Existing Beads stale/tie handling remains a second race barrier for issue-row import.
+
+Independent verification:
+
+```bash
+python3 packages/board-audit/board-audit-roundtrip.py verify package.editable.json
+```
+
+Exit codes are designed for later automation: 0 success, 2 invalid/unsupported/command failure, 3 three-way conflict, 4 verification or newly-introduced-cycle failure.
+
+The complete safety contract is in `ROUNDTRIP.md`.
+
+## Audit mode
+
+The historical audit workflow remains available:
+
+```bash
 board-audit
+board-audit --epic xtrm-123
+board-audit --no-pr
 ```
 
-Takes ~2 min for a ~200-PR repo. Overwrites the bundle on re-run.
+It writes:
 
-## Output
-
-Single file to attach to ChatGPT web:
-
-```
-/tmp/board-audit-<repo>/audit-bundle-YYYYMMDD.md
-```
-
-Intermediate files kept alongside (if you want to iterate on the prompt without re-exporting data):
-
-```
+```text
 /tmp/board-audit-<repo>/
-├── audit-bundle-YYYYMMDD.md   ← attach THIS
-├── audit-prompt.md            ← prompt only
-├── beads.jsonl                ← all non-closed beads
-├── prs.md                     ← per-PR markdown (full body + all commits)
-└── current-state.md           ← bd stats snapshot
+├── audit-bundle-YYYYMMDD.md
+├── audit-prompt.md
+├── beads.jsonl
+├── prs.md
+└── current-state.md
 ```
 
-## What's in the bundle
+Audit-mode Beads data now derives from the same one-shot `bd export --all` snapshot as structured export. The PR corpus still uses the historical auto-window from the oldest selected bead creation date minus seven days and supports `BOARD_AUDIT_PR_SINCE` / `BOARD_AUDIT_PR_LIMIT` overrides.
 
-1. **Prompt** — 6-bucket classification + 13 additional passes:
-   - Buckets: A live / B silently shipped / C superseded / D stale / E blocked-in-fact / F ambiguous
-   - Passes: (1) ponytail description criticism, (2) dependency rewiring, (3) codebase drift, (4) metric-emission via Prometheus MCP, (5) Jira ↔ bd cross-check, (6) sister-repo relocations, (7) silent supersedes, (8) zombie epics, (9) stale-tone sweep, (10) follow-up gap, (11) duplicate/adjacent, (12) hard validation / no-regression, (13) existing-library reuse
-2. **beads.jsonl** — every non-closed bead with full fields
-3. **prs.md** — merged PRs since `min(bead.created) - 7d`, each with number/title/date/author/URL, files changed with +/- line counts, **full body**, **all commits with short SHA + headline**
-
-## Auto-window (why the PR count varies)
-
-The PR window is scoped to the oldest open bead's creation date minus a 7-day buffer. If the oldest bead is 75 days old you get ~75 days of PRs; fresh board falls back to 90 days. Guarantees full silent-ship detection coverage without wasting API calls on PRs older than any open bead.
-
-## Overrides
-
-Rarely needed:
+## Installation
 
 ```bash
-BOARD_AUDIT_PR_SINCE=2026-01-01 board-audit    # explicit start date
-BOARD_AUDIT_PR_LIMIT=1000 board-audit          # raise the 500-PR safety cap
+mkdir -p ~/bin ~/.local/bin
+cp packages/board-audit/board-audit ~/bin/board-audit
+cp packages/board-audit/board-audit-roundtrip.py ~/bin/board-audit-roundtrip
+chmod +x ~/bin/board-audit ~/bin/board-audit-roundtrip
+ln -sf ~/bin/board-audit ~/.local/bin/board-audit
+ln -sf ~/bin/board-audit-roundtrip ~/.local/bin/board-audit-roundtrip
 ```
 
-## Using the output on ChatGPT web
+Regression checks:
 
-1. Open a ChatGPT web session with browsing + tool use (Pro tier).
-2. Attach the single bundle file.
-3. Type: **"run the audit"**.
-4. Wait ~15–25 minutes.
-5. Paste the resulting audit back to whichever coordinator agent will execute the recommendations.
+```bash
+board-audit --help
+board-audit-roundtrip --help
+python3 -m unittest discover -s packages/board-audit/tests -p 'test_*.py' -v
+```
 
-The prompt tells ChatGPT to verify claims with its GitHub, Jira, and web-search tools. If a bead can't be verified, it goes into bucket F rather than being closed by inference.
+## GitHub Actions direction
 
-## What to do with the audit result
+The repository contains only non-mutative board-audit CI at this stage: Python/shell syntax plus round-trip unit tests. Automated Beads mutation is intentionally not enabled yet.
 
-Feed it back to a Claude/pi session in the target repo with:
+After representative local round-trip trials, the intended next stage is export/prepare artifact → ChatGPT/human proposed artifact → non-mutative validation/diff → PR with apply plan → protected apply on an authorized runner → post-apply export/verification.
 
-> "here is a ChatGPT audit of the board — execute the mechanical B/C/D/E findings in a batch, surface only genuinely-operator decisions at the end"
-
-The 2026-07-22 infra run reduced the open board **108 → 68 beads (−37%)** in a single session with this pattern.
-
-## Pitfalls / gotchas
-
-- **Zsh PATH:** if `board-audit` isn't found, `~/bin` isn't on your interactive PATH. Symlinking to `~/.local/bin` (step 2 of Install) usually fixes it. `hash -r` if the shell has cached "not found".
-- **GitHub cardinality trap:** `gh pr list --json commits` collapses above ~50 PRs. The script side-steps by doing a cheap list first then a per-PR `gh pr view` loop.
-- **Bundle size:** ~600K for 200 PRs. ChatGPT web handles it. If you hit an upload limit, drop `BOARD_AUDIT_PR_LIMIT` or narrow `PR_SINCE`.
-- **Empty board:** falls back to 90d-ago PR window.
-- **gh auth expired:** the PR loop will spam warnings; re-auth with `gh auth login`.
-
-## Iterating on the prompt
-
-The prompt lives inline in the script inside a `<<'PROMPT_EOF'` heredoc. Edit `~/bin/board-audit` directly (and re-`cp` back into this resource dir when you like the change). Placeholders substituted at emit time:
-
-- `%REPO%` — GitHub owner/name
-- `%DATE%` — today
-- `%BEAD_COUNT%` — non-closed bead count
-- `%PR_LIMIT%` — safety cap
-- `%PR_SINCE%` — auto-computed start date
-
-## Related memories
-
-- `board-audit-tool` (bd remember key) — feature-level notes on this tool
-- `feedback_no_premature_readiness_claims` — audit ships defaults, operator ratifies
-- `feedback_coordinator_acts_doesnt_ask` — execute B/C/D mechanically, surface only genuine decisions
-
-## Files in this resource
-
-- `board-audit` — the script itself (executable)
-- `README.md` — this file (install + operational manual)
-
-The atomic zettel version of the ops-only manual lives at `~/second-mind/zettlekasten/board-audit.md`.
+If authoritative Beads state is workstation/VPS-local, the eventual mutation job belongs on a constrained self-hosted runner that can reach that database; a fresh GitHub-hosted checkout must not be treated as authoritative state.
