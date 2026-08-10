@@ -497,6 +497,22 @@ def ensure_updated_at(row: dict[str, Any], *, is_new: bool) -> dict[str, Any]:
     return out
 
 
+def cycle_signature(cycle: Any) -> tuple[str, ...] | str:
+    if isinstance(cycle, dict) and isinstance(cycle.get("members"), list):
+        ids = []
+        for member in cycle["members"]:
+            if isinstance(member, dict) and member.get("id") is not None:
+                ids.append(str(member["id"]))
+        if ids:
+            return tuple(ids)
+    return "raw:" + sha256_obj(cycle)
+
+
+def introduced_cycles(before: list[Any], after: list[Any]) -> list[Any]:
+    known = {cycle_signature(c) for c in before}
+    return [c for c in after if cycle_signature(c) not in known]
+
+
 def post_commands(rec: dict[str, Any]) -> list[list[str]]:
     commands: list[list[str]] = []
     for change in rec["changes"]:
@@ -554,6 +570,10 @@ def compile_plan(pkg_path: Path, pkg: dict[str, Any], current_path: Path, out_di
         "#!/usr/bin/env bash",
         "set -euo pipefail",
         'HERE="$(cd "$(dirname "$0")" && pwd)"',
+        'CYCLES_BEFORE="$(mktemp)"',
+        'CYCLES_AFTER="$(mktemp)"',
+        'trap \'rm -f "$CYCLES_BEFORE" "$CYCLES_AFTER"\' EXIT',
+        'bd dep cycles --json > "$CYCLES_BEFORE"',
         'echo "== Beads import dry-run =="',
         'bd import "$HERE/beads-import.jsonl" --dry-run --json',
         'if [ "${1:-}" != "--execute" ]; then',
@@ -564,7 +584,26 @@ def compile_plan(pkg_path: Path, pkg: dict[str, Any], current_path: Path, out_di
     ]
     for cmd in commands:
         lines.append(shlex.join(cmd))
-    lines.extend(["bd dep cycles", 'echo "apply complete; run board-audit-roundtrip verify on the package"'])
+    lines.extend(
+        [
+            'bd dep cycles --json > "$CYCLES_AFTER"',
+            'python3 - "$CYCLES_BEFORE" "$CYCLES_AFTER" <<\'PY\'',
+            'import json, sys',
+            'before = json.load(open(sys.argv[1], encoding="utf-8"))',
+            'after = json.load(open(sys.argv[2], encoding="utf-8"))',
+            'def sig(c):',
+            '    members = c.get("members", []) if isinstance(c, dict) else []',
+            '    ids = tuple(str(m.get("id")) for m in members if isinstance(m, dict) and m.get("id") is not None)',
+            '    return ids or json.dumps(c, sort_keys=True, separators=(",", ":"))',
+            'known = {sig(c) for c in before}',
+            'introduced = [c for c in after if sig(c) not in known]',
+            'if introduced:',
+            '    print(json.dumps({"error":"new dependency cycles introduced","cycles":introduced}, indent=2), file=sys.stderr)',
+            '    raise SystemExit(4)',
+            'PY',
+            'echo "apply complete; run board-audit-roundtrip verify on the package"',
+        ]
+    )
     apply_sh.write_text("\n".join(lines) + "\n", encoding="utf-8")
     apply_sh.chmod(0o755)
     return rec, plan
@@ -574,6 +613,28 @@ def intent_fields(base: dict[str, Any] | None, desired: dict[str, Any]) -> set[s
     if base is None:
         return set(desired)
     return {k for k in set(base) | set(desired) if base.get(k, MISSING) != desired.get(k, MISSING)} - PROTECTED_EXISTING_FIELDS
+
+
+def verify_metadata_delta(base: Any, desired: Any, actual: Any, rid: str) -> list[dict[str, Any]]:
+    if not all(isinstance(x, dict) for x in (base, desired, actual)):
+        if actual != desired:
+            return [{"id": rid, "field": "metadata", "expected": desired, "actual": actual}]
+        return []
+    failures: list[dict[str, Any]] = []
+    for key in sorted(set(base) | set(desired)):
+        b, d, a = base.get(key, MISSING), desired.get(key, MISSING), actual.get(key, MISSING)
+        if d == b:
+            continue
+        if a != d:
+            failures.append(
+                {
+                    "id": rid,
+                    "field": f"metadata.{key}",
+                    "expected": val(d),
+                    "actual": val(a),
+                }
+            )
+    return failures
 
 
 def verify_intent(pkg: dict[str, Any], actual: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -608,6 +669,8 @@ def verify_intent(pkg: dict[str, Any], actual: dict[str, dict[str, Any]]) -> lis
                 akeys = {comment_key(x) for x in (a.get("comments") or [])}
                 if not dadd <= akeys:
                     failures.append({"id": rid, "field": "comments", "expected_appended": sorted(dadd), "actual": sorted(akeys)})
+            elif field == "metadata":
+                failures.extend(verify_metadata_delta((b or {}).get("metadata", {}), d.get("metadata", {}), a.get("metadata", {}), rid))
             elif a.get(field, MISSING) != d.get(field, MISSING):
                 failures.append({"id": rid, "field": field, "expected": val(d.get(field, MISSING)), "actual": val(a.get(field, MISSING))})
     return failures
@@ -673,6 +736,17 @@ def run_checked(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     return proc
 
 
+def dependency_cycles() -> list[Any]:
+    proc = run_checked(["bd", "dep", "cycles", "--json"])
+    try:
+        data = json.loads(proc.stdout or "[]")
+    except json.JSONDecodeError as exc:
+        raise RoundtripError(f"bd dep cycles --json returned invalid JSON: {exc}") from exc
+    if not isinstance(data, list):
+        raise RoundtripError("bd dep cycles --json returned a non-list payload")
+    return data
+
+
 def cmd_apply(args: argparse.Namespace) -> int:
     if shutil.which("bd") is None:
         raise RoundtripError("bd is required for apply")
@@ -690,10 +764,16 @@ def cmd_apply(args: argparse.Namespace) -> int:
         if not args.execute:
             print("dry-run only; re-run with --execute to mutate", file=sys.stderr)
             return 0
+
+        before_cycles = dependency_cycles()
         run_checked(["bd", "import", str(import_path), "--json"])
         for cmd in plan["post_import_commands"]:
             run_checked(list(cmd))
-        run_checked(["bd", "dep", "cycles"])
+        after_cycles = dependency_cycles()
+        new_cycles = introduced_cycles(before_cycles, after_cycles)
+        if new_cycles:
+            print(json.dumps({"verified": False, "error": "new dependency cycles introduced", "cycles": new_cycles}, ensure_ascii=False, indent=2), file=sys.stderr)
+            return 4
 
         post_path, post_temp = acquire_current_jsonl()
         failures = verify_intent(pkg, current_map(post_path))
