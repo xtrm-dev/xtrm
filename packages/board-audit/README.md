@@ -10,6 +10,37 @@ packages/board-audit/board-audit-roundtrip.py
 packages/board-audit/ROUNDTRIP.md
 ```
 
+## Artifact location and GitHub visibility
+
+User-visible board-audit artifacts are repository state, not temporary files. By default every invocation writes under:
+
+```text
+<repo>/.xtrm/board-audit/
+```
+
+Structured exports go under `exports/`; audit bundles go under `audits/`. Round-trip `prepare` and compile output are created beside the selected work-package file, so the complete ChatGPT/human handoff remains inside the repository tree.
+
+This is intentional: once the selected artifact is committed and pushed on a branch, GitHub-connected agents can read the exact Beads snapshot/work package and return proposed edits without requiring local filesystem access.
+
+`board-audit` does **not** auto-commit or auto-push generated artifacts. Version control remains explicit. A typical sharing flow is:
+
+```bash
+git switch -c board-audit/xtrm-123
+board-audit --export --epic xtrm-123
+git add .xtrm/board-audit/
+git commit -m "chore(board-audit): export xtrm-123"
+git push -u origin HEAD
+```
+
+The output root can be overridden for tests or intentionally ephemeral runs:
+
+```bash
+board-audit --output-dir /some/path --export --epic xtrm-123
+BOARD_AUDIT_OUTDIR=/some/path board-audit --export --open
+```
+
+A relative override is resolved from the repository root.
+
 ## Prerequisites
 
 Structured export/round-trip require `bd`, `python3`, and a Git working tree. Audit mode additionally requires authenticated `gh`.
@@ -38,10 +69,10 @@ board-audit --export --bead xtrm-456
 
 `--open` means non-terminal work rather than literal `status=open`; active `in_progress`/`blocked` work stays included. Closed ancestors required to understand an active subtree are retained as `context-only`. A non-epic task with children is also a work-package root.
 
-Output:
+Default output:
 
 ```text
-/tmp/board-audit-<repo>/export-YYYYMMDDTHHMMSS/
+.xtrm/board-audit/exports/export-YYYYMMDDTHHMMSS/
 ├── raw-beads.jsonl
 ├── manifest.json
 └── work-packages/
@@ -55,11 +86,11 @@ Structured export contains data only; it does not embed the large audit prompt.
 
 ## Editable round-trip
 
-Prepare one work package:
+Prepare one work package directly from the repository-local export:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py prepare \
-  /tmp/board-audit-xtrm/export-.../work-packages/xtrm-123__title.json
+board-audit-roundtrip prepare \
+  .xtrm/board-audit/exports/export-.../work-packages/xtrm-123__title.json
 ```
 
 The `.editable.json` artifact has this contract:
@@ -87,8 +118,8 @@ New desired issues may specify planning/content fields and an explicit ID; statu
 ## Reconcile before mutation
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py validate package.editable.json
-python3 packages/board-audit/board-audit-roundtrip.py diff package.editable.json
+board-audit-roundtrip validate package.editable.json
+board-audit-roundtrip diff package.editable.json
 ```
 
 The reconciler compares:
@@ -106,9 +137,9 @@ For deterministic/offline tests, commands that require current state accept `--c
 ## Compile and inspect
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py compile-import package.editable.json
+board-audit-roundtrip compile-import package.editable.json
 # alias:
-python3 packages/board-audit/board-audit-roundtrip.py compile-apply package.editable.json
+board-audit-roundtrip compile-apply package.editable.json
 ```
 
 Generated directory:
@@ -129,13 +160,13 @@ Beads import merges auxiliary records, so exact removals are compiled separately
 Dry-run is the default:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py apply package.editable.json
+board-audit-roundtrip apply package.editable.json
 ```
 
 Actual mutation requires:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py apply package.editable.json --execute
+board-audit-roundtrip apply package.editable.json --execute
 ```
 
 The tool freshly exports current Beads, reconciles, runs `bd import --dry-run --json` when issue rows exist, and stops unless `--execute` is explicit. Executed apply captures `bd dep cycles --json` before/after, fails if the proposal introduced a new scheduling cycle, re-exports Beads, and verifies the user-intended delta.
@@ -145,7 +176,7 @@ It never generates `bd import --allow-stale`. Existing Beads stale/tie handling 
 Independent verification:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py verify package.editable.json
+board-audit-roundtrip verify package.editable.json
 ```
 
 Exit codes are designed for later automation: 0 success, 2 invalid/unsupported/command failure, 3 three-way conflict, 4 verification or newly-introduced-cycle failure.
@@ -162,28 +193,29 @@ board-audit --epic xtrm-123
 board-audit --no-pr
 ```
 
-It writes:
+Each invocation gets its own repository-local audit directory:
 
 ```text
-/tmp/board-audit-<repo>/
-├── audit-bundle-YYYYMMDD.md
+.xtrm/board-audit/audits/audit-YYYYMMDDTHHMMSS/
+├── audit-bundle.md
 ├── audit-prompt.md
 ├── beads.jsonl
+├── raw-beads.jsonl
 ├── prs.md
 └── current-state.md
 ```
 
-Audit-mode Beads data now derives from the same one-shot `bd export --all` snapshot as structured export. The PR corpus still uses the historical auto-window from the oldest selected bead creation date minus seven days and supports `BOARD_AUDIT_PR_SINCE` / `BOARD_AUDIT_PR_LIMIT` overrides.
+Audit-mode Beads data derives from the same one-shot `bd export --all` snapshot as structured export. The PR corpus still uses the historical auto-window from the oldest selected bead creation date minus seven days and supports `BOARD_AUDIT_PR_SINCE` / `BOARD_AUDIT_PR_LIMIT` overrides.
 
 ## Installation
 
+Prefer symlinks so a normal `git pull` updates the globally available commands immediately:
+
 ```bash
-mkdir -p ~/bin ~/.local/bin
-cp packages/board-audit/board-audit ~/bin/board-audit
-cp packages/board-audit/board-audit-roundtrip.py ~/bin/board-audit-roundtrip
-chmod +x ~/bin/board-audit ~/bin/board-audit-roundtrip
-ln -sf ~/bin/board-audit ~/.local/bin/board-audit
-ln -sf ~/bin/board-audit-roundtrip ~/.local/bin/board-audit-roundtrip
+mkdir -p ~/.local/bin
+chmod +x packages/board-audit/board-audit packages/board-audit/board-audit-roundtrip.py
+ln -sf "$(pwd)/packages/board-audit/board-audit" ~/.local/bin/board-audit
+ln -sf "$(pwd)/packages/board-audit/board-audit-roundtrip.py" ~/.local/bin/board-audit-roundtrip
 ```
 
 Regression checks:
@@ -198,6 +230,6 @@ python3 -m unittest discover -s packages/board-audit/tests -p 'test_*.py' -v
 
 The repository contains only non-mutative board-audit CI at this stage: Python/shell syntax plus round-trip unit tests. Automated Beads mutation is intentionally not enabled yet.
 
-After representative local round-trip trials, the intended next stage is export/prepare artifact → ChatGPT/human proposed artifact → non-mutative validation/diff → PR with apply plan → protected apply on an authorized runner → post-apply export/verification.
+After representative round-trip trials, the intended next stage is export/prepare artifact → ChatGPT/human proposed artifact → non-mutative validation/diff → PR with apply plan → protected apply on an authorized runner → post-apply export/verification.
 
 If authoritative Beads state is workstation/VPS-local, the eventual mutation job belongs on a constrained self-hosted runner that can reach that database; a fresh GitHub-hosted checkout must not be treated as authoritative state.
