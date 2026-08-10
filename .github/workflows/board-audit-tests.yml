@@ -34,6 +34,7 @@ jobs:
         run: |
           python -m py_compile packages/board-audit/board-audit-roundtrip.py
           python -m py_compile packages/board-audit/board-audit-flow.py
+          python -m py_compile packages/board-audit/board-audit-transport.py
 
       - name: Shell syntax
         run: |
