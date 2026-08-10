@@ -94,7 +94,9 @@ desired_issues.<id>   desired Beads state; edit this
 
 The base records are SHA-256 checked before compilation. Existing timestamps/provenance fields are protected, comments are append-only, and context-only ancestors are read-only unless explicitly enabled.
 
-This `.editable.json` is the intended single artifact to hand to ChatGPT or another agent. The agent can change descriptions, design/notes/acceptance criteria, status/priority, metadata, labels, dependencies, append comments, and add new desired issues while retaining the complete original work-package context.
+This `.editable.json` is the intended single artifact to hand to ChatGPT or another agent. For existing beads, v1 supports the ordinary planning/content surface: title, description, design, acceptance criteria, notes, spec ID, priority, issue type, estimate, external reference, metadata, labels, dependencies/relations, and appended comments. New desired beads may also set an initial status.
+
+Existing assignment/owner, lifecycle status, lease/heartbeat, scheduling, storage-plane/ephemeral, compaction, gate/event and similar operational fields remain present in the lossless source record but are read-only in round-trip v1. This prevents the JSONL import/recovery door from bypassing Beads' stricter claim/lifecycle mutation fences.
 
 Before any mutation, reconcile against current local Beads:
 
@@ -185,7 +187,7 @@ BOARD_AUDIT_PR_LIMIT=1000 board-audit
 
 Beads remains authority; board-audit outputs are projections/edit proposals. One `bd export --all` acquisition feeds an export/audit invocation. No hardcoded issue-count limit is used for Beads acquisition. Original source fields are retained. Arbitrary-depth parent-child hierarchies are supported. Closed ancestors may be carried as context without being counted as selected active work. Cross-package dependencies remain resolvable by ID. Dangling references and DAG multiplicity are diagnostics, not fatal parsing errors. Work-package serialization and ordering are deterministic apart from run-level manifest metadata.
 
-For round-trip mutation, immutable base records are hash checked; current state is freshly acquired; overlapping three-way conflicts are fatal; `--allow-stale` is not automatic; issue omission is not deletion; existing comments are append-only; executed apply ends with a fresh export and intent verification.
+For round-trip mutation, immutable base records are hash checked; current state is freshly acquired; overlapping three-way conflicts are fatal; operational control fields are fenced out of v1 edits; `--allow-stale` is not automatic; issue omission is not deletion; existing comments are append-only; executed apply ends with a fresh export and intent verification.
 
 The Jira direction in `board-audit-to-jira-and-improvements.md` should consume the same canonical work-package schema rather than create another ad-hoc Beads extraction path.
 
