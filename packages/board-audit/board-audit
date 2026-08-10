@@ -100,6 +100,11 @@ OUTDIR="${TMPDIR:-/tmp}/board-audit-${REPO_SLUG}"
 mkdir -p "$OUTDIR"
 TODAY="$(date +%Y-%m-%d)"
 
+_export_all() {
+  local out="$1"
+  bd export --all -o "$out" >/dev/null 2>&1 || bd export --all > "$out"
+}
+
 # ----------------------------------------------------------------------
 # Structured export mode
 # ----------------------------------------------------------------------
@@ -111,12 +116,7 @@ if [ "$EXPORT_MODE" -eq 1 ]; then
   mkdir -p "$PACKAGES_DIR"
 
   echo "→ acquiring canonical Beads snapshot with bd export --all..."
-  # `--all` is intentional: no arbitrary list limit; filtering happens locally.
-  bd export --all -o "$RAW_OUT" >/dev/null 2>&1 || {
-    # Compatibility fallback for builds that emit to stdout rather than accepting -o.
-    bd export --all > "$RAW_OUT"
-  }
-
+  _export_all "$RAW_OUT"
   [ -s "$RAW_OUT" ] || echo "warning: Beads export is empty" >&2
   BD_VERSION="$(bd version 2>/dev/null | head -n1 || true)"
 
@@ -131,17 +131,15 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 raw_path, packages_dir, manifest_path, repo, scope, epic_id, bead_id, bd_version = sys.argv[1:]
-
 TERMINAL = {"closed", "done", "completed", "cancelled", "canceled", "tombstone", "deleted"}
+PARENT_TYPES = {"parent-child", "parent", "child-of"}
 
 
 def read_rows(path):
-    rows = []
     with open(path, "r", encoding="utf-8") as f:
         text = f.read().strip()
     if not text:
-        return rows
-    # Beads export is normally JSONL, but tolerate a JSON array/object envelope.
+        return []
     if text.startswith("[") or text.startswith("{"):
         try:
             parsed = json.loads(text)
@@ -154,23 +152,41 @@ def read_rows(path):
                 return [parsed]
         except json.JSONDecodeError:
             pass
+    rows = []
     for line in text.splitlines():
-        line = line.strip()
-        if line:
-            row = json.loads(line)
-            if isinstance(row, dict):
-                rows.append(row)
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if isinstance(row, dict):
+            rows.append(row)
     return rows
 
 
-def first_id(value):
+def entity_id(value):
+    """ID of an issue-like value, used for explicit parent/discovery fields."""
     if isinstance(value, str):
         return value
     if isinstance(value, dict):
-        for k in ("id", "issue_id", "bead_id", "target", "target_id", "parent_id"):
-            v = value.get(k)
-            if isinstance(v, str) and v:
-                return v
+        for key in ("id", "issue_id", "bead_id", "parent_id", "target_id", "target"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate:
+                return candidate
+    return None
+
+
+def dependency_target(value):
+    """Target of a Beads dependency record.
+
+    Current Beads Dependency has its own surrogate row `id`; the target is
+    `depends_on_id`. Never interpret the edge row ID as the issue target.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("depends_on_id", "depends_on_issue_id", "target_id", "target", "parent_id", "bead_id"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate:
+                return candidate
     return None
 
 
@@ -181,85 +197,100 @@ def relation_type(value):
 
 
 def collect_relations(row):
-    rid = row.get("id")
+    rid = str(row.get("id"))
     out = []
     for key in ("deps", "dependencies", "relations"):
         vals = row.get(key)
-        if isinstance(vals, list):
-            for v in vals:
-                target = first_id(v)
-                if target:
-                    out.append({"source": rid, "target": target, "type": relation_type(v), "source_field": key, "raw": v})
+        if not isinstance(vals, list):
+            continue
+        for value in vals:
+            target = dependency_target(value)
+            if target:
+                out.append({
+                    "source": rid,
+                    "target": target,
+                    "type": relation_type(value),
+                    "source_field": key,
+                    "raw": value,
+                })
     for key in ("parents", "parent"):
         vals = row.get(key)
         if vals is None:
             continue
         if not isinstance(vals, list):
             vals = [vals]
-        for v in vals:
-            target = first_id(v)
+        for value in vals:
+            target = entity_id(value)
             if target:
-                typ = relation_type(v)
+                typ = relation_type(value)
                 if typ == "unknown":
                     typ = "parent-child"
-                out.append({"source": rid, "target": target, "type": typ, "source_field": key, "raw": v})
+                out.append({"source": rid, "target": target, "type": typ, "source_field": key, "raw": value})
     discovered = row.get("discovered_from")
     if discovered:
         vals = discovered if isinstance(discovered, list) else [discovered]
-        for v in vals:
-            target = first_id(v)
+        for value in vals:
+            target = entity_id(value)
             if target:
-                out.append({"source": rid, "target": target, "type": "discovered-from", "source_field": "discovered_from", "raw": v})
+                out.append({"source": rid, "target": target, "type": "discovered-from", "source_field": "discovered_from", "raw": value})
     return out
 
 
-def parent_ids(row, relations):
-    rid = row.get("id")
-    parents = []
-    # Explicit parent fields are strongest.
+def explicit_parent_ids(row, relations):
+    rid = str(row.get("id"))
+    out = []
     for key in ("parents", "parent"):
         vals = row.get(key)
         if vals is None:
             continue
         if not isinstance(vals, list):
             vals = [vals]
-        for v in vals:
-            pid = first_id(v)
-            if pid and pid not in parents:
-                parents.append(pid)
-    # Then infer from parent-child dependency records where current row points to parent.
+        for value in vals:
+            parent = entity_id(value)
+            if parent and parent not in out:
+                out.append(parent)
     for rel in relations:
-        if rel["source"] == rid and rel["type"] in {"parent-child", "parent", "child-of"}:
-            if rel["target"] not in parents:
-                parents.append(rel["target"])
-    return parents
+        if rel["source"] == rid and rel["type"] in PARENT_TYPES and rel["target"] not in out:
+            out.append(rel["target"])
+    return out
 
 
 def slug(title):
-    s = unicodedata.normalize("NFKD", str(title or "untitled"))
-    s = s.encode("ascii", "ignore").decode("ascii").lower()
-    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
-    return (s[:96].rstrip("-") or "untitled")
+    value = unicodedata.normalize("NFKD", str(title or "untitled"))
+    value = value.encode("ascii", "ignore").decode("ascii").lower()
+    value = re.sub(r"[^a-z0-9]+", "-", value).strip("-")
+    return value[:96].rstrip("-") or "untitled"
 
 
 def canonical_bytes(obj):
     return (json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
+
 rows = read_rows(raw_path)
-by_id = {str(r["id"]): r for r in rows if r.get("id") is not None}
+by_id = {str(row["id"]): row for row in rows if row.get("id") is not None}
 all_relations = []
 for row in by_id.values():
     all_relations.extend(collect_relations(row))
 
+# Match Beads' own tree semantics: explicit parent-child edges first; if an
+# issue has no known explicit parent, fall back to immediate dotted-ID ancestry
+# (`parent.1`, `parent.1.2`) when that parent exists in the snapshot.
 parents = {}
 children = defaultdict(list)
+derived_dotted_links = []
 for rid, row in by_id.items():
-    ps = [p for p in parent_ids(row, all_relations) if p != rid]
+    ps = [p for p in explicit_parent_ids(row, all_relations) if p != rid]
+    known_explicit = [p for p in ps if p in by_id]
+    if not known_explicit and "." in rid:
+        dotted_parent = rid.rsplit(".", 1)[0]
+        if dotted_parent in by_id and dotted_parent != rid and dotted_parent not in ps:
+            ps.append(dotted_parent)
+            derived_dotted_links.append({"child": rid, "parent": dotted_parent})
     parents[rid] = ps
-    for p in ps:
-        children[p].append(rid)
-for p in children:
-    children[p] = sorted(set(children[p]))
+    for parent in ps:
+        children[parent].append(rid)
+for parent in children:
+    children[parent] = sorted(set(children[parent]))
 
 
 def is_terminal(row):
@@ -270,11 +301,11 @@ def ancestors(rid):
     seen = set()
     stack = list(parents.get(rid, []))
     while stack:
-        cur = stack.pop()
-        if cur in seen:
+        current = stack.pop()
+        if current in seen:
             continue
-        seen.add(cur)
-        stack.extend(parents.get(cur, []))
+        seen.add(current)
+        stack.extend(parents.get(current, []))
     return seen
 
 
@@ -282,11 +313,11 @@ def descendants(rid):
     seen = set()
     stack = list(children.get(rid, []))
     while stack:
-        cur = stack.pop()
-        if cur in seen:
+        current = stack.pop()
+        if current in seen:
             continue
-        seen.add(cur)
-        stack.extend(children.get(cur, []))
+        seen.add(current)
+        stack.extend(children.get(current, []))
     return seen
 
 
@@ -297,10 +328,9 @@ def highest_known_root(rid):
         known = sorted(p for p in parents.get(current, []) if p in by_id and p not in seen)
         if not known:
             return current
-        # Multiple parents make the graph a DAG. Pick deterministic canonical parent;
-        # all original relations remain preserved, and diagnostics expose multiplicity.
         current = known[0]
         seen.add(current)
+
 
 if scope in {"epic", "bead"}:
     requested = epic_id if scope == "epic" else bead_id
@@ -308,7 +338,6 @@ if scope in {"epic", "bead"}:
         raise SystemExit(f"error: bead '{requested}' not found in bd export --all snapshot")
     roots = [requested]
     selected = {requested} | descendants(requested)
-    # Preserve ancestor context without moving the requested package root.
     context_only = ancestors(requested)
 elif scope == "all":
     selected = set(by_id)
@@ -317,32 +346,31 @@ elif scope == "all":
 else:
     active = {rid for rid, row in by_id.items() if not is_terminal(row)}
     selected = set(active)
-    # Closed ancestors are retained as context so active descendants are not orphaned.
     context_only = set()
     for rid in active:
         context_only |= {a for a in ancestors(rid) if a in by_id and a not in active}
     selected |= context_only
     roots = sorted({highest_known_root(rid) for rid in active})
 
-# Filter roots to packages that actually contain selected active/all requested records.
 package_entries = []
 written_ids = set()
+
 
 def build_hierarchy(rid, package_ids, trail=None):
     trail = set(trail or ())
     if rid in trail:
         return {"id": rid, "cycle": True, "children": []}
     trail.add(rid)
-    kids = [c for c in children.get(rid, []) if c in package_ids]
-    return {"id": rid, "children": [build_hierarchy(c, package_ids, trail) for c in sorted(kids)]}
+    kids = [child for child in children.get(rid, []) if child in package_ids]
+    return {"id": rid, "children": [build_hierarchy(child, package_ids, trail) for child in sorted(kids)]}
+
 
 for root in roots:
     if scope in {"epic", "bead"}:
         package_ids = {root} | {d for d in descendants(root) if d in selected}
         package_ids |= {a for a in context_only if a in by_id}
     else:
-        family = {root} | descendants(root)
-        package_ids = family & selected
+        package_ids = ({root} | descendants(root)) & selected
     if not package_ids:
         continue
 
@@ -364,17 +392,21 @@ for root in roots:
             external_relations.append(enriched)
 
     multiple_parents = [
-        {"id": rid, "parents": sorted([p for p in parents.get(rid, []) if p in by_id])}
+        {"id": rid, "parents": sorted(p for p in parents.get(rid, []) if p in by_id)}
         for rid in sorted(package_ids)
         if len([p for p in parents.get(rid, []) if p in by_id]) > 1
     ]
-
-    issue_map = {}
-    for rid in sorted(package_ids):
-        issue_map[rid] = {
+    issue_map = {
+        rid: {
             "selection_state": "context-only" if rid in context_only else "selected",
             "source": by_id[rid],
         }
+        for rid in sorted(package_ids)
+    }
+    package_dotted_links = [
+        link for link in derived_dotted_links
+        if link["child"] in package_ids and link["parent"] in package_ids
+    ]
 
     payload = {
         "schema_version": "xtrm.board-audit.work-package.v1",
@@ -389,6 +421,7 @@ for root in roots:
         "diagnostics": {
             "dangling_relations": sorted(dangling, key=lambda r: (r["source"], r["type"], r["target"])),
             "multiple_parent_nodes": multiple_parents,
+            "derived_dotted_parent_links": sorted(package_dotted_links, key=lambda x: (x["parent"], x["child"])),
         },
     }
     digest = hashlib.sha256(canonical_bytes(payload)).hexdigest()
@@ -429,8 +462,9 @@ manifest = {
     },
     "packages": sorted(package_entries, key=lambda p: p["root_id"]),
     "diagnostics": {
-        "unpackaged_selected_ids": sorted((selected - written_ids)),
+        "unpackaged_selected_ids": sorted(selected - written_ids),
         "unknown_parent_refs": sorted({p for rid in by_id for p in parents.get(rid, []) if p not in by_id}),
+        "derived_dotted_parent_links": sorted(derived_dotted_links, key=lambda x: (x["parent"], x["child"])),
     },
 }
 with open(manifest_path, "w", encoding="utf-8") as f:
@@ -454,70 +488,113 @@ PR_OUT="$OUTDIR/prs.md"
 PROMPT_OUT="$OUTDIR/audit-prompt.md"
 STATE_OUT="$OUTDIR/current-state.md"
 BUNDLE_OUT="$OUTDIR/audit-bundle-$(date +%Y%m%d).md"
-
-# The audit corpus now also starts from one complete Beads snapshot. This keeps
-# whole-board and --epic audit semantics aligned and eliminates list/show drift.
 RAW_AUDIT_OUT="$OUTDIR/.raw-beads-all.jsonl"
+
 echo "→ acquiring canonical Beads snapshot with bd export --all..."
-bd export --all -o "$RAW_AUDIT_OUT" >/dev/null 2>&1 || bd export --all > "$RAW_AUDIT_OUT"
+_export_all "$RAW_AUDIT_OUT"
 
 python3 - "$RAW_AUDIT_OUT" "$BD_OUT" "$EPIC" <<'PY'
-import json, sys
+import json
+import sys
+
 raw_path, out_path, epic = sys.argv[1:]
 TERMINAL = {"closed", "done", "completed", "cancelled", "canceled", "tombstone", "deleted"}
+PARENT_TYPES = {"parent-child", "parent", "child-of"}
+
 
 def rows(path):
-    text=open(path,encoding="utf-8").read().strip()
-    if not text: return []
+    text = open(path, encoding="utf-8").read().strip()
+    if not text:
+        return []
     try:
-        d=json.loads(text)
-        if isinstance(d,list): return d
-        if isinstance(d,dict):
-            for k in ("issues","beads","records"):
-                if isinstance(d.get(k),list): return d[k]
-    except json.JSONDecodeError: pass
-    return [json.loads(x) for x in text.splitlines() if x.strip()]
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return parsed
+        if isinstance(parsed, dict):
+            for key in ("issues", "beads", "records"):
+                if isinstance(parsed.get(key), list):
+                    return parsed[key]
+    except json.JSONDecodeError:
+        pass
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
 
-def id_of(v):
-    if isinstance(v,str): return v
-    if isinstance(v,dict):
-        for k in ("id","issue_id","bead_id","target","target_id","parent_id"):
-            if isinstance(v.get(k),str): return v[k]
 
-def parent_ids(r):
-    out=[]
-    vals=r.get("parents", r.get("parent", []))
-    if not isinstance(vals,list): vals=[vals] if vals else []
-    for v in vals:
-        x=id_of(v)
-        if x: out.append(x)
-    for key in ("deps","dependencies","relations"):
-        vals=r.get(key,[])
-        if isinstance(vals,list):
-            for v in vals:
-                if isinstance(v,dict) and str(v.get("type") or v.get("dependency_type") or v.get("relation_type") or "") in {"parent-child","parent","child-of"}:
-                    x=id_of(v)
-                    if x: out.append(x)
-    return list(dict.fromkeys(out))
+def entity_id(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("id", "issue_id", "bead_id", "parent_id", "target_id", "target"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate:
+                return candidate
+    return None
 
-rs=[r for r in rows(raw_path) if isinstance(r,dict) and r.get("id") is not None]
-by={str(r["id"]):r for r in rs}
-children={k:[] for k in by}
-for rid,r in by.items():
-    for p in parent_ids(r):
-        children.setdefault(p,[]).append(rid)
+
+def dependency_target(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("depends_on_id", "depends_on_issue_id", "target_id", "target", "parent_id", "bead_id"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate:
+                return candidate
+    return None
+
+
+def parent_ids(row):
+    out = []
+    vals = row.get("parents", row.get("parent", []))
+    if not isinstance(vals, list):
+        vals = [vals] if vals else []
+    for value in vals:
+        parent = entity_id(value)
+        if parent and parent not in out:
+            out.append(parent)
+    for key in ("deps", "dependencies", "relations"):
+        vals = row.get(key, [])
+        if not isinstance(vals, list):
+            continue
+        for value in vals:
+            if not isinstance(value, dict):
+                continue
+            typ = str(value.get("type") or value.get("dependency_type") or value.get("relation_type") or "")
+            if typ in PARENT_TYPES:
+                parent = dependency_target(value)
+                if parent and parent not in out:
+                    out.append(parent)
+    return out
+
+
+records = [row for row in rows(raw_path) if isinstance(row, dict) and row.get("id") is not None]
+by_id = {str(row["id"]): row for row in records}
+children = {rid: [] for rid in by_id}
+for rid, row in by_id.items():
+    ps = [p for p in parent_ids(row) if p != rid]
+    known_explicit = [p for p in ps if p in by_id]
+    if not known_explicit and "." in rid:
+        dotted_parent = rid.rsplit(".", 1)[0]
+        if dotted_parent in by_id and dotted_parent != rid and dotted_parent not in ps:
+            ps.append(dotted_parent)
+    for parent in ps:
+        children.setdefault(parent, []).append(rid)
+
 if epic:
-    if epic not in by: raise SystemExit(f"error: epic '{epic}' not found")
-    keep={epic}; stack=[epic]
+    if epic not in by_id:
+        raise SystemExit(f"error: epic '{epic}' not found")
+    keep = {epic}
+    stack = [epic]
     while stack:
-        cur=stack.pop()
-        for c in children.get(cur,[]):
-            if c not in keep: keep.add(c); stack.append(c)
+        current = stack.pop()
+        for child in children.get(current, []):
+            if child not in keep:
+                keep.add(child)
+                stack.append(child)
 else:
-    keep={rid for rid,r in by.items() if str(r.get("status","")).lower() not in TERMINAL}
-with open(out_path,"w",encoding="utf-8") as f:
+    keep = {rid for rid, row in by_id.items() if str(row.get("status", "")).lower() not in TERMINAL}
+
+with open(out_path, "w", encoding="utf-8") as f:
     for rid in sorted(keep):
-        f.write(json.dumps(by[rid],ensure_ascii=False,separators=(",",":"),sort_keys=True)+"\n")
+        f.write(json.dumps(by_id[rid], ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n")
 PY
 BEAD_COUNT=$(wc -l < "$BD_OUT" | tr -d ' ')
 
@@ -534,30 +611,39 @@ else
     PR_WINDOW_SOURCE="env override"
   else
     PR_SINCE="$(python3 - "$BD_OUT" <<'PY'
-import json,sys
-from datetime import date,datetime,timedelta
-oldest=None
-for line in open(sys.argv[1],encoding="utf-8"):
-    if not line.strip(): continue
-    row=json.loads(line)
-    c=row.get("created") or row.get("created_at")
-    if not c: continue
-    d=datetime.fromisoformat(c.replace("Z","+00:00")).date()
-    oldest=d if oldest is None or d < oldest else oldest
-print(((oldest-timedelta(days=7)) if oldest else (date.today()-timedelta(days=90))).isoformat())
+import json
+import sys
+from datetime import date, datetime, timedelta
+oldest = None
+for line in open(sys.argv[1], encoding="utf-8"):
+    if not line.strip():
+        continue
+    row = json.loads(line)
+    created = row.get("created") or row.get("created_at")
+    if not created:
+        continue
+    current = datetime.fromisoformat(created.replace("Z", "+00:00")).date()
+    oldest = current if oldest is None or current < oldest else oldest
+print(((oldest - timedelta(days=7)) if oldest else (date.today() - timedelta(days=90))).isoformat())
 PY
 )"
     PR_WINDOW_SOURCE="oldest bead minus 7d buffer"
   fi
+
   echo "→ exporting merged PRs since ${PR_SINCE} (${PR_WINDOW_SOURCE}; cap ${PR_LIMIT})..."
-  mapfile -t PR_NUMBERS < <(gh pr list --state=merged --limit "$PR_LIMIT" --search "merged:>=${PR_SINCE} sort:updated-asc" --json number,mergedAt --jq 'sort_by(.mergedAt) | .[] | .number' 2>/dev/null)
+  mapfile -t PR_NUMBERS < <(
+    gh pr list --state=merged --limit "$PR_LIMIT" \
+      --search "merged:>=${PR_SINCE} sort:updated-asc" \
+      --json number,mergedAt \
+      --jq 'sort_by(.mergedAt) | .[] | .number' 2>/dev/null
+  )
   PR_COUNT="${#PR_NUMBERS[@]}"
   [ "$PR_COUNT" -ne "$PR_LIMIT" ] || echo "warning: hit ${PR_LIMIT} PR cap; raise BOARD_AUDIT_PR_LIMIT" >&2
   : > "$PR_OUT"
-  PR_IDX=0
   for N in "${PR_NUMBERS[@]}"; do
-    PR_IDX=$((PR_IDX+1))
-    gh pr view "$N" --json number,mergedAt,title,body,files,commits,author,url --template '## PR #{{.number}} — {{.title}}
+    gh pr view "$N" \
+      --json number,mergedAt,title,body,files,commits,author,url \
+      --template '## PR #{{.number}} — {{.title}}
 
 - **merged:** {{.mergedAt}}
 - **author:** @{{.author.login}}
@@ -589,8 +675,6 @@ Non-closed beads exported: ${BEAD_COUNT}
 Merged PRs exported: ${PR_COUNT}
 EOF
 
-# Keep the established audit prompt as a separate artifact. The structured
-# --export mode deliberately emits no instructions.
 cat > "$PROMPT_OUT" <<EOF
 # Board audit — ${GH_REPO}
 
