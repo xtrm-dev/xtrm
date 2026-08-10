@@ -1,20 +1,18 @@
 # board-audit Beads round-trip
 
-`board-audit-roundtrip.py` is the inverse side of the structured `board-audit --export` workflow. It lets an exported work package be handed to a human or model, edited as desired state, reconciled against the live local Beads board, compiled back to native Beads JSONL/mutations, applied, and verified.
+`board-audit-roundtrip.py` is the inverse side of the structured `board-audit --export` workflow. It lets an exported work package be handed to a human or model, edited as desired state, reconciled against the live local Beads board, compiled back to native Beads JSONL plus guarded native mutations, applied, and verified.
 
-The design deliberately keeps Beads authoritative. A work-package file is an edit/reconciliation artifact, not a database.
+Beads remains authoritative. A work-package file is an edit/reconciliation artifact, not a database.
 
 ## Upstream Beads contract used
 
-Current Beads `bd import` is an incremental JSONL upsert counterpart to `bd export`. It accepts the issue schema emitted by `bd export`, including content fields such as `description`, `design`, `notes`, and `acceptance_criteria`, plus ownership, labels, dependencies, comments, metadata, scheduling fields, external references, and timestamps.
+Current Beads `bd import` is an incremental JSONL upsert counterpart to `bd export`. It accepts issue rows plus relational labels, dependencies and comments, provides `--dry-run`, and has stale/timestamp guards. `--allow-stale` is an explicit recovery escape hatch; board-audit never generates it automatically.
 
-`bd import` provides `--dry-run`, JSON output, stale/timestamp protection, and an explicit `--allow-stale` restore escape hatch. board-audit never uses `--allow-stale` automatically.
+Import is intentionally a migration/recovery surface, not the normal claim/lifecycle API. Round-trip v1 therefore uses import only for planning/content row changes and creation, while operations that need stronger native semantics are either compiled to native `bd` commands or fenced out completely.
 
-Beads import merges/deduplicates auxiliary data such as relationships/comments rather than acting as an exact replacement primitive. For that reason the round-trip compiler emits both a JSONL upsert and explicit native cleanup mutations when user intent removes labels or dependency edges.
+In particular, historical comment objects are never editor-controlled. Proposed new comments are represented separately and compiled to `bd comments add`, so Beads—not an uploaded JSON artifact—assigns comment authorship and creation time.
 
-Beads also has stricter lifecycle/claim semantics on ordinary mutation commands such as `bd update`. Because `bd import` is intentionally a migration/recovery upsert door, round-trip v1 does not permit an editor to mutate existing assignment, claim/lease, lifecycle status, scheduling, storage-plane, compaction, event, or other operational control fields through JSONL. Those fields are still preserved losslessly in `issues.<id>.source` and in current-state reconciliation; they are simply read-only until a later compiler maps them to the appropriate guarded native commands.
-
-## Editing model
+## Prepared edit artifact
 
 An exported package contains immutable source records:
 
@@ -22,33 +20,35 @@ An exported package contains immutable source records:
 issues.<id>.source
 ```
 
-Prepare it before editing:
+Prepare it:
 
 ```bash
 python3 packages/board-audit/board-audit-roundtrip.py prepare \
   /tmp/board-audit-xtrm/export-.../work-packages/xtrm-123__title.json
 ```
 
-This creates `xtrm-123__title.editable.json`. The prepared artifact keeps the original package intact and adds:
+The resulting `.editable.json` keeps the complete source package and adds:
 
 ```text
 roundtrip
   schema_version
+  prepared_at
   base_package_sha256
   base_record_sha256
   edit_contract
 
 desired_issues
-  <id> → desired native Beads record
+  <id> -> desired issue state
+
+new_comments
+  <id> -> ["comment text", ...]
 ```
 
-Only `desired_issues` is editable. `issues.<id>.source` is immutable base evidence and is hash-checked before compilation.
+Only `desired_issues` and `new_comments` are editable. `issues.<id>.source` is immutable base evidence and is hash-checked before compilation.
 
-Selected records are copied to `desired_issues`. Context-only closed ancestors remain read-only unless `--allow-context-edit` is supplied explicitly.
+Selected records are copied to `desired_issues`; context-only ancestors stay read-only unless `--allow-context-edit` is explicitly supplied. Existing selected issues may not be deleted by omission from `desired_issues`.
 
-Existing selected issues may not be removed from `desired_issues`; closing or superseding them should eventually be represented through guarded lifecycle commands, not as disappearance from the artifact. New desired issue IDs are allowed when they carry at least a title.
-
-For existing beads, round-trip v1 allows edits to the ordinary planning/content surface:
+For an existing bead, round-trip v1 allows edits to this planning/content surface:
 
 ```text
 title
@@ -64,28 +64,51 @@ external_ref
 metadata
 labels
 dependencies / deps / relations
-comments (append only)
 ```
 
-The source record remains lossless even when a field is not editable. Existing fields such as `assignee`, `owner`, `status`, lease/heartbeat data, timestamps/provenance, scheduling controls, storage class/ephemeral flags, gate/event fields and similar operational state are rejected if changed in `desired_issues`.
+The lossless source still carries everything else. Existing `status`, `assignee`, `owner`, lease/heartbeat state, timestamps/provenance, scheduling controls, persistence/storage-plane state, compaction data, gate/event fields and comparable operational state are rejected if changed in `desired_issues`. Historical `comments` are also read-only.
 
-A newly introduced desired issue has no live lifecycle state to overwrite, so v1 additionally permits an initial `status` value on new records. Other unsupported operational fields are still rejected.
+New comments go only in `new_comments`, for example:
 
-Existing provenance/timestamp fields such as `id`, `created_at`, `created_by`, and `updated_at` are not editor-controlled. The compiler preserves identity/provenance and stamps the outgoing update timestamp after reconciliation.
+```json
+{
+  "new_comments": {
+    "xtrm-123": [
+      "Reconciled acceptance criteria against the current implementation."
+    ]
+  }
+}
+```
 
-Existing comments are append-only. Editing, reordering, or deleting historical comments is rejected; new comments may be appended.
+They compile to:
+
+```bash
+bd comments add xtrm-123 "Reconciled acceptance criteria against the current implementation."
+```
+
+This preserves local Beads provenance. Existing comment objects cannot be edited, reordered, removed, or forged through import.
+
+A new desired issue may be represented with an explicit ID and planning/content fields, but lifecycle state remains compiler-owned. If omitted, the compiler sets conservative creation defaults:
+
+```text
+status=open
+priority=2
+issue_type=task
+```
+
+The editor cannot set `status` directly in round-trip v1. Native-ID generation/mapping and guarded lifecycle transitions are candidates for a later compiler rather than being hidden inside this first round-trip format.
 
 ## Three-way reconciliation
 
-Before a package can be compiled or applied, the tool compares three states:
+Before compilation or apply, the tool compares:
 
 ```text
-base     = issues.<id>.source from original export
-desired  = desired_issues edited by human/model
-current  = a fresh local `bd export --all`
+base     = issues.<id>.source from the original export
+desired  = desired_issues from the edited artifact
+current  = fresh local bd export --all
 ```
 
-The reconciler preserves disjoint concurrent changes. Example:
+Disjoint concurrent changes are retained:
 
 ```text
 base:     description=A, priority=P2
@@ -94,33 +117,33 @@ current:  description=A, priority=P1
 result:   description=B, priority=P1
 ```
 
-If both current and desired changed the same ordinary field to different values, compilation stops with a conflict instead of overwriting either side.
+If current and desired changed the same ordinary field differently, reconciliation stops with a conflict rather than overwriting either side.
 
-Labels are reconciled as set deltas so unrelated current additions survive. Metadata is reconciled per top-level key. Existing comments are immutable and independently appended comments are retained. Dependencies are reconciled as typed `(source, target, type)` relations.
+Labels are reconciled as set deltas, metadata per top-level key, and dependencies as typed `(source, target, type)` graph deltas. A dependency target outside the package is accepted only if it exists on the current board or is being introduced by the same desired package.
 
-A dependency target outside the package is valid only when it exists in the current board or is being created by the same desired package.
+`new_comments` are append intents rather than issue-row deltas and therefore do not force an otherwise unchanged issue through `bd import`.
 
 ## Validate and diff
 
-Schema/edit-contract validation only:
+Edit-contract validation only:
 
 ```bash
 python3 packages/board-audit/board-audit-roundtrip.py validate package.editable.json --offline
 ```
 
-Validate against a fresh local board:
+Validate against fresh local Beads:
 
 ```bash
 python3 packages/board-audit/board-audit-roundtrip.py validate package.editable.json
 ```
 
-Show the three-way reconciliation:
+Show base/current/desired reconciliation:
 
 ```bash
 python3 packages/board-audit/board-audit-roundtrip.py diff package.editable.json
 ```
 
-For tests/offline tooling, any command that needs current state accepts:
+For deterministic tests or offline tooling, commands that need current state accept:
 
 ```bash
 --current-jsonl path/to/bd-export.jsonl
@@ -132,13 +155,13 @@ For tests/offline tooling, any command that needs current state accepts:
 python3 packages/board-audit/board-audit-roundtrip.py compile-import package.editable.json
 ```
 
-`compile-apply` is an alias with the same current implementation:
+`compile-apply` is currently an alias:
 
 ```bash
 python3 packages/board-audit/board-audit-roundtrip.py compile-apply package.editable.json
 ```
 
-The default output directory is `<package>.roundtrip/` and contains:
+The generated directory contains:
 
 ```text
 beads-import.jsonl
@@ -147,110 +170,109 @@ apply-plan.json
 apply.sh
 ```
 
-`beads-import.jsonl` contains native Beads issue records for changed/new desired issues after three-way reconciliation with current local state.
+`beads-import.jsonl` contains only issue rows that actually require an import/create/update. A comment-only proposal therefore produces an empty JSONL file and a native comment command in the apply plan.
 
-`changes.json` records user changes, current concurrent changes, relation/label deltas, and any conflicts.
+`changes.json` records the reconciliation result. `apply-plan.json` records source/current digests, changed IDs, actual import IDs and explicit post-import commands. `apply.sh` is dry-run-only unless passed `--execute`.
 
-`apply-plan.json` records the current snapshot digest, changed issue IDs, and explicit post-import Beads commands.
-
-`apply.sh` always performs `bd import --dry-run --json` first. Without `--execute` it exits after the dry-run. With `--execute`, it performs the import, applies any required exact-removal commands, and runs `bd dep cycles`.
-
-Dependency removals require special handling because `bd dep remove` is pair-scoped. When a relation type changes on the same source/target pair, the generated plan removes the pair and restores every relation type that should remain after reconciliation.
+Beads import has merge semantics for auxiliary data, so exact removals need native follow-up commands. Label removals use `bd update --remove-label`. Dependency removals use `bd dep remove`; because that command is pair-scoped, the compiler restores any relation types on the same source/target pair that should remain. Comment additions use `bd comments add`.
 
 ## Direct apply
 
-The Python tool can run the same guarded path itself:
+Dry-run:
 
 ```bash
 python3 packages/board-audit/board-audit-roundtrip.py apply package.editable.json
 ```
 
-This is dry-run only.
-
-Actual mutation requires the explicit flag:
+Execute:
 
 ```bash
 python3 packages/board-audit/board-audit-roundtrip.py apply package.editable.json --execute
 ```
 
-The apply sequence is:
+The guarded sequence is:
 
 ```text
 fresh bd export --all
-→ validate immutable base + edit contract
-→ three-way reconcile base/current/desired
-→ refuse conflicts
-→ compile native Beads JSONL
-→ bd import --dry-run --json
-→ bd import --json
-→ explicit removals/rewires where import merge semantics are insufficient
-→ bd dep cycles
-→ fresh bd export --all
-→ verify actual board satisfies user-intended delta
+-> validate immutable base + editable-field contract
+-> three-way reconcile base/current/desired
+-> reject conflicts and missing relation targets
+-> compile native Beads issue JSONL + native mutation commands
+-> bd import --dry-run --json when issue rows exist
+-> stop unless --execute
+-> capture bd dep cycles --json baseline
+-> bd import --json when issue rows exist
+-> native removals/rewires/comment additions
+-> capture bd dep cycles --json again
+-> fail if the change introduced a new scheduling cycle
+-> fresh bd export --all
+-> verify the user-intended delta
 ```
 
-The compiler intentionally does not pass `--allow-stale`. A local write racing the compiled import remains protected by Beads' import stale/tie guard; post-apply verification then detects if intended state was not actually reached.
+`bd dep cycles` itself reports cycles with a successful command exit, so the round-trip tool compares the JSON reports rather than treating exit code zero as "no cycles". Pre-existing cycles are not attributed to the package; newly introduced cycles fail verification.
 
-## Verify later
+The compiler never passes `--allow-stale`. Beads' own stale/tie guard remains a second race barrier around imported issue rows. Post-apply verification is mandatory for executed changes.
 
-The desired delta can be checked against the board independently:
+## Verification semantics
+
+Independent verification is available with:
 
 ```bash
 python3 packages/board-audit/board-audit-roundtrip.py verify package.editable.json
 ```
 
-Verification focuses on the user's intended delta rather than demanding that unrelated concurrent fields equal the old export.
+Verification checks the user's intended delta rather than requiring unrelated concurrent fields to equal the old export. Metadata is checked only for keys the editor changed; label/dependency checks use set/edge deltas. Proposed comments are verified by text-count increase relative to the exported base, while author/time remain Beads-owned.
 
 ## Exit semantics
 
-The CLI uses non-zero exits for machine automation:
-
 ```text
 0  valid / safe / compiled / verified
-2  invalid package, source tampering, unsupported mutation, command failure
+2  invalid artifact, source tampering, unsupported mutation, command failure
 3  three-way conflict
-4  post-apply verification failure
+4  post-apply verification failure or newly introduced dependency cycle
 ```
 
 ## ChatGPT workflow
 
-The intended practical workflow is:
+The intended practical flow is:
 
 ```text
 local repo
-→ board-audit --export --epic <id>
-→ board-audit-roundtrip prepare <work-package>
-→ upload the single editable JSON to ChatGPT
-→ ChatGPT edits desired_issues only
-→ return/save edited artifact
-→ validate + diff locally
-→ compile/apply
-→ fresh export + verification
+-> board-audit --export --epic <id>
+-> board-audit-roundtrip prepare <work-package>
+-> upload the single editable JSON to ChatGPT
+-> ChatGPT edits desired_issues and/or new_comments only
+-> return/save edited artifact
+-> validate + diff locally
+-> compile/apply
+-> fresh export + verification
 ```
 
-This gives ChatGPT a complete Beads work package while keeping all mutation authority and concurrency checks in the local repository.
+This makes ChatGPT aware of the complete Beads work package while local Beads remains the authority for mutation and provenance.
 
 ## Safety boundaries in v1
 
-The first round-trip version intentionally does not treat omission of an issue as deletion. Historical comments cannot be rewritten. Context-only ancestors are read-only by default. Existing assignment/ownership/lifecycle/scheduling/lease/storage-plane operational fields are not mutable through the import path. `--allow-stale` is never generated.
+Round-trip v1 does not treat issue omission as deletion. It does not permit existing lifecycle, assignment, ownership, scheduling, lease, storage-plane, compaction or event/gate mutation. Historical comments are immutable. Context-only ancestors are read-only by default. `--allow-stale` is never generated.
 
-The tool does not claim transactionality across the JSONL import and subsequent exact-removal commands; verification is mandatory for executed changes. For dependency/label removals, a concurrent write in the small post-import window can therefore cause verification to fail and require reconciliation rather than being silently accepted.
+The import plus exact-removal/native-command sequence is not claimed to be one database transaction. A concurrent write in the small post-import window can cause final verification to fail; failure means reconcile again, not silently accept divergence.
 
-Beads/Dolt database backup and history restoration are outside this feature. This is issue/work-package interchange and mutation, not disaster-recovery backup.
+Beads/Dolt backup and history restoration remain outside this feature. This is issue/work-package interchange and mutation, not disaster recovery.
 
 ## Future GitHub Actions automation
 
-After real-board trials prove the edit contract and conflict behavior, this flow is suitable for GitHub Actions automation. The natural staged design is:
+After representative local trials prove the edit contract and concurrency behavior, the natural automation is:
 
 ```text
-workflow_dispatch / issue command
-→ export + prepare on an authorized runner
-→ upload editable work-package artifact
-→ human/ChatGPT produces proposed desired artifact
-→ validation/diff workflow
-→ PR containing desired artifact + generated changes/apply plan
-→ protected apply job on an authorized runner
-→ post-apply export + verification artifact
+workflow_dispatch / controlled request
+-> export + prepare on an authorized runner
+-> publish editable work-package artifact
+-> human/ChatGPT returns proposed desired artifact
+-> non-mutative validate/diff workflow
+-> PR containing desired artifact + generated changes/apply plan
+-> protected apply job on an authorized runner
+-> post-apply export + verification artifact
 ```
 
-The apply job should not be enabled until the manual/local round-trip has been exercised on representative boards. It should run only where the authoritative Beads database is reachable; for workstation/VPS-local Beads state that normally means an appropriately constrained self-hosted runner rather than assuming a fresh GitHub-hosted checkout has the authoritative database.
+The current PR intentionally adds only non-mutative CI for syntax/unit tests. It does not automate Beads mutation.
+
+If the authoritative Beads database is workstation/VPS-local, the eventual apply stage must run on a constrained self-hosted runner that can reach that authoritative database. A fresh GitHub-hosted checkout must not be assumed to contain authoritative local Beads state.
