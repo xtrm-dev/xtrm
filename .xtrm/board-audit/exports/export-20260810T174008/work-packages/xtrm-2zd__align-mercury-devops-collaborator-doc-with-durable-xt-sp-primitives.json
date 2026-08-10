@@ -1,0 +1,247 @@
+{
+  "content_sha256": "57dec7d8d92ac0d2eb9ac5db5cad7bc225c96fbe78719366691cd1e6751c33f9",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-2zd.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2zd.2"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2zd.3"
+      }
+    ],
+    "id": "xtrm-2zd"
+  },
+  "issues": {
+    "xtrm-2zd": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-06-28T12:39:56Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\n`docs/devops/mercury-devops-collaborator.md` currently inlines bash for sync/rebase/audit/GC mechanisms that are partly xt-owned and partly sp-owned. If left inline, future bots will reimplement runtime primitives instead of composing the correct repo-owned surfaces.\n\n## SUCCESS\n\nThe design doc clearly separates Mercury-container composition from reusable runtime primitives: xt owns git/worktree/PR primitives, specialists owns job observability/attention, bd/substrate owns lease state, and the container owns webhooks/cron/bot identity/fork topology.\n\n## SCOPE\n\n- `docs/devops/mercury-devops-collaborator.md` Sections 4-7 and related references\n- Cross-references to xtrm-tools epic `xtrm-lk4on`\n- Cross-references to specialists epic `specialists-05q`\n- Optional brief note in reports/handoff docs only if needed\n\n## NON_GOALS\n\n- Do not implement xt or sp primitives in this repo.\n- Do not change Mercury infra compose files or webhook receiver code.\n- Do not rewrite the entire design doc; keep this as a focused ownership/composition correction.\n\n## CONSTRAINTS\n\n- Durable framing: distinguish bridge commands from substrate targets; name migration shape where the doc discusses runtime state.\n- Logging/telemetry: docs must specify where evidence appears (`xt --json`, `sp ps`/`sp doctor`, container logs, bd notes) and what fields are expected.\n- Preserve the trust/isolation architecture: no host bind mounts, bot PR-only, separate credentials.\n\n## VALIDATION\n\n- [ ] Sections 4-7 no longer present xt/sp primitives as Mercury-specific inline bash when a repo-owned surface exists or is planned.\n- [ ] Rebase notification flow references xt PR merge-state classification and sp needs-attention surface.\n- [ ] Crash recovery separates xt worktree/branch audit from sp dead-job audit.\n- [ ] Garbage collection references xt branch GC and sp terminal-job worktree GC without conflating them.\n- [ ] Required logs/telemetry and smoke evidence paths are explicit.\n\n## OUTPUT\n\nFocused doc update and summary linking the xtrm-tools and specialists epics so implementation agents can work in the right repos.\n\n## REFERENCES\n\n- xtrm-tools epic: `xtrm-lk4on`\n- specialists epic: `specialists-05q`\n- `docs/devops/mercury-devops-collaborator.md`\n",
+        "id": "xtrm-2zd",
+        "issue_type": "epic",
+        "labels": [
+          "autonomous",
+          "devops-docs",
+          "durability"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "Align Mercury devops collaborator doc with durable xt/sp primitives",
+        "updated_at": "2026-06-28T12:39:56Z"
+      }
+    },
+    "xtrm-2zd.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-06-28T12:39:58Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-06-28T14:39:57Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd",
+            "issue_id": "xtrm-2zd.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nSections 4-5 describe sync and rebase handling with inline shell snippets. That hides the SSOT split: xt owns PR/worktree/rebase primitives, sp owns runtime attention surfaces, and the Mercury container only schedules/composes them.\n\n## SUCCESS\n\nThe doc explains the sync and rebase-notification flow as container webhook/cron triggers that call xt PR-status/rebase primitives and sp needs-attention refreshes, with clear fallback behavior for conflicts.\n\n## SCOPE\n\n- `docs/devops/mercury-devops-collaborator.md` Sections 4-5\n- references to xtrm-tools epic `xtrm-lk4on` and specialists epic `specialists-05q`\n\n## NON_GOALS\n\n- Do not design command flags beyond what the implementation epics own.\n- Do not remove the three-layer sync model; rephrase it around composed primitives.\n\n## CONSTRAINTS\n\n- Durable target: doc must name which state survives into substrate container/worktree rows.\n- Logging/telemetry: doc must state expected fields for rebase notification findings (`repo`, `branch`, `pr_url`, `merge_state`, `classification`, `action`, `outcome`).\n- Conflict handling remains non-autonomous: file note/comment/escalation, no hand merge.\n\n## VALIDATION\n\n- [ ] Section 4 keeps webhook/cron/pre-flight layers but delegates primitives to xt/sp.\n- [ ] Section 5 explains `needs-rebase` and `conflict` notification without relying on operator memory.\n- [ ] Cross-repo bead references are present.\n\n## OUTPUT\n\nDoc diff and concise summary of the new composition flow.\n",
+        "id": "xtrm-2zd.1",
+        "issue_type": "task",
+        "labels": [
+          "autonomous",
+          "devops-docs",
+          "durability"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "Rewrite collaborator sync/rebase sections to compose xt and sp commands",
+        "updated_at": "2026-06-28T12:39:58Z"
+      }
+    },
+    "xtrm-2zd.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-06-28T12:40:00Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-06-28T14:39:59Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd",
+            "issue_id": "xtrm-2zd.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nSections 6-7 mix container restart recovery, branch cleanup, specialist job state, and worktree GC in container-local bash. Those concerns are split across xt and sp.\n\n## SUCCESS\n\nThe doc states that container startup/cron composes xt worktree/branch audit, xt branch GC, sp dead-job audit, and sp terminal-job worktree GC, with each surface owning its own evidence and safety model.\n\n## SCOPE\n\n- `docs/devops/mercury-devops-collaborator.md` Sections 6-7\n- optional updates to Section 9 observability table if needed\n\n## NON_GOALS\n\n- Do not implement GC commands.\n- Do not change the weekly/15-minute cadence unless the doc text becomes inconsistent.\n\n## CONSTRAINTS\n\n- Durable framing: sp dead-job audit may retire into the substrate daemon; xt worktree/branch audit and PR-state fields migrate/attach to substrate container state.\n- Logging/telemetry: document expected evidence locations (`xt --json`, `sp doctor --json`, container logs, bd notes/comments).\n- Safety: deletion remains dry-run/explicit by default.\n\n## VALIDATION\n\n- [ ] Section 6 separates worktree/branch audit from job-row audit.\n- [ ] Section 7 separates xt branch GC from sp terminal-job worktree cleanup.\n- [ ] Section 9 observability table includes the needs-attention surface if applicable.\n\n## OUTPUT\n\nDoc diff and handoff notes for implementation epics.\n",
+        "id": "xtrm-2zd.2",
+        "issue_type": "task",
+        "labels": [
+          "autonomous",
+          "devops-docs",
+          "durability"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "Rewrite collaborator recovery and GC sections around xt/sp ownership",
+        "updated_at": "2026-06-28T12:40:00Z"
+      }
+    },
+    "xtrm-2zd.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-06-28T12:40:01Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-06-28T14:40:02Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd.1",
+            "issue_id": "xtrm-2zd.3",
+            "metadata": "{}",
+            "type": "validates"
+          },
+          {
+            "created_at": "2026-06-28T14:40:01Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd",
+            "issue_id": "xtrm-2zd.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-06-28T14:40:03Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd.2",
+            "issue_id": "xtrm-2zd.3",
+            "metadata": "{}",
+            "type": "validates"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nA cross-repo design-doc update can easily drift from the actual xt and sp boards. The final doc must align with the implementation ownership and not promise commands or fields that the boards do not plan.\n\n## SUCCESS\n\nThe doc update is checked against xtrm-tools epic `xtrm-lk4on` and specialists epic `specialists-05q`, with any mismatches corrected or noted as open decisions.\n\n## SCOPE\n\n- `docs/devops/mercury-devops-collaborator.md`\n- `bd show` output from xtrm-tools and specialists epics\n\n## NON_GOALS\n\n- Do not validate code behavior; implementation repos own tests.\n- Do not create new cross-repo boards unless gaps are found.\n\n## CONSTRAINTS\n\n- Logging/telemetry: validation output must list each doc claim and the owning bead/epic or mark it as intentionally future.\n- Smoke/E2E: doc-level smoke is a consistency check, not code execution.\n\n## VALIDATION\n\n- [ ] Every xt-owned doc claim maps to `xtrm-lk4on` or child bead.\n- [ ] Every sp-owned doc claim maps to `specialists-05q` or child bead.\n- [ ] bd/substrate lease claims point to bd merge-slot/substrate, not new sp columns.\n- [ ] Container-only claims remain in the Mercury collaborator doc.\n\n## OUTPUT\n\nChecklist-style validation note with corrected doc links and residual open questions.\n",
+        "id": "xtrm-2zd.3",
+        "issue_type": "task",
+        "labels": [
+          "autonomous",
+          "devops-docs",
+          "durability"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "open",
+        "title": "Validate collaborator doc consistency against xtrm-tools and specialists boards",
+        "updated_at": "2026-06-28T12:40:01Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-06-28T14:39:57Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd",
+        "issue_id": "xtrm-2zd.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2zd.1",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-06-28T14:39:59Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd",
+        "issue_id": "xtrm-2zd.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2zd.2",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-06-28T14:40:01Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd",
+        "issue_id": "xtrm-2zd.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2zd.3",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-06-28T14:40:02Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd.1",
+        "issue_id": "xtrm-2zd.3",
+        "metadata": "{}",
+        "type": "validates"
+      },
+      "source": "xtrm-2zd.3",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd.1",
+      "type": "validates"
+    },
+    {
+      "raw": {
+        "created_at": "2026-06-28T14:40:03Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd.2",
+        "issue_id": "xtrm-2zd.3",
+        "metadata": "{}",
+        "type": "validates"
+      },
+      "source": "xtrm-2zd.3",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd.2",
+      "type": "validates"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-2zd",
+  "root_title": "Align Mercury devops collaborator doc with durable xt/sp primitives",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "epic"
+}
