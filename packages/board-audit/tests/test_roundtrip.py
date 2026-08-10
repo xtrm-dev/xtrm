@@ -105,6 +105,17 @@ class RoundtripTests(unittest.TestCase):
         change = next(item for item in rec["changes"] if item["id"] == "x-1")
         self.assertEqual(change["label_remove"], ["old"])
 
+    def test_metadata_verify_only_checks_user_delta(self):
+        raw = package()
+        raw["issues"]["x-1"]["source"]["metadata"] = {"a": 1}
+        prepared = rt.prepare_package(raw)
+        prepared["desired_issues"]["x-1"]["metadata"] = {"a": 2}
+        actual = {key: value["source"].copy() for key, value in prepared["issues"].items()}
+        actual["x-1"] = dict(actual["x-1"])
+        actual["x-1"]["metadata"] = {"a": 2, "unrelated": 9}
+
+        self.assertEqual(rt.verify_intent(prepared, actual), [])
+
     def test_comments_are_append_only(self):
         prepared = rt.prepare_package(package())
         prepared["desired_issues"]["x-1"]["comments"] = []
@@ -151,6 +162,13 @@ class RoundtripTests(unittest.TestCase):
         prepared["desired_issues"]["x-1"]["status"] = "closed"
         with self.assertRaises(rt.RoundtripError):
             rt.validate_package(prepared)
+
+    def test_introduced_cycles_ignores_preexisting_cycle(self):
+        old = [{"members": [{"id": "x-1"}, {"id": "x-2"}], "partial": False}]
+        new = old + [{"members": [{"id": "x-3"}, {"id": "x-4"}], "partial": False}]
+
+        self.assertEqual(rt.introduced_cycles(old, new), [new[1]])
+        self.assertEqual(rt.introduced_cycles(old, old), [])
 
 
 if __name__ == "__main__":
