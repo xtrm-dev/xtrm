@@ -1,6 +1,6 @@
 {
   "schema_version": "xtrm.v1.final-completion-ledger.v1",
-  "reconciled": "2026-08-09T00:00:00+02:00",
+  "reconciled": "2026-08-10T00:00:00+02:00",
   "authority": {
     "execution_truth": "repository-local Beads",
     "source_truth": "default-branch Git",
@@ -27,36 +27,206 @@
     "FINAL": "PENDING"
   },
   "packets": [
-    "SP-PRD-01",
-    "SP-RMAP-01",
-    "SP-EXEC-01",
-    "SP-CHAIN-01",
-    "SP-EVAL-01",
-    "SP-PI-01",
-    "CORE-MEM-01",
-    "XTRM-CHAN-01",
-    "XTRM-CHAN-02",
-    "XTRM-SUB-01",
-    "XTRM-OUT-01",
-    "XTRM-ADAPT-01",
-    "XTRM-PI-01",
-    "XTRM-PLAN-01",
-    "XTRM-UI-01",
-    "XTRM-REG-01",
-    "XTRM-DRAFT-01",
-    "XTRM-DRAFT-02"
+    {
+      "id": "SP-PRD-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Patch existing Specialists WPs with accepted runtime semantics; map each residual to an existing Bead.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "SP-RMAP-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Patch the roadmap boundary and sequence without creating a competing WP family.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "SP-EXEC-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Patch execution identity, leases, mutation journal, uncertain reconciliation, replay, snapshots and bounded convergence.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "SP-CHAIN-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Patch governed dynamic-child and terminal-limit semantics.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "SP-EVAL-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Add runtime/system evaluation dimensions and telemetry-integrity evidence.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "SP-PI-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Complete Pi RPC compatibility first; record AgentSession only as a later comparison.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "CORE-MEM-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Patch memory boundaries and governed promotion while retaining PRD WP-M01..M08 as implementation authority.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "XTRM-CHAN-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Implement the ChannelMessage-to-delivery-to-processing separation and runtime identity/backpressure/replay rules.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "XTRM-CHAN-02",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Align historical rationale with canonical Channels semantics.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "XTRM-SUB-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Patch design-only separation of work causality and execution lineage; no target runtime.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "XTRM-OUT-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Add uncertain and reconciliation outcomes with stable next actions.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "XTRM-ADAPT-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Require runtime-derived identity, idempotency and reconciliation; no adapter-private authority.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "XTRM-PI-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Record RPC/AgentSession ownership and compatibility boundaries.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "XTRM-PLAN-01",
+      "disposition": "DELIVERED_SOURCE_ONLY",
+      "required_result": "Maintain the canonical plan and JSON as synchronized sequencing authorities.",
+      "evidence_state": "source-level disposition recorded"
+    },
+    {
+      "id": "XTRM-UI-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Define execution-tree projection and coherent snapshot/replay behavior.",
+      "evidence_state": "pending repository-local Beads and implementation evidence"
+    },
+    {
+      "id": "XTRM-REG-01",
+      "disposition": "DELIVERED_SOURCE_ONLY",
+      "required_result": "Maintain this single ledger with separate design/source/release/deployment/promotion states.",
+      "evidence_state": "source-level disposition recorded"
+    },
+    {
+      "id": "XTRM-DRAFT-01",
+      "disposition": "SUPERSEDED",
+      "required_result": "Unique valid content absorbed; stale snapshot remains closed.",
+      "evidence_state": "source-level disposition recorded"
+    },
+    {
+      "id": "XTRM-DRAFT-02",
+      "disposition": "SUPERSEDED",
+      "required_result": "Valid registry content absorbed; stale registry remains closed.",
+      "evidence_state": "source-level disposition recorded"
+    }
   ],
   "implementation_residuals": [
-    "PI-v0.84.1",
-    "KAN-127-K5-K6",
-    "specialists.execution.v1",
-    "ChainTemplate-ResolvedChain",
-    "D1-reducer-scheduler-delivery",
-    "quant-fixture",
-    "Eval-Core-context-prompts",
-    "Memory-WP-M01-M08",
-    "Channels-v1-bridge",
-    "pulse-attention-projections"
+    {
+      "id": "PI-v0.84.1",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "RPC compatibility and fault-injected E2E"
+    },
+    {
+      "id": "KAN-127-K5-K6",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "released parity matrix and clean-install trio smoke"
+    },
+    {
+      "id": "specialists.execution.v1",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "identity, lease, uncertain, replay, recovery and convergence fixtures"
+    },
+    {
+      "id": "ChainTemplate-ResolvedChain",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "pure compiler, persistence and composition E2E"
+    },
+    {
+      "id": "D1-reducer-scheduler-delivery",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "reducer, intents, delivery, idempotency and crash matrix"
+    },
+    {
+      "id": "quant-fixture",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "deterministic validator vertical fixture"
+    },
+    {
+      "id": "Eval-Core-context-prompts",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "telemetry integrity, system metrics and measured promotion"
+    },
+    {
+      "id": "Memory-WP-M01-M08",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "provenance, dedupe, contradiction, lenses, retrieval and promotion tests"
+    },
+    {
+      "id": "Channels-v1-bridge",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "delivery/processing split, identity, backpressure and recovery fixtures"
+    },
+    {
+      "id": "pulse-attention-projections",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "pulse, attention, recovery and separate graph projections"
+    },
+    {
+      "id": "service-knowledge",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "source, release/deployment and canary disposition"
+    },
+    {
+      "id": "console-gitboard",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "owning service and versioned DTO/event contract evidence"
+    },
+    {
+      "id": "devops-platform",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "living DevOps PRD and deployment/operator freshness evidence"
+    },
+    {
+      "id": "release-ci",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "published package and supported-install evidence"
+    },
+    {
+      "id": "native-adapters",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "adapter compatibility and authority-boundary fixtures"
+    },
+    {
+      "id": "mcp-facing-seams",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "MCP-facing contract and migration disposition"
+    },
+    {
+      "id": "five-package-monorepo",
+      "disposition": "DEFERRED_BY_EXPLICIT_GATE",
+      "required_evidence": "named later readiness/migration gate"
+    },
+    {
+      "id": "substrate-runtime-migration",
+      "disposition": "DEFERRED_BY_EXPLICIT_GATE",
+      "required_evidence": "accepted target-runtime gate"
+    }
   ],
   "next_action": "map residuals onto existing repository-local Beads after local evidence delta; do not create a cross-repository mega-epic"
 }
