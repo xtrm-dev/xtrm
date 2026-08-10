@@ -12,6 +12,8 @@ Current Beads `bd import` is an incremental JSONL upsert counterpart to `bd expo
 
 Beads import merges/deduplicates auxiliary data such as relationships/comments rather than acting as an exact replacement primitive. For that reason the round-trip compiler emits both a JSONL upsert and explicit native cleanup mutations when user intent removes labels or dependency edges.
 
+Beads also has stricter lifecycle/claim semantics on ordinary mutation commands such as `bd update`. Because `bd import` is intentionally a migration/recovery upsert door, round-trip v1 does not permit an editor to mutate existing assignment, claim/lease, lifecycle status, scheduling, storage-plane, compaction, event, or other operational control fields through JSONL. Those fields are still preserved losslessly in `issues.<id>.source` and in current-state reconciliation; they are simply read-only until a later compiler maps them to the appropriate guarded native commands.
+
 ## Editing model
 
 An exported package contains immutable source records:
@@ -44,7 +46,30 @@ Only `desired_issues` is editable. `issues.<id>.source` is immutable base eviden
 
 Selected records are copied to `desired_issues`. Context-only closed ancestors remain read-only unless `--allow-context-edit` is supplied explicitly.
 
-Existing selected issues may not be removed from `desired_issues`; closing or superseding them should be represented as Beads state, not as disappearance from the artifact. New desired issue IDs are allowed when they carry at least a title.
+Existing selected issues may not be removed from `desired_issues`; closing or superseding them should eventually be represented through guarded lifecycle commands, not as disappearance from the artifact. New desired issue IDs are allowed when they carry at least a title.
+
+For existing beads, round-trip v1 allows edits to the ordinary planning/content surface:
+
+```text
+title
+description
+design
+acceptance_criteria
+notes
+spec_id
+priority
+issue_type
+estimated_minutes
+external_ref
+metadata
+labels
+dependencies / deps / relations
+comments (append only)
+```
+
+The source record remains lossless even when a field is not editable. Existing fields such as `assignee`, `owner`, `status`, lease/heartbeat data, timestamps/provenance, scheduling controls, storage class/ephemeral flags, gate/event fields and similar operational state are rejected if changed in `desired_issues`.
+
+A newly introduced desired issue has no live lifecycle state to overwrite, so v1 additionally permits an initial `status` value on new records. Other unsupported operational fields are still rejected.
 
 Existing provenance/timestamp fields such as `id`, `created_at`, `created_by`, and `updated_at` are not editor-controlled. The compiler preserves identity/provenance and stamps the outgoing update timestamp after reconciliation.
 
@@ -182,7 +207,7 @@ The CLI uses non-zero exits for machine automation:
 
 ```text
 0  valid / safe / compiled / verified
-2  invalid package, source tampering, command failure, or unsupported operation
+2  invalid package, source tampering, unsupported mutation, command failure
 3  three-way conflict
 4  post-apply verification failure
 ```
@@ -207,7 +232,9 @@ This gives ChatGPT a complete Beads work package while keeping all mutation auth
 
 ## Safety boundaries in v1
 
-The first round-trip version intentionally does not treat omission of an issue as deletion. Historical comments cannot be rewritten. Context-only ancestors are read-only by default. `--allow-stale` is never generated. The tool does not claim transactionality across the JSONL import and subsequent exact-removal commands; verification is mandatory for executed changes. For dependency/label removals, a concurrent write in the small post-import window can therefore cause verification to fail and require reconciliation rather than being silently accepted.
+The first round-trip version intentionally does not treat omission of an issue as deletion. Historical comments cannot be rewritten. Context-only ancestors are read-only by default. Existing assignment/ownership/lifecycle/scheduling/lease/storage-plane operational fields are not mutable through the import path. `--allow-stale` is never generated.
+
+The tool does not claim transactionality across the JSONL import and subsequent exact-removal commands; verification is mandatory for executed changes. For dependency/label removals, a concurrent write in the small post-import window can therefore cause verification to fail and require reconciliation rather than being silently accepted.
 
 Beads/Dolt database backup and history restoration are outside this feature. This is issue/work-package interchange and mutation, not disaster-recovery backup.
 
