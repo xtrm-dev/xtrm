@@ -1,0 +1,2 @@
+[console_scripts]
+arena-top = arena_top.cli:main
