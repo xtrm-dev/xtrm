@@ -1,138 +1,135 @@
 # board-audit — install & operational manual
 
-A one-shot script that exports the local `bd` board + relevant merged PRs into a single ChatGPT-web-friendly bundle for periodic board audits.
+`board-audit` has two deliberately separate surfaces:
 
-**Extracted from** the 2026-07-22 infra ChatGPT audit workstream (bd `infra-1evu`, `infra-koe2`, `infra-bkr7`, `infra-0chg`, `infra-4co7`).
+1. an audit workflow that exports Beads plus relevant merged PRs into a ChatGPT-web-friendly bundle;
+2. a structured Beads export workflow that produces lossless, deterministic work-package JSON without audit instructions.
 
----
+The canonical executable is `packages/board-audit/board-audit`.
 
-## Install (any host)
+## Prerequisites
 
-Prereqs: `bd` (beads), `gh` (GitHub CLI, authenticated), `python3`.
-
-```bash
-# 1. Drop the script somewhere on PATH.
-mkdir -p ~/bin
-cp board-audit ~/bin/board-audit
-chmod +x ~/bin/board-audit
-
-# 2. If ~/bin is not on your interactive PATH (typical on Fedora zsh without
-#    ~/.zshrc PATH tweaks), symlink into ~/.local/bin which usually is:
-mkdir -p ~/.local/bin
-ln -sf ~/bin/board-audit ~/.local/bin/board-audit
-
-# 3. Sanity-check.
-which board-audit
-board-audit --help 2>/dev/null || echo "(script has no --help; run inside a git repo to actually invoke)"
-```
-
-Verify it can reach GitHub:
+`bd` (Beads), `python3`, and a Git working tree are required for structured export. Audit mode additionally requires authenticated `gh`.
 
 ```bash
 gh auth status
-# → "Logged in to github.com as <you>"
-```
-
-And `bd`:
-
-```bash
 bd stats
 ```
 
-## Run
+## Structured work-package export
+
+The structured exporter always performs exactly one canonical acquisition:
 
 ```bash
-cd <any-mercury-repo>       # git working tree with bd + gh set up
+bd export --all
+```
+
+There is no arbitrary `bd list --limit N` ceiling and no N× `bd show` hydration loop. All filtering and graph reconstruction happen locally from that immutable snapshot.
+
+### Export all non-terminal work
+
+```bash
+board-audit --export --open
+```
+
+`--open` means non-terminal work, not only literal `status=open`. Active statuses such as `in_progress` and `blocked` remain included. Closed ancestors required to understand the hierarchy are retained as `context-only` records.
+
+### Export the full board
+
+```bash
+board-audit --export --all
+```
+
+### Export one epic/subtree
+
+```bash
+board-audit --export --epic xtrm-123
+```
+
+### Export one bead/subtree
+
+```bash
+board-audit --export --bead xtrm-456
+```
+
+A task with children is treated as a work package even when its issue type is not `epic`.
+
+### Structured output
+
+Each invocation creates a timestamped directory under:
+
+```text
+/tmp/board-audit-<repo>/export-YYYYMMDDTHHMMSS/
+├── raw-beads.jsonl
+├── manifest.json
+└── work-packages/
+    ├── <root-id>__<slug-title>.json
+    └── ...
+```
+
+`raw-beads.jsonl` is the direct Beads source snapshot. It is retained so the normalized projection never becomes a replacement source of truth.
+
+`manifest.json` records repository, Beads version, source command, raw SHA-256, record counts, selection scope, work-package filenames and package content digests. It also reports unknown parent references and any selected records that could not be packaged.
+
+Each work-package file uses schema `xtrm.board-audit.work-package.v1`. It contains the root identity, all source issue records losslessly under `issues.<id>.source`, a separate parent-child `hierarchy`, preserved dependency/relationship edges, cross-package/external relations, and diagnostics such as dangling relation targets or multiple-parent DAG nodes.
+
+Unknown Beads fields are preserved rather than filtered through a board-audit field whitelist. This keeps the exporter forward-compatible as Beads evolves.
+
+The exporter distinguishes hierarchy from the wider dependency graph. Parent-child structure determines package topology; `blocks`, `related`, `discovered-from` and other relationship data remain represented as relations and are not flattened into a tree.
+
+Structured export emits data only. It intentionally does not embed the large audit prompt.
+
+## Audit mode
+
+The existing audit workflow remains available:
+
+```bash
 board-audit
+board-audit --epic xtrm-123
+board-audit --no-pr
 ```
 
-Takes ~2 min for a ~200-PR repo. Overwrites the bundle on re-run.
+Audit mode writes:
 
-## Output
-
-Single file to attach to ChatGPT web:
-
-```
-/tmp/board-audit-<repo>/audit-bundle-YYYYMMDD.md
-```
-
-Intermediate files kept alongside (if you want to iterate on the prompt without re-exporting data):
-
-```
+```text
 /tmp/board-audit-<repo>/
-├── audit-bundle-YYYYMMDD.md   ← attach THIS
-├── audit-prompt.md            ← prompt only
-├── beads.jsonl                ← all non-closed beads
-├── prs.md                     ← per-PR markdown (full body + all commits)
-└── current-state.md           ← bd stats snapshot
+├── audit-bundle-YYYYMMDD.md
+├── audit-prompt.md
+├── beads.jsonl
+├── prs.md
+└── current-state.md
 ```
 
-## What's in the bundle
+The Beads corpus in audit mode now also derives from one `bd export --all` snapshot, so whole-board and `--epic` audit paths no longer use different `bd list`/`bd show` acquisition semantics.
 
-1. **Prompt** — 6-bucket classification + 13 additional passes:
-   - Buckets: A live / B silently shipped / C superseded / D stale / E blocked-in-fact / F ambiguous
-   - Passes: (1) ponytail description criticism, (2) dependency rewiring, (3) codebase drift, (4) metric-emission via Prometheus MCP, (5) Jira ↔ bd cross-check, (6) sister-repo relocations, (7) silent supersedes, (8) zombie epics, (9) stale-tone sweep, (10) follow-up gap, (11) duplicate/adjacent, (12) hard validation / no-regression, (13) existing-library reuse
-2. **beads.jsonl** — every non-closed bead with full fields
-3. **prs.md** — merged PRs since `min(bead.created) - 7d`, each with number/title/date/author/URL, files changed with +/- line counts, **full body**, **all commits with short SHA + headline**
-
-## Auto-window (why the PR count varies)
-
-The PR window is scoped to the oldest open bead's creation date minus a 7-day buffer. If the oldest bead is 75 days old you get ~75 days of PRs; fresh board falls back to 90 days. Guarantees full silent-ship detection coverage without wasting API calls on PRs older than any open bead.
-
-## Overrides
-
-Rarely needed:
+Merged PR export retains the historical auto-window: by default PRs are fetched from the oldest selected bead creation date minus seven days, with `BOARD_AUDIT_PR_LIMIT=500` as a GitHub safety cap. Override with:
 
 ```bash
-BOARD_AUDIT_PR_SINCE=2026-01-01 board-audit    # explicit start date
-BOARD_AUDIT_PR_LIMIT=1000 board-audit          # raise the 500-PR safety cap
+BOARD_AUDIT_PR_SINCE=2026-01-01 board-audit
+BOARD_AUDIT_PR_LIMIT=1000 board-audit
 ```
 
-## Using the output on ChatGPT web
+`--no-pr` skips the PR corpus and leaves silent-ship verification to GitHub tool use.
 
-1. Open a ChatGPT web session with browsing + tool use (Pro tier).
-2. Attach the single bundle file.
-3. Type: **"run the audit"**.
-4. Wait ~15–25 minutes.
-5. Paste the resulting audit back to whichever coordinator agent will execute the recommendations.
+## Design invariants
 
-The prompt tells ChatGPT to verify claims with its GitHub, Jira, and web-search tools. If a bead can't be verified, it goes into bucket F rather than being closed by inference.
+The source snapshot is Beads authority; board-audit outputs are projections. One `bd export --all` acquisition feeds an invocation. No hardcoded issue-count limit is used for Beads acquisition. Original source fields are retained. Arbitrary-depth parent-child hierarchies are supported. Closed ancestors may be carried as context without being counted as selected active work. Cross-package dependencies remain resolvable by ID. Dangling references and DAG multiplicity are diagnostics, not fatal parsing errors. Work-package serialization and ordering are deterministic apart from run-level manifest metadata such as generation time.
 
-## What to do with the audit result
+The Jira/import direction described in `board-audit-to-jira-and-improvements.md` should consume the canonical work-package schema in a later change rather than create another ad-hoc Beads extraction path.
 
-Feed it back to a Claude/pi session in the target repo with:
+## Installation
 
-> "here is a ChatGPT audit of the board — execute the mechanical B/C/D/E findings in a batch, surface only genuinely-operator decisions at the end"
+Copy or symlink the canonical script onto PATH:
 
-The 2026-07-22 infra run reduced the open board **108 → 68 beads (−37%)** in a single session with this pattern.
+```bash
+mkdir -p ~/bin ~/.local/bin
+cp packages/board-audit/board-audit ~/bin/board-audit
+chmod +x ~/bin/board-audit
+ln -sf ~/bin/board-audit ~/.local/bin/board-audit
+```
 
-## Pitfalls / gotchas
+Then verify:
 
-- **Zsh PATH:** if `board-audit` isn't found, `~/bin` isn't on your interactive PATH. Symlinking to `~/.local/bin` (step 2 of Install) usually fixes it. `hash -r` if the shell has cached "not found".
-- **GitHub cardinality trap:** `gh pr list --json commits` collapses above ~50 PRs. The script side-steps by doing a cheap list first then a per-PR `gh pr view` loop.
-- **Bundle size:** ~600K for 200 PRs. ChatGPT web handles it. If you hit an upload limit, drop `BOARD_AUDIT_PR_LIMIT` or narrow `PR_SINCE`.
-- **Empty board:** falls back to 90d-ago PR window.
-- **gh auth expired:** the PR loop will spam warnings; re-auth with `gh auth login`.
-
-## Iterating on the prompt
-
-The prompt lives inline in the script inside a `<<'PROMPT_EOF'` heredoc. Edit `~/bin/board-audit` directly (and re-`cp` back into this resource dir when you like the change). Placeholders substituted at emit time:
-
-- `%REPO%` — GitHub owner/name
-- `%DATE%` — today
-- `%BEAD_COUNT%` — non-closed bead count
-- `%PR_LIMIT%` — safety cap
-- `%PR_SINCE%` — auto-computed start date
-
-## Related memories
-
-- `board-audit-tool` (bd remember key) — feature-level notes on this tool
-- `feedback_no_premature_readiness_claims` — audit ships defaults, operator ratifies
-- `feedback_coordinator_acts_doesnt_ask` — execute B/C/D mechanically, surface only genuine decisions
-
-## Files in this resource
-
-- `board-audit` — the script itself (executable)
-- `README.md` — this file (install + operational manual)
-
-The atomic zettel version of the ops-only manual lives at `~/second-mind/zettlekasten/board-audit.md`.
+```bash
+board-audit --help
+```
