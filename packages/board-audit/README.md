@@ -1,15 +1,22 @@
 # board-audit — install & operational manual
 
-`board-audit` has two deliberately separate surfaces:
+`board-audit` now has three deliberately separated surfaces:
 
 1. an audit workflow that exports Beads plus relevant merged PRs into a ChatGPT-web-friendly bundle;
-2. a structured Beads export workflow that produces lossless, deterministic work-package JSON without audit instructions.
+2. a structured Beads export workflow that produces lossless, deterministic work-package JSON without audit instructions;
+3. a round-trip reconciler that turns one work package into editable desired state, three-way merges it against current local Beads, compiles native Beads JSONL/mutations, and verifies applied intent.
 
-The canonical executable is `packages/board-audit/board-audit`.
+The canonical files are:
+
+```text
+packages/board-audit/board-audit
+packages/board-audit/board-audit-roundtrip.py
+packages/board-audit/ROUNDTRIP.md
+```
 
 ## Prerequisites
 
-`bd` (Beads), `python3`, and a Git working tree are required for structured export. Audit mode additionally requires authenticated `gh`.
+`bd` (Beads), `python3`, and a Git working tree are required for structured export/round-trip. Audit mode additionally requires authenticated `gh`.
 
 ```bash
 gh auth status
@@ -26,7 +33,7 @@ bd export --all
 
 There is no arbitrary `bd list --limit N` ceiling and no N× `bd show` hydration loop. All filtering and graph reconstruction happen locally from that immutable snapshot.
 
-### Export all non-terminal work
+Export all non-terminal work:
 
 ```bash
 board-audit --export --open
@@ -34,29 +41,17 @@ board-audit --export --open
 
 `--open` means non-terminal work, not only literal `status=open`. Active statuses such as `in_progress` and `blocked` remain included. Closed ancestors required to understand the hierarchy are retained as `context-only` records.
 
-### Export the full board
+Other scopes:
 
 ```bash
 board-audit --export --all
-```
-
-### Export one epic/subtree
-
-```bash
 board-audit --export --epic xtrm-123
-```
-
-### Export one bead/subtree
-
-```bash
 board-audit --export --bead xtrm-456
 ```
 
 A task with children is treated as a work package even when its issue type is not `epic`.
 
-### Structured output
-
-Each invocation creates a timestamped directory under:
+Each invocation creates:
 
 ```text
 /tmp/board-audit-<repo>/export-YYYYMMDDTHHMMSS/
@@ -69,7 +64,7 @@ Each invocation creates a timestamped directory under:
 
 `raw-beads.jsonl` is the direct Beads source snapshot. It is retained so the normalized projection never becomes a replacement source of truth.
 
-`manifest.json` records repository, Beads version, source command, raw SHA-256, record counts, selection scope, work-package filenames and package content digests. It also reports unknown parent references and any selected records that could not be packaged.
+`manifest.json` records repository, Beads version, source command, raw SHA-256, record counts, selection scope, work-package filenames and package content digests. It also reports unknown parent references and selected records that could not be packaged.
 
 Each work-package file uses schema `xtrm.board-audit.work-package.v1`. It contains the root identity, all source issue records losslessly under `issues.<id>.source`, a separate parent-child `hierarchy`, preserved dependency/relationship edges, cross-package/external relations, and diagnostics such as dangling relation targets or multiple-parent DAG nodes.
 
@@ -78,6 +73,81 @@ Unknown Beads fields are preserved rather than filtered through a board-audit fi
 The exporter distinguishes hierarchy from the wider dependency graph. Parent-child structure determines package topology; `blocks`, `related`, `discovered-from` and other relationship data remain represented as relations and are not flattened into a tree.
 
 Structured export emits data only. It intentionally does not embed the large audit prompt.
+
+## Editable round-trip back to local Beads
+
+The round-trip tool consumes the work-package schema above. It does not ask an editor/model to rewrite the immutable source records directly.
+
+Prepare one exported package:
+
+```bash
+python3 packages/board-audit/board-audit-roundtrip.py prepare \
+  /tmp/board-audit-xtrm/export-.../work-packages/xtrm-123__title.json
+```
+
+This creates an `.editable.json` artifact with `desired_issues`. The edit contract is:
+
+```text
+issues.<id>.source    immutable base state
+desired_issues.<id>   desired Beads state; edit this
+```
+
+The base records are SHA-256 checked before compilation. Existing timestamps/provenance fields are protected, comments are append-only, and context-only ancestors are read-only unless explicitly enabled.
+
+This `.editable.json` is the intended single artifact to hand to ChatGPT or another agent. The agent can change descriptions, design/notes/acceptance criteria, status/priority, metadata, labels, dependencies, append comments, and add new desired issues while retaining the complete original work-package context.
+
+Before any mutation, reconcile against current local Beads:
+
+```bash
+python3 packages/board-audit/board-audit-roundtrip.py validate package.editable.json
+python3 packages/board-audit/board-audit-roundtrip.py diff package.editable.json
+```
+
+The reconciler performs:
+
+```text
+base (original export)
++ desired (edited artifact)
++ current (fresh bd export --all)
+→ merged desired state or explicit conflict
+```
+
+Disjoint concurrent changes are retained. If both current and desired changed the same ordinary field differently, compilation stops rather than overwriting one side.
+
+Compile the safe result:
+
+```bash
+python3 packages/board-audit/board-audit-roundtrip.py compile-import package.editable.json
+# equivalent current compiler surface:
+python3 packages/board-audit/board-audit-roundtrip.py compile-apply package.editable.json
+```
+
+The generated directory contains:
+
+```text
+beads-import.jsonl
+changes.json
+apply-plan.json
+apply.sh
+```
+
+`beads-import.jsonl` is native Beads import data. `changes.json` records base/current/desired deltas. `apply-plan.json` records the current snapshot digest and explicit post-import mutations. `apply.sh` performs a Beads dry-run by default and only mutates when called with `--execute`.
+
+Direct guarded apply is also supported:
+
+```bash
+python3 packages/board-audit/board-audit-roundtrip.py apply package.editable.json
+# dry-run only
+
+python3 packages/board-audit/board-audit-roundtrip.py apply package.editable.json --execute
+# mutation + fresh export + intent verification
+```
+
+The tool never generates `bd import --allow-stale`. It relies on Beads' import stale/tie protection as a second race guard and verifies the resulting local board after an executed apply.
+
+Beads import has merge/upsert semantics for auxiliary data, so exact removals are compiled separately. Label removals use native `bd update --remove-label`; dependency removals/rewires use native `bd dep remove`/`bd dep add`. Historical comments are never rewritten by the round-trip layer.
+
+Full rationale, safety boundaries, exit semantics and future workflow design are in `ROUNDTRIP.md`.
 
 ## Audit mode
 
@@ -113,23 +183,35 @@ BOARD_AUDIT_PR_LIMIT=1000 board-audit
 
 ## Design invariants
 
-The source snapshot is Beads authority; board-audit outputs are projections. One `bd export --all` acquisition feeds an invocation. No hardcoded issue-count limit is used for Beads acquisition. Original source fields are retained. Arbitrary-depth parent-child hierarchies are supported. Closed ancestors may be carried as context without being counted as selected active work. Cross-package dependencies remain resolvable by ID. Dangling references and DAG multiplicity are diagnostics, not fatal parsing errors. Work-package serialization and ordering are deterministic apart from run-level manifest metadata such as generation time.
+Beads remains authority; board-audit outputs are projections/edit proposals. One `bd export --all` acquisition feeds an export/audit invocation. No hardcoded issue-count limit is used for Beads acquisition. Original source fields are retained. Arbitrary-depth parent-child hierarchies are supported. Closed ancestors may be carried as context without being counted as selected active work. Cross-package dependencies remain resolvable by ID. Dangling references and DAG multiplicity are diagnostics, not fatal parsing errors. Work-package serialization and ordering are deterministic apart from run-level manifest metadata.
 
-The Jira/import direction described in `board-audit-to-jira-and-improvements.md` should consume the canonical work-package schema in a later change rather than create another ad-hoc Beads extraction path.
+For round-trip mutation, immutable base records are hash checked; current state is freshly acquired; overlapping three-way conflicts are fatal; `--allow-stale` is not automatic; issue omission is not deletion; existing comments are append-only; executed apply ends with a fresh export and intent verification.
+
+The Jira direction in `board-audit-to-jira-and-improvements.md` should consume the same canonical work-package schema rather than create another ad-hoc Beads extraction path.
 
 ## Installation
 
-Copy or symlink the canonical script onto PATH:
+Copy or symlink the canonical tools onto PATH:
 
 ```bash
 mkdir -p ~/bin ~/.local/bin
 cp packages/board-audit/board-audit ~/bin/board-audit
-chmod +x ~/bin/board-audit
+cp packages/board-audit/board-audit-roundtrip.py ~/bin/board-audit-roundtrip
+chmod +x ~/bin/board-audit ~/bin/board-audit-roundtrip
 ln -sf ~/bin/board-audit ~/.local/bin/board-audit
+ln -sf ~/bin/board-audit-roundtrip ~/.local/bin/board-audit-roundtrip
 ```
 
 Then verify:
 
 ```bash
 board-audit --help
+board-audit-roundtrip --help
+python3 -m unittest packages/board-audit/tests/test_roundtrip.py
 ```
+
+## GitHub Actions direction
+
+Do not enable automated mutation yet. After several representative local round-trips, the intended next step is a GitHub Actions pipeline that exports/prepares a package, publishes it as an artifact, validates a proposed edited artifact, records the diff/apply-plan in a PR, and gates actual application behind an authorized runner plus post-apply verification.
+
+If the authoritative Beads database is workstation/VPS-local rather than reconstructible from a fresh checkout, the mutation phase belongs on a constrained self-hosted runner that can reach that database. A GitHub-hosted runner should not be assumed to possess authoritative local Beads state.
