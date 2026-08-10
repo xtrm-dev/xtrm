@@ -31,10 +31,14 @@ jobs:
           python-version: "3.12"
 
       - name: Python syntax
-        run: python -m py_compile packages/board-audit/board-audit-roundtrip.py
+        run: |
+          python -m py_compile packages/board-audit/board-audit-roundtrip.py
+          python -m py_compile packages/board-audit/board-audit-flow.py
 
       - name: Shell syntax
-        run: bash -n packages/board-audit/board-audit
+        run: |
+          bash -n packages/board-audit/board-audit
+          bash -n packages/board-audit/board-audit-core
 
       - name: Board-audit artifact tracking boundary
         run: |
@@ -44,5 +48,5 @@ jobs:
           fi
           git check-ignore -q --no-index .xtrm/runtime/example.json
 
-      - name: Round-trip unit tests
+      - name: Board-audit tests
         run: python -m unittest discover -s packages/board-audit/tests -p 'test_*.py' -v

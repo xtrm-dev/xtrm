@@ -1,64 +1,144 @@
 # board-audit — install & operational manual
 
-`board-audit` has three deliberately separated surfaces: the original board/PR audit bundle, a lossless structured Beads work-package export, and a guarded round-trip reconciler that lets a human or model propose edits and compile them back to local Beads.
+`board-audit` exposes a simple user-facing handoff/reconcile workflow over the existing deterministic Beads export and guarded round-trip primitives.
 
-Canonical files:
+The normal workflow is intentionally three commands:
+
+```bash
+board-audit handoff xtrm-123
+# ChatGPT/human edits the remote desired-state artifact
+board-audit reconcile xtrm-123
+board-audit reconcile xtrm-123 --execute
+```
+
+The caller's current Git checkout is never switched by these commands.
+
+## Primary workflow
+
+### 1. Handoff
+
+```bash
+board-audit handoff xtrm-123
+```
+
+`handoff` performs the mechanical sequence that previously had to be remembered manually:
 
 ```text
-packages/board-audit/board-audit
-packages/board-audit/board-audit-roundtrip.py
-packages/board-audit/ROUNDTRIP.md
+fetch origin
+→ resolve/create transport branch board-audit/xtrm-123
+→ create isolated worktree with bd worktree create
+→ board-audit --export --bead xtrm-123
+→ board-audit-roundtrip prepare <package>
+→ update .xtrm/board-audit/index.json
+→ commit generated handoff artifacts
+→ push board-audit/xtrm-123
+→ bd worktree remove
+→ delete the local staging branch
 ```
 
-## Artifact location and GitHub visibility
+The Beads-managed worktree shares the same authoritative Beads database as the main repository through Git common-directory discovery. No copied database or redirect file is created.
 
-User-visible board-audit artifacts are repository state, not temporary files. By default every invocation writes under:
+The worktree itself is ephemeral and lives outside the repository under the user's cache directory. The durable interchange artifacts live on the transport branch under `.xtrm/board-audit/`.
+
+A successful command ends with output similar to:
 
 ```text
-<repo>/.xtrm/board-audit/
+✓ xtrm-123 ready for handoff
+  branch:   board-audit/xtrm-123
+  issues:   4
+  editable: .xtrm/board-audit/exports/.../work-packages/xtrm-123__....editable.json
+  checkout: unchanged (main)
+
+Tell ChatGPT: "leggi export xtrm-123"
 ```
 
-Structured exports go under `exports/`; audit bundles go under `audits/`. Round-trip `prepare` and compile output are created beside the selected work-package file, so the complete ChatGPT/human handoff remains inside the repository tree.
+`handoff` may commit and push **only the transport-branch interchange artifacts**. It does not commit or switch the user's current working branch.
 
-This is intentional: once the selected artifact is committed and pushed on a branch, GitHub-connected agents can read the exact Beads snapshot/work package and return proposed edits without requiring local filesystem access.
+### 2. Edit remotely
 
-`board-audit` does **not** auto-commit or auto-push generated artifacts. Version control remains explicit. A typical sharing flow is:
+A GitHub-connected agent reads the transport branch and edits only:
+
+```text
+desired_issues
+new_comments
+```
+
+The immutable base remains:
+
+```text
+issues.<id>.source
+```
+
+`new_comments` contains text only and compiles to native `bd comments add`, so author/timestamp provenance remains Beads-owned.
+
+### 3. Reconcile without mutation
 
 ```bash
-git switch -c board-audit/xtrm-123
-board-audit --export --epic xtrm-123
-git add .xtrm/board-audit/
-git commit -m "chore(board-audit): export xtrm-123"
-git push -u origin HEAD
+board-audit reconcile xtrm-123
 ```
 
-The output root can be overridden for tests or intentionally ephemeral runs:
+This fetches the latest `board-audit/xtrm-123` transport branch into another isolated Beads-managed worktree and runs:
+
+```text
+validate
+→ fresh three-way diff (base/current/desired)
+→ guarded apply dry-run
+```
+
+No Beads mutation occurs. The caller stays on the same branch.
+
+### 4. Apply explicitly
+
+After reviewing the reconcile output:
 
 ```bash
-board-audit --output-dir /some/path --export --epic xtrm-123
-BOARD_AUDIT_OUTDIR=/some/path board-audit --export --open
+board-audit reconcile xtrm-123 --execute
 ```
 
-A relative override is resolved from the repository root.
+This repeats validation/reconciliation against fresh local Beads state, then runs the guarded apply and post-apply verification. Successful execution marks the transport index entry `applied` and pushes that transport metadata.
 
-## Prerequisites
+`--execute` is the only high-level path that mutates Beads.
 
-Structured export/round-trip require `bd`, `python3`, and a Git working tree. Audit mode additionally requires authenticated `gh`.
+## Transport index
 
-```bash
-gh auth status
-bd stats
+The stable lookup surface is:
+
+```text
+.xtrm/board-audit/index.json
 ```
 
-## Structured work-package export
+Schema: `xtrm.board-audit.index.v1`.
 
-Every structured export starts from one canonical acquisition:
+Each bead/root maps to its current transport branch, export directory, manifest, immutable package, editable package, base digest, selected-record count and handoff state. This removes timestamp/glob discovery from the normal UX and gives GitHub-connected agents a deterministic pointer to the current artifact.
 
-```bash
-bd export --all
-```
+Handoffs made before the index existed remain readable: `reconcile` falls back to the newest matching `.editable.json` on the transport branch.
 
-There is no arbitrary `bd list --limit N` ceiling and no N× `bd show` hydration loop. Filtering and graph reconstruction happen locally from that immutable snapshot.
+## Safety properties
+
+Beads remains authoritative. Git is the transport/provenance plane for snapshots and desired-state proposals, not a replacement database.
+
+The high-level flow preserves the round-trip safety contract:
+
+- immutable `issues.*.source` hash validation;
+- planning/content fields only for existing issues;
+- assignment/lifecycle/lease/scheduling/storage/provenance fields remain read-only;
+- historical comment records remain read-only;
+- three-way reconciliation preserves disjoint concurrent changes;
+- overlapping same-field changes fail closed;
+- import runs dry-run first;
+- `--allow-stale` is never generated;
+- dependency-cycle deltas are checked on executed apply;
+- executed apply finishes with fresh export and intent verification.
+
+Exit codes inherited from the round-trip layer are: `0` success, `2` invalid/unsupported/command failure, `3` reconciliation conflict, `4` post-apply verification/new-cycle failure.
+
+If handoff/reconcile fails after creating its isolated worktree, the tool deliberately retains that worktree and staging branch and prints their locations for recovery rather than deleting potentially useful evidence.
+
+## Advanced / low-level primitives
+
+The high-level commands are wrappers. The deterministic primitives remain available for debugging, CI and specialized automation.
+
+Structured export:
 
 ```bash
 board-audit --export --open
@@ -67,125 +147,30 @@ board-audit --export --epic xtrm-123
 board-audit --export --bead xtrm-456
 ```
 
-`--open` means non-terminal work rather than literal `status=open`; active `in_progress`/`blocked` work stays included. Closed ancestors required to understand an active subtree are retained as `context-only`. A non-epic task with children is also a work-package root.
-
-Default output:
+Every export starts from one `bd export --all` acquisition and writes by default to:
 
 ```text
 .xtrm/board-audit/exports/export-YYYYMMDDTHHMMSS/
 ├── raw-beads.jsonl
 ├── manifest.json
 └── work-packages/
-    ├── <root-id>__<slug-title>.json
-    └── ...
 ```
 
-`raw-beads.jsonl` remains the direct Beads snapshot. `manifest.json` records repository/version/source command, record counts, SHA-256 provenance, selected scope and package diagnostics. Each work package uses schema `xtrm.board-audit.work-package.v1`, preserves every source field under `issues.<id>.source`, separates parent-child hierarchy from the wider dependency graph, and retains external/dangling relation diagnostics.
-
-Structured export contains data only; it does not embed the large audit prompt.
-
-## Editable round-trip
-
-Prepare one work package directly from the repository-local export:
+Low-level round trip:
 
 ```bash
-board-audit-roundtrip prepare \
-  .xtrm/board-audit/exports/export-.../work-packages/xtrm-123__title.json
-```
-
-The `.editable.json` artifact has this contract:
-
-```text
-issues.<id>.source     immutable, hashed base evidence
-desired_issues.<id>    desired planning/content state
-new_comments.<id>      proposed comment text strings
-```
-
-Only `desired_issues` and `new_comments` are editor/model surfaces. The immutable base is hash-checked before reconciliation.
-
-For existing beads, v1 supports edits to title, description, design, acceptance criteria, notes, spec ID, priority, issue type, estimate, external reference, metadata, labels and dependency/relationship edges. Operational state remains losslessly visible but read-only: existing status/lifecycle, assignee/owner, lease/heartbeat, scheduling, storage/persistence, compaction, gate/event and provenance/timestamp fields cannot be changed through this import path.
-
-Historical comment objects are also read-only. A model that wants to add a comment writes only text in `new_comments`; the compiler emits native:
-
-```bash
-bd comments add <id> "<text>"
-```
-
-so local Beads assigns the actual author and timestamp. This prevents an uploaded artifact from forging comment provenance.
-
-New desired issues may specify planning/content fields and an explicit ID; status is not editor-controlled. The compiler supplies conservative defaults when absent: `open`, priority 2, type `task`.
-
-## Reconcile before mutation
-
-```bash
+board-audit-roundtrip prepare package.json
 board-audit-roundtrip validate package.editable.json
 board-audit-roundtrip diff package.editable.json
-```
-
-The reconciler compares:
-
-```text
-base     original work-package source
-current  fresh bd export --all
-desired  edited artifact
-```
-
-Disjoint concurrent changes survive. If current and desired changed the same ordinary field differently, compilation stops instead of overwriting either side. Labels use set deltas, metadata uses per-key reconciliation, dependencies use typed graph-edge deltas, and proposed comments remain a separate append plane.
-
-For deterministic/offline tests, commands that require current state accept `--current-jsonl path/to/export.jsonl`.
-
-## Compile and inspect
-
-```bash
-board-audit-roundtrip compile-import package.editable.json
-# alias:
 board-audit-roundtrip compile-apply package.editable.json
-```
-
-Generated directory:
-
-```text
-beads-import.jsonl
-changes.json
-apply-plan.json
-apply.sh
-```
-
-Only actual issue-row changes/new rows enter `beads-import.jsonl`; a comment-only proposal therefore needs no issue import. `apply-plan.json` includes changed IDs, actual import IDs and native follow-up commands.
-
-Beads import merges auxiliary records, so exact removals are compiled separately: labels via `bd update --remove-label`, dependency pair changes via `bd dep remove` plus necessary re-adds, and proposed comments via `bd comments add`.
-
-## Apply
-
-Dry-run is the default:
-
-```bash
 board-audit-roundtrip apply package.editable.json
-```
-
-Actual mutation requires:
-
-```bash
 board-audit-roundtrip apply package.editable.json --execute
-```
-
-The tool freshly exports current Beads, reconciles, runs `bd import --dry-run --json` when issue rows exist, and stops unless `--execute` is explicit. Executed apply captures `bd dep cycles --json` before/after, fails if the proposal introduced a new scheduling cycle, re-exports Beads, and verifies the user-intended delta.
-
-It never generates `bd import --allow-stale`. Existing Beads stale/tie handling remains a second race barrier for issue-row import.
-
-Independent verification:
-
-```bash
 board-audit-roundtrip verify package.editable.json
 ```
 
-Exit codes are designed for later automation: 0 success, 2 invalid/unsupported/command failure, 3 three-way conflict, 4 verification or newly-introduced-cycle failure.
+See `ROUNDTRIP.md` for the complete schema/reconciliation/apply contract.
 
-The complete safety contract is in `ROUNDTRIP.md`.
-
-## Audit mode
-
-The historical audit workflow remains available:
+Historical audit bundle mode also remains available:
 
 ```bash
 board-audit
@@ -193,30 +178,32 @@ board-audit --epic xtrm-123
 board-audit --no-pr
 ```
 
-Each invocation gets its own repository-local audit directory:
+Audit bundles live under `.xtrm/board-audit/audits/`.
+
+## Files
 
 ```text
-.xtrm/board-audit/audits/audit-YYYYMMDDTHHMMSS/
-├── audit-bundle.md
-├── audit-prompt.md
-├── beads.jsonl
-├── raw-beads.jsonl
-├── prs.md
-└── current-state.md
+packages/board-audit/board-audit              # user-facing dispatcher
+packages/board-audit/board-audit-flow.py      # handoff/reconcile orchestration
+packages/board-audit/board-audit-core          # low-level exporter/audit implementation
+packages/board-audit/board-audit-roundtrip.py # reconciliation/compiler/apply engine
+packages/board-audit/ROUNDTRIP.md
 ```
-
-Audit-mode Beads data derives from the same one-shot `bd export --all` snapshot as structured export. The PR corpus still uses the historical auto-window from the oldest selected bead creation date minus seven days and supports `BOARD_AUDIT_PR_SINCE` / `BOARD_AUDIT_PR_LIMIT` overrides.
 
 ## Installation
 
-Prefer symlinks so a normal `git pull` updates the globally available commands immediately:
+Prefer symlinks so `git pull` updates the global commands immediately:
 
 ```bash
 mkdir -p ~/.local/bin
-chmod +x packages/board-audit/board-audit packages/board-audit/board-audit-roundtrip.py
+chmod +x packages/board-audit/board-audit \
+  packages/board-audit/board-audit-core \
+  packages/board-audit/board-audit-roundtrip.py
 ln -sf "$(pwd)/packages/board-audit/board-audit" ~/.local/bin/board-audit
 ln -sf "$(pwd)/packages/board-audit/board-audit-roundtrip.py" ~/.local/bin/board-audit-roundtrip
 ```
+
+`board-audit-flow.py` is invoked through `board-audit` and does not need its own global command.
 
 Regression checks:
 
@@ -228,8 +215,6 @@ python3 -m unittest discover -s packages/board-audit/tests -p 'test_*.py' -v
 
 ## GitHub Actions direction
 
-The repository contains only non-mutative board-audit CI at this stage: Python/shell syntax plus round-trip unit tests. Automated Beads mutation is intentionally not enabled yet.
+The current CI remains non-mutative. It validates syntax, export semantics, round-trip semantics, Git ignore boundaries and the high-level worktree handoff/reconcile flow.
 
-After representative round-trip trials, the intended next stage is export/prepare artifact → ChatGPT/human proposed artifact → non-mutative validation/diff → PR with apply plan → protected apply on an authorized runner → post-apply export/verification.
-
-If authoritative Beads state is workstation/VPS-local, the eventual mutation job belongs on a constrained self-hosted runner that can reach that database; a fresh GitHub-hosted checkout must not be treated as authoritative state.
+A later protected Actions mutation flow can consume the same transport/index contract, but interactive local `handoff`/`reconcile` does not depend on Actions.
