@@ -5,7 +5,7 @@ set -euo pipefail
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SELF")" && pwd)"
 CORE="$SCRIPT_DIR/board-audit-core"
-FLOW="$SCRIPT_DIR/board-audit-flow.py"
+FLOW="$SCRIPT_DIR/board-audit-transport.py"
 
 case "${1:-}" in
   handoff|reconcile)
