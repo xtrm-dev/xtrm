@@ -4,6 +4,24 @@
 
 Beads remains authoritative. A work-package file is an edit/reconciliation artifact, not a database.
 
+## Repository-local interchange
+
+`board-audit` writes user-visible artifacts under the repository-local `.xtrm/board-audit/` tree by default. This is deliberate: a selected work package can be committed and pushed on a branch, after which a GitHub-connected ChatGPT session can read exactly the same snapshot without access to the operator's local filesystem.
+
+The tool never commits or pushes automatically. A normal handoff is:
+
+```bash
+git switch -c board-audit/xtrm-123
+board-audit --export --epic xtrm-123
+board-audit-roundtrip prepare \
+  .xtrm/board-audit/exports/export-.../work-packages/xtrm-123__title.json
+git add .xtrm/board-audit/
+git commit -m "chore(board-audit): prepare xtrm-123 handoff"
+git push -u origin HEAD
+```
+
+The exact artifact can then be located/read through GitHub. `--output-dir` or `BOARD_AUDIT_OUTDIR` may override the artifact root for tests or intentionally non-versioned runs.
+
 ## Upstream Beads contract used
 
 Current Beads `bd import` is an incremental JSONL upsert counterpart to `bd export`. It accepts issue rows plus relational labels, dependencies and comments, provides `--dry-run`, and has stale/timestamp guards. `--allow-stale` is an explicit recovery escape hatch; board-audit never generates it automatically.
@@ -23,11 +41,11 @@ issues.<id>.source
 Prepare it:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py prepare \
-  /tmp/board-audit-xtrm/export-.../work-packages/xtrm-123__title.json
+board-audit-roundtrip prepare \
+  .xtrm/board-audit/exports/export-.../work-packages/xtrm-123__title.json
 ```
 
-The resulting `.editable.json` keeps the complete source package and adds:
+The resulting `.editable.json` remains beside the work package inside the repository and keeps the complete source package while adding:
 
 ```text
 roundtrip
@@ -128,19 +146,19 @@ Labels are reconciled as set deltas, metadata per top-level key, and dependencie
 Edit-contract validation only:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py validate package.editable.json --offline
+board-audit-roundtrip validate package.editable.json --offline
 ```
 
 Validate against fresh local Beads:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py validate package.editable.json
+board-audit-roundtrip validate package.editable.json
 ```
 
 Show base/current/desired reconciliation:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py diff package.editable.json
+board-audit-roundtrip diff package.editable.json
 ```
 
 For deterministic tests or offline tooling, commands that need current state accept:
@@ -152,16 +170,16 @@ For deterministic tests or offline tooling, commands that need current state acc
 ## Compile back to Beads
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py compile-import package.editable.json
+board-audit-roundtrip compile-import package.editable.json
 ```
 
 `compile-apply` is currently an alias:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py compile-apply package.editable.json
+board-audit-roundtrip compile-apply package.editable.json
 ```
 
-The generated directory contains:
+The generated directory is created beside the editable package, and therefore also remains inside the repository-local interchange tree when the default export layout is used:
 
 ```text
 beads-import.jsonl
@@ -181,13 +199,13 @@ Beads import has merge semantics for auxiliary data, so exact removals need nati
 Dry-run:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py apply package.editable.json
+board-audit-roundtrip apply package.editable.json
 ```
 
 Execute:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py apply package.editable.json --execute
+board-audit-roundtrip apply package.editable.json --execute
 ```
 
 The guarded sequence is:
@@ -218,7 +236,7 @@ The compiler never passes `--allow-stale`. Beads' own stale/tie guard remains a 
 Independent verification is available with:
 
 ```bash
-python3 packages/board-audit/board-audit-roundtrip.py verify package.editable.json
+board-audit-roundtrip verify package.editable.json
 ```
 
 Verification checks the user's intended delta rather than requiring unrelated concurrent fields to equal the old export. Metadata is checked only for keys the editor changed; label/dependency checks use set/edge deltas. Proposed comments are verified by text-count increase relative to the exported base, while author/time remain Beads-owned.
@@ -234,15 +252,16 @@ Verification checks the user's intended delta rather than requiring unrelated co
 
 ## ChatGPT workflow
 
-The intended practical flow is:
+The intended practical flow is now GitHub-backed rather than `/tmp`-backed:
 
 ```text
-local repo
+local repo on dedicated branch
 -> board-audit --export --epic <id>
--> board-audit-roundtrip prepare <work-package>
--> upload the single editable JSON to ChatGPT
+-> board-audit-roundtrip prepare <repo-local work-package>
+-> git add/commit/push .xtrm/board-audit/... artifact
+-> ChatGPT reads the exact artifact through GitHub
 -> ChatGPT edits desired_issues and/or new_comments only
--> return/save edited artifact
+-> proposed artifact is committed/pushed back or saved locally
 -> validate + diff locally
 -> compile/apply
 -> fresh export + verification
@@ -264,15 +283,15 @@ After representative local trials prove the edit contract and concurrency behavi
 
 ```text
 workflow_dispatch / controlled request
--> export + prepare on an authorized runner
--> publish editable work-package artifact
--> human/ChatGPT returns proposed desired artifact
+-> export + prepare on an authorized runner into .xtrm/board-audit/
+-> commit/push or PR the versioned editable work package
+-> ChatGPT/human returns proposed desired artifact
 -> non-mutative validate/diff workflow
 -> PR containing desired artifact + generated changes/apply plan
 -> protected apply job on an authorized runner
 -> post-apply export + verification artifact
 ```
 
-The current PR intentionally adds only non-mutative CI for syntax/unit tests. It does not automate Beads mutation.
+The current implementation intentionally adds only non-mutative CI for syntax/unit tests. It does not automate Beads mutation.
 
 If the authoritative Beads database is workstation/VPS-local, the eventual apply stage must run on a constrained self-hosted runner that can reach that authoritative database. A fresh GitHub-hosted checkout must not be assumed to contain authoritative local Beads state.

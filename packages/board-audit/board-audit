@@ -9,6 +9,8 @@
 #
 # Export mode performs exactly one canonical `bd export --all` acquisition and
 # derives deterministic, lossless work-package projections from that snapshot.
+# User-visible artifacts default to the repository-local `.xtrm/board-audit/`
+# tree so they can be versioned and shared through GitHub.
 
 set -euo pipefail
 
@@ -17,6 +19,7 @@ EPIC=""
 BEAD=""
 EXPORT_MODE=0
 EXPORT_SCOPE=""
+OUTPUT_DIR=""
 
 _usage() {
   cat <<'EOF'
@@ -32,14 +35,16 @@ Structured export mode:
   board-audit --export --bead <id>
 
 Flags:
-  --no-pr        Audit mode only: skip merged-PR export.
-  --epic <id>    Audit mode: scope audit to epic subtree.
-                 Export mode: export the selected epic/subtree as one package.
-  --bead <id>    Export mode only: export selected bead/subtree as one package.
-  --export       Emit structured JSON snapshot projections; no audit prompt/PRs.
-  --open         Export mode: all non-terminal work packages.
-  --all          Export mode: all work packages, including closed-only packages.
-  -h, --help     Show this help.
+  --no-pr             Audit mode only: skip merged-PR export.
+  --epic <id>         Audit mode: scope audit to epic subtree.
+                      Export mode: export the selected epic/subtree as one package.
+  --bead <id>         Export mode only: export selected bead/subtree as one package.
+  --export            Emit structured JSON snapshot projections; no audit prompt/PRs.
+  --open              Export mode: all non-terminal work packages.
+  --all               Export mode: all work packages, including closed-only packages.
+  --output-dir <path> Override artifact root. Relative paths resolve from repo root.
+                      Default: .xtrm/board-audit (or BOARD_AUDIT_OUTDIR).
+  -h, --help          Show this help.
 EOF
 }
 
@@ -57,6 +62,10 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || { echo "error: --bead needs a bead id" >&2; exit 2; }
       BEAD="$2"; shift 2 ;;
     --bead=*) BEAD="${1#--bead=}"; shift ;;
+    --output-dir)
+      [ $# -ge 2 ] || { echo "error: --output-dir needs a path" >&2; exit 2; }
+      OUTPUT_DIR="$2"; shift 2 ;;
+    --output-dir=*) OUTPUT_DIR="${1#--output-dir=}"; shift ;;
     -h|--help) _usage; exit 0 ;;
     *) echo "error: unknown arg '$1'" >&2; _usage >&2; exit 2 ;;
   esac
@@ -96,7 +105,12 @@ if [ "$EXPORT_MODE" -eq 0 ]; then
   command -v gh >/dev/null || { echo "error: 'gh' not on PATH" >&2; exit 1; }
 fi
 
-OUTDIR="${TMPDIR:-/tmp}/board-audit-${REPO_SLUG}"
+ARTIFACT_ROOT="$OUTPUT_DIR"
+[ -n "$ARTIFACT_ROOT" ] || ARTIFACT_ROOT="${BOARD_AUDIT_OUTDIR:-.xtrm/board-audit}"
+case "$ARTIFACT_ROOT" in
+  /*) OUTDIR="$ARTIFACT_ROOT" ;;
+  *) OUTDIR="$REPO_ROOT/$ARTIFACT_ROOT" ;;
+esac
 mkdir -p "$OUTDIR"
 TODAY="$(date +%Y-%m-%d)"
 
@@ -109,7 +123,7 @@ _export_all() {
 # Structured export mode
 # ----------------------------------------------------------------------
 if [ "$EXPORT_MODE" -eq 1 ]; then
-  SNAPSHOT_DIR="$OUTDIR/export-$(date +%Y%m%dT%H%M%S)"
+  SNAPSHOT_DIR="$OUTDIR/exports/export-$(date +%Y%m%dT%H%M%S)"
   RAW_OUT="$SNAPSHOT_DIR/raw-beads.jsonl"
   PACKAGES_DIR="$SNAPSHOT_DIR/work-packages"
   MANIFEST_OUT="$SNAPSHOT_DIR/manifest.json"
@@ -477,18 +491,23 @@ PY
   echo "  raw:      $RAW_OUT"
   echo "  manifest: $MANIFEST_OUT"
   echo "  packages: $PACKAGES_DIR"
+  if [[ "$SNAPSHOT_DIR" == "$REPO_ROOT/"* ]]; then
+    echo "  git add:  ${SNAPSHOT_DIR#$REPO_ROOT/}"
+  fi
   exit 0
 fi
 
 # ----------------------------------------------------------------------
 # Legacy audit mode — retained for compatibility.
 # ----------------------------------------------------------------------
-BD_OUT="$OUTDIR/beads.jsonl"
-PR_OUT="$OUTDIR/prs.md"
-PROMPT_OUT="$OUTDIR/audit-prompt.md"
-STATE_OUT="$OUTDIR/current-state.md"
-BUNDLE_OUT="$OUTDIR/audit-bundle-$(date +%Y%m%d).md"
-RAW_AUDIT_OUT="$OUTDIR/.raw-beads-all.jsonl"
+AUDIT_DIR="$OUTDIR/audits/audit-$(date +%Y%m%dT%H%M%S)"
+mkdir -p "$AUDIT_DIR"
+BD_OUT="$AUDIT_DIR/beads.jsonl"
+PR_OUT="$AUDIT_DIR/prs.md"
+PROMPT_OUT="$AUDIT_DIR/audit-prompt.md"
+STATE_OUT="$AUDIT_DIR/current-state.md"
+BUNDLE_OUT="$AUDIT_DIR/audit-bundle.md"
+RAW_AUDIT_OUT="$AUDIT_DIR/raw-beads.jsonl"
 
 echo "→ acquiring canonical Beads snapshot with bd export --all..."
 _export_all "$RAW_AUDIT_OUT"
@@ -710,3 +729,6 @@ EOF
 BUNDLE_SIZE="$(du -h "$BUNDLE_OUT" | cut -f1)"
 echo "✓ audit bundle: $BUNDLE_OUT ($BUNDLE_SIZE)"
 echo "  beads: $BEAD_COUNT | PRs: $PR_COUNT"
+if [[ "$AUDIT_DIR" == "$REPO_ROOT/"* ]]; then
+  echo "  git add: ${AUDIT_DIR#$REPO_ROOT/}"
+fi
