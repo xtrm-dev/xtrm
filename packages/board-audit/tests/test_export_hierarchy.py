@@ -12,6 +12,27 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "packages" / "board-audit" / "board-audit"
 
 
+def write_fake_bd(fake_bin: Path, fixture: Path) -> None:
+    fake_bd = fake_bin / "bd"
+    fake_bd.write_text(
+        "#!/usr/bin/env python3\n"
+        "import pathlib, sys\n"
+        f"fixture = pathlib.Path({str(fixture)!r}).read_text(encoding='utf-8')\n"
+        "args = sys.argv[1:]\n"
+        "if args[:2] == ['export', '--all']:\n"
+        "    if '-o' in args:\n"
+        "        pathlib.Path(args[args.index('-o') + 1]).write_text(fixture, encoding='utf-8')\n"
+        "    else:\n"
+        "        sys.stdout.write(fixture)\n"
+        "elif args and args[0] == 'version':\n"
+        "    print('bd test')\n"
+        "else:\n"
+        "    raise SystemExit('unexpected fake bd invocation: ' + ' '.join(args))\n",
+        encoding="utf-8",
+    )
+    fake_bd.chmod(0o755)
+
+
 def run_export(rows: list[dict], *args: str) -> tuple[subprocess.CompletedProcess[str], dict, dict]:
     with tempfile.TemporaryDirectory() as td_raw:
         td = Path(td_raw)
@@ -19,25 +40,7 @@ def run_export(rows: list[dict], *args: str) -> tuple[subprocess.CompletedProces
         fake_bin.mkdir()
         fixture = td / "fixture.jsonl"
         fixture.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
-
-        fake_bd = fake_bin / "bd"
-        fake_bd.write_text(
-            "#!/usr/bin/env python3\n"
-            "import pathlib, sys\n"
-            f"fixture = pathlib.Path({str(fixture)!r}).read_text(encoding='utf-8')\n"
-            "args = sys.argv[1:]\n"
-            "if args[:2] == ['export', '--all']:\n"
-            "    if '-o' in args:\n"
-            "        pathlib.Path(args[args.index('-o') + 1]).write_text(fixture, encoding='utf-8')\n"
-            "    else:\n"
-            "        sys.stdout.write(fixture)\n"
-            "elif args and args[0] == 'version':\n"
-            "    print('bd test')\n"
-            "else:\n"
-            "    raise SystemExit('unexpected fake bd invocation: ' + ' '.join(args))\n",
-            encoding="utf-8",
-        )
-        fake_bd.chmod(0o755)
+        write_fake_bd(fake_bin, fixture)
 
         artifact_root = td / "artifacts"
         env = os.environ.copy()
@@ -62,6 +65,45 @@ def run_export(rows: list[dict], *args: str) -> tuple[subprocess.CompletedProces
 
 
 class ExportHierarchyTests(unittest.TestCase):
+    def test_default_output_is_repo_local_xtrm_board_audit(self):
+        rows = [
+            {"id": "x-root", "title": "Root", "status": "open", "priority": 1, "issue_type": "epic"},
+        ]
+        with tempfile.TemporaryDirectory() as td_raw:
+            td = Path(td_raw)
+            repo = td / "repo"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+
+            fake_bin = td / "bin"
+            fake_bin.mkdir()
+            fixture = td / "fixture.jsonl"
+            fixture.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+            write_fake_bd(fake_bin, fixture)
+
+            env = os.environ.copy()
+            env["PATH"] = f"{fake_bin}:{env['PATH']}"
+            env.pop("BOARD_AUDIT_OUTDIR", None)
+            legacy_tmp = td / "legacy-tmp"
+            env["TMPDIR"] = str(legacy_tmp)
+
+            proc = subprocess.run(
+                [str(SCRIPT), "--export", "--epic", "x-root"],
+                cwd=repo,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr + proc.stdout)
+            snapshots = sorted((repo / ".xtrm" / "board-audit" / "exports").glob("export-*"))
+            self.assertEqual(len(snapshots), 1)
+            self.assertTrue((snapshots[0] / "manifest.json").is_file())
+            self.assertTrue((snapshots[0] / "work-packages").is_dir())
+            self.assertFalse(legacy_tmp.exists(), "TMPDIR must not receive user-visible board-audit artifacts")
+            self.assertIn(str(repo / ".xtrm" / "board-audit" / "exports"), proc.stdout)
+
     def test_epic_export_includes_dotted_id_descendants_without_explicit_edges(self):
         rows = [
             {"id": "xtrm-2zd", "title": "Epic", "status": "open", "priority": 1, "issue_type": "epic"},
