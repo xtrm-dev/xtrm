@@ -495,7 +495,7 @@ Allow a typed proposal class for evidence-backed knowledge promotion. It creates
 
 ### 7.6 Clarify Channels versus runtime replay
 
-Channels durable cursor stays `message_id`. Runtime attach/reconnect uses `execution_id + generation + sequence`, and snapshot recovery cannot rewrite or renumber Channel messages.
+Channels durable cursor is `channel_messages.id` (stored by the subscription as `last_seen_id`). Runtime attach/reconnect uses `execution_id + generation + sequence`, and snapshot recovery cannot rewrite or renumber Channel messages.
 
 ## 8. Memory v1 amendment
 
@@ -622,6 +622,7 @@ C1 packaged catalog
 → pure compiler
 → persisted ResolvedChain
 → thin Beads materializer
+→ GATE-IFACE
 → manual review/insert/approve/show
 → GATE-COMPOSE
 → quant/math vertical fixture
@@ -639,8 +640,8 @@ authoritative evidence projection
 → scheduler intents
 → execution delivery / lease / uncertain-reconciliation integration
 → recovery/idempotency/crash fixtures
-→ released-trio end-to-end run
 → GATE-DO0
+→ released-trio end-to-end run
 ```
 
 A typical flow is:
