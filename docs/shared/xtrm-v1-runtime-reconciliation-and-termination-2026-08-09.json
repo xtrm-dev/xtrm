@@ -27,6 +27,8 @@
     "work causality and execution lineage are distinct graphs",
     "Console/Agent Workspace renders execution trees and synchronizes through snapshot/replay",
     "Pi 0.84.1 RPC remediation precedes any direct-AgentSession migration decision",
+    "native-harness adoption is undecided until R1.6 parity spikes and GATE-HARNESS-ADR; corrected RPC remains a valid terminal outcome",
+    "RLM children are governed cognitive descendants inside one approved step and cannot mutate ResolvedChain topology",
     "Prime Agent is a reference implementation, not an XTRM dependency or authority",
     "target package count remains five: core, substrate, channels, specialists, console"
   ],
@@ -97,6 +99,12 @@
       "path": "docs/shared/xtrm-native-pi-tools-pi-extensible-workflows-integration-2026-07-30.md"
     },
     {
+      "id": "XTRM-HARNESS-01",
+      "repo": "xtrm-dev/xtrm",
+      "path": "docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md",
+      "action": "preserve-non-normative-input-and-execute-R1.6-ADR"
+    },
+    {
       "id": "XTRM-PLAN-01",
       "repo": "xtrm-dev/xtrm",
       "path": "docs/shared/xtrm-current-execution-plan.md"
@@ -135,7 +143,7 @@
     },
     {
       "phase": 2,
-      "name": "minimum specialists.execution.v1 plus R1 runtime-semantics closure"
+      "name": "minimum specialists.execution.v1 contracts, R1.1/R1.2, bounded native-harness-on-Pi spike, GATE-HARNESS-ADR, then selected runtime-semantics closure; pure C1 compiler/schema may proceed in parallel"
     },
     {
       "phase": 3,
@@ -143,7 +151,7 @@
     },
     {
       "phase": 4,
-      "name": "evidence reducer, scheduler intents, delivery/lease/uncertain recovery, GATE-DO0"
+      "name": "evidence reducer, scheduler intents, delivery/lease/uncertain recovery, released-trio end-to-end fixture, then GATE-DO0"
     },
     {
       "phase": 5,
@@ -173,6 +181,7 @@
     "Eval Core measures promoted autonomy",
     "Channels/memory/Substrate/product/monorepo lanes have delivered, rejected, retired or explicitly deferred terminal dispositions",
     "bridge artifacts have named retirement conditions",
-    "supported operator path has final released/deployed smoke evidence"
+    "supported operator path has final released/deployed smoke evidence",
+    "R1.6 has terminal parity evidence and GATE-HARNESS-ADR records accepted corrected-RPC or native-harness ownership"
   ]
 }

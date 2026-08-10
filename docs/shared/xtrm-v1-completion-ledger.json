@@ -11,7 +11,8 @@
   "absorbed_inputs": [
     "xtrm#33",
     "xtrm#34",
-    "mercuryintelligence/program#75"
+    "mercuryintelligence/program#75",
+    "docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md"
   ],
   "explicit_exclusion": {
     "substrate_runtime_and_migration": "DEFERRED_BY_EXPLICIT_GATE"
@@ -24,7 +25,8 @@
     "GATE_COMPOSE": "PENDING",
     "GATE_DO0": "PENDING",
     "GATE_AUTH": "PENDING",
-    "FINAL": "PENDING"
+    "FINAL": "PENDING",
+    "GATE_HARNESS_ADR": "PENDING"
   },
   "packets": [
     {
@@ -106,6 +108,12 @@
       "evidence_state": "pending repository-local Beads and implementation evidence"
     },
     {
+      "id": "XTRM-HARNESS-01",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_result": "Run R1.6 direct AgentSession parity spike; if viable run one governed-child spike; accept an ADR selecting corrected RPC or native XTRM harness without changing workflow authorities.",
+      "evidence_state": "pending Pi compatibility, local spike evidence and accepted ADR"
+    },
+    {
       "id": "XTRM-PLAN-01",
       "disposition": "DELIVERED_SOURCE_ONLY",
       "required_result": "Maintain the canonical plan and JSON as synchronized sequencing authorities.",
@@ -151,6 +159,11 @@
       "id": "specialists.execution.v1",
       "disposition": "GENUINE_V1_RESIDUAL",
       "required_evidence": "identity, lease, uncertain, replay, recovery and convergence fixtures"
+    },
+    {
+      "id": "native-harness-on-Pi-decision",
+      "disposition": "GENUINE_V1_RESIDUAL",
+      "required_evidence": "R1.6 parity evidence and terminal retain-RPC or adopt-native ADR; native selection additionally requires governed RLM-child negative proofs"
     },
     {
       "id": "ChainTemplate-ResolvedChain",
@@ -228,5 +241,5 @@
       "required_evidence": "accepted target-runtime gate"
     }
   ],
-  "next_action": "map residuals onto existing repository-local Beads after local evidence delta; do not create a cross-repository mega-epic"
+  "next_action": "map residuals, including R1.6/GATE-HARNESS-ADR, onto existing repository-local Beads after local evidence delta; do not create a cross-repository mega-epic"
 }

@@ -561,6 +561,7 @@ The following edits are mandatory before this reconciliation can be considered f
 | XTRM-OUT-01 | `docs/shared/xtrm-cli-actionable-outcomes-and-followups.md` | extend outcome semantics so mutation surfaces can report/reconcile `uncertain`; distinguish safe failure from unknown side-effect state | stable reason codes and next actions include reconciliation |
 | XTRM-ADAPT-01 | `docs/shared/xtrm-harness-native-adapters.md` | require runtime-derived actor/execution identity, idempotency, uncertain reconciliation and no private durable authority in adapters | adapters remain thin |
 | XTRM-PI-01 | `docs/shared/xtrm-native-pi-tools-pi-extensible-workflows-integration-2026-07-30.md` | compare current RPC, direct AgentSession hosting, Prime-like runtime primitives and pi-extensible-workflows; record exact ownership of identity/lease/recovery/journal | external workflow framework cannot become XTRM authority |
+| XTRM-HARNESS-01 | `docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md` | preserve the exploration as non-normative input; execute R1.6 as a bounded direct AgentSession parity spike and ADR, with a governed one-child RLM spike only if the direct path remains viable | one terminal ADR outcome; no implementation-first migration, daemon-first build, Prime dependency, sixth package or deterministic-chain bypass |
 | XTRM-PLAN-01 | `docs/shared/xtrm-current-execution-plan.md` + JSON graph | refresh source/release baseline; insert R1 runtime-semantics closure between minimum execution-shell design and promotion of terminal/idempotent runtime/scheduler work; adopt the final sequence in §10 | one sequencing authority remains; this amendment sunsets after absorption |
 | XTRM-UI-01 | Console/Agent Workspace product and observability docs | model execution tree and coherent snapshot/replay; retain stream/graph/progress and add runtime view; terminal panes are projections | UI has no hidden scheduler or source-of-truth DB |
 | XTRM-REG-01 | programme completion registry | reconcile against RESEARCH-008/PR #75 and current local evidence delta; preserve separate source/release/deployment/promotion/design dimensions | exactly one master programme ledger remains |
@@ -609,11 +610,14 @@ Development may overlap with Phase 1 where safe, but promotion follows current i
 E1.1 execution-profile schema
 → E1.2 PREPARE reducer
 → E1.3 FINALIZE reducer
-→ R1 runtime-semantics closure
+→ R1.1 execution identity + R1.2 supervision boundary contracts
+→ R1.6 native-harness-on-Pi spike
+→ GATE-HARNESS-ADR
+→ R1.3/R1.4/R1.5 runtime-semantics closure
 → E1.4 terminal actions / idempotency / recovery semantics
 ```
 
-`R1` is not a new product gate. It is the design closure recorded by the direct patches above. It must resolve execution identity, runtime/workflow ownership, leases, mutation journal/uncertain, replay/snapshot, bounded convergence and the RPC/AgentSession decision boundary before later scheduler/runtime contracts freeze those concepts accidentally.
+`R1` is not a new product family. It is the design closure recorded by the direct patches above. Common identity, authority, PREPARE/FINALIZE and supervision contracts remain transport-independent. R1.6 is the bounded decision packet that prevents later runtime work from freezing an accidental RPC-specific ownership split. Its accepted ADR must select either the corrected RPC-compatible runtime or a native XTRM harness on public Pi APIs; native adoption is not presumed. Pure C1 compiler/schema work does not wait for this decision.
 
 ### Phase 3 — chain composition and first vertical fixture
 
@@ -640,8 +644,8 @@ authoritative evidence projection
 → scheduler intents
 → execution delivery / lease / uncertain-reconciliation integration
 → recovery/idempotency/crash fixtures
-→ GATE-DO0
 → released-trio end-to-end run
+→ GATE-DO0
 ```
 
 A typical flow is:
@@ -688,8 +692,7 @@ Current xtmux messaging/obligation/monitor authorities remain bridge sources unt
 ### Phase 7 — adapters and product surfaces
 
 ```text
-native harness adapters
-→ direct AgentSession ADR if still justified
+transport-specific adapters for the accepted R1.6 ADR outcome
 → Console/Agent Workspace read-only runtime view
 → controlled actions consuming command outcomes/authority
 → Operational Knowledge System where accepted
@@ -748,12 +751,16 @@ R1.2 runtime/workflow supervision boundary
 R1.3 lease + mutation journal + uncertain reconciliation
 R1.4 runtime replay/snapshot/recovery contract
 R1.5 bounded convergence policy
-R1.6 RPC vs direct-AgentSession ADR spike
+R1.6 bounded native-harness-on-Pi AgentSession parity spike and ADR
 R1.7 Channels delivery amendment
 R1.8 memory promotion/provenance amendment
 R1.9 Substrate execution-lineage projection
 R1.10 Console runtime-tree projection
 ```
+
+R1.6 cold-starts only after Pi v0.84.1 RPC compatibility is proven and the minimum execution contracts exist. The first spike runs one existing Specialist through a directly hosted public Pi `AgentSession` boundary and compares it with the corrected RPC path for prompt/context equivalence, tools, canonical events, terminality, cancellation, retry, compaction, evidence/forensics, cleanup and recovery. If that path remains viable, a second bounded spike may add exactly one governed research/advisor child under the current Specialist step and must prove lineage, budgets, reduced authority, tool/workspace boundaries, evidence capture and inability to mutate the approved `ResolvedChain`.
+
+The resulting ADR has exactly two acceptable outcomes: retain the corrected RPC-compatible runtime, or select a native XTRM harness on public Pi runtime APIs. Native selection additionally requires evidence that it reduces duplicate lifecycle/session authority and does not introduce a second Channels/Beads authority, a sixth package, a Prime Agent dependency, a daemon-first programme or Substrate runtime implementation. Either outcome leaves ResolvedChain, reducer, scheduler and Channels semantics unchanged.
 
 Repository ownership remains local. Cross-repository relations are recorded as links/dependencies and release gates; do not fabricate a single Beads parent-child hierarchy across stores.
 
