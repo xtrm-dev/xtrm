@@ -1,6 +1,6 @@
 {
   "schema_version": "xtrm.current-execution-plan.v1",
-  "last_reconciled": "2026-08-09T00:00:00+02:00",
+  "last_reconciled": "2026-08-10T00:00:00+02:00",
   "status": "canonical-current-plan-amended-for-v1-termination",
   "authority": {
     "requirements": "xtrm-dev/specialists/docs/design/roadmap/enhanced-prd.md",
@@ -44,10 +44,15 @@
     "KAN127-K6",
     "released-trio-smoke",
     "E1-specialists.execution.v1",
+    "R1.6-native-harness-on-Pi-spike",
+    "GATE-HARNESS-ADR",
+    "R1-runtime-semantics-closure",
     "C1-compiler-ResolvedChain",
+    "GATE-IFACE",
     "GATE-COMPOSE",
     "quant-math-fixture",
     "D1-reducer-scheduler-delivery",
+    "GATE-DO0",
     "Eval-Core-context-memory-v1",
     "Channels-v1-bridge",
     "GATE-AUTH",
@@ -237,7 +242,8 @@
           "title": "Terminal actions and idempotency",
           "dependencies": [
             "E1.2",
-            "E1.3"
+            "E1.3",
+            "R1"
           ]
         }
       ],
@@ -251,6 +257,118 @@
         "activation cannot become terminal before schema and evidence validation",
         "terminal actions are idempotent",
         "blocked and waiting states are explicit"
+      ]
+    },
+    {
+      "id": "R1",
+      "title": "Runtime-semantics closure",
+      "priority": "P0",
+      "owners": [
+        "xtrm-dev/specialists",
+        "xtrm-dev/core",
+        "Jaggerxtrm/xtmux"
+      ],
+      "jira": [
+        "KAN-118",
+        "KAN-124"
+      ],
+      "dependencies": [
+        "E1.2",
+        "E1.3",
+        "PI-v0.84.1",
+        "KAN127-K5",
+        "KAN127-K6",
+        "released-trio-smoke"
+      ],
+      "parallelizable": false,
+      "children": [
+        {
+          "id": "R1.1",
+          "title": "Execution identity and envelope",
+          "dependencies": [
+            "E1.2",
+            "E1.3"
+          ]
+        },
+        {
+          "id": "R1.2",
+          "title": "Runtime/workflow supervision boundary",
+          "dependencies": [
+            "R1.1"
+          ]
+        },
+        {
+          "id": "R1.3",
+          "title": "Lease, mutation journal and uncertain reconciliation",
+          "dependencies": [
+            "R1.1",
+            "GATE-HARNESS-ADR"
+          ]
+        },
+        {
+          "id": "R1.4",
+          "title": "Runtime replay, snapshot and recovery contract",
+          "dependencies": [
+            "R1.1",
+            "R1.2",
+            "GATE-HARNESS-ADR"
+          ]
+        },
+        {
+          "id": "R1.5",
+          "title": "Bounded convergence policy",
+          "dependencies": [
+            "R1.2",
+            "R1.3"
+          ]
+        },
+        {
+          "id": "R1.6",
+          "title": "Bounded native-harness-on-Pi AgentSession parity spike and ADR",
+          "dependencies": [
+            "R1.1",
+            "R1.2",
+            "PI-v0.84.1"
+          ]
+        },
+        {
+          "id": "R1.7",
+          "title": "Channels delivery amendment and runtime-derived notification identity",
+          "dependencies": [
+            "R1.1",
+            "R1.3"
+          ]
+        },
+        {
+          "id": "R1.8",
+          "title": "Memory promotion and provenance amendment",
+          "dependencies": [
+            "R1.1"
+          ]
+        },
+        {
+          "id": "R1.9",
+          "title": "Substrate execution-lineage projection",
+          "dependencies": [
+            "R1.1"
+          ]
+        },
+        {
+          "id": "R1.10",
+          "title": "Console runtime-tree projection",
+          "dependencies": [
+            "R1.1",
+            "R1.4"
+          ]
+        }
+      ],
+      "exit_criteria": [
+        "execution identity is independent of terminal or UI attachment",
+        "runtime and workflow supervision responsibilities are explicit",
+        "uncertain mutations reconcile without blind replay",
+        "replay and snapshots are generation-aware",
+        "convergence limits fail or escalate rather than report success",
+        "GATE-HARNESS-ADR records one accepted retain-RPC or adopt-native decision before runtime-specific ownership freezes"
       ]
     },
     {
@@ -329,7 +447,8 @@
         "KAN-124"
       ],
       "dependencies": [
-        "GATE-COMPOSE"
+        "GATE-COMPOSE",
+        "GATE-HARNESS-ADR"
       ],
       "parallelizable": false,
       "children": [
@@ -384,7 +503,7 @@
         "KAN-124"
       ],
       "dependencies": [
-        "D1.2"
+        "GATE-DO0"
       ],
       "parallelizable": true,
       "children": [
@@ -564,6 +683,31 @@
       ]
     },
     {
+      "id": "GATE-HARNESS-ADR",
+      "title": "Pi execution substrate decision",
+      "dependencies": [
+        "R1.6"
+      ],
+      "authorizes": [
+        "implementation of the selected corrected-RPC or native-XTRM runtime path"
+      ],
+      "does_not_authorize": [
+        "resident daemon without separate evidence",
+        "Prime Agent dependency",
+        "sixth package",
+        "Substrate runtime migration",
+        "RLM workflow-topology mutation",
+        "raw direct messaging as a Channels authority"
+      ],
+      "requirements": [
+        "Pi v0.84.1 RPC correctness",
+        "one existing Specialist direct AgentSession parity spike",
+        "lifecycle cancellation retry compaction evidence forensics cleanup and recovery comparison",
+        "accepted ADR with explicit ownership and retirement consequences",
+        "if native remains viable one governed child spike with lineage budget capability and ResolvedChain negative proofs"
+      ]
+    },
+    {
       "id": "GATE-COMPOSE",
       "title": "Manual deterministic composition promotion",
       "dependencies": [
@@ -676,17 +820,20 @@
     "Agent Workspace mutation controls before command outcomes",
     "second xt spec implementation",
     "Archon as XTRM authority",
-    "monorepo migration as prerequisite"
+    "monorepo migration as prerequisite",
+    "native harness adoption before GATE-HARNESS-ADR",
+    "resident daemon or sixth harness package from the exploration alone"
   ],
   "amendment_2026_08_09": {
     "authority": "docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md",
     "completion_ledger": "docs/shared/xtrm-v1-completion-ledger.md",
-    "gate_state": "GATE-R0=DOCUMENTS_PATCHED_PENDING_REVIEW; all later gates pending",
+    "gate_state": "GATE-R0=DOCUMENTS_PATCHED_PENDING_REVIEW; remediation applied; all later gates pending",
     "explicit_exclusion": "Substrate runtime and migration deferred by accepted gate; design compatibility patches remain mandatory",
     "absorbed_inputs": [
       "xtrm#33",
       "xtrm#34",
-      "mercuryintelligence/program#75"
+      "mercuryintelligence/program#75",
+      "docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md"
     ],
     "packet_requirements": [
       "stable_work_id",

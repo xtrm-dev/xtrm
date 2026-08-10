@@ -609,7 +609,9 @@ Passing `GATE-IFACE` authorizes thin adapters and later scheduler intents to con
 ### 8.3 Activation and composition gate
 
 ```text
-E1.1 → E1.2/E1.3 → E1.4
+E1.1 → E1.2/E1.3 → R1.1/R1.2 common runtime contracts
+→ R1.6 native-harness-on-Pi spike → GATE-HARNESS-ADR
+→ R1.3/R1.4/R1.5 runtime closure → E1.4
 C1.1 → C1.2 → C1.3 → C1.4
 GATE-IFACE + E1.4 + C1.4 → C1.5
 ```
@@ -625,7 +627,22 @@ GATE-IFACE + E1.4 + C1.4 → C1.5
 
 Passing `GATE-COMPOSE` authorizes manual deterministic composition and observe-only execution. It does not authorize automatic advancement or coordinator authority.
 
-### 8.4 Deterministic orchestration gate
+### 8.4 Native harness decision gate
+
+```text
+Pi v0.84.1 RPC correctness + E1.2/E1.3 + R1.1/R1.2
+→ R1.6 direct AgentSession execution spike
+→ parity comparison against the corrected RPC path
+→ one governed RLM child spike only if the direct path remains viable
+→ accepted ADR
+→ GATE-HARNESS-ADR
+```
+
+`GATE-HARNESS-ADR` requires one evidence-backed terminal decision: retain the corrected RPC-compatible runtime, or select an XTRM-native harness on public Pi runtime APIs. The comparison must cover lifecycle/terminality, cancellation, retry, compaction, context, evidence/forensics, cleanup, recovery and upstream compatibility. Native selection additionally requires bounded child identity/lineage, budget and capability enforcement, and proof that the child cannot mutate the approved `ResolvedChain`.
+
+Passing the gate selects the execution substrate for later runtime-specific implementation. It does not authorize a resident daemon, a Prime Agent dependency, a sixth package, Substrate runtime migration, raw direct messaging as a Channels alternative, or RLM authority outside one governed step. Pure C1 compiler/schema work may proceed in parallel; E1.4 and runtime-delivery implementation may not freeze a transport-specific ownership split before the ADR.
+
+### 8.5 Deterministic orchestration gate
 
 ```text
 GATE-COMPOSE
@@ -633,6 +650,7 @@ GATE-COMPOSE
 → D1.2
 → D1.3
 → released-trio end-to-end fixture
+→ GATE-DO0
 ```
 
 `GATE-DO0` requires:
@@ -651,7 +669,7 @@ GATE-COMPOSE
 
 Passing `GATE-DO0` authorizes deterministic scheduler intents and coordinator shadow mode. It does not authorize broad automatic enforcement.
 
-### 8.5 Authority-promotion gate
+### 8.6 Authority-promotion gate
 
 ```text
 GATE-DO0
@@ -812,11 +830,16 @@ RUN 0 document reconciliation
 → KAN-127 K5 parity promotion
 → K6 published compatibility releases
 → clean-install released-trio smoke
-→ specialists.execution.v1 runtime semantics
+→ minimum specialists.execution.v1 contracts
+→ bounded native-harness-on-Pi AgentSession/RLM spike
+→ GATE-HARNESS-ADR selects corrected RPC or native runtime
+→ specialists.execution.v1 runtime-semantics closure
 → ChainTemplate compiler and persisted ResolvedChain
+→ GATE-IFACE
 → manual composition gate
 → quant/math vertical fixture
 → evidence reducer, scheduler intents and runtime delivery
+→ GATE-DO0
 → Eval Core, deterministic context and memory v1
 → Channels v1 bridge, pulse and attention compatibility
 → measured authority gate

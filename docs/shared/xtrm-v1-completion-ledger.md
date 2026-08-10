@@ -1,7 +1,7 @@
 # XTRM v1 Final Completion Ledger
 
 Status: canonical programme completion ledger
-Reconciled: 2026-08-09, Europe/Rome
+Reconciled: 2026-08-10, Europe/Rome
 Authority: repository-local Beads for executable work; GitHub default branches and released artifacts for source/release truth; this ledger is the single cross-repository disposition index.
 Design basis: docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md.
 Important: this ledger records disposition, not completion by assertion. Runtime, release, deployment and promotion states remain separate.
@@ -48,6 +48,7 @@ No row marked residual, source-only or deferred is complete.
 | Pi v0.84.1 compatibility | GENUINE_V1_RESIDUAL | Atomic RPC compatibility patch, fault-injected settlement/retry/compaction/recovery tests, supported-version CI and real RPC smoke. |
 | KAN-127 K5/K6 | GENUINE_V1_RESIDUAL | Cross-repository parity matrix, published compatible releases and clean-install trio smoke. |
 | specialists.execution.v1 | GENUINE_V1_RESIDUAL | Envelope, PREPARE/FINALIZE, idempotency, leases, uncertain reconciliation, replay/snapshot/recovery and bounded convergence fixtures. |
+| Native harness on Pi decision | GENUINE_V1_RESIDUAL | R1.6 direct AgentSession parity spike, optional governed one-child RLM spike if viable, and accepted ADR selecting corrected RPC or native runtime. Native adoption is not presumed. |
 | ChainTemplate compiler / ResolvedChain | GENUINE_V1_RESIDUAL | Pure packaged compiler, persisted schema, manual composition and Beads materializer with no hidden mutation. |
 | D1 reducer/scheduler/delivery | GENUINE_V1_RESIDUAL | Pure evidence reducer, scheduler intents, runtime delivery, duplicate suppression and crash/recovery matrix. |
 | Quant/math vertical | GENUINE_V1_RESIDUAL | End-to-end deterministic-validator fixture through independent gate/review. |
@@ -56,7 +57,13 @@ No row marked residual, source-only or deferred is complete.
 | Channels v1 bridge | GENUINE_V1_RESIDUAL | Delivery/processing split, identity, backpressure, replay separation, reviewer/executor and human-steer paths with failure/recovery tests. |
 | Pulse/attention/projections | GENUINE_V1_RESIDUAL | Pulse/emitter compatibility, attention/backpressure/recovery and separate work/execution lineage projections. |
 | Substrate runtime/migration | DEFERRED_BY_EXPLICIT_GATE | Target runtime and migration are explicitly excluded from this campaign; bridge compatibility design remains mandatory. |
-| Other programme lanes | GENUINE_V1_RESIDUAL or explicit terminal disposition required | DevOps, UI, adapters, service knowledge, release/CI, monorepo and MCP-facing seams must be evidence-audited; none is deferred merely by document position. |
+| Service Knowledge | GENUINE_V1_RESIDUAL | Audit source, publication/deployment and canary enablement; map residual work to repository-local Beads. |
+| Console / Gitboard evidence | GENUINE_V1_RESIDUAL | Identify the owning service and bind product work to versioned DTO/event contracts. |
+| DevOps / platform engineering | GENUINE_V1_RESIDUAL | Reconcile the living DevOps PRD with deployment freshness and runtime-daemon responsibilities. |
+| Release / CI | GENUINE_V1_RESIDUAL | Prove supported published-package installation and release compatibility. |
+| Native adapters | GENUINE_V1_RESIDUAL | Reconcile adapter seams against command outcomes, identity and idempotency authorities. |
+| MCP-facing seams | GENUINE_V1_RESIDUAL | Audit the MCP-facing contract and record an evidence-backed disposition. |
+| Five-package monorepo migration | DEFERRED_BY_EXPLICIT_GATE | Accepted later readiness/migration gate; not a prerequisite for current runtime correctness. |
 
 ## 4. Gates
 
@@ -64,6 +71,7 @@ No row marked residual, source-only or deferred is complete.
 |---|---|---|
 | GATE-R0 | DOCUMENTS_PATCHED_PENDING_REVIEW | Every §9 patch merged or explicitly rejected; one ledger; contradiction review; local Beads delta mapped. |
 | GATE-PI84 | PENDING | Pi compatibility and fault-injected E2E green. |
+| GATE-HARNESS-ADR | PENDING | Direct AgentSession parity evidence and accepted retain-RPC or adopt-native decision; native selection also requires governed RLM-child negative proofs. |
 | K5 | PENDING | Released cross-repository Codex parity. |
 | K6 | PENDING | Ordered published-package releases and clean-install smoke. |
 | GATE-COMPOSE | PENDING | Pure compiler, persisted topology, manual approve/materialize E2E. |
