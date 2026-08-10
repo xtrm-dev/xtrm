@@ -56,7 +56,13 @@ No row marked residual, source-only or deferred is complete.
 | Channels v1 bridge | GENUINE_V1_RESIDUAL | Delivery/processing split, identity, backpressure, replay separation, reviewer/executor and human-steer paths with failure/recovery tests. |
 | Pulse/attention/projections | GENUINE_V1_RESIDUAL | Pulse/emitter compatibility, attention/backpressure/recovery and separate work/execution lineage projections. |
 | Substrate runtime/migration | DEFERRED_BY_EXPLICIT_GATE | Target runtime and migration are explicitly excluded from this campaign; bridge compatibility design remains mandatory. |
-| Service Knowledge | GENUINE_V1_RESIDUAL | Audit source, publication/deployment and canary enablement; map residual work to repository-local Beads. |\n| Console / Gitboard evidence | GENUINE_V1_RESIDUAL | Identify the owning service and bind product work to versioned DTO/event contracts. |\n| DevOps / platform engineering | GENUINE_V1_RESIDUAL | Reconcile the living DevOps PRD with deployment freshness and runtime-daemon responsibilities. |\n| Release / CI | GENUINE_V1_RESIDUAL | Prove supported published-package installation and release compatibility. |\n| Native adapters | GENUINE_V1_RESIDUAL | Reconcile adapter seams against command outcomes, identity and idempotency authorities. |\n| MCP-facing seams | GENUINE_V1_RESIDUAL | Audit the MCP-facing contract and record an evidence-backed disposition. |\n| Five-package monorepo migration | DEFERRED_BY_EXPLICIT_GATE | Accepted later readiness/migration gate; not a prerequisite for current runtime correctness. |
+| Service Knowledge | GENUINE_V1_RESIDUAL | Audit source, publication/deployment and canary enablement; map residual work to repository-local Beads. 
+| Console / Gitboard evidence | GENUINE_V1_RESIDUAL | Identify the owning service and bind product work to versioned DTO/event contracts. 
+| DevOps / platform engineering | GENUINE_V1_RESIDUAL | Reconcile the living DevOps PRD with deployment freshness and runtime-daemon responsibilities. 
+| Release / CI | GENUINE_V1_RESIDUAL | Prove supported published-package installation and release compatibility. 
+| Native adapters | GENUINE_V1_RESIDUAL | Reconcile adapter seams against command outcomes, identity and idempotency authorities. 
+| MCP-facing seams | GENUINE_V1_RESIDUAL | Audit the MCP-facing contract and record an evidence-backed disposition. 
+| Five-package monorepo migration | DEFERRED_BY_EXPLICIT_GATE | Accepted later readiness/migration gate; not a prerequisite for current runtime correctness. |
 
 ## 4. Gates
 
