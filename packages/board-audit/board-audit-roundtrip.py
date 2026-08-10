@@ -39,6 +39,25 @@ PROTECTED_EXISTING_FIELDS = {
     "started_at",
 }
 AUX_FIELDS = {"labels", "dependencies", "deps", "relations", "comments"}
+EDITABLE_EXISTING_FIELDS = {
+    "title",
+    "description",
+    "design",
+    "acceptance_criteria",
+    "notes",
+    "spec_id",
+    "priority",
+    "issue_type",
+    "estimated_minutes",
+    "external_ref",
+    "metadata",
+    "labels",
+    "dependencies",
+    "deps",
+    "relations",
+    "comments",
+}
+NEW_ISSUE_FIELDS = EDITABLE_EXISTING_FIELDS | {"status"}
 MISSING = object()
 
 
@@ -219,6 +238,9 @@ def validate_package(pkg: dict[str, Any], *, allow_context_edit: bool = False) -
         if rid not in base:
             if not str(row.get("title") or "").strip():
                 raise RoundtripError(f"new bead {rid} requires title")
+            unsupported = sorted(set(row) - NEW_ISSUE_FIELDS - {"id"})
+            if unsupported:
+                raise RoundtripError(f"new bead {rid}: unsupported v1 fields: {', '.join(unsupported)}")
             continue
         b = base[rid]
         for field in PROTECTED_EXISTING_FIELDS:
@@ -226,6 +248,12 @@ def validate_package(pkg: dict[str, Any], *, allow_context_edit: bool = False) -
                 continue
             if row.get(field, MISSING) != b.get(field, MISSING):
                 raise RoundtripError(f"{rid}: protected provenance field {field!r} was edited")
+        changed = {field for field in set(b) | set(row) if row.get(field, MISSING) != b.get(field, MISSING)}
+        unsupported = sorted(changed - EDITABLE_EXISTING_FIELDS - PROTECTED_EXISTING_FIELDS)
+        if unsupported:
+            raise RoundtripError(
+                f"{rid}: fields are preserved losslessly but not mutable through round-trip v1: {', '.join(unsupported)}"
+            )
         validate_comment_append_only(b.get("comments"), row.get("comments"), rid)
 
     package_ids = set(base) | set(desired)
