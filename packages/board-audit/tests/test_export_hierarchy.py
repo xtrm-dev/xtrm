@@ -126,11 +126,14 @@ class ExportHierarchyTests(unittest.TestCase):
         self.assertEqual(manifest["selection"]["selected_record_count"], 2)
         self.assertEqual(set(package["issues"]), {"x-root", "x-child"})
         self.assertEqual([child["id"] for child in package["hierarchy"]["children"]], ["x-child"])
-        self.assertEqual(package["relations"][0]["target"], "x-root")
+        internal_targets = {(r["type"], r["target"]) for r in package["relations"]}
+        self.assertIn(("parent-child", "x-root"), internal_targets)
         external = [r for r in package["external_relations"] if r["type"] == "blocks"]
         self.assertEqual(len(external), 1)
         self.assertEqual(external[0]["target"], "x-blocker")
-        self.assertNotIn("edge-row-uuid-blocks", json.dumps(package))
+        normalized_targets = {r["target"] for r in package["relations"] + package["external_relations"]}
+        self.assertNotIn("edge-row-uuid-parent", normalized_targets)
+        self.assertNotIn("edge-row-uuid-blocks", normalized_targets)
 
 
 if __name__ == "__main__":
