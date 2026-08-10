@@ -138,6 +138,20 @@ class RoundtripTests(unittest.TestCase):
         with self.assertRaises(rt.RoundtripError):
             rt.validate_package(prepared)
 
+    def test_existing_assignment_is_not_mutable_in_v1(self):
+        raw = package()
+        raw["issues"]["x-1"]["source"]["assignee"] = "agent-a"
+        prepared = rt.prepare_package(raw)
+        prepared["desired_issues"]["x-1"]["assignee"] = "agent-b"
+        with self.assertRaises(rt.RoundtripError):
+            rt.validate_package(prepared)
+
+    def test_existing_lifecycle_status_is_not_mutable_in_v1(self):
+        prepared = rt.prepare_package(package())
+        prepared["desired_issues"]["x-1"]["status"] = "closed"
+        with self.assertRaises(rt.RoundtripError):
+            rt.validate_package(prepared)
+
 
 if __name__ == "__main__":
     unittest.main()
