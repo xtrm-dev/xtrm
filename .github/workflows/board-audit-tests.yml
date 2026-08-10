@@ -4,10 +4,14 @@ on:
   push:
     paths:
       - "packages/board-audit/**"
+      - ".xtrm/board-audit/**"
+      - ".gitignore"
       - ".github/workflows/board-audit-tests.yml"
   pull_request:
     paths:
       - "packages/board-audit/**"
+      - ".xtrm/board-audit/**"
+      - ".gitignore"
       - ".github/workflows/board-audit-tests.yml"
 
 permissions:
@@ -31,6 +35,14 @@ jobs:
 
       - name: Shell syntax
         run: bash -n packages/board-audit/board-audit
+
+      - name: Board-audit artifact tracking boundary
+        run: |
+          if git check-ignore -q --no-index .xtrm/board-audit/exports/example.json; then
+            echo ".xtrm/board-audit must be versionable" >&2
+            exit 1
+          fi
+          git check-ignore -q --no-index .xtrm/runtime/example.json
 
       - name: Round-trip unit tests
         run: python -m unittest discover -s packages/board-audit/tests -p 'test_*.py' -v

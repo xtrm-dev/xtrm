@@ -29,7 +29,11 @@ build/
 .env.*.local
 
 # Worktree / agent runtime
-.xtrm/
+# Keep .xtrm runtime state ignored, but allow the board-audit interchange tree
+# to be versioned for GitHub-backed human/agent handoff.
+.xtrm/*
+!.xtrm/board-audit/
+!.xtrm/board-audit/**
 .specialists/
 .wolf/
 .beads/
