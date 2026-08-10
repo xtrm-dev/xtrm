@@ -12,7 +12,7 @@
     "assignment/actor/participant/execution/attempt/parent/session/generation identities are distinct",
     "mutable execution ownership uses explicit leases or existing equivalent authorities",
     "uncertain is a first-class mutation outcome and forbids blind replay",
-    "Channels message_id remains semantic cursor while runtime replay uses execution_id+generation+sequence",
+    "Channels channel_messages.id remains the semantic cursor while runtime replay uses execution_id+generation+sequence",
     "ChannelMessage is separate from DeliveryIntent/DeliveryAttempt/ProcessingReceipt",
     "reducer decides semantic next state; scheduler authorizes; runtime executes; Channels communicates",
     "direct agent messaging is subordinate to Channels and authority",
@@ -31,35 +31,136 @@
     "target package count remains five: core, substrate, channels, specialists, console"
   ],
   "patches": [
-    {"id":"SP-PRD-01","repo":"xtrm-dev/specialists","path":"docs/design/roadmap/enhanced-prd.md"},
-    {"id":"SP-RMAP-01","repo":"xtrm-dev/specialists","path":"docs/design/roadmap/specialists-roadmap.md"},
-    {"id":"SP-EXEC-01","repo":"xtrm-dev/specialists","path":"docs/design/execution-protocol-design/specialist-execution-protocol.md"},
-    {"id":"SP-CHAIN-01","repo":"xtrm-dev/specialists","path":"docs/design/roadmap/chain-templates/README.md"},
-    {"id":"SP-EVAL-01","repo":"xtrm-dev/specialists","path":"docs/design/roadmap/chains-prompt-evals.md"},
-    {"id":"SP-PI-01","repo":"xtrm-dev/specialists","path":"docs/pi-rpc-boundary.md"},
-    {"id":"CORE-MEM-01","repo":"xtrm-dev/core","path":"docs/design/memory-system-r6g.md"},
-    {"id":"XTRM-CHAN-01","repo":"xtrm-dev/xtrm","path":"docs/channels/channels.md"},
-    {"id":"XTRM-CHAN-02","repo":"xtrm-dev/xtrm","path":"docs/channels/channels-upgrade.md"},
-    {"id":"XTRM-SUB-01","repo":"xtrm-dev/xtrm","path":"docs/substrate/*"},
-    {"id":"XTRM-OUT-01","repo":"xtrm-dev/xtrm","path":"docs/shared/xtrm-cli-actionable-outcomes-and-followups.md"},
-    {"id":"XTRM-ADAPT-01","repo":"xtrm-dev/xtrm","path":"docs/shared/xtrm-harness-native-adapters.md"},
-    {"id":"XTRM-PI-01","repo":"xtrm-dev/xtrm","path":"docs/shared/xtrm-native-pi-tools-pi-extensible-workflows-integration-2026-07-30.md"},
-    {"id":"XTRM-PLAN-01","repo":"xtrm-dev/xtrm","path":"docs/shared/xtrm-current-execution-plan.md"},
-    {"id":"XTRM-UI-01","repo":"xtrm-dev/xtrm","path":"docs/console/**"},
-    {"id":"XTRM-REG-01","repo":"xtrm-dev/xtrm","path":"programme completion registry"},
-    {"id":"XTRM-DRAFT-01","repo":"xtrm-dev/xtrm","path":"PR #33","action":"absorb-and-supersede"},
-    {"id":"XTRM-DRAFT-02","repo":"xtrm-dev/xtrm","path":"PR #34","action":"absorb-and-supersede"}
+    {
+      "id": "SP-PRD-01",
+      "repo": "xtrm-dev/specialists",
+      "path": "docs/design/roadmap/enhanced-prd.md"
+    },
+    {
+      "id": "SP-RMAP-01",
+      "repo": "xtrm-dev/specialists",
+      "path": "docs/design/roadmap/specialists-roadmap.md"
+    },
+    {
+      "id": "SP-EXEC-01",
+      "repo": "xtrm-dev/specialists",
+      "path": "docs/design/execution-protocol-design/specialist-execution-protocol.md"
+    },
+    {
+      "id": "SP-CHAIN-01",
+      "repo": "xtrm-dev/specialists",
+      "path": "docs/design/roadmap/chain-templates/README.md"
+    },
+    {
+      "id": "SP-EVAL-01",
+      "repo": "xtrm-dev/specialists",
+      "path": "docs/design/roadmap/chains-prompt-evals.md"
+    },
+    {
+      "id": "SP-PI-01",
+      "repo": "xtrm-dev/specialists",
+      "path": "docs/pi-rpc-boundary.md"
+    },
+    {
+      "id": "CORE-MEM-01",
+      "repo": "xtrm-dev/core",
+      "path": "docs/design/memory-system-r6g.md"
+    },
+    {
+      "id": "XTRM-CHAN-01",
+      "repo": "xtrm-dev/xtrm",
+      "path": "docs/channels/channels.md"
+    },
+    {
+      "id": "XTRM-CHAN-02",
+      "repo": "xtrm-dev/xtrm",
+      "path": "docs/channels/channels-upgrade.md"
+    },
+    {
+      "id": "XTRM-SUB-01",
+      "repo": "xtrm-dev/xtrm",
+      "path": "docs/substrate/*"
+    },
+    {
+      "id": "XTRM-OUT-01",
+      "repo": "xtrm-dev/xtrm",
+      "path": "docs/shared/xtrm-cli-actionable-outcomes-and-followups.md"
+    },
+    {
+      "id": "XTRM-ADAPT-01",
+      "repo": "xtrm-dev/xtrm",
+      "path": "docs/shared/xtrm-harness-native-adapters.md"
+    },
+    {
+      "id": "XTRM-PI-01",
+      "repo": "xtrm-dev/xtrm",
+      "path": "docs/shared/xtrm-native-pi-tools-pi-extensible-workflows-integration-2026-07-30.md"
+    },
+    {
+      "id": "XTRM-PLAN-01",
+      "repo": "xtrm-dev/xtrm",
+      "path": "docs/shared/xtrm-current-execution-plan.md"
+    },
+    {
+      "id": "XTRM-UI-01",
+      "repo": "xtrm-dev/xtrm",
+      "path": "docs/console/**"
+    },
+    {
+      "id": "XTRM-REG-01",
+      "repo": "xtrm-dev/xtrm",
+      "path": "programme completion registry"
+    },
+    {
+      "id": "XTRM-DRAFT-01",
+      "repo": "xtrm-dev/xtrm",
+      "path": "PR #33",
+      "action": "absorb-and-supersede"
+    },
+    {
+      "id": "XTRM-DRAFT-02",
+      "repo": "xtrm-dev/xtrm",
+      "path": "PR #34",
+      "action": "absorb-and-supersede"
+    }
   ],
   "sequence": [
-    {"phase":0,"name":"local evidence delta and final ledger reconciliation"},
-    {"phase":1,"name":"Pi 0.84.1 remediation, KAN-127 K5/K6, compatible releases, released-trio smoke, deployment freshness"},
-    {"phase":2,"name":"minimum specialists.execution.v1 plus R1 runtime-semantics closure"},
-    {"phase":3,"name":"pure compiler, persisted ResolvedChain, manual composition, GATE-COMPOSE, quant fixture"},
-    {"phase":4,"name":"evidence reducer, scheduler intents, delivery/lease/uncertain recovery, GATE-DO0"},
-    {"phase":5,"name":"coordinator shadow, telemetry integrity, Eval Core, context/prompts, three-lens memory, GATE-AUTH"},
-    {"phase":6,"name":"Channels/pulse/Substrate-compatible bridge and execution-lineage projections"},
-    {"phase":7,"name":"native adapters and accepted product surfaces"},
-    {"phase":8,"name":"target Substrate/Channels migration, five-package monorepo readiness/migration, bridge retirement, final programme audit"}
+    {
+      "phase": 0,
+      "name": "local evidence delta and final ledger reconciliation"
+    },
+    {
+      "phase": 1,
+      "name": "Pi 0.84.1 remediation, KAN-127 K5/K6, compatible releases, released-trio smoke, deployment freshness"
+    },
+    {
+      "phase": 2,
+      "name": "minimum specialists.execution.v1 plus R1 runtime-semantics closure"
+    },
+    {
+      "phase": 3,
+      "name": "pure compiler, persisted ResolvedChain, GATE-IFACE, manual composition, GATE-COMPOSE, quant fixture"
+    },
+    {
+      "phase": 4,
+      "name": "evidence reducer, scheduler intents, delivery/lease/uncertain recovery, GATE-DO0"
+    },
+    {
+      "phase": 5,
+      "name": "coordinator shadow, telemetry integrity, Eval Core, context/prompts, three-lens memory, GATE-AUTH"
+    },
+    {
+      "phase": 6,
+      "name": "Channels/pulse/Substrate-compatible bridge and execution-lineage projections"
+    },
+    {
+      "phase": 7,
+      "name": "native adapters and accepted product surfaces"
+    },
+    {
+      "phase": 8,
+      "name": "target Substrate/Channels migration, five-package monorepo readiness/migration, bridge retirement, final programme audit"
+    }
   ],
   "terminal_criteria": [
     "every meaningful requirement/design item has an explicit disposition",
