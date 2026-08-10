@@ -39,11 +39,10 @@ def run_export(rows: list[dict], *args: str) -> tuple[subprocess.CompletedProces
         )
         fake_bd.chmod(0o755)
 
-        tmp_root = td / "tmp"
-        tmp_root.mkdir()
+        artifact_root = td / "artifacts"
         env = os.environ.copy()
         env["PATH"] = f"{fake_bin}:{env['PATH']}"
-        env["TMPDIR"] = str(tmp_root)
+        env["BOARD_AUDIT_OUTDIR"] = str(artifact_root)
 
         proc = subprocess.run(
             [str(SCRIPT), "--export", *args],
@@ -53,8 +52,7 @@ def run_export(rows: list[dict], *args: str) -> tuple[subprocess.CompletedProces
             capture_output=True,
             check=False,
         )
-        export_root = tmp_root / f"board-audit-{REPO_ROOT.name}"
-        snapshots = sorted(export_root.glob("export-*"))
+        snapshots = sorted((artifact_root / "exports").glob("export-*"))
         if not snapshots:
             return proc, {}, {}
         manifest = json.loads((snapshots[0] / "manifest.json").read_text(encoding="utf-8"))
