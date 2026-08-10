@@ -53,5 +53,4 @@ build/
 .specialists/db/*.db
 .specialists/db/*.db-wal
 .specialists/db/*.db-shm
-# bd worktree
 .worktrees/xtrm-2m3.10/xtrm-2m3.10-executor/
