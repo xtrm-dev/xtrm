@@ -25,7 +25,11 @@ The transport branch is artifact-only. On a repeat handoff it is rebuilt from th
 
 `handoff` deliberately force-stages only its explicit `.xtrm/board-audit/**` artifact paths. Therefore an owning repository may ignore `.xtrm/` wholesale; it does **not** need a `.gitignore` exception merely to use board-audit. The force-stage path guard fails closed if any requested path escapes `.xtrm/board-audit/**`.
 
-The local staging branch/worktree is temporary and is removed after a successful command. On failure it is retained and printed for recovery.
+Transport publication deliberately bypasses repository-local `pre-commit` and `pre-push` hooks after that strict path check. These branches carry generated Beads interchange JSON rather than product code, so code-size, lint, SAST, dependency and entropy-based code gates are not authoritative for the transport. Transport commits include `[skip ci]` to suppress broad GitHub `push`/`pull_request` workflow triggers where supported. Normal repository branches and PRs keep all existing hooks and CI unchanged.
+
+This hook/CI isolation does not change the confidentiality boundary: board-audit exports are lossless and must only be published to a repository/access class suitable for the underlying Beads content.
+
+The local staging branch/worktree is temporary and is removed after a successful command. Before removal, board-audit fetches the exact published transport ref, requires local `HEAD` to equal that remote head, then repoints the ephemeral staging upstream so `bd worktree remove` can keep its normal safety checks. On failure the worktree is retained and printed for recovery.
 
 ## Layout
 
