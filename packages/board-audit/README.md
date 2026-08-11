@@ -33,9 +33,13 @@ fetch origin
 → board-audit --export --bead xtrm-123
 → board-audit-roundtrip prepare <package>
 → update .xtrm/board-audit/index.json
-→ commit generated handoff artifacts
+→ force-stage only .xtrm/board-audit/**
+→ commit transport artifacts with --no-verify and [skip ci]
+→ push transport branch with --no-verify
 → normal push for first handoff, exact --force-with-lease rewrite for repeat handoff
-→ bd worktree remove
+→ verify local HEAD == fetched remote transport HEAD
+→ repoint ephemeral staging upstream to the verified transport ref
+→ bd worktree remove with normal Beads safety checks
 → delete the local staging branch
 ```
 
@@ -60,6 +64,30 @@ Tell ChatGPT: "leggi export xtrm-123"
 ```
 
 `handoff` may commit and push only transport-branch interchange artifacts. It does not commit or switch the user's current working branch and does not mutate Beads.
+
+### Transport hooks and CI
+
+A board-audit transport commit is **not** a product-code delivery commit. Repository-local hooks commonly include code-oriented policies such as large-file limits, Ruff, Semgrep, OSV or Gitleaks entropy rules that are appropriate for application changes but can reject valid lossless Beads JSON. In particular, Beads memories and identifiers may intentionally contain long/high-entropy values, and a large work package may exceed repository code-file size conventions while remaining far below Git/GitHub hard limits.
+
+The transport publisher therefore owns this narrow bypass:
+
+```text
+validate every staged path is .xtrm/board-audit or .xtrm/board-audit/**
+→ git add -f -- <validated transport paths>
+→ git commit --no-verify -m '... [skip ci]'
+→ git push --no-verify ...
+```
+
+This does **not** weaken normal repository policy:
+
+- the bypass exists only inside `board-audit-transport.py`;
+- any path outside `.xtrm/board-audit/**` fails before force-stage/commit/push;
+- normal branches and PRs still execute their configured hooks and CI;
+- transport branches are not merged into the product default branch;
+- `[skip ci]` suppresses broad GitHub `push`/`pull_request` workflow triggers for the transport commit where GitHub supports skip instructions; normal branch/path filtering remains preferable when already configured;
+- confidentiality remains a precondition because the transport is lossless. Hook bypass does not authorize publishing secrets or restricted Beads data to an unsuitable repository.
+
+The same policy applies when `reconcile --execute` updates `index.json` to `applied`: that is transport metadata, not a code change.
 
 ### 2. Edit remotely
 
@@ -179,7 +207,9 @@ The high-level flow preserves the round-trip safety contract:
 - overlapping same-field changes fail closed;
 - import runs dry-run first;
 - `--allow-stale` is never generated;
+- force-stage/hook bypass is fenced to `.xtrm/board-audit/**` only;
 - exact force-with-lease protects repeat transport-branch publication;
+- post-push cleanup verifies exact local/remote transport SHA before normal Beads worktree removal;
 - dependency-cycle deltas are checked on executed apply;
 - executed apply finishes with fresh export and intent verification;
 - failed handoff/reconcile retains its worktree/staging branch for recovery rather than deleting evidence.
@@ -209,7 +239,7 @@ local Beads/Dolt
 → index state = applied
 ```
 
-This trial also exposed and led to the transport freshness rule above: repeat handoffs are rebuilt from current `origin/HEAD` and preserve only interchange artifacts, protected by an exact force-with-lease.
+Subsequent live use exposed two transport-only integration defects that are now regression-covered: repositories may ignore `.xtrm/` wholesale, and Beads worktree cleanup must compare the staging commit against the published transport ref rather than the default branch. A later Infra handoff also demonstrated why transport publication must not inherit code-oriented pre-commit/pre-push gates: a valid 117-bead lossless package was blocked by repository large-file, Gitleaks-entropy and Semgrep hooks even though no application code was being delivered.
 
 ## Advanced / low-level primitives
 
@@ -261,14 +291,14 @@ Audit bundles live under `.xtrm/board-audit/audits/`.
 
 ```text
 packages/board-audit/board-audit               # user-facing dispatcher
-packages/board-audit/board-audit-transport.py  # fresh-from-main transport policy + exact lease handling
+packages/board-audit/board-audit-transport.py  # fresh-from-main transport policy + exact lease/hook/CI handling
 packages/board-audit/board-audit-flow.py       # generic handoff/reconcile orchestration
 packages/board-audit/board-audit-core          # low-level exporter/audit implementation
 packages/board-audit/board-audit-roundtrip.py  # reconciliation/compiler/apply engine
 packages/board-audit/ROUNDTRIP.md               # complete low-level safety contract
 ```
 
-`board-audit-transport.py` owns the user-facing transport policy. It delegates the generic reconciliation machinery to `board-audit-flow.py` while enforcing fresh default-branch ancestry and lease-protected transport rewrites.
+`board-audit-transport.py` owns the user-facing transport policy. It delegates the generic reconciliation machinery to `board-audit-flow.py` while enforcing fresh default-branch ancestry, strict artifact path fencing, code-hook/CI bypass for transport-only commits, lease-protected transport rewrites and verified cleanup.
 
 ## Installation
 
@@ -295,6 +325,6 @@ python3 -m unittest discover -s packages/board-audit/tests -p 'test_*.py' -v
 
 ## GitHub Actions direction
 
-The current CI remains non-mutative. It validates syntax, export semantics, round-trip semantics, Git ignore boundaries, high-level worktree handoff/reconcile behavior, and transport freshness/lease policy.
+The board-audit package's own CI remains non-mutative. It validates syntax, export semantics, round-trip semantics, Git ignore boundaries, hook/CI transport isolation, high-level worktree handoff/reconcile behavior, transport freshness/lease policy and cleanup safety.
 
-A later protected Actions mutation flow can consume the same transport/index contract, but interactive local `handoff`/`reconcile` does not depend on Actions.
+Normal product-repository CI remains authoritative for normal product branches/PRs. Transport commits are deliberately marked `[skip ci]` and pushed with local hooks bypassed because they are artifact interchange, not code delivery. A later protected Actions mutation flow can consume the same transport/index contract, but interactive local `handoff`/`reconcile` does not depend on Actions.
