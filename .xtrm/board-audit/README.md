@@ -2,26 +2,28 @@
 
 This directory is the repository-local interchange surface for `packages/board-audit`.
 
-Beads/Dolt remains authoritative. Files here are snapshots, projections, audit inputs, desired-state proposals, and transport metadata; they are not the Beads database.
+Beads/Dolt remains authoritative. Files here are snapshots, projections, audit inputs, desired-state proposals and transport metadata; they are not the Beads database.
 
 ## Normal UX
 
 ```bash
 board-audit handoff <bead-id>
-# ChatGPT/human edits the remote transport artifact
+# ChatGPT/human edits the remote desired-state artifact
 board-audit reconcile <bead-id>
 board-audit reconcile <bead-id> --execute
 ```
 
-`handoff` and `reconcile` use isolated worktrees created with `bd worktree create`. Beads worktrees automatically share the same authoritative database through Git common-directory discovery. The caller's current checkout is never switched.
+`handoff` and `reconcile` use isolated worktrees created with `bd worktree create`. Beads worktrees share the same authoritative database through Git common-directory discovery. The caller's current checkout is never switched.
 
-The durable transport branch is:
+The durable remote transport branch is:
 
 ```text
 board-audit/<bead-id>
 ```
 
-The local staging branch/worktree used to construct or consume that transport branch is temporary and is removed after a successful command.
+The transport branch is artifact-only. On a repeat handoff it is rebuilt from the current remote default branch, previous `.xtrm/board-audit/**` artifacts are restored, and the remote branch is rewritten with an exact `--force-with-lease` tied to the SHA observed after fetch. Concurrent remote edits therefore fail the lease rather than being overwritten.
+
+The local staging branch/worktree is temporary and is removed after a successful command. On failure it is retained and printed for recovery.
 
 ## Layout
 
@@ -47,11 +49,20 @@ The local staging branch/worktree used to construct or consume that transport br
 
 `index.json` uses schema `xtrm.board-audit.index.v1` and is the stable pointer from a bead/root ID to its latest export and editable artifact. Normal consumers should use the index rather than discover timestamped paths manually.
 
+Typical index states:
+
+```text
+prepared  remote editable exists and may be reconciled
+applied   execute completed and post-apply verification succeeded
+```
+
+Successful execution also records `applied_at`.
+
 ## Mutation boundary
 
 `board-audit handoff` may commit/push only interchange artifacts on the transport branch. It never mutates Beads.
 
-`board-audit reconcile <id>` fetches the remote desired artifact, validates it, performs a fresh three-way reconciliation and runs the apply path in dry-run mode.
+`board-audit reconcile <id>` fetches the remote desired artifact, validates immutable source hashes and the edit contract, performs a fresh three-way reconciliation and runs the apply path in dry-run mode.
 
 Only:
 
@@ -59,6 +70,6 @@ Only:
 board-audit reconcile <id> --execute
 ```
 
-may mutate Beads, and it retains the round-trip engine's dry-run, stale-write, dependency-cycle and post-apply verification fences.
+may mutate Beads. It repeats fresh reconciliation, performs the real issue upsert and native dependency/comment operations, checks newly introduced dependency cycles, re-exports current Beads and verifies the intended delta before marking the index `applied`.
 
-Low-level manual export/prepare/reconcile commands remain available for debugging and CI; see `packages/board-audit/README.md` and `ROUNDTRIP.md`.
+Low-level manual export/prepare/reconcile commands remain available for debugging and CI; see `packages/board-audit/README.md` and `packages/board-audit/ROUNDTRIP.md`.
