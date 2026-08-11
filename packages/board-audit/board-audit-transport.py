@@ -30,6 +30,15 @@ spec.loader.exec_module(flow)
 # normal fast-forward push from the fetched transport head.
 _HANDOFF_LEASES: dict[str, str | None] = {}
 
+# ``bd worktree remove`` compares the worktree HEAD with the staging branch's
+# configured upstream. Handoff staging branches start from origin/HEAD, but the
+# commit is deliberately pushed to board-audit/<id>. Track that relationship so
+# successful cleanup can realign the comparator before asking Beads to remove
+# the worktree with its normal safety checks intact.
+_STAGING_TRANSPORTS: dict[str, str] = {}
+_BASE_MAKE_STAGING_BRANCH = flow.make_staging_branch
+_BASE_CLEANUP_TRANSPORT_WORKTREE = flow.cleanup_transport_worktree
+
 
 def _transport_artifacts_exist(repo: Path, remote_branch: str) -> bool:
     return (
@@ -68,6 +77,82 @@ def _transport_relpaths(worktree: Path, paths: list[Path]) -> list[str]:
     return relative_paths
 
 
+def make_staging_branch(repo: Path, bead_id: str, start_ref: str) -> str:
+    """Create a staging branch and remember its intended transport branch."""
+    staging = _BASE_MAKE_STAGING_BRANCH(repo, bead_id, start_ref)
+    _STAGING_TRANSPORTS[staging] = flow.transport_branch(bead_id)
+    return staging
+
+
+def _prepare_cleanup_upstream(
+    repo: Path,
+    worktree: Path,
+    staging: str,
+    remote_branch: str,
+) -> None:
+    """Prove publication and point Beads' normal comparator at that proof.
+
+    Beads' normal worktree-removal policy checks cleanliness and requires the
+    worktree HEAD to be contained in its comparison target. Handoff staging
+    branches initially track origin/HEAD, while their generated commit is pushed
+    to board-audit/<id>. Refresh exactly that transport ref, require exact HEAD
+    equality, then repoint the ephemeral staging branch upstream so
+    ``bd worktree remove`` can run without ``--force``.
+    """
+    remote_tracking = f"origin/{remote_branch}"
+    refspec = f"+refs/heads/{remote_branch}:refs/remotes/origin/{remote_branch}"
+    flow.run(["git", "fetch", "origin", refspec], cwd=repo)
+
+    local_head = flow.git_output(worktree, "rev-parse", "HEAD")
+    remote_head = flow.git_output(repo, "rev-parse", remote_tracking)
+    if local_head != remote_head:
+        raise flow.FlowError(
+            "refusing worktree cleanup: local transport HEAD does not match "
+            f"{remote_tracking} ({local_head} != {remote_head})"
+        )
+
+    flow.run(
+        ["git", "branch", "--set-upstream-to", remote_tracking, staging],
+        cwd=repo,
+    )
+
+
+def cleanup_transport_worktree(
+    repo: Path,
+    path: Path,
+    staging: str,
+    *,
+    keep_on_error: bool,
+) -> None:
+    """Preserve Beads safety checks while cleaning published staging worktrees."""
+    if keep_on_error:
+        _STAGING_TRANSPORTS.pop(staging, None)
+        _BASE_CLEANUP_TRANSPORT_WORKTREE(
+            repo,
+            path,
+            staging,
+            keep_on_error=True,
+        )
+        return
+
+    remote_branch = _STAGING_TRANSPORTS.get(staging)
+    if not remote_branch:
+        raise flow.FlowError(
+            f"cannot determine transport branch for cleanup staging branch {staging}"
+        )
+
+    try:
+        _prepare_cleanup_upstream(repo, path, staging, remote_branch)
+        _BASE_CLEANUP_TRANSPORT_WORKTREE(
+            repo,
+            path,
+            staging,
+            keep_on_error=False,
+        )
+    finally:
+        _STAGING_TRANSPORTS.pop(staging, None)
+
+
 def start_transport_worktree(repo: Path, bead_id: str) -> tuple[Path, str, str]:
     """Start handoff from current origin default while preserving artifacts.
 
@@ -84,6 +169,9 @@ def start_transport_worktree(repo: Path, bead_id: str) -> tuple[Path, str, str]:
         previous_sha = flow.git_output(repo, "rev-parse", f"origin/{remote_branch}")
 
     staging = flow.make_staging_branch(repo, bead_id, flow.default_remote_ref(repo))
+    # Keep this explicit as well as in make_staging_branch so tests or callers
+    # that temporarily replace the flow hook cannot lose the cleanup mapping.
+    _STAGING_TRANSPORTS[staging] = remote_branch
     path = flow.cache_worktree_path(repo, bead_id)
     try:
         flow.create_bd_worktree(repo, path, staging)
@@ -106,6 +194,7 @@ def start_transport_worktree(repo: Path, bead_id: str) -> tuple[Path, str, str]:
         # before the worktree became usable.
         if not path.exists():
             flow.delete_local_branch(repo, staging)
+        _STAGING_TRANSPORTS.pop(staging, None)
         raise
 
     _HANDOFF_LEASES[remote_branch] = previous_sha
@@ -146,6 +235,8 @@ def commit_and_push(
 
 
 # Install the transport policy into the generic flow implementation.
+flow.make_staging_branch = make_staging_branch
+flow.cleanup_transport_worktree = cleanup_transport_worktree
 flow.start_transport_worktree = start_transport_worktree
 flow.commit_and_push = commit_and_push
 
