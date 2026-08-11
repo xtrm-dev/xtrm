@@ -23,6 +23,8 @@ board-audit/<bead-id>
 
 The transport branch is artifact-only. On a repeat handoff it is rebuilt from the current remote default branch, previous `.xtrm/board-audit/**` artifacts are restored, and the remote branch is rewritten with an exact `--force-with-lease` tied to the SHA observed after fetch. Concurrent remote edits therefore fail the lease rather than being overwritten.
 
+`handoff` deliberately force-stages only its explicit `.xtrm/board-audit/**` artifact paths. Therefore an owning repository may ignore `.xtrm/` wholesale; it does **not** need a `.gitignore` exception merely to use board-audit. The force-stage path guard fails closed if any requested path escapes `.xtrm/board-audit/**`.
+
 The local staging branch/worktree is temporary and is removed after a successful command. On failure it is retained and printed for recovery.
 
 ## Layout
