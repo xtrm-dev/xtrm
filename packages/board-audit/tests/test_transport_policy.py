@@ -65,6 +65,10 @@ class TransportPolicyTests(unittest.TestCase):
             run.mock_calls,
         )
         self.assertEqual(transport._HANDOFF_LEASES[branch], "abc123")
+        self.assertEqual(
+            transport._STAGING_TRANSPORTS["board-audit-staging/x-1"],
+            branch,
+        )
 
         with tempfile.TemporaryDirectory() as td_raw:
             td = Path(td_raw)
@@ -91,8 +95,7 @@ class TransportPolicyTests(unittest.TestCase):
             calls[0],
             ["git", "add", "-f", "--", ".xtrm/board-audit/index.json"],
         )
-        push = calls[-1]
-        self.assertEqual(push[0:2], ["git", "push"])
+        push = next(call for call in calls if call[0:2] == ["git", "push"])
         self.assertIn(
             "--force-with-lease=refs/heads/board-audit/x-1:abc123",
             push,
@@ -118,6 +121,10 @@ class TransportPolicyTests(unittest.TestCase):
 
         make_branch.assert_called_once_with(repo, "x-2", "origin/main")
         self.assertIsNone(transport._HANDOFF_LEASES["board-audit/x-2"])
+        self.assertEqual(
+            transport._STAGING_TRANSPORTS["board-audit-staging/x-2"],
+            "board-audit/x-2",
+        )
 
     def test_commit_and_push_force_stages_transport_even_when_xtrm_is_ignored(self):
         transport = load_transport()
@@ -185,6 +192,141 @@ class TransportPolicyTests(unittest.TestCase):
                     message="must fail",
                     remote_branch="board-audit/x-guard",
                 )
+
+    def test_prepare_cleanup_upstream_repoints_staging_to_published_transport(self):
+        transport = load_transport()
+
+        with tempfile.TemporaryDirectory() as td_raw:
+            td = Path(td_raw)
+            remote = td / "remote.git"
+            repo = td / "repo"
+            worktree = td / "worktree"
+            subprocess.run(
+                ["git", "init", "--bare", str(remote)],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            repo.mkdir()
+            git(repo, "init", "-b", "main")
+            git(repo, "config", "user.name", "Board Audit Test")
+            git(repo, "config", "user.email", "board-audit@example.invalid")
+            (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+            git(repo, "add", "README.md")
+            git(repo, "commit", "-m", "init")
+            git(repo, "remote", "add", "origin", str(remote))
+            git(repo, "push", "-u", "origin", "main")
+
+            staging = "board-audit-staging/x-clean"
+            branch = "board-audit/x-clean"
+            git(repo, "branch", staging, "origin/main")
+            git(repo, "worktree", "add", str(worktree), staging)
+            artifact = worktree / ".xtrm" / "board-audit" / "index.json"
+            artifact.parent.mkdir(parents=True)
+            artifact.write_text("{}\n", encoding="utf-8")
+            git(worktree, "add", "-f", ".xtrm/board-audit/index.json")
+            git(worktree, "commit", "-m", "handoff")
+            git(worktree, "push", "origin", f"HEAD:refs/heads/{branch}")
+
+            before = git(
+                worktree,
+                "rev-parse",
+                "--abbrev-ref",
+                "--symbolic-full-name",
+                "@{upstream}",
+                capture=True,
+            ).stdout.strip()
+            self.assertEqual(before, "origin/main")
+
+            transport._prepare_cleanup_upstream(repo, worktree, staging, branch)
+
+            after = git(
+                worktree,
+                "rev-parse",
+                "--abbrev-ref",
+                "--symbolic-full-name",
+                "@{upstream}",
+                capture=True,
+            ).stdout.strip()
+            self.assertEqual(after, f"origin/{branch}")
+            self.assertEqual(
+                git(worktree, "rev-parse", "HEAD", capture=True).stdout.strip(),
+                git(repo, "rev-parse", f"origin/{branch}", capture=True).stdout.strip(),
+            )
+            containment = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", "HEAD", "@{upstream}"],
+                cwd=worktree,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(containment.returncode, 0, containment.stderr)
+
+    def test_prepare_cleanup_upstream_rejects_remote_head_mismatch(self):
+        transport = load_transport()
+        flow = transport.flow
+        repo = Path("/repo")
+        worktree = Path("/worktree")
+        staging = "board-audit-staging/x-race"
+        branch = "board-audit/x-race"
+
+        with (
+            mock.patch.object(flow, "run") as run,
+            mock.patch.object(flow, "git_output", side_effect=["local123", "remote456"]),
+        ):
+            run.return_value = subprocess.CompletedProcess([], 0, "", "")
+            with self.assertRaisesRegex(
+                flow.FlowError,
+                "local transport HEAD does not match",
+            ):
+                transport._prepare_cleanup_upstream(
+                    repo,
+                    worktree,
+                    staging,
+                    branch,
+                )
+
+        self.assertEqual(len(run.mock_calls), 1)
+        self.assertEqual(
+            run.mock_calls[0],
+            mock.call(
+                [
+                    "git",
+                    "fetch",
+                    "origin",
+                    "+refs/heads/board-audit/x-race:refs/remotes/origin/board-audit/x-race",
+                ],
+                cwd=repo,
+            ),
+        )
+
+    def test_cleanup_uses_transport_mapping_before_normal_bd_removal(self):
+        transport = load_transport()
+        repo = Path("/repo")
+        worktree = Path("/worktree")
+        staging = "board-audit-staging/x-cleanup"
+        branch = "board-audit/x-cleanup"
+        transport._STAGING_TRANSPORTS[staging] = branch
+
+        with (
+            mock.patch.object(transport, "_prepare_cleanup_upstream") as prepare,
+            mock.patch.object(transport, "_BASE_CLEANUP_TRANSPORT_WORKTREE") as cleanup,
+        ):
+            transport.cleanup_transport_worktree(
+                repo,
+                worktree,
+                staging,
+                keep_on_error=False,
+            )
+
+        prepare.assert_called_once_with(repo, worktree, staging, branch)
+        cleanup.assert_called_once_with(
+            repo,
+            worktree,
+            staging,
+            keep_on_error=False,
+        )
+        self.assertNotIn(staging, transport._STAGING_TRANSPORTS)
 
 
 if __name__ == "__main__":
