@@ -95,7 +95,11 @@ class TransportPolicyTests(unittest.TestCase):
             calls[0],
             ["git", "add", "-f", "--", ".xtrm/board-audit/index.json"],
         )
+        commit = next(call for call in calls if call[0:2] == ["git", "commit"])
+        self.assertEqual(commit[:3], ["git", "commit", "--no-verify"])
+        self.assertIn("[skip ci]", commit[-1])
         push = next(call for call in calls if call[0:2] == ["git", "push"])
+        self.assertEqual(push[0:3], ["git", "push", "--no-verify"])
         self.assertIn(
             "--force-with-lease=refs/heads/board-audit/x-1:abc123",
             push,
@@ -173,6 +177,77 @@ class TransportPolicyTests(unittest.TestCase):
                 capture=True,
             ).stdout.splitlines()
             self.assertIn(".xtrm/board-audit/index.json", tracked)
+            subject = git(
+                repo,
+                "log",
+                "-1",
+                "--format=%s",
+                f"origin/{branch}",
+                capture=True,
+            ).stdout.strip()
+            self.assertIn("[skip ci]", subject)
+
+    def test_transport_bypasses_failing_commit_and_push_hooks(self):
+        transport = load_transport()
+
+        with tempfile.TemporaryDirectory() as td_raw:
+            td = Path(td_raw)
+            remote = td / "remote.git"
+            repo = td / "repo"
+            hooks = td / "hooks"
+            commit_marker = td / "pre-commit-ran"
+            push_marker = td / "pre-push-ran"
+            subprocess.run(
+                ["git", "init", "--bare", str(remote)],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            repo.mkdir()
+            git(repo, "init", "-b", "main")
+            git(repo, "config", "user.name", "Board Audit Test")
+            git(repo, "config", "user.email", "board-audit@example.invalid")
+            (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+            git(repo, "add", "README.md")
+            git(repo, "commit", "-m", "init")
+            git(repo, "remote", "add", "origin", str(remote))
+            git(repo, "push", "-u", "origin", "main")
+
+            hooks.mkdir()
+            pre_commit = hooks / "pre-commit"
+            pre_commit.write_text(
+                f"#!/bin/sh\ntouch {commit_marker}\nexit 99\n",
+                encoding="utf-8",
+            )
+            pre_push = hooks / "pre-push"
+            pre_push.write_text(
+                f"#!/bin/sh\ntouch {push_marker}\nexit 98\n",
+                encoding="utf-8",
+            )
+            pre_commit.chmod(0o755)
+            pre_push.chmod(0o755)
+            git(repo, "config", "core.hooksPath", str(hooks))
+
+            artifact = repo / ".xtrm" / "board-audit" / "index.json"
+            artifact.parent.mkdir(parents=True)
+            artifact.write_text("{}\n", encoding="utf-8")
+            branch = "board-audit/x-hooks"
+            transport._HANDOFF_LEASES[branch] = None
+
+            transport.commit_and_push(
+                repo,
+                paths=[artifact],
+                message="handoff hook bypass",
+                remote_branch=branch,
+            )
+
+            self.assertFalse(commit_marker.exists(), "pre-commit hook unexpectedly ran")
+            self.assertFalse(push_marker.exists(), "pre-push hook unexpectedly ran")
+            git(repo, "fetch", "origin")
+            self.assertEqual(
+                git(repo, "rev-parse", "HEAD", capture=True).stdout.strip(),
+                git(repo, "rev-parse", f"origin/{branch}", capture=True).stdout.strip(),
+            )
 
     def test_force_stage_rejects_paths_outside_board_audit_tree(self):
         transport = load_transport()
@@ -192,6 +267,11 @@ class TransportPolicyTests(unittest.TestCase):
                     message="must fail",
                     remote_branch="board-audit/x-guard",
                 )
+
+    def test_transport_commit_message_does_not_duplicate_skip_marker(self):
+        transport = load_transport()
+        message = "handoff [skip ci]"
+        self.assertEqual(transport._transport_commit_message(message), message)
 
     def test_prepare_cleanup_upstream_repoints_staging_to_published_transport(self):
         transport = load_transport()
