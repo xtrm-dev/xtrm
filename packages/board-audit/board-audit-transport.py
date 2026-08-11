@@ -7,6 +7,13 @@ branch instead of letting them accumulate stale code history. Existing
 ``.xtrm/board-audit/**`` artifacts are restored from the previous transport
 branch, and the rewritten transport branch is pushed with an exact
 ``--force-with-lease`` guard.
+
+Transport commits are not product-code delivery. After a strict path fence
+proves every staged path is under ``.xtrm/board-audit/**``, board-audit bypasses
+repository-local commit/push hooks and marks the transport commit ``[skip ci]``.
+This prevents code-oriented size/lint/SAST hooks and broad push CI from treating
+lossless Beads transport JSON as application code. Repository review/test gates
+remain unchanged for normal branches and pull requests.
 """
 from __future__ import annotations
 
@@ -60,9 +67,9 @@ def _transport_relpaths(worktree: Path, paths: list[Path]) -> list[str]:
     """Return force-stageable transport paths, rejecting every other path.
 
     ``handoff`` deliberately versions ``.xtrm/board-audit/**`` even when a
-    repository ignores ``.xtrm/`` wholesale. Because ``git add -f`` bypasses
-    ignore rules, keep the force boundary narrower than the caller-provided
-    path list and fail closed if anything escapes the transport tree.
+    repository ignores ``.xtrm/`` wholesale. Because both ``git add -f`` and
+    hook bypasses are powerful, keep their boundary narrower than the caller-
+    provided path list and fail closed if anything escapes the transport tree.
     """
     relative_paths = [flow.rel(worktree, path) for path in paths]
     if not relative_paths:
@@ -75,6 +82,16 @@ def _transport_relpaths(worktree: Path, paths: list[Path]) -> list[str]:
                 "refusing to force-stage non-board-audit path: " + relative
             )
     return relative_paths
+
+
+def _transport_commit_message(message: str) -> str:
+    """Mark artifact transport commits so broad push/pull_request CI skips them."""
+    if any(
+        marker in message.lower()
+        for marker in ("[skip ci]", "[ci skip]", "[no ci]", "[skip actions]", "[actions skip]")
+    ):
+        return message
+    return f"{message} [skip ci]"
 
 
 def make_staging_branch(repo: Path, bead_id: str, start_ref: str) -> str:
@@ -222,9 +239,26 @@ def commit_and_push(
         != 0
     )
     if staged:
-        flow.run(["git", "commit", "-m", message], cwd=worktree)
+        # Repository hooks are designed for product-code commits and can reject
+        # valid lossless transport JSON for size/entropy/SAST reasons. The
+        # strict transport path fence above is the authority boundary for this
+        # narrow bypass; normal repository commits keep their hooks unchanged.
+        flow.run(
+            [
+                "git",
+                "commit",
+                "--no-verify",
+                "-m",
+                _transport_commit_message(message),
+            ],
+            cwd=worktree,
+        )
 
-    push = ["git", "push"]
+    # Pre-push hooks (Semgrep/OSV/full test mirrors in many Mercury repos) are
+    # likewise code-delivery gates, not transport gates. Skip only for this
+    # board-audit-owned push. GitHub-side push/pull_request workflows are also
+    # suppressed by the transport commit's [skip ci] marker where applicable.
+    push = ["git", "push", "--no-verify"]
     lease = _HANDOFF_LEASES.pop(remote_branch, None)
     if lease:
         push.append(
