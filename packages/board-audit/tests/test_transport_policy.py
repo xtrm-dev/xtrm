@@ -21,6 +21,16 @@ def load_transport():
     return module
 
 
+def git(cwd: Path, *args: str, capture: bool = False) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        text=True,
+        capture_output=capture,
+        check=True,
+    )
+
+
 class TransportPolicyTests(unittest.TestCase):
     def test_existing_transport_rebases_artifacts_on_default_and_pushes_with_exact_lease(self):
         transport = load_transport()
@@ -77,6 +87,10 @@ class TransportPolicyTests(unittest.TestCase):
                     remote_branch=branch,
                 )
 
+        self.assertEqual(
+            calls[0],
+            ["git", "add", "-f", "--", ".xtrm/board-audit/index.json"],
+        )
         push = calls[-1]
         self.assertEqual(push[0:2], ["git", "push"])
         self.assertIn(
@@ -104,6 +118,73 @@ class TransportPolicyTests(unittest.TestCase):
 
         make_branch.assert_called_once_with(repo, "x-2", "origin/main")
         self.assertIsNone(transport._HANDOFF_LEASES["board-audit/x-2"])
+
+    def test_commit_and_push_force_stages_transport_even_when_xtrm_is_ignored(self):
+        transport = load_transport()
+
+        with tempfile.TemporaryDirectory() as td_raw:
+            td = Path(td_raw)
+            remote = td / "remote.git"
+            repo = td / "repo"
+            subprocess.run(
+                ["git", "init", "--bare", str(remote)],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            repo.mkdir()
+            git(repo, "init", "-b", "main")
+            git(repo, "config", "user.name", "Board Audit Test")
+            git(repo, "config", "user.email", "board-audit@example.invalid")
+            (repo / ".gitignore").write_text(".xtrm/\n", encoding="utf-8")
+            (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+            git(repo, "add", ".gitignore", "README.md")
+            git(repo, "commit", "-m", "init")
+            git(repo, "remote", "add", "origin", str(remote))
+            git(repo, "push", "-u", "origin", "main")
+
+            artifact = repo / ".xtrm" / "board-audit" / "index.json"
+            artifact.parent.mkdir(parents=True)
+            artifact.write_text("{}\n", encoding="utf-8")
+            branch = "board-audit/x-ignore"
+            transport._HANDOFF_LEASES[branch] = None
+
+            transport.commit_and_push(
+                repo,
+                paths=[artifact],
+                message="handoff ignored artifact",
+                remote_branch=branch,
+            )
+
+            git(repo, "fetch", "origin")
+            tracked = git(
+                repo,
+                "ls-tree",
+                "-r",
+                "--name-only",
+                f"origin/{branch}",
+                capture=True,
+            ).stdout.splitlines()
+            self.assertIn(".xtrm/board-audit/index.json", tracked)
+
+    def test_force_stage_rejects_paths_outside_board_audit_tree(self):
+        transport = load_transport()
+
+        with tempfile.TemporaryDirectory() as td_raw:
+            repo = Path(td_raw)
+            outside = repo / "README.md"
+            outside.write_text("not transport\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                transport.flow.FlowError,
+                "refusing to force-stage non-board-audit path",
+            ):
+                transport.commit_and_push(
+                    repo,
+                    paths=[outside],
+                    message="must fail",
+                    remote_branch="board-audit/x-guard",
+                )
 
 
 if __name__ == "__main__":
