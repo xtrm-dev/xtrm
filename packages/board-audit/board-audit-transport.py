@@ -47,6 +47,27 @@ def _transport_artifacts_exist(repo: Path, remote_branch: str) -> bool:
     )
 
 
+def _transport_relpaths(worktree: Path, paths: list[Path]) -> list[str]:
+    """Return force-stageable transport paths, rejecting every other path.
+
+    ``handoff`` deliberately versions ``.xtrm/board-audit/**`` even when a
+    repository ignores ``.xtrm/`` wholesale. Because ``git add -f`` bypasses
+    ignore rules, keep the force boundary narrower than the caller-provided
+    path list and fail closed if anything escapes the transport tree.
+    """
+    relative_paths = [flow.rel(worktree, path) for path in paths]
+    if not relative_paths:
+        raise flow.FlowError("refusing to force-stage an empty transport path set")
+    for relative in relative_paths:
+        if relative != ".xtrm/board-audit" and not relative.startswith(
+            ".xtrm/board-audit/"
+        ):
+            raise flow.FlowError(
+                "refusing to force-stage non-board-audit path: " + relative
+            )
+    return relative_paths
+
+
 def start_transport_worktree(repo: Path, bead_id: str) -> tuple[Path, str, str]:
     """Start handoff from current origin default while preserving artifacts.
 
@@ -98,10 +119,11 @@ def commit_and_push(
     message: str,
     remote_branch: str,
 ) -> None:
-    flow.run(
-        ["git", "add", "--", *[flow.rel(worktree, path) for path in paths]],
-        cwd=worktree,
-    )
+    relative_paths = _transport_relpaths(worktree, paths)
+    # Transport artifacts are intentionally versioned even when the owning
+    # repository ignores .xtrm/ globally. Force applies only after the strict
+    # .xtrm/board-audit/** path check above.
+    flow.run(["git", "add", "-f", "--", *relative_paths], cwd=worktree)
     staged = (
         flow.run(
             ["git", "diff", "--cached", "--quiet"],
