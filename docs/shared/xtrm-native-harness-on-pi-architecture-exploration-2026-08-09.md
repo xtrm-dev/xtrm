@@ -1087,3 +1087,33 @@ not simply:
 ```text
 more infrastructure
 ```
+
+---
+
+## 29. Prime-agent code findings — exploration input
+
+> **EXPLORE FURTHER AND DONT' TAKE AS AUTHORATIVE EVIDENCE**
+>
+> The findings below come from a direct code read of `PrimeIntellect-ai/prime-agent` (its `packages/` tree plus the root `prime-agent-runtime/` Python package) performed 2026-08-12 during this exploration. They are input for the ADR decision, not settled conclusions. All items are **verified in code** unless marked otherwise. Each item names the concrete mechanism or file that produced the finding.
+
+1. **Prime-agent is a pi fork, not an extension.** `packages/coding-agent` is `@earendil-works/pi-coding-agent` v0.7.2, forked. The kernel tool is a base tool wired into `AgentSession` internals (`core/tools/index.ts`, `core/agent-session.ts`), and the session class itself was extended (RLM children, goals, agent messaging). Implication for section 25's "no forking Pi" non-goal: in-process RLM children specifically required forked internals; the ADR must decide that trade explicitly rather than assume a pure extension path.
+
+2. **Single-tool registry.** `allToolNames = ["ipython"]` — the entire tool surface is one persistent-kernel tool; bash/edit/read happen inside the kernel (`%%bash` cells, Python file ops). This confirms section 15's profile instinct: the kernel as the *default* tool is a deliberate prime-agent choice, and XTRM's profile split (deterministic-specialist vs research-rlm) is the intended divergence, not a given.
+
+3. **The kernel↔host contract is versioned.** `core/kernel/bootstrap.ts` hashes every `src/rlm/*.py` plus `pyproject.toml`, caches the kernel venv install by content hash, and runs a strict readiness check asserting the exact Python API (`rlm.run`, `rlm.host_request`, `rlm.harness.*`). Runtime drift is a checked failure, never a silent break. For XTRM's evidence/forensics goals: evidence should record which kernel runtime version ran.
+
+4. **The host-request protocol is the concrete low-level transport.** Python `await host_request("rlm.run", {...})` → Jupyter comm target `host.request` → host `hostHandlers[type]` → reply `{status: ok|error}`. Typed handlers: `rlm.run/find_models/list_subagents/delete_subagent`, `goal.get/create/complete`, `agent_message.list_agents/send`, `agent_observe.list/get/recent`, `rlm_heartbeat.*`. Requests are tagged with the calling cell's source. This is a concrete candidate answer to section 23's "which low-level delivery APIs belong to Core": transport is the comm bridge, semantics stay in Channels.
+
+5. **Interrupt escalation ladder.** Interrupt → if the cell is still running, user chooses wait / kill-and-restart / cancel → kill restarts the kernel and the tool result carries a `kernelRestarted` notice ("state from before the restart is gone; recreate it"). Section 19–20 cancellation parity should include busy-kernel handling; a kernel restart is an evidence-worthy event, not a cosmetic detail.
+
+6. **In-process RLM children, lazy kernels.** `rlm.run` constructs a full `AgentSession` in-process (own `SessionManager`/`Agent`, inherited model/tools/goals, `rlmDepth + 1` bounded by max depth, parent lineage). Child kernels boot lazily on first use. Implication for section 19: the minimum spike does not need the daemon; the daemon layer (`worker-recovery-journal`, `snapshot-transcript-cache`) exists for detach/continuity, which section 19 defers. Kernels are single-threaded (`executionMode: "sequential"`) — kernel-bound executions serialize.
+
+7. **Kernel scratch snapshot ≠ memory, made mechanical.** The kernel namespace is snapshotted best-effort to the session artifact dir and restored on resume with a reported `RestoreResult` (which names survived); the model is told what was revived. Restore is reported, never silent. This operationalizes section 13's kernel/scratch vs semantic-memory distinction.
+
+8. **Governed learning has a mechanism shape.** The persisted layer is exposed through the kernel as host-side CRUD: `rlm.harness.create_memory/skill/subagent/prompt_note`, session-local by default, `global_=True` opt-in, plus `record_refinement`; validation lives host-side and the kernel only sees serialized payloads. Terminology worth adopting: RLM = runtime/kernel/call interface; "continual harness" = persisted prompt/memory/skill layer. This is a concrete answer to section 14's "how does candidate→review→promote get exposed".
+
+9. **Doctrine prompts are a first-class context-assembly layer.** `core/prompts/rlm.ts` is a dedicated prompt builder: kernel usage rules (`%%bash` must be first line, shell state is throwaway per cell while `%cd`/`os.environ` persist, Python state persists across cells and compaction, tool calls are await-able expressions, "run external projects through their own environment, never install into the kernel"), a child-agent doctrine block at depth > 0, and delegation when/why guidance. Section 13's context pipeline should list a per-profile doctrine block.
+
+10. **The kernel runtime is a separate Python package.** `prime-agent-runtime/` sits at repo root (`src/rlm/*.py` + `pyproject.toml`), separate from the npm `packages/`. This does not violate section 17's "no sixth npm package", but the ADR should plan the Python-side package's versioning and install story.
+
+11. **Fork-maintenance cost is real.** Prime-agent pins `@earendil-works/pi-*` at 0.7.2 and carries the full coding-agent package. This supports the doc's preference for public AgentSession APIs where possible; the honest corollary is that "no forking Pi" may not be tenable if in-process RLM children are non-negotiable. (partly inferred)
