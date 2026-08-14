@@ -1,0 +1,34 @@
+{
+  "name": "@xtrm/xtprompt",
+  "version": "0.1.0",
+  "description": "CLI for turning rough prompts into structured prompts with Pi models",
+  "type": "module",
+  "bin": {
+    "xtprompt": "src/cli.mjs"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.1"
+  },
+  "keywords": [
+    "prompt",
+    "cli",
+    "pi",
+    "llm"
+  ],
+  "author": "xtrm",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "restricted"
+  }
+}
