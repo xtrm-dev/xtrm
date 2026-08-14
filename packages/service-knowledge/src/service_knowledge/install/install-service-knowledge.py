@@ -64,13 +64,30 @@ def install_git_hooks(project_root: Path) -> None:
             hp.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
             hp.chmod(0o755)
 
+    # Resolve the checkout at hook runtime. The installer may run from an ephemeral
+    # worktree, so absolute install-time paths would outlive their source tree.
+    script_rel = {
+        doc_script: ".xtrm/skills/default/service-knowledge/install/git-hooks/doc_reminder.py",
+        staleness_script: ".xtrm/skills/default/service-knowledge/install/git-hooks/skill_staleness.py",
+        drift_script: ".xtrm/skills/default/service-knowledge/install/git-hooks/post_merge_drift_sweep.py",
+    }
+
+    def make_snippet(marker: str, script: Path) -> str:
+        rel = script_rel[script]
+        return (
+            f"\n{marker}\n"
+            "if command -v python3 &>/dev/null; then\n"
+            '    root="$(git rev-parse --show-toplevel 2>/dev/null)"\n'
+            f'    if [ -n "$root" ] && [ -f "$root/{rel}" ]; then\n'
+            f'        python3 "$root/{rel}" || true\n'
+            "    fi\n"
+            "fi\n"
+        )
+
     snippets = [
-        (pre_commit, MARKER_DOC,
-         f"\n{MARKER_DOC}\nif command -v python3 &>/dev/null && [ -f \"{doc_script}\" ]; then\n    python3 \"{doc_script}\" || true\nfi\n"),
-        (pre_push, MARKER_STALENESS,
-         f"\n{MARKER_STALENESS}\nif command -v python3 &>/dev/null && [ -f \"{staleness_script}\" ]; then\n    python3 \"{staleness_script}\" || true\nfi\n"),
-        (post_merge, MARKER_DRIFT_SWEEP,
-         f"\n{MARKER_DRIFT_SWEEP}\nif command -v python3 &>/dev/null && [ -f \"{drift_script}\" ]; then\n    python3 \"{drift_script}\" || true\nfi\n"),
+        (pre_commit, MARKER_DOC, make_snippet(MARKER_DOC, doc_script)),
+        (pre_push, MARKER_STALENESS, make_snippet(MARKER_STALENESS, staleness_script)),
+        (post_merge, MARKER_DRIFT_SWEEP, make_snippet(MARKER_DRIFT_SWEEP, drift_script)),
     ]
 
     for hook_path, marker, snippet in snippets:

@@ -1,0 +1,34 @@
+{
+  "bd_version": "bd version 1.1.0 (8e4e59d39: HEAD@8e4e59d39f34)",
+  "diagnostics": {
+    "derived_dotted_parent_links": [],
+    "unknown_parent_refs": [],
+    "unpackaged_selected_ids": []
+  },
+  "generated_at": "2026-08-10T15:40:09.276864+00:00",
+  "packages": [
+    {
+      "content_sha256": "57dec7d8d92ac0d2eb9ac5db5cad7bc225c96fbe78719366691cd1e6751c33f9",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-2zd__align-mercury-devops-collaborator-doc-with-durable-xt-sp-primitives.json",
+      "issue_count": 4,
+      "root_id": "xtrm-2zd",
+      "selected_issue_count": 4,
+      "title": "Align Mercury devops collaborator doc with durable xt/sp primitives"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "schema_version": "xtrm.board-audit.snapshot-manifest.v1",
+  "selection": {
+    "context_only_record_count": 0,
+    "requested_id": "xtrm-2zd",
+    "scope": "epic",
+    "selected_record_count": 4
+  },
+  "source": {
+    "command": "bd export --all",
+    "raw_file": "raw-beads.jsonl",
+    "raw_record_count": 66,
+    "raw_sha256": "c945dc946eeb266a3c587b3e38cbf1c4b1db90a19d7027f9062a956f789a1d09"
+  }
+}

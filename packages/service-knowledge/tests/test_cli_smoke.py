@@ -7,6 +7,7 @@ from pathlib import Path
 
 from service_knowledge import __version__
 from service_knowledge.cli import main
+from service_knowledge.cli.common import wire_hooks
 
 
 def _snapshot(repo: Path) -> dict[str, str]:
@@ -72,7 +73,39 @@ def test_install_repairs_stale_service_skills_hook_path(consumer_repo: Path) -> 
     assert main(["update", "--path", str(consumer_repo)]) == 0
     content = hook.read_text()
     assert "/service-skills/" not in content
-    assert "/service-knowledge/install/git-hooks/post_merge_drift_sweep.py" in content
+    assert "$root/.xtrm/skills/default/service-knowledge/install/git-hooks/post_merge_drift_sweep.py" in content
+
+
+def test_wire_hooks_preserves_siblings_and_timeout(consumer_repo: Path) -> None:
+    settings_path = consumer_repo / ".claude/settings.json"
+    settings_path.write_text(json.dumps({
+        "hooks": {
+            "SessionStart": [{
+                "matcher": "startup",
+                "hooks": [
+                    {"type": "command", "command": "python3 sibling.py"},
+                    {"type": "command", "command": "python3 old/service-knowledge/cataloger.py", "timeout": 42},
+                ],
+            }],
+            "PostToolUse": [{
+                "matcher": "Write",
+                "hooks": [
+                    {"type": "command", "command": "python3 sibling.py"},
+                    {"type": "command", "command": "python3 old/drift_detector.py check-hook", "timeout": 10000},
+                ],
+            }],
+        }
+    }), encoding="utf-8")
+
+    assert wire_hooks(consumer_repo) == [".claude/settings.json"]
+    settings = json.loads(settings_path.read_text())
+    session_entry = settings["hooks"]["SessionStart"][0]
+    assert session_entry["matcher"] == "startup"
+    assert len(session_entry["hooks"]) == 2
+    post_entry = settings["hooks"]["PostToolUse"][0]
+    assert post_entry["matcher"] == "Write"
+    drift = next(h for h in post_entry["hooks"] if "drift_detector.py" in h["command"])
+    assert drift["timeout"] == 10000
 
 
 def test_installed_post_merge_hook_uses_service_knowledge_flow(consumer_repo: Path) -> None:

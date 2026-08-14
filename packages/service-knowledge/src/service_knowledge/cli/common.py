@@ -138,7 +138,7 @@ _DESIRED_HOOKS = {
         "script": "drift_detector.py",
         "extra": "check-hook",
         "matcher": "Write|Edit|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
-        "timeout": 10,
+        "timeout": 10000,
     },
 }
 
@@ -154,8 +154,7 @@ def _build_hook_entry(spec: dict) -> dict:
 
 
 def wire_hooks(root: Path) -> list[str]:
-    """Ensure .claude/settings.json has canonical service-knowledge hooks for the three
-    events, replacing any stale service-skills machinery hook in place. Idempotent."""
+    """Ensure service-knowledge hooks exist without replacing sibling hooks or metadata."""
     settings_path = root / ".claude" / "settings.json"
     try:
         settings = json.loads(settings_path.read_text(encoding="utf-8")) if settings_path.exists() else {}
@@ -166,16 +165,22 @@ def wire_hooks(root: Path) -> list[str]:
     changed = False
     for event, spec in _DESIRED_HOOKS.items():
         desired = _build_hook_entry(spec)
+        desired_hook = desired["hooks"][0]
         entries = hooks.get(event, [])
-        replaced = False
-        for i, entry in enumerate(entries):
-            if _is_machinery_hook(entry, spec["script"]):
-                if entry != desired:
-                    entries[i] = desired
+        found = False
+        for entry in entries:
+            for index, hook in enumerate(entry.get("hooks", [])):
+                if spec["script"] not in hook.get("command", ""):
+                    continue
+                merged_hook = {**hook, **desired_hook}
+                if merged_hook != hook:
+                    entry["hooks"][index] = merged_hook
                     changed = True
-                replaced = True
+                found = True
                 break
-        if not replaced:
+            if found:
+                break
+        if not found:
             entries.append(desired)
             changed = True
         hooks[event] = entries
