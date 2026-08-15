@@ -197,18 +197,30 @@ A checkpoint can be triggered by:
 Published layout under `.xtrm/board-audit/`:
 
 ```text
-index.json                                  index.v1 + open_issues + pr_checkpoints
+index.json                                  index.v1 + open_issues + pr_checkpoints + packages
 handoffs/pr-<n>.json                        pr-handoff.v1 (repository, pull_request,
                                             implementation_branch/head_sha, beads_root_ids,
                                             snapshot_id, snapshot_sha256, generated_at,
                                             transport_branch/head_sha, state, open_issue_count,
-                                            index, handoff)
+                                            work_package_count, index, handoff)
 snapshots/<snapshot-id>/manifest.json       pr-snapshot-manifest.v1 (raw digest, record counts,
                                             per-file hashes)
 snapshots/<snapshot-id>/roots/<root>.json
 snapshots/<snapshot-id>/issues/<bead>.json  pr-projection.v1 (lossless source record +
                                             deterministic navigation)
+exports/export-<ts>/manifest.json           work-package export manifest (existing exporter)
+exports/export-<ts>/raw-beads.jsonl         the one canonical acquisition (same digest as the snapshot)
+exports/export-<ts>/work-packages/          bounded root/work-package handoff
+    <root>__<title>.json                    work-package.v1 (issues.<id>.source)
+    <root>__<title>.editable.json           roundtrip.v1 prepared desired-state artifact
 ```
+
+A PR checkpoint publishes the **bounded root/work-package handoff** (the same
+packages the `handoff` flow produces, derived from the same single `bd export
+--all` acquisition via `--from-raw`) plus a per-root prepared editable. The
+index `packages` entries point at them, so the existing Web edit → `reconcile`
+→ `reconcile --execute` round-trip contract resolves off the PR transport
+branch unchanged.
 
 The snapshot id is content-derived: the same open board plus the same PR head produce the same snapshot id. Unchanged records keep identical canonical SHA-256 hashes and are never rewritten. A checkpoint with no changes prints `NO_CHANGES` and adds no transport commit.
 

@@ -505,6 +505,9 @@ def build_index(
         "snapshot_id": snapshot["snapshot_id"],
         "updated_at": generated_at,
     }
+    # Persist immediately; update_index_for_handoff merges the per-root
+    # packages entries on top of this saved state.
+    flow.write_json(board_audit_dir(worktree) / "index.json", index)
     return index
 
 
@@ -537,6 +540,8 @@ def handoff_payload(
 
 
 def locator_block(handoff: dict[str, Any]) -> str:
+    work_packages = handoff.get("work_package_count")
+    work_line = f"Work packages: {work_packages}\n" if work_packages is not None else ""
     return (
         "Board-Audit Handoff\n"
         f"PR: #{handoff['pull_request']}\n"
@@ -546,7 +551,8 @@ def locator_block(handoff: dict[str, Any]) -> str:
         f"Snapshot: {handoff['snapshot_id']}\n"
         f"Generated: {handoff['generated_at']}\n"
         f"State: {handoff['state']}\n"
-        f"Index: {handoff['index']}\n"
+        + work_line
+        + f"Index: {handoff['index']}\n"
         f"PR handoff: {handoff['handoff']}\n"
     )
 
@@ -622,42 +628,101 @@ def cmd_pr_checkpoint(args: argparse.Namespace) -> int:
             bd_version = "unknown"
 
         snapshot = compute_snapshot(raw, slug, bd_version, generated_at)
+
+        # NO_CHANGES: membership, issue hashes, PR head and the bounded
+        # work-package handoff (count) are unchanged. The count comparison
+        # also forces a republish when an older handoff lacks the work-package
+        # artifacts entirely.
+        if (
+            previous is not None
+            and str(previous.get("implementation_head_sha", "")) == str(info.get("headRefOid", ""))
+            and str(previous.get("snapshot_id", "")) == snapshot["snapshot_id"]
+            and str(previous.get("work_package_count", "") or "") == str(len(snapshot["roots"]))
+        ):
+            no_changes = True
+            if raw.exists():
+                raw.unlink()
+            print(f"NO_CHANGES: PR #{pr} handoff is already current")
+            print(f"  snapshot: {snapshot['snapshot_id']}")
+            print(f"  head:     {info.get('headRefOid')}")
+            return 0
+
+        # Bounded root/work-package handoff: derive the same work packages the
+        # handoff flow publishes, from the SAME acquisition (--from-raw), then
+        # prepare each as an editable round-trip artifact so the existing
+        # Web edit → reconcile → reconcile --execute contract resolves off
+        # this PR transport branch.
+        core, roundtrip = flow.script_paths()
+        try:
+            flow.run([str(core), "--export", "--open", "--from-raw", str(raw)], cwd=worktree)
+        except flow.FlowError as exc:
+            raise PRCheckpointError(SNAPSHOT_FAILED, f"work-package export failed: {exc}") from exc
+        export_dir = flow.latest_export_dir(worktree)
+        work_entries: list[tuple[str, Path, Path, dict[str, Any]]] = []
+        for root in snapshot["roots"]:
+            try:
+                package, manifest = flow.package_from_manifest(export_dir, root)
+            except flow.FlowError as exc:
+                print(f"warning: no work package for root {root}: {exc}", file=sys.stderr)
+                continue
+            prepared = flow.run(
+                [sys.executable, str(roundtrip), "prepare", str(package)],
+                cwd=worktree,
+                capture=True,
+            )
+            editable = Path(prepared.stdout.strip())
+            if not editable.is_absolute():
+                editable = (worktree / editable).resolve()
+            if not editable.exists():
+                raise PRCheckpointError(
+                    SNAPSHOT_FAILED,
+                    f"prepare did not create expected artifact: {editable}",
+                )
+            work_entries.append((root, package, editable, manifest))
+        # The branch carries exactly one current work-package export tree.
+        exports_root = board_audit_dir(worktree) / "exports"
+        if exports_root.exists():
+            for candidate in exports_root.iterdir():
+                if candidate.is_dir() and candidate != export_dir:
+                    shutil.rmtree(candidate)
         # The projection files inside the worktree already carry lossless
         # source records; the raw acquisition is no longer needed and keeping
         # the checkout clean is what allows bd worktree remove to succeed.
         if raw.exists():
             raw.unlink()
 
-        # NO_CHANGES: membership, issue hashes and PR head are unchanged.
-        if (
-            previous is not None
-            and str(previous.get("implementation_head_sha", "")) == str(info.get("headRefOid", ""))
-            and str(previous.get("snapshot_id", "")) == snapshot["snapshot_id"]
-        ):
-            no_changes = True
-            print(f"NO_CHANGES: PR #{pr} handoff is already current")
-            print(f"  snapshot: {snapshot['snapshot_id']}")
-            print(f"  head:     {info.get('headRefOid')}")
-            return 0
-
         # Committed evidence tree. transport_head_sha is sealed after the
         # artifacts commit so the recorded SHA is an exact published transport
         # SHA; the seal commit then becomes the branch head.
         handoff = handoff_payload(slug, pr, info, snapshot, generated_at)
+        handoff["work_package_count"] = len(work_entries)
         index = build_index(worktree, snapshot, pr, info, generated_at)
+        for root, package, editable, manifest in work_entries:
+            flow.update_index_for_handoff(
+                worktree,
+                root,
+                remote_branch,
+                export_dir,
+                package,
+                editable,
+                manifest,
+            )
         write_projection(worktree, snapshot)
 
         handoff_path = board_audit_dir(worktree) / "handoffs" / f"pr-{pr}.json"
         handoff_path.parent.mkdir(parents=True, exist_ok=True)
         flow.write_json(handoff_path, handoff)
         index_path = board_audit_dir(worktree) / "index.json"
-        flow.write_json(index_path, index)
+        # update_index_for_handoff already persisted the merged index (with
+        # the per-root packages entries); do not rewrite it here from the
+        # pre-loop ``index`` snapshot or the packages entries are lost.
         snapshots_path = board_audit_dir(worktree) / "snapshots"
+        exports_path = board_audit_dir(worktree) / "exports"
 
         try:
             transport.commit_transport(
                 worktree,
-                paths=[snapshots_path, index_path, handoff_path],
+                paths=[snapshots_path, exports_path, index_path, handoff_path],
                 message=f"chore(board-audit): pr #{pr} checkpoint",
             )
         except flow.FlowError as exc:
