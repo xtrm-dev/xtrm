@@ -170,6 +170,87 @@ fresh export
 
 `--execute` is the only high-level path that mutates Beads.
 
+## PR-checkpoint handoffs
+
+A PR-checkpoint handoff is a versioned per-Bead evidence projection bound to an exact remote PR head. It is produced and inspected with:
+
+```bash
+board-audit pr-checkpoint 123
+board-audit pr-status 123
+```
+
+Both commands take an optional PR number and default it to the current branch's PR via `gh pr view`. The caller's checkout and branch are never changed.
+
+### Trigger model
+
+A checkpoint can be triggered by:
+
+- PR creation or a code push while the PR is open — event adapter or client-side hook;
+- manual refresh — `board-audit pr-checkpoint <PR>`.
+
+`pr-checkpoint` never publishes an unverified handoff. It fetches the implementation branch and requires the fetched head to equal the remote `headRefOid` reported by `gh pr view`. An un-refreshed binding is reported `STALE_CODE_HEAD`, never claimed current.
+
+### Publication
+
+`pr-checkpoint` verifies the remote PR head, then creates one isolated Beads-managed worktree (authoritative Beads via Git common-dir), acquires exactly one canonical `bd export --all`, builds the per-Bead read projection, publishes to transport branch `board-audit/pr-<number>` with the existing transport safety model — exact `--force-with-lease`, hook/CI bypass fenced to `.xtrm/board-audit/**`, remote SHA verification before worktree cleanup — and removes the worktree.
+
+Published layout under `.xtrm/board-audit/`:
+
+```text
+index.json                                  index.v1 + open_issues + pr_checkpoints
+handoffs/pr-<n>.json                        pr-handoff.v1 (repository, pull_request,
+                                            implementation_branch/head_sha, beads_root_ids,
+                                            snapshot_id, snapshot_sha256, generated_at,
+                                            transport_branch/head_sha, state, open_issue_count,
+                                            index, handoff)
+snapshots/<snapshot-id>/manifest.json       pr-snapshot-manifest.v1 (raw digest, record counts,
+                                            per-file hashes)
+snapshots/<snapshot-id>/roots/<root>.json
+snapshots/<snapshot-id>/issues/<bead>.json  pr-projection.v1 (lossless source record +
+                                            deterministic navigation)
+```
+
+The snapshot id is content-derived: the same open board plus the same PR head produce the same snapshot id. Unchanged records keep identical canonical SHA-256 hashes and are never rewritten. A checkpoint with no changes prints `NO_CHANGES` and adds no transport commit.
+
+### Freshness
+
+`pr-status` reports one of:
+
+```text
+FRESH            handoff head equals the live PR head and a snapshot is bound
+STALE_CODE_HEAD  handoff head differs from the live PR head
+STALE_SNAPSHOT   handoff head matches but no snapshot is bound
+NO_HANDOFF       no handoff is published for the PR
+```
+
+`pr-status --check` exits `3` when the status is not `FRESH`. `prepared` does not mean permanently current: the generated timestamp and the exact head/snapshot bindings are the evidence boundaries.
+
+### Confidentiality gate
+
+Automated publication (`BOARD_AUDIT_PR_TRIGGER=auto|hook` or `--trigger auto|hook`) fails closed with `CONFIDENTIALITY_BLOCKED` unless the repository slug is listed in `BOARD_AUDIT_PR_AUTHORIZED_REPOS` (comma-separated `owner/repo` entries, or `*`). Manual invocation publishes by operator choice.
+
+### Event adapter
+
+`packages/board-audit/board-audit-pr-adapter.sh` resolves the current branch's PR and runs `pr-checkpoint --trigger auto`. It is trigger-agnostic: wire it as a client-side pre-push hook, run it from a self-hosted PR-event executor, or invoke it manually. A plain pre-push hook fires before the code push succeeds, so the adapter never fabricates a current handoff; the checkpoint binds only the verified remote PR head.
+
+### Failure classes
+
+Failures print `FAILURE: <CLASS>` to stderr and exit `2`:
+
+```text
+PR_NOT_RESOLVED  REMOTE_HEAD_MISMATCH  BEADS_UNAVAILABLE  SNAPSHOT_FAILED
+TRANSPORT_CONFLICT  TRANSPORT_PUSH_FAILED  TRANSPORT_VERIFY_FAILED
+CLEANUP_BLOCKED  CONFIDENTIALITY_BLOCKED
+```
+
+Failed publication never mutates Beads and retains the isolated worktree and staging branch for recovery. `--comment` posts the compact locator as a PR comment via `gh`.
+
+### Read-model boundary
+
+The per-Bead projection is a read model only. Web actors must not edit `issues/<id>.json`; Web-originated mutation continues through the existing bounded `desired_issues`/`new_comments` round-trip followed by local `reconcile` and explicit `reconcile --execute`.
+
+The design has no watcher and no dependence on `xt end` or any XTRM session lifecycle command.
+
 ## Transport index
 
 The stable lookup surface is:
@@ -295,6 +376,8 @@ packages/board-audit/board-audit-transport.py  # fresh-from-main transport polic
 packages/board-audit/board-audit-flow.py       # generic handoff/reconcile orchestration
 packages/board-audit/board-audit-core          # low-level exporter/audit implementation
 packages/board-audit/board-audit-roundtrip.py  # reconciliation/compiler/apply engine
+packages/board-audit/board-audit-pr.py         # PR-checkpoint handoff publication + freshness
+packages/board-audit/board-audit-pr-adapter.sh # PR-checkpoint event adapter (client hook / PR-event executor / manual)
 packages/board-audit/ROUNDTRIP.md               # complete low-level safety contract
 ```
 

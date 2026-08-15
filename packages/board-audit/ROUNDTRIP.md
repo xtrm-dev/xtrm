@@ -58,6 +58,20 @@ This keeps the transport branch artifact-only and prevents stale code history fr
 
 First-time handoffs use a normal push.
 
+## PR-checkpoint read projection
+
+`board-audit pr-checkpoint <PR>` publishes a per-Bead read projection bound to an exact remote PR head on transport branch `board-audit/pr-<number>`. It is a versioned evidence/read surface, not a mutation path: nothing compiles from it and it is never input to `reconcile`. Only the existing round-trip artifact — `desired_issues` plus `new_comments` — compiles to Beads mutations, and only through local `reconcile` followed by explicit `reconcile --execute`.
+
+```text
+.xtrm/board-audit/
+├── index.json                    # index.v1 + open_issues + pr_checkpoints
+├── handoffs/pr-<n>.json          # pr-handoff.v1 (exact PR-head binding)
+└── snapshots/<snapshot-id>/
+    ├── manifest.json             # pr-snapshot-manifest.v1
+    ├── roots/<root>.json         # pr-root.v1
+    └── issues/<bead>.json        # pr-projection.v1 (lossless source + navigation)
+```
+
 ## Upstream Beads contract used
 
 `bd import` is an incremental JSONL upsert counterpart to `bd export`: new issues are created and existing issues are updated. It accepts issue rows plus relational labels/dependencies/comments and provides dry-run/stale guards.
