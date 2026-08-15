@@ -240,6 +240,10 @@
   - content-derived snapshot ids; unchanged records keep identical canonical
     hashes and are never rewritten; NO_CHANGES checkpoints add no transport
     commit
+  - publishes the bounded root/work-package handoff (existing exporter, single
+    acquisition via --from-raw) plus per-root prepared editable artifacts, so
+    the existing edit → reconcile → execute round trip resolves off the PR
+    transport branch
   - confidentiality gate: automated publication fails closed unless the
     repository is listed in BOARD_AUDIT_PR_AUTHORIZED_REPOS
   - `board-audit-pr-adapter.sh` event adapter (client pre-push hook /

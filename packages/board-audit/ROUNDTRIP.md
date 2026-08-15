@@ -64,13 +64,23 @@ First-time handoffs use a normal push.
 
 ```text
 .xtrm/board-audit/
-├── index.json                    # index.v1 + open_issues + pr_checkpoints
+├── index.json                    # index.v1 + open_issues + pr_checkpoints + packages
 ├── handoffs/pr-<n>.json          # pr-handoff.v1 (exact PR-head binding)
-└── snapshots/<snapshot-id>/
-    ├── manifest.json             # pr-snapshot-manifest.v1
-    ├── roots/<root>.json         # pr-root.v1
-    └── issues/<bead>.json        # pr-projection.v1 (lossless source + navigation)
+├── snapshots/<snapshot-id>/      # read projection (per-Bead issues, roots, manifest)
+└── exports/export-<ts>/          # bounded work-package handoff (existing exporter)
+    ├── manifest.json
+    ├── raw-beads.jsonl           # same single acquisition as the snapshot
+    └── work-packages/
+        ├── <root>__<title>.json          # work-package.v1 (issues.<id>.source)
+        └── <root>__<title>.editable.json # roundtrip.v1 prepared desired state
 ```
+
+The PR transport branch therefore carries the same bounded work-package handoff
+and prepared editable artifacts that the `handoff` flow publishes (derived from
+the same canonical acquisition). The standard round trip — Web edits the
+editable, then local `reconcile` and explicit `reconcile --execute` — resolves
+against a PR checkpoint transport branch unchanged; the per-Bead projection
+under `snapshots/` remains read-only evidence.
 
 ## Upstream Beads contract used
 

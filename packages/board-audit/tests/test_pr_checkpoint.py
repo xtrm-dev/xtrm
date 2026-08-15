@@ -292,6 +292,9 @@ class PrCheckpointTests(unittest.TestCase):
             self.assertEqual(handoff["state"], "prepared")
             self.assertNotEqual(handoff["snapshot_id"], "")
             self.assertNotEqual(handoff["snapshot_sha256"], "")
+            # The bounded root/work-package handoff (export + editable) is part
+            # of the same publication, derived from the same acquisition.
+            self.assertEqual(handoff["work_package_count"], 1)
 
             index = json.loads(fx.show_transport(".xtrm/board-audit/index.json"))
             open_issues = index["open_issues"]
@@ -302,6 +305,21 @@ class PrCheckpointTests(unittest.TestCase):
                 self.assertIn(f".xtrm/board-audit/{entry['file']}", fx.transport_tree())
                 self.assertEqual(entry["root_id"], "root-1")
             self.assertEqual(index["pr_checkpoints"]["531"]["implementation_head_sha"], fx.head_oid)
+
+            # The round-trip contract resolves off the PR transport branch:
+            # per-root work package + prepared editable, indexed by the
+            # existing handoff index entry.
+            package_entry = index["packages"]["root-1"]
+            self.assertEqual(package_entry["state"], "prepared")
+            self.assertEqual(package_entry["branch"], "board-audit/pr-531")
+            self.assertTrue(package_entry["editable"].endswith(".editable.json"))
+            work_package = json.loads(fx.show_transport(package_entry["package"]))
+            self.assertEqual(work_package["schema_version"], "xtrm.board-audit.work-package.v1")
+            self.assertEqual(work_package["root_id"], "root-1")
+            self.assertEqual(work_package["issues"]["root-1.1"]["source"]["title"], "Example child")
+            editable = json.loads(fx.show_transport(package_entry["editable"]))
+            self.assertEqual(editable["desired_issues"]["root-1"]["description"], "base")
+            self.assertIn("new_comments", editable)
 
             # transport_head_sha is the exact artifacts commit (first commit
             # on the branch; the seal commit is the head).
