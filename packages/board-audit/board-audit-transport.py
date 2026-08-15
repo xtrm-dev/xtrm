@@ -170,15 +170,24 @@ def cleanup_transport_worktree(
         _STAGING_TRANSPORTS.pop(staging, None)
 
 
-def start_transport_worktree(repo: Path, bead_id: str) -> tuple[Path, str, str]:
-    """Start handoff from current origin default while preserving artifacts.
+def start_transport_worktree(
+    repo: Path,
+    bead_id: str,
+    remote_branch: str | None = None,
+) -> tuple[Path, str, str]:
+    """Start transport publication from current origin default.
+
+    ``bead_id`` names the identity (used for the staging branch and cache
+    path); ``remote_branch`` overrides the derived ``board-audit/<bead-id>``
+    branch for identities whose transport branch has a different name, e.g.
+    PR-checkpoint handoffs published to ``board-audit/pr-<number>``.
 
     If a transport branch already exists we capture its exact remote SHA for a
     later lease-protected rewrite, then restore only the interchange tree into
     a staging branch rooted at current origin/main (or origin/HEAD).
     """
     flow.run(["git", "fetch", "origin"], cwd=repo)
-    remote_branch = flow.transport_branch(bead_id)
+    remote_branch = remote_branch or flow.transport_branch(bead_id)
     remote_ref = f"refs/remotes/origin/{remote_branch}"
 
     previous_sha: str | None = None
@@ -218,13 +227,20 @@ def start_transport_worktree(repo: Path, bead_id: str) -> tuple[Path, str, str]:
     return path, staging, remote_branch
 
 
-def commit_and_push(
+def commit_transport(
     worktree: Path,
     *,
     paths: list[Path],
     message: str,
-    remote_branch: str,
-) -> None:
+) -> bool:
+    """Force-stage transport paths and commit with hook/CI bypass.
+
+    Returns True when a commit was created, False when nothing was staged.
+    ``commit_and_push`` keeps its original behaviour; callers that need more
+    than one commit under a single lease-protected push (PR-checkpoint
+    evidence commit plus transport-seal commit) call this directly and finish
+    with ``push_transport``.
+    """
     relative_paths = _transport_relpaths(worktree, paths)
     # Transport artifacts are intentionally versioned even when the owning
     # repository ignores .xtrm/ globally. Force applies only after the strict
@@ -238,26 +254,33 @@ def commit_and_push(
         ).returncode
         != 0
     )
-    if staged:
-        # Repository hooks are designed for product-code commits and can reject
-        # valid lossless transport JSON for size/entropy/SAST reasons. The
-        # strict transport path fence above is the authority boundary for this
-        # narrow bypass; normal repository commits keep their hooks unchanged.
-        flow.run(
-            [
-                "git",
-                "commit",
-                "--no-verify",
-                "-m",
-                _transport_commit_message(message),
-            ],
-            cwd=worktree,
-        )
+    if not staged:
+        return False
+    # Repository hooks are designed for product-code commits and can reject
+    # valid lossless transport JSON for size/entropy/SAST reasons. The
+    # strict transport path fence above is the authority boundary for this
+    # narrow bypass; normal repository commits keep their hooks unchanged.
+    flow.run(
+        [
+            "git",
+            "commit",
+            "--no-verify",
+            "-m",
+            _transport_commit_message(message),
+        ],
+        cwd=worktree,
+    )
+    return True
 
-    # Pre-push hooks (Semgrep/OSV/full test mirrors in many Mercury repos) are
-    # likewise code-delivery gates, not transport gates. Skip only for this
-    # board-audit-owned push. GitHub-side push/pull_request workflows are also
-    # suppressed by the transport commit's [skip ci] marker where applicable.
+
+def push_transport(worktree: Path, *, remote_branch: str) -> None:
+    """Push the current worktree HEAD to the transport branch under lease.
+
+    Pre-push hooks (Semgrep/OSV/full test mirrors in many Mercury repos) are
+    code-delivery gates, not transport gates. Skip only for this
+    board-audit-owned push. GitHub-side push/pull_request workflows are also
+    suppressed by the transport commit's [skip ci] marker where applicable.
+    """
     push = ["git", "push", "--no-verify"]
     lease = _HANDOFF_LEASES.pop(remote_branch, None)
     if lease:
@@ -266,6 +289,17 @@ def commit_and_push(
         )
     push.extend(["origin", f"HEAD:refs/heads/{remote_branch}"])
     flow.run(push, cwd=worktree)
+
+
+def commit_and_push(
+    worktree: Path,
+    *,
+    paths: list[Path],
+    message: str,
+    remote_branch: str,
+) -> None:
+    commit_transport(worktree, paths=paths, message=message)
+    push_transport(worktree, remote_branch=remote_branch)
 
 
 # Install the transport policy into the generic flow implementation.

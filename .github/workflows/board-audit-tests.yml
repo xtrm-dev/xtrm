@@ -35,11 +35,13 @@ jobs:
           python -m py_compile packages/board-audit/board-audit-roundtrip.py
           python -m py_compile packages/board-audit/board-audit-flow.py
           python -m py_compile packages/board-audit/board-audit-transport.py
+          python -m py_compile packages/board-audit/board-audit-pr.py
 
       - name: Shell syntax
         run: |
           bash -n packages/board-audit/board-audit
           bash -n packages/board-audit/board-audit-core
+          bash -n packages/board-audit/board-audit-pr-adapter.sh
 
       - name: Board-audit artifact tracking boundary
         run: |

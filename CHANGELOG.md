@@ -229,6 +229,25 @@
   Bead: xtrm-56flm.7
 
 
+- **PR-checkpoint Board-Audit handoffs [xtrm-5t7]** — PR number and commit SHA added on merge
+
+  Adds per-PR Board-Audit evidence handoffs bound to an exact remote PR head:
+  - `board-audit pr-checkpoint <PR>` publishes a per-Bead read projection to
+    transport branch `board-audit/pr-<n>` from one canonical `bd export --all`
+    in an isolated Beads-managed worktree; the caller's checkout never switches
+  - `board-audit pr-status <PR>` reports FRESH / STALE_CODE_HEAD /
+    STALE_SNAPSHOT / NO_HANDOFF; `--check` exits 3 when not FRESH
+  - content-derived snapshot ids; unchanged records keep identical canonical
+    hashes and are never rewritten; NO_CHANGES checkpoints add no transport
+    commit
+  - confidentiality gate: automated publication fails closed unless the
+    repository is listed in BOARD_AUDIT_PR_AUTHORIZED_REPOS
+  - `board-audit-pr-adapter.sh` event adapter (client pre-push hook /
+    self-hosted PR-event executor / manual)
+  - `--comment` posts the compact locator as a PR comment; docs in
+    README.md/ROUNDTRIP.md; unit tests
+
+
 ### Fixed
 
 - **V0.1.1 — 5 P1 Codex findings post-#13 merge (#14)** ([4cd724b](https://github.com/xtrm-dev/xtrm/commit/4cd724b645298399d92bab2a196031d716146759)) — 2026-07-24 15:07

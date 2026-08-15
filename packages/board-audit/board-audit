@@ -6,13 +6,19 @@ SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SELF")" && pwd)"
 CORE="$SCRIPT_DIR/board-audit-core"
 FLOW="$SCRIPT_DIR/board-audit-transport.py"
+PR_FLOW="$SCRIPT_DIR/board-audit-pr.py"
 
 case "${1:-}" in
   handoff|reconcile)
     exec python3 "$FLOW" "$@"
     ;;
+  pr-checkpoint|pr-status)
+    exec python3 "$PR_FLOW" "$@"
+    ;;
   -h|--help)
     python3 "$FLOW" --help
+    echo
+    python3 "$PR_FLOW" --help
     echo
     exec "$CORE" --help
     ;;
