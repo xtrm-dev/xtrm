@@ -229,7 +229,7 @@
   Bead: xtrm-56flm.7
 
 
-- **PR-checkpoint Board-Audit handoffs [xtrm-5t7]** — PR number and commit SHA added on merge
+- **PR-checkpoint Board-Audit handoffs [xtrm-5t7] (#56)** ([df64e4d](https://github.com/xtrm-dev/xtrm/commit/df64e4d54f3b7d27b639365634bc0507c53dc21f))
 
   Adds per-PR Board-Audit evidence handoffs bound to an exact remote PR head:
   - `board-audit pr-checkpoint <PR>` publishes a per-Bead read projection to
