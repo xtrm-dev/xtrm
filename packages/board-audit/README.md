@@ -183,7 +183,7 @@ board-audit init
 
 Both commands take an optional PR number and default it to the current branch's PR via `gh pr view`. The caller's checkout and branch are never changed.
 
-`doctor` checks the environment: git repository, `bd`/`gh`/`python3`, usable GitHub authentication (`gh auth status`), beads workspace, board-audit package availability, hook installation (beads shim, dolt-sync chaining, checkpoint adapter, broken `&&` idiom detection) and — when the checkpoint hook is wired — whether the current repository is authorized for automatic publication (`BOARD_AUDIT_PR_AUTHORIZED_REPOS`). It exits 0 on pass, 2 on failures, 3 with `--check` when the checked PR handoff is stale.
+`doctor` checks the environment: git repository, `bd`/`gh`/`python3`, usable GitHub authentication (`gh auth status`), beads workspace, board-audit package availability, hook installation (beads shim, dolt-sync chaining, checkpoint adapter, broken `&&` idiom detection). It exits 0 on pass, 2 on failures, 3 with `--check` when the checked PR handoff is stale.
 
 `init` performs non-destructive additive setup: it refreshes the bd hook shims, writes the dolt-sync scripts and chaining (if-idiom), and appends the pre-push PR-checkpoint adapter. It never modifies the working tree or any branch, and it is idempotent.
 
@@ -260,13 +260,13 @@ NO_HANDOFF       no handoff is published for the PR
 
 `pr-status --check` exits `3` when the status is not `FRESH`. `prepared` does not mean permanently current: the generated timestamp and the exact head/snapshot bindings are the evidence boundaries.
 
-### Confidentiality gate
+### Automatic publication (no allowlist)
 
-Automated publication (`BOARD_AUDIT_PR_TRIGGER=auto|hook` or `--trigger auto|hook`) fails closed with `CONFIDENTIALITY_BLOCKED` unless the repository slug is listed in `BOARD_AUDIT_PR_AUTHORIZED_REPOS` (comma-separated `owner/repo` entries, or `*`). Manual invocation publishes by operator choice.
+There is no allowlist and no blocker. Any invocation — manual, `--trigger auto|hook`, or the pre-push hook — publishes the checkpoint. Every push to a PR branch produces a verifiable Board-Audit handoff; any agent in the repository can verify it with `board-audit pr-status <pr> --check` or by reading the transport branch.
 
 ### Event adapter
 
-`packages/board-audit/board-audit-pr-adapter.sh` resolves the current branch's PR and runs `pr-checkpoint --trigger auto`. It is trigger-agnostic: wire it as a client-side pre-push hook, run it from a self-hosted PR-event executor, or invoke it manually. A plain pre-push hook fires before the code push succeeds, so the adapter never fabricates a current handoff; the checkpoint binds only the verified remote PR head.
+`packages/board-audit/board-audit-pr-adapter.sh` is the post-delivery trigger. Wired as a pre-push hook (via `board-audit init`, which copies it into the hooks directory), it performs the code push itself first (`git push --no-verify`, lease-protected), then publishes `pr-checkpoint --trigger auto` against the now-remote PR head, so the handoff is FRESH — not stale — after every push. Adapter failures only warn and never block the code push. Invoked directly with a PR number, it checkpoints that PR without a push phase.
 
 ### Failure classes
 
@@ -275,7 +275,7 @@ Failures print `FAILURE: <CLASS>` to stderr and exit `2`:
 ```text
 PR_NOT_RESOLVED  REMOTE_HEAD_MISMATCH  BEADS_UNAVAILABLE  SNAPSHOT_FAILED
 TRANSPORT_CONFLICT  TRANSPORT_PUSH_FAILED  TRANSPORT_VERIFY_FAILED
-CLEANUP_BLOCKED  CONFIDENTIALITY_BLOCKED
+CLEANUP_BLOCKED
 ```
 
 Failed publication never mutates Beads and retains the isolated worktree and staging branch for recovery. `--comment` posts the compact locator as a PR comment via `gh`.

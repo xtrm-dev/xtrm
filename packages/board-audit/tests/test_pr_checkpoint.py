@@ -559,45 +559,32 @@ class PrCheckpointTests(unittest.TestCase):
             worktrees = git(fx.source, "worktree", "list", "--porcelain", capture=True).stdout
             self.assertGreater(worktrees.count("worktree "), 1)
 
-    def test_confidentiality_blocks_automated_publication_before_transport_push(self):
-        # AC15: automation fails closed before transport push unless the
-        # repository is authorized; pr-status reports NO_HANDOFF.
+    def test_automated_publication_publishes_without_allowlist(self):
+        # Operator directive 2026-08-16: no allowlist, no blocker. Automated
+        # publication (--trigger auto) publishes immediately and pr-status
+        # reports FRESH.
         with tempfile.TemporaryDirectory() as td_raw:
             fx = PrCheckpointFixture(Path(td_raw)).setup(BASE_ROWS)
 
-            denied = fx.run("pr-checkpoint", "531", "--trigger", "auto")
-            self.assertEqual(denied.returncode, 2, denied.stderr + denied.stdout)
-            self.assertIn("CONFIDENTIALITY_BLOCKED", denied.stderr)
-            refs = git(fx.source, "ls-remote", "origin", "refs/heads/board-audit/*", capture=True).stdout
-            self.assertEqual(refs.strip(), "", "confidentiality block must precede any transport push")
+            result = fx.run("pr-checkpoint", "531", "--trigger", "auto")
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertIn("✓ PR #531 checkpoint published", result.stdout)
 
-            no_handoff = fx.run("pr-status", "531", "--check")
-            self.assertEqual(no_handoff.returncode, 3, no_handoff.stderr + no_handoff.stdout)
-            self.assertIn("STATUS: NO_HANDOFF", no_handoff.stdout)
+            git(fx.source, "fetch", "origin")
+            refs = git(fx.source, "ls-remote", "origin", "refs/heads/board-audit/pr-531", capture=True).stdout
+            self.assertTrue(refs.strip(), "automated publication must publish the transport branch")
 
-            # Wrong allowlist entry also fails closed.
-            wrong = fx.run(
-                "pr-checkpoint", "531", "--trigger", "auto",
-                BOARD_AUDIT_PR_AUTHORIZED_REPOS="owner/other",
-            )
-            self.assertEqual(wrong.returncode, 2, wrong.stderr + wrong.stdout)
-            self.assertIn("CONFIDENTIALITY_BLOCKED", wrong.stderr)
-
-            # Authorized automation publishes.
-            allowed = fx.run(
-                "pr-checkpoint", "531", "--trigger", "auto",
-                BOARD_AUDIT_PR_AUTHORIZED_REPOS="*",
-            )
-            self.assertEqual(allowed.returncode, 0, allowed.stderr + allowed.stdout)
-            self.assertIn("✓ PR #531 checkpoint published", allowed.stdout)
+            status = fx.run("pr-status", "531", "--check")
+            self.assertEqual(status.returncode, 0, status.stderr + status.stdout)
+            self.assertIn("STATUS: FRESH", status.stdout)
 
     def test_event_adapter_publishes_via_explicit_pr_argument(self):
-        # The adapter's explicit-argument form must forward exactly one PR
-        # number and publish under the automated (fail-closed) trigger.
+        # The adapter's explicit-argument form checkpoints exactly that PR and
+        # requires no allowlist.
         adapter = REPO_ROOT / "packages" / "board-audit" / "board-audit-pr-adapter.sh"
         with tempfile.TemporaryDirectory() as td_raw:
             fx = PrCheckpointFixture(Path(td_raw)).setup(BASE_ROWS)
-            env = fx.env(BOARD_AUDIT_PR_AUTHORIZED_REPOS="*")
+            env = fx.env()
             env.pop("BOARD_AUDIT_PR_TRIGGER", None)
             first = subprocess.run(
                 [str(adapter), "531"],
@@ -625,6 +612,49 @@ class PrCheckpointTests(unittest.TestCase):
             self.assertEqual(second.returncode, 0, second.stderr + second.stdout)
             self.assertIn("NO_CHANGES", second.stdout)
 
+    def test_adapter_prepush_pushes_then_publishes_fresh_checkpoint(self):
+        # The pre-push adapter performs the code push itself, then publishes a
+        # FRESH checkpoint bound to the just-pushed remote head, so a PR push
+        # leaves verifiable current evidence without a watcher or CI.
+        adapter = REPO_ROOT / "packages" / "board-audit" / "board-audit-pr-adapter.sh"
+        with tempfile.TemporaryDirectory() as td_raw:
+            fx = PrCheckpointFixture(Path(td_raw)).setup(BASE_ROWS)
+            # New local commit on feature/x, NOT yet remote; PR 531 tracks it.
+            git(fx.source, "checkout", "feature/x")
+            (fx.source / "feature3.txt").write_text("impl3\n", encoding="utf-8")
+            git(fx.source, "add", "feature3.txt")
+            git(fx.source, "commit", "-m", "third implementation commit")
+            new_head = git(fx.source, "rev-parse", "HEAD", capture=True).stdout.strip()
+            old_remote = git(fx.source, "rev-parse", "origin/feature/x", capture=True).stdout.strip()
+            git(fx.source, "checkout", "main")
+            write_pr_json(fx.pr_json, 531, new_head)
+            self.assertNotEqual(new_head, old_remote)
+
+            # Simulate git's pre-push protocol: remote name as argv[1], refs
+            # on stdin.
+            refs = f"refs/heads/feature/x {new_head} refs/heads/feature/x {old_remote}\n"
+            result = subprocess.run(
+                [str(adapter), "origin"],
+                cwd=fx.source,
+                env=fx.env(),
+                input=refs,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertIn("published FRESH Board-Audit checkpoint", result.stderr)
+
+            # The code push landed and the checkpoint is FRESH at the new head.
+            git(fx.source, "fetch", "origin")
+            remote_head = git(fx.source, "rev-parse", "origin/feature/x", capture=True).stdout.strip()
+            self.assertEqual(remote_head, new_head)
+            status = fx.run("pr-status", "531", "--check")
+            self.assertEqual(status.returncode, 0, status.stderr + status.stdout)
+            self.assertIn("STATUS: FRESH", status.stdout)
+            handoff = json.loads(fx.show_transport(".xtrm/board-audit/handoffs/pr-531.json"))
+            self.assertEqual(handoff["implementation_head_sha"], new_head)
+
     def test_doctor_reports_environment_and_hook_state(self):
         with tempfile.TemporaryDirectory() as td_raw:
             fx = PrCheckpointFixture(Path(td_raw)).setup(BASE_ROWS)
@@ -648,13 +678,9 @@ class PrCheckpointTests(unittest.TestCase):
 
             after = fx.run("doctor")
             self.assertIn("[PASS] checkpoint hook", after.stdout)
-            # The hook alone is not authorization: without an allowlist entry
-            # every automated trigger is rejected with CONFIDENTIALITY_BLOCKED.
-            self.assertIn("[WARN] auto-publication authorization", after.stdout)
-            # With the repository allowlisted, authorization is explicit.
-            authorized = fx.run("doctor", BOARD_AUDIT_PR_AUTHORIZED_REPOS="repo")
-            self.assertIn("[PASS] auto-publication authorization", authorized.stdout)
-            self.assertNotIn("[WARN] auto-publication authorization", authorized.stdout)
+            # No allowlist exists and none is required: the checkpoint hook is
+            # sufficient for automatic publication.
+            self.assertNotIn("auto-publication authorization", after.stdout)
 
     def test_init_is_additive_and_idempotent(self):
         with tempfile.TemporaryDirectory() as td_raw:

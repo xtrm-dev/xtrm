@@ -72,7 +72,6 @@ TRANSPORT_CONFLICT = "TRANSPORT_CONFLICT"
 TRANSPORT_PUSH_FAILED = "TRANSPORT_PUSH_FAILED"
 TRANSPORT_VERIFY_FAILED = "TRANSPORT_VERIFY_FAILED"
 CLEANUP_BLOCKED = "CLEANUP_BLOCKED"
-CONFIDENTIALITY_BLOCKED = "CONFIDENTIALITY_BLOCKED"
 
 
 class PRCheckpointError(flow.FlowError):
@@ -185,27 +184,6 @@ def verify_remote_head(repo: Path, info: dict[str, Any]) -> None:
             REMOTE_HEAD_MISMATCH,
             f"remote PR head mismatch: gh reports {head_oid}, fetched {head_ref!r} is {remote_head}",
         )
-
-
-def check_confidentiality(slug: str, trigger: str) -> None:
-    """Fail closed when automation publishes lossless evidence to a non-authorized repo.
-
-    Manual invocation (no trigger marker) publishes by operator choice. Any
-    automated trigger (``BOARD_AUDIT_PR_TRIGGER`` set to ``auto``/``hook`` or
-    the ``--trigger auto|hook`` flag) requires the repository slug to be listed
-    in ``BOARD_AUDIT_PR_AUTHORIZED_REPOS`` (comma-separated ``owner/repo`` or
-    ``*`` entries).
-    """
-    if trigger not in ("auto", "hook"):
-        return
-    allowlist = [entry.strip() for entry in os.environ.get("BOARD_AUDIT_PR_AUTHORIZED_REPOS", "").split(",") if entry.strip()]
-    if any(entry in ("*", slug) for entry in allowlist):
-        return
-    raise PRCheckpointError(
-        CONFIDENTIALITY_BLOCKED,
-        f"automated publication not authorized for repository {slug}; "
-        "set BOARD_AUDIT_PR_AUTHORIZED_REPOS to allow lossless evidence publication",
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -634,7 +612,6 @@ def cmd_pr_checkpoint(args: argparse.Namespace) -> int:
     flow.require_commands("git", "bd", "python3", "gh")
     repo = flow.repo_root()
     original_branch = flow.git_output(repo, "branch", "--show-current") or "(detached)"
-    trigger = args.trigger or os.environ.get("BOARD_AUDIT_PR_TRIGGER", "manual")
 
     pr = resolve_pr_number(repo, args.pr_number)
     info = fetch_pr_info(repo, pr)
@@ -642,7 +619,6 @@ def cmd_pr_checkpoint(args: argparse.Namespace) -> int:
     if state != "open":
         raise PRCheckpointError(PR_NOT_RESOLVED, f"pull request #{pr} is not open (state={state})")
     slug = repo_slug(repo)
-    check_confidentiality(slug, trigger)
     verify_remote_head(repo, info)
 
     identity = f"pr-{pr}"
@@ -1086,29 +1062,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             _report("FAIL", "hook exit-status idiom", "broken && idiom present; every push will fail on success")
             failures += 1
         if "board-audit-pr-adapter" in text or "pr-checkpoint" in text:
-            _report("PASS", "checkpoint hook", "pre-push checkpoint adapter wired")
-            # The checkpoint hook alone is not proof that automation is
-            # authorized: without an allowlist entry every automated trigger is
-            # (correctly) rejected with CONFIDENTIALITY_BLOCKED.
-            try:
-                slug = repo_slug(repo)
-            except flow.FlowError:
-                slug = ""
-            allowlist = [
-                entry.strip()
-                for entry in os.environ.get("BOARD_AUDIT_PR_AUTHORIZED_REPOS", "").split(",")
-                if entry.strip()
-            ]
-            if any(entry in ("*", slug) for entry in allowlist):
-                _report("PASS", "auto-publication authorization", f"repository {slug} is authorized")
-            else:
-                _report(
-                    "WARN",
-                    "auto-publication authorization",
-                    f"AUTO_PUBLICATION_NOT_AUTHORIZED: repository {slug} is not listed in "
-                    "BOARD_AUDIT_PR_AUTHORIZED_REPOS; automated triggers will be rejected",
-                )
-                warnings += 1
+            _report("PASS", "checkpoint hook", "pre-push checkpoint adapter wired (every push to a PR branch publishes a fresh handoff)")
         else:
             _report("WARN", "checkpoint hook", "no automatic per-PR publication; run board-audit init")
             warnings += 1
@@ -1182,11 +1136,11 @@ fi
 
 ADAPTER_CHAINING_TEMPLATE = """\
 # --- BEGIN custom: board-audit pr-checkpoint before push ---
-# Non-destructive additive hook: publishes a PR-checkpoint handoff for the
-# current branch's PR when one exists. Runs after a successful code push is
-# irrelevant here (pre-push runs before it), so the handoff binds only the
-# verified REMOTE PR head and is reported stale until refreshed. Never blocks
-# the push; merge gating is a separate pr-status --check policy.
+# Publishes a FRESH PR-checkpoint handoff for every push to a PR branch: the
+# adapter performs the code push itself (--no-verify), then binds the
+# checkpoint to the now-remote PR head, so the handoff is current, not stale.
+# Never blocks the code push: adapter failures only warn. Any agent in the
+# repository can verify the evidence via board-audit pr-status <pr> --check.
 if [ -x "{adapter}" ]; then
     "{adapter}" "$@" || true
 fi
@@ -1301,13 +1255,20 @@ def cmd_init(args: argparse.Namespace) -> int:
         else:
             print(f"  · {hook} dolt-sync chaining already present")
 
-    # 3. PR-checkpoint adapter chaining (pre-push, advisory)
+    # 3. PR-checkpoint adapter chaining (pre-push). The adapter is copied into
+    # the hooks dir so the wiring survives worktree/session churn; the copied
+    # path is the one the hook invokes.
     adapter = HERE / "board-audit-pr-adapter.sh"
     if adapter.exists():
+        installed_adapter = hooks_dir / "board-audit-pr-adapter.sh"
+        if not installed_adapter.exists() or installed_adapter.read_bytes() != adapter.read_bytes():
+            shutil.copyfile(adapter, installed_adapter)
+            installed_adapter.chmod(0o755)
+            print("  · installed pr-checkpoint adapter in hooks dir")
         if _append_if_absent(
             hooks_dir / "pre-push",
             "board-audit-pr-adapter",
-            ADAPTER_CHAINING_TEMPLATE.format(adapter=adapter),
+            ADAPTER_CHAINING_TEMPLATE.format(adapter=installed_adapter),
         ):
             print("  · added pr-checkpoint adapter to pre-push")
         else:
@@ -1334,7 +1295,7 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint = sub.add_parser("pr-checkpoint", help="publish/refresh a PR-checkpoint handoff for the exact remote PR head")
     checkpoint.add_argument("pr_number", nargs="?", help="pull request number; default: current branch's PR")
     checkpoint.add_argument("--comment", action="store_true", help="post/update the compact Board-Audit locator as a PR comment")
-    checkpoint.add_argument("--trigger", choices=["manual", "auto", "hook"], default=None, help="publication trigger class; auto/hook fail closed without BOARD_AUDIT_PR_AUTHORIZED_REPOS")
+    checkpoint.add_argument("--trigger", choices=["manual", "auto", "hook"], default=None, help="publication trigger class (classification only; publication is never blocked by an allowlist)")
     checkpoint.set_defaults(func=cmd_pr_checkpoint)
 
     status = sub.add_parser("pr-status", help="report handoff freshness (FRESH / STALE_CODE_HEAD / STALE_SNAPSHOT / NO_HANDOFF)")
