@@ -52,4 +52,8 @@ jobs:
           git check-ignore -q --no-index .xtrm/runtime/example.json
 
       - name: Board-audit tests
+        env:
+          # doctor verifies usable GitHub authentication (gh auth status); the
+          # runner's gh reads the token from this environment variable.
+          GH_TOKEN: ${{ github.token }}
         run: python -m unittest discover -s packages/board-audit/tests -p 'test_*.py' -v

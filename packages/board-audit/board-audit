@@ -12,13 +12,31 @@ case "${1:-}" in
   handoff|reconcile)
     exec python3 "$FLOW" "$@"
     ;;
-  pr-checkpoint|pr-status)
+  pr-checkpoint|pr-status|doctor|init)
     exec python3 "$PR_FLOW" "$@"
     ;;
   -h|--help)
-    python3 "$FLOW" --help
-    echo
-    python3 "$PR_FLOW" --help
+    cat <<'EOF'
+board-audit — Beads work-package export, handoff, round trip and PR-checkpoint evidence.
+
+Commands:
+  handoff <bead>          Export + prepare + commit + push one work-package handoff
+                          through an isolated Beads-managed worktree (transport branch).
+  reconcile <bead>        Fetch the edited handoff, validate/diff, dry-run apply;
+                          --execute is the only guarded mutation path.
+  pr-checkpoint [<pr>]    Publish/refresh a PR-checkpoint handoff bound to the exact
+                          remote PR head (per-Bead projection + work-package handoff).
+  pr-status [<pr>]        Report handoff freshness: FRESH / STALE_CODE_HEAD /
+                          STALE_SNAPSHOT / NO_HANDOFF; --check exits 3 unless FRESH.
+  doctor [<pr>]           Check the environment: repo, bd/gh, beads workspace,
+                          package availability, hook installation, handoff freshness.
+  init                    Non-destructive additive setup: install the pre-push
+                          checkpoint hook and the Dolt-sync chaining (idempotent).
+
+All transport publication bypasses repository commit/push hooks and CI
+(--no-verify, [skip ci]) and is fenced to .xtrm/board-audit/**. The caller's
+implementation branch and working tree are never modified.
+EOF
     echo
     exec "$CORE" --help
     ;;

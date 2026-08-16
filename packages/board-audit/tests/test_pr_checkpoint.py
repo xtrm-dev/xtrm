@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -41,6 +42,10 @@ elif args[:2] == ['worktree', 'remove']:
     if len(matches) != 1:
         raise SystemExit('cannot resolve worktree ' + name)
     subprocess.run(['git', 'worktree', 'remove', matches[0]], check=True)
+elif args and args[0] == 'where':
+    print('/fake/beads-workspace')
+elif args[:2] == ['hooks', 'install']:
+    print('fake hooks installed')
 else:
     raise SystemExit('unexpected fake bd invocation: ' + ' '.join(args))
 """
@@ -327,6 +332,15 @@ class PrCheckpointTests(unittest.TestCase):
             self.assertEqual(len(commits), 2)
             self.assertEqual(handoff["transport_head_sha"], commits[1])
 
+            # Producer provenance: this fixture carries no repo package, so the
+            # caller's package is recorded with its digest (and the checkout
+            # SHA when the package lives inside a git working tree).
+            producer = handoff["producer"]
+            self.assertEqual(producer["board_audit_source"], "caller")
+            self.assertRegex(producer["package_sha256"], r"[0-9a-f]{64}")
+            if producer["git_sha"] is not None:
+                self.assertRegex(producer["git_sha"], r"[0-9a-f]{40}")
+
             # The open projection is individually addressable per bead.
             first_projection = json.loads(fx.show_transport(f".xtrm/board-audit/{open_issues['root-1.1']['file']}"))
             self.assertEqual(first_projection["navigation"]["root"], "root-1")
@@ -610,6 +624,108 @@ class PrCheckpointTests(unittest.TestCase):
             )
             self.assertEqual(second.returncode, 0, second.stderr + second.stdout)
             self.assertIn("NO_CHANGES", second.stdout)
+
+    def test_doctor_reports_environment_and_hook_state(self):
+        with tempfile.TemporaryDirectory() as td_raw:
+            fx = PrCheckpointFixture(Path(td_raw)).setup(BASE_ROWS)
+
+            before = fx.run("doctor")
+            self.assertEqual(before.returncode, 0, before.stderr + before.stdout)
+            self.assertIn("[PASS] git repository", before.stdout)
+            self.assertIn("[PASS] beads workspace", before.stdout)
+            # gh presence is not enough: usable authentication is probed.
+            self.assertIn("[PASS] GitHub authentication", before.stdout)
+            # The fixture repo does not carry the package: warning, not failure.
+            self.assertIn("[WARN] board-audit package", before.stdout)
+            # No hooks installed yet: the pre-push warning covers it.
+            self.assertIn("[WARN] pre-push hook", before.stdout)
+            self.assertNotIn("[FAIL]", before.stdout)
+
+            installed = fx.run("init")
+            self.assertEqual(installed.returncode, 0, installed.stderr + installed.stdout)
+            # init writes into the hooks dir only; the repo tree stays clean.
+            self.assertEqual(git(fx.source, "status", "--porcelain", capture=True).stdout.strip(), "")
+
+            after = fx.run("doctor")
+            self.assertIn("[PASS] checkpoint hook", after.stdout)
+            # The hook alone is not authorization: without an allowlist entry
+            # every automated trigger is rejected with CONFIDENTIALITY_BLOCKED.
+            self.assertIn("[WARN] auto-publication authorization", after.stdout)
+            # With the repository allowlisted, authorization is explicit.
+            authorized = fx.run("doctor", BOARD_AUDIT_PR_AUTHORIZED_REPOS="repo")
+            self.assertIn("[PASS] auto-publication authorization", authorized.stdout)
+            self.assertNotIn("[WARN] auto-publication authorization", authorized.stdout)
+
+    def test_init_is_additive_and_idempotent(self):
+        with tempfile.TemporaryDirectory() as td_raw:
+            fx = PrCheckpointFixture(Path(td_raw)).setup(BASE_ROWS)
+            first = fx.run("init")
+            self.assertEqual(first.returncode, 0, first.stderr + first.stdout)
+            hooks_dir = fx.source / ".git" / "hooks"
+            pre_push = (hooks_dir / "pre-push").read_text(encoding="utf-8")
+            self.assertIn("board-audit-pr-adapter", pre_push)
+            self.assertIn("if [ $rc -ne 0 ]; then exit $rc; fi", pre_push)
+            self.assertNotIn("[ $rc -ne 0 ] && exit $rc", pre_push)
+            # The adapter block references the adapter script twice (-x test and
+            # the exec line); exactly one block must exist.
+            self.assertEqual(pre_push.count("board-audit-pr-adapter"), 2)
+            self.assertTrue((hooks_dir / "pre-push.bd-sync").exists())
+            self.assertTrue((hooks_dir / "post-merge.bd-sync").exists())
+
+            second = fx.run("init")
+            self.assertEqual(second.returncode, 0, second.stderr + second.stdout)
+            pre_push_again = (hooks_dir / "pre-push").read_text(encoding="utf-8")
+            self.assertEqual(pre_push.count("if [ $rc -ne 0 ]; then exit $rc; fi"),
+                             pre_push_again.count("if [ $rc -ne 0 ]; then exit $rc; fi"))
+
+            # The hooks dir is outside the repo tree: still no tracked changes.
+            self.assertEqual(git(fx.source, "status", "--porcelain", capture=True).stdout.strip(), "")
+
+    def test_checkpoint_cherry_picks_package_from_repo_and_stays_fenced(self):
+        # The repo carries packages/board-audit on its default branch; the
+        # checkpoint must cherry-pick it into the isolated worktree (archive,
+        # unstaged) and still push only .xtrm/board-audit/** assets.
+        with tempfile.TemporaryDirectory() as td_raw:
+            fx = PrCheckpointFixture(Path(td_raw)).setup(BASE_ROWS)
+            package_src = REPO_ROOT / "packages" / "board-audit"
+            target = fx.source / "packages" / "board-audit"
+            shutil.copytree(package_src, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            git(fx.source, "add", "packages")
+            git(fx.source, "commit", "-m", "add board-audit package")
+            git(fx.source, "push", "origin", "main")
+
+            result = fx.run("pr-checkpoint", "531")
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertIn("✓ PR #531 checkpoint published", result.stdout)
+
+            git(fx.source, "fetch", "origin")
+            generated = git(
+                fx.source,
+                "diff",
+                "--name-only",
+                "origin/main",
+                "origin/board-audit/pr-531",
+                capture=True,
+            ).stdout.splitlines()
+            self.assertTrue(generated)
+            self.assertTrue(all(p.startswith(".xtrm/board-audit/") for p in generated), generated)
+            # The cherry-picked package must never be pushed with the assets.
+            self.assertFalse(any(p.startswith("packages/") for p in generated), generated)
+
+            status = fx.run("pr-status", "531", "--check")
+            self.assertEqual(status.returncode, 0, status.stderr + status.stdout)
+            self.assertIn("STATUS: FRESH", status.stdout)
+
+            # Producer provenance: the repo-carried package is pinned to the
+            # exact default-branch SHA used for the archive, and the digest
+            # covers the executed package tree.
+            handoff = json.loads(fx.show_transport(".xtrm/board-audit/handoffs/pr-531.json"))
+            producer = handoff["producer"]
+            self.assertEqual(producer["board_audit_source"], "repository")
+            self.assertEqual(producer["repository"], "repo")
+            main_sha = git(fx.source, "rev-parse", "origin/main", capture=True).stdout.strip()
+            self.assertEqual(producer["git_sha"], main_sha)
+            self.assertRegex(producer["package_sha256"], r"[0-9a-f]{64}")
 
     def test_no_implementation_path_invokes_or_depends_on_xt_end(self):
         # AC16: no implementation path invokes or depends on xt end.
