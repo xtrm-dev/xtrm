@@ -703,6 +703,14 @@ class PrCheckpointTests(unittest.TestCase):
             pre_push_again = (hooks_dir / "pre-push").read_text(encoding="utf-8")
             self.assertEqual(pre_push.count("if [ $rc -ne 0 ]; then exit $rc; fi"),
                              pre_push_again.count("if [ $rc -ne 0 ]; then exit $rc; fi"))
+            # The chaining invokes the hooks-dir adapter copy, and the chain is
+            # byte-stable across repeated init runs.
+            self.assertTrue((hooks_dir / "board-audit-pr-adapter.sh").exists())
+            self.assertIn("board-audit-pr-adapter.sh", pre_push)
+            third = fx.run("init")
+            self.assertEqual(third.returncode, 0, third.stderr + third.stdout)
+            pre_push_third = (hooks_dir / "pre-push").read_text(encoding="utf-8")
+            self.assertEqual(pre_push_again, pre_push_third)
 
             # The hooks dir is outside the repo tree: still no tracked changes.
             self.assertEqual(git(fx.source, "status", "--porcelain", capture=True).stdout.strip(), "")
