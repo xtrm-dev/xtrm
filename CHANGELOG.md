@@ -3,6 +3,22 @@
 
 ### Added
 
+- **board-audit: automatic per-PR publication, no allowlist [xtrm-5t7]** ([db799f3](https://github.com/xtrm-dev/xtrm/commit/db799f3)) — 2026-08-16
+
+  Operator directive: every PR produces a Board-Audit handoff, no blocker.
+  - Removed the `BOARD_AUDIT_PR_AUTHORIZED_REPOS` gate: automated
+    publication (`--trigger auto|hook`) publishes unconditionally
+  - `board-audit-pr-adapter.sh` rewired as a post-delivery trigger: as a
+    pre-push hook it performs the code push itself (`git push --no-verify`,
+    lease-protected, fast-forward-aware), then publishes a FRESH checkpoint
+    bound to the now-remote PR head — no watcher, no CI, no `xt end`
+  - Adapter failures only warn; the code push is never blocked
+  - `board-audit init` copies the adapter into the hooks directory (stable
+    across worktree churn) and chains it
+  - PR-creation gap documented: a PR created without any subsequent push has
+    no automatic checkpoint until the next push or a manual `pr-checkpoint`
+  - `doctor` no longer reports authorization state
+
 - **Service-knowledge v0.1.0 — new xtrm package (PR0 lift-and-shift) [xtrm-56flm.6] (#13)** ([2d91be9](https://github.com/xtrm-dev/xtrm/commit/2d91be93be0c33b4d86237e044ce34cea74307d4)) — 2026-07-24 15:04
 
   PR0 of xtrm-56flm epic — new first-class xtrm package.
