@@ -39,6 +39,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 from typing import Any
@@ -205,6 +206,52 @@ def check_confidentiality(slug: str, trigger: str) -> None:
         f"automated publication not authorized for repository {slug}; "
         "set BOARD_AUDIT_PR_AUTHORIZED_REPOS to allow lossless evidence publication",
     )
+
+
+# ---------------------------------------------------------------------------
+# Producer provenance
+# ---------------------------------------------------------------------------
+
+def package_digest(package_dir: Path) -> str:
+    """Deterministic SHA-256 of the exact board-audit package contents.
+
+    Digests every file under ``package_dir`` (excluding bytecode caches),
+    keyed by relative path, so two checkouts of the same package produce the
+    same digest and a dirty/modified caller copy cannot be attributed to a
+    clean source commit.
+    """
+    entries: list[tuple[str, str]] = []
+    for path in sorted(package_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(package_dir).as_posix()
+        if rel.startswith("__pycache__/") or rel.endswith(".pyc"):
+            continue
+        entries.append((rel, hashlib.sha256(path.read_bytes()).hexdigest()))
+    listing = "\n".join(f"{rel}\0{digest}" for rel, digest in entries)
+    return hashlib.sha256(listing.encode("utf-8")).hexdigest()
+
+
+def caller_producer(package_dir: Path) -> dict[str, Any]:
+    """Producer identity for the caller-package path (no repo-carried copy).
+
+    ``git_sha`` is the caller checkout's HEAD when the package lives inside a
+    git working tree, else null; ``package_sha256`` is always present.
+    """
+    repository: str | None = None
+    git_sha: str | None = None
+    try:
+        root = flow.git_output(package_dir, "rev-parse", "--show-toplevel").strip()
+        repository = repo_slug(Path(root))
+        git_sha = flow.git_output(package_dir, "rev-parse", "HEAD").strip()
+    except flow.FlowError:
+        pass
+    return {
+        "board_audit_source": "caller",
+        "repository": repository,
+        "git_sha": git_sha,
+        "package_sha256": package_digest(package_dir),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -605,12 +652,60 @@ def cmd_pr_checkpoint(args: argparse.Namespace) -> int:
     worktree: Path | None = None
     staging = ""
     no_changes = False
+    cherry_picked = False
     handoff: dict[str, Any] | None = None
     head_after_push = ""
     keep = False
     try:
         worktree, staging, _ = transport.start_transport_worktree(repo, identity, remote_branch=remote_branch)
         previous = load_previous_handoff(worktree, pr)
+
+        # Board-audit must run from the repository's own copy when the repo
+        # carries the package: cherry-pick packages/board-audit from the default
+        # branch into the isolated worktree WITHOUT staging it (git archive +
+        # tar, not checkout), so the derivation uses the repo's version while
+        # the transport commit still contains only .xtrm/board-audit/** assets.
+        cherry_picked = False
+        producer_sha: str | None = None
+        if repo_carries_package(repo):
+            try:
+                default_ref = flow.default_remote_ref(repo)
+                # Pin the archive to the exact producer SHA, not the moving
+                # ref name, so provenance records the commit that was used.
+                producer_sha = flow.git_output(repo, "rev-parse", f"{default_ref}^{{commit}}").strip()
+                archive = subprocess.run(
+                    ["git", "archive", "--format=tar", producer_sha, "packages/board-audit"],
+                    cwd=repo,
+                    capture_output=True,
+                )
+                package_target = worktree  # archive entries are prefixed packages/board-audit/...
+                untar = subprocess.run(
+                    ["tar", "-xf", "-", "-C", str(package_target)],
+                    input=archive.stdout,
+                )
+                if archive.returncode == 0 and untar.returncode == 0 and (worktree / "packages/board-audit/board-audit-core").exists():
+                    cherry_picked = True
+                    # tar -xf as a non-root user applies the umask and strips
+                    # the exec bit; the core script is executed directly.
+                    (worktree / "packages/board-audit/board-audit-core").chmod(0o755)
+                    os.environ["BOARD_AUDIT_CORE"] = str(worktree / "packages/board-audit/board-audit-core")
+                    os.environ["BOARD_AUDIT_ROUNDTRIP"] = str(worktree / "packages/board-audit/board-audit-roundtrip.py")
+            except flow.FlowError:
+                cherry_picked = False
+        if not cherry_picked:
+            os.environ.pop("BOARD_AUDIT_CORE", None)
+            os.environ.pop("BOARD_AUDIT_ROUNDTRIP", None)
+
+        if cherry_picked:
+            producer: dict[str, Any] = {
+                "board_audit_source": "repository",
+                "repository": slug,
+                "git_sha": producer_sha,
+                "package_sha256": package_digest(worktree / "packages" / "board-audit"),
+            }
+        else:
+            caller_pkg = Path(os.environ.get("BOARD_AUDIT_CORE", str(HERE / "board-audit-core"))).resolve().parent
+            producer = caller_producer(caller_pkg)
 
         # The raw acquisition lives outside the worktree (cache dir) so the
         # isolated checkout stays clean for bd worktree remove; it is retained
@@ -695,6 +790,7 @@ def cmd_pr_checkpoint(args: argparse.Namespace) -> int:
         # artifacts commit so the recorded SHA is an exact published transport
         # SHA; the seal commit then becomes the branch head.
         handoff = handoff_payload(slug, pr, info, snapshot, generated_at)
+        handoff["producer"] = producer
         handoff["work_package_count"] = len(work_entries)
         index = build_index(worktree, snapshot, pr, info, generated_at)
         for root, package, editable, manifest in work_entries:
@@ -769,41 +865,51 @@ def cmd_pr_checkpoint(args: argparse.Namespace) -> int:
     except flow.FlowError as exc:
         keep = True
         raise PRCheckpointError(CLEANUP_BLOCKED, f"checkpoint failed: {exc}") from exc
+    except Exception as exc:
+        # Do not let a cleanup error in finally mask the real failure.
+        keep = True
+        raise PRCheckpointError(CLEANUP_BLOCKED, f"checkpoint failed unexpectedly: {exc!r}") from exc
     finally:
         if worktree is not None and staging:
             if keep:
                 transport.cleanup_transport_worktree(repo, worktree, staging, keep_on_error=True)
-            elif no_changes:
-                # Nothing was committed. The transport-branch restore staged
-                # the previous artifacts into the index; discard them so the
-                # untouched staging worktree matches HEAD exactly. Real bd
-                # worktree removal refuses branches without a resolvable
-                # upstream, so point the staging branch at the origin default
-                # (HEAD equals it: the branch was created from it).
-                flow.run(["git", "reset", "-q"], cwd=worktree)
-                flow.run(
-                    ["git", "clean", "-fdx", "--", ".xtrm/board-audit"],
-                    cwd=worktree,
-                )
-                flow.run(
-                    ["git", "branch", "--set-upstream-to", flow.default_remote_ref(repo), staging],
-                    cwd=repo,
-                )
-                # flow.cleanup_transport_worktree is the transport-patched
-                # version; the raw base implementation is preserved separately.
-                transport._BASE_CLEANUP_TRANSPORT_WORKTREE(
-                    repo,
-                    worktree,
-                    staging,
-                    keep_on_error=False,
-                )
             else:
-                # Verification of the exact remote transport SHA happens here;
-                # a mismatch is a failed publication and retains recovery state.
-                try:
-                    transport.cleanup_transport_worktree(repo, worktree, staging, keep_on_error=False)
-                except flow.FlowError as exc:
-                    raise PRCheckpointError(TRANSPORT_VERIFY_FAILED, f"transport verification/cleanup failed: {exc}") from exc
+                # The cherry-picked board-audit package was extracted without
+                # staging; discard it so the worktree matches the committed
+                # tree (only .xtrm/board-audit/** assets) before removal.
+                if cherry_picked:
+                    flow.run(["git", "clean", "-fdx", "--", "packages/board-audit"], cwd=worktree)
+                if no_changes:
+                    # Nothing was committed. The transport-branch restore staged
+                    # the previous artifacts into the index; discard them so the
+                    # untouched staging worktree matches HEAD exactly. Real bd
+                    # worktree removal refuses branches without a resolvable
+                    # upstream, so point the staging branch at the origin default
+                    # (HEAD equals it: the branch was created from it).
+                    flow.run(["git", "reset", "-q"], cwd=worktree)
+                    flow.run(
+                        ["git", "clean", "-fdx", "--", ".xtrm/board-audit"],
+                        cwd=worktree,
+                    )
+                    flow.run(
+                        ["git", "branch", "--set-upstream-to", flow.default_remote_ref(repo), staging],
+                        cwd=repo,
+                    )
+                    # flow.cleanup_transport_worktree is the transport-patched
+                    # version; the raw base implementation is preserved separately.
+                    transport._BASE_CLEANUP_TRANSPORT_WORKTREE(
+                        repo,
+                        worktree,
+                        staging,
+                        keep_on_error=False,
+                    )
+                else:
+                    # Verification of the exact remote transport SHA happens here;
+                    # a mismatch is a failed publication and retains recovery state.
+                    try:
+                        transport.cleanup_transport_worktree(repo, worktree, staging, keep_on_error=False)
+                    except flow.FlowError as exc:
+                        raise PRCheckpointError(TRANSPORT_VERIFY_FAILED, f"transport verification/cleanup failed: {exc}") from exc
 
     assert handoff is not None
     print(f"✓ PR #{pr} checkpoint published")
@@ -876,6 +982,348 @@ def cmd_pr_status(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Doctor and init
+# ---------------------------------------------------------------------------
+
+DEFAULT_REF_HINT = "configure origin/HEAD or origin/main"
+
+
+def repo_carries_package(repo: Path) -> bool:
+    """True when the repository's default branch carries packages/board-audit.
+
+    Used to decide whether the checkpoint cherry-picks the package into the
+    isolated worktree (self-contained derivation) or falls back to the caller's
+    package.
+    """
+    try:
+        default_ref = flow.default_remote_ref(repo)
+    except flow.FlowError:
+        return False
+    probe = f"{default_ref}:packages/board-audit/board-audit-core"
+    return (
+        flow.run(["git", "cat-file", "-e", probe], cwd=repo, check=False).returncode
+        == 0
+    )
+
+
+def _report(mark: str, name: str, detail: str = "") -> None:
+    suffix = f" — {detail}" if detail else ""
+    print(f"[{mark}] {name}{suffix}")
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Check the environment and report PASS/FAIL/WARN per item."""
+    import shutil as _shutil
+
+    failures = 0
+    warnings = 0
+
+    # 1. git repository
+    repo: Path | None = None
+    if flow.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=Path.cwd(), capture=True, check=False).returncode == 0:
+        repo = flow.repo_root()
+        _report("PASS", "git repository", str(repo))
+    else:
+        _report("FAIL", "git repository", "not inside a git working tree")
+        failures += 1
+        print("doctor: cannot continue without a git repository")
+        return 2
+
+    # 2. required commands
+    gh_present = False
+    for name in ("bd", "gh", "python3"):
+        if _shutil.which(name):
+            _report("PASS", f"command {name}")
+            if name == "gh":
+                gh_present = True
+        else:
+            _report("FAIL", f"command {name}", "not on PATH")
+            failures += 1
+
+    # 2b. usable GitHub authentication (binary exists != authenticated)
+    if gh_present:
+        auth = flow.run(["gh", "auth", "status"], cwd=repo, capture=True, check=False)
+        if auth.returncode == 0:
+            _report("PASS", "GitHub authentication", "gh auth status ok")
+        else:
+            _report("FAIL", "GitHub authentication", "gh auth status failed; run gh auth login")
+            failures += 1
+
+    # 3. beads workspace
+    ws = flow.run(["bd", "where"], cwd=repo, capture=True, check=False)
+    if ws.returncode == 0 and ws.stdout.strip():
+        _report("PASS", "beads workspace", ws.stdout.strip().splitlines()[0])
+    else:
+        _report("FAIL", "beads workspace", "bd where failed; run bd init or check the workspace")
+        failures += 1
+
+    # 4. board-audit package availability
+    if repo_carries_package(repo):
+        _report("PASS", "board-audit package", "carried by the repository default branch (cherry-picked into checkpoints)")
+    elif Path(os.environ.get("BOARD_AUDIT_CORE", str(HERE / "board-audit-core"))).exists():
+        _report("WARN", "board-audit package", "not carried by this repository; checkpoints use the caller's package")
+        warnings += 1
+    else:
+        _report("FAIL", "board-audit package", "no package copy found")
+        failures += 1
+
+    # 5. hooks
+    hooks_dir = Path(flow.git_output(repo, "rev-parse", "--git-path", "hooks"))
+    _report("PASS", "hooks directory", str(hooks_dir))
+    pre_push = hooks_dir / "pre-push"
+    if not pre_push.exists():
+        _report("WARN", "pre-push hook", "not installed; board-audit init installs it")
+        warnings += 1
+    else:
+        text = pre_push.read_text(encoding="utf-8", errors="replace")
+        if "BEGIN BEADS INTEGRATION" in text:
+            _report("PASS", "beads shim", "pre-push hooks managed by bd")
+        else:
+            _report("WARN", "beads shim", "no bd-managed pre-push shim; bd hooks install not run")
+            warnings += 1
+        if "[ $rc -ne 0 ] && exit $rc" in text:
+            _report("FAIL", "hook exit-status idiom", "broken && idiom present; every push will fail on success")
+            failures += 1
+        if "board-audit-pr-adapter" in text or "pr-checkpoint" in text:
+            _report("PASS", "checkpoint hook", "pre-push checkpoint adapter wired")
+            # The checkpoint hook alone is not proof that automation is
+            # authorized: without an allowlist entry every automated trigger is
+            # (correctly) rejected with CONFIDENTIALITY_BLOCKED.
+            try:
+                slug = repo_slug(repo)
+            except flow.FlowError:
+                slug = ""
+            allowlist = [
+                entry.strip()
+                for entry in os.environ.get("BOARD_AUDIT_PR_AUTHORIZED_REPOS", "").split(",")
+                if entry.strip()
+            ]
+            if any(entry in ("*", slug) for entry in allowlist):
+                _report("PASS", "auto-publication authorization", f"repository {slug} is authorized")
+            else:
+                _report(
+                    "WARN",
+                    "auto-publication authorization",
+                    f"AUTO_PUBLICATION_NOT_AUTHORIZED: repository {slug} is not listed in "
+                    "BOARD_AUDIT_PR_AUTHORIZED_REPOS; automated triggers will be rejected",
+                )
+                warnings += 1
+        else:
+            _report("WARN", "checkpoint hook", "no automatic per-PR publication; run board-audit init")
+            warnings += 1
+        if f"{pre_push.name}.bd-sync" in text:
+            _report("PASS", "dolt-sync chaining", "beads/dolt sync before push")
+        else:
+            _report("WARN", "dolt-sync chaining", "no beads/dolt sync chaining")
+            warnings += 1
+
+    # 6. optional PR freshness
+    stale_pr = False
+    if getattr(args, "pr_number", None):
+        try:
+            pr = resolve_pr_number(repo, args.pr_number)
+            info = fetch_pr_info(repo, pr)
+            flow.run(["git", "fetch", "origin"], cwd=repo)
+            branch = f"board-audit/pr-{pr}"
+            handoff_rel = f".xtrm/board-audit/handoffs/pr-{pr}.json"
+            probe = flow.run(
+                ["git", "cat-file", "-e", f"origin/{branch}:{handoff_rel}"],
+                cwd=repo,
+                check=False,
+            )
+            if probe.returncode != 0:
+                _report("WARN", f"PR #{pr} handoff", "NO_HANDOFF")
+                warnings += 1
+            else:
+                handoff_text = flow.git_output(repo, "show", f"origin/{branch}:{handoff_rel}")
+                try:
+                    handoff = json.loads(handoff_text)
+                except json.JSONDecodeError:
+                    handoff = {}
+                if str(info.get("headRefOid", "")) != str(handoff.get("implementation_head_sha", "")):
+                    _report("WARN", f"PR #{pr} handoff", "STALE_CODE_HEAD — run pr-checkpoint")
+                    warnings += 1
+                    stale_pr = True
+                else:
+                    _report("PASS", f"PR #{pr} handoff", "FRESH")
+        except (flow.FlowError, PRCheckpointError) as exc:
+            _report("WARN", "PR freshness", str(exc))
+            warnings += 1
+
+    print()
+    if failures:
+        print(f"doctor: {failures} failure(s), {warnings} warning(s) — exit 2")
+        return 2
+    if stale_pr and args.check:
+        print(f"doctor: handoff stale — exit 3")
+        return 3
+    print(f"doctor: ok ({warnings} warning(s))")
+    return 0
+
+
+SYNC_CHAINING_TEMPLATE = """\
+# --- BEGIN custom: beads/dolt sync before {hook} ---
+# Outside bd's managed markers (bd hooks install/upgrade won't clobber).
+# Commits pending Beads changes, then pulls and pushes the Dolt remote
+# (refs/dolt/data on the GitHub origin). Fails the Git operation on sync failure.
+if [ -x "$(dirname "$0")/{hook}.bd-sync" ]; then
+    _bd_timeout=${{BEADS_HOOK_TIMEOUT:-300}}
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$_bd_timeout" "$(dirname "$0")/{hook}.bd-sync" "$@"
+    else
+        "$(dirname "$0")/{hook}.bd-sync" "$@"
+    fi
+    rc=$?
+    if [ $rc -ne 0 ]; then exit $rc; fi
+fi
+# --- END custom ---
+"""
+
+ADAPTER_CHAINING_TEMPLATE = """\
+# --- BEGIN custom: board-audit pr-checkpoint before push ---
+# Non-destructive additive hook: publishes a PR-checkpoint handoff for the
+# current branch's PR when one exists. Runs after a successful code push is
+# irrelevant here (pre-push runs before it), so the handoff binds only the
+# verified REMOTE PR head and is reported stale until refreshed. Never blocks
+# the push; merge gating is a separate pr-status --check policy.
+if [ -x "{adapter}" ]; then
+    "{adapter}" "$@" || true
+fi
+# --- END custom ---
+"""
+
+# Self-contained Dolt-sync scripts so ``init`` works without a repo-level
+# scripts/hooks tree. Keep in sync with scripts/hooks/*.bd-sync at repo root.
+BD_SYNC_PRE_PUSH = """#!/usr/bin/env bash
+# Beads/Dolt sync chained from the pre-push hook.
+# Default the Dolt pre-push fsck timeout: 30s is too tight for large stores.
+: "${BEADS_FSCK_TIMEOUT:=600}"
+#
+# Synchronizes Beads data with the GitHub-backed Dolt remote (refs/dolt/data):
+#   1. commit pending Beads changes (idempotent)
+#   2. pull the Dolt remote (pull before push, per Beads concurrency policy)
+#   3. push the Dolt remote
+#
+# A non-zero exit aborts the Git push, so the push cannot succeed while Beads
+# state is unsynced.
+set -uo pipefail
+
+if ! command -v bd >/dev/null 2>&1 || ! bd where >/dev/null 2>&1; then
+  echo "beads-sync: no beads database in this checkout — skipping Dolt sync" >&2
+  exit 0
+fi
+
+echo "beads-sync: commit pending Beads changes"
+if ! bd dolt commit; then
+  echo "beads-sync: ERROR: 'bd dolt commit' failed — aborting Git push" >&2
+  exit 1
+fi
+
+echo "beads-sync: pull Dolt remote"
+if ! bd dolt pull; then
+  echo "beads-sync: ERROR: 'bd dolt pull' failed — aborting Git push" >&2
+  exit 1
+fi
+
+echo "beads-sync: push Dolt remote"
+if ! bd dolt push; then
+  echo "beads-sync: ERROR: 'bd dolt push' failed — aborting Git push" >&2
+  exit 1
+fi
+
+echo "beads-sync: Dolt sync OK"
+exit 0
+"""
+
+BD_SYNC_POST_MERGE = """#!/usr/bin/env bash
+# Beads/Dolt sync chained from the post-merge hook.
+: "${BEADS_FSCK_TIMEOUT:=600}"
+# Pulls Beads data from the GitHub-backed Dolt remote (refs/dolt/data) after a
+# Git pull/merge. A failed pull is reported loudly: the Git pull/merge command
+# reports failure (post-merge exit code) and the operator sees the message.
+set -uo pipefail
+
+if ! command -v bd >/dev/null 2>&1 || ! bd where >/dev/null 2>&1; then
+  exit 0
+fi
+
+echo "beads-sync: pull Dolt remote"
+if ! bd dolt pull; then
+  echo "beads-sync: ERROR: 'bd dolt pull' failed after Git merge." >&2
+  echo "beads-sync: Beads data may be stale. Run 'bd dolt pull' manually." >&2
+  exit 1
+fi
+exit 0
+"""
+
+
+def _append_if_absent(target: Path, marker: str, block: str) -> bool:
+    if not target.exists():
+        target.write_text("#!/usr/bin/env sh\n", encoding="utf-8")
+        target.chmod(0o755)
+    text = target.read_text(encoding="utf-8", errors="replace")
+    if marker in text:
+        return False
+    with target.open("a", encoding="utf-8") as handle:
+        handle.write(block)
+    return True
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """Non-destructive additive setup: hooks + chaining, no branch or tree changes."""
+    repo = flow.repo_root()
+    hooks_dir = Path(flow.git_output(repo, "rev-parse", "--git-path", "hooks"))
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"init: {repo}")
+
+    # 1. refresh the bd-managed shims (additive; preserves custom blocks)
+    if shutil.which("bd"):
+        flow.run(["bd", "hooks", "install"], cwd=repo)
+        print("  · refreshed bd hook shims")
+
+    # 2. Dolt-sync scripts + chaining (if-idiom)
+    sync_src = HERE / "scripts" / "hooks"
+    embedded = {"pre-push": BD_SYNC_PRE_PUSH, "post-merge": BD_SYNC_POST_MERGE}
+    for hook in ("pre-push", "post-merge"):
+        target = hooks_dir / f"{hook}.bd-sync"
+        template = sync_src / f"{hook}.bd-sync"
+        content = template.read_text(encoding="utf-8") if template.exists() else embedded[hook]
+        target.write_text(content, encoding="utf-8")
+        target.chmod(0o700)
+        if _append_if_absent(
+            hooks_dir / hook,
+            f"{hook}.bd-sync",
+            SYNC_CHAINING_TEMPLATE.format(hook=hook),
+        ):
+            print(f"  · added {hook} dolt-sync chaining")
+        else:
+            print(f"  · {hook} dolt-sync chaining already present")
+
+    # 3. PR-checkpoint adapter chaining (pre-push, advisory)
+    adapter = HERE / "board-audit-pr-adapter.sh"
+    if adapter.exists():
+        if _append_if_absent(
+            hooks_dir / "pre-push",
+            "board-audit-pr-adapter",
+            ADAPTER_CHAINING_TEMPLATE.format(adapter=adapter),
+        ):
+            print("  · added pr-checkpoint adapter to pre-push")
+        else:
+            print("  · pr-checkpoint adapter already present")
+
+    # 4. package availability notice
+    if repo_carries_package(repo):
+        print("  · repo carries packages/board-audit; checkpoints are self-contained")
+    else:
+        print("  · WARN: repo does not carry packages/board-audit; checkpoints use the caller's package")
+        print("    (commit the package or install it; doctor reports this as a warning)")
+
+    print("✓ init complete — additive only; no working-tree or branch changes")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="board-audit pr",
@@ -893,6 +1341,14 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("pr_number", nargs="?", help="pull request number; default: current branch's PR")
     status.add_argument("--check", action="store_true", help="exit 3 when the handoff is not FRESH")
     status.set_defaults(func=cmd_pr_status)
+
+    doctor = sub.add_parser("doctor", help="check the environment: repo, commands, beads workspace, package, hooks, optional PR freshness")
+    doctor.add_argument("pr_number", nargs="?", help="optional pull request number to also check handoff freshness")
+    doctor.add_argument("--check", action="store_true", help="exit 3 when the checked PR handoff is stale")
+    doctor.set_defaults(func=cmd_doctor)
+
+    init = sub.add_parser("init", help="non-destructive additive setup: install the pre-push checkpoint hook and dolt-sync chaining (idempotent)")
+    init.set_defaults(func=cmd_init)
     return parser
 
 

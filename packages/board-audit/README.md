@@ -177,9 +177,32 @@ A PR-checkpoint handoff is a versioned per-Bead evidence projection bound to an 
 ```bash
 board-audit pr-checkpoint 123
 board-audit pr-status 123
+board-audit doctor [123]
+board-audit init
 ```
 
 Both commands take an optional PR number and default it to the current branch's PR via `gh pr view`. The caller's checkout and branch are never changed.
+
+`doctor` checks the environment: git repository, `bd`/`gh`/`python3`, usable GitHub authentication (`gh auth status`), beads workspace, board-audit package availability, hook installation (beads shim, dolt-sync chaining, checkpoint adapter, broken `&&` idiom detection) and — when the checkpoint hook is wired — whether the current repository is authorized for automatic publication (`BOARD_AUDIT_PR_AUTHORIZED_REPOS`). It exits 0 on pass, 2 on failures, 3 with `--check` when the checked PR handoff is stale.
+
+`init` performs non-destructive additive setup: it refreshes the bd hook shims, writes the dolt-sync scripts and chaining (if-idiom), and appends the pre-push PR-checkpoint adapter. It never modifies the working tree or any branch, and it is idempotent.
+
+### Self-contained derivation
+
+When the repository carries `packages/board-audit` on its default branch, the checkpoint cherry-picks that package into the isolated worktree (via `git archive`, unstaged, pinned to the exact default-branch SHA) and runs the derivation from the repository's own copy. Only `.xtrm/board-audit/**` assets are ever pushed; the cherry-picked package is discarded before worktree removal. Repositories without the package use the caller's package copy; `doctor` reports this as a warning.
+
+Every handoff records its producer so the evidence envelope can name the exact Board-Audit code that generated it:
+
+```json
+"producer": {
+  "board_audit_source": "repository | caller",
+  "repository": "owner/repo or null",
+  "git_sha": "<exact archive SHA or null>",
+  "package_sha256": "<sha256 of the executed package tree>"
+}
+```
+
+The digest covers the executed package contents, so a dirty caller copy cannot be attributed to a clean source commit.
 
 ### Trigger model
 
