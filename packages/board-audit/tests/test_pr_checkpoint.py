@@ -697,6 +697,11 @@ class PrCheckpointTests(unittest.TestCase):
             self.assertEqual(pre_push.count("board-audit-pr-adapter"), 2)
             self.assertTrue((hooks_dir / "pre-push.bd-sync").exists())
             self.assertTrue((hooks_dir / "post-merge.bd-sync").exists())
+            # The adapter runtime is staged beside the hook so the chain is
+            # self-contained (sibling-based imports).
+            for name in ("board-audit-pr.py", "board-audit-flow.py", "board-audit-transport.py",
+                         "board-audit-roundtrip.py", "board-audit-core", "board-audit-pr-adapter.sh"):
+                self.assertTrue((hooks_dir / name).exists(), name)
 
             second = fx.run("init")
             self.assertEqual(second.returncode, 0, second.stderr + second.stdout)

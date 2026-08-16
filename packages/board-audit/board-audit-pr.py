@@ -1279,17 +1279,32 @@ def cmd_init(args: argparse.Namespace) -> int:
         else:
             print(f"  · {hook} dolt-sync chaining already present")
 
-    # 3. PR-checkpoint adapter chaining (pre-push). The adapter is copied into
-    # the hooks dir so the wiring survives worktree/session churn; the copied
-    # path is the one the hook invokes. A pre-existing chaining that points at
-    # an older path is replaced in place (section-scoped, additive elsewhere).
+    # 3. PR-checkpoint adapter + runtime (pre-push). The adapter and its python
+    # runtime are staged into the hooks dir so the wiring survives
+    # worktree/session churn and the hook is self-contained (sibling-based
+    # imports: pr.py loads flow/transport from its own directory). A
+    # pre-existing chaining that points at an older path is replaced in place
+    # (section-scoped, additive elsewhere).
     adapter = HERE / "board-audit-pr-adapter.sh"
     if adapter.exists():
+        runtime_files = [
+            "board-audit-pr-adapter.sh",
+            "board-audit-pr.py",
+            "board-audit-flow.py",
+            "board-audit-transport.py",
+            "board-audit-roundtrip.py",
+            "board-audit-core",
+        ]
+        for name in runtime_files:
+            src = HERE / name
+            if not src.exists():
+                continue
+            dst = hooks_dir / name
+            if not dst.exists() or dst.read_bytes() != src.read_bytes():
+                shutil.copyfile(src, dst)
+                if name in ("board-audit-core", "board-audit-pr-adapter.sh"):
+                    dst.chmod(0o755)
         installed_adapter = hooks_dir / "board-audit-pr-adapter.sh"
-        if not installed_adapter.exists() or installed_adapter.read_bytes() != adapter.read_bytes():
-            shutil.copyfile(adapter, installed_adapter)
-            installed_adapter.chmod(0o755)
-            print("  · installed pr-checkpoint adapter in hooks dir")
         section = ADAPTER_CHAINING_TEMPLATE.format(adapter=installed_adapter)
         if _replace_section(
             hooks_dir / "pre-push",
