@@ -1224,6 +1224,30 @@ def _append_if_absent(target: Path, marker: str, block: str) -> bool:
     return True
 
 
+def _replace_section(target: Path, begin: str, end: str, block: str) -> bool:
+    """Replace the delimited section holding ``begin``..``end`` with ``block``.
+
+    Used to re-point the board-audit chaining at the hooks-dir adapter copy
+    after ``init`` moves/updates the adapter, without touching the rest of the
+    hook file (bd shim, other chaining). Returns True when the file changed;
+    a section with identical content is left untouched (idempotent).
+    """
+    text = target.read_text(encoding="utf-8", errors="replace")
+    start = text.find(begin)
+    if start == -1:
+        return False
+    stop = text.find("# --- END custom ---", start + len(begin))
+    if stop == -1:
+        return False
+    stop += len("# --- END custom ---")
+    if text.startswith("\n", stop):
+        stop += 1
+    if text[start:stop] == block:
+        return False
+    target.write_text(text[:start] + block + text[stop:], encoding="utf-8")
+    return True
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     """Non-destructive additive setup: hooks + chaining, no branch or tree changes."""
     repo = flow.repo_root()
@@ -1257,7 +1281,8 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     # 3. PR-checkpoint adapter chaining (pre-push). The adapter is copied into
     # the hooks dir so the wiring survives worktree/session churn; the copied
-    # path is the one the hook invokes.
+    # path is the one the hook invokes. A pre-existing chaining that points at
+    # an older path is replaced in place (section-scoped, additive elsewhere).
     adapter = HERE / "board-audit-pr-adapter.sh"
     if adapter.exists():
         installed_adapter = hooks_dir / "board-audit-pr-adapter.sh"
@@ -1265,10 +1290,18 @@ def cmd_init(args: argparse.Namespace) -> int:
             shutil.copyfile(adapter, installed_adapter)
             installed_adapter.chmod(0o755)
             print("  · installed pr-checkpoint adapter in hooks dir")
-        if _append_if_absent(
+        section = ADAPTER_CHAINING_TEMPLATE.format(adapter=installed_adapter)
+        if _replace_section(
+            hooks_dir / "pre-push",
+            "# --- BEGIN custom: board-audit pr-checkpoint",
+            "# --- END custom",
+            section,
+        ):
+            print("  · re-pointed pr-checkpoint chaining to hooks-dir adapter")
+        elif _append_if_absent(
             hooks_dir / "pre-push",
             "board-audit-pr-adapter",
-            ADAPTER_CHAINING_TEMPLATE.format(adapter=installed_adapter),
+            section,
         ):
             print("  · added pr-checkpoint adapter to pre-push")
         else:
