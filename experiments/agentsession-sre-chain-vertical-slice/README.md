@@ -1,8 +1,8 @@
 # AgentSession SRE Chain — Scripted Runtime Vertical Slice
 
-**Status:** bounded harness experiment; non-canonical.
+**Status:** bounded harness experiment; non-canonical. Reconciled post PR #68 (bead `xtrm-5z4`) — see `experiment-report.md` §10.
 **Spec:** [`docs/harness/experiments/agentsession-sre-chain-vertical-slice-2026-08-17.md`](../../docs/harness/experiments/agentsession-sre-chain-vertical-slice-2026-08-17.md)
-**Bead:** `xtrm-19w`
+**Bead:** `xtrm-19w` (original experiment) · `xtrm-5z4` (reconciliation pass)
 **Baseline compared against:** `mercuryintelligence/infra:.specialists/user/sre-*.specialist.json` (the `/sre-triage` team).
 
 ## What this is
@@ -34,6 +34,10 @@ Roles map to the baseline SRE team (system prompt bodies reused verbatim, wrappe
 cd ~/dev/xtrm/experiments/agentsession-sre-chain-vertical-slice
 bun install
 
+# One-time: stamp the synthetic fixture (choose scenario)
+scripts/setup-fixture.sh true-regression   # real 512Mi -> 64Mi (default)
+scripts/setup-fixture.sh false-premise     # value never changed; only a comment removed
+
 # Dry-run (materialize plan, no dispatch)
 bun run src/cli/main.ts --repo ./fixtures/tiny-repo --dry-run
 
@@ -48,6 +52,9 @@ bun run src/cli/main.ts --resume <chain-run-id>
 
 # NDJSON facts
 bun run src/cli/main.ts --repo <path> --json
+
+# Tests (48 pass)
+bun test tests/
 ```
 
 ## Files
@@ -63,9 +70,9 @@ src/
   cli/           main entry + stdout renderer + args
   util/          fs atomic, ids, logger
 roles/           adapted role system prompts (baseline verbatim + chain doctrine)
-fixtures/tiny-repo/  deterministic synthetic incident
-tests/           reducer + channels invariants + recovery
-scripts/         smoke run
+fixtures/tiny-repo/  deterministic synthetic incident (two scenarios via setup-fixture.sh)
+tests/           reducer + channels + adversarial authority + beads adapter + sre_exec policy + fixture scenarios
+scripts/         smoke run + setup-fixture (two scenarios) + inspector + docs for the two live-model runnables (adversarial-authority.md, crash-resume.md)
 ```
 
 ## Non-goals (per spec)

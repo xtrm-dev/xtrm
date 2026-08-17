@@ -11,7 +11,7 @@ import { initRunDir, loadResolvedChain, loadRunState, paths, saveDesignInputs, s
 import { projectEvidence } from "../evidence/index.ts";
 import { newResolvedChain } from "../chain/topology.ts";
 import { initialRunState } from "../chain/reducer.ts";
-import { materializeBeads, versionInfo } from "../adapters/beads.ts";
+import { chainEpicIdOf, materializeBeads, versionInfo } from "../adapters/beads.ts";
 import { runToCompletion } from "../chain/scheduler.ts";
 import { createLogger, defaultRender } from "../util/logger.ts";
 import { nowIso, shortId } from "../util/ids.ts";
@@ -161,7 +161,9 @@ async function main() {
     externalRootRef: args.rootBead,
     title: `[${chain.chain_id}] SRE vertical-slice — ${args.incidentBrief.slice(0, 60) || "ambient"}`,
   });
-  const chainWithRoot = { ...chain, root_bead_id: beadsMap.root_bead_id };
+  // ResolvedChain.root_bead_id semantically carries the operator-supplied
+  // external ref (provenance). The sandbox parent id is the ChainRun Epic.
+  const chainWithRoot = { ...chain, root_bead_id: args.rootBead ?? chainEpicIdOf(beadsMap) };
   await saveResolvedChain(p, chainWithRoot);
 
   const run = initialRunState(chainWithRoot, chainRunId);
@@ -170,7 +172,8 @@ async function main() {
   logger.human("");
   logger.human(`chain_run_id=${chainRunId}`);
   logger.human(`chain_id=${chainWithRoot.chain_id}`);
-  logger.human(`root_bead_id=${beadsMap.root_bead_id}`);
+  logger.human(`chain_epic_id=${chainEpicIdOf(beadsMap)}`);
+  logger.human(`external_root_bead_ref=${beadsMap.external_root_bead_ref ?? "-"}`);
   logger.human(`target_repo=${targetRepo}`);
   logger.human(`state_dir=${p.root}`);
   logger.human(`pi=${fp.pi_package.name}@${fp.pi_package.version}  beads=${fp.beads.version}`);

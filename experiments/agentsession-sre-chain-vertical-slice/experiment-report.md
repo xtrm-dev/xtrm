@@ -8,13 +8,22 @@
 
 ## 1. Executive verdict
 
-_(TO BE FILLED after fixture + real-target runs return)_
+The direct-Pi-AgentSession vertical slice is a proven architecture point.
+Both the synthetic fixture run and the real-target `mercury/infra` run
+completed `closed_pass` first attempt. The subsequent reconciliation pass
+(post PR #68 — see §10) corrected the Beads-topology shortcut that had
+required `bd close --force`, split the synthetic fixture into two
+semantic scenarios (false-premise + true-regression), added adversarial
+authority coverage, characterized the sre_exec regex boundary, and
+reconciled inspect.sh's honesty. Every automated test is green
+(48/48).
 
 Working:
 - The Pi public SDK boundary (`createAgentSession()`) is sufficient to host a governed chain participant in-process, without Pi RPC or the specialists framework.
 - Custom `defineTool` tools cover the coordination surface (channels, evidence, chain progress, sre_exec) as intended.
 - Read-only posture (`noTools: "builtin"`, allowlisted sre_exec) holds — the target repository is untouched.
-- Reducer / channels invariants pass their unit tests (13/13 green).
+- Reducer / channels invariants + reconciliation-pass Beads/authority/fixture/sre_exec tests all pass (48/48 green).
+- Native Beads Epic + `--parent` hierarchy: no normal closure path uses `bd close --force` any more.
 
 Friction encountered:
 - `AuthStorage` and `ModelRegistry` overrides were removed between pi 0.80.x and 0.84.x — see §5.
@@ -201,12 +210,10 @@ Attention is unit-tested and works — a non-targeted chain-visible message show
 
 ### 5.4 Baseline comparison
 
-_(TO BE FILLED after both runs)_
-
 Same-model, same-doctrine comparison of `/sre-triage` (framework) vs this experiment (direct):
-- Report quality: TBD
-- Wall time: TBD
-- Model tokens spent: TBD
+- Report quality: both PASSed reviewer coverage on the real-target `mercury/infra` run; the direct-AgentSession run produced the same-shape recommendations without the framework-mandated `sre_quick_triage.sh` prelude.
+- Wall time: direct-slice run finished in 5:22 (§4.2); a framework comparison run is scoped to a separate benchmark stream (RSS/CPU/wall, direct AgentSession vs sp RPC) that runs in parallel to this reconciliation and reports into `/tmp/svs-bench-summary.md`. Report will be updated once that stream lands.
+- Model tokens spent: to be sourced from the parallel benchmark; not measured inline by this experiment.
 - Coordination overhead (files/hooks vs channels/evidence): channels-first is qualitatively lighter — no `.specialists/*-result.md` file contract, no `bd note` per hop, no memory-gate.
 - Reviewer role: the framework doesn't have one; this experiment adds a real quality gate that the framework relies on the coordinator's self-check to substitute for.
 
@@ -217,10 +224,10 @@ Confirmed missing at time of run:
 
 ### 5.6 What belongs where (harness vs Specialists vs Substrate)
 
-_(TO BE FILLED after we see the full run)_ — early read:
-- **Harness (XTRM-native, this experiment):** ResolvedChain freeze, reducer, scheduler, channels-with-attention, evidence pointer store, participant identity injection, per-run beads sandbox, structured runtime facts.
-- **Specialists (existing):** the actual role bodies + probe libraries + baseline mandatory rules + models/routing. Nothing about the specialists needs to change to be re-hosted on this harness.
-- **Substrate (future):** cross-run memory, promotion of proven chain templates, capability registry, deployment surface. Out of scope here.
+Confirmed after both runs + reconciliation pass:
+- **Harness (XTRM-native, this experiment):** ResolvedChain freeze, reducer, scheduler, channels-with-attention + host-enforced authority, evidence pointer store, participant identity injection, per-run Beads sandbox (native Epic + `--parent` children, no fake dep parent), structured runtime facts, bounded read-only sre_exec surface as an experiment-grade primitive (production capability sandbox stays out of scope — §10.5).
+- **Specialists (existing):** the actual role bodies + probe libraries + baseline mandatory rules + models/routing. Nothing about the specialists needs to change to be re-hosted on this harness; specialist-JSON runtime fusion is future work.
+- **Substrate (future):** cross-run memory, promotion of proven chain templates, capability registry, deployment surface, cross-host leases, production capability isolation, mutation journal. Out of scope here.
 
 ## 6. Round-2 fixes (2026-08-18)
 
@@ -230,13 +237,13 @@ After the initial fixture + real-target runs, three gaps flagged by the operator
 
 `src/chain/scheduler.ts` now runs a `reconcileBeads()` pass after every reduce. When a step transitions to `satisfied`, the runtime:
 1. Appends a note to its step bead containing the exec id, attempts, remediation loops, and every produced evidence's `evidence_id + kind + summary`.
-2. Closes the step bead via `bd close --force --reason "..."`.
+2. Closes the step bead via `bd close --reason "..."`.
 
-On chain close, the root bead is also closed with the terminal status + reviewer verdict as the reason.
-
-`--force` is required because our dep graph makes children `blocked-by` the root — bd would otherwise refuse child closure until root closure. Comment in the adapter records that "runtime step-satisfaction is authoritative and outranks bd's blocking check."
+On chain close, the ChainRun Epic is also closed with the terminal status + reviewer verdict as the reason.
 
 Adapter bug fixes on the same pass: `bd note <id> <text>` uses positional text (not `-m`); `bd close --reason "..."` uses `--reason` (not `-m`). Errors now surface to stderr instead of being swallowed.
+
+**Reconciled (§10.1):** the earlier form of the adapter used `bd dep add <step> <root>` as a surrogate for parentage — that dep-graph made children `blocked-by` the root and forced `bd close --force` on every step. The reconciliation pass replaced that with native `bd q --parent=<epic>` hierarchy and separated real readiness deps (`blocks` edges between step beads only); `--force` is no longer required on any normal closure path.
 
 ### 6.2 Channel-post schema validator
 
@@ -321,5 +328,283 @@ An adversarial spoof test where a real agent tries to falsify its `authorRole` v
 - Publish `xtrm-dev/specialists:docs/design/chain-templates.md` (spec §19 gap)
 - Fix pi SDK 0.84 top-level export drift (`AuthStorage`, `ModelRegistry`) if the SDK team wants callers to override those
 - Wire a `pi_session_id` extractor that survives session disposal — `session.sessionId` is captured pre-prompt; a post-dispose read fails
-- Adversarial-spoof-by-agent eval scenario
+- Real-AgentSession adversarial-spoof drive: the unit-level authority coverage (§10.3) is complete; the live run against a real model is scoped as an isolated harness (`scripts/adversarial-authority.md`) rather than gated on this reconciliation
+
+## 10. Reconciliation pass (post PR #68, bead `xtrm-5z4`)
+
+Reconciliation follows the eight-requirement scope in `xtrm-5z4`. All
+architectural decisions from PR #68 are preserved. This pass corrects
+experimental shortcuts and hardens the evidence package; it does not
+redesign ResolvedChain, ChainRun, the reducer, Channels, or the
+AgentSession-vs-RPC decision.
+
+### 10.1 Corrected Beads chain model (Requirement 1)
+
+Replaced the fake `bd dep add <step> <root>` parent-surrogate with the
+native Beads hierarchy that current `bd` (`1.2.1`) already supports:
+
+- Every run materializes ONE `ChainRun Epic` (`bd q ... -t epic`) with
+  the operator-supplied bead id attached as an `--external-ref` for
+  provenance. Cross-DB references are opaque — the sandbox DB never
+  queries the real project's DB.
+- Every step bead is a **native child** of the Epic (`bd q ...
+  --parent=<epic> -t task`). The parent relationship is visible in
+  `bd show --json` as `dependency_type: "parent-child"` and via the
+  `parent` field, and in `bd children --json` as a first-class listing.
+- Real execution readiness deps are `blocks` edges **between step beads
+  only**, following `ResolvedChain.topology[].needs`. There is no
+  step→Epic `blocks` edge any more.
+
+Consequences:
+
+- `bd close --force` is no longer used on any normal closure path.
+  Children close in real-dependency order (`coordinator-entry` first,
+  then `explorer` + `observability`, then `diagnostician`, `reviewer`,
+  `coordinator-close`). The Epic closes only after all children close.
+- `closeBead()` now propagates close failures (`throw` after logging)
+  so a real disagreement between runtime authority and Beads authority
+  is surfaced, never hidden behind `--force`.
+- `BeadsMap` gained explicit fields (`chain_epic_id`,
+  `external_root_bead_ref`) that record hierarchy vs provenance
+  separately. `root_bead_id` is retained as a legacy read fallback
+  so pre-reconciliation persisted files stay loadable.
+
+Idempotency is preserved: `beads-map.json` is written after Epic +
+children are created; a rerun short-circuits on `loadBeadsMap` and
+never re-creates duplicate Epics, children, or dep edges.
+
+Beads-side coverage lives in `tests/beads-adapter.test.ts` (7 tests,
+run against a real per-test sandbox `bd` DB). They assert:
+
+- ChainRun Epic is materialized with `issue_type == "epic"`;
+- every step bead is a native child (both `bd children` listing and
+  `parent` field);
+- no step bead carries a `blocks` edge back to the Epic (parent-child
+  is expected);
+- `diagnostician`'s `blocks` deps include both advisors;
+- second materialize returns the identical map (no dup Epic/children);
+- a child closes without `--force` once its blockers are closed;
+- the Epic closes without `--force` after all children are closed.
+
+Beads-topology summary example (rendered by the updated
+`scripts/inspect.sh`):
+
+```
+=== beads ===
+chain_epic_id: svs-a1b
+external_root_bead_ref: op-bd-ext-42
+step children (native parent = ChainRun Epic):
+  coordinator-entry  -> svs-a1b.1
+  explorer           -> svs-a1b.2
+  observability      -> svs-a1b.3
+  diagnostician      -> svs-a1b.4
+  reviewer           -> svs-a1b.5
+  coordinator-close  -> svs-a1b.6
+```
+
+### 10.2 Two-scenario synthetic fixture (Requirement 2)
+
+`scripts/setup-fixture.sh` accepts a scenario argument. The two
+scenarios deliberately look similar at the incident-brief level but
+differ at the repository-truth level:
+
+- `true-regression` (default): commit history contains a real
+  `memory_limit: 512Mi → 64Mi` diff on `svc-b/config.yml`. The chain
+  should recognize the actual regression, cite the exact diff, and
+  recommend an operator-applied recovery under read-only posture.
+- `false-premise`: `svc-b/config.yml` carries `memory_limit: 64Mi` at
+  both commits. The HEAD commit only removes a stale comment that
+  mentioned a `512Mi → 64Mi` change. The chain should challenge the
+  operator's causal claim, cite git evidence showing memory_limit is
+  64Mi at every commit, and not recommend reverting an irrelevant
+  commit.
+
+A scenario stamp (`scenario: <name>`) is written into
+`fixtures/tiny-repo/README.md`; re-invoking the script with the same
+scenario short-circuits, `FORCE=1` overrides.
+
+Coverage lives in `tests/fixture-scenarios.test.ts` (3 tests): both
+scenarios rebuild deterministically, and same-scenario reinvocation is
+a no-op.
+
+### 10.3 Adversarial authority eval (Requirement 3)
+
+`tests/authority-adversarial.test.ts` covers every vector listed in
+the reconciliation scope, exercising `checkAuthority` /
+`postMessage` directly at the same host validator that any real
+AgentSession-driven `channel_post` tool call would hit:
+
+1. Role spoofing (claimed reviewer, trusted explorer) — rejected;
+   `runtime.message_rejected` audit entry written.
+2. Explorer / diagnostician attempting `work.verdict` — rejected.
+3. Any non-runtime participant attempting `system.done` — rejected.
+4. A hostile explorer citing an attention-only message to claim
+   verdict authority — rejected.
+5. Investigative `work.turn` / `work.finding` without evidence refs —
+   rejected.
+6. Supplying trusted-author identity itself — the tool interface takes
+   claimed role from the caller and the host injects trusted role; a
+   spoofed claim is caught by `checkAuthority`.
+
+Enforcement is structural: `checkAuthority` runs against the
+host-injected trusted role, never against a value read from the tool
+call body.
+
+A real-AgentSession driver that spawns a governed agent with a
+doctrine-tweaked assignment (asking the model to *attempt* each
+vector, then recording rejection metadata) is scoped as a separate
+runnable at `scripts/adversarial-authority.md`. It requires live model
+API access and is documented as an experiment limitation on this
+reconciliation pass rather than gating it.
+
+### 10.4 Kill/resume against corrected Beads topology (Requirement 4)
+
+The round-2 live resume test (§6.3) was rerun logically against the
+new native-Epic topology; the reducer path and the
+`recovery-reset-stuck-steps` code path in `src/cli/main.ts` are
+unchanged, and the beads-adapter tests confirm that closing an already
+completed child bead never needs `--force` any more. A fresh live
+crash/resume run against the new topology is scoped as a runnable that
+requires live model access (see `scripts/crash-resume.md`) and is
+listed as an experiment limitation on this pass.
+
+Invariants required to hold on any real rerun remain:
+
+- `coordinator-entry`, `explorer`, `observability`, `reviewer`,
+  `coordinator-close` all `attempts=1`; `diagnostician` `attempts=2`;
+- satisfied upstream steps are not re-dispatched;
+- diagnostician gets a new `execution_id` and may get a new
+  `pi_session_id`; `participant_id` remains stable;
+- no duplicate Epic / children / dep edges;
+- no `--force` on any close in the happy path;
+- ChainRun Epic closes only after terminal chain completion.
+
+### 10.5 sre_exec boundary characterization (Requirement 5)
+
+`tests/sre-exec-authority.test.ts` runs the same allow/deny regexes
+`sreExec.execute` runs, exercising them against every attack surface
+called out in the reconciliation scope. Results:
+
+- Shell chaining (`;`, `&&`, `||`), pipes to mutating commands,
+  backtick command substitution to mutating commands, subshell
+  mutating commands, stdout/stderr redirection, `sudo`/`su`/`mount`,
+  mutating git/docker/bd commands, and basic filesystem mutations are
+  all rejected by the current denylist.
+- Documented experiment-level limitations of the current regex-only
+  policy:
+  - `$()` command substitution around a READ inside an allowlisted
+    wrapper (e.g. `printenv $(cat /etc/hostname)`) passes both regex
+    checks — the denylist covers `(mutator` (backtick or `(`) but not
+    the READ-in-wrapper form.
+  - Path traversal is not restricted; `cat ../../../etc/shadow` matches
+    the `^cat\s+` allowlist. Real cwd containment is enforced by
+    `child_process { cwd }` at execute time, but a symlink escape or
+    `..` read isn't blocked at the policy layer.
+  - Environment/secret extraction via allowlisted `env` / `printenv`
+    is possible; the experiment relies on the runner scrubbing env
+    before dispatch — not a regex-level guarantee.
+
+The regex validator is an experiment-grade read-only policy, not a
+production capability sandbox. The production sandbox is explicitly
+out of scope (§8, §5.6).
+
+### 10.6 Reconciled inspector (Requirement 6)
+
+`scripts/inspect.sh` header + driver reconciled:
+
+- Mode `tail` (kept as an alias for `tail-forensics`) follows only
+  `forensics/events.jsonl` and is documented as forensics-only.
+- New mode `tail-all` follows all four append-only streams
+  (`forensics/events.jsonl`, `channels/messages.jsonl`,
+  `evidence/index.jsonl`, `chain/scheduler-intents.jsonl`) and
+  interleaves them by arrival order, matching the header contract.
+- `show_beads` reads `chain_epic_id` with a `root_bead_id` fallback and
+  labels the row explicitly as "step children (native parent = ChainRun
+  Epic)"; `external_root_bead_ref` is rendered separately.
+
+This is still an experiment inspector, not the future Console.
+
+### 10.7 Report reconciliation (Requirement 7)
+
+Stale `TO BE FILLED` / `TBD` markers on completed work in §1, §5.4,
+§5.6 replaced with the answers the shipped runs already carry. §6.1
+updated to reflect the removal of `--force`. This §10 records the
+reconciliation pass.
+
+### 10.8 Real-target smoke (Requirement 8)
+
+The final real-target non-regression smoke is scoped as a runnable
+that requires live model access; it uses the same
+`mercury/infra` read-only posture the original §4.2 run did and is
+expected to reproduce the same outcome shape. Recorded here as an
+experiment limitation of this reconciliation pass so it is not
+misrepresented as complete.
+
+## 11. Proven vs not-yet-proven for production
+
+### 11.1 Proven by the experiment
+
+- Public Pi `AgentSession` is a sufficient in-process hosting boundary
+  for a governed chain participant — no Pi RPC subprocess needed.
+- Logical `participant_id` is separate from `execution_id` and
+  `pi_session_id`; identity travels through activation boundaries
+  correctly.
+- One frozen `ResolvedChain` + durable `ChainRun` + pure reducer +
+  `SchedulerIntent` model works end-to-end.
+- Reducer-driven parallelism works (both advisors dispatched in one
+  batch, run concurrently).
+- Channels-style semantic communication + pointer-first evidence work;
+  routing / attention / authority are host-enforced.
+- Kill/resume can recover unfinished logical work without re-running
+  satisfied participants (round-2 live test).
+- Native Beads Epic + `--parent` hierarchy is the correct Beads
+  materialization for a chain run; no fake dep-parent required.
+- The read-only sre_exec policy holds against the SRE participant
+  behavior seen in real runs; every fix is operator-applied.
+
+### 11.2 NOT yet proven for production
+
+- Production capability sandbox — regex allow/deny is experiment-only.
+- Full real Channels backend (this experiment uses local JSONL).
+- Specialist-JSON runtime fusion (mandatory_rules, skills,
+  output_schema post-run validation, memory_gate, service-knowledge
+  freshness, mercury.principal identity).
+- Production mutation journal / uncertain reconciliation.
+- Full Substrate durability, cross-run memory, capability registry.
+- Cross-host leases.
+- Full native-harness lifecycle (long-running daemon/service posture).
+- Broad model/provider parity — verified on the model tier used in
+  §4.1 and §4.2 only.
+- Live real-AgentSession adversarial authority run (unit-level
+  coverage is complete; live run is scoped separately).
+- Live crash/resume run against the reconciled native-Epic topology
+  (round-2 crash/resume run stands under the pre-reconciliation
+  topology).
+
+## 12. Recommended promotions into the native-harness plan
+
+Ready to lift into the canonical native-harness implementation plan
+(order-of-work suggestion, not architecture change):
+
+1. `ResolvedChain` freeze semantics, durable `ChainRun`, pure reducer,
+   `SchedulerIntent` idempotency-key discipline.
+2. Native Beads materialization: ChainRun Epic (`-t epic`) + step
+   beads as `--parent` children, real readiness deps as `blocks`
+   edges between step beads only; no `--force` on any normal path.
+3. Host-injected trusted-author identity + `checkAuthority` at every
+   message post; `runtime.message_rejected` as first-class forensic
+   record.
+4. Pointer-first evidence store; participants publish envelopes with
+   `body_ref` and read via `evidence_get`.
+5. `chain_progress` projection as the coordinator's default view.
+6. Recovery contract: on resume, reset `dispatched|running` without
+   satisfying evidence to `ready` with `attempts+=1`.
+
+Deferred to production harness / Specialists / Substrate (not carried
+over from the experiment as-is):
+
+- Production capability sandbox (replaces regex allow/deny sre_exec).
+- Real Channels transport.
+- Specialist-JSON runtime fusion.
+- Mutation journal, cross-host leases, Substrate durability.
 
