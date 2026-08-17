@@ -54,6 +54,7 @@ export function buildTools(host: ToolHostContext): ToolDefinition[] {
     label: "Chain progress",
     description:
       "Return a compact projection of the current chain run: participant statuses, latest verdict, pending intents, reviewer loops. Read-only.",
+    promptSnippet: "chain_progress: read current chain state (participants, verdict, remediation loops)",
     parameters: Type.Object({}),
     async execute() {
       const run = await loadRunState(host.paths);
@@ -75,6 +76,7 @@ export function buildTools(host: ToolHostContext): ToolDefinition[] {
     label: "Actionable messages",
     description:
       "List messages targeted at YOU (action_targets includes your participant_id) that you have NOT yet acked. Reading here does not ack.",
+    promptSnippet: "channel_actionable: list unread messages targeted at you (read does not ack)",
     parameters: Type.Object({
       limit: Type.Optional(Type.Number({ description: "Max messages to return (default 20)" })),
     }),
@@ -102,6 +104,7 @@ export function buildTools(host: ToolHostContext): ToolDefinition[] {
     label: "Attention signals",
     description:
       "Bounded pointer view of chain-visible messages NOT targeted at you but potentially relevant. Attention does NOT grant authority to act as if targeted.",
+    promptSnippet: "channel_attention: see chain-visible signals not targeted at you (attention != authority)",
     parameters: Type.Object({
       limit: Type.Optional(Type.Number({ description: "Max messages (default 10)" })),
     }),
@@ -129,6 +132,7 @@ export function buildTools(host: ToolHostContext): ToolDefinition[] {
     label: "Post channel message",
     description:
       "Append a typed message to the chain channel. Author identity is host-injected; do NOT include it. Body must be SHORT (≤8KiB) and pointer-first — attach big payloads via evidence_publish and reference their evidence_ids in evidence_refs.",
+    promptSnippet: "channel_post: post a typed message (work.turn|work.finding|work.proposal|work.ack|control.*)",
     parameters: Type.Object({
       kind: Type.String({
         description:
@@ -185,6 +189,7 @@ export function buildTools(host: ToolHostContext): ToolDefinition[] {
     label: "Ack messages",
     description:
       "Advance your PROCESSING cursor up to the given message id — call ONLY after actually handling the message. Reading via channel_actionable does not ack.",
+    promptSnippet: "channel_ack: advance processing cursor after handling messages",
     parameters: Type.Object({
       up_to_id: Type.Number({ description: "Highest message id you have processed." }),
     }),
@@ -199,6 +204,7 @@ export function buildTools(host: ToolHostContext): ToolDefinition[] {
     label: "Publish evidence",
     description:
       "Persist a semantic payload as evidence and receive an evidence_id (pointer). Downstream participants dereference via evidence_get. Use kind = topology.map | observability.snapshot | diagnostician.report | reviewer.verdict | coordinator.decision.",
+    promptSnippet: "evidence_publish: persist a semantic payload → returns evidence_id",
     parameters: Type.Object({
       kind: Type.String(),
       summary: Type.String({ description: "One-line summary (≤300 chars)" }),
@@ -227,6 +233,7 @@ export function buildTools(host: ToolHostContext): ToolDefinition[] {
     label: "Get evidence",
     description:
       "Dereference an evidence_id to its full body. Default is pointer-first — only call this when you actually need the payload.",
+    promptSnippet: "evidence_get: dereference an evidence_id to its full body (pointer-first)",
     parameters: Type.Object({
       evidence_id: Type.String(),
     }),
@@ -248,6 +255,7 @@ export function buildTools(host: ToolHostContext): ToolDefinition[] {
     label: "SRE exec (read-only)",
     description:
       "Run a bounded READ-ONLY diagnostic shell command against the target repository. Mutation/destructive operations are refused. Use for git log, cat, grep, ls, find, docker inspect, prometheus query via mcpq, etc.",
+    promptSnippet: "sre_exec: run a bounded READ-ONLY shell command against the target repo (allowlisted)",
     parameters: Type.Object({
       cmd: Type.String({ description: "The command to run — must match allowlist" }),
       timeout_ms: Type.Optional(Type.Number({ description: "Default 30000, cap 120000" })),

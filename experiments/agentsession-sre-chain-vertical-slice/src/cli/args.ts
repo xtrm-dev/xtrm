@@ -35,8 +35,9 @@ Flags:
 `;
 
 export function parseArgs(argv: string[]): CliArgs {
+  const HOME = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
   const args: CliArgs = {
-    stateDir: "./.chain-runs",
+    stateDir: `${HOME}/.cache/agentsession-sre-chain-vertical-slice`,
     dryRun: false,
     json: false,
     help: false,

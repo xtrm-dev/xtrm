@@ -23,28 +23,42 @@ import { loadBeadsMap, saveBeadsMap, type Paths } from "../chain/store.ts";
 const pexec = promisify(execFile);
 
 async function bd(args: string[], dbDir: string): Promise<{ stdout: string; stderr: string }> {
-  const dbFile = path.join(dbDir, "beads.db");
-  // Explicit --db to prevent bd from walking up and hitting a parent repo's beads DB.
-  const finalArgs = ["--db", dbFile, "--sandbox", ...args];
-  const env = { ...process.env, BEADS_DB: dbFile };
-  const { stdout, stderr } = await pexec("bd", finalArgs, { env, cwd: dbDir, maxBuffer: 8 * 1024 * 1024 });
+  // Use --sandbox to prevent Dolt auto-push. cwd is the isolated dir with its own .beads/,
+  // so bd's auto-discovery picks up our sandboxed DB before walking to a parent repo.
+  const finalArgs = ["--sandbox", ...args];
+  const { stdout, stderr } = await pexec("bd", finalArgs, { cwd: dbDir, maxBuffer: 8 * 1024 * 1024 });
   return { stdout, stderr };
 }
 
 /** Initialise the per-run beads DB (idempotent). */
 async function ensureBeadsInit(dbDir: string): Promise<void> {
   if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-  const dbFile = path.join(dbDir, "beads.db");
-  if (fs.existsSync(dbFile)) return;
-  // bd auto-inits on first write; use `bd status` to trigger the DB creation.
+  if (fs.existsSync(path.join(dbDir, ".beads"))) return;
   try {
-    await bd(["status"], dbDir);
-  } catch {
-    // ignore — first-write path below will create if needed
+    await pexec("bd", ["init", "--non-interactive", "--prefix", "svs"], {
+      cwd: dbDir,
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 30_000,
+    });
+  } catch (e: any) {
+    const stderr = String(e?.stderr ?? "");
+    const stdout = String(e?.stdout ?? "");
+    if (!/already|initialized/i.test(stderr + stdout)) {
+      throw new Error(`bd init failed in ${dbDir}: ${e?.message}\nstderr=${stderr}\nstdout=${stdout}`);
+    }
+  }
+  if (!fs.existsSync(path.join(dbDir, ".beads"))) {
+    throw new Error(`bd init did not create .beads in ${dbDir}`);
   }
 }
 
-/** Materialize root + step beads per spec §4. Returns the mapping. */
+/** Materialize root + step beads per spec §4. Returns the mapping.
+ *
+ * If bd init cannot create an isolated DB (e.g. an ancestor .beads/ makes bd
+ * refuse to nest), we fall back to VIRTUAL step ids so the experiment can
+ * still walk the topology. This is documented as a spec-§4 gap in
+ * experiment-report.md.
+ */
 export async function materializeBeads(args: {
   paths: Paths;
   chain: ResolvedChain;
@@ -54,7 +68,27 @@ export async function materializeBeads(args: {
   const existing = await loadBeadsMap(args.paths);
   if (existing) return existing;
 
-  await ensureBeadsInit(args.paths.beadsDbDir);
+  try {
+    await ensureBeadsInit(args.paths.beadsDbDir);
+  } catch (e: any) {
+    // Nested-ancestor case (bd refuses to init inside a tree that already has .beads/).
+    // Fall back to virtual ids — the experiment persists its own beads-map.json, and
+    // the operator-supplied externalRootRef stays in the design-inputs fingerprint.
+    const virtualStep: Record<string, string> = {};
+    for (const s of args.chain.topology) {
+      virtualStep[s.step_id] = `vsvs-${args.chain.chain_id}-${s.step_id}`;
+    }
+    const map: BeadsMap = {
+      root_bead_id: args.externalRootRef ?? `vsvs-${args.chain.chain_id}-root`,
+      step_bead_ids: virtualStep,
+    };
+    await saveBeadsMap(args.paths, map);
+    // Surface the fallback for visibility.
+    process.stderr.write(
+      `[beads-adapter] bd init unavailable in ${args.paths.beadsDbDir} (${(e?.message ?? e).toString().split("\n")[0]}); using VIRTUAL step ids.\n`,
+    );
+    return map;
+  }
 
   // Create root bead.
   const rootTitle = args.title;

@@ -61,16 +61,23 @@ function parseModelString(modelStr: string): { provider: string; id: string } {
   return { provider: modelStr.slice(0, idx), id: modelStr.slice(idx + 1) };
 }
 
-/** Minimal ResourceLoader that supplies just the system prompt and no other resources. */
-function makeReplaceResourceLoader(systemPrompt: string): ResourceLoader {
+/**
+ * ResourceLoader that keeps pi's base system prompt (which auto-generates the
+ * "Available tools" section from customTools' promptSnippet + parameters), and
+ * APPENDS our chain-participant doctrine + role body. Discovery of user-level
+ * skills/extensions/prompts is turned off — we want a clean env per activation.
+ */
+function makeAppendResourceLoader(appendPrompt: string): ResourceLoader {
   return {
     getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
     getSkills: () => ({ skills: [], diagnostics: [] }),
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getThemes: () => ({ themes: [], diagnostics: [] }),
     getAgentsFiles: () => ({ agentsFiles: [] }),
-    getSystemPrompt: () => systemPrompt,
-    getAppendSystemPrompt: () => [],
+    // Return undefined for getSystemPrompt so pi uses its default coding-agent prompt
+    // which is where the "Available tools" section is emitted.
+    getSystemPrompt: () => undefined,
+    getAppendSystemPrompt: () => [appendPrompt],
     extendResources: () => {},
     reload: async () => {},
   };
@@ -82,12 +89,11 @@ function makeReplaceResourceLoader(systemPrompt: string): ResourceLoader {
  * checks evidence for that separately).
  */
 export async function dispatchActivation(args: DispatchArgs): Promise<DispatchResult> {
-  const systemPrompt = await readRolePrompt(args.identity.role);
-  const resourceLoader = makeReplaceResourceLoader(systemPrompt);
+  const rolePrompt = await readRolePrompt(args.identity.role);
+  const resourceLoader = makeAppendResourceLoader(rolePrompt);
 
-  // Per-activation isolated pi state.
-  const agentDir = path.join(args.paths.piAgentDir, args.identity.execution_id);
-  await fs.mkdir(agentDir, { recursive: true });
+  // Do NOT override agentDir — this makes pi use the operator's real ~/.pi/agent/auth.json
+  // and models.json. Per-run isolation happens via SessionManager.inMemory + SettingsManager.inMemory below.
 
   const { provider, id } = parseModelString(args.model);
   const primary = getModel(provider, id);
@@ -116,14 +122,14 @@ export async function dispatchActivation(args: DispatchArgs): Promise<DispatchRe
 
   const { session } = await createAgentSession({
     cwd: args.targetRepo,
-    agentDir,
     model: primary,
     thinkingLevel: "medium",
     scopedModels: scoped,
     resourceLoader,
     customTools,
-    // No built-in tools — coordination is exclusively via our custom tools + sre_exec.
-    tools: [],
+    // Disable pi's built-in bash/edit/write/read; keep our custom tools active.
+    // Coordination is exclusively via chain_*/evidence_*/sre_exec.
+    noTools: "builtin",
     sessionManager: SessionManager.inMemory(args.targetRepo),
     settingsManager,
   });
