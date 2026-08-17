@@ -138,7 +138,44 @@ This is the kind of finding that validates the whole harness — a naive prompt-
 
 ### 4.2 Real target: `/home/dawid/projects/mercury/infra`
 
-_(TO BE FILLED after fixture run passes)_
+Incident brief given to coordinator entry:
+
+> `Baseline current infra state: what are the top 3-5 SRE observations right now? Any firing alerts, unhealthy containers, resource pressure, recent deploys, unrotated logs?`
+
+**Result:** `closed_pass` in 5:22 (22:08:23 → 22:13:45 wall). chain_run_id `run-sre-50efd` / chain_id `chain-sre-81879e`. Every step: 1 attempt, 0 remediation loops.
+
+| Time | Step | Wall | Outcome |
+|---|---|---|---|
+| 22:08:23 | `coordinator-entry` START | 30s | 3 unhealthy containers flagged in orienting probe |
+| 22:08:53 | `explorer` + `observability-analyst` START (parallel) | 51s + 95s | topology.map + observability.snapshot |
+| 22:10:28 | `sre-diagnostician` START | 106s | live `docker logs` probe → probe-desync finding |
+| 22:12:14 | `reviewer` START | 44s | **PASS** — coverage checks all green |
+| 22:12:58 | `coordinator-close` START | 47s | 5-hypothesis synthesis + 10-item action list |
+| 22:13:45 | `runtime` CLOSE | — | `closed_pass` |
+
+**Substantive findings** (from `coordinator-close` evidence body):
+
+1. **`mmd-data-feed` STALE is a healthcheck-counter desync, NOT an ingestion outage.** The diagnostician ran `docker logs mmd-data-feed --tail 60` live and saw continuous successful STIR candles_5m upserts (rows_written 88-185/symbol, `ingestion.completed success`, restarts=0, oom=false) at 22:10Z, on a cycle of "0 core, 26 STIR." The 11-alert observability probe reported TSDB=0/QuestDB=0 (STALE healthcheck), but the pipe is actively writing. Explicit anti-recommendation: **do NOT restart mmd-data-feed** — it will not fix a counter issue and could disrupt healthy ingestion. Confidence MEDIUM, cross-advisor discrepancy properly surfaced.
+
+2. **11 firing alerts triaged** with source-labelled disposition:
+   - `ServiceDown ext-papers:8006` = documented false positive (stopped by design)
+   - `ContainerJsonLogTooLarge` on `mmd-questdb` (json-file driver has NO max-size)
+   - `RestoreTestCritical` / `RestoreTestStale` correlated to orphan container `tsdb_repro_t80he` (Up 2 weeks, no healthcheck, no memory limit)
+   - `Watchdog`, `ObservabilityDegraded`, `BackupMetricMissing`, `SierraRolloverLoadReminder`, `MercuryComputeLatencyHigh`, `MercuryComputeErrorRateHigh` all catalogued
+3. **Config-level gaps** with exact operator-applied fixes:
+   - `logging: driver: json-file, options: {max-size: 50m, max-file: 3}` on `mmd-questdb`
+   - `retention_period: 168h` in `loki-config.yml`
+   - `docker rm -f tsdb_repro_t80he` (after backup/restore verification)
+   - Add container memory limits (many core containers have `+Inf` working-set/limit while host swap is 74% used)
+   - Add health checks to ~20 containers (`infra-*`, `supabase_*`, `doltlab-*`, exporters, `tsdb_repro`)
+   - Attach/deprecate `bold_tesla` + `nice_meninsky` (2-week DNS-orphan containers, FailingStreak 4590 + 5797)
+   - Add CI/compose lint failing on missing `logging max-size`, missing `retention_period`, missing `memory-limit`
+4. **Cross-advisor discrepancies honored** — `mmd-timescaledb` CPU 98.93% vs 21.5% reconciled as transient; questdb healthy but its log retention is not (combined interpretation).
+5. **Open questions listed** — which DB owns `candles_5m` (TSDB vs QuestDB determines whether STALE is one-sided or fully spurious); `RestoreTestCritical/Stale` alert rule source not dereferenced by either advisor.
+
+**Read-only posture strict** — no mutation. Every fix explicitly labelled "operator-applied under read-only posture." The `sre_exec` allowlist held: no `git commit/push`, no `docker rm/restart`, no `sudo`.
+
+**Artifacts:** `~/.cache/agentsession-sre-chain-vertical-slice/run-sre-50efd/`
 
 ## 5. Findings
 
