@@ -1232,7 +1232,10 @@ def _replace_section(target: Path, begin: str, end: str, block: str) -> bool:
     hook file (bd shim, other chaining). Returns True when the file changed;
     a section with identical content is left untouched (idempotent).
     """
-    text = target.read_text(encoding="utf-8", errors="replace")
+    try:
+        text = target.read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        return False  # caller falls back to creating/append
     start = text.find(begin)
     if start == -1:
         return False
@@ -1261,7 +1264,10 @@ def cmd_init(args: argparse.Namespace) -> int:
         flow.run(["bd", "hooks", "install"], cwd=repo)
         print("  · refreshed bd hook shims")
 
-    # 2. Dolt-sync scripts + chaining (if-idiom)
+    # 2. Dolt-sync scripts + chaining (if-idiom). The chaining block is
+    # section-replaced when an older installed version differs (e.g. a
+    # leftover explicit `exit 0` that would terminate the hook before later
+    # chained blocks like the board-audit adapter).
     sync_src = HERE / "scripts" / "hooks"
     embedded = {"pre-push": BD_SYNC_PRE_PUSH, "post-merge": BD_SYNC_POST_MERGE}
     for hook in ("pre-push", "post-merge"):
@@ -1270,10 +1276,18 @@ def cmd_init(args: argparse.Namespace) -> int:
         content = template.read_text(encoding="utf-8") if template.exists() else embedded[hook]
         target.write_text(content, encoding="utf-8")
         target.chmod(0o700)
-        if _append_if_absent(
+        sync_block = SYNC_CHAINING_TEMPLATE.format(hook=hook)
+        if _replace_section(
+            hooks_dir / hook,
+            f"# --- BEGIN custom: beads/dolt sync before {hook}",
+            "# --- END custom",
+            sync_block,
+        ):
+            print(f"  · refreshed {hook} dolt-sync chaining")
+        elif _append_if_absent(
             hooks_dir / hook,
             f"{hook}.bd-sync",
-            SYNC_CHAINING_TEMPLATE.format(hook=hook),
+            sync_block,
         ):
             print(f"  · added {hook} dolt-sync chaining")
         else:

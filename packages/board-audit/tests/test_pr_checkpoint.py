@@ -717,6 +717,41 @@ class PrCheckpointTests(unittest.TestCase):
             pre_push_third = (hooks_dir / "pre-push").read_text(encoding="utf-8")
             self.assertEqual(pre_push_again, pre_push_third)
 
+    def test_init_refreshes_stale_dolt_chaining_and_preserves_adapter_block(self):
+        # Regression: an older init installed the dolt-sync chaining with a
+        # leftover explicit `exit 0`, which terminated the whole pre-push hook
+        # before the board-audit adapter block. init must section-replace the
+        # stale dolt block (adapter block intact) and stay byte-stable.
+        with tempfile.TemporaryDirectory() as td_raw:
+            fx = PrCheckpointFixture(Path(td_raw)).setup(BASE_ROWS)
+            hooks_dir = fx.source / ".git" / "hooks"
+            stale = (
+                "#!/usr/bin/env sh\n"
+                "# --- BEGIN custom: beads/dolt sync before pre-push ---\n"
+                "if [ -x \"$(dirname \"$0\")/pre-push.bd-sync\" ]; then\n"
+                "    rc=0\n"
+                "    if [ $rc -ne 0 ]; then exit $rc; fi\n"
+                "    exit 0\n"
+                "fi\n"
+                "# --- END custom ---\n"
+                "# --- BEGIN custom: board-audit pr-checkpoint before push ---\n"
+                "# adapter block marker\n"
+                "# --- END custom ---\n"
+            )
+            (hooks_dir / "pre-push").write_text(stale, encoding="utf-8")
+
+            first = fx.run("init")
+            self.assertEqual(first.returncode, 0, first.stderr + first.stdout)
+            after = (hooks_dir / "pre-push").read_text(encoding="utf-8")
+            self.assertNotIn("exit 0", after)
+            self.assertNotIn("# adapter block marker", after)
+            self.assertIn("board-audit-pr-adapter.sh", after)
+            self.assertIn("# --- BEGIN custom: board-audit pr-checkpoint before push ---", after)
+
+            second = fx.run("init")
+            self.assertEqual(second.returncode, 0, second.stderr + second.stdout)
+            self.assertEqual(after, (hooks_dir / "pre-push").read_text(encoding="utf-8"))
+
             # The hooks dir is outside the repo tree: still no tracked changes.
             self.assertEqual(git(fx.source, "status", "--porcelain", capture=True).stdout.strip(), "")
 
