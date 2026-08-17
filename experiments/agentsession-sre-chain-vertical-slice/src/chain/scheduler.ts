@@ -19,7 +19,7 @@ import type {
   StepExecutionState,
 } from "./types.ts";
 import type { Paths } from "./store.ts";
-import { appendIntent, loadRunState, saveChainProgress, saveRunState } from "./store.ts";
+import { appendIntent, loadBeadsMap, loadRunState, saveChainProgress, saveRunState } from "./store.ts";
 import { reduceChain } from "./reducer.ts";
 import { projectEvidence } from "../evidence/index.ts";
 import { readMessages } from "../chain/store.ts";
@@ -27,6 +27,7 @@ import { dispatchActivation } from "../agents/bridge.ts";
 import { runtimePost } from "../channels/index.ts";
 import { executionId, nowIso, participantId } from "../util/ids.ts";
 import { stepById } from "./topology.ts";
+import { closeBead, noteBead } from "../adapters/beads.ts";
 
 export interface SchedulerContext {
   paths: Paths;
@@ -135,7 +136,25 @@ export async function runToCompletion(
     await saveRunState(ctx.paths, newRunState);
     await saveChainProgress(ctx.paths, projectChainProgress(newRunState));
 
+    // Reconcile beads for any newly-satisfied steps (spec §11: bounded Bead evidence/note).
+    await reconcileBeads(ctx, run, newRunState, evidence);
+
     if (newRunState.status.startsWith("closed_")) {
+      const beadsMap = await loadBeadsMap(ctx.paths);
+      if (beadsMap) {
+        await closeBead(
+          ctx.paths.beadsDbDir,
+          beadsMap.root_bead_id,
+          `chain closed: ${newRunState.status} (verdict=${newRunState.reviewer_verdict ?? "-"})`,
+        );
+        ctx.onFact({
+          ts: nowIso(),
+          chain_id: ctx.chain.chain_id,
+          role: "runtime",
+          kind: "chain.close",
+          detail: `root bead ${beadsMap.root_bead_id} closed`,
+        });
+      }
       ctx.onFact({
         ts: nowIso(),
         chain_id: ctx.chain.chain_id,
@@ -264,6 +283,51 @@ export async function runToCompletion(
     role: "runtime",
     detail: `scheduler hit max iterations (${maxIters}) — bailing`,
   });
+}
+
+/** Note evidence + close beads for steps newly transitioned to satisfied (spec §11). */
+async function reconcileBeads(
+  ctx: SchedulerContext,
+  prevRun: RunState,
+  nextRun: RunState,
+  evidence: import("./types.ts").EvidenceProjection,
+): Promise<void> {
+  const beadsMap = await loadBeadsMap(ctx.paths);
+  if (!beadsMap) return;
+  for (const [stepId, next] of Object.entries(nextRun.steps)) {
+    const prev = prevRun.steps[stepId];
+    if (next.status !== "satisfied" || prev?.status === "satisfied") continue;
+    const beadId = beadsMap.step_bead_ids[stepId];
+    if (!beadId) continue;
+    const stepEvidence = evidence.by_step[stepId] ?? [];
+    const note = [
+      `chain=${ctx.chain.chain_id} step=${stepId} exec=${next.last_execution_id ?? "-"}`,
+      `attempts=${next.attempts} remediation_loops=${next.remediation_loops}`,
+      "evidence:",
+      ...stepEvidence.map((e) => `  ${e.evidence_id} kind=${e.kind}: ${e.summary}`),
+    ].join("\n");
+    try {
+      await noteBead(ctx.paths.beadsDbDir, beadId, note);
+      await closeBead(ctx.paths.beadsDbDir, beadId, `step ${stepId} satisfied by chain runtime`);
+      ctx.onFact({
+        ts: nowIso(),
+        chain_id: ctx.chain.chain_id,
+        role: "runtime",
+        step_id: stepId,
+        kind: "step.satisfied",
+        detail: `bead ${beadId} noted + closed (${stepEvidence.length} evidence)`,
+      });
+    } catch (e: any) {
+      ctx.onFact({
+        ts: nowIso(),
+        chain_id: ctx.chain.chain_id,
+        role: "runtime",
+        step_id: stepId,
+        kind: "step.failed",
+        detail: `bead ${beadId} note/close failed: ${e?.message ?? e}`,
+      });
+    }
+  }
 }
 
 function projectChainProgress(run: RunState) {

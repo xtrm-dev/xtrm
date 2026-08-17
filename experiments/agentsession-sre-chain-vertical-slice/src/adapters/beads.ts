@@ -138,14 +138,21 @@ export async function materializeBeads(args: {
 
 /** Append a note to a bead — used for evidence pointers per spec §11. */
 export async function noteBead(dbDir: string, beadId: string, note: string): Promise<void> {
-  await bd(["note", beadId, "-m", note], dbDir).catch(() => {});
+  // bd note <id> takes note text POSITIONALLY (no -m flag).
+  await bd(["note", beadId, note], dbDir).catch((e: any) => {
+    process.stderr.write(`[beads] noteBead ${beadId} failed: ${e?.message ?? e}\n`);
+  });
 }
 
-/** Close a bead — coordinator-close step marks the root closed. */
+/** Close a bead — --force because the runtime's step-satisfaction is authoritative
+ *  and outranks bd's blocking check (child beads are blocked-by root in our dep graph
+ *  so bd would refuse to close them out of order without --force). */
 export async function closeBead(dbDir: string, beadId: string, reason?: string): Promise<void> {
-  const args = ["close", beadId];
-  if (reason) args.push("-m", reason);
-  await bd(args, dbDir).catch(() => {});
+  const args = ["close", beadId, "--force"];
+  if (reason) args.push("--reason", reason);
+  await bd(args, dbDir).catch((e: any) => {
+    process.stderr.write(`[beads] closeBead ${beadId} failed: ${e?.message ?? e}\n`);
+  });
 }
 
 /** Report bd + pi package versions for fingerprinting. */

@@ -7,7 +7,8 @@ import * as fs from "node:fs/promises";
 import * as fsSync from "node:fs";
 import * as path from "node:path";
 import { parseArgs, helpText } from "./args.ts";
-import { initRunDir, loadResolvedChain, paths, saveDesignInputs, saveResolvedChain, saveRunState } from "../chain/store.ts";
+import { initRunDir, loadResolvedChain, loadRunState, paths, saveDesignInputs, saveResolvedChain, saveRunState } from "../chain/store.ts";
+import { projectEvidence } from "../evidence/index.ts";
 import { newResolvedChain } from "../chain/topology.ts";
 import { initialRunState } from "../chain/reducer.ts";
 import { materializeBeads, versionInfo } from "../adapters/beads.ts";
@@ -91,7 +92,31 @@ async function main() {
       process.exit(2);
     }
     logger.human(`resuming chain_run_id=${chainRunId} chain_id=${existing.chain_id}`);
-    // Run state is already persisted; the scheduler will re-derive readiness from evidence.
+
+    // Resume-recovery: reset stuck dispatched/running steps that never produced evidence
+    // so the reducer will re-dispatch them (spec §15: --resume creates a new AgentSession
+    // for unfinished logical work; already-satisfied work is not re-run).
+    const run = (await loadRunState(p))!;
+    const proj = await projectEvidence(p);
+    let recovered = 0;
+    for (const [stepId, st] of Object.entries(run.steps)) {
+      if (st.status === "dispatched" || st.status === "running") {
+        const hasEv = (proj.by_step[stepId] ?? []).length > 0;
+        if (!hasEv) {
+          st.status = "ready";
+          st.attempts = (st.attempts ?? 0) + 1;
+          recovered++;
+        } else {
+          // Evidence exists but wasn't reconciled to satisfied before the crash. Let reducer promote.
+          st.status = "produced_result";
+        }
+      }
+    }
+    if (recovered > 0) {
+      await saveRunState(p, run);
+      logger.human(`resume-recovery: reset ${recovered} stuck step(s) to ready`);
+    }
+
     if (args.reallyRunAgents) {
       await runToCompletion(
         {

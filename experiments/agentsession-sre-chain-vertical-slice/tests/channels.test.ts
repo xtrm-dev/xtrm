@@ -18,7 +18,14 @@ const EXPLORER = "chain:t::explorer";
 const DIAG = "chain:t::sre-diagnostician";
 const REVIEWER = "chain:t::reviewer";
 
-async function post(kind: any, author: any, authorRole: any, targets: string[], body: Record<string, unknown>) {
+async function post(
+  kind: any,
+  author: any,
+  authorRole: any,
+  targets: string[],
+  body: Record<string, unknown>,
+  evidence_refs: string[] = ["ev-fixture"],
+) {
   return postMessage(p, {
     channel_id: CH,
     authorParticipantId: author,
@@ -26,6 +33,7 @@ async function post(kind: any, author: any, authorRole: any, targets: string[], 
     kind,
     audience: { visibility: "chain", action_targets: targets },
     body,
+    evidence_refs,
   }, authorRole);
 }
 
@@ -83,5 +91,38 @@ describe("channels", () => {
     const res = await post("system.done", REVIEWER, "reviewer", [], {});
     expect(res.ok).toBe(false);
     expect(res.reason).toMatch(/may not emit/);
+  });
+
+  test("investigative work.turn without evidence_refs is rejected", async () => {
+    const res = await post("work.turn", EXPLORER, "explorer", [DIAG], { summary: "here you go" }, []);
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/evidence_refs/);
+  });
+
+  test("work.turn requires at least one action_target", async () => {
+    const res = await postMessage(p, {
+      channel_id: CH,
+      authorParticipantId: EXPLORER,
+      authorRole: "explorer",
+      kind: "work.turn",
+      audience: { visibility: "chain", action_targets: [] },
+      body: { summary: "hi" },
+      evidence_refs: ["ev-x"],
+    }, "explorer");
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/action_target/);
+  });
+
+  test("work.turn with evidence_refs passes", async () => {
+    const res = await postMessage(p, {
+      channel_id: CH,
+      authorParticipantId: EXPLORER,
+      authorRole: "explorer",
+      kind: "work.turn",
+      audience: { visibility: "chain", action_targets: [DIAG] },
+      body: { summary: "hi" },
+      evidence_refs: ["ev-x"],
+    }, "explorer");
+    expect(res.ok).toBe(true);
   });
 });

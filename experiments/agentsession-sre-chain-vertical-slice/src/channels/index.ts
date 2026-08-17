@@ -56,7 +56,7 @@ export interface PostResult {
   reason?: string;
 }
 
-/** Runtime-injected trust checker. Rejects spoofed authors + unauthorized kinds. */
+/** Runtime-injected trust checker. Rejects spoofed authors + unauthorized kinds + schema violations. */
 export function checkAuthority(args: PostArgs, trustedAuthorRole: ParticipantRole | "runtime" | "reviewer_policy"): string | null {
   if (args.authorRole !== trustedAuthorRole) {
     return `spoofed author role: claimed=${args.authorRole} trusted=${trustedAuthorRole}`;
@@ -71,6 +71,31 @@ export function checkAuthority(args: PostArgs, trustedAuthorRole: ParticipantRol
   // Bounded body size — pointer-first.
   const bodyStr = JSON.stringify(args.body);
   if (bodyStr.length > 8 * 1024) return `body too large (${bodyStr.length}B > 8KiB); use evidence_refs`;
+
+  // Schema validators — evidence_refs required for finding-bearing messages.
+  const isInvestigative =
+    trustedAuthorRole === "explorer" ||
+    trustedAuthorRole === "observability-analyst" ||
+    trustedAuthorRole === "sre-diagnostician" ||
+    trustedAuthorRole === "reviewer" ||
+    trustedAuthorRole === "reviewer_policy" ||
+    trustedAuthorRole === "chain-coordinator";
+  const hasRefs = (args.evidence_refs ?? []).length > 0;
+
+  if (args.kind === "work.finding" && !hasRefs) {
+    return "work.finding requires evidence_refs (pointer-first)";
+  }
+  if (args.kind === "work.verdict" && !hasRefs) {
+    return "work.verdict requires evidence_refs (reviewer must reference the verdict evidence body)";
+  }
+  if (args.kind === "work.turn" && isInvestigative && !hasRefs) {
+    return `${trustedAuthorRole} work.turn requires evidence_refs — publish evidence via evidence_publish first, then reference its evidence_id`;
+  }
+
+  // action_targets must be non-empty for work.turn (routing hard).
+  if (args.kind === "work.turn" && (args.audience.action_targets ?? []).length === 0) {
+    return "work.turn requires at least one action_target";
+  }
   return null;
 }
 
