@@ -62,7 +62,7 @@ run_trial() {
   else
     (
       cd "$TARGET"
-      sp run sre-coordinator --prompt "$BRIEF" > "$runlog" 2>&1
+      sp run sre-coordinator --no-keep-alive --prompt "$BRIEF" > "$runlog" 2>&1
     ) &
     local root_pid=$!
   fi
