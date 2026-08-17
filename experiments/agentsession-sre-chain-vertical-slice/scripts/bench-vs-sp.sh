@@ -5,7 +5,7 @@ set -uo pipefail
 
 TRIALS="${TRIALS:-2}"
 TARGET="${TARGET:-/home/dawid/projects/mercury/infra}"
-BRIEF="${BRIEF:-Baseline current infra state: what are the top 3-5 SRE observations right now? Any firing alerts, unhealthy containers, resource pressure, recent deploys, unrotated logs?}"
+BRIEF="${BRIEF:-Full-triage incident investigation (NOT ambient briefing): mercury infra is showing multiple firing alerts including ContainerJsonLogTooLarge on mmd-questdb, ServiceDown on ext-papers:8006, RestoreTestCritical on timescaledb. Fan out to ALL forensics specialists (host + observability + change) in parallel, synthesize their evidence into ranked hypotheses with concrete operator-applied fixes, and produce a full triage report. Do NOT do an ambient briefing — this is a full fan-out request.}"
 
 DIRECT_DIR="/home/dawid/dev/xtrm/experiments/agentsession-sre-chain-vertical-slice"
 PROGRESS=/tmp/svs-bench.log
