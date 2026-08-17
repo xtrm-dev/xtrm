@@ -1,0 +1,97 @@
+{
+  "chain_id": "chain-sre-0a902b",
+  "root_bead_id": "xtrm-1ib",
+  "topology": [
+    {
+      "step_id": "coordinator-entry",
+      "role": "chain-coordinator",
+      "class": "coordinator",
+      "needs": [],
+      "model": "opencode-go/deepseek-v4-flash",
+      "fallback_model": "zai/glm-5-turbo"
+    },
+    {
+      "step_id": "explorer",
+      "role": "explorer",
+      "class": "advisor",
+      "needs": [
+        "coordinator-entry"
+      ],
+      "model": "opencode-go/deepseek-v4-flash",
+      "fallback_model": "zai/glm-5-turbo"
+    },
+    {
+      "step_id": "observability",
+      "role": "observability-analyst",
+      "class": "advisor",
+      "needs": [
+        "coordinator-entry"
+      ],
+      "model": "opencode-go/deepseek-v4-flash",
+      "fallback_model": "zai/glm-5-turbo"
+    },
+    {
+      "step_id": "diagnostician",
+      "role": "sre-diagnostician",
+      "class": "step",
+      "needs": [
+        "explorer",
+        "observability"
+      ],
+      "model": "opencode-go/deepseek-v4-flash",
+      "fallback_model": "zai/glm-5-turbo"
+    },
+    {
+      "step_id": "reviewer",
+      "role": "reviewer",
+      "class": "gate",
+      "needs": [
+        "diagnostician"
+      ],
+      "model": "opencode-go/deepseek-v4-flash",
+      "fallback_model": "zai/glm-5-turbo"
+    },
+    {
+      "step_id": "coordinator-close",
+      "role": "chain-coordinator",
+      "class": "coordinator",
+      "needs": [
+        "reviewer"
+      ],
+      "model": "opencode-go/deepseek-v4-flash",
+      "fallback_model": "zai/glm-5-turbo"
+    }
+  ],
+  "entry_step_id": "coordinator-entry",
+  "close_step_id": "coordinator-close",
+  "reviewer_step_id": "reviewer",
+  "diagnostician_step_id": "diagnostician",
+  "created_at": "2026-08-17T21:48:21.388Z",
+  "fingerprint": {
+    "pi_package": {
+      "name": "@earendil-works/pi-coding-agent",
+      "version": "0.80.6"
+    },
+    "beads_version": "bd version 1.2.1 (634cbbc4b)",
+    "experiment_source_dir": "/home/dawid/dev/xtrm/experiments/agentsession-sre-chain-vertical-slice",
+    "experiment_source_dirty": false,
+    "baseline_specialists": [
+      {
+        "path": "/home/dawid/projects/mercury/infra/.specialists/user/sre-coordinator.specialist.json",
+        "sha256": "6458cf22573f2a969ddb43b64e494fdc635ae2cb3527bbc353c9819769b98cbf"
+      },
+      {
+        "path": "/home/dawid/projects/mercury/infra/.specialists/user/sre-host-forensics.specialist.json",
+        "sha256": "daf9532f4a0287d3e641af75236534fea3b114067bc505dcbdba54aafc957ad5"
+      },
+      {
+        "path": "/home/dawid/projects/mercury/infra/.specialists/user/sre-observability-forensics.specialist.json",
+        "sha256": "070216ea4933293d538215d55657c7b46c7bc9bed28f0bbd28b9356f0afd4635"
+      },
+      {
+        "path": "/home/dawid/projects/mercury/infra/.specialists/user/sre-change-forensics.specialist.json",
+        "sha256": "3ef6d9192367f4f1ade5d12e2be7d20d5b22067088248fa8a99b9f7d55a292e3"
+      }
+    ]
+  }
+}

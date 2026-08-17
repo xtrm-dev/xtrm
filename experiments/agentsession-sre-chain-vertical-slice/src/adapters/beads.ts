@@ -23,12 +23,11 @@ import { loadBeadsMap, saveBeadsMap, type Paths } from "../chain/store.ts";
 const pexec = promisify(execFile);
 
 async function bd(args: string[], dbDir: string): Promise<{ stdout: string; stderr: string }> {
-  const env = {
-    ...process.env,
-    // sandbox to our per-run DB
-    BEADS_DB: path.join(dbDir, "beads.db"),
-  };
-  const { stdout, stderr } = await pexec("bd", args, { env, cwd: dbDir, maxBuffer: 8 * 1024 * 1024 });
+  const dbFile = path.join(dbDir, "beads.db");
+  // Explicit --db to prevent bd from walking up and hitting a parent repo's beads DB.
+  const finalArgs = ["--db", dbFile, "--sandbox", ...args];
+  const env = { ...process.env, BEADS_DB: dbFile };
+  const { stdout, stderr } = await pexec("bd", finalArgs, { env, cwd: dbDir, maxBuffer: 8 * 1024 * 1024 });
   return { stdout, stderr };
 }
 
