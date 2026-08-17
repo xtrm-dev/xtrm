@@ -222,9 +222,104 @@ _(TO BE FILLED after we see the full run)_ — early read:
 - **Specialists (existing):** the actual role bodies + probe libraries + baseline mandatory rules + models/routing. Nothing about the specialists needs to change to be re-hosted on this harness.
 - **Substrate (future):** cross-run memory, promotion of proven chain templates, capability registry, deployment surface. Out of scope here.
 
-## 6. Next steps (post-experiment)
+## 6. Round-2 fixes (2026-08-18)
 
-- Land a real `xt worktree`-style command that wraps this experiment behind an operator alias.
-- Wire an actual reviewer specialist into the specialists framework (so the RPC baseline gains parity).
-- Publish `docs/design/chain-templates.md` (spec §19 gap) so canonical references resolve.
-- Fix pi SDK 0.84 typings — export `AuthStorage` / `ModelRegistry` from top-level if `createAgentSession` still consumes them (or update docs to say they're not required).
+After the initial fixture + real-target runs, three gaps flagged by the operator got fixed in-session:
+
+### 6.1 Bead closure + evidence notes (spec §11)
+
+`src/chain/scheduler.ts` now runs a `reconcileBeads()` pass after every reduce. When a step transitions to `satisfied`, the runtime:
+1. Appends a note to its step bead containing the exec id, attempts, remediation loops, and every produced evidence's `evidence_id + kind + summary`.
+2. Closes the step bead via `bd close --force --reason "..."`.
+
+On chain close, the root bead is also closed with the terminal status + reviewer verdict as the reason.
+
+`--force` is required because our dep graph makes children `blocked-by` the root — bd would otherwise refuse child closure until root closure. Comment in the adapter records that "runtime step-satisfaction is authoritative and outranks bd's blocking check."
+
+Adapter bug fixes on the same pass: `bd note <id> <text>` uses positional text (not `-m`); `bd close --reason "..."` uses `--reason` (not `-m`). Errors now surface to stderr instead of being swallowed.
+
+### 6.2 Channel-post schema validator
+
+`src/channels/index.ts:checkAuthority()` now rejects:
+- `work.turn` from investigative roles (explorer, observability-analyst, sre-diagnostician, reviewer, chain-coordinator) that lacks `evidence_refs` — closes the round-1 gap where explorer's message #2 landed with `refs=[]`.
+- `work.finding` without `evidence_refs`.
+- `work.verdict` without `evidence_refs`.
+- `work.turn` without at least one `action_target` (routing is hard).
+
+Three new tests in `tests/channels.test.ts`: **16/16 green** (13 pre-existing + 3 new).
+
+### 6.3 Resume live-test — spec §15 proven live
+
+Killed a mid-flight run after both advisors satisfied but before diagnostician finished (chain-run `run-sre-1e761`, chain `chain-sre-6c08d0`). Ran with `--resume`. Observed:
+
+```
+resuming chain_run_id=run-sre-1e761 chain_id=chain-sre-6c08d0
+resume-recovery: reset 1 stuck step(s) to ready
+22:40:30  chain-sre-6c08d0  sre-diagnostician  START  exec=exec-chain-sre-6c08d0-sre-diagnostician-2 attempt=2
+```
+
+- **Coordinator-entry / explorer / observability were NOT re-dispatched** — reducer skipped them because their `status=satisfied`. Confirmed by absence of START events for those roles in the resume log.
+- **Diagnostician re-ran with `attempt=2`** — new AgentSession, new pi_session_id, new execution_id. The counter increment proves the retry is a new activation, not a rerun of the dead one.
+- Chain then progressed reviewer → coordinator-close and closed_pass at 22:43:41.
+- Final `run-state.json` shows `diagnostician: attempts=2`, all others `attempts=1`.
+- Final bead state: **7/7 beads closed** (all step beads + root).
+
+New code path: `src/cli/main.ts` on `--resume` runs a recovery pass that:
+- For each step with `status=dispatched` or `status=running`: check evidence store; if evidence exists → mark `produced_result` (reducer will promote to satisfied); if not → reset to `ready` and bump `attempts`.
+
+Idempotency-key persistence (`processed_intent_keys` on `RunState`) still protects against duplicate dispatch on rapid reduce cycles.
+
+## 7. Updated acceptance criteria vs spec §20
+
+| Criterion | Status | Notes |
+|---|---|---|
+| direct createAgentSession() executes every participant | ✅ | verified on both fixture + real runs |
+| no Pi RPC subprocess | ✅ | zero subprocesses |
+| frozen ResolvedChain before dispatch | ✅ | persisted to resolved-chain.json |
+| all step Beads exist before dispatch | ✅ | 7 real beads per run, sandboxed DB |
+| participant_id != execution_id != pi_session_id | ✅ | visible in run-state.json |
+| advisor parallelism reducer-driven | ✅ | both advisors START in same second, live |
+| every agent knows chain/step/authority | ✅ | assignment prompt + chain doctrine |
+| agents cannot write channel storage | ✅ | `noTools: "builtin"`, no filesystem tools |
+| audience/action-target/attention distinct | ✅ | unit-tested + validator now enforces action_target on work.turn |
+| attention cannot self-grant authority | ✅ | tool separation + doctrine |
+| read != ack | ✅ | cursor test + live cursors on real run |
+| evidence pointer-first | ✅ | 6 evidences, body-separated |
+| coordinator sees projection not transcript | ✅ | `chain_progress` tool used |
+| reviewer PARTIAL → bounded remediation | ✅ | reducer unit-tested; live runs both PASSed first try |
+| agent_end alone != satisfied | ✅ | reducer unit-tested |
+| reducer pure, intents idempotent | ✅ | processed_intent_keys guards |
+| stdout derives from structured runtime facts | ✅ | 27+ facts per run |
+| **`--resume` does not rerun satisfied work** | ✅ **NEW round-2** | live-tested; attempts=2 only on the killed step |
+| target repository unmodified | ✅ | mercury/infra source tree unchanged |
+| structured SRE triage report produced | ✅ | both runs; real one caught mmd-data-feed false positive |
+| experiment report records findings + gaps | ✅ | this file |
+| **beads closed on step-satisfied + evidence noted** | ✅ **NEW round-2** | 7/7 beads closed on run-sre-1e761 |
+
+**19 ✅ / 0 🟡 / 2 ⚠️ (adversarial-spoof-by-agent + specialist-JSON runtime fusion — see §8)**
+
+## 8. Deliberately out-of-scope (specialist-framework fusion)
+
+The chain runtime is proven; the specialist runtime is NOT re-hosted on top of it. The following specialist-JSON features were never invoked and are legitimate followups:
+
+- `mandatory_rules.template_sets` (canonical rules)
+- `skills.paths` (using-specialists, service-knowledge, sre-triage SKILL)
+- `skills.scripts` pre-run (`sre_quick_triage.sh` baseline for the coordinator)
+- `output_schema` post-run validation of the evidence body
+- `memory_gate` hook
+- `service-knowledge` freshness check (`Last sync > 30d`)
+- `mercury.principal.v1` identity injection for authenticated MCP calls
+
+For the same reason, the beads were composed by the **host** during materialization (spec §4-mandated), not by `bd formula pour` — topology is hardcoded in `topology.ts`. A future iteration could use `bd formula` as the composition primitive.
+
+An adversarial spoof test where a real agent tries to falsify its `authorRole` via `channel_post` was not run — only unit-tested against the API. The `checkAuthority()` gate rejects it, but "no live agent tried it and got rejected" is not the same as "a live agent tried it and got rejected."
+
+## 9. Followups to file (post-hand-off)
+
+- `bd formula`-driven topology composition experiment
+- Specialist-framework fusion: adapt the specialists runtime to consume this harness's ResolvedChain + reducer instead of its own file-based orchestration
+- Publish `xtrm-dev/specialists:docs/design/chain-templates.md` (spec §19 gap)
+- Fix pi SDK 0.84 top-level export drift (`AuthStorage`, `ModelRegistry`) if the SDK team wants callers to override those
+- Wire a `pi_session_id` extractor that survives session disposal — `session.sessionId` is captured pre-prompt; a post-dispose read fails
+- Adversarial-spoof-by-agent eval scenario
+

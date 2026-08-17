@@ -1,0 +1,11 @@
+# Runtime artifacts — chain runs live under ~/.cache/ by default; this
+# is only for --state-dir overrides that point inside the repo.
+.chain-runs/
+
+# Node/Bun
+node_modules/
+
+# The synthetic fixture is a real git repo (chain roles run `git log` on it);
+# its .git/ is intentionally NOT part of the outer repo. Recreate with
+# scripts/setup-fixture.sh after cloning.
+fixtures/tiny-repo/.git
