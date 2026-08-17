@@ -1,0 +1,21 @@
+{
+  "name": "agentsession-sre-chain-vertical-slice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Direct Pi AgentSession SRE Chain — scripted runtime vertical slice. Non-canonical experiment per docs/harness/experiments/agentsession-sre-chain-vertical-slice-2026-08-17.md.",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/cli/main.ts",
+    "dry-run": "bun run src/cli/main.ts --dry-run",
+    "test": "bun test tests/",
+    "smoke": "bun run scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.80.6",
+    "typebox": "^1.1.37"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.5.0"
+  }
+}
