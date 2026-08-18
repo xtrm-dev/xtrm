@@ -121,7 +121,14 @@ def resolve_pr_number(repo: Path, argument: str | None) -> int:
             raise PRCheckpointError(PR_NOT_RESOLVED, f"invalid pull request number {argument!r}")
         return int(argument)
     try:
-        pr = flow.run(["gh", "pr", "view", "--json", "number", "--jq", ".number"], cwd=repo, capture=True).stdout.strip()
+        branch = flow.git_output(repo, "branch", "--show-current").strip()
+        # gh pr view resolves the branch itself and has mis-resolved in some
+        # worktrees; pass the branch explicitly for a deterministic lookup.
+        pr = flow.run(
+            ["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number", "--jq", ".[0].number"],
+            cwd=repo,
+            capture=True,
+        ).stdout.strip()
     except flow.FlowError as exc:
         raise PRCheckpointError(PR_NOT_RESOLVED, f"cannot resolve pull request for current branch: {exc}") from exc
     if not pr or not re.fullmatch(r"[0-9]+", pr):
