@@ -92,8 +92,17 @@ export BA_REMOTE="$REMOTE" BA_BRANCH="$branch" BA_SHA="$pushed_sha" \
 LOG="/tmp/board-audit-adapter-$PR_NUMBER.log"
 nohup setsid bash -c '
   for _ in $(seq 1 30); do
-    cur="$(git ls-remote "$BA_REMOTE" "refs/heads/$BA_BRANCH" 2>/dev/null | awk "{print \$1}")"
-    [ "$cur" = "$BA_SHA" ] && break
+    ref="$(git ls-remote "$BA_REMOTE" "refs/heads/$BA_BRANCH" 2>/dev/null | awk "{print \$1}")"
+    if [ -n "${BOARD_AUDIT_PR_JSON:-}" ] && [ -f "$BOARD_AUDIT_PR_JSON" ]; then
+      gh_head="$(python3 -c "import json,os;print(json.load(open(os.environ[\"BOARD_AUDIT_PR_JSON\"]))[\"headRefOid\"])" 2>/dev/null || true)"
+    else
+      # GitHub updates the PR headRefOid with a small lag after a push;
+      # wait for it so the checkpoint binds the pushed head, not the old one.
+      gh_head="$(gh pr view "$BA_PR" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
+    fi
+    if [ "$ref" = "$BA_SHA" ] && [ "$gh_head" = "$BA_SHA" ]; then
+      break
+    fi
     sleep 2
   done
   if python3 "$BA_FLOW" pr-checkpoint "$BA_PR" --trigger auto; then
