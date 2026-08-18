@@ -26,6 +26,11 @@
 # checkpoints that PR synchronously.
 set -uo pipefail
 
+# Hook environments set GIT_DIR (and friends); they must not leak into the
+# child checkpoint, whose bd worktree create / git calls resolve the repo
+# from cwd.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR 2>/dev/null || true
+
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SELF")" && pwd)"
 PR_FLOW="$SCRIPT_DIR/board-audit-pr.py"
@@ -91,6 +96,7 @@ export BA_REMOTE="$REMOTE" BA_BRANCH="$branch" BA_SHA="$pushed_sha" \
        BA_PR="$PR_NUMBER" BA_FLOW="$PR_FLOW" BOARD_AUDIT_PR_TRIGGER="${BOARD_AUDIT_PR_TRIGGER:-auto}"
 LOG="/tmp/board-audit-adapter-$PR_NUMBER.log"
 nohup setsid bash -c '
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR 2>/dev/null || true
   for _ in $(seq 1 30); do
     ref="$(git ls-remote "$BA_REMOTE" "refs/heads/$BA_BRANCH" 2>/dev/null | awk "{print \$1}")"
     if [ -n "${BOARD_AUDIT_PR_JSON:-}" ] && [ -f "$BOARD_AUDIT_PR_JSON" ]; then
