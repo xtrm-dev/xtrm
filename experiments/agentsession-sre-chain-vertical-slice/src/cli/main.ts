@@ -17,6 +17,8 @@ import { createLogger, defaultRender } from "../util/logger.ts";
 import { nowIso, shortId } from "../util/ids.ts";
 import { sha256File } from "../util/fs.ts";
 import type { DesignInputsFingerprint } from "../chain/types.ts";
+import { resolveSreSpecialistBindings } from "../specialists/sre-team.ts";
+import { loadSpecialistBindings, saveSpecialistBindings } from "../specialists/bindings.ts";
 
 function readJsonSyncSafe<T>(p: string): T | null {
   try {
@@ -37,7 +39,9 @@ async function fingerprint(args: {
   const piPkg = piPkgJsonPath ? readJsonSyncSafe<{ name: string; version: string }>(piPkgJsonPath) : null;
   const bd = await versionInfo();
 
-  const baselineDir = "/home/dawid/projects/mercury/infra/.specialists/user";
+  // Fingerprint Specialist JSON from the ACTUAL target repo rather than a hard-coded
+  // Mercury path. These are provenance inputs even when --specialist-json=off.
+  const baselineDir = path.join(path.resolve(args.targetRepo), ".specialists", "user");
   const baseline: DesignInputsFingerprint["baseline_specialists"] = [];
   for (const name of ["sre-coordinator", "sre-host-forensics", "sre-observability-forensics", "sre-change-forensics"]) {
     const p = `${baselineDir}/${name}.specialist.json`;
@@ -92,6 +96,12 @@ async function main() {
       process.exit(2);
     }
     logger.human(`resuming chain_run_id=${chainRunId} chain_id=${existing.chain_id}`);
+    const frozenSpecialists = await loadSpecialistBindings(p);
+    if (frozenSpecialists) {
+      logger.human(
+        `specialist_json=${frozenSpecialists.mode} bindings=${Object.keys(frozenSpecialists.bindings).length} (source-hash enforced)`,
+      );
+    }
 
     // Resume-recovery: reset stuck dispatched/running steps that never produced evidence
     // so the reducer will re-dispatch them (spec §15: --resume creates a new AgentSession
@@ -143,6 +153,16 @@ async function main() {
   const fp = await fingerprint({ targetRepo, rootBeadRef: args.rootBead });
   await saveDesignInputs(p, fp);
 
+  if (args.specialistJson !== "off") {
+    const bindings = await resolveSreSpecialistBindings(targetRepo, args.specialistJson);
+    await saveSpecialistBindings(p, {
+      schema_version: 1,
+      mode: args.specialistJson,
+      created_at: nowIso(),
+      bindings,
+    });
+  }
+
   const chain = newResolvedChain({
     chain_id: args.chainId,
     root_bead_id: "", // filled after materialization
@@ -178,6 +198,14 @@ async function main() {
   logger.human(`state_dir=${p.root}`);
   logger.human(`pi=${fp.pi_package.name}@${fp.pi_package.version}  beads=${fp.beads.version}`);
   logger.human(`baseline_specialists=${fp.baseline_specialists.length} sha256-fingerprinted`);
+  if (args.specialistJson !== "off") {
+    const frozen = await loadSpecialistBindings(p);
+    logger.human(
+      `specialist_json=${args.specialistJson} bindings=${Object.keys(frozen?.bindings ?? {}).length} frozen`,
+    );
+  } else {
+    logger.human("specialist_json=off (legacy adapted role markdown)");
+  }
   logger.human("");
   logger.human("Topology (frozen):");
   for (const s of chainWithRoot.topology) {
