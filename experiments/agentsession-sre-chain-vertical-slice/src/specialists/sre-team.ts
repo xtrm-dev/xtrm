@@ -71,11 +71,15 @@ export async function resolveSreSpecialistBindings(
   return result;
 }
 
+const CAPABILITY_ADAPTATION =
+  "When the Specialist doctrine says to use Pi `bash`/`read`, use the governed host equivalents: `sre_exec` for allowed read-only diagnostics and `evidence_get` for evidence bodies. Built-in Pi bash/read/edit/write are intentionally unavailable.";
+
 export function roleAdaptationOverlay(role: ParticipantRole): string {
   switch (role) {
     case "chain-coordinator":
       return [
         "## Chain-role adaptation: coordinator",
+        CAPABILITY_ADAPTATION,
         "The loaded sre-coordinator JSON contains legacy instructions to fan out via `sp`, poll children, write result files and update Beads.",
         "Those are cognition-era orchestration instructions and are superseded here.",
         "For this activation, perform ONLY the coordinator entry/close gate assigned by XTRM. The reducer schedules all advisors and gates.",
@@ -84,18 +88,21 @@ export function roleAdaptationOverlay(role: ParticipantRole): string {
     case "explorer":
       return [
         "## Chain-role adaptation: explorer",
+        CAPABILITY_ADAPTATION,
         "Use the loaded sre-host-forensics probe doctrine as your domain cognition.",
         "Your governed output is topology/host evidence for the downstream diagnostician, not the legacy result file.",
       ].join("\n");
     case "observability-analyst":
       return [
         "## Chain-role adaptation: observability analyst",
+        CAPABILITY_ADAPTATION,
         "Use the loaded sre-observability-forensics query doctrine as your domain cognition.",
         "Your governed output is observability evidence for the downstream diagnostician, not the legacy result file.",
       ].join("\n");
     case "sre-diagnostician":
       return [
         "## Chain-role adaptation: diagnostician",
+        CAPABILITY_ADAPTATION,
         "The loaded sre-change-forensics JSON is a probe library and change-correlation doctrine, not your complete chain role.",
         "You MUST synthesize BOTH upstream advisor evidence sets, use change-forensics probes where useful, rank causal hypotheses, expose discrepancies and publish the diagnostician report required by XTRM.",
       ].join("\n");
