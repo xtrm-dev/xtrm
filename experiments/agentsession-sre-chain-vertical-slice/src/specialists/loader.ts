@@ -97,7 +97,8 @@ export interface SpecialistActivationProfile {
     files_to_watch: string[];
     stale_threshold_days?: number;
   };
-  stall_detection: Record<string, number | null | undefined>;
+  /** Passthrough keeps future upstream fields auditable without pretending XTRM understands them. */
+  stall_detection: Record<string, unknown>;
   output: {
     legacy_output_file?: string;
     notes_mode: "full-trail" | "final-only";
@@ -133,6 +134,11 @@ function expandHome(value: string): string {
   return value;
 }
 
+/**
+ * Experiment-only direct file lookup. Production should prefer injecting the
+ * public @jaggerxtrm/specialists/lib SpecialistLoader through resolver.ts so
+ * package/global/repo merge semantics stay upstream-owned.
+ */
 function candidatePaths(targetRepo: string, name: string): string[] {
   return [
     path.join(targetRepo, ".specialists", "user", `${name}.specialist.json`),
@@ -252,14 +258,19 @@ function featureMatrix(spec: SpecialistSpec, skills: ResolvedSkillAsset[]): Feat
       reason: "maps directly to Pi AgentSession model/scoped-model/thinking configuration",
     },
     {
-      feature: "execution.timeout/stall/max_retries",
-      disposition: "adapted",
-      reason: "compiled as runtime policy; XTRM scheduler/supervisor authority must enforce it, not the model prompt",
+      feature: "execution.max_retries",
+      disposition: "native",
+      reason: "maps to Pi SettingsManager retry configuration for the activation",
+    },
+    {
+      feature: "execution.timeout/stall",
+      disposition: "deferred",
+      reason: "values are compiled and frozen, but XTRM does not yet enforce the Specialist-specific timeout/stall policy in this bridge",
     },
     {
       feature: "execution.permission_required + permissions",
       disposition: "adapted",
-      reason: "maps to host capability policy; never enables Pi built-ins merely because JSON requests them",
+      reason: "write-capable tiers are rejected; LOW/READ_ONLY never auto-enable Pi builtins and require host capability mapping",
     },
     {
       feature: "prompt.system + system_prompt_mode",
@@ -285,8 +296,8 @@ function featureMatrix(spec: SpecialistSpec, skills: ResolvedSkillAsset[]): Feat
     },
     {
       feature: "capabilities.required_tools/external_commands",
-      disposition: "adapted",
-      reason: "compiled as preflight requirements; actual runtime tool availability is checked by the host capability resolver",
+      disposition: "deferred",
+      reason: "requirements are compiled and visible, but complete host-tool aliasing/PATH preflight is not yet enforced by this bridge",
     },
     {
       feature: "mandatory_rules.inline_rules",
@@ -302,8 +313,10 @@ function featureMatrix(spec: SpecialistSpec, skills: ResolvedSkillAsset[]): Feat
     },
     {
       feature: "prompt.output_schema + execution.expected_output_keys",
-      disposition: "adapted",
-      reason: "compiled as post-agent result validation contract; agent_end remains insufficient for step satisfaction",
+      disposition: (spec.prompt.output_schema || (spec.execution.expected_output_keys?.length ?? 0) > 0) ? "deferred" : "native",
+      reason: (spec.prompt.output_schema || (spec.execution.expected_output_keys?.length ?? 0) > 0)
+        ? "contract is retained but not yet compiled into the authoritative evidence validator"
+        : "no structured terminal-output contract declared",
     },
     {
       feature: "output_file",
@@ -319,9 +332,9 @@ function featureMatrix(spec: SpecialistSpec, skills: ResolvedSkillAsset[]): Feat
     },
     {
       feature: "execution.interactive",
-      disposition: spec.execution.interactive ? "adapted" : "native",
+      disposition: spec.execution.interactive ? "deferred" : "native",
       reason: spec.execution.interactive
-        ? "logical participant durability is XTRM-owned; a Pi session may be kept/resumed only as an activation optimization"
+        ? "logical durability is XTRM-owned; keepalive/multi-turn optimization is not yet implemented by the full-JSON bridge"
         : "single activation semantics match directly",
     },
     {
