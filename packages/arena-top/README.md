@@ -39,6 +39,16 @@ Each snapshot is `{ meta, models[] }` where every model has
 via `data/latest.json` → `data/<YYYY-MM-DD>/<category>.json`. Upstream updates
 daily; no local caching, so you always see the current board.
 
+## Reference data
+
+`data/commandcode-model-catalog.json` — snapshot of Command Code's model catalog
+(scraped from `commandcode.ai/models/*` streamed loader data, 2026-08-18): 57 models
+with per-model `category` (premium/opensource), `inputCost`/`outputCost`/cache rates
+($/M tokens), `minPlanName`/`blockedPlanLevels` plan gating, context windows, and
+benchmark scores. Useful for planning which models are usable/affordable on a given
+Command Code plan (e.g. GOAT = opensource only). Refresh with the same scraping
+approach when models change.
+
 ## License
 
 MIT
