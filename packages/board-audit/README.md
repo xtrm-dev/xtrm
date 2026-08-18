@@ -278,7 +278,7 @@ TRANSPORT_CONFLICT  TRANSPORT_PUSH_FAILED  TRANSPORT_VERIFY_FAILED
 CLEANUP_BLOCKED
 ```
 
-Failed publication never mutates Beads and retains the isolated worktree and staging branch for recovery. `--comment` posts the compact locator as a PR comment via `gh`.
+Failed publication never mutates Beads and retains the isolated worktree and staging branch for recovery. Every successful checkpoint posts (or updates in place, idempotently) the compact Board-Audit locator as a comment on the code PR, so any web agent can find the evidence from the PR itself without guessing branch names.
 
 ### Read-model boundary
 
