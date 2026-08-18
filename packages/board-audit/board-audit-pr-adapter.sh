@@ -63,7 +63,9 @@ if [ -n "${BOARD_AUDIT_PR_JSON:-}" ] && [ -f "$BOARD_AUDIT_PR_JSON" ]; then
   PR_NUMBER="$(python3 -c "import json,os;print(json.load(open(os.environ['BOARD_AUDIT_PR_JSON']))['number'])" 2>/dev/null || true)"
 fi
 if [ -z "$PR_NUMBER" ]; then
-  PR_NUMBER="$(gh pr view --json number --jq .number 2>/dev/null || true)"
+  # gh pr view resolves the branch itself and has mis-resolved in some
+  # worktrees; pass the branch explicitly for a deterministic lookup.
+  PR_NUMBER="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)"
 fi
 if [ -z "$PR_NUMBER" ] || ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
   echo "board-audit-pr-adapter: no pull request for the current branch; nothing to publish" >&2
