@@ -586,7 +586,42 @@ def locator_block(handoff: dict[str, Any]) -> str:
         + work_line
         + f"Index: {handoff['index']}\n"
         f"PR handoff: {handoff['handoff']}\n"
+        "_board-audit locator_\n"
     )
+
+
+LOCATOR_MARKER = "Board-Audit Handoff"
+
+
+def post_locator_comment(repo: Path, pr: int, block: str) -> None:
+    """Post or update the Board-Audit locator comment on the PR.
+
+    Idempotent: an existing comment whose body starts with the locator marker
+    is updated in place (PATCH) so repeated checkpoints do not spam the PR.
+    """
+    slug = repo_slug(repo)
+    comments = flow.run(
+        ["gh", "api", f"repos/{slug}/issues/{pr}/comments", "--jq", ".[] | select(.body | startswith(\"Board-Audit Handoff\")) | .id"],
+        cwd=repo,
+        capture=True,
+        check=False,
+    ).stdout.strip()
+    existing_id = comments.splitlines()[-1] if comments else ""
+    if existing_id:
+        flow.run(
+            ["gh", "api", "-X", "PATCH", f"repos/{slug}/issues/comments/{existing_id}", "-f", f"body={block}"],
+            cwd=repo,
+            capture=True,
+            check=True,
+        )
+    else:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+            tmp.write(block)
+            tmp_path = tmp.name
+        try:
+            flow.run(["gh", "pr", "comment", str(pr), "--body-file", tmp_path], cwd=repo)
+        finally:
+            os.unlink(tmp_path)
 
 
 def write_projection(worktree: Path, snapshot: dict[str, Any]) -> list[Path]:
@@ -830,18 +865,13 @@ def cmd_pr_checkpoint(args: argparse.Namespace) -> int:
             raise PRCheckpointError(kind, f"transport push failed: {exc}") from exc
 
         head_after_push = flow.git_output(worktree, "rev-parse", "HEAD")
-        if args.comment:
-            tmp_path: str | None = None
-            try:
-                with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
-                    tmp.write(locator_block(handoff))
-                    tmp_path = tmp.name
-                flow.run(["gh", "pr", "comment", str(pr), "--body-file", tmp_path], cwd=worktree)
-            except flow.FlowError as exc:
-                print(f"warning: could not post PR comment: {exc}", file=sys.stderr)
-            finally:
-                if tmp_path is not None:
-                    os.unlink(tmp_path)
+        # Always publish the compact locator on the code PR so a web agent can
+        # find the evidence without guessing branch names. Idempotent: the
+        # existing locator comment is updated in place.
+        try:
+            post_locator_comment(repo, pr, locator_block(handoff))
+        except flow.FlowError as exc:
+            print(f"warning: could not post/update PR comment: {exc}", file=sys.stderr)
     except PRCheckpointError:
         keep = True
         raise
@@ -1366,7 +1396,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     checkpoint = sub.add_parser("pr-checkpoint", help="publish/refresh a PR-checkpoint handoff for the exact remote PR head")
     checkpoint.add_argument("pr_number", nargs="?", help="pull request number; default: current branch's PR")
-    checkpoint.add_argument("--comment", action="store_true", help="post/update the compact Board-Audit locator as a PR comment")
+    checkpoint.add_argument("--comment", action="store_true", help="deprecated: the locator comment is now always posted/updated")
     checkpoint.add_argument("--trigger", choices=["manual", "auto", "hook"], default=None, help="publication trigger class (classification only; publication is never blocked by an allowlist)")
     checkpoint.set_defaults(func=cmd_pr_checkpoint)
 
