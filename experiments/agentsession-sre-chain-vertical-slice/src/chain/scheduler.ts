@@ -27,7 +27,7 @@ import { dispatchActivation } from "../agents/bridge.ts";
 import { runtimePost } from "../channels/index.ts";
 import { executionId, nowIso, participantId } from "../util/ids.ts";
 import { stepById } from "./topology.ts";
-import { closeBead, noteBead } from "../adapters/beads.ts";
+import { chainEpicIdOf, closeBead, noteBead } from "../adapters/beads.ts";
 
 export interface SchedulerContext {
   paths: Paths;
@@ -142,17 +142,21 @@ export async function runToCompletion(
     if (newRunState.status.startsWith("closed_")) {
       const beadsMap = await loadBeadsMap(ctx.paths);
       if (beadsMap) {
+        const epicId = chainEpicIdOf(beadsMap);
         await closeBead(
           ctx.paths.beadsDbDir,
-          beadsMap.root_bead_id,
+          epicId,
           `chain closed: ${newRunState.status} (verdict=${newRunState.reviewer_verdict ?? "-"})`,
-        );
+        ).catch((e: any) => {
+          // Surface — never silently swallow chain-authority disagreement.
+          process.stderr.write(`[scheduler] closing ChainRun Epic ${epicId} failed: ${e?.message ?? e}\n`);
+        });
         ctx.onFact({
           ts: nowIso(),
           chain_id: ctx.chain.chain_id,
           role: "runtime",
           kind: "chain.close",
-          detail: `root bead ${beadsMap.root_bead_id} closed`,
+          detail: `ChainRun Epic ${epicId} closed`,
         });
       }
       ctx.onFact({

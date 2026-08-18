@@ -44,10 +44,27 @@ export interface ResolvedChain {
   };
 }
 
-/** Beads mapping — chain_id + step_id → bd issue id. */
+/** Beads mapping — chain_id + step_id → bd issue id.
+ *
+ * `chain_epic_id` is the ChainRun Epic materialized in the experiment's
+ * sandbox beads DB. Every step bead is a NATIVE child of this Epic
+ * (`bd q --parent`). Step-to-step readiness is expressed as real
+ * `blocked-by` dep edges between step beads only — NOT between step and
+ * Epic (that fake edge was what forced `bd close --force`).
+ *
+ * `external_root_bead_ref` is an opaque reference to the originating bead
+ * in the real project's beads DB. Provenance only — never queried
+ * cross-DB and never used as a blocking parent.
+ *
+ * `root_bead_id` is a legacy alias kept for reading older beads-map.json
+ * files produced before the reconciliation pass. New code writes
+ * `chain_epic_id`; readers may fall back to `root_bead_id`.
+ */
 export interface BeadsMap {
-  root_bead_id: string;
-  step_bead_ids: Record<string, string>; // step_id → bd issue id
+  chain_epic_id: string;
+  step_bead_ids: Record<string, string>;
+  external_root_bead_ref?: string;
+  root_bead_id?: string;
 }
 
 /** Per-step execution attempt bookkeeping. */

@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
 # One-shot chain observer.
-# Merges forensics/messages/evidence/intents into ONE time-sorted stream.
+#
+# `once` mode merges forensics/messages/evidence/intents into ONE time-sorted
+# stream and prints one-shot summaries.
+#
+# `tail-all` mode continuously follows ALL FOUR append-only streams
+# (forensics/messages/evidence/intents) and interleaves them by arrival.
+#
+# `tail-forensics` mode follows ONLY forensics/events.jsonl (kept for
+# backwards compatibility with the earlier `tail` naming).
 #
 # Usage:
-#   scripts/inspect.sh                       # latest run
-#   scripts/inspect.sh <chain-run-id>        # specific run
-#   scripts/inspect.sh <chain-run-id> tail   # follow live (Ctrl+C to stop)
-#   STATE_DIR=/some/where scripts/inspect.sh # override state dir
+#   scripts/inspect.sh                            # latest run (once)
+#   scripts/inspect.sh <chain-run-id>             # specific run (once)
+#   scripts/inspect.sh <chain-run-id> tail-all    # follow all streams
+#   scripts/inspect.sh <chain-run-id> tail-forensics
+#   scripts/inspect.sh <chain-run-id> tail        # alias for tail-forensics
+#   STATE_DIR=/some/where scripts/inspect.sh      # override state dir
 set -euo pipefail
 
 STATE_DIR="${STATE_DIR:-$HOME/.cache/agentsession-sre-chain-vertical-slice}"
@@ -60,8 +70,9 @@ show_beads() {
   hdr "beads"
   if [[ -f "$B/chain/beads-map.json" ]]; then
     jq -r '
-      "root: \(.root_bead_id)",
-      "steps:",
+      "chain_epic_id: \(.chain_epic_id // .root_bead_id // "-")",
+      "external_root_bead_ref: \(.external_root_bead_ref // "-")",
+      "step children (native parent = ChainRun Epic):",
       (.step_bead_ids | to_entries[] | "  \(.key) -> \(.value)")
     ' "$B/chain/beads-map.json"
   else
@@ -186,13 +197,42 @@ show_paths() {
 
 # ---- driver ---------------------------------------------------------------
 case "$MODE" in
-  tail)
+  tail|tail-forensics)
     show_chain; show_state; show_beads
     show_stream
-    hdr "following (Ctrl+C to stop)"
+    hdr "following forensics/events.jsonl only (Ctrl+C to stop)"
     tail -F "$B/forensics/events.jsonl" 2>/dev/null | \
       jq -c '{ts, source:"fact", kind, who:(.role // .participant_id // "-"), detail:(.detail // "")}' | \
       render
+    ;;
+  tail-all)
+    show_chain; show_state; show_beads
+    show_stream
+    hdr "following all four streams (Ctrl+C to stop)"
+    # Concurrently tail forensics/messages/evidence/intents into a shared
+    # normalized envelope stream, then render. Streams are interleaved by
+    # arrival order — each stream keeps its own append order; there is no
+    # global reordering.
+    tail -F -n 0 -q \
+      "$B/forensics/events.jsonl" \
+      "$B/channels/messages.jsonl" \
+      "$B/evidence/index.jsonl" \
+      "$B/chain/scheduler-intents.jsonl" 2>/dev/null | \
+      jq -c '
+        if .kind == null then empty
+        elif has("author") then
+          { ts: .created_at, source:"msg", kind, who:.author.participant_role,
+            detail: ("#" + (.id|tostring) + "  targets=[" + ((.audience.action_targets // []) | join(",")) + "]") }
+        elif has("evidence_id") then
+          { ts: .created_at, source:"ev", kind, who:.producer_role,
+            detail: (.evidence_id + "  " + ((.summary // "")[0:120])) }
+        elif has("idempotency_key") then
+          { ts: "", source:"intent", kind, who:.participant_id,
+            detail: (.step_id + "  attempt=" + (.attempt|tostring)) }
+        else
+          { ts, source:"fact", kind, who:(.role // .participant_id // "-"), detail:(.detail // "") }
+        end
+      ' | render
     ;;
   *)
     show_chain
