@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -612,26 +613,29 @@ class PrCheckpointTests(unittest.TestCase):
             self.assertEqual(second.returncode, 0, second.stderr + second.stdout)
             self.assertIn("NO_CHANGES", second.stdout)
 
-    def test_adapter_prepush_pushes_then_publishes_fresh_checkpoint(self):
-        # The pre-push adapter performs the code push itself, then publishes a
-        # FRESH checkpoint bound to the just-pushed remote head, so a PR push
-        # leaves verifiable current evidence without a watcher or CI.
+    def test_adapter_defers_to_git_push_then_publishes_fresh_checkpoint(self):
+        # The pre-push adapter does NOT push itself (a double push races on
+        # GitHub and fails). It defers to git's own push and starts a detached
+        # poller that publishes a FRESH checkpoint once the remote ref equals
+        # the pushed SHA.
         adapter = REPO_ROOT / "packages" / "board-audit" / "board-audit-pr-adapter.sh"
         with tempfile.TemporaryDirectory() as td_raw:
             fx = PrCheckpointFixture(Path(td_raw)).setup(BASE_ROWS)
-            # New local commit on feature/x, NOT yet remote; PR 531 tracks it.
+            # New local commit on feature/x, then the REAL git push lands it.
             git(fx.source, "checkout", "feature/x")
             (fx.source / "feature3.txt").write_text("impl3\n", encoding="utf-8")
             git(fx.source, "add", "feature3.txt")
             git(fx.source, "commit", "-m", "third implementation commit")
             new_head = git(fx.source, "rev-parse", "HEAD", capture=True).stdout.strip()
             old_remote = git(fx.source, "rev-parse", "origin/feature/x", capture=True).stdout.strip()
-            git(fx.source, "checkout", "main")
             write_pr_json(fx.pr_json, 531, new_head)
+            git(fx.source, "push", "origin", "feature/x")
             self.assertNotEqual(new_head, old_remote)
 
-            # Simulate git's pre-push protocol: remote name as argv[1], refs
-            # on stdin.
+            # Simulate the pre-push stdin while ON feature/x (the current
+            # branch must match the pushed ref for the poller path): git was
+            # about to push old_remote → new_head; the poller observes the
+            # remote already at new_head.
             refs = f"refs/heads/feature/x {new_head} refs/heads/feature/x {old_remote}\n"
             result = subprocess.run(
                 [str(adapter), "origin"],
@@ -643,15 +647,18 @@ class PrCheckpointTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-            self.assertIn("published FRESH Board-Audit checkpoint", result.stderr)
+            self.assertIn("deferred FRESH checkpoint", result.stderr)
+            git(fx.source, "checkout", "main")
 
-            # The code push landed and the checkpoint is FRESH at the new head.
-            git(fx.source, "fetch", "origin")
-            remote_head = git(fx.source, "rev-parse", "origin/feature/x", capture=True).stdout.strip()
-            self.assertEqual(remote_head, new_head)
-            status = fx.run("pr-status", "531", "--check")
-            self.assertEqual(status.returncode, 0, status.stderr + status.stdout)
-            self.assertIn("STATUS: FRESH", status.stdout)
+            # The detached poller publishes within seconds; wait for it.
+            deadline = time.time() + 30
+            status = None
+            while time.time() < deadline:
+                status = fx.run("pr-status", "531", "--check")
+                if "STATUS: FRESH" in status.stdout:
+                    break
+                time.sleep(1)
+            self.assertIn("STATUS: FRESH", status.stdout, status.stderr + status.stdout)
             handoff = json.loads(fx.show_transport(".xtrm/board-audit/handoffs/pr-531.json"))
             self.assertEqual(handoff["implementation_head_sha"], new_head)
 
