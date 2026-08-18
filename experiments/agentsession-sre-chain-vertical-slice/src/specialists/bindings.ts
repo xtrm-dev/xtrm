@@ -31,7 +31,8 @@ export async function loadSpecialistBindings(p: Paths): Promise<SpecialistBindin
 
 /**
  * Rehydrate the exact Specialist cognition approved for this run.
- * Source drift is fail-closed: a resume cannot silently pick up a changed JSON.
+ * JSON OR resolved-skill drift is fail-closed: a resume cannot silently pick up
+ * a changed manifest or changed cognition asset.
  */
 export async function loadBoundSpecialistProfile(
   p: Paths,
@@ -67,6 +68,33 @@ export async function loadBoundSpecialistProfile(
     targetRepo,
     strictSkills: true,
   });
+
+  const currentSkills = new Map(
+    profile.skills.map((skill) => [skill.declared_path, skill] as const),
+  );
+  if (currentSkills.size !== binding.skills.length) {
+    throw new Error(
+      `Specialist skill-set drift for role=${role} name=${binding.name}: ` +
+      `frozen=${binding.skills.length}, current=${currentSkills.size}`,
+    );
+  }
+  for (const frozenSkill of binding.skills) {
+    const current = currentSkills.get(frozenSkill.declared_path);
+    if (!current) {
+      throw new Error(
+        `Specialist skill removed/rebound for role=${role}: ${frozenSkill.declared_path}`,
+      );
+    }
+    if (current.resolved_path !== frozenSkill.resolved_path || current.sha256 !== frozenSkill.sha256) {
+      throw new Error(
+        `Specialist skill drift for role=${role} skill=${frozenSkill.declared_path}: ` +
+        `frozen path=${frozenSkill.resolved_path} sha256=${frozenSkill.sha256}, ` +
+        `current path=${current.resolved_path} sha256=${current.sha256}. ` +
+        "Start a new ChainRun/revision instead of mutating cognition in-place.",
+      );
+    }
+  }
+
   assertSpecialistCompatible(profile);
   return profile;
 }
