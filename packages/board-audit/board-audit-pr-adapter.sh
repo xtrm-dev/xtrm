@@ -38,8 +38,14 @@ PR_FLOW="$SCRIPT_DIR/board-audit-pr.py"
 REMOTE="${1:-origin}"
 PR="${2:-}"
 
-# Direct/manual invocation: checkpoint that PR synchronously.
-if [ -n "$PR" ] && [[ "$PR" =~ ^[0-9]+$ ]]; then
+# Direct/manual invocation: adapter <pr> or adapter <remote> <pr> — the first
+# numeric argument is the explicit PR to checkpoint synchronously.
+if [[ "${1:-}" =~ ^[0-9]+$ ]]; then
+  PR="${1}"
+  export BOARD_AUDIT_PR_TRIGGER="${BOARD_AUDIT_PR_TRIGGER:-auto}"
+  exec python3 "$PR_FLOW" pr-checkpoint "$PR" --trigger auto
+fi
+if [[ "${2:-}" =~ ^[0-9]+$ ]]; then
   export BOARD_AUDIT_PR_TRIGGER="${BOARD_AUDIT_PR_TRIGGER:-auto}"
   exec python3 "$PR_FLOW" pr-checkpoint "$PR" --trigger auto
 fi
@@ -60,6 +66,12 @@ if [ -n "$branch" ] && [ ! -t 0 ]; then
         ;;
     esac
   done
+fi
+# A preceding hook block (e.g. a gate runner) may have consumed stdin, so
+# the loop above saw no refs. For the common case — pushing the current
+# branch — fall back to HEAD.
+if [ -z "$pushed_sha" ] && [ -n "$branch" ]; then
+  pushed_sha="$(git rev-parse HEAD 2>/dev/null || true)"
 fi
 
 # Resolve the PR for the current branch.
@@ -93,9 +105,11 @@ fi
 # pushed SHA), then publish the checkpoint. Never blocks the push; failures
 # land in the poller log.
 export BA_REMOTE="$REMOTE" BA_BRANCH="$branch" BA_SHA="$pushed_sha" \
-       BA_PR="$PR_NUMBER" BA_FLOW="$PR_FLOW" BOARD_AUDIT_PR_TRIGGER="${BOARD_AUDIT_PR_TRIGGER:-auto}"
+       BA_PR="$PR_NUMBER" BA_FLOW="$PR_FLOW" BA_CWD="$(pwd)" \
+       BOARD_AUDIT_PR_TRIGGER="${BOARD_AUDIT_PR_TRIGGER:-auto}"
 LOG="/tmp/board-audit-adapter-$PR_NUMBER.log"
 nohup setsid bash -c '
+  cd "$BA_CWD" 2>/dev/null || exit 1
   unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR 2>/dev/null || true
   for _ in $(seq 1 30); do
     ref="$(git ls-remote "$BA_REMOTE" "refs/heads/$BA_BRANCH" 2>/dev/null | awk "{print \$1}")"
