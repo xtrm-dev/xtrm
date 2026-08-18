@@ -7,21 +7,23 @@
 # manually.
 #
 # Post-delivery semantics from a pre-push hook: a plain pre-push fires BEFORE
-# the code push succeeds, so it cannot truthfully bind the new head. This
-# adapter therefore performs the code push itself (git push --no-verify,
-# lease-protected against the remote SHA the hook observed), then runs the
-# checkpoint against the now-remote PR head. The handoff is current, not
-# stale, and any agent in the repository can verify it with:
+# the code push succeeds, so a synchronous checkpoint there could only bind
+# the previous remote head (STALE). The adapter therefore defers to git's own
+# push (no second push — a double push races on GitHub and fails with
+# "cannot lock ref") and starts a detached one-shot poller that waits for the
+# remote ref to reach the pushed SHA (max ~60s), then publishes the
+# checkpoint against the now-remote PR head. The handoff is FRESH after every
+# push, and any agent in the repository can verify it with:
 #   board-audit pr-status <pr> --check
 #
-# The adapter never blocks the code push. A failed adapter (missing
-# bd/gh/python3, export failure, transport failure) only warns; the code push
-# proceeds. There is no allowlist: every PR produces its Board-Audit evidence.
+# The adapter never blocks the code push. Adapter or poller failures only
+# warn (poller log: /tmp/board-audit-adapter-<pr>.log). There is no
+# allowlist: every PR produces its Board-Audit evidence.
 #
 # Protocol: as a pre-push hook, refspecs arrive on stdin as
 #   <local ref> <local sha> <remote ref> <remote sha>
-# and the remote name is argv[1]. Invoked directly with a PR number, it skips
-# the push phase and checkpoints that PR.
+# and the remote name is argv[1]. Invoked directly with a PR number, it
+# checkpoints that PR synchronously.
 set -uo pipefail
 
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -31,59 +33,31 @@ PR_FLOW="$SCRIPT_DIR/board-audit-pr.py"
 REMOTE="${1:-origin}"
 PR="${2:-}"
 
-# Phase 0: if a PR number was given explicitly (direct/manual invocation),
-# skip the push phase entirely and checkpoint that PR.
+# Direct/manual invocation: checkpoint that PR synchronously.
 if [ -n "$PR" ] && [[ "$PR" =~ ^[0-9]+$ ]]; then
   export BOARD_AUDIT_PR_TRIGGER="${BOARD_AUDIT_PR_TRIGGER:-auto}"
   exec python3 "$PR_FLOW" pr-checkpoint "$PR" --trigger auto
 fi
 
-# Phase 1: perform the code push that git was about to do. Read the refspecs
-# from stdin (pre-push protocol), skip tag refs and deletions, and push each
-# branch ref with --no-verify (no recursion). Fast-forward and new-branch
-# updates use a plain push; a non-fast-forward update (rebase/force workflow)
-# is published under an exact lease pinned to the remote SHA the hook
-# observed, so a concurrent remote change still fails closed.
-refs=()
-if [ ! -t 0 ]; then
+# Determine the pushed SHA of the current branch from the pre-push stdin
+# protocol (skipped for non-branch refs, deletions, and TTY stdin).
+branch="$(git branch --show-current 2>/dev/null || true)"
+pushed_sha=""
+if [ -n "$branch" ] && [ ! -t 0 ]; then
   while read -r local_ref local_sha remote_ref remote_sha; do
-    if [ -z "$local_ref" ]; then
-      continue
-    fi
+    [ -z "$local_ref" ] && continue
     case "$local_ref" in
       refs/heads/*)
-        if [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
-          refs+=("$local_ref:$remote_ref:$local_sha:$remote_sha")
+        if [ "$local_sha" != "0000000000000000000000000000000000000000" ] \
+           && [ "${local_ref#refs/heads/}" = "$branch" ]; then
+          pushed_sha="$local_sha"
         fi
         ;;
     esac
   done
 fi
-for entry in "${refs[@]}"; do
-  local_ref="${entry%%:*}"
-  rest="${entry#*:}"
-  remote_ref="${rest%%:*}"
-  rest="${rest#*:}"
-  local_sha="${rest%%:*}"
-  remote_sha="${rest#*:}"
-  zero="0000000000000000000000000000000000000000"
-  if [ "$remote_sha" != "$zero" ] && ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
-    echo "board-audit-pr-adapter: non-fast-forward update for $remote_ref; publishing under lease $remote_sha" >&2
-    if ! git push --no-verify "--force-with-lease=$remote_ref:$remote_sha" "$REMOTE" "$local_ref:$remote_ref" 2>&1; then
-      echo "board-audit-pr-adapter: code push failed (see above); skipping checkpoint" >&2
-      exit 0
-    fi
-  else
-    if ! git push --no-verify "$REMOTE" "$local_ref:$remote_ref" 2>&1; then
-      echo "board-audit-pr-adapter: code push failed (see above); skipping checkpoint" >&2
-      exit 0
-    fi
-  fi
-done
 
-# Phase 2: publish the checkpoint for the current branch's PR. Failures warn
-# only; the code push has already landed and must never be reported as failed
-# because evidence publication had a problem.
+# Resolve the PR for the current branch.
 PR_NUMBER=""
 if [ -n "${BOARD_AUDIT_PR_JSON:-}" ] && [ -f "$BOARD_AUDIT_PR_JSON" ]; then
   PR_NUMBER="$(python3 -c "import json,os;print(json.load(open(os.environ['BOARD_AUDIT_PR_JSON']))['number'])" 2>/dev/null || true)"
@@ -96,10 +70,35 @@ if [ -z "$PR_NUMBER" ] || ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
   exit 0
 fi
 
-export BOARD_AUDIT_PR_TRIGGER="${BOARD_AUDIT_PR_TRIGGER:-auto}"
-if python3 "$PR_FLOW" pr-checkpoint "$PR_NUMBER" --trigger auto; then
-  echo "board-audit-pr-adapter: published FRESH Board-Audit checkpoint for PR #$PR_NUMBER" >&2
-else
-  echo "board-audit-pr-adapter: WARNING — checkpoint for PR #$PR_NUMBER failed; the code push succeeded but the handoff may be stale or missing" >&2
+# No branch ref pushed (tag-only/deletion push): checkpoint synchronously as
+# best effort against the current remote head.
+if [ -z "$pushed_sha" ]; then
+  export BOARD_AUDIT_PR_TRIGGER="${BOARD_AUDIT_PR_TRIGGER:-auto}"
+  if python3 "$PR_FLOW" pr-checkpoint "$PR_NUMBER" --trigger auto; then
+    echo "board-audit-pr-adapter: published FRESH Board-Audit checkpoint for PR #$PR_NUMBER" >&2
+  else
+    echo "board-audit-pr-adapter: WARNING — checkpoint for PR #$PR_NUMBER failed (see above)" >&2
+  fi
+  exit 0
 fi
+
+# Detached one-shot poller: wait for git's own push to land (remote ref ==
+# pushed SHA), then publish the checkpoint. Never blocks the push; failures
+# land in the poller log.
+export BA_REMOTE="$REMOTE" BA_BRANCH="$branch" BA_SHA="$pushed_sha" \
+       BA_PR="$PR_NUMBER" BA_FLOW="$PR_FLOW" BOARD_AUDIT_PR_TRIGGER="${BOARD_AUDIT_PR_TRIGGER:-auto}"
+LOG="/tmp/board-audit-adapter-$PR_NUMBER.log"
+nohup setsid bash -c '
+  for _ in $(seq 1 30); do
+    cur="$(git ls-remote "$BA_REMOTE" "refs/heads/$BA_BRANCH" 2>/dev/null | awk "{print \$1}")"
+    [ "$cur" = "$BA_SHA" ] && break
+    sleep 2
+  done
+  if python3 "$BA_FLOW" pr-checkpoint "$BA_PR" --trigger auto; then
+    echo "board-audit-pr-adapter: published FRESH Board-Audit checkpoint for PR #$BA_PR" >&2
+  else
+    echo "board-audit-pr-adapter: WARNING — checkpoint for PR #$BA_PR failed; the push landed but the handoff may be stale or missing" >&2
+  fi
+' > "$LOG" 2>&1 &
+echo "board-audit-pr-adapter: deferred FRESH checkpoint for PR #$PR_NUMBER (poller log: $LOG)" >&2
 exit 0
