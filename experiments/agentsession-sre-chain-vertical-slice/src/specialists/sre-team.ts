@@ -1,5 +1,6 @@
 import type { ParticipantRole } from "../chain/types.ts";
 import {
+  compileSpecialistActivationProfile,
   loadSpecialistFromRepo,
   type LoadedSpecialistDocument,
 } from "./loader.ts";
@@ -13,11 +14,18 @@ export const SRE_SPECIALIST_BY_ROLE: Partial<Record<ParticipantRole, string>> = 
   // has no independent reviewer equivalent, and the reviewer is a runtime quality gate.
 };
 
+export interface FrozenSkillBinding {
+  declared_path: string;
+  resolved_path: string;
+  sha256: string;
+}
+
 export interface FrozenSpecialistBinding {
   name: string;
   source_path: string;
   sha256: string;
   version: string;
+  skills: FrozenSkillBinding[];
 }
 
 export async function resolveSreSpecialistBindings(
@@ -26,19 +34,30 @@ export async function resolveSreSpecialistBindings(
 ): Promise<Partial<Record<ParticipantRole, FrozenSpecialistBinding>>> {
   const result: Partial<Record<ParticipantRole, FrozenSpecialistBinding>> = {};
   for (const [role, name] of Object.entries(SRE_SPECIALIST_BY_ROLE) as Array<[ParticipantRole, string]>) {
-    let loaded: LoadedSpecialistDocument;
     try {
-      loaded = await loadSpecialistFromRepo(targetRepo, name);
+      const loaded: LoadedSpecialistDocument = await loadSpecialistFromRepo(targetRepo, name);
+      // Compile at approval/materialization time so every declared skill is resolved
+      // and fingerprinted before the first activation. `required` therefore fails
+      // early if cognition assets are incomplete.
+      const profile = await compileSpecialistActivationProfile(loaded, {
+        targetRepo,
+        strictSkills: true,
+      });
+      result[role] = {
+        name,
+        source_path: loaded.source.path,
+        sha256: loaded.source.sha256,
+        version: loaded.document.specialist.metadata.version,
+        skills: profile.skills.map((skill) => ({
+          declared_path: skill.declared_path,
+          resolved_path: skill.resolved_path,
+          sha256: skill.sha256,
+        })),
+      };
     } catch (error) {
       if (mode === "auto") continue;
       throw error;
     }
-    result[role] = {
-      name,
-      source_path: loaded.source.path,
-      sha256: loaded.source.sha256,
-      version: loaded.document.specialist.metadata.version,
-    };
   }
 
   if (mode === "required") {
@@ -46,7 +65,7 @@ export async function resolveSreSpecialistBindings(
       .filter(([role]) => !result[role as ParticipantRole])
       .map(([, name]) => name);
     if (missing.length > 0) {
-      throw new Error(`required SRE Specialist JSON missing: ${missing.join(", ")}`);
+      throw new Error(`required SRE Specialist JSON/cognition assets missing: ${missing.join(", ")}`);
     }
   }
   return result;
