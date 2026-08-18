@@ -727,7 +727,9 @@ class PrCheckpointTests(unittest.TestCase):
             hooks_dir = fx.source / ".git" / "hooks"
             stale = (
                 "#!/usr/bin/env sh\n"
-                "# --- BEGIN custom: beads/dolt sync before pre-push ---\n"
+                # Historical installs wrote "before push" (not "before pre-push");
+                # the refresh must find and replace that block too.
+                "# --- BEGIN custom: beads/dolt sync before push ---\n"
                 "if [ -x \"$(dirname \"$0\")/pre-push.bd-sync\" ]; then\n"
                 "    rc=0\n"
                 "    if [ $rc -ne 0 ]; then exit $rc; fi\n"

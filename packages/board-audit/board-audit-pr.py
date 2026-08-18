@@ -1279,7 +1279,10 @@ def cmd_init(args: argparse.Namespace) -> int:
         sync_block = SYNC_CHAINING_TEMPLATE.format(hook=hook)
         if _replace_section(
             hooks_dir / hook,
-            f"# --- BEGIN custom: beads/dolt sync before {hook}",
+            # The historical installed block says "before push"; the template
+            # says "before pre-push". Match the shared prefix so an older
+            # installed block is found and replaced either way.
+            "# --- BEGIN custom: beads/dolt sync before",
             "# --- END custom",
             sync_block,
         ):
