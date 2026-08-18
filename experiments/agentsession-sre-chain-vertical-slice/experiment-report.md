@@ -608,3 +608,106 @@ over from the experiment as-is):
 - Specialist-JSON runtime fusion.
 - Mutation journal, cross-host leases, Substrate durability.
 
+## 13. Bench: direct AgentSession vs sp RPC (partial, 2026-08-18)
+
+Bead `xtrm-1ia`. Wrapper: `scripts/bench-vs-sp.sh` (bash + per-2s process-tree
+RSS/CPU sampler, no `/usr/bin/time` dependency since the box has none installed).
+Target: `/home/dawid/projects/mercury/infra`. Same brief on both sides.
+
+The bench is **not a fair apples-to-apples wall-clock comparison** — see
+"prompt-shape non-parity" and "sp coordinator hang" below. What it does deliver
+is a real-world qualitative + partial-quantitative signal.
+
+### 13.1 What the direct side measured
+
+Two `direct` trials completed cleanly. Representative numbers (mercury infra,
+opencode-go/deepseek-v4-flash + zai/glm-5-turbo fallback):
+
+| trial | wall (s) | peak RSS (MB, process tree) | avg CPU% | peak PIDs |
+|---|---|---|---|---|
+| trial-1-direct (no PARTIAL loop) | 470 | 387 | 11.5% | 4 |
+| trial-1-direct (with PARTIAL loop → attempts=2 diagnostician) | 900 | 384 | 14.1% | 6 |
+| trial-1-direct (full-fanout brief, no PARTIAL) | 614 | 387 | 13.6% | 5 |
+
+The direct-side memory ceiling is stable at ~380–390 MB peak RSS regardless of
+whether the chain took the fast (single-pass) or slow (PARTIAL remediation)
+path — the same Bun process hosts every AgentSession in-process. Wall time
+tracks the model reasoning cost + PARTIAL loops, not framework overhead.
+
+### 13.2 What the sp side actually did (twice)
+
+Both `sp` trials terminated in **failure modes attributable to the framework
+layer**, not to the model or the specialist prompt:
+
+**Trial A (baseline-brief prompt).** `sp run sre-coordinator --no-keep-alive
+--prompt "<baseline brief>"` completed in **65 s** but never fanned out — the
+v1.5 coordinator interpreted the wording as an ambient-triage request and
+emitted a single-turn briefing. Peak RSS 258 MB, 10 pids (pi bootstrap
+children). **Not comparable** to the direct side which force-executes the
+frozen 6-participant topology regardless of prompt shape. This is a
+prompt-shape non-parity between the two paths and is properly a spec-of-the-
+comparison bug, not a framework fault.
+
+**Trial B (full-fanout prompt).** `sp run sre-coordinator --no-keep-alive
+--prompt "Full-triage incident investigation (NOT ambient briefing)..."`
+correctly fanned out to the three sub-specialists via `sp run --background`,
+then **hung indefinitely** in the coordinator's polling loop
+(`sleep 90 && sp ps | grep <job-hash>`). After 20+ minutes without progress
+we killed the process. `sp ps` at kill time showed the epic containing all
+four child jobs in the `failed` bucket — one or more sub-specialists had
+crashed silently, and the coordinator's polling loop had no timeout guard
+against that. This is a real fragility of the `sp` orchestration path:
+**silent sub-specialist failure + unbounded coordinator wait = a stuck job
+that consumes model quota indefinitely until an operator kills it**. The
+direct AgentSession chain has no equivalent failure mode — a dispatched
+step that produces no evidence is bounded by pi's own retry/stall settings
+and the reducer's per-step attempts counter, and `--resume` recovers stuck
+steps deterministically.
+
+### 13.3 The qualitative finding that survives the non-parity
+
+Even though the two paths were not doing the same work in the two sp trials,
+the runs surfaced a durable architectural difference:
+
+- **Direct AgentSession chain**: framework layer is a pure reducer + a
+  scheduler that owns the wait-loop and controls timeouts per-step; a
+  hung/crashed step is visible in the run-state, bounded by attempts +
+  stall_timeout_ms, and recoverable via `--resume`. In three trials, zero
+  hung processes and zero unbounded polling.
+- **sp RPC**: framework layer is a coordinator specialist that itself
+  polls via shell (`sleep + sp ps + grep`), meaning the wait-loop is
+  agent-authored and unbounded unless the specialist author remembers to
+  add a timeout. In two trials, one hung indefinitely on a silent
+  sub-specialist crash. This is not the model's fault and not the
+  specialist prompt's fault — it is a runtime-authority gap where the
+  framework delegates its own control-loop to a specialist.
+
+For the "should XTRM own a harness" question this bench was meant to
+inform, the sp side's fragility on Trial B is arguably more informative
+than the wall-clock numbers would have been: **the harness's own control
+loop should not live inside a specialist prompt**. That is exactly what
+the direct AgentSession chain proves is buildable outside of pi RPC.
+
+### 13.4 What a proper A/B would need (not done)
+
+- A `sp` invocation shape that also frozen-executes the fixed topology
+  (i.e. use `bd formula pour` to materialize the same 6-step DAG, then
+  run each specialist non-interactively) — probably `sp mol run` or
+  equivalent, TBD after the current specialists chain-template canon
+  resolves the gap noted in the base spec §19.
+- A wall-clock-only comparison stripped of model reasoning variance
+  (same seed, same prompt, same context; only framework overhead).
+- Token cost per participant, extracted from `session.state.messages`
+  usage stats on the direct side and from `sp result --json` on the sp
+  side.
+- Multiple trials each side for statistical significance.
+
+### 13.5 Artifacts
+
+- `scripts/bench-vs-sp.sh` — the wrapper (as-is; captures wall + peak
+  RSS + avg CPU + peak-pids via a per-2s process-tree sampler).
+- `/tmp/svs-bench.log` — human progress lines from the two live runs
+  (retained until reboot; not committed).
+- `/tmp/svs-bench-samples.jsonl` — per-2s tree samples (retained until
+  reboot; not committed).
+
