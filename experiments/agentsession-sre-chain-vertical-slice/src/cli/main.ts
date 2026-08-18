@@ -8,6 +8,7 @@ import * as fsSync from "node:fs";
 import * as path from "node:path";
 import { parseArgs, helpText } from "./args.ts";
 import { initRunDir, loadResolvedChain, loadRunState, paths, saveDesignInputs, saveResolvedChain, saveRunState } from "../chain/store.ts";
+import { loadChainRunInputs, saveChainRunInputs } from "../chain/run-inputs.ts";
 import { projectEvidence } from "../evidence/index.ts";
 import { newResolvedChain } from "../chain/topology.ts";
 import { initialRunState } from "../chain/reducer.ts";
@@ -95,11 +96,19 @@ async function main() {
       process.stderr.write(`resume: no resolved chain at ${p.resolvedChain}\n`);
       process.exit(2);
     }
+    const frozenInputs = await loadChainRunInputs(p);
+    const resumeTargetRepo = path.resolve(args.repo ?? frozenInputs?.target_repo_path ?? process.cwd());
+    const resumeIncidentBrief = args.incidentBrief || frozenInputs?.incident_brief || "";
+    if (!fsSync.existsSync(resumeTargetRepo)) {
+      throw new Error(`resume target repo not found: ${resumeTargetRepo}`);
+    }
+
     logger.human(`resuming chain_run_id=${chainRunId} chain_id=${existing.chain_id}`);
+    logger.human(`target_repo=${resumeTargetRepo} (persisted=${Boolean(frozenInputs)})`);
     const frozenSpecialists = await loadSpecialistBindings(p);
     if (frozenSpecialists) {
       logger.human(
-        `specialist_json=${frozenSpecialists.mode} bindings=${Object.keys(frozenSpecialists.bindings).length} (source-hash enforced)`,
+        `specialist_json=${frozenSpecialists.mode} bindings=${Object.keys(frozenSpecialists.bindings).length} (JSON + skill hashes enforced)`,
       );
     }
 
@@ -133,10 +142,10 @@ async function main() {
           paths: p,
           chain: existing,
           channelId: `chain:${existing.chain_id}`,
-          targetRepo: args.repo ?? process.cwd(),
+          targetRepo: resumeTargetRepo,
           onFact,
         },
-        "",
+        resumeIncidentBrief,
       );
     } else {
       logger.human("--no-agents: skipping dispatch");
@@ -144,7 +153,9 @@ async function main() {
     return;
   }
 
-  const targetRepo = args.repo ?? path.resolve(new URL("../../fixtures/tiny-repo", import.meta.url).pathname);
+  const targetRepo = path.resolve(
+    args.repo ?? new URL("../../fixtures/tiny-repo", import.meta.url).pathname,
+  );
   if (!fsSync.existsSync(targetRepo)) {
     process.stderr.write(`target repo not found: ${targetRepo}\n`);
     process.exit(2);
@@ -152,6 +163,11 @@ async function main() {
 
   const fp = await fingerprint({ targetRepo, rootBeadRef: args.rootBead });
   await saveDesignInputs(p, fp);
+  await saveChainRunInputs(p, {
+    schema_version: 1,
+    target_repo_path: targetRepo,
+    incident_brief: args.incidentBrief,
+  });
 
   if (args.specialistJson !== "off") {
     const bindings = await resolveSreSpecialistBindings(targetRepo, args.specialistJson);
@@ -201,7 +217,7 @@ async function main() {
   if (args.specialistJson !== "off") {
     const frozen = await loadSpecialistBindings(p);
     logger.human(
-      `specialist_json=${args.specialistJson} bindings=${Object.keys(frozen?.bindings ?? {}).length} frozen`,
+      `specialist_json=${args.specialistJson} bindings=${Object.keys(frozen?.bindings ?? {}).length} frozen (JSON + skill assets)`,
     );
   } else {
     logger.human("specialist_json=off (legacy adapted role markdown)");
@@ -215,7 +231,7 @@ async function main() {
 
   if (args.dryRun) {
     logger.human("--dry-run: plan materialized. Not dispatching. To run:");
-    logger.human(`  bun run src/cli/main.ts --repo ${targetRepo} --state-dir ${stateDir} --resume ${chainRunId}`);
+    logger.human(`  bun run src/cli/main.ts --state-dir ${stateDir} --resume ${chainRunId}`);
     return;
   }
 
