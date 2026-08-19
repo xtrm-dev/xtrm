@@ -1,0 +1,115 @@
+{
+  "bd_version": "bd version 1.2.1 (634cbbc4b: HEAD@634cbbc4bc58)",
+  "diagnostics": {
+    "derived_dotted_parent_links": [],
+    "unknown_parent_refs": [],
+    "unpackaged_selected_ids": []
+  },
+  "generated_at": "2026-08-19T00:28:19.445634+00:00",
+  "packages": [
+    {
+      "content_sha256": "a65ad902ffdc93608f1b6c0840ca7c64db16eb30890686475d7df578717bd4ba",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-07e__release-flow-dev-integrates-main-stable-release-line-clone-safe-for-non-technical-users.json",
+      "issue_count": 1,
+      "root_id": "xtrm-07e",
+      "selected_issue_count": 1,
+      "title": "release-flow: dev integrates, main = stable release line (clone-safe for non-technical users)"
+    },
+    {
+      "content_sha256": "0fc7654d6c2e305877a416a740401855d669c3324d510a50d0c0d4aa71ff28fe",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-2zd__reconcile-mercury-devops-collaborator-with-xtrm-v1-runtime-and-ownership-semantics.json",
+      "issue_count": 5,
+      "root_id": "xtrm-2zd",
+      "selected_issue_count": 5,
+      "title": "Reconcile Mercury DevOps collaborator with XTRM v1 runtime and ownership semantics"
+    },
+    {
+      "content_sha256": "42e6e9e74fed92f14de2bfb99718e5e060cdb607d8ff239a6f8240b76a7a1cf7",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-401__fix-service-knowledge-skill-activator-decide-hard-blocks-when-the-index-is-merely-unimportable.json",
+      "issue_count": 1,
+      "root_id": "xtrm-401",
+      "selected_issue_count": 1,
+      "title": "fix(service-knowledge): skill_activator decide() hard-blocks when the index is merely unimportable"
+    },
+    {
+      "content_sha256": "367ffb3edc1ac044a89a5f5c2ef65e025f20f3f4953603942a2251d9f5630866",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-56flm__epic-service-skills-reframe-deterministic-verifier-evidence-first-retrieval.json",
+      "issue_count": 1,
+      "root_id": "xtrm-56flm",
+      "selected_issue_count": 1,
+      "title": "Epic: service-skills reframe — deterministic verifier + evidence-first retrieval"
+    },
+    {
+      "content_sha256": "64f9ab0328084b37399cb500d473bf988523eb39c91160b47708186a131843c3",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-6e8__extend-service-knowledge-capabilities-for-docs-like-the-infra-telemetry-wiring-must-be-done-corr.json",
+      "issue_count": 1,
+      "root_id": "xtrm-6e8",
+      "selected_issue_count": 1,
+      "title": "extend service knowledge capabilities for docs like the infra telemetry wiring. must be done correctly and made sure no staleness risk"
+    },
+    {
+      "content_sha256": "bfc1a33a0123d86e939c4c3348c405f3ca2b81ab961a225a29ab53e336b5255c",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-8fo__enable-ssh-commit-signing-required-signatures-on-xtrm-main.json",
+      "issue_count": 1,
+      "root_id": "xtrm-8fo",
+      "selected_issue_count": 1,
+      "title": "Enable SSH commit signing + required_signatures on xtrm main"
+    },
+    {
+      "content_sha256": "37f8679d8ee2dda3e3c0b23f0bd40e0f3af81e17ae3e78b9b19852acc3cef453",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-crz__fix-service-knowledge-make-drift-detection-ref-based-so-isolated-worktrees-work.json",
+      "issue_count": 1,
+      "root_id": "xtrm-crz",
+      "selected_issue_count": 1,
+      "title": "fix(service-knowledge): make drift detection ref-based so isolated worktrees work"
+    },
+    {
+      "content_sha256": "303c65936920623f83e356c7784bc90bf33ec91a78fd2dc0296591a74fca24ab",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-h1r__session-handoff-2026-06-14-pick-up-next-priorities.json",
+      "issue_count": 1,
+      "root_id": "xtrm-h1r",
+      "selected_issue_count": 1,
+      "title": "Session handoff 2026-06-14: pick up next priorities"
+    },
+    {
+      "content_sha256": "41d37500f301208c4499f92f7553d08af534de2e1f113cf19e94891133daa51a",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-w5m__bench-direct-agentsession-vs-sp-rpc-rss-cpu-wall.json",
+      "issue_count": 1,
+      "root_id": "xtrm-w5m",
+      "selected_issue_count": 1,
+      "title": "Bench: direct AgentSession vs sp RPC RSS/CPU/wall"
+    },
+    {
+      "content_sha256": "485c4f7556e7676494885ceff6c7443aae20a52311ca5be242c33ff910c6dfea",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-y9i__session-handoff-2026-06-10-pick-up-next-priorities.json",
+      "issue_count": 1,
+      "root_id": "xtrm-y9i",
+      "selected_issue_count": 1,
+      "title": "Session handoff 2026-06-10: pick up next priorities"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "schema_version": "xtrm.board-audit.snapshot-manifest.v1",
+  "selection": {
+    "context_only_record_count": 0,
+    "requested_id": null,
+    "scope": "open",
+    "selected_record_count": 14
+  },
+  "source": {
+    "command": "bd export --all",
+    "raw_file": "raw-beads.jsonl",
+    "raw_record_count": 92,
+    "raw_sha256": "409f5bece9d993eb2f790136a9dda397f3d8e1005daac59256241b859de00f78"
+  }
+}

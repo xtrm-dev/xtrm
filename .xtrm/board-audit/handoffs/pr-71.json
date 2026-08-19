@@ -1,0 +1,35 @@
+{
+  "beads_root_ids": [
+    "xtrm-07e",
+    "xtrm-2zd",
+    "xtrm-401",
+    "xtrm-56flm",
+    "xtrm-6e8",
+    "xtrm-8fo",
+    "xtrm-crz",
+    "xtrm-h1r",
+    "xtrm-w5m",
+    "xtrm-y9i"
+  ],
+  "generated_at": "2026-08-19T00:28:16Z",
+  "handoff": ".xtrm/board-audit/handoffs/pr-71.json",
+  "implementation_branch": "web/full-specialist-json-loader-2026-08-18",
+  "implementation_head_sha": "f9bee07e532556f9d155291ceff902f44c520cc7",
+  "index": ".xtrm/board-audit/index.json",
+  "open_issue_count": 14,
+  "producer": {
+    "board_audit_source": "repository",
+    "git_sha": "9fe91bfdacf7c83fdca3d1a4450ce40028fcbdef",
+    "package_sha256": "ef69515e3153710883c58fa913fd5913f18813f8eb98fa8972f8046d4d6bc2e2",
+    "repository": "xtrm-dev/xtrm"
+  },
+  "pull_request": 71,
+  "repository": "xtrm-dev/xtrm",
+  "schema_version": "xtrm.board-audit.pr-handoff.v1",
+  "snapshot_id": "f3769ad3ba83c0785e1034ff963ebb85718cb3f95091f9df71976450b354815b",
+  "snapshot_sha256": "409f5bece9d993eb2f790136a9dda397f3d8e1005daac59256241b859de00f78",
+  "state": "prepared",
+  "transport_branch": "board-audit/pr-71",
+  "transport_head_sha": null,
+  "work_package_count": 10
+}

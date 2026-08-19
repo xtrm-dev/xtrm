@@ -1,0 +1,78 @@
+{
+  "content_sha256": "a65ad902ffdc93608f1b6c0840ca7c64db16eb30890686475d7df578717bd4ba",
+  "desired_issues": {
+    "xtrm-07e": {
+      "_type": "issue",
+      "comment_count": 0,
+      "created_at": "2026-07-26T19:49:54Z",
+      "created_by": "jaggerxtrm",
+      "dependency_count": 0,
+      "dependent_count": 0,
+      "description": "## PROBLEM\n\nThree active repos under `~/dev/` — `specialists`, `xtmux`, `core` — currently merge all sprint work directly to `main` under PR protection. Non-technical users who clone `main` mid-sprint receive a half-done product: the branch tip tracks every dev merge, so a clone during a 20-PR sprint lands on an incoherent, non-shippable state.\n\nRoot cause: `main` is both integration target AND release line. No branch stays frozen between releases.\n\n## SCOPE (agreed model)\n\nApplies to all three repos: `~/dev/specialists`, `~/dev/xtmux`, `~/dev/core` (shorthand: `~/dev/{specialists,xtmux,core}`).\n\n- `dev` = integration branch. All sprint PRs land here. Allowed to be half-done mid-sprint. Contributors target `dev`.\n- `main` = release line, stays default branch (bare `git clone` hits stable code). Advances ONLY at release boundaries, not per dev merge. A release = \"sprint done, verified\" → merge `dev -> main` → tag `vX.Y.Z`.\n- Non-technical users clone `main` → always get a coherent, shippable product. Half-done state lives on `dev` and never reaches `main`.\n- Key rule: `dev -> main` = release. `main` does not auto-track `dev`.\n\n## HOTFIX POLICY (decided)\n\nMid-sprint `dev` is unstable, so `dev -> main` merge is not viable for shipping a fix.\n- Hotfix = cherry-pick to `main` as patch release (`vX.Y.Z+1`), AND land the same fix on `dev` for next sprint release.\n- Chosen over `hotfix/*` branch + back-merge (lazier, fewer branches).\n\n## WORK ITEMS (rough — refine when promoted from draft)\n\n- [ ] For each repo in `~/dev/{specialists,xtmux,core}`:\n  - [ ] Branch protection on `dev`: PRs required, required CI status checks, linear history.\n  - [ ] Tighten `main`: only `dev -> main` merge PRs accepted; keep default branch = main; required CI.\n  - [ ] Add required status checks (CI: lint + test) on both branches if not present.\n  - [ ] Write one-page CONTRIBUTING note: PRs target `dev`; releases cut from `dev -> main` merge + tag; hotfix = cherry-pick to `main` + land on `dev`.\n- [ ] Define release cadence guardrail per repo: do not let `main` go stale (stale main = different complaint, same dissatisfaction).\n- [ ] Decide per-repo CI workflow details (stacks may differ across the three repos).\n\n## TBD\n\n- Per-repo CI stack details (specialists / xtmux / core may differ).\n- Whether all three adopt the model in the same pass or phased.\n- Release cadence per repo (may differ).\n\n## CONTEXT\n\nFiled under specialists:xtmux territory. Work to be done at a later point. Created as draft contract (contract:draft label) until promoted to ready before dispatch.",
+      "id": "xtrm-07e",
+      "issue_type": "task",
+      "labels": [
+        "contract:draft",
+        "specialists",
+        "xtmux"
+      ],
+      "owner": "jagger.xtrm@gmail.com",
+      "priority": 0,
+      "status": "open",
+      "title": "release-flow: dev integrates, main = stable release line (clone-safe for non-technical users)",
+      "updated_at": "2026-07-26T20:03:19Z"
+    }
+  },
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-07e"
+  },
+  "issues": {
+    "xtrm-07e": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-07-26T19:49:54Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nThree active repos under `~/dev/` — `specialists`, `xtmux`, `core` — currently merge all sprint work directly to `main` under PR protection. Non-technical users who clone `main` mid-sprint receive a half-done product: the branch tip tracks every dev merge, so a clone during a 20-PR sprint lands on an incoherent, non-shippable state.\n\nRoot cause: `main` is both integration target AND release line. No branch stays frozen between releases.\n\n## SCOPE (agreed model)\n\nApplies to all three repos: `~/dev/specialists`, `~/dev/xtmux`, `~/dev/core` (shorthand: `~/dev/{specialists,xtmux,core}`).\n\n- `dev` = integration branch. All sprint PRs land here. Allowed to be half-done mid-sprint. Contributors target `dev`.\n- `main` = release line, stays default branch (bare `git clone` hits stable code). Advances ONLY at release boundaries, not per dev merge. A release = \"sprint done, verified\" → merge `dev -> main` → tag `vX.Y.Z`.\n- Non-technical users clone `main` → always get a coherent, shippable product. Half-done state lives on `dev` and never reaches `main`.\n- Key rule: `dev -> main` = release. `main` does not auto-track `dev`.\n\n## HOTFIX POLICY (decided)\n\nMid-sprint `dev` is unstable, so `dev -> main` merge is not viable for shipping a fix.\n- Hotfix = cherry-pick to `main` as patch release (`vX.Y.Z+1`), AND land the same fix on `dev` for next sprint release.\n- Chosen over `hotfix/*` branch + back-merge (lazier, fewer branches).\n\n## WORK ITEMS (rough — refine when promoted from draft)\n\n- [ ] For each repo in `~/dev/{specialists,xtmux,core}`:\n  - [ ] Branch protection on `dev`: PRs required, required CI status checks, linear history.\n  - [ ] Tighten `main`: only `dev -> main` merge PRs accepted; keep default branch = main; required CI.\n  - [ ] Add required status checks (CI: lint + test) on both branches if not present.\n  - [ ] Write one-page CONTRIBUTING note: PRs target `dev`; releases cut from `dev -> main` merge + tag; hotfix = cherry-pick to `main` + land on `dev`.\n- [ ] Define release cadence guardrail per repo: do not let `main` go stale (stale main = different complaint, same dissatisfaction).\n- [ ] Decide per-repo CI workflow details (stacks may differ across the three repos).\n\n## TBD\n\n- Per-repo CI stack details (specialists / xtmux / core may differ).\n- Whether all three adopt the model in the same pass or phased.\n- Release cadence per repo (may differ).\n\n## CONTEXT\n\nFiled under specialists:xtmux territory. Work to be done at a later point. Created as draft contract (contract:draft label) until promoted to ready before dispatch.",
+        "id": "xtrm-07e",
+        "issue_type": "task",
+        "labels": [
+          "contract:draft",
+          "specialists",
+          "xtmux"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 0,
+        "status": "open",
+        "title": "release-flow: dev integrates, main = stable release line (clone-safe for non-technical users)",
+        "updated_at": "2026-07-26T20:03:19Z"
+      }
+    }
+  },
+  "new_comments": {},
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-07e",
+  "root_title": "release-flow: dev integrates, main = stable release line (clone-safe for non-technical users)",
+  "roundtrip": {
+    "base_package_sha256": "a65ad902ffdc93608f1b6c0840ca7c64db16eb30890686475d7df578717bd4ba",
+    "base_record_sha256": {
+      "xtrm-07e": "32067ae5a6593a84b656ae07586f3daed62c93f5b39e2e6ef2d75f9b5648525e"
+    },
+    "edit_contract": "modify desired_issues and new_comments only; issues.*.source is immutable base state",
+    "prepared_at": "2026-08-19T00:28:19Z",
+    "schema_version": "xtrm.board-audit.roundtrip.v1"
+  },
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}
