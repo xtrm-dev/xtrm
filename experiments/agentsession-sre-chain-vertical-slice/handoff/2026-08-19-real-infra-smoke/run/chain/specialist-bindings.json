@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "mode": "required",
+  "created_at": "2026-08-19T04:08:26.199Z",
+  "bindings": {
+    "chain-coordinator": {
+      "name": "sre-coordinator",
+      "source_path": "/tmp/claude-1000/-home-dawid-dev-xtrm/a27124c7-55e7-4dcf-a286-d399f828df5a/scratchpad/mercury-infra-mirror/.specialists/user/sre-coordinator.specialist.json",
+      "sha256": "2c5f202eec54c171fb78507f9c8b8256bbc169f3da99ef7f32d318095b694792",
+      "version": "1.5.0",
+      "skills": [
+        {
+          "declared_path": "~/.xtrm/skills/default/using-specialists/SKILL.md",
+          "resolved_path": "/home/dawid/.xtrm/skills/default/using-specialists/SKILL.md",
+          "sha256": "8ba5c2fc32044ee44f689b565da4dbd275fd5dbcc8d75df127a26c29e040c8d0"
+        },
+        {
+          "declared_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/SKILL.md",
+          "resolved_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/SKILL.md",
+          "sha256": "25872bc7b836d805043d1bb32f45a5334e0d9d33e66a245918830090f0d16e6f"
+        },
+        {
+          "declared_path": "/home/dawid/.claude/skills/sre-triage/SKILL.md",
+          "resolved_path": "/home/dawid/.xtrm/skills/default/sre-triage/SKILL.md",
+          "sha256": "87c99ed01314d79ebb6856d38e31680214a83529cc2fbfe83198627271997453"
+        }
+      ]
+    },
+    "explorer": {
+      "name": "sre-host-forensics",
+      "source_path": "/tmp/claude-1000/-home-dawid-dev-xtrm/a27124c7-55e7-4dcf-a286-d399f828df5a/scratchpad/mercury-infra-mirror/.specialists/user/sre-host-forensics.specialist.json",
+      "sha256": "23f0a42869f1cc3e6b249103e07ca3eb1c3ca3e1451d9c3edfceb88f34acd343",
+      "version": "1.1.0",
+      "skills": [
+        {
+          "declared_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/SKILL.md",
+          "resolved_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/SKILL.md",
+          "sha256": "25872bc7b836d805043d1bb32f45a5334e0d9d33e66a245918830090f0d16e6f"
+        },
+        {
+          "declared_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/cadvisor/SKILL.md",
+          "resolved_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/cadvisor/SKILL.md",
+          "sha256": "a123bdbbba5e1e7ade78ebf219969843286074a9e089737829ecebe9d4e1828f"
+        },
+        {
+          "declared_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/node-exporter/SKILL.md",
+          "resolved_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/node-exporter/SKILL.md",
+          "sha256": "eee9853119643711aed02d6cf26d06ef87724f1c41516b4eaf3a1eb3a1da6959"
+        },
+        {
+          "declared_path": "/home/dawid/.claude/skills/capacity-reclaim/SKILL.md",
+          "resolved_path": "/home/dawid/.xtrm/skills/default/capacity-reclaim/SKILL.md",
+          "sha256": "f732ede49107017eb117a7a24669ea6ac4dca069e1c6cd1096a937bbf8472a62"
+        }
+      ]
+    },
+    "observability-analyst": {
+      "name": "sre-observability-forensics",
+      "source_path": "/tmp/claude-1000/-home-dawid-dev-xtrm/a27124c7-55e7-4dcf-a286-d399f828df5a/scratchpad/mercury-infra-mirror/.specialists/user/sre-observability-forensics.specialist.json",
+      "sha256": "aa7ca69bdb1e7f76ddd10c7fcdc7036f418d7cbb02d8277f14185c390df70522",
+      "version": "1.1.0",
+      "skills": [
+        {
+          "declared_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/SKILL.md",
+          "resolved_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/SKILL.md",
+          "sha256": "25872bc7b836d805043d1bb32f45a5334e0d9d33e66a245918830090f0d16e6f"
+        },
+        {
+          "declared_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/prometheus/SKILL.md",
+          "resolved_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/prometheus/SKILL.md",
+          "sha256": "a52039efcc762edab15c9c07adb03ff806cbeebc99f7bee455cbed294857c00f"
+        },
+        {
+          "declared_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/loki/SKILL.md",
+          "resolved_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/loki/SKILL.md",
+          "sha256": "42105ba340ea3557eab821fd27068fe532602f5eb87e5d3d09d0f2260263d4e8"
+        },
+        {
+          "declared_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/tempo/SKILL.md",
+          "resolved_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/tempo/SKILL.md",
+          "sha256": "e7e124ab53b0c763c13956a66cd8e6f927ed5c696bcd9bea23747eeb86d4e68f"
+        },
+        {
+          "declared_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/grafana-mcp/SKILL.md",
+          "resolved_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/grafana-mcp/SKILL.md",
+          "sha256": "16c96acfeb286c070b9d6c064f7f68c50dccd13fb50509942861ed1eb283d2fe"
+        },
+        {
+          "declared_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/alerting/SKILL.md",
+          "resolved_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/services/alerting/SKILL.md",
+          "sha256": "1b30b2363a29f16aa2df6368a52564b23cc8ff1cbf8a0f8b9674e7ce1825eacb"
+        }
+      ]
+    },
+    "sre-diagnostician": {
+      "name": "sre-change-forensics",
+      "source_path": "/tmp/claude-1000/-home-dawid-dev-xtrm/a27124c7-55e7-4dcf-a286-d399f828df5a/scratchpad/mercury-infra-mirror/.specialists/user/sre-change-forensics.specialist.json",
+      "sha256": "9e0f6c1bbabe9bcdbaa7e97aa0e2a34b2a23bb5a270116e03d4ff3820967bf59",
+      "version": "1.1.0",
+      "skills": [
+        {
+          "declared_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/SKILL.md",
+          "resolved_path": "/home/dawid/projects/mercury/infra/.xtrm/skills/infra/service-knowledge/SKILL.md",
+          "sha256": "25872bc7b836d805043d1bb32f45a5334e0d9d33e66a245918830090f0d16e6f"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "chain_epic_id": "vsvs-chain-sre-9ec830-epic",
+  "step_bead_ids": {
+    "coordinator-entry": "vsvs-chain-sre-9ec830-coordinator-entry",
+    "explorer": "vsvs-chain-sre-9ec830-explorer",
+    "observability": "vsvs-chain-sre-9ec830-observability",
+    "diagnostician": "vsvs-chain-sre-9ec830-diagnostician",
+    "reviewer": "vsvs-chain-sre-9ec830-reviewer",
+    "coordinator-close": "vsvs-chain-sre-9ec830-coordinator-close"
+  }
+}

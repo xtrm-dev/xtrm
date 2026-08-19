@@ -1,0 +1,69 @@
+{
+  "schema_version": "sre-change-forensics.report.v1",
+  "chain_id": "chain-sre-9ec830",
+  "chain_run_id": "run-sre-d8b91",
+  "step_id": "diagnostician",
+  "role": "sre-diagnostician",
+  "participant_id": "chain-sre-9ec830::sre-diagnostician",
+  "execution_id": "exec-chain-sre-9ec830-sre-diagnostician-2",
+  "attempt": 2,
+  "incident_brief": "Baseline SRE triage. Read-only. Report top 5 observations with evidence.",
+  "incident_window": "2026-08-17T09:49Z (mmd-questdb container start) to 2026-08-19T04:15Z (observability snapshot) — reported symptom window; outage (QuestDB equities candle freshness 2/4) spanned >=24h to 08-19T04:15Z",
+  "method": "read-only probes: git log/show/branch (infra mirror), docker ps/inspect/logs, grep of prometheus.yml; probe commands cited per finding",
+  "summary": "No in-window change (git commit, image build, or deploy) touched the QuestDB/candle data path. The equities candle freshness outage (fresh=2/4; NQ=F/YM=F stale) is feed-side: mmd-snapshot-feed & mmd-data-feed both Up 4d from the SAME mmd-python:latest build created 2026-08-15T00:36Z — no candle-path deploy in window. mmd-questdb restarted 2026-08-17T09:49Z on an unchanged questdb/questdb:latest image (created 2026-03-26), 12GiB memory cap, no image change in window; its logs show steady WAL-apply/o3-merge (no crash loop). The only in-window change train is the api-gateway KAN-58 lane-B (#321-#330, 08-18T19:05Z->08-19T05:07Z), deployed clean (infra-api-gateway Up since 08-18T17:12:49Z, restarts=0, /health /metrics 200) and confined to the api-gateway service. Two config-drift defects correlate with alert noise, NOT with the candle outage: (a) stale scrape target ext-papers:8006 in HEAD prometheus.yml L86 (comment L89 'stays down by design') keeps up==0=1 -> ServiceDown + observability-gate=0; fix eb71393 'drop stale scrape' exists ONLY on branch xt/p35r (unmerged) — HEAD predates it; (b) mmd-questdb on json-file log driver with no rotation config, json.log 23.9GiB (ContainerJsonLogTooLarge) — infra compose ships default-logging, mercury-market-data compose does not. 3rd orphan tsdb_repro_t80he (bridge, default POSTGRES_PASSWORD=postgres, no healthcheck, no compose labels, created/started 2026-07-28T17:22:59Z) confirmed; 2 legacy debug orphans (bold_tesla 08-01T17:55Z, nice_meninsky 07-28T13:14Z) confirmed. Swap 95.7% escalation (inflection ~08-19T00:30Z) is host-pressure correlation with QuestDB CPU ramp (170->345% at 08-18T19:00Z) and KAN-58 deploy train — correlational only, no causal link established to the candle outage.",
+  "top_5_observations": [
+    {
+      "rank": 1,
+      "observation": "QuestDB equities candle outage (fresh=2/4, NQ=F/YM=F stale; 5m/30m/1h FamilyOutage + SymbolStale) is NOT caused by any in-window change to the candle path — no candle-path deploy exists in the window",
+      "evidence": [
+        "docker inspect mmd-questdb: image=questdb/questdb:latest created=2026-03-26T18:09:06Z started=2026-08-17T09:49:51Z restarts=0 (restart 08-17T09:49Z on UNCHANGED 4-month-old image; no rebuild in window)",
+        "docker inspect mmd-snapshot-feed + mmd-data-feed: image=mmd-python:latest created=2026-08-15T00:36:36Z/00:36:28Z started=2026-08-15T00:36:54Z/00:36:53Z restarts=0 — both feeds Up 4d on the SAME 08-15 build; no candle-path code change deployed in window",
+        "git log infra --since=2026-08-16: only api-gateway KAN-58 train (#321-#330) + traefik strip (#323) + smml/otel pin + beads/reap chores — NO commit touches questdb/market-data/docker-compose data path",
+        "docker logs mmd-questdb --tail 25: continuous WAL apply + o3 partition merge on ohlcv_5m/30m/1h (steady-state maintenance; DB alive, writing 04:10Z candles) — no error/crash"
+      ],
+      "assessment": "Causal-negative for deploy-caused outage: candle-path code/images unchanged since 08-15T00:36Z. Staleness is feed-side (observability analyst: mmd-snapshot-feed stale_leg_skip_write EF-M27/EF-H27 every 5m + compute.completed 27.8s) — correlation with host CPU contention, not a regression from a merged change."
+    },
+    {
+      "rank": 2,
+      "observation": "KAN-58 api-gateway change train (#321-#330, 08-18T19:05Z->08-19T05:07Z) — the ONLY in-window merged change train — deployed clean; excluded as cause of the candle outage",
+      "evidence": [
+        "git log infra: bddc58c 08-19T05:11:02Z cycle-8 pin sha256:d10089ab; #324/#325 (c6, 00:09/00:16Z), #327/#328 (c7, 02:45/03:03Z), #329/#330 (c8, 05:07Z); #321/#322 08-18T19:05/19:10Z; #323 traefik strip 08-18T23:36Z",
+        "docker inspect infra-api-gateway: created=2026-08-18T17:12:47Z started=2026-08-18T17:12:49Z restarts=0 — running pinned sha256:892d2081 since 08-18T17:12:49Z (pre-train)",
+        "explorer: infra-api-gateway healthy, /health /metrics 200, no errors; runner rebuilds infra-runner 01:59Z/platform 03:15Z image_created~started"
+      ],
+      "assessment": "Timing overlaps the swap-escalation inflection (00:30Z) and QuestDB CPU ramp, but scope is api-gateway-only (supavisor/entitlement/CF-access/secret-pins). No interface to candles/QuestDB. HIGH confidence NOT the outage cause; LOW-MEDIUM correlation with host load."
+    },
+    {
+      "rank": 3,
+      "observation": "Config-drift defect (alerting hygiene): stale scrape target ext-papers:8006 in HEAD prometheus.yml L86 keeps up==0=1 -> ServiceDown (critical) + mercury:observability_healthy:bool=0; the FIX (eb71393 'drop stale scrape') exists ONLY on unmerged branch xt/p35r",
+      "evidence": [
+        "grep -n 'ext-papers' prometheus/prometheus.yml: L86 '- \"ext-papers:8006\"' + L89 '# ext-papers:8006 above stays down by design (compose profile, stopped).' — target STILL in HEAD",
+        "git show eb71393 -- prometheus/prometheus.yml: commit 2026-08-17T08:48:12Z removes the target (diff '- \"ext-papers:8006\"' + comment 'Legacy monolithic ext-papers:8006 removed...')",
+        "git branch --contains eb71393: only 'xt/p35r' — NOT merged to main; HEAD (bddc58c) does not include it",
+        "docker inspect ext-papers-acquire/registrar/digest: created 08-16T22:16-22:17Z — monolith split into 5 decomposed services 2 days prior (explorer/observability: all Up 2d healthy)"
+      ],
+      "assessment": "By-design-down target (comment) yet still scraped: alert noise + gate=0 is a stale-config artifact whose fix is UNMERGED on xt/p35r. Not the candle outage. HIGH confidence defect; MEDIUM-HIGH confidence fix should merge (reconcile comment L89 with the removal, or silence alert)."
+    },
+    {
+      "rank": 4,
+      "observation": "mmd-questdb json.log 23.9GiB unrotated (ContainerJsonLogTooLarge) — no log-rotation config on the market-data stack (infra ships default-logging; mercury-market-data compose does not)",
+      "evidence": [
+        "docker inspect mmd-questdb: logdriver=json-file (HostConfig.LogConfig.Type) + observability: mercury_docker_container_log_bytes cid=2703f434c8b8=23.94e9",
+        "docker inspect mmd-data-feed: logdriver=json-file — mercury-market-data compose lacks a logging block with max-size/max-file",
+        "infra docker-compose.yml carries default-logging (per reviewer spot-check) — mercury-market-data compose does not"
+      ],
+      "assessment": "Waste + disk pressure (root 81%), not causal to candles; on the HIGHEST-CPU container (233% java). Operator fix: add logging block (max-size: 100m, max-file: 3) or truncate -s 0 the 23.9GiB file."
+    },
+    {
+      "rank": 5,
+      "observation": "3 orphan/debug containers pollute bridge + health surfaces: tsdb_repro_t80he (NEW, default creds), bold_tesla, nice_meninsky — none causal to the outage, all stale",
+      "evidence": [
+        "docker inspect tsdb_repro_t80he: image=timescale/timescaledb:latest-pg16 created=started=2026-07-28T17:22:59Z health=none, bridge 172.17.0.4, env POSTGRES_PASSWORD=postgres POSTGRES_DB=market_data, no compose labels (only maintainer)",
+        "docker inspect bold_tesla: mmd-python:latest created=2026-08-01T17:55:04Z labels com.docker.compose.project=mercury-market-data service=mmd-api (unhealthy, failing streak 4950)",
+        "docker inspect nice_meninsky: mmd-python:latest created=2026-07-28T13:14:49Z labels project=mercury-market-data-ido61-debugger (unhealthy, 6157)",
+        "bridge has no timescaledb alias (root cause of their DB_HOST=timescaledb failures); production mmd-api on mmd-network unaffected"
+      ],
+      "assessment": "Legacy debug leftovers 3-4 weeks old, Up weeks, unhealthy; tsdb_repro has default postgres creds (security hygiene). Operator: docker rm -f after verifying no workflow dependency."
+    }
+  ]
+}

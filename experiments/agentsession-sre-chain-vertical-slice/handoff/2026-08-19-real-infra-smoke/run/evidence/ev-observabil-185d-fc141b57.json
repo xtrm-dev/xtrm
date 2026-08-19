@@ -1,0 +1,170 @@
+{
+  "schema_version": "sre-observability.snapshot.v1",
+  "chain_run_id": "run-sre-d8b91",
+  "chain_id": "chain-sre-9ec830",
+  "participant_id": "chain-sre-9ec830::observability-analyst",
+  "execution_id": "exec-chain-sre-9ec830-observability-analyst-1",
+  "collected_at": "2026-08-19T04:15Z",
+  "window": "2026-08-17T00:00Z to 2026-08-19T04:15Z",
+  "surfaces_used": [
+    "prometheus (mcpq prometheus via --config /home/dawid/projects/mercury/.mcpq.json)",
+    "grafana (mcpq grafana — loki datasource P8E80F9AEF21F6940)",
+    "docker (ps/inspect/logs)",
+    "git (log)"
+  ],
+  "observability_surface_status": "AVAILABLE — coordinator believed unavailable (no .mcpq.json at scratchpad walk-up) but explicit --config /home/dawid/projects/mercury/.mcpq.json reaches all 3 MCP sidecars (prometheus-mcp healthy v1.6.1, grafana-mcp up, loki up, tempo up). All infra-observability containers up: infra-prometheus 11d, infra-loki 11d, infra-tempo 11d, infra-grafana 11d, infra-prometheus-mcp 9d, infra-grafana-mcp 9d.",
+  "firing_alerts": [
+    {
+      "alertname": "ServiceDown",
+      "severity": "critical",
+      "instance": "ext-papers:8006",
+      "job": "mercury-ingestion",
+      "verdict": "FALSE POSITIVE — stale scrape target. prometheus.yml L89 comment: 'ext-papers:8006 above stays down by design (compose profile, stopped)'. ext-papers decomposed into 5 containers 2 days ago (ext-papers-{digest,registrar,reconcile,replicate,acquire} all Up 2d healthy). Target should be removed from scrape config."
+    },
+    {
+      "alertname": "QuestDBCandle5mFamilyOutage",
+      "severity": "critical",
+      "family": "equities",
+      "verdict": "REAL — mmd_questdb_5m_fresh_count:by_family{family=\"equities\"}=2 < 3 threshold, session open (cmex_globex_session_closed=0, mmd_session_open gate passes)."
+    },
+    {
+      "alertname": "QuestDBCandle30mFamilyOutage",
+      "severity": "critical",
+      "family": "equities",
+      "verdict": "REAL — same root cause"
+    },
+    {
+      "alertname": "QuestDBCandle1hFamilyOutage",
+      "severity": "critical",
+      "family": "equities",
+      "verdict": "REAL — same root cause"
+    },
+    {
+      "alertname": "QuestDBCandle5mSymbolStale",
+      "severity": "warning",
+      "symbols": [
+        "NQ=F",
+        "YM=F"
+      ],
+      "verdict": "REAL — 2 of 4 equity index futures (ES=F/RTY=F fresh, NQ=F/YM=F stale)"
+    },
+    {
+      "alertname": "RestoreTestCritical",
+      "severity": "critical",
+      "data_class": "timescaledb",
+      "verdict": "REAL — mercury_restore_test_age_seconds=1873603s = 21.7 days > 14d threshold"
+    },
+    {
+      "alertname": "RestoreTestStale",
+      "severity": "warning",
+      "data_class": "timescaledb",
+      "verdict": "REAL — same 21.7d age > 8d threshold"
+    },
+    {
+      "alertname": "BackupMetricMissing",
+      "severity": "warning",
+      "mercury_module": "market-data",
+      "verdict": "REAL — absent(mercury_backup_last_success_unix_seconds{mercury_module=\"market-data\"})=1; market-data backup success metric never present"
+    },
+    {
+      "alertname": "MercuryComputeLatencyHigh",
+      "severity": "warning",
+      "analytic_family": "candles",
+      "verdict": "REAL — histogram_quantile(0.99, mercury_compute_duration_seconds{analytic_family=\"candles\"}[15m])=30s > 15s threshold; mmd-snapshot-feed compute.completed duration_ms=27830 in logs"
+    },
+    {
+      "alertname": "ObservabilityDegraded",
+      "severity": "warning",
+      "verdict": "EXPLAINED — mercury:observability_healthy:bool=0 because count(up==0)=1 (the stale ext-papers target). Coverage matrix healthy=1 and fresh (191s). Gate flips purely due to stale target."
+    },
+    {
+      "alertname": "ContainerJsonLogTooLarge",
+      "severity": "warning",
+      "cid": "2703f434c8b8",
+      "verdict": "REAL — cid=2703f434c8b8 = mmd-questdb, mercury_docker_container_log_bytes=23,938,488,575 = 23.9 GiB > 10GiB. json-file driver unrotated (Docker log trap); container on json-file driver."
+    },
+    {
+      "alertname": "TmpfsFillingUp",
+      "severity": "warning",
+      "mountpoint": "/tmp",
+      "verdict": "REAL — matches coordinator df -h /tmp=83%"
+    },
+    {
+      "alertname": "SierraRolloverLoadReminder",
+      "severity": "warning",
+      "count": 7,
+      "verdict": "expected scheduled reminders (SI/UB/ZB/ZF/ZN/ZT Z26 contracts)"
+    },
+    {
+      "alertname": "Watchdog",
+      "severity": "heartbeat",
+      "verdict": "expected heartbeat; currently reporting degraded gate"
+    }
+  ],
+  "top_5_observations": [
+    {
+      "rank": 1,
+      "observation": "CRITICAL ACTIVE: QuestDB equities candle freshness outage — fresh symbol count stuck at 2/4 (ES=F, RTY=F fresh; NQ=F, YM=F stale) for entire 24h+ window, session open so alerts NOT suppressed",
+      "metric_evidence": "mmd_questdb_5m_fresh_count:by_family{family=\"equities\"}=2 (threshold <3); range 2026-08-18T04:00Z→08-19T04:15Z step 1h: 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2 (one dip to 0 at 08-18T17:00Z); cmex_globex_session_closed=0 (open)",
+      "log_evidence": "mmd-questdb logs (tail 40): actively writing candles (INSERT BOB 108.0, WAL commits seqTxn 623500, o3 partition merges) — DB alive, no errors; Loki query {container=\"mmd-questdb\"} |= \"error\" over 711k lines scanned: 0 matches",
+      "interpretation": "QuestDB is healthy (pg_up{job=\"postgres-mmd-questdb\"}=1) and writing, but NQ=F/YM=F 5m candles not landing in ohlcv_5m within 15m window. Feed-side staleness, not DB failure. Correlated: mmd-snapshot-feed logs show compute.completed candles duration_ms=27830 (slow) + repeated stale_leg_skip_write warnings every 5m (EF-M27: stale legs ZQJ27.CBT/ZQK27.CBT; EF-H27: ZQF27.CBT/ZQG27.CBT — 2 of 3 legs stale, result=partial).",
+      "risk": "equity index candle consumers (analytics, rollover, downstream) reading stale 5m data; family outage alerts will page until fresh count ≥3"
+    },
+    {
+      "rank": 2,
+      "observation": "Host swap exhaustion escalating: 95.7% swap used now, ramped from 61-72% to 94-98% within last ~4-5h; load avg 10-13 sustained",
+      "metric_evidence": "100*(1-node_memory_SwapFree_bytes/node_memory_SwapTotal_bytes)=95.68; range 08-18T00:00Z→08-19T04:15Z step 1h: 85.9,72.9,70.3,69.6,69.3,68.5,68.4,65.0,65.3,65.1,64.1,63.4,61.6,68.7,68.9,72.1,70.9,71.5,67.8,65.9,64.8,64.1,64.3,69.5,94.4,98.2,91.3,92.0,96.5 — inflection at ~08-19T00:30Z",
+      "host_evidence": "coordinator free: 18.9/31Gi RAM used, 679MiB free, swap 23.05/23.99Gi used, 963MiB free; top cpu: mmd-questdb java 233%, codex --bypass 94.8%, dockerd 22.8%",
+      "interpretation": "swap was healthy 61-72% all of 08-18, spiked to 94-98% after 08-19T00:30Z — coincides with QuestDB CPU ramp (170→345% at 08-18T19:00Z) and api-gateway cycle-6/7/8 deploy train (00:09-05:11Z). Risk: swap thrash + OOM-kill for capped containers under next spike."
+    },
+    {
+      "rank": 3,
+      "observation": "Observability gate (mercury:observability_healthy:bool) = 0 AND ServiceDown critical firing — both caused by ONE stale scrape target ext-papers:8006, a false positive by design",
+      "metric_evidence": "mercury:observability_healthy:bool=0; recording rule expr: ((count(up==0) or vector(0)) == bool 0) * (coverage healthy == bool 1) * (freshness < 600); coverage matrix healthy=1 fresh=191s — only the up==0 dimension fails; up==0 → ext-papers:8006 only",
+      "config_evidence": "prometheus/prometheus.yml L86-93: ext-papers:8006 listed then L89 comment 'stays down by design (compose profile, stopped)'; L90-93 add ext-papers-registrar:8008, acquire:8009, replicate:8010, reconcile:8011. No container named ext-papers exists (5 decomposed siblings all Up 2d healthy).",
+      "impact": "Watchdog heartbeat posts degraded; ObservabilityDegraded pages every 5m; the 2m-for ServiceDown critical fires continuously. This is an alerting-hygiene defect, not an outage — but it masks real signal and would inhibit/desensitize on-call."
+    },
+    {
+      "rank": 4,
+      "observation": "3 orphan/debug containers polluting health surface + mmd-questdb json.log 23.9GiB (Docker log trap)",
+      "docker_evidence": "bold_tesla Up 2 weeks (unhealthy) — compose project mercury-market-data, service mmd-api, image mmd-python, mem/limit +Inf (no limit); nice_meninsky Up 3 weeks (unhealthy) — project mercury-market-data-ido61-debugger; tsdb_repro_t80he Up 3 weeks timescale/timescaledb:latest-pg16 (mem/limit +Inf) — NOT in coordinator's 2-container list; all lack container_spec_memory_limit_bytes",
+      "log_evidence": "mercury_docker_container_log_bytes{cid=\"2703f434c8b8\"}=23.94e9 (23.9GiB); alert expr max_over_time(mercury_docker_container_log_bytes[1h:5m]) > 10GiB; cid resolves to mmd-questdb (docker inspect); HostConfig.LogConfig.Type=json-file; mount /root/.questdb",
+      "risk": "23.9GiB invisible to docker system df; truncate -s 0 reclaims in place; debug containers add +Inf mem ratios to mem/limit dashboards and unhealthy streaks to health surfaces"
+    },
+    {
+      "rank": 5,
+      "observation": "DR/backup gaps: restore-test 21.7 days stale (critical), market-data backup success metric missing; compute latency breach on candles (p99 30s vs 15s threshold)",
+      "metric_evidence": "mercury_restore_test_age_seconds{data_class=\"timescaledb\",mercury_module=\"market-data\"}=1873603s (21.7d; RestoreTestCritical >14d, RestoreTestStale >8d); absent(mercury_backup_last_success_unix_seconds{mercury_module=\"market-data\"})=1; mercury_backup_age_seconds{mercury_module=\"darth-feedor\"}=43111s (12h, OK for that module); histogram_quantile(0.99,sum by(le)(rate(mercury_compute_duration_seconds_bucket{analytic_family=\"candles\"}[15m])))=30",
+      "log_evidence": "mmd-snapshot-feed compute.completed candles duration_ms=27830 at 04:10:58Z; provider_call questdb:get_last_candle_ts 2-9ms (fast)",
+      "risk": "no verified timescaledb restore within 14d = DR exposure for market data; candles compute breaching latency SLO consistent with CPU contention from QuestDB"
+    },
+    {
+      "rank": 6,
+      "observation": "(context) api-gateway KAN-58 change train deployed cleanly; host disk 81.7%; /tmp tmpfs 83%; Traefik edge clean",
+      "evidence": "git log HEAD=bddc58c cycle-8 pin sha256:d10089ab (05:11Z), #324 #325 #327 #328 #329 merged 00:09-05:11Z; up{job=\"api-gateway\"}=1, infra-api-gateway Up 11h healthy; traefik_service_requests_total 5xx: no series (0 rate); 404-ratio query returned NaN (no websecure traffic in window); 100*(1-node_filesystem_avail_bytes{mountpoint=\"/\"}/node_filesystem_size_bytes)=81.68; TmpfsFillingUp /tmp firing matches coordinator 83%"
+    }
+  ],
+  "correlations": [
+    {
+      "metric-log": "QuestDB equities fresh count=2 ↔ mmd-snapshot-feed stale_leg_skip_write every 5m (EF-M27/EF-H27) + compute.completed candles 27.8s — feed-side staleness + slow compute under CPU contention"
+    },
+    {
+      "metric-config": "mercury:observability_healthy:bool=0 ↔ up==0 on ext-papers:8006 ↔ prometheus.yml stale target (by design, commented) — config defect flips meta-gate"
+    },
+    {
+      "metric-metric": "swap 95.7% ramp at 08-19T00:30Z ↔ QuestDB CPU 170→345% at 08-18T19:00Z ↔ api-gateway cycle-6/7/8 deploys 00:09-05:11Z — host pressure window overlaps change train"
+    },
+    {
+      "metric-docker": "ContainerJsonLogTooLarge cid=2703f434c8b8 ↔ docker inspect mmd-questdb json-file driver — log rotation missing on highest-CPU container"
+    }
+  ],
+  "suggested_next_probes": [
+    "1) Confirm NQ=F/YM=F tick source: does mmd-data-feed (stir job, last_success age 729s OK) deliver ticks for these symbols; check upstream CME feed for symbol-scoped gaps (mmd-snapshot-feed symbol universe config).",
+    "2) Query QuestDB directly (read-only via QuestDB-MarketData datasource P9A12AD88BFFEB851) for ohlcv_5m last ts per equity symbol to separate DB-write vs feed-delivery cause.",
+    "3) Trace one compute.completed candles event end-to-end (Tempo datasource P214B5B846CF3925F, or docker logs for correlation.trace_id) to find where the 27.8s goes.",
+    "4) Operator: truncate -s 0 /var/lib/docker/containers/2703f434c8b8*/2703f434c8b8*-json.log (23.9GiB reclaim) and remove ext-papers:8006 from prometheus.yml scrape (restores gate to 1, clears ServiceDown + ObservabilityDegraded).",
+    "5) Operator: docker rm -f bold_tesla nice_meninsky tsdb_repro_t80he after confirming no workflow dependency.",
+    "6) Investigate QuestDB 345% CPU (single largest host consumer) — check for runaway queries in QuestDB pg_stat_activity analog or retention backlog since 08-17 restart."
+  ],
+  "coordinator_delta": "Coordinator reported observability surface UNAVAILABLE; this pass proved it reachable via --config and surfaced: (a) CRITICAL QuestDB equities outage (not visible host-side), (b) ServiceDown false positive + gate=0 root cause, (c) 3rd orphan container tsdb_repro_t80he, (d) 23.9GiB questdb json.log, (e) restore-test 21.7d critical (coordinator only saw stale service-knowledge + swap + 2 containers)."
+}

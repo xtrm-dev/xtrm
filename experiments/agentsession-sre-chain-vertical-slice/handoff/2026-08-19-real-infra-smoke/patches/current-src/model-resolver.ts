@@ -1,0 +1,47 @@
+/**
+ * Unified model resolver: built-in providers (via pi-ai/compat) + custom providers
+ * declared in ~/.pi/agent/models.json (Pi CLI convention).
+ *
+ * Local uncommitted patch — belongs to xtrm-pq1.2 fix in the next workstream.
+ * The experiment's bridge/specialist-bridge originally called getModel from
+ * pi-ai/compat directly, which only sees built-in providers. Custom providers
+ * (commandcode, nano-gpt, qwencloud, etc) live in ~/.pi/agent/models.json and
+ * pi-coding-agent's own CLI resolves them via ModelRuntime, not pi-ai/compat.
+ *
+ * This adapter tries built-in first, then falls back to synthesizing a model
+ * object from the on-disk custom-provider block. Same shape pi-ai's
+ * openai-completions api accepts (verified via createAgentSession probe).
+ */
+import { readFileSync, existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { getModel as getBuiltin } from "@earendil-works/pi-ai/compat";
+
+type Catalog = { providers?: Record<string, { baseUrl?: string; apiKey?: string; api?: string; authHeader?: boolean; models?: Array<Record<string, unknown> & { id: string }>; env?: Record<string, string> }> };
+
+let catalog: Catalog | null = null;
+function loadCatalog(): Catalog {
+  if (catalog !== null) return catalog;
+  const p = join(homedir(), ".pi/agent/models.json");
+  if (!existsSync(p)) { catalog = {}; return catalog; }
+  try { catalog = JSON.parse(readFileSync(p, "utf8")); } catch { catalog = {}; }
+  return catalog!;
+}
+
+export function resolveModel(provider: string, id: string): any {
+  const builtin = getBuiltin(provider, id) as any;
+  if (builtin && builtin.id) return builtin;
+  const c = loadCatalog();
+  const pb = c.providers?.[provider];
+  if (!pb) throw new Error(`model not found: ${provider}/${id} (provider is neither built-in nor in ~/.pi/agent/models.json)`);
+  const entry = pb.models?.find((m) => m.id === id);
+  if (!entry) throw new Error(`model not found: ${provider}/${id} (id absent from custom provider ${provider} in ~/.pi/agent/models.json)`);
+  return {
+    ...entry,
+    provider,
+    api: pb.api,
+    baseUrl: pb.baseUrl,
+    apiKey: pb.apiKey,
+    authHeader: pb.authHeader,
+  };
+}

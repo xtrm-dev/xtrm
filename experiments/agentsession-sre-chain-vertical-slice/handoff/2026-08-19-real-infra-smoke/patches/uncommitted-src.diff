@@ -1,0 +1,436 @@
+diff --git a/experiments/agentsession-sre-chain-vertical-slice/src/agents/bridge.ts b/experiments/agentsession-sre-chain-vertical-slice/src/agents/bridge.ts
+index e439dbf..c33da99 100644
+--- a/experiments/agentsession-sre-chain-vertical-slice/src/agents/bridge.ts
++++ b/experiments/agentsession-sre-chain-vertical-slice/src/agents/bridge.ts
+@@ -15,7 +15,7 @@ import {
+   createExtensionRuntime,
+   type ResourceLoader,
+ } from "@earendil-works/pi-coding-agent";
+-import { getModel } from "@earendil-works/pi-ai/compat";
++import { resolveModel as getModel } from "./model-resolver.ts";
+ import type { ParticipantIdentity, RuntimeFact } from "../chain/types.ts";
+ import type { Paths } from "../chain/store.ts";
+ import { buildTools, DEFAULT_SRE_ALLOWLIST, DEFAULT_SRE_DENYLIST } from "../tools/index.ts";
+@@ -168,6 +168,46 @@ export async function dispatchActivation(args: DispatchArgs): Promise<DispatchRe
+   let agentEndError: string | undefined;
+   const done = new Promise<void>((resolve) => {
+     const unsub = session.subscribe((event) => {
++      // ---- LIVE STREAM patch (uncommitted): forward Pi runtime events to onFact
++      const emitLive = (kind: string, detail: string) => {
++        try {
++          args.onFact({
++            ts: new Date().toISOString(),
++            chain_id: args.identity.chain_id,
++            step_id: args.identity.step_id,
++            participant_id: args.identity.participant_id,
++            role: args.identity.role,
++            kind: kind as any,
++            detail,
++            meta: { execution_id: args.identity.execution_id },
++          } as any);
++        } catch { /* best-effort */ }
++      };
++      const ev: any = event;
++      switch (ev.type) {
++        case "agent_start": emitLive("activation.start", `pi_session=${ev.sessionId ?? ev.session_id ?? "?"}`); return;
++        case "message_start": emitLive("activation.msg.start", `role=${ev.role ?? ev.messageRole ?? "?"}`); return;
++        case "message_end": {
++          const t = ev.text ?? ev.content ?? ev.assistantText ?? "";
++          const snip = typeof t === "string" ? t.replace(/\s+/g, " ").slice(0, 160) : "";
++          emitLive("activation.msg.end", `len=${(typeof t === "string" ? t.length : 0)}  head="${snip}"`);
++          return;
++        }
++        case "tool_execution_start": {
++          const name = ev.name ?? ev.toolName ?? ev.tool ?? "?";
++          const argStr = (() => { try { return JSON.stringify(ev.arguments ?? ev.input ?? {}).slice(0, 200); } catch { return "?"; } })();
++          emitLive("activation.tool.start", `${name}  args=${argStr}`); return;
++        }
++        case "tool_execution_end": {
++          const name = ev.name ?? ev.toolName ?? ev.tool ?? "?";
++          const okv = (ev.ok ?? ev.success ?? (ev.error == null)) ? "ok" : `err=${ev.error ?? "?"}`;
++          emitLive("activation.tool.end", `${name}  ${okv}`); return;
++        }
++        case "bash_execution_update":
++          emitLive("activation.bash", (ev.line ?? ev.text ?? "").toString().replace(/\s+/g," ").slice(0, 200)); return;
++        case "agent_settled":
++          emitLive("activation.settled", `settled`); return;
++      }
+       if (event.type === "agent_end") {
+         agentEnded = true;
+         if (event.willRetry) {
+@@ -200,6 +240,30 @@ export async function dispatchActivation(args: DispatchArgs): Promise<DispatchRe
+       kind: "step.failed",
+       detail: `AgentSession prompt threw: ${agentEndError}`,
+     });
++  // ---- LIVE MESSAGES dump (uncommitted, xtrm-pq1.x): one activation.msg fact per session message.
++  try {
++    const msgs = ((session as any).state?.messages ?? []) as any[];
++    for (let i = 0; i < msgs.length; i++) {
++      const m: any = msgs[i];
++      let snippet = "";
++      try {
++        const c = m.content;
++        if (typeof c === "string") snippet = c;
++        else snippet = JSON.stringify(c);
++      } catch { snippet = "?"; }
++      const head = String(snippet ?? "").replace(/\s+/g, " ").slice(0, 240);
++      args.onFact({
++        ts: new Date().toISOString(),
++        chain_id: args.identity.chain_id,
++        step_id: args.identity.step_id,
++        participant_id: args.identity.participant_id,
++        role: args.identity.role,
++        kind: ("activation.msg." + (m.role ?? "?")) as any,
++        detail: "#" + i + "  " + head,
++        meta: { execution_id: args.identity.execution_id, idx: i, msg_role: m.role },
++      } as any);
++    }
++  } catch { /* best-effort */ }
+   } finally {
+     session.dispose();
+   }
+diff --git a/experiments/agentsession-sre-chain-vertical-slice/src/agents/specialist-bridge.ts b/experiments/agentsession-sre-chain-vertical-slice/src/agents/specialist-bridge.ts
+index d77d0f7..052d70e 100644
+--- a/experiments/agentsession-sre-chain-vertical-slice/src/agents/specialist-bridge.ts
++++ b/experiments/agentsession-sre-chain-vertical-slice/src/agents/specialist-bridge.ts
+@@ -7,7 +7,7 @@ import {
+   createExtensionRuntime,
+   type ResourceLoader,
+ } from "@earendil-works/pi-coding-agent";
+-import { getModel } from "@earendil-works/pi-ai/compat";
++import { resolveModel as getModel } from "./model-resolver.ts";
+ import type { ParticipantIdentity, RuntimeFact } from "../chain/types.ts";
+ import type { Paths } from "../chain/store.ts";
+ import { buildTools, DEFAULT_SRE_ALLOWLIST, DEFAULT_SRE_DENYLIST } from "../tools/index.ts";
+@@ -155,6 +155,50 @@ export async function dispatchSpecialistActivation(
+   let agentEndError: string | undefined;
+   const done = new Promise<void>((resolve) => {
+     const unsub = session.subscribe((event) => {
++      // ---- LIVE STREAM patch (uncommitted, xtrm-pq1.x): forward Pi runtime
++      // events to onFact so the operator sees per-activation progress in the
++      // pane and in forensics/events.jsonl, not just start/done.
++      const emitLive = (kind: string, detail: string) => {
++        try {
++          args.onFact({
++            ts: new Date().toISOString(),
++            chain_id: args.identity.chain_id,
++            step_id: args.identity.step_id,
++            participant_id: args.identity.participant_id,
++            role: args.identity.role,
++            kind: kind as any,
++            detail,
++            meta: { execution_id: args.identity.execution_id },
++          } as any);
++        } catch { /* best-effort telemetry */ }
++      };
++      const ev: any = event;
++      switch (ev.type) {
++        case "agent_start":
++          emitLive("activation.start", `pi_session=${ev.sessionId ?? ev.session_id ?? "?"}`); return;
++        case "message_start":
++          emitLive("activation.msg.start", `role=${ev.role ?? ev.messageRole ?? "?"}`); return;
++        case "message_end": {
++          const t = ev.text ?? ev.content ?? ev.assistantText ?? "";
++          const snip = typeof t === "string" ? t.replace(/\s+/g, " ").slice(0, 160) : "";
++          emitLive("activation.msg.end", `len=${(typeof t === "string" ? t.length : 0)}  head="${snip}"`);
++          return;
++        }
++        case "tool_execution_start": {
++          const name = ev.name ?? ev.toolName ?? ev.tool ?? "?";
++          const argStr = (() => { try { return JSON.stringify(ev.arguments ?? ev.input ?? {}).slice(0, 200); } catch { return "?"; } })();
++          emitLive("activation.tool.start", `${name}  args=${argStr}`); return;
++        }
++        case "tool_execution_end": {
++          const name = ev.name ?? ev.toolName ?? ev.tool ?? "?";
++          const okv = (ev.ok ?? ev.success ?? (ev.error == null)) ? "ok" : `err=${ev.error ?? "?"}`;
++          emitLive("activation.tool.end", `${name}  ${okv}`); return;
++        }
++        case "bash_execution_update":
++          emitLive("activation.bash", (ev.line ?? ev.text ?? "").toString().replace(/\s+/g," ").slice(0, 200)); return;
++        case "agent_settled":
++          emitLive("activation.settled", `settled`); return;
++      }
+       if (event.type !== "agent_end") return;
+       if (event.willRetry) return;
+       agentEnded = true;
+@@ -202,6 +246,32 @@ export async function dispatchSpecialistActivation(
+         specialist_sha256: args.profile.source.sha256,
+       },
+     });
++  // ---- LIVE MESSAGES dump (uncommitted, xtrm-pq1.x): emit one activation.msg fact
++  // per session message so the operator sees every user/assistant/tool turn in
++  // forensics/events.jsonl and the pane, exactly like scripts/smoke_bridge_verbose.ts does.
++  try {
++    const msgs = ((session as any).state?.messages ?? []) as any[];
++    for (let i = 0; i < msgs.length; i++) {
++      const m: any = msgs[i];
++      let snippet = "";
++      try {
++        const c = m.content;
++        if (typeof c === "string") snippet = c;
++        else snippet = JSON.stringify(c);
++      } catch { snippet = "?"; }
++      const head = String(snippet ?? "").replace(/\s+/g, " ").slice(0, 240);
++      args.onFact({
++        ts: new Date().toISOString(),
++        chain_id: args.identity.chain_id,
++        step_id: args.identity.step_id,
++        participant_id: args.identity.participant_id,
++        role: args.identity.role,
++        kind: ("activation.msg." + (m.role ?? "?")) as any,
++        detail: "#" + i + "  " + head,
++        meta: { execution_id: args.identity.execution_id, idx: i, msg_role: m.role },
++      } as any);
++    }
++  } catch { /* best-effort */ }
+   } finally {
+     session.dispose();
+   }
+diff --git a/experiments/agentsession-sre-chain-vertical-slice/src/chain/scheduler.ts b/experiments/agentsession-sre-chain-vertical-slice/src/chain/scheduler.ts
+index 4e11af5..5ab3fd8 100644
+--- a/experiments/agentsession-sre-chain-vertical-slice/src/chain/scheduler.ts
++++ b/experiments/agentsession-sre-chain-vertical-slice/src/chain/scheduler.ts
+@@ -28,6 +28,119 @@ import { runtimePost } from "../channels/index.ts";
+ import { executionId, nowIso, participantId } from "../util/ids.ts";
+ import { stepById } from "./topology.ts";
+ import { chainEpicIdOf, closeBead, noteBead } from "../adapters/beads.ts";
++import * as fsp from "node:fs/promises";
++import * as pathmod from "node:path";
++import { readMessages as _readMessagesUnused } from "./store.ts"; // types-only
++
++/**
++ * Deterministic per-run evidence bundle written into the state-dir at
++ * chain terminalization. Contract: sre-triage-runs.report-log.v1
++ * (see ~/.xtrm/skills/default/sre-triage/SKILL.md "Persistent per-run
++ * knowledge" section). Not committed — uncommitted patch pending
++ * xtrm-pq1.3.
++ */
++async function writeReportLogJsonSafe(
++  ctx: SchedulerContext,
++  runState: RunState,
++  terminalState: "closed" | "escalated" | "blocked",
++): Promise<void> {
++  try {
++    // rundir = the directory that holds chain/, evidence/, channels/, forensics/…
++    // paths.rundir may be undefined if the store shape changes; fall back to inference.
++    const anyPaths: any = ctx.paths as any;
++    const runDir: string =
++      anyPaths.rundir ??
++      anyPaths.runDir ??
++      anyPaths.chainDir?.replace(/\/chain\/?$/, "") ??
++      pathmod.dirname((anyPaths.chainDir ?? anyPaths.forensicsPath ?? ""));
++    if (!runDir) return;
++    const outPath = pathmod.join(runDir, "report-log.json");
++
++    // Load evidence index (best-effort)
++    let evidenceIds: string[] = [];
++    let evidenceBySummary: Record<string, string> = {};
++    try {
++      const ev = pathmod.join(runDir, "evidence", "index.jsonl");
++      const txt = await fsp.readFile(ev, "utf8");
++      for (const line of txt.split(/\n/).filter(Boolean)) {
++        try {
++          const r = JSON.parse(line);
++          if (r?.evidence_id) {
++            evidenceIds.push(r.evidence_id);
++            const head = typeof r.summary === "string" ? r.summary.slice(0, 240) : "";
++            evidenceBySummary[r.evidence_id] = head;
++          }
++        } catch { /* skip bad line */ }
++      }
++    } catch { /* no evidence yet */ }
++
++    // Load target repo HEAD (best-effort)
++    let targetSha: string | null = null;
++    try {
++      const { execSync } = await import("node:child_process");
++      targetSha = execSync(`git -C ${JSON.stringify(ctx.targetRepo)} rev-parse HEAD`, {
++        stdio: ["ignore", "pipe", "ignore"],
++      }).toString().trim() || null;
++    } catch { /* not a git repo or unavailable */ }
++
++    // Compose per-step summary from runState + resolved-chain topology
++    const steps = ctx.chain.topology.map((s) => {
++      const st = runState.steps[s.step_id] ?? ({} as any);
++      return {
++        step_id: s.step_id,
++        role: s.role,
++        class: s.class,
++        needs: s.needs,
++        model: (s as any).model,
++        participant_id: `${ctx.chain.chain_id}::${s.step_id}`,
++        execution_id: st.last_execution_id ?? null,
++        pi_session_id: st.last_pi_session_id ?? null,
++        attempts: st.attempts ?? 0,
++        remediation_loops: st.remediation_loops ?? 0,
++        status: st.status ?? "unknown",
++        last_error: st.last_error ?? null,
++        last_agent_end_at: st.last_agent_end_at ?? null,
++      };
++    });
++
++    const bundle = {
++      schema_version: "sre-triage-runs.report-log.v1",
++      chain_run_id: runState.chain_run_id ?? (runState as any).chainRunId,
++      chain_id: ctx.chain.chain_id,
++      chain_epic_id: (runState as any).chain_epic_id ?? null,
++      target_repo: ctx.targetRepo,
++      target_repo_sha: targetSha,
++      terminal_state: terminalState,
++      reviewer_verdict: (runState as any).reviewer_verdict ?? null,
++      started_at: (runState as any).started_at ?? null,
++      ended_at: nowIso(),
++      specialist_json_mode: (ctx.chain as any).fingerprint?.specialist_json_mode ?? null,
++      baseline_specialists: (ctx.chain as any).fingerprint?.baseline_specialists ?? [],
++      steps,
++      evidence_index: evidenceIds,
++      evidence_summaries: evidenceBySummary,
++      notes: "Deterministic evidence bundle emitted by scheduler at terminalization. See sre-triage SKILL 'Persistent per-run knowledge' section for how the coordinator copies this into <target>/.xtrm/skills/infra/service-knowledge/services/sre-triage-runs/runs/<UTC>-<chain_run_id>/report-log.json alongside its hand-written report.md.",
++    };
++
++    await fsp.writeFile(outPath, JSON.stringify(bundle, null, 2) + "\n", "utf8");
++    ctx.onFact({
++      ts: nowIso(),
++      chain_id: ctx.chain.chain_id,
++      role: "runtime",
++      kind: "report.log.written",
++      detail: `report-log.json (${terminalState}) at ${outPath}  steps=${steps.length}  evidence=${evidenceIds.length}`,
++    } as any);
++  } catch (e: any) {
++    ctx.onFact({
++      ts: nowIso(),
++      chain_id: ctx.chain.chain_id,
++      role: "runtime",
++      kind: "report.log.failed",
++      detail: `report-log.json write failed: ${e?.message ?? e}`,
++    } as any);
++  }
++}
++
+ 
+ export interface SchedulerContext {
+   paths: Paths;
+@@ -82,11 +195,87 @@ function assignmentPrompt(args: {
+     "## Upstream evidence pointers (dereference via evidence_get when needed)",
+     upstream,
+     "",
+-    "## What you MUST do (exit criteria)",
+-    "1. Publish ONE evidence via `evidence_publish` whose `kind` matches your step contract.",
+-    "2. Post ONE `work.turn` message via `channel_post` referencing that evidence_id.",
+-    "3. Then stop — agent_end alone does NOT satisfy your step. Evidence + work.turn is the exit contract.",
+-  ].join("\n");
++    "## What you MUST do (exit criteria) — HARD REQUIREMENTS",
++    ...(function () {
++      // Concrete downstream targets from topology so the model does not have to guess.
++      const downstream = args.chain.topology
++        .filter((s) => s.needs.includes(args.step.step_id))
++        .map((s) => `${args.chain.chain_id}::${s.step_id}`);
++      const kindByStep: Record<string, string> = {
++        "coordinator-entry": "coordinator.decision",
++        "explorer": "topology.map",
++        "observability": "observability.snapshot",
++        "diagnostician": "diagnostician.report",
++        "reviewer": "reviewer.verdict",
++        "coordinator-close": "coordinator.decision",
++      };
++      const expectedKind = kindByStep[args.step.step_id] ?? "step.result";
++      const targets = downstream.length ? downstream : [`${args.chain.chain_id}::coordinator-close`];
++      const targetsJson = JSON.stringify(targets);
++
++      // Reviewer step has a very specific exit contract per roles/reviewer.md:
++      //   evidence.summary MUST contain the bare word PASS | PARTIAL | FAIL,
++      //   and the work.turn kind is "work.verdict" (only the reviewer may emit it).
++      //   On PASS/FAIL the message targets chain-coordinator; on PARTIAL it targets sre-diagnostician.
++      if (args.step.step_id === "reviewer") {
++        return [
++          "You are the reviewer gate. Follow the reviewer role's checks in the system prompt.",
++          "",
++          "Before you call agent_end you MUST perform BOTH of these tool calls, in order:",
++          "",
++          "1. Call the `evidence_publish` tool exactly once with:",
++          "   - kind = \"reviewer.verdict\"",
++          "   - summary = the bare word \"PASS\" (or \"PARTIAL: <one-line reason>\" or \"FAIL: <one-line reason>\").",
++          "     The reducer routes chain progression on this bare word — you MUST include exactly one of PASS, PARTIAL, or FAIL as a whole word in the summary.",
++          "   - body = { verdict, checks_run, checks_failed, gaps_for_remediation, rationale }  (see reviewer role prompt).",
++          "   The tool RETURNS an evidence_id — remember it. Do not fabricate evidence_ids.",
++          "",
++          "2. Call the `channel_post` tool exactly once with:",
++          `   - kind = "work.verdict"   (only the reviewer may emit this kind — do NOT use "work.turn")`,
++          `   - action_targets = ["${args.chain.chain_id}::coordinator-close"]   (on PASS or FAIL — chain will close via the close-coordinator step; on PARTIAL use ["${args.chain.chain_id}::diagnostician"])`,
++          "   - evidence_refs = [<the evidence_id returned in step 1>]",
++          "   - body.summary = one-line rationale for the verdict",
++          "",
++          "3. Then call agent_end. Do not respond in plain text alone — the reducer only advances on the evidence in step 1.",
++        ];
++      }
++
++      // coordinator-close step: closes the chain, emits its own coordinator.decision + system.done.
++      if (args.step.step_id === "coordinator-close") {
++        return [
++          "You are the coordinator's CLOSE turn. Read the reviewer.verdict evidence and every advisor evidence in this ChainRun.",
++          "",
++          "Before you call agent_end you MUST perform these tool calls, in order:",
++          "",
++          "1. Call the `evidence_publish` tool exactly once with:",
++          "   - kind = \"coordinator.decision\"",
++          "   - body = { phase: \"close\", outcome, chosen_verdict, ranked_findings, recommended_actions_read_only }",
++          "   - summary = one-line close statement",
++          "",
++          `2. Call the \`channel_post\` tool exactly once with kind = "system.done", action_targets = [], visibility = "chain", body.summary = one-line closing statement. This is the signal the reducer needs to terminalize the chain.`,
++          "",
++          "3. Then call agent_end. If you skip step 2 the runtime will not close the chain.",
++        ];
++      }
++
++      return [
++        "Before you call agent_end you MUST perform BOTH of these two tool calls, in order:",
++        "",
++        "1. Call the `evidence_publish` tool exactly once with kind=\"" + expectedKind + "\".",
++        "   The tool RETURNS an evidence_id — remember it. Do not fabricate evidence_ids.",
++        "   Body must be a JSON object summarising your work (fields per your role's usual shape).",
++        "",
++        "2. Call the `channel_post` tool exactly once with:",
++        "   - kind = \"work.turn\"",
++        `   - action_targets = ${targetsJson}   (EXACTLY these participant_ids, in this order — do not substitute step_ids you invented)`,
++        "   - evidence_refs = [<the evidence_id returned in step 1>]",
++        "   - body.summary = a one-paragraph handoff",
++        "",
++        "3. Then call agent_end. agent_end alone does NOT satisfy your step.",
++        "   If you skip steps 1 or 2, the reducer will escalate the chain as blocked and your work is discarded.",
++      ];
++    })(),
++  ].flat().join("\n");
+ }
+ 
+ async function upstreamEvidenceFor(paths: Paths, step: ChainStep) {
+@@ -166,6 +355,7 @@ export async function runToCompletion(
+         role: "runtime",
+         detail: `terminal: ${newRunState.status}`,
+       });
++      await writeReportLogJsonSafe(ctx, newRunState, "closed");
+       return;
+     }
+     if (intents.length === 0) {
+@@ -179,6 +369,7 @@ export async function runToCompletion(
+       });
+       newRunState.status = "blocked";
+       await saveRunState(ctx.paths, newRunState);
++      await writeReportLogJsonSafe(ctx, newRunState, "blocked");
+       return;
+     }
+ 
+diff --git a/experiments/agentsession-sre-chain-vertical-slice/src/chain/topology.ts b/experiments/agentsession-sre-chain-vertical-slice/src/chain/topology.ts
+index c426ec2..dc6d4cb 100644
+--- a/experiments/agentsession-sre-chain-vertical-slice/src/chain/topology.ts
++++ b/experiments/agentsession-sre-chain-vertical-slice/src/chain/topology.ts
+@@ -15,8 +15,8 @@
+ import type { ChainStep, ParticipantRole, ResolvedChain } from "./types.ts";
+ import { nowIso, shortId } from "../util/ids.ts";
+ 
+-const DEFAULT_MODEL = "opencode-go/deepseek-v4-flash";
+-const DEFAULT_FALLBACK = "zai/glm-5-turbo";
++const DEFAULT_MODEL = "commandcode/deepseek/deepseek-v4-flash";
++const DEFAULT_FALLBACK = "opencode-go/deepseek-v4-flash";
+ 
+ const STEP_DEFS: Array<{
+   step_id: string;

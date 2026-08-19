@@ -1,0 +1,167 @@
+{
+  "schema_version": "sre-coordinator-report.v1",
+  "chain_run_id": "run-sre-d8b91",
+  "chain_id": "chain-sre-9ec830",
+  "participant_id": "chain-sre-9ec830::chain-coordinator",
+  "mode": "baseline-triage",
+  "report_contract_path": ".specialists/sre-coordinator-result.md (cannot be written — read-only harness; full content is this payload)",
+  "collected_at": "2026-08-19T06:08Z",
+  "surfaces_used": "host (sre-host-forensics-style probes via docker inspect/ps/free/df), change (git log), observability (UNAVAILABLE — no .mcpq.json in mirror; PromQL not run here)",
+  "summary": "Baseline triage of the mercury-infra host. Overall health is GOOD on the core stack (all 84 containers running; api-gateway/traefik/prometheus/grafana healthy, no crash loops, only one exited container = mmd-migrations 4d ago, expected). Two legacy debug containers are stuck unhealthy for 3-4 weeks (timescaledb DNS misconfig — they sit on the wrong Docker network). Host is oversubscribed: swap 96% consumed, load avg 10-13, QuestDB+TimescaleDB+snapshot-feed eating 3+ cores. Disk 81% used, /tmp tmpfs 83% used (5.9G issue95-venv + console-exp data). Active change surface: api-gateway cycle-6/7/8 lane-B work merged 00:09-05:11Z (KAN-58) with matching runner rebuilds 02:20-03:15Z — deployed cleanly, api-gateway healthy since 17:12Z yesterday. Service-knowledge registry stale (last_sync 2026-07-25, 25d) and sre-triage-runs ledger not yet registered in this mirror.",
+  "timeline": [
+    {
+      "t": "2026-07-28",
+      "surface": "host",
+      "event": "nice_meninsky started on bridge network; began failing timescaledb healthcheck (streak 6156)"
+    },
+    {
+      "t": "2026-08-01",
+      "surface": "host",
+      "event": "bold_tesla started on bridge network; began failing timescaledb healthcheck (streak 4949)"
+    },
+    {
+      "t": "2026-08-17 09:49Z",
+      "surface": "host",
+      "event": "mmd-questdb restarted (Up 42h); since then QuestDB java pegged ~233% host CPU"
+    },
+    {
+      "t": "2026-08-18 17:12Z",
+      "surface": "change",
+      "event": "infra-api-gateway deployed with new image (cycle-5 pin sha256:892d2081); healthy since"
+    },
+    {
+      "t": "2026-08-19 00:09-02:45Z",
+      "surface": "change",
+      "event": "api-gateway cycle-6 Lane B (native PG entitlement) merged (#324 #325 #327)"
+    },
+    {
+      "t": "2026-08-19 02:20-03:15Z",
+      "surface": "change",
+      "event": "Runners rebuilt+deployed: darth-feedor-runner 02:20Z, platform-runner 02:44Z, infra-runner 03:15Z (image_created≈started, built+deployed pattern)"
+    },
+    {
+      "t": "2026-08-19 03:03Z",
+      "surface": "change",
+      "event": "cycle-7 pin sha256:480dad19 merged (#328)"
+    },
+    {
+      "t": "2026-08-19 05:07-05:11Z",
+      "surface": "change",
+      "event": "cycle-8 Lane B close-out + pin sha256:d10089ab merged (#329, bddc58c HEAD)"
+    },
+    {
+      "t": "2026-08-19 06:08Z",
+      "surface": "host",
+      "event": "Baseline captured: load 10.00/13.69/13.51, swap 23.05/23.99Gi used, disk 81%, /tmp 83%"
+    }
+  ],
+  "top_5_observations": [
+    {
+      "rank": 1,
+      "observation": "Host oversubscribed: swap exhausted (96%), load avg 10-13",
+      "evidence": {
+        "uptime": "load 1m=10.00 5m=13.69 15m=13.51",
+        "free": "18.9/31Gi RAM used, 679MiB free; 23.05/23.99Gi swap used, 963MiB free",
+        "cpu_drivers": "mmd-questdb java 233% (2.5GiB RSS); codex --bypass 94.8%; snapshot_feed.py 15.9%; SierraChart 11.5%; dockerd 22.8%",
+        "container_cpu": "mmd-timescaledb 101.98% (2.06GiB); mmd-questdb 111.68% (1.26GiB/12Gi limit); mmd-snapshot-feed 95.45% (443MiB)"
+      },
+      "risk": "swap thrash + OOM-kill risk for capped containers under spikes; degrade latency for DB feeds"
+    },
+    {
+      "rank": 2,
+      "observation": "Two unhealthy legacy debug containers: bold_tesla (streak 4949), nice_meninsky (streak 6156) — DB_HOST=timescaledb unresolvable",
+      "evidence": {
+        "both": "on default bridge network; env DB_HOST=timescaledb; psycopg2 error 'could not translate host name \\\"timescaledb\\\" to address'",
+        "timescaledb": "mmd-timescaledb healthy on mmd-network (172.19.0.2), aliases include timescaledb — not reachable from bridge",
+        "labels": "bold_tesla=mercury-market-data/mmd-api; nice_meninsky=mercury-market-data-ido61-debugger/mmd-api",
+        "production": "mmd-api Up 4 days (healthy) — unaffected"
+      },
+      "risk": "none to production (debug leftovers) but pollute health surfaces and alerting if scraped"
+    },
+    {
+      "rank": 3,
+      "observation": "Disk pressure: root 81% (782G/1007G used); /tmp tmpfs 83% (13G/16G)",
+      "evidence": {
+        "root": "df -h / = 81% used, 185G avail",
+        "tmp": "df -h /tmp = 83% used, 2.9G avail",
+        "tmp_consumers": "/tmp/issue95-venv 5.9G, /tmp/console-exp020 515M, /tmp/console-exp020-smoke-data 336M, ~10x darth-pre-push-* dirs ~119-127M each"
+      },
+      "risk": "root disk fine short-term; /tmp will exhaust with more dev activity; tmpfs pressure can fail CI/venv work"
+    },
+    {
+      "rank": 4,
+      "observation": "Active api-gateway KAN-58 change train: 8 commits merged in 24h (cycle-6/7/8 lane-B), runners rebuilt to match",
+      "evidence": {
+        "git": "HEAD=bddc58c cycle-8 pin sha256:d10089ab (05:11Z); #324 #325 #327 #328 #329 merged 00:09-05:11Z; #323 traefik X-Mercury-* strip",
+        "deploy_correlation": "infra-runner image_created≈started 03:15Z, platform-runner 02:44Z, darth-feedor-runner 02:20Z, ext_mcp 01:59Z — built+deployed pattern",
+        "api_gateway": "healthy, started 2026-08-18T17:12Z; logs show clean /health 200 + /metrics 200, no errors"
+      },
+      "risk": "high-change velocity window — any regression would appear ~24h window; currently clean"
+    },
+    {
+      "rank": 5,
+      "observation": "Service-knowledge stale: all 16 service SKILLs last_sync=2026-07-25 (25 days, approaching 30d threshold); sre-triage-runs ledger NOT registered in this mirror",
+      "evidence": {
+        "registry": "16 services, every last_sync = 2026-07-25T17:42/17:44Z @ ec269dff",
+        "services_list": "alerting, alertmanager, api-gateway, cadvisor, grafana, grafana-dashboards, grafana-mcp, loki, node-exporter, otel-collector, prometheus, prometheus-mcp, promtail, runners, tempo, traefik",
+        "missing": "sre-triage-runs absent from registry and services dir"
+      },
+      "risk": "stale service knowledge = stale queries = false-confidence findings on next incident; freshness gate flags this"
+    },
+    {
+      "rank": 0,
+      "observation": "Observability surface unavailable from this mirror",
+      "evidence": "mcpq prometheus call → error: no .mcpq.json found at scratchpad (ceiling /home/dawid); could not query ALERTS/up/freshness",
+      "risk": "live alert state, Prometheus up==0, freshness SLOs UNVERIFIED in this pass — observability specialist must re-probe from a proper worktree"
+    }
+  ],
+  "ranked_hypotheses": [
+    {
+      "rank": 1,
+      "hypothesis": "Host resource pressure is the primary ongoing condition, driven by QuestDB (233% CPU, 42h uptime) + TimescaleDB + snapshot feed, compounded by swap exhaustion",
+      "evidence_from": "sre-host-forensics (docker stats, ps, free)",
+      "confidence": "HIGH"
+    },
+    {
+      "rank": 2,
+      "hypothesis": "The two unhealthy containers are abandoned debug leftovers with a wrong-network DNS misconfig, not production impact",
+      "evidence_from": "sre-host-forensics (docker inspect networks/env/health) + sre-change-forensics (labels show debugger compose project)",
+      "confidence": "HIGH"
+    },
+    {
+      "rank": 3,
+      "hypothesis": "api-gateway KAN-58 cycle-6/7/8 lane-B train is the recent-change surface; deployed cleanly so far (healthy since 17:12Z)",
+      "evidence_from": "sre-change-forensics (git log) + sre-host-forensics (container healthy, logs clean)",
+      "confidence": "MEDIUM (no regression observed; window still open)"
+    },
+    {
+      "rank": 4,
+      "hypothesis": "Disk/tmpfs pressure is a slow-burn risk: /tmp tmpfs 83% with 5.9G issue95-venv; root disk 81%",
+      "evidence_from": "sre-host-forensics (df)",
+      "confidence": "MEDIUM"
+    }
+  ],
+  "recommended_fix": {
+    "immediate": [
+      "1) Remove two unhealthy debug leftovers (operator verifies no workflow uses them): docker rm -f bold_tesla nice_meninsky — reclaims health-surface noise; no production impact.",
+      "2) Investigate QuestDB: questdb/questdb:latest (created 2026-03-26, started 08-17) pinned at 233% CPU and 1.26GiB against 12GiB limit. Check for runaway queries / retention backlog: docker logs mmd-questdb --tail 200, or query QuestDB for long-running statements. If unexplained, restart windowed: docker restart mmd-questdb (operator)."
+    ],
+    "permanent": [
+      "3) Rebalance host: cap or schedule snapshot_feed.py (15.9% CPU, 457MiB), consider memory/CPU limits on mmd-timescaledb (currently unlimited → 101.98% of host), raise swap awareness (23Gi swap fully used is abnormal).",
+      "4) Rebuild service-knowledge index + register sre-triage-runs ledger: service-knowledge index rebuild; ensure last_sync refreshed past 2026-07-25.",
+      "5) Clean /tmp pressure: rm -rf /tmp/issue95-venv /tmp/console-exp020* and stale darth-pre-push-* dirs when done; add tmpfs cleanup policy."
+    ],
+    "safety": "All commands are operator-applied; this chain is read-only. Verify bold_tesla/nice_meninsky have no active workflow before removal (they are 3-4 weeks old, labels indicate debug compose project)."
+  },
+  "residual_uncertainty": {
+    "discrepancies": [
+      "Observability surface unavailable (no .mcpq.json in this mirror) — Prometheus alert state, up==0, freshness SLOs NOT verified. Next probe: observability specialist from proper worktree: mcpq prometheus call prometheus_execute_query --arg query='ALERTS{alertstate=\"firing\"}' --json; up==0; freshness feeds."
+    ],
+    "service_knowledge_freshness": "ALL 16 service SKILL.md entries have last_sync=2026-07-25T17:42/17:44Z @ ec269dff — 25 days old, under the 30-day threshold but aging; flag for operator: service-knowledge index rebuild / updating-service-skills. sre-triage-runs ledger not yet registered in this mirror.",
+    "host_load": "Load avg 10-13 with swap 96% is sustained — not a spike; unknown whether QuestDB 233% CPU is normal market-data load or a runaway; needs QuestDB-internal query inspection (not possible read-only from here).",
+    "next_probe": "1) Observability: ALERTS/up/freshness via mcpq. 2) QuestDB: docker logs mmd-questdb --tail 200 + internal long-query check. 3) Confirm bold_tesla/nice_meninsky orphan status (compose ps in mercury-market-data-ido61-debugger worktree).",
+    "cross_surface": "No metric-vs-file discrepancies — the mirror lacks the mcpq sidecar so cross-validation of PromQL numbers vs docker stats was not possible."
+  },
+  "prior_runs_consulted": "sre-triage-runs ledger not present in this mirror (not registered in service-registry.json); no prior gotchas retrievable.",
+  "report_path": ".specialists/sre-coordinator-result.md (content = this payload; file write not permitted by read-only harness)"
+}

@@ -1,0 +1,18 @@
+--- a/home/dawid/.xtrm/skills/default/sre-triage/SKILL.md
++++ b/home/dawid/.xtrm/skills/default/sre-triage/SKILL.md
+@@ -173,6 +173,15 @@
+ `infra-*` to the infra repo; yours will differ). Open that file and read the
+ actual mappings before attributing containers.
+ 
++**Fallback when `.mcpq.json` is not in ancestors** — `mcpq` walks up from
++`cwd` (ceiling `$HOME`) looking for `.mcpq.json`. A scratchpad or `/tmp/`
++mirror of the infra repo has none above it, so bare `mcpq` errors before it
++reaches the sidecars. This is **not** sidecars-down — do not mark
++observability `UNAVAILABLE` on this error class. Pass the real config
++explicitly, and apply the same flag to every `mcpq` call in Step 1 and below:
++`mcpq --config <target-infra>/.mcpq.json <subcommand>`
++(e.g. `mcpq --config /home/dawid/projects/mercury/.mcpq.json prometheus call …`).
++
+ **Fallback when mcpq is unreachable** — if both `mcpq` calls return errors
+ mentioning `docker exec ... exited` or `connection refused`, the sidecars are
+ down. Fall back to the file-cache path:
