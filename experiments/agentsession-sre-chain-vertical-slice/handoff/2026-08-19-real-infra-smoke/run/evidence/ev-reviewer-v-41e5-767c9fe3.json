@@ -1,0 +1,31 @@
+{
+  "verdict": "PARTIAL",
+  "checks_run": [
+    "evidence_ref_exists",
+    "multi_surface_HIGH",
+    "concrete_fix",
+    "residual_flagged",
+    "advisor_gaps_acknowledged",
+    "read_only_fix"
+  ],
+  "checks_failed": [
+    {
+      "check": "concrete_fix",
+      "detail": "No top-level recommended_fix field. Concrete commands exist only embedded in rank-4/5 assessments (logging block max-size:100m/max-file:3 or truncate -s 0 for questdb json.log; docker rm -f orphans). Must be consolidated into an explicit recommended_fix field so the operator has one actionable list."
+    },
+    {
+      "check": "residual_flagged",
+      "detail": "residual_uncertainty field absent entirely. Rank-1 is a HIGH-confidence multi-surface causal-negative claim; per check-4 it must carry explicit residual uncertainty. Additionally the report does not address two log-visible degradation signals I independently confirmed: (a) mmd-data-feed currently unhealthy (FailingStreak=13) looping 'possibly delisted; no price data found' for CBT symbols; (b) mmd-snapshot-feed 'adjusted candle snapshot unavailable ... roll ledger has no generation' (VX=F) + repeated 'Model is not converging' warnings."
+    },
+    {
+      "check": "advisor_gaps_acknowledged",
+      "detail": "Coordinator explicitly flagged observability surface UNAVAILABLE in this mirror (no .mcpq.json; PromQL ALERTS/up/freshness not run). The report cites advisor-derived values inline ('observability analyst: mmd-snapshot-feed stale_leg_skip_write EF-M27/EF-H27 every 5m + compute.completed 27.8s', 'explorer: api-gateway healthy') without evidence_id refs and without stating whether fresh=2/4, NQ=F/YM=F stale, FamilyOutage/SymbolStale came from PromQL or log inference. Provenance must be explicit."
+    }
+  ],
+  "gaps_for_remediation": [
+    "Add a top-level recommended_fix field with concrete operator-applied commands: (1) merge eb71393 'drop stale scrape' from xt/p35r (or reconcile L89 comment with alert silence/removal) for ext-papers:8006 ServiceDown; (2) add logging rotation block max-size:100m/max-file:3 to mercury-market-data compose, or truncate -s 0 the 23.9GiB questdb json.log; (3) docker rm -f bold_tesla nice_meninsky tsdb_repro_t80he after operator verifies no workflow dependency; (4) investigate mmd-data-feed CBT 'possibly delisted; no price data found' loop.",
+    "Add residual_uncertainty acknowledging: (a) provenance of alert/freshness values (fresh=2/4, NQ=F/YM=F stale, FamilyOutage/SymbolStale) — PromQL verified or log-inferred, and the observability surface's mcpq unavailability; (b) the feed-side-staleness <-> host CPU/swap link is correlational only; (c) mmd-data-feed unhealthy state (streak 13, CBT loop) evaluated or explicitly scoped out; (d) mmd-snapshot-feed 'roll ledger has no generation' (VX=F) and model non-convergence warnings assessed for outage relevance.",
+    "Link advisor findings to evidence_ids: reference the observability-analyst and explorer evidence payloads for the stale_leg_skip_write/compute.completed and api-gateway-health claims so downstream participants can dereference rather than trust inline prose."
+  ],
+  "rationale": "All 5 ranked observations were independently re-verified against the live system (docker inspect/logs, git log/show/branch, prometheus.yml grep) and are accurate and multi-surface for HIGH-confidence claims; the read-only posture is respected (fixes attributed to operator). However the report is missing the two structured contract fields (recommended_fix, residual_uncertainty) required for independent operator action, does not acknowledge the coordinator's observability-surface-UNavailable flag or link advisor evidence_ids, and leaves two log-visible candle-path degradations (mmd-data-feed unhealthy CBT loop; snapshot-feed roll-ledger warnings) unaddressed. These are bounded, specific gaps — a single remediation pass can close them."
+}

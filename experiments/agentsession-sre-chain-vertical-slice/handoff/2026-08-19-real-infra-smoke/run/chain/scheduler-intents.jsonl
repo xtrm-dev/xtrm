@@ -1,0 +1,10 @@
+{"kind":"dispatch","participant_id":"chain-sre-9ec830::chain-coordinator","step_id":"coordinator-entry","attempt":1,"idempotency_key":"chain-sre-9ec830/step:coordinator-entry/attempt:1/dispatch","reason":"ready"}
+{"kind":"dispatch","participant_id":"chain-sre-9ec830::explorer","step_id":"explorer","attempt":1,"idempotency_key":"chain-sre-9ec830/step:explorer/attempt:1/dispatch","reason":"ready"}
+{"kind":"dispatch","participant_id":"chain-sre-9ec830::observability-analyst","step_id":"observability","attempt":1,"idempotency_key":"chain-sre-9ec830/step:observability/attempt:1/dispatch","reason":"ready"}
+{"kind":"dispatch","participant_id":"chain-sre-9ec830::sre-diagnostician","step_id":"diagnostician","attempt":1,"idempotency_key":"chain-sre-9ec830/step:diagnostician/attempt:1/dispatch","reason":"ready"}
+{"kind":"dispatch","participant_id":"chain-sre-9ec830::reviewer","step_id":"reviewer","attempt":1,"idempotency_key":"chain-sre-9ec830/step:reviewer/attempt:1/dispatch","reason":"ready"}
+{"kind":"dispatch","participant_id":"chain-sre-9ec830::sre-diagnostician","step_id":"diagnostician","attempt":2,"idempotency_key":"chain-sre-9ec830/step:diagnostician/attempt:2/dispatch","reason":"remediation loop 1"}
+{"kind":"dispatch","participant_id":"chain-sre-9ec830::reviewer","step_id":"reviewer","attempt":2,"idempotency_key":"chain-sre-9ec830/step:reviewer/attempt:2/dispatch","reason":"ready"}
+{"kind":"dispatch","participant_id":"chain-sre-9ec830::sre-diagnostician","step_id":"diagnostician","attempt":3,"idempotency_key":"chain-sre-9ec830/step:diagnostician/attempt:3/dispatch","reason":"remediation loop 2"}
+{"kind":"dispatch","participant_id":"chain-sre-9ec830::reviewer","step_id":"reviewer","attempt":3,"idempotency_key":"chain-sre-9ec830/step:reviewer/attempt:3/dispatch","reason":"ready"}
+{"kind":"dispatch","participant_id":"chain-sre-9ec830::chain-coordinator","step_id":"coordinator-close","attempt":1,"idempotency_key":"chain-sre-9ec830/step:coordinator-close/attempt:1/dispatch","reason":"ready"}

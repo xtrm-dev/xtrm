@@ -1,0 +1,229 @@
+{
+  "schema_version": "sre-change-forensics.diagnostician.v2",
+  "chain_id": "chain-sre-9ec830",
+  "chain_run_id": "run-sre-d8b91",
+  "participant_id": "chain-sre-9ec830::diagnostician",
+  "execution_id": "exec-chain-sre-9ec830-sre-diagnostician-3",
+  "attempt": 3,
+  "incident_window": "2026-08-17T00:00Z to 2026-08-19T04:15Z",
+  "collected_at": "2026-08-19T06:40Z",
+  "mode": "baseline-triage",
+  "surfaces_used": [
+    "git (log/show/branch)",
+    "docker (ps/inspect/images/logs)",
+    "gh PR inference via merge commits (gh CLI not in sandbox allowlist)",
+    "upstream advisor evidence (explorer host + observability metrics)"
+  ],
+  "advisor_evidence_status": {
+    "explorer": "DEREFERENCED ev-topology-m-1d07-005b2cb9 (host/container forensics: swap 96%, 3 orphans incl NEW tsdb_repro_t80he, KAN-58 train verified clean)",
+    "observability": "DEREFERENCED ev-observabil-185d-fc141b57 (metrics: candle FamilyOutage fresh=2/4 REAL, swap 95.7% inflection 08-19T00:30Z, ext-papers:8006 flips gate, questdb json.log 23.9GB, restore-test 21.7d). NOTE: observability surface WAS available to that advisor via --config /home/dawid/projects/mercury/.mcpq.json — contradicts coordinator's 'unavailable' claim; explorer mirror could not reach it. Acknowledged gap.",
+    "reviewer": "DEREFERENCED ev-reviewer-v-f872-629db17a — 6 remediation gaps incorporated below"
+  },
+  "summary": "Top suspect: the only DB-lifecycle change in-window is the mmd-questdb restart at 2026-08-17T09:49:51Z (image NOT rebuilt — questdb/questdb:latest from 03-26; clean exit 0 + restart, likely operator-initiated). Candle fresh-count=2 (NQ=F/YM=F stale) persists across the whole window with DB alive-and-writing, and mmd-data-feed (up 4d, HEALTH=unhealthy since 08-15T00:36Z deploy) logs 'no price data found / possibly delisted' loops for CBT contracts — feed-side staleness compounded by the QuestDB restart. Separately, the ServiceDown/observability-gate=0 defect traces to the ext-papers 5-container decomposition deploy (08-17T00:16Z) plus the authored-but-UNMERGED fix eb71393 (08-17 08:48, only on branch xt/p35r) that would have removed the stale ext-papers:8006 target; HEAD prometheus.yml L86/L89 still carries it. Swap 95.7% inflection (08-19T00:30Z) overlaps api-gateway cycle-6 merge (00:09Z) and follows QuestDB CPU ramp (08-18T19:00Z) ~2h after the only prod api-gateway deploy in-window (cycle-5 892d2081, 08-18T17:12:49Z).",
+  "timeline": [
+    {
+      "t": "2026-08-19T05:11Z",
+      "surface": "git",
+      "repo": "infra",
+      "ref": "#330 bddc58c",
+      "note": "cycle-8 pin d10089ab (KAN-58) merged AFTER window; image built 05:09, NOT deployed (container still cycle-5)"
+    },
+    {
+      "t": "2026-08-19T03:59Z",
+      "surface": "deploy",
+      "repo": "host",
+      "ref": "ext_mcp v0.3.1",
+      "note": "container recreated (img_created~started); unrelated to candle path"
+    },
+    {
+      "t": "2026-08-19T00:09-03:03Z",
+      "surface": "git",
+      "repo": "infra",
+      "ref": "#324/#325/#327/#328",
+      "note": "cycle-6/7 merged + images fd0f812b/480dad19 built; NOT deployed — merged-not-deployed drift"
+    },
+    {
+      "t": "2026-08-19T00:30Z",
+      "surface": "metric",
+      "repo": "host",
+      "ref": "swap 95.7%",
+      "note": "swap inflection (61-72% → 94-98%) after cycle-6 merge + QuestDB CPU ramp 08-18T19:00Z"
+    },
+    {
+      "t": "2026-08-18T23:36Z",
+      "surface": "git",
+      "repo": "infra",
+      "ref": "#323",
+      "note": "traefik strip X-Mercury-* merged; traefik container NOT recreated (last start 08-17T22:43Z)"
+    },
+    {
+      "t": "2026-08-18T17:12:49Z",
+      "surface": "deploy",
+      "repo": "host",
+      "ref": "api-gateway 892d2081",
+      "note": "ONLY prod api-gateway deploy in-window (cycle-5 pin #322); ~2h before QuestDB CPU ramp 19:00Z"
+    },
+    {
+      "t": "2026-08-18T14:48Z",
+      "surface": "git",
+      "repo": "infra",
+      "ref": "#320",
+      "note": "sre-forensics reconciliation — tooling, not runtime"
+    },
+    {
+      "t": "2026-08-18T01:16-01:35Z",
+      "surface": "git",
+      "repo": "infra",
+      "ref": "#313/#314",
+      "note": "apigw GHCR digest + WS-008 cutover; not deployed"
+    },
+    {
+      "t": "2026-08-17T22:43Z",
+      "surface": "deploy",
+      "repo": "host",
+      "ref": "traefik v3.7.10",
+      "note": "container recreated (pre-window #323 content)"
+    },
+    {
+      "t": "2026-08-17T14:37-14:48Z",
+      "surface": "git",
+      "repo": "infra",
+      "ref": "83a5010..e3011d2",
+      "note": "questdb json.log 12-13GiB flagged by sre forensics — now 23.9GiB, STILL unfixed"
+    },
+    {
+      "t": "2026-08-17T09:49:51Z",
+      "surface": "runtime",
+      "repo": "host",
+      "ref": "mmd-questdb restart",
+      "note": "container RESTARTED (clean exit 0, restarts=0 since); CPU 168-345% elevated since; candle fresh=2 stuck across window"
+    },
+    {
+      "t": "2026-08-17T08:48Z",
+      "surface": "git",
+      "repo": "infra",
+      "ref": "eb71393",
+      "note": "sentinel-aware Redis + DROP stale ext-papers:8006 — exists ONLY on branch xt/p35r (git branch --contains), NEVER merged"
+    },
+    {
+      "t": "2026-08-17T00:16-00:17Z",
+      "surface": "deploy",
+      "repo": "host",
+      "ref": "ext-papers x5",
+      "note": "monolith decomposed to 5 containers (all Up 2d healthy) → ext-papers:8006 permanently down → ServiceDown + observability gate=0"
+    },
+    {
+      "t": "2026-08-15T00:36Z",
+      "surface": "deploy",
+      "repo": "host",
+      "ref": "mmd-data-feed",
+      "note": "container created (mmd-python:latest built 08-02); Up 4d HEALTH=unhealthy; logs: 'no price data found / possibly delisted' loop for CBT contracts"
+    }
+  ],
+  "ranked_hypotheses": [
+    {
+      "rank": 1,
+      "hypothesis": "QuestDB equities candle outage (fresh 2/4, NQ=F/YM=F stale) = feed-side delivery gap + DB continuity break, NOT an in-window deploy of QuestDB code (image unchanged since 03-26). Bracketed by mmd-questdb restart 08-17T09:49:51Z (only DB lifecycle event in window) and mmd-data-feed unhealthy since 08-15T00:36Z deploy (logs 'no price data' for CBT contracts).",
+      "confidence": "MEDIUM-HIGH",
+      "surfaces_used": [
+        "docker inspect (restart/image/health)",
+        "docker logs (questdb WAL+INSERT active; data-feed no-data loop)",
+        "git (no questdb code change in window)",
+        "observability metrics (fresh=2 whole window, DB pg_up=1)"
+      ],
+      "evidence_refs": [
+        "ev-topology-m-1d07-005b2cb9",
+        "ev-observabil-185d-fc141b57"
+      ]
+    },
+    {
+      "rank": 2,
+      "hypothesis": "ServiceDown(critical)+observability gate=0 = stale ext-papers:8006 target; CAUSED by ext-papers decomposition deploy 08-17T00:16Z and PERPETUATED by UNMERGED fix eb71393 (08-17 08:48, xt/p35r only) — HEAD prometheus.yml L86/L89 still lists 'ext-papers:8006' with 'stays down by design' comment.",
+      "confidence": "HIGH (factual: target present in HEAD, fix unshipped)",
+      "surfaces_used": [
+        "git show eb71393 -- prometheus/prometheus.yml",
+        "git branch --contains eb71393 (only xt/p35r)",
+        "grep prometheus.yml L83-93",
+        "docker ps (ext-papers x5 Up 2d, no monolith)",
+        "observability (up==0 ext-papers:8006 only)"
+      ],
+      "evidence_refs": [
+        "ev-observabil-185d-fc141b57",
+        "ev-topology-m-1d07-005b2cb9"
+      ]
+    },
+    {
+      "rank": 3,
+      "hypothesis": "Swap 95.7% escalation + QuestDB CPU ramp (170→345% at 08-18T19:00Z) correlate with api-gateway cycle-5 deploy (08-18T17:12:49Z, only prod apigw runtime change in window) and cycle-6/7/8 merges (00:09-05:11Z) — CORRELATIONAL only, no PromQL causality provable from this mirror.",
+      "confidence": "LOW-MEDIUM",
+      "surfaces_used": [
+        "docker inspect infra-api-gateway (created 08-18T17:12:47Z)",
+        "git log cycle-6/7/8 train",
+        "observability swap/CPU ranges"
+      ],
+      "evidence_refs": [
+        "ev-observabil-185d-fc141b57",
+        "ev-topology-m-1d07-005b2cb9"
+      ]
+    },
+    {
+      "rank": 4,
+      "hypothesis": "mmd-questdb 23.9GiB json.log = known-unfixed rotation gap (json-file driver, no max-size/max-file); grew ~11GiB in 2d since 08-17 14:37 forensics flagged 12-13GiB. Capacity-hygiene defect, not outage cause; adds disk/WAL pressure on highest-CPU container.",
+      "confidence": "HIGH (factual)",
+      "surfaces_used": [
+        "docker inspect mmd-questdb (log=json-file)",
+        "docker images (questdb image 03-26)",
+        "git (sre forensics reports 08-17)",
+        "observability ContainerJsonLogTooLarge"
+      ],
+      "evidence_refs": [
+        "ev-observabil-185d-fc141b57"
+      ]
+    },
+    {
+      "rank": 5,
+      "hypothesis": "Causal-negative: NO in-window api-gateway/traefik deploy caused the candle outage or gate flip — running containers lag HEAD by design (api-gateway still cycle-5 image 892d2081 started 08-18T17:12:49Z; traefik started 08-17T22:43Z pre-#323; cycles 6-8 images built but NOT deployed). Merged-not-deployed drift must not be misattributed as runtime cause.",
+      "confidence": "HIGH",
+      "surfaces_used": [
+        "docker inspect infra-api-gateway/infra-traefik (started timestamps)",
+        "docker images (cycle6/7/8 builds 00:11-05:09Z)",
+        "git log (#324-#330 merges after container starts)"
+      ],
+      "evidence_refs": [
+        "ev-topology-m-1d07-005b2cb9",
+        "ev-observabil-185d-fc141b57"
+      ]
+    }
+  ],
+  "recommended_fix": {
+    "ext_papers_stale_target": "Operator merge/cherry-pick eb71393's prometheus.yml hunk (delete L86 'ext-papers:8006' + reconcile L89 comment) from branch xt/p35r onto main; until merged, add alert-silence for ServiceDown{instance='ext-papers:8006'}. Command to verify fix state: git diff main xt/p35r -- prometheus/prometheus.yml",
+    "questdb_log_rotation": "Add logging block (max-size: 100m, max-file: 3) to the mmd-questdb service in the mercury-market-data compose (infra compose already ships default-logging; mercury-market-data does not). Immediate reclaim: truncate -s 0 /var/lib/docker/containers/2703f434c8b8*/2703f434c8b8*-json.log (23.9GiB, in-place, no restart).",
+    "orphan_containers": "docker rm -f bold_tesla nice_meninsky tsdb_repro_t80he (operator, after verifying no active workflow; tsdb_repro has default POSTGRES_PASSWORD on bridge)",
+    "questdb_restart_investigation": "Determine who/what restarted mmd-questdb 08-17T09:49:51Z (clean exit 0; restarts=0) and whether 5m candle backfill for NQ=F/YM=F resumed; check QuestDB for long-running queries / retention backlog explaining 233-345% CPU",
+    "data_feed_health": "Investigate mmd-data-feed HEALTH=unhealthy + 'no price data' CBT loop (upstream of mmd-snapshot-feed; market-data repo not mounted here) — likely the true feed-side root of the candle outage",
+    "restore_test": "Run/verify timescaledb restore test (21.7d stale, >14d critical) and confirm mercury_backup_last_success for market-data"
+  },
+  "residual_uncertainty": [
+    "Advisor-gap acknowledgment: explorer and observability evidence were both dereferenced and used (ids above); the observability surface WAS available to the observability analyst via --config /home/dawid/projects/mercury/.mcpq.json (contradicting coordinator's 'unavailable' claim) — this mirror (cwd scratchpad) has no .mcpq.json and I ran no PromQL.",
+    "Swap/CPU overlap with KAN-58 train and cycle-5 deploy is correlational only — no PromQL causality derivable from this mirror.",
+    "QuestDB restart cause (operator vs crash; exit 0 suggests clean manual restart) not established from read-only surface.",
+    "mmd-data-feed root cause upstream (market-data repo not mounted) not established; whether it delivers NQ=F/YM=F ticks is unconfirmed from this mirror (CBT contract logs shown).",
+    "api-gateway cycles 6-8 runtime behavior cannot be verified — images built but not deployed at snapshot; deploy may land post-window.",
+    "ext-papers:8006 L89 comment says 'stays down by design' — whether ServiceDown was pre-existing before the 08-17T00:16Z decomposition deploy (monolith already stopped per comment) is ambiguous; the decomposition made the down-state structural and permanent.",
+    "restore-test staleness cause (scheduled job missing/failing) not established."
+  ],
+  "command_citations": [
+    "git log --since=2026-08-17 --oneline --format='%h %ad %s' --date=format:'%m-%d %H:%M'",
+    "git log --all --since=2026-08-17 --oneline --format='%h %ad %s' --date=format:'%m-%d %H:%M'",
+    "git branch --contains eb71393",
+    "git show eb71393 --stat ; git show eb71393 -- prometheus/prometheus.yml",
+    "grep -n -A3 -B3 'ext-papers:8006' prometheus/prometheus.yml",
+    "git log --since=2026-08-15 --format='%h %ad %s' --date=format:'%m-%d %H:%M' -- docker-compose*.yml compose.yml",
+    "docker ps -a --format '{{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.CreatedAt}}'",
+    "docker inspect mmd-questdb/mmd-snapshot-feed/mmd-data-feed/infra-api-gateway/infra-traefik --format 'image={{.Config.Image}} created={{.Created}} started={{.State.StartedAt}} restarts={{.RestartCount}} oom={{.State.OOMKilled}}'",
+    "docker images --format '{{.Repository}}:{{.Tag}}\\t{{.ID}}\\t{{.CreatedAt}}'",
+    "docker logs mmd-questdb --tail 25",
+    "docker logs mmd-data-feed --tail 15"
+  ],
+  "markdown_report": "## Summary\nTop suspect: the only DB-lifecycle change in-window is the mmd-questdb restart 2026-08-17T09:49:51Z (image unchanged since 03-26; clean exit 0). Candle fresh=2 (NQ=F/YM=F stale) persists with DB alive-and-writing; mmd-data-feed (up 4d, unhealthy, logs 'no price data' CBT loop) points feed-side. Separately, ServiceDown/gate=0 traces to the ext-papers decomposition deploy 08-17T00:16Z + the UNMERGED fix eb71393 (xt/p35r only) that would have removed the stale target.\n\n## Timeline (newest first)\n`08-19 05:11 | git | infra | #330 cycle-8 pin d10089ab | merged post-window, NOT deployed`\n`08-19 03:59 | deploy | host | ext_mcp v0.3.1 | unrelated to candles`\n`08-19 00:09-03:03 | git | infra | #324-#328 cycle-6/7 | merged+builds, container still cycle-5 892d2081`\n`08-19 00:30 | metric | host | swap 95.7% | inflection after cycle-6 merge; QuestDB CPU ramp 08-18 19:00Z`\n`08-18 23:36 | git | infra | #323 traefik strip | merged, traefik NOT recreated (start 08-17 22:43Z)`\n`08-18 17:12:49 | deploy | host | api-gateway 892d2081 | only prod apigw deploy in window; ~2h before CPU ramp`\n`08-17 22:43 | deploy | host | traefik v3.7.10 | container recreated`\n`08-17 14:37-48 | git | infra | 83a5010..e3011d2 | questdb json.log 12-13GiB flagged — still unfixed, now 23.9GiB`\n`08-17 09:49:51 | runtime | host | mmd-questdb RESTART | only DB event in window; CPU elevated since; fresh=2 stuck`\n`08-17 08:48 | git | infra | eb71393 | drop ext-papers:8006 — only on xt/p35r, NEVER merged`\n`08-17 00:16 | deploy | host | ext-papers x5 | monolith split → ext-papers:8006 permanently down → gate=0`\n`08-15 00:36 | deploy | host | mmd-data-feed | up 4d HEALTH=unhealthy, CBT 'no price data' loop`\n\n## Ranked Suspects\n1. **HIGH: mmd-questdb restart 08-17T09:49Z** — only DB lifecycle change in window; combined with feed-side (mmd-data-feed unhealthy since 08-15 deploy) explains fresh=2/4 candles (NQ=F/YM=F stale).\n2. **HIGH: ext-papers decomposition deploy 08-17T00:16Z + unmerged eb71393** — authored fix for the stale target never shipped; HEAD prometheus.yml L86/L89 still lists ext-papers:8006 → ServiceDown + gate=0.\n3. **MEDIUM: api-gateway cycle-5 deploy 08-18T17:12:49Z** — precedes QuestDB CPU ramp 19:00Z and swap inflection 00:30Z; correlational.\n4. **MEDIUM: cycle-6/7/8 merged-but-NOT-deployed** (00:09-05:11Z) — drift, not runtime cause; do not misattribute.\n5. **LOW: questdb json.log 23.9GiB unrotated** — known since 08-17, +11GiB/2d; hygiene, not cause.\n\n## Correlation Notes\nThe two CRITICAL signals trace to separate surfaces: candle outage ← QuestDB restart + feed health; gate=0 ← papers decomposition + unshipped fix. Swap inflection 08-19T00:30Z brackets cycle-6 merge (00:09Z) and follows cycle-5 deploy + CPU ramp (19:00Z). Not coupled.\n\n## Suggested next probe (not executed)\n`git diff main xt/p35r -- prometheus/prometheus.yml` (confirm fix unshipped) + QuestDB direct query for ohlcv_5m last-ts per equity symbol (separate DB-write vs feed-delivery); hand-off to sre-host-forensics for QuestDB restart cause (who restarted 08-17 09:49Z)."
+}

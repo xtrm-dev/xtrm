@@ -1,0 +1,97 @@
+{
+  "chain_id": "chain-sre-9ec830",
+  "root_bead_id": "vsvs-chain-sre-9ec830-epic",
+  "topology": [
+    {
+      "step_id": "coordinator-entry",
+      "role": "chain-coordinator",
+      "class": "coordinator",
+      "needs": [],
+      "model": "commandcode/deepseek/deepseek-v4-flash",
+      "fallback_model": "opencode-go/deepseek-v4-flash"
+    },
+    {
+      "step_id": "explorer",
+      "role": "explorer",
+      "class": "advisor",
+      "needs": [
+        "coordinator-entry"
+      ],
+      "model": "commandcode/deepseek/deepseek-v4-flash",
+      "fallback_model": "opencode-go/deepseek-v4-flash"
+    },
+    {
+      "step_id": "observability",
+      "role": "observability-analyst",
+      "class": "advisor",
+      "needs": [
+        "coordinator-entry"
+      ],
+      "model": "commandcode/deepseek/deepseek-v4-flash",
+      "fallback_model": "opencode-go/deepseek-v4-flash"
+    },
+    {
+      "step_id": "diagnostician",
+      "role": "sre-diagnostician",
+      "class": "step",
+      "needs": [
+        "explorer",
+        "observability"
+      ],
+      "model": "commandcode/deepseek/deepseek-v4-flash",
+      "fallback_model": "opencode-go/deepseek-v4-flash"
+    },
+    {
+      "step_id": "reviewer",
+      "role": "reviewer",
+      "class": "gate",
+      "needs": [
+        "diagnostician"
+      ],
+      "model": "commandcode/deepseek/deepseek-v4-flash",
+      "fallback_model": "opencode-go/deepseek-v4-flash"
+    },
+    {
+      "step_id": "coordinator-close",
+      "role": "chain-coordinator",
+      "class": "coordinator",
+      "needs": [
+        "reviewer"
+      ],
+      "model": "commandcode/deepseek/deepseek-v4-flash",
+      "fallback_model": "opencode-go/deepseek-v4-flash"
+    }
+  ],
+  "entry_step_id": "coordinator-entry",
+  "close_step_id": "coordinator-close",
+  "reviewer_step_id": "reviewer",
+  "diagnostician_step_id": "diagnostician",
+  "created_at": "2026-08-19T04:08:26.204Z",
+  "fingerprint": {
+    "pi_package": {
+      "name": "@earendil-works/pi-coding-agent",
+      "version": "0.80.6"
+    },
+    "beads_version": "bd version 1.2.1 (634cbbc4b)",
+    "experiment_source_dir": "/home/dawid/dev/xtrm-wt/pr71-loader/experiments/agentsession-sre-chain-vertical-slice",
+    "experiment_source_dirty": false,
+    "baseline_specialists": [
+      {
+        "path": "/tmp/claude-1000/-home-dawid-dev-xtrm/a27124c7-55e7-4dcf-a286-d399f828df5a/scratchpad/mercury-infra-mirror/.specialists/user/sre-coordinator.specialist.json",
+        "sha256": "2c5f202eec54c171fb78507f9c8b8256bbc169f3da99ef7f32d318095b694792"
+      },
+      {
+        "path": "/tmp/claude-1000/-home-dawid-dev-xtrm/a27124c7-55e7-4dcf-a286-d399f828df5a/scratchpad/mercury-infra-mirror/.specialists/user/sre-host-forensics.specialist.json",
+        "sha256": "23f0a42869f1cc3e6b249103e07ca3eb1c3ca3e1451d9c3edfceb88f34acd343"
+      },
+      {
+        "path": "/tmp/claude-1000/-home-dawid-dev-xtrm/a27124c7-55e7-4dcf-a286-d399f828df5a/scratchpad/mercury-infra-mirror/.specialists/user/sre-observability-forensics.specialist.json",
+        "sha256": "aa7ca69bdb1e7f76ddd10c7fcdc7036f418d7cbb02d8277f14185c390df70522"
+      },
+      {
+        "path": "/tmp/claude-1000/-home-dawid-dev-xtrm/a27124c7-55e7-4dcf-a286-d399f828df5a/scratchpad/mercury-infra-mirror/.specialists/user/sre-change-forensics.specialist.json",
+        "sha256": "9e0f6c1bbabe9bcdbaa7e97aa0e2a34b2a23bb5a270116e03d4ff3820967bf59"
+      }
+    ]
+  }
+}

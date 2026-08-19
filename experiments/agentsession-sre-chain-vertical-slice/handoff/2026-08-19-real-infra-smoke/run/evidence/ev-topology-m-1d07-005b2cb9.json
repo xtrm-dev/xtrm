@@ -1,0 +1,104 @@
+{
+  "schema_version": "sre-host-forensics.topology.v1",
+  "chain_id": "chain-sre-9ec830",
+  "step_id": "explorer",
+  "participant_id": "chain-sre-9ec830::explorer",
+  "execution_id": "exec-chain-sre-9ec830-explorer-1",
+  "mode": "baseline-triage",
+  "collected_at": "2026-08-19T06:12Z",
+  "method": "read-only probes: free/ps/docker inspect/stats/top/logs/git log",
+  "top_5_observations": [
+    {
+      "rank": 1,
+      "observation": "Host oversubscribed: swap 22/23Gi used (96%), Mem 19/31Gi used, load 7.5/11/12.5 (dropping from 10/13.7/13.5)",
+      "evidence": [
+        "free -h: Mem 31Gi total 19Gi used 563MiB free 12Gi avail; Swap 23Gi 22Gi used 1.0Gi free",
+        "uptime: 147 days, load 7.54/11.07/12.53",
+        "top VmSwap: PID 83463 java(QuestDB) 1,015,252 kB; PID 2131932 python 793,964 kB; PID 2943111 SierraChart 543,624 kB; dolt 371,748 kB; claude/pi 160-262MB each"
+      ],
+      "assessment": "swap thrash risk under any spike; 1.0GiB swap headroom only"
+    },
+    {
+      "rank": 2,
+      "observation": "Two unhealthy legacy debug containers + NEW third orphan on bridge: bold_tesla, nice_meninsky, tsdb_repro_t80he",
+      "evidence": [
+        "bold_tesla: mmd-python:latest, bridge 172.17.0.5, DB_HOST=timescaledb, FailingStreak=4950, labels mercury-market-data/mmd-api, psycopg2 'could not translate host name'",
+        "nice_meninsky: mmd-python:latest, bridge 172.17.0.3, DB_HOST=timescaledb, FailingStreak=6157, labels mercury-market-data-ido61-debugger/mmd-api",
+        "NEW: tsdb_repro_t80he: timescale/timescaledb:latest-pg16, bridge 172.17.0.4, POSTGRES_PASSWORD=postgres POSTGRES_DB=market_data, health=null (no healthcheck), no compose labels, Up 3 weeks",
+        "root cause: timescaledb only resolves on mmd-network (172.19.0.2, aliases [mmd-timescaledb,timescaledb]); bridge has no such alias",
+        "production mmd-api healthy, networks mercury_dev_network/mercury_platform/mmd-network"
+      ],
+      "assessment": "3 orphans pollute bridge + health surfaces; tsdb_repro has default creds"
+    },
+    {
+      "rank": 3,
+      "observation": "CPU: QuestDB dominant (36-168% sampling variance, java PID 83463 at 99%C / 4d-02h CPU time since Aug17 restart); mmd-timescaledb bursty (101-111% at 06:08Z, now 1-8%)",
+      "evidence": [
+        "docker stats top: mmd-questdb 168%→36% (1.26GiB/12GiB limit), infra-postgres-exporter-mmd 73%, infra-prometheus 29%, sierra_container 22.6%, mmd-timescaledb 8.5%",
+        "docker top mmd-timescaledb: backend PID 3568245 (client 172.19.0.19) CPU time 1-01:28, idle — correlates with spike",
+        "docker logs mmd-questdb: continuous WAL apply + o3 partition merge on ohlcv_* tables (steady-state load, not crash loop)"
+      ],
+      "assessment": "QuestDB steady ingest/maintenance; postgres-exporter-mmd 73% CPU anomalous for an exporter"
+    },
+    {
+      "rank": 4,
+      "observation": "Disk/tmpfs pressure: /dev/vda4 81% (782G/1007G, 185G avail), /tmp tmpfs 83% (13G/16G, 2.9G avail)",
+      "evidence": [
+        "df -h: / 81%, /tmp 83%",
+        "du: /tmp/issue95-venv 5.9G, /tmp/console-exp020 515M, /tmp/console-exp020-smoke-data 336M"
+      ],
+      "assessment": "root fine short-term; /tmp exhausts with dev activity"
+    },
+    {
+      "rank": 5,
+      "observation": "api-gateway KAN-58 cycle-6/7/8 change train merged 00:09-05:11Z; runners rebuilt; deployed clean",
+      "evidence": [
+        "git log: HEAD=bddc58c cycle-8 pin sha256:d10089ab 05:11Z; #324 #325 (c6), #327 #328 (c7), #329 (c8), #323 traefik strip, #322 c5 pin",
+        "infra-api-gateway healthy since 2026-08-18T17:12:49Z, logs clean /health+/metrics 200, no errors",
+        "runners: infra-runner Up 56m, platform-runner Up 1h, darth-feedor-runner Up 2h, ext_mcp Up 2h (image_created≈started)"
+      ],
+      "assessment": "high-velocity window, currently clean"
+    },
+    {
+      "rank": 6,
+      "observation": "Core stack healthy: 84 containers, no crash loops, no OOMKilled, only exited container mmd-migrations (expected)",
+      "evidence": [
+        "docker ps: infra-api-gateway/traefik/prometheus healthy, restarts=0, oom=false",
+        "mmd-questdb/mmd-timescaledb/mmd-snapshot-feed: restarts=0, oom=false"
+      ]
+    }
+  ],
+  "new_findings": [
+    "tsdb_repro_t80he: 3rd orphan on bridge — timescale image, default POSTGRES_PASSWORD=postgres, no healthcheck, no compose labels, Up 3 weeks (2026-07-28). Upstream flagged only 2 orphans. Recommend operator verify-then-remove with the other two."
+  ],
+  "residual_uncertainty": [
+    "/var/lib/docker/containers log sizes: Permission denied (no sudo in allowlist) — unrotated json-log check NOT completed; operator should run sudo find ... -printf '%s %p' | sort -rn | head",
+    "PID 2131932 python (794MB VmSwap, 15MB RSS) unattributed — not in any docker top; likely a host dev-session process",
+    "infra-postgres-exporter-mmd 73% CPU unexplained (no docker top captured); check its scrape targets",
+    "mmd-timescaledb CPU burst source (client 172.19.0.19) not identified — suspect a query/reindex burst",
+    "Observability surface (PromQL ALERTS/up/freshness) not available in this mirror — observability specialist must re-probe"
+  ],
+  "recommended_fix_operator_applies": [
+    "docker rm -f bold_tesla nice_meninsky (verify no workflow first; debug leftovers, 3-4w old)",
+    "docker rm -f tsdb_repro_t80he (verify unused; default creds on bridge)",
+    "QuestDB: check internal long-running queries / retention backlog (233%→168% CPU, 42h up); consider windowed restart if unexplained",
+    "Investigate infra-postgres-exporter-mmd 73% CPU; review mmd-timescaledb spike client 172.19.0.19",
+    "Clean /tmp: rm -rf /tmp/issue95-venv /tmp/console-exp020* and stale darth-pre-push-* dirs when done",
+    "Check unrotated docker json-logs: sudo find /var/lib/docker/containers -maxdepth 2 -name '*-json.log' -printf '%s %p\\n' | sort -rn | head"
+  ],
+  "command_citations": [
+    "free -h",
+    "uptime",
+    "grep -H '^VmSwap:' /proc/[0-9]*/status | sort -t: -k3 -rn | head -15",
+    "docker ps --format 'table {{.Names}}\\t{{.Status}}\\t{{.Image}}'",
+    "docker stats --no-stream --format '{{.Name}}\\t{{.CPUPerc}}\\t{{.MemUsage}}' | sort",
+    "docker inspect bold_tesla/nice_meninsky/tsdb_repro_t80he --format '{{json .Config.Labels}}'",
+    "docker network inspect bridge",
+    "docker inspect mmd-timescaledb --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}/{{$v.IPAddress}} aliases={{$v.Aliases}} {{end}}'",
+    "docker top mmd-questdb; docker top mmd-timescaledb",
+    "docker logs mmd-questdb --tail 40",
+    "docker logs infra-api-gateway --tail 15",
+    "df -h / /tmp; du -sh /tmp/issue95-venv /tmp/console-exp020 /tmp/console-exp020-smoke-data",
+    "git log --oneline -12; git log --since='24 hours ago' --format='%h %ad %s' --date=iso"
+  ]
+}
