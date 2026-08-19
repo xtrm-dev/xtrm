@@ -246,33 +246,35 @@ export async function dispatchSpecialistActivation(
         specialist_sha256: args.profile.source.sha256,
       },
     });
-  // ---- LIVE MESSAGES dump (uncommitted, xtrm-pq1.x): emit one activation.msg fact
-  // per session message so the operator sees every user/assistant/tool turn in
-  // forensics/events.jsonl and the pane, exactly like scripts/smoke_bridge_verbose.ts does.
-  try {
-    const msgs = ((session as any).state?.messages ?? []) as any[];
-    for (let i = 0; i < msgs.length; i++) {
-      const m: any = msgs[i];
-      let snippet = "";
-      try {
-        const c = m.content;
-        if (typeof c === "string") snippet = c;
-        else snippet = JSON.stringify(c);
-      } catch { snippet = "?"; }
-      const head = String(snippet ?? "").replace(/\s+/g, " ").slice(0, 240);
-      args.onFact({
-        ts: new Date().toISOString(),
-        chain_id: args.identity.chain_id,
-        step_id: args.identity.step_id,
-        participant_id: args.identity.participant_id,
-        role: args.identity.role,
-        kind: ("activation.msg." + (m.role ?? "?")) as any,
-        detail: "#" + i + "  " + head,
-        meta: { execution_id: args.identity.execution_id, idx: i, msg_role: m.role },
-      } as any);
-    }
-  } catch { /* best-effort */ }
   } finally {
+    // ---- LIVE MESSAGES dump (xtrm-pq1.5): one activation.msg fact per
+    // session message. ponytail: moved from catch to finally so it fires on
+    // the happy path -- the previous placement only ran when session.prompt
+    // threw, so a successful activation emitted zero activation.msg.<role>
+    // facts.
+    try {
+      const msgs = ((session as any).state?.messages ?? []) as any[];
+      for (let i = 0; i < msgs.length; i++) {
+        const m: any = msgs[i];
+        let snippet = "";
+        try {
+          const c = m.content;
+          if (typeof c === "string") snippet = c;
+          else snippet = JSON.stringify(c);
+        } catch { snippet = "?"; }
+        const head = String(snippet ?? "").replace(/\s+/g, " ").slice(0, 240);
+        args.onFact({
+          ts: new Date().toISOString(),
+          chain_id: args.identity.chain_id,
+          step_id: args.identity.step_id,
+          participant_id: args.identity.participant_id,
+          role: args.identity.role,
+          kind: ("activation.msg." + (m.role ?? "?")) as any,
+          detail: "#" + i + "  " + head,
+          meta: { execution_id: args.identity.execution_id, idx: i, msg_role: m.role },
+        } as any);
+      }
+    } catch { /* best-effort */ }
     session.dispose();
   }
 
