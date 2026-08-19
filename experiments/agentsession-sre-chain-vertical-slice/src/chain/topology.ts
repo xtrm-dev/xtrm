@@ -15,8 +15,8 @@
 import type { ChainStep, ParticipantRole, ResolvedChain } from "./types.ts";
 import { nowIso, shortId } from "../util/ids.ts";
 
-const DEFAULT_MODEL = "opencode-go/deepseek-v4-flash";
-const DEFAULT_FALLBACK = "zai/glm-5-turbo";
+const DEFAULT_MODEL = "commandcode/deepseek/deepseek-v4-flash";
+const DEFAULT_FALLBACK = "opencode-go/deepseek-v4-flash";
 
 const STEP_DEFS: Array<{
   step_id: string;

@@ -7,7 +7,7 @@ import {
   createExtensionRuntime,
   type ResourceLoader,
 } from "@earendil-works/pi-coding-agent";
-import { getModel } from "@earendil-works/pi-ai/compat";
+import { resolveModel as getModel } from "./model-resolver.ts";
 import type { ParticipantIdentity, RuntimeFact } from "../chain/types.ts";
 import type { Paths } from "../chain/store.ts";
 import { buildTools, DEFAULT_SRE_ALLOWLIST, DEFAULT_SRE_DENYLIST } from "../tools/index.ts";
@@ -155,6 +155,50 @@ export async function dispatchSpecialistActivation(
   let agentEndError: string | undefined;
   const done = new Promise<void>((resolve) => {
     const unsub = session.subscribe((event) => {
+      // ---- LIVE STREAM patch (uncommitted, xtrm-pq1.x): forward Pi runtime
+      // events to onFact so the operator sees per-activation progress in the
+      // pane and in forensics/events.jsonl, not just start/done.
+      const emitLive = (kind: string, detail: string) => {
+        try {
+          args.onFact({
+            ts: new Date().toISOString(),
+            chain_id: args.identity.chain_id,
+            step_id: args.identity.step_id,
+            participant_id: args.identity.participant_id,
+            role: args.identity.role,
+            kind: kind as any,
+            detail,
+            meta: { execution_id: args.identity.execution_id },
+          } as any);
+        } catch { /* best-effort telemetry */ }
+      };
+      const ev: any = event;
+      switch (ev.type) {
+        case "agent_start":
+          emitLive("activation.start", `pi_session=${ev.sessionId ?? ev.session_id ?? "?"}`); return;
+        case "message_start":
+          emitLive("activation.msg.start", `role=${ev.role ?? ev.messageRole ?? "?"}`); return;
+        case "message_end": {
+          const t = ev.text ?? ev.content ?? ev.assistantText ?? "";
+          const snip = typeof t === "string" ? t.replace(/\s+/g, " ").slice(0, 160) : "";
+          emitLive("activation.msg.end", `len=${(typeof t === "string" ? t.length : 0)}  head="${snip}"`);
+          return;
+        }
+        case "tool_execution_start": {
+          const name = ev.name ?? ev.toolName ?? ev.tool ?? "?";
+          const argStr = (() => { try { return JSON.stringify(ev.arguments ?? ev.input ?? {}).slice(0, 200); } catch { return "?"; } })();
+          emitLive("activation.tool.start", `${name}  args=${argStr}`); return;
+        }
+        case "tool_execution_end": {
+          const name = ev.name ?? ev.toolName ?? ev.tool ?? "?";
+          const okv = (ev.ok ?? ev.success ?? (ev.error == null)) ? "ok" : `err=${ev.error ?? "?"}`;
+          emitLive("activation.tool.end", `${name}  ${okv}`); return;
+        }
+        case "bash_execution_update":
+          emitLive("activation.bash", (ev.line ?? ev.text ?? "").toString().replace(/\s+/g," ").slice(0, 200)); return;
+        case "agent_settled":
+          emitLive("activation.settled", `settled`); return;
+      }
       if (event.type !== "agent_end") return;
       if (event.willRetry) return;
       agentEnded = true;
@@ -202,6 +246,32 @@ export async function dispatchSpecialistActivation(
         specialist_sha256: args.profile.source.sha256,
       },
     });
+  // ---- LIVE MESSAGES dump (uncommitted, xtrm-pq1.x): emit one activation.msg fact
+  // per session message so the operator sees every user/assistant/tool turn in
+  // forensics/events.jsonl and the pane, exactly like scripts/smoke_bridge_verbose.ts does.
+  try {
+    const msgs = ((session as any).state?.messages ?? []) as any[];
+    for (let i = 0; i < msgs.length; i++) {
+      const m: any = msgs[i];
+      let snippet = "";
+      try {
+        const c = m.content;
+        if (typeof c === "string") snippet = c;
+        else snippet = JSON.stringify(c);
+      } catch { snippet = "?"; }
+      const head = String(snippet ?? "").replace(/\s+/g, " ").slice(0, 240);
+      args.onFact({
+        ts: new Date().toISOString(),
+        chain_id: args.identity.chain_id,
+        step_id: args.identity.step_id,
+        participant_id: args.identity.participant_id,
+        role: args.identity.role,
+        kind: ("activation.msg." + (m.role ?? "?")) as any,
+        detail: "#" + i + "  " + head,
+        meta: { execution_id: args.identity.execution_id, idx: i, msg_role: m.role },
+      } as any);
+    }
+  } catch { /* best-effort */ }
   } finally {
     session.dispose();
   }
