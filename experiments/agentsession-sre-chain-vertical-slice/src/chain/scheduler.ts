@@ -31,6 +31,7 @@ import { chainEpicIdOf, closeBead, noteBead } from "../adapters/beads.ts";
 import * as fsp from "node:fs/promises";
 import * as pathmod from "node:path";
 import { readMessages as _readMessagesUnused } from "./store.ts"; // types-only
+import { writeSreTriageBundle, terminalStateOf } from "./finalize.ts";
 
 /**
  * Deterministic per-run evidence bundle written into the state-dir at
@@ -356,6 +357,19 @@ export async function runToCompletion(
         detail: `terminal: ${newRunState.status}`,
       });
       await writeReportLogJsonSafe(ctx, newRunState, "closed");
+      const term = terminalStateOf(newRunState.status);
+      if (term) {
+        await writeSreTriageBundle({
+          paths: ctx.paths,
+          runState: newRunState,
+          targetRepo: ctx.targetRepo,
+          terminalState: term,
+          chainId: ctx.chain.chain_id,
+          chainRunId: newRunState.chain_run_id,
+          onFact: ctx.onFact,
+          startedAt: (run as any).started_at ?? null,
+        });
+      }
       return;
     }
     if (intents.length === 0) {
@@ -367,9 +381,24 @@ export async function runToCompletion(
         role: "runtime",
         detail: "reducer produced no intents and chain not closed — blocked",
       });
-      newRunState.status = "blocked";
+      const term = terminalStateOf(newRunState.status);
+      if (term) {
+        await writeSreTriageBundle({
+          paths: ctx.paths,
+          runState: newRunState,
+          targetRepo: ctx.targetRepo,
+          terminalState: term,
+          chainId: ctx.chain.chain_id,
+          chainRunId: newRunState.chain_run_id,
+          onFact: ctx.onFact,
+          startedAt: (run as any).started_at ?? null,
+        });
+      }
+      if (newRunState.status !== "escalated") {
+        newRunState.status = "blocked";
+      }
       await saveRunState(ctx.paths, newRunState);
-      await writeReportLogJsonSafe(ctx, newRunState, "blocked");
+      await writeReportLogJsonSafe(ctx, newRunState, newRunState.status === "escalated" ? "escalated" : "blocked");
       return;
     }
 
