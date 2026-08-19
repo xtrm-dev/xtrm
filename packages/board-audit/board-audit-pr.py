@@ -810,7 +810,9 @@ def cmd_pr_checkpoint(args: argparse.Namespace) -> int:
         handoff = handoff_payload(slug, pr, info, snapshot, generated_at)
         handoff["producer"] = producer
         handoff["work_package_count"] = len(work_entries)
-        index = build_index(worktree, snapshot, pr, info, generated_at)
+        # Persists index.json (open_issues + pr_checkpoints); the per-root
+        # packages entries are merged on top by update_index_for_handoff.
+        build_index(worktree, snapshot, pr, info, generated_at)
         for root, package, editable, manifest in work_entries:
             flow.update_index_for_handoff(
                 worktree,
@@ -1147,7 +1149,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"doctor: {failures} failure(s), {warnings} warning(s) — exit 2")
         return 2
     if stale_pr and args.check:
-        print(f"doctor: handoff stale — exit 3")
+        print("doctor: handoff stale — exit 3")
         return 3
     print(f"doctor: ok ({warnings} warning(s))")
     return 0
