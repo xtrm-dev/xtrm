@@ -1,19 +1,15 @@
 /**
  * AgentSession bridge per spec §6.
  *
- * One direct createAgentSession() per activation. System prompt = chain doctrine
- * + role body (adapted from baseline SRE team). First user message = the
- * step assignment. Custom tools are the host-owned coordination surface.
- *
- * We disable pi's built-in bash/edit/write tools — the coordination path is
- * exclusively through our custom tools + sre_exec.
+ * One direct createAgentSession() per activation. When a ChainRun has frozen
+ * Specialist JSON bindings, dispatch is delegated to specialist-bridge.ts;
+ * otherwise the original adapted role markdown remains the compatibility path.
  */
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import {
   createAgentSession,
-  DefaultResourceLoader,
   SessionManager,
   SettingsManager,
   createExtensionRuntime,
@@ -24,6 +20,8 @@ import type { ParticipantIdentity, RuntimeFact } from "../chain/types.ts";
 import type { Paths } from "../chain/store.ts";
 import { buildTools, DEFAULT_SRE_ALLOWLIST, DEFAULT_SRE_DENYLIST } from "../tools/index.ts";
 import { nowIso } from "../util/ids.ts";
+import { loadBoundSpecialistProfile } from "../specialists/bindings.ts";
+import { dispatchSpecialistActivation } from "./specialist-bridge.ts";
 
 const ROLES_DIR = path.resolve(new URL("../../roles", import.meta.url).pathname);
 
@@ -89,6 +87,37 @@ function makeAppendResourceLoader(appendPrompt: string): ResourceLoader {
  * checks evidence for that separately).
  */
 export async function dispatchActivation(args: DispatchArgs): Promise<DispatchResult> {
+  // Full Specialist JSON is opt-in per ChainRun. Bindings are persisted before
+  // dispatch and source-hash verified on every activation/resume.
+  const specialistProfile = await loadBoundSpecialistProfile(
+    args.paths,
+    args.targetRepo,
+    args.identity.role,
+  );
+  if (specialistProfile) {
+    const result = await dispatchSpecialistActivation({
+      paths: args.paths,
+      channelId: args.channelId,
+      identity: args.identity,
+      profile: specialistProfile,
+      targetRepo: args.targetRepo,
+      assignmentPrompt: args.assignmentPrompt,
+      // Scheduler already emits the canonical step.start. Suppress the bridge's
+      // provenance start duplicate while preserving failures/other facts.
+      onFact: (fact) => {
+        if (fact.kind === "step.start") return;
+        args.onFact(fact);
+      },
+    });
+    return {
+      execution_id: result.execution_id,
+      pi_session_id: result.pi_session_id,
+      agent_end_ok: result.agent_end_ok,
+      agent_end_error: result.agent_end_error,
+      final_state_message_count: result.final_state_message_count,
+    };
+  }
+
   const rolePrompt = await readRolePrompt(args.identity.role);
   const resourceLoader = makeAppendResourceLoader(rolePrompt);
 
