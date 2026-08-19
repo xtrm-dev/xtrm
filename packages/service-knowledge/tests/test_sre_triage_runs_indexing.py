@@ -18,14 +18,24 @@ from pathlib import Path
 
 from service_knowledge.cli import main
 
-REGISTRY_REL = ".xtrm/skills/infra/service-knowledge/service-registry.json"
-SVC_REL = ".xtrm/skills/infra/service-knowledge/services/sre-triage-runs"
-SKILL_REL = f"{SVC_REL}/SKILL.md"
+def _umbrella(repo: Path) -> Path:
+    """Fixture writes its registry under the migrated umbrella; find it."""
+    regs = sorted(repo.glob(".xtrm/skills/*/service-knowledge/service-registry.json"))
+    assert regs, "no umbrella registry in fixture repo"
+    return regs[0].parent
+
+REGISTRY_REL_PATTERN = ".xtrm/skills/*/service-knowledge/service-registry.json"
 
 
 def _make_archive(repo: Path) -> None:
-    """Seed a minimal sre-triage-runs archive (SKILL.md + registry + one run)."""
-    svc = repo / SVC_REL
+    """Seed a minimal sre-triage-runs archive (SKILL.md + registry + one run).
+
+    The consumer_repo fixture leaves a legacy service-skills umbrella; install
+    migrates it to service-knowledge and creates the registry we extend.
+    """
+    assert main(["install", "--path", str(repo)]) == 0
+    umb = _umbrella(repo)
+    svc = umb / "services" / "sre-triage-runs"
     run = svc / "20260819T015344Z-chain-sre-308163"
     (run / "evidence").mkdir(parents=True)
     (run / "chain-report.json").write_text(
@@ -56,19 +66,21 @@ def _make_archive(repo: Path) -> None:
         encoding="utf-8",
     )
 
-    reg = json.loads((repo / REGISTRY_REL).read_text())
+    reg = json.loads((umb / "service-registry.json").read_text())
+    skill_rel = svc.relative_to(repo).as_posix() + "/SKILL.md"
+    svc_rel = svc.relative_to(repo).as_posix()
     reg["services"]["sre-triage-runs"] = {
         "name": "sre-triage-runs",
         "description": "Archive of terminal sre-triage chain runs.",
-        "skill_path": SKILL_REL,
-        "territory": [f"{SVC_REL}/**"],
+        "skill_path": skill_rel,
+        "territory": [f"{svc_rel}/**"],
         "triggers": ["sre triage report", "past incident", "prior sre run",
                      "chain-report", "gotcha", "applied fix", "workaround",
                      "questdb", "candle", "swap"],
         "last_sync": "",
         "last_sync_ref": "",
     }
-    (repo / REGISTRY_REL).write_text(json.dumps(reg, indent=2) + "\n", encoding="utf-8")
+    (umb / "service-registry.json").write_text(json.dumps(reg, indent=2) + "\n", encoding="utf-8")
 
 
 def test_index_build_indexes_sre_triage_runs(consumer_repo: Path) -> None:
@@ -130,7 +142,7 @@ def test_index_rebuild_is_refresh_path(consumer_repo: Path) -> None:
     _make_archive(consumer_repo)
     assert main(["index", "build", "--path", str(consumer_repo)]) == 0
     # add a second run row to the Run Index, rebuild, and confirm it appears
-    skill = consumer_repo / SKILL_REL
+    skill = _umbrella(consumer_repo) / "services" / "sre-triage-runs" / "SKILL.md"
     skill.write_text(
         skill.read_text() + "| 2026-08-20T00:00Z | run-sre-20000 | chain-sre-999999 | memory, swap |\n",
         encoding="utf-8",
