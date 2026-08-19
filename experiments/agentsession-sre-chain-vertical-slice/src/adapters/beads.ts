@@ -172,6 +172,8 @@ export function chainEpicIdOf(map: BeadsMap): string {
 
 /** Append a note to a bead — used for evidence pointers per spec §11. */
 export async function noteBead(dbDir: string, beadId: string, note: string): Promise<void> {
+  // Virtual-mode ids (bd init refused): no real DB exists, so bd note would always fail.
+  if (beadId.startsWith("vsvs-")) return;
   // bd note <id> takes note text POSITIONALLY (no -m flag).
   await bd(["note", beadId, note], dbDir).catch((e: any) => {
     process.stderr.write(`[beads] noteBead ${beadId} failed: ${e?.message ?? e}\n`);
@@ -184,6 +186,8 @@ export async function noteBead(dbDir: string, beadId: string, note: string): Pro
  * fails, surface it so a real disagreement between runtime and bd is not
  * hidden. */
 export async function closeBead(dbDir: string, beadId: string, reason?: string): Promise<void> {
+  // Virtual-mode ids (bd init refused): no real DB exists, so bd close would always fail.
+  if (beadId.startsWith("vsvs-")) return;
   const args = ["close", beadId];
   if (reason) args.push("--reason", reason);
   await bd(args, dbDir).catch((e: any) => {
