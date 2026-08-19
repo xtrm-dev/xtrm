@@ -1,0 +1,14 @@
+{
+  "verdict": "PASS",
+  "checks_run": [
+    "evidence_ref_exists",
+    "multi_surface_HIGH",
+    "concrete_fix",
+    "residual_flagged",
+    "advisor_gaps_acknowledged",
+    "read_only_fix"
+  ],
+  "checks_failed": [],
+  "gaps_for_remediation": [],
+  "rationale": "Attempt-3 diagnostician report (ev-diagnostic-9b7d-3ce9334a) closes all 4 gaps from prior PARTIAL (ev-reviewer-v-f872-629db17a). (1) All 5 ranked hypotheses carry evidence_refs to ev-topology-m-1d07-005b2cb9 (explorer) and/or ev-observabil-185d-fc141b57 (observability); both dereference and corroborate the cited claims (fresh=2/4 equities, swap 95.7% inflection 08-19T00:30Z, ext-papers:8006 stale target w/ unmerged eb71393 on xt/p35r only, 23.9GiB questdb json.log, mmd-questdb restart 08-17T09:49:51Z, KAN-58 train clean). (2) HIGH findings span >=2 surfaces: rank-2 ext-papers defect = git show + git branch --contains + grep prometheus.yml + docker ps + observability up==0; rank-4 log trap = observability metrics (23.94e9 bytes) + docker inspect json-file driver; rank-5 causal-negative = explorer container started/image timestamps + observability + in-window git log. (3) recommended_fix names concrete operator commands: git diff main xt/p35r -- prometheus/prometheus.yml (verify unshipped fix), merge/cherry-pick eb71393 hunk or alert-silence, truncate -s 0 of the 23.9GiB json.log, docker rm -f bold_tesla nice_meninsky tsdb_repro_t80he, logging max-size block for mercury-market-data compose. (4) residual_uncertainty is substantive (7 items): correlational-only swap/CPU overlap, unestablished QuestDB restart cause, feed-side root cause upstream of mmd-data-feed unconfirmed, pre-existing-vs-decomposition ServiceDown ambiguity, merged-not-deployed cycles 6-8 unverifiable, restore-test cause unestablished. (5) advisor_evidence_status explicitly acknowledges both advisors dereferenced+used, the .mcpq.json mirror limitation (no PromQL from this scratchpad), and prior reviewer input. (6) Read-only posture respected: every fix is operator-applied with verification caveats; no mutating command presented as chain-executed or unconditionally safe. No fabricated evidence_ids, no unsafe recommendations, no missing advisor acknowledgment. Report is independently actionable."
+}

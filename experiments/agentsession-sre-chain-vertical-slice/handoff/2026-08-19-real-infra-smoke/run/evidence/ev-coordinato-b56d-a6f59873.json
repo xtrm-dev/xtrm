@@ -1,0 +1,49 @@
+{
+  "schema_version": "sre-coordinator.decision.v1",
+  "chain_run_id": "run-sre-d8b91",
+  "chain_id": "chain-sre-9ec830",
+  "step_id": "coordinator-entry",
+  "participant_id": "chain-sre-9ec830::chain-coordinator",
+  "execution_id": "exec-chain-sre-9ec830-chain-coordinator-1",
+  "incident_brief": "Baseline SRE triage. Read-only. Report top 5 observations with evidence.",
+  "mode": "baseline-triage",
+  "collected_at": "2026-08-19T06:08Z",
+  "observability_surface": "UNAVAILABLE from this mirror: no .mcpq.json found (ceiling /home/dawid); PromQL/alert queries could not run here. Observability specialist should re-run from a proper worktree with mcpq wiring.",
+  "top_5_observations": [
+    {
+      "rank": 1,
+      "observation": "Host under sustained memory + CPU pressure: swap exhausted",
+      "evidence": {
+        "uptime": "up 147 days, load 1m=10.00, 5m=13.69, 15m=13.51",
+        "free": "Mem 18.9Gi/31Gi used, 679MiB free, 12Gi available; Swap 23.05Gi/23.99Gi used (96%+), 963MiB free",
+        "top_cpu": [
+          "mmd-questdb java 233% CPU / 2.5GiB RSS",
+          "codex --bypass 94.8% CPU",
+          "dockerd 22.8%",
+          "containerd 13.4%",
+          "snapshot_feed.py 15.9% / 457MiB",
+          "SierraChart_64.exe 11.5%",
+          "promtail 8.3%"
+        ],
+        "top_container_cpu": [
+          "mmd-timescaledb 101.98% / 2.058GiB",
+          "mmd-questdb 111.68% / 1.258GiB (limit 12Gi)",
+          "mmd-snapshot-feed 95.45% / 443MiB"
+        ]
+      },
+      "assessment": "Load average >10 sustained with swap fully committed — host is oversubscribed. QuestDB (single largest consumer, ~233% host CPU, up 42h) + TimescaleDB + snapshot feed are the drivers; multiple claude/pi/codex dev sessions add baseline load. Risk: swap thrash under any spike; OOM pressure on containers with cgroup limits.",
+      "confidence": "HIGH"
+    },
+    {
+      "rank": 2,
+      "observation": "Two containers unhealthy with identical root cause: DB_HOST=timescaledb unresolvable (wrong Docker network)",
+      "evidence": {
+        "bold_tesla": "Status=unhealthy, FailingStreak=4949, started 2026-08-01, network=bridge (172.17.0.5), labels=com.docker.compose.project=mercury-market-data / service=mmd-api, env DB_HOST=timescaledb",
+        "nice_meninsky": "Status=unhealthy, FailingStreak=6156, started 2026-07-28, network=bridge (172.17.0.3), labels=com.docker.compose.project=mercury-market-data-ido61-debugger / service=mmd-api, env DB_HOST=timescaledb",
+        "healthcheck_error": "psycopg2.OperationalError: could not translate host name \\\"timescaledb\\\" to address: Name or service not known",
+        "timescaledb_location": "mmd-timescaledb healthy on mmd-network (172.19.0.2) with aliases [mmd-timescaledb, timescaledb] — NOT on bridge",
+        "production_mmd_api": "mmd-api Up 4 days (healthy) — separate container unaffected"
+      }
+    }
+  ]
+}

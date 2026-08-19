@@ -1,0 +1,40 @@
+{
+  "verdict": "PARTIAL",
+  "checks_run": [
+    "evidence_ref_exists",
+    "multi_surface_HIGH",
+    "concrete_fix",
+    "residual_flagged",
+    "advisor_gaps_acknowledged",
+    "read_only_fix"
+  ],
+  "checks_failed": [
+    {
+      "check": "evidence_ref_exists",
+      "detail": "Evidence ev-diagnostic-c712-fe1b7d4a contains NO ranked_hypotheses array and NO evidence_refs anywhere in the body — only a markdown_report blob. The work.turn cites only the report itself; the gate cannot dereference ANY supporting evidence (host/metrics/change snapshots) for any hypothesis."
+    },
+    {
+      "check": "multi_surface_HIGH",
+      "detail": "The HIGH-confidence causal-negative claim ('no in-window deploy caused the outage') is supported in prose by two surfaces (docker container uptime/image-build 08-02 + in-window git log KAN-58 train), but without per-hypothesis evidence_refs the two-surface requirement cannot be verified by the gate."
+    },
+    {
+      "check": "concrete_fix",
+      "detail": "No recommended_fix field exists. No concrete operator-applied commands are named for the two config-drift defects (ext-papers:8006 scrape, mmd-questdb log rotation)."
+    },
+    {
+      "check": "residual_flagged",
+      "detail": "No residual_uncertainty field exists; scope_limits is not a substitute. The report asserts 'two real defects are config-drift/legacy gaps' with HIGH tone but lists no uncertainty for the config-drift determination."
+    },
+    {
+      "check": "advisor_gaps_acknowledged",
+      "detail": "No acknowledgment of advisor evidence status. Explorer (host) and observability-analyst (metrics) work.turn evidence pointers are not cited, and the observability surface was unavailable in this mirror (no .mcpq.json) — the report references 'observability gate=0' without citing the source. Not acknowledged in any residual_uncertainty."
+    }
+  ],
+  "gaps_for_remediation": [
+    "Restructure the evidence body to include ranked_hypotheses[] — each entry {rank, hypothesis, confidence, surfaces_used, evidence_refs:[published ids]} — and PUBLISH the supporting host/metrics/change snapshots first, then reference their real evidence_ids (do not fabricate).",
+    "Add recommended_fix naming concrete operator-applied commands: (a) ext-papers:8006 — reconcile against the HEAD prometheus.yml line-89 comment 'ext-papers:8006 above stays down by design (compose profile, stopped)' before labeling it a defect; recommend merge/revert of eb71393 (lives only on branch xt/p35r) or an alert-silence if by-design; (b) mmd-questdb 23.9GiB json-file log — add a logging block with max-size/max-file (e.g. 100m x3) to the mmd-questdb service in the mercury-market-data compose (infra compose already ships default-logging, mercury-market-data does not); (c) orphan containers — docker rm -f bold_tesla nice_meninsky (operator, after verifying no active workflow).",
+    "Add residual_uncertainty: (a) explicitly acknowledge whether explorer/observability advisor evidence was present, empty, or unavailable, and that swap/CPU overlap with the KAN-58 train is correlational only (no PromQL possible from this mirror); (b) QuestDB 233% CPU cause (runaway vs normal market-data load) unresolved; (c) feed-side staleness root cause upstream of mmd-snapshot-feed (market-data repo not mounted) not established.",
+    "Tie the HIGH-confidence 'no in-window deploy caused the outage' claim to >=2 explicit evidence_refs (docker container uptime/image build + in-window git log) so the gate can verify the two-surface rule."
+  ],
+  "rationale": "Spot-check verified the report's factual claims are TRUE: mmd-snapshot-feed Up 4d on mmd-python:latest built 2026-08-02; infra-api-gateway running sha256:892d2081 since 2026-08-18T17:12:49Z; in-window git history shows only the KAN-58 cycle-6/7/8 train (#322-#329, pins 892d2081/fd0f812b/480dad19/d10089ab); eb71393 exists only on branch xt/p35r; mmd-questdb uses json-file logging with no rotation config; ext-papers:8006 still present in HEAD prometheus.yml. Content quality is good and read-only posture is respected (no mutating commands presented as safe defaults). However, the evidence body is contract-incomplete for gate coverage: no ranked_hypotheses/evidence_refs, no recommended_fix, no residual_uncertainty, no advisor-evidence acknowledgment — the gate cannot run checks 1-5 as specified. One substantive nuance: prometheus.yml:89 comments the ext-papers:8006 target 'stays down by design', conflicting with the report's defect framing and its implied ServiceDown/observability-gate impact; requires reconciliation. Verdict: PARTIAL (bounded remediation, not FAIL — no fabrication, no unsafe fixes, hypotheses grounded in verifiable facts)."
+}

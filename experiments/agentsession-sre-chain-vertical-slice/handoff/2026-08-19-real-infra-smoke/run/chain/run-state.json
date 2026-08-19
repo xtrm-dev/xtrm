@@ -1,0 +1,84 @@
+{
+  "chain_run_id": "run-sre-d8b91",
+  "chain_id": "chain-sre-9ec830",
+  "status": "blocked",
+  "steps": {
+    "coordinator-entry": {
+      "step_id": "coordinator-entry",
+      "participant_id": "chain-sre-9ec830::chain-coordinator",
+      "attempts": 1,
+      "status": "satisfied",
+      "remediation_loops": 0,
+      "last_execution_id": "exec-chain-sre-9ec830-chain-coordinator-1",
+      "last_pi_session_id": "01a01834-c453-7727-8411-626daf291e38",
+      "last_agent_end_at": "2026-08-19T04:11:41.064Z",
+      "last_satisfied_at": "2026-08-19T04:11:41.088Z"
+    },
+    "explorer": {
+      "step_id": "explorer",
+      "participant_id": "chain-sre-9ec830::explorer",
+      "attempts": 1,
+      "status": "satisfied",
+      "remediation_loops": 0,
+      "last_execution_id": "exec-chain-sre-9ec830-explorer-1",
+      "last_pi_session_id": "01a01837-bef4-773f-b62d-c22a174f5f09",
+      "last_agent_end_at": "2026-08-19T04:13:51.606Z",
+      "last_satisfied_at": "2026-08-19T04:15:45.776Z"
+    },
+    "observability": {
+      "step_id": "observability",
+      "participant_id": "chain-sre-9ec830::observability-analyst",
+      "attempts": 1,
+      "status": "satisfied",
+      "remediation_loops": 0,
+      "last_execution_id": "exec-chain-sre-9ec830-observability-analyst-1",
+      "last_pi_session_id": "01a01837-bf10-7712-a616-97d8ce858904",
+      "last_agent_end_at": "2026-08-19T04:15:45.761Z",
+      "last_satisfied_at": "2026-08-19T04:15:45.776Z"
+    },
+    "diagnostician": {
+      "step_id": "diagnostician",
+      "participant_id": "chain-sre-9ec830::sre-diagnostician",
+      "attempts": 3,
+      "status": "satisfied",
+      "remediation_loops": 2,
+      "last_execution_id": "exec-chain-sre-9ec830-sre-diagnostician-3",
+      "last_pi_session_id": "01a01848-7038-72ce-8e07-26a1012f6571",
+      "last_agent_end_at": "2026-08-19T04:35:30.033Z",
+      "last_satisfied_at": "2026-08-19T04:35:30.041Z"
+    },
+    "reviewer": {
+      "step_id": "reviewer",
+      "participant_id": "chain-sre-9ec830::reviewer",
+      "attempts": 3,
+      "status": "satisfied",
+      "remediation_loops": 0,
+      "last_execution_id": "exec-chain-sre-9ec830-reviewer-3",
+      "last_pi_session_id": "01a0184d-8cd7-7fae-8093-665a9a0658d7",
+      "last_agent_end_at": "2026-08-19T04:36:28.953Z",
+      "last_satisfied_at": "2026-08-19T04:36:28.968Z"
+    },
+    "coordinator-close": {
+      "step_id": "coordinator-close",
+      "participant_id": "chain-sre-9ec830::chain-coordinator",
+      "attempts": 1,
+      "status": "failed",
+      "remediation_loops": 0,
+      "last_error": "Specialist skill drift for role=chain-coordinator skill=/home/dawid/.claude/skills/sre-triage/SKILL.md: frozen path=/home/dawid/.xtrm/skills/default/sre-triage/SKILL.md sha256=87c99ed01314d79ebb6856d38e31680214a83529cc2fbfe83198627271997453, current path=/home/dawid/.xtrm/skills/default/sre-triage/SKILL.md sha256=9877c5a24c2c3a3fd7b393f8d2c52dcbc211546c93b7504d1a40c369d30b498e. Start a new ChainRun/revision instead of mutating cognition in-place."
+    }
+  },
+  "last_reduce_at": "2026-08-19T04:36:29.561Z",
+  "processed_intent_keys": [
+    "chain-sre-9ec830/step:coordinator-entry/attempt:1/dispatch",
+    "chain-sre-9ec830/step:explorer/attempt:1/dispatch",
+    "chain-sre-9ec830/step:observability/attempt:1/dispatch",
+    "chain-sre-9ec830/step:diagnostician/attempt:1/dispatch",
+    "chain-sre-9ec830/step:reviewer/attempt:1/dispatch",
+    "chain-sre-9ec830/step:diagnostician/attempt:2/dispatch",
+    "chain-sre-9ec830/step:reviewer/attempt:2/dispatch",
+    "chain-sre-9ec830/step:diagnostician/attempt:3/dispatch",
+    "chain-sre-9ec830/step:reviewer/attempt:3/dispatch",
+    "chain-sre-9ec830/step:coordinator-close/attempt:1/dispatch"
+  ],
+  "reviewer_verdict": "PASS"
+}

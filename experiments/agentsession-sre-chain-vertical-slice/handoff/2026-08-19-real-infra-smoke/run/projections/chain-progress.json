@@ -1,0 +1,43 @@
+{
+  "chain_run_id": "run-sre-d8b91",
+  "status": "running",
+  "reviewer_verdict": "PASS",
+  "last_reduce_at": "2026-08-19T04:36:29.561Z",
+  "steps": {
+    "coordinator-entry": {
+      "status": "satisfied",
+      "attempts": 1,
+      "remediation_loops": 0,
+      "last_execution_id": "exec-chain-sre-9ec830-chain-coordinator-1"
+    },
+    "explorer": {
+      "status": "satisfied",
+      "attempts": 1,
+      "remediation_loops": 0,
+      "last_execution_id": "exec-chain-sre-9ec830-explorer-1"
+    },
+    "observability": {
+      "status": "satisfied",
+      "attempts": 1,
+      "remediation_loops": 0,
+      "last_execution_id": "exec-chain-sre-9ec830-observability-analyst-1"
+    },
+    "diagnostician": {
+      "status": "satisfied",
+      "attempts": 3,
+      "remediation_loops": 2,
+      "last_execution_id": "exec-chain-sre-9ec830-sre-diagnostician-3"
+    },
+    "reviewer": {
+      "status": "satisfied",
+      "attempts": 3,
+      "remediation_loops": 0,
+      "last_execution_id": "exec-chain-sre-9ec830-reviewer-3"
+    },
+    "coordinator-close": {
+      "status": "failed",
+      "attempts": 1,
+      "remediation_loops": 0
+    }
+  }
+}

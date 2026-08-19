@@ -1,0 +1,19 @@
+{
+  "schema_version": "sre-change-forensics.report.v1",
+  "chain_id": "chain-sre-9ec830",
+  "step_id": "diagnostician",
+  "participant_id": "chain-sre-9ec830::sre-diagnostician",
+  "collected_at": "2026-08-19T04:20Z",
+  "incident_window": "2026-08-18T04:00Z to 2026-08-19T04:15Z",
+  "surfaces": [
+    "git log/show/reflog/branch (infra mirror)",
+    "docker ps/inspect/logs/images",
+    "docker-compose.yml (main)",
+    "prometheus/prometheus.yml (HEAD)",
+    "CHANGELOG.md"
+  ],
+  "scope_limits": [
+    "Mirror exposes infra repo only (market-data/darth-feedor not mounted) — mmd container state captured via docker; gh/gh-run not in allowlist so PR/run CI timeline inferred from merge commits + digest-pin messages"
+  ],
+  "markdown_report": "## Summary\nTop suspect: the QuestDB equities candle outage (NQ=F/YM=F stale, fresh=2/4) is NOT caused by any change landing inside the incident window. The affected pipeline container mmd-snapshot-feed has been up since 2026-08-15T00:36:54Z (restarts=0) on image mmd-python:latest built 2026-08-02 — no code/config/container change touched the candle path in-window; logs show feed-side stale_leg_skip_write + 'roll ledger has no generation' + 27s compute, not DB failure (QuestDB actively applying WAL/o3/matview refresh at 04:17Z). The only in-window change train is api-gateway KAN-58 cycle-6/7/8 (00:09-05:11Z): digest pins + an off-production test container; prod infra-api-gateway still runs cycle-5 digest 892d2081 since 2026-08-18T17:12:49Z — clean, no errors. The host swap ramp (94-98% from ~00:30Z) and QuestDB CPU 170->345% overlap this train in time but have no causal link (train touched no QuestDB/resource config). Two real defects are config-drift/legacy gaps, not in-window regressions: (1) ext-papers:8006 stale scrape — removal commit eb71393 (2026-08-17) lives ONLY on branch xt/p35r, never merged; HEAD:prometheus.yml still contains the target, driving ServiceDown + observability gate=0; (2) mmd-questdb json-file log with no rotation (23.9GiB) — infra compose ships default-logging 100mx3 but questdb is managed by mercury-market-data compose which lacks the block. Orphan containers bold_tesla/nice_meninsky/tsdb_repro_t80he date to 07-28/08-01, outside window. No deploy correlated with the outage onset."
+}
