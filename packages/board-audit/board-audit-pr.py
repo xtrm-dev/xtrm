@@ -1298,10 +1298,16 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     print(f"init: {repo}")
 
-    # 1. refresh the bd-managed shims (additive; preserves custom blocks)
+    # 1. refresh the bd-managed shims (additive; preserves custom blocks).
+    # Non-blocking: bd refuses when a repo tracks its own hooks (e.g. a
+    # committed .githooks/pre-commit it does not own); the dolt-sync and
+    # adapter chaining below still install into that hooks dir.
     if shutil.which("bd"):
-        flow.run(["bd", "hooks", "install"], cwd=repo)
-        print("  · refreshed bd hook shims")
+        try:
+            flow.run(["bd", "hooks", "install"], cwd=repo)
+            print("  · refreshed bd hook shims")
+        except flow.FlowError as exc:
+            print(f"  · WARN: bd hooks install skipped: {exc}", file=sys.stderr)
 
     # 2. Dolt-sync scripts + chaining (if-idiom). The chaining block is
     # section-replaced when an older installed version differs (e.g. a
