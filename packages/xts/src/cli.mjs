@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 const VERSION = "0.1.0";
 
 const USAGE = `xts — minimal terminal AI assistant for shell work
@@ -32,14 +36,75 @@ const NOT_IMPLEMENTED = {
 const HANDLERS = {
   interactive: async () => notImplemented("interactive"),
   oneShot: async () => notImplemented("oneShot"),
-  run: async () => notImplemented("run"),
+  run: async (args) => runCommand(args),
   model: async () => notImplemented("model"),
-  shellhook: async () => notImplemented("shellhook"),
+  shellhook: shellhook,
 };
+
+// `xts shellhook [bash|zsh]` prints the hook fragment for the requested shell
+// plus install instructions. Default shell: basename of $SHELL (bash fallback).
+const HOOK_FILES = {
+  bash: new URL("./history/hook.bash", import.meta.url),
+  zsh: new URL("./history/hook.zsh", import.meta.url),
+};
+
+function hookUsage(shell) {
+  return `
+
+Install: source this file in your shell config, then enable the hook.
+
+  bash (in ~/.bashrc):
+    source ${resolveHookPath("bash")}
+    PROMPT_COMMAND="\${PROMPT_COMMAND:+\$PROMPT_COMMAND;}xts_hook"
+
+  zsh (in ~/.zshrc):
+    source ${resolveHookPath("zsh")}
+    autoload -U add-zsh-hook; add-zsh-hook precmd xts_hook
+
+State is written to \$XTS_STATE_DIR/xts/state.json (default ~/.local/state/xts/state.json).
+The hook prints nothing. To uninstall, remove the two lines above and the
+state directory (rm -rf ~/.local/state/xts).
+`;
+}
+function resolveHookPath(shell) {
+  return fileURLToPath(HOOK_FILES[shell]);
+}
+
+async function shellhook() {
+  const requested = process.argv[process.argv.indexOf("shellhook") + 1];
+  const shell = requested === "bash" || requested === "zsh" ? requested : defaultShell();
+  try {
+    const snippet = await readFile(resolveHookPath(shell), "utf8");
+    process.stdout.write(snippet + hookUsage(shell));
+  } catch {
+    process.stderr.write(`xts: could not read the ${shell} hook file\n`);
+    process.exitCode = 1;
+  }
+}
+
+function defaultShell() {
+  const name = process.env.SHELL ? path.basename(process.env.SHELL) : "";
+  return name === "zsh" ? "zsh" : "bash";
+}
 
 async function notImplemented(key) {
   process.stderr.write(`xts: ${NOT_IMPLEMENTED[key]} is not implemented yet\n`);
   process.exitCode = 1;
+}
+
+// `xts run "command"`: gate then execute (PRD §7.4, §14).
+// ctx has no askApprove here (no TUI overlay yet); the stdin fallback in
+// approve.mjs handles one-shot mode. Model interpretation of the result is
+// wired by task 7.
+async function runCommand(args) {
+  const { executeGuarded } = await import("./run.mjs");
+  const result = await executeGuarded(args.join(" "), { ctx: {} });
+  if (result.status === "denied") {
+    process.stderr.write(`xts: command denied: ${result.reason}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  process.exitCode = result.exitCode ?? 0;
 }
 
 function parseArgv(argv) {
@@ -95,7 +160,7 @@ async function run() {
       process.exitCode = 2;
       return;
     }
-    await HANDLERS.run();
+    await HANDLERS.run(rest);
     return;
   }
   if (command in HANDLERS) {

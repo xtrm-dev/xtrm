@@ -40,11 +40,48 @@ test("bare unknown positional is a one-shot question and exits 1", async () => {
 });
 
 test("not-yet-implemented commands exit 1 with stderr message", async () => {
-  for (const args of [["interactive"], ["run", "ls"], ["model"], ["shellhook"], ["a question"]]) {
+  for (const args of [
+    ["interactive"],
+    ["model"],
+    ["a question"],
+  ]) {
     await assert.rejects(run(args), (error) => {
       assert.equal(error.code, 1);
       assert.match(error.stderr, /not implemented yet/);
       return true;
     });
   }
+});
+
+test("shellhook prints the bash hook and install instructions", async () => {
+  const { stdout } = await run(["shellhook"]);
+  assert.match(stdout, /xts_hook\(\)/);
+  assert.match(stdout, /PROMPT_COMMAND/);
+  assert.match(stdout, /~\/\.bashrc/);
+});
+
+test("shellhook zsh prints the zsh hook and instructions", async () => {
+  const { stdout } = await run(["shellhook", "zsh"]);
+  assert.match(stdout, /add-zsh-hook precmd xts_hook/);
+  assert.match(stdout, /~\/\.zshrc/);
+});
+
+test("shellhook with unknown shell defaults to bash", async () => {
+  const { stdout } = await run(["shellhook", "fish"]);
+  assert.match(stdout, /xts_hook\(\)/);
+  assert.doesNotMatch(stdout, /fish/);
+});
+
+test("run executes a safe command and prints its output", async () => {
+  const { stdout } = await run(["run", "echo", "hi"]);
+  assert.equal(stdout.trim(), "hi");
+});
+
+test("run denies a dangerous command without executing it", async () => {
+  // stdin is not a TTY under execFile, so the gate defaults to deny.
+  await assert.rejects(run(["run", "rm -rf /tmp/xts-cli-test"]), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /command denied/);
+    return true;
+  });
 });
