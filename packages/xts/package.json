@@ -1,0 +1,27 @@
+{
+  "name": "@xtrm/xts",
+  "version": "0.1.0",
+  "description": "Minimal terminal AI assistant for shell work",
+  "type": "module",
+  "bin": {
+    "xts": "src/cli.mjs"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.2",
+    "@earendil-works/pi-tui": "^0.84.2"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "restricted"
+  }
+}
