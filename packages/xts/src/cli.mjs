@@ -181,7 +181,8 @@ async function run() {
   }
 
   // A positional that is not a subcommand is a one-shot question.
-  await HANDLERS.oneShot({ question: rest, showPrompt: parsed.flags.showPrompt });
+  // The first positional is part of the question, not a subcommand name.
+  await HANDLERS.oneShot({ question: [command, ...rest], showPrompt: parsed.flags.showPrompt });
 }
 
 // One-shot question (PRD §7.2, §7.3): `xts "question"` and `command | xts`.
@@ -190,16 +191,18 @@ async function run() {
 // is printed to stdout for inspection; otherwise the handler reports that the
 // model call is not wired yet and exits 1.
 async function oneShot({ question, showPrompt }) {
-  const [{ buildUserMessage }, { isPiped, readStdin }, { loadShellContext }] = await Promise.all([
+  const [{ buildUserMessage }, { readStdin }, { loadShellContext }] = await Promise.all([
     import("./prompt.mjs"),
     import("./stdin.mjs"),
     import("./context.mjs"),
   ]);
 
   const instruction = Array.isArray(question) ? question.join(" ") : "";
-  const stdin = isPiped() ? await readStdin() : null;
+  const stdin = await maybeReadStdin(readStdin);
+  // Empty or absent stdin adds no evidence block (buildUserMessage checks truthiness).
+  const stdinForPrompt = stdin && stdin.content ? stdin : null;
   const shellContext = await loadShellContext();
-  const envelope = buildUserMessage({ instruction, stdin, shellContext });
+  const envelope = buildUserMessage({ instruction, stdin: stdinForPrompt, shellContext });
 
   if (showPrompt) {
     process.stdout.write(envelope);
@@ -208,7 +211,37 @@ async function oneShot({ question, showPrompt }) {
   }
 
   process.stderr.write("xts: the model call is not wired yet (task 7). Run with --show-prompt to inspect the assembled prompt.\n");
-  process.exitCode = 1;
+  process.exit(1);
+}
+
+// Pipe-mode detection that does not block when stdin is an open-but-idle pipe
+// (e.g. under execFile / CI, where stdin is never closed). Real pipe usage
+// delivers data within a short window; an interactive terminal never does
+// (it waits for keystrokes).
+function maybeReadStdin(readStdin) {
+  if (process.stdin.isTTY) return Promise.resolve(null);
+  // If data is already buffered or the pipe is already closed, read it.
+  if (process.stdin.readableLength > 0 || process.stdin.readableEnded) {
+    return readStdin();
+  }
+  // Otherwise wait briefly for the first chunk; if none arrives, treat as no pipe.
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      process.stdin.removeListener("readable", onReadable);
+      process.stdin.removeListener("data", onData);
+      resolve(null);
+    }, 150);
+    const finish = () => {
+      clearTimeout(timer);
+      process.stdin.removeListener("readable", onReadable);
+      process.stdin.removeListener("data", onData);
+      resolve(readStdin());
+    };
+    const onReadable = () => finish();
+    const onData = () => finish();
+    process.stdin.once("readable", onReadable);
+    process.stdin.once("data", onData);
+  });
 }
 
 async function createRuntime() {
