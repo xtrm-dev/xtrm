@@ -1,0 +1,35 @@
+{
+  "beads_root_ids": [
+    "xtrm-07e",
+    "xtrm-2zd",
+    "xtrm-401",
+    "xtrm-56flm",
+    "xtrm-6e8",
+    "xtrm-8fo",
+    "xtrm-crz",
+    "xtrm-h1r",
+    "xtrm-w5m",
+    "xtrm-y9i"
+  ],
+  "generated_at": "2026-08-20T16:46:50Z",
+  "handoff": ".xtrm/board-audit/handoffs/pr-85.json",
+  "implementation_branch": "fix/agentsession-sre-pq1-4-5-diag-dump-and-virtual-beads-2026-08-19",
+  "implementation_head_sha": "78d5ea516955622091d09940d111fe618b04c88c",
+  "index": ".xtrm/board-audit/index.json",
+  "open_issue_count": 14,
+  "producer": {
+    "board_audit_source": "repository",
+    "git_sha": "cfc2f5056607af6ab5e01cc019697e5ed182d7e4",
+    "package_sha256": "b8fe3cc4af9153203faf4d406852e2544145286418c0898c2f67b14d613f29d1",
+    "repository": "xtrm-dev/xtrm"
+  },
+  "pull_request": 85,
+  "repository": "xtrm-dev/xtrm",
+  "schema_version": "xtrm.board-audit.pr-handoff.v1",
+  "snapshot_id": "f3769ad3ba83c0785e1034ff963ebb85718cb3f95091f9df71976450b354815b",
+  "snapshot_sha256": "04d4e619d106802fcaaf931e34145e08296c4916981f8b3e138a1ee901ab3041",
+  "state": "prepared",
+  "transport_branch": "board-audit/pr-85",
+  "transport_head_sha": null,
+  "work_package_count": 10
+}

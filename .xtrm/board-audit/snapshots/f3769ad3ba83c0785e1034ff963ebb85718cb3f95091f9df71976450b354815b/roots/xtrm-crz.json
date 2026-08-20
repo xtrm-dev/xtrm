@@ -1,0 +1,1 @@
+{"issue_ids":["xtrm-crz"],"open_issue_count":1,"root_id":"xtrm-crz","schema_version":"xtrm.board-audit.pr-root.v1","source_sha256":"f29298a48b55314762b77254ce98b2c0e7ee27778706f8b0e42fc4f57cc12eb2","title":"fix(service-knowledge): make drift detection ref-based so isolated worktrees work"}

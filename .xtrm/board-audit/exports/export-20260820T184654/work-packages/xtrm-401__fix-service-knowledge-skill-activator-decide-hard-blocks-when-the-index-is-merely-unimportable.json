@@ -1,0 +1,40 @@
+{
+  "content_sha256": "42e6e9e74fed92f14de2bfb99718e5e060cdb607d8ff239a6f8240b76a7a1cf7",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-401"
+  },
+  "issues": {
+    "xtrm-401": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-07-26T12:19:06Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "retrieve_evidence()'s docstring (skill_activator.py:182-184) states: 'available=False means the packaged index is not importable in this process (hook running standalone without the pip package) - that must NEVER block, only degrade to advisory. available=True, ok=False means a real retrieval failure (broken index) - that may block.'\n\ndecide() line 318 contradicts this: 'elif not retrieval.ok and not exempt:' blocks on ok==False without ever reading retrieval.available. The Retrieval.available field is dead code - nothing consumes it.\n\nObserved in mercury-market-data: the PreToolUse hook is wired to system python3, which cannot import service_knowledge (only the pipx venv can), so every Write/Edit touching a registered territory was hard-denied with 'Retrieval failed: service-knowledge index not importable' - including edits to .gitignore and .claude/settings.json, which are not in any territory. That deadlocks the operator: the hook blocks the very edit that would repair the hook.\n\nFix: gate the block on 'retrieval.available and not retrieval.ok'; when available is False, return an advisory allow.\n\nSecondary: territory matching attributed .gitignore and .claude/settings.json to serving-mcp-tools, whose territory is 'api/mcp_server.py, api/docstrings/**/*, api/toon.py, api/filtering.py'. Neither path matches those globs - investigate the fallback that picks a service when no glob matches.",
+        "id": "xtrm-401",
+        "issue_type": "bug",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "fix(service-knowledge): skill_activator decide() hard-blocks when the index is merely unimportable",
+        "updated_at": "2026-07-26T12:19:06Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-401",
+  "root_title": "fix(service-knowledge): skill_activator decide() hard-blocks when the index is merely unimportable",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}

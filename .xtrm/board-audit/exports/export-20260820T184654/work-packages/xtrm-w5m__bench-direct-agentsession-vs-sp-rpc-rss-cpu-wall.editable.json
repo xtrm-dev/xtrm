@@ -1,0 +1,70 @@
+{
+  "content_sha256": "41d37500f301208c4499f92f7553d08af534de2e1f113cf19e94891133daa51a",
+  "desired_issues": {
+    "xtrm-w5m": {
+      "_type": "issue",
+      "assignee": "jaggerxtrm",
+      "comment_count": 0,
+      "created_at": "2026-08-17T23:02:19Z",
+      "dependency_count": 0,
+      "dependent_count": 0,
+      "heartbeat_at": "2026-08-17T23:02:19Z",
+      "id": "xtrm-w5m",
+      "issue_type": "task",
+      "lease_expires_at": "2026-08-17T23:07:19Z",
+      "priority": 2,
+      "started_at": "2026-08-17T23:02:19Z",
+      "status": "in_progress",
+      "title": "Bench: direct AgentSession vs sp RPC RSS/CPU/wall",
+      "updated_at": "2026-08-17T23:02:19Z"
+    }
+  },
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-w5m"
+  },
+  "issues": {
+    "xtrm-w5m": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "comment_count": 0,
+        "created_at": "2026-08-17T23:02:19Z",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "heartbeat_at": "2026-08-17T23:02:19Z",
+        "id": "xtrm-w5m",
+        "issue_type": "task",
+        "lease_expires_at": "2026-08-17T23:07:19Z",
+        "priority": 2,
+        "started_at": "2026-08-17T23:02:19Z",
+        "status": "in_progress",
+        "title": "Bench: direct AgentSession vs sp RPC RSS/CPU/wall",
+        "updated_at": "2026-08-17T23:02:19Z"
+      }
+    }
+  },
+  "new_comments": {},
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-w5m",
+  "root_title": "Bench: direct AgentSession vs sp RPC RSS/CPU/wall",
+  "roundtrip": {
+    "base_package_sha256": "41d37500f301208c4499f92f7553d08af534de2e1f113cf19e94891133daa51a",
+    "base_record_sha256": {
+      "xtrm-w5m": "7c83d82a5a780aaa844e9cef5675207f31b641b564e99d25153e7365cf44bf6e"
+    },
+    "edit_contract": "modify desired_issues and new_comments only; issues.*.source is immutable base state",
+    "prepared_at": "2026-08-20T16:46:55Z",
+    "schema_version": "xtrm.board-audit.roundtrip.v1"
+  },
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}

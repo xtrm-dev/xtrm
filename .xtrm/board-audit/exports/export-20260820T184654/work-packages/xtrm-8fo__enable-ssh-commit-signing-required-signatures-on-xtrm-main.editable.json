@@ -1,0 +1,135 @@
+{
+  "content_sha256": "bfc1a33a0123d86e939c4c3348c405f3ca2b81ab961a225a29ab53e336b5255c",
+  "desired_issues": {
+    "xtrm-8fo": {
+      "_type": "issue",
+      "comment_count": 0,
+      "created_at": "2026-06-10T11:16:28Z",
+      "created_by": "dawid",
+      "dependencies": [
+        {
+          "created_at": "2026-06-14T15:11:52Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-h1r",
+          "issue_id": "xtrm-8fo",
+          "metadata": "{}",
+          "type": "relates-to"
+        },
+        {
+          "created_at": "2026-06-11T01:57:53Z",
+          "created_by": "jaggerxtrm",
+          "depends_on_id": "xtrm-y9i",
+          "issue_id": "xtrm-8fo",
+          "metadata": "{}",
+          "type": "relates-to"
+        }
+      ],
+      "dependency_count": 0,
+      "dependent_count": 0,
+      "description": "## PROBLEM\n\nBranch protection on xtrm-dev/xtrm main is now tight (1 approval, enforce_admins true, last_push_approval true, no force push / deletions, conversation resolution required, linear history), BUT `required_signatures` was left disabled to avoid locking the owner out — there is no local signing key configured in git, no `~/.gnupg/`, and the recent commits on main are unverified.\n\n## SUCCESS\n\n`required_signatures` is enabled on main protection, the local git is configured to sign by default with the existing `~/.ssh/id_ed25519`, and a verification push lands a commit that GitHub shows as \"Verified\".\n\n## SCOPE\n\n- Local git config (user.signingkey, gpg.format=ssh, commit.gpgsign=true, gpg.ssh.allowedSignersFile).\n- GitHub account: register `~/.ssh/id_ed25519.pub` as a signing key (separate from auth-key registration).\n- Re-enable `required_signatures` on `repos/xtrm-dev/xtrm/branches/main/protection/required_signatures`.\n\n## CONSTRAINTS\n\n- Use SSH signing with the existing ed25519 key — no GPG bootstrap required.\n- Operator must run the local config commands themselves; do not assume an agent can install signing without consent.\n\n## VALIDATION\n\nExact steps to run, in order:\n\n```bash\n# 1. Tell git to sign with SSH using the existing ed25519 key\ngit config --global gpg.format ssh\ngit config --global user.signingkey ~/.ssh/id_ed25519.pub\ngit config --global commit.gpgsign true\ngit config --global tag.gpgsign true\n\n# 2. (Optional) Build an allowed-signers file so `git log --show-signature`\n#    can verify locally\nmkdir -p ~/.config/git\nprintf '%s %s\\n' \"$(git config user.email)\" \"$(cat ~/.ssh/id_ed25519.pub)\" \\\n  > ~/.config/git/allowed_signers\ngit config --global gpg.ssh.allowedSignersFile ~/.config/git/allowed_signers\n\n# 3. Register the SSH key as a SIGNING key on GitHub (separate from auth key)\ngh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title \"$(hostname) signing\"\n\n# 4. Re-enable required_signatures on main\ngh api -X POST repos/xtrm-dev/xtrm/branches/main/protection/required_signatures \\\n  -H \"Accept: application/vnd.github+json\"\n\n# 5. Verify: make a trivial commit on a branch, push, and check it lands as Verified\ngh api repos/xtrm-dev/xtrm/commits/main --jq '.commit.verification'\n```\n\n## NON_GOALS\n\n- GPG/PGP setup (not needed when SSH signing works).\n- Configuring other repos in the org (do those one at a time, this bead is xtrm only).\n- Backfilling signatures on existing unsigned commits — pre-protection history is exempt.\n\n## OUTPUT\n\n- Final `required_signatures.enabled = true` on main protection.\n- One signed test commit visible as Verified in GitHub UI.\n\n## REFERENCES\n\n- GitHub docs on SSH commit signing: https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification#ssh-commit-signature-verification\n- Current branch protection: 1 approval, enforce_admins, last_push_approval, linear history, no force push, no deletions, conversation resolution required.\n- Branch protection was tightened in this session (2026-06-10) — every other guard is on; only signing is deferred until the operator runs the steps above.\n\nSCRUTINY: low",
+      "id": "xtrm-8fo",
+      "issue_type": "task",
+      "priority": 2,
+      "status": "open",
+      "title": "Enable SSH commit signing + required_signatures on xtrm main",
+      "updated_at": "2026-06-10T11:16:28Z"
+    }
+  },
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-06-14T15:11:52Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-h1r",
+        "issue_id": "xtrm-8fo",
+        "metadata": "{}",
+        "type": "relates-to"
+      },
+      "source": "xtrm-8fo",
+      "source_field": "dependencies",
+      "target": "xtrm-h1r",
+      "target_present_in_snapshot": true,
+      "target_title": "Session handoff 2026-06-14: pick up next priorities",
+      "type": "relates-to"
+    },
+    {
+      "raw": {
+        "created_at": "2026-06-11T01:57:53Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-y9i",
+        "issue_id": "xtrm-8fo",
+        "metadata": "{}",
+        "type": "relates-to"
+      },
+      "source": "xtrm-8fo",
+      "source_field": "dependencies",
+      "target": "xtrm-y9i",
+      "target_present_in_snapshot": true,
+      "target_title": "Session handoff 2026-06-10: pick up next priorities",
+      "type": "relates-to"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-8fo"
+  },
+  "issues": {
+    "xtrm-8fo": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-06-10T11:16:28Z",
+        "created_by": "dawid",
+        "dependencies": [
+          {
+            "created_at": "2026-06-14T15:11:52Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-h1r",
+            "issue_id": "xtrm-8fo",
+            "metadata": "{}",
+            "type": "relates-to"
+          },
+          {
+            "created_at": "2026-06-11T01:57:53Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-y9i",
+            "issue_id": "xtrm-8fo",
+            "metadata": "{}",
+            "type": "relates-to"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nBranch protection on xtrm-dev/xtrm main is now tight (1 approval, enforce_admins true, last_push_approval true, no force push / deletions, conversation resolution required, linear history), BUT `required_signatures` was left disabled to avoid locking the owner out — there is no local signing key configured in git, no `~/.gnupg/`, and the recent commits on main are unverified.\n\n## SUCCESS\n\n`required_signatures` is enabled on main protection, the local git is configured to sign by default with the existing `~/.ssh/id_ed25519`, and a verification push lands a commit that GitHub shows as \"Verified\".\n\n## SCOPE\n\n- Local git config (user.signingkey, gpg.format=ssh, commit.gpgsign=true, gpg.ssh.allowedSignersFile).\n- GitHub account: register `~/.ssh/id_ed25519.pub` as a signing key (separate from auth-key registration).\n- Re-enable `required_signatures` on `repos/xtrm-dev/xtrm/branches/main/protection/required_signatures`.\n\n## CONSTRAINTS\n\n- Use SSH signing with the existing ed25519 key — no GPG bootstrap required.\n- Operator must run the local config commands themselves; do not assume an agent can install signing without consent.\n\n## VALIDATION\n\nExact steps to run, in order:\n\n```bash\n# 1. Tell git to sign with SSH using the existing ed25519 key\ngit config --global gpg.format ssh\ngit config --global user.signingkey ~/.ssh/id_ed25519.pub\ngit config --global commit.gpgsign true\ngit config --global tag.gpgsign true\n\n# 2. (Optional) Build an allowed-signers file so `git log --show-signature`\n#    can verify locally\nmkdir -p ~/.config/git\nprintf '%s %s\\n' \"$(git config user.email)\" \"$(cat ~/.ssh/id_ed25519.pub)\" \\\n  > ~/.config/git/allowed_signers\ngit config --global gpg.ssh.allowedSignersFile ~/.config/git/allowed_signers\n\n# 3. Register the SSH key as a SIGNING key on GitHub (separate from auth key)\ngh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title \"$(hostname) signing\"\n\n# 4. Re-enable required_signatures on main\ngh api -X POST repos/xtrm-dev/xtrm/branches/main/protection/required_signatures \\\n  -H \"Accept: application/vnd.github+json\"\n\n# 5. Verify: make a trivial commit on a branch, push, and check it lands as Verified\ngh api repos/xtrm-dev/xtrm/commits/main --jq '.commit.verification'\n```\n\n## NON_GOALS\n\n- GPG/PGP setup (not needed when SSH signing works).\n- Configuring other repos in the org (do those one at a time, this bead is xtrm only).\n- Backfilling signatures on existing unsigned commits — pre-protection history is exempt.\n\n## OUTPUT\n\n- Final `required_signatures.enabled = true` on main protection.\n- One signed test commit visible as Verified in GitHub UI.\n\n## REFERENCES\n\n- GitHub docs on SSH commit signing: https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification#ssh-commit-signature-verification\n- Current branch protection: 1 approval, enforce_admins, last_push_approval, linear history, no force push, no deletions, conversation resolution required.\n- Branch protection was tightened in this session (2026-06-10) — every other guard is on; only signing is deferred until the operator runs the steps above.\n\nSCRUTINY: low",
+        "id": "xtrm-8fo",
+        "issue_type": "task",
+        "priority": 2,
+        "status": "open",
+        "title": "Enable SSH commit signing + required_signatures on xtrm main",
+        "updated_at": "2026-06-10T11:16:28Z"
+      }
+    }
+  },
+  "new_comments": {},
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-8fo",
+  "root_title": "Enable SSH commit signing + required_signatures on xtrm main",
+  "roundtrip": {
+    "base_package_sha256": "bfc1a33a0123d86e939c4c3348c405f3ca2b81ab961a225a29ab53e336b5255c",
+    "base_record_sha256": {
+      "xtrm-8fo": "de63173a61125acf98174a51f2c73c344c123254535a7225e6c25d0a7b68d4fa"
+    },
+    "edit_contract": "modify desired_issues and new_comments only; issues.*.source is immutable base state",
+    "prepared_at": "2026-08-20T16:46:55Z",
+    "schema_version": "xtrm.board-audit.roundtrip.v1"
+  },
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}
