@@ -75,6 +75,14 @@ test("isModelAvailable reflects the available set", async () => {
   assert.equal(await isModelAvailable(runtime, "anthropic", "claude-opus"), false);
 });
 
+test("resolveModel handles model ids containing slashes", async () => {
+  const runtime = makeRuntime([{ provider: "commandcode", id: "deepseek/deepseek-v4-flash", name: "DeepSeek" }]);
+  assert.deepEqual(
+    await resolveModel(runtime, { model: { provider: "commandcode", id: "deepseek/deepseek-v4-flash" } }),
+    { provider: "commandcode", id: "deepseek/deepseek-v4-flash" },
+  );
+});
+
 test("formatModel renders provider/id", () => {
   assert.equal(formatModel({ provider: "openai", id: "gpt-5.6" }), "openai/gpt-5.6");
 });
