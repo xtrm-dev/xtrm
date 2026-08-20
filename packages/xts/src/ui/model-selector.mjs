@@ -11,8 +11,6 @@ import {
   SelectList,
   Text,
   TuiMainScreen,
-  truncateToWidth,
-  visibleWidth,
 } from "@earendil-works/pi-tui";
 
 const FG = (code) => (s) => `\x1b[${code}m${s}\x1b[0m`;
@@ -83,7 +81,11 @@ class ModelSelectorApp {
   }
 
   confirm(item) {
-    const [provider, id] = item.value.split("/");
+    // Model ids may contain "/" (e.g. commandcode/deepseek/deepseek-v4-flash),
+    // so split on the FIRST slash only.
+    const slash = item.value.indexOf("/");
+    const provider = item.value.slice(0, slash);
+    const id = item.value.slice(slash + 1);
     this.result = { provider, id };
     this.close();
   }

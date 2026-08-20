@@ -84,3 +84,26 @@ test("run denies a dangerous command without executing it", async () => {
     return true;
   });
 });
+
+test("model --json prints the inventory as JSON and exits 0", async () => {
+  const { stdout } = await run(["model", "--json"]);
+  const parsed = JSON.parse(stdout);
+  assert.ok(Array.isArray(parsed.providers));
+  for (const p of parsed.providers) {
+    assert.equal(typeof p.provider, "string");
+    assert.ok(Array.isArray(p.models));
+    for (const m of p.models) {
+      assert.equal(typeof m.id, "string");
+      assert.equal(typeof m.name, "string");
+    }
+  }
+});
+
+test("model without TTY exits 1 with interactive-terminal guidance", async () => {
+  // execFile has no TTY on stdin.
+  await assert.rejects(run(["model"]), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /interactive terminal/);
+    return true;
+  });
+});

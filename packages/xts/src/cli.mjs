@@ -20,6 +20,7 @@ Usage:
 Options:
   -h, --help                   Show this help
   -v, --version                Show version
+      --show-prompt            Print the assembled prompt envelope and exit (no model call)
 `;
 
 const NOT_IMPLEMENTED = {
@@ -34,7 +35,7 @@ const NOT_IMPLEMENTED = {
 // --help and --version stay instant.
 const HANDLERS = {
   interactive: async () => notImplemented("interactive"),
-  oneShot: async () => notImplemented("oneShot"),
+  oneShot: async (args) => oneShot(args),
   run: async (args) => runCommand(args),
   model: async () => modelCommand(),
   modelJson: async () => modelJsonCommand(),
@@ -108,7 +109,7 @@ async function runCommand(args) {
 }
 
 function parseArgv(argv) {
-  const flags = { json: false, help: false, version: false };
+  const flags = { json: false, help: false, version: false, showPrompt: false };
   const positionals = [];
   for (const arg of argv) {
     if (arg === "--json") {
@@ -117,6 +118,8 @@ function parseArgv(argv) {
       flags.help = true;
     } else if (arg === "--version" || arg === "-v") {
       flags.version = true;
+    } else if (arg === "--show-prompt") {
+      flags.showPrompt = true;
     } else if (arg === "--") {
       positionals.push(...argv.slice(argv.indexOf(arg) + 1));
       break;
@@ -178,7 +181,34 @@ async function run() {
   }
 
   // A positional that is not a subcommand is a one-shot question.
-  await HANDLERS.oneShot();
+  await HANDLERS.oneShot({ question: rest, showPrompt: parsed.flags.showPrompt });
+}
+
+// One-shot question (PRD §7.2, §7.3): `xts "question"` and `command | xts`.
+// Task 4 wires stdin reading, shell context, and prompt assembly; the model
+// call itself is owned by task 7. With --show-prompt the assembled envelope
+// is printed to stdout for inspection; otherwise the handler reports that the
+// model call is not wired yet and exits 1.
+async function oneShot({ question, showPrompt }) {
+  const [{ buildUserMessage }, { isPiped, readStdin }, { loadShellContext }] = await Promise.all([
+    import("./prompt.mjs"),
+    import("./stdin.mjs"),
+    import("./context.mjs"),
+  ]);
+
+  const instruction = Array.isArray(question) ? question.join(" ") : "";
+  const stdin = isPiped() ? await readStdin() : null;
+  const shellContext = await loadShellContext();
+  const envelope = buildUserMessage({ instruction, stdin, shellContext });
+
+  if (showPrompt) {
+    process.stdout.write(envelope);
+    process.stdout.write("\n");
+    return;
+  }
+
+  process.stderr.write("xts: the model call is not wired yet (task 7). Run with --show-prompt to inspect the assembled prompt.\n");
+  process.exitCode = 1;
 }
 
 async function createRuntime() {
@@ -194,7 +224,7 @@ async function modelJsonCommand() {
 }
 
 async function modelCommand() {
-  const [{ formatModel, inventoryToJson, listAvailable, resolveOrSelectModel }, { readConfig }] = await Promise.all([
+  const [{ formatModel, inventoryToJson, listAvailable, requireAvailableModels }, { readConfig, writeConfig }] = await Promise.all([
     import("./model.mjs"),
     import("./config.mjs"),
   ]);
@@ -215,15 +245,35 @@ async function modelCommand() {
   }
 
   const config = await readConfig();
-  const result = await resolveOrSelectModel(runtime, config, (models) =>
-    runModelSelector({ models, title: "Select model for XTS" }),
-  );
-  if (result.error) {
-    process.stderr.write(`xts: ${result.error}\n`);
+
+  // `xts model` explicitly reopens the selector so the user can change the
+  // model, even when one is already persisted (PRD §7.5, §8). First-launch
+  // auto-selection (skip when a valid model exists) is resolveOrSelectModel,
+  // used by task 7's runtime wiring.
+  let models;
+  try {
+    models = await requireAvailableModels(runtime);
+  } catch (error) {
+    process.stderr.write(`xts: ${error.message}\n`);
     process.exitCode = 1;
     return;
   }
-  process.stdout.write(`xts: model set to ${formatModel(result.model)}\n`);
+  let selected;
+  try {
+    selected = await runModelSelector({ models, title: "Select model for XTS" });
+  } catch (error) {
+    process.stderr.write(`xts: ${error.message}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!selected) {
+    process.stderr.write("xts: model selection cancelled.\n");
+    process.exitCode = 1;
+    return;
+  }
+
+  await writeConfig({ ...config, model: { provider: selected.provider, id: selected.id } });
+  process.stdout.write(`xts: model set to ${formatModel(selected)}\n`);
 }
 
 if (import.meta.main) {
