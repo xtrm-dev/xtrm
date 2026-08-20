@@ -1,0 +1,4 @@
+# 210926 - SEPARATE PERMANENT WORKTREES FOR BOARD AUDIT
+instead of piping a board audit with an ad-hoc pr, ad hoc worktree each time, like now, what if instead it would get a permanent one with a branch, like board-audit-export-do-not-cancel, it could even be an empty one with just board audit assets, where a push is triggered on given events like pushes or prs on other branches? This way lots of machinery gets eliminated likely. 
+Beads do not care if there are any files in the tree as the command bd worktree create gives a permanent access to the base dolt db server instead.
+Problem is, the server connection that remains open in this case, if it does, could give any problems?
