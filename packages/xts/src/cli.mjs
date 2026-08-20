@@ -26,7 +26,6 @@ const NOT_IMPLEMENTED = {
   interactive: "interactive mode",
   oneShot: "one-shot questions",
   run: "xts run",
-  model: "the model selector",
   shellhook: "xts shellhook",
 };
 
@@ -37,7 +36,8 @@ const HANDLERS = {
   interactive: async () => notImplemented("interactive"),
   oneShot: async () => notImplemented("oneShot"),
   run: async (args) => runCommand(args),
-  model: async () => notImplemented("model"),
+  model: async () => modelCommand(),
+  modelJson: async () => modelJsonCommand(),
   shellhook: shellhook,
 };
 
@@ -163,6 +163,10 @@ async function run() {
     await HANDLERS.run(rest);
     return;
   }
+  if (command === "model") {
+    await (parsed.flags.json ? HANDLERS.modelJson() : HANDLERS.model(rest));
+    return;
+  }
   if (command in HANDLERS) {
     await HANDLERS[command]();
     return;
@@ -175,6 +179,51 @@ async function run() {
 
   // A positional that is not a subcommand is a one-shot question.
   await HANDLERS.oneShot();
+}
+
+async function createRuntime() {
+  const { ModelRuntime } = await import("@earendil-works/pi-coding-agent");
+  return ModelRuntime.create({ allowModelNetwork: false, refreshOnCreate: false });
+}
+
+async function modelJsonCommand() {
+  const { inventoryToJson, listAvailable } = await import("./model.mjs");
+  const runtime = await createRuntime();
+  const models = await listAvailable(runtime);
+  process.stdout.write(`${JSON.stringify(inventoryToJson(models), null, 2)}\n`);
+}
+
+async function modelCommand() {
+  const [{ formatModel, inventoryToJson, listAvailable, resolveOrSelectModel }, { readConfig }] = await Promise.all([
+    import("./model.mjs"),
+    import("./config.mjs"),
+  ]);
+  const { runModelSelector } = await import("./ui/model-selector.mjs");
+
+  const runtime = await createRuntime();
+
+  // Non-interactive (e.g. piped stdin): print the inventory and instruct the
+  // user to run in a terminal. Never silently pick a model (PRD §8.4).
+  if (!process.stdin.isTTY) {
+    process.stdout.write(JSON.stringify(inventoryToJson(await listAvailable(runtime)), null, 2));
+    process.stdout.write("\n");
+    process.stderr.write(
+      "xts: model selection requires an interactive terminal. Run `xts model` in a terminal to select a model; see `xts model --json` for the inventory.\n",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const config = await readConfig();
+  const result = await resolveOrSelectModel(runtime, config, (models) =>
+    runModelSelector({ models, title: "Select model for XTS" }),
+  );
+  if (result.error) {
+    process.stderr.write(`xts: ${result.error}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  process.stdout.write(`xts: model set to ${formatModel(result.model)}\n`);
 }
 
 if (import.meta.main) {

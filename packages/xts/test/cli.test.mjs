@@ -42,7 +42,6 @@ test("bare unknown positional is a one-shot question and exits 1", async () => {
 test("not-yet-implemented commands exit 1 with stderr message", async () => {
   for (const args of [
     ["interactive"],
-    ["model"],
     ["a question"],
   ]) {
     await assert.rejects(run(args), (error) => {
