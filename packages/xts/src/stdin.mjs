@@ -25,20 +25,22 @@ function countLines(text) {
   return countNewlines(text) + (text.endsWith("\n") ? 0 : 1);
 }
 
-// Longest char-prefix of text within a byte budget and a newline budget.
-// Code-point safe (iterates characters, never splits UTF-8 sequences). The
-// newline budget is exact for the string being built: it allows up to
-// maxNewlines newline-terminated lines, or maxNewlines - 1 newlines plus one
-// unterminated trailing line.
+// Longest prefix of text within a hard byte budget and a newline budget.
+// Byte budget is strict: a single over-long line is cut at the byte limit
+// (the mid-line finish rule in readStdin re-attaches short lines). The
+// newline budget is a hard stop at the first character of the next line
+// (an unterminated trailing line is allowed by the caller's line accounting).
 function keepPrefix(text, maxBytes, maxNewlines) {
   if (maxBytes <= 0 || maxNewlines <= 0) return "";
   let out = "";
   let bytes = 0;
   let newlines = 0;
-  for (const ch of text) {
+  const chars = [...text];
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
     const size = Buffer.byteLength(ch, "utf8");
-    if (bytes + size > maxBytes) break;
-    if (newlines >= maxNewlines) break;
+    if (bytes + size > maxBytes) return out; // strict byte cap
+    if (newlines >= maxNewlines) return out; // hard stop at next line
     out += ch;
     bytes += size;
     if (ch === "\n") newlines += 1;
@@ -90,7 +92,30 @@ export async function readStdin({
       contentBytes += bytes;
       contentNewlines += textNewlines;
     } else {
-      content += keepPrefix(text, maxBytes - contentBytes, maxLines - contentNewlines);
+      const kept = keepPrefix(text, maxBytes - contentBytes, maxLines - contentNewlines);
+      content += kept;
+      contentBytes += Buffer.byteLength(kept, "utf8");
+      contentNewlines += countNewlines(kept);
+      if (kept.length < text.length) {
+        const rest = text.slice(kept.length);
+        const end = rest.indexOf("\n");
+        const nextLine = end === -1 ? rest : rest.slice(0, end);
+        const nextLineBytes = Buffer.byteLength(nextLine, "utf8");
+        const nextLineFull = end === -1 ? nextLineBytes : nextLineBytes + 1;
+        if (contentNewlines < maxLines) {
+          // Byte cap was binding (line budget has room): finish a short line
+          // that the byte cap cut in half, unless it exceeds the full budget.
+          if (rest[0] !== "\n" && nextLineBytes <= maxBytes) {
+            content += nextLine;
+            contentBytes += nextLineBytes;
+          }
+        } else if (rest[0] !== "\n" && nextLineFull > maxBytes - contentBytes) {
+          // Line budget exhausted but byte cap also binds: keep the trailing
+          // line's characters (unterminated) so the last line is never a stub.
+          content += nextLine;
+          contentBytes += nextLineBytes;
+        }
+      }
       truncated = true;
     }
   }
