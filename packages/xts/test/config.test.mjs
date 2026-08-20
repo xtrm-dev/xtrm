@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { CONFIG_DIR, CONFIG_FILE, defaultConfig, readConfig, writeConfig } from "../src/config.mjs";
+import { defaultConfig, readConfig, writeConfig } from "../src/config.mjs";
 
 async function withTempConfig(run) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "xts-config-"));
@@ -45,11 +45,11 @@ test("write then read round-trips the model", async () => {
 });
 
 test("write creates the config dir with mode 0700", async () => {
-  await withTempConfig(async () => {
+  await withTempConfig(async (file) => {
     await writeConfig({ model: null });
-    const dirStat = await stat(CONFIG_DIR);
+    const dirStat = await stat(path.dirname(file));
     assert.equal(dirStat.mode & 0o777, 0o700);
     const { readFile } = await import("node:fs/promises");
-    assert.equal(await readFile(CONFIG_FILE, "utf8"), '{\n  "model": null\n}\n');
+    assert.equal(await readFile(file, "utf8"), '{\n  "model": null\n}\n');
   });
 });
