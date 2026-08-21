@@ -111,9 +111,12 @@ export async function resolveOrSelectModel(runtime, config, select) {
   // Persist the preference, but return the runtime's authoritative Model
   // object — a plain { provider, id } lacks capabilities/auth and produced
   // empty model responses (Pi stopReason=error on first launch).
+  const authoritative = runtime.getModel(chosen.provider, chosen.id);
+  if (!authoritative) {
+    return { error: `Selected model is unavailable: ${chosen.provider}/${chosen.id}` };
+  }
   const pref = { provider: chosen.provider, id: chosen.id };
   await writeConfig({ ...(config ?? {}), model: pref });
-  const authoritative = runtime.getModel(chosen.provider, chosen.id) ?? pref;
   return { model: authoritative };
 }
 

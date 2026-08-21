@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { execFileSync, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -135,4 +136,33 @@ test("formatShellContext: absent shell/exit code -> lines omitted", () => {
   assert.doesNotMatch(out, /shell:/);
   assert.doesNotMatch(out, /last exit code/);
   assert.match(out, /recent commands: none available/);
+});
+
+test("shell hooks force private state and do not persist obvious secrets", async () => {
+  const hookDir = path.resolve(new URL("../src/history", import.meta.url).pathname);
+  const shells = ["bash"];
+  if (spawnSync("zsh", ["-f", "-c", "exit 0"], { encoding: "utf8" }).status === 0) shells.push("zsh");
+
+  for (const shell of shells) {
+    const stateDir = path.join(tmpDir, `hook-${shell}`);
+    const hook = path.join(hookDir, `hook.${shell}`);
+    const script = shell === "bash"
+      ? `umask 000; export XTS_STATE_DIR=${JSON.stringify(stateDir)}; source ${JSON.stringify(hook)}; history -s "export OPENAI_API_KEY=sk-proj-secret-value"; xts_hook`
+      : `umask 000; export XTS_STATE_DIR=${JSON.stringify(stateDir)}; source ${JSON.stringify(hook)}; print -s "export OPENAI_API_KEY=sk-proj-secret-value"; xts_hook`;
+    const result = execFileSync(shell, shell === "bash" ? ["--noprofile", "--norc", "-c", script] : ["-f", "-c", script], {
+      encoding: "utf8",
+      env: { ...process.env, XTS_STATE_DIR: stateDir },
+    });
+    assert.equal(result, "", `${shell} hook must stay silent`);
+
+    const dirMode = (await stat(path.join(stateDir, "xts"))).mode & 0o777;
+    const stateMode = (await stat(path.join(stateDir, "xts", "state.json"))).mode & 0o777;
+    const commandsMode = (await stat(path.join(stateDir, "xts", "cmds.txt"))).mode & 0o777;
+    assert.equal(dirMode, 0o700, `${shell} state directory mode`);
+    assert.equal(stateMode, 0o600, `${shell} state file mode`);
+    assert.equal(commandsMode, 0o600, `${shell} command file mode`);
+    const raw = await readFile(path.join(stateDir, "xts", "state.json"), "utf8");
+    assert.doesNotMatch(raw, /sk-proj-secret-value/);
+    assert.match(raw, /\[redacted\]/);
+  }
 });
