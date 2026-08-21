@@ -23,12 +23,12 @@ const GREEN = FG("32");
 const RED_BOLD = FG("1;31");
 
 // Theme for the assistant Markdown renderer (minimal, PRD §16 NON_GOALS).
-const MD_THEME = {
+export const MD_THEME = {
   heading: (s) => BOLD(s),
   link: (s) => CYAN(s),
   linkUrl: (s) => DIM(s),
   code: (s) => CYAN(s),
-  codeBlock: (s) => (line) => line,
+  codeBlock: (s) => DIM(s),
   codeBlockBorder: (s) => DIM(s),
   quote: (s) => s,
   quoteBorder: (s) => DIM("│"),
@@ -75,6 +75,15 @@ export function formatToolRow(command, output = "", maxLines = 3) {
   return lines;
 }
 
+function messageText(content) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((part) => part?.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("");
+}
+
 /** Dismiss the current streaming block, if any (returns true if there was one). */
 function dismissCurrentBlock(state) {
   if (state.kind !== "streaming") return false;
@@ -82,7 +91,7 @@ function dismissCurrentBlock(state) {
   return true;
 }
 
-class ConversationView {
+export class ConversationView {
   constructor({ onPrompt, onAbort, onExit }) {
     this.onPrompt = onPrompt;
     this.onAbort = onAbort;
@@ -94,6 +103,7 @@ class ConversationView {
     this.pendingHistoryValue = "";
     this.assistantPending = "";
     this.state = { kind: "idle", kind_: "idle" };
+    this.busy = false;
 
     this.terminal = new ProcessTerminal();
     this.ui = new TuiAltScreen(this.terminal, false, undefined, { mouse: false });
@@ -108,6 +118,7 @@ class ConversationView {
     // to the transcript (never cleared on completion — retention is structural).
     this.assistant = null;
     this.assistantPending = "";
+    this.activeTool = null;
 
     // Conversation area: user prompts, assistant turns, tool rows, in order.
     this.body = new Container();
@@ -156,6 +167,7 @@ class ConversationView {
   }
 
   close() {
+    if (this.streamTimer) clearTimeout(this.streamTimer);
     this.removeListener();
     try {
       this.ui.stop();
@@ -219,11 +231,48 @@ class ConversationView {
     this.finalizeStreamBlock();
   }
 
+  appendAssistantError(error) {
+    this.dismissCurrentStream();
+    this.body.addChild(new Text(`${RED_BOLD("error:")} ${String(error ?? "Unknown assistant error")}`, 0, 0));
+    this.body.addChild(new Text("", 0, 0));
+    this.scheduleRender();
+  }
+
+  appendSessionMessages(messages = []) {
+    for (const message of messages) {
+      if (message?.role === "user") {
+        this.appendUserMessage(messageText(message.content));
+      } else if (message?.role === "assistant") {
+        const text = messageText(message.content);
+        if (text) this.appendAssistantDelta(text);
+        if (message.stopReason === "error" || message.errorMessage) {
+          this.appendAssistantError(message.errorMessage ?? "assistant stopped with an error");
+        } else {
+          this.appendAssistantComplete();
+        }
+      } else if (message?.role === "toolResult" || message?.role === "tool") {
+        this.appendToolRow(message.toolName ?? message.name ?? "tool", messageText(message.content));
+        this.activeTool = null;
+      }
+    }
+  }
+
   appendToolRow(command, output = "") {
     this.dismissCurrentStream();
     const t = new Text(formatToolRow(command, output).join("\n"), 0, 0);
     this.body.addChild(t);
     this.body.addChild(new Text("", 0, 0));
+    this.activeTool = { command, component: t };
+    this.scheduleRender();
+  }
+
+  appendToolResult(output = "") {
+    if (!this.activeTool) {
+      this.appendToolRow("tool", output);
+      return;
+    }
+    this.activeTool.component.setText(formatToolRow(this.activeTool.command, output).join("\n"));
+    this.activeTool = null;
     this.scheduleRender();
   }
 
@@ -236,12 +285,14 @@ class ConversationView {
   // -- input --------------------------------------------------------------
 
   submit(value) {
+    if (this.busy) return;
     const text = value.trim();
     this.input.setValue("");
     this.input.focused = true;
     if (!text) return;
     this.promptHistory.push(text);
     this.historyIndex = this.promptHistory.length;
+    this.setBusy(true);
     this.pendingHistoryValue = "";
     this.appendUserMessage(text);
     if (this.onPrompt) this.onPrompt(text);
@@ -271,13 +322,19 @@ class ConversationView {
   }
 
   handleCtrlC() {
-    if (this.state.kind === "streaming" && typeof this.onAbort === "function") {
+    if (this.busy && typeof this.onAbort === "function") {
       this.onAbort();
+      this.setBusy(false);
       this.finalizeStreamBlock();
       this.scheduleRender();
       return;
     }
     if (this.onExit) this.onExit();
+  }
+
+  setBusy(busy) {
+    this.busy = Boolean(busy);
+    this.scheduleRender();
   }
 
   // -- public API (runtime wiring) ---------------------------------------

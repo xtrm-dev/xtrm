@@ -15,6 +15,19 @@ xts_state_dir="$xts_state_base/xts"
 xts_state_file="$xts_state_dir/state.json"
 xts_cmds_file="$xts_state_dir/cmds.txt"
 
+# Release-safe history policy: obvious credential-bearing commands are stored
+# only as a marker. This is intentionally conservative; it is not a secret
+# detector for arbitrary shell expansions.
+xts_history_redact() {
+  local xts_secret=$1
+  case "$xts_secret" in
+    *TOKEN=*|*token=*|*PASSWORD=*|*password=*|*PASSWD=*|*passwd=*|*API_KEY=*|*api_key=*|*SECRET=*|*secret=*|*AWS_SECRET_ACCESS_KEY=*|*OPENAI_API_KEY=*|*BEGIN\ PRIVATE\ KEY*|*ghp_*|*github_pat_*|*glpat-*|*sk-*)
+      printf '%s' '[redacted]'
+      ;;
+    *) printf '%s' "$xts_secret" ;;
+  esac
+}
+
 # Replace ", \, newline, tab with JSON-escaped forms. Multi-line commands are
 # collapsed to a single line (a " " separator), which keeps the state file
 # compact and valid JSON.
@@ -53,6 +66,7 @@ xts_hook() {
   if [[ ! -d $xts_state_dir ]]; then
     mkdir -p "$xts_state_dir" 2>/dev/null || return 0
   fi
+  chmod 700 "$xts_state_dir" 2>/dev/null || return 0
   [[ -w $xts_state_dir ]] || return 0
 
   # Last executed command (shell expansion happens in the caller's context).
@@ -61,12 +75,25 @@ xts_hook() {
   xts_last_cmd=$(fc -ln -1 2>/dev/null | tail -n 1)
   xts_last_cmd=${xts_last_cmd#"${xts_last_cmd%%[![:space:]]*}"}
 
-  # Rolling ring of the last 10 commands.
+  # Rolling ring of the last 10 commands. Redact before persistence and also
+  # sanitize older entries when the ring is rewritten.
   if [[ -n $xts_last_cmd ]]; then
-    printf '%s\n' "$xts_last_cmd" >>"$xts_cmds_file" 2>/dev/null
-    local xts_tail
+    local xts_safe_cmd
+    xts_safe_cmd=$(xts_history_redact "$xts_last_cmd") || return 0
+    printf '%s\n' "$xts_safe_cmd" >>"$xts_cmds_file" 2>/dev/null
+  fi
+  if [[ -f $xts_cmds_file ]]; then
+    chmod 600 "$xts_cmds_file" 2>/dev/null || return 0
+    local xts_tail xts_cmds_tmp
     xts_tail=$(tail -n 10 "$xts_cmds_file" 2>/dev/null) || return 0
-    printf '%s\n' "$xts_tail" >"$xts_cmds_file" 2>/dev/null
+    xts_cmds_tmp="$xts_cmds_file.tmp"
+    : >"$xts_cmds_tmp" 2>/dev/null || return 0
+    while IFS= read -r xts_cmd; do
+      xts_history_redact "$xts_cmd"
+      printf '\n'
+    done <<<"$xts_tail" >"$xts_cmds_tmp" 2>/dev/null
+    chmod 600 "$xts_cmds_tmp" 2>/dev/null || return 0
+    mv -f "$xts_cmds_tmp" "$xts_cmds_file" 2>/dev/null || return 0
   fi
 
   # Recent commands as a JSON array. Only read the ring when it exists
@@ -97,7 +124,10 @@ xts_hook() {
     printf ',"lastExitCode":%s' "$xts_code"
     printf ',"recentCommands":%s' "$xts_cmds_json"
     printf '}\n'
-  } >"$xts_state_file.tmp" 2>/dev/null && mv -f "$xts_state_file.tmp" "$xts_state_file" 2>/dev/null
+  } >"$xts_state_file.tmp" 2>/dev/null &&
+    chmod 600 "$xts_state_file.tmp" 2>/dev/null &&
+    mv -f "$xts_state_file.tmp" "$xts_state_file" 2>/dev/null &&
+    chmod 600 "$xts_state_file" 2>/dev/null
   return 0
 }
 

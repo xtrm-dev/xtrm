@@ -28,6 +28,19 @@ test("conversation transcript is append-only across pre-tool and final answers",
   }
 });
 
+test("successful tool results update the retained command preview", () => {
+  const view = new ConversationView({});
+  try {
+    view.appendToolRow("echo answer");
+    view.appendToolResult("answer");
+    const output = strip(view.body.render(120).join("\\n"));
+    assert.match(output, /\$ echo answer/);
+    assert.match(output, /answer/);
+  } finally {
+    view.close();
+  }
+});
+
 test("persistent session messages render in chronological order", () => {
   const view = new ConversationView({});
   try {

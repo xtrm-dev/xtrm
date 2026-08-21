@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,7 +11,23 @@ const execFileAsync = promisify(execFile);
 const CLI = new URL("../src/cli.mjs", import.meta.url).pathname;
 
 function run(args, options = {}) {
-  return execFileAsync(process.execPath, [CLI, ...args], options);
+  if (!Object.hasOwn(options, "input")) return execFileAsync(process.execPath, [CLI, ...args], options);
+  const { input, ...spawnOptions } = options;
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [CLI, ...args], { ...spawnOptions, stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(Object.assign(new Error(`child exited ${code}`), { code, stdout, stderr }));
+    });
+    child.stdin.end(input);
+  });
 }
 
 test("--help exits 0 and prints usage", async () => {

@@ -80,17 +80,18 @@ export function makeGatedBashTool({ cwd, askApprove }) {
  * Create a slim XTS AgentSession.
  *
  * @param {object} opts
- * @param {object} opts.model            resolved { provider, id } (from model.mjs)
+ * @param {object} opts.model            authoritative Pi Model (from model.mjs)
+ * @param {object} [opts.modelRuntime]  one ModelRuntime for this invocation
  * @param {string} [opts.cwd]            working directory
  * @param {"persistent"|"inMemory"} [opts.sessionMode]  interactive persists
  * @param {(o:{command:string,reason:string})=>Promise<boolean>} [opts.askApprove]
  * @returns {Promise<{session: import("@earendil-works/pi-coding-agent").AgentSession, runtime: import("@earendil-works/pi-coding-agent").ModelRuntime}>}
  */
-export async function createXtsSession({ model, cwd = process.cwd(), sessionMode = "inMemory", askApprove }) {
+export async function createXtsSession({ model, modelRuntime, cwd = process.cwd(), sessionMode = "inMemory", askApprove }) {
   const { ModelRuntime, SessionManager, SettingsManager, createAgentSession } =
     await import("@earendil-works/pi-coding-agent");
 
-  const runtime = await ModelRuntime.create({ allowModelNetwork: false, refreshOnCreate: false });
+  const runtime = modelRuntime ?? (await ModelRuntime.create({ allowModelNetwork: false, refreshOnCreate: false }));
   const settingsManager = SettingsManager.inMemory({
     compaction: { enabled: false },
     retry: { enabled: false },

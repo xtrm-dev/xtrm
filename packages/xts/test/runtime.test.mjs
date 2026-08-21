@@ -34,7 +34,6 @@ test("gated bash tool exposes a valid bash tool definition", () => {
 
 test("createXtsSession reuses the invocation ModelRuntime and exposes only bash", async () => {
   const { ModelRuntime } = await import("@earendil-works/pi-coding-agent");
-  const { getModel } = await import("@earendil-works/pi-ai/compat");
   const dir = await mkdtemp(path.join(os.tmpdir(), "xts-runtime-"));
   const modelRuntime = await ModelRuntime.create({
     authPath: path.join(dir, "auth.json"),
@@ -42,7 +41,7 @@ test("createXtsSession reuses the invocation ModelRuntime and exposes only bash"
     allowModelNetwork: false,
     refreshOnCreate: false,
   });
-  const model = getModel("anthropic", "claude-sonnet-4-5");
+  const model = modelRuntime.getModel("anthropic", "claude-sonnet-4-5");
   assert.ok(model, "Pi test model should exist");
   const { createXtsSession } = await import("../src/runtime.mjs");
   const created = await createXtsSession({ model, modelRuntime, sessionMode: "inMemory" });

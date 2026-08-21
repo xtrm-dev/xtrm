@@ -187,6 +187,12 @@ function tokenize(segment) {
       hasWord = true;
       continue;
     }
+    if (quote === '"') {
+      if (char === '"') quote = null;
+      else word += char;
+      hasWord = true;
+      continue;
+    }
     if (char === '"') {
       quote = quote === '"' ? null : '"';
       hasWord = true;
@@ -492,16 +498,39 @@ function matchSegment(rawWords) {
 
   // 3) git global options: `git -C <dir> reset --hard` — skip them.
   if (words[0] === "git") {
+    const optionsWithArguments = new Set([
+      "-C",
+      "-c",
+      "--git-dir",
+      "--work-tree",
+      "--namespace",
+      "--exec-path",
+      "--config-env",
+    ]);
     let i = 1;
-    while (i < words.length && words[i].startsWith("-")) i += words[i] === "-C" ? 2 : 1;
+    while (i < words.length && words[i].startsWith("-")) {
+      if (optionsWithArguments.has(words[i])) i += 2;
+      else i += 1;
+    }
     if (i > 1) words = ["git", ...words.slice(i)];
   }
 
-  // 4) xargs operands: `xargs rm -rf` — classify the operand command.
+  // 4) xargs operands: skip xargs' own options, then classify the command it
+  // will invoke. This covers path-qualified commands and nested `sh -c`.
   if (words[0] === "xargs") {
     const operand = words.slice(1);
-    if (operand.length > 0) {
-      const nested = matchSegment(operand);
+    const optionsWithArguments = new Set(["-d", "-E", "-I", "-L", "-n", "-P", "--delimiter", "--eof", "--replace", "--max-lines", "--max-args", "--max-procs"]);
+    let i = 0;
+    while (i < operand.length && operand[i].startsWith("-")) {
+      if (operand[i] === "--") {
+        i += 1;
+        break;
+      }
+      if (optionsWithArguments.has(operand[i])) i += 2;
+      else i += 1;
+    }
+    if (i < operand.length) {
+      const nested = matchSegment(operand.slice(i));
       if (nested) return nested;
     }
   }

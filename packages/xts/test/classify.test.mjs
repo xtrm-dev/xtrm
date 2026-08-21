@@ -205,7 +205,7 @@ test("gate hardening: benign equivalents stay safe", () => {
     "xargs echo",
     "bash -c \"echo safe\"",
     "kill 1234",
-    "pkill -HUP my-service",
+    "pgrep -f my-service",
   ];
   for (const cmd of benign) {
     assert.equal(isSafe(cmd), true, `${cmd} must be safe`);

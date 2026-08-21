@@ -146,9 +146,7 @@ test("shell hooks force private state and do not persist obvious secrets", async
   for (const shell of shells) {
     const stateDir = path.join(tmpDir, `hook-${shell}`);
     const hook = path.join(hookDir, `hook.${shell}`);
-    const script = shell === "bash"
-      ? `umask 000; export XTS_STATE_DIR=${JSON.stringify(stateDir)}; source ${JSON.stringify(hook)}; history -s "export OPENAI_API_KEY=sk-proj-secret-value"; xts_hook`
-      : `umask 000; export XTS_STATE_DIR=${JSON.stringify(stateDir)}; source ${JSON.stringify(hook)}; print -s "export OPENAI_API_KEY=sk-proj-secret-value"; xts_hook`;
+    const script = `umask 000; export XTS_STATE_DIR=${JSON.stringify(stateDir)}; mkdir -p ${JSON.stringify(path.join(stateDir, "xts"))}; printf '%s\\n' 'export OPENAI_API_KEY=sk-proj-secret-value' > ${JSON.stringify(path.join(stateDir, "xts", "cmds.txt"))}; source ${JSON.stringify(hook)}; xts_hook`;
     const result = execFileSync(shell, shell === "bash" ? ["--noprofile", "--norc", "-c", script] : ["-f", "-c", script], {
       encoding: "utf8",
       env: { ...process.env, XTS_STATE_DIR: stateDir },
