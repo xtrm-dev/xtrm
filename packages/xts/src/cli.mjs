@@ -34,7 +34,7 @@ const NOT_IMPLEMENTED = {
 // of the heavy SDK modules. Keep the SDK out of the top-level import graph so
 // --help and --version stay instant.
 const HANDLERS = {
-  interactive: async () => notImplemented("interactive"),
+  interactive: async () => interactiveCommand(),
   oneShot: async (args) => oneShot(args),
   run: async (args) => runCommand(args),
   model: async () => modelCommand(),
@@ -106,6 +106,108 @@ async function runCommand(args) {
     return;
   }
   process.exitCode = result.exitCode ?? 0;
+}
+
+// `xts` interactive session (PRD §7.1, §16, §20.1): TUI + streamed model
+// responses + guarded bash + conversation persistence.
+async function interactiveCommand() {
+  const [{ loadShellContext }, { readConfig }] = await Promise.all([
+    import("./context.mjs"),
+    import("./config.mjs"),
+  ]);
+  const { buildUserMessage } = await import("./prompt.mjs");
+
+  if (!process.stdin.isTTY) {
+    process.stderr.write("xts: interactive session requires a TTY (stdin is not a terminal). Use a question or pipe instead.\n");
+    process.exitCode = 1;
+    return;
+  }
+
+  const { createXtsApp } = await import("./ui/app.mjs");
+  const { makeTuiApprovalHandler } = await import("./ui/approval.mjs");
+  const { resolveOrSelectModel } = await import("./model.mjs");
+  const { runModelSelector } = await import("./ui/model-selector.mjs");
+  const { createXtsSession } = await import("./runtime.mjs");
+
+  const runtime = await (async () => {
+    const { ModelRuntime } = await import("@earendil-works/pi-coding-agent");
+    return ModelRuntime.create({ allowModelNetwork: false, refreshOnCreate: false });
+  })();
+
+  const config = await readConfig();
+  const select = (models) => runModelSelector({ models, title: "Select model for XTS" });
+  const resolved = await resolveOrSelectModel(runtime, config, select);
+  if (!resolved.model) {
+    process.stderr.write(`xts: ${resolved.error ?? "no model selected"}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  const model = resolved.model;
+
+  let session;
+  let exiting = false;
+  const app = createXtsApp({
+    onPrompt: async (text) => {
+      if (!session || exiting) return;
+      const shellContext = await loadShellContext();
+      const envelope = buildUserMessage({ instruction: text, stdin: null, shellContext });
+      try {
+        await session.prompt(envelope);
+      } catch (error) {
+        app.appendToolRow("session", error?.message ?? String(error));
+      }
+    },
+    onAbort: async () => {
+      try {
+        await session?.abort();
+      } catch {
+        // session may already be idle
+      }
+    },
+    onExit: async () => {
+      exiting = true;
+      app.close();
+      session?.dispose();
+      process.exit(0);
+    },
+  });
+
+  const askApprove = makeTuiApprovalHandler(app);
+  const created = await createXtsSession({
+    model,
+    cwd: process.cwd(),
+    sessionMode: "persistent",
+    askApprove,
+  });
+  session = created.session;
+
+  app.setModelLabel(`${model.provider}/${model.id}`);
+  app.setCwd(process.cwd());
+
+  session.subscribe((event) => {
+    if (event.type === "message_update") {
+      const se = event.assistantMessageEvent;
+      if (se?.type === "text_delta") app.appendAssistantDelta(se.delta);
+    } else if (event.type === "tool_execution_start") {
+      const cmd = event.toolName === "bash" ? event.args?.command : event.toolName;
+      app.appendToolRow(cmd ?? event.toolName);
+    } else if (event.type === "tool_execution_end") {
+      if (event.isError) {
+        const text =
+          typeof event.result === "string"
+            ? event.result
+            : JSON.stringify(event.result ?? "").slice(0, 300);
+        app.appendToolRow(`blocked: ${event.toolName}`, text);
+      }
+    } else if (event.type === "agent_end") {
+      app.appendAssistantComplete();
+    } else if (event.type === "turn_end") {
+      app.appendAssistantComplete();
+    }
+  });
+
+  // keep the process alive; onExit / Ctrl+C drives shutdown
+  await new Promise(() => {});
 }
 
 function parseArgv(argv) {
@@ -186,10 +288,9 @@ async function run() {
 }
 
 // One-shot question (PRD §7.2, §7.3): `xts "question"` and `command | xts`.
-// Task 4 wires stdin reading, shell context, and prompt assembly; the model
-// call itself is owned by task 7. With --show-prompt the assembled envelope
-// is printed to stdout for inspection; otherwise the handler reports that the
-// model call is not wired yet and exits 1.
+// Builds the envelope from stdin (bounded), shell context, and the question;
+// with --show-prompt prints the envelope and exits. Otherwise resolves the
+// model, creates an in-memory session, streams the answer to stdout, exits.
 async function oneShot({ question, showPrompt }) {
   const [{ buildUserMessage }, { readStdin }, { loadShellContext }] = await Promise.all([
     import("./prompt.mjs"),
@@ -210,8 +311,58 @@ async function oneShot({ question, showPrompt }) {
     return;
   }
 
-  process.stderr.write("xts: the model call is not wired yet (task 7). Run with --show-prompt to inspect the assembled prompt.\n");
-  process.exit(1);
+  const { readConfig } = await import("./config.mjs");
+  const { resolveModel, requireAvailableModels } = await import("./model.mjs");
+  const { createXtsSession } = await import("./runtime.mjs");
+
+  const config = await readConfig();
+  const runtime = await (async () => {
+    const { ModelRuntime } = await import("@earendil-works/pi-coding-agent");
+    return ModelRuntime.create({ allowModelNetwork: false, refreshOnCreate: false });
+  })();
+
+  let model = await resolveModel(runtime, config);
+  if (!model) {
+    // No persisted/valid model: cannot select interactively in one-shot.
+    const available = await requireAvailableModels(runtime).catch(() => []);
+    if (available.length > 0) {
+      process.stderr.write(
+        "xts: no model configured. Run `xts model` in a terminal to select one, or pass `xts model --json` to inspect the inventory.\n",
+      );
+    } else {
+      process.stderr.write("xts: no available models. Configure Pi auth first (`pi`).\n");
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const { session } = await createXtsSession({
+    model,
+    cwd: process.cwd(),
+    sessionMode: "inMemory",
+    askApprove: null, // non-interactive: approve.mjs stdin fallback (default deny)
+  });
+
+  let answer = "";
+  session.subscribe((event) => {
+    if (event.type === "message_update") {
+      const se = event.assistantMessageEvent;
+      if (se?.type === "text_delta") {
+        answer += se.delta;
+        process.stdout.write(se.delta);
+      }
+    }
+  });
+
+  try {
+    await session.prompt(envelope);
+  } catch (error) {
+    process.stderr.write(`\nxts: request failed: ${error?.message ?? error}\n`);
+    process.exitCode = 1;
+  } finally {
+    if (answer && !answer.endsWith("\n")) process.stdout.write("\n");
+    session.dispose();
+  }
 }
 
 // Pipe-mode detection that does not block when stdin is an open-but-idle pipe
