@@ -34,7 +34,7 @@ test("unknown option exits 2", async () => {
 test("bare unknown positional is a one-shot question and exits 1", async () => {
   await assert.rejects(run(["frobnicate"]), (error) => {
     assert.equal(error.code, 1);
-    assert.match(error.stderr, /not implemented yet/);
+    assert.match(error.stderr, /model call is not wired yet/);
     return true;
   });
 });
@@ -46,7 +46,7 @@ test("not-yet-implemented commands exit 1 with stderr message", async () => {
   ]) {
     await assert.rejects(run(args), (error) => {
       assert.equal(error.code, 1);
-      assert.match(error.stderr, /not implemented yet/);
+      assert.match(error.stderr, /(not implemented yet|model call is not wired yet)/);
       return true;
     });
   }
