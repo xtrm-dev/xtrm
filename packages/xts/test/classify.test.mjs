@@ -190,6 +190,20 @@ test("gate hardening: shell syntax in quoted literals is not executable", () => 
   }
 });
 
+test("gate hardening: wrapper option forms remain dangerous", () => {
+  const dangerous = [
+    ["! rm -rf /tmp/x", "negated command"],
+    ["coproc rm -rf /tmp/x", "coprocess command"],
+    ["command -p rm -rf /tmp/x", "command path lookup"],
+    ["exec -a argv0 rm -rf /tmp/x", "exec argv"],
+    ["setsid -f rm -rf /tmp/x", "setsid fork"],
+    ["stdbuf -oL -eL rm -rf /tmp/x", "stdbuf streams"],
+  ];
+  for (const [cmd, label] of dangerous) {
+    assert.equal(isSafe(cmd), false, `${label}: ${cmd} must be dangerous`);
+  }
+});
+
 test("gate hardening: static control and wrapper grammar is covered", () => {
   const dangerous = [
     ["command -- /bin/rm -rf /tmp/x", "command delimiter"],
@@ -213,6 +227,16 @@ test("gate hardening: static control and wrapper grammar is covered", () => {
   }
   assertSafe("rm -- -rf /tmp/x");
   assertSafe("echo '{ rm -rf /tmp/x; }'");
+});
+
+test("gate hardening: control words in arguments are not command positions", () => {
+  for (const cmd of [
+    "echo if rm -rf",
+    "grep if rm -rf file",
+    "printf \"%s %s\" then rm -rf",
+  ]) {
+    assertSafe(cmd);
+  }
 });
 
 test("gate hardening: benign equivalents stay safe", () => {
