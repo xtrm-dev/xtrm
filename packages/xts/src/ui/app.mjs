@@ -83,11 +83,10 @@ function dismissCurrentBlock(state) {
 }
 
 class ConversationView {
-  constructor({ onPrompt, onAbort, onExit, setCwd }) {
+  constructor({ onPrompt, onAbort, onExit }) {
     this.onPrompt = onPrompt;
     this.onAbort = onAbort;
     this.onExit = onExit;
-    this.setCwd = setCwd;
     this.streamTimer = null;
     this.streamDirty = false;
     this.promptHistory = [];

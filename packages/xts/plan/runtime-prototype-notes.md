@@ -66,3 +66,19 @@ history pollution) — or a dedicated named session if PRD §17.2 evaluation fav
   use the custom-tool path for all model-driven bash, and `run.mjs` for `xts run`.
 - TUI events for tool rows come from `tool_execution_start/end` subscriptions, not the bash tool
   render hooks.
+
+## Task-7 verification (orchestrator, live)
+
+- One-shot: `node src/cli.mjs "Reply with exactly: XTS-OK"` → `XTS-OK`, exit 0.
+- Pipe: `echo "pipe data here" | xts "Reply with exactly the last two words"` → `data here`.
+- Dangerous gate via live model: model asked to `rm -rf /tmp/xts-gate-test` → tool result
+  "Command blocked by XTS safety gate: recursive force delete"; sentinel survived. (AC 19/21/22)
+- Interactive pty: header `╭─ xts · <cwd> ─· <model>`, user prompt, streamed answer `PTY-OK`,
+  Ctrl+C clean restore. (AC 1/24)
+- Conversation persistence: `SessionManager.continueRecent(cwd, ~/.local/state/xts/sessions)`;
+  run1 stored `2026-08-21T13-18-29-031Z_...jsonl`, run2 restored 2 messages and recalled
+  codeword BLUEBERRY. XTS uses its OWN session dir (never Pi's). (AC 23)
+- Model resolution fix: resolveModel now returns the runtime's Model object (plain
+  {provider,id} produced empty model responses).
+- UI fix: ConversationView constructor no longer shadows the setCwd method.
+- stdin fix: maybeReadStdin destroys the idle pipe handle so execFile/CI exits (no hang).
