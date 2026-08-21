@@ -71,15 +71,30 @@ function measureTui() {
 }
 
 function peakRssKb() {
-  const result = spawnSync("/usr/bin/time", ["-f", "%M", NODE, CLI, "--help"], {
+  const time = spawnSync("/usr/bin/time", ["-f", "%M", NODE, CLI, "--help"], {
     cwd: ROOT,
     encoding: "utf8",
     timeout: TIMEOUT_MS,
   });
-  assert.equal(result.status, 0, result.stderr);
-  const match = result.stderr.trim().match(/(\d+)\s*$/);
-  assert.ok(match, `could not parse peak RSS from /usr/bin/time: ${result.stderr}`);
-  return Number(match[1]);
+  if (time.error?.code !== "ENOENT") {
+    assert.equal(time.status, 0, time.stderr);
+    const match = time.stderr.trim().match(/(\d+)\s*$/);
+    assert.ok(match, `could not parse peak RSS from /usr/bin/time: ${time.stderr}`);
+    return Number(match[1]);
+  }
+
+  // Minimal containers may not ship /usr/bin/time. Inject an exit hook into
+  // the child so process.memoryUsage() still measures the CLI process itself.
+  const probe = "data:text/javascript,process.on('exit',()=>console.error('XTS_RSS='+process.memoryUsage().rss))";
+  const fallback = spawnSync(NODE, ["--import", probe, CLI, "--help"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    timeout: TIMEOUT_MS,
+  });
+  assert.equal(fallback.status, 0, fallback.stderr);
+  const match = fallback.stderr.match(/XTS_RSS=(\d+)/);
+  assert.ok(match, `could not parse child process RSS: ${fallback.stderr}`);
+  return Math.ceil(Number(match[1]) / 1024);
 }
 
 function schemaTokenCount() {
