@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -54,18 +55,20 @@ function writeOneShotErrorLoader(dir) {
       "  };",
       "  return { session };",
       "}",
-    ].join("\\n"),
+    ].join("\n"),
     "@earendil-works/pi-coding-agent": "export const ModelRuntime = { create: async () => ({}) };",
   };
   const loader = path.join(dir, "one-shot-error-loader.mjs");
   writeFileSync(
     loader,
-    `const modules = ${JSON.stringify(modules)};\\n` +
-      "export async function resolve(specifier, context, nextResolve) {\\n" +
-      "  const source = modules[specifier];\\n" +
-      "  if (source) return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true };\\n" +
-      "  return nextResolve(specifier, context);\\n" +
-      "}\\n",
+    `import { register } from "node:module";\n` +
+      `register(import.meta.url, import.meta.url);\n` +
+      `const modules = ${JSON.stringify(modules)};\n` +
+      "export async function resolve(specifier, context, nextResolve) {\n" +
+      "  const source = modules[specifier];\n" +
+      "  if (source) return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true };\n" +
+      "  return nextResolve(specifier, context);\n" +
+      "}\n",
   );
   return loader;
 }
@@ -305,4 +308,28 @@ test("interactive setup disposes a created session when wiring fails", async () 
   );
   assert.equal(closed, 1);
   assert.equal(disposed, 1);
+});
+
+test("one-shot surfaces assistant stopReason errors on stderr and exits 1", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "xts-oneshot-error-"));
+  try {
+    const loader = writeOneShotErrorLoader(dir);
+    const child = spawn(
+      process.execPath,
+      ["--import", pathToFileURL(loader).href, CLI],
+      { env: { ...process.env, XTS_CONFIG_DIR: dir }, stdio: ["pipe", "pipe", "pipe"] },
+    );
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.stdin.end(""); // close stdin so non-TTY pipe mode reads to EOF immediately
+    const code = await new Promise((resolve, reject) => {
+      child.on("error", reject);
+      child.on("close", resolve);
+    });
+    assert.equal(code, 1, `expected exit 1, stderr: ${stderr}`);
+    assert.match(stderr, /xts: assistant error: simulated provider failure/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
