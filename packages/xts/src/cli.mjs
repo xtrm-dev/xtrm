@@ -154,7 +154,8 @@ async function interactiveCommand() {
       try {
         await session.prompt(envelope);
       } catch (error) {
-        app.appendToolRow("session", error?.message ?? String(error));
+        app.setBusy(false);
+        app.appendAssistantError(error?.message ?? String(error));
       }
     },
     onAbort: async () => {
@@ -175,33 +176,37 @@ async function interactiveCommand() {
   const askApprove = makeTuiApprovalHandler(app);
   const created = await createXtsSession({
     model,
+    modelRuntime: runtime,
     cwd: process.cwd(),
     sessionMode: "persistent",
     askApprove,
   });
   session = created.session;
+  app.appendSessionMessages(session.messages);
 
   app.setModelLabel(`${model.provider}/${model.id}`);
   app.setCwd(process.cwd());
 
   session.subscribe((event) => {
-    if (event.type === "message_update") {
+    if (event.type === "agent_start") {
+      app.setBusy(true);
+    } else if (event.type === "message_update") {
       const se = event.assistantMessageEvent;
       if (se?.type === "text_delta") app.appendAssistantDelta(se.delta);
     } else if (event.type === "tool_execution_start") {
       const cmd = event.toolName === "bash" ? event.args?.command : event.toolName;
       app.appendToolRow(cmd ?? event.toolName);
     } else if (event.type === "tool_execution_end") {
-      if (event.isError) {
-        const text =
-          typeof event.result === "string"
-            ? event.result
-            : JSON.stringify(event.result ?? "").slice(0, 300);
-        app.appendToolRow(`blocked: ${event.toolName}`, text);
-      }
+      const text = toolResultText(event.result);
+      app.appendToolResult(event.isError ? `blocked: ${text}` : text);
     } else if (event.type === "agent_end") {
+      const error = findAssistantError(event.messages);
+      if (error) app.appendAssistantError(error);
       app.appendAssistantComplete();
+      app.setBusy(false);
     } else if (event.type === "turn_end") {
+      const error = findAssistantError([event.message]);
+      if (error) app.appendAssistantError(error);
       app.appendAssistantComplete();
     }
   });
@@ -345,18 +350,26 @@ async function oneShot({ question, showPrompt, readFull = false }) {
 
   const { session } = await createXtsSession({
     model,
+    modelRuntime: runtime,
     cwd: process.cwd(),
     sessionMode: "inMemory",
     askApprove: null, // non-interactive: approve.mjs stdin fallback (default deny)
   });
 
   let answer = "";
+  let failed = false;
   session.subscribe((event) => {
     if (event.type === "message_update") {
       const se = event.assistantMessageEvent;
       if (se?.type === "text_delta") {
         answer += se.delta;
         process.stdout.write(se.delta);
+      }
+    } else if (event.type === "agent_end") {
+      const error = findAssistantError(event.messages);
+      if (error) {
+        failed = true;
+        process.stderr.write(`\nxts: assistant error: ${error}\n`);
       }
     }
   });
@@ -368,8 +381,25 @@ async function oneShot({ question, showPrompt, readFull = false }) {
     process.exitCode = 1;
   } finally {
     if (answer && !answer.endsWith("\n")) process.stdout.write("\n");
+    if (failed) process.exitCode = 1;
     session.dispose();
   }
+}
+
+function toolResultText(result) {
+  if (typeof result === "string") return result;
+  if (Array.isArray(result?.content)) {
+    return result.content
+      .filter((part) => part?.type === "text")
+      .map((part) => part.text)
+      .join("\\n");
+  }
+  return JSON.stringify(result ?? "").slice(0, 300);
+}
+
+function findAssistantError(messages = []) {
+  const message = [...messages].reverse().find((item) => item?.role === "assistant" && item.stopReason === "error");
+  return message?.errorMessage ?? (message ? "assistant stopped with an error" : null);
 }
 
 // Pipe-mode detection that does not block when stdin is an open-but-idle pipe
