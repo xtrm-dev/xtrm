@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ConversationView, MD_THEME, buildHeader, collapseCommand, formatToolRow } from "../src/ui/app.mjs";
-import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import { Markdown, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 
 const strip = stripTerminalSequences;
 
@@ -12,6 +12,23 @@ test("Markdown codeBlock theme returns styled text, not a renderer function", ()
 
 test("Markdown quoteBorder styles the supplied border text", () => {
   assert.match(MD_THEME.quoteBorder("quoted border"), /quoted border/);
+});
+
+test("real Markdown rendering applies ANSI theme styling to markdown blocks", () => {
+  const markdown = new Markdown(
+    "# Heading\n\n**bold** and `inline` and [link](https://example.test)\n\n> quoted\n\n```js\nconst answer = 42;\n```",
+    0,
+    0,
+    MD_THEME,
+  );
+  const output = markdown.render(120).join("\n");
+
+  assert.match(output, /\x1b\[1m/, "heading/bold styling must be emitted");
+  assert.match(output, /\x1b\[2m/, "dim styling must be emitted");
+  assert.match(output, /\x1b\[36m/, "cyan styling must be emitted");
+  assert.match(output, /\x1b\[2m│ \x1b\[0mquoted/, "quote border and text must render correctly");
+  assert.match(output, /\x1b\[2m```js\x1b\[0m/, "code-block fence must render as markdown output");
+  assert.match(output, /  \x1b\[2mconst answer = 42;\x1b\[0m/, "code-block content must render as a line");
 });
 
 test("conversation transcript is append-only across pre-tool and final answers", () => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -33,6 +33,41 @@ function runWithInput(args, writeInput, options = {}) {
     });
     writeInput(child.stdin);
   });
+}
+
+function writeOneShotErrorLoader(dir) {
+  const modules = {
+    "./prompt.mjs": "export function buildUserMessage() { return 'test envelope'; }",
+    "./stdin.mjs": "export async function readStdin() { return { content: '' }; }",
+    "./context.mjs": "export async function loadShellContext() { return ''; }",
+    "./config.mjs": "export async function readConfig() { return {}; }",
+    "./model.mjs": "export async function resolveModel() { return { provider: 'test', id: 'test-model' }; }",
+    "./runtime.mjs": [
+      "export async function createXtsSession() {",
+      "  let onEvent = () => {};",
+      "  const session = {",
+      "    subscribe(callback) { onEvent = callback; },",
+      "    async prompt() {",
+      "      onEvent({ type: 'agent_end', messages: [{ role: 'assistant', stopReason: 'error', errorMessage: 'simulated provider failure' }] });",
+      "    },",
+      "    dispose() {},",
+      "  };",
+      "  return { session };",
+      "}",
+    ].join("\\n"),
+    "@earendil-works/pi-coding-agent": "export const ModelRuntime = { create: async () => ({}) };",
+  };
+  const loader = path.join(dir, "one-shot-error-loader.mjs");
+  writeFileSync(
+    loader,
+    `const modules = ${JSON.stringify(modules)};\\n` +
+      "export async function resolve(specifier, context, nextResolve) {\\n" +
+      "  const source = modules[specifier];\\n" +
+      "  if (source) return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true };\\n" +
+      "  return nextResolve(specifier, context);\\n" +
+      "}\\n",
+  );
+  return loader;
 }
 
 test("--help exits 0 and prints usage", async () => {
