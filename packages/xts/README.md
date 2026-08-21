@@ -21,10 +21,26 @@ Flags:
 xts --help                   # show usage
 xts --version                # show version
 xts --json                   # emit dev output as JSON
+xts --show-prompt            # print the assembled prompt envelope and exit (no model call)
 ```
 
-Not-yet-implemented commands exit 1 with a message on stderr. `--help` and
-`--version` work now.
+## Verification
+
+```bash
+npm test                     # full unit suite (node --test)
+node test/perf.mjs           # startup/memory/prompt-size metrics table
+node test/e2e.mjs            # end-to-end smoke (skips live-model steps when unauthenticated)
+```
+
+PRD §24 acceptance criteria 1–27 are mapped to concrete evidence in
+[`test/acceptance.md`](./test/acceptance.md).
+
+Recorded measurements (see `test/acceptance.md`): cold startup ~39 ms, warm ~45 ms,
+time-to-first-TUI ~177 ms, system prompt ~89 tokens, tool schema ~128 tokens,
+peak RSS ~46 MB — initialization overhead is far below typical model latency.
+
+Note: run the full suite from a terminal or an isolated/background process;
+some agent harnesses interact badly with the PTY-based e2e probes.
 
 ## Install
 
