@@ -157,6 +157,39 @@ test("gate hardening: wrapper/path bypasses are detected", () => {
   }
 });
 
+test("gate hardening: additional wrappers and nested forms are detected", () => {
+  const dangerous = [
+    ["env -i FOO=1 /bin/rm -rf /tmp/x", "env options + path rm"],
+    ["env -- /bin/rm -rf /tmp/x", "env delimiter + path rm"],
+    ["env /bin/sh -c 'FOO=1 /bin/rm -rf /tmp/x'", "env shell -c"],
+    ["/bin/bash -c 'echo ok; /bin/rm -rf /tmp/x'", "path shell -c"],
+    ["git -C/repo reset --hard", "attached git -C hard reset"],
+    ["git -C /repo -c core.autocrlf=false push --force", "git global options"],
+    ["xargs -0 -n1 /bin/rm -rf", "xargs options + path rm"],
+    ["xargs -0 /bin/sh -c 'rm -rf /tmp/x'", "xargs shell -c"],
+    ["kill -9 1234", "forced process termination"],
+    ["pkill -9 node", "process-wide termination"],
+    ["killall node", "process-wide termination"],
+  ];
+  for (const [cmd, label] of dangerous) {
+    assert.equal(isSafe(cmd), false, `${label}: ${cmd} must be dangerous`);
+  }
+});
+
+test("gate hardening: shell syntax in quoted literals is not executable", () => {
+  const benign = [
+    "echo \"rm -rf /tmp/x\"",
+    "echo 'literal; rm -rf /tmp/x'",
+    "printf '%s' \"git reset --hard\"",
+    "printf '%s' '$(rm -rf /tmp/x)'",
+    "git commit -m 'run git clean -fdx later'",
+    "xargs echo 'rm -rf /tmp/x'",
+  ];
+  for (const cmd of benign) {
+    assert.equal(isSafe(cmd), true, `${cmd} must be safe`);
+  }
+});
+
 test("gate hardening: benign equivalents stay safe", () => {
   const benign = [
     "echo \"rm -rf\"",
@@ -171,6 +204,8 @@ test("gate hardening: benign equivalents stay safe", () => {
     "nohup git push origin main",
     "xargs echo",
     "bash -c \"echo safe\"",
+    "kill 1234",
+    "pkill -HUP my-service",
   ];
   for (const cmd of benign) {
     assert.equal(isSafe(cmd), true, `${cmd} must be safe`);

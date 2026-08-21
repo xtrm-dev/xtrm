@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { SYSTEM_PROMPT } from "../src/prompt.mjs";
@@ -27,6 +30,28 @@ test("gated bash tool exposes a valid bash tool definition", () => {
   const tool = makeGatedBashTool({ cwd: "/tmp", askApprove: null });
   assert.equal(tool.name, "bash");
   assert.equal(typeof tool.execute, "function");
+});
+
+test("createXtsSession reuses the invocation ModelRuntime and exposes only bash", async () => {
+  const { ModelRuntime } = await import("@earendil-works/pi-coding-agent");
+  const { getModel } = await import("@earendil-works/pi-ai/compat");
+  const dir = await mkdtemp(path.join(os.tmpdir(), "xts-runtime-"));
+  const modelRuntime = await ModelRuntime.create({
+    authPath: path.join(dir, "auth.json"),
+    modelsPath: path.join(dir, "models.json"),
+    allowModelNetwork: false,
+    refreshOnCreate: false,
+  });
+  const model = getModel("anthropic", "claude-sonnet-4-5");
+  assert.ok(model, "Pi test model should exist");
+  const { createXtsSession } = await import("../src/runtime.mjs");
+  const created = await createXtsSession({ model, modelRuntime, sessionMode: "inMemory" });
+  try {
+    assert.equal(created.runtime, modelRuntime);
+    assert.deepEqual(created.session.agent.state.tools.map((tool) => tool.name), ["bash"]);
+  } finally {
+    created.session.dispose();
+  }
 });
 
 test("gated bash tool: dangerous command with denying askApprove does not execute", async () => {

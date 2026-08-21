@@ -26,6 +26,9 @@ export const DEFAULT_PATTERN_DESCRIPTIONS = Object.freeze({
   "git push --force": "force push",
   "git reset --hard": "hard reset",
   "git clean -fdx": "clean with force",
+  "kill -9": "forced process termination",
+  pkill: "process-wide process termination",
+  killall: "process-wide process termination",
 });
 
 /**
@@ -43,7 +46,7 @@ export function classifyCommand(command, { extraPatterns = [] } = {}) {
   }
 
   for (const segment of splitSegments(command)) {
-    const words = segment.split(/\s+/).filter(Boolean);
+    const words = tokenize(segment);
     if (words.length === 0) continue;
     const match = matchSegment(words);
     if (match) return { safe: false, reason: match.reason, pattern: match.pattern };
@@ -63,14 +66,149 @@ export function isSafe(command, options) {
   return classifyCommand(command, options).safe;
 }
 
-// Split on statement/pipe separators, subshell delimiters and backticks so
-// every embedded segment is classified independently. Conservative: one
-// dangerous segment makes the whole command dangerous.
+// This is a deliberately small shell lexer, not a shell parser. It tracks
+// quotes and escapes so operators inside quoted arguments remain literals.
+// Command substitutions are split even inside double quotes because they run.
+// Conservative: one dangerous segment makes the whole command dangerous.
 function splitSegments(command) {
-  return command
-    .split(/[;&|()\n]+|`/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const segments = [];
+  let start = 0;
+  let quote = null;
+  let escaped = false;
+
+  for (let i = 0; i < command.length; i += 1) {
+    const char = command[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\" && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if (quote === "'") {
+      if (char === "'") quote = null;
+      continue;
+    }
+    if (char === '"') {
+      quote = quote === '"' ? null : '"';
+      continue;
+    }
+    if (char === "'") {
+      quote = "'";
+      continue;
+    }
+
+    const commandSubstitution = char === "$" && command[i + 1] === "(";
+    const backtickSubstitution = char === "`";
+    if (commandSubstitution || backtickSubstitution) {
+      const segment = command.slice(start, i).trim();
+      if (segment) segments.push(segment);
+      const open = commandSubstitution ? i + 2 : i + 1;
+      const close = commandSubstitution
+        ? findClosing(command, open, "(", ")")
+        : command.indexOf("`", open);
+      if (close === -1) {
+        start = open;
+        i = open - 1;
+      } else {
+        segments.push(...splitSegments(command.slice(open, close)));
+        start = close + 1;
+        i = close;
+      }
+      continue;
+    }
+    if (";&|()\n".includes(char)) {
+      const segment = command.slice(start, i).trim();
+      if (segment) segments.push(segment);
+      start = i + 1;
+    }
+  }
+
+  const tail = command.slice(start).trim();
+  if (tail) segments.push(tail);
+  return segments;
+}
+
+function findClosing(command, start, open, close) {
+  let depth = 1;
+  let quote = null;
+  let escaped = false;
+  for (let i = start; i < command.length; i += 1) {
+    const char = command[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\" && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if (quote === "'") {
+      if (char === "'") quote = null;
+      continue;
+    }
+    if (char === '"') {
+      quote = quote === '"' ? null : '"';
+      continue;
+    }
+    if (char === "'") {
+      quote = "'";
+      continue;
+    }
+    if (char === open) depth += 1;
+    if (char === close && --depth === 0) return i;
+  }
+  return -1;
+}
+
+function tokenize(segment) {
+  const words = [];
+  let word = "";
+  let quote = null;
+  let escaped = false;
+  let hasWord = false;
+
+  for (const char of segment) {
+    if (escaped) {
+      word += char;
+      escaped = false;
+      hasWord = true;
+      continue;
+    }
+    if (char === "\\" && quote !== "'") {
+      escaped = true;
+      hasWord = true;
+      continue;
+    }
+    if (quote === "'") {
+      if (char === "'") quote = null;
+      else word += char;
+      hasWord = true;
+      continue;
+    }
+    if (char === '"') {
+      quote = quote === '"' ? null : '"';
+      hasWord = true;
+      continue;
+    }
+    if (char === "'") {
+      quote = "'";
+      hasWord = true;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (hasWord) words.push(word);
+      word = "";
+      hasWord = false;
+      continue;
+    }
+    word += char;
+    hasWord = true;
+  }
+  if (escaped) word += "\\";
+  if (hasWord) words.push(word);
+  return words;
 }
 
 function hasArg(words, prefix) {
@@ -188,6 +326,17 @@ const CONTAINER_HOST_FLAGS = [
   ["--ipc", "container with host IPC"],
 ];
 
+function matchProcess(words) {
+  if (words[0] === "pkill") return { pattern: "pkill", reason: D.pkill };
+  if (words[0] === "killall") return { pattern: "killall", reason: D.killall };
+  if (words[0] !== "kill") return undefined;
+  const forced = words.some((word) =>
+    ["-9", "-KILL", "-SIGKILL", "-1", "--signal=KILL", "--signal=SIGKILL"].includes(word),
+  );
+  if (forced) return { pattern: "kill -9", reason: D["kill -9"] };
+  return undefined;
+}
+
 function matchContainer(words) {
   const cmd = words[0];
   if (cmd !== "docker" && cmd !== "podman") return undefined;
@@ -261,6 +410,7 @@ const MATCHERS = [
   matchChmod,
   matchChown,
   matchGit,
+  matchProcess,
   matchContainer,
 ];
 
@@ -283,26 +433,34 @@ const C_STRING_COMMANDS = new Set(["bash", "sh", "zsh", "dash", "ksh", "fish", "
  * wrapper command names, so /usr/bin/rm -rf and env FOO=1 rm -rf are seen.
  * Returns the remaining words with the canonical command at index 0.
  */
+function commandName(word) {
+  if (!word) return word;
+  return word.includes("/") || word.startsWith("./") ? word.split("/").pop() : word;
+}
+
 function normalizeWords(rawWords) {
-  let words = [...rawWords];
-  // env assignments (FOO=bar) and wrapper commands (env, eval, nohup, ...)
-  // may interleave: `env FOO=1 rm -rf` — skip both repeatedly.
-  let advanced = true;
-  while (advanced && words.length > 0) {
-    advanced = false;
+  const words = [...rawWords];
+  while (words.length > 0) {
+    words[0] = commandName(words[0]);
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) {
       words.shift();
-      advanced = true;
-    } else if (WRAPPER_COMMANDS.has(words[0])) {
+      continue;
+    }
+    if (!WRAPPER_COMMANDS.has(words[0])) break;
+    const wrapper = words.shift();
+    if (wrapper === "env") {
+      while (words.length > 0 && words[0].startsWith("-")) {
+        const option = words.shift();
+        if (option === "--") break;
+        if (["-u", "--unset", "-C", "--chdir"].includes(option)) words.shift();
+      }
+    } else if (wrapper === "nice" && words[0] === "-n") {
+      words.splice(0, 2);
+    } else if (wrapper === "stdbuf" && words.length > 0 && words[0].startsWith("-")) {
       words.shift();
-      advanced = true;
     }
   }
-  // path-qualified command: /bin/rm, /usr/bin/git, ./tool, ~/bin/x
-  if (words.length > 0 && (words[0].includes("/") || words[0].startsWith("./"))) {
-    const parts = words[0].split("/");
-    words[0] = parts[parts.length - 1];
-  }
+  if (words.length > 0) words[0] = commandName(words[0]);
   return words;
 }
 
@@ -313,35 +471,23 @@ function normalizeWords(rawWords) {
  * inside the quotes. Returns null when the form is not a -c invocation.
  */
 function extractCString(words) {
-  if (words.length < 3) return null;
-  if (!C_STRING_COMMANDS.has(words[0])) return null;
+  if (words.length < 3 || !C_STRING_COMMANDS.has(commandName(words[0]))) return null;
   const cIdx = words.indexOf("-c");
   if (cIdx === -1 || cIdx + 1 >= words.length) return null;
-  const parts = words.slice(cIdx + 1);
-  const first = parts[0];
-  if (first.startsWith("\"")) {
-    const joined = parts.join(" ");
-    const end = joined.lastIndexOf('"');
-    if (end > 0) return joined.slice(1, end);
-  }
-  if (first.startsWith("'")) {
-    const joined = parts.join(" ");
-    const end = joined.lastIndexOf("'");
-    if (end > 0) return joined.slice(1, end);
-  }
-  return null;
+  return words[cIdx + 1];
 }
 
 function matchSegment(rawWords) {
-  // 1) nested command strings: bash -c "rm -rf /tmp" — classify the payload.
-  const cString = extractCString(rawWords);
+  // 1) canonicalize the command word (strip path/env/wrappers).
+  let words = normalizeWords(rawWords);
+  if (words.length === 0) return undefined;
+
+  // 2) nested command strings: bash -c "rm -rf /tmp" — classify the payload.
+  const cString = extractCString(words);
   if (cString !== null && cString.length > 0) {
     const nested = classifyCommand(cString);
     if (!nested.safe) return nested;
   }
-
-  // 2) canonicalize the command word (strip path/env/wrappers).
-  let words = normalizeWords(rawWords);
   if (words.length === 0) return undefined;
 
   // 3) git global options: `git -C <dir> reset --hard` — skip them.

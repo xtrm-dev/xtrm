@@ -173,6 +173,33 @@ test("resolveOrSelectModel: invalid config -> calls selector", async () => {
   });
 });
 
+test("resolveOrSelectModel returns the authoritative runtime Model object", async () => {
+  const authoritative = { provider: "openai", id: "gpt-5.6", capabilities: { toolCall: true } };
+  const runtime = {
+    getAvailable: async () => [{ provider: authoritative.provider, id: authoritative.id, name: "GPT-5.6" }],
+    getModel: (provider, id) => provider === authoritative.provider && id === authoritative.id ? authoritative : undefined,
+  };
+  await withTempConfig(async () => {
+    const result = await resolveOrSelectModel(runtime, { model: null }, async () => ({
+      provider: authoritative.provider,
+      id: authoritative.id,
+    }));
+    assert.equal(result.model, authoritative);
+  });
+});
+
+test("resolveOrSelectModel rejects a selection missing from the runtime inventory", async () => {
+  const runtime = makeRuntime();
+  await withTempConfig(async () => {
+    const result = await resolveOrSelectModel(runtime, { model: null }, async () => ({
+      provider: "missing",
+      id: "model",
+    }));
+    assert.match(result.error, /unavailable|not found|selection/i);
+    assert.deepEqual(await readConfig(), { model: null });
+  });
+});
+
 test("resolveOrSelectModel: selector cancel -> error, nothing persisted", async () => {
   await withTempConfig(async () => {
     const runtime = makeRuntime();
