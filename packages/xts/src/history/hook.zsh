@@ -20,9 +20,9 @@ xts_cmds_file="$xts_state_dir/cmds.txt"
 # detector for arbitrary shell expansions.
 xts_history_redact() {
   local xts_secret=$1
-  local xts_assignment='(^|[[:space:]])([[:alnum:]_]*([Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Ss][Ss][Ww][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt])|[Aa][Pp][Ii][-_]?[Kk][Ee][Yy])[[:space:]]*=[[:space:]]*[^[:space:]]{8,}'
-  local xts_flag='(^|[[:space:]])(--password|-p)(=|[[:space:]]+)[^[:space:]]+|(^|[[:space:]])-p[^[:space:]]+'
-  local xts_bearer='(^|[[:space:]:])([Bb]earer|[Tt]oken)[[:space:]]+[A-Za-z0-9._~+/=-]{8,}'
+  local xts_assignment='([[:alnum:]_]*([Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Ss][Ss][Ww][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt])|[Aa][Pp][Ii][-_]?[Kk][Ee][Yy])[[:space:]]*=[[:space:]]*[^[:space:]]{8,}'
+  local xts_flag='(--password|-p)(=|[[:space:]]+)[^[:space:]]+|-p[^[:space:]]+'
+  local xts_bearer='([Bb]earer|[Tt]oken)[[:space:]]+[A-Za-z0-9._~+/=-]{8,}'
   local xts_pem='[Pp][Rr][Ii][Vv][Aa][Tt][Ee][[:space:]]+[Kk][Ee][Yy]|BEGIN[[:space:]]+[Rr][Ss][Aa][[:space:]]+[Pp][Rr][Ii][Vv][Aa][Tt][Ee][[:space:]]+[Kk][Ee][Yy]'
   if [[ "$xts_secret" =~ $xts_assignment || "$xts_secret" =~ $xts_flag || "$xts_secret" =~ $xts_bearer || "$xts_secret" =~ $xts_pem ]]; then
     printf '%s' '[redacted]'
@@ -75,10 +75,12 @@ xts_hook() {
   chmod 700 "$xts_state_dir" 2>/dev/null || return 0
   [[ -w $xts_state_dir ]] || return 0
 
-  # Last executed command. $history is a tied associative array; HISTCMD is
-  # the index of the next command, so HISTCMD-1 is the previous one.
-  local xts_last_cmd=""
-  (( HISTCMD > 1 )) && xts_last_cmd="$history[$((HISTCMD - 1))]"
+  # Last executed command. In precmd, zsh's `fc -ln -1` is the stable
+  # previous-event query; direct HISTCMD/history indexing is empty in some
+  # non-interactive probes and varies with history options.
+  local xts_last_cmd
+  xts_last_cmd=$(fc -ln -1 2>/dev/null | tail -n 1)
+  xts_last_cmd=${xts_last_cmd#"${xts_last_cmd%%[![:space:]]*}"}
 
   # Redact before persistence and sanitize older entries when the ring is
   # rewritten.

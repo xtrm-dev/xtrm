@@ -10,6 +10,10 @@ test("Markdown codeBlock theme returns styled text, not a renderer function", ()
   assert.equal(typeof MD_THEME.codeBlock("const answer = 1;"), "string");
 });
 
+test("Markdown quoteBorder styles the supplied border text", () => {
+  assert.match(MD_THEME.quoteBorder("quoted border"), /quoted border/);
+});
+
 test("conversation transcript is append-only across pre-tool and final answers", () => {
   const view = new ConversationView({});
   try {
@@ -19,7 +23,7 @@ test("conversation transcript is append-only across pre-tool and final answers",
     view.appendToolRow("echo done", "done");
     view.appendAssistantDelta("final answer");
     view.appendAssistantComplete();
-    const output = strip(view.body.render(120).join("\\n"));
+    const output = strip(view.body.render(120).join("\n"));
     assert.ok(output.indexOf("first question") < output.indexOf("pre-tool answer"));
     assert.ok(output.indexOf("pre-tool answer") < output.indexOf("$ echo done"));
     assert.ok(output.indexOf("$ echo done") < output.indexOf("final answer"));
@@ -33,7 +37,7 @@ test("successful tool results update the retained command preview", () => {
   try {
     view.appendToolRow("echo answer");
     view.appendToolResult("answer");
-    const output = strip(view.body.render(120).join("\\n"));
+    const output = strip(view.body.render(120).join("\n"));
     assert.match(output, /\$ echo answer/);
     assert.match(output, /answer/);
   } finally {
@@ -49,9 +53,24 @@ test("persistent session messages render in chronological order", () => {
       { role: "assistant", content: [{ type: "text", text: "restored answer" }] },
       { role: "toolResult", toolName: "bash", content: [{ type: "text", text: "restored output" }] },
     ]);
-    const output = strip(view.body.render(120).join("\\n"));
+    const output = strip(view.body.render(120).join("\n"));
     assert.ok(output.indexOf("restored question") < output.indexOf("restored answer"));
     assert.ok(output.indexOf("restored answer") < output.indexOf("restored output"));
+  } finally {
+    view.close();
+  }
+});
+
+test("hydrated bashExecution keeps one command/output row", () => {
+  const view = new ConversationView({});
+  try {
+    view.appendSessionMessages([
+      { role: "bashExecution", command: "echo restored", output: "restored output", exitCode: 0 },
+      { role: "toolResult", toolName: "bash", content: [{ type: "text", text: "restored output" }] },
+    ]);
+    const output = strip(view.body.render(120).join("\n"));
+    assert.equal((output.match(/\$ echo restored/g) ?? []).length, 1);
+    assert.equal((output.match(/restored output/g) ?? []).length, 1);
   } finally {
     view.close();
   }
@@ -62,11 +81,27 @@ test("busy state blocks submission and Ctrl+C aborts tool-only work", () => {
   let aborted = 0;
   const view = new ConversationView({ onPrompt: () => prompted++, onAbort: () => aborted++ });
   try {
+    view.setReady(true);
     view.setBusy(true);
     view.submit("blocked");
     assert.equal(prompted, 0);
     view.handleCtrlC();
     assert.equal(aborted, 1);
+  } finally {
+    view.close();
+  }
+});
+
+test("submission is ignored until the session is ready", () => {
+  let prompted = 0;
+  const view = new ConversationView({ onPrompt: () => prompted++ });
+  try {
+    view.submit("too early");
+    assert.equal(prompted, 0);
+    assert.equal(view.busy, false);
+    view.setReady(true);
+    view.submit("ready now");
+    assert.equal(prompted, 1);
   } finally {
     view.close();
   }
@@ -117,6 +152,20 @@ test("formatToolRow with empty output renders only the command", () => {
 test("collapseCommand collapses whitespace", () => {
   assert.equal(collapseCommand("git   status\n --short"), "git status --short");
   assert.equal(collapseCommand("  "), "");
+});
+
+test("completed transcript retains final component state", () => {
+  const view = new ConversationView({});
+  try {
+    view.appendUserMessage("question");
+    view.appendAssistantDelta("answer");
+    view.appendAssistantComplete();
+    assert.equal(view.state.kind, "idle");
+    assert.equal(view.assistant, null);
+    assert.match(strip(view.body.render(120).join("\n")), /question[\s\S]*answer/);
+  } finally {
+    view.close();
+  }
 });
 
 test("formatToolRow collapses a multi-line command to one line", () => {

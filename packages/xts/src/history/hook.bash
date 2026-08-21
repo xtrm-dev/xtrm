@@ -20,9 +20,9 @@ xts_cmds_file="$xts_state_dir/cmds.txt"
 # detector for arbitrary shell expansions.
 xts_history_redact() {
   local xts_secret=$1
-  local xts_assignment='(^|[[:space:]])([[:alnum:]_]*([Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Ss][Ss][Ww][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt])|[Aa][Pp][Ii][-_]?[Kk][Ee][Yy])[[:space:]]*=[[:space:]]*[^[:space:]]{8,}'
-  local xts_flag='(^|[[:space:]])(--password|-p)(=|[[:space:]]+)[^[:space:]]+|(^|[[:space:]])-p[^[:space:]]+'
-  local xts_bearer='(^|[[:space:]:])([Bb]earer|[Tt]oken)[[:space:]]+[A-Za-z0-9._~+/=-]{8,}'
+  local xts_assignment='([[:alnum:]_]*([Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Ss][Ss][Ww][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt])|[Aa][Pp][Ii][-_]?[Kk][Ee][Yy])[[:space:]]*=[[:space:]]*[^[:space:]]{8,}'
+  local xts_flag='(--password|-p)(=|[[:space:]]+)[^[:space:]]+|-p[^[:space:]]+'
+  local xts_bearer='([Bb]earer|[Tt]oken)[[:space:]]+[A-Za-z0-9._~+/=-]{8,}'
   local xts_pem='[Pp][Rr][Ii][Vv][Aa][Tt][Ee][[:space:]]+[Kk][Ee][Yy]|BEGIN[[:space:]]+[Rr][Ss][Aa][[:space:]]+[Pp][Rr][Ii][Vv][Aa][Tt][Ee][[:space:]]+[Kk][Ee][Yy]'
   if [[ "$xts_secret" =~ $xts_assignment || "$xts_secret" =~ $xts_flag || "$xts_secret" =~ $xts_bearer || "$xts_secret" =~ $xts_pem ]]; then
     printf '%s' '[redacted]'

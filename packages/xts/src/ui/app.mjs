@@ -31,7 +31,7 @@ export const MD_THEME = {
   codeBlock: (s) => DIM(s),
   codeBlockBorder: (s) => DIM(s),
   quote: (s) => s,
-  quoteBorder: (s) => DIM("│"),
+  quoteBorder: (s) => DIM(s),
   hr: (s) => DIM(s),
   listBullet: (s) => CYAN(s),
   bold: (s) => BOLD(s),
@@ -104,6 +104,7 @@ export class ConversationView {
     this.assistantPending = "";
     this.state = { kind: "idle", kind_: "idle" };
     this.busy = false;
+    this.ready = false;
 
     this.terminal = new ProcessTerminal();
     this.ui = new TuiAltScreen(this.terminal, false, undefined, { mouse: false });
@@ -119,6 +120,7 @@ export class ConversationView {
     this.assistant = null;
     this.assistantPending = "";
     this.activeTool = null;
+    this.hydratedBash = null;
 
     // Conversation area: user prompts, assistant turns, tool rows, in order.
     this.body = new Container();
@@ -250,9 +252,23 @@ export class ConversationView {
         } else {
           this.appendAssistantComplete();
         }
-      } else if (message?.role === "toolResult" || message?.role === "tool") {
-        this.appendToolRow(message.toolName ?? message.name ?? "tool", messageText(message.content));
+      } else if (message?.role === "bashExecution") {
+        this.appendToolRow(message.command ?? "bash", message.output ?? "");
         this.activeTool = null;
+        this.hydratedBash = { output: message.output ?? "" };
+      } else if (message?.role === "toolResult" || message?.role === "tool") {
+        const output = messageText(message.content);
+        const duplicateBash =
+          this.hydratedBash &&
+          message.toolName === "bash" &&
+          output === this.hydratedBash.output;
+        this.hydratedBash = null;
+        if (!duplicateBash) {
+          this.appendToolRow(message.toolName ?? message.name ?? "tool", output);
+          this.activeTool = null;
+        }
+      } else {
+        this.hydratedBash = null;
       }
     }
   }
@@ -285,7 +301,7 @@ export class ConversationView {
   // -- input --------------------------------------------------------------
 
   submit(value) {
-    if (this.busy) return;
+    if (!this.ready || this.busy) return;
     const text = value.trim();
     this.input.setValue("");
     this.input.focused = true;
@@ -334,6 +350,11 @@ export class ConversationView {
 
   setBusy(busy) {
     this.busy = Boolean(busy);
+    this.scheduleRender();
+  }
+
+  setReady(ready) {
+    this.ready = Boolean(ready);
     this.scheduleRender();
   }
 

@@ -452,6 +452,7 @@ const WRAPPER_COMMANDS = new Set([
 // Commands that invoke a nested command string via -c: `bash -c "..."`.
 const C_STRING_COMMANDS = new Set(["bash", "sh", "zsh", "dash", "ksh", "fish", "pwsh"]);
 const CONTROL_WORDS = new Set(["if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "{", "}"]);
+const ENV_SPLIT_MARKER = "__xts_env_split__";
 
 /**
  * Resolve the command word to its canonical name: strip path prefixes and
@@ -483,7 +484,9 @@ function normalizeWords(rawWords) {
         const option = words.shift();
         if (option === "--") break;
         if (option === "-S" || option === "--split-string") {
-          return ["sh", "-c", words.join(" ")];
+          // Keep each reconstructed token intact so a nested `bash -c`
+          // payload is still available to extractCString below.
+          return [ENV_SPLIT_MARKER, ...words];
         }
         if (["-u", "--unset", "-C", "--chdir"].includes(option)) words.shift();
       }
@@ -525,9 +528,26 @@ function extractCString(words) {
 }
 
 function matchSegment(rawWords) {
+  // Named coprocesses have an optional name before the actual command.
+  // Inspect the command-position candidate without treating an unnamed
+  // `coproc echo ...` as named syntax.
+  if (rawWords[0] === "coproc" && rawWords.length > 2) {
+    const named = matchSegment(rawWords.slice(2));
+    if (named) return named;
+  }
+
   // 1) canonicalize the command word (strip path/env/wrappers).
   let words = normalizeWords(rawWords);
   if (words.length === 0) return undefined;
+
+  if (words[0] === ENV_SPLIT_MARKER) {
+    const reconstructed = words.slice(1);
+    const nestedWords = matchSegment(reconstructed);
+    if (nestedWords) return nestedWords;
+    const nestedText = classifyCommand(reconstructed.join(" "));
+    if (!nestedText.safe) return nestedText;
+    words = reconstructed;
+  }
 
   // 2) nested command strings: bash -c "rm -rf /tmp" — classify the payload.
   const cString = extractCString(words);
