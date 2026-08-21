@@ -127,3 +127,52 @@ test("empty and whitespace commands are safe", () => {
   assertSafe("");
   assertSafe("   ");
 });
+
+// --- Adversarial gate-hardening regressions (xtrm-nka.7.3) ---
+// High-risk commands must be caught through common wrappers/path forms
+// without parsing quoted literals as commands.
+
+const BYPASS_CASES = [
+  ["/bin/rm -rf /tmp/x", "path-qualified rm"],
+  ["/usr/bin/rm -rf /tmp/x", "usr-path rm"],
+  ["env FOO=1 rm -rf /tmp/x", "env + assignment"],
+  ["FOO=1 rm -rf /tmp/x", "bare assignment"],
+  ["env rm -rf /tmp/x", "env wrapper"],
+  ["nohup rm -rf /tmp/x", "nohup wrapper"],
+  ["eval rm -rf /tmp/x", "eval wrapper"],
+  ["command rm -rf /tmp/x", "command wrapper"],
+  ["bash -c \"rm -rf /tmp/x\"", "bash -c double-quoted"],
+  ["sh -c 'rm -rf /tmp/x'", "sh -c single-quoted"],
+  ["zsh -c \"rm -rf /tmp/x\"", "zsh -c"],
+  ["git -C /repo reset --hard", "git -C hard reset"],
+  ["git -C /repo push --force", "git -C force push"],
+  ["git --git-dir=/x reset --hard", "git --git-dir hard reset"],
+  ["xargs rm -rf", "xargs rm"],
+  ["find / -exec rm -rf {} +", "find -exec rm"],
+];
+
+test("gate hardening: wrapper/path bypasses are detected", () => {
+  for (const [cmd, label] of BYPASS_CASES) {
+    assert.equal(isSafe(cmd), false, `${label}: ${cmd} must be dangerous`);
+  }
+});
+
+test("gate hardening: benign equivalents stay safe", () => {
+  const benign = [
+    "echo \"rm -rf\"",
+    "printf 'rm -rf %s' /tmp",
+    "git status",
+    "git -C /repo status",
+    "git push origin main",
+    "git reset HEAD~1",
+    "ls -la",
+    "npm test",
+    "env FOO=1 echo hi",
+    "nohup git push origin main",
+    "xargs echo",
+    "bash -c \"echo safe\"",
+  ];
+  for (const cmd of benign) {
+    assert.equal(isSafe(cmd), true, `${cmd} must be safe`);
+  }
+});

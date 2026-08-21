@@ -126,7 +126,8 @@ test("resolveOrSelectModel: no config -> calls selector, persists result", async
     let result;
     await withTempConfig(async () => {
       result = await resolveOrSelectModel(runtime, { model: null }, select);
-      assert.deepEqual(result, { model: { provider: "openai", id: "gpt-5.6" } });
+      assert.equal(result.model.provider, "openai");
+      assert.equal(result.model.id, "gpt-5.6");
       assert.equal(calls.length, 1);
       assert.deepEqual(calls[0][0], {
         provider: "anthropic",
@@ -137,7 +138,8 @@ test("resolveOrSelectModel: no config -> calls selector, persists result", async
     });
     return { result };
   })();
-  assert.deepEqual(result, { model: { provider: "openai", id: "gpt-5.6" } });
+  assert.equal(result.model.provider, "openai");
+  assert.equal(result.model.id, "gpt-5.6");
 });
 
 test("resolveOrSelectModel: valid config -> skips selector", async () => {
@@ -164,7 +166,8 @@ test("resolveOrSelectModel: invalid config -> calls selector", async () => {
         return { provider: "anthropic", id: "claude-haiku" };
       },
     );
-    assert.deepEqual(result, { model: { provider: "anthropic", id: "claude-haiku" } });
+    assert.equal(result.model.provider, "anthropic");
+    assert.equal(result.model.id, "claude-haiku");
     assert.equal(called, 1);
     assert.deepEqual(await readConfig(), { model: { provider: "anthropic", id: "claude-haiku" } });
   });

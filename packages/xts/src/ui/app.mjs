@@ -104,12 +104,13 @@ class ConversationView {
     this.model = "";
     this.header.setText(this.renderHeaderText());
 
-    // Assistant Markdown (streaming target).
-    this.assistant = new Markdown("", 0, 0, MD_THEME);
+    // Assistant response area: each turn gets its own Markdown child appended
+    // to the transcript (never cleared on completion — retention is structural).
+    this.assistant = null;
+    this.assistantPending = "";
 
-    // Conversation area: user prompts and tool rows as plain text.
+    // Conversation area: user prompts, assistant turns, tool rows, in order.
     this.body = new Container();
-    this.body.addChild(this.assistant);
     this.scroll = new ScrollView(this.body, { follow: "end", primary: true });
 
     this.input = new Input();
@@ -183,15 +184,18 @@ class ConversationView {
     }
     this.state = { kind: "streaming", kind_: "streaming" };
     this.assistantPending = "";
-    this.assistant.setText("");
+    // A new Markdown child per turn — the transcript keeps every response.
+    this.assistant = new Markdown("", 0, 0, MD_THEME);
+    this.body.addChild(this.assistant);
+    this.body.addChild(new Text("", 0, 0));
     this.scheduleRender();
   }
 
   finalizeStreamBlock() {
     if (this.state.kind !== "streaming") return;
     this.state = { kind: "idle", kind_: "idle" };
-    this.assistantPending = "";
-    this.assistant.setText("");
+    // Keep the completed assistant text in the transcript (do NOT clear).
+    this.assistant = null;
     this.scheduleRender();
   }
 

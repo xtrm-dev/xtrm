@@ -117,3 +117,39 @@ test("model without TTY exits 1 with interactive-terminal guidance", async () =>
     return true;
   });
 });
+
+// --- Bare pipe dispatch regressions (xtrm-nka.7.1) ---
+// `command | xts` (no positional) must analyze stdin, not route to
+// interactive. Isolated config dir so the no-model path fails fast.
+
+test("bare pipe with stdin does not route to interactive", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "xts-cli-"));
+  try {
+    // No positional + piped stdin -> one-shot path -> no-model error (exit 1),
+    // NOT the interactive-TTY error. Assert the one-shot error message.
+    await assert.rejects(
+      run([], { env: { ...process.env, XTS_CONFIG_DIR: dir }, input: "some piped data" }),
+      (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stderr, /no model configured/);
+        return true;
+      },
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("bare pipe with --show-prompt includes stdin evidence", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "xts-cli-"));
+  try {
+    const { stdout } = await run(["--show-prompt"], {
+      env: { ...process.env, XTS_CONFIG_DIR: dir },
+      input: "delayed producer line\n",
+    });
+    assert.match(stdout, /stdin evidence/);
+    assert.match(stdout, /delayed producer line/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

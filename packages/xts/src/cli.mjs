@@ -256,6 +256,13 @@ async function run() {
   const [command, ...rest] = parsed.positionals;
 
   if (command === undefined) {
+    // Bare `xts` starts interactive; but `command | xts` (piped stdin, no
+    // positional) must analyze stdin instead (PRD §7.3, AC16).
+    if (!process.stdin.isTTY) {
+      // Bare pipe: stdin is the definitive input — read it fully (bounded).
+      await HANDLERS.oneShot({ question: [], showPrompt: parsed.flags.showPrompt, readFull: true });
+      return;
+    }
     await HANDLERS.interactive();
     return;
   }
@@ -291,7 +298,7 @@ async function run() {
 // Builds the envelope from stdin (bounded), shell context, and the question;
 // with --show-prompt prints the envelope and exits. Otherwise resolves the
 // model, creates an in-memory session, streams the answer to stdout, exits.
-async function oneShot({ question, showPrompt }) {
+async function oneShot({ question, showPrompt, readFull = false }) {
   const [{ buildUserMessage }, { readStdin }, { loadShellContext }] = await Promise.all([
     import("./prompt.mjs"),
     import("./stdin.mjs"),
@@ -299,7 +306,7 @@ async function oneShot({ question, showPrompt }) {
   ]);
 
   const instruction = Array.isArray(question) ? question.join(" ") : "";
-  const stdin = await maybeReadStdin(readStdin);
+  const stdin = readFull ? readStdin() : await maybeReadStdin(readStdin);
   // Empty or absent stdin adds no evidence block (buildUserMessage checks truthiness).
   const stdinForPrompt = stdin && stdin.content ? stdin : null;
   const shellContext = await loadShellContext();
