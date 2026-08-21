@@ -142,6 +142,33 @@ test("formatShellContext: absent shell/exit code -> lines omitted", () => {
   assert.match(out, /recent commands: none available/);
 });
 
+test("zsh precmd captures the prior command without hook internals", async () => {
+  if (spawnSync("zsh", ["-f", "-c", "exit 0"], { encoding: "utf8" }).status !== 0) return;
+  const stateDir = path.join(tmpDir, "zsh-live");
+  const hook = path.resolve(new URL("../src/history/hook.zsh", import.meta.url).pathname);
+  const script = [
+    'PS1=""',
+    `export XTS_STATE_DIR=${JSON.stringify(stateDir)}`,
+    `source ${JSON.stringify(hook)}`,
+    "true",
+    "printf '%s\\n' 'KEY = live-generic-secret-value' >/dev/null",
+    "printf '%s\\n' 'Authorization: Bearer live-bearer-secret' >/dev/null",
+    "exit",
+    "",
+  ].join("\n");
+  const output = execFileSync("zsh", ["-f", "-i"], {
+    input: script,
+    encoding: "utf8",
+    env: { ...process.env, XTS_STATE_DIR: stateDir },
+  });
+  assert.equal(output, "", "zsh hook must not write to stdout");
+  const state = await readFile(path.join(stateDir, "xts", "state.json"), "utf8");
+  const commands = await readFile(path.join(stateDir, "xts", "cmds.txt"), "utf8");
+  assert.match(`${state}\\n${commands}`, /true/);
+  assert.doesNotMatch(`${state}\\n${commands}`, /live-generic-secret-value|live-bearer-secret/);
+  assert.doesNotMatch(`${state}\\n${commands}`, /xts_history_redact|fc -ln|xts_hook/);
+});
+
 test("shell hooks force private state and do not persist obvious secrets", async () => {
   const hookDir = path.resolve(new URL("../src/history", import.meta.url).pathname);
   const shells = ["bash"];

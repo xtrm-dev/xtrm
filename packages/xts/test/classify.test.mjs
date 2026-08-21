@@ -210,6 +210,7 @@ test("gate hardening: static control and wrapper grammar is covered", () => {
     ["exec -- rm -rf /tmp/x", "exec delimiter"],
     ["nohup -- rm -rf /tmp/x", "nohup delimiter"],
     ["env -S 'rm -rf /tmp/x'", "env split string"],
+    ["env -S bash -c \"rm -rf /tmp/x\"", "env split string nested shell"],
     ["bash -c $'rm -rf /tmp/x'", "bash ANSI-C payload"],
     ["sh -c $'echo ok; rm -rf /tmp/x'", "sh ANSI-C payload"],
     ["if rm -rf /tmp/x; then echo done; fi", "if control"],
@@ -221,11 +222,15 @@ test("gate hardening: static control and wrapper grammar is covered", () => {
     ["kill -s KILL 123", "kill signal option"],
     ["kill --signal KILL 123", "kill long signal option"],
     ["kill -n KILL 123", "kill numeric signal option"],
+    ["coproc worker rm -rf /tmp/x", "named coprocess command"],
+    ["coproc worker { rm -rf /tmp/x; }", "named coprocess grouping"],
   ];
   for (const [cmd, label] of dangerous) {
     assert.equal(isSafe(cmd), false, `${label}: ${cmd} must be dangerous`);
   }
   assertSafe("rm -- -rf /tmp/x");
+  assertSafe("env -S echo safe");
+  assertSafe("coproc echo safe");
   assertSafe("echo '{ rm -rf /tmp/x; }'");
 });
 

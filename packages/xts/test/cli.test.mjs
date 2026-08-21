@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 const CLI = new URL("../src/cli.mjs", import.meta.url).pathname;
+const { createSessionEventHandler, promptInteractive, setupInteractiveSession, toolResultText } = await import("../src/cli.mjs");
 
 function run(args, options = {}) {
   if (!Object.hasOwn(options, "input")) return execFileAsync(process.execPath, [CLI, ...args], options);
@@ -200,4 +201,73 @@ test("bare pipe waits for a delayed producer through EOF", async () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("tool result multipart preview joins parts with real newlines", () => {
+  assert.equal(
+    toolResultText({ content: [{ type: "text", text: "first" }, { type: "text", text: "second" }] }),
+    "first\nsecond",
+  );
+});
+
+test("assistant error renders once across turn_end and agent_end", () => {
+  const calls = { errors: [], complete: 0, busy: [] };
+  const app = {
+    appendAssistantError: (error) => calls.errors.push(error),
+    appendAssistantComplete: () => { calls.complete += 1; },
+    setBusy: (busy) => calls.busy.push(busy),
+    appendAssistantDelta() {},
+    appendToolRow() {},
+    appendToolResult() {},
+  };
+  const handle = createSessionEventHandler(app);
+  const message = { role: "assistant", stopReason: "error", errorMessage: "provider failed" };
+  handle({ type: "agent_start" });
+  handle({ type: "turn_end", message });
+  handle({ type: "agent_end", messages: [message] });
+  assert.deepEqual(calls.errors, ["provider failed"]);
+  assert.equal(calls.busy.at(-1), false);
+});
+
+test("interactive prompt lifecycle resets busy when context assembly fails", async () => {
+  const calls = { busy: [], errors: [] };
+  await promptInteractive({
+    text: "question",
+    session: { prompt: async () => { throw new Error("prompt should not run"); } },
+    app: {
+      setBusy: (busy) => calls.busy.push(busy),
+      appendAssistantError: (error) => calls.errors.push(error),
+    },
+    loadShellContext: async () => { throw new Error("shell unavailable"); },
+    buildUserMessage: () => "unused",
+  });
+  assert.equal(calls.busy.at(-1), false);
+  assert.deepEqual(calls.errors, ["shell unavailable"]);
+});
+
+test("interactive setup closes the TUI when session creation fails", async () => {
+  let closed = 0;
+  await assert.rejects(
+    setupInteractiveSession({
+      createApp: () => ({ close: () => { closed += 1; }, setReady() {} }),
+      createSession: async () => { throw new Error("session setup failed"); },
+    }),
+    /session setup failed/,
+  );
+  assert.equal(closed, 1);
+});
+
+test("interactive setup disposes a created session when wiring fails", async () => {
+  let closed = 0;
+  let disposed = 0;
+  await assert.rejects(
+    setupInteractiveSession({
+      createApp: () => ({ close: () => { closed += 1; }, setReady() {} }),
+      createSession: async () => ({ session: { dispose: () => { disposed += 1; } } }),
+      setup: () => { throw new Error("session wiring failed"); },
+    }),
+    /session wiring failed/,
+  );
+  assert.equal(closed, 1);
+  assert.equal(disposed, 1);
 });
