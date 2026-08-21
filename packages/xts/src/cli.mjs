@@ -380,6 +380,9 @@ function maybeReadStdin(readStdin) {
     const timer = setTimeout(() => {
       process.stdin.removeListener("readable", onReadable);
       process.stdin.removeListener("data", onData);
+      // Release the open pipe handle so the process can exit; the 150ms
+      // window already decided there is no real pipe to read.
+      process.stdin.destroy();
       resolve(null);
     }, 150);
     const finish = () => {
