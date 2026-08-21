@@ -59,7 +59,7 @@ test("bare unknown positional is a one-shot question and exits 1", async () => {
   // clear message (never hangs waiting on the network when no model is set).
   const dir = mkdtempSync(path.join(os.tmpdir(), "xts-cli-"));
   try {
-    await assert.rejects(run(["frobnicate"], { env: { ...process.env, XTS_CONFIG_DIR: dir } }), (error) => {
+    await assert.rejects(run(["frobnicate"], { env: { ...process.env, XTS_CONFIG_DIR: dir }, input: "" }), (error) => {
       assert.equal(error.code, 1);
       assert.match(error.stderr, /no model configured/);
       return true;
@@ -169,6 +169,20 @@ test("bare pipe with --show-prompt includes stdin evidence", async () => {
     });
     assert.match(stdout, /stdin evidence/);
     assert.match(stdout, /delayed producer line/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("explicit question waits for a delayed producer through EOF", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "xts-cli-"));
+  try {
+    const { stdout } = await runWithInput(
+      ["question", "--show-prompt"],
+      (stdin) => setTimeout(() => stdin.end("DELAYED_EXPLICIT_EVIDENCE\n"), 400),
+      { env: { ...process.env, XTS_CONFIG_DIR: dir } },
+    );
+    assert.match(stdout, /DELAYED_EXPLICIT_EVIDENCE/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

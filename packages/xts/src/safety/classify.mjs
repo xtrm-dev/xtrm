@@ -446,6 +446,7 @@ const WRAPPER_COMMANDS = new Set([
   "time",
   "timeout",
   "builtin",
+  "coproc",
 ]);
 
 // Commands that invoke a nested command string via -c: `bash -c "..."`.
@@ -470,6 +471,10 @@ function normalizeWords(rawWords) {
       words.shift();
       continue;
     }
+    if (words[0] === "!") {
+      words.shift();
+      continue;
+    }
     if (!WRAPPER_COMMANDS.has(words[0])) break;
     const wrapper = words.shift();
     if (words[0] === "--") words.shift();
@@ -484,8 +489,15 @@ function normalizeWords(rawWords) {
       }
     } else if (wrapper === "nice" && words[0] === "-n") {
       words.splice(0, 2);
-    } else if (wrapper === "stdbuf" && words.length > 0 && words[0].startsWith("-")) {
-      words.shift();
+    } else if (wrapper === "command") {
+      while (words.length > 0 && words[0].startsWith("-")) words.shift();
+    } else if (wrapper === "exec") {
+      while (words.length > 0 && words[0].startsWith("-")) {
+        const option = words.shift();
+        if (option === "-a") words.shift();
+      }
+    } else if (wrapper === "setsid" || wrapper === "stdbuf") {
+      while (words.length > 0 && words[0].startsWith("-")) words.shift();
     } else if (wrapper === "time") {
       while (words.length > 0 && words[0].startsWith("-")) words.shift();
     } else if (wrapper === "timeout") {
@@ -565,11 +577,10 @@ function matchSegment(rawWords) {
   }
 
   // Control constructs are intentionally not parsed as a full shell grammar.
-  // Strip their syntax words and inspect each following command. Quoted text
-  // remains in one token, so `echo '{ rm -rf /; }'` is not treated as code.
-  for (let i = 0; i < words.length; i += 1) {
-    if (!CONTROL_WORDS.has(words[i])) continue;
-    const nested = matchSegment(words.slice(i + 1));
+  // Only a control word in command position opens a nested command. This
+  // avoids treating ordinary arguments such as `echo if rm -rf` as syntax.
+  if (CONTROL_WORDS.has(words[0])) {
+    const nested = matchSegment(words.slice(1));
     if (nested) return nested;
   }
 

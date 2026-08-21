@@ -265,7 +265,7 @@ async function run() {
     // positional) must analyze stdin instead (PRD §7.3, AC16).
     if (!process.stdin.isTTY) {
       // Bare pipe: stdin is the definitive input — read it fully (bounded).
-      await HANDLERS.oneShot({ question: [], showPrompt: parsed.flags.showPrompt, readFull: true });
+      await HANDLERS.oneShot({ question: [], showPrompt: parsed.flags.showPrompt });
       return;
     }
     await HANDLERS.interactive();
@@ -303,7 +303,7 @@ async function run() {
 // Builds the envelope from stdin (bounded), shell context, and the question;
 // with --show-prompt prints the envelope and exits. Otherwise resolves the
 // model, creates an in-memory session, streams the answer to stdout, exits.
-async function oneShot({ question, showPrompt, readFull = false }) {
+async function oneShot({ question, showPrompt }) {
   const [{ buildUserMessage }, { readStdin }, { loadShellContext }] = await Promise.all([
     import("./prompt.mjs"),
     import("./stdin.mjs"),
@@ -311,7 +311,7 @@ async function oneShot({ question, showPrompt, readFull = false }) {
   ]);
 
   const instruction = Array.isArray(question) ? question.join(" ") : "";
-  const stdin = readFull ? await readStdin() : await maybeReadStdin(readStdin);
+  const stdin = process.stdin.isTTY ? null : await readStdin();
   // Empty or absent stdin adds no evidence block (buildUserMessage checks truthiness).
   const stdinForPrompt = stdin && stdin.content ? stdin : null;
   const shellContext = await loadShellContext();
@@ -400,39 +400,6 @@ function toolResultText(result) {
 function findAssistantError(messages = []) {
   const message = [...messages].reverse().find((item) => item?.role === "assistant" && item.stopReason === "error");
   return message?.errorMessage ?? (message ? "assistant stopped with an error" : null);
-}
-
-// Pipe-mode detection that does not block when stdin is an open-but-idle pipe
-// (e.g. under execFile / CI, where stdin is never closed). Real pipe usage
-// delivers data within a short window; an interactive terminal never does
-// (it waits for keystrokes).
-function maybeReadStdin(readStdin) {
-  if (process.stdin.isTTY) return Promise.resolve(null);
-  // If data is already buffered or the pipe is already closed, read it.
-  if (process.stdin.readableLength > 0 || process.stdin.readableEnded) {
-    return readStdin();
-  }
-  // Otherwise wait briefly for the first chunk; if none arrives, treat as no pipe.
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      process.stdin.removeListener("readable", onReadable);
-      process.stdin.removeListener("data", onData);
-      // Release the open pipe handle so the process can exit; the 150ms
-      // window already decided there is no real pipe to read.
-      process.stdin.destroy();
-      resolve(null);
-    }, 150);
-    const finish = () => {
-      clearTimeout(timer);
-      process.stdin.removeListener("readable", onReadable);
-      process.stdin.removeListener("data", onData);
-      resolve(readStdin());
-    };
-    const onReadable = () => finish();
-    const onData = () => finish();
-    process.stdin.once("readable", onReadable);
-    process.stdin.once("data", onData);
-  });
 }
 
 async function createRuntime() {
