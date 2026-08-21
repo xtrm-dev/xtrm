@@ -12,8 +12,19 @@
 //   - a denied dangerous command reaches the model as tool error evidence
 
 import { createBashTool, createExtensionRuntime, createLocalBashOperations } from "@earendil-works/pi-coding-agent";
+import os from "node:os";
+import path from "node:path";
 import { SYSTEM_PROMPT } from "./prompt.mjs";
 import { classifyCommand } from "./safety/classify.mjs";
+
+// XTS keeps its own conversation store, separate from Pi's session tree
+// (PRD §17: conversation history is a distinct concept; XTS never touches Pi's
+// sessions). Uses the same state-dir convention as history/shell.mjs.
+export function xtsSessionDir() {
+  const base =
+    process.env.XTS_STATE_DIR ?? process.env.XDG_STATE_HOME ?? path.join(os.homedir(), ".local", "state");
+  return path.join(base, "xts", "sessions");
+}
 
 /**
  * Minimal explicit resource loader: an empty closed surface. The runtime
@@ -85,7 +96,9 @@ export async function createXtsSession({ model, cwd = process.cwd(), sessionMode
     retry: { enabled: false },
   });
   const sessionManager =
-    sessionMode === "persistent" ? SessionManager.create(cwd) : SessionManager.inMemory(cwd);
+    sessionMode === "persistent"
+      ? SessionManager.continueRecent(cwd, xtsSessionDir())
+      : SessionManager.inMemory(cwd);
   const resourceLoader = makeClosedLoader();
   const bashTool = makeGatedBashTool({ cwd, askApprove });
 
