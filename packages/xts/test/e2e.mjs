@@ -182,6 +182,9 @@ async function main() {
     assert.equal(silent.stderr, "");
     note("shell integration silence", "PASS");
 
+    // Isolate the parent process too: config.mjs reads XTS_CONFIG_DIR per call,
+    // so without this the round trip would overwrite the real user config.
+    process.env.XTS_CONFIG_DIR = configDir;
     const { readConfig, writeConfig } = await import("../src/config.mjs");
     const preference = { provider: "fixture-provider", id: "fixture/model" };
     await writeConfig({ model: preference });
