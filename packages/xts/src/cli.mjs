@@ -311,7 +311,7 @@ async function oneShot({ question, showPrompt, readFull = false }) {
   ]);
 
   const instruction = Array.isArray(question) ? question.join(" ") : "";
-  const stdin = readFull ? readStdin() : await maybeReadStdin(readStdin);
+  const stdin = readFull ? await readStdin() : await maybeReadStdin(readStdin);
   // Empty or absent stdin adds no evidence block (buildUserMessage checks truthiness).
   const stdinForPrompt = stdin && stdin.content ? stdin : null;
   const shellContext = await loadShellContext();

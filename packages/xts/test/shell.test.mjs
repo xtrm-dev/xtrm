@@ -31,6 +31,10 @@ test("redactCommand: secret forms are redacted", () => {
     "git push https://user:password=super-secret-value@github.com/repo.git",
     "export OPENAI_API_KEY=sk-proj-abcdefghijklmnop",
     "aws configure set aws_secret_access_key=mysecretaccesskey123",
+    "KEY = generic-long-secret-value",
+    "curl --password=long-password-value",
+    "Authorization: Bearer bearer-secret-value",
+    "-----BEGIN RSA PRIVATE KEY-----",
   ];
   for (const cmd of secrets) assert.equal(redactCommand(cmd), "[redacted]", cmd);
 });
@@ -146,7 +150,7 @@ test("shell hooks force private state and do not persist obvious secrets", async
   for (const shell of shells) {
     const stateDir = path.join(tmpDir, `hook-${shell}`);
     const hook = path.join(hookDir, `hook.${shell}`);
-    const script = `umask 000; export XTS_STATE_DIR=${JSON.stringify(stateDir)}; mkdir -p ${JSON.stringify(path.join(stateDir, "xts"))}; printf '%s\\n' 'export OPENAI_API_KEY=sk-proj-secret-value' > ${JSON.stringify(path.join(stateDir, "xts", "cmds.txt"))}; source ${JSON.stringify(hook)}; xts_hook`;
+    const script = `umask 000; export XTS_STATE_DIR=${JSON.stringify(stateDir)}; mkdir -p ${JSON.stringify(path.join(stateDir, "xts"))}; printf '%s\\n' 'KEY = generic-long-secret-value' 'Authorization: Bearer bearer-secret-value' 'curl --password=long-password-value' '-----BEGIN RSA PRIVATE KEY-----' > ${JSON.stringify(path.join(stateDir, "xts", "cmds.txt"))}; source ${JSON.stringify(hook)}; xts_hook`;
     const result = execFileSync(shell, shell === "bash" ? ["--noprofile", "--norc", "-c", script] : ["-f", "-c", script], {
       encoding: "utf8",
       env: { ...process.env, XTS_STATE_DIR: stateDir },
@@ -159,8 +163,11 @@ test("shell hooks force private state and do not persist obvious secrets", async
     assert.equal(dirMode, 0o700, `${shell} state directory mode`);
     assert.equal(stateMode, 0o600, `${shell} state file mode`);
     assert.equal(commandsMode, 0o600, `${shell} command file mode`);
-    const raw = await readFile(path.join(stateDir, "xts", "state.json"), "utf8");
-    assert.doesNotMatch(raw, /sk-proj-secret-value/);
+    const statePath = path.join(stateDir, "xts", "state.json");
+    const commandsPath = path.join(stateDir, "xts", "cmds.txt");
+    const raw = await readFile(statePath, "utf8");
+    const rawCommands = await readFile(commandsPath, "utf8");
+    assert.doesNotMatch(`${raw}\n${rawCommands}`, /generic-long-secret-value|bearer-secret-value|long-password-value|BEGIN RSA PRIVATE KEY/);
     assert.match(raw, /\[redacted\]/);
   }
 });

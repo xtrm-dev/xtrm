@@ -3,6 +3,7 @@
 // and line limits, and always reports truncation explicitly — silent
 // truncation never happens.
 import { Buffer } from "node:buffer";
+import { StringDecoder } from "node:string_decoder";
 
 export const MAX_STDIN_BYTES = 65536;
 export const MAX_STDIN_LINES = 2000;
@@ -25,27 +26,8 @@ function countLines(text) {
   return countNewlines(text) + (text.endsWith("\n") ? 0 : 1);
 }
 
-// Longest prefix of text within a hard byte budget and a newline budget.
-// Byte budget is strict: a single over-long line is cut at the byte limit
-// (the mid-line finish rule in readStdin re-attaches short lines). The
-// newline budget is a hard stop at the first character of the next line
-// (an unterminated trailing line is allowed by the caller's line accounting).
-function keepPrefix(text, maxBytes, maxNewlines) {
-  if (maxBytes <= 0 || maxNewlines <= 0) return "";
-  let out = "";
-  let bytes = 0;
-  let newlines = 0;
-  const chars = [...text];
-  for (let i = 0; i < chars.length; i++) {
-    const ch = chars[i];
-    const size = Buffer.byteLength(ch, "utf8");
-    if (bytes + size > maxBytes) return out; // strict byte cap
-    if (newlines >= maxNewlines) return out; // hard stop at next line
-    out += ch;
-    bytes += size;
-    if (ch === "\n") newlines += 1;
-  }
-  return out;
+function limit(value, fallback) {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : fallback;
 }
 
 export async function readStdin({
@@ -53,6 +35,9 @@ export async function readStdin({
   maxBytes = MAX_STDIN_BYTES,
   maxLines = MAX_STDIN_LINES,
 } = {}) {
+  const byteLimit = limit(maxBytes, MAX_STDIN_BYTES);
+  const lineLimit = limit(maxLines, MAX_STDIN_LINES);
+  const decoder = new StringDecoder("utf8");
   let content = "";
   let contentBytes = 0;
   let contentNewlines = 0;
@@ -63,62 +48,34 @@ export async function readStdin({
   let originalHadContent = false;
   let originalEndsWithNewline = false;
 
-  for await (const chunk of stream) {
-    const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
-    const bytes = Buffer.byteLength(text, "utf8");
-    const textNewlines = countNewlines(text);
+  const consume = (text) => {
+    if (text.length === 0) return;
 
-    originalBytes += bytes;
-    originalNewlines += textNewlines;
-    if (text.length > 0) {
-      originalHadContent = true;
-      originalEndsWithNewline = text.endsWith("\n");
-    }
+    originalHadContent = true;
+    originalEndsWithNewline = text.endsWith("\n");
+    originalNewlines += countNewlines(text);
 
-    if (truncated) continue;
+    if (truncated) return;
 
-    // Exact line count of content + text: newlines plus one if the combined
-    // string ends mid-line. Only exact combined-line arithmetic keeps the
-    // budget correct when a line spans chunk boundaries.
-    const combinedEndsWithNewline =
-      text.length > 0 ? text.endsWith("\n") : content.endsWith("\n");
-    const combinedLines =
-      contentNewlines +
-      textNewlines +
-      (content.length + text.length > 0 && !combinedEndsWithNewline ? 1 : 0);
-
-    if (bytes <= maxBytes - contentBytes && combinedLines <= maxLines) {
-      content += text;
-      contentBytes += bytes;
-      contentNewlines += textNewlines;
-    } else {
-      const kept = keepPrefix(text, maxBytes - contentBytes, maxLines - contentNewlines);
-      content += kept;
-      contentBytes += Buffer.byteLength(kept, "utf8");
-      contentNewlines += countNewlines(kept);
-      if (kept.length < text.length) {
-        const rest = text.slice(kept.length);
-        const end = rest.indexOf("\n");
-        const nextLine = end === -1 ? rest : rest.slice(0, end);
-        const nextLineBytes = Buffer.byteLength(nextLine, "utf8");
-        const nextLineFull = end === -1 ? nextLineBytes : nextLineBytes + 1;
-        if (contentNewlines < maxLines) {
-          // Byte cap was binding (line budget has room): finish a short line
-          // that the byte cap cut in half, unless it exceeds the full budget.
-          if (rest[0] !== "\n" && nextLineBytes <= maxBytes) {
-            content += nextLine;
-            contentBytes += nextLineBytes;
-          }
-        } else if (rest[0] !== "\n" && nextLineFull > maxBytes - contentBytes) {
-          // Line budget exhausted but byte cap also binds: keep the trailing
-          // line's characters (unterminated) so the last line is never a stub.
-          content += nextLine;
-          contentBytes += nextLineBytes;
-        }
+    for (const ch of text) {
+      const size = Buffer.byteLength(ch, "utf8");
+      const nextLines = contentNewlines + 1;
+      if (contentBytes + size > byteLimit || nextLines > lineLimit) {
+        truncated = true;
+        return;
       }
-      truncated = true;
+      content += ch;
+      contentBytes += size;
+      if (ch === "\n") contentNewlines++;
     }
+  };
+
+  for await (const chunk of stream) {
+    const bytes = Buffer.from(chunk);
+    originalBytes += bytes.byteLength;
+    consume(decoder.write(bytes));
   }
+  consume(decoder.end());
 
   const keptBytes = Buffer.byteLength(content, "utf8");
   const keptLines = countLines(content);

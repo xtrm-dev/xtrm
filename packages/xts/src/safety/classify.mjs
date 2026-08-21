@@ -69,6 +69,8 @@ export function isSafe(command, options) {
 // This is a deliberately small shell lexer, not a shell parser. It tracks
 // quotes and escapes so operators inside quoted arguments remain literals.
 // Command substitutions are split even inside double quotes because they run.
+// Dynamic command construction, aliases/functions, indirection, and obfuscation
+// remain outside this grammar and are the explicit residual bypass ceiling.
 // Conservative: one dangerous segment makes the whole command dangerous.
 function splitSegments(command) {
   const segments = [];
@@ -194,11 +196,13 @@ function tokenize(segment) {
       continue;
     }
     if (char === '"') {
+      if (word === "$") word = "";
       quote = quote === '"' ? null : '"';
       hasWord = true;
       continue;
     }
     if (char === "'") {
+      if (word === "$") word = "";
       quote = "'";
       hasWord = true;
       continue;
@@ -238,12 +242,13 @@ const D = DEFAULT_PATTERN_DESCRIPTIONS;
 
 function matchRm(words) {
   if (words[0] !== "rm") return undefined;
+  const optionWords = words.slice(1, words.indexOf("--") === -1 ? words.length : words.indexOf("--"));
   const recursive =
-    hasShortFlag(words, "r") ||
-    hasShortFlag(words, "R") ||
-    hasLongOption(words, "recursive") ||
-    hasLongOption(words, "dir");
-  const force = hasShortFlag(words, "f") || hasLongOption(words, "force");
+    hasShortFlag(optionWords, "r") ||
+    hasShortFlag(optionWords, "R") ||
+    hasLongOption(optionWords, "recursive") ||
+    hasLongOption(optionWords, "dir");
+  const force = hasShortFlag(optionWords, "f") || hasLongOption(optionWords, "force");
   if (recursive && force) return { pattern: "rm -rf", reason: D["rm -rf"] };
   return undefined;
 }
@@ -336,10 +341,19 @@ function matchProcess(words) {
   if (words[0] === "pkill") return { pattern: "pkill", reason: D.pkill };
   if (words[0] === "killall") return { pattern: "killall", reason: D.killall };
   if (words[0] !== "kill") return undefined;
-  const forced = words.some((word) =>
-    ["-9", "-KILL", "-SIGKILL", "-1", "--signal=KILL", "--signal=SIGKILL"].includes(word),
-  );
-  if (forced) return { pattern: "kill -9", reason: D["kill -9"] };
+  const forcedSignals = new Set(["KILL", "SIGKILL", "9", "-1"]);
+  for (let i = 1; i < words.length; i += 1) {
+    const word = words[i].toUpperCase();
+    if (["-S", "-N", "--SIGNAL"].includes(word) && forcedSignals.has((words[i + 1] ?? "").toUpperCase())) {
+      return { pattern: "kill -9", reason: D["kill -9"] };
+    }
+    if (word.startsWith("--SIGNAL=") && forcedSignals.has(word.slice(9))) {
+      return { pattern: "kill -9", reason: D["kill -9"] };
+    }
+    if (forcedSignals.has(word.replace(/^-/, "")) || forcedSignals.has(word)) {
+      return { pattern: "kill -9", reason: D["kill -9"] };
+    }
+  }
   return undefined;
 }
 
@@ -429,10 +443,14 @@ const WRAPPER_COMMANDS = new Set([
   "command",
   "setsid",
   "stdbuf",
+  "time",
+  "timeout",
+  "builtin",
 ]);
 
 // Commands that invoke a nested command string via -c: `bash -c "..."`.
 const C_STRING_COMMANDS = new Set(["bash", "sh", "zsh", "dash", "ksh", "fish", "pwsh"]);
+const CONTROL_WORDS = new Set(["if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "{", "}"]);
 
 /**
  * Resolve the command word to its canonical name: strip path prefixes and
@@ -454,16 +472,27 @@ function normalizeWords(rawWords) {
     }
     if (!WRAPPER_COMMANDS.has(words[0])) break;
     const wrapper = words.shift();
+    if (words[0] === "--") words.shift();
     if (wrapper === "env") {
       while (words.length > 0 && words[0].startsWith("-")) {
         const option = words.shift();
         if (option === "--") break;
+        if (option === "-S" || option === "--split-string") {
+          return ["sh", "-c", words.join(" ")];
+        }
         if (["-u", "--unset", "-C", "--chdir"].includes(option)) words.shift();
       }
     } else if (wrapper === "nice" && words[0] === "-n") {
       words.splice(0, 2);
     } else if (wrapper === "stdbuf" && words.length > 0 && words[0].startsWith("-")) {
       words.shift();
+    } else if (wrapper === "time") {
+      while (words.length > 0 && words[0].startsWith("-")) words.shift();
+    } else if (wrapper === "timeout") {
+      while (words.length > 0 && (words[0].startsWith("-") || /^\d/.test(words[0]))) {
+        const option = words.shift();
+        if (["-s", "--signal"].includes(option)) words.shift();
+      }
     }
   }
   if (words.length > 0) words[0] = commandName(words[0]);
@@ -533,6 +562,15 @@ function matchSegment(rawWords) {
       const nested = matchSegment(operand.slice(i));
       if (nested) return nested;
     }
+  }
+
+  // Control constructs are intentionally not parsed as a full shell grammar.
+  // Strip their syntax words and inspect each following command. Quoted text
+  // remains in one token, so `echo '{ rm -rf /; }'` is not treated as code.
+  for (let i = 0; i < words.length; i += 1) {
+    if (!CONTROL_WORDS.has(words[i])) continue;
+    const nested = matchSegment(words.slice(i + 1));
+    if (nested) return nested;
   }
 
   for (const matcher of MATCHERS) {

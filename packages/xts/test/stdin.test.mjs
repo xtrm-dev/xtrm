@@ -65,10 +65,11 @@ test("a line spanning chunk boundaries counts once", async () => {
   // per-chunk newline counting would over-count if content were truncated.
   const result = await readStdin({
     stream: fromChunks(["abc\n", "def\n", "ghi\n"]),
-    maxBytes: 6,
+    maxBytes: 7,
     maxLines: 10,
   });
   assert.equal(result.content, "abc\ndef");
+  assert.equal(result.keptBytes, 7);
   assert.equal(result.truncated, true);
   assert.equal(result.originalLines, 3);
   assert.equal(result.keptLines, 2);
@@ -80,10 +81,24 @@ test("byte and line limits both apply, smaller wins", async () => {
     maxBytes: 5,
     maxLines: 2,
   });
-  assert.equal(result.content, "a\nb\nc");
+  assert.equal(result.content, "a\nb\n");
+  assert.equal(result.keptBytes, 4);
   assert.equal(result.truncated, true);
   assert.equal(result.originalLines, 4);
-  assert.equal(result.keptLines, 3);
+  assert.equal(result.keptLines, 2);
+  assert.ok(result.keptBytes <= 5);
+  assert.ok(result.keptLines <= 2);
+});
+
+test("split UTF-8 buffer chunks decode without replacement", async () => {
+  const input = Buffer.from("before € after\n");
+  const euro = input.indexOf(0xe2);
+  const result = await readStdin({
+    stream: fromChunks([input.subarray(0, euro + 1), input.subarray(euro + 1, euro + 2), input.subarray(euro + 2)]),
+  });
+  assert.equal(result.content, "before € after\n");
+  assert.equal(result.originalBytes, input.byteLength);
+  assert.doesNotMatch(result.content, /�/);
 });
 
 test("works with a PassThrough stream", async () => {

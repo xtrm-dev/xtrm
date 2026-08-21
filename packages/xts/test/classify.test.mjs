@@ -190,6 +190,31 @@ test("gate hardening: shell syntax in quoted literals is not executable", () => 
   }
 });
 
+test("gate hardening: static control and wrapper grammar is covered", () => {
+  const dangerous = [
+    ["command -- /bin/rm -rf /tmp/x", "command delimiter"],
+    ["exec -- rm -rf /tmp/x", "exec delimiter"],
+    ["nohup -- rm -rf /tmp/x", "nohup delimiter"],
+    ["env -S 'rm -rf /tmp/x'", "env split string"],
+    ["bash -c $'rm -rf /tmp/x'", "bash ANSI-C payload"],
+    ["sh -c $'echo ok; rm -rf /tmp/x'", "sh ANSI-C payload"],
+    ["if rm -rf /tmp/x; then echo done; fi", "if control"],
+    ["for x in a; do rm -rf /tmp/x; done", "for control"],
+    ["{ rm -rf /tmp/x; }", "brace grouping"],
+    ["time rm -rf /tmp/x", "time wrapper"],
+    ["timeout 5 rm -rf /tmp/x", "timeout wrapper"],
+    ["builtin -- rm -rf /tmp/x", "builtin delimiter"],
+    ["kill -s KILL 123", "kill signal option"],
+    ["kill --signal KILL 123", "kill long signal option"],
+    ["kill -n KILL 123", "kill numeric signal option"],
+  ];
+  for (const [cmd, label] of dangerous) {
+    assert.equal(isSafe(cmd), false, `${label}: ${cmd} must be dangerous`);
+  }
+  assertSafe("rm -- -rf /tmp/x");
+  assertSafe("echo '{ rm -rf /tmp/x; }'");
+});
+
 test("gate hardening: benign equivalents stay safe", () => {
   const benign = [
     "echo \"rm -rf\"",

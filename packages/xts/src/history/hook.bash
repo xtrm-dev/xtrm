@@ -20,6 +20,14 @@ xts_cmds_file="$xts_state_dir/cmds.txt"
 # detector for arbitrary shell expansions.
 xts_history_redact() {
   local xts_secret=$1
+  local xts_assignment='(^|[[:space:]])([[:alnum:]_]*([Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Ss][Ss][Ww][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt])|[Aa][Pp][Ii][-_]?[Kk][Ee][Yy])[[:space:]]*=[[:space:]]*[^[:space:]]{8,}'
+  local xts_flag='(^|[[:space:]])(--password|-p)(=|[[:space:]]+)[^[:space:]]+|(^|[[:space:]])-p[^[:space:]]+'
+  local xts_bearer='(^|[[:space:]:])([Bb]earer|[Tt]oken)[[:space:]]+[A-Za-z0-9._~+/=-]{8,}'
+  local xts_pem='[Pp][Rr][Ii][Vv][Aa][Tt][Ee][[:space:]]+[Kk][Ee][Yy]|BEGIN[[:space:]]+[Rr][Ss][Aa][[:space:]]+[Pp][Rr][Ii][Vv][Aa][Tt][Ee][[:space:]]+[Kk][Ee][Yy]'
+  if [[ "$xts_secret" =~ $xts_assignment || "$xts_secret" =~ $xts_flag || "$xts_secret" =~ $xts_bearer || "$xts_secret" =~ $xts_pem ]]; then
+    printf '%s' '[redacted]'
+    return 0
+  fi
   case "$xts_secret" in
     *TOKEN=*|*token=*|*PASSWORD=*|*password=*|*PASSWD=*|*passwd=*|*API_KEY=*|*api_key=*|*SECRET=*|*secret=*|*AWS_SECRET_ACCESS_KEY=*|*OPENAI_API_KEY=*|*BEGIN\ PRIVATE\ KEY*|*ghp_*|*github_pat_*|*glpat-*|*sk-*)
       printf '%s' '[redacted]'
@@ -64,7 +72,7 @@ xts_hook() {
 
   # Never touch the shell if the state directory is not writable.
   if [[ ! -d $xts_state_dir ]]; then
-    mkdir -p "$xts_state_dir" 2>/dev/null || return 0
+    (umask 077; mkdir -p "$xts_state_dir") 2>/dev/null || return 0
   fi
   chmod 700 "$xts_state_dir" 2>/dev/null || return 0
   [[ -w $xts_state_dir ]] || return 0
@@ -80,14 +88,13 @@ xts_hook() {
   if [[ -n $xts_last_cmd ]]; then
     local xts_safe_cmd
     xts_safe_cmd=$(xts_history_redact "$xts_last_cmd") || return 0
-    printf '%s\n' "$xts_safe_cmd" >>"$xts_cmds_file" 2>/dev/null
+    (umask 077; printf '%s\n' "$xts_safe_cmd" >>"$xts_cmds_file") 2>/dev/null || return 0
   fi
   if [[ -f $xts_cmds_file ]]; then
     chmod 600 "$xts_cmds_file" 2>/dev/null || return 0
     local xts_tail xts_cmds_tmp
     xts_tail=$(tail -n 10 "$xts_cmds_file" 2>/dev/null) || return 0
-    xts_cmds_tmp="$xts_cmds_file.tmp"
-    : >"$xts_cmds_tmp" 2>/dev/null || return 0
+    xts_cmds_tmp=$(umask 077; mktemp "$xts_state_dir/.cmds.XXXXXX") 2>/dev/null || return 0
     while IFS= read -r xts_cmd; do
       xts_history_redact "$xts_cmd"
       printf '\n'
@@ -116,7 +123,9 @@ xts_hook() {
   xts_cwd_json=$(xts_json_field "$xts_cwd")
   xts_shell=bash
 
-  # Atomic-ish write: build then rename, so a reader never sees a torn file.
+  # Atomic-ish write: use a private unpredictable temp file before rename.
+  local xts_state_tmp
+  xts_state_tmp=$(umask 077; mktemp "$xts_state_dir/.state.XXXXXX") 2>/dev/null || return 0
   {
     printf '{'
     printf '"cwd":%s' "$xts_cwd_json"
@@ -124,9 +133,9 @@ xts_hook() {
     printf ',"lastExitCode":%s' "$xts_code"
     printf ',"recentCommands":%s' "$xts_cmds_json"
     printf '}\n'
-  } >"$xts_state_file.tmp" 2>/dev/null &&
-    chmod 600 "$xts_state_file.tmp" 2>/dev/null &&
-    mv -f "$xts_state_file.tmp" "$xts_state_file" 2>/dev/null &&
+  } >"$xts_state_tmp" 2>/dev/null &&
+    chmod 600 "$xts_state_tmp" 2>/dev/null &&
+    mv -f "$xts_state_tmp" "$xts_state_file" 2>/dev/null &&
     chmod 600 "$xts_state_file" 2>/dev/null
   return 0
 }

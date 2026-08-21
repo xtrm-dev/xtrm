@@ -13,8 +13,12 @@ const CLI = new URL("../src/cli.mjs", import.meta.url).pathname;
 function run(args, options = {}) {
   if (!Object.hasOwn(options, "input")) return execFileAsync(process.execPath, [CLI, ...args], options);
   const { input, ...spawnOptions } = options;
+  return runWithInput(args, (stdin) => stdin.end(input), spawnOptions);
+}
+
+function runWithInput(args, writeInput, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [CLI, ...args], { ...spawnOptions, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(process.execPath, [CLI, ...args], { ...options, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8");
@@ -26,7 +30,7 @@ function run(args, options = {}) {
       if (code === 0) resolve({ stdout, stderr });
       else reject(Object.assign(new Error(`child exited ${code}`), { code, stdout, stderr }));
     });
-    child.stdin.end(input);
+    writeInput(child.stdin);
   });
 }
 
@@ -165,6 +169,20 @@ test("bare pipe with --show-prompt includes stdin evidence", async () => {
     });
     assert.match(stdout, /stdin evidence/);
     assert.match(stdout, /delayed producer line/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("bare pipe waits for a delayed producer through EOF", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "xts-cli-"));
+  try {
+    const { stdout } = await runWithInput(
+      ["--show-prompt"],
+      (stdin) => setTimeout(() => stdin.end("producer arrived after startup\n"), 250),
+      { env: { ...process.env, XTS_CONFIG_DIR: dir } },
+    );
+    assert.match(stdout, /producer arrived after startup/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
