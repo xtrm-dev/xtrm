@@ -245,6 +245,20 @@ async function main() {
     await access(deniedSentinel);
     note("xts run dangerous deny + no-exec sentinel", "PASS");
 
+    const approvedSentinel = path.join(base, "approved-sentinel");
+    await writeFile(approvedSentinel, "may be removed");
+    const approved = await runPty(["run", `rm -rf ${approvedSentinel}`], {
+      env,
+      action: async ({ write, waitFor }) => {
+        await waitFor(/Type 'yes' to approve/);
+        write("yes\r");
+      },
+    });
+    assert.equal(approved.actionError, undefined, approved.actionError?.message);
+    assert.equal(approved.code, 0, approved.stderr || approved.output.slice(-1_000));
+    await assert.rejects(access(approvedSentinel));
+    note("xts run dangerous approval", "PASS");
+
     if (inventory.providers.length === 0) {
       note("live one-shot answer", "SKIP", "no available authenticated model");
       note("PTY retained final answer + restore", "SKIP", "no available authenticated model");
