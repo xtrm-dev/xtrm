@@ -65,11 +65,13 @@ function isValidState(state) {
 // boundary on the key on purpose: it must catch "AZURE_OPENAI_API_KEY=..." and
 // "OPENAI_API_KEY=..." (the key sits inside a longer underscore name).
 const KEY_VALUE_RE = /(?:token|tokens|password|passwd|api[_-]?key|secret|key)\s*=\s*(\S+)/i;
+const FLAG_SECRET_RE = /(?:^|\s)(?:--password|-p)(?:=|\s+|(?=\S))\S+/i;
+const BEARER_SECRET_RE = /(?:bearer|token)\s+[A-Za-z0-9._~+/=-]{8,}/i;
 // Common inline env exports whose key hides the secret name behind
 // underscores, so KEY_VALUE_RE does not see "secret=" directly.
 const SECRET_VAR_RE =
   /(?:aws_secret_access_key|azure_openai_api_key|openai_api_key)\s*=\s*(\S+)/i;
-const PEM_RE = /BEGIN PRIVATE KEY|PRIVATE KEY BLOCK|-----BEGIN/i;
+const PEM_RE = /BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|PRIVATE KEY BLOCK|-----BEGIN/i;
 // Token prefixes. The \b keeps ordinary words ending in "sk" ("disk-usage",
 // "mask-util") intact while still matching "sk-abc...", "ghp_...", etc.
 const TOKEN_PREFIX_RE = /\b(?:github_pat_|ghp_|glpat-|sk-)\S+/i;
@@ -84,7 +86,7 @@ function hasLongSecretValue(cmd) {
 
 export function redactCommand(cmd) {
   if (typeof cmd !== "string") return cmd;
-  if (PEM_RE.test(cmd) || TOKEN_PREFIX_RE.test(cmd) || hasLongSecretValue(cmd)) {
+  if (PEM_RE.test(cmd) || TOKEN_PREFIX_RE.test(cmd) || FLAG_SECRET_RE.test(cmd) || BEARER_SECRET_RE.test(cmd) || hasLongSecretValue(cmd)) {
     return "[redacted]";
   }
   return cmd;
