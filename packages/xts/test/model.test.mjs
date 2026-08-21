@@ -52,10 +52,10 @@ test("listAvailable groups and sorts by provider then id", async () => {
 
 test("resolveModel returns the persisted model when available", async () => {
   const config = { model: { provider: "anthropic", id: "claude-sonnet" } };
-  assert.deepEqual(await resolveModel(makeRuntime(), config), {
-    provider: "anthropic",
-    id: "claude-sonnet",
-  });
+  const model = await resolveModel(makeRuntime(), config);
+  assert.ok(model, "model should resolve");
+  assert.equal(model.provider, "anthropic");
+  assert.equal(model.id, "claude-sonnet");
 });
 
 test("resolveModel returns null when no model is configured", async () => {
@@ -77,10 +77,10 @@ test("isModelAvailable reflects the available set", async () => {
 
 test("resolveModel handles model ids containing slashes", async () => {
   const runtime = makeRuntime([{ provider: "commandcode", id: "deepseek/deepseek-v4-flash", name: "DeepSeek" }]);
-  assert.deepEqual(
-    await resolveModel(runtime, { model: { provider: "commandcode", id: "deepseek/deepseek-v4-flash" } }),
-    { provider: "commandcode", id: "deepseek/deepseek-v4-flash" },
-  );
+  const model = await resolveModel(runtime, { model: { provider: "commandcode", id: "deepseek/deepseek-v4-flash" } });
+  assert.ok(model, "model should resolve");
+  assert.equal(model.provider, "commandcode");
+  assert.equal(model.id, "deepseek/deepseek-v4-flash");
 });
 
 test("formatModel renders provider/id", () => {
@@ -147,7 +147,8 @@ test("resolveOrSelectModel: valid config -> skips selector", async () => {
     called++;
     throw new Error("selector should not run");
   });
-  assert.deepEqual(result, { model: { provider: "openai", id: "gpt-5.6" } });
+  assert.equal(result.model.provider, "openai");
+  assert.equal(result.model.id, "gpt-5.6");
   assert.equal(called, 0);
 });
 

@@ -30,10 +30,13 @@ export async function resolveModel(runtime, config) {
   if (!model || typeof model.provider !== "string" || typeof model.id !== "string") {
     return null;
   }
-  if (!(await isModelAvailable(runtime, model.provider, model.id))) {
-    return null;
-  }
-  return { provider: model.provider, id: model.id };
+  // Return the runtime's Model object (carries capabilities + auth state), not
+  // a plain { provider, id } — createAgentSession needs the real Model.
+  const found = runtime.getModel(model.provider, model.id);
+  if (!found) return null;
+  const available = await runtime.getAvailable();
+  const isAvailable = available.some((m) => m.provider === model.provider && m.id === model.id);
+  return isAvailable ? found : null;
 }
 
 /**
