@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
@@ -7,8 +10,8 @@ const execFileAsync = promisify(execFile);
 
 const CLI = new URL("../src/cli.mjs", import.meta.url).pathname;
 
-function run(args) {
-  return execFileAsync(process.execPath, [CLI, ...args]);
+function run(args, options = {}) {
+  return execFileAsync(process.execPath, [CLI, ...args], options);
 }
 
 test("--help exits 0 and prints usage", async () => {
@@ -32,23 +35,30 @@ test("unknown option exits 2", async () => {
 });
 
 test("bare unknown positional is a one-shot question and exits 1", async () => {
-  await assert.rejects(run(["frobnicate"]), (error) => {
-    assert.equal(error.code, 1);
-    assert.match(error.stderr, /model call is not wired yet/);
-    return true;
-  });
+  // Isolated config dir: no model configured -> one-shot fails fast with a
+  // clear message (never hangs waiting on the network when no model is set).
+  const dir = mkdtempSync(path.join(os.tmpdir(), "xts-cli-"));
+  try {
+    await assert.rejects(run(["frobnicate"], { env: { ...process.env, XTS_CONFIG_DIR: dir } }), (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /no model configured/);
+      return true;
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("not-yet-implemented commands exit 1 with stderr message", async () => {
-  for (const args of [
-    ["interactive"],
-    ["a question"],
-  ]) {
-    await assert.rejects(run(args), (error) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "xts-cli-"));
+  try {
+    await assert.rejects(run(["interactive"], { env: { ...process.env, XTS_CONFIG_DIR: dir } }), (error) => {
       assert.equal(error.code, 1);
-      assert.match(error.stderr, /(not implemented yet|model call is not wired yet)/);
+      assert.match(error.stderr, /(interactive session requires a TTY|no model configured)/);
       return true;
     });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
