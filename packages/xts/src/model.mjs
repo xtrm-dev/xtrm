@@ -108,9 +108,13 @@ export async function resolveOrSelectModel(runtime, config, select) {
   if (!chosen || typeof chosen.provider !== "string" || typeof chosen.id !== "string") {
     return { error: "Model selection cancelled." };
   }
-  const model = { provider: chosen.provider, id: chosen.id };
-  await writeConfig({ ...(config ?? {}), model });
-  return { model };
+  // Persist the preference, but return the runtime's authoritative Model
+  // object — a plain { provider, id } lacks capabilities/auth and produced
+  // empty model responses (Pi stopReason=error on first launch).
+  const pref = { provider: chosen.provider, id: chosen.id };
+  await writeConfig({ ...(config ?? {}), model: pref });
+  const authoritative = runtime.getModel(chosen.provider, chosen.id) ?? pref;
+  return { model: authoritative };
 }
 
 function byProviderThenId(a, b) {

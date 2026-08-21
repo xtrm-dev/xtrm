@@ -28,19 +28,6 @@ export const DEFAULT_PATTERN_DESCRIPTIONS = Object.freeze({
   "git clean -fdx": "clean with force",
 });
 
-// Prefixes whose following word is the real command. sudo/doas/pkexec are NOT
-// here: they are flagged as dangerous themselves.
-const WRAPPER_COMMANDS = new Set([
-  "eval",
-  "exec",
-  "env",
-  "nice",
-  "nohup",
-  "command",
-  "setsid",
-  "stdbuf",
-]);
-
 /**
  * Classify a shell command string.
  *
@@ -56,8 +43,7 @@ export function classifyCommand(command, { extraPatterns = [] } = {}) {
   }
 
   for (const segment of splitSegments(command)) {
-    let words = segment.split(/\s+/).filter(Boolean);
-    if (WRAPPER_COMMANDS.has(words[0])) words = words.slice(1);
+    const words = segment.split(/\s+/).filter(Boolean);
     if (words.length === 0) continue;
     const match = matchSegment(words);
     if (match) return { safe: false, reason: match.reason, pattern: match.pattern };
@@ -248,8 +234,21 @@ function matchContainer(words) {
   return undefined;
 }
 
+// `find / -exec rm -rf {} +` — destructive recursive deletion via find.
+function matchFindExec(words) {
+  if (words[0] !== "find") return undefined;
+  const execIdx = words.indexOf("-exec");
+  if (execIdx === -1) return undefined;
+  const target = words[execIdx + 1];
+  if (!target) return undefined;
+  const nested = matchSegment([target, ...words.slice(execIdx + 2)]);
+  if (nested) return { pattern: "find -exec", reason: `destructive find -exec: ${nested.reason}` };
+  return undefined;
+}
+
 const MATCHERS = [
   matchRm,
+  matchFindExec,
   shred,
   sudo,
   doas,
@@ -265,7 +264,102 @@ const MATCHERS = [
   matchContainer,
 ];
 
-function matchSegment(words) {
+const WRAPPER_COMMANDS = new Set([
+  "eval",
+  "exec",
+  "env",
+  "nice",
+  "nohup",
+  "command",
+  "setsid",
+  "stdbuf",
+]);
+
+// Commands that invoke a nested command string via -c: `bash -c "..."`.
+const C_STRING_COMMANDS = new Set(["bash", "sh", "zsh", "dash", "ksh", "fish", "pwsh"]);
+
+/**
+ * Resolve the command word to its canonical name: strip path prefixes and
+ * wrapper command names, so /usr/bin/rm -rf and env FOO=1 rm -rf are seen.
+ * Returns the remaining words with the canonical command at index 0.
+ */
+function normalizeWords(rawWords) {
+  let words = [...rawWords];
+  // env assignments (FOO=bar) and wrapper commands (env, eval, nohup, ...)
+  // may interleave: `env FOO=1 rm -rf` — skip both repeatedly.
+  let advanced = true;
+  while (advanced && words.length > 0) {
+    advanced = false;
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) {
+      words.shift();
+      advanced = true;
+    } else if (WRAPPER_COMMANDS.has(words[0])) {
+      words.shift();
+      advanced = true;
+    }
+  }
+  // path-qualified command: /bin/rm, /usr/bin/git, ./tool, ~/bin/x
+  if (words.length > 0 && (words[0].includes("/") || words[0].startsWith("./"))) {
+    const parts = words[0].split("/");
+    words[0] = parts[parts.length - 1];
+  }
+  return words;
+}
+
+/**
+ * Extract the nested command string from `bash -c "..."` (or -c '...').
+ * The payload may span multiple words when the shell split it on whitespace
+ * ("rm -rf /tmp/x" arrives as ["\"rm", "-rf", "/tmp/x\""]). Rejoin words
+ * inside the quotes. Returns null when the form is not a -c invocation.
+ */
+function extractCString(words) {
+  if (words.length < 3) return null;
+  if (!C_STRING_COMMANDS.has(words[0])) return null;
+  const cIdx = words.indexOf("-c");
+  if (cIdx === -1 || cIdx + 1 >= words.length) return null;
+  const parts = words.slice(cIdx + 1);
+  const first = parts[0];
+  if (first.startsWith("\"")) {
+    const joined = parts.join(" ");
+    const end = joined.lastIndexOf('"');
+    if (end > 0) return joined.slice(1, end);
+  }
+  if (first.startsWith("'")) {
+    const joined = parts.join(" ");
+    const end = joined.lastIndexOf("'");
+    if (end > 0) return joined.slice(1, end);
+  }
+  return null;
+}
+
+function matchSegment(rawWords) {
+  // 1) nested command strings: bash -c "rm -rf /tmp" — classify the payload.
+  const cString = extractCString(rawWords);
+  if (cString !== null && cString.length > 0) {
+    const nested = classifyCommand(cString);
+    if (!nested.safe) return nested;
+  }
+
+  // 2) canonicalize the command word (strip path/env/wrappers).
+  let words = normalizeWords(rawWords);
+  if (words.length === 0) return undefined;
+
+  // 3) git global options: `git -C <dir> reset --hard` — skip them.
+  if (words[0] === "git") {
+    let i = 1;
+    while (i < words.length && words[i].startsWith("-")) i += words[i] === "-C" ? 2 : 1;
+    if (i > 1) words = ["git", ...words.slice(i)];
+  }
+
+  // 4) xargs operands: `xargs rm -rf` — classify the operand command.
+  if (words[0] === "xargs") {
+    const operand = words.slice(1);
+    if (operand.length > 0) {
+      const nested = matchSegment(operand);
+      if (nested) return nested;
+    }
+  }
+
   for (const matcher of MATCHERS) {
     const match = matcher(words);
     if (match) return match;
