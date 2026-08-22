@@ -53,7 +53,7 @@ flock <worktree>/.lock (waits up to 120s, exits 3 on timeout)
 → git push origin board-audit-export-do-not-cancel --no-verify (plain fast-forward)
 ```
 
-No-op detection compares **only `raw-beads.jsonl`**, the one canonical acquisition. Never compare `manifest.json`: it embeds `generated_at`, so a fresh timestamp alone would look like a change. On a clean board the new export directory is deleted again and the command prints:
+No-op detection compares **only `raw-beads.jsonl`** (the committed transport projection — see "Transport-projection schema" below). Never compare `manifest.json`: it embeds `generated_at`, so a fresh timestamp alone would look like a change. On a clean board the new export directory is deleted again and the command prints:
 
 ```text
 ✓ no board changes since last checkpoint
@@ -62,6 +62,21 @@ No-op detection compares **only `raw-beads.jsonl`**, the one canonical acquisiti
 Exit codes: `0` pushed or no-op, `2` not a git repository / worktree missing (run `ensure` first), `3` lock timeout.
 
 Pushes are plain fast-forwards on a single-writer assumption (one host). Concurrent invocations serialize on the flock; a second writer on another host would be rejected by the non-forced push rather than overwrite.
+
+### Transport-projection schema (raw-beads.jsonl memory records)
+
+`raw-beads.jsonl` in the committed transport tree is the **sanitized transport projection of exactly one** `bd export --all` acquisition. Issue records pass through byte-identically; memory records are rewritten in-place so a field literally named `key` does not sit next to a high-entropy slug in a file that scanners like gitleaks index. The authoritative Beads/Dolt schema is unchanged. The rename is deterministic and idempotent:
+
+```text
+{"_type":"memory","key":"<slug>","value":"<content>"}
+→ {"_schema_version":2,"_type":"memory-slug-v2","memory_slug":"<slug>","value":"<content>"}
+```
+
+- The `value` is preserved verbatim.
+- Non-memory records (issues, dependencies, …) are pass-through — the sanitizer only rewrites lines whose `_type` is `memory`, so byte-comparison no-op detection on the newest two exports stays deterministic.
+- Downstream readers that consume raw memory records must accept either `_type=memory` (older acquisitions) or `_type=memory-slug-v2` (this transport projection) and read `memory_slug` on the v2 shape.
+
+The regression coverage lives in `packages/board-audit/tests/test_gitleaks_transport.py` (pinned gitleaks `v8.30.1`); it asserts a normal representative checkpoint has zero `generic-api-key` findings, that a synthetic credential under `.xtrm/board-audit/**` still fires, and that a replayed historic secret-like line in a new commit still fires.
 
 ### Fanout
 
@@ -338,6 +353,8 @@ index `packages` entries point at them, so the existing Web edit → `reconcile`
 branch unchanged.
 
 The snapshot id is content-derived: the same open board plus the same PR head produce the same snapshot id. Unchanged records keep identical canonical SHA-256 hashes and are never rewritten. A checkpoint with no changes prints `NO_CHANGES` and adds no transport commit.
+
+`board-audit-core --export --all --from-raw <acquisition>` reuses a caller-supplied `bd export --all` acquisition instead of running `bd` itself, and does not require `bd` on PATH. The auto-acquire path (`--export` without `--from-raw`) still requires `bd`; audit mode still requires both `bd` and `gh`.
 
 ### Freshness
 
