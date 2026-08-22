@@ -161,8 +161,8 @@ The canonical namespace is **families**: `work.*`, `control.*`, `system.*`, `run
 | runtime | `runtime.pulse_delivery_failed` | runtime | `{pulse_ref?, reason, attempts?}` | reducer/runtime |
 | runtime | `runtime.budget_exhausted_mid_step` | runtime | `{budget_kind, used?, limit?, participant_id?}` | reducer/runtime |
 | runtime | `runtime.recursion_cap` | runtime | `{loop_kind?, count?, hard_cap?, refs?}` | reducer/runtime |
-| chain | `chain.incident.opened` | runtime / authorized coordinator boundary | `{incident_kind, summary, refs, recovery_exhausted: true}` | chain coordinator |
-| chain | `chain.incident.resolved` | chain coordinator / runtime | `{incident_ref, outcome, refs?}` | affected action targets / audit |
+| runtime | `chain.incident.opened` (wake namespace, not a transport family) | runtime / authorized coordinator boundary | `{incident_kind, summary, refs, recovery_exhausted: true}` | chain coordinator |
+| runtime | `chain.incident.resolved` (wake namespace, not a transport family) | chain coordinator / runtime | `{incident_ref, outcome, refs?}` | affected action targets / audit |
 | — | `note` | any | `{text}` | nobody |
 
 `runtime.error` / `runtime.message_rejected` messages are written to the stream (not just returned as API envelopes) so the channel log is self-contained for post-mortem: a replay reveals exactly where and why messages were rejected, without external logs.
