@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# board-audit-fanout — checkpoint every beads repo under ~/projects/mercury.
+# Designed for the systemd user timer; safe to run manually. Per-repo
+# failures are reported but never abort the loop. Skips repos without
+# both .beads/ and an origin remote; ensures the worktree exists first.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WT="$HERE/board-audit-export-wt"
+ROOT="${BOARD_AUDIT_FANOUT_ROOT:-$HOME/projects/mercury}"
+fail=0
+
+for r in "$ROOT"/*/; do
+  n="$(basename "$r")"
+  [ -e "$r/.beads" ] || continue
+  git -C "$r" config --get remote.origin.url >/dev/null 2>&1 || continue
+  "$WT" ensure "$r" >/dev/null 2>&1
+  if out=$("$WT" checkpoint "$r" --all 2>&1 | tail -1); then
+    printf "%-18s %s\n" "$n:" "$out"
+  else
+    printf "%-18s FAILED: %s\n" "$n:" "$out"
+    fail=1
+  fi
+done
+exit $fail
