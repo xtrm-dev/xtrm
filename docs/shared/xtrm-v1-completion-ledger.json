@@ -15,7 +15,8 @@
     "docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md"
   ],
   "explicit_exclusion": {
-    "substrate_runtime_and_migration": "DEFERRED_BY_EXPLICIT_GATE"
+    "substrate_runtime_and_migration": "DEFERRED_BY_EXPLICIT_GATE",
+    "substrate_minimum_durability_kernel_exception": "minimum Substrate durability kernel (stable IDs, run/container identity, lineage, effect receipts, projections, explicit uncertain state) proceeds WITHOUT the Stage-0 daemon prerequisite; see xtrm-dev/xtrm:docs/runtime/adr/002-container-chainrun-durability.md (annotated 2026-08-22)"
   },
   "gates": {
     "GATE_R0": "DOCUMENTS_PATCHED_PENDING_REVIEW",

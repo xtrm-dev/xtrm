@@ -1,6 +1,6 @@
 {
   "schema_version": "xtrm.current-execution-plan.v1",
-  "last_reconciled": "2026-08-10T00:00:00+02:00",
+  "last_reconciled": "2026-08-22T00:00:00+02:00",
   "status": "canonical-current-plan-amended-for-v1-termination",
   "authority": {
     "requirements": "xtrm-dev/specialists/docs/design/roadmap/enhanced-prd.md",
@@ -856,5 +856,33 @@
       "deployment_operator",
       "promotion"
     ]
+  },
+  "amendment_2026_08_22": {
+    "authority": "docs/runtime/ (PRD + ADR-001/002/003/006 + reconciliation/runtime-decision-matrix.md Q1/Q7/Q18/Q20/Q22)",
+    "scope": "additive; supplements amendment_2026_08_09 without creating a competing plan",
+    "r1_gate_harness_adr": "native Pi AgentSession hosting adopted as product target on SRE-vertical-slice evidence; gate reframed as production-parity/hardening evidence; corrected RPC = compatibility/migration/rollback/headless transport",
+    "c1_restatement": "ChainSource schema/loaders -> ChainDefinition -> pure compiler -> ResolvedChain -> durable ChainRun/materialization-after-freeze; templates are one ChainSource variant",
+    "a1_pi_extensible_workflows": "bounded authoring/cognition/reference integration; never a second durable workflow runtime",
+    "eval_lane_extension": [
+      "compiler determinism",
+      "resolved-chain freeze integrity",
+      "chain-run replay equivalence",
+      "duplicate-effect rate",
+      "recovery success",
+      "activation leak",
+      "resource cleanup",
+      "stale-activation routing",
+      "message duplication",
+      "wake amplification",
+      "authority violation",
+      "scope/capability violation",
+      "cooperation usefulness",
+      "handoff quality",
+      "evidence dereference precision",
+      "memory promotion precision",
+      "end-to-end outcome"
+    ],
+    "eval_telemetry_constraint": "Prometheus stays low-cardinality; exact IDs never become metric labels; subjects map onto existing eval entities",
+    "ledger_kernel_exception": "minimum Substrate durability kernel (ADR-002) proceeds without Stage-0 daemon prerequisite; full migration stays deferred by explicit gate"
   }
 }
