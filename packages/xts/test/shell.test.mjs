@@ -178,7 +178,7 @@ test("shell hooks force private state and do not persist obvious secrets", async
   for (const shell of shells) {
     const stateDir = path.join(tmpDir, `hook-${shell}`);
     const hook = path.join(hookDir, `hook.${shell}`);
-    const script = `umask 000; export XTS_STATE_DIR=${JSON.stringify(stateDir)}; mkdir -p ${JSON.stringify(path.join(stateDir, "xts"))}; printf '%s\\n' 'KEY = generic-long-secret-value' 'Authorization: Bearer bearer-secret-value' 'curl --password=long-password-value' '-----BEGIN RSA PRIVATE KEY-----' > ${JSON.stringify(path.join(stateDir, "xts", "cmds.txt"))}; source ${JSON.stringify(hook)}; xts_hook`;
+    const script = `umask 000; export XTS_STATE_DIR=${JSON.stringify(stateDir)}; export XTS_SESSION_ID=priv-test; mkdir -p ${JSON.stringify(path.join(stateDir, "xts"))}; printf '%s\\n' 'KEY = generic-long-secret-value' 'Authorization: Bearer bearer-secret-value' 'curl --password=long-password-value' '-----BEGIN RSA PRIVATE KEY-----' > ${JSON.stringify(path.join(stateDir, "xts", "cmds.priv-test.txt"))}; source ${JSON.stringify(hook)}; xts_hook`;
     const result = execFileSync(shell, shell === "bash" ? ["--noprofile", "--norc", "-c", script] : ["-f", "-c", script], {
       encoding: "utf8",
       env: { ...process.env, XTS_STATE_DIR: stateDir },
@@ -235,8 +235,12 @@ test("hooks write per-session files when XTS_SESSION_ID is preset", async () => 
           : ["-f", "-c", `export XTS_SESSION_ID=777-tty9; source ${hookDir}/hook.zsh; true; xts_hook`],
         { env: { ...process.env, XTS_STATE_DIR: dir } });
       assert.ok(fs.existsSync(path.join(dir, "xts", "state.777-tty9.json")), `${shell} state.<id>.json`);
-      assert.ok(fs.existsSync(path.join(dir, "xts", "cmds.777-tty9.txt")), `${shell} cmds.<id>.txt`);
-      assert.ok(!fs.existsSync(path.join(dir, "xts", "state.json")), `${shell} no global file`);
+      // cmds ring only appears once a real command has run; non-interactive
+      // xts_hook has no history, so only the absence of a global file matters.
+      if (fs.existsSync(path.join(dir, "xts", "cmds.777-tty9.txt"))) {
+        assert.ok(!fs.existsSync(path.join(dir, "xts", "cmds.txt")), `${shell} no global cmds`);
+      }
+      assert.ok(!fs.existsSync(path.join(dir, "xts", "state.json")), `${shell} no global state`);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

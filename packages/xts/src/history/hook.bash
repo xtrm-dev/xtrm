@@ -16,9 +16,7 @@ xts_state_dir="$xts_state_base/xts"
 # Per-session isolation: one stable id per shell (pid+tty) exported so child
 # xts processes inherit it and read only this terminal's state (audit #12).
 if [[ -z ${XTS_SESSION_ID:-} ]]; then
-  xts_tty=$(tty 2>/dev/null)
-  xts_tty=${xts_tty##*/}
-  XTS_SESSION_ID="$${xts_tty:+-$xts_tty}"
+  XTS_SESSION_ID="$$"
   export XTS_SESSION_ID
 fi
 xts_state_file="$xts_state_dir/state.$XTS_SESSION_ID.json"
