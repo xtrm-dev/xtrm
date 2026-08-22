@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # board-audit-pr-adapter — PR-checkpoint event adapter.
 #
+# DEPRECATED for checkpoint triggering: the PR-checkpoint mode is superseded
+# by the permanent export surfaces (board-audit-export-wt) plus the systemd
+# board-audit-fanout.timer, which publish board state every 15 minutes
+# without any PR coupling. A client pre-push hook also fires before the
+# pull request exists, so it can never bind the fresh head. Kept unmodified
+# for pr-status verification of existing handoffs and manual re-checkpoints.
+#
 # Publishes a FRESH PR-checkpoint Board-Audit handoff for every push to a
 # pull-request branch. Wire it as a client-side pre-push hook (board-audit
 # init does this), run it from a self-hosted PR-event executor, or invoke it

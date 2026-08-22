@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """PR-checkpoint Board-Audit handoffs.
 
+DEPRECATED for checkpoint triggering: the PR-checkpoint mode is superseded by
+the permanent export surfaces (board-audit-export-wt) plus the systemd
+board-audit-fanout.timer. Kept unmodified so ``pr-status``/``doctor`` can
+still verify existing handoffs and manual re-checkpoints still work.
+
 Implements the PR-checkpoint handoff publication contract: when repository work
 reaches a Git/PR delivery event, one complete, coherent Board-Audit evidence
 sidecar is published on a dedicated ``board-audit/pr-<number>`` transport
