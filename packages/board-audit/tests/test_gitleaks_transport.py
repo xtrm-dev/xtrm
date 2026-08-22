@@ -103,11 +103,19 @@ def _init_repo(root: Path) -> None:
     _git(root, "commit", "-q", "--allow-empty", "-m", "root")
 
 
-def _scan_generic_api_key(gitleaks: Path, repo: Path) -> list[dict]:
-    """Full git-history scan; return the generic-api-key findings only."""
+def _scan_all(gitleaks: Path, repo: Path) -> list[dict]:
+    """Full git-history scan of `repo`; return raw findings unfiltered.
+
+    Runs gitleaks with cwd=repo and --gitleaks-ignore-path pointing INSIDE
+    `repo` so no `.gitleaksignore` from the calling repository or the CI
+    runner's HOME is inherited (default `-i .` would otherwise resolve
+    against the caller's cwd). All GITLEAKS_* env vars are stripped for
+    the same reason.
+    """
     report = repo / ".gitleaks-report.json"
     if report.exists():
         report.unlink()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GITLEAKS_")}
     subprocess.run(
         [
             str(gitleaks),
@@ -120,12 +128,20 @@ def _scan_generic_api_key(gitleaks: Path, repo: Path) -> list[dict]:
             "--no-banner",
             "--exit-code",
             "0",
+            "--gitleaks-ignore-path",
+            str(repo),
         ],
+        cwd=str(repo),
+        env=env,
         check=True,
         capture_output=True,
     )
-    data = json.loads(report.read_text(encoding="utf-8") or "[]")
-    return [f for f in data if f.get("RuleID") == "generic-api-key"]
+    return json.loads(report.read_text(encoding="utf-8") or "[]")
+
+
+def _scan_generic_api_key(gitleaks: Path, repo: Path) -> list[dict]:
+    """Full git-history scan; return the generic-api-key findings only."""
+    return [f for f in _scan_all(gitleaks, repo) if f.get("RuleID") == "generic-api-key"]
 
 
 # ---------------------------------------------------------------------------
@@ -340,26 +356,7 @@ class SanitizedTransportHarness(unittest.TestCase):
         )
         _git(self.repo, "add", "-A", ".xtrm/board-audit")
         _git(self.repo, "commit", "-q", "-m", "inject synthetic credential")
-        report = self.repo / ".gitleaks-report.json"
-        if report.exists():
-            report.unlink()
-        subprocess.run(
-            [
-                str(self.gitleaks),
-                "git",
-                str(self.repo),
-                "--report-format",
-                "json",
-                "--report-path",
-                str(report),
-                "--no-banner",
-                "--exit-code",
-                "0",
-            ],
-            check=True,
-            capture_output=True,
-        )
-        findings = json.loads(report.read_text(encoding="utf-8") or "[]")
+        findings = _scan_all(self.gitleaks, self.repo)
         matching = [
             f for f in findings
             if f.get("RuleID") == "generic-api-key"
