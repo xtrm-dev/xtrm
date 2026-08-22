@@ -53,7 +53,7 @@ flock <worktree>/.lock (waits up to 120s, exits 3 on timeout)
 → git push origin board-audit-export-do-not-cancel --no-verify (plain fast-forward)
 ```
 
-No-op detection compares **only `raw-beads.jsonl`**, the one canonical acquisition. Never compare `manifest.json`: it embeds `generated_at`, so a fresh timestamp alone would look like a change. On a clean board the new export directory is deleted again and the command prints:
+No-op detection compares **only `raw-beads.jsonl`** (the committed transport projection — see "Transport-projection schema" below). Never compare `manifest.json`: it embeds `generated_at`, so a fresh timestamp alone would look like a change. On a clean board the new export directory is deleted again and the command prints:
 
 ```text
 ✓ no board changes since last checkpoint
@@ -65,7 +65,7 @@ Pushes are plain fast-forwards on a single-writer assumption (one host). Concurr
 
 ### Transport-projection schema (raw-beads.jsonl memory records)
 
-`raw-beads.jsonl` is the one canonical acquisition of `bd export --all`. The Beads/Dolt schema is authoritative and unchanged. For the **committed transport tree**, `board-audit-core` renames memory records so a field literally named `key` does not sit next to a high-entropy slug in a file that scanners like gitleaks index. The rename is deterministic, in-place, and idempotent:
+`raw-beads.jsonl` in the committed transport tree is the **sanitized transport projection of exactly one** `bd export --all` acquisition. Issue records pass through byte-identically; memory records are rewritten in-place so a field literally named `key` does not sit next to a high-entropy slug in a file that scanners like gitleaks index. The authoritative Beads/Dolt schema is unchanged. The rename is deterministic and idempotent:
 
 ```text
 {"_type":"memory","key":"<slug>","value":"<content>"}
@@ -353,6 +353,8 @@ index `packages` entries point at them, so the existing Web edit → `reconcile`
 branch unchanged.
 
 The snapshot id is content-derived: the same open board plus the same PR head produce the same snapshot id. Unchanged records keep identical canonical SHA-256 hashes and are never rewritten. A checkpoint with no changes prints `NO_CHANGES` and adds no transport commit.
+
+`board-audit-core --export --all --from-raw <acquisition>` reuses a caller-supplied `bd export --all` acquisition instead of running `bd` itself, and does not require `bd` on PATH. The auto-acquire path (`--export` without `--from-raw`) still requires `bd`; audit mode still requires both `bd` and `gh`.
 
 ### Freshness
 

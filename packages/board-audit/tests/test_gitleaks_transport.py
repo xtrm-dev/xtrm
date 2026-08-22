@@ -325,15 +325,17 @@ class SanitizedTransportHarness(unittest.TestCase):
 
     def test_D_synthetic_credential_under_board_audit_still_fires(self) -> None:
         self._checkpoint("baseline before synthetic credential")
-        # A per-run synthetic key that mirrors the AWS-style shape gitleaks
-        # ships a dedicated rule for. Generated fresh per run and NEVER
-        # persisted anywhere except this in-test git repo.
-        rnd = os.urandom(20).hex().upper()[:16]
-        creds = self.repo / ".xtrm/board-audit/scratch/creds.env"
+        # A secret-shaped line placed under .xtrm/board-audit/** to prove no
+        # path exemption is leaking that tree. 48-char random hex gives
+        # Shannon entropy comfortably above the generic-api-key floor with no
+        # realistic flake window; the value is generated fresh per run and
+        # NEVER persisted anywhere except this in-test git repo.
+        rnd = os.urandom(24).hex()
+        expected_path = ".xtrm/board-audit/scratch/creds.env"
+        creds = self.repo / expected_path
         creds.parent.mkdir(parents=True, exist_ok=True)
         creds.write_text(
-            f"AWS_ACCESS_KEY_ID=AKIA{rnd}\n"
-            f"secret_api_token = \"{os.urandom(24).hex()}\"\n",
+            f"secret_api_token = \"{rnd}\"\n",
             encoding="utf-8",
         )
         _git(self.repo, "add", "-A", ".xtrm/board-audit")
@@ -358,9 +360,16 @@ class SanitizedTransportHarness(unittest.TestCase):
             capture_output=True,
         )
         findings = json.loads(report.read_text(encoding="utf-8") or "[]")
+        matching = [
+            f for f in findings
+            if f.get("RuleID") == "generic-api-key"
+            and f.get("File", "").endswith(expected_path)
+        ]
         self.assertTrue(
-            findings,
-            "gitleaks did not detect the synthetic credential — a path exemption is leaking",
+            matching,
+            "gitleaks did not detect the synthetic secret under "
+            f"{expected_path} — a path exemption is leaking. all findings: "
+            + json.dumps([{"RuleID": f.get("RuleID"), "File": f.get("File")} for f in findings]),
         )
 
     # ---- Required result E ------------------------------------------------
@@ -369,13 +378,16 @@ class SanitizedTransportHarness(unittest.TestCase):
         self._checkpoint("baseline before replay")
         replay = self.repo / "docs" / "replay.md"
         replay.parent.mkdir(parents=True, exist_ok=True)
-        # A representative shape that generic-api-key catches on the
-        # committed transport tree today. Generated per run so no value
-        # ever persists in the source tree.
-        rnd = os.urandom(16).hex()
+        # A representative shape that generic-api-key catches on the committed
+        # transport tree today. base64url of 48 random bytes = 64 chars over a
+        # ~64-symbol alphabet, giving Shannon entropy well above the
+        # generic-api-key ~3.5 bits/char floor with no realistic flake window.
+        # Generated per run so no value ever persists in the source tree.
+        import base64
+        rnd = base64.urlsafe_b64encode(os.urandom(48)).decode("ascii").rstrip("=")
         replay.write_text(
             "legacy fingerprint replay\n\n"
-            f"api_key: {rnd}\n",
+            f"api_key = \"{rnd}\"\n",
             encoding="utf-8",
         )
         _git(self.repo, "add", "-A")
@@ -383,7 +395,8 @@ class SanitizedTransportHarness(unittest.TestCase):
         findings = _scan_generic_api_key(self.gitleaks, self.repo)
         self.assertTrue(
             findings,
-            "gitleaks did not detect the replayed historic secret shape — a value-based ignore is present",
+            "gitleaks did not detect the replayed historic secret shape under "
+            "the generic-api-key rule — a value-based ignore is present",
         )
 
     # ---- Required result F ------------------------------------------------
