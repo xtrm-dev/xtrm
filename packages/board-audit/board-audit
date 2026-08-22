@@ -12,6 +12,13 @@ case "${1:-}" in
   handoff|reconcile)
     exec python3 "$FLOW" "$@"
     ;;
+  ensure|checkpoint|status)
+    exec "$SCRIPT_DIR/board-audit-export-wt" "$@"
+    ;;
+  fanout)
+    shift
+    exec "$SCRIPT_DIR/board-audit-fanout" "$@"
+    ;;
   pr-checkpoint|pr-status|doctor|init)
     exec python3 "$PR_FLOW" "$@"
     ;;
@@ -19,7 +26,23 @@ case "${1:-}" in
     cat <<'EOF'
 board-audit — Beads work-package export, handoff, round trip and PR-checkpoint evidence.
 
-Commands:
+Canonical export-surface commands (gen-2):
+  checkpoint [<repo>] [--open|--all]
+                        Export into the permanent orphan worktree, commit and
+                        push board-audit-export-do-not-cancel. No-op (exit 0,
+                        "no board changes") when raw-beads.jsonl is byte-
+                        identical to the previous export. flock-serialized.
+  status [<repo>]       Show the export worktree path, branch, last commit and
+                        remote ahead/behind state.
+  ensure [<repo>]       Create the permanent worktree + orphan branch if
+                        missing (idempotent).
+  fanout                Checkpoint every beads repo under ~/projects/mercury
+                        (what the systemd timer runs every 15 min). Per-repo
+                        failures never abort the loop. No dry-run flag; a
+                        clean board makes any run a no-op, or scope it with
+                        BOARD_AUDIT_FANOUT_ROOT=<dir>.
+
+Legacy handoff/reconcile/PR commands:
   handoff <bead>          Export + prepare + commit + push one work-package handoff
                           through an isolated Beads-managed worktree (transport branch).
   reconcile <bead>        Fetch the edited handoff, validate/diff, dry-run apply;

@@ -1,8 +1,102 @@
 # board-audit — install & operational manual
 
-`board-audit` exposes a simple user-facing handoff/reconcile workflow over deterministic Beads export and guarded round-trip primitives.
+This package carries two generations:
 
-The normal workflow is intentionally three commands:
+- **Canonical (gen-2, live since 2026-08-22):** permanent orphan export worktrees (`board-audit-export-wt`) plus an all-repo fanout loop (`board-audit-fanout`) fired by a systemd user timer every 15 minutes. All 12 mercury repos publish their Beads board through it. No PR coupling, no ad-hoc worktrees.
+- **Legacy (gen-1):** ad-hoc-worktree handoff/reconcile transport branches and the PR-checkpoint machinery. Operationally superseded — the pre-push checkpoint hook cannot bind a fresh head because client pre-push fires before `xt end` creates the PR — but still working and retained for handoff/reconcile round-trips and `pr-status` verification.
+
+The caller's current Git checkout is never switched by any command in this package.
+
+## Canonical workflow: permanent export surfaces (gen-2)
+
+One durable worktree and one orphan artifact branch per repository:
+
+```text
+branch:  board-audit-export-do-not-cancel   (one per repo)
+tree:    ~/.cache/xtrm/board-audit/export-worktrees/<owner-repo.git>/
+content: only .xtrm/board-audit/**          (orphan branch — no code ancestry)
+```
+
+Beads DB access comes from Git common-directory discovery; the worktree's file contents are irrelevant to `bd`. The worktree is permanent: never cancel it, never base code work on the branch.
+
+### Commands
+
+Verified against the live `market-data` repo:
+
+```bash
+# Idempotent creation of worktree + orphan branch (prints "already present"
+# when it exists):
+board-audit ensure /home/dawid/projects/mercury/market-data
+
+# Export → commit → push. Exits 0 either way:
+board-audit checkpoint /home/dawid/projects/mercury/market-data --all
+
+# Worktree path/branch/head + remote ahead/behind:
+board-audit status /home/dawid/projects/mercury/market-data
+
+# All mercury repos at once (what the timer runs):
+board-audit fanout
+```
+
+(`board-audit` here is the wrapper dispatcher; calling `board-audit-export-wt` directly is equivalent for `ensure|checkpoint|status`. A repo argument defaults to `$PWD`; pass any path inside the target repo.)
+
+### Checkpoint semantics
+
+`checkpoint [<repo>] [--open|--all] [extra board-audit-core args...]` performs:
+
+```text
+flock <worktree>/.lock (waits up to 120s, exits 3 on timeout)
+→ board-audit-core --export --all|--open --output-dir <worktree>/.xtrm/board-audit
+→ no-op check: byte-compare raw-beads.jsonl of the newest two exports
+→ retention: keep newest 3 exports, delete older
+→ git add .xtrm/board-audit → commit --no-verify -m '... [skip ci]'
+→ git push origin board-audit-export-do-not-cancel --no-verify (plain fast-forward)
+```
+
+No-op detection compares **only `raw-beads.jsonl`**, the one canonical acquisition. Never compare `manifest.json`: it embeds `generated_at`, so a fresh timestamp alone would look like a change. On a clean board the new export directory is deleted again and the command prints:
+
+```text
+✓ no board changes since last checkpoint
+```
+
+Exit codes: `0` pushed or no-op, `2` not a git repository / worktree missing (run `ensure` first), `3` lock timeout.
+
+Pushes are plain fast-forwards on a single-writer assumption (one host). Concurrent invocations serialize on the flock; a second writer on another host would be rejected by the non-forced push rather than overwrite.
+
+### Fanout
+
+`board-audit-fanout` loops `$HOME/projects/mercury/*/`, skips directories without both `.beads/` and an `origin` remote, runs `ensure` then `checkpoint --all` per repo, and prints one line per repo. Per-repo failures are reported but never abort the loop; the exit code is `1` if any repo failed. Override the scan root with `BOARD_AUDIT_FANOUT_ROOT` (also how you scope a manual run to fewer repos), and the worktree cache root with `BOARD_AUDIT_WT_ROOT`.
+
+There is no dry-run flag — none is needed: a clean board makes any run a complete no-op, which makes manual runs safe.
+
+### Systemd user timer
+
+Units live at `~/.config/systemd/user/board-audit-fanout.{service,timer}`:
+
+```ini
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min   ; cadence knob — change here to re-fire more/less often
+Persistent=true         ; catches up missed runs after downtime
+```
+
+Gotcha already hit in production: **user units do not inherit your shell PATH.** The unit needs an explicit `Environment=PATH=...` line including `~/.local/bin` and the nvm bin directory, otherwise `bd` and `gh` silently vanish for the service. After editing a unit: `systemctl --user daemon-reload`.
+
+Operate with:
+
+```bash
+systemctl --user list-timers board-audit-fanout.timer   # next/last fire times
+journalctl --user -u board-audit-fanout.service -f      # per-repo results live
+systemctl --user start board-audit-fanout.service       # trigger immediately
+```
+
+A healthy run ends with `Finished board-audit-fanout.service ...` after one `✓ ...` or `FAILED:` line per repo.
+
+## Legacy: ad-hoc worktree handoff/reconcile roundtrip
+
+Everything below describes gen-1 machinery: still functional, no longer the default publication path. Prefer the canonical section above for board-state publishing.
+
+The handoff/reconcile round-trip remains intentionally three commands:
 
 ```bash
 board-audit handoff xtrm-123
@@ -10,10 +104,6 @@ board-audit handoff xtrm-123
 board-audit reconcile xtrm-123
 board-audit reconcile xtrm-123 --execute
 ```
-
-The caller's current Git checkout is never switched by these commands.
-
-## Primary workflow
 
 ### 1. Handoff
 
@@ -170,7 +260,9 @@ fresh export
 
 `--execute` is the only high-level path that mutates Beads.
 
-## PR-checkpoint handoffs
+## PR-checkpoint handoffs (legacy)
+
+Superseded for checkpoint triggering by the canonical export surfaces + timer above; a client pre-push hook fires before `xt end` creates the PR, so it can never bind the fresh head. Retained unchanged for `pr-status` verification of existing handoffs and manual re-checkpoints (`board-audit-pr.py` / `board-audit-pr-adapter.sh` carry deprecation banners; their logic is untouched).
 
 A PR-checkpoint handoff is a versioned per-Bead evidence projection bound to an exact remote PR head. It is produced and inspected with:
 
@@ -407,6 +499,10 @@ Audit bundles live under `.xtrm/board-audit/audits/`.
 
 ```text
 packages/board-audit/board-audit               # user-facing dispatcher
+canonical (gen-2):
+packages/board-audit/board-audit-export-wt     # permanent orphan worktree ensure/checkpoint/status
+packages/board-audit/board-audit-fanout        # all-repo checkpoint loop (timer target)
+legacy (gen-1):
 packages/board-audit/board-audit-transport.py  # fresh-from-main transport policy + exact lease/hook/CI handling
 packages/board-audit/board-audit-flow.py       # generic handoff/reconcile orchestration
 packages/board-audit/board-audit-core          # low-level exporter/audit implementation
