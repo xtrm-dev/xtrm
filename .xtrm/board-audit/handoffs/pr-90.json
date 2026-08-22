@@ -1,0 +1,37 @@
+{
+  "beads_root_ids": [
+    "xtrm-07e",
+    "xtrm-2zd",
+    "xtrm-401",
+    "xtrm-56flm",
+    "xtrm-6e8",
+    "xtrm-8fo",
+    "xtrm-at9",
+    "xtrm-cn8",
+    "xtrm-crz",
+    "xtrm-h1r",
+    "xtrm-w5m",
+    "xtrm-y9i"
+  ],
+  "generated_at": "2026-08-22T23:08:38Z",
+  "handoff": ".xtrm/board-audit/handoffs/pr-90.json",
+  "implementation_branch": "docs/xtrm-cn8-6-final-reconciliation",
+  "implementation_head_sha": "ca417341c459353847aa6a1b9f54dcbfdf9cf315",
+  "index": ".xtrm/board-audit/index.json",
+  "open_issue_count": 18,
+  "producer": {
+    "board_audit_source": "repository",
+    "git_sha": "7a1212e0e7dbb4a46223622110a60256b5d41944",
+    "package_sha256": "802a394512ff6a2d5cdec02a3f28771bea1f42c30370c808a99845436f91024e",
+    "repository": "xtrm-dev/xtrm"
+  },
+  "pull_request": 90,
+  "repository": "xtrm-dev/xtrm",
+  "schema_version": "xtrm.board-audit.pr-handoff.v1",
+  "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+  "snapshot_sha256": "1d913e9d655a038d7681f559e88c7ba5b70acb9b0bcba273adab4434ba2a6892",
+  "state": "prepared",
+  "transport_branch": "board-audit/pr-90",
+  "transport_head_sha": null,
+  "work_package_count": 12
+}

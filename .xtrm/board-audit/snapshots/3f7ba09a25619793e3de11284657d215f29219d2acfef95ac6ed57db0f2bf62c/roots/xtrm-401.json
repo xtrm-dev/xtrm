@@ -1,0 +1,1 @@
+{"issue_ids":["xtrm-401"],"open_issue_count":1,"root_id":"xtrm-401","schema_version":"xtrm.board-audit.pr-root.v1","source_sha256":"5d2a1b7db846445a71861b2e4e9675a4130271d9c8b367b9893b5af68227418a","title":"fix(service-knowledge): skill_activator decide() hard-blocks when the index is merely unimportable"}

@@ -1,0 +1,1 @@
+{"issue_ids":["xtrm-at9"],"open_issue_count":1,"root_id":"xtrm-at9","schema_version":"xtrm.board-audit.pr-root.v1","source_sha256":"92054a41a8f23af9f475c8e0f4f1109aff7c5299c34a604609e3af6c41d404c0","title":"board-audit exporter: sanitize transport projection to close gitleaks generic-api-key recurrence"}

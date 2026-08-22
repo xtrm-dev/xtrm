@@ -1,0 +1,39 @@
+{
+  "content_sha256": "7b5c28550618410968e8e19764d0c013f593bea5cb0348baf65c0b62b0c55001",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-w5m"
+  },
+  "issues": {
+    "xtrm-w5m": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "comment_count": 0,
+        "created_at": "2026-08-17T23:02:19Z",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "id": "xtrm-w5m",
+        "issue_type": "task",
+        "priority": 2,
+        "started_at": "2026-08-17T23:02:19Z",
+        "status": "in_progress",
+        "title": "Bench: direct AgentSession vs sp RPC RSS/CPU/wall",
+        "updated_at": "2026-08-17T23:02:19Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-w5m",
+  "root_title": "Bench: direct AgentSession vs sp RPC RSS/CPU/wall",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "open"
+}

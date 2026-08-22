@@ -1,0 +1,275 @@
+{
+  "open_issues": {
+    "xtrm-07e": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-07e.json",
+      "root_id": "xtrm-07e",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "32067ae5a6593a84b656ae07586f3daed62c93f5b39e2e6ef2d75f9b5648525e",
+      "state": "open"
+    },
+    "xtrm-2zd": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-2zd.json",
+      "root_id": "xtrm-2zd",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "acf8e9fa64c95310c60e9e0451394eabed151d18fac81eb8ad40a35ddd123838",
+      "state": "open"
+    },
+    "xtrm-2zd.1": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-2zd.1.json",
+      "root_id": "xtrm-2zd",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "218e8506ac3abd1615a80eac631bb158eb309f5c9d4b2a01236f66c178fbc925",
+      "state": "open"
+    },
+    "xtrm-2zd.2": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-2zd.2.json",
+      "root_id": "xtrm-2zd",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "b8199eef418195444b1f5aad7de96798eac73e43e90ae50891fe01f07e155f53",
+      "state": "open"
+    },
+    "xtrm-2zd.3": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-2zd.3.json",
+      "root_id": "xtrm-2zd",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "b7f12509ba7ae74a2de3fb4107b83e7e1c36df75ad76d44cb2240ce9bb35ac83",
+      "state": "open"
+    },
+    "xtrm-2zd.4": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-2zd.4.json",
+      "root_id": "xtrm-2zd",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "8374ff8914790dbec225d6635f596cb512217c2d8f29cbf7389ef11ff8efd821",
+      "state": "open"
+    },
+    "xtrm-401": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-401.json",
+      "root_id": "xtrm-401",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "5d2a1b7db846445a71861b2e4e9675a4130271d9c8b367b9893b5af68227418a",
+      "state": "open"
+    },
+    "xtrm-56flm": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-56flm.json",
+      "root_id": "xtrm-56flm",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "90271d9f08a6596492e10d441f01aab3f28fb2697b3a510dde1159eec8f00503",
+      "state": "open"
+    },
+    "xtrm-6e8": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-6e8.json",
+      "root_id": "xtrm-6e8",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "7ac18c2ea9937ece12d42aec190889aa5681517d599e1fa82b787368878a2957",
+      "state": "open"
+    },
+    "xtrm-8fo": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-8fo.json",
+      "root_id": "xtrm-8fo",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "de63173a61125acf98174a51f2c73c344c123254535a7225e6c25d0a7b68d4fa",
+      "state": "open"
+    },
+    "xtrm-at9": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-at9.json",
+      "root_id": "xtrm-at9",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "92054a41a8f23af9f475c8e0f4f1109aff7c5299c34a604609e3af6c41d404c0",
+      "state": "open"
+    },
+    "xtrm-cn8": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-cn8.json",
+      "root_id": "xtrm-cn8",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "9f14fb70415d8c2d25e019f5703e277267b5e8f20e3e27e65a4c51d706eac208",
+      "state": "open"
+    },
+    "xtrm-cn8.5": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-cn8.5.json",
+      "root_id": "xtrm-cn8",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "218398a990345d2c68151a183fab9fb1c87be550a48603d287446f4b1682fc19",
+      "state": "open"
+    },
+    "xtrm-cn8.6": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-cn8.6.json",
+      "root_id": "xtrm-cn8",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "2c94d09fab46de6024454b47143270354d1572df25e9cc2991318588ad8d1070",
+      "state": "open"
+    },
+    "xtrm-crz": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-crz.json",
+      "root_id": "xtrm-crz",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "f29298a48b55314762b77254ce98b2c0e7ee27778706f8b0e42fc4f57cc12eb2",
+      "state": "open"
+    },
+    "xtrm-h1r": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-h1r.json",
+      "root_id": "xtrm-h1r",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "1da99f36b8dac3a5e92b9bb089a0e9273de45fb847492ff623c31ad0fa1f4ef9",
+      "state": "open"
+    },
+    "xtrm-w5m": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-w5m.json",
+      "root_id": "xtrm-w5m",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "1bf80874a5918c1cc87be638872273cf238a5a37cfeca176efff5316b0c451c5",
+      "state": "open"
+    },
+    "xtrm-y9i": {
+      "file": "snapshots/3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c/issues/xtrm-y9i.json",
+      "root_id": "xtrm-y9i",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "source_sha256": "c5cc1b6cd95cb7a455e317da64cf3a52ea48ccf4d820d231529329e2711e9b34",
+      "state": "open"
+    }
+  },
+  "packages": {
+    "xtrm-07e": {
+      "base_package_sha256": "a65ad902ffdc93608f1b6c0840ca7c64db16eb30890686475d7df578717bd4ba",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-07e__release-flow-dev-integrates-main-stable-release-line-clone-safe-for-non-technical-users.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-07e__release-flow-dev-integrates-main-stable-release-line-clone-safe-for-non-technical-users.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    },
+    "xtrm-2zd": {
+      "base_package_sha256": "173df5067ad3ca7e173f0e8cdd3a45685916239b35135ba72c07b84abd99bbea",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-2zd__reconcile-mercury-devops-collaborator-with-xtrm-v1-runtime-and-ownership-semantics.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-2zd__reconcile-mercury-devops-collaborator-with-xtrm-v1-runtime-and-ownership-semantics.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    },
+    "xtrm-401": {
+      "base_package_sha256": "42e6e9e74fed92f14de2bfb99718e5e060cdb607d8ff239a6f8240b76a7a1cf7",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-401__fix-service-knowledge-skill-activator-decide-hard-blocks-when-the-index-is-merely-unimportable.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-401__fix-service-knowledge-skill-activator-decide-hard-blocks-when-the-index-is-merely-unimportable.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    },
+    "xtrm-56flm": {
+      "base_package_sha256": "367ffb3edc1ac044a89a5f5c2ef65e025f20f3f4953603942a2251d9f5630866",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-56flm__epic-service-skills-reframe-deterministic-verifier-evidence-first-retrieval.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-56flm__epic-service-skills-reframe-deterministic-verifier-evidence-first-retrieval.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    },
+    "xtrm-6e8": {
+      "base_package_sha256": "64f9ab0328084b37399cb500d473bf988523eb39c91160b47708186a131843c3",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-6e8__extend-service-knowledge-capabilities-for-docs-like-the-infra-telemetry-wiring-must-be-done-corr.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-6e8__extend-service-knowledge-capabilities-for-docs-like-the-infra-telemetry-wiring-must-be-done-corr.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    },
+    "xtrm-8fo": {
+      "base_package_sha256": "bfc1a33a0123d86e939c4c3348c405f3ca2b81ab961a225a29ab53e336b5255c",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-8fo__enable-ssh-commit-signing-required-signatures-on-xtrm-main.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-8fo__enable-ssh-commit-signing-required-signatures-on-xtrm-main.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    },
+    "xtrm-at9": {
+      "base_package_sha256": "1426a08ad7b88ca12c2c65eeef45ce3c03f9bd7cd92f4fc321b9b55336b51aa5",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-at9__board-audit-exporter-sanitize-transport-projection-to-close-gitleaks-generic-api-key-recurrence.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-at9__board-audit-exporter-sanitize-transport-projection-to-close-gitleaks-generic-api-key-recurrence.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    },
+    "xtrm-cn8": {
+      "base_package_sha256": "28fcaaf95b0707ec4f6b2c16337d852d1fb2bc66966d7ab5efcef8834f0a4863",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-cn8__runtime-architecture-doc-audit-canonicalization-programme.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-cn8__runtime-architecture-doc-audit-canonicalization-programme.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    },
+    "xtrm-crz": {
+      "base_package_sha256": "37f8679d8ee2dda3e3c0b23f0bd40e0f3af81e17ae3e78b9b19852acc3cef453",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-crz__fix-service-knowledge-make-drift-detection-ref-based-so-isolated-worktrees-work.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-crz__fix-service-knowledge-make-drift-detection-ref-based-so-isolated-worktrees-work.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    },
+    "xtrm-h1r": {
+      "base_package_sha256": "303c65936920623f83e356c7784bc90bf33ec91a78fd2dc0296591a74fca24ab",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-h1r__session-handoff-2026-06-14-pick-up-next-priorities.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-h1r__session-handoff-2026-06-14-pick-up-next-priorities.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    },
+    "xtrm-w5m": {
+      "base_package_sha256": "7b5c28550618410968e8e19764d0c013f593bea5cb0348baf65c0b62b0c55001",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-w5m__bench-direct-agentsession-vs-sp-rpc-rss-cpu-wall.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-w5m__bench-direct-agentsession-vs-sp-rpc-rss-cpu-wall.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    },
+    "xtrm-y9i": {
+      "base_package_sha256": "485c4f7556e7676494885ceff6c7443aae20a52311ca5be242c33ff910c6dfea",
+      "branch": "board-audit/pr-90",
+      "editable": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-y9i__session-handoff-2026-06-10-pick-up-next-priorities.editable.json",
+      "export_dir": ".xtrm/board-audit/exports/export-20260823T010841",
+      "manifest": ".xtrm/board-audit/exports/export-20260823T010841/manifest.json",
+      "package": ".xtrm/board-audit/exports/export-20260823T010841/work-packages/xtrm-y9i__session-handoff-2026-06-10-pick-up-next-priorities.json",
+      "selected_record_count": 18,
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:43Z"
+    }
+  },
+  "pr_checkpoints": {
+    "90": {
+      "branch": "board-audit/pr-90",
+      "handoff": "handoffs/pr-90.json",
+      "implementation_head_sha": "ca417341c459353847aa6a1b9f54dcbfdf9cf315",
+      "snapshot_id": "3f7ba09a25619793e3de11284657d215f29219d2acfef95ac6ed57db0f2bf62c",
+      "state": "prepared",
+      "updated_at": "2026-08-22T23:08:38Z"
+    }
+  },
+  "schema_version": "xtrm.board-audit.index.v1"
+}
