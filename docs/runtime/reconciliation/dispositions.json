@@ -1,112 +1,692 @@
 {
-"xtrm:docs/xtrm-MOC.md": ["archive", null, "historical design index (2026-06-21 state); provenance only"],
-"xtrm:docs/_meta/2026-06-21-design-reconciliation.md": ["archive", null, "HISTORICAL DECISION RECORD; extract still-valid contracts first"],
-"xtrm:docs/_meta/vault-workflow.md": ["keep", null, "editorial ops how-to; stays under _meta/"],
-"xtrm:docs/shared/xtrm-current-execution-plan.md": ["update_in_place", null, "canonical sequencing authority; R1/C1/A1/eval-lane corrections per runtime-decision-matrix"],
-"xtrm:docs/shared/xtrm-current-execution-plan.json": ["update_in_place", null, "pair-consistency with md required (fix 08-09 vs 08-10 last_reconciled drift)"],
-"xtrm:docs/shared/xtrm-v1-completion-ledger.md": ["update_in_place", null, "single cross-repo disposition index; carve out minimum-kernel exception"],
-"xtrm:docs/shared/xtrm-v1-completion-ledger.json": ["update_in_place", null, ""],
-"xtrm:docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md": ["absorb_then_archive", null, "self-declared sunset once §9 patches merged + plan refreshed; becomes provenance record"],
-"xtrm:docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.json": ["absorb_then_archive", null, "pairs with md"],
-"xtrm:docs/shared/xtrm-local-coordinator-bootstrap.md": ["archive", null, "stale pre-amendment duplication of plan gates"],
-"xtrm:docs/shared/xtrm-codex-kan-127-execution-note.md": ["keep", null, "programme sequencing companion (K0-K7); GATE-IFACE independence rule preserved"],
-"xtrm:docs/shared/xtrm-cli-actionable-outcomes-and-followups.md": ["update_in_place", null, "fix stale release baselines (0.11.2/0.2.2/3.21.1 vs released trio)"],
-"xtrm:docs/shared/xtrm-harness-native-adapters.md": ["move", "docs/runtime/harness/native-adapters.md", "adapter boundary doc to harness domain; fix stale MCP release-candidate claim"],
-"xtrm:docs/shared/xtrm-native-pi-tools-pi-extensible-workflows-integration-2026-07-30.md": ["update_in_place", null, "add REFERENCE DESIGN banner; reclassify as bounded authoring/cognition integration, never second durable runtime"],
-"xtrm:docs/shared/xtrm-deterministic-quant-pipelines-2026-08-10.md": ["move", "docs/research/", "quant vertical reference; leaves shared/"],
-"xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/architecture-decision-matrix-and-adr-index.md": ["absorb_then_archive", "docs/runtime/adr/", "35 decisions D-01..D-35 + ADR-01..10 ownership absorbed into ADR set + runtime-decision-matrix"],
-"xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/local-verification-packet.md": ["retain_as_evidence", "docs/runtime/reconciliation/verification-packet.md", "16-section bounded verification tracker"],
-"xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/native-chain-runtime-prd-draft.md": ["absorb_then_archive", "docs/runtime/prd/native-chain-runtime.md", "draft absorbed into canonical runtime PRD"],
-"xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/source-and-authority-register.md": ["absorb_then_archive", "docs/runtime/reconciliation/source-register.json", "superseded by programme-wide source register"],
-"xtrm:docs/tether.md": ["retain_as_evidence", null, "Shepherd sidecar design draft; fix conversations.md->channels links; long-term home specialists/design"],
-"xtrm:docs/improvements.md": ["archive", null, "personal research notes"],
-"xtrm:docs/state-store-options.md": ["update_in_place", null, "owner of storage-kernel decisions via §10.1 inbound refs; annotate daemon-timing supersession (packet D-08)"],
-"xtrm:docs/monorepo-migration.md": ["update_in_place", null, "accepted five-package target deferred by explicit gate; annotate packet D-12/C-12 refinement"],
-
-"specialists:docs/design/roadmap/specialists-roadmap.md": ["update_in_place", null, "W3: ChainSource terminology/participant split/ActivationSupervisor/capabilities/probes/reducer ownership/Channels placement/Beads projection/no-SRE-runtime"],
-"specialists:docs/design/roadmap/enhanced-prd.md": ["absorb_then_archive", "specialists:docs/design/roadmap/specialists-prd.md", "append-only accumulation -> historical copy + new current canonical PRD with WP continuity table (W4)"],
-"specialists:docs/design/roadmap/chains-prompt-evals.md": ["move", "specialists:docs/design/roadmap/history/chains-prompt-evals.md", "superseded by enhanced-prd (~98% overlap verified); port open decisions #1/#2 into successor first"],
-"specialists:docs/design/roadmap/current-release-snapshot.md": ["update_in_place", null, "refresh versions at write time"],
-"specialists:docs/design/roadmap/README.md": ["update_in_place", null, "fix counts (12 opps/13 formulas -> v3.3 baseline/15 formulas) and unitAI-sc03v reference"],
-"specialists:docs/design/execution-protocol-design/specialist-execution-protocol.md": ["update_in_place", null, "W3: activation identity/attempt/AgentSession/grants/probes/evidence/ActivationSupervisor/recovery/effect receipts"],
-"specialists:docs/design/execution-protocol-design/specialist-execution-protocol-ownership-decision.md": ["keep", null, "ten invariants preserved verbatim"],
-"specialists:docs/design/roadmap/history/handoff-from-substrate-design.md": ["keep", null, "history; banners correct"],
-"specialists:docs/design/roadmap/history/specialists-roadmap-v3.2-2026-07-24.md": ["keep", null, "history"],
-"specialists:docs/design/roadmap/history/substrate-reconciliation.md": ["keep", null, "history"],
-"specialists:docs/design/README.md": ["update_in_place", null, "refresh opportunity/template counts; drop temp_roadmap/unitAI refs"],
-"specialists:docs/design/audit-reconcile-v0724.md": ["replace_with_pointer", "core repo docs/design/audit-reconcile-v0724.md", "0-byte stub cited as evidence by PRD; point at core original or delete"],
-"specialists:docs/ARCHITECTURE.md": ["keep", null, "runtime boundary reference"],
-"specialists:docs/architecture.md": ["keep", null, "cache-layout addendum; optional rename"],
-"specialists:docs/TODO.md": ["delete_generated_copy", null, "empty frontmatter stub, no function"],
-
-"xtrm:docs/harness/README.md": ["update_in_place", null, "repoint exploration link to surviving copy"],
-"xtrm:docs/harness/experiments/README.md": ["keep", null, ""],
-"xtrm:docs/harness/experiments/agentsession-sre-chain-vertical-slice-2026-08-17.md": ["keep", null, "durable spec home of the SRE vertical-slice experiment"],
-"xtrm:docs/harness/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md": ["delete_generated_copy", null, "STALE duplicate blob 1d98420b; canonical superset = docs/shared blob 5bec00a3"],
-"xtrm:docs/harness/mercury-governed-research-harness-prd-draft-2026-08-10.md": ["retain_as_evidence", null, "non-authoritative PRD draft; add status banner"],
-"xtrm:docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md": ["move", "docs/harness/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md", "newer superset (blob 5bec00a3) is canonical evidence location; update inbound refs incl. Mercury PRD §22"],
-"xtrm:docs/research/prime-agent-xtrm-runtime-reference-2026-08-09.md": ["retain_as_evidence", null, "historical research"],
-"worktree_pr71:experiments/agentsession-sre-chain-vertical-slice/README.md": ["retain_as_evidence", null, "merge via PR #71 lineage"],
-"worktree_pr71:experiments/agentsession-sre-chain-vertical-slice/full-specialist-json-loader.md": ["retain_as_evidence", null, ""],
-"worktree_pr71:experiments/agentsession-sre-chain-vertical-slice/experiment-report.md": ["retain_as_evidence", null, ""],
-
-"xtrm:docs/channels/channels.md": ["update_in_place", null, "CANON; absorb plain_it §7 runtime.*/chain.incident.* delta into §5.3"],
-"xtrm:docs/channels/channels-upgrade.md": ["keep", null, "non-normative decision log; preserve two SUPERSEDED banners"],
-"xtrm:docs/channels/channels-forensic-attention-proposal.md": ["archive", null, "all Q1-Q7 resolved; add HISTORICAL banner + successor pointers"],
-"xtrm:docs/channels/channels_plain_it.md": ["update_in_place", null, "after §7 absorption demote to purely editorial translation"],
-"xtrm:docs/channels/channels.html": ["delete_generated_copy", null, "cosmetic export; regenerate on canonical change only"],
-"specialists:docs/design/substrate/channels.md": ["keep", null, "healthy relocation stub; model pattern for dispositions"],
-"xtrm:docs/substrate/substrate_design_it.md": ["update_in_place", null, "CANON rev12; correct §7/§13.4 channel-recap cursor drift (seq/msg_id -> id-cursor)"],
-"xtrm:docs/substrate/substrate_design_en.md": ["archive", null, "STALE banner since 2026-06-01, rev10; no unique current content vs IT rev12"],
-"xtrm:docs/premortem-substrate/synthesis.md": ["retain_as_evidence", null, "premortem synthesis with full disposition table"],
-"xtrm:docs/premortem-substrate/{out-01..09.md, reason-01..09.md, prompt-01..09.md, err-*.log, audit-dispatch.log, all-outputs.txt, report.html}": ["retain_as_evidence", null, "raw generated fan-out artifacts; sampled to confirm class; archive dir wholesale"],
-
-"core:docs/architecture/coordination-terminology.md": ["keep", null, ""],
-"core:docs/architecture/coordinator-branch-ancestry.md": ["keep", null, ""],
-"core:docs/architecture/interactive-role-envelope.md": ["keep", null, "forbidden supervision-field list is load-bearing"],
-"core:docs/architecture/repair-transaction.md": ["keep", null, ""],
-"core:docs/architecture/superseded-designs.md": ["update_in_place", null, "register delegation-architecture + orchestration-implementation as superseded"],
-"core:docs/cli-architecture.md": ["keep", null, ""],
-"core:docs/xt-pi-role.md": ["keep", null, ""],
-"core:docs/xt-topology.md": ["keep", null, ""],
-"core:docs/pi-extensions.md": ["keep", null, "canonical home for extension/package sync behavior"],
-"core:docs/skills-ownership.md": ["update_in_place", null, "remediate repo-vs-SSOT vendor drift (planning/test-planning triplication)"],
-"core:docs/xtrm-directory.md": ["keep", null, ""],
-"core:docs/xtrm-ui.md": ["keep", null, ""],
-"core:docs/design/command-outcome-v1.md": ["keep", null, "K2 contract; negative ResolvedChain boundary preserved"],
-"core:docs/design/codex-runtime-boundary.md": ["keep", null, "K1 ledger"],
-"core:docs/design/issuetracking.md": ["keep", null, "deferred design; validator-verdict model feeds ChainDefinition freeze gate"],
-"core:docs/design/memory-system-r6g.md": ["retain_as_evidence", null, "design input to R1.8, not plan of record; dead knowledgebasecerebras/openwiki links noted"],
-"core:docs/design/xtrm-orchestration-determinism-final-consolidated-report-2026-07-23.md": ["keep", null, "authoritative consolidated audit record"],
-"core:docs/plans/delegation-architecture.md": ["move", "core:docs/plans/deprecated/delegation-architecture.md", "pre-Specialists era; register in superseded-designs.md"],
-"core:docs/plans/orchestration-implementation.md": ["move", "core:docs/plans/deprecated/orchestration-implementation.md", ".jaggers era; register in superseded-designs.md"],
-"core:docs/plans/xtpi-worktree-first-flow.md": ["update_in_place", null, "reconcile memory-ack mechanism (KV vs marker file) + commit policy before keeping §3-§4 as canon"],
-"core:docs/runtime-compatibility.json": ["keep", null, ""],
-"core:docs/command-deprecations.json": ["keep", null, ""],
-"pi_skills:planning/SKILL.md": ["update_in_place", null, "future direction: intent -> ChainDefinition -> review/freeze -> ResolvedChain -> Beads materialization; byte-equal to global SSOT"],
-"pi_skills:test-planning/SKILL.md": ["update_in_place", null, "rename code-sanity -> seconder"],
-
-"xtrm:docs/telemetry/forensic-event-contract.md": ["keep", null, "SSOT envelope; C-1/C-2 conflicts recorded for follow-up fixes"],
-"xtrm:docs/telemetry/prometheus-projection-contract.md": ["update_in_place", null, "becomes single forbidden-label source; others demote to pointers"],
-"xtrm:docs/telemetry/agentops-event-catalog.md": ["update_in_place", null, "fix family taxonomy (C-2), eval naming (C-4), MCP liveness claim (C-1)"],
-"xtrm:docs/telemetry/prometheus-infra-console-handoff.md": ["keep", null, ""],
-"xtrm:docs/research/agentops-telemetry-for-specialists.md": ["archive", null, "research-historical; superseded metric names retracted"],
-"xtrm:docs/specialists/agentops-suite.md": ["replace_with_pointer", "specialists:docs/design/specialist-agentops-suite.md", "content-identical duplicate (+ -10.1 corruption); pointer wins"],
-"specialists:docs/design/specialist-agentops-suite.md": ["keep", null, "design-draft ancestor of Eval Core workstream E"],
-"specialists:docs/observability-metrics.md": ["update_in_place", null, "legacy-compat; footnote cost_usd display"],
-"core:docs/observability/prometheus-labels.md": ["update_in_place", null, "cross-reference projection contract as upstream label authority (C-6)"],
-"xtrm:docs/console/console-product-contract.md": ["keep", null, "canon product surface; refresh §15.1 after C-3"],
-"xtrm:docs/console/architecture/console-observability-spec.md": ["replace_with_pointer", "console:docs/architecture/console-observability-spec.md", "post-host-retirement reality owned by console repo (C-3)"],
-"xtrm:docs/console/architecture/console-architecture.md": ["replace_with_pointer", "console:docs/architecture/console-architecture.md", "gitboard-hosted model is stale (C-3)"],
-"console:docs/architecture/console-architecture.md": ["keep", null, "canonical owner post host-retirement"],
-"console:docs/architecture/daemon-read-model-contract.md": ["keep", null, "operative read-model authority"],
-"console:docs/xtrm-observability-prd.md": ["update_in_place", null, "add implementation-authority cross-link to observability spec"],
-"xtrm:docs/console/architecture/console-test-guards.md": ["replace_with_pointer", "console:docs/architecture/console-test-guards.md", "console repo owns test-guard checklist"],
-"xtrm:docs/console/architecture/apps-console-scaffold-preflight.md": ["archive", null, "bridge-era scaffold boundary; cites dead second-mind paths"],
-
-"xtrm:docs/substrate/chain_templates.md": ["update_in_place", null, "semantic canon until substrate catalog lands; fix stale §3 header/§3.14/3.15/§3.6/§3.9 + incident-policy claims; fix using-specialists-vN path cites"],
-"xtrm:docs/substrate/chain_templates.html": ["archive", null, "stale pre-restructure export; misrepresents catalog"],
-"xtrm:docs/chains.md": ["keep", null, "bridge doc; honor do-not-parse warning in telemetry work"],
-"specialists:docs/design/roadmap/chain-templates/README.md": ["update_in_place", null, "fix broken canonical pointer -> xtrm docs/substrate/chain_templates.md; add missing catalog rows (code-with-tests/test-only); explain formulas are ChainSource compatibility assets"],
-"xtrm:docs/specs placeholder": ["ignore", null, ""]
+ "xtrm:docs/xtrm-MOC.md": [
+  "archive",
+  null,
+  "historical design index (2026-06-21 state); provenance only"
+ ],
+ "xtrm:docs/_meta/2026-06-21-design-reconciliation.md": [
+  "archive",
+  null,
+  "HISTORICAL DECISION RECORD; extract still-valid contracts first"
+ ],
+ "xtrm:docs/_meta/vault-workflow.md": [
+  "keep",
+  null,
+  "editorial ops how-to; stays under _meta/"
+ ],
+ "xtrm:docs/shared/xtrm-current-execution-plan.md": [
+  "update_in_place",
+  null,
+  "canonical sequencing authority; R1/C1/A1/eval-lane corrections per runtime-decision-matrix"
+ ],
+ "xtrm:docs/shared/xtrm-current-execution-plan.json": [
+  "update_in_place",
+  null,
+  "pair-consistency with md required (fix 08-09 vs 08-10 last_reconciled drift)"
+ ],
+ "xtrm:docs/shared/xtrm-v1-completion-ledger.md": [
+  "update_in_place",
+  null,
+  "single cross-repo disposition index; carve out minimum-kernel exception"
+ ],
+ "xtrm:docs/shared/xtrm-v1-completion-ledger.json": [
+  "update_in_place",
+  null,
+  ""
+ ],
+ "xtrm:docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md": [
+  "absorb_then_archive",
+  null,
+  "self-declared sunset once \u00a79 patches merged + plan refreshed; becomes provenance record"
+ ],
+ "xtrm:docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.json": [
+  "absorb_then_archive",
+  null,
+  "pairs with md"
+ ],
+ "xtrm:docs/shared/xtrm-local-coordinator-bootstrap.md": [
+  "archive",
+  null,
+  "stale pre-amendment duplication of plan gates"
+ ],
+ "xtrm:docs/shared/xtrm-codex-kan-127-execution-note.md": [
+  "keep",
+  null,
+  "programme sequencing companion (K0-K7); GATE-IFACE independence rule preserved"
+ ],
+ "xtrm:docs/shared/xtrm-cli-actionable-outcomes-and-followups.md": [
+  "update_in_place",
+  null,
+  "fix stale release baselines (0.11.2/0.2.2/3.21.1 vs released trio)"
+ ],
+ "xtrm:docs/shared/xtrm-harness-native-adapters.md": [
+  "move",
+  "docs/runtime/harness/native-adapters.md",
+  "adapter boundary doc to harness domain; fix stale MCP release-candidate claim"
+ ],
+ "xtrm:docs/shared/xtrm-native-pi-tools-pi-extensible-workflows-integration-2026-07-30.md": [
+  "update_in_place",
+  null,
+  "add REFERENCE DESIGN banner; reclassify as bounded authoring/cognition integration, never second durable runtime"
+ ],
+ "xtrm:docs/shared/xtrm-deterministic-quant-pipelines-2026-08-10.md": [
+  "move",
+  "docs/research/",
+  "quant vertical reference; leaves shared/"
+ ],
+ "xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/architecture-decision-matrix-and-adr-index.md": [
+  "absorb_then_archive",
+  "docs/runtime/adr/",
+  "35 decisions D-01..D-35 + ADR-01..10 ownership absorbed into ADR set + runtime-decision-matrix"
+ ],
+ "xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/local-verification-packet.md": [
+  "retain_as_evidence",
+  "docs/runtime/reconciliation/verification-packet.md",
+  "16-section bounded verification tracker"
+ ],
+ "xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/native-chain-runtime-prd-draft.md": [
+  "absorb_then_archive",
+  "docs/runtime/prd/native-chain-runtime.md",
+  "draft absorbed into canonical runtime PRD"
+ ],
+ "xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/source-and-authority-register.md": [
+  "absorb_then_archive",
+  "docs/runtime/reconciliation/source-register.json",
+  "superseded by programme-wide source register"
+ ],
+ "xtrm:docs/tether.md": [
+  "retain_as_evidence",
+  null,
+  "Shepherd sidecar design draft; fix conversations.md->channels links; long-term home specialists/design"
+ ],
+ "xtrm:docs/improvements.md": [
+  "archive",
+  null,
+  "personal research notes"
+ ],
+ "xtrm:docs/state-store-options.md": [
+  "update_in_place",
+  null,
+  "owner of storage-kernel decisions via \u00a710.1 inbound refs; annotate daemon-timing supersession (packet D-08)"
+ ],
+ "xtrm:docs/monorepo-migration.md": [
+  "update_in_place",
+  null,
+  "accepted five-package target deferred by explicit gate; annotate packet D-12/C-12 refinement"
+ ],
+ "specialists:docs/design/roadmap/specialists-roadmap.md": [
+  "update_in_place",
+  null,
+  "W3: ChainSource terminology/participant split/ActivationSupervisor/capabilities/probes/reducer ownership/Channels placement/Beads projection/no-SRE-runtime"
+ ],
+ "specialists:docs/design/roadmap/enhanced-prd.md": [
+  "absorb_then_archive",
+  "specialists:docs/design/roadmap/specialists-prd.md",
+  "append-only accumulation -> historical copy + new current canonical PRD with WP continuity table (W4)"
+ ],
+ "specialists:docs/design/roadmap/chains-prompt-evals.md": [
+  "move",
+  "specialists:docs/design/roadmap/history/chains-prompt-evals.md",
+  "superseded by enhanced-prd (~98% overlap verified); port open decisions #1/#2 into successor first"
+ ],
+ "specialists:docs/design/roadmap/current-release-snapshot.md": [
+  "update_in_place",
+  null,
+  "refresh versions at write time"
+ ],
+ "specialists:docs/design/roadmap/README.md": [
+  "update_in_place",
+  null,
+  "fix counts (12 opps/13 formulas -> v3.3 baseline/15 formulas) and unitAI-sc03v reference"
+ ],
+ "specialists:docs/design/execution-protocol-design/specialist-execution-protocol.md": [
+  "update_in_place",
+  null,
+  "W3: activation identity/attempt/AgentSession/grants/probes/evidence/ActivationSupervisor/recovery/effect receipts"
+ ],
+ "specialists:docs/design/execution-protocol-design/specialist-execution-protocol-ownership-decision.md": [
+  "keep",
+  null,
+  "ten invariants preserved verbatim"
+ ],
+ "specialists:docs/design/roadmap/history/handoff-from-substrate-design.md": [
+  "keep",
+  null,
+  "history; banners correct"
+ ],
+ "specialists:docs/design/roadmap/history/specialists-roadmap-v3.2-2026-07-24.md": [
+  "keep",
+  null,
+  "history"
+ ],
+ "specialists:docs/design/roadmap/history/substrate-reconciliation.md": [
+  "keep",
+  null,
+  "history"
+ ],
+ "specialists:docs/design/README.md": [
+  "update_in_place",
+  null,
+  "refresh opportunity/template counts; drop temp_roadmap/unitAI refs"
+ ],
+ "specialists:docs/design/audit-reconcile-v0724.md": [
+  "replace_with_pointer",
+  "core repo docs/design/audit-reconcile-v0724.md",
+  "0-byte stub cited as evidence by PRD; point at core original or delete"
+ ],
+ "specialists:docs/ARCHITECTURE.md": [
+  "keep",
+  null,
+  "runtime boundary reference"
+ ],
+ "specialists:docs/architecture.md": [
+  "keep",
+  null,
+  "cache-layout addendum; optional rename"
+ ],
+ "specialists:docs/TODO.md": [
+  "delete_generated_copy",
+  null,
+  "empty frontmatter stub, no function"
+ ],
+ "xtrm:docs/harness/README.md": [
+  "update_in_place",
+  null,
+  "repoint exploration link to surviving copy"
+ ],
+ "xtrm:docs/harness/experiments/README.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "xtrm:docs/harness/experiments/agentsession-sre-chain-vertical-slice-2026-08-17.md": [
+  "keep",
+  null,
+  "durable spec home of the SRE vertical-slice experiment"
+ ],
+ "xtrm:docs/harness/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md": [
+  "delete_generated_copy",
+  null,
+  "STALE duplicate blob 1d98420b; canonical superset = docs/shared blob 5bec00a3"
+ ],
+ "xtrm:docs/harness/mercury-governed-research-harness-prd-draft-2026-08-10.md": [
+  "retain_as_evidence",
+  null,
+  "non-authoritative PRD draft; add status banner"
+ ],
+ "xtrm:docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md": [
+  "move",
+  "docs/harness/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md",
+  "newer superset (blob 5bec00a3) is canonical evidence location; update inbound refs incl. Mercury PRD \u00a722"
+ ],
+ "xtrm:docs/research/prime-agent-xtrm-runtime-reference-2026-08-09.md": [
+  "retain_as_evidence",
+  null,
+  "historical research"
+ ],
+ "worktree_pr71:experiments/agentsession-sre-chain-vertical-slice/README.md": [
+  "retain_as_evidence",
+  null,
+  "merge via PR #71 lineage"
+ ],
+ "worktree_pr71:experiments/agentsession-sre-chain-vertical-slice/full-specialist-json-loader.md": [
+  "retain_as_evidence",
+  null,
+  ""
+ ],
+ "worktree_pr71:experiments/agentsession-sre-chain-vertical-slice/experiment-report.md": [
+  "retain_as_evidence",
+  null,
+  ""
+ ],
+ "xtrm:docs/channels/channels.md": [
+  "update_in_place",
+  null,
+  "CANON; absorb plain_it \u00a77 runtime.*/chain.incident.* delta into \u00a75.3"
+ ],
+ "xtrm:docs/channels/channels-upgrade.md": [
+  "keep",
+  null,
+  "non-normative decision log; preserve two SUPERSEDED banners"
+ ],
+ "xtrm:docs/channels/channels-forensic-attention-proposal.md": [
+  "archive",
+  null,
+  "all Q1-Q7 resolved; add HISTORICAL banner + successor pointers"
+ ],
+ "xtrm:docs/channels/channels_plain_it.md": [
+  "update_in_place",
+  null,
+  "after \u00a77 absorption demote to purely editorial translation"
+ ],
+ "xtrm:docs/channels/channels.html": [
+  "delete_generated_copy",
+  null,
+  "cosmetic export; regenerate on canonical change only"
+ ],
+ "specialists:docs/design/substrate/channels.md": [
+  "keep",
+  null,
+  "healthy relocation stub; model pattern for dispositions"
+ ],
+ "xtrm:docs/substrate/substrate_design_it.md": [
+  "update_in_place",
+  null,
+  "CANON rev12; correct \u00a77/\u00a713.4 channel-recap cursor drift (seq/msg_id -> id-cursor)"
+ ],
+ "xtrm:docs/substrate/substrate_design_en.md": [
+  "archive",
+  null,
+  "STALE banner since 2026-06-01, rev10; no unique current content vs IT rev12"
+ ],
+ "xtrm:docs/premortem-substrate/synthesis.md": [
+  "retain_as_evidence",
+  null,
+  "premortem synthesis with full disposition table"
+ ],
+ "xtrm:docs/premortem-substrate/{out-01..09.md, reason-01..09.md, prompt-01..09.md, err-*.log, audit-dispatch.log, all-outputs.txt, report.html}": [
+  "retain_as_evidence",
+  null,
+  "raw generated fan-out artifacts; sampled to confirm class; archive dir wholesale"
+ ],
+ "core:docs/architecture/coordination-terminology.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "core:docs/architecture/coordinator-branch-ancestry.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "core:docs/architecture/interactive-role-envelope.md": [
+  "keep",
+  null,
+  "forbidden supervision-field list is load-bearing"
+ ],
+ "core:docs/architecture/repair-transaction.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "core:docs/architecture/superseded-designs.md": [
+  "update_in_place",
+  null,
+  "register delegation-architecture + orchestration-implementation as superseded"
+ ],
+ "core:docs/cli-architecture.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "core:docs/xt-pi-role.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "core:docs/xt-topology.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "core:docs/pi-extensions.md": [
+  "keep",
+  null,
+  "canonical home for extension/package sync behavior"
+ ],
+ "core:docs/skills-ownership.md": [
+  "update_in_place",
+  null,
+  "remediate repo-vs-SSOT vendor drift (planning/test-planning triplication)"
+ ],
+ "core:docs/xtrm-directory.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "core:docs/xtrm-ui.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "core:docs/design/command-outcome-v1.md": [
+  "keep",
+  null,
+  "K2 contract; negative ResolvedChain boundary preserved"
+ ],
+ "core:docs/design/codex-runtime-boundary.md": [
+  "keep",
+  null,
+  "K1 ledger"
+ ],
+ "core:docs/design/issuetracking.md": [
+  "keep",
+  null,
+  "deferred design; validator-verdict model feeds ChainDefinition freeze gate"
+ ],
+ "core:docs/design/memory-system-r6g.md": [
+  "retain_as_evidence",
+  null,
+  "design input to R1.8, not plan of record; dead knowledgebasecerebras/openwiki links noted"
+ ],
+ "core:docs/design/xtrm-orchestration-determinism-final-consolidated-report-2026-07-23.md": [
+  "keep",
+  null,
+  "authoritative consolidated audit record"
+ ],
+ "core:docs/plans/delegation-architecture.md": [
+  "move",
+  "core:docs/plans/deprecated/delegation-architecture.md",
+  "pre-Specialists era; register in superseded-designs.md"
+ ],
+ "core:docs/plans/orchestration-implementation.md": [
+  "move",
+  "core:docs/plans/deprecated/orchestration-implementation.md",
+  ".jaggers era; register in superseded-designs.md"
+ ],
+ "core:docs/plans/xtpi-worktree-first-flow.md": [
+  "update_in_place",
+  null,
+  "reconcile memory-ack mechanism (KV vs marker file) + commit policy before keeping \u00a73-\u00a74 as canon"
+ ],
+ "core:docs/runtime-compatibility.json": [
+  "keep",
+  null,
+  ""
+ ],
+ "core:docs/command-deprecations.json": [
+  "keep",
+  null,
+  ""
+ ],
+ "pi_skills:planning/SKILL.md": [
+  "update_in_place",
+  null,
+  "future direction: intent -> ChainDefinition -> review/freeze -> ResolvedChain -> Beads materialization; byte-equal to global SSOT"
+ ],
+ "pi_skills:test-planning/SKILL.md": [
+  "update_in_place",
+  null,
+  "rename code-sanity -> seconder"
+ ],
+ "xtrm:docs/telemetry/forensic-event-contract.md": [
+  "keep",
+  null,
+  "SSOT envelope; C-1/C-2 conflicts recorded for follow-up fixes"
+ ],
+ "xtrm:docs/telemetry/prometheus-projection-contract.md": [
+  "update_in_place",
+  null,
+  "becomes single forbidden-label source; others demote to pointers"
+ ],
+ "xtrm:docs/telemetry/agentops-event-catalog.md": [
+  "update_in_place",
+  null,
+  "fix family taxonomy (C-2), eval naming (C-4), MCP liveness claim (C-1)"
+ ],
+ "xtrm:docs/telemetry/prometheus-infra-console-handoff.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "xtrm:docs/research/agentops-telemetry-for-specialists.md": [
+  "archive",
+  null,
+  "research-historical; superseded metric names retracted"
+ ],
+ "xtrm:docs/specialists/agentops-suite.md": [
+  "replace_with_pointer",
+  "specialists:docs/design/specialist-agentops-suite.md",
+  "content-identical duplicate (+ -10.1 corruption); pointer wins"
+ ],
+ "specialists:docs/design/specialist-agentops-suite.md": [
+  "keep",
+  null,
+  "design-draft ancestor of Eval Core workstream E"
+ ],
+ "specialists:docs/observability-metrics.md": [
+  "update_in_place",
+  null,
+  "legacy-compat; footnote cost_usd display"
+ ],
+ "core:docs/observability/prometheus-labels.md": [
+  "update_in_place",
+  null,
+  "cross-reference projection contract as upstream label authority (C-6)"
+ ],
+ "xtrm:docs/console/console-product-contract.md": [
+  "keep",
+  null,
+  "canon product surface; refresh \u00a715.1 after C-3"
+ ],
+ "xtrm:docs/console/architecture/console-observability-spec.md": [
+  "replace_with_pointer",
+  "console:docs/architecture/console-observability-spec.md",
+  "post-host-retirement reality owned by console repo (C-3)"
+ ],
+ "xtrm:docs/console/architecture/console-architecture.md": [
+  "replace_with_pointer",
+  "console:docs/architecture/console-architecture.md",
+  "gitboard-hosted model is stale (C-3)"
+ ],
+ "console:docs/architecture/console-architecture.md": [
+  "keep",
+  null,
+  "canonical owner post host-retirement"
+ ],
+ "console:docs/architecture/daemon-read-model-contract.md": [
+  "keep",
+  null,
+  "operative read-model authority"
+ ],
+ "console:docs/xtrm-observability-prd.md": [
+  "update_in_place",
+  null,
+  "add implementation-authority cross-link to observability spec"
+ ],
+ "xtrm:docs/console/architecture/console-test-guards.md": [
+  "replace_with_pointer",
+  "console:docs/architecture/console-test-guards.md",
+  "console repo owns test-guard checklist"
+ ],
+ "xtrm:docs/console/architecture/apps-console-scaffold-preflight.md": [
+  "archive",
+  null,
+  "bridge-era scaffold boundary; cites dead second-mind paths"
+ ],
+ "xtrm:docs/substrate/chain_templates.md": [
+  "update_in_place",
+  null,
+  "semantic canon until substrate catalog lands; fix stale \u00a73 header/\u00a73.14/3.15/\u00a73.6/\u00a73.9 + incident-policy claims; fix using-specialists-vN path cites"
+ ],
+ "xtrm:docs/substrate/chain_templates.html": [
+  "archive",
+  null,
+  "stale pre-restructure export; misrepresents catalog"
+ ],
+ "xtrm:docs/chains.md": [
+  "keep",
+  null,
+  "bridge doc; honor do-not-parse warning in telemetry work"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/README.md": [
+  "update_in_place",
+  null,
+  "fix broken canonical pointer -> xtrm docs/substrate/chain_templates.md; add missing catalog rows (code-with-tests/test-only); explain formulas are ChainSource compatibility assets"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/code-quick.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/code-standard.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/code-with-advisors.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/code-with-tests.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format; FIX obligations-scanner unconditional-needs defect (code-with-tests)"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/debug.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/doc-sync.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/memory-hygiene.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/planning.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/premortem.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/release-prep.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/research-only.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/restitch.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/security-deep.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/test-only.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "specialists:docs/design/roadmap/chain-templates/triage.formula.json": [
+  "absorb_then_archive",
+  "runtime ChainDefinition source corpus",
+  "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format"
+ ],
+ "core:docs/specs/SCHEMA.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "core:docs/specs/CHANGE-CONTRACT-SHAPE.md": [
+  "keep",
+  null,
+  "planner root contract = future ChainSource variant input"
+ ],
+ "core:docs/specs/UPSTREAM-DEPENDENCIES.md": [
+  "update_in_place",
+  null,
+  "refresh formula count 13->15"
+ ],
+ "core:docs/specs/VALIDATE-JSON.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "core:docs/specs/ARCHIVE-GATE.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "xtrm:docs/premortem-substrate/_context.md": [
+  "retain_as_evidence",
+  null,
+  ""
+ ],
+ "xtrm:docs/premortem-substrate/audit-brief.md": [
+  "retain_as_evidence",
+  null,
+  ""
+ ],
+ "xtrm:docs/premortem-substrate/audit-result.md": [
+  "retain_as_evidence",
+  null,
+  ""
+ ],
+ "xtmux:docs/ts-sqlite.md": [
+  "keep",
+  null,
+  "SQLite V2 shipped-status override section 27 is authoritative"
+ ],
+ "xtmux:docs/ts-sqlite-domains-4-7-8.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "xtmux:docs/observability-redesign.md": [
+  "keep",
+  null,
+  "V2 default-on"
+ ],
+ "xtmux:docs/xtmux-gaps.md": [
+  "keep",
+  null,
+  "event-family naming drift vs shipped journal recorded as follow-up"
+ ],
+ "xtmux:docs/bridge.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "xtmux:docs/agent-state-hooks.md": [
+  "keep",
+  null,
+  ""
+ ],
+ "xtmux:docs/json-command-api.md": [
+  "keep",
+  null,
+  "coordination budgets preserved"
+ ],
+ "xtmux:docs/INSTALL.md": [
+  "keep",
+  null,
+  "placeholder links in fenced block are false positives"
+ ],
+ "xtmux:docs/design/adr/adr001-navigation-design.md": [
+  "keep",
+  null,
+  "v1 design spec; cross-link with ADR pair member"
+ ],
+ "xtmux:docs/design/adr/adr001-xtmux-nav.md": [
+  "keep",
+  null,
+  "accepted decision record of the pair"
+ ],
+ "xtmux:docs/codex-characterization-k1.md": [
+  "keep",
+  null,
+  "preserve explicit SUPERSEDED banners if moved"
+ ],
+ "console:apps/console/src/server/runtime-lifecycle.ts": [
+  "keep",
+  null,
+  "source-code evidence (not a doc): console data-plane lifecycle only, no agent supervision"
+ ]
 }

@@ -36,11 +36,15 @@ def _norm_repo(val, path):
         return "worktree_pr71"
     if ".pi/agent/skills" in v or ".pi/agent/skills" in p:
         return "pi_skills"
-    if "specialists" in v or p.startswith(("docs/design/", "docs/archive")) or \
-       p in ("docs/TODO.md", "docs/ARCHITECTURE.md", "docs/architecture.md"):
+    if "specialists" in v:
         return "specialists"
-    if "/core" in v:
+    if "/core" in v or v.endswith("core") or v == "core":
         return "core"
+    if not v or v in ("None", "unknown"):
+        # repo value silent -> infer from path
+        if p.startswith(("docs/design/", "docs/archive")) or \
+           p in ("docs/TODO.md", "docs/ARCHITECTURE.md", "docs/architecture.md"):
+            return "specialists"
     if "xtmux" in v:
         return "xtmux"
     if "console" in v:
@@ -48,7 +52,18 @@ def _norm_repo(val, path):
     return "xtrm"
 
 def key(row):
-    return f'{row.get("repository","")}:{row.get("path","")}'
+    p = str(row.get("path", ""))
+    if row.get("repository") == "pi_skills":
+        import os
+        dn = os.path.dirname(p)
+        if "test-planning" in p:
+            d = "test-planning"
+        elif "planning" in dn or "/planning/" in p or dn == "planning":
+            d = "planning"
+        else:
+            d = os.path.basename(dn)
+        return f'pi_skills:{d}/{os.path.basename(p)}'
+    return f'{row.get("repository","")}:{p}'
 
 # Coordinator normalizations after direct verification (see reconciliation log):
 # - two console docs skimmed by lane-i were fully read by coordinator -> complete

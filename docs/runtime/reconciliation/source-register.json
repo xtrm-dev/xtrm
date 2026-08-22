@@ -1704,7 +1704,8 @@
     "notes": "No project-local copy exists under /home/dawid/dev/xtrm/.agents/skills/ (only beads skill there). UPSTREAM-DEPENDENCIES pins the upstream copy to ~/dev/specialists/config/skills/planning/SKILL.md \u2014 a THIRD variant location to reconcile.",
     "_lane": "lane-c-source-register",
     "_lanes": [
-      "lane-c-source-register.json"
+      "lane-c-source-register.json",
+      "lane-h-source-register.json"
     ]
   },
   {
@@ -1743,7 +1744,8 @@
     "notes": "Same three-location situation as planning skill.",
     "_lane": "lane-c-source-register",
     "_lanes": [
-      "lane-c-source-register.json"
+      "lane-c-source-register.json",
+      "lane-h-source-register.json"
     ]
   },
   {
@@ -2891,7 +2893,7 @@
     ]
   },
   {
-    "repository": "specialists",
+    "repository": "xtmux",
     "path": "docs/design/adr/adr001-navigation-design.md",
     "sha": "51d90d39b182743c7f9143e15bc723fb69dd37b6",
     "bytes": 20158,
@@ -2927,7 +2929,7 @@
     ]
   },
   {
-    "repository": "specialists",
+    "repository": "xtmux",
     "path": "docs/design/adr/adr001-xtmux-nav.md",
     "sha": "afdf96342cf25534a07c66c84b56bc9f0aba95a6",
     "bytes": 14496,
@@ -3450,7 +3452,7 @@
     ]
   },
   {
-    "repository": "specialists",
+    "repository": "core",
     "path": "docs/design/command-outcome-v1.md",
     "sha": "d4c6efeb486744ddf1c111c776d7a13acc10ced9",
     "bytes": 3765,
@@ -3484,7 +3486,7 @@
     ]
   },
   {
-    "repository": "specialists",
+    "repository": "core",
     "path": "docs/design/codex-runtime-boundary.md",
     "sha": "8603f7a6b7f830601c9de15f420ff6d7e806a9f7",
     "bytes": 8733,
@@ -3518,7 +3520,7 @@
     ]
   },
   {
-    "repository": "specialists",
+    "repository": "core",
     "path": "docs/design/issuetracking.md",
     "sha": "e62d3241ca06bb8da948106f41195e57d7274481",
     "bytes": 10132,
@@ -3552,7 +3554,7 @@
     ]
   },
   {
-    "repository": "specialists",
+    "repository": "core",
     "path": "docs/design/memory-system-r6g.md",
     "sha": "8ccfb91c542128dce7ea4a4204b5a2d62b6fa0c3",
     "bytes": 44283,
@@ -3587,7 +3589,7 @@
     ]
   },
   {
-    "repository": "specialists",
+    "repository": "core",
     "path": "docs/design/xtrm-orchestration-determinism-final-consolidated-report-2026-07-23.md",
     "sha": "a09bb9f6329a25c5fb04881dd6f9190e4e1eaa68",
     "bytes": 86996,
@@ -3788,83 +3790,6 @@
     ]
   },
   {
-    "repository": "pi_skills",
-    "path": "/home/dawid/.pi/agent/skills/planning/SKILL.md",
-    "sha": "not-git-tracked-here; byte-equal to ~/.xtrm/skills/default/planning/SKILL.md (diff verified); core repo counterpart skills/planning/SKILL.md @HEAD = 36430e4b0ccf9e57c3d6be0cf289dd94670b4398 (451 lines, OLDER)",
-    "bytes": 32268,
-    "lines": 670,
-    "read_status": "complete",
-    "classification": "skill-canonical-content (SSOT copy ahead of repo copy)",
-    "domain": [
-      "planning",
-      "beads"
-    ],
-    "authority_for": [
-      "effective planning workflow as shipped",
-      "7-section bead contract",
-      "single-invocation board creation mechanics",
-      "draft capture mode",
-      "dependency edge taxonomy"
-    ],
-    "duplicate_of": "~/.xtrm/skills/default/planning/SKILL.md",
-    "supersedes": "core repo HEAD copy (older revision)",
-    "superseded_by": null,
-    "conflicts_with": [
-      "core repo skills/planning/SKILL.md @HEAD (drift C1)"
-    ],
-    "disposition": "preserve mechanics; re-establish vendor invariant (repo upstream, regenerate SSOT)",
-    "target_path": "skills/planning/SKILL.md (core repo) after sync",
-    "unique_requirements_to_preserve": [
-      "see lane-h-planner-modernization.json mechanics_worth_preserving (quoted verbatim)"
-    ],
-    "notes": "Repo copy lacks draft-capture mode, telemetry/validation contracts, library-first survey record in LIBRARIES section.",
-    "_lane": "lane-h-source-register",
-    "_lanes": [
-      "lane-h-source-register.json"
-    ]
-  },
-  {
-    "repository": "pi_skills",
-    "path": "/home/dawid/.pi/agent/skills/test-planning/SKILL.md",
-    "sha": "not-git-tracked-here; byte-equal to ~/.xtrm/skills/default/test-planning/SKILL.md (diff verified); core repo counterpart skills/test-planning/SKILL.md @HEAD = 2669cec4d1c28475df33f3177ec2e55b7518a1f4 (465 lines, OLDER)",
-    "bytes": 27940,
-    "lines": 542,
-    "read_status": "complete",
-    "classification": "skill-canonical-content (SSOT copy ahead of repo copy)",
-    "domain": [
-      "test-planning",
-      "beads"
-    ],
-    "authority_for": [
-      "layer detection (core/boundary/shell/operational-agentic)",
-      "live-first preference order",
-      "smoke/E2E mandatory-for-integrated-behavior rule",
-      "telemetry assertion requirements",
-      "anti-pattern checklist",
-      "priority heuristics",
-      "critical-path coverage framing",
-      "advisory vs enforcement boundary"
-    ],
-    "duplicate_of": "~/.xtrm/skills/default/test-planning/SKILL.md",
-    "supersedes": "core repo HEAD copy (two-trigger older revision)",
-    "superseded_by": null,
-    "conflicts_with": [
-      "core repo skills/test-planning/SKILL.md @HEAD (drift C1)"
-    ],
-    "disposition": "preserve mechanics; re-establish vendor invariant",
-    "target_path": "skills/test-planning/SKILL.md (core repo) after sync",
-    "unique_requirements_to_preserve": [
-      "Trigger 2 (specialist-chain test authoring) and Trigger 3 (closure gate) must survive",
-      "typecheck/lint are evidence only, never the behavioral test gate",
-      "test issue is a tracked commitment, not a gate; gating opt-in via bd deps"
-    ],
-    "notes": "evals/ directories exist alongside both skills in core repo (skills/*/evals/evals.json) \u2014 not read, out of lane scope.",
-    "_lane": "lane-h-source-register",
-    "_lanes": [
-      "lane-h-source-register.json"
-    ]
-  },
-  {
     "repo": "xtrm",
     "path": "docs/telemetry/forensic-event-contract.md",
     "blob_sha": "7b1810cb9db5d0467b8bdd296113e89ed1f751ca",
@@ -4001,7 +3926,7 @@
     "read": "complete",
     "role": "core-side cardinality guardrail (11.md P3-04): MUST-NOT label list, where identity fields DO live, allowed dimensions, 10k-series redesign threshold",
     "classification": "current-canon (core scope)",
-    "repository": "xtrm",
+    "repository": "core",
     "read_status": "complete",
     "_lane": "lane-i-source-register",
     "_lanes": [

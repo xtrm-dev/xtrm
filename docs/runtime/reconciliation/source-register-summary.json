@@ -1,6 +1,6 @@
 {
-  "TOTAL_FILES": 140,
-  "FULLY_READ": 137,
+  "TOTAL_FILES": 138,
+  "FULLY_READ": 135,
   "PARTIAL": 0,
   "UNREAD": 0,
   "UNCLASSIFIED": 0,
@@ -21,7 +21,7 @@
     "unclassified": 0
   },
   "BROKEN_LINKS_REPORTED": 165,
-  "AUTHORITY_CONFLICTS": 10,
+  "AUTHORITY_CONFLICTS": 14,
   "REGISTER_CONFLICTS": [
     {
       "key": "specialists:docs/design/roadmap/current-release-snapshot.md",
@@ -132,7 +132,55 @@
       ]
     },
     {
-      "key": "specialists:docs/design/memory-system-r6g.md",
+      "key": "pi_skills:planning/SKILL.md",
+      "field": "classification",
+      "values": [
+        "operational-skill",
+        "skill-canonical-content (SSOT copy ahead of repo copy)"
+      ],
+      "sources": [
+        "lane-c-source-register",
+        "lane-h-source-register.json"
+      ]
+    },
+    {
+      "key": "pi_skills:planning/SKILL.md",
+      "field": "disposition",
+      "values": [
+        "align-with-xml-contract-direction",
+        "preserve mechanics; re-establish vendor invariant (repo upstream, regenerate SSOT)"
+      ],
+      "sources": [
+        "lane-c-source-register",
+        "lane-h-source-register.json"
+      ]
+    },
+    {
+      "key": "pi_skills:test-planning/SKILL.md",
+      "field": "classification",
+      "values": [
+        "operational-skill",
+        "skill-canonical-content (SSOT copy ahead of repo copy)"
+      ],
+      "sources": [
+        "lane-c-source-register",
+        "lane-h-source-register.json"
+      ]
+    },
+    {
+      "key": "pi_skills:test-planning/SKILL.md",
+      "field": "disposition",
+      "values": [
+        "keep; rename stale role references",
+        "preserve mechanics; re-establish vendor invariant"
+      ],
+      "sources": [
+        "lane-c-source-register",
+        "lane-h-source-register.json"
+      ]
+    },
+    {
+      "key": "core:docs/design/memory-system-r6g.md",
       "field": "classification",
       "values": [
         "research-design",

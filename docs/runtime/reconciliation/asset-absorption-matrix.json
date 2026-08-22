@@ -1002,6 +1002,77 @@
       ]
     },
     {
+      "current_path": "docs/design/command-outcome-v1.md",
+      "repository": "core",
+      "sha": "d4c6efeb486744ddf1c111c776d7a13acc10ced9",
+      "bytes": 3765,
+      "classification": "design-contract",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "K2 contract; negative ResolvedChain boundary preserved",
+      "_lanes": [
+        "lane-h-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/codex-runtime-boundary.md",
+      "repository": "core",
+      "sha": "8603f7a6b7f830601c9de15f420ff6d7e806a9f7",
+      "bytes": 8733,
+      "classification": "design-evidence",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "K1 ledger",
+      "_lanes": [
+        "lane-h-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/issuetracking.md",
+      "repository": "core",
+      "sha": "e62d3241ca06bb8da948106f41195e57d7274481",
+      "bytes": 10132,
+      "classification": "deferred-design",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "deferred design; validator-verdict model feeds ChainDefinition freeze gate",
+      "_lanes": [
+        "lane-h-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/memory-system-r6g.md",
+      "repository": "core",
+      "sha": "8ccfb91c542128dce7ea4a4204b5a2d62b6fa0c3",
+      "bytes": 44283,
+      "classification": "research-design",
+      "read_status": "complete",
+      "disposition": "retain_as_evidence",
+      "target_path": null,
+      "unique_content_preserved": "design input to R1.8, not plan of record; dead knowledgebasecerebras/openwiki links noted",
+      "_lanes": [
+        "lane-h-source-register.json",
+        "lane-i-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/xtrm-orchestration-determinism-final-consolidated-report-2026-07-23.md",
+      "repository": "core",
+      "sha": "a09bb9f6329a25c5fb04881dd6f9190e4e1eaa68",
+      "bytes": 86996,
+      "classification": "consolidated-audit-record",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "authoritative consolidated audit record",
+      "_lanes": [
+        "lane-h-source-register.json"
+      ]
+    },
+    {
       "current_path": "docs/plans/delegation-architecture.md",
       "repository": "core",
       "sha": "291e1b3c84876921fc5a432af4be102f9ca4c794",
@@ -1082,7 +1153,8 @@
       "target_path": null,
       "unique_content_preserved": "future direction: intent -> ChainDefinition -> review/freeze -> ResolvedChain -> Beads materialization; byte-equal to global SSOT",
       "_lanes": [
-        "lane-c-source-register.json"
+        "lane-c-source-register.json",
+        "lane-h-source-register.json"
       ]
     },
     {
@@ -1096,7 +1168,8 @@
       "target_path": null,
       "unique_content_preserved": "rename code-sanity -> seconder",
       "_lanes": [
-        "lane-c-source-register.json"
+        "lane-c-source-register.json",
+        "lane-h-source-register.json"
       ]
     },
     {
@@ -1207,6 +1280,20 @@
       "disposition": "update_in_place",
       "target_path": null,
       "unique_content_preserved": "legacy-compat; footnote cost_usd display",
+      "_lanes": [
+        "lane-i-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/observability/prometheus-labels.md",
+      "repository": "core",
+      "sha": "26bb8fba45eefc600d4dfa334efeb7df17e48b77",
+      "bytes": 2073,
+      "classification": "current-canon (core scope)",
+      "read_status": "complete",
+      "disposition": "update_in_place",
+      "target_path": null,
+      "unique_content_preserved": "cross-reference projection contract as upstream label authority (C-6)",
       "_lanes": [
         "lane-i-source-register.json"
       ]
@@ -1377,6 +1464,496 @@
       "unique_content_preserved": "fix broken canonical pointer -> xtrm docs/substrate/chain_templates.md; add missing catalog rows (code-with-tests/test-only); explain formulas are ChainSource compatibility assets",
       "_lanes": [
         "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/code-quick.formula.json",
+      "repository": "specialists",
+      "sha": "b755029c928208df7716ca136585ddc8d537a27a",
+      "bytes": 1587,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/code-standard.formula.json",
+      "repository": "specialists",
+      "sha": "09408570a3d5d2400fc882d369ef0fd733da70b8",
+      "bytes": 5444,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/code-with-advisors.formula.json",
+      "repository": "specialists",
+      "sha": "e6342c5b2661775d580da56b6929ef670d1c7751",
+      "bytes": 4910,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/code-with-tests.formula.json",
+      "repository": "specialists",
+      "sha": "44a1c19d44f6f865f44166f44e9a89c8d26cc323",
+      "bytes": 5110,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format; FIX obligations-scanner unconditional-needs defect (code-with-tests)",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/debug.formula.json",
+      "repository": "specialists",
+      "sha": "bea83e04983762a3403b3397c0d4beacbdf62d59",
+      "bytes": 4858,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/doc-sync.formula.json",
+      "repository": "specialists",
+      "sha": "a45170ff74bec64285e88868f855772c6af8a8d5",
+      "bytes": 1937,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/memory-hygiene.formula.json",
+      "repository": "specialists",
+      "sha": "a11ba4e0cb43b2d3b99989db78a4fc74eb1545e5",
+      "bytes": 2354,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/planning.formula.json",
+      "repository": "specialists",
+      "sha": "c5fb452a06970893f592ae9a2d9dc795646efa5b",
+      "bytes": 2047,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/premortem.formula.json",
+      "repository": "specialists",
+      "sha": "3243d7fbf805f5de2eb5b095b7cccff986bdec04",
+      "bytes": 2340,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/release-prep.formula.json",
+      "repository": "specialists",
+      "sha": "ce3fece1aa7fb49b4eec07b74d2a5f9fef08ad1b",
+      "bytes": 2638,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/research-only.formula.json",
+      "repository": "specialists",
+      "sha": "afbe3dc9de3e41f0c71d9ede3885b36d69e11a02",
+      "bytes": 2165,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/restitch.formula.json",
+      "repository": "specialists",
+      "sha": "9dbc41ca1ce6a00147e3e9a93555d240842a1e70",
+      "bytes": 5087,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/security-deep.formula.json",
+      "repository": "specialists",
+      "sha": "8d57614bae080e03468ac3552b6ea5de5a211fa6",
+      "bytes": 6901,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/test-only.formula.json",
+      "repository": "specialists",
+      "sha": "d8ab6be1622055e99c658fbd75fd302d786e7f88",
+      "bytes": 3264,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/roadmap/chain-templates/triage.formula.json",
+      "repository": "specialists",
+      "sha": "e1a971c287b6529c96d2e47fb6f73cca996474b5",
+      "bytes": 3039,
+      "classification": "legacy-materialization-format",
+      "read_status": "complete",
+      "disposition": "absorb_then_archive",
+      "target_path": "runtime ChainDefinition source corpus",
+      "unique_content_preserved": "executable shape authority per canon precedence rule; migrate to ChainDefinition corpus then retire format",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/specs/SCHEMA.md",
+      "repository": "core",
+      "sha": "0aacae63dae8af40db3100d8fcc522bb198b38aa",
+      "bytes": null,
+      "classification": "spec-contract",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/specs/CHANGE-CONTRACT-SHAPE.md",
+      "repository": "core",
+      "sha": "e59f7afdd624d32ce9c784a0a355dde60cf9ee3a",
+      "bytes": null,
+      "classification": "spec-contract",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "planner root contract = future ChainSource variant input",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/specs/UPSTREAM-DEPENDENCIES.md",
+      "repository": "core",
+      "sha": "011634770e59fa16a2e844f5238da52a063b87a6",
+      "bytes": null,
+      "classification": "spec-contract",
+      "read_status": "complete",
+      "disposition": "update_in_place",
+      "target_path": null,
+      "unique_content_preserved": "refresh formula count 13->15",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/specs/VALIDATE-JSON.md",
+      "repository": "core",
+      "sha": "fc8117bf022fa9e93b747ec857a0489563f2df3f",
+      "bytes": null,
+      "classification": "spec-contract",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/specs/ARCHIVE-GATE.md",
+      "repository": "core",
+      "sha": "b72e396e80f673b1a128e1544d239b94aa96d2fd",
+      "bytes": null,
+      "classification": "spec-contract",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "",
+      "_lanes": [
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/premortem-substrate/_context.md",
+      "repository": "xtrm",
+      "sha": "77762a3c521f602736130fb3d777610d28bc8862",
+      "bytes": 5255,
+      "classification": "generated-frame-input",
+      "read_status": "complete",
+      "disposition": "retain_as_evidence",
+      "target_path": null,
+      "unique_content_preserved": "",
+      "_lanes": [
+        "lane-f-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/premortem-substrate/audit-brief.md",
+      "repository": "xtrm",
+      "sha": "b4da7a3f8ff14b0b5f8cd7512c9b1f9ccf92a044",
+      "bytes": 5558,
+      "classification": "audit-brief-input",
+      "read_status": "complete",
+      "disposition": "retain_as_evidence",
+      "target_path": null,
+      "unique_content_preserved": "",
+      "_lanes": [
+        "lane-f-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/premortem-substrate/audit-result.md",
+      "repository": "xtrm",
+      "sha": "ecd0bc992149b4b3f4e59ece05ba87cef24bf2a4",
+      "bytes": 13738,
+      "classification": "audit-verdicts",
+      "read_status": "complete",
+      "disposition": "retain_as_evidence",
+      "target_path": null,
+      "unique_content_preserved": "",
+      "_lanes": [
+        "lane-f-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/ts-sqlite.md",
+      "repository": "xtmux",
+      "sha": "cc90b469db9dd3aa5e17d7b0b04b5656477cb697",
+      "bytes": 37828,
+      "classification": "normative-prd-with-shipped-amendment",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "SQLite V2 shipped-status override section 27 is authoritative",
+      "_lanes": [
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/ts-sqlite-domains-4-7-8.md",
+      "repository": "xtmux",
+      "sha": "cdeb481b6d25549557c36a43492a925b4371daa0",
+      "bytes": 22395,
+      "classification": "phase-design-record",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "",
+      "_lanes": [
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/observability-redesign.md",
+      "repository": "xtmux",
+      "sha": "3228299b18338ce46bda2e829c5eb946f65d046d",
+      "bytes": 51582,
+      "classification": "current-shipped-implementation-record",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "V2 default-on",
+      "_lanes": [
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/xtmux-gaps.md",
+      "repository": "xtmux",
+      "sha": "979c82d575da85467fbec552f3f233d789887029",
+      "bytes": 40278,
+      "classification": "cross-repo-integration-guidance",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "event-family naming drift vs shipped journal recorded as follow-up",
+      "_lanes": [
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/bridge.md",
+      "repository": "xtmux",
+      "sha": "20c6b51a2d9a35dc785132226267c6f6215f49c0",
+      "bytes": 4230,
+      "classification": "security-deployment-doc",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "",
+      "_lanes": [
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/agent-state-hooks.md",
+      "repository": "xtmux",
+      "sha": "c34cf60ac9f2df7d167e6e22b3c205d25a64e9ea",
+      "bytes": 32852,
+      "classification": "runtime-behavior-reference",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "",
+      "_lanes": [
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/json-command-api.md",
+      "repository": "xtmux",
+      "sha": "e05a86a4d24fbaada862d5bb0fd0c08ac82c8bac",
+      "bytes": 33301,
+      "classification": "machine-boundary-contract",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "coordination budgets preserved",
+      "_lanes": [
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/INSTALL.md",
+      "repository": "xtmux",
+      "sha": "726a4072e1a01464c3c86d5a7ce48c71f82297c5",
+      "bytes": 7998,
+      "classification": "operator-procedure",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "placeholder links in fenced block are false positives",
+      "_lanes": [
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/adr/adr001-navigation-design.md",
+      "repository": "xtmux",
+      "sha": "51d90d39b182743c7f9143e15bc723fb69dd37b6",
+      "bytes": 20158,
+      "classification": "v1-design-spec",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "v1 design spec; cross-link with ADR pair member",
+      "_lanes": [
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/design/adr/adr001-xtmux-nav.md",
+      "repository": "xtmux",
+      "sha": "afdf96342cf25534a07c66c84b56bc9f0aba95a6",
+      "bytes": 14496,
+      "classification": "accepted-adr",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "accepted decision record of the pair",
+      "_lanes": [
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "current_path": "docs/codex-characterization-k1.md",
+      "repository": "xtmux",
+      "sha": "266f45c7b403754389e06c881a465740783e4c0c",
+      "bytes": 9065,
+      "classification": "historical-characterization-banner-managed",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "preserve explicit SUPERSEDED banners if moved",
+      "_lanes": [
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "current_path": "apps/console/src/server/runtime-lifecycle.ts",
+      "repository": "console",
+      "sha": "5bcab9c5c3e2c692699ae84d7165cf1bb0e43dd2",
+      "bytes": 11208,
+      "classification": "current-console-source",
+      "read_status": "complete",
+      "disposition": "keep",
+      "target_path": null,
+      "unique_content_preserved": "source-code evidence (not a doc): console data-plane lifecycle only, no agent supervision",
+      "_lanes": [
+        "lane-g-source-register.json"
       ]
     }
   ]
