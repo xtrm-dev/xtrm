@@ -1,0 +1,143 @@
+{
+  "lane": "D",
+  "programme_epic": "xtrm-cn8",
+  "generated": "2026-08-19",
+  "repos": {
+    "main": { "path": "/home/dawid/dev/xtrm", "head": "4f6ac48c4e0b" },
+    "worktree_pr71": { "path": "/home/dawid/dev/xtrm-wt/pr71-loader", "branch": "web/full-specialist-json-loader-2026-08-18", "head": "818da6553a213b3a798de329ba3219bc5688f38f" }
+  },
+  "rows": [
+    {
+      "id": "D1",
+      "path": "docs/harness/README.md",
+      "repo": "main",
+      "blob_sha": "d67d40fc843cd5c3132b47497929300a51673638",
+      "tracked": true,
+      "classification": "index",
+      "disposition": "keep-as-index; update link target to docs/shared/ exploration copy after dedup",
+      "read_completely": true
+    },
+    {
+      "id": "D2",
+      "path": "docs/harness/experiments/README.md",
+      "repo": "main",
+      "blob_sha": "04fcdde6c0ccbe35c1d0d07cbb64e480c302dc71",
+      "tracked": true,
+      "classification": "index",
+      "disposition": "keep; non-canonical experiments registry, source-discipline rules restated",
+      "read_completely": true
+    },
+    {
+      "id": "D3",
+      "path": "docs/harness/experiments/agentsession-sre-chain-vertical-slice-2026-08-17.md",
+      "repo": "main",
+      "blob_sha": "dd09a54489a170036279ad57e49c98a04c7ba7db",
+      "tracked": true,
+      "classification": "experiment-spec",
+      "disposition": "canonical experiment specification; durable home confirmed (docs/harness/experiments/)",
+      "read_completely": true
+    },
+    {
+      "id": "D4",
+      "path": "docs/harness/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md",
+      "repo": "main",
+      "blob_sha": "1d98420b9defecefa9e2adcc3d862e0caf1eec29",
+      "tracked": true,
+      "classification": "duplicate",
+      "disposition": "STALE DUPLICATE of D6 — missing header programme-tracking line and entire §29; delete or replace with pointer to D6",
+      "read_completely": true
+    },
+    {
+      "id": "D5",
+      "path": "docs/harness/mercury-governed-research-harness-prd-draft-2026-08-10.md",
+      "repo": "main",
+      "blob_sha": "cadba277891f5927aa5dc8bf750051437cd9eb76",
+      "tracked": true,
+      "classification": "prd-draft-non-authoritative",
+      "disposition": "keep as draft; self-declares non-authoritative; references D6 shared path in §22 baseline",
+      "read_completely": true
+    },
+    {
+      "id": "D6",
+      "path": "docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md",
+      "repo": "main",
+      "blob_sha": "5bec00a34bca9351887a50bf60e195bf456f6627",
+      "tracked": true,
+      "classification": "architecture-exploration",
+      "disposition": "CANONICAL newer copy (superset: +header tracking line, +§29 prime-agent findings); recommended single canonical evidence/provenance location for the exploration doc",
+      "read_completely": true
+    },
+    {
+      "id": "D7",
+      "path": "docs/research/prime-agent-xtrm-runtime-reference-2026-08-09.md",
+      "repo": "main",
+      "blob_sha": "a20184bd5a964c43f6064e9020f0c14f8e5d3557",
+      "tracked": true,
+      "classification": "historical-research",
+      "disposition": "keep as provenance/reference; predates §29 code-level findings; superseded on prime-agent internals detail by D6 §29 where they overlap",
+      "read_completely": true
+    },
+    {
+      "id": "D8",
+      "path": "experiments/agentsession-sre-chain-vertical-slice/README.md",
+      "repo": "worktree_pr71",
+      "blob_sha": "ad9c0c7f9fed8dac6f05378665cd5167132a265b",
+      "tracked": true,
+      "worktree_clean": true,
+      "classification": "experiment-evidence",
+      "disposition": "canonical experiment README once PR #71 lineage merges; documents full-JSON authority boundary",
+      "read_completely": true
+    },
+    {
+      "id": "D9",
+      "path": "experiments/agentsession-sre-chain-vertical-slice/full-specialist-json-loader.md",
+      "repo": "worktree_pr71",
+      "blob_sha": "75e647a3e077f6af163c8117b6d25a48b81dfc4d",
+      "tracked": true,
+      "worktree_clean": true,
+      "classification": "experiment-evidence",
+      "disposition": "canonical loader/compiler boundary doc; lists 8 remaining runtime-fusion tasks that do not reopen the AgentSession hosting decision",
+      "read_completely": true
+    },
+    {
+      "id": "D10",
+      "path": "experiments/agentsession-sre-chain-vertical-slice/experiment-report.md",
+      "repo": "worktree_pr71",
+      "blob_sha": "4ea24748821a55a8d621aee855114fcbbf15aef1",
+      "tracked": true,
+      "worktree_clean": true,
+      "classification": "experiment-evidence",
+      "disposition": "primary run/report evidence incl. reconciliation pass §10 and sp-vs-direct bench §13; merge with branch",
+      "read_completely": true
+    }
+  ],
+  "native_harness_copy_inventory": {
+    "unique_blobs": [
+      { "sha": "5bec00a34bca9351887a50bf60e195bf456f6627", "status": "newer-canonical", "locations": ["docs/shared/ (main)", "docs/shared/ (all 9 other checkouts: .xtrm/worktrees/{xtrm-xt-pi-e6tq,xtrm-xt-pi-on12,xtrm-xt-pi-q43q,xtrm-xt-pi-board-audit-revamp,xtrm-xt-claude-tq2v-worker,xtrm-xt-pi-xcfn,xtrm-xt-claude-board-audit-review}, xtrm-wt/main-baseline-check, xtrm-wt/pr71-loader)"] },
+      { "sha": "1d98420b9defecefa9e2adcc3d862e0caf1eec29", "status": "stale-duplicate", "locations": ["docs/harness/ (main)", "docs/harness/ (all 9 other checkouts listed above)"] }
+    ],
+    "third_variant_found": false,
+    "recommendation": "single canonical evidence/provenance location: docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md @ 5bec00a3"
+  },
+  "source_verification": {
+    "scope": "bounded read of worktree experiments/agentsession-sre-chain-vertical-slice src|tests|scripts",
+    "key_files": [
+      "src/agents/bridge.ts (createAgentSession import; noTools builtin @161)",
+      "src/agents/specialist-bridge.ts (noTools builtin @148)",
+      "src/chain/scheduler.ts (Promise.all dispatch concurrency ~L376-396)",
+      "src/specialists/loader.ts (Zod passthrough schema, sha256 fingerprints)",
+      "src/specialists/bindings.ts (fail-closed source/skill drift checks)",
+      "tests/beads-adapter.test.ts, tests/channels.test.ts, tests/authority-adversarial.test.ts, tests/sre-exec-authority.test.ts"
+    ],
+    "uncommitted_worktree_changes": [
+      "M src/adapters/beads.ts",
+      "M src/agents/bridge.ts",
+      "M src/agents/specialist-bridge.ts",
+      "M src/chain/scheduler.ts",
+      "M src/chain/topology.ts",
+      "?? handoff/",
+      "?? src/agents/model-resolver.ts"
+    ],
+    "not_found_in_scope": ["PREPARE", "FINALIZE", "ActivationSupervisor"]
+  }
+}

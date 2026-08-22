@@ -1,0 +1,97 @@
+{
+  "lane": "F",
+  "name": "minimal-durability-kernel-candidate",
+  "principle": "Bring forward only the durability invariants that make agent work recoverable, attributable, and replay-safe NOW on the existing runtime (observability.db + bd + git + shipped forensic v1). None of these requires the substrate daemon/state-store programme as a prerequisite. Each item cites its canonical source so the full substrate design can later absorb it without semantic drift.",
+  "prerequisite_programmes_required": [],
+  "items": [
+    {
+      "id": "MDK-1",
+      "name": "Stable IDs",
+      "content": "Colon-separated stable identifiers (chain:<id>, node:<id>, epic:<id>, pair:<uuid>); hierarchical sub-scopes with /. Container ID == its channel workstream ID so they cannot drift.",
+      "canonical_source": "substrate_design_it.md §2.1; channels.md:118-125",
+      "status_now": "already de-facto used by bridge work and channels design",
+      "bring_forward_as": "naming/identity convention enforced in current runtime tables"
+    },
+    {
+      "id": "MDK-2",
+      "name": "ChainRun / Container identity with three axes",
+      "content": "Minimal container record: {id, kind, state} plus membership parent_id (mutable structural), provenance opened_by/opened_reason/origin_chain (immutable historical), ownership owned_by (mutable responsible-actor-now). Provenance chain to root reconstructible by following opened_by.",
+      "canonical_source": "substrate_design_it.md §2.6, §13.3 containers table",
+      "status_now": "chain identity today is worktree-rooted lineage; formalize the record",
+      "bring_forward_as": "a containers-shaped table or bd-molecule-backed view with the three axes"
+    },
+    {
+      "id": "MDK-3",
+      "name": "Participant / activation lineage (L3 vs L4)",
+      "content": "participant_id stable per (scope, role) across re-activations; job_id new per activation/run; L1 kind / L2 role are the only label-safe identity fields; two activations of same role+scope = same participant_id, distinct job_id.",
+      "canonical_source": "substrate_design_it.md §2.7",
+      "status_now": "already adopted bridge-side by forensic-event-contract (shipped) and roadmap Opp 18",
+      "bring_forward_as": "persist participant_id alongside job_id in job/event rows (forensic v1 already carries it)"
+    },
+    {
+      "id": "MDK-4",
+      "name": "Append-only effect receipts (idempotency keys)",
+      "content": "Every external effect gated on a stable idempotency key before execution; replay re-checks and skips committed effects. Canonical key list: resume intent (channel_id,msg_id,target); system.* emission; forensic write (deterministic event id); evidence write (content-addressed); edge derivation UNIQUE(...); projection watermark; judge timeout.",
+      "canonical_source": "channels.md:249-258; substrate_design_it.md §5.8 pulse_dedup",
+      "status_now": "pattern shipped for pulse dedup conceptually; not yet uniform",
+      "bring_forward_as": "uniform receipts table or per-domain unique constraints in observability.db"
+    },
+    {
+      "id": "MDK-5",
+      "name": "Forensic dual-write through one envelope writer",
+      "content": "Significant mutations emit xtrm.forensic.v1 events via the shared envelope writer; mechanical vs domain families kept separate; no caller hand-builds event JSON; forensics are audit facts only, never authority.",
+      "canonical_source": "channels.md §10.5; substrate_design_it.md §2.8; SSOT telemetry/forensic-event-contract.md (SHIPPED in specialists repo)",
+      "status_now": "SHIPPED (src/specialist/forensic-events.ts, sp forensic)",
+      "bring_forward_as": "keep shipping; extend adoption to channel/container mutations"
+    },
+    {
+      "id": "MDK-6",
+      "name": "Execution lineage: evidence as the durable side of live/persisted dual-write",
+      "content": "A result is written live (channel/stream) AND persisted durably (evidence refs: diff ref, verdict ref, test ref, checklist) keyed by issue/step; tracing never depends on a stream surviving. Journal-with-state-snapshot-and-gap-detection pattern for any long-running actor (checkpoint cadence: persist at checkpoints, not clean exit).",
+      "canonical_source": "substrate_design_it.md §6.8, §5.9, §13.3 evidence_json",
+      "status_now": "specialist_results persists verbose output; structured evidence_json not yet materialized",
+      "bring_forward_as": "structured evidence records attached to beads/jobs at completion"
+    },
+    {
+      "id": "MDK-7",
+      "name": "Projections recomputable from an append-only truth stream",
+      "content": "Truth is the stream; every projection/cache is a pure fold over (stream + durable edges) recomputable from a watermark; monotonic cursor changesSince(cursor) is the read surface contract.",
+      "canonical_source": "channels.md §5.9; substrate_design_it.md §17.1 change-tracking face",
+      "status_now": "container_progress designed; observability.db already append-only events",
+      "bring_forward_as": "watermark discipline on any derived state built now"
+    },
+    {
+      "id": "MDK-8",
+      "name": "Explicit uncertain / degraded state is recorded, never silently dropped",
+      "content": "failure_class transient|semantic carried on failures; escalated suspension state preserves worktree+evidence; degrade-not-reject outcomes persisted (edge provenance unverified_endpoint, closed:with_followups flag, coordinator_release_missing fallback reason).",
+      "canonical_source": "substrate_design_it.md §5.10, §6.10.1 resolution, §4.3 role-4 resolution; channels.md §5.8 endpoint validation",
+      "status_now": "absent — failures today are prose in reports",
+      "bring_forward_as": "failure_class + degraded-outcome fields on job/chain close records"
+    },
+    {
+      "id": "MDK-9",
+      "name": "Replay-safe recovery: never destroy work on failure",
+      "content": "Destruction of worktrees/diffs/findings is always a deliberate decision (abandoned), never a side effect; failed runs preserve evidence for resume (transient) or improvement (semantic); reducer-pure/effect-in-after-hook split so crash-recovery replays never double-fire.",
+      "canonical_source": "substrate_design_it.md §5.10, §3.1; channels.md §11 reducer purity invariant",
+      "status_now": "worktrees preserved by operator discipline; not runtime-guaranteed",
+      "bring_forward_as": "preserve-on-failure rule in run/chain teardown paths"
+    },
+    {
+      "id": "MDK-10",
+      "name": "Backup-before-migration + integrity-check rollback predicate",
+      "content": "Before destructive schema/migration steps: WAL checkpoint, hot-copy backup under exclusive lock; post-step PRAGMA integrity_check + foreign_key_check must be clean or rollback path engages; backups immutable; rollback requires operator approval and writes a migration.rollback forensic event.",
+      "canonical_source": "state-store-options.md §10.2 (kernel-side authoritative version of substrate §13.8 Stage 0 gate)",
+      "status_now": "not implemented anywhere; pattern applies to any store migration done now",
+      "bring_forward_as": "operational procedure for current migrations (bd/observability.db)"
+    }
+  ],
+  "explicitly_not_in_kernel": [
+    "substrate daemon + Unix socket + state.db (Stage 0 programme)",
+    "five-package monorepo layout",
+    "any container lifecycle beyond recording identity/state",
+    "chain-template engine, seed planning, epic/wave/node kinds",
+    "collision matrix, plan artifacts, validator stages, tether, console",
+    "two-tier Supabase projection"
+  ],
+  "constraint": "Premortem R2 freeze rule: no new architectural section absorbs into canon without merged-PR runtime receipt; R9: non-author reviewer sign-off required. The kernel must ship as runtime behavior/receipts, not as new doc sections ahead of implementation."
+}

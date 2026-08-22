@@ -1,0 +1,23 @@
+{
+  "schema": "lane-b-source-register/v1",
+  "repo": "/home/dawid/dev/specialists",
+  "commit": "0253e3e4b823de419bf1acc54f07eb618e10a054",
+  "bead": "xtrm-cn8.1",
+  "rows": [
+    {"path": "docs/design/roadmap/specialists-roadmap.md", "blob_sha": "d944fa66588074ea9469454daa1bfcd67dc4a2ce", "bytes": 18233, "lines": 361, "read": "complete", "role": "canonical roadmap v3.3 baseline; authority for Opportunities/architecture", "classification": "current-canon"},
+    {"path": "docs/design/roadmap/enhanced-prd.md", "blob_sha": "e737b377a520d19b0bbcaf4cdbab434b9ba9f754", "bytes": 226491, "lines": 4617, "read": "complete", "role": "requirements canon; WP definitions; AC0/DO0 gates", "classification": "current-canon"},
+    {"path": "docs/design/roadmap/chains-prompt-evals.md", "blob_sha": "fdb5ab20d89a3591d7c5b0715b26276adf40851f", "bytes": 140018, "lines": 3054, "read": "complete", "role": "12 July PRD predecessor of enhanced-prd.md; superseded with named residuals", "classification": "superseded-historical"},
+    {"path": "docs/design/roadmap/current-release-snapshot.md", "blob_sha": "2831bd1c89ebb46cef91ab2d1c24c92445d84a2b", "bytes": 7733, "lines": 164, "read": "complete", "role": "mutable current-state ledger (reconciled 2026-08-02); authority for delivered/partial/unimplemented", "classification": "current-canon"},
+    {"path": "docs/design/roadmap/README.md", "blob_sha": "f2eec2cca8f3aaa93cf42c329be0337eaf64a703", "bytes": 5003, "lines": 80, "read": "complete", "role": "roadmap index; authority-by-claim-type table", "classification": "current-canon"},
+    {"path": "docs/design/execution-protocol-design/specialist-execution-protocol.md", "blob_sha": "cee2d85b0aecc112733a12d1bfba98e373cbd8c2", "bytes": 27596, "lines": 992, "read": "complete", "role": "canonical specialists.execution.v1 design (PREPARE/PLAN/EXECUTE/FINALIZE)", "classification": "current-canon"},
+    {"path": "docs/design/execution-protocol-design/specialist-execution-protocol-ownership-decision.md", "blob_sha": "b157d5bf99b133d22de08d7dd4e98361251cfbed", "bytes": 5885, "lines": 150, "read": "complete", "role": "ownership decision + 10 invariants for the execution protocol", "classification": "current-canon"},
+    {"path": "docs/design/roadmap/history/handoff-from-substrate-design.md", "blob_sha": "ce60d65555acc01be68f0f0306496fb0dde870ea", "bytes": 14465, "lines": 86, "read": "complete", "role": "historical substrate handoff context only", "classification": "history"},
+    {"path": "docs/design/roadmap/history/specialists-roadmap-v3.2-2026-07-24.md", "blob_sha": "fad131432c2035f4a29021a21a1aa8a060f90320", "bytes": 175082, "lines": 1356, "read": "complete", "role": "archived pre-v3.3 roadmap: Opportunities 1-19, D1-D30, phases, §A bridge economics, §B ownership split", "classification": "history"},
+    {"path": "docs/design/roadmap/history/substrate-reconciliation.md", "blob_sha": "65ff5e75ec79770ca4054ab211f1f4e428d1b48b", "bytes": 16490, "lines": 104, "read": "complete", "role": "v2-vs-substrate-rev-9 decision delta; absorbed into v3.x roadmap", "classification": "history"},
+    {"path": "docs/design/README.md", "blob_sha": "96621d2a673434dcf08ce3f0a84764eb4411e6fa", "bytes": 2836, "lines": 36, "read": "complete", "role": "design navigation index; stale in places (says 12 opportunities/13 templates vs current state)", "classification": "current-index-stale-details"},
+    {"path": "docs/design/audit-reconcile-v0724.md", "blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", "bytes": 0, "lines": 0, "read": "complete (empty)", "role": "EMPTY FILE at HEAD — git empty blob. PRD cites audit-reconcile-v0724 as current closure evidence; the PRD companion list points at xtrm-dev/core for the real file; this specialists copy is an empty placeholder", "classification": "empty-placeholder"},
+    {"path": "docs/ARCHITECTURE.md", "blob_sha": "b6516b5f523ccc0de88b8087973f185d5f2cb532", "bytes": 50366, "lines": 1168, "read": "complete", "role": "runtime architecture reference (supervisor/timeline/worktree/rpc); NOT a duplicate of docs/architecture.md", "classification": "current-reference"},
+    {"path": "docs/architecture.md", "blob_sha": "8400d62ef7ac035964571de0321f168d0b55edf5", "bytes": 578, "lines": 11, "read": "complete", "role": "small addendum on benchmark/probe cache layout only; different blob, different title, no duplication of ARCHITECTURE.md", "classification": "current-reference-addendum"},
+    {"path": "docs/TODO.md", "blob_sha": "2a828e00adf24884f3a3df7698c1c5c369bb2753", "bytes": 99, "lines": 9, "read": "complete", "role": "frontmatter stub only, no content", "classification": "stub"}
+  ]
+}

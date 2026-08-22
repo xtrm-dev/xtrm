@@ -1,0 +1,215 @@
+{
+  "lane": "E",
+  "domain": "channels",
+  "contract_kind": "canonical runtime-reference contract (extracted from existing canon; no second messaging contract proposed)",
+  "canonical_owner": "/home/dawid/dev/xtrm/docs/channels/channels.md",
+  "invariants": [
+    {
+      "id": "CH-envelope",
+      "name": "MessageEnvelope / storage shape",
+      "statement": "channel_messages carries kind, message_family, audience_json, body_json (discriminated union, validated on write), refs_json, work_refs_json, evidence_refs_json, forensic_event_ids_json, provenance_json; delivery cursor is table-wide autoincrement id; seq is per-channel display ordinal only.",
+      "source": "docs/channels/channels.md:74-103",
+      "status": "defined",
+      "owner": "channels.md §5.1"
+    },
+    {
+      "id": "CH-audience",
+      "name": "Audience is the canonical addressing model",
+      "statement": "audience = {visibility, action_targets[], suggested_watchers[], scope_refs[], urgency}; target_key/target_job_id are 0.1 bridge aliases for action_targets[0].",
+      "source": "docs/channels/channels.md:174, 199; docs/channels/channels-upgrade.md:118-136",
+      "status": "defined",
+      "owner": "channels.md §5.4 (rationale upgrade.md §4)"
+    },
+    {
+      "id": "CH-visibility",
+      "name": "Visibility enum governs awareness only",
+      "statement": "private | targets | chain | node | operator | public_audit; per-kind defaults with container default chain/node; visibility filters awareness/card only, never authority and never automatic evidence dereference.",
+      "source": "docs/channels/channels.md:176-197",
+      "status": "defined",
+      "owner": "channels.md §5.4"
+    },
+    {
+      "id": "CH-action-targets",
+      "name": "action_targets wake; suggested_watchers never do",
+      "statement": "action_targets may be auto-woken through the scheduler; suggested_watchers widen awareness (card/pointer) only.",
+      "source": "docs/channels/channels.md:174, 197",
+      "status": "defined",
+      "owner": "channels.md §5.4"
+    },
+    {
+      "id": "CH-routing-attention-authority",
+      "name": "Routing hard / attention soft / authority hard",
+      "statement": "A non-matching message is not auto-wake but remains noticable via the progress projection and actionable through attention_policy requests; noticing is never activation; activation authority stays with coordinator/judge/scheduler.",
+      "source": "docs/channels/channels.md:218, 399; docs/channels/channels-upgrade.md:100-115",
+      "status": "defined",
+      "owner": "channels.md §5.4+§5.10 (thesis upgrade.md §3)"
+    },
+    {
+      "id": "CH-read-neq-ack",
+      "name": "read != ack",
+      "statement": "readSince is pure observation and never advances any cursor; markSeen(processedId) is the only cursor advance.",
+      "source": "docs/channels/channels.md:220, 741",
+      "status": "defined",
+      "owner": "channels.md §5.5, §11"
+    },
+    {
+      "id": "CH-delivered-neq-processed",
+      "name": "delivered != processed (cursor-through-N)",
+      "statement": "Cursor advances to the highest successfully processed message id only; a failed enqueue does not advance it; at-least-once delivery with receiver-side dedupe by (channel_id, msg_id).",
+      "source": "docs/channels/channels.md:238-241, 734-735",
+      "status": "defined",
+      "owner": "channels.md §5.5, §11"
+    },
+    {
+      "id": "CH-body-neq-authority",
+      "name": "body != authority",
+      "statement": "Authority is verified against DB participant state, spec emits/cannot_emit, capability scope, refs, provenance — never body text; a body claiming role/identity is downgraded to kind=note with no wakeup; unknown authority = reject.",
+      "source": "docs/channels/channels.md:591-627, 744",
+      "status": "defined",
+      "owner": "channels.md §10.1, §11"
+    },
+    {
+      "id": "CH-outcome-classes",
+      "name": "Distinct rejection outcome classes",
+      "statement": "validation-reject, authority-reject, note-downgrade are distinct facts; rejects are not written as requested kind but always produce a runtime.message_rejected audit record and the structured §10.2 error envelope.",
+      "source": "docs/channels/channels.md:614-637",
+      "status": "defined",
+      "owner": "channels.md §10.1–§10.2"
+    },
+    {
+      "id": "CH-l3-l4",
+      "name": "Participant L3 vs activation/job L4",
+      "statement": "participant_id (L3, stable member identity in scope) is used for subscriptions/addressing/authority checks; job_id (L4, current activation) changes on respawn/resume; channel authority checks participant_id + current job_id; scheduler resolves L3→L4; identity is minted by substrate, channels only consume.",
+      "source": "docs/channels/channels.md:105-116, 776",
+      "status": "defined",
+      "owner": "channels.md §5.1 identity table; substrate_design_it.md §2.7 owns the model"
+    },
+    {
+      "id": "CH-pointer-first",
+      "name": "Pointer-first evidence",
+      "statement": "Participants receive pointers/cards by default; full evidence dereferenced only under the six-condition requestEvidence gate (valid activation, visibility or operator override, addressing/subscription/step-contract/scope-overlap, can_request_evidence, cap/cooldown/dedup, grant for out-of-contract scope); durable grants live in substrate-owned evidence_access_grants.",
+      "source": "docs/channels/channels.md:386, 640-677",
+      "status": "defined",
+      "owner": "channels.md §5.9, §10.3"
+    },
+    {
+      "id": "CH-work-refs",
+      "name": "work_refs are the graph-derivation input",
+      "statement": "{author_issue_id, target_issue_ids[], spawned_issue_ids[], relation_hints[]} supplied by the author at post(); the edge deriver is a pure function of (kind, proposal_class, verdict, work_refs, scope_refs, evidence_refs, forensic_event_ids) and never parses free-text body.",
+      "source": "docs/channels/channels.md:314-316",
+      "status": "defined",
+      "owner": "channels.md §5.8"
+    },
+    {
+      "id": "CH-dual-write",
+      "name": "Forensic/evidence dual write",
+      "statement": "Significant mutations dual-write xtrm.forensic.v1 events via the shared envelope writer (channel.* mechanical family); verdicts/findings additionally dual-write durable evidence; after-hook order is forensic → evidence → edge → projection, each idempotent by its own key.",
+      "source": "docs/channels/channels.md:341-346, 710-718, 757",
+      "status": "defined",
+      "owner": "channels.md §5.8, §10.5, §11"
+    },
+    {
+      "id": "CH-edge-rules",
+      "name": "Edges are descriptive, triple-linked, degrade-not-reject",
+      "statement": "Every edge links source message + forensic event (evidence only for evidence-producing messages); edges never grant authority; endpoint mismatch degrades to provenance endpoint_status=unverified_endpoint, never a message rejection.",
+      "source": "docs/channels/channels.md:341-364",
+      "status": "defined",
+      "owner": "channels.md §5.8"
+    },
+    {
+      "id": "CH-scheduler-indirection",
+      "name": "Scheduler indirection (intent, never direct resume)",
+      "statement": "Every channel read emits a resume intent consumed by a scheduler — trivial 1:1 for chains/pairs, node-supervisor inbox for nodes; built in 0.1 even where the scheduler is trivial so 0.2 needs no rewiring.",
+      "source": "docs/channels/channels.md:242, 740, 758, 775",
+      "status": "defined",
+      "owner": "channels.md §5.5, §11 seams (seam 2)"
+    },
+    {
+      "id": "CH-single-scheduler",
+      "name": "Single-scheduler invariant",
+      "statement": "One scheduler per channel kind; node members never wake from a channel bypassing node-supervisor; enforced by test in 0.2 (direct channel→runner wake inside a node is a test failure). Prevents the unitAI-jzhim split-brain.",
+      "source": "docs/channels/channels.md:740, 789, 852",
+      "status": "defined",
+      "owner": "channels.md §11 invariants, §14"
+    },
+    {
+      "id": "CH-projection",
+      "name": "Progress projection is recomputable cache owned by substrate",
+      "statement": "Truth is the stream; container_progress is an event-sourced cache computed by the runtime after-hook (not the coordinator), joined from stream + edges + issue state + runtime status; two renderings (visibility-filtered ambient card pushed on wake; rich coordinator projection pulled); watermark last_message_id enables recompute-if-behind.",
+      "source": "docs/channels/channels.md:366-397",
+      "status": "defined",
+      "owner": "channels.md §5.9 (resolution narrative upgrade.md §23)"
+    },
+    {
+      "id": "CH-reducer-purity",
+      "name": "Reducer purity / after-hook split",
+      "statement": "Reducer derives state purely (no I/O, replay-safe); all effects (resume intents, system.* writes, dual-writes, edges, projection updates) live in the after-hook gated on idempotency keys listed in §5.5.",
+      "source": "docs/channels/channels.md:222-224, 249-258, 743",
+      "status": "defined",
+      "owner": "channels.md §5.5, §11"
+    },
+    {
+      "id": "CH-attention-selfactivation",
+      "name": "Attention/self-activation are requests, never self-grants",
+      "statement": "Two rungs both requests: rung 1 control.attention_requested (soft), rung 2 work.proposal{self_activation} (firm, derives discovered_from + requests_attention edges); activation always adjudicated via system.redirect/scheduler; gated by attention_policy.can_self_activate_on, self_activation_mode off|attention|proposal, per-epoch caps (2/1), cooldown, dedup; epoch resets only on system.epoch_bump.",
+      "source": "docs/channels/channels.md:398-459",
+      "status": "defined",
+      "owner": "channels.md §5.10 (resolves forensic Q3)"
+    },
+    {
+      "id": "CH-stop-conditions",
+      "name": "Declarative stop conditions, first to fire wins",
+      "statement": "judge.done | consensus:N | budget:tokens=T | budget:turns=N | idle:K | judge_timeout:N (auto system.continue backstop; judge is eventually-consistent, never blocking) | manual; evaluated after every message write.",
+      "source": "docs/channels/channels.md:267-277, 834",
+      "status": "defined",
+      "owner": "channels.md §5.7"
+    },
+    {
+      "id": "CH-lifecycle-drain",
+      "name": "Status separate from drain",
+      "statement": "open → draining → closed | aborted; draining stops new actionable writes but permits reading/acking outstanding messages; pruning excludes open/draining channels.",
+      "source": "docs/channels/channels.md:128-132, 736",
+      "status": "defined",
+      "owner": "channels.md §5.2, §11"
+    },
+    {
+      "id": "CH-verdict-single-target",
+      "name": "work.verdict is single-target",
+      "statement": "Validator requires exactly one action_target and one target issue per verdict; N executors produce N verdict messages; edge derivation fans one edge per target.",
+      "source": "docs/channels/channels.md:170, 811",
+      "status": "resolved (Open-Q #2)",
+      "owner": "channels.md §5.3, §12"
+    },
+    {
+      "id": "CH-swap-no-kill",
+      "name": "system.swap unsubscribes, never kills",
+      "statement": "Producer ordering pins steps 1–5 before epoch_bump; dirty writer lease blocks swap completion; edits preserved; only explicit operator sp stop kills; takeover audited (checkpoint/commit/stash/takeover-dirty).",
+      "source": "docs/channels/channels.md:679-708, 813, 823",
+      "status": "resolved (Open-Q #3, #11)",
+      "owner": "channels.md §10.4, §12"
+    },
+    {
+      "id": "CH-evidence-grant-record",
+      "name": "Durable grant authority is substrate DB state",
+      "statement": "evidence_access_grants row (substrate-owned) is the authority; forensics audit request/grant/deny/dereference/revoke but never authorize; grants must expire; operator_override is a DB flag, never a body assertion.",
+      "source": "docs/channels/channels.md:653-677, 819",
+      "status": "resolved (audit Open-Q #7)",
+      "owner": "channels.md §10.3, §12"
+    },
+    {
+      "id": "CH-runtime-failure-kinds",
+      "name": "runtime.* mechanical failure kinds + chain.incident.* wake",
+      "statement": "Reducer detects intra-run mechanical failures (participant_died, gate_unresponsive, worktree_diverged, evidence_ref_broken, pulse_delivery_failed, budget_exhausted_mid_step, recursion_cap), attempts deterministic recovery, then emits chain.incident.opened as the coordinator's only explicit wake; detection stays in reducer, wake intent in after-hook; closed:failed is always a coordinator verdict, never runtime fallthrough.",
+      "source": "docs/channels/channels_plain_it.md:195-208; docs/substrate/substrate_design_it.md:278, 355",
+      "status": "open (absorption into canonical channels.md §5.3 pending)",
+      "owner": "substrate IT §3.1 invariant + §4.3 role 5 (xtrm-1jp); plain_it carries the message-kind delta"
+    }
+  ],
+  "deferred_by_design": [
+    "cross-channel watching / epic-level channel (out of scope indefinitely; cross-container coordination belongs to pulse)",
+    "multi-user identity in messages (single user author key)",
+    "external integrations (Slack/GitHub comments)",
+    "0.2 freeform tuning numbers (runtime-tuned, not contract)"
+  ],
+  "notes": "All 11 canonical open questions resolved (channels.md §12). The contract above is extracted solely from existing canon; no second messaging contract is proposed."
+}

@@ -92,11 +92,11 @@ This work follows the project’s Ponytail discipline.
 
 ## 4. Current evidence and known boundaries
 
-At the verified snapshot:
+At the verified snapshot (versions re-checked 2026-08-22 against the released trio per execution plan §2):
 
-* Core is released as `xtrm-tools` 0.11.2.
-* xtmux is released as `@jaggerxtrm/xtmux` 0.2.2.
-* Specialists is released as `@jaggerxtrm/specialists` 3.21.1, with later source-only work.
+* Core is released as `xtrm-tools` 0.11.4.
+* xtmux is released as `@jaggerxtrm/xtmux` 0.2.3.
+* Specialists is released as `@jaggerxtrm/specialists` 3.21.2.
 * xtmux already owns durable messages, reply obligations, monitors, wakes, exact message retrieval and completed-turn retrieval.
 * the local audit requires Pi monitor correctness to become obligation-driven and FYI-safe;
 * `message-ack` remains receipt, not fulfilment;

@@ -1,0 +1,118 @@
+{
+  "lane": "G",
+  "domain": "xtmux-runtime-supervision-boundary",
+  "generated": "2026-08-22",
+  "bead": "xtrm-cn8.3",
+  "repo_heads": {
+    "xtmux": "aebb885f429684d401d49ab8cb6ed6c7ddb4b099 (dirty worktree files: bin/tmux-session-picker, test/nav-contract.sh — not read paths)",
+    "xtrm": "docs clean at all cited paths at read time",
+    "console": "apps/console/src/server/runtime-lifecycle.ts DIRTY in worktree; HEAD blob 5bcab9c5c3e2c692699ae84d7165cf1bb0e43dd2"
+  },
+  "runtime_supervisor_adr_location": {
+    "standalone_file": null,
+    "found_in": [
+      "xtrm/docs/shared/native-chain-runtime-audit-2026-08-19/native-chain-runtime-prd-draft.md §8 (ActivationSupervisor owns / xtmux RuntimeSupervisor boundary)",
+      "xtrm/docs/shared/native-chain-runtime-audit-2026-08-19/architecture-decision-matrix-and-adr-index.md ADR-06 + D-10 + line 122 ('The proposed RuntimeSupervisor ADR can be reconciled into this')",
+      "xtrm/docs/shared/native-chain-runtime-audit-2026-08-19/source-and-authority-register.md (register row: 'proposed RuntimeSupervisor ADR supplied with audit | PROPOSED')",
+      "xtrm/docs/shared/native-chain-runtime-audit-2026-08-19/local-verification-packet.md §9 (disposition rubric)"
+    ],
+    "token_occurrences_in_xtmux_or_console": 0
+  },
+  "three_roles": {
+    "activation_supervisor": {
+      "scope": "one physical activation lifecycle: start/settlement, provider/session identity, heartbeat/progress, tool/probe activity, timeout/stall, retry eligibility signal, cancellation/abort, provider failure, session disposal, activation metrics",
+      "invariant": "never decides which chain node is next",
+      "applies_to": "XTRM-owned direct participant activations (native Pi AgentSession hosting per ADR-03)"
+    },
+    "xtmux_runtime_supervisor_boundary": {
+      "scope": "evolve xtmux V2: runtime instance registry, provider adapters, terminal backends, event-driven observation, delivery attempts/receipts, waits/interrupts, runtime reconciliation",
+      "constraints": [
+        "do not create another xtmux database or message ontology",
+        "provider/backend selection must never alter Chain or Channels semantics",
+        "no workflow authority"
+      ],
+      "shipped_today": [
+        "agent_instances registry (+pane supersession, rehydration, pane_gone recovery via reconcileAll())",
+        "delivery_attempts + message_receipts + reply obligations (SQL-indexed, markerless)",
+        "outbound_waits durable wakes (requester-owned, restart-surviving, one-time idempotent consumption)",
+        "monitors with lease/heartbeat and closed terminal taxonomy (subprocess/process supervision for tmux-hosted targets)",
+        "handoffs lifecycle with prompt-file pointer+hash and transactional monitor linkage",
+        "agent_state_transitions, agent_turns + episodes, command_runs interrupted detection via owner_pid",
+        "audit_runs/audit_findings fingerprint dedupe, retention, shadow divergence machinery"
+      ],
+      "missing_for_target": [
+        "provider adapter seam (today exactly three hard-wired hook surfaces: Pi/Claude/Codex)",
+        "terminal backend seam (tmux coupling pervasive: identity resolution, delivery, capture)",
+        "push-driven observation triggers (reconciliation today runs on-read/on-command, no daemon by design)"
+      ]
+    },
+    "chain_reducer_scheduler": {
+      "scope": "workflow progression: reducer, scheduler, convergence, gate routing, chain-level recovery, terminal chain outcome",
+      "invariant": "Chain progression stays outside participant runtime and outside xtmux (xtmux-gaps §10 forbids scheduler/Channels authority in xtmux)"
+    }
+  },
+  "explicit_answers": {
+    "must_direct_xtrm_hosted_pi_agent_session_go_through_xtmux": false,
+    "evidence": [
+      "PRD draft §8 assigns activation lifecycle to ActivationSupervisor inside native runtime (ADR-03), not xtmux; xtmux boundary lists only substrate capabilities",
+      "All xtmux lifecycle inputs require tmux context: agent-state.sh exits without state change outside TMUX/TMUX_PANE; invocation identity NULL without $TMUX (observability-redesign §4.8)",
+      "xtmux-gaps §2: Specialists owns job allocation/lifecycle; xtmux owns local tmux topology and interactive pane-instance identity",
+      "source register: evolve existing V2 'rather than introduce a second store/control plane'"
+    ],
+    "tmux_role": "optional operational/UI backend for hosted runtimes; mandatory only where a runtime chooses tmux hosting. tmux is live-topology authority within its plane only; SQLite is durable authority; tmux options are best-effort projections. Future Herdr-like backends enter as terminal backends behind ADR-06 adapters; adopting Herdr as runtime was rejected in adr001-xtmux-nav; changing tmux as session authority requires a new ADR."
+  },
+  "runtime_class_ownership_map": [
+    {"class": "direct Pi AgentSession (XTRM-hosted, RPC)", "today": "Specialists runner.ts/supervisor.ts mixed implementation", "target": "ActivationSupervisor under native participant runtime (ADR-03); xtmux not involved"},
+    {"class": "interactive Pi in tmux pane", "today": "xtmux (pi extension -> agent-state.sh -> SQLite instances/transitions/turns/episodes)", "target": "xtmux substrate via provider adapter"},
+    {"class": "Claude Code in tmux pane", "today": "xtmux Claude hooks incl. obligation gate + wait arm", "target": "xtmux substrate via provider adapter"},
+    {"class": "Codex CLI in tmux pane", "today": "xtmux K3/K4 hooks; outcome-apply consumes xtrm.command-outcome.v1", "target": "xtmux substrate via provider adapter"},
+    {"class": "tmux topology / terminal UI", "today": "tmux live authority; xtmux projects xtrm.xtmux.topology.v1", "target": "unchanged; one terminal backend among several"},
+    {"class": "future Herdr-like backend", "today": "none", "target": "new terminal backend behind ADR-06 provider adapters; no semantic authority"},
+    {"class": "subprocess lifecycle (pollers/wrapped commands)", "today": "xtmux monitors lease/heartbeat/process_gone + command_runs.owner_pid interrupted detection", "target": "xtmux substrate for tmux-hosted; ActivationSupervisor for directly spawned activations"},
+    {"class": "resume", "today": "Codex outcome nextActions resume argv recorded verbatim; no generic resume engine", "target": "ActivationSupervisor owns resume/settlement; xtmux record/pass-through"},
+    {"class": "interrupt/kill", "today": "picker guarded-admin actions (act/kill/bulk-kill), monitor-kill, instance end reasons (off/pane_gone/superseded)", "target": "pane-level: xtmux; activation-level cancel/abort: ActivationSupervisor"},
+    {"class": "runtime result normalization", "today": "agent_turns + episodes (source_key dedupe) + outcome-apply full-schema enforcement", "target": "storage stays xtmux; result validation vs task contract moves to FINALIZE/finalization layer"}
+  ],
+  "responsibility_dispositions": {
+    "already_shipped": ["runtime instance registry", "delivery attempts/receipts", "waits/interrupts (substrate level)", "runtime reconciliation"],
+    "partly_shipped": ["event-driven observation (hooks + journal cursor exist; triggers are on-read)"],
+    "new": ["provider adapters", "terminal backend seam (extraction/new)"],
+    "elsewhere": ["workflow progression", "scheduling", "retry policy", "activation-level interrupt/cancel/resume"]
+  },
+  "console_finding": "apps/console/src/server/runtime-lifecycle.ts implements the console server's own data-plane lifecycle (scanner/materializer/watchers/parity harness start-stop, source registration beads:* and obs:*, Dolt hash probe). No agent process/session/activation lifecycle. Console 'runtime' vocabulary is not RuntimeSupervisor scope.",
+  "contradictions": [
+    "gaps §9.2 event-family names (agent.turn.completed, message.delivered, handoff.delivery_attempted) vs shipped journal types (agent.turn.done, message.sent, delivery.attempted kinds)",
+    "codex-characterization-k1 self-declared superseded statements (banner-managed, keep banners)",
+    "agent.ready readiness handshake prescribed in gaps §8.1 evidenced shipped only for Codex SessionStart wiring"
+  ],
+  "duplications": [
+    {"files": ["xtmux docs/design/adr/adr001-navigation-design.md", "xtmux docs/design/adr/adr001-xtmux-nav.md"], "verdict": "complementary-not-duplicates", "note": "decision record vs v1 design spec; substantial verbatim overlap (fzf record model, capability probe/fallback, attention algorithm, inspector, popup geometry); disposition keep both + cross-link, annex shared sections if touched"},
+    {"files": ["xtmux docs/ts-sqlite.md §27", "xtmux docs/observability-redesign.md §14"], "verdict": "consistent-overlap", "note": "PRD contract vs implementation record; both declare their role; keep both"}
+  ],
+  "unique_requirements_any_canonical_runtime_doc_must_preserve": [
+    "no mandatory daemon or broker (ts-sqlite §25)",
+    "SQLite sole steady-state authority for obligations/waits/monitors; markerless coordination",
+    "tmux remains live topology authority; tmux options are projections, never authority",
+    "message.sent != delivery.attempted semantic separation",
+    "send-keys success != acceptance; wake delivery != task completion",
+    "V1 byte-compatible rollback surface (XTMUX_OBS_V2=0) retained",
+    "coordination budgets: SQL limits 200/500, <=20 mutations per cycle, fail-closed above 500 monitor rows",
+    "display text never authority; machine tokens for actions",
+    "bridge read-only, default-deny allowlist, forced-command SSH boundary",
+    "identity: $N/%N stable IDs; instance id over pane id; no #S names",
+    "hooks fail open outside live tmux client",
+    "no workflow/chain/Channels authority ever enters xtmux",
+    "observed stream duration never presented as provider compute time; activity spans carry no content"
+  ],
+  "open_questions": [
+    "canonical ADR-06 text location and whether it absorbs the proposed RuntimeSupervisor ADR wholesale",
+    "agent.ready shipping status for Pi and Claude (only Codex evidenced)",
+    "conform gaps §9.2 event names to shipped journal types or vice versa before Console consumption",
+    "does direct-AgentSession path need an xtmux facts adapter or stay outside until cross-backend registry justified",
+    "owner of retry/stall policy for tmux-hosted runtimes (presumably invoking coordinator; unconfirmed)"
+  ],
+  "evidence_paths": [
+    "/home/dawid/dev/xtrm/docs/runtime/reconciliation/lanes/lane-g-xtmux-runtime-audit.md",
+    "/home/dawid/dev/xtrm/docs/runtime/reconciliation/lanes/lane-g-source-register.json"
+  ]
+}

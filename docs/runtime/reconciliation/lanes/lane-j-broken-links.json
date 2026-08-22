@@ -1,0 +1,1159 @@
+{
+ "broken_relative_and_repo_root_links": [
+  {
+   "from": "docs/docs/tether.md",
+   "line": 10,
+   "kind": "mdlink",
+   "target": "./conversations.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/tether.md",
+   "line": 403,
+   "kind": "mdlink",
+   "target": "./conversations.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/tether.md",
+   "line": 404,
+   "kind": "mdlink",
+   "target": "./conversations.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/substrate/substrate_design_it.md",
+   "line": 1229,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/substrate/substrate_design_it.md",
+   "line": 1235,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/substrate/chain_templates.md",
+   "line": 46,
+   "kind": "pathmention",
+   "target": "chain-templates/README.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/substrate/chain_templates.md",
+   "line": 206,
+   "kind": "pathmention",
+   "target": "chain-templates/README.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/substrate/chain_templates.md",
+   "line": 456,
+   "kind": "pathmention",
+   "target": "chain-templates/README.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/substrate/chain_templates.md",
+   "line": 19,
+   "kind": "pathmention",
+   "target": "docs/design/substrate/substrate.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/substrate/chain_templates.md",
+   "line": 478,
+   "kind": "pathmention",
+   "target": "docs/design/substrate/substrate.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/specialists/specialists-execution-protocol.md",
+   "line": 4,
+   "kind": "pathmention",
+   "target": "docs/design/specialist-execution-protocol.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/specialists/agentops-suite.md",
+   "line": 16,
+   "kind": "pathmention",
+   "target": "docs/design/post-aws-summit-research-findings.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/research/terraform-first-steps.md",
+   "line": 397,
+   "kind": "pathmention",
+   "target": "docs/devops-specialist-observability.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/research/terraform-first-steps.md",
+   "line": 397,
+   "kind": "pathmention",
+   "target": "docs/terraform-first-steps.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/research/prime-agent-xtrm-runtime-reference-2026-08-09.md",
+   "line": 422,
+   "kind": "pathmention",
+   "target": "packages/coding-agent/docs/architecture.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/devops/mercury-devops-collaborator.md",
+   "line": 10,
+   "kind": "pathmention",
+   "target": "docs/telemetry/runbooks/devops-agent-grounding.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/devops/mercury-devops-collaborator.md",
+   "line": 603,
+   "kind": "pathmention",
+   "target": "docs/telemetry/runbooks/devops-agent-grounding.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/devops/mcp-sidecars-pattern.md",
+   "line": 68,
+   "kind": "pathmention",
+   "target": "docs/telemetry/mcp-query-surfaces.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/archive/devops-platform-engineering-prd.md",
+   "line": 307,
+   "kind": "mdlink",
+   "target": "~/second-mind/inbox/transcripts/AWS-reInvent-2025-Move-beyond-reactive-Transform-cloud-ops-with-AWS-DevOps-Agent-COP362.analysis.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/archive/devops-platform-engineering-prd.md",
+   "line": 309,
+   "kind": "mdlink",
+   "target": "~/second-mind/inbox/transcripts/Diving-Deep-on-AWS-DevOps-Agent-AWS-Tech-Tales.analysis.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/archive/devops-platform-engineering-prd.md",
+   "line": 308,
+   "kind": "mdlink",
+   "target": "~/second-mind/inbox/transcripts/Introducing-AWS-DevOps-Agent-Amazon-Web-Services.analysis.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/archive/devops-platform-engineering-prd.md",
+   "line": 29,
+   "kind": "pathmention",
+   "target": "docs/AGENT_MONITORING.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/archive/devops-platform-engineering-prd.md",
+   "line": 48,
+   "kind": "pathmention",
+   "target": "docs/design/substrate/substrate.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/archive/devops-platform-engineering-prd.md",
+   "line": 31,
+   "kind": "pathmention",
+   "target": "docs/xtrm-console-visual-contract.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/archive/devops-platform-engineering-prd.md",
+   "line": 31,
+   "kind": "pathmention",
+   "target": "docs/xtrm-observability-prd.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/premortem-substrate/audit-result.md",
+   "line": 35,
+   "kind": "pathmention",
+   "target": "docs/temp_roadmap.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/premortem-substrate/audit-result.md",
+   "line": 47,
+   "kind": "pathmention",
+   "target": "docs/temp_roadmap.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/premortem-substrate/audit-result.md",
+   "line": 48,
+   "kind": "pathmention",
+   "target": "docs/temp_roadmap.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/premortem-substrate/audit-result.md",
+   "line": 60,
+   "kind": "pathmention",
+   "target": "docs/temp_roadmap.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/premortem-substrate/audit-result.md",
+   "line": 131,
+   "kind": "pathmention",
+   "target": "docs/temp_roadmap.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/premortem-substrate/audit-brief.md",
+   "line": 22,
+   "kind": "pathmention",
+   "target": "docs/temp_roadmap.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/premortem-substrate/audit-brief.md",
+   "line": 23,
+   "kind": "pathmention",
+   "target": "docs/temp_roadmap.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/premortem-substrate/audit-brief.md",
+   "line": 24,
+   "kind": "pathmention",
+   "target": "docs/temp_roadmap.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/premortem-substrate/audit-brief.md",
+   "line": 25,
+   "kind": "pathmention",
+   "target": "docs/temp_roadmap.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/shared/xtrm-deterministic-quant-pipelines-2026-08-10.md",
+   "line": 1213,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/shared/xtrm-deterministic-quant-pipelines-2026-08-10.md",
+   "line": 1223,
+   "kind": "pathmention",
+   "target": "docs/internals/validators.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/shared/native-chain-runtime-audit-2026-08-19/local-verification-packet.md",
+   "line": 306,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/shared/native-chain-runtime-audit-2026-08-19/source-and-authority-register.md",
+   "line": 121,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/harness/experiments/agentsession-sre-chain-vertical-slice-2026-08-17.md",
+   "line": 538,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-test-guards.md",
+   "line": 17,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-architecture.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-test-guards.md",
+   "line": 166,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-architecture.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-observability-spec.md",
+   "line": 18,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-architecture.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-observability-spec.md",
+   "line": 43,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-architecture.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-observability-spec.md",
+   "line": 357,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-architecture.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-observability-spec.md",
+   "line": 41,
+   "kind": "pathmention",
+   "target": "docs/backend.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-observability-spec.md",
+   "line": 42,
+   "kind": "pathmention",
+   "target": "docs/deployment.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-observability-spec.md",
+   "line": 40,
+   "kind": "pathmention",
+   "target": "docs/xtrm-console-visual-contract.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-observability-spec.md",
+   "line": 39,
+   "kind": "pathmention",
+   "target": "docs/xtrm-observability-prd.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-architecture.md",
+   "line": 507,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-test-guards.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-architecture.md",
+   "line": 418,
+   "kind": "pathmention",
+   "target": "docs/backend.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-architecture.md",
+   "line": 502,
+   "kind": "pathmention",
+   "target": "docs/backend.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-architecture.md",
+   "line": 417,
+   "kind": "pathmention",
+   "target": "docs/deployment.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-architecture.md",
+   "line": 418,
+   "kind": "pathmention",
+   "target": "docs/deployment.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/console-architecture.md",
+   "line": 427,
+   "kind": "pathmention",
+   "target": "docs/deployment.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/apps-console-scaffold-preflight.md",
+   "line": 51,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-architecture.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/apps-console-scaffold-preflight.md",
+   "line": 52,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-test-guards.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "docs/docs/console/architecture/apps-console-scaffold-preflight.md",
+   "line": 93,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-test-guards.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/specialists-service.md",
+   "line": 341,
+   "kind": "pathmention",
+   "target": "docs/script-specialists.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/manifest.md",
+   "line": 183,
+   "kind": "mdlink",
+   "target": "design/gzrx-completion-critique.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/manifest.md",
+   "line": 182,
+   "kind": "mdlink",
+   "target": "design/gzrx-tool-catalog.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/manifest.md",
+   "line": 25,
+   "kind": "pathmention",
+   "target": "docs/design/gzrx-completion-critique.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/manifest.md",
+   "line": 25,
+   "kind": "pathmention",
+   "target": "docs/design/gzrx-tool-catalog.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/authoring.md",
+   "line": 655,
+   "kind": "pathmention",
+   "target": "docs/design/specialists-service-evaluation.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/authoring.md",
+   "line": 269,
+   "kind": "pathmention",
+   "target": "skills/notes.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/observability-metrics.md",
+   "line": 25,
+   "kind": "pathmention",
+   "target": "docs/AGENT_MONITORING.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/examples/mercury-atomic-summarizer.specialist.json",
+   "line": 6,
+   "kind": "pathmention",
+   "target": "docs/darth-feedor-migration.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/archive/iron-review-hardening-qa-chain-substrate.md",
+   "line": 6,
+   "kind": "mdlink",
+   "target": "../design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/archive/iron-review-hardening-qa-chain-substrate.md",
+   "line": 7,
+   "kind": "mdlink",
+   "target": "../design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/archive/iron-review-hardening-qa-chain-substrate.md",
+   "line": 8,
+   "kind": "mdlink",
+   "target": "../design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/archive/iron-review-hardening-qa-chain-substrate.md",
+   "line": 9,
+   "kind": "mdlink",
+   "target": "../design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/archive/iron-review-hardening-qa-chain-substrate.md",
+   "line": 10,
+   "kind": "mdlink",
+   "target": "../design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/archive/iron-review-hardening-qa-chain-substrate.md",
+   "line": 6,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/archive/iron-review-hardening-qa-chain-substrate.md",
+   "line": 7,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/archive/iron-review-hardening-qa-chain-substrate.md",
+   "line": 8,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/archive/iron-review-hardening-qa-chain-substrate.md",
+   "line": 9,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/archive/iron-review-hardening-qa-chain-substrate.md",
+   "line": 10,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/README.md",
+   "line": 17,
+   "kind": "mdlink",
+   "target": "gzrx-completion-critique.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/README.md",
+   "line": 18,
+   "kind": "mdlink",
+   "target": "gzrx-research-notes.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/README.md",
+   "line": 16,
+   "kind": "mdlink",
+   "target": "gzrx-tool-catalog.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/specialist-agentops-suite.md",
+   "line": 8,
+   "kind": "pathmention",
+   "target": "docs/design/post-aws-summit-research-findings.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/darth-feedor-migration.md",
+   "line": 49,
+   "kind": "mdlink",
+   "target": "authoring.md#script-class-authoring",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/darth-feedor-migration.md",
+   "line": 77,
+   "kind": "mdlink",
+   "target": "examples/mercury-atomic-summarizer.specialist.json",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/darth-feedor-migration.md",
+   "line": 49,
+   "kind": "mdlink",
+   "target": "specialists-service.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/darth-feedor-migration.md",
+   "line": 218,
+   "kind": "pathmention",
+   "target": "docs/guides/qwen-service-integration-guide.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/darth-feedor-migration.md",
+   "line": 6,
+   "kind": "pathmention",
+   "target": "docs/script-specialists.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/darth-feedor-migration.md",
+   "line": 146,
+   "kind": "pathmention",
+   "target": "docs/specialists-service-evaluation.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/substrate/devops-platform-engineering-prd.md",
+   "line": 376,
+   "kind": "mdlink",
+   "target": "~/second-mind/inbox/transcripts/AWS-reInvent-2025-Move-beyond-reactive-Transform-cloud-ops-with-AWS-DevOps-Agent-COP362.analysis.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/substrate/devops-platform-engineering-prd.md",
+   "line": 378,
+   "kind": "mdlink",
+   "target": "~/second-mind/inbox/transcripts/Diving-Deep-on-AWS-DevOps-Agent-AWS-Tech-Tales.analysis.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/substrate/devops-platform-engineering-prd.md",
+   "line": 377,
+   "kind": "mdlink",
+   "target": "~/second-mind/inbox/transcripts/Introducing-AWS-DevOps-Agent-Amazon-Web-Services.analysis.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/substrate/devops-platform-engineering-prd.md",
+   "line": 25,
+   "kind": "pathmention",
+   "target": "docs/AGENT_MONITORING.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/substrate/devops-platform-engineering-prd.md",
+   "line": 49,
+   "kind": "pathmention",
+   "target": "docs/design/substrate/substrate.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/substrate/devops-platform-engineering-prd.md",
+   "line": 27,
+   "kind": "pathmention",
+   "target": "docs/xtrm-console-visual-contract.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/substrate/devops-platform-engineering-prd.md",
+   "line": 27,
+   "kind": "pathmention",
+   "target": "docs/xtrm-observability-prd.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chains-prompt-evals.md",
+   "line": 2952,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-architecture.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chains-prompt-evals.md",
+   "line": 2951,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-observability-spec.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/enhanced-prd.md",
+   "line": 406,
+   "kind": "angle",
+   "target": "plan.json",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/enhanced-prd.md",
+   "line": 4246,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-architecture.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/enhanced-prd.md",
+   "line": 4245,
+   "kind": "pathmention",
+   "target": "docs/architecture/console-observability-spec.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/history/specialists-roadmap-v3.2-2026-07-24.md",
+   "line": 1166,
+   "kind": "mdlink",
+   "target": "../chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/history/specialists-roadmap-v3.2-2026-07-24.md",
+   "line": 501,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/history/specialists-roadmap-v3.2-2026-07-24.md",
+   "line": 529,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/history/specialists-roadmap-v3.2-2026-07-24.md",
+   "line": 574,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/history/specialists-roadmap-v3.2-2026-07-24.md",
+   "line": 1166,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/history/specialists-roadmap-v3.2-2026-07-24.md",
+   "line": 138,
+   "kind": "pathmention",
+   "target": "skills/CLAUDE.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/README.md",
+   "line": 145,
+   "kind": "mdlink",
+   "target": "../../chain-templates.html",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/README.md",
+   "line": 5,
+   "kind": "mdlink",
+   "target": "../../chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/README.md",
+   "line": 145,
+   "kind": "mdlink",
+   "target": "../../chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/README.md",
+   "line": 43,
+   "kind": "mdlink",
+   "target": "../../chain-templates.md#2-the-canonical-pipeline",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/README.md",
+   "line": 25,
+   "kind": "mdlink",
+   "target": "../../chain-templates.md#3-the-template-catalog",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/README.md",
+   "line": 43,
+   "kind": "mdlink",
+   "target": "../../chain-templates.md#3-the-template-catalog",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/README.md",
+   "line": 45,
+   "kind": "mdlink",
+   "target": "../../chain-templates.md#4-devops-gates--design-pending",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/README.md",
+   "line": 5,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/README.md",
+   "line": 145,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/README.md",
+   "line": 9,
+   "kind": "pathmention",
+   "target": "docs/design/substrate/substrate.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/README.md",
+   "line": 150,
+   "kind": "pathmention",
+   "target": "docs/design/substrate/substrate.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "specialists/docs/design/roadmap/chain-templates/doc-sync.formula.json",
+   "line": 8,
+   "kind": "pathmention",
+   "target": "docs/README.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/xtrm-directory.md",
+   "line": 129,
+   "kind": "pathmention",
+   "target": "skills/state.json",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/delegation-architecture.md",
+   "line": 105,
+   "kind": "pathmention",
+   "target": "skills/delegation/skill.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/agentpipe-brainstorming-guide.md",
+   "line": 263,
+   "kind": "pathmention",
+   "target": "docs/plans/brainstorming-results.json",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/agentpipe-brainstorming-guide.md",
+   "line": 258,
+   "kind": "pathmention",
+   "target": "docs/plans/brainstorming-results.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/agentpipe-brainstorming-guide.md",
+   "line": 271,
+   "kind": "pathmention",
+   "target": "docs/plans/brainstorming-results.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/agentpipe-brainstorming-guide.md",
+   "line": 245,
+   "kind": "pathmention",
+   "target": "docs/plans/brainstorming-state.json",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/agentpipe-brainstorming-guide.md",
+   "line": 250,
+   "kind": "pathmention",
+   "target": "docs/plans/brainstorming-state.json",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/agentpipe-brainstorming-guide.md",
+   "line": 256,
+   "kind": "pathmention",
+   "target": "docs/plans/brainstorming-state.json",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/agentpipe-brainstorming-guide.md",
+   "line": 261,
+   "kind": "pathmention",
+   "target": "docs/plans/brainstorming-state.json",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/agentpipe-brainstorming-guide.md",
+   "line": 276,
+   "kind": "pathmention",
+   "target": "docs/plans/service-skills-implementation.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/orchestration-implementation.md",
+   "line": 191,
+   "kind": "mdlink",
+   "target": "aws-cao-integration-analysis.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/orchestration-implementation.md",
+   "line": 203,
+   "kind": "mdlink",
+   "target": "aws-cao-integration-analysis.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/hook-system-summary.md",
+   "line": 184,
+   "kind": "mdlink",
+   "target": "./delegation-architecture.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/2026-02-25-gitnexus-installer-integration.md",
+   "line": 72,
+   "kind": "pathmention",
+   "target": "skills/gitnexus/debugging/SKILL.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/2026-02-25-gitnexus-installer-integration.md",
+   "line": 81,
+   "kind": "pathmention",
+   "target": "skills/gitnexus/debugging/SKILL.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/2026-02-25-gitnexus-installer-integration.md",
+   "line": 71,
+   "kind": "pathmention",
+   "target": "skills/gitnexus/exploring/SKILL.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/2026-02-25-gitnexus-installer-integration.md",
+   "line": 80,
+   "kind": "pathmention",
+   "target": "skills/gitnexus/exploring/SKILL.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/2026-02-25-gitnexus-installer-integration.md",
+   "line": 73,
+   "kind": "pathmention",
+   "target": "skills/gitnexus/impact-analysis/SKILL.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/2026-02-25-gitnexus-installer-integration.md",
+   "line": 82,
+   "kind": "pathmention",
+   "target": "skills/gitnexus/impact-analysis/SKILL.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/2026-02-25-gitnexus-installer-integration.md",
+   "line": 74,
+   "kind": "pathmention",
+   "target": "skills/gitnexus/refactoring/SKILL.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/2026-02-25-gitnexus-installer-integration.md",
+   "line": 83,
+   "kind": "pathmention",
+   "target": "skills/gitnexus/refactoring/SKILL.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/mcp-servers-config.md",
+   "line": 368,
+   "kind": "mdlink",
+   "target": "../../ROADMAP.md#phase-1-universal-configuration-hub--format-adaptation-completed-v150",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/mcp-servers-config.md",
+   "line": 367,
+   "kind": "mdlink",
+   "target": "../../cli/lib/config-adapter.js",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/mcp-servers-config.md",
+   "line": 79,
+   "kind": "mdlink",
+   "target": "../../config/.env.example",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/mcp-servers-config.md",
+   "line": 56,
+   "kind": "mdlink",
+   "target": "../../config/mcp_servers.json",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/mcp-servers-config.md",
+   "line": 69,
+   "kind": "mdlink",
+   "target": "../../config/mcp_servers_optional.json",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/mcp-servers-config.md",
+   "line": 366,
+   "kind": "mdlink",
+   "target": "../../vault-pattern-implementation.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/deprecated/mcp-servers-config.md",
+   "line": 369,
+   "kind": "mdlink",
+   "target": "../../vsync_repo/README.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/complete/2026-02-24-documenting-skill-hardening.md",
+   "line": 351,
+   "kind": "pathmention",
+   "target": "docs/README.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/complete/2026-02-24-documenting-skill-hardening.md",
+   "line": 20,
+   "kind": "pathmention",
+   "target": "docs/plans/2026-02-24-documenting-skill-hardening-design.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/complete/2026-02-25-unified-sync-flow.md",
+   "line": 25,
+   "kind": "pathmention",
+   "target": "docs/plans/2026-02-25-unified-sync-flow-design.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/plans/complete/ts-migration.md",
+   "line": 859,
+   "kind": "mdlink",
+   "target": "../vsync_repo/cli/src/",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 7,
+   "kind": "mdlink",
+   "target": "./knowledgebasecerebras.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 158,
+   "kind": "mdlink",
+   "target": "./knowledgebasecerebras.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 452,
+   "kind": "mdlink",
+   "target": "./knowledgebasecerebras.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 9,
+   "kind": "mdlink",
+   "target": "./openwiki.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 216,
+   "kind": "mdlink",
+   "target": "./openwiki.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 453,
+   "kind": "mdlink",
+   "target": "./openwiki.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 79,
+   "kind": "mdlink",
+   "target": "file.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 7,
+   "kind": "pathmention",
+   "target": "docs/design/knowledgebasecerebras.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 158,
+   "kind": "pathmention",
+   "target": "docs/design/knowledgebasecerebras.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 452,
+   "kind": "pathmention",
+   "target": "docs/design/knowledgebasecerebras.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 9,
+   "kind": "pathmention",
+   "target": "docs/design/openwiki.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 216,
+   "kind": "pathmention",
+   "target": "docs/design/openwiki.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "core/docs/design/memory-system-r6g.md",
+   "line": 453,
+   "kind": "pathmention",
+   "target": "docs/design/openwiki.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "xtmux/docs/INSTALL.md",
+   "line": 123,
+   "kind": "mdlink",
+   "target": "...",
+   "status": "relative-missing"
+  },
+  {
+   "from": "xtmux/docs/INSTALL.md",
+   "line": 126,
+   "kind": "mdlink",
+   "target": "...",
+   "status": "relative-missing"
+  },
+  {
+   "from": "xtrm-wt/pr71-loader/experiments/agentsession-sre-chain-vertical-slice/experiment-report.md",
+   "line": 223,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  },
+  {
+   "from": "xtrm-wt/pr71-loader/experiments/agentsession-sre-chain-vertical-slice/experiment-report.md",
+   "line": 328,
+   "kind": "pathmention",
+   "target": "docs/design/chain-templates.md",
+   "status": "relative-missing"
+  }
+ ]
+}

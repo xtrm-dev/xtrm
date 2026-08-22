@@ -7,7 +7,7 @@ updated: 2026-06-09T01:35
 > Status: Design draft (sequenced v0 → v2)
 > Scope: Add a small, always-on sidecar that watches a specialist's feed and forces relevant memories, paths, and scope reminders into the next turn. Default-on, opt-out only for specialists that should wander.
 > Non-goal: Replace the orchestrator, the reviewer, the mailbox, or the runner. Shepherd is decoration *forced* into prompts; it does not author work and does not schedule.
-> Companion design: [conversations.md](./conversations.md). Shepherd dual-writes hints to the mailbox as `kind=hint` for observability, but its behavioral channel is the forced prompt block.
+> Companion design: conversations.md (renamed → channels/, see [docs/channels/channels.md](./channels/channels.md)). Shepherd dual-writes hints to the mailbox as `kind=hint` for observability, but its behavioral channel is the forced prompt block.
 
 ## 1. Problem
 
@@ -400,6 +400,6 @@ No new behavior. Pure observability bridge between shepherd (v0) and mailbox (co
 
 ## 15. Cross-Reference
 
-- Mailbox storage and `kind=hint` schema: [conversations.md §5.1, §11 v0](./conversations.md).
-- Single-scheduler invariant (shepherd MUST honor): [conversations.md §11 design invariants](./conversations.md).
+- Mailbox storage and `kind=hint` schema: conversations.md §5.1, §11 v0 (conversations.md renamed → channels/, see docs/channels/channels.md).
+- Single-scheduler invariant (shepherd MUST honor): conversations.md §11 design invariants (conversations.md renamed → channels/, see docs/channels/channels.md).
 - Critique trail behind sequenced approach (shepherd inherits same philosophy): bead `unitAI-jzhim` (closed).

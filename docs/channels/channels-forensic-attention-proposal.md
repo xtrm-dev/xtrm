@@ -6,6 +6,8 @@ date_modified: Saturday, June 6th 2026, 1:43:16 am
 ---
 # Channels, Forensics, Metrics e attenzione del team
 
+> **HISTORICAL (non-normative) 2026-08-22** — all Q1–Q7 resolved; see channels.md §5.4/§5.10/§10.3/§10.5/§11 and channels-upgrade.md §23.
+>
 > Stato: proposta / bozza di allineamento.
 > Data: 2026-06-05.
 > Scopo: fissare le decisioni proposte prima di riallineare i documenti

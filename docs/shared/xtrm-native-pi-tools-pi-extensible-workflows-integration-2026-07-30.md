@@ -1,5 +1,7 @@
 # XTRM Native Pi Tools + pi-extensible-workflows Integration
 
+> **REFERENCE DESIGN (2026-08-22)** — bounded authoring/cognition/reference integration; never a second durable workflow runtime. See xtrm docs/runtime/ decision matrix Q18.
+
 ## Final Integration Design, Verification Program, and Beads Decomposition Contract
 
 **Status:** final design proposal for independent verification and planning  

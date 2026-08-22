@@ -1,7 +1,7 @@
 # XTRM Current Execution Plan
 
 **Status:** canonical current execution plan  
-**Last reconciled:** 2026-08-09, Europe/Rome  
+**Last reconciled:** 2026-08-22, Europe/Rome  
 **Programme:** XTRM  
 **Repositories:** `xtrm-dev/core`, `xtrm-dev/specialists`, `Jaggerxtrm/xtmux`, `xtrm-dev/xtrm`  
 **Jira projection:** project `KAN`  
@@ -853,3 +853,13 @@ The target Substrate runtime and migration are explicitly deferred by accepted g
 Each implementation packet must carry a stable ID, owning repository, authority reference, current baseline, exact missing behavior, dependencies, scope/non-goals, acceptance and negative tests, E2E checkpoint, rollback/compatibility rule and release consequence. Completion claims must separately identify design, source, release, deployment/operator and promotion state.
 
 The plan now requires a cross-document contradiction review across the PRD, roadmap, execution protocol, chain canon, Channels, memory, Substrate compatibility, command outcomes, adapters, JSON graph and completion ledger before GATE-R0 can pass.
+
+### 2026-08-22 runtime-model reconciliation
+
+Additive amendment recording the accepted integrated runtime model (`xtrm-dev/xtrm:docs/runtime/`, decision matrix Q7/Q1/Q18/Q20/Q22). It does not create a competing plan.
+
+- **R1 / GATE-HARNESS-ADR reframed.** Native Pi AgentSession hosting is adopted as the product target on SRE-vertical-slice evidence (Q7). GATE-HARNESS-ADR is no longer an architecture coin-flip between RPC and native: it becomes production-parity/hardening evidence for the already-selected native runtime. Corrected RPC is reclassified as compatibility/migration/rollback/headless transport (ADR-003).
+- **C1 restated as the four-stage authoring pipeline.** ChainSource schema/loaders → ChainDefinition → pure compiler → ResolvedChain → durable ChainRun/materialization-after-freeze. Templates are one ChainSource variant among Template/JSON/AdHoc/Imported, not the ontology (ADR-001).
+- **A1 / pi-extensible-workflows reclassified.** Bounded authoring/cognition/reference integration only; never a second durable workflow runtime or execution authority (decision matrix Q18).
+- **Eval lane extended.** Eval Core subjects extend to whole-chain/runtime categories using existing entities, no second eval subsystem: compiler determinism · ResolvedChain freeze integrity · ChainRun replay equivalence · duplicate-effect rate · recovery success · activation leak · resource cleanup · stale-activation routing · message duplication · wake amplification · authority violation · scope/capability violation · cooperation usefulness · handoff quality · evidence dereference precision · memory promotion precision · end-to-end outcome. Prometheus stays low-cardinality; exact IDs never become metric labels.
+- **Ledger kernel exception.** The minimum Substrate durability kernel (stable IDs; run/container identity; participant-activation lineage; append-only effect receipts; execution lineage; recomputable projections; explicit uncertain state; replay-safe recovery) proceeds without the Stage-0 daemon prerequisite, per ADR-002. The coarse ledger deferral row is annotated accordingly; full Substrate migration remains deferred by its explicit gate.

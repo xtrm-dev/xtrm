@@ -1,0 +1,409 @@
+{
+  "$comment": "Lane C formula catalog. All paths relative to /home/dawid/dev/specialists. SHAs are git blob SHAs on branch master at audit time.",
+  "repo": "/home/dawid/dev/specialists",
+  "branch": "master",
+  "count": 15,
+  "formulas": [
+    {
+      "name": "code-quick",
+      "path": "docs/design/roadmap/chain-templates/code-quick.formula.json",
+      "sha": "b755029c928208df7716ca136585ddc8d537a27a",
+      "bytes": 1587,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root", "reviewer"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "labels": ["chain-root", "kind:root", "scrutiny:low"], "needs": [] },
+        { "id": "reviewer", "class": "gate", "role": "reviewer", "needs": ["root"], "labels": ["chain-step", "kind:step", "role:reviewer", "edge:validates->root"] }
+      ],
+      "gates": { "final": ["reviewer"] },
+      "variables": { "root_title": "default 'Untitled work'", "scope": "default 'src/**'" },
+      "scrutiny_assumption": "Hardcoded scrutiny:low label on root; no {{scrutiny}} var (unlike code-standard family). LOW-blast trivial change; operator may implement directly without executor.",
+      "writer_class": "none declared — no writer step in formula (canon §3.1 diagram shows optional 'executor or no-writer trivial'; README table matches formula: root → reviewer)",
+      "advisor_class": "none",
+      "semantic_edge_hints": ["edge:validates->root (reviewer)"],
+      "ambidextrous_roles": [],
+      "non_canonical_assumptions": [
+        "bd-specific labels (chain-root, kind:root, role:, edge:, scrutiny:) are materialization hints, not ontology",
+        "MANDATE/INPUTS/OUTPUTS/SCOPE/NON_GOALS free-text block inside step description duplicates step-contract semantics as prose"
+      ]
+    },
+    {
+      "name": "code-standard",
+      "path": "docs/design/roadmap/chain-templates/code-standard.formula.json",
+      "sha": "09408570a3d5d2400fc882d369ef0fd733da70b8",
+      "bytes": 5444,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root", "executor", "seconder", "test-engineer", "test-runner", "obligations-scanner", "reviewer"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "labels": ["chain-root", "kind:root", "scrutiny:{{scrutiny}}"], "needs": [] },
+        { "id": "executor", "class": "writer", "role": "executor", "needs": ["root"], "labels": ["chain-step", "kind:step", "role:executor", "edge:implements->root"] },
+        { "id": "seconder", "class": "gate", "role": "seconder", "needs": ["executor"], "labels": ["gate:mandatory", "edge:validates->executor"] },
+        { "id": "test-engineer", "class": "qa-writer", "role": "test-engineer", "needs": ["seconder"], "labels": ["edge:validates->executor"] },
+        { "id": "test-runner", "class": "gate", "role": "test-runner", "needs": ["test-engineer"], "labels": ["gate:mandatory"] },
+        { "id": "obligations-scanner", "class": "gate", "role": "obligations-scanner", "needs": ["test-runner"], "labels": ["edge:validates->executor", "gate:mandatory"] },
+        { "id": "reviewer", "class": "gate", "role": "reviewer", "needs": ["obligations-scanner"], "labels": ["edge:validates->root", "gate:final"] }
+      ],
+      "gates": { "mandatory": ["seconder", "test-runner", "obligations-scanner"], "final": ["reviewer"] },
+      "variables": { "root_title": "default 'Untitled work'", "scope": "default 'src/**'", "scrutiny": "default 'medium'" },
+      "scrutiny_assumption": "scrutiny is a pour-time variable rendered into root label + prose; default medium. security-auditor NOT embedded — dispatched separately if sensitive surface (see security-deep).",
+      "writer_class": "executor (single writer; HIGH permission implied by canon §2.3, not encoded in formula)",
+      "advisor_class": "none",
+      "semantic_edge_hints": ["edge:implements->root (executor)", "edge:validates->executor (seconder, test-engineer, obligations-scanner)", "edge:validates->root (reviewer)"],
+      "ambidextrous_roles": ["test-engineer appears here in QA-secondary position, but with NO position: label — position labels exist only in code-with-tests/test-only"],
+      "non_canonical_assumptions": [
+        "permission tiers (HIGH executor / LOW gates) live in canon §2.3 and specialist configs, absent from formula",
+        "auto-escalation table (canon §2.4) is external dispatcher policy, only referenced in prose",
+        "'Iron pipeline applies' phrasing assumes using-specialists skill enforcement outside the artifact"
+      ]
+    },
+    {
+      "name": "code-with-advisors",
+      "path": "docs/design/roadmap/chain-templates/code-with-advisors.formula.json",
+      "sha": "e6342c5b2661775d580da56b6929ef670d1c7751",
+      "bytes": 4910,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root", "explorer", "researcher", "overthinker", "executor", "seconder", "test-engineer", "test-runner", "obligations-scanner", "reviewer"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "labels": ["chain-root", "kind:root", "scrutiny:{{scrutiny}}"], "needs": [] },
+        { "id": "executor", "class": "writer", "role": "executor", "needs": ["explorer", "researcher", "overthinker"], "labels": ["edge:implements->root"] },
+        { "id": "seconder", "class": "gate", "role": "seconder", "needs": ["executor"], "labels": ["gate:mandatory", "edge:validates->executor"] },
+        { "id": "test-engineer", "class": "qa-writer", "role": "test-engineer", "needs": ["seconder"], "labels": ["edge:validates->executor"] },
+        { "id": "test-runner", "class": "gate", "role": "test-runner", "needs": ["test-engineer"], "labels": ["gate:mandatory"] },
+        { "id": "obligations-scanner", "class": "gate", "role": "obligations-scanner", "needs": ["test-runner"], "labels": ["edge:validates->executor", "gate:mandatory"] },
+        { "id": "reviewer", "class": "gate", "role": "reviewer", "needs": ["obligations-scanner"], "labels": ["edge:validates->root", "gate:final"] }
+      ],
+      "gates": { "mandatory": ["seconder", "test-runner", "obligations-scanner"], "final": ["reviewer"] },
+      "variables": { "root_title": "default 'Untitled work'", "scope": "default 'src/**'", "scrutiny": "default 'high'" },
+      "scrutiny_assumption": "Default high. NOTE: advisor steps have NO needs edges to root and NO explicit ordering among themselves — parallelism is expressed purely via executor needing all three; advisor findings reach executor through channel/discovered-from conventions described in prose, not edges.",
+      "writer_class": "executor (reads all three advisor outputs before opening files)",
+      "advisor_class": "three parallel pre-impl advisors: explorer, researcher, overthinker (declared only as executor dependencies — no advisor: labels in this file, unlike premortem/triage/release-prep)",
+      "semantic_edge_hints": ["edge:implements->root", "edge:validates->executor", "edge:validates->root"],
+      "ambidextrous_roles": [],
+      "non_canonical_assumptions": [
+        "advisors write findings 'to the chain channel or discovered-from bead' (canon §3.3) — runtime convention absent from the formula graph",
+        "researcher is an unconditional need though its INPUTS say '(if dispatched)' — conditional dispatch not expressible in bd formula schema"
+      ]
+    },
+    {
+      "name": "code-with-tests",
+      "path": "docs/design/roadmap/chain-templates/code-with-tests.formula.json",
+      "sha": "44a1c19d44f6f865f44166f44e9a89c8d26cc323",
+      "bytes": 5110,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root", "executor", "seconder", "test-engineer", "test-runner", "security-auditor", "obligations-scanner", "reviewer"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "labels": ["chain-root", "kind:root", "scrutiny:{{scrutiny}}"], "needs": [] },
+        { "id": "executor", "class": "writer-primary", "role": "executor", "needs": ["root"], "labels": ["edge:implements->root"] },
+        { "id": "seconder", "class": "gate", "role": "seconder", "needs": ["executor"], "labels": ["edge:validates->executor", "gate:mandatory"] },
+        { "id": "test-engineer", "class": "writer-secondary", "role": "test-engineer", "needs": ["seconder"], "labels": ["edge:validates->executor", "position:secondary-writer"] },
+        { "id": "test-runner", "class": "gate", "role": "test-runner", "needs": ["test-engineer"], "labels": ["gate:mandatory"] },
+        { "id": "security-auditor", "class": "gate-optional-on-mandatory-path", "role": "security-auditor", "needs": ["test-runner"], "labels": ["edge:validates->executor", "gate:mandatory", "optional:sensitive"] },
+        { "id": "obligations-scanner", "class": "gate", "role": "obligations-scanner", "needs": ["security-auditor"], "labels": ["edge:validates->executor", "gate:mandatory"] },
+        { "id": "reviewer", "class": "gate", "role": "reviewer", "needs": ["obligations-scanner"], "labels": ["edge:validates->root", "gate:final"] }
+      ],
+      "gates": { "mandatory": ["seconder", "test-runner", "obligations-scanner"], "conditional_on_mandatory_path": ["security-auditor"], "final": ["reviewer"] },
+      "variables": { "root_title": "default 'Untitled work'", "scope": "default 'src/**'", "scrutiny": "default 'high'" },
+      "scrutiny_assumption": "Default high. Canon adds selection matcher applies_when (type task|bug, scrutiny>=high, scope contains production paths) — NOT in formula (bd formula has no applies_when; selection lives in hook/dispatcher config).",
+      "writer_class": "dual planned writers: executor then test-engineer (secondary); lease handoff per substrate §6.9.6 asserted in canon, not encoded",
+      "advisor_class": "none",
+      "semantic_edge_hints": ["edge:implements->root", "edge:validates->executor", "edge:validates->root", "position:secondary-writer label"],
+      "ambidextrous_roles": ["test-engineer × 2 positions instance: secondary-writer mandate text verbatim in step.description ('you are the secondary writer after the executor…')"],
+      "non_canonical_assumptions": [
+        "STRUCTURAL DEFECT: obligations-scanner needs security-auditor unconditionally, so an optional:sensitive step sits on the mandatory dependency path — skipping security-auditor breaks the blocks edge; canon describes it as conditional ('if sensitive')",
+        "findings_per_writer reviewer attribution required by mandate text but not machine-encoded",
+        "lease/worktree semantics assumed from substrate §6.9.6, absent from artifact"
+      ]
+    },
+    {
+      "name": "debug",
+      "path": "docs/design/roadmap/chain-templates/debug.formula.json",
+      "sha": "bea83e04983762a3403b3397c0d4beacbdf62d59",
+      "bytes": 4858,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root(type:bug)", "debugger", "seconder", "test-engineer", "test-runner", "obligations-scanner", "reviewer"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "type": "bug", "labels": ["chain-root", "kind:root", "type:bug", "scrutiny:{{scrutiny}}"], "needs": [] },
+        { "id": "debugger", "class": "writer", "role": "debugger", "needs": ["root"], "labels": ["edge:implements->root", "non-skippable:true"] },
+        { "id": "seconder", "class": "gate", "role": "seconder", "needs": ["debugger"], "labels": ["edge:validates->debugger", "gate:mandatory"] },
+        { "id": "test-engineer", "class": "qa-writer", "role": "test-engineer", "needs": ["seconder"], "labels": ["edge:validates->debugger"] },
+        { "id": "test-runner", "class": "gate", "role": "test-runner", "needs": ["test-engineer"], "labels": ["gate:mandatory"] },
+        { "id": "obligations-scanner", "class": "gate", "role": "obligations-scanner", "needs": ["test-runner"], "labels": ["edge:validates->debugger", "gate:mandatory"] },
+        { "id": "reviewer", "class": "gate", "role": "reviewer", "needs": ["obligations-scanner"], "labels": ["edge:validates->root", "gate:final"] }
+      ],
+      "gates": { "mandatory": ["seconder", "test-runner", "obligations-scanner"], "final": ["reviewer"] },
+      "variables": { "root_title": "default 'Untitled bug'", "scope": "default 'src/**'", "scrutiny": "default 'medium'" },
+      "scrutiny_assumption": "Default medium; canon says raises to high if regression severe (operator-declared) — not encoded. Regression test mandatory via VALIDATION prose.",
+      "writer_class": "debugger (non-skippable, labeled non-skippable:true — only debug and restitch carry this marker)",
+      "advisor_class": "none",
+      "semantic_edge_hints": ["edge:implements->root", "edge:validates->debugger (entire QA tail validates the debugger's diff)", "edge:validates->root (reviewer)", "non-skippable:true"],
+      "ambidextrous_roles": [],
+      "non_canonical_assumptions": [
+        "'do NOT dispatch executor here' orchestration rule and architectural-root-cause escalation to overthinker/planner (canon §3.4 critical orchestration rule) live only in prose",
+        "root type:bug maps to bd issue type enum"
+      ]
+    },
+    {
+      "name": "doc-sync",
+      "path": "docs/design/roadmap/chain-templates/doc-sync.formula.json",
+      "sha": "a45170ff74bec64285e88868f855772c6af8a8d5",
+      "bytes": 1937,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root(type:chore)", "sync-docs"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "type": "chore", "labels": ["chain-root", "kind:root", "type:chore", "documentation"], "needs": [] },
+        { "id": "sync-docs", "class": "writer", "role": "sync-docs", "needs": ["root"], "labels": ["edge:implements->root"] }
+      ],
+      "gates": {},
+      "variables": { "root_title": "default 'Sync doc with recent changes'", "doc_path": "default 'docs/README.md'", "context_scope": "default 'src/**'" },
+      "scrutiny_assumption": "None declared (canon severity floor N/A). No scrutiny label at all — inconsistent with code-* formulas which always carry one.",
+      "writer_class": "sync-docs (single-file minimal-diff editor)",
+      "advisor_class": "none",
+      "semantic_edge_hints": ["edge:implements->root"],
+      "ambidextrous_roles": [],
+      "non_canonical_assumptions": [
+        "'Drift-detector pre-script runs before specialist starts' — external hook assumption embedded in prose",
+        "hard single-doc-per-chain rule enforced by sync-docs mandatory rules, not by structure"
+      ]
+    },
+    {
+      "name": "memory-hygiene",
+      "path": "docs/design/roadmap/chain-templates/memory-hygiene.formula.json",
+      "sha": "a11ba4e0cb43b2d3b99989db78a4fc74eb1545e5",
+      "bytes": 2354,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root(type:chore)", "memory-processor"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "type": "chore", "labels": ["chain-root", "kind:root", "type:chore", "memory", "hygiene"], "needs": [] },
+        { "id": "memory-processor", "class": "writer", "role": "memory-processor", "needs": ["root"], "labels": ["edge:implements->root"] }
+      ],
+      "gates": {},
+      "variables": { "root_title": "default 'Memory hygiene pass'", "trigger_reason": "default 'post-epic-close'" },
+      "scrutiny_assumption": "None declared. CONTRADICTION with canon §3.13 which lists variables `scope` (default all memories) and `dry_run` (default true) — formula has neither.",
+      "writer_class": "memory-processor (edits .xtrm/memory.md only)",
+      "advisor_class": "none",
+      "semantic_edge_hints": ["edge:implements->root"],
+      "ambidextrous_roles": [],
+      "non_canonical_assumptions": [
+        "references bd memories store, .xtrm/memory.md layout, bd kv keys-to-forget — Beads/storage specifics that do not belong in a ChainDefinition",
+        "'Bulk-export pre-script runs before specialist starts' — external script hook assumed"
+      ]
+    },
+    {
+      "name": "planning",
+      "path": "docs/design/roadmap/chain-templates/planning.formula.json",
+      "sha": "c5fb452a06970893f592ae9a2d9dc795646efa5b",
+      "bytes": 2047,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root", "planner"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "type": "task", "labels": ["chain-root", "kind:root", "type:task", "planning"], "needs": [] },
+        { "id": "planner", "class": "writer-meta", "role": "planner", "needs": ["root"], "labels": ["edge:implements->root"] }
+      ],
+      "gates": {},
+      "variables": { "root_title": "default 'Untitled initiative'", "scope": "default 'src/**'" },
+      "scrutiny_assumption": "None declared (canon N/A).",
+      "writer_class": "planner (HIGH planning authority; writes bd issues, not code)",
+      "advisor_class": "none",
+      "semantic_edge_hints": ["edge:implements->root"],
+      "ambidextrous_roles": [],
+      "non_canonical_assumptions": [
+        "planner OUTPUTS are bd create commands with --parent/--deps and change-contract sections — deep Beads-authoring coupling inside a step contract",
+        "Canon §3.10 says planner output proposes recommended_template per leaf bead (roadmap D26 Pass-2); formula mandate does not mention recommended_template annotation — gap vs core UPSTREAM-DEPENDENCIES.md capability `planning_recommends_template`",
+        "UPSTREAM-DEPENDENCIES expects planner to use bd swarm validate/create + <change-contract> XML — neither present in this formula's mandate"
+      ]
+    },
+    {
+      "name": "premortem",
+      "path": "docs/design/roadmap/chain-templates/premortem.formula.json",
+      "sha": "3243d7fbf805f5de2eb5b095b7cccff986bdec04",
+      "bytes": 2340,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root(type:decision)", "overthinker"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "type": "decision", "labels": ["chain-root", "kind:root", "type:decision", "premortem", "scope-empty:code"], "needs": [] },
+        { "id": "overthinker", "class": "advisor-standalone", "role": "overthinker", "needs": ["root"], "labels": ["edge:informs->root", "advisor:standalone"] }
+      ],
+      "gates": {},
+      "variables": { "root_title": "default 'Risky design premortem'" },
+      "scrutiny_assumption": "None declared. Root carries scope-empty:code marker.",
+      "writer_class": "none (READ_ONLY output memo)",
+      "advisor_class": "overthinker standalone (4-phase CoT: initial analysis → critique → synthesis → distilled recommendation)",
+      "semantic_edge_hints": ["edge:informs->root", "advisor:standalone"],
+      "ambidextrous_roles": [],
+      "non_canonical_assumptions": [
+        "substrate rev9 REMOVED `decision` as an issue type classifier ('decision removed as it is an outcome not a classifier') — this formula's root type:decision conflicts with substrate issue schema"
+      ]
+    },
+    {
+      "name": "release-prep",
+      "path": "docs/design/roadmap/chain-templates/release-prep.formula.json",
+      "sha": "ce3fece1aa7fb49b4eec07b74d2a5f9fef08ad1b",
+      "bytes": 2638,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root(type:chore)", "changelog-drafter", "changelog-keeper"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "type": "chore", "labels": ["chain-root", "kind:root", "type:chore", "release"], "needs": [] },
+        { "id": "changelog-drafter", "class": "advisor-standalone", "role": "changelog-drafter", "needs": ["root"], "labels": ["edge:informs->root", "advisor:pre-impl"] },
+        { "id": "changelog-keeper", "class": "writer", "role": "changelog-keeper", "needs": ["changelog-drafter"], "labels": ["edge:implements->root"] }
+      ],
+      "gates": {},
+      "variables": { "root_title": "default 'Release prep'", "prev_tag": "default 'HEAD~50'", "next_tag": "default 'HEAD'" },
+      "scrutiny_assumption": "None declared; canon claims floor medium.",
+      "writer_class": "changelog-keeper (CHANGELOG.md only, single-file diff)",
+      "advisor_class": "changelog-drafter (READ_ONLY bundle synthesis, labeled advisor:pre-impl despite being a sequential predecessor rather than a parallel advisor)",
+      "semantic_edge_hints": ["edge:informs->root", "edge:implements->root", "advisor:pre-impl"],
+      "ambidextrous_roles": [],
+      "non_canonical_assumptions": [
+        "MAJOR CONTRADICTION: canon §3.6 says variables prev_tag/next_version and changelog-keeper 'bump version + tag + push'; formula explicitly NON_GOALS 'no version bump; no build; no commit/tag/push/publish — operator handles via /releasing'. Per canon §1 precedence (formula wins for executable shape), the formula is current and canon §3.6 is stale",
+        "git tag-range semantics (.xtrm/reports/*.md, xt reports) baked into inputs"
+      ]
+    },
+    {
+      "name": "research-only",
+      "path": "docs/design/roadmap/chain-templates/research-only.formula.json",
+      "sha": "afbe3dc9de3e41f0c71d9ede3885b36d69e11a02",
+      "bytes": 2165,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root", "{{specialist}} (explorer|researcher|overthinker per canon; explorer|researcher per formula description)"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "type": "task", "labels": ["chain-root", "kind:root", "type:task", "research", "scope-empty:code"], "needs": [] },
+        { "id": "investigation", "class": "advisor-standalone", "role": "{{specialist}}", "needs": ["root"], "labels": ["edge:informs->root", "advisor:standalone"] }
+      ],
+      "gates": {},
+      "variables": { "root_title": "default 'Untitled investigation'", "scope": "default 'src/**'", "specialist": "default 'explorer'" },
+      "scrutiny_assumption": "None declared. Only formula whose ROLE ITSELF is templated (`role:{{specialist}}`, title `{{specialist}}:{{root_title}}`).",
+      "writer_class": "none (READ_ONLY findings memo to bd notes + optional design doc)",
+      "advisor_class": "variable-role standalone investigator",
+      "semantic_edge_hints": ["edge:informs->root", "advisor:standalone"],
+      "ambidextrous_roles": ["inverse case: instead of one role in two positions, one position filled by a variable role"],
+      "non_canonical_assumptions": [
+        "variable substitution into the role field assumes the pour engine accepts templated roles — a ChainDefinition compiler needs a role-enum constraint or explicit validation here",
+        "canon allows overthinker as third specialist choice; formula description mentions only explorer/researcher override"
+      ]
+    },
+    {
+      "name": "restitch",
+      "path": "docs/design/roadmap/chain-templates/restitch.formula.json",
+      "sha": "9dbc41ca1ce6a00147e3e9a93555d240842a1e70",
+      "bytes": 5087,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root(type:bug)", "debugger", "seconder", "test-engineer", "test-runner", "obligations-scanner", "reviewer"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "type": "bug", "labels": ["chain-root", "kind:root", "type:bug", "restitch", "conflict-recovery"], "needs": [] },
+        { "id": "debugger", "class": "writer", "role": "debugger", "needs": ["root"], "labels": ["edge:implements->root", "non-skippable:true"] },
+        { "id": "seconder", "class": "gate", "role": "seconder", "needs": ["debugger"], "labels": ["edge:validates->debugger", "gate:mandatory"] },
+        { "id": "test-engineer", "class": "qa-writer", "role": "test-engineer", "needs": ["seconder"], "labels": ["edge:validates->debugger"] },
+        { "id": "test-runner", "class": "gate", "role": "test-runner", "needs": ["test-engineer"], "labels": ["gate:mandatory"] },
+        { "id": "obligations-scanner", "class": "gate", "role": "obligations-scanner", "needs": ["test-runner"], "labels": ["edge:validates->debugger", "gate:mandatory"] },
+        { "id": "reviewer", "class": "gate", "role": "reviewer", "needs": ["obligations-scanner"], "labels": ["edge:validates->root", "gate:final"] }
+      ],
+      "gates": { "mandatory": ["seconder", "test-runner", "obligations-scanner"], "final": ["reviewer"] },
+      "variables": { "root_title": "default 'Restitch failed merge'", "conflict_source": "default ''" },
+      "scrutiny_assumption": "None declared in formula. Canon §3.9: 'Inherits original chain's SCRUTINY' — no inheritance mechanism exists in bd formula vars and none is encodable here.",
+      "writer_class": "debugger (non-skippable conflict resolution)",
+      "advisor_class": "none",
+      "semantic_edge_hints": ["edge:implements->root", "edge:validates->debugger", "edge:validates->root", "non-skippable:true"],
+      "ambidextrous_roles": [],
+      "non_canonical_assumptions": [
+        "CONTRADICTION: canon §3.9 mermaid shows root → debugger → seconder → reviewer (NO test-engineer/test-runner/obligations); formula ships the full QA tail. README table matches the formula; canon diagram stale",
+        "ddiff carry-forward of prior chain's QA evidence (canon) is reducer semantics, not representable in the artifact",
+        "canon names variable original_chain_root; formula carries only conflict_source — no structural link back to the failed chain"
+      ]
+    },
+    {
+      "name": "security-deep",
+      "path": "docs/design/roadmap/chain-templates/security-deep.formula.json",
+      "sha": "8d57614bae080e03468ac3552b6ea5de5a211fa6",
+      "bytes": 6901,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root", "security-auditor(advisor)", "executor", "seconder", "test-engineer", "test-runner", "security-auditor(gate)", "obligations-scanner", "reviewer"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "labels": ["chain-root", "kind:root", "scrutiny:{{scrutiny}}", "surface:sensitive"], "needs": [] },
+        { "id": "security-auditor-advisor", "class": "advisor", "role": "security-auditor", "needs": ["root"], "labels": ["role:security-auditor", "phase:advisor", "edge:informs->root"] },
+        { "id": "executor", "class": "writer", "role": "executor", "needs": ["security-auditor-advisor"], "labels": ["edge:implements->root"] },
+        { "id": "seconder", "class": "gate", "role": "seconder", "needs": ["executor"], "labels": ["edge:validates->executor", "gate:mandatory"] },
+        { "id": "test-engineer", "class": "qa-writer", "role": "test-engineer", "needs": ["seconder"], "labels": ["edge:validates->executor"] },
+        { "id": "test-runner", "class": "gate", "role": "test-runner", "needs": ["test-engineer"], "labels": ["gate:mandatory"] },
+        { "id": "security-auditor-gate", "class": "gate", "role": "security-auditor", "needs": ["test-runner"], "labels": ["role:security-auditor", "phase:gate", "edge:validates->executor", "gate:mandatory"] },
+        { "id": "obligations-scanner", "class": "gate", "role": "obligations-scanner", "needs": ["test-runner"], "labels": ["edge:validates->executor", "gate:mandatory"] },
+        { "id": "reviewer", "class": "gate", "role": "reviewer", "needs": ["security-auditor-gate", "obligations-scanner"], "labels": ["edge:validates->root", "gate:final"] }
+      ],
+      "gates": { "mandatory": ["seconder", "test-runner", "security-auditor-gate", "obligations-scanner"], "final": ["reviewer"] },
+      "variables": { "root_title": "default 'Untitled sensitive change'", "scope": "default 'src/**'", "scrutiny": "default 'critical'" },
+      "scrutiny_assumption": "Default critical. Canonical example of same-role-two-classes: role:security-auditor twice, distinguished by phase:advisor vs phase:gate labels and separate step ids.",
+      "writer_class": "executor (applies advisor recommendations)",
+      "advisor_class": "security-auditor as pre-impl threat-model advisor (LOW permission, recommendations-only, CVE/CWE citations requested)",
+      "semantic_edge_hints": ["edge:informs->root", "edge:implements->root", "edge:validates->executor", "edge:validates->root", "phase:advisor", "phase:gate"],
+      "ambidextrous_roles": ["security-auditor × 2 classes — THE established ambidextrous precedent (substrate same-role-two-classes, §6.2.1)"],
+      "non_canonical_assumptions": [
+        "sensitive_surface var named in canon §3.5 (auth|secrets|crypto|migration|hooks|permissions|lockfile|agent-config) is ABSENT from formula vars — only surface:sensitive label",
+        "CVE/CWE citation expectation is prompt-level content, not structure"
+      ]
+    },
+    {
+      "name": "test-only",
+      "path": "docs/design/roadmap/chain-templates/test-only.formula.json",
+      "sha": "d8ab6be1622055e99c658fbd75fd302d786e7f88",
+      "bytes": 3264,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root", "test-engineer(primary-writer)", "seconder", "test-runner", "reviewer"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "labels": ["chain-root", "kind:root", "scrutiny:{{scrutiny}}"], "needs": [] },
+        { "id": "test-engineer", "class": "writer-primary", "role": "test-engineer", "needs": ["root"], "labels": ["edge:validates->root", "position:primary-writer"] },
+        { "id": "seconder", "class": "gate", "role": "seconder", "needs": ["test-engineer"], "labels": ["edge:validates->root", "gate:mandatory"] },
+        { "id": "test-runner", "class": "gate", "role": "test-runner", "needs": ["seconder"], "labels": ["gate:mandatory"] },
+        { "id": "reviewer", "class": "gate", "role": "reviewer", "needs": ["test-runner"], "labels": ["edge:validates->root", "gate:final"] }
+      ],
+      "gates": { "mandatory": ["seconder", "test-runner"], "final": ["reviewer"] },
+      "variables": { "root_title": "default 'Untitled tests'", "scope": "default 'tests/**'", "scrutiny": "default 'medium'" },
+      "scrutiny_assumption": "Default medium. No security-auditor/obligations-scanner (matches canon §3.15 rationale). coverage_target named in canon §3.15 vars but ABSENT from formula vars.",
+      "writer_class": "test-engineer as PRIMARY writer (mandate text: 'you are the primary writer; write tests that satisfy the bead contract')",
+      "advisor_class": "none",
+      "semantic_edge_hints": ["edge:validates->root (writer carries a validates edge — unusual)", "position:primary-writer", "gate:mandatory/final"],
+      "ambidextrous_roles": ["test-engineer × 2 positions instance: primary-writer mode"],
+      "non_canonical_assumptions": [
+        "applies_when matcher (scope_matches test/** etc., no production file) documented in canon §3.15 but not encodable in formula",
+        "anomaly: test-only's writer carries edge:validates->root while code-with-tests' equivalent writer carries edge:implements->root — validates/implements usage for the writer→root relation is inconsistent across formulas"
+      ]
+    },
+    {
+      "name": "triage",
+      "path": "docs/design/roadmap/chain-templates/triage.formula.json",
+      "sha": "e1a971c287b6529c96d2e47fb6f73cca996474b5",
+      "bytes": 3039,
+      "type": "workflow",
+      "version": 1,
+      "roles": ["root(type:chore)", "explorer", "overthinker"],
+      "steps": [
+        { "id": "root", "class": "chain-root", "type": "chore", "labels": ["chain-root", "kind:root", "type:chore", "triage", "board-health"], "needs": [] },
+        { "id": "explorer", "class": "advisor", "role": "explorer", "needs": ["root"], "labels": ["edge:informs->root", "advisor:pre-impl"] },
+        { "id": "overthinker", "class": "advisor", "role": "overthinker", "needs": ["explorer"], "labels": ["edge:informs->root", "advisor:pre-impl"] }
+      ],
+      "gates": {},
+      "variables": { "root_title": "default 'Board triage pass'", "filter": "default 'status=open'" },
+      "scrutiny_assumption": "None declared (READ_ONLY chain).",
+      "writer_class": "none — output is advisory; OPERATOR applies recommendations after the chain (bd dep/duplicate/supersede/close)",
+      "advisor_class": "sequential advisors: explorer (clustering/dup/orphan mapping) → overthinker (4-phase critique + ranked recommendations); sequencing via needs edge, both labeled advisor:pre-impl despite being the entire chain",
+      "semantic_edge_hints": ["edge:informs->root", "advisor:pre-impl", "implicit sequencing explorer→overthinker via needs"],
+      "ambidextrous_roles": [],
+      "non_canonical_assumptions": [
+        "deeply Beads-coupled: inputs bd list --json, outputs ready-to-run bd commands — board-domain work expressed as a chain",
+        "'orphan tracking-beads (step-beads missing validates edge to root)' presumes THIS system's own edge vocabulary inside a template"
+      ]
+    }
+  ]
+}

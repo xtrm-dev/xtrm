@@ -1,0 +1,119 @@
+{
+  "lane": "H",
+  "topic": "planner-modernization",
+  "generated": "2026-07-24",
+  "repo_context": {
+    "repository": "/home/dawid/dev/core",
+    "head": "ba3515330b17800e80410f147f9a0d48e467a9c0"
+  },
+  "current_direction_as_written": {
+    "summary": "Intent -> clarify -> GitNexus explore -> structure phases -> mutate Beads graph directly via bd create --parent/--deps (single bash invocation board) -> test-planning companion issues -> claim first issue.",
+    "sources": [
+      "~/.pi/agent/skills/planning/SKILL.md (== ~/.xtrm/skills/default/planning/SKILL.md, 670 lines)",
+      "~/.pi/agent/skills/test-planning/SKILL.md (== ~/.xtrm/skills/default/test-planning/SKILL.md, 542 lines)",
+      "core docs/plans/xtpi-worktree-first-flow.md section 3 (canonical loop: bd update --claim / bd close --reason)",
+      "core docs/design/issuetracking.md (deferred design; issues as executable contracts, validator-gated dispatch)"
+    ],
+    "key_mechanics": [
+      "Board created in ONE scripted bash invocation: epic first and alone, then children with --parent in dependency order",
+      "Hierarchical IDs deterministic by creation order (<epic>.1, <epic>.2, ...); main sequencing edges wired inline at create time via --deps; post-hoc edges via typed bd dep add",
+      "--deps direction semantics: bare id / depends-on:id / blocked-by:id make THIS issue depend on id; blocks:id reverses",
+      "Draft capture mode: contract:draft label, real PROBLEM + rough SCOPE, explicit 'TBD — needs exploration' elsewhere; draft beads are undispatchable ('A draft bead cannot be dispatched.')",
+      "Verification chained on the same invocation: bd children, bd graph, bd dep cycles",
+      "7-section bead contract mandatory for every task and epic; template must stay mirrored with using-specialists SKILL.md"
+    ]
+  },
+  "target_direction": {
+    "summary": "Intent -> authored ChainDefinition -> review/freeze -> ResolvedChain -> Beads materialization.",
+    "nearest_written_precursors_in_core_docs": [
+      {
+        "doc": "docs/design/xtrm-orchestration-determinism-final-consolidated-report-2026-07-23.md",
+        "sha": "a09bb9f6329a25c5fb04881dd6f9190e4e1eaa68",
+        "quote": "One canonical resolver must produce: selected template → resolved DAG → exact Specialist and dispatch flags → parent/coordinator assignment → expected notification or monitor behavior → typed result contract → eligible next transitions.",
+        "quote2": "Do not implement separate partial resolvers in Core, xtmux, Specialists, prompts, and Archon adapters."
+      },
+      {
+        "doc": "docs/design/command-outcome-v1.md",
+        "sha": "d4c6efeb486744ddf1c111c776d7a13acc10ced9",
+        "quote": "This K2 slice proves the common shape with existing Pi and Claude launchers. It does not depend on ResolvedChain, specialists.execution.v1, the chain reducer, MCP, plugins, or a production Codex launcher."
+      },
+      {
+        "doc": "docs/design/issuetracking.md",
+        "sha": "e62d3241ca06bb8da948106f41195e57d7274481",
+        "quote": "issue contract → validator → specialist chain → evidence graph → review → merge/close",
+        "quote2": "'ready' should not mean only “not blocked by deps”. It should mean the issue contract is specific enough to launch the right specialist chain."
+      }
+    ],
+    "gap": "No core doc describes the authored-ChainDefinition flow yet. The planning skill mutates Beads directly; issuetracking.md is explicitly deferred; substrate canon holds resolved_chain_json as completeness contract. The freeze gate concept exists in three unconnected places: planning skill's bd set-state contract=ready promotion, issuetracking.md contract_status=ready verdict, substrate resolved_chain_json."
+  },
+  "mechanics_worth_preserving": [
+    {
+      "name": "rich self-contained contracts",
+      "quote_planning": "The seven sections — `PROBLEM / SUCCESS / SCOPE / NON_GOALS / CONSTRAINTS / VALIDATION / OUTPUT` — are mandatory for every task and every epic.",
+      "quote_quality_bar": "The test of a good issue: could another agent pick it up cold and succeed?",
+      "quote_drift_guard": "Any drift between this template and the using-specialists contract creates partial contracts and weakens downstream specialist output."
+    },
+    {
+      "name": "hierarchy first",
+      "quote": "Create the epic first, alone, and capture its ID ... Create every child with --parent \"$EPIC\" inside the same invocation, in dependency order — the issue that others wait on is created first.",
+      "quote2": "Hierarchical IDs are assigned deterministically by creation order"
+    },
+    {
+      "name": "dependencies separate (typed edges, inline where possible)",
+      "quote": "`blocks` is only for hard must-happen-before sequencing; overusing it makes `bd ready` untrustworthy and hides review/test/follow-up meaning.",
+      "quote2": "Companion test/reviewer/sanity/security issues should usually use `validates`, not `blocks`.",
+      "quote3": "Follow-up issues spawned by exploration or review should use `discovered-from`, not `blocks`."
+    },
+    {
+      "name": "test-planning integration",
+      "quote_planning_skill": "After the implementation issues are created, invoke **test-planning**",
+      "quote_test_triggers": "Activates at three points: (1) issue-board creation from a spec/plan, (2) specialist-chain test authoring after executor/debugger work clarifies what changed, and (3) implementation closure to close coverage gaps.",
+      "quote_batching": "Don't create one test issue per implementation issue — that's overhead. Batch by layer and phase",
+      "quote_gating": "Test issues should gate the next phase of work. Use bd dependencies or document in the issue description"
+    },
+    {
+      "name": "critical-path testing",
+      "quote": "Do not frame test issues around coverage percentages. Frame them around critical paths and risk rationale.",
+      "quote2": "a 90% line-coverage number says nothing about whether the one path that processes payments is tested. A critical path map forces explicit reasoning about what matters and what was skipped.",
+      "quote3": "Static gates like `pyright`, `tsc`, `ruff`, ESLint, or schema validation are valuable, but they are not substitutes for smoke/E2E evidence."
+    },
+    {
+      "name": "file collision planning",
+      "quote_scope": "SCOPE — Files, symbols, modules this task MAY touch. Be explicit — file:line or symbol-list when possible.",
+      "quote_boundary": "Forbidden boundary (\"do NOT touch\") goes in NON_GOALS or CONSTRAINTS.",
+      "quote_merge_rule": "If two tasks always ship together → merge them"
+    },
+    {
+      "name": "handoff quality",
+      "quote": "Include a short **Architecture & Impact Summary** in your handoff message: Key execution flows/processes involved; Top d=1 dependents to watch; Highest observed risk (LOW/MEDIUM/HIGH/CRITICAL); Whether GitNexus-first or fallback exploration was used",
+      "quote_self_check": "[ ] First implementation issue is ready to claim",
+      "quote_observability_contract": "Every implementation plan must include a logging/telemetry contract and an integration validation contract. Do this during planning, not as a reviewer afterthought."
+    },
+    {
+      "name": "draft capture honesty (intake for future ChainDefinition authoring)",
+      "quote": "No one-liners, ever — draft mode included. PROBLEM must be real prose, SCOPE must be a real guess, and every other section must explicitly say `TBD — needs exploration` rather than being silently absent.",
+      "quote2": "Draft mode defers the work, not the eventual rigor."
+    },
+    {
+      "name": "recent-work check before planning",
+      "quote": "Stale mental models are the largest single source of over-scoping ... If a recent PR already did what the request is asking for, STOP and confirm with the operator before continuing."
+    }
+  ],
+  "mapping_to_target": {
+    "chaindefinition_payload": "The 7-section bead contract plus LIBRARIES survey result and layer classification signals map onto per-node input/output contracts of a ChainDefinition.",
+    "dependency_edges": "blocks/validates/discovered-from/until edge semantics map onto DAG dependency kinds; bd dep cycles == resolver acyclicity proof.",
+    "freeze_gate_candidates": [
+      "planning skill: bd set-state <id> contract=ready --reason after Phase 2-4 rewrite",
+      "issuetracking.md: contract_status=ready verdict from validator, dispatch_allowed=false otherwise",
+      "substrate canon: resolved_chain_json persisted container state = completeness contract (per lane F)"
+    ],
+    "materialization_seam": "xt update ReconciliationOutcome phase model is the existing single-verb pattern a future 'materialize ResolvedChain into Beads' phase would extend; repair-transaction.md says new reconciliation work belongs inside xt update, not a parallel verb.",
+    "open_design_decision": "Whether planner bd-direct mutation survives as draft/intake tier beneath authored ChainDefinition, or is replaced wholesale. Draft-capture mode (contract:draft) is the natural intake format either way."
+  },
+  "skill_copy_status": {
+    "runtime_copy_read": "~/.pi/agent/skills/{planning,test-planning}/SKILL.md read fully",
+    "global_ssot": "~/.xtrm/skills/default/{planning,test-planning}/SKILL.md byte-equal to runtime copies (diff verified)",
+    "core_repo_copy_stale": true,
+    "detail": "core skills/planning/SKILL.md @HEAD 36430e4b (451 lines) lacks draft-capture mode, telemetry contracts, Trigger-2; core skills/test-planning/SKILL.md @HEAD 2669cec4 (465 lines) has only two triggers and older description. Global SSOT copies are ahead. Violates skills-ownership.md vendor-flow direction."
+  }
+}
