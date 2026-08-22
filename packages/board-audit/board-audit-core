@@ -112,9 +112,14 @@ REPO_SLUG="$(basename "$REPO_ROOT")"
 GH_REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)"
 [ -n "$GH_REPO" ] || GH_REPO="$REPO_SLUG"
 
-for cmd in bd python3; do
-  command -v "$cmd" >/dev/null || { echo "error: '$cmd' not on PATH" >&2; exit 1; }
-done
+command -v python3 >/dev/null || { echo "error: 'python3' not on PATH" >&2; exit 1; }
+# `bd` is only needed when this run must acquire the canonical Beads snapshot
+# itself. Export mode with --from-raw consumes an acquisition supplied by the
+# caller and does not touch bd (the best-effort `bd version` metadata below
+# already tolerates absence via `|| true`).
+if [ "$EXPORT_MODE" -eq 0 ] || [ -z "$FROM_RAW" ]; then
+  command -v bd >/dev/null || { echo "error: 'bd' not on PATH (required unless --export --from-raw is used)" >&2; exit 1; }
+fi
 if [ "$EXPORT_MODE" -eq 0 ]; then
   command -v gh >/dev/null || { echo "error: 'gh' not on PATH" >&2; exit 1; }
 fi
@@ -143,11 +148,11 @@ if [ "$EXPORT_MODE" -eq 1 ]; then
   MANIFEST_OUT="$SNAPSHOT_DIR/manifest.json"
   mkdir -p "$PACKAGES_DIR"
 
-  echo "→ acquiring canonical Beads snapshot with bd export --all..."
   if [ -n "$FROM_RAW" ]; then
+    echo "→ reusing provided Beads acquisition: $FROM_RAW"
     cp -f "$FROM_RAW" "$RAW_OUT"
-    echo "→ reusing provided acquisition: $FROM_RAW"
   else
+    echo "→ acquiring canonical Beads snapshot with bd export --all..."
     _export_all "$RAW_OUT"
   fi
   [ -s "$RAW_OUT" ] || echo "warning: Beads export is empty" >&2
