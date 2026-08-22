@@ -52,31 +52,33 @@ const HOOK_FILES = {
 function hookUsage(shell) {
   return `
 
-Install: source this file in your shell config, then enable the hook.
+xts shellhook prints only the hook code (safe to eval/source). Install it with:
 
-  bash (in ~/.bashrc):
-    source ${resolveHookPath("bash")}
-    PROMPT_COMMAND="\${PROMPT_COMMAND:+\$PROMPT_COMMAND;}xts_hook"
+  eval "$(xts shellhook)"      # add to ~/.${shell === "zsh" ? "zshrc" : "bashrc"}
 
-  zsh (in ~/.zshrc):
-    source ${resolveHookPath("zsh")}
-    autoload -U add-zsh-hook; add-zsh-hook precmd xts_hook
-
-State is written to \$XTS_STATE_DIR/xts/state.json (default ~/.local/state/xts/state.json).
-The hook prints nothing. To uninstall, remove the two lines above and the
-state directory (rm -rf ~/.local/state/xts).
+State is written to $XTS_STATE_DIR/xts/state.json (default ~/.local/state/xts/state.json).
+The hook prints nothing. To uninstall, remove the marked block from your rc and
+the state directory (rm -rf ~/.local/state/xts).
 `;
 }
 function resolveHookPath(shell) {
   return fileURLToPath(HOOK_FILES[shell]);
 }
 
-async function shellhook() {
-  const requested = process.argv[process.argv.indexOf("shellhook") + 1];
+async function shellhook(args = []) {
+  const requested = args[0];
+  if (requested === "--help" || requested === "-h") {
+    const shell = defaultShell();
+    process.stdout.write(hookUsage(shell));
+    return;
+  }
   const shell = requested === "bash" || requested === "zsh" ? requested : defaultShell();
   try {
     const snippet = await readFile(resolveHookPath(shell), "utf8");
-    process.stdout.write(snippet + hookUsage(shell));
+    // Pure hook code on stdout — safe for eval "$(xts shellhook)". The zsh
+    // snippet self-registers via add-zsh-hook; usage guidance is --help only,
+    // so sourced/eval'd output never prints anything (PRD §10 silence).
+    process.stdout.write(snippet);
   } catch {
     process.stderr.write(`xts: could not read the ${shell} hook file\n`);
     process.exitCode = 1;
@@ -296,16 +298,23 @@ async function run() {
     return;
   }
 
-  if (parsed.flags.help) {
-    process.stdout.write(USAGE);
-    return;
-  }
   if (parsed.flags.version) {
     process.stdout.write(`${VERSION}\n`);
     return;
   }
 
   const [command, ...rest] = parsed.positionals;
+
+  // shellhook owns its own flags (--help): parseArgv would swallow them as
+  // globals, so hand over the raw argv tail after the "shellhook" token.
+  if (command === "shellhook") {
+    await shellhook(process.argv.slice(process.argv.indexOf("shellhook") + 1));
+    return;
+  }
+  if (parsed.flags.help) {
+    process.stdout.write(USAGE);
+    return;
+  }
 
   if (command === undefined) {
     // Bare `xts` starts interactive; but `command | xts` (piped stdin, no
@@ -405,6 +414,10 @@ async function oneShot({ question, showPrompt }) {
 
   let answer = "";
   let failed = false;
+  const toolLabel = (command) => {
+    const collapsed = String(command ?? "").replace(/\s+/g, " ").trim();
+    return collapsed.length > 120 ? `${collapsed.slice(0, 119)}…` : collapsed;
+  };
   session.subscribe((event) => {
     if (event.type === "message_update") {
       const se = event.assistantMessageEvent;
@@ -412,6 +425,12 @@ async function oneShot({ question, showPrompt }) {
         answer += se.delta;
         process.stdout.write(se.delta);
       }
+    } else if (event.type === "tool_execution_start") {
+      // Tool calls are visible in one-shot/pipe too (PRD §16): stderr keeps
+      // stdout clean so the answer stays pipeable.
+      process.stderr.write(`$ ${toolLabel(event.args?.command ?? event.toolName)}\n`);
+    } else if (event.type === "tool_execution_end") {
+      process.stderr.write(`-> ${event.isError ? "error" : "ok"}\n`);
     } else if (event.type === "agent_end") {
       const error = findAssistantError(event.messages);
       if (error) {

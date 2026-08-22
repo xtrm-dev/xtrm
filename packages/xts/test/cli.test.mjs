@@ -36,6 +36,45 @@ function runWithInput(args, writeInput, options = {}) {
   });
 }
 
+function writeToolEventsLoader(dir) {
+  const modules = {
+    "./prompt.mjs": "export function buildUserMessage() { return 'test envelope'; }",
+    "./stdin.mjs": "export async function readStdin() { return { content: '' }; }",
+    "./context.mjs": "export async function loadShellContext() { return ''; }",
+    "./config.mjs": "export async function readConfig() { return {}; }",
+    "./model.mjs": "export async function resolveModel() { return { provider: 'test', id: 'test-model' }; }",
+    "./runtime.mjs": [
+      "export async function createXtsSession() {",
+      "  let onEvent = () => {};",
+      "  const session = {",
+      "    subscribe(callback) { onEvent = callback; },",
+      "    async prompt() {",
+      "      onEvent({ type: 'tool_execution_start', toolCallId: 't1', toolName: 'bash', args: { command: 'echo   called-by-tool' } });",
+      "      onEvent({ type: 'tool_execution_end', toolCallId: 't1', toolName: 'bash', result: {}, isError: false });",
+      "      onEvent({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'done' } });",
+      "    },",
+      "    dispose() {},",
+      "  };",
+      "  return { session };",
+      "}",
+    ].join("\n"),
+    "@earendil-works/pi-coding-agent": "export const ModelRuntime = { create: async () => ({}) };",
+  };
+  const loader = path.join(dir, "tool-events-loader.mjs");
+  writeFileSync(
+    loader,
+    `import { register } from "node:module";\n` +
+      `register(import.meta.url, import.meta.url);\n` +
+      `const modules = ${JSON.stringify(modules)};\n` +
+      "export async function resolve(specifier, context, nextResolve) {\n" +
+      "  const source = modules[specifier];\n" +
+      "  if (source) return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true };\n" +
+      "  return nextResolve(specifier, context);\n" +
+      "}\n",
+  );
+  return loader;
+}
+
 function writeOneShotErrorLoader(dir) {
   const modules = {
     "./prompt.mjs": "export function buildUserMessage() { return 'test envelope'; }",
@@ -121,17 +160,22 @@ test("not-yet-implemented commands exit 1 with stderr message", async () => {
   }
 });
 
-test("shellhook prints the bash hook and install instructions", async () => {
+test("shellhook prints pure hook code safe for eval (no usage text)", async () => {
   const { stdout } = await run(["shellhook"]);
   assert.match(stdout, /xts_hook\(\)/);
-  assert.match(stdout, /PROMPT_COMMAND/);
-  assert.match(stdout, /~\/\.bashrc/);
+  assert.doesNotMatch(stdout, /Install:/);
 });
 
-test("shellhook zsh prints the zsh hook and instructions", async () => {
+test("shellhook --help prints usage without hook code", async () => {
+  const { stdout } = await run(["shellhook", "--help"]);
+  assert.match(stdout, /Install it with/);
+  assert.doesNotMatch(stdout, /xts_hook\(\) \{/);
+});
+
+test("shellhook zsh prints the zsh hook code only", async () => {
   const { stdout } = await run(["shellhook", "zsh"]);
   assert.match(stdout, /add-zsh-hook precmd xts_hook/);
-  assert.match(stdout, /~\/\.zshrc/);
+  assert.doesNotMatch(stdout, /Install it with/);
 });
 
 test("shellhook with unknown shell defaults to bash", async () => {
@@ -329,6 +373,35 @@ test("one-shot surfaces assistant stopReason errors on stderr and exits 1", asyn
     });
     assert.equal(code, 1, `expected exit 1, stderr: ${stderr}`);
     assert.match(stderr, /xts: assistant error: simulated provider failure/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("one-shot prints bash tool calls to stderr while stdout stays clean", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "xts-tool-events-"));
+  try {
+    const loader = writeToolEventsLoader(dir);
+    const child = spawn(
+      process.execPath,
+      ["--import", pathToFileURL(loader).href, CLI],
+      { env: { ...process.env, XTS_CONFIG_DIR: dir }, stdio: ["pipe", "pipe", "pipe"] },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (c) => { stdout += c; });
+    child.stderr.on("data", (c) => { stderr += c; });
+    child.stdin.end("");
+    const code = await new Promise((resolve, reject) => {
+      child.on("error", reject);
+      child.on("close", resolve);
+    });
+    assert.equal(code, 0, `stderr: ${stderr}`);
+    assert.match(stderr, /\$ echo called-by-tool/);
+    assert.match(stderr, /-> ok/);
+    assert.equal(stdout.trim(), "done");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
