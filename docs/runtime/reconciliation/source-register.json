@@ -1,0 +1,2358 @@
+[
+  {
+    "path": "docs/xtrm-MOC.md",
+    "sha": "c5f83563ef7a4270b8f4d18f840b8a4504e5dc83",
+    "bytes": 9361,
+    "lines": 154,
+    "read_status": "complete",
+    "classification": "editorial-snapshot",
+    "domain_tags": [
+      "planning",
+      "programme"
+    ],
+    "authority_for": [
+      "June-2026 design-surface map (historical only)"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": "docs/shared/native-chain-runtime-audit-2026-08-19/source-and-authority-register.md (as current design index)",
+    "conflicts_with": [
+      "current release/roadmap state; open checkboxes unverifiable"
+    ],
+    "disposition_suggestion": "archive (keep as provenance index; mark stale)",
+    "unique_requirements_to_preserve": [
+      "doc-home decision rule (repo-canonical vs vault) at lines 18-25"
+    ],
+    "notes": "Register line 62 already demotes it to provenance use. References removed temp_roadmap.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/_meta/2026-06-21-design-reconciliation.md",
+    "sha": "e0fa7383fdffe97aad86c9515bfe44d3dd9a00ed",
+    "bytes": 23175,
+    "lines": 434,
+    "read_status": "complete",
+    "classification": "historical",
+    "domain_tags": [
+      "programme",
+      "substrate",
+      "channels",
+      "console",
+      "telemetry",
+      "planning"
+    ],
+    "authority_for": [
+      "2026-06-21 snapshot decisions only"
+    ],
+    "duplicate_of": null,
+    "supersedes": "xtrm/docs/temp_roadmap.md (removed)",
+    "superseded_by": "docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md + native-chain-runtime-audit-2026-08-19 packet",
+    "conflicts_with": [
+      "daemon/state.db-first Stage-0 critical path vs packet D-08 no-daemon-first-rewrite"
+    ],
+    "disposition_suggestion": "archive after extracting still-valid target contracts (two-tier store, three-face API, container kinds)",
+    "unique_requirements_to_preserve": [
+      "Stage-0 gating history for rollback reasoning",
+      "unitAI bead cross-references"
+    ],
+    "notes": "Classified HISTORICAL DECISION RECORD by the packet register itself (line 63).",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/_meta/vault-workflow.md",
+    "sha": "9805f5382941c918780a3b0fa09ac9381755f684",
+    "bytes": 5224,
+    "lines": 145,
+    "read_status": "complete",
+    "classification": "editorial-snapshot",
+    "domain_tags": [
+      "core"
+    ],
+    "authority_for": [
+      "Obsidian vault sync workflow"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition_suggestion": "keep in docs/_meta/ (operational how-to, not programme canon)",
+    "unique_requirements_to_preserve": [],
+    "notes": "No runtime/programme content.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-current-execution-plan.md",
+    "sha": "c45c2b17c263b59263717e7cc12f0e6a76375e22",
+    "bytes": 28591,
+    "lines": 855,
+    "read_status": "complete",
+    "classification": "canonical",
+    "domain_tags": [
+      "programme",
+      "runtime",
+      "chain",
+      "harness",
+      "eval",
+      "planning"
+    ],
+    "authority_for": [
+      "programme sequencing and dispatch",
+      "workstreams R0/I1/E1/R1/C1/D1/V1/A1/P1",
+      "gates GATE-IFACE/HARNESS-ADR/COMPOSE/DO0/AUTH"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [
+      "native-chain-runtime-audit D-01/D-09/C-01/C-03/C-04 (template-only C1; neutral harness gate; coarse Substrate deferral)"
+    ],
+    "disposition_suggestion": "canonical; apply packet section-4 canon changes when adopted (generalize C1, reframe R1.6)",
+    "unique_requirements_to_preserve": [
+      "one-authority-per-concern table 3.3",
+      "gate ladder section 8",
+      "forbidden early work section 12",
+      "amendment 15 critical path"
+    ],
+    "notes": "Self-declared canonical sequencing authority. md says reconciled 2026-08-09.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json",
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-current-execution-plan.json",
+    "sha": "49c53fd8930e4117da23574b6690a3ef3fc9f7b9",
+    "bytes": 22354,
+    "lines": 860,
+    "read_status": "complete",
+    "classification": "canonical",
+    "domain_tags": [
+      "programme",
+      "planning"
+    ],
+    "authority_for": [
+      "machine-readable mirror of execution plan"
+    ],
+    "duplicate_of": "docs/shared/xtrm-current-execution-plan.md (paired representation)",
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [
+      "last_reconciled 2026-08-10 vs md 2026-08-09 (date drift)"
+    ],
+    "disposition_suggestion": "canonical; keep md/json pair consistent",
+    "unique_requirements_to_preserve": [
+      "workstreams/gates JSON schema",
+      "forbidden_early_work list"
+    ],
+    "notes": "Gate state: GATE-R0=DOCUMENTS_PATCHED_PENDING_REVIEW (line 830).",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-v1-completion-ledger.md",
+    "sha": "fdff0fcabc82a2c5b38c140f02aa74a114e03672",
+    "bytes": 9317,
+    "lines": 86,
+    "read_status": "complete",
+    "classification": "canonical",
+    "domain_tags": [
+      "programme",
+      "runtime",
+      "chain",
+      "memory",
+      "channels",
+      "eval",
+      "planning"
+    ],
+    "authority_for": [
+      "cross-repository disposition vocabulary and ledger",
+      "gate states"
+    ],
+    "duplicate_of": null,
+    "supersedes": "draft PRs #33/#34 registries (SUPERSEDED rows)",
+    "superseded_by": null,
+    "conflicts_with": [
+      "packet C-04: Substrate deferred is too coarse - needs minimum-kernel carve-out"
+    ],
+    "disposition_suggestion": "canonical single master ledger",
+    "unique_requirements_to_preserve": [
+      "terminal disposition vocabulary section 1",
+      "one-ledger rule",
+      "Substrate+monorepo DEFERRED_BY_EXPLICIT_GATE rows"
+    ],
+    "notes": "Records disposition, not completion by assertion (line 7).",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-v1-completion-ledger.json",
+    "sha": "3b52d9b67fb90bb96137a8a6b31c5357350aa099",
+    "bytes": 9915,
+    "lines": 245,
+    "read_status": "complete",
+    "classification": "canonical",
+    "domain_tags": [
+      "programme",
+      "planning"
+    ],
+    "authority_for": [
+      "machine-readable completion ledger"
+    ],
+    "duplicate_of": "docs/shared/xtrm-v1-completion-ledger.md (paired representation)",
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition_suggestion": "canonical; includes XTRM-HARNESS-01 row absent from md table granularity",
+    "unique_requirements_to_preserve": [
+      "implementation_residuals array with required_evidence"
+    ],
+    "notes": "single_master_ledger pointer line 10.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md",
+    "sha": "ad9f482b887e6ed46623abb16bf469ab8dc81ff7",
+    "bytes": 47551,
+    "lines": 890,
+    "read_status": "complete",
+    "classification": "normative",
+    "domain_tags": [
+      "runtime",
+      "chain",
+      "participant",
+      "channels",
+      "memory",
+      "substrate",
+      "programme",
+      "telemetry"
+    ],
+    "authority_for": [
+      "D1-D22 closed architectural decisions",
+      "section 5 execution envelope",
+      "section 6 mutation journal",
+      "section 7 Channels amendment",
+      "section 9 patch matrix",
+      "section 10 finite programme sequence"
+    ],
+    "duplicate_of": null,
+    "supersedes": [
+      "pre-amendment sequencing in current-execution-plan (via section 15)",
+      "channels-upgrade conflicting delivery assumptions",
+      "stale substrate EN companion authority"
+    ],
+    "superseded_by": null,
+    "conflicts_with": [
+      "packet D-09 native-target preference vs its own neutral D20 gate framing"
+    ],
+    "disposition_suggestion": "accepted amendment with explicit sunset; move to archive/provenance once section 9 patches merged and plan refreshed",
+    "unique_requirements_to_preserve": [
+      "execution identity envelope fields",
+      "uncertain semantics + journal rules",
+      "ChannelMessage-DeliveryIntent-DeliveryAttempt-ProcessingReceipt split",
+      "runtime-vs-workflow supervision split",
+      "three-lens memory governance",
+      "five-package invariant",
+      "exactly-one-master-ledger rule"
+    ],
+    "notes": "Sunset condition at line 8. Prime Agent = reference only (D21).",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json",
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.json",
+    "sha": "1c24d6ff2971ce94e90afff8d67960a82ceebe32",
+    "bytes": 7389,
+    "lines": 187,
+    "read_status": "complete",
+    "classification": "normative",
+    "domain_tags": [
+      "programme",
+      "runtime",
+      "chain",
+      "channels",
+      "memory"
+    ],
+    "authority_for": [
+      "machine-readable decision list, patch map, sequence, terminal criteria"
+    ],
+    "duplicate_of": "docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md (paired representation)",
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition_suggestion": "companion of md; same sunset",
+    "unique_requirements_to_preserve": [
+      "decisions array (24 items)",
+      "terminal_criteria array"
+    ],
+    "notes": "Sunset declared in authority.sunset (line 7).",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-local-coordinator-bootstrap.md",
+    "sha": "8e7baa4a196e5d1b3f5e0d449be5a0972dc87328",
+    "bytes": 9495,
+    "lines": 392,
+    "read_status": "complete",
+    "classification": "programme-sequencing",
+    "domain_tags": [
+      "programme",
+      "planning"
+    ],
+    "authority_for": [
+      "local Beads compilation procedure for R0/I1/E1/C1/D1 wave"
+    ],
+    "duplicate_of": [
+      "execution-plan gates section",
+      "execution-plan first-packet section"
+    ],
+    "supersedes": null,
+    "superseded_by": "execution-plan amendment 15 (adds R1/PI-v0.84.1/KAN-127 K5-K6 absent here)",
+    "conflicts_with": [
+      "its implementation order omits the amended critical path"
+    ],
+    "disposition_suggestion": "regenerate against amended plan or archive",
+    "unique_requirements_to_preserve": [
+      "symbolic-to-real bead mapping procedure",
+      "shared-contract rules (one owner/reviewer/test owner)"
+    ],
+    "notes": "Expected baseline trio still matches released versions; flow pre-dates amendment.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json",
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-codex-kan-127-execution-note.md",
+    "sha": "c227d35d2389c6aaadd282ae7ddbcec2c58f957b",
+    "bytes": 15129,
+    "lines": 331,
+    "read_status": "complete",
+    "classification": "current-state-ledger",
+    "domain_tags": [
+      "harness",
+      "programme",
+      "channels"
+    ],
+    "authority_for": [
+      "KAN-127 / A1.5 XT Codex phases K0-K7",
+      "K5 parity promotion evidence list"
+    ],
+    "duplicate_of": null,
+    "supersedes": "provisional create-XT-Codex-if-not-mirrored Jira action",
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition_suggestion": "keep as programme companion (current sequencing companion status line 3)",
+    "unique_requirements_to_preserve": [
+      "behavioral-not-mechanical parity rule",
+      "distinct codex runtime descriptor",
+      "no Codex-specific second stores/schedulers",
+      "GATE-IFACE independence from production Codex"
+    ],
+    "notes": "Maps A1.5; K5/K6 appear in ledger gates.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-cli-actionable-outcomes-and-followups.md",
+    "sha": "a11623d71ee3ec5e0a195835207b0c62de199214",
+    "bytes": 19294,
+    "lines": 629,
+    "read_status": "complete",
+    "classification": "implementation-reference",
+    "domain_tags": [
+      "runtime",
+      "harness",
+      "xtmux",
+      "console",
+      "programme"
+    ],
+    "authority_for": [
+      "candidate xtrm.command-outcome.v1 contract",
+      "Phase 1 evidence-only protocol"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [
+      "release baselines stale (0.11.2/0.2.2/3.21.1 vs 0.11.4/0.2.3/3.21.2)"
+    ],
+    "disposition_suggestion": "keep as I1 source contract; refresh baselines; extend with uncertain/reconciliation semantics per XTRM-OUT-01",
+    "unique_requirements_to_preserve": [
+      "status vocabulary ok/degraded/noop/rejected/failed",
+      "argv next_actions rules",
+      "receipt-not-fulfilment",
+      "FYI-no-monitor",
+      "Ponytail constraints section 3"
+    ],
+    "notes": "Status line 3: proposal for independent verification.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-harness-native-adapters.md",
+    "sha": "2181601619a5475ba81f79f45d5bfba6b958e046",
+    "bytes": 23926,
+    "lines": 824,
+    "read_status": "complete",
+    "classification": "implementation-reference",
+    "domain_tags": [
+      "harness",
+      "runtime",
+      "xtmux"
+    ],
+    "authority_for": [
+      "adapter thinness boundary",
+      "Pi background-runtime comparison criteria",
+      "Claude capability verification protocol"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [
+      "line 5 all-caps MCP 2.0 banner without evidence pointer",
+      "section 2.4 release-candidate status stale",
+      "packet D-17 reframes xtmux role toward provider/backend supervisor"
+    ],
+    "disposition_suggestion": "keep under harness domain; verify/refresh MCP claims before any implementation",
+    "unique_requirements_to_preserve": [
+      "adapter may/may-not lists section 3",
+      "no adapter-private durable authority",
+      "feature-gated MCP Tasks rollout ladder section 16"
+    ],
+    "notes": "Companion spec to CLI outcomes doc.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-native-pi-tools-pi-extensible-workflows-integration-2026-07-30.md",
+    "sha": "583e411bd34c1bad5341965193171321e7abac3a",
+    "bytes": 30887,
+    "lines": 1189,
+    "read_status": "complete",
+    "classification": "reference",
+    "domain_tags": [
+      "harness",
+      "runtime",
+      "chain"
+    ],
+    "authority_for": [
+      "pi-extensible-workflows integration constraints (workflow-local authority only)"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": "subordinated by packet PRD 14.4 (no competing run engines) and register line 59 (REFERENCE DESIGN)",
+    "conflicts_with": [
+      "external workflow journals/worktrees would duplicate ChainRun if adopted as authority"
+    ],
+    "disposition_suggestion": "retain as reference design under harness/research; never promote to workflow authority",
+    "unique_requirements_to_preserve": [
+      "idempotency-key replay-safety strategy section 9",
+      "worktree ownership split section 10",
+      "checkpoint-not-Bead-acceptance section 12"
+    ],
+    "notes": "Historical/independent workstream per its own line 7.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/xtrm-deterministic-quant-pipelines-2026-08-10.md",
+    "sha": "9bc4d231ba97ccb90594c596afa6a117064ed286",
+    "bytes": 44552,
+    "lines": 1226,
+    "read_status": "complete",
+    "classification": "implementation-reference",
+    "domain_tags": [
+      "eval",
+      "chain",
+      "participant",
+      "channels",
+      "memory",
+      "programme"
+    ],
+    "authority_for": [
+      "quant reference-vertical contract (QD0-QD6, acceptance criteria)",
+      "dual-repo synchronization rule section 2"
+    ],
+    "duplicate_of": "mercuryintelligence/quant copy (identical twin, must be reconciled on drift)",
+    "supersedes": "2026-08-04 chain/Substrate/Channels reconciliation (declared historical, line 1227)",
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition_suggestion": "keep as reference vertical contract; mirror-consistency obligation with quant repo",
+    "unique_requirements_to_preserve": [
+      "18-item vertical acceptance criteria section 34",
+      "exploratory-warning vs blocking-gate validator discipline section 14",
+      "run-dag is compute engine not scheduler section 5"
+    ],
+    "notes": "Explicitly does not claim gates/releases (line 7).",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/native-chain-runtime-audit-2026-08-19/architecture-decision-matrix-and-adr-index.md",
+    "sha": "0395909a941b3f4064aeaec93990cbd84d4607fb",
+    "bytes": 12499,
+    "lines": 247,
+    "read_status": "complete",
+    "classification": "experiment",
+    "domain_tags": [
+      "runtime",
+      "chain",
+      "participant",
+      "channels",
+      "memory",
+      "eval",
+      "substrate",
+      "xtmux",
+      "harness",
+      "planning"
+    ],
+    "authority_for": [
+      "audit-derived decisions D-01..D-35 (LOCAL GATE items pending verification)",
+      "ADR-01..ADR-10 ownership map"
+    ],
+    "duplicate_of": null,
+    "supersedes": [
+      "template-only authoring assumption (C1)",
+      "neutral RPC/native gate framing (R1.6/GATE-HARNESS-ADR)"
+    ],
+    "superseded_by": null,
+    "conflicts_with": [
+      "current-execution-plan C1/R1.6 text until canon change applied"
+    ],
+    "disposition_suggestion": "seed docs/runtime/adr/; promote decisions to canon after LOCAL GATE verification",
+    "unique_requirements_to_preserve": [
+      "Container/ChainRun 1:1 single terminal authority (D-05)",
+      "capability request not grant (C-07)",
+      "whole-container cleanup contract (D-18)",
+      "post-acceptance sequencing A-G section 5"
+    ],
+    "notes": "Items marked LOCAL GATE: D-07 bd primitive audit, D-30 package placement.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/native-chain-runtime-audit-2026-08-19/local-verification-packet.md",
+    "sha": "0d4575156d17a46f839c59357cf80a8de062bec5",
+    "bytes": 10401,
+    "lines": 416,
+    "read_status": "complete",
+    "classification": "experiment",
+    "domain_tags": [
+      "runtime",
+      "harness",
+      "xtmux",
+      "chain",
+      "eval",
+      "memory",
+      "programme"
+    ],
+    "authority_for": [
+      "enumerated machine-level verification work (PR 71 closure, AgentSession smoke, prototype bugs, Beads capability matrix, file specimen, package-placement gate)"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition_suggestion": "seed docs/runtime/verification/ as the bounded work list",
+    "unique_requirements_to_preserve": [
+      "prototype hardening findings section 4 (journal ordering, typed reviewer verdicts)",
+      "fault-injection matrix section 7",
+      "do-not-clean-unknown-work rule section 1"
+    ],
+    "notes": "P0 doc-authority fix section 11: broken chain-template canon pointer in specialists repo.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/native-chain-runtime-audit-2026-08-19/native-chain-runtime-prd-draft.md",
+    "sha": "f05edf4c09cf1a1d7b7657cfef0698a0a6836c4f",
+    "bytes": 33499,
+    "lines": 1279,
+    "read_status": "complete",
+    "classification": "experiment",
+    "domain_tags": [
+      "runtime",
+      "chain",
+      "participant",
+      "channels",
+      "memory",
+      "substrate",
+      "eval",
+      "harness",
+      "console"
+    ],
+    "authority_for": [
+      "(draft) ChainSource-ChainDefinition-ResolvedChain-ChainRun object model",
+      "non-negotiable invariants section 2",
+      "product lifecycle section 4",
+      "phases A-F section 21",
+      "acceptance criteria section 23"
+    ],
+    "duplicate_of": null,
+    "supersedes": [
+      "template-only chain authoring",
+      "Specialist Supervisor wholesale-port assumption"
+    ],
+    "superseded_by": null,
+    "conflicts_with": [
+      "current-execution-plan C1 model and neutral harness gate until absorbed"
+    ],
+    "disposition_suggestion": "seed docs/runtime/prd/; draft-for-canonicalization pending verification gates section 24",
+    "unique_requirements_to_preserve": [
+      "invariant block section 2 verbatim",
+      "PREPARE deterministic admission 7.1",
+      "agent_end not equal step satisfied",
+      "Container cleanup contract 12.4",
+      "24 acceptance criteria section 23"
+    ],
+    "notes": "Status line 3: Draft for canonicalization and local source/runtime verification.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json",
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/shared/native-chain-runtime-audit-2026-08-19/source-and-authority-register.md",
+    "sha": "ba010d696ceac6ee0a4e78a72cf05b6b6106b91c",
+    "bytes": 24584,
+    "lines": 346,
+    "read_status": "complete",
+    "classification": "evidence",
+    "domain_tags": [
+      "programme",
+      "runtime",
+      "chain",
+      "channels",
+      "substrate",
+      "telemetry",
+      "memory",
+      "harness",
+      "console",
+      "eval"
+    ],
+    "authority_for": [
+      "authority-class taxonomy",
+      "source classifications for the whole decision corpus",
+      "contradictions C-01..C-12",
+      "coverage statement"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition_suggestion": "merge into the programme-wide source register this audit feeds; keep snapshot heads dated",
+    "unique_requirements_to_preserve": [
+      "authority classes section 3",
+      "experiment-source findings that must not be promoted as-is section 6",
+      "coverage boundary sections 1 and 7"
+    ],
+    "notes": "Remote-head snapshot 2026-08-19 must be refreshed per its own instruction (line 32).",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json",
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/tether.md",
+    "sha": "352de9f2dd7a45c244111fbe3e2480a8b097cccd",
+    "bytes": 22548,
+    "lines": 405,
+    "read_status": "complete",
+    "classification": "research",
+    "domain_tags": [
+      "harness",
+      "memory",
+      "telemetry"
+    ],
+    "authority_for": [
+      "Shepherd sidecar design draft v0-v2 (specialists domain)"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [
+      "predates v1 runtime semantics; references conversations.md invariants not present in shared corpus"
+    ],
+    "disposition_suggestion": "move to specialists/harness docs or research; not xtrm programme canon",
+    "unique_requirements_to_preserve": [
+      "forced-injection always-on doctrine + suppression rules",
+      "shepherd never schedules (single-scheduler invariant)",
+      "recursive guard"
+    ],
+    "notes": "Status line 7: Design draft.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/improvements.md",
+    "sha": "3d63713ca4f5d3b64c290d6c4ef9325879df321e",
+    "bytes": 1919,
+    "lines": 14,
+    "read_status": "complete",
+    "classification": "research",
+    "domain_tags": [
+      "research"
+    ],
+    "authority_for": [],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition_suggestion": "archive (personal research notes, Italian)",
+    "unique_requirements_to_preserve": [
+      "AutoScientists/SkillOpt research pointers if ever revisited"
+    ],
+    "notes": "AWS-summit follow-up notes; ends with open substrate-vs-channels question, long since resolved.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/state-store-options.md",
+    "sha": "ee711d268da34f1ca2e9223a6ec7070d411b0791",
+    "bytes": 18364,
+    "lines": 284,
+    "read_status": "complete",
+    "classification": "current-state-ledger",
+    "domain_tags": [
+      "substrate",
+      "core",
+      "console"
+    ],
+    "authority_for": [
+      "kernel decisions: SQLite WAL + xt daemon + socket (Path 1 chosen 2026-06-06)",
+      "Stage-0 rollback predicate 10.2",
+      "inbound-reference surface 10.1"
+    ],
+    "duplicate_of": "monorepo-migration.md state-store alternatives table (duplicated content)",
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [
+      "packet D-08 no-daemon-first rewrite; D-14 typed SQLite direction compatible but daemon timing differs"
+    ],
+    "disposition_suggestion": "retain as target storage design; reconcile daemon-timing claim with packet D-08 before docs/runtime adoption",
+    "unique_requirements_to_preserve": [
+      "WAL backup + integrity_check rollback predicate (only testable Stage-0 rollback spec in corpus)",
+      "keeper bd-mirror bridge class 10.3"
+    ],
+    "notes": "Named owner-of kernel decisions by substrate 13/15 and monorepo-migration 3.0/5.1.",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/monorepo-migration.md",
+    "sha": "c4b9c89771ab24eee057794d11617f5998ad5ea1",
+    "bytes": 27915,
+    "lines": 497,
+    "read_status": "complete",
+    "classification": "current-state-ledger",
+    "domain_tags": [
+      "core",
+      "substrate",
+      "channels",
+      "console",
+      "programme"
+    ],
+    "authority_for": [
+      "fresh-umbrella + filter-repo graft mechanics",
+      "bridge whitelist + retirement criteria 5.1",
+      "per-stage rollback table 5.1"
+    ],
+    "duplicate_of": null,
+    "supersedes": "earlier rename-in-place revision (documented internally 2.1)",
+    "superseded_by": null,
+    "conflicts_with": [
+      "ledger row five-package-monorepo DEFERRED_BY_EXPLICIT_GATE",
+      "packet D-12: prefer implementing new contracts directly in final package boundaries"
+    ],
+    "disposition_suggestion": "retain as accepted target migration design; annotate deferral and D-12 refinement",
+    "unique_requirements_to_preserve": [
+      "closed bridge whitelist (additions require operator escalation)",
+      "rollback-is-itself-permanent-lineage rule",
+      "MOC-update trigger per ownership-changing stage"
+    ],
+    "notes": "Five-package DAG with channels-to-core decision (2026-06-06).",
+    "repository": "xtrm",
+    "_lane": "lane-a-source-register",
+    "_lanes": [
+      "lane-a-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/roadmap/specialists-roadmap.md",
+    "blob_sha": "d944fa66588074ea9469454daa1bfcd67dc4a2ce",
+    "bytes": 18233,
+    "lines": 361,
+    "read": "complete",
+    "role": "canonical roadmap v3.3 baseline; authority for Opportunities/architecture",
+    "classification": "current-canon",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/roadmap/enhanced-prd.md",
+    "blob_sha": "e737b377a520d19b0bbcaf4cdbab434b9ba9f754",
+    "bytes": 226491,
+    "lines": 4617,
+    "read": "complete",
+    "role": "requirements canon; WP definitions; AC0/DO0 gates",
+    "classification": "current-canon",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json",
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/roadmap/chains-prompt-evals.md",
+    "blob_sha": "fdb5ab20d89a3591d7c5b0715b26276adf40851f",
+    "bytes": 140018,
+    "lines": 3054,
+    "read": "complete",
+    "role": "12 July PRD predecessor of enhanced-prd.md; superseded with named residuals",
+    "classification": "superseded-historical",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json",
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/roadmap/current-release-snapshot.md",
+    "blob_sha": "2831bd1c89ebb46cef91ab2d1c24c92445d84a2b",
+    "bytes": 7733,
+    "lines": 164,
+    "read": "complete",
+    "role": "mutable current-state ledger (reconciled 2026-08-02); authority for delivered/partial/unimplemented",
+    "classification": "current-canon",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/roadmap/README.md",
+    "blob_sha": "f2eec2cca8f3aaa93cf42c329be0337eaf64a703",
+    "bytes": 5003,
+    "lines": 80,
+    "read": "complete",
+    "role": "roadmap index; authority-by-claim-type table",
+    "classification": "current-canon",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/execution-protocol-design/specialist-execution-protocol.md",
+    "blob_sha": "cee2d85b0aecc112733a12d1bfba98e373cbd8c2",
+    "bytes": 27596,
+    "lines": 992,
+    "read": "complete",
+    "role": "canonical specialists.execution.v1 design (PREPARE/PLAN/EXECUTE/FINALIZE)",
+    "classification": "current-canon",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/execution-protocol-design/specialist-execution-protocol-ownership-decision.md",
+    "blob_sha": "b157d5bf99b133d22de08d7dd4e98361251cfbed",
+    "bytes": 5885,
+    "lines": 150,
+    "read": "complete",
+    "role": "ownership decision + 10 invariants for the execution protocol",
+    "classification": "current-canon",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/roadmap/history/handoff-from-substrate-design.md",
+    "blob_sha": "ce60d65555acc01be68f0f0306496fb0dde870ea",
+    "bytes": 14465,
+    "lines": 86,
+    "read": "complete",
+    "role": "historical substrate handoff context only",
+    "classification": "history",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/roadmap/history/specialists-roadmap-v3.2-2026-07-24.md",
+    "blob_sha": "fad131432c2035f4a29021a21a1aa8a060f90320",
+    "bytes": 175082,
+    "lines": 1356,
+    "read": "complete",
+    "role": "archived pre-v3.3 roadmap: Opportunities 1-19, D1-D30, phases, \u00a7A bridge economics, \u00a7B ownership split",
+    "classification": "history",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/roadmap/history/substrate-reconciliation.md",
+    "blob_sha": "65ff5e75ec79770ca4054ab211f1f4e428d1b48b",
+    "bytes": 16490,
+    "lines": 104,
+    "read": "complete",
+    "role": "v2-vs-substrate-rev-9 decision delta; absorbed into v3.x roadmap",
+    "classification": "history",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/README.md",
+    "blob_sha": "96621d2a673434dcf08ce3f0a84764eb4411e6fa",
+    "bytes": 2836,
+    "lines": 36,
+    "read": "complete",
+    "role": "design navigation index; stale in places (says 12 opportunities/13 templates vs current state)",
+    "classification": "current-index-stale-details",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/design/audit-reconcile-v0724.md",
+    "blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "bytes": 0,
+    "lines": 0,
+    "read": "complete (empty)",
+    "role": "EMPTY FILE at HEAD \u2014 git empty blob. PRD cites audit-reconcile-v0724 as current closure evidence; the PRD companion list points at xtrm-dev/core for the real file; this specialists copy is an empty placeholder",
+    "classification": "empty-placeholder",
+    "repository": "specialists",
+    "read_status": "complete (empty)",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/ARCHITECTURE.md",
+    "blob_sha": "b6516b5f523ccc0de88b8087973f185d5f2cb532",
+    "bytes": 50366,
+    "lines": 1168,
+    "read": "complete",
+    "role": "runtime architecture reference (supervisor/timeline/worktree/rpc); NOT a duplicate of docs/architecture.md",
+    "classification": "current-reference",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/architecture.md",
+    "blob_sha": "8400d62ef7ac035964571de0321f168d0b55edf5",
+    "bytes": 578,
+    "lines": 11,
+    "read": "complete",
+    "role": "small addendum on benchmark/probe cache layout only; different blob, different title, no duplication of ARCHITECTURE.md",
+    "classification": "current-reference-addendum",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "path": "docs/TODO.md",
+    "blob_sha": "2a828e00adf24884f3a3df7698c1c5c369bb2753",
+    "bytes": 99,
+    "lines": 9,
+    "read": "complete",
+    "role": "frontmatter stub only, no content",
+    "classification": "stub",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-b-source-register",
+    "_lanes": [
+      "lane-b-source-register.json"
+    ]
+  },
+  {
+    "id": "D1",
+    "path": "docs/harness/README.md",
+    "repo": "main",
+    "blob_sha": "d67d40fc843cd5c3132b47497929300a51673638",
+    "tracked": true,
+    "classification": "index",
+    "disposition": "keep-as-index; update link target to docs/shared/ exploration copy after dedup",
+    "read_completely": true,
+    "repository": "main",
+    "read_status": "complete",
+    "_lane": "lane-d-source-register",
+    "_lanes": [
+      "lane-d-source-register.json"
+    ]
+  },
+  {
+    "id": "D2",
+    "path": "docs/harness/experiments/README.md",
+    "repo": "main",
+    "blob_sha": "04fcdde6c0ccbe35c1d0d07cbb64e480c302dc71",
+    "tracked": true,
+    "classification": "index",
+    "disposition": "keep; non-canonical experiments registry, source-discipline rules restated",
+    "read_completely": true,
+    "repository": "main",
+    "read_status": "complete",
+    "_lane": "lane-d-source-register",
+    "_lanes": [
+      "lane-d-source-register.json"
+    ]
+  },
+  {
+    "id": "D3",
+    "path": "docs/harness/experiments/agentsession-sre-chain-vertical-slice-2026-08-17.md",
+    "repo": "main",
+    "blob_sha": "dd09a54489a170036279ad57e49c98a04c7ba7db",
+    "tracked": true,
+    "classification": "experiment-spec",
+    "disposition": "canonical experiment specification; durable home confirmed (docs/harness/experiments/)",
+    "read_completely": true,
+    "repository": "main",
+    "read_status": "complete",
+    "_lane": "lane-d-source-register",
+    "_lanes": [
+      "lane-d-source-register.json"
+    ]
+  },
+  {
+    "id": "D4",
+    "path": "docs/harness/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md",
+    "repo": "main",
+    "blob_sha": "1d98420b9defecefa9e2adcc3d862e0caf1eec29",
+    "tracked": true,
+    "classification": "duplicate",
+    "disposition": "STALE DUPLICATE of D6 \u2014 missing header programme-tracking line and entire \u00a729; delete or replace with pointer to D6",
+    "read_completely": true,
+    "repository": "main",
+    "read_status": "complete",
+    "_lane": "lane-d-source-register",
+    "_lanes": [
+      "lane-d-source-register.json"
+    ]
+  },
+  {
+    "id": "D5",
+    "path": "docs/harness/mercury-governed-research-harness-prd-draft-2026-08-10.md",
+    "repo": "main",
+    "blob_sha": "cadba277891f5927aa5dc8bf750051437cd9eb76",
+    "tracked": true,
+    "classification": "prd-draft-non-authoritative",
+    "disposition": "keep as draft; self-declares non-authoritative; references D6 shared path in \u00a722 baseline",
+    "read_completely": true,
+    "repository": "main",
+    "read_status": "complete",
+    "_lane": "lane-d-source-register",
+    "_lanes": [
+      "lane-d-source-register.json"
+    ]
+  },
+  {
+    "id": "D6",
+    "path": "docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md",
+    "repo": "main",
+    "blob_sha": "5bec00a34bca9351887a50bf60e195bf456f6627",
+    "tracked": true,
+    "classification": "architecture-exploration",
+    "disposition": "CANONICAL newer copy (superset: +header tracking line, +\u00a729 prime-agent findings); recommended single canonical evidence/provenance location for the exploration doc",
+    "read_completely": true,
+    "repository": "main",
+    "read_status": "complete",
+    "_lane": "lane-d-source-register",
+    "_lanes": [
+      "lane-d-source-register.json"
+    ]
+  },
+  {
+    "id": "D7",
+    "path": "docs/research/prime-agent-xtrm-runtime-reference-2026-08-09.md",
+    "repo": "main",
+    "blob_sha": "a20184bd5a964c43f6064e9020f0c14f8e5d3557",
+    "tracked": true,
+    "classification": "historical-research",
+    "disposition": "keep as provenance/reference; predates \u00a729 code-level findings; superseded on prime-agent internals detail by D6 \u00a729 where they overlap",
+    "read_completely": true,
+    "repository": "main",
+    "read_status": "complete",
+    "_lane": "lane-d-source-register",
+    "_lanes": [
+      "lane-d-source-register.json"
+    ]
+  },
+  {
+    "id": "D8",
+    "path": "experiments/agentsession-sre-chain-vertical-slice/README.md",
+    "repo": "worktree_pr71",
+    "blob_sha": "ad9c0c7f9fed8dac6f05378665cd5167132a265b",
+    "tracked": true,
+    "worktree_clean": true,
+    "classification": "experiment-evidence",
+    "disposition": "canonical experiment README once PR #71 lineage merges; documents full-JSON authority boundary",
+    "read_completely": true,
+    "repository": "worktree_pr71",
+    "read_status": "complete",
+    "_lane": "lane-d-source-register",
+    "_lanes": [
+      "lane-d-source-register.json"
+    ]
+  },
+  {
+    "id": "D9",
+    "path": "experiments/agentsession-sre-chain-vertical-slice/full-specialist-json-loader.md",
+    "repo": "worktree_pr71",
+    "blob_sha": "75e647a3e077f6af163c8117b6d25a48b81dfc4d",
+    "tracked": true,
+    "worktree_clean": true,
+    "classification": "experiment-evidence",
+    "disposition": "canonical loader/compiler boundary doc; lists 8 remaining runtime-fusion tasks that do not reopen the AgentSession hosting decision",
+    "read_completely": true,
+    "repository": "worktree_pr71",
+    "read_status": "complete",
+    "_lane": "lane-d-source-register",
+    "_lanes": [
+      "lane-d-source-register.json"
+    ]
+  },
+  {
+    "id": "D10",
+    "path": "experiments/agentsession-sre-chain-vertical-slice/experiment-report.md",
+    "repo": "worktree_pr71",
+    "blob_sha": "4ea24748821a55a8d621aee855114fcbbf15aef1",
+    "tracked": true,
+    "worktree_clean": true,
+    "classification": "experiment-evidence",
+    "disposition": "primary run/report evidence incl. reconciliation pass \u00a710 and sp-vs-direct bench \u00a713; merge with branch",
+    "read_completely": true,
+    "repository": "worktree_pr71",
+    "read_status": "complete",
+    "_lane": "lane-d-source-register",
+    "_lanes": [
+      "lane-d-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/architecture/coordination-terminology.md",
+    "sha": "ef9a0c3dea3611f5b7fbcc42b6e2dafb89d25df4",
+    "bytes": 2255,
+    "lines": 67,
+    "read_status": "complete",
+    "classification": "canon-architecture",
+    "domain": [
+      "coordination",
+      "xtmux",
+      "ui"
+    ],
+    "authority_for": [
+      "message state vocabulary (unread/acknowledged/pending-reply/fulfilled/cancelled)",
+      "wake triple semantics (terminal/delivered/consumed; display never consumes)",
+      "read-only bridge principle and remote-control preconditions"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/architecture/coordination-terminology.md",
+    "unique_requirements_to_preserve": [
+      "A UI must NEVER render 'acknowledged' as 'task completed'",
+      "Exactly one entity may consume a wake; multiple viewers all see it",
+      "'Read-only' is the design principle, not a current limitation"
+    ],
+    "notes": "",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/architecture/coordinator-branch-ancestry.md",
+    "sha": "68f4cc768d4c9c76e96b50a82898913e9b5adada",
+    "bytes": 6701,
+    "lines": 139,
+    "read_status": "complete",
+    "classification": "canon-architecture",
+    "domain": [
+      "git",
+      "coordination",
+      "core-cli"
+    ],
+    "authority_for": [
+      "branch topology xt/* vs sp/*",
+      "base-branch publication contract (@agent_branch / XTMUX_AGENT_BRANCH)",
+      "merge authority ladder",
+      "enforcement table (code vs Specialists vs prompt)"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/architecture/coordinator-branch-ancestry.md",
+    "unique_requirements_to_preserve": [
+      "Core cannot create specialist branches; Core publishes, Specialists consumes",
+      "Core refuses to create a worktree from inside another worktree",
+      "xt merge gate is a guardrail, not a boundary; --dry-run always allowed",
+      "Specialist branches derive from the coordinator integration branch, not main"
+    ],
+    "notes": "",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/architecture/interactive-role-envelope.md",
+    "sha": "dbe6e9921cfda9e05ee0abcf4f053f830d15f674",
+    "bytes": 3448,
+    "lines": 95,
+    "read_status": "complete",
+    "classification": "canon-contract",
+    "domain": [
+      "core-cli",
+      "specialists-boundary"
+    ],
+    "authority_for": [
+      "xtrm.interactive-role-envelope.v1 field allowlist",
+      "Core/Specialists ownership split for interactive launch",
+      "forbidden supervision-field list",
+      "additive versioning rule"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/architecture/interactive-role-envelope.md",
+    "unique_requirements_to_preserve": [
+      "Core must not consume retries/stall_timeout/overall_job_timeout/permission_tier/external_command_capabilities/background_execution_policy/supervisor_restart_policy",
+      "tri-state interactive field stays permissive for older releases",
+      "extend by smallest additive field, do not grow into launch-plan abstraction"
+    ],
+    "notes": "Primary evidence that no ChainRun/participant-execution authority may move to Core.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/architecture/repair-transaction.md",
+    "sha": "eb7633aaf025f4e336cfa03342f6b8de70bfbb67",
+    "bytes": 2941,
+    "lines": 89,
+    "read_status": "complete",
+    "classification": "canon-architecture",
+    "domain": [
+      "core-cli",
+      "install-update-doctor"
+    ],
+    "authority_for": [
+      "xt update as the one repair verb",
+      "ReconciliationOutcome phase model (11 ordered phases)",
+      "cleanup-as-phase rule",
+      "ownership-based deletion rules"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/architecture/repair-transaction.md",
+    "unique_requirements_to_preserve": [
+      "Every reconciliation phase returns the same ReconciliationOutcome shape",
+      "Do NOT add new top-level xt <verb> repair commands",
+      "Removal only when path is EXPLICITLY XTRM-owned; do NOT infer ownership from absence"
+    ],
+    "notes": "Natural extension seam for future ResolvedChain -> Beads materialization phase.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/architecture/superseded-designs.md",
+    "sha": "7976f55c3e565ae3e31b6eadcd1cf7bfbb6a5fed",
+    "bytes": 5030,
+    "lines": 126,
+    "read_status": "complete",
+    "classification": "canon-archive-index",
+    "domain": [
+      "architecture-history"
+    ],
+    "authority_for": [
+      "register of rejected designs with stale search terms"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/architecture/superseded-designs.md",
+    "unique_requirements_to_preserve": [
+      "add-entry-in-same-PR rule before deleting/renaming a design surface",
+      "existing entries: prompt-file transport, marker dirs, core skill-prefix construction, -e allowlisting, broad permission seeds, pi-mutation pilot, remote mutation bridge, no-worktree roles, full job-supervision duplication"
+    ],
+    "notes": "Missing entries identified: delegation-architecture.md and orchestration-implementation.md (2026-03 era plans).",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/cli-architecture.md",
+    "sha": "fbe2b1ff5a7a34edd4c9895dd5f951ce0c4b3ab4",
+    "bytes": 19063,
+    "lines": 414,
+    "read_status": "complete",
+    "classification": "canon-reference",
+    "domain": [
+      "core-cli"
+    ],
+    "authority_for": [
+      "command map",
+      "init flow phases",
+      "module reference (doctor/update/pi-runtime/skills/report/sync engine)",
+      "canonical Pi package inventory pointer"
+    ],
+    "duplicate_of": "partially overlaps docs/pi-extensions.md sync tables (consistent)",
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/cli-architecture.md",
+    "unique_requirements_to_preserve": [
+      "memory/merge intentionally thin wrappers around specialists",
+      "doctor report-only; update --apply is the only mutating refresh path",
+      "safeMergeConfig protected keys; additive-only mcpServers"
+    ],
+    "notes": "source_of_truth_for cli/src/**/*.ts",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/xt-pi-role.md",
+    "sha": "888a8174d1eaafd83fbadc68bfa4d2bd03a4eadd",
+    "bytes": 22287,
+    "lines": 325,
+    "read_status": "complete",
+    "classification": "canon-reference",
+    "domain": [
+      "core-cli",
+      "launch-ux",
+      "tmux"
+    ],
+    "authority_for": [
+      "--role/--bead/--prompt/--subordinate flag surface",
+      "turn-1 composition",
+      "worktree+branch isolation invariant",
+      "pane option/env tables",
+      "subordinate validation checks",
+      "sp run parity boundary",
+      "position-0 slash invariant",
+      "byte guards"
+    ],
+    "duplicate_of": null,
+    "supersedes": "xtrm-osipt file-transport stopgap (via xtrm-8zsi1)",
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/xt-pi-role.md",
+    "unique_requirements_to_preserve": [
+      "no --no-worktree for interactive role launch, ever",
+      "env set derived from pane options so the two cannot drift",
+      "launch validation fires before any worktree creation",
+      "--skill requests validated + realpath-deduplicated; non-discoverable Claude requests fail before worktree creation"
+    ],
+    "notes": "",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/xt-topology.md",
+    "sha": "ab4d2ce2493920fc8236b6d75ccc00d2f5bde55b",
+    "bytes": 6184,
+    "lines": 131,
+    "read_status": "complete",
+    "classification": "canon-reference",
+    "domain": [
+      "observability",
+      "core-cli"
+    ],
+    "authority_for": [
+      "xtrm.topology.projection.v1 join",
+      "views catalog",
+      "read-only-by-construction guarantee",
+      "known limitations (beads resolve, job attribution, tmux-direct role fields)"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/xt-topology.md",
+    "unique_requirements_to_preserve": [
+      "READ_ONLY_COMMANDS single argv table; structural not conventional guarantee",
+      "completion only from bead.status / PR merged_at|state / job.status \u2014 never agent.state or terminal output",
+      "no content/preview/capture field at any contract level; additionalProperties:false",
+      "unavailable kept distinct from error in sources ledger"
+    ],
+    "notes": "Determinism report lists source-ledger completeness as an open P1 against this surface.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/pi-extensions.md",
+    "sha": "92d11cf843450fb4ff28bce252aa13a2289313a0",
+    "bytes": 10488,
+    "lines": 224,
+    "read_status": "complete",
+    "classification": "canon-reference",
+    "domain": [
+      "pi-extensions",
+      "distribution"
+    ],
+    "authority_for": [
+      "package-install model",
+      "npm:@jaggerxtrm/pi-extensions publish/install contract",
+      "extension inventory and behavior notes",
+      "sync behavior table"
+    ],
+    "duplicate_of": null,
+    "supersedes": "legacy config/pi/extensions trees and .xtrm/ext-src",
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/pi-extensions.md",
+    "unique_requirements_to_preserve": [
+      "canonical inventory shared by runtime sync/update/doctor lives in cli/src/core/pi-runtime.ts \u2014 no hard-coded allowlists elsewhere",
+      "doctor never installs; update --apply is the mutation path",
+      "Serena extensions remain disabled migration artifacts, unmanaged"
+    ],
+    "notes": "",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/skills-ownership.md",
+    "sha": "9560ac15d076755c19ec550747bcec32c0d026a8",
+    "bytes": 4497,
+    "lines": 60,
+    "read_status": "complete",
+    "classification": "canon-policy",
+    "domain": [
+      "skills",
+      "ownership"
+    ],
+    "authority_for": [
+      "survival-decided-by-location contract",
+      "vendor flow specialists -> xtrm-tools -> global SSOT",
+      "reserved pack names"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [
+      "observed drift: ~/.xtrm/skills/default planning/test-planning copies are NEWER than core repo skills/ copies at HEAD (violates documented vendor direction)"
+    ],
+    "disposition": "keep-canon + remediate drift",
+    "target_path": "docs/skills-ownership.md",
+    "unique_requirements_to_preserve": [
+      "user packs are the only update-surviving homes for user skills",
+      "optional/ is package-managed, copyTier removes and re-copies both tiers on version bump",
+      "collision fails loudly: 'Cannot enable skill <name>: <path> is user-owned'"
+    ],
+    "notes": "Machine-readable sibling docs/skills-ownership.json sha 0172c561bea9033cc85387286081d49e0bcda99b.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/xtrm-directory.md",
+    "sha": "2724bdafe36d515bde7ceb4f7460b6b081090faf",
+    "bytes": 8421,
+    "lines": 179,
+    "read_status": "complete",
+    "classification": "canon-reference",
+    "domain": [
+      "config",
+      "layout"
+    ],
+    "authority_for": [
+      ".xtrm/ and ~/.xtrm/ layout",
+      "deprecated paths list",
+      "global skills SSOT model"
+    ],
+    "duplicate_of": "restates pi-extensions.md extension architecture (consistent)",
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/xtrm-directory.md",
+    "unique_requirements_to_preserve": [
+      "deprecated-path ledger (.agents/skills, .pi/skills, .xtrm/ext-src, per-repo default/optional tiers)",
+      "project scope = residual state only after xtrm-bq7yd migration"
+    ],
+    "notes": "",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/xtrm-ui.md",
+    "sha": "056354f8721d911988314ec07bea94bf59a3884d",
+    "bytes": 5129,
+    "lines": 124,
+    "read_status": "complete",
+    "classification": "canon-reference",
+    "domain": [
+      "pi-extensions",
+      "ui",
+      "themes"
+    ],
+    "authority_for": [
+      "xtrm-ui preferences/commands/themes",
+      "presentation-only rendering rule"
+    ],
+    "duplicate_of": null,
+    "supersedes": "legacy pidex-* theme names (auto-migrated)",
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/xtrm-ui.md",
+    "unique_requirements_to_preserve": [
+      "custom-footer is sole footer owner; xtrm-ui never calls setFooter()",
+      "rendering does not mutate tool-result payloads"
+    ],
+    "notes": "",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/design/command-outcome-v1.md",
+    "sha": "d4c6efeb486744ddf1c111c776d7a13acc10ced9",
+    "bytes": 3765,
+    "lines": 53,
+    "read_status": "complete",
+    "classification": "design-contract",
+    "domain": [
+      "contracts",
+      "launch-ux"
+    ],
+    "authority_for": [
+      "xtrm.command-outcome.v1 K2 shape",
+      "safety profile recording",
+      "exact-action argv rules"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon (K2 contract)",
+    "target_path": "docs/design/command-outcome-v1.md",
+    "unique_requirements_to_preserve": [
+      "argv authoritative, display derived; no shell chaining",
+      "no contract slot for raw prompts/credentials/transcripts/terminal capture",
+      "never fabricate ready/thread_id; degraded status when metadata persistence fails"
+    ],
+    "notes": "Explicitly does NOT depend on ResolvedChain yet \u2014 additive seam.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/design/codex-runtime-boundary.md",
+    "sha": "8603f7a6b7f830601c9de15f420ff6d7e806a9f7",
+    "bytes": 8733,
+    "lines": 85,
+    "read_status": "complete",
+    "classification": "design-evidence",
+    "domain": [
+      "runtime-discovery",
+      "codex-parity"
+    ],
+    "authority_for": [
+      "released Pi/Claude launcher baseline table",
+      "Codex lifecycle observations (0.146.0)",
+      "capability/ownership parity ledger"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon (K1 evidence)",
+    "target_path": "docs/design/codex-runtime-boundary.md",
+    "unique_requirements_to_preserve": [
+      "permission_mode from hooks is not a sandbox signal; record safety profile from emitted argv",
+      "Core must never generate or forward --dangerously-bypass-hook-trust",
+      "turn capture consumes Stop.last_assistant_message; must not copy Claude transcript tail-reading"
+    ],
+    "notes": "Records known baseline drift: installed-hook parity assertion failing on unchanged main.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/design/issuetracking.md",
+    "sha": "e62d3241ca06bb8da948106f41195e57d7274481",
+    "bytes": 10132,
+    "lines": 312,
+    "read_status": "complete",
+    "classification": "deferred-design",
+    "domain": [
+      "planning",
+      "issue-tracking"
+    ],
+    "authority_for": [
+      "dispatchable issue contract sections",
+      "contract readiness states",
+      "validator-verdict dispatch gating concept"
+    ],
+    "duplicate_of": "overlaps planning-skill 7-section contract (compatible superset: adds RISK, SPECIALIST ROUTING, ISSUE-LOCAL MANDATORY RULES)",
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-deferred; feed into ChainDefinition freeze-gate design",
+    "target_path": "docs/design/issuetracking.md",
+    "unique_requirements_to_preserve": [
+      "'ready' must mean contract-specific-enough-to-dispatch, not merely dependency-clear",
+      "dispatch refused when validator says not_ready unless override recorded and persisted",
+      "Do not replace bd now; backport constraints incrementally"
+    ],
+    "notes": "Self-marked 'Status: deferred design. Do not implement now.'",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/design/memory-system-r6g.md",
+    "sha": "8ccfb91c542128dce7ea4a4204b5a2d62b6fa0c3",
+    "bytes": 44283,
+    "lines": 481,
+    "read_status": "complete",
+    "classification": "research-design",
+    "domain": [
+      "memory"
+    ],
+    "authority_for": [
+      "current-state memory substrate inventory (as of 2026-07-18)",
+      "ship-in-order PR sequence if greenlit"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [
+      "appendix hook inventory stale vs current memory-acked:<id> KV close tracking"
+    ],
+    "disposition": "archive-as-research",
+    "target_path": "docs/design/ (archive candidate)",
+    "unique_requirements_to_preserve": [
+      "bd/Dolt remains raw truth store; layer retrieval on top, no new datastore",
+      "processor reframed as promotion tool (Archival->Core), not delete tool",
+      "no LLM in retrieval hot path; no answer() endpoint"
+    ],
+    "notes": "Self-marked 'Design / research. Not a plan of record.'",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/design/xtrm-orchestration-determinism-final-consolidated-report-2026-07-23.md",
+    "sha": "a09bb9f6329a25c5fb04881dd6f9190e4e1eaa68",
+    "bytes": 86996,
+    "lines": 2335,
+    "read_status": "complete",
+    "classification": "consolidated-audit-record",
+    "domain": [
+      "orchestration",
+      "authority-model",
+      "history"
+    ],
+    "authority_for": [
+      "final conclusion authority table",
+      "Track A/B separation",
+      "notification schema xtrm.specialist.parent-notification.v1",
+      "retrieval hierarchy",
+      "Archon experimental posture"
+    ],
+    "duplicate_of": null,
+    "supersedes": "all earlier audit drafts (stated in revision note)",
+    "superseded_by": null,
+    "conflicts_with": [
+      "historical sections internally superseded by Final conclusion (rule stated in-document)"
+    ],
+    "disposition": "keep-canon as audit record",
+    "target_path": "docs/design/",
+    "unique_requirements_to_preserve": [
+      "one authority per concept table \u2014 no competing owners",
+      "push transitions, do not poll lifecycle",
+      "message-get stays pure read; ack only after continuation queued",
+      "capture-pane must not be standard result retrieval",
+      "deterministic gates cannot be overridden by model prose",
+      "chain templates + deterministic dispatch land together; no partial resolvers per component"
+    ],
+    "notes": "Longest doc in lane; final conclusion (lines 13-607) is authoritative over historical sections.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/plans/delegation-architecture.md",
+    "sha": "291e1b3c84876921fc5a432af4be102f9ca4c794",
+    "bytes": 5954,
+    "lines": 205,
+    "read_status": "complete",
+    "classification": "legacy-plan",
+    "domain": [
+      "orchestration-history"
+    ],
+    "authority_for": [],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": "Specialists/xtmux orchestration architecture",
+    "conflicts_with": [
+      "its 'NEVER execute without user confirmation' doctrine conflicts with current autonomous chain orchestration"
+    ],
+    "disposition": "archive-superseded + add superseded-designs entry",
+    "target_path": "docs/plans/deprecated/",
+    "unique_requirements_to_preserve": [
+      "cost/autonomy warning display principle survives as UX guidance"
+    ],
+    "notes": "2026-03 era: AskUserQuestion menus, Gemini/Cursor/Droid profiles, .claude/delegation-config.yaml. Not registered in superseded-designs.md.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/plans/orchestration-implementation.md",
+    "sha": "0436c7e126581d4cecd63a0c8d797725ebb17c79",
+    "bytes": 11003,
+    "lines": 283,
+    "read_status": "complete",
+    "classification": "legacy-plan",
+    "domain": [
+      "orchestration-history"
+    ],
+    "authority_for": [],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": "Specialists/xtmux orchestration architecture",
+    "conflicts_with": [],
+    "disposition": "archive-superseded + add superseded-designs entry",
+    "target_path": "docs/plans/deprecated/",
+    "unique_requirements_to_preserve": [
+      "UUID/session pinning principle survives via exact resume contracts (codex-runtime-boundary, command-outcome thread_id)"
+    ],
+    "notes": "2026-02 era: .jaggers/sessions.json, Gemini --list-sessions diffing, qwen --session-id. Predates Specialists entirely.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/plans/xtpi-worktree-first-flow.md",
+    "sha": "fc6aa2bf86ec17e9ad114f43331e92c5539ec965",
+    "bytes": 12566,
+    "lines": 277,
+    "read_status": "complete",
+    "classification": "plan-partial-stale",
+    "domain": [
+      "workflow",
+      "beads",
+      "worktrees"
+    ],
+    "authority_for": [
+      "canonical beads-first loop (bd claim/close)",
+      "beads-in-worktrees mechanism incl. Dolt server port bootstrap",
+      "Claude/Pi parity enforcement-surfaces model",
+      "Specialists complement boundary"
+    ],
+    "duplicate_of": null,
+    "supersedes": "xtpi-primary naming (decides xtrm canonical CLI, xt alias)",
+    "superseded_by": null,
+    "conflicts_with": [
+      "memory-gate ack as .beads/.memory-gate-done marker file vs current memory-acked:<id> KV practice",
+      "close auto-commit git add -A policy vs conservative commit doctrine"
+    ],
+    "disposition": "reconcile then keep-canon (sections 3-4)",
+    "target_path": "docs/plans/xtpi-worktree-first-flow.md",
+    "unique_requirements_to_preserve": [
+      "all worktrees of a repo read/write the same canonical beads backing store; no per-worktree trackers",
+      "session kv markers are runtime-local; canonical truth is bd issue status",
+      "specialists jobs attach to canonical beads context; never fork a second tracker",
+      "sessions start directly inside a pre-configured worktree (mid-session migration pattern not viable)"
+    ],
+    "notes": "Status header says Active; sections 5-6 partially superseded by later hook/extension changes.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/runtime-compatibility.json",
+    "sha": "2732312ab4bc8754d976cbfd4b231fbd19ef4162",
+    "bytes": 1519,
+    "lines": 28,
+    "read_status": "complete",
+    "classification": "machine-contract",
+    "domain": [
+      "compatibility",
+      "runtime-discovery"
+    ],
+    "authority_for": [
+      "Core compatibility window",
+      "contract identifier registry"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/runtime-compatibility.json",
+    "unique_requirements_to_preserve": [
+      "enforced at interactive worktree launch BEFORE creation; not at CLI startup",
+      "absent/unresolvable sibling is never an incompatibility; XTRM_SKIP_RUNTIME_COMPAT=1 override",
+      "minimum bumps coincide with the release PR that requires them"
+    ],
+    "notes": "Shipped in package files; consumed by build gate + launch preflight.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "/home/dawid/dev/core",
+    "path": "docs/command-deprecations.json",
+    "sha": "9f3e7d8a99e3723969df5d793aeee61b5009f5ff",
+    "bytes": 2809,
+    "lines": 83,
+    "read_status": "complete",
+    "classification": "machine-contract",
+    "domain": [
+      "cli",
+      "deprecations"
+    ],
+    "authority_for": [
+      "deprecation/removal ledger for compat verbs (removal target v0.13.0)"
+    ],
+    "duplicate_of": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "conflicts_with": [],
+    "disposition": "keep-canon",
+    "target_path": "docs/command-deprecations.json",
+    "unique_requirements_to_preserve": [
+      "every deprecation message in code corresponds to a ledger entry added in the same PR"
+    ],
+    "notes": "9 entries: bootstrap, clean, pi install/doctor/reload/setup flags, claude reload/reinstall/doctor.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "~ (runtime copy; == global SSOT ~/.xtrm/skills/default/planning/SKILL.md)",
+    "path": "/home/dawid/.pi/agent/skills/planning/SKILL.md",
+    "sha": "not-git-tracked-here; byte-equal to ~/.xtrm/skills/default/planning/SKILL.md (diff verified); core repo counterpart skills/planning/SKILL.md @HEAD = 36430e4b0ccf9e57c3d6be0cf289dd94670b4398 (451 lines, OLDER)",
+    "bytes": 32268,
+    "lines": 670,
+    "read_status": "complete",
+    "classification": "skill-canonical-content (SSOT copy ahead of repo copy)",
+    "domain": [
+      "planning",
+      "beads"
+    ],
+    "authority_for": [
+      "effective planning workflow as shipped",
+      "7-section bead contract",
+      "single-invocation board creation mechanics",
+      "draft capture mode",
+      "dependency edge taxonomy"
+    ],
+    "duplicate_of": "~/.xtrm/skills/default/planning/SKILL.md",
+    "supersedes": "core repo HEAD copy (older revision)",
+    "superseded_by": null,
+    "conflicts_with": [
+      "core repo skills/planning/SKILL.md @HEAD (drift C1)"
+    ],
+    "disposition": "preserve mechanics; re-establish vendor invariant (repo upstream, regenerate SSOT)",
+    "target_path": "skills/planning/SKILL.md (core repo) after sync",
+    "unique_requirements_to_preserve": [
+      "see lane-h-planner-modernization.json mechanics_worth_preserving (quoted verbatim)"
+    ],
+    "notes": "Repo copy lacks draft-capture mode, telemetry/validation contracts, library-first survey record in LIBRARIES section.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repository": "~ (runtime copy; == global SSOT ~/.xtrm/skills/default/test-planning/SKILL.md)",
+    "path": "/home/dawid/.pi/agent/skills/test-planning/SKILL.md",
+    "sha": "not-git-tracked-here; byte-equal to ~/.xtrm/skills/default/test-planning/SKILL.md (diff verified); core repo counterpart skills/test-planning/SKILL.md @HEAD = 2669cec4d1c28475df33f3177ec2e55b7518a1f4 (465 lines, OLDER)",
+    "bytes": 27940,
+    "lines": 542,
+    "read_status": "complete",
+    "classification": "skill-canonical-content (SSOT copy ahead of repo copy)",
+    "domain": [
+      "test-planning",
+      "beads"
+    ],
+    "authority_for": [
+      "layer detection (core/boundary/shell/operational-agentic)",
+      "live-first preference order",
+      "smoke/E2E mandatory-for-integrated-behavior rule",
+      "telemetry assertion requirements",
+      "anti-pattern checklist",
+      "priority heuristics",
+      "critical-path coverage framing",
+      "advisory vs enforcement boundary"
+    ],
+    "duplicate_of": "~/.xtrm/skills/default/test-planning/SKILL.md",
+    "supersedes": "core repo HEAD copy (two-trigger older revision)",
+    "superseded_by": null,
+    "conflicts_with": [
+      "core repo skills/test-planning/SKILL.md @HEAD (drift C1)"
+    ],
+    "disposition": "preserve mechanics; re-establish vendor invariant",
+    "target_path": "skills/test-planning/SKILL.md (core repo) after sync",
+    "unique_requirements_to_preserve": [
+      "Trigger 2 (specialist-chain test authoring) and Trigger 3 (closure gate) must survive",
+      "typecheck/lint are evidence only, never the behavioral test gate",
+      "test issue is a tracked commitment, not a gate; gating opt-in via bd deps"
+    ],
+    "notes": "evals/ directories exist alongside both skills in core repo (skills/*/evals/evals.json) \u2014 not read, out of lane scope.",
+    "_lane": "lane-h-source-register",
+    "_lanes": [
+      "lane-h-source-register.json"
+    ]
+  },
+  {
+    "repo": "xtrm",
+    "path": "docs/telemetry/forensic-event-contract.md",
+    "blob_sha": "7b1810cb9db5d0467b8bdd296113e89ed1f751ca",
+    "bytes": 23163,
+    "lines": 1046,
+    "read": "complete",
+    "role": "canonical xtrm.forensic.v1 envelope: identity layers (5-layer, kj651 Opp 18), correlation model, redaction, event families incl. chain.incident/design.review/migration.rollback (2026-06-13 additions), Prometheus boundary rules",
+    "classification": "current-canon",
+    "repository": "xtrm",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "xtrm",
+    "path": "docs/telemetry/prometheus-projection-contract.md",
+    "blob_sha": "7fd308ccb4455e4185702b971156df84efc14257",
+    "bytes": 26143,
+    "lines": 419,
+    "read": "complete",
+    "role": "canonical low-cardinality Prometheus projection: label allowlist \u00a73.1, forbidden labels \u00a73.2, metric catalog \u00a75 (incl. eval/gate families \u00a75.9), exporter architecture, ownership split",
+    "classification": "current-canon",
+    "repository": "xtrm",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "xtrm",
+    "path": "docs/telemetry/agentops-event-catalog.md",
+    "blob_sha": "6e13effaf2d70e808319e76ea8bea67a6184fc72",
+    "bytes": 17886,
+    "lines": 360,
+    "read": "complete",
+    "role": "implementation-ready AgentOps event names with body fields, evidence semantics and Prometheus eligibility; eval.* family \u00a710.3; evidence kinds \u00a712; new-event procedure \u00a713",
+    "classification": "current-canon",
+    "repository": "xtrm",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "xtrm",
+    "path": "docs/telemetry/prometheus-infra-console-handoff.md",
+    "blob_sha": "ff95344e5a41af3e9386f20df4c214e6c224e52c",
+    "bytes": 6205,
+    "lines": 128,
+    "read": "complete",
+    "role": "ownership split (xtrm semantics vs mercury/infra plumbing vs console UX); console drill-down rule: opaque IDs only after drill-down via logs/traces/events; never persist panels grouping by job_id/chain_id/participant_id/bead_id/trace_id",
+    "classification": "current-canon",
+    "repository": "xtrm",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "xtrm",
+    "path": "docs/research/agentops-telemetry-for-specialists.md",
+    "blob_sha": "80a18bf384978373ed58013f6863f35d9e3640b2",
+    "bytes": 8103,
+    "lines": 131,
+    "read": "complete",
+    "role": "research note (OTel GenAI/MCP semconv); proposes superseded specialist_* metric names and USD metrics later retracted by canon",
+    "classification": "research-historical",
+    "repository": "xtrm",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "xtrm",
+    "path": "docs/specialists/agentops-suite.md",
+    "blob_sha": "a1bd92b6d62c33a8fca3597ce4dcd8651696ae86",
+    "bytes": 17748,
+    "lines": 287,
+    "read": "complete",
+    "role": "copy of specialists AgentOps suite design (Evaluation + Optimization pillars); content-identical to specialists repo copy except frontmatter; contains one markdown corruption (`\u00a710.1` rendered as `-10.1`)",
+    "classification": "duplicate-copy",
+    "repository": "xtrm",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "specialists",
+    "path": "docs/design/specialist-agentops-suite.md",
+    "blob_sha": "c585234212d4abd70f23d1845679fafbeec5af4e",
+    "bytes": 17573,
+    "lines": 323,
+    "read": "complete",
+    "role": "origin copy of the AgentOps suite design draft (2026-06-05): SkillOpt loop adaptation, golden-set A/B harness \u00a78, governance invariant (no specialist self-edit), sp-improve proposal beads",
+    "classification": "design-draft (predates Eval Core workstream E; partially superseded)",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "specialists",
+    "path": "docs/observability-metrics.md",
+    "blob_sha": "1e0869d52e848441ca6a091c38c1adefda408972",
+    "bytes": 7460,
+    "lines": 152,
+    "read": "complete",
+    "role": "v2.0 RPC/timeline metrics contract (legacy sibling); self-declares bridge-era status and defers to docs/telemetry/* for new design",
+    "classification": "legacy-compat",
+    "repository": "specialists",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "core",
+    "path": "docs/observability/prometheus-labels.md",
+    "blob_sha": "26bb8fba45eefc600d4dfa334efeb7df17e48b77",
+    "bytes": 2073,
+    "lines": 64,
+    "read": "complete",
+    "role": "core-side cardinality guardrail (11.md P3-04): MUST-NOT label list, where identity fields DO live, allowed dimensions, 10k-series redesign threshold",
+    "classification": "current-canon (core scope)",
+    "repository": "core",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "core",
+    "path": "docs/design/memory-system-r6g.md",
+    "blob_sha": "8ccfb91c542128dce7ea4a4204b5a2d62b6fa0c3",
+    "bytes": 24584,
+    "lines": 481,
+    "read": "complete",
+    "role": "memory system research/design (r6g): three-substrate current state, failure modes F1\u2013F11, proposed memory_item schema, tier promotion vocabulary (Archival/Recall/Core), ship-in-order PRs 1\u20135",
+    "classification": "design-research ('Design / research. Not a plan of record.')",
+    "repository": "core",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "xtrm",
+    "path": "docs/console/console-product-contract.md",
+    "blob_sha": "f182cbb244e85c3a2b796780e9320d03c9329ee4",
+    "bytes": 41831,
+    "lines": 958,
+    "read": "complete",
+    "role": "single-source-of-truth console product contract (rev 42): Operations-vs-Observability split \u00a74.1, telemetry boundary LOCKED \u00a717 (Prom aggregates vs forensic drill-down, no USD metric), pre/post-substrate mapping \u00a714/\u00a715 with shipped/PARTIAL statuses",
+    "classification": "current-canon",
+    "repository": "xtrm",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "xtrm",
+    "path": "docs/console/architecture/console-observability-spec.md",
+    "blob_sha": "592cd045bef8bf166dbd0d423af3d7d9432e24d2",
+    "bytes": 33499,
+    "lines": 1124,
+    "read": "complete",
+    "role": "datasource/evidence contract Slices A\u2013F: ObserveDatasourceDescriptor/QueryRequest/Response/EvidenceRef types, read-only posture, missing-signal routing, agent-authored dashboards require operator approval, journal/recommendation promotion classes",
+    "classification": "current-canon",
+    "repository": "xtrm",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "xtrm",
+    "path": "docs/console/architecture/console-architecture.md",
+    "blob_sha": "605182195f064d55ed3baa51bd42b5f5ed5746f3",
+    "bytes": 29455,
+    "lines": 531,
+    "read": "complete",
+    "role": "bridge-era UI/API/materializer/state ownership matrix; \u00a78.1 forbidden-label list declared single source of truth for the console repo; feed rollup not forensic firehose; substrate never copied into second SQLite projection",
+    "classification": "current-canon (xtrm view; see contradiction C-3 vs console-repo version)",
+    "repository": "xtrm",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "console",
+    "path": "docs/architecture/console-architecture.md",
+    "blob_sha": "5e67f188931567fc85b64e7a1b76a4524c6c0c84",
+    "bytes": 2073,
+    "lines": 50,
+    "read": "complete",
+    "role": "post-host-retirement rewrite: apps/console is now production host AND UI package; composition root apps/console/src/server/index.ts; /gitboard 308 redirect",
+    "classification": "current-canon (console repo view; supersedes the gitboard-hosted model in the xtrm copy)",
+    "repository": "console",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "console",
+    "path": "docs/architecture/daemon-read-model-contract.md",
+    "blob_sha": "afe1c584842c9c9f592bee75a3387abef92d12ab",
+    "bytes": 8512,
+    "lines": 179,
+    "read": "complete",
+    "role": "read-model contract: five named contracts (substrate.issue-graph, specialists.activity-evidence, feed.rollups, graph.console-joins, source-health.freshness); bridge retirement gate returns 'retain'; route-to-core parity mandatory before wrapper retirement",
+    "classification": "current-canon (bridge-era)",
+    "repository": "console",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "console",
+    "path": "docs/xtrm-observability-prd.md",
+    "blob_sha": "254859692f09c8aaa1e15f537319e9377c4eead6",
+    "bytes": 30201,
+    "lines": 512,
+    "read": "complete",
+    "role": "observability platform PRD (planning-ready + forge-i7pr.10 addendum): Datasource-as-interface, JSON dashboard specs, agent-authored panels with operator approval, token-first/no-USD rules, explore-mode Datasette demoted to debug fallback",
+    "classification": "current-canon (product PRD)",
+    "repository": "console",
+    "read_status": "complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "xtrm",
+    "path": "docs/console/architecture/console-test-guards.md",
+    "blob_sha": "2da0ee25b72d2df46d62b5973373f91fefcc850c",
+    "lines": 246,
+    "read": "skim-complete",
+    "role": "test guard checklist protecting materializer/API/Prometheus-cardinality/feed boundaries; forbidden labels defined once in console-architecture.md \u00a78.1",
+    "classification": "supporting",
+    "repository": "xtrm",
+    "read_status": "skim-complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  },
+  {
+    "repo": "xtrm",
+    "path": "docs/console/architecture/apps-console-scaffold-preflight.md",
+    "blob_sha": "d2e664841a5a2bb91c1f9d0d8ab119436b829b55",
+    "lines": 109,
+    "read": "skim-complete",
+    "role": "scaffold boundary reference (completed): 'do not move backend/API/materializer ownership into apps/console' \u2014 predates host retirement; stale relative to the console-repo architecture doc",
+    "classification": "stale-relative-to-console-repo",
+    "repository": "xtrm",
+    "read_status": "skim-complete",
+    "_lane": "lane-i-source-register",
+    "_lanes": [
+      "lane-i-source-register.json"
+    ]
+  }
+]

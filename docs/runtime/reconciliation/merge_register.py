@@ -17,6 +17,17 @@ CLASSIFICATIONS = [
     "unclassified",
 ]
 
+def _infer_repo(path):
+    """Infer owning repo from register path when the lane omitted it."""
+    p = str(path)
+    if p.startswith("docs/design/") or p.startswith("docs/archive") or \
+       p.startswith("docs/ARCHITECTURE") or p == "docs/architecture.md" or \
+       p == "docs/TODO.md":
+        return "specialists"
+    if p.startswith("experiments/"):
+        return "xtrm-wt/pr71-loader"
+    return "xtrm"
+
 def key(row):
     return f'{row.get("repository","")}:{row.get("path","")}'
 
@@ -28,6 +39,17 @@ def main():
         data = json.loads(lf.read_text())
         rows = data if isinstance(data, list) else data.get("rows", data.get("files", []))
         for row in rows:
+            # --- schema normalization across lanes ---
+            if not row.get("repository"):
+                p = row.get("path", "")
+                row["repository"] = row.get("repo") or _infer_repo(p)
+            rs = row.get("read_status")
+            if not rs or rs == "not_read":
+                if row.get("read") == "complete" or row.get("read_completely") is True:
+                    rs = "complete"
+                elif row.get("read") or row.get("read_completely") is False:
+                    rs = str(row.get("read") or "partial")
+            row["read_status"] = rs
             k = key(row)
             if k in merged:
                 old = merged[k]
@@ -66,7 +88,13 @@ def main():
     bl = OUT / "lanes" / "lane-j-broken-links.json"
     if bl.exists():
         try:
-            summary["BROKEN_LINKS_REPORTED"] = len(json.loads(bl.read_text()))
+            d = json.loads(bl.read_text())
+            if isinstance(d, dict):
+                for v in d.values():
+                    if isinstance(v, list):
+                        d = v
+                        break
+            summary["BROKEN_LINKS_REPORTED"] = len(d)
         except Exception as e:
             summary["BROKEN_LINKS_REPORTED"] = f"parse-error: {e}"
 

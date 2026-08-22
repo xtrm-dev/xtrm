@@ -1,0 +1,110 @@
+{
+  "TOTAL_FILES": 90,
+  "FULLY_READ": 87,
+  "PARTIAL": 0,
+  "UNREAD": 0,
+  "UNCLASSIFIED": 0,
+  "BY_CLASSIFICATION": {
+    "canonical": 4,
+    "normative": 2,
+    "current-state-ledger": 3,
+    "programme-sequencing": 1,
+    "implementation-reference": 3,
+    "experiment": 3,
+    "evidence": 1,
+    "research": 2,
+    "historical": 1,
+    "superseded": 0,
+    "duplicate": 1,
+    "generated": 0,
+    "editorial-snapshot": 2,
+    "unclassified": 0
+  },
+  "BROKEN_LINKS_REPORTED": 165,
+  "AUTHORITY_CONFLICTS": 6,
+  "REGISTER_CONFLICTS": [
+    {
+      "key": "specialists:docs/design/roadmap/chains-prompt-evals.md",
+      "field": "classification",
+      "values": [
+        "superseded-historical",
+        "superseded-historical overall (per lane-b) but \u00a79 is the reference text of the eval entity model"
+      ],
+      "sources": [
+        "lane-b-source-register",
+        "lane-i-source-register.json"
+      ]
+    },
+    {
+      "key": "xtrm:docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md",
+      "field": "classification",
+      "values": [
+        "normative",
+        "current-programme-amendment"
+      ],
+      "sources": [
+        "lane-a-source-register",
+        "lane-i-source-register.json"
+      ]
+    },
+    {
+      "key": "xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/native-chain-runtime-prd-draft.md",
+      "field": "classification",
+      "values": [
+        "experiment",
+        "audit-prd-draft"
+      ],
+      "sources": [
+        "lane-a-source-register",
+        "lane-i-source-register.json"
+      ]
+    },
+    {
+      "key": "xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/source-and-authority-register.md",
+      "field": "classification",
+      "values": [
+        "evidence",
+        "audit-authority-register"
+      ],
+      "sources": [
+        "lane-a-source-register",
+        "lane-i-source-register.json"
+      ]
+    },
+    {
+      "key": "xtrm:docs/shared/xtrm-current-execution-plan.md",
+      "field": "classification",
+      "values": [
+        "canonical",
+        "current-plan"
+      ],
+      "sources": [
+        "lane-a-source-register",
+        "lane-i-source-register.json"
+      ]
+    },
+    {
+      "key": "xtrm:docs/shared/xtrm-local-coordinator-bootstrap.md",
+      "field": "classification",
+      "values": [
+        "programme-sequencing",
+        "current-programme-amendment"
+      ],
+      "sources": [
+        "lane-a-source-register",
+        "lane-i-source-register.json"
+      ]
+    }
+  ],
+  "LANES_MERGED": [
+    "lane-a-source-register.json",
+    "lane-b-source-register.json",
+    "lane-c-source-register.json",
+    "lane-d-source-register.json",
+    "lane-e-source-register.json",
+    "lane-f-source-register.json",
+    "lane-g-source-register.json",
+    "lane-h-source-register.json",
+    "lane-i-source-register.json"
+  ]
+}
