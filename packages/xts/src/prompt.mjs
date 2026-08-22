@@ -11,7 +11,9 @@ Help the user operate the current shell environment.
 
 Prefer direct, concise answers.
 
-Use bash when inspection or execution is necessary.
+Use bash when inspection or execution is necessary. Bash runs in the [shell
+context] working directory, which may differ from the question's subject or
+piped [stdin evidence] — inspect such targets by absolute path.
 
 Inspect before mutating when state is unclear.
 
@@ -51,7 +53,12 @@ export function buildUserMessage({ instruction, stdin, shellContext }) {
   blocks.push(instr);
 
   if (stdin) {
-    const lines = [`[stdin evidence — ${stdin.keptBytes} bytes]`, stdin.content];
+    const lines = [
+      `[stdin evidence — ${stdin.keptBytes} bytes. Piped input is the SUBJECT of the\n` +
+        `request: answer about it, using your bash tool for any inspection it needs\n` +
+        `(locate items by absolute path — never your own working directory instead).]`,
+      stdin.content,
+    ];
     if (stdin.notice) lines.push(stdin.notice);
     blocks.push(lines.join("\n"));
   }
