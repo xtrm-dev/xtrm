@@ -444,3 +444,13 @@ test("postinstall appends marked hook block once and honors opt-out", async () =
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test("interactive TTY guard reports exactly what is missing", async () => {
+  const { missingInteractiveTtys } = await import("../src/cli.mjs");
+  const tty = { isTTY: true };
+  const pipe = { isTTY: false };
+  assert.deepEqual(missingInteractiveTtys({ stdin: tty, stdout: tty }), []);
+  assert.deepEqual(missingInteractiveTtys({ stdin: pipe, stdout: tty }), ["stdin"]);
+  assert.deepEqual(missingInteractiveTtys({ stdin: tty, stdout: pipe }), ["stdout"]);
+  assert.deepEqual(missingInteractiveTtys({ stdin: pipe, stdout: pipe }), ["stdin", "stdout"]);
+});

@@ -177,6 +177,13 @@ export function createSessionEventHandler(app) {
 
 // `xts` interactive session (PRD §7.1, §16, §20.1): TUI + streamed model
 // responses + guarded bash + conversation persistence.
+export function missingInteractiveTtys({ stdin, stdout }) {
+  return [
+    !stdin.isTTY && "stdin",
+    !stdout.isTTY && "stdout",
+  ].filter(Boolean);
+}
+
 async function interactiveCommand() {
   const [{ loadShellContext }, { readConfig }] = await Promise.all([
     import("./context.mjs"),
@@ -184,8 +191,12 @@ async function interactiveCommand() {
   ]);
   const { buildUserMessage } = await import("./prompt.mjs");
 
-  if (!process.stdin.isTTY) {
-    process.stderr.write("xts: interactive session requires a TTY (stdin is not a terminal). Use a question or pipe instead.\n");
+  const missing = missingInteractiveTtys({ stdin: process.stdin, stdout: process.stdout });
+  if (missing.length > 0) {
+    // `xts | something` leaves stdout as a pipe; rendering the alt-screen TUI
+    // into it would EPIPE-crash when the consumer exits (PRD §21: clear
+    // failure, never a stack trace).
+    process.stderr.write(`xts: interactive session requires a TTY on ${missing}. Did you mean: command | xts "question"?\n`);
     process.exitCode = 1;
     return;
   }
@@ -531,6 +542,16 @@ async function modelCommand() {
 
   await writeConfig({ ...config, model: { provider: selected.provider, id: selected.id } });
   process.stdout.write(`xts: model set to ${formatModel(selected)}\n`);
+}
+
+// A closed pipe consumer (e.g. `xts "q" | head`) must exit quietly instead of
+// crashing on an unhandled EPIPE from late stdout writes. Everything else
+// still surfaces.
+if (process.stdout && typeof process.stdout.on === "function") {
+  process.stdout.on("error", (error) => {
+    if (error?.code === "EPIPE") process.exit(0);
+    throw error;
+  });
 }
 
 if (import.meta.main) {
