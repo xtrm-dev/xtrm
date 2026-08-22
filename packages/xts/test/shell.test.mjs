@@ -149,6 +149,7 @@ test("zsh precmd captures the prior command without hook internals", async () =>
   const script = [
     'PS1=""',
     `export XTS_STATE_DIR=${JSON.stringify(stateDir)}`,
+    "export XTS_SESSION_ID=live-zsh",
     `source ${JSON.stringify(hook)}`,
     "true",
     "printf '%s\\n' 'KEY = live-generic-secret-value' >/dev/null",
@@ -162,8 +163,8 @@ test("zsh precmd captures the prior command without hook internals", async () =>
     env: { ...process.env, XTS_STATE_DIR: stateDir },
   });
   assert.equal(output, "", "zsh hook must not write to stdout");
-  const state = await readFile(path.join(stateDir, "xts", "state.json"), "utf8");
-  const commands = await readFile(path.join(stateDir, "xts", "cmds.txt"), "utf8");
+  const state = await readFile(path.join(stateDir, "xts", "state.live-zsh.json"), "utf8");
+  const commands = await readFile(path.join(stateDir, "xts", "cmds.live-zsh.txt"), "utf8");
   assert.match(`${state}\\n${commands}`, /true/);
   assert.doesNotMatch(`${state}\\n${commands}`, /live-generic-secret-value|live-bearer-secret/);
   assert.doesNotMatch(`${state}\\n${commands}`, /xts_history_redact|fc -ln|xts_hook/);
@@ -185,16 +186,59 @@ test("shell hooks force private state and do not persist obvious secrets", async
     assert.equal(result, "", `${shell} hook must stay silent`);
 
     const dirMode = (await stat(path.join(stateDir, "xts"))).mode & 0o777;
-    const stateMode = (await stat(path.join(stateDir, "xts", "state.json"))).mode & 0o777;
-    const commandsMode = (await stat(path.join(stateDir, "xts", "cmds.txt"))).mode & 0o777;
+    const stateMode = (await stat(path.join(stateDir, "xts", "state.priv-test.json"))).mode & 0o777;
+    const commandsMode = (await stat(path.join(stateDir, "xts", "cmds.priv-test.txt"))).mode & 0o777;
     assert.equal(dirMode, 0o700, `${shell} state directory mode`);
     assert.equal(stateMode, 0o600, `${shell} state file mode`);
     assert.equal(commandsMode, 0o600, `${shell} command file mode`);
-    const statePath = path.join(stateDir, "xts", "state.json");
-    const commandsPath = path.join(stateDir, "xts", "cmds.txt");
+    const statePath = path.join(stateDir, "xts", "state.priv-test.json");
+    const commandsPath = path.join(stateDir, "xts", "cmds.priv-test.txt");
     const raw = await readFile(statePath, "utf8");
     const rawCommands = await readFile(commandsPath, "utf8");
     assert.doesNotMatch(`${raw}\n${rawCommands}`, /generic-long-secret-value|bearer-secret-value|long-password-value|BEGIN RSA PRIVATE KEY/);
     assert.match(raw, /\[redacted\]/);
+  }
+});
+
+test("session id isolates state paths and falls back without one", async () => {
+  const { getStatePath, getCommandsPath } = await import("../src/history/shell.mjs");
+  delete process.env.XTS_SESSION_ID;
+  assert.match(getStatePath(), /state\.json$/);
+  assert.match(getCommandsPath(), /cmds\.txt$/);
+
+  process.env.XTS_SESSION_ID = "1234-pts0";
+  try {
+    assert.match(getStatePath(), /state\.1234-pts0\.json$/);
+    assert.match(getCommandsPath(), /cmds\.1234-pts0\.txt$/);
+    // Traversal attempts are neutralized ("/" is stripped), keeping files
+    // inside the state dir.
+    process.env.XTS_SESSION_ID = "../../evil";
+    const evil = getStatePath();
+    assert.ok(!evil.split(path.sep).some((part) => part === ".."), "no parent traversal");
+    assert.match(evil, /xts\/state\.+evil\.json$/);
+  } finally {
+    delete process.env.XTS_SESSION_ID;
+  }
+});
+
+test("hooks write per-session files when XTS_SESSION_ID is preset", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const hookDir = path.join(path.dirname(new URL(import.meta.url).pathname), "..", "src", "history");
+  for (const shell of ["bash", "zsh"]) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), `xts-sid-${shell}-`));
+    try {
+      execFileSync(shell,
+        shell === "bash"
+          ? ["--noprofile", "--norc", "-c", `export XTS_SESSION_ID=777-tty9; source ${hookDir}/hook.bash; xts_hook`]
+          : ["-f", "-c", `export XTS_SESSION_ID=777-tty9; source ${hookDir}/hook.zsh; true; xts_hook`],
+        { env: { ...process.env, XTS_STATE_DIR: dir } });
+      assert.ok(fs.existsSync(path.join(dir, "xts", "state.777-tty9.json")), `${shell} state.<id>.json`);
+      assert.ok(fs.existsSync(path.join(dir, "xts", "cmds.777-tty9.txt")), `${shell} cmds.<id>.txt`);
+      assert.ok(!fs.existsSync(path.join(dir, "xts", "state.json")), `${shell} no global file`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }
 });

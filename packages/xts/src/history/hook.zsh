@@ -12,8 +12,17 @@
 
 xts_state_base="${XTS_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}}"
 xts_state_dir="$xts_state_base/xts"
-xts_state_file="$xts_state_dir/state.json"
-xts_cmds_file="$xts_state_dir/cmds.txt"
+
+# Per-session isolation: one stable id per shell (pid+tty) exported so child
+# xts processes inherit it and read only this terminal's state (audit #12).
+if [[ -z ${XTS_SESSION_ID:-} ]]; then
+  xts_tty=$(tty 2>/dev/null)
+  xts_tty=${xts_tty##*/}
+  XTS_SESSION_ID="$${xts_tty:+-$xts_tty}"
+  export XTS_SESSION_ID
+fi
+xts_state_file="$xts_state_dir/state.$XTS_SESSION_ID.json"
+xts_cmds_file="$xts_state_dir/cmds.$XTS_SESSION_ID.txt"
 
 # Release-safe history policy: obvious credential-bearing commands are stored
 # only as a marker. This is intentionally conservative; it is not a secret
@@ -118,6 +127,9 @@ xts_hook() {
   local xts_cwd xts_cwd_json
   xts_cwd=$(xts_json_escape "$PWD") || xts_cwd=
   xts_cwd_json=$(xts_json_field "$xts_cwd")
+
+  # Prune session files from shells that closed more than 7 days ago.
+  find "$xts_state_dir" -maxdepth 1 \( -name 'state.*.json' -o -name 'cmds.*.txt' \) -mtime +7 -delete 2>/dev/null
 
   local xts_state_tmp
   xts_state_tmp=$(umask 077; mktemp "$xts_state_dir/.state.XXXXXX") 2>/dev/null || return 0
