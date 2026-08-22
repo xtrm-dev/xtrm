@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -404,5 +404,43 @@ test("one-shot prints bash tool calls to stderr while stdout stays clean", async
     assert.equal(stdout.trim(), "done");
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("postinstall appends marked hook block once and honors opt-out", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "xts-postinstall-"));
+  const script = path.join(path.dirname(CLI), "..", "scripts", "postinstall.mjs");
+  const env = { ...process.env, HOME: home, SHELL: "/usr/bin/zsh", XTS_CONFIG_DIR: home };
+  const runScript = async (extraEnv = {}) =>
+    new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [script], {
+        env: { ...env, ...extraEnv },
+        stdio: "ignore",
+      });
+      child.on("error", reject);
+      child.on("close", resolve);
+    });
+
+  try {
+    assert.equal(await runScript(), 0);
+    const rc = readFileSync(path.join(home, ".zshrc"), "utf8");
+    assert.match(rc, /# xts shell history/);
+    assert.match(rc, /eval "\$\(xts shellhook\)"/);
+
+    // Idempotent: second run must not duplicate the block.
+    assert.equal(await runScript(), 0);
+    const again = readFileSync(path.join(home, ".zshrc"), "utf8");
+    assert.equal((again.match(/# xts shell history/g) ?? []).length, 1);
+
+    // Opt-out respected even with no rc present.
+    const home2 = mkdtempSync(path.join(os.tmpdir(), "xts-postinstall-skip-"));
+    try {
+      assert.equal(await runScript({ XTS_SKIP_HOOK_INSTALL: "1" }), 0);
+      assert.equal((() => { try { readFileSync(path.join(home2, ".zshrc"), "utf8"); return true; } catch { return false; } })(), false);
+    } finally {
+      rmSync(home2, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(home, { recursive: true, force: true });
   }
 });
