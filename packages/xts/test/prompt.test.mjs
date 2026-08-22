@@ -54,7 +54,7 @@ test("envelope with instruction + stdin + context contains all parts", () => {
     shellContext: contextFixture,
   });
   assert.match(msg, /what is the time\?/);
-  assert.match(msg, /\[stdin evidence — 12 bytes\]/);
+  assert.match(msg, /\[stdin evidence — 12 bytes\./);
   assert.match(msg, /line1\nline2/);
   assert.match(msg, /\[shell context\]/);
   assert.match(msg, /cwd: \/home\/user\/proj/);
@@ -108,7 +108,7 @@ test("stdin alone (no instruction) renders stdin as primary evidence", () => {
     stdin: stdinFixture,
     shellContext: null,
   });
-  assert.match(msg, /^Describe the current shell state and answer any implied question\.\n\n\[stdin evidence — 12 bytes\]/);
+  assert.match(msg, /^Describe the current shell state and answer any implied question\.\n\n\[stdin evidence — 12 bytes\./);
   assert.match(msg, /line1\nline2/);
 });
 
