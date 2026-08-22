@@ -70,7 +70,15 @@ def main():
     lane_files = sorted(LANES.glob("lane-*-source-register.json"))
     for lf in lane_files:
         data = json.loads(lf.read_text())
-        rows = data if isinstance(data, list) else data.get("rows", data.get("files", []))
+        rows = data if isinstance(data, list) else None
+        if rows is None:
+            for k in ("rows", "files", "entries", "sources"):
+                if isinstance(data, dict) and isinstance(data.get(k), list):
+                    rows = data[k]
+                    break
+        if rows is None:
+            print(f"WARN: no row list found in {lf.name}; keys={list(data)[:10]}")
+            rows = []
         for row in rows:
             # --- schema normalization across lanes ---
             if not row.get("repository"):
@@ -82,6 +90,8 @@ def main():
                     rs = "complete"
                 elif row.get("read") or row.get("read_completely") is False:
                     rs = str(row.get("read") or "partial")
+            if rs == "read-completely":
+                rs = "complete"
             row["read_status"] = rs
             k = key(row)
             ov = NORMALIZE.get(k)
