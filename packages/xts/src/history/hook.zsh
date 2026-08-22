@@ -16,9 +16,7 @@ xts_state_dir="$xts_state_base/xts"
 # Per-session isolation: one stable id per shell (pid+tty) exported so child
 # xts processes inherit it and read only this terminal's state (audit #12).
 if [[ -z ${XTS_SESSION_ID:-} ]]; then
-  xts_tty=$(tty 2>/dev/null)
-  xts_tty=${xts_tty##*/}
-  XTS_SESSION_ID="$${xts_tty:+-$xts_tty}"
+  XTS_SESSION_ID="$$"
   export XTS_SESSION_ID
 fi
 xts_state_file="$xts_state_dir/state.$XTS_SESSION_ID.json"
@@ -84,12 +82,11 @@ xts_hook() {
   chmod 700 "$xts_state_dir" 2>/dev/null || return 0
   [[ -w $xts_state_dir ]] || return 0
 
-  # Last executed command. In precmd, zsh's `fc -ln -1` is the stable
-  # previous-event query; direct HISTCMD/history indexing is empty in some
-  # non-interactive probes and varies with history options.
-  local xts_last_cmd
-  xts_last_cmd=$(fc -ln -1 2>/dev/null | tail -n 1)
-  xts_last_cmd=${xts_last_cmd#"${xts_last_cmd%%[![:space:]]*}"}
+  # Last executed command comes from preexec (the literal line about to run),
+  # NOT from fc/history: shared-history imports would surface other
+  # terminals' commands here, breaking per-session isolation.
+  local xts_last_cmd="$xts_pending_command"
+  xts_pending_command=""
 
   # Redact before persistence and sanitize older entries when the ring is
   # rewritten.
@@ -147,5 +144,11 @@ xts_hook() {
   return 0
 }
 
+# preexec receives the exact command line before execution; paired with the
+# precmd writer above it captures only this shell's own commands.
+xts_pending_command=""
+xts_preexec() { xts_pending_command="$1"; }
+
 autoload -U add-zsh-hook
 add-zsh-hook precmd xts_hook
+add-zsh-hook preexec xts_preexec
