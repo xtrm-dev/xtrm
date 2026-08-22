@@ -80,7 +80,7 @@ MD
 cmd_checkpoint() {
   # usage: checkpoint [repo] [--open|--all] [extra board-audit-core args...]
   local repo="$PWD"
-  if [ $# -gt 0 ] && [ -d "$1/.git" ]; then repo="$1"; shift; fi
+  if [ $# -gt 0 ] && [ "$(git -C "$1" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then repo="$1"; shift; fi
   need_wt "$repo"
   acquire_lock
   [ "$(git -C "$WT" rev-parse --is-inside-work-tree 2>/dev/null)" = true ] \
@@ -123,7 +123,7 @@ cmd_checkpoint() {
 
 cmd_status() {
   local repo="${1:-$PWD}"
-  if [ $# -gt 0 ] && [ -d "$1/.git" ]; then repo="$1"; fi
+  if [ $# -gt 0 ] && [ "$(git -C "$1" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then repo="$1"; fi
   need_wt "$repo"
   if [ ! -f "$WT/.git" ] && [ ! -d "$WT/.git" ]; then echo "no export worktree (run ensure)"; exit 0; fi
   (cd "$WT"
