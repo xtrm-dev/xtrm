@@ -19,11 +19,28 @@ function stateBaseDir() {
 }
 
 export function getStatePath() {
-  return path.join(stateBaseDir(), "xts", "state.json");
+  return path.join(stateBaseDir(), "xts", stateFileName());
 }
 
 export function getCommandsPath() {
-  return path.join(stateBaseDir(), "xts", "cmds.txt");
+  return path.join(stateBaseDir(), "xts", cmdsFileName());
+}
+
+// Per-session isolation (audit #12): shells with the hook export a stable
+// XTS_SESSION_ID, so each terminal reads only its own state. Sanitized to
+// keep the id from escaping the state directory. No id -> legacy global files.
+function sessionId() {
+  return (process.env.XTS_SESSION_ID ?? "").replace(/[^A-Za-z0-9_.-]/g, "");
+}
+
+function stateFileName() {
+  const sid = sessionId();
+  return sid ? `state.${sid}.json` : "state.json";
+}
+
+function cmdsFileName() {
+  const sid = sessionId();
+  return sid ? `cmds.${sid}.txt` : "cmds.txt";
 }
 
 // Tolerant read: missing or corrupt file -> null, never throws. Shape is
