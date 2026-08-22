@@ -1,0 +1,99 @@
+{
+  "$comment": "Lane C terminology reconciliation map. Each term: where defined/used, with quotes and sources. SHAs in lane-c-source-register.json.",
+  "terms": [
+    {
+      "term": "chain template / chain_template / template",
+      "definition_sources": [
+        { "source": "xtrm:docs/substrate/chain_templates.md §1", "quote": "A **chain template** is a named, reusable shape for a multi-step specialist chain." },
+        { "source": "specialists:docs/design/substrate (via xtrm substrate_design_en.md §6.9 intro, line ~825)", "quote": "Its *shape* (which steps, in what order, with which gates) is defined by a **chain_template**: a named, reusable definition from which a concrete chain is instantiated." },
+        { "source": "substrate_design_en.md rev9 note", "quote": "the workflow concept is renamed **chain_template** … 'workflow' no longer appears, the unit is the chain." }
+      ],
+      "status": "canonical concept name",
+      "notes": "Three declared origins (§6.9.4): pre-built, type-resolved, on-the-run; promotion cycle ad-hoc → formalized → engineered. Storage today: `config/chains/` '(today, a bd formula)'."
+    },
+    {
+      "term": "formula (.formula.json)",
+      "definition_sources": [
+        { "source": "specialists:docs/design/roadmap/chain-templates/README.md", "quote": "**Schema:** verified `bd formula` schema. Pour mechanism creates a `molecule` parent issue (the chain identity) + one bd issue per formula step as children with `parent-child` edge." },
+        { "source": "specialists:docs/design/roadmap/current-release-snapshot.md", "quote": "Fifteen formula files exist in source. They are not a released orchestration product." }
+      ],
+      "status": "legacy / current materialization format — the executable artifact form of a template, explicitly NOT the ontology",
+      "notes": "README limitation list: needs = blocks-on only; no applies_when; extends appends only; vars substitute at pour time only."
+    },
+    {
+      "term": "molecule",
+      "definition_sources": [
+        { "source": "specialists:chain-templates/README.md", "quote": "# → returns the molecule id (this IS the chain identity)" },
+        { "source": "xtrm:docs/chains.md bridge note", "quote": "future bridge/substrate phases may make it a bd molecule id or `container_id`. Do not parse the shape in dashboards, telemetry, or alerts." },
+        { "source": "xtrm:docs/telemetry/forensic-event-contract.md", "quote": "`chain_id` | current specialists chain identity | Opaque. Today worktree-lineage/root-derived; bridge-era may be bd molecule id." }
+      ],
+      "status": "bd-materialization term for chain identity; bridge-era only",
+      "notes": "`bd mol pour <formula>` creates it; `sp epic` decoration section of roadmap: 'chain ≡ bd molecule replaces the old chain ≡ bd epic mental model'."
+    },
+    {
+      "term": "chain (runtime sense)",
+      "definition_sources": [
+        { "source": "xtrm:docs/chains.md", "quote": "In short: a chain is a worktree-rooted reuse lineage; reused_from_job_id gives the parent edge, worktree_owner_job_id/chain_id gives the shared chain identity." },
+        { "source": "substrate_design_en.md §6.9 intro", "quote": "A chain is the minimal unit of specialist work — even a single-member chain is a chain." }
+      ],
+      "status": "overloaded term: worktree-lineage (bridge runtime) vs instantiated-template unit (substrate)",
+      "notes": "chains.md carries an explicit do-not-parse warning for telemetry consumers."
+    },
+    {
+      "term": "chain root / root Bead",
+      "definition_sources": [
+        { "source": "formulas (all 15)", "quote": "\"labels\": [\"chain-root\", \"kind:root\", …] on step id \"root\"" },
+        { "source": "core:CHANGE-CONTRACT-SHAPE.md", "quote": "produces an epic + child root beads, then Pass-2 annotates `recommended_template` per child root" },
+        { "source": "substrate_design_en.md rev9", "quote": "a root carries a *change contract* (the five sections) … A root is not directly dispatchable — it needs ≥1 step" }
+      ],
+      "status": "consistent across all three strata",
+      "notes": "Root bead carries SCRUTINY + change-contract; step beads inherit scrutiny (canon §2.2 'single source of truth')."
+    },
+    {
+      "term": "step Bead",
+      "definition_sources": [
+        { "source": "specialists:chain-templates/README.md", "quote": "one bd issue per formula step as children with `parent-child` edge. `needs` produces `blocks` edges between siblings. Per-step `labels` carry role identity for the post-pour edge-wiring helper" },
+        { "source": "xtrm:chain_templates.md §2.9", "quote": "Each step in §2.1 becomes a `class:step` issue (substrate §6.2.1) with its `step-contract` populated" }
+      ],
+      "status": "bridge-era materialization of a substrate step-issue",
+      "notes": "Substrate analog: class:step issue with <step-contract> XML mandate; migration is 'one-for-one transcription'."
+    },
+    {
+      "term": "ChainSource",
+      "definition_sources": [],
+      "status": "NOT FOUND in either repo's docs — target-ontology term of the canonicalization programme with no written definition yet",
+      "notes": "grep over xtrm/docs + specialists/docs returns zero literal hits. Candidate referents found in prose: `.formula.json` files ('Fifteen .formula.json source assets exist' — xtrm-current-execution-plan.md §6), spec.yaml planner beads, and on-the-run shapes. The programme must define what qualifies before the compiler exists."
+    },
+    {
+      "term": "ChainDefinition",
+      "definition_sources": [],
+      "status": "NOT FOUND literally — programme-internal target term",
+      "notes": "Nearest existing anchors: substrate `chain_template` rows (`substrate.chain_templates`, canon §5 '§3 catalog → substrate.chain_templates rows') and `resolved_chain_json` schema field on containers (substrate rev9 schema)."
+    },
+    {
+      "term": "ResolvedChain",
+      "definition_sources": [
+        { "source": "xtrm:docs/shared/xtrm-current-execution-plan.md", "quote": "| Chain topology | canonical template compiled to persisted `ResolvedChain` | ; gaps: 'no persisted `ResolvedChain`'" },
+        { "source": "xtrm:docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md", "quote": "Beads describes the work. ResolvedChain describes the governed workflow. The reducer decides the next semantic state." },
+        { "source": "xtrm:docs/shared/xtrm-v1-completion-ledger.md", "quote": "| ChainTemplate compiler / ResolvedChain | GENUINE_V1_RESIDUAL | Pure packaged compiler, persisted schema, manual composition and Beads materializer with no hidden mutation. |" }
+      ],
+      "status": "defined as a v1 residual deliverable; does not exist yet",
+      "notes": "Properties asserted across execution-plan docs: deterministic compile from versioned root contract; immutable after approval ('child cannot mutate the approved ResolvedChain'); dynamic children gather evidence but cannot modify topology."
+    },
+    {
+      "term": "ChainRun",
+      "definition_sources": [],
+      "status": "NOT FOUND literally in audited docs",
+      "notes": "Nearest existing concepts: substrate container lifecycle (open → working → merge) driven by reducer on agent_end events (substrate_design_en §3.1); specialists job/worktree lineage (chains.md); forensic `chain.created` event (agentops-event-catalog.md). A ChainRun ontology term would need to be pinned to one of these."
+    },
+    {
+      "term": "recommended_template",
+      "definition_sources": [
+        { "source": "substrate_design_en.md seed example", "quote": "\"recommended_template\": \"debug\", // names a chain_template (§6.9), not an ad-hoc sequence" },
+        { "source": "core:UPSTREAM-DEPENDENCIES.md", "quote": "Pass-2 of the planner annotates each child root with `recommended_template: <one of 13 formulas | on-the-run>` validated against live `bd formula list`." }
+      ],
+      "status": "the bridge field by which planner output selects a template pre-materialization",
+      "notes": "Count drift inside UPSTREAM row: says '13 formulas'; 15 exist. Also substrate rev9 rename: recommended_workflow → recommended_template."
+    }
+  ]
+}

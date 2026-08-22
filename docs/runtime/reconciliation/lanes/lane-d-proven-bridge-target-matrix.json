@@ -1,0 +1,149 @@
+{
+  "lane": "D",
+  "programme_epic": "xtrm-cn8",
+  "generated": "2026-08-19",
+  "classification_legend": {
+    "PROVEN": "evidenced by experiment source/tests or live run records in scope",
+    "BRIDGE": "exists today in experiment/prototype form; production form still open",
+    "TARGET": "proposed/target-state only in non-normative docs; no implementation evidence",
+    "REJECTED": "explicitly ruled out by canon or evidence",
+    "UNVERIFIED": "no evidence found inside lane D scope"
+  },
+  "items": [
+    {
+      "topic": "direct AgentSession hosting",
+      "classification": "PROVEN",
+      "evidence": [
+        "worktree experiments/agentsession-sre-chain-vertical-slice/src/agents/bridge.ts: createAgentSession/SessionManager/SettingsManager/ResourceLoader imports; one direct session per activation, no Pi RPC",
+        "experiment-report.md §1/§11.1: 'Public Pi AgentSession is a sufficient in-process hosting boundary' — both fixture and real mercury/infra runs closed_pass",
+        "spec agentsession-sre-chain-vertical-slice-2026-08-17.md §20 acceptance criterion 'direct createAgentSession() executes every participant' marked ✅"
+      ],
+      "notes": "Experiment-level proof; ADR (GATE-HARNESS-ADR) still pending per exploration doc header."
+    },
+    {
+      "topic": "logical participant != physical session",
+      "classification": "PROVEN",
+      "evidence": [
+        "spec §5 identity model: participant_id / execution_id / pi_session_id distinct; retry invariant 'same logical participant => new execution_id => Pi session may be new'",
+        "experiment-report.md §6.3 live resume: diagnostician attempt=2 with new execution_id/pi_session_id, participant_id stable; run-state.json shows attempts=2 only on killed step"
+      ]
+    },
+    {
+      "topic": "reducer parallelism",
+      "classification": "PROVEN",
+      "evidence": [
+        "src/chain/scheduler.ts ~L376–396: dispatch intents from one reducer batch run concurrently via Promise.all; idempotency keys persisted before dispatch",
+        "experiment-report.md §4.1 timeline: explorer + observability-analyst START in the same second (22:03:28)"
+      ]
+    },
+    {
+      "topic": "crash/recovery",
+      "classification": "BRIDGE",
+      "evidence": [
+        "experiment-report.md §6.3: live kill/resume test pre-reconciliation topology (run-sre-1e761) — satisfied steps not re-dispatched, stuck step reset to ready, attempts=2",
+        "experiment-report.md §10.4 and §11.2: fresh live crash/resume against reconciled native-Epic topology is scoped (scripts/crash-resume.md) but NOT yet run"
+      ],
+      "notes": "Proven on old topology; reconciled-topology live rerun outstanding."
+    },
+    {
+      "topic": "typed communication/evidence",
+      "classification": "PROVEN",
+      "evidence": [
+        "src/channels/index.ts checkAuthority(): rejects work.turn/work.finding/work.verdict without evidence_refs; work.turn without action_target",
+        "tests/channels.test.ts + tests/authority-adversarial.test.ts: role spoofing, verdict forgery, system.* misuse rejected; runtime.message_rejected audit entries",
+        "evidence store pointer-first: src/evidence/index.ts; evidence_publish returns opaque ref, body persisted separately"
+      ]
+    },
+    {
+      "topic": "Beads hierarchy",
+      "classification": "PROVEN",
+      "evidence": [
+        "experiment-report.md §10.1: native ChainRun Epic (-t epic) + --parent children, blocks edges between step beads only, no bd close --force on normal paths",
+        "tests/beads-adapter.test.ts: 7 tests incl. epic materialization, parent-child visibility, no --force closure"
+      ]
+    },
+    {
+      "topic": "Specialist JSON loading",
+      "classification": "PROVEN",
+      "evidence": [
+        "src/specialists/loader.ts: Zod schema (.passthrough()), SHA-256 source fingerprint, feature matrix native|adapted|deferred|rejected",
+        "full-specialist-json-loader.md: pipeline Specialist JSON → lossless Zod validation → SpecialistActivationProfile → frozen digest → XTRM adaptation → direct AgentSession",
+        "scripts/inspect-specialist.ts compiles a specialist without model dispatch"
+      ],
+      "notes": "Experiment-local resolver; production path should use upstream @jaggerxtrm/specialists/lib SpecialistLoader#get() — explicitly listed as remaining work."
+    },
+    {
+      "topic": "skill fingerprinting",
+      "classification": "PROVEN",
+      "evidence": [
+        "full-specialist-json-loader.md 'Skills': host-resolved skills size-bounded read, SHA-256 fingerprinted, injected as cognition; missing skills fail closed",
+        "src/specialists/bindings.ts: frozen skill resolved_path+sha256 revalidated on every activation/resume; drift fails closed"
+      ]
+    },
+    {
+      "topic": "capability adaptation",
+      "classification": "BRIDGE",
+      "evidence": [
+        "loader emits per-field classification native/adapted/deferred/rejected (loader doc 'Schema philosophy'); scripts parsed but not executed (deferred); mandatory-rule template sets deferred",
+        "remaining work item 4: structured capability resolver proving required_tools/external_commands not yet built"
+      ],
+      "notes": "Classification mechanism exists; full capability enforcement is deferred."
+    },
+    {
+      "topic": "PREPARE/FINALIZE",
+      "classification": "UNVERIFIED",
+      "evidence": [],
+      "notes": "Zero occurrences of PREPARE/FINALIZE in experiment src/tests/scripts and none of the Lane D documents mention these phases. Route to lane owning Specialists runtime sources."
+    },
+    {
+      "topic": "ActivationSupervisor",
+      "classification": "UNVERIFIED",
+      "evidence": [],
+      "notes": "No symbol ActivationSupervisor anywhere in Lane D scope. The experiment has src/chain/scheduler.ts (dispatch loop), which may be its analogue, but no doc/source in scope names ActivationSupervisor."
+    },
+    {
+      "topic": "direct native delivery",
+      "classification": "TARGET",
+      "evidence": [
+        "exploration doc (shared @5bec00a3) §12: Channels → DeliveryIntent → XTRM runtime delivery → target execution/AgentSession; primitives deliver/steer/follow_up/queue are proposed",
+        "experiment implements local channel_post/channel_ack tools over JSONL only; report §11.2: real Channels transport NOT proven"
+      ]
+    },
+    {
+      "topic": "RLM children",
+      "classification": "TARGET",
+      "evidence": [
+        "exploration doc §8/§9/§21: RLM as governed execution-profile capability below step boundary; second spike defined but not run",
+        "exploration doc §29 items 1/6: prime-agent achieves in-process RLM children only via forked AgentSession internals (external reference, self-declared non-authoritative)",
+        "spec §1: dynamic RLM children explicitly NOT authorized in this experiment"
+      ]
+    },
+    {
+      "topic": "noTools/builtin boundary",
+      "classification": "PROVEN",
+      "evidence": [
+        "src/agents/bridge.ts:161 and src/agents/specialist-bridge.ts:148: noTools: \"builtin\"",
+        "experiment-report.md §5.1 friction note: tools: [] empties customTools too; noTools: \"builtin\" keeps custom tools while dropping built-ins",
+        "report §4.2: read-only posture held on real target; sre_exec denylist refused git commit/docker rm/sudo"
+      ]
+    },
+    {
+      "topic": "current SRE-specific scaffolding",
+      "classification": "PROVEN",
+      "evidence": [
+        "experiments README roles table maps chain roles to sre-* specialists; src/specialists/sre-team.ts mapping; roles/ adapted prompts; fixtures/tiny-repo two scenarios (setup-fixture.sh true-regression|false-premise); sre_exec regex allow/deny policy characterized in report §10.5 incl. documented limitations ($() reads, path traversal, env extraction)"
+      ],
+      "notes": "Present and working at experiment grade; regex policy is explicitly not a production capability sandbox."
+    }
+  ],
+  "rejected_candidates": [
+    {
+      "topic": "adopt Prime Agent wholesale / fork Pi by default",
+      "classification": "REJECTED",
+      "evidence": [
+        "exploration doc §25 explicit non-goals: forking Prime Agent, Prime Agent as dependency, forking Pi without accepted necessity, sixth harness package, daemon-first",
+        "prime-agent-xtrm-runtime-reference-2026-08-09.md §19 adoption matrix: persistent goals vs Beads 'Do not duplicate'; continual /refine 'Do not adopt directly'; Prime daemon 'Do not replace wholesale'"
+      ]
+    }
+  ]
+}
