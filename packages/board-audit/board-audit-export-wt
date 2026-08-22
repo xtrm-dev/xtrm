@@ -91,12 +91,26 @@ cmd_checkpoint() {
   # Canonical acquisition via the existing core exporter, written straight
   # into the permanent worktree.
   (cd "$repo" && "$SCRIPT_DIR/board-audit-core" \
-      --export "$scope" --output-dir "$WT" "$@")
+      --export "$scope" --output-dir "$WT/.xtrm/board-audit" "$@")
+
+  # Retention + no-op detection: keep newest 3 exports; skip commit entirely
+  # when the canonical acquisition (raw-beads.jsonl) is byte-identical to the
+  # previous export — a new timestamp alone is not a board change.
+  local exports="$WT/.xtrm/board-audit/exports"
+  local newest prev
+  newest="$(ls -1dt "$exports"/export-* 2>/dev/null | head -1)"
+  prev="$(ls -1dt "$exports"/export-* 2>/dev/null | sed -n 2p)"
+  if [ -n "$prev" ] && cmp -s "$newest/raw-beads.jsonl" "$prev/raw-beads.jsonl"; then
+    rm -rf "$newest"
+    echo "✓ no board changes since last checkpoint"
+    return 0
+  fi
+  ls -1dt "$exports"/export-* 2>/dev/null | tail -n +4 | xargs -r rm -rf
 
   (cd "$WT"
     git add -A .xtrm/board-audit
     if git diff --cached --quiet; then
-      echo "✓ no board changes since last checkpoint"
+      echo "✓ nothing to commit"
       return 0
     fi
     local ts; ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
