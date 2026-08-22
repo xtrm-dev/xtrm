@@ -55,7 +55,7 @@ archive 9 · move 6 · replace_with_pointer 5 · delete_generated_copy 3
 | Asset | Disposition | Notes |
 |---|---|---|
 | `design/roadmap/specialists-roadmap.md` | **update_in_place** | W3 writer; references accepted integrated runtime model; no WP tables copied in |
-| `design/roadmap/enhanced-prd.md` | **absorb_then_archive** → new `specialists-prd.md` + historical copy | 90 WP identifiers preserved via continuity table (lane-b-wp-continuity.json). Open decisions #1/#2 from chains-prompt-evals ported first |
+| `design/roadmap/enhanced-prd.md` | absorb_then_archive → **residual xtrm-cn8.5** (interim: stays canon with dated header note + `wp-continuity.json`, 90 WPs preserved; open decisions #1/#2 already ported to §20.2) | consolidation into current canonical specialists-prd.md tracked as its own bead |
 | `design/roadmap/chains-prompt-evals.md` | **move → history/** after residual port | ~98% overlap with PRD verified mechanically; §9 was the eval reference text — successor is the new PRD Workstream E section |
 | `design/execution-protocol-design/specialist-execution-protocol.md` | update_in_place | PREPARE/PLAN/EXECUTE/FINALIZE core preserved; activation/attempt/session identity, grants, probes updated |
 | `…/specialist-execution-protocol-ownership-decision.md` | keep | Ten invariants verbatim |
@@ -98,6 +98,17 @@ Planning direction change (documented, not implemented): intent → authored Cha
 - Forensic contract = envelope SSOT; projection contract becomes the single forbidden-label source; catalog gets C-1/C-2/C-4 corrections. Prometheus stays low-cardinality; exact IDs stay in forensics/evidence/read models.
 - Eval Core: no standalone doc exists; ontology owned by Specialists PRD Workstream E. Extension follows packet C-09 ("subject model is incomplete — extend, don't rebuild"); all 16 requested subjects map onto existing entities with no new tables (lane-i-eval-extension-map.json).
 - Console host ownership (C-3): console-repo architecture set is canonical post-host-retirement; xtrm-tree console architecture copies become pointers; product contract remains the surface authority.
+
+## Post-write disposition status (updated 2026-08-22 after independent review)
+
+Applied during W1–W6: runtime foundation (README/PRD/ADR-001..006); plan+ledger amendments incl. kernel exception aligned to ADR-002's 8 items; banners (pi-extensible-workflows REFERENCE DESIGN, forensic-proposal HISTORICAL, chains-prompt-evals HISTORICAL move); chain-templates README pointer fix + 2 catalog rows; execution-protocol and agentops-suite xtrm duplicates → pointers; harness stale twin → pointer; tether dead links; wp-continuity.json; PRD identity-envelope + memory sections.
+
+Explicitly residual (each has an owner bead — none silently dropped):
+- `xtrm-harness-native-adapters.md` move, quant doc move, coordinator-bootstrap archive, MOC/_meta archives → **xtrm-cn8.6** (docs housekeeping batch)
+- Console architecture copies → pointers (C-3), core superseded-designs registration, skills vendor-drift note → **xtrm-cn8.6**
+- channels.md §5.3 absorption of plain_it §7 `runtime.*`/`chain.incident.*` kinds; substrate IT §7/§13.4 id-cursor correction → **xtrm-cn8.6** (channels/substrate correction pass)
+- enhanced-prd consolidation into current canonical specialists-prd.md → **xtrm-cn8.5** (in-place header note + wp-continuity.json keep the deviation documented meanwhile)
+- v1-reconciliation archive: deferred BY DESIGN until its own sunset condition (all §9 patches merged) is met; identity envelope now carried by runtime PRD §"Execution identity envelope", delivery split by ADR-005
 
 ## Follow-ups required at write time (serialized)
 

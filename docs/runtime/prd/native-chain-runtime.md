@@ -22,6 +22,10 @@ XTRM governs multi-agent work as deterministic, auditable chains over Pi-hosted 
 
 Identity rules: `participant_id` stable per `(scope, role)`; `job_id` new per activation; `pi_session_id` owned by Pi. `participant ≠ activation ≠ session`. Five-layer identity taxonomy: telemetry contract §identity.
 
+### Execution identity envelope (absorbed from the v1 reconciliation amendment)
+
+Every execution carries an explicit identity envelope: `principal, actor, assignment, participant, execution, attempt, parent, job, runtime_session, generation, authority_ref`, plus lease and convergence policy fields. Rules: admission precedes effect; a completed idempotency key returns the durable result; an `uncertain` outcome blocks blind replay; reconciliation records its resolving evidence. Channel delivery is modeled as `ChannelMessage → DeliveryIntent → DeliveryAttempt → ProcessingReceipt` with dual cursors — `channel_messages.id` stays the semantic cursor; runtime replay uses `execution_id + generation + sequence`; snapshot recovery never renumbers channel messages.
+
 Invariants (full list in [README](../README.md)); the load-bearing ones: agent finished ≠ protocol completed; result exists ≠ result validated; job completed ≠ chain step satisfied; message body ≠ authority; attention ≠ authorization; requested capability ≠ granted capability; ChainDefinition ≠ ChainRun; template is one ChainSource variant, not the ontology.
 
 ## 3. Requirements
@@ -52,7 +56,7 @@ Invariants (full list in [README](../README.md)); the load-bearing ones: agent f
 17. Taxonomy: cognition (skills/prompt/procedures) · activation policy (model/timeout/retry) · prepare probes/validators/context resolvers · result contract (schema/evidence requirements) · finalize validators/projections/effects. Legacy `skills.scripts` compiles into typed ProbeDefinition for compatibility; shell scripts are never a privileged implicit preflight API.
 
 ### R5 — Cooperation over Channels
-18. Participants communicate only through the canonical Channels contract ([`../channels/channels.md`](../channels/channels.md)): routing hard / attention soft / authority hard; read ≠ ack; delivered ≠ processed; body ≠ authority; scheduler indirection; single-scheduler invariant.
+18. Participants communicate only through the canonical Channels contract ([`docs/channels/channels.md`](../../channels/channels.md)): routing hard / attention soft / authority hard; read ≠ ack; delivered ≠ processed; body ≠ authority; scheduler indirection; single-scheduler invariant.
 19. Evidence travels pointer-first; work refs are opaque; no direct resume bypass.
 
 ### R6 — Work/evidence authority
@@ -65,6 +69,10 @@ Invariants (full list in [README](../README.md)); the load-bearing ones: agent f
 ### R8 — Observability & evaluation
 23. Forensics (`xtrm.forensic.v1`) carry exact identity; Prometheus stays low-cardinality; exact IDs never become metric labels.
 24. Eval Core extends its subject set (compiler determinism, ResolvedChain freeze integrity, ChainRun replay equivalence, duplicate-effect rate, recovery, leaks, authority violations, cooperation, end-to-end outcome) using existing entities; no second eval subsystem.
+
+### R9 — Memory promotion discipline
+
+Memory surfaces stay distinct: durable `bd` memory, synthesized project memory, harness auto-memory, and close-time-distilled container memories. Promotion is evidence-gated (Archival → Recall → Core tiers); findings are candidates, not truth; no silent self-modification; automatic memory writes are prohibited before measured precision (GATE-AUTH / R1.8). Three lenses only (herd/workgroup/identity); execution lineage is provenance, never a fourth store.
 
 ## 4. Non-goals
 

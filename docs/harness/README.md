@@ -4,7 +4,7 @@ This directory groups XTRM harness architecture work and bounded runtime experim
 
 ## Architecture
 
-- [`xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md`](./xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md) — native-XTRM-on-Pi architecture exploration and bounded direct-`AgentSession` decision path.
+- [`xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md`](./xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md) — pointer; canonical copy (superset, incl. §29 prime-agent findings) moved to [`docs/shared/`](../shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md) (2026-08-22).
 - [`mercury-governed-research-harness-prd-draft-2026-08-10.md`](./mercury-governed-research-harness-prd-draft-2026-08-10.md) — Mercury governed-research harness draft.
 
 ## Experiments

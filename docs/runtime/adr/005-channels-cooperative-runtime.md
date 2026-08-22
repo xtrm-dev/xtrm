@@ -2,7 +2,7 @@
 
 > Status: ACCEPTED · Date: 2026-08-22
 > Relationship: **references** the canonical Channels contract; duplicates nothing.
-> Canonical contract: [`../../../channels/channels.md`](../../channels/channels.md) (normative spec)
+> Canonical contract: [`docs/channels/channels.md`](../../channels/channels.md) (normative spec)
 
 ## Decision
 
