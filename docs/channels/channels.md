@@ -154,9 +154,20 @@ The canonical namespace is **families**: `work.*`, `control.*`, `system.*`, `run
 | runtime | `runtime.message_rejected` | system | `{error_code, …}` | nobody |
 | runtime | `runtime.member_joined` / `runtime.member_left` | runtime | `{participant_id, reason}` | coordinator |
 | runtime | `runtime.delivery_failed` | runtime | `{target, reason}` | coordinator |
+| runtime | `runtime.participant_died` | runtime | `{participant_id, job_id?, reason, refs?}` | reducer/runtime; coordinator only after recovery exhaustion |
+| runtime | `runtime.gate_unresponsive` | runtime | `{participant_id, gate_kind?, timeout_ms?, refs?}` | reducer/runtime; coordinator only after recovery exhaustion |
+| runtime | `runtime.worktree_diverged` | runtime | `{worktree?, base_ref?, reason, refs?}` | reducer/runtime |
+| runtime | `runtime.evidence_ref_broken` | runtime | `{evidence_ref, reason}` | reducer/runtime |
+| runtime | `runtime.pulse_delivery_failed` | runtime | `{pulse_ref?, reason, attempts?}` | reducer/runtime |
+| runtime | `runtime.budget_exhausted_mid_step` | runtime | `{budget_kind, used?, limit?, participant_id?}` | reducer/runtime |
+| runtime | `runtime.recursion_cap` | runtime | `{loop_kind?, count?, hard_cap?, refs?}` | reducer/runtime |
+| chain | `chain.incident.opened` | runtime / authorized coordinator boundary | `{incident_kind, summary, refs, recovery_exhausted: true}` | chain coordinator |
+| chain | `chain.incident.resolved` | chain coordinator / runtime | `{incident_ref, outcome, refs?}` | affected action targets / audit |
 | — | `note` | any | `{text}` | nobody |
 
 `runtime.error` / `runtime.message_rejected` messages are written to the stream (not just returned as API envelopes) so the channel log is self-contained for post-mortem: a replay reveals exactly where and why messages were rejected, without external logs.
+
+**Runtime failures and chain incidents.** `runtime.*` records bounded mechanical failures observed during one ChainRun/Container execution. Deterministic classes are first consumed by the runtime reducer/recovery policy; they do not wake the chain coordinator merely because the notice exists. When deterministic recovery is exhausted, or the failure requires semantic/operator judgment, the effect layer emits one idempotency-keyed `chain.incident.opened`. The coordinator consumes that explicit incident, not every mechanical failure. Resolution emits `chain.incident.resolved`. Neither message body may grant authority, mutate ResolvedChain topology, or bypass the scheduler. This absorbs the failure-kind inventory previously present only in `channels_plain_it.md` §7 and aligns with Substrate §4.3 incident handling and the native runtime recovery ADR.
 
 **`proposal` is not a flat body.** Keep the storage kind stable (`work.proposal`) and discriminate by `proposal_class`:
 ```json
