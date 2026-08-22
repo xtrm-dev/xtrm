@@ -1,6 +1,6 @@
 {
-  "TOTAL_FILES": 153,
-  "FULLY_READ": 142,
+  "TOTAL_FILES": 140,
+  "FULLY_READ": 137,
   "PARTIAL": 0,
   "UNREAD": 0,
   "UNCLASSIFIED": 0,
@@ -21,8 +21,129 @@
     "unclassified": 0
   },
   "BROKEN_LINKS_REPORTED": 165,
-  "AUTHORITY_CONFLICTS": 0,
-  "REGISTER_CONFLICTS": [],
+  "AUTHORITY_CONFLICTS": 10,
+  "REGISTER_CONFLICTS": [
+    {
+      "key": "specialists:docs/design/roadmap/current-release-snapshot.md",
+      "field": "classification",
+      "values": [
+        "current-canon",
+        "status-truth-doc"
+      ],
+      "sources": [
+        "lane-b-source-register",
+        "lane-c-source-register.json"
+      ]
+    },
+    {
+      "key": "xtrm:docs/xtrm-MOC.md",
+      "field": "classification",
+      "values": [
+        "editorial-snapshot",
+        "map-of-content"
+      ],
+      "sources": [
+        "lane-a-source-register",
+        "lane-e-source-register.json"
+      ]
+    },
+    {
+      "key": "xtrm:docs/_meta/2026-06-21-design-reconciliation.md",
+      "field": "classification",
+      "values": [
+        "historical",
+        "meta-snapshot"
+      ],
+      "sources": [
+        "lane-a-source-register",
+        "lane-e-source-register.json"
+      ]
+    },
+    {
+      "key": "xtrm:docs/state-store-options.md",
+      "field": "classification",
+      "values": [
+        "current-state-ledger",
+        "canonical-kernel-decisions"
+      ],
+      "sources": [
+        "lane-a-source-register",
+        "lane-f-source-register.json"
+      ]
+    },
+    {
+      "key": "specialists:docs/design/roadmap/history/handoff-from-substrate-design.md",
+      "field": "classification",
+      "values": [
+        "history",
+        "historical-handoff"
+      ],
+      "sources": [
+        "lane-b-source-register",
+        "lane-f-source-register.json"
+      ]
+    },
+    {
+      "key": "specialists:docs/design/roadmap/history/substrate-reconciliation.md",
+      "field": "classification",
+      "values": [
+        "history",
+        "historical-decision-delta"
+      ],
+      "sources": [
+        "lane-b-source-register",
+        "lane-f-source-register.json"
+      ]
+    },
+    {
+      "key": "xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/architecture-decision-matrix-and-adr-index.md",
+      "field": "classification",
+      "values": [
+        "experiment",
+        "adr-index-and-decision-matrix"
+      ],
+      "sources": [
+        "lane-a-source-register",
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "key": "xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/local-verification-packet.md",
+      "field": "classification",
+      "values": [
+        "experiment",
+        "verification-checklist"
+      ],
+      "sources": [
+        "lane-a-source-register",
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "key": "xtrm:docs/shared/xtrm-v1-completion-ledger.md",
+      "field": "classification",
+      "values": [
+        "canonical",
+        "residual-ledger"
+      ],
+      "sources": [
+        "lane-a-source-register",
+        "lane-g-source-register.json"
+      ]
+    },
+    {
+      "key": "specialists:docs/design/memory-system-r6g.md",
+      "field": "classification",
+      "values": [
+        "research-design",
+        "design-research ('Design / research. Not a plan of record.')"
+      ],
+      "sources": [
+        "lane-h-source-register",
+        "lane-i-source-register.json"
+      ]
+    }
+  ],
   "LANES_MERGED": [
     "lane-a-source-register.json",
     "lane-b-source-register.json",

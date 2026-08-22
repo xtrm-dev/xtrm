@@ -27,7 +27,8 @@
     "repository": "xtrm",
     "_lane": "lane-a-source-register",
     "_lanes": [
-      "lane-a-source-register.json"
+      "lane-a-source-register.json",
+      "lane-e-source-register.json"
     ]
   },
   {
@@ -63,7 +64,8 @@
     "repository": "xtrm",
     "_lane": "lane-a-source-register",
     "_lanes": [
-      "lane-a-source-register.json"
+      "lane-a-source-register.json",
+      "lane-e-source-register.json"
     ]
   },
   {
@@ -130,6 +132,7 @@
     "_lane": "lane-a-source-register",
     "_lanes": [
       "lane-a-source-register.json",
+      "lane-c-source-register.json",
       "lane-i-source-register.json"
     ]
   },
@@ -201,7 +204,8 @@
     "repository": "xtrm",
     "_lane": "lane-a-source-register",
     "_lanes": [
-      "lane-a-source-register.json"
+      "lane-a-source-register.json",
+      "lane-g-source-register.json"
     ]
   },
   {
@@ -579,7 +583,8 @@
     "repository": "xtrm",
     "_lane": "lane-a-source-register",
     "_lanes": [
-      "lane-a-source-register.json"
+      "lane-a-source-register.json",
+      "lane-g-source-register.json"
     ]
   },
   {
@@ -615,7 +620,8 @@
     "repository": "xtrm",
     "_lane": "lane-a-source-register",
     "_lanes": [
-      "lane-a-source-register.json"
+      "lane-a-source-register.json",
+      "lane-g-source-register.json"
     ]
   },
   {
@@ -665,6 +671,7 @@
     "_lane": "lane-a-source-register",
     "_lanes": [
       "lane-a-source-register.json",
+      "lane-g-source-register.json",
       "lane-i-source-register.json"
     ]
   },
@@ -708,6 +715,7 @@
     "_lane": "lane-a-source-register",
     "_lanes": [
       "lane-a-source-register.json",
+      "lane-g-source-register.json",
       "lane-i-source-register.json"
     ]
   },
@@ -803,7 +811,8 @@
     "repository": "xtrm",
     "_lane": "lane-a-source-register",
     "_lanes": [
-      "lane-a-source-register.json"
+      "lane-a-source-register.json",
+      "lane-f-source-register.json"
     ]
   },
   {
@@ -905,7 +914,8 @@
     "read_status": "complete",
     "_lane": "lane-b-source-register",
     "_lanes": [
-      "lane-b-source-register.json"
+      "lane-b-source-register.json",
+      "lane-c-source-register.json"
     ]
   },
   {
@@ -965,7 +975,8 @@
     "read_status": "complete",
     "_lane": "lane-b-source-register",
     "_lanes": [
-      "lane-b-source-register.json"
+      "lane-b-source-register.json",
+      "lane-f-source-register.json"
     ]
   },
   {
@@ -995,7 +1006,8 @@
     "read_status": "complete",
     "_lane": "lane-b-source-register",
     "_lanes": [
-      "lane-b-source-register.json"
+      "lane-b-source-register.json",
+      "lane-f-source-register.json"
     ]
   },
   {
@@ -1075,7 +1087,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm (main)",
+    "repository": "xtrm",
     "path": "docs/substrate/chain_templates.md",
     "sha": "2c9a09234697483e5038217a8ca4515cffe4f59e",
     "bytes": 61048,
@@ -1128,7 +1140,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm (main)",
+    "repository": "xtrm",
     "path": "docs/substrate/chain_templates.html",
     "sha": "ef40d924d19755e3e92cebb8bc5c3a6b0f80aacc",
     "bytes": 28385,
@@ -1155,7 +1167,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/README.md",
     "sha": "c30ea24d2ef7268436ddd69b46b6095944cb1335",
     "bytes": null,
@@ -1200,7 +1212,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/code-quick.formula.json",
     "sha": "b755029c928208df7716ca136585ddc8d537a27a",
     "bytes": 1587,
@@ -1231,7 +1243,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/code-standard.formula.json",
     "sha": "09408570a3d5d2400fc882d369ef0fd733da70b8",
     "bytes": 5444,
@@ -1260,7 +1272,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/code-with-advisors.formula.json",
     "sha": "e6342c5b2661775d580da56b6929ef670d1c7751",
     "bytes": 4910,
@@ -1289,7 +1301,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/code-with-tests.formula.json",
     "sha": "44a1c19d44f6f865f44166f44e9a89c8d26cc323",
     "bytes": 5110,
@@ -1320,7 +1332,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/debug.formula.json",
     "sha": "bea83e04983762a3403b3397c0d4beacbdf62d59",
     "bytes": 4858,
@@ -1349,7 +1361,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/doc-sync.formula.json",
     "sha": "a45170ff74bec64285e88868f855772c6af8a8d5",
     "bytes": 1937,
@@ -1378,7 +1390,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/memory-hygiene.formula.json",
     "sha": "a11ba4e0cb43b2d3b99989db78a4fc74eb1545e5",
     "bytes": 2354,
@@ -1409,7 +1421,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/planning.formula.json",
     "sha": "c5fb452a06970893f592ae9a2d9dc795646efa5b",
     "bytes": 2047,
@@ -1441,7 +1453,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/premortem.formula.json",
     "sha": "3243d7fbf805f5de2eb5b095b7cccff986bdec04",
     "bytes": 2340,
@@ -1472,7 +1484,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/release-prep.formula.json",
     "sha": "ce3fece1aa7fb49b4eec07b74d2a5f9fef08ad1b",
     "bytes": 2638,
@@ -1505,7 +1517,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/research-only.formula.json",
     "sha": "afbe3dc9de3e41f0c71d9ede3885b36d69e11a02",
     "bytes": 2165,
@@ -1536,7 +1548,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/restitch.formula.json",
     "sha": "9dbc41ca1ce6a00147e3e9a93555d240842a1e70",
     "bytes": 5087,
@@ -1567,7 +1579,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/security-deep.formula.json",
     "sha": "8d57614bae080e03468ac3552b6ea5de5a211fa6",
     "bytes": 6901,
@@ -1598,7 +1610,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/test-only.formula.json",
     "sha": "d8ab6be1622055e99c658fbd75fd302d786e7f88",
     "bytes": 3264,
@@ -1629,7 +1641,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
+    "repository": "specialists",
     "path": "docs/design/roadmap/chain-templates/triage.formula.json",
     "sha": "e1a971c287b6529c96d2e47fb6f73cca996474b5",
     "bytes": 3039,
@@ -1658,7 +1670,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/.pi/agent/skills (untracked)",
+    "repository": "pi_skills",
     "path": "planning/SKILL.md",
     "sha": "d36f2d6a3bf8141db7a3861ba26a67f160b54b12",
     "bytes": 31535,
@@ -1696,7 +1708,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/.pi/agent/skills (untracked)",
+    "repository": "pi_skills",
     "path": "test-planning/SKILL.md",
     "sha": "af4724ad2353d5e171d4821a18c667116a4efaa6",
     "bytes": 27940,
@@ -1735,7 +1747,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core (main)",
+    "repository": "core",
     "path": "docs/specs/SCHEMA.md",
     "sha": "0aacae63dae8af40db3100d8fcc522bb198b38aa",
     "bytes": null,
@@ -1768,7 +1780,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core (main)",
+    "repository": "core",
     "path": "docs/specs/CHANGE-CONTRACT-SHAPE.md",
     "sha": "e59f7afdd624d32ce9c784a0a355dde60cf9ee3a",
     "bytes": null,
@@ -1806,7 +1818,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core (main)",
+    "repository": "core",
     "path": "docs/specs/UPSTREAM-DEPENDENCIES.md",
     "sha": "011634770e59fa16a2e844f5238da52a063b87a6",
     "bytes": null,
@@ -1840,7 +1852,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core (main)",
+    "repository": "core",
     "path": "docs/specs/VALIDATE-JSON.md",
     "sha": "fc8117bf022fa9e93b747ec857a0489563f2df3f",
     "bytes": null,
@@ -1871,7 +1883,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core (main)",
+    "repository": "core",
     "path": "docs/specs/ARCHIVE-GATE.md",
     "sha": "b72e396e80f673b1a128e1544d239b94aa96d2fd",
     "bytes": null,
@@ -1902,7 +1914,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm (main)",
+    "repository": "xtrm",
     "path": "docs/chains.md",
     "sha": "b5ddfedf67dfa3f8c7c78c971709e5dab40e691b",
     "bytes": null,
@@ -1939,70 +1951,6 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists (master)",
-    "path": "docs/design/roadmap/current-release-snapshot.md (excerpt lines ~105-125)",
-    "sha": "2831bd1c89ebb46cef91ab2d1c24c92445d84a2b",
-    "bytes": null,
-    "lines": null,
-    "read_status": "excerpt-read (relevant section)",
-    "classification": "status-truth-doc",
-    "domain": [
-      "release-status",
-      "chain-templates"
-    ],
-    "authority_for": [
-      "current truth about chain-template shipping status",
-      "'not the semantic authority' demotion of local README"
-    ],
-    "duplicate_of": null,
-    "supersedes": null,
-    "superseded_by": null,
-    "conflicts_with": [
-      "older docs claiming templates are pourable product"
-    ],
-    "disposition": "keep",
-    "target_path": null,
-    "unique_requirements_to_preserve": [
-      "five conditions before reporting chain templates production-ready (package path, pure compiler + persisted ResolvedChain, enforced activation protocol, manual composition commands, evidence reducer)"
-    ],
-    "notes": "Discovered transitively; confirms broken-pointer remediation already exists elsewhere (GitHub URL to xtrm repo).",
-    "_lane": "lane-c-source-register",
-    "_lanes": [
-      "lane-c-source-register.json"
-    ]
-  },
-  {
-    "repository": "/home/dawid/dev/xtrm (main)",
-    "path": "docs/shared/xtrm-current-execution-plan.md (\u00a76 excerpt)",
-    "sha": "c45c2b17c263b59263717e7cc12f0e6a76375e22",
-    "bytes": null,
-    "lines": null,
-    "read_status": "excerpt-read (relevant section)",
-    "classification": "programme-plan",
-    "domain": [
-      "resolvedchain",
-      "compiler"
-    ],
-    "authority_for": [
-      "C1 workstream: ResolvedChain schema + pure compiler",
-      "gap list for chain-template disposition"
-    ],
-    "duplicate_of": null,
-    "supersedes": null,
-    "superseded_by": null,
-    "conflicts_with": [],
-    "disposition": "keep",
-    "target_path": null,
-    "unique_requirements_to_preserve": [
-      "gaps list = acceptance criteria for canonicalization: package/install location, sp chain family, selection/compiler boundary, persisted ResolvedChain, activation protocol, evidence reducer"
-    ],
-    "notes": "Discovered transitively.",
-    "_lane": "lane-c-source-register",
-    "_lanes": [
-      "lane-c-source-register.json"
-    ]
-  },
-  {
     "id": "D1",
     "path": "docs/harness/README.md",
     "repo": "main",
@@ -2011,7 +1959,7 @@
     "classification": "index",
     "disposition": "keep-as-index; update link target to docs/shared/ exploration copy after dedup",
     "read_completely": true,
-    "repository": "main",
+    "repository": "xtrm",
     "read_status": "complete",
     "_lane": "lane-d-source-register",
     "_lanes": [
@@ -2027,7 +1975,7 @@
     "classification": "index",
     "disposition": "keep; non-canonical experiments registry, source-discipline rules restated",
     "read_completely": true,
-    "repository": "main",
+    "repository": "xtrm",
     "read_status": "complete",
     "_lane": "lane-d-source-register",
     "_lanes": [
@@ -2043,7 +1991,7 @@
     "classification": "experiment-spec",
     "disposition": "canonical experiment specification; durable home confirmed (docs/harness/experiments/)",
     "read_completely": true,
-    "repository": "main",
+    "repository": "xtrm",
     "read_status": "complete",
     "_lane": "lane-d-source-register",
     "_lanes": [
@@ -2059,7 +2007,7 @@
     "classification": "duplicate",
     "disposition": "STALE DUPLICATE of D6 \u2014 missing header programme-tracking line and entire \u00a729; delete or replace with pointer to D6",
     "read_completely": true,
-    "repository": "main",
+    "repository": "xtrm",
     "read_status": "complete",
     "_lane": "lane-d-source-register",
     "_lanes": [
@@ -2075,7 +2023,7 @@
     "classification": "prd-draft-non-authoritative",
     "disposition": "keep as draft; self-declares non-authoritative; references D6 shared path in \u00a722 baseline",
     "read_completely": true,
-    "repository": "main",
+    "repository": "xtrm",
     "read_status": "complete",
     "_lane": "lane-d-source-register",
     "_lanes": [
@@ -2091,7 +2039,7 @@
     "classification": "architecture-exploration",
     "disposition": "CANONICAL newer copy (superset: +header tracking line, +\u00a729 prime-agent findings); recommended single canonical evidence/provenance location for the exploration doc",
     "read_completely": true,
-    "repository": "main",
+    "repository": "xtrm",
     "read_status": "complete",
     "_lane": "lane-d-source-register",
     "_lanes": [
@@ -2107,7 +2055,7 @@
     "classification": "historical-research",
     "disposition": "keep as provenance/reference; predates \u00a729 code-level findings; superseded on prime-agent internals detail by D6 \u00a729 where they overlap",
     "read_completely": true,
-    "repository": "main",
+    "repository": "xtrm",
     "read_status": "complete",
     "_lane": "lane-d-source-register",
     "_lanes": [
@@ -2166,7 +2114,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/channels/channels.md",
     "sha": "45a9981bb8b7c70605fd9494aca36951fbf733b1",
     "bytes": 73639,
@@ -2219,7 +2167,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/channels/channels-upgrade.md",
     "sha": "b3568d432d17460105209ce44a8ce545f58e7626",
     "bytes": 31249,
@@ -2260,7 +2208,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/channels/channels-forensic-attention-proposal.md",
     "sha": "1a727dce6a494ba57dbea0bbb26df84ffbae615e",
     "bytes": 19508,
@@ -2296,7 +2244,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/channels/channels_plain_it.md",
     "sha": "6670abce7fd577995ec847cfc2e834dc28f8d1c9",
     "bytes": 24024,
@@ -2330,7 +2278,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/channels/channels.html",
     "sha": "208a4339bc38ce9b76399a55741419013b75e717",
     "bytes": 89437,
@@ -2355,7 +2303,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists",
+    "repository": "specialists",
     "path": "docs/design/substrate/channels.md",
     "sha": "4510b07f2b03417dfebc805555ae1bd84d9f5544",
     "bytes": 732,
@@ -2384,59 +2332,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
-    "path": "docs/xtrm-MOC.md",
-    "sha": "c5f83563ef7a4270b8f4d18f840b8a4504e5dc83",
-    "bytes": 9361,
-    "lines": 154,
-    "read_status": "targeted-sections",
-    "classification": "map-of-content",
-    "domain": [
-      "meta"
-    ],
-    "authority_for": [
-      "doc ownership map"
-    ],
-    "duplicate_of": null,
-    "supersedes": [],
-    "superseded_by": null,
-    "conflicts_with": [],
-    "disposition": "keep",
-    "target_path": "docs/xtrm-MOC.md",
-    "unique_requirements_to_preserve": [],
-    "notes": "Read only \u00a71/\u00a77 rows relevant to Channels authority claims.",
-    "_lane": "lane-e-source-register",
-    "_lanes": [
-      "lane-e-source-register.json"
-    ]
-  },
-  {
-    "repository": "/home/dawid/dev/xtrm",
-    "path": "docs/_meta/2026-06-21-design-reconciliation.md",
-    "sha": "e0fa7383fdffe97aad86c9515bfe44d3dd9a00ed",
-    "bytes": 23175,
-    "lines": 434,
-    "read_status": "partial-tl-dr-and-channels-refs",
-    "classification": "meta-snapshot",
-    "domain": [
-      "meta"
-    ],
-    "authority_for": [],
-    "duplicate_of": null,
-    "supersedes": [],
-    "superseded_by": null,
-    "conflicts_with": [],
-    "disposition": "keep",
-    "target_path": "docs/_meta/2026-06-21-design-reconciliation.md",
-    "unique_requirements_to_preserve": [],
-    "notes": "Corroborates Channels LOCKED & AUDITED status; read limited to \u00a70 + channels references.",
-    "_lane": "lane-e-source-register",
-    "_lanes": [
-      "lane-e-source-register.json"
-    ]
-  },
-  {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/substrate/substrate_design_it.md",
     "sha": "51255cbed02d36b58517b536e164fbfc307693bd",
     "bytes": 299821,
@@ -2491,7 +2387,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/substrate/substrate_design_en.md",
     "sha": "07c698f0ed17bfa768388a1ab69fdc53dbcd8ce0",
     "bytes": 213154,
@@ -2520,43 +2416,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
-    "path": "docs/state-store-options.md",
-    "sha": "ee711d268da34f1ca2e9223a6ec7070d411b0791",
-    "bytes": 18364,
-    "lines": 284,
-    "read_status": "complete",
-    "classification": "canonical-kernel-decisions",
-    "domain": [
-      "state-store",
-      "deployment-tiers",
-      "rollback"
-    ],
-    "authority_for": [
-      "bottom-tier store choice (SQLite+daemon+socket)",
-      "tier decision tree incl. libSQL/Turso and Supabase revisit triggers",
-      "Stage 0 backup/integrity-check rollback predicate (\u00a710.2)",
-      "keeper bridge class kernel framing (\u00a710.3)"
-    ],
-    "duplicate_of": null,
-    "supersedes": [],
-    "superseded_by": null,
-    "conflicts_with": [],
-    "disposition": "keep-canon",
-    "target_path": "docs/state-store-options.md",
-    "unique_requirements_to_preserve": [
-      "backup-before-migration + integrity_check rollback predicate",
-      "inbound-reference surface table \u00a710.1",
-      "revisit triggers for libSQL/schema-portable paths"
-    ],
-    "notes": "Named owner-of kernel decisions by substrate IT \u00a713/\u00a715 and monorepo-migration.",
-    "_lane": "lane-f-source-register",
-    "_lanes": [
-      "lane-f-source-register.json"
-    ]
-  },
-  {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/premortem-substrate/_context.md",
     "sha": "77762a3c521f602736130fb3d777610d28bc8862",
     "bytes": 5255,
@@ -2583,7 +2443,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/premortem-substrate/audit-brief.md",
     "sha": "b4da7a3f8ff14b0b5f8cd7512c9b1f9ccf92a044",
     "bytes": 5558,
@@ -2610,7 +2470,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/premortem-substrate/audit-result.md",
     "sha": "ecd0bc992149b4b3f4e59ece05ba87cef24bf2a4",
     "bytes": 13738,
@@ -2639,7 +2499,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/premortem-substrate/synthesis.md",
     "sha": "4382d05e049ff76952fe13e9f6f1d19df5015550",
     "bytes": 18043,
@@ -2669,7 +2529,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
+    "repository": "xtrm",
     "path": "docs/premortem-substrate/{out-01..09.md, reason-01..09.md, prompt-01..09.md, err-*.log, audit-dispatch.log, all-outputs.txt, report.html}",
     "sha": "sampled: out-01=4a7e2cfe1fd2e6df901f6f4e2d5cd2f99bd32b20, reason-05=ae3081aa614f947b6a871ddb214e3221c43f8190",
     "bytes": "~110KB aggregate",
@@ -2696,68 +2556,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/specialists",
-    "path": "docs/design/roadmap/history/handoff-from-substrate-design.md",
-    "sha": "ce60d65555acc01be68f0f0306496fb0dde870ea",
-    "bytes": 14465,
-    "lines": 86,
-    "read_status": "complete",
-    "classification": "historical-handoff",
-    "domain": [
-      "substrate-history"
-    ],
-    "authority_for": [],
-    "duplicate_of": null,
-    "supersedes": [],
-    "superseded_by": [
-      "current canon (references substrate-design.md rev10 pre-vault-move; superseded naming)"
-    ],
-    "conflicts_with": [],
-    "disposition": "keep-history-context-only",
-    "target_path": "unchanged (history/ dir explicitly context-only per specialists docs README)",
-    "unique_requirements_to_preserve": [
-      "method conventions: pushback quality gate, one canonical source per concept, identifiers stay English in translation, reads-forward must point to existing sections"
-    ],
-    "notes": "Lane B owns WP extraction; Substrate-specific uniques recorded above.",
-    "_lane": "lane-f-source-register",
-    "_lanes": [
-      "lane-f-source-register.json"
-    ]
-  },
-  {
-    "repository": "/home/dawid/dev/specialists",
-    "path": "docs/design/roadmap/history/substrate-reconciliation.md",
-    "sha": "65ff5e75ec79770ca4054ab211f1f4e428d1b48b",
-    "bytes": 16490,
-    "lines": 104,
-    "read_status": "complete",
-    "classification": "historical-decision-delta",
-    "domain": [
-      "substrate-history",
-      "roadmap-history"
-    ],
-    "authority_for": [],
-    "duplicate_of": null,
-    "supersedes": [],
-    "superseded_by": [
-      "applied decisions now live in substrate rev9+/specialists-roadmap v3+"
-    ],
-    "conflicts_with": [],
-    "disposition": "keep-history-context-only",
-    "target_path": "unchanged",
-    "unique_requirements_to_preserve": [
-      "verification-authority-belongs-to-independent-gate principle (D2 elevated to principle)",
-      "opened_by synthetic-pre-substrate:<first-job-id> migration marker convention",
-      "recommended_template is a name not a step list / recommended not resolved discipline"
-    ],
-    "notes": "Lane B owns WP extraction; Substrate-specific uniques recorded above.",
-    "_lane": "lane-f-source-register",
-    "_lanes": [
-      "lane-f-source-register.json"
-    ]
-  },
-  {
-    "repository": "/home/dawid/dev/xtmux",
+    "repository": "xtmux",
     "path": "docs/ts-sqlite.md",
     "sha": "cc90b469db9dd3aa5e17d7b0b04b5656477cb697",
     "bytes": 37828,
@@ -2811,7 +2610,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtmux",
+    "repository": "xtmux",
     "path": "docs/ts-sqlite-domains-4-7-8.md",
     "sha": "cdeb481b6d25549557c36a43492a925b4371daa0",
     "bytes": 22395,
@@ -2852,7 +2651,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtmux",
+    "repository": "xtmux",
     "path": "docs/observability-redesign.md",
     "sha": "3228299b18338ce46bda2e829c5eb946f65d046d",
     "bytes": 51582,
@@ -2895,7 +2694,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtmux",
+    "repository": "xtmux",
     "path": "docs/xtmux-gaps.md",
     "sha": "979c82d575da85467fbec552f3f233d789887029",
     "bytes": 40278,
@@ -2937,7 +2736,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtmux",
+    "repository": "xtmux",
     "path": "docs/bridge.md",
     "sha": "20c6b51a2d9a35dc785132226267c6f6215f49c0",
     "bytes": 4230,
@@ -2969,7 +2768,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtmux",
+    "repository": "xtmux",
     "path": "docs/agent-state-hooks.md",
     "sha": "c34cf60ac9f2df7d167e6e22b3c205d25a64e9ea",
     "bytes": 32852,
@@ -3016,7 +2815,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtmux",
+    "repository": "xtmux",
     "path": "docs/json-command-api.md",
     "sha": "e05a86a4d24fbaada862d5bb0fd0c08ac82c8bac",
     "bytes": 33301,
@@ -3055,7 +2854,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtmux",
+    "repository": "xtmux",
     "path": "docs/INSTALL.md",
     "sha": "726a4072e1a01464c3c86d5a7ce48c71f82297c5",
     "bytes": 7998,
@@ -3092,7 +2891,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtmux",
+    "repository": "specialists",
     "path": "docs/design/adr/adr001-navigation-design.md",
     "sha": "51d90d39b182743c7f9143e15bc723fb69dd37b6",
     "bytes": 20158,
@@ -3128,7 +2927,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtmux",
+    "repository": "specialists",
     "path": "docs/design/adr/adr001-xtmux-nav.md",
     "sha": "afdf96342cf25534a07c66c84b56bc9f0aba95a6",
     "bytes": 14496,
@@ -3164,7 +2963,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtmux",
+    "repository": "xtmux",
     "path": "docs/codex-characterization-k1.md",
     "sha": "266f45c7b403754389e06c881a465740783e4c0c",
     "bytes": 9065,
@@ -3199,185 +2998,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/xtrm",
-    "path": "docs/shared/native-chain-runtime-audit-2026-08-19/native-chain-runtime-prd-draft.md",
-    "sha": "f05edf4c09cf1a1d7b7657cfef0698a0a6836c4f",
-    "bytes": 33499,
-    "lines": 1226,
-    "read_status": "complete-target-sections-plus-context",
-    "sections_read_completely": [
-      "\u00a77 activation lifecycle (PREPARE/agentic/FINALIZE context)",
-      "\u00a78 runtime supervision",
-      "Phase C/D/E sequencing context around lines 1150-1175"
-    ],
-    "classification": "proposed-prd-draft",
-    "domain": [
-      "activation-supervisor",
-      "chain-runtime",
-      "xtmux-boundary",
-      "capabilities",
-      "probes"
-    ],
-    "authority_for": [
-      "three-way supervision split \u00a78",
-      "ActivationSupervisor responsibility list",
-      "xtmux RuntimeSupervisor boundary evolution list + no-second-store constraint"
-    ],
-    "duplicate_of": null,
-    "supersedes": [],
-    "superseded_by": null,
-    "conflicts_with": [],
-    "disposition": "reconcile-source (being audited by this programme)",
-    "target_path": null,
-    "unique_requirements_to_preserve": [
-      "ActivationSupervisor never decides chain node",
-      "provider/backend selection never alters Chain/Channels semantics"
-    ],
-    "notes": "Read fully in the sections defining the reconciled concepts; full remaining sections (capabilities detail, memory, eval) belong to other lanes' domains.",
-    "_lane": "lane-g-source-register",
-    "_lanes": [
-      "lane-g-source-register.json"
-    ]
-  },
-  {
-    "repository": "/home/dawid/dev/xtrm",
-    "path": "docs/shared/native-chain-runtime-audit-2026-08-19/architecture-decision-matrix-and-adr-index.md",
-    "sha": "0395909a941b3f4064aeaec93990cbd84d4607fb",
-    "bytes": 12499,
-    "lines": 247,
-    "read_status": "complete",
-    "classification": "adr-index-and-decision-matrix",
-    "domain": [
-      "adr-plan",
-      "d10-activation-lifecycle",
-      "adr06-runtime-supervision"
-    ],
-    "authority_for": [
-      "ADR-06 scope (Runtime Supervision and xtmux Provider/Terminal Adapters)",
-      "D-10 recommendation",
-      "'proposed RuntimeSupervisor ADR can be reconciled into this'"
-    ],
-    "duplicate_of": null,
-    "supersedes": [],
-    "superseded_by": null,
-    "conflicts_with": [],
-    "disposition": "reconcile-source",
-    "target_path": null,
-    "unique_requirements_to_preserve": [
-      "ADR-06 carries 'no workflow authority' explicitly"
-    ],
-    "notes": "",
-    "_lane": "lane-g-source-register",
-    "_lanes": [
-      "lane-g-source-register.json"
-    ]
-  },
-  {
-    "repository": "/home/dawid/dev/xtrm",
-    "path": "docs/shared/native-chain-runtime-audit-2026-08-19/local-verification-packet.md",
-    "sha": "0d4575156d17a46f839c59357cf80a8de062bec5",
-    "bytes": 10401,
-    "lines": 418,
-    "read_status": "complete-relevant-sections",
-    "sections_read_completely": [
-      "\u00a78 package placement gate",
-      "\u00a79 xtmux RuntimeSupervisor characterization",
-      "\u00a710 runner/supervisor disposition rubric"
-    ],
-    "classification": "verification-checklist",
-    "domain": [
-      "verification-rubric",
-      "xtmux-dispositions"
-    ],
-    "authority_for": [
-      "already-shipped/extraction/new/elsewhere disposition rubric used by this lane",
-      "checklist of xtmux facts to verify (all verified present in lane G)"
-    ],
-    "duplicate_of": null,
-    "supersedes": [],
-    "superseded_by": null,
-    "conflicts_with": [],
-    "disposition": "reconcile-source",
-    "target_path": null,
-    "unique_requirements_to_preserve": [
-      "Do not create a second xtmux store"
-    ],
-    "notes": "Lane G answers \u00a79 checklist items against shipped xtmux docs.",
-    "_lane": "lane-g-source-register",
-    "_lanes": [
-      "lane-g-source-register.json"
-    ]
-  },
-  {
-    "repository": "/home/dawid/dev/xtrm",
-    "path": "docs/shared/native-chain-runtime-audit-2026-08-19/source-and-authority-register.md",
-    "sha": "ba010d696ceac6ee0a4e78a72cf05b6b6106b91c",
-    "bytes": 24584,
-    "lines": 290,
-    "read_status": "complete-relevant-sections",
-    "sections_read_completely": [
-      "specialists sources table rows supervisor.ts/runner.ts/pi-rpc",
-      "xtmux table",
-      "console table",
-      "decisions C-08 area"
-    ],
-    "classification": "source-register-predecessor",
-    "domain": [
-      "authority-register",
-      "supervisor-decomposition"
-    ],
-    "authority_for": [
-      "register row declaring proposed RuntimeSupervisor ADR PROPOSED",
-      "C-08 decomposition targets",
-      "xtmux doc classifications reused here"
-    ],
-    "duplicate_of": null,
-    "supersedes": [],
-    "superseded_by": null,
-    "conflicts_with": [],
-    "disposition": "reconcile-source",
-    "target_path": null,
-    "unique_requirements_to_preserve": [
-      "Chain progression stays outside participant runtime"
-    ],
-    "notes": "",
-    "_lane": "lane-g-source-register",
-    "_lanes": [
-      "lane-g-source-register.json"
-    ]
-  },
-  {
-    "repository": "/home/dawid/dev/xtrm",
-    "path": "docs/shared/xtrm-v1-completion-ledger.md",
-    "sha": "fdff0fcabc82a2c5b38c140f02aa74a114e03672",
-    "bytes": 9317,
-    "lines": 30,
-    "read_status": "complete-relevant-rows",
-    "rows_read_completely": [
-      "\u00a72 SP-PRD-01, SP-RMAP-01, SP-EXEC-01 rows"
-    ],
-    "classification": "residual-ledger",
-    "domain": [
-      "v1-residuals"
-    ],
-    "authority_for": [
-      "SP-RMAP-01 'clarify runtime supervisor versus workflow supervisor' residual that this reconciliation addresses"
-    ],
-    "duplicate_of": null,
-    "supersedes": [],
-    "superseded_by": null,
-    "conflicts_with": [],
-    "disposition": "reference-only",
-    "target_path": "docs/shared/xtrm-v1-completion-ledger.md",
-    "unique_requirements_to_preserve": [],
-    "notes": "Grep hit only; confirms the residual this programme closes.",
-    "_lane": "lane-g-source-register",
-    "_lanes": [
-      "lane-g-source-register.json"
-    ]
-  },
-  {
-    "repository": "/home/dawid/dev/console",
+    "repository": "console",
     "path": "apps/console/src/server/runtime-lifecycle.ts",
     "sha": "5bcab9c5c3e2c692699ae84d7165cf1bb0e43dd2",
     "bytes": 11208,
@@ -3409,7 +3030,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/architecture/coordination-terminology.md",
     "sha": "ef9a0c3dea3611f5b7fbcc42b6e2dafb89d25df4",
     "bytes": 2255,
@@ -3444,7 +3065,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/architecture/coordinator-branch-ancestry.md",
     "sha": "68f4cc768d4c9c76e96b50a82898913e9b5adada",
     "bytes": 6701,
@@ -3481,7 +3102,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/architecture/interactive-role-envelope.md",
     "sha": "dbe6e9921cfda9e05ee0abcf4f053f830d15f674",
     "bytes": 3448,
@@ -3516,7 +3137,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/architecture/repair-transaction.md",
     "sha": "eb7633aaf025f4e336cfa03342f6b8de70bfbb67",
     "bytes": 2941,
@@ -3551,7 +3172,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/architecture/superseded-designs.md",
     "sha": "7976f55c3e565ae3e31b6eadcd1cf7bfbb6a5fed",
     "bytes": 5030,
@@ -3581,7 +3202,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/cli-architecture.md",
     "sha": "fbe2b1ff5a7a34edd4c9895dd5f951ce0c4b3ab4",
     "bytes": 19063,
@@ -3615,7 +3236,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/xt-pi-role.md",
     "sha": "888a8174d1eaafd83fbadc68bfa4d2bd03a4eadd",
     "bytes": 22287,
@@ -3656,7 +3277,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/xt-topology.md",
     "sha": "ab4d2ce2493920fc8236b6d75ccc00d2f5bde55b",
     "bytes": 6184,
@@ -3692,7 +3313,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/pi-extensions.md",
     "sha": "92d11cf843450fb4ff28bce252aa13a2289313a0",
     "bytes": 10488,
@@ -3727,7 +3348,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/skills-ownership.md",
     "sha": "9560ac15d076755c19ec550747bcec32c0d026a8",
     "bytes": 4497,
@@ -3763,7 +3384,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/xtrm-directory.md",
     "sha": "2724bdafe36d515bde7ceb4f7460b6b081090faf",
     "bytes": 8421,
@@ -3796,7 +3417,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/xtrm-ui.md",
     "sha": "056354f8721d911988314ec07bea94bf59a3884d",
     "bytes": 5129,
@@ -3829,7 +3450,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "specialists",
     "path": "docs/design/command-outcome-v1.md",
     "sha": "d4c6efeb486744ddf1c111c776d7a13acc10ced9",
     "bytes": 3765,
@@ -3863,7 +3484,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "specialists",
     "path": "docs/design/codex-runtime-boundary.md",
     "sha": "8603f7a6b7f830601c9de15f420ff6d7e806a9f7",
     "bytes": 8733,
@@ -3897,7 +3518,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "specialists",
     "path": "docs/design/issuetracking.md",
     "sha": "e62d3241ca06bb8da948106f41195e57d7274481",
     "bytes": 10132,
@@ -3931,7 +3552,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "specialists",
     "path": "docs/design/memory-system-r6g.md",
     "sha": "8ccfb91c542128dce7ea4a4204b5a2d62b6fa0c3",
     "bytes": 44283,
@@ -3961,11 +3582,12 @@
     "notes": "Self-marked 'Design / research. Not a plan of record.'",
     "_lane": "lane-h-source-register",
     "_lanes": [
-      "lane-h-source-register.json"
+      "lane-h-source-register.json",
+      "lane-i-source-register.json"
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "specialists",
     "path": "docs/design/xtrm-orchestration-determinism-final-consolidated-report-2026-07-23.md",
     "sha": "a09bb9f6329a25c5fb04881dd6f9190e4e1eaa68",
     "bytes": 86996,
@@ -4007,7 +3629,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/plans/delegation-architecture.md",
     "sha": "291e1b3c84876921fc5a432af4be102f9ca4c794",
     "bytes": 5954,
@@ -4036,7 +3658,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/plans/orchestration-implementation.md",
     "sha": "0436c7e126581d4cecd63a0c8d797725ebb17c79",
     "bytes": 11003,
@@ -4063,7 +3685,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/plans/xtpi-worktree-first-flow.md",
     "sha": "fc6aa2bf86ec17e9ad114f43331e92c5539ec965",
     "bytes": 12566,
@@ -4103,7 +3725,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/runtime-compatibility.json",
     "sha": "2732312ab4bc8754d976cbfd4b231fbd19ef4162",
     "bytes": 1519,
@@ -4136,7 +3758,7 @@
     ]
   },
   {
-    "repository": "/home/dawid/dev/core",
+    "repository": "core",
     "path": "docs/command-deprecations.json",
     "sha": "9f3e7d8a99e3723969df5d793aeee61b5009f5ff",
     "bytes": 2809,
@@ -4166,7 +3788,7 @@
     ]
   },
   {
-    "repository": "~ (runtime copy; == global SSOT ~/.xtrm/skills/default/planning/SKILL.md)",
+    "repository": "pi_skills",
     "path": "/home/dawid/.pi/agent/skills/planning/SKILL.md",
     "sha": "not-git-tracked-here; byte-equal to ~/.xtrm/skills/default/planning/SKILL.md (diff verified); core repo counterpart skills/planning/SKILL.md @HEAD = 36430e4b0ccf9e57c3d6be0cf289dd94670b4398 (451 lines, OLDER)",
     "bytes": 32268,
@@ -4202,7 +3824,7 @@
     ]
   },
   {
-    "repository": "~ (runtime copy; == global SSOT ~/.xtrm/skills/default/test-planning/SKILL.md)",
+    "repository": "pi_skills",
     "path": "/home/dawid/.pi/agent/skills/test-planning/SKILL.md",
     "sha": "not-git-tracked-here; byte-equal to ~/.xtrm/skills/default/test-planning/SKILL.md (diff verified); core repo counterpart skills/test-planning/SKILL.md @HEAD = 2669cec4d1c28475df33f3177ec2e55b7518a1f4 (465 lines, OLDER)",
     "bytes": 27940,
@@ -4379,23 +4001,7 @@
     "read": "complete",
     "role": "core-side cardinality guardrail (11.md P3-04): MUST-NOT label list, where identity fields DO live, allowed dimensions, 10k-series redesign threshold",
     "classification": "current-canon (core scope)",
-    "repository": "core",
-    "read_status": "complete",
-    "_lane": "lane-i-source-register",
-    "_lanes": [
-      "lane-i-source-register.json"
-    ]
-  },
-  {
-    "repo": "core",
-    "path": "docs/design/memory-system-r6g.md",
-    "blob_sha": "8ccfb91c542128dce7ea4a4204b5a2d62b6fa0c3",
-    "bytes": 24584,
-    "lines": 481,
-    "read": "complete",
-    "role": "memory system research/design (r6g): three-substrate current state, failure modes F1\u2013F11, proposed memory_item schema, tier promotion vocabulary (Archival/Recall/Core), ship-in-order PRs 1\u20135",
-    "classification": "design-research ('Design / research. Not a plan of record.')",
-    "repository": "core",
+    "repository": "xtrm",
     "read_status": "complete",
     "_lane": "lane-i-source-register",
     "_lanes": [

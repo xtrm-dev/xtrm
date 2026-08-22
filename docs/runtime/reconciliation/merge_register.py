@@ -4,7 +4,7 @@
 Usage: python3 merge_register.py [lanes_dir]
 Writes: ../source-register.json, ../source-register-summary.json
 """
-import json, sys
+import json, re, sys
 from pathlib import Path
 
 LANES = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).parent / "lanes")
@@ -26,6 +26,25 @@ def _infer_repo(path):
         return "specialists"
     if p.startswith("experiments/"):
         return "xtrm-wt/pr71-loader"
+    return "xtrm"
+
+def _norm_repo(val, path):
+    """Normalize repository spellings across lanes to canonical slugs."""
+    v = str(val or "")
+    p = str(path or "")
+    if "pr71" in v or "worktree" in v:
+        return "worktree_pr71"
+    if ".pi/agent/skills" in v or ".pi/agent/skills" in p:
+        return "pi_skills"
+    if "specialists" in v or p.startswith(("docs/design/", "docs/archive")) or \
+       p in ("docs/TODO.md", "docs/ARCHITECTURE.md", "docs/architecture.md"):
+        return "specialists"
+    if "/core" in v:
+        return "core"
+    if "xtmux" in v:
+        return "xtmux"
+    if "console" in v:
+        return "console"
     return "xtrm"
 
 def key(row):
@@ -81,9 +100,13 @@ def main():
             rows = []
         for row in rows:
             # --- schema normalization across lanes ---
-            if not row.get("repository"):
-                p = row.get("path", "")
-                row["repository"] = row.get("repo") or _infer_repo(p)
+            p_raw = str(row.get("path") or "")
+            p_clean = re.split(r"\s+\((?:excerpt|§|targeted|Workstream)", p_raw)[0].strip()
+            if p_clean != p_raw:
+                row["path"] = p_clean
+                row["_path_note"] = p_raw
+            row["repository"] = _norm_repo(row.get("repo") or row.get("repository"),
+                                           p_clean)
             rs = row.get("read_status")
             if not rs or rs == "not_read":
                 if row.get("read") == "complete" or row.get("read_completely") is True:
