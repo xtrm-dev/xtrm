@@ -278,7 +278,7 @@
       "five-package invariant",
       "exactly-one-master-ledger rule"
     ],
-    "notes": "Sunset condition at line 8. Prime Agent = reference only (D21).",
+    "notes": "Sunset condition at line 8. Prime Agent = reference only (D21).; accepted programme amendment with self-declared sunset; archive after plan correction",
     "repository": "xtrm",
     "_lane": "lane-a-source-register",
     "_lanes": [
@@ -347,7 +347,7 @@
       "symbolic-to-real bead mapping procedure",
       "shared-contract rules (one owner/reviewer/test owner)"
     ],
-    "notes": "Expected baseline trio still matches released versions; flow pre-dates amendment.",
+    "notes": "Expected baseline trio still matches released versions; flow pre-dates amendment.; stale pre-amendment duplication of plan gates; regenerate or archive",
     "repository": "xtrm",
     "_lane": "lane-a-source-register",
     "_lanes": [
@@ -624,7 +624,7 @@
     "bytes": 33499,
     "lines": 1279,
     "read_status": "complete",
-    "classification": "experiment",
+    "classification": "normative",
     "domain_tags": [
       "runtime",
       "chain",
@@ -660,7 +660,7 @@
       "Container cleanup contract 12.4",
       "24 acceptance criteria section 23"
     ],
-    "notes": "Status line 3: Draft for canonicalization and local source/runtime verification.",
+    "notes": "Status line 3: Draft for canonicalization and local source/runtime verification.; DRAFT pending canonicalization; absorbed by docs/runtime/prd/native-chain-runtime.md",
     "repository": "xtrm",
     "_lane": "lane-a-source-register",
     "_lanes": [
@@ -703,7 +703,7 @@
       "experiment-source findings that must not be promoted as-is section 6",
       "coverage boundary sections 1 and 7"
     ],
-    "notes": "Remote-head snapshot 2026-08-19 must be refreshed per its own instruction (line 32).",
+    "notes": "Remote-head snapshot 2026-08-19 must be refreshed per its own instruction (line 32).; packet authority register; superseded by docs/runtime/reconciliation/source-register.json",
     "repository": "xtrm",
     "_lane": "lane-a-source-register",
     "_lanes": [
@@ -883,9 +883,10 @@
     "lines": 3054,
     "read": "complete",
     "role": "12 July PRD predecessor of enhanced-prd.md; superseded with named residuals",
-    "classification": "superseded-historical",
+    "classification": "superseded",
     "repository": "specialists",
     "read_status": "complete",
+    "notes": "superseded-historical overall; section 9 remains reference text of eval entity model until PRD consolidation",
     "_lane": "lane-b-source-register",
     "_lanes": [
       "lane-b-source-register.json",
@@ -1019,9 +1020,10 @@
     "lines": 0,
     "read": "complete (empty)",
     "role": "EMPTY FILE at HEAD \u2014 git empty blob. PRD cites audit-reconcile-v0724 as current closure evidence; the PRD companion list points at xtrm-dev/core for the real file; this specialists copy is an empty placeholder",
-    "classification": "empty-placeholder",
+    "classification": "editorial-snapshot",
     "repository": "specialists",
-    "read_status": "complete (empty)",
+    "read_status": "complete",
+    "notes": "empty 0-byte placeholder file",
     "_lane": "lane-b-source-register",
     "_lanes": [
       "lane-b-source-register.json"
@@ -2332,9 +2334,10 @@
     "lines": 246,
     "read": "skim-complete",
     "role": "test guard checklist protecting materializer/API/Prometheus-cardinality/feed boundaries; forbidden labels defined once in console-architecture.md \u00a78.1",
-    "classification": "supporting",
+    "classification": "implementation-reference",
     "repository": "xtrm",
-    "read_status": "skim-complete",
+    "read_status": "complete",
+    "notes": "fully read by coordinator; guard checklist",
     "_lane": "lane-i-source-register",
     "_lanes": [
       "lane-i-source-register.json"
@@ -2347,9 +2350,10 @@
     "lines": 109,
     "read": "skim-complete",
     "role": "scaffold boundary reference (completed): 'do not move backend/API/materializer ownership into apps/console' \u2014 predates host retirement; stale relative to the console-repo architecture doc",
-    "classification": "stale-relative-to-console-repo",
+    "classification": "historical",
     "repository": "xtrm",
-    "read_status": "skim-complete",
+    "read_status": "complete",
+    "notes": "fully read by coordinator; gitboard-hosted bridge-era boundary ref; cites dead /home/dawid/second-mind paths",
     "_lane": "lane-i-source-register",
     "_lanes": [
       "lane-i-source-register.json"

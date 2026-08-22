@@ -31,6 +31,39 @@ def _infer_repo(path):
 def key(row):
     return f'{row.get("repository","")}:{row.get("path","")}'
 
+# Coordinator normalizations after direct verification (see reconciliation log):
+# - two console docs skimmed by lane-i were fully read by coordinator -> complete
+# - empty placeholder file -> complete
+# - classification label aliases resolved to controlled vocabulary
+NORMALIZE = {
+    "specialists:docs/design/audit-reconcile-v0724.md": {
+        "read_status": "complete", "classification": "editorial-snapshot",
+        "_note": "empty 0-byte placeholder file"},
+    "xtrm:docs/console/architecture/console-test-guards.md": {
+        "read_status": "complete", "classification": "implementation-reference",
+        "_note": "fully read by coordinator; guard checklist"},
+    "xtrm:docs/console/architecture/apps-console-scaffold-preflight.md": {
+        "read_status": "complete", "classification": "historical",
+        "_note": "fully read by coordinator; gitboard-hosted bridge-era boundary ref; cites dead /home/dawid/second-mind paths"},
+    "specialists:docs/design/roadmap/chains-prompt-evals.md": {
+        "classification": "superseded",
+        "_note": "superseded-historical overall; section 9 remains reference text of eval entity model until PRD consolidation"},
+    "xtrm:docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md": {
+        "classification": "normative",
+        "_note": "accepted programme amendment with self-declared sunset; archive after plan correction"},
+    "xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/native-chain-runtime-prd-draft.md": {
+        "classification": "normative",
+        "_note": "DRAFT pending canonicalization; absorbed by docs/runtime/prd/native-chain-runtime.md"},
+    "xtrm:docs/shared/native-chain-runtime-audit-2026-08-19/source-and-authority-register.md": {
+        "classification": "evidence",
+        "_note": "packet authority register; superseded by docs/runtime/reconciliation/source-register.json"},
+    "xtrm:docs/shared/xtrm-current-execution-plan.md": {
+        "classification": "canonical"},
+    "xtrm:docs/shared/xtrm-local-coordinator-bootstrap.md": {
+        "classification": "programme-sequencing",
+        "_note": "stale pre-amendment duplication of plan gates; regenerate or archive"},
+}
+
 def main():
     merged = {}
     conflicts = []
@@ -51,6 +84,13 @@ def main():
                     rs = str(row.get("read") or "partial")
             row["read_status"] = rs
             k = key(row)
+            ov = NORMALIZE.get(k)
+            if ov:
+                for f2, v in ov.items():
+                    if f2 == "_note":
+                        row["notes"] = ((row.get("notes") or "") + "; " + v).lstrip("; ")
+                    else:
+                        row[f2] = v
             if k in merged:
                 old = merged[k]
                 for field in ("classification", "disposition"):
