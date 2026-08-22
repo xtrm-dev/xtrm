@@ -117,3 +117,8 @@ test("estimateTokens is a ceil length/4 heuristic", () => {
   assert.equal(estimateTokens("abcd"), 1);
   assert.equal(estimateTokens("abcde"), 2);
 });
+
+test("SYSTEM_PROMPT includes the optional HINT teaching instruction", () => {
+  assert.match(SYSTEM_PROMPT, /HINT:/);
+  assert.match(SYSTEM_PROMPT, /skip it/i);
+});

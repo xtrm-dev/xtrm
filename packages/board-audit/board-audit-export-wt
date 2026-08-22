@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# board-audit-export-wt — permanent export worktree (prototype, IDEAS.md 210926).
+#
+# One durable worktree + one orphan artifact branch per repository:
+#   branch:  board-audit-export-do-not-cancel
+#   tree:    ~/.cache/xtrm/board-audit/export-worktrees/<repo-slug>/
+#   content: only .xtrm/board-audit/**
+#
+# Replaces the ad-hoc worktree + per-PR transport-branch machinery for the
+# export/checkpoint path. Beads DB access comes from git common-directory
+# discovery — file contents of the worktree are irrelevant.
+#
+# Commands:
+#   ensure                 Create the permanent worktree + orphan branch if missing.
+#   checkpoint [--open|--all] [extra core args...]
+#                          flock → export into the worktree → commit → push.
+#   status                 Show worktree path, branch, last commit, remote sync state.
+#
+# Concurrency: all mutations serialize on <worktree>/.lock (flock).
+# Pushes are plain fast-forwards; single-writer assumption (one host).
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+BRANCH="board-audit-export-do-not-cancel"
+CACHE_ROOT="${BOARD_AUDIT_WT_ROOT:-$HOME/.cache/xtrm/board-audit/export-worktrees}"
+
+repo_slug() {
+  git -C "$1" config --get remote.origin.url \
+    | sed -E 's#.*[:/]([^/]+/[^/]+)(\.git)?$#\1#' | tr '/' '-'
+}
+
+WT=""
+LOCK_FD=""
+
+need_wt() {
+  local repo="${1:-$PWD}"
+  git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+    || { echo "error: $repo is not a git repository" >&2; exit 2; }
+  WT="$CACHE_ROOT/$(repo_slug "$repo")"
+}
+
+acquire_lock() {
+  mkdir -p "$WT"
+  exec {LOCK_FD}>"$WT/.lock"
+  flock -w 120 "$LOCK_FD" || { echo "error: checkpoint lock timeout" >&2; exit 3; }
+}
+
+cmd_ensure() {
+  local repo="${1:-$PWD}"
+  need_wt "$repo"
+  if git -C "$repo" worktree list | grep -q "^\[$BRANCH\]\|$WT"; then
+    echo "✓ worktree already present: $WT ($BRANCH)"
+    return 0
+  fi
+  # Detached temp checkout, then orphan the index so the branch carries ONLY
+  # .xtrm/board-audit assets (no code ancestry — transport branches taught us
+  # stale code ancestry is a liability).
+  git -C "$repo" worktree add --detach "$WT" >/dev/null
+  (
+    cd "$WT"
+    git checkout --orphan "$BRANCH" >/dev/null 2>&1
+    git rm -rf --quiet . >/dev/null 2>&1 || true
+    find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+    mkdir -p .xtrm/board-audit
+    cat > README.md <<'MD'
+# board-audit export surface
+
+Artifact-only branch maintained by `board-audit-export-wt`. Not a code branch;
+do not base work on it. Assets under `.xtrm/board-audit/**` only. Do not cancel
+or auto-cleanup this worktree/branch.
+MD
+    git add README.md
+    git -c user.name="${USER}" -c user.email="${USER}@board-audit.local" \
+      commit --no-verify -m "board-audit: init export surface [skip ci]" >/dev/null
+    git push -u origin "$BRANCH" --no-verify
+  )
+  echo "✓ created $WT on orphan branch $BRANCH and pushed"
+}
+
+cmd_checkpoint() {
+  # usage: checkpoint [repo] [--open|--all] [extra board-audit-core args...]
+  local repo="$PWD"
+  if [ $# -gt 0 ] && [ -d "$1/.git" ]; then repo="$1"; shift; fi
+  need_wt "$repo"
+  acquire_lock
+  [ "$(git -C "$WT" rev-parse --is-inside-work-tree 2>/dev/null)" = true ] \
+    || { echo "error: run 'ensure' first" >&2; exit 2; }
+  local scope="--all"
+  if [ "${1:-}" = "--open" ] || [ "${1:-}" = "--all" ]; then scope="$1"; shift; fi
+
+  # Canonical acquisition via the existing core exporter, written straight
+  # into the permanent worktree.
+  (cd "$repo" && "$SCRIPT_DIR/board-audit-core" \
+      --export "$scope" --output-dir "$WT" "$@")
+
+  (cd "$WT"
+    git add -A .xtrm/board-audit
+    if git diff --cached --quiet; then
+      echo "✓ no board changes since last checkpoint"
+      return 0
+    fi
+    local ts; ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    git -c user.name="${USER}" -c user.email="${USER}@board-audit.local" \
+      commit --no-verify -m "board-audit: checkpoint ${ts} [skip ci]" >/dev/null
+    git push origin "$BRANCH" --no-verify
+    echo "✓ checkpoint pushed: $(git rev-parse --short HEAD) ($(git log -1 --format=%ci))"
+  )
+}
+
+cmd_status() {
+  local repo="${1:-$PWD}"
+  if [ $# -gt 0 ] && [ -d "$1/.git" ]; then repo="$1"; fi
+  need_wt "$repo"
+  if [ ! -f "$WT/.git" ] && [ ! -d "$WT/.git" ]; then echo "no export worktree (run ensure)"; exit 0; fi
+  (cd "$WT"
+    echo "path:     $WT"
+    echo "branch:   $BRANCH"
+    echo "head:     $(git rev-parse --short HEAD) $(git log -1 --format='%ci %s')"
+    git fetch origin "$BRANCH" --quiet 2>/dev/null || true
+    if git rev-parse --verify --quiet "origin/$BRANCH" >/dev/null; then
+      local ahead behind
+      ahead=$(git rev-list --count "origin/$BRANCH..HEAD")
+      behind=$(git rev-list --count "HEAD..origin/$BRANCH")
+      echo "remote:   ahead=$ahead behind=$behind"
+    else
+      echo "remote:   not pushed yet"
+    fi
+  )
+}
+
+case "${1:-}" in
+  ensure)     shift; cmd_ensure "$@" ;;
+  checkpoint) shift; cmd_checkpoint "$@" ;;
+  status)     shift; cmd_status "$@" ;;
+  *)
+    sed -n '2,30p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'
+    exit "${1:+2}"
+    ;;
+esac

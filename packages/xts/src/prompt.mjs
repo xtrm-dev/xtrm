@@ -17,7 +17,11 @@ Inspect before mutating when state is unclear.
 
 Do not modify files unless the user's request requires it.
 
-Do not explain routine shell commands unless explanation is useful.`;
+Do not explain routine shell commands unless explanation is useful.
+
+When the situation offers a genuinely useful lesson, you may end your answer
+with one short line starting with "HINT:" that teaches a related technique or
+gotcha. Keep it to one line; skip it when there is nothing worth teaching.`;
 
 // Default instruction when the user passes no positional argument. Piped
 // stdin is primary evidence; the model answers from it.
