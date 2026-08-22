@@ -1,0 +1,111 @@
+{
+  "lane": "F",
+  "name": "deferred-full-substrate",
+  "principle": "Everything from substrate_design_it.md that is NOT required for durability-now. Deferred without prejudice: the full programme remains canon (rev12, FROZEN architecturally) and the minimal kernel items cite back into it so absorption later is semantic-preserving.",
+  "deferred_items": [
+    {
+      "id": "DFS-1",
+      "name": "Stage 0 kernel: daemon + state.db + socket",
+      "content": "Single SQLite(WAL) ~/.xtrm/state.db served by xt daemon over Unix socket; lazy launch + file lock + PID-aware cleanup; all domain packages as StateClient socket clients; project registration.",
+      "canonical_source": "substrate_design_it.md §13.1-§13.2, §15 Stage 0; state-store-options.md §1, §9",
+      "deferral_reason": "Premortem R1: Stage 0 is the hardest product in the system and gates everything; premortem plan-revision row 9 (cut Stage 0 scope) remains owned by state-store-options/monorepo-migration."
+    },
+    {
+      "id": "DFS-2",
+      "name": "Monorepo packaging (core/substrate/channels/specialists/console)",
+      "content": "Five npm packages, acyclic deps, ownership-in-code of table schemas, no cross-domain FK.",
+      "canonical_source": "substrate_design_it.md §0 package table; owned by monorepo-migration doc",
+      "deferral_reason": "structural migration; no durability value before Stage 0"
+    },
+    {
+      "id": "DFS-3",
+      "name": "Seed planning container",
+      "content": "seed kind: advisor channel, invite rules, plan.v1 artifact, approval modes auto/operator-gate/re-seed, transform-on-approval commit.",
+      "canonical_source": "substrate_design_it.md §4.1, §5",
+      "deferral_reason": "depends on container entity + channels v0 + validator (stages 1/2/4/5)"
+    },
+    {
+      "id": "DFS-4",
+      "name": "Epic / wave / node container kinds",
+      "content": "DAG epic with shared integration base; parallel wave with independent bases; standing autonomous node with autonomy policy, failure budget, scheduling authority limits, Stage 4.5 delivery demo gate.",
+      "canonical_source": "substrate_design_it.md §4.2-§4.5, §15 stage 8",
+      "deferral_reason": "node coordinator is premortem R5 load-bearing-fiction risk until its executable demo exists (Stage 4.5)"
+    },
+    {
+      "id": "DFS-5",
+      "name": "Chain-template engine and composition moments",
+      "content": "Two-layer templates (domain steps + mandatory gates), three composition moments, composition gate review/insert/approve, worktree lease, two-axis git model, mid-run insertion, promotion cycle, eight archetypes + fifteen-formula catalog (catalog semantics owned by chain_templates.md).",
+      "canonical_source": "substrate_design_it.md §6.9-§6.9.10; docs/substrate/chain_templates.md",
+      "deferral_reason": "requires container entity + issue store (stages 1/4); template catalog already operates pre-substrate via bd formulas"
+    },
+    {
+      "id": "DFS-6",
+      "name": "New issue system (schema, classifiers, relationships, close-as-derivation)",
+      "content": "Structured contracts (change/step, XML), class/type/role axes, nine relationship kinds with gating classes, two-stage validator + third entry-gate moment, close_ready→merge transactional close.",
+      "canonical_source": "substrate_design_it.md §6.1-§6.10, stage 1",
+      "deferral_reason": "replaces bd; bd remains the issue store through the adoption period (temp_roadmap keeper-class framing)"
+    },
+    {
+      "id": "DFS-7",
+      "name": "Collision matrix",
+      "content": "Per-worktree diff polling, file/range/semantic severity tiers, serialize/unify/pause/reconcile resolution commands.",
+      "canonical_source": "substrate_design_it.md §9, stage 7",
+      "deferral_reason": "needs container entity + fork_base authority"
+    },
+    {
+      "id": "DFS-8",
+      "name": "Pulse/emitter infrastructure",
+      "content": "triggers/pulse_queue/pulse_dedup tables, emitter registration, capability model can_emit, node FIFO queues with mechanical rate-limit/coalescing.",
+      "canonical_source": "substrate_design_it.md §2.3, §5.8, §13.3",
+      "deferral_reason": "daemon-dependent; MDK-4 carries forward only the idempotency-key pattern"
+    },
+    {
+      "id": "DFS-9",
+      "name": "Memory subsystem formalization",
+      "content": "memories table with type classifier, herd/workgroup/identity query lenses, memory-query extension injection, close-time distillation by closing judge.",
+      "canonical_source": "substrate_design_it.md §10.1-§10.3",
+      "deferral_reason": "current bd memories + service-knowledge cover the need; open tuning questions (pruning/promotion predicates) explicitly deferred by canon"
+    },
+    {
+      "id": "DFS-10",
+      "name": "Skills-as-capability per-step injection",
+      "content": "skill packs injected at composition or coordinator entry-gate via step.required_skills; sublayer to service-skills; generic template + per-repo override precedence.",
+      "canonical_source": "substrate_design_it.md §10.4",
+      "deferral_reason": "dispatcher contract field requires chain composition to exist"
+    },
+    {
+      "id": "DFS-11",
+      "name": "Coordinator roles (node + chain, five roles)",
+      "content": "Node coordinator (stateless, journal respawn, failure budget) and chain coordinator (entry gate verdict:ready, borderline judge, hygiene pulse, close-time judge with atomic coordinator.release, incident handler).",
+      "canonical_source": "substrate_design_it.md §4.2-§4.3, §3.1 invariant 2026-06-13",
+      "deferral_reason": "judgment layer over containers/channels; xtrm-1jp vocabulary preserved in Lane E contract so semantics are not lost"
+    },
+    {
+      "id": "DFS-12",
+      "name": "Tether, dashboard/console, API faces",
+      "content": "Always-on hint sidecar; console renderer + lineage drawer (owned by console-product-contract); three-face API (query/change-tracking/command) with monotonic cursor and read-live bias.",
+      "canonical_source": "substrate_design_it.md §8, §12, §17",
+      "deferral_reason": "consumer surfaces over deferred state; premortem R8 risk recorded (substrate invisible without them — acceptance criterion when stages resume)"
+    },
+    {
+      "id": "DFS-13",
+      "name": "Two-tier deployment projection (Supabase top tier)",
+      "content": "Optional shared/web tier: auth, realtime, team-level writes as read-mostly projection upward via opaque-ID row transfer.",
+      "canonical_source": "state-store-options.md §0-§7, §9 decision log",
+      "deferral_reason": "explicitly tier-gated (team/company); solo-user horizon does not need it; premortem R7 top-tier-v0 criterion is a Stage 0 acceptance item whenever Stage 0 resumes"
+    },
+    {
+      "id": "DFS-14",
+      "name": "bd → substrate data migration (Stage 13)",
+      "content": "One-time data migration replacing bd; §13.8 bridge whitelist (bd mirror, shadow write, GitHub materializer compat) with measurable retirement criteria and per-Stage rollback gates.",
+      "canonical_source": "substrate_design_it.md §13.7-§13.8, §15 stage 13",
+      "deferral_reason": "last stage; bd stays authoritative throughout adoption period"
+    }
+  ],
+  "carried_constraints_from_premortem": [
+    "R2 freeze rule: design prose must not outrun runtime receipts (substrate IT top-of-doc revision protocol)",
+    "R9 independent-reviewer gate for rev13+ sections (forensic design.review evidence required)",
+    "Still-real risks ranked in synthesis.md: canon drift > migration gates > author=implementer",
+    "Plan revisions rows 2/3/5/9 remain owned by monorepo-migration / temp_roadmap / console-product-contract / state-store-options — not absorbed here"
+  ]
+}
