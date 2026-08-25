@@ -11,10 +11,13 @@
  *   2. Template resolution — a TemplateChainSource carries only a catalog
  *      reference; the loader resolves the referenced formula asset into the
  *      concrete inline shape (`normalizeFromResolvedTemplate`).
- *   3. Change-contract roots (Q25) — the loader accepts an ALREADY-PARSED
+ *   3. Ad-hoc sources — persisted typed compositions enter through
+ *      `loadAdHocSource` (`normalizeAdhocSource`), same normalization path.
+ *   4. Change-contract roots (Q25) — the loader accepts an ALREADY-PARSED
  *      `xt spec` change-contract object (plain JS object; YAML parsing is
  *      owned by `xt spec`, never this module).
  *
+ * All four ChainSource variants reach one ChainDefinition here.
  * PRECEDENCE RULE ("formula wins executable shape"): the `.formula.json`
  * asset content ALONE determines the resolved shape. Prose docs, catalog
  * metadata, READMEs and dispatcher labels never alter it. Labels other than
@@ -32,7 +35,7 @@
  *     loops — none are invented.
  *   - `role:<x>` label → specialist { name: x }.
  *   - FORCED DEVIATION: the root step carries no `role:` label in any of
- *     the 15 assets (it is the molecule/container bead, not a model step),
+ *     the 15 assets (it is the container/entry step, not a model step),
  *     but AuthoredStepSchema structurally requires exactly one of
  *     specialist/executor. The loader encodes the root as
  *     executor { kind: "deterministic", ref: "formula-root" } — the only
@@ -51,6 +54,7 @@
 import { createHash } from "node:crypto";
 import {
   CHAIN_SOURCE_SCHEMA_VERSION,
+  AdHocChainSourceSchema,
   ImportedWorkflowSourceSchema,
   JsonChainSourceSchema,
   TemplateChainSourceSchema,
@@ -63,6 +67,7 @@ import {
 import {
   canonicalJson,
   NormalizationError,
+  normalizeAdhocSource,
   normalizeFromResolvedTemplate,
   normalizeImportedSource,
   normalizeJsonSource,
@@ -155,13 +160,16 @@ function mapFormulaSteps(
   asset: FormulaAsset,
   vars: Record<string, string>,
 ): { steps: AuthoredStep[]; entryStep: string } {
+  if (!Array.isArray(asset.steps) || asset.steps.some((s) => s === null || typeof s !== "object")) {
+    throw new NormalizationError(["formula asset 'steps' must be an array of step objects"]);
+  }
   const problems: string[] = [];
   const steps: AuthoredStep[] = [];
 
-  const roots = (asset.steps ?? []).filter((s) => (s.labels ?? []).includes("kind:root"));
+  const roots = asset.steps.filter((s) => (s.labels ?? []).includes("kind:root"));
   if (roots.length === 0) problems.push("no step labeled 'kind:root' — cannot determine entry_step");
   if (roots.length > 1) problems.push(`multiple 'kind:root' steps: ${roots.map((r) => r.id).join(", ")}`);
-  const ids = new Set((asset.steps ?? []).map((s) => s.id));
+  const ids = new Set(asset.steps.map((s) => s.id));
 
   for (const s of asset.steps ?? []) {
     // Labels are substituted too (e.g. research-only declares
@@ -190,10 +198,10 @@ function mapFormulaSteps(
           ? { specialist: { name: role } }
           : {}),
       // Deterministic repair for a known formula-asset defect class
-      // (ADR-001 §5): some assets declare needs on CONDITIONALLY DISPATCHED
-      // steps that do not exist in the asset itself (e.g.
-      // code-with-advisors' executor needs explorer/researcher/overthinker).
-      // Dangling needs are dropped so the qcy.1 referential validation sees
+      // (the dangling-advisor-needs instance in code-with-advisors; ADR-001
+      // §5 names this defect family and sanctions its repair during
+      // migration): some assets declare needs on CONDITIONALLY DISPATCHED
+      // steps that do not exist in the asset itself. Dangling needs are dropped so the qcy.1 referential validation sees
       // the authored shape the asset actually contains; existing ids pass
       // through untouched.
       depends_on: (s.needs ?? []).filter((n) => ids.has(n)),
@@ -267,6 +275,22 @@ export function loadFormulaAsset(
   opts: { path?: string; vars?: Record<string, string> } = {},
 ): ChainDefinition {
   return normalizeImportedSource(parseFormulaAsset(json, opts));
+}
+
+// ---------------------------------------------------------------------------
+// Ad-hoc sources (persisted typed compositions)
+// ---------------------------------------------------------------------------
+
+/**
+ * Load a persisted AdHocChainSource (typed composition saved before
+ * execution; PRD §2/R1.1). Input is the already-persisted source object
+ * (parsed JSON); schema validation and normalization go through the
+ * shared qcy.1 path exactly like every other variant. Schema violations
+ * surface as NormalizationError like every other mapping problem.
+ */
+export function loadAdHocSource(source: unknown): ChainDefinition {
+  const parsed = AdHocChainSourceSchema.parse(source);
+  return normalizeAdhocSource(parsed);
 }
 
 // ---------------------------------------------------------------------------
