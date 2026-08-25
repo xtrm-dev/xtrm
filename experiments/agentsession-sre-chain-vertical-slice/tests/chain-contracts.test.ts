@@ -291,11 +291,14 @@ describe("invalid gate/verdict targets", () => {
     expect(validateInlineTopology(t).some((p) => p.includes("must declare gate"))).toBe(true);
   });
 
-  test("duplicate (gate, verdict) pairs with different targets rejected", () => {
+  test("duplicate (gate, verdict) pairs rejected even with different targets", () => {
     const t = twoStepTopology();
+    const third = structuredClone(t.steps[0]!);
+    third.step_id = "recheck";
+    t.steps.push(third);
     t.steps[1]!.routes = [
       { gate: "review", verdict: "fail", target: "explore" },
-      { gate: "review", verdict: "fail", target: "explore" },
+      { gate: "review", verdict: "fail", target: "recheck" },
     ];
     expect(validateInlineTopology(t).some((p) => p.includes("duplicate route verdict"))).toBe(true);
   });
