@@ -11,3 +11,4 @@
 export * from "./chain-source.ts";
 export * from "./chain-definition.ts";
 export * from "./normalize.ts";
+export * from "./json-schema.ts";

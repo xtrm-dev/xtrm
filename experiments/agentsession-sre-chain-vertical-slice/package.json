@@ -14,7 +14,8 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.84.0",
     "typebox": "^1.1.37",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

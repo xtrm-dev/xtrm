@@ -34,6 +34,7 @@ import {
   normalizeJsonSource,
   topologyFingerprint,
 } from "../src/chain-contracts/normalize.ts";
+import { chainDefinitionJsonSchema, chainSourceJsonSchema } from "../src/chain-contracts/json-schema.ts";
 
 const SHA = "a".repeat(64);
 
@@ -53,6 +54,7 @@ function twoStepTopology(): InlineTopology {
         class: "gate",
         executor: { kind: "deterministic", ref: "verdict-checker" },
         depends_on: ["explore"],
+        // Routes are declared ON the gate step and reference it as gate.
         routes: [{ gate: "review", verdict: "fail", target: "explore" }],
         remediation: { back_to: "explore", max_iterations: 2 },
       },
@@ -69,7 +71,6 @@ function baseEnvelope(source_kind: "json" | "adhoc" | "imported") {
     version: "1.0.0",
     provenance: { origin: "test" },
     source_kind,
-    ...(source_kind === "json" ? {} : {}),
   };
 }
 
@@ -222,19 +223,81 @@ describe("stable step / dependency validation", () => {
     t.entry_step = "missing";
     expect(validateInlineTopology(t).some((p) => p.includes("entry_step"))).toBe(true);
   });
+
+  test("mutual dependency cycle rejected (A -> B -> A)", () => {
+    const t: InlineTopology = {
+      entry_step: "a",
+      policy: {},
+      steps: [
+        { step_id: "a", class: "step" as const, specialist: { name: "x" }, depends_on: ["b"], routes: [] },
+        { step_id: "b", class: "step" as const, executor: { kind: "deterministic", ref: "y" }, depends_on: ["a"], routes: [] },
+      ],
+    };
+    expect(validateInlineTopology(t).some((p) => p.includes("dependency cycle"))).toBe(true);
+    expect(() =>
+      normalizeJsonSource(JsonChainSourceSchema.parse({ ...baseEnvelope("json"), topology: t })),
+    ).toThrow(NormalizationError);
+  });
+
+  test("three-node cycle rejected with readable path", () => {
+    const t: InlineTopology = {
+      entry_step: "a",
+      policy: {},
+      steps: [
+        { step_id: "a", class: "step" as const, specialist: { name: "x" }, depends_on: ["c"], routes: [] },
+        { step_id: "b", class: "step" as const, specialist: { name: "y" }, depends_on: ["a"], routes: [] },
+        { step_id: "c", class: "step" as const, executor: { kind: "deterministic", ref: "z" }, depends_on: ["b"], routes: [] },
+      ],
+    };
+    const problems = validateInlineTopology(t);
+    expect(problems.some((p) => p.includes("a -> c -> b -> a") || p.includes("c -> b -> a -> c"))).toBe(true);
+  });
+
+  test("diamond dependency (shared dep, no cycle) accepted", () => {
+    const t: InlineTopology = {
+      entry_step: "root",
+      policy: {},
+      steps: [
+        { step_id: "root", class: "step" as const, specialist: { name: "x" }, depends_on: [], routes: [] },
+        { step_id: "l", class: "step" as const, specialist: { name: "x" }, depends_on: ["root"], routes: [] },
+        { step_id: "r", class: "step" as const, specialist: { name: "x" }, depends_on: ["root"], routes: [] },
+        { step_id: "join", class: "step" as const, executor: { kind: "deterministic", ref: "j" }, depends_on: ["l", "r"], routes: [] },
+      ],
+    };
+    expect(validateInlineTopology(t)).toEqual([]);
+  });
 });
 
 describe("invalid gate/verdict targets", () => {
   test("route to nonexistent gate rejected", () => {
     const t = twoStepTopology();
+    // A route naming a different gate is rejected as misplaced (routes live
+    // on the gate step itself), which also makes a nonexistent gate
+    // unreachable.
     t.steps[0]!.routes = [{ gate: "nope", verdict: "pass", target: "review" }];
-    expect(validateInlineTopology(t).some((p) => p.includes("(gate)"))).toBe(true);
+    expect(validateInlineTopology(t).some((p) => p.includes("must declare gate"))).toBe(true);
   });
 
   test("route referencing non-gate step as gate rejected", () => {
     const t = twoStepTopology();
     t.steps[0]!.routes = [{ gate: "explore", verdict: "pass", target: "review" }];
     expect(validateInlineTopology(t).some((p) => p.includes("non-gate step"))).toBe(true);
+  });
+
+  test("routes must be declared on the gate step itself", () => {
+    const t = twoStepTopology();
+    t.steps[0]!.class = "gate"; // explore is a gate too, but the route lives elsewhere
+    t.steps[0]!.routes = [{ gate: "review", verdict: "pass", target: "explore" }];
+    expect(validateInlineTopology(t).some((p) => p.includes("must declare gate"))).toBe(true);
+  });
+
+  test("duplicate (gate, verdict) pairs with different targets rejected", () => {
+    const t = twoStepTopology();
+    t.steps[1]!.routes = [
+      { gate: "review", verdict: "fail", target: "explore" },
+      { gate: "review", verdict: "fail", target: "explore" },
+    ];
+    expect(validateInlineTopology(t).some((p) => p.includes("duplicate route verdict"))).toBe(true);
   });
 
   test("route target must exist", () => {
@@ -273,7 +336,7 @@ describe("invalid capability / evidence / operator declarations", () => {
 });
 
 describe("runtime-only fields are structurally impossible in ChainDefinition", () => {
-  test("each runtime-only field at every object level fails validation", () => {
+  test("each runtime-only field at root/metadata level fails validation", () => {
     for (const f of RUNTIME_ONLY_FIELDS) {
       const poisoned = {
         schema_version: "xtrm.chain-definition.v1",
@@ -281,6 +344,17 @@ describe("runtime-only fields are structurally impossible in ChainDefinition", (
         provenance: { source_kind: "json", source_id: "x", origin: "t" },
         topology: { entry_step: "a", policy: {}, steps: [] },
       };
+      expect(ChainDefinitionSchema.safeParse(poisoned).success).toBe(false);
+    }
+  });
+
+  test("each runtime-only field at step level fails validation", () => {
+    for (const f of RUNTIME_ONLY_FIELDS) {
+      const def = normalizeJsonSource(
+        JsonChainSourceSchema.parse({ ...baseEnvelope("json"), topology: twoStepTopology() }),
+      );
+      const poisoned = structuredClone(def);
+      (poisoned.topology.steps[0] as Record<string, unknown>)[f] = "runtime-value";
       expect(ChainDefinitionSchema.safeParse(poisoned).success).toBe(false);
     }
   });
@@ -403,6 +477,29 @@ describe("deterministic serialization / fingerprints", () => {
       }),
     );
     expect(topologyFingerprint(d1)).toBe(topologyFingerprint(d2));
+  });
+});
+
+describe("JSON Schema output", () => {
+  test("source + definition schemas generate with expected identity", () => {
+    const src = chainSourceJsonSchema() as { $ref?: string; definitions?: Record<string, unknown> };
+    const def = chainDefinitionJsonSchema() as { $ref?: string; definitions?: Record<string, unknown> };
+    expect(src.$ref).toBe("#/definitions/XtrmChainSource");
+    expect(def.$ref).toBe("#/definitions/XtrmChainDefinition");
+    expect(Object.keys(src.definitions ?? {})).toContain("XtrmChainSource");
+    expect(Object.keys(def.definitions ?? {})).toContain("XtrmChainDefinition");
+  });
+
+  test("generation is deterministic (identical bytes across calls)", () => {
+    expect(JSON.stringify(chainSourceJsonSchema())).toBe(JSON.stringify(chainSourceJsonSchema()));
+    expect(JSON.stringify(chainDefinitionJsonSchema())).toBe(
+      JSON.stringify(chainDefinitionJsonSchema()),
+    );
+  });
+
+  test("generated definition schema carries additionalProperties: false at object levels", () => {
+    const def = JSON.stringify(chainDefinitionJsonSchema());
+    expect(def).toContain('"additionalProperties":false');
   });
 });
 

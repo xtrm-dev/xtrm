@@ -139,8 +139,16 @@ export const RemediationLoopSchema = z
   .strict();
 
 /**
- * Gate/verdict routing edges. Conditional on a declared gate step's
- * verdict; targets must be existing step_ids (validated below).
+ * Gate/verdict routing edges. Routes are declared ON the gate step itself
+ * and reference that same step as `gate` (validated in
+ * `validateInlineTopology`). Duplicate `(gate, verdict)` pairs are
+ * rejected — a verdict has exactly one authored continuation.
+ *
+ * Recorded precedence decision (binding for the qcy.3 compiler): when a
+ * step declares both a remediation loop and fail-routes, the remediation
+ * loop consumes its `max_iterations` budget FIRST; route evaluation
+ * applies only after remediation budget exhaustion. This is an authored
+ * declaration order, not scheduler state.
  */
 export const VerdictRouteSchema = z
   .object({
@@ -215,6 +223,7 @@ export const TemplateChainSourceSchema = z
       .strict(),
     /** Author-supplied variable substitutions resolved at load time. */
     vars: z.record(z.string()).optional(),
+    // TODO(xtrm-qcy.2): typed override vocabulary lands with the ChainLoader.
     overrides: z.array(z.unknown()).default([]),
     policy: PolicyInputsSchema.default({}),
     source_metadata: z.record(z.unknown()).default({}),
@@ -295,8 +304,16 @@ export function validateInlineTopology(t: InlineTopology): string[] {
       ref(d, `step ${s.step_id} depends_on`);
     }
     if (s.remediation) ref(s.remediation.back_to, `step ${s.step_id} remediation`);
+    const routeKeys = new Set<string>();
     for (const r of s.routes) {
-      ref(r.gate, `route on step ${s.step_id} (gate)`);
+      if (r.gate !== s.step_id) {
+        problems.push(`route on step ${s.step_id} must declare gate = its own step_id (${s.step_id})`);
+      }
+      const key = `${r.gate}|${r.verdict}`;
+      if (routeKeys.has(key)) {
+        problems.push(`duplicate route verdict ${r.verdict} on gate ${r.gate}`);
+      }
+      routeKeys.add(key);
       ref(r.target, `route on step ${s.step_id} (target)`);
       const gate = t.steps.find((g) => g.step_id === r.gate);
       if (gate && gate.class !== "gate") {
@@ -305,5 +322,24 @@ export function validateInlineTopology(t: InlineTopology): string[] {
     }
   }
   if (!seen.has(t.entry_step)) problems.push(`entry_step references nonexistent step_id: ${t.entry_step}`);
+
+  // Cycle rejection over dependency edges (routes/remediation are
+  // conditional re-entry declarations bounded by max_iterations, not part
+  // of the mandatory dependency graph).
+  const byId = new Map(t.steps.map((s) => [s.step_id, s]));
+  const state = new Map<string, 0 | 1 | 2>(); // 0=unvisited 1=in-stack 2=done
+  const visit = (id: string, path: string[]): void => {
+    const st = state.get(id) ?? 0;
+    if (st === 1) {
+      problems.push(`dependency cycle: ${[...path.slice(path.indexOf(id)), id].join(" -> ")}`);
+      return;
+    }
+    if (st === 2) return;
+    state.set(id, 1);
+    for (const d of byId.get(id)?.depends_on ?? []) visit(d, [...path, id]);
+    state.set(id, 2);
+  };
+  for (const s of t.steps) visit(s.step_id, []);
+
   return problems;
 }
