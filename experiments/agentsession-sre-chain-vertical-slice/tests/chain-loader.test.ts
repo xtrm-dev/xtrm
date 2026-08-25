@@ -15,6 +15,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   buildFormulaCatalog,
+  loadAdHocSource,
   loadChangeContractRoot,
   loadFormulaAsset,
   loadTemplate,
@@ -121,6 +122,16 @@ describe("formula assets — all 15 real assets", () => {
     const src = parseFormulaAsset(entry.asset, { path: entry.path });
     expect(src.import_ref.sha256).toBe(entry.sha256);
   });
+
+  test("research-only resolves role:{{specialist}} to a concrete specialist name", () => {
+    const def = loadTemplate({ template: { name: "research-only" } }, catalog);
+    const specialists = def.topology.steps
+      .map((s) => s.specialist?.name)
+      .filter((n): n is string => n !== undefined);
+    expect(specialists.length).toBeGreaterThan(0);
+    for (const n of specialists) expect(n).toMatch(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/);
+    expect(specialists.some((n) => n.includes("{{"))).toBe(false);
+  });
 });
 
 describe("determinism", () => {
@@ -177,6 +188,76 @@ describe("var substitution", () => {
 
   test("supplying an undeclared var is rejected", () => {
     expect(() => loadFormulaAsset(miniAsset(), { vars: { bogus: "x" } })).toThrow(/not declared/);
+  });
+});
+
+describe("ad-hoc sources (fourth variant)", () => {
+  const adhocSource = {
+    schema_version: "xtrm.chain-source.v1",
+    source_id: "adhoc-composition",
+    name: "adhoc-composition",
+    version: "0.1.0",
+    provenance: { origin: "session:evidence-ref-1" },
+    source_kind: "adhoc",
+    composition: { session_evidence_ref: "evidence:abc" },
+    topology: {
+      entry_step: "explore",
+      steps: [
+        { step_id: "explore", class: "step", specialist: { name: "explorer" }, depends_on: [], routes: [] },
+        { step_id: "check", class: "gate", executor: { kind: "deterministic", ref: "verdict-checker" },
+          depends_on: ["explore"], routes: [{ gate: "check", verdict: "fail", target: "explore" }] },
+      ],
+      policy: { scrutiny: "high" },
+    },
+  };
+
+  test("loadAdHocSource normalizes to a valid ChainDefinition through the shared path", () => {
+    const def = loadAdHocSource(adhocSource);
+    expect(def.provenance.source_kind).toBe("adhoc");
+    expect(def.topology.steps).toHaveLength(2);
+    // Scrutiny stays an unresolved authored request.
+    expect(def.topology.policy.scrutiny).toBe("high");
+  });
+
+  test("schema-invalid adhoc source rejected as NormalizationError (not ZodError)", () => {
+    expect(() => loadAdHocSource({ ...adhocSource, job_id: "runtime-leak" })).toThrow(NormalizationError);
+  });
+
+  test("invalid inline topology in adhoc source rejected via qcy.1 validation", () => {
+    const bad = structuredClone(adhocSource) as typeof adhocSource;
+    (bad.topology.steps[1] as { depends_on: string[] }).depends_on = ["missing"];
+    let msg = "";
+    try {
+      loadAdHocSource(bad);
+    } catch (e) {
+      msg = String(e);
+    }
+    expect(msg).toContain("nonexistent step_id");
+  });
+
+  test("formula path vs adhoc path of the same shape are logically equivalent", () => {
+    const fromFormula = loadFormulaAsset(miniAsset({}));
+    const sameShape = {
+      ...adhocSource,
+      source_id: fromFormula.metadata.name,
+      name: fromFormula.metadata.name,
+      provenance: { origin: "equivalence-check" },
+      composition: undefined,
+      topology: {
+        entry_step: fromFormula.topology.entry_step,
+        steps: JSON.parse(JSON.stringify(fromFormula.topology.steps)),
+        policy: {},
+      },
+    };
+    const fromAdhoc = loadAdHocSource(sameShape);
+    expect(logicallyEquivalent(fromFormula, fromAdhoc)).toBe(true);
+  });
+});
+
+describe("malformed structural input", () => {
+  test("steps: 5 is a typed rejection, not TypeError", () => {
+    expect(() => loadFormulaAsset({ formula: "bad", steps: 5 })).toThrow(NormalizationError);
+    expect(() => loadFormulaAsset({ formula: "bad", steps: 5 })).toThrow(/array of step objects/);
   });
 });
 

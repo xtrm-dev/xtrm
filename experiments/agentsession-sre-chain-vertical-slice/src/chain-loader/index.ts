@@ -289,8 +289,11 @@ export function loadFormulaAsset(
  * surface as NormalizationError like every other mapping problem.
  */
 export function loadAdHocSource(source: unknown): ChainDefinition {
-  const parsed = AdHocChainSourceSchema.parse(source);
-  return normalizeAdhocSource(parsed);
+  const parsed = AdHocChainSourceSchema.safeParse(source);
+  if (!parsed.success) {
+    throw new NormalizationError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`));
+  }
+  return normalizeAdhocSource(parsed.data);
 }
 
 // ---------------------------------------------------------------------------
