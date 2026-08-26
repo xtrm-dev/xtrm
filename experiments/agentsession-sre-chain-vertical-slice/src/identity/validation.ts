@@ -139,10 +139,17 @@ export function validateMutation(
       }
       if (
         cfg.cutoverComplete === true &&
-        binding.immutable_account_id !== null &&
         e.principal_binding.immutable_account_id === null
       ) {
-        failures.push({ code: "binding_account_mismatch", detail: "null account id after cutover" });
+        // fires whether the null is on the envelope side or the trusted
+        // config side: post-cutover, BOTH must carry populated platform ids
+        failures.push({
+          code: "binding_account_mismatch",
+          detail:
+            binding.immutable_account_id === null
+              ? "trusted principal-set config still carries null account id after cutover"
+              : "null account id after cutover",
+        });
       }
     }
 

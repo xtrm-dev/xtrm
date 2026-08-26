@@ -454,6 +454,17 @@ describe("review findings — validation coverage gaps", () => {
     expect(validateMutation(env, CFG()).ok).toBe(true);
   });
 
+  test("cutoverComplete also flags trusted config that still carries null ids", () => {
+    const env = assembledEnv(); // envelope binding account id = null
+    const staleConfigCutover = {
+      ...CFG(),
+      cutoverComplete: true,
+    };
+    const res = validateMutation(env, staleConfigCutover);
+    expect(res.ok).toBe(false);
+    expect(res.failures.map((f) => f.code)).toContain("binding_account_mismatch");
+  });
+
   test("unknown principal set fails closed", () => {
     const env = assembledEnv();
     const res = validateMutation(env, { registry: CFG().registry, principalSets: {} });

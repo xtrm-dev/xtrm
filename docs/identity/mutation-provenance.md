@@ -34,8 +34,9 @@ actor. Unsigned receipts classify `self_attested_web`; `xtrm_attested`
 requires signer+signature from a separately approved attestation service.
 Validation passing for legacy/unattributed envelopes proves format
 consistency only — unsigned evidence never becomes an authenticity claim.
-After credential cutover, validators should set `cutoverComplete` so
-envelope bindings may no longer carry a null platform account id.
+After credential cutover, validators should set `cutoverComplete` so no
+binding — envelope OR trusted principal-set config — may still carry a
+null platform account id; the flag enforces both sides.
 
 ## 4. Platform projection
 
