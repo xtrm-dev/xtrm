@@ -22,6 +22,7 @@ import {
   ExecutionIdentitySchema,
   PrincipalSetSchema,
   PROVENANCE_SCHEMA_VERSION,
+  ProvenanceEnvelopeSchema,
   type Actor,
   type AuthorshipMode,
   type ExecutionIdentity,
@@ -94,11 +95,16 @@ export function assembleProvenance(
   ctx: unknown,
   payload: unknown,
   opts: {
-    authorship_mode: AuthorshipMode;
+    authorship_mode: Exclude<AuthorshipMode, "legacy_unattributed">;
     attribution_strength?: "xtrm_attested" | "self_attested_web";
     binding: PrincipalBinding;
   },
 ): ProvenanceEnvelope {
+  if ((opts.authorship_mode as AuthorshipMode) === "legacy_unattributed") {
+    throw new Error(
+      "legacy_unattributed_not_assemblable: live mutations always carry a resolved actor; use legacyUnattributedEnvelope for history",
+    );
+  }
   const resolved = ResolvedExecutionContextSchema.parse(ctx);
   const smuggled = findCallerIdentityKeys(payload);
   if (smuggled.length > 0) {
@@ -126,11 +132,12 @@ export function assembleProvenance(
 
   const unsigned = {
     schema_version: PROVENANCE_SCHEMA_VERSION,
-    receipt_id: `xpr-${shortId("d", 8).slice(4)}`,
+    // 64-bit receipt id; receipts are evidence pointers, not authenticators
+    receipt_id: shortId("xpr", 16),
     actor_id: resolved.actor.actor_id,
     principal_set_id: resolved.principal_set.principal_set_id,
     principal_binding: opts.binding,
-    principal_shared: resolved.principal_set.shared_by.length > 0 && resolved.principal_set.kind === "shared_web_connector",
+    principal_shared: resolved.principal_set.kind === "shared_web_connector",
     authorship_mode: opts.authorship_mode,
     attribution_strength: opts.attribution_strength ?? "self_attested_web",
     assignment_id: resolved.execution.assignment_id,
@@ -158,29 +165,57 @@ type UnsignedEnvelope = Omit<ProvenanceEnvelope, "integrity"> & {
 
 /**
  * Compute envelope_sha256 over the canonical JSON of everything EXCEPT the
- * hash itself (which would be self-referential). Signer/signature are part
- * of the covered material.
+ * hash field itself (which would be self-referential). Signer and signature
+ * REMAIN inside the covered material so a swapped or stripped signature
+ * trips envelope_hash_mismatch at validation time.
  */
 export function computeEnvelopeHash(env: Omit<ProvenanceEnvelope, "integrity"> & { integrity?: unknown }): string {
   const copy: Record<string, unknown> = { ...(env as Record<string, unknown>) };
-  delete copy.integrity;
+  const integrity = (copy.integrity ?? {}) as Record<string, unknown>;
+  copy.integrity = {
+    ...(integrity.signer !== undefined || integrity.signature !== undefined
+      ? {
+          ...(integrity.signer !== undefined ? { signer: integrity.signer } : {}),
+          ...(integrity.signature !== undefined ? { signature: integrity.signature } : {}),
+        }
+      : {}),
+  };
   return `sha256:${sha256String(canonicalJson(copy))}`;
 }
 
-/** Fill integrity.envelope_sha256 and re-parse through the strict schema. */
+/**
+ * Fill integrity.envelope_sha256, then re-parse through the strict schema.
+ * When the input already carries a hash, it MUST verify first — re-sealing
+ * is refused for envelopes whose claimed integrity does not reproduce, so
+ * semi-trusted data cannot be laundered into hash-consistent evidence.
+ */
 export function sealEnvelope(unsigned: UnsignedEnvelope | ProvenanceEnvelope): ProvenanceEnvelope {
+  const candidate = unsigned as ProvenanceEnvelope;
+  if (
+    candidate.integrity &&
+    typeof candidate.integrity.envelope_sha256 === "string" &&
+    candidate.integrity.envelope_sha256 !== ""
+  ) {
+    const recomputed = computeEnvelopeHash(candidate);
+    if (recomputed !== candidate.integrity.envelope_sha256) {
+      throw new Error("envelope_hash_mismatch: refusing to re-seal an envelope whose integrity does not verify");
+    }
+  }
   const envelope_sha256 = computeEnvelopeHash(unsigned);
-  return {
-    ...(unsigned as ProvenanceEnvelope),
+  const sealed: ProvenanceEnvelope = {
+    ...candidate,
     integrity: {
-      ...(unsigned as ProvenanceEnvelope).integrity,
+      ...candidate.integrity,
       envelope_sha256,
     },
   };
+  return ProvenanceEnvelopeSchema.parse(sealed);
 }
 
 /**
  * Bind the platform-assigned external id after a side effect returns.
+ * The input envelope's existing integrity MUST verify (fail closed against
+ * forged or tampered input) and the sealed result re-parses strictly.
  * Re-binding over a DIFFERENT existing id fails closed (uncertain side
  * effects must be reconciled, never blindly retried).
  */
@@ -188,6 +223,12 @@ export function bindPlatformResult(
   env: ProvenanceEnvelope,
   result: { system: string; external_id: string; content_sha256?: string },
 ): ProvenanceEnvelope {
+  const parsedInput = ProvenanceEnvelopeSchema.parse(env);
+  const recomputed = computeEnvelopeHash(parsedInput);
+  if (recomputed !== parsedInput.integrity.envelope_sha256) {
+    throw new Error("envelope_hash_mismatch: refusing to bind a platform result onto an envelope whose integrity does not verify");
+  }
+  env = parsedInput;
   if (env.principal_binding.system !== result.system) {
     throw new Error(`binding_system_mismatch: ${result.system}`);
   }
@@ -202,8 +243,11 @@ export function bindPlatformResult(
   ) {
     throw new Error("content_hash_mismatch: platform content differs from attested content");
   }
+  // Input integrity was verified above; clear the stale field hash so
+  // sealEnvelope mints a fresh one for the bound envelope.
   return sealEnvelope({
     ...env,
     target: { ...env.target, external_id: result.external_id },
+    integrity: { ...env.integrity, envelope_sha256: "" },
   });
 }

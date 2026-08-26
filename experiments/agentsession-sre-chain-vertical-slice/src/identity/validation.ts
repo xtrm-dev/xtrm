@@ -15,7 +15,7 @@ import {
   PROVENANCE_SCHEMA_VERSION,
   type ProvenanceEnvelope,
 } from "./schemas.ts";
-import { computeEnvelopeHash } from "./context.ts";
+import { computeEnvelopeHash, sealEnvelope } from "./context.ts";
 import { sha256String } from "../util/fs.ts";
 import { shortId } from "../util/ids.ts";
 
@@ -42,6 +42,12 @@ export interface TrustedValidationConfig {
   registry: Record<string, unknown>;
   /** principal_set_id -> PrincipalSet document (schema-checked here). */
   principalSets: Record<string, unknown>;
+  /**
+   * When true (post-cutover), envelope bindings carrying a null immutable
+   * account id fail closed — pre-cutover envelopes must be migrated or
+   * re-issued once platform ids exist.
+   */
+  cutoverComplete?: boolean;
   expected?: {
     assignment_id?: string;
     assignment_version?: number;
@@ -49,11 +55,14 @@ export interface TrustedValidationConfig {
 }
 
 const SECRET_PATTERNS = [
-  /gh[pousr]_[A-Za-z0-9]{20,}/, // GitHub tokens
+  /gh[pousr]_[A-Za-z0-9]{20,}/, // GitHub classic tokens
+  /github_pat_[A-Za-z0-9_]{20,}/, // GitHub fine-grained PATs
   /ATATT[A-Za-z0-9_-]{20,}/, // Atlassian API tokens
   /Bearer\s+[A-Za-z0-9._-]+/i,
-  /(api[_-]?key|password|passwd|secret)\s*[:=]\s*\S+/i,
+  /(api[_-]?key|password|passwd|secret|token)\s*[:=]\s*\S+/i,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+  /AKIA[0-9A-Z]{16}/, // AWS access keys
+  /xox[baprs]-[A-Za-z0-9-]+/, // Slack tokens
 ];
 
 /**
@@ -128,6 +137,13 @@ export function validateMutation(
       ) {
         failures.push({ code: "binding_account_mismatch" });
       }
+      if (
+        cfg.cutoverComplete === true &&
+        binding.immutable_account_id !== null &&
+        e.principal_binding.immutable_account_id === null
+      ) {
+        failures.push({ code: "binding_account_mismatch", detail: "null account id after cutover" });
+      }
     }
 
     if (cfg.expected?.assignment_id !== undefined && cfg.expected.assignment_id !== e.assignment_id) {
@@ -196,13 +212,10 @@ export function legacyUnattributedEnvelope(seed: {
     source_cursors: {},
     created_at: seed.created_at,
     integrity: { envelope_sha256: "", signer: null, signature: null },
-  } as ProvenanceEnvelope;
+  } as unknown as ProvenanceEnvelope;
   return computeEnvelopeHashInPlace(unsigned);
 }
 
 function computeEnvelopeHashInPlace(env: ProvenanceEnvelope): ProvenanceEnvelope {
-  return {
-    ...env,
-    integrity: { ...env.integrity, envelope_sha256: computeEnvelopeHash(env) },
-  };
+  return sealEnvelope(env);
 }

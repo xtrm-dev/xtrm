@@ -48,7 +48,7 @@ export const CREDENTIAL_STORAGES = [
   "none",
 ] as const;
 
-const idToken = z.string().regex(/^[a-z0-9][a-z0-9._:/@+-]*$/i);
+const idToken = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._/@+-]*$/);
 
 export const PrincipalBindingSchema = z
   .object({

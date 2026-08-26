@@ -22,10 +22,15 @@ export function renderAuthorityRef(authorityRef: string): string {
   return authorityRef;
 }
 
-/** Compact visible attribution line (first line of projected comment/body). */
+/**
+ * Compact visible attribution line (first line of projected comment/body).
+ * Legacy/unattributed history renders an honest marker instead of an actor.
+ */
 export function compactAttributionLine(env: ProvenanceEnvelope): string {
-  const actor = env.actor_id ?? "unknown";
-  return `XTRM actor: ${actor} · execution: ${env.execution_id} · authority: ${renderAuthorityRef(env.authority_ref)}`;
+  if (env.authorship_mode === "legacy_unattributed") {
+    return `XTRM provenance: legacy_unattributed · authority: ${renderAuthorityRef(env.authority_ref)}`;
+  }
+  return `XTRM actor: ${env.actor_id} · execution: ${env.execution_id} · authority: ${renderAuthorityRef(env.authority_ref)}`;
 }
 
 /** Canonical stable JSON rendering (byte-stable, sorted keys). */
@@ -51,7 +56,23 @@ export function githubTrailers(env: ProvenanceEnvelope): string[] {
   ];
 }
 
-export type JiraClassification = "xtrm_attested" | "self_attested_web";
+/**
+ * Mirrors envelope attribution strength honestly; never upgrades.
+ * `xtrm_attested` appears here ONLY for envelopes whose schema-level refine
+ * guarantees signer+signature; `unattributed` stays unattributed everywhere.
+ */
+export type JiraClassification = "xtrm_attested" | "self_attested_web" | "unattributed";
+
+function classify(strength: "xtrm_attested" | "self_attested_web" | "unattributed"): JiraClassification {
+  if (strength === "xtrm_attested") return "xtrm_attested";
+  if (strength === "unattributed") return "unattributed";
+  return "self_attested_web";
+}
+
+/** Fallback channels cap attestation at self_attested_web; they never upgrade. */
+function downgradeForFallback(c: JiraClassification): JiraClassification {
+  return c === "xtrm_attested" ? "self_attested_web" : c;
+}
 
 export interface JiraCommentProjection {
   /** Full visible comment body including the compact attribution line. */
@@ -76,13 +97,12 @@ export function jiraCommentProjection(
     return {
       body: `${compactAttributionLine(env)}\n\n${visible}`,
       property: { name: "xtrm.provenance", value: renderEnvelopeJson(env) },
-      classification:
-        env.attribution_strength === "self_attested_web" ? "self_attested_web" : "xtrm_attested",
+      classification: classify(env.attribution_strength),
     };
   }
   const footer = `<!-- xtrm.provenance receipt=${env.receipt_id} envelope=${env.integrity.envelope_sha256} -->`;
   return {
     body: `${compactAttributionLine(env)}\n\n${visible}\n${footer}`,
-    classification: "self_attested_web",
+    classification: downgradeForFallback(classify(env.attribution_strength)),
   };
 }

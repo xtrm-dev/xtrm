@@ -17,8 +17,10 @@ import {
 import {
   assembleProvenance,
   bindPlatformResult,
+  computeEnvelopeHash,
   findCallerIdentityKeys,
   MutationPayloadSchema,
+  sealEnvelope,
 } from "../src/identity/context.ts";
 import {
   compactAttributionLine,
@@ -333,5 +335,176 @@ describe("secret hygiene", () => {
   test("rendered projections leak no secret when content is clean", () => {
     const proj = jiraCommentProjection(assembledEnv(), "clean visible", { propertiesSupported: false });
     expect(proj.body + JSON.stringify(proj)).not.toMatch(/gh[pousr]_|ATATT|Bearer\s/);
+  });
+});
+
+describe("review findings — integrity coverage (M1)", () => {
+  test("swapping the signature trips envelope_hash_mismatch", () => {
+    const env = assembledEnv();
+    const swapped = {
+      ...env,
+      integrity: { ...env.integrity, signature: "sig-swapped" },
+    };
+    const res = validateMutation(swapped, CFG());
+    expect(res.ok).toBe(false);
+    expect(res.failures.map((f) => f.code)).toContain("envelope_hash_mismatch");
+  });
+
+  test("hash differs when signer/signature differ", () => {
+    const env = assembledEnv();
+    const a = computeEnvelopeHash({ ...env, integrity: { ...env.integrity, signature: "one" } });
+    const b = computeEnvelopeHash({ ...env, integrity: { ...env.integrity, signature: "two" } });
+    expect(a).not.toBe(b);
+  });
+});
+
+describe("review findings — attribution honesty (M2)", () => {
+  test("legacy envelope projects as unattributed on both jira paths", () => {
+    const legacy = legacyUnattributedEnvelope({
+      cursor: "jira-comment-1000",
+      principal_set_id: "xtrm-web",
+      principal_binding: jiraBinding(),
+      assignment_id: "OPS-TEST",
+      assignment_version: 1,
+      participant_id: "unknown-pre-xtrm",
+      authority_ref: "jira:ISSUE-T:comment:1000",
+      target_kind: "jira_comment",
+      content_sha256: sha("old body"),
+      created_at: "2026-01-02T00:00:00.000Z",
+    });
+    expect(compactAttributionLine(legacy)).toMatch(/^XTRM provenance: legacy_unattributed/);
+    const withProp = jiraCommentProjection(legacy, "v", { propertiesSupported: true });
+    expect(withProp.classification).toBe("unattributed");
+    const withoutProp = jiraCommentProjection(legacy, "v", { propertiesSupported: false });
+    expect(withoutProp.classification).toBe("unattributed");
+  });
+
+  test("signed xtrm_attested envelope downgrades honestly on fallback path only", () => {
+    const signed = sealEnvelope({
+      ...assembledEnv(),
+      attribution_strength: "xtrm_attested",
+      integrity: { envelope_sha256: "", signer: "xtrm-attest", signature: "sig" },
+    } as never);
+    expect(signed.attribution_strength).toBe("xtrm_attested");
+    const propPath = jiraCommentProjection(signed, "v", { propertiesSupported: true });
+    expect(propPath.classification).toBe("xtrm_attested");
+    const fallback = jiraCommentProjection(signed, "v", { propertiesSupported: false });
+    expect(fallback.classification).toBe("self_attested_web");
+  });
+});
+
+describe("review findings — re-seal laundering path (M3)", () => {
+  test("bindPlatformResult refuses a forged envelope whose hash does not verify", () => {
+    const env = assembledEnv();
+    const forged = { ...env, execution_id: "exec-forged", assignment_id: "FORGED" } as typeof env;
+    expect(() => bindPlatformResult(forged, { system: "jira", external_id: "cmt-1" })).toThrow(
+      /envelope_hash_mismatch/,
+    );
+  });
+
+  test("sealEnvelope refuses to re-seal a tampered already-sealed envelope", () => {
+    const env = assembledEnv();
+    const tampered = { ...env, actor_id: "mercury/hive-research-web" } as typeof env;
+    expect(() => sealEnvelope(tampered)).toThrow(/envelope_hash_mismatch/);
+  });
+});
+
+describe("review findings — validation coverage gaps", () => {
+  test("assignment_id mismatch fails closed", () => {
+    const res = validateMutation(assembledEnv(), { ...CFG(), expected: { assignment_id: "OPS-OTHER" } });
+    expect(res.failures.map((f) => f.code)).toContain("assignment_mismatch");
+  });
+
+  test("binding account mismatch fails closed when both ids are present and differ", () => {
+    const env = {
+      ...assembledEnv(),
+      principal_binding: { ...jiraBinding(), immutable_account_id: "acct-ENVELOPE" },
+    } as ReturnType<typeof assembledEnv>;
+    // recompute integrity for the mutated binding so ONLY the config disagrees
+    const resealed = sealEnvelope({ ...env, integrity: { ...env.integrity, envelope_sha256: "" } } as never);
+    const cfgWithAccounts = {
+      registry: CFG().registry,
+      principalSets: {
+        "xtrm-web": {
+          ...PRINCIPAL_SET,
+          bindings: [{ ...jiraBinding(), immutable_account_id: "acct-REAL" }],
+        },
+      },
+    };
+    const res = validateMutation(resealed, cfgWithAccounts);
+    expect(res.ok).toBe(false);
+    expect(res.failures.map((f) => f.code)).toContain("binding_account_mismatch");
+  });
+
+  test("cutoverComplete rejects null account-id bindings post-cutover", () => {
+    const env = assembledEnv(); // binding.immutable_account_id = null
+    const postCutoverCfg = {
+      registry: CFG().registry,
+      principalSets: {
+        "xtrm-web": {
+          ...PRINCIPAL_SET,
+          bindings: [{ ...jiraBinding(), immutable_account_id: "acct-REAL" }],
+        },
+      },
+      cutoverComplete: true,
+    };
+    const res = validateMutation(env, postCutoverCfg);
+    expect(res.failures.map((f) => f.code)).toContain("binding_account_mismatch");
+    // pre-cutover config without the flag stays tolerant (migration window)
+    expect(validateMutation(env, CFG()).ok).toBe(true);
+  });
+
+  test("unknown principal set fails closed", () => {
+    const env = assembledEnv();
+    const res = validateMutation(env, { registry: CFG().registry, principalSets: {} });
+    expect(res.failures.map((f) => f.code)).toContain("principal_set_unknown");
+  });
+
+  test("blank authority_ref fails closed even when hash is consistent", () => {
+    const env = assembledEnv();
+    const blank = {
+      ...env,
+      authority_ref: " ",
+      integrity: { ...env.integrity, envelope_sha256: "" },
+    } as typeof env;
+    blank.integrity.envelope_sha256 = computeEnvelopeHash(blank);
+    const res = validateMutation(blank, CFG());
+    expect(res.ok).toBe(false);
+    expect(res.failures.map((f) => f.code)).toContain("authority_ref_missing");
+  });
+
+  test("assembly rejects legacy authorship mode outright", () => {
+    expect(() =>
+      assembleProvenance(ctxFor(makeActor("mercury/program-coordinator-web")), PAYLOAD, {
+        authorship_mode: "legacy_unattributed" as never,
+        binding: jiraBinding(),
+      }),
+    ).toThrow(/legacy_unattributed_not_assemblable/);
+  });
+
+  test("fine-grained PATs and bare token= are detected by hygiene scan", () => {
+    const patEnv = assembleProvenance(
+      ctxFor(makeActor("mercury/program-coordinator-web")),
+      { ...PAYLOAD, content: "github_pat_11AAAAAAA01234567890_abcdefghijklmnopqrstuvwxyz1234567890" },
+      { authorship_mode: "xtrm_web_direct", binding: jiraBinding() },
+    );
+    expect(validateMutation(patEnv, CFG(), { content: "github_pat_11AAAAAAA01234567890_abcdefghijklmnopqrstuvwxyz1234567890" })
+      .failures.map((f) => f.code))
+      .toContain("secret_material_detected");
+
+    const tokEnv = assembleProvenance(
+      ctxFor(makeActor("mercury/program-coordinator-web")),
+      { ...PAYLOAD, content: "token=abcdef123456" },
+      { authorship_mode: "xtrm_web_direct", binding: jiraBinding() },
+    );
+    expect(
+      validateMutation(tokEnv, CFG(), { content: "token=abcdef123456" }).failures
+        .map((f) => f.code),
+    ).toContain("secret_material_detected");
+  });
+
+  test("receipt ids carry >=64 bits of entropy", () => {
+    const env = assembledEnv();
+    expect(env.receipt_id).toMatch(/^xpr-[0-9a-f]{16}$/);
   });
 });

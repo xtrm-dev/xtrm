@@ -37,4 +37,12 @@ daemon/scheduler. No cryptographic non-repudiation claims: signatures are
 optional until an approved attestation service exists, and unsigned
 receipts must classify `self_attested_web`, never `xtrm_attested`.
 
+Honesty boundary: `validateMutation(...).ok === true` for a
+`legacy_unattributed` envelope proves FORMAT consistency only — unsigned
+evidence carries no authenticity claim (docs/identity/mutation-provenance.md §3).
+
+Post-cutover enforcement: pass `cutoverComplete: true` in the validation
+config to reject envelope bindings that still claim a null immutable
+account id.
+
 Tests: `tests/identity.test.ts` (`bun test tests/identity.test.ts`).
