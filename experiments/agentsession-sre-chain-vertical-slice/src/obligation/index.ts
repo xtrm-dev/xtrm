@@ -651,10 +651,20 @@ export class ObligationLedger {
    * REMAIN uncertain — never silently resolved. Returns what happened so the
    * caller can audit both directions.
    */
-  async settleFromStream(tail: Array<{ channel_id: string; message_id: string; author: { participant_id: string }; correlation_id?: string }>): Promise<{
+  async settleFromStream(rawTail: Array<{ channel_id: string; message_id: string; author: { participant_id: string }; correlation_id?: string }>): Promise<{
     replied: Array<{ obligation_id: string; message_id: string }>;
     unresolved_uncertain: Array<{ obligation_id: string; external_refs: string[] }>;
   }> {
+    const tail = parseArg(
+      z.array(z.object({
+        channel_id: z.string().min(1),
+        message_id: z.string().min(1),
+        author: z.object({ participant_id: z.string().min(1) }).strict(),
+        correlation_id: z.string().min(1).optional(),
+      }).strict()),
+      rawTail,
+      "settleFromStream.tail",
+    );
     const replied: Array<{ obligation_id: string; message_id: string }> = [];
     for (const msg of tail) {
       if (!msg.correlation_id) continue;

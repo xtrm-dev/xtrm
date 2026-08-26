@@ -525,3 +525,32 @@ describe("seam integration: ledger handle → ChannelCommunicationService.reply 
 function stableLine(ev: unknown): string {
   return canonicalEventLine(ObligationEventSchema.parse(ev));
 }
+
+describe("xtrm-1o8 re-review repairs", () => {
+  test("S1: supersede refuses uncertain-pending obligations (same gate as retry)", async () => {
+    const { ledger } = await openedLedger();
+    await ledger.registerRequest({ ...baseInput, idempotency_key: "k-s1" });
+    await ledger.observeExternalReply("ext-s1", "req:k-s1", "chain:t1");
+    let msg = "";
+    try {
+      await ledger.supersede("obl:k-s1", { ...baseInput, idempotency_key: "k-s1b" }, "coord-1");
+    } catch (e) {
+      msg = String((e as Error).message ?? e);
+    }
+    expect(msg).toContain("uncertain_pending");
+    // Nothing landed: old record untouched, still open.
+    expect(ledger.get("obl:k-s1")?.state).toBe("open");
+  });
+
+  test("S2: settleFromStream rejects malformed tail entries with ObligationInputError", async () => {
+    const { ledger } = await openedLedger();
+    await ledger.registerRequest({ ...baseInput, idempotency_key: "k-s2" });
+    let threw = "";
+    try {
+      await ledger.settleFromStream([{ channel_id: "", message_id: "m1", author: { participant_id: "p" } } as never]);
+    } catch (e) {
+      threw = (e as Error).constructor.name + ":" + String((e as Error).message ?? e);
+    }
+    expect(threw).toContain("ObligationInputError");
+  });
+});
