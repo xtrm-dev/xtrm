@@ -124,6 +124,7 @@ function emptyRecord(opened: Extract<ObligationEvent, { type: "obligation.opened
     superseded_by: null,
     settlement_evidence: null,
     pending_external_observations: [],
+    mandatory: input.mandatory ?? false,
   };
 }
 
@@ -210,7 +211,8 @@ export class ObligationLedger {
   private records = new Map<string, ReplyObligationRecord>();
 
   constructor(
-    private readonly journal: ObligationJournal,
+    /** Public-read so FINALIZE-phase settlement ops (xtrm-2mi) append through the same journal; appends remain single-writer per the stance in schemas.ts. */
+    readonly journal: ObligationJournal,
     private readonly opts: LedgerOptions = {},
   ) {}
 

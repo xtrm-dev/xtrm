@@ -88,6 +88,12 @@ export const ReplyObligationRecordSchema = z
     /** Opaque pointer to settlement proof (evidence pointer-first, channels.md). */
     settlement_evidence: OpaqueRef.nullable(),
     /**
+     * FINALIZE enforcement (xtrm-2mi): mandatory inbound obligations block
+     * finalization while unresolved. Default false — legacy journal events
+     * predate this field and load as non-mandatory via safeParse default.
+     */
+    mandatory: z.boolean().default(false),
+    /**
      * UNCERTAIN surface (R2.7): non-empty while an external reply observation
      * awaits reconciliation against committed stream state. The record stays
      * open; uncertain never silently resolves.
@@ -108,6 +114,8 @@ export interface RegisterInput {
   /** Overrides default `req:<idempotency_key>` (used by tests for ambiguity). */
   correlation_id?: string;
   lineage?: { supersedes?: string; retry_of?: string };
+  /** Mandatory inbound: unresolved record blocks FINALIZE (xtrm-2mi). Default false. */
+  mandatory?: boolean;
 }
 
 /** A committed reply observed on the stream (or handed in directly). */
