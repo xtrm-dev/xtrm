@@ -509,6 +509,16 @@ export class ObligationLedger {
   private async supersedeInner(old_id: string, new_input: RegisterInput, actor: string): Promise<ReplyObligationRecord> {
     const rec = this.getOrThrow(old_id);
     this.assertOwner(rec, actor);
+    if (rec.pending_external_observations.length > 0) {
+      // Same R2.7 gate as retry(): superseding would silently transfer an
+      // unconfirmable external effect onto the successor send. cancel() stays
+      // deliberately ungated — it is explicit abandon, not re-send.
+      throw new ObligationError(
+        "uncertain_pending",
+        `obligation ${old_id} carries ${rec.pending_external_observations.length} unresolved external observation(s); reconcile (recordReply/settleFromStream) or abandon (cancel) before supersede`,
+        [...rec.pending_external_observations],
+      );
+    }
     if (rec.state !== "open" && rec.state !== "replied") {
       throw new ObligationError("invalid_transition", `supersede requires open|replied; ${old_id} is "${rec.state}"`);
     }
