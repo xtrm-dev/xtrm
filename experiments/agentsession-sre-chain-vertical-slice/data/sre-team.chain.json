@@ -20,47 +20,81 @@
       {
         "step_id": "coordinator-entry",
         "class": "step",
-        "specialist": { "name": "chain-coordinator" },
+        "specialist": {
+          "name": "chain-coordinator"
+        },
         "depends_on": [],
         "routes": []
       },
       {
         "step_id": "explorer",
         "class": "advisor",
-        "specialist": { "name": "explorer" },
-        "depends_on": ["coordinator-entry"],
+        "specialist": {
+          "name": "explorer"
+        },
+        "depends_on": [
+          "coordinator-entry"
+        ],
         "routes": []
       },
       {
         "step_id": "observability",
         "class": "advisor",
-        "specialist": { "name": "observability-analyst" },
-        "depends_on": ["coordinator-entry"],
+        "specialist": {
+          "name": "observability-analyst"
+        },
+        "depends_on": [
+          "coordinator-entry"
+        ],
         "routes": []
       },
       {
         "step_id": "diagnostician",
         "class": "step",
-        "specialist": { "name": "sre-diagnostician" },
-        "depends_on": ["explorer", "observability"],
+        "specialist": {
+          "name": "sre-diagnostician"
+        },
+        "depends_on": [
+          "explorer",
+          "observability"
+        ],
         "routes": []
       },
       {
         "step_id": "reviewer",
         "class": "gate",
-        "specialist": { "name": "reviewer" },
-        "depends_on": ["diagnostician"],
-        "routes": [
-          { "gate": "reviewer", "verdict": "pass", "target": "coordinator-close" },
-          { "gate": "reviewer", "verdict": "fail", "target": "coordinator-close" }
+        "specialist": {
+          "name": "reviewer"
+        },
+        "depends_on": [
+          "diagnostician"
         ],
-        "remediation": { "back_to": "diagnostician", "max_iterations": 2 }
+        "routes": [
+          {
+            "gate": "reviewer",
+            "verdict": "pass",
+            "target": "coordinator-close"
+          },
+          {
+            "gate": "reviewer",
+            "verdict": "fail",
+            "target": "coordinator-close"
+          }
+        ],
+        "remediation": {
+          "back_to": "diagnostician",
+          "max_iterations": 2
+        }
       },
       {
         "step_id": "coordinator-close",
         "class": "step",
-        "specialist": { "name": "chain-coordinator" },
-        "depends_on": ["reviewer"],
+        "specialist": {
+          "name": "chain-coordinator"
+        },
+        "depends_on": [
+          "reviewer"
+        ],
         "routes": []
       }
     ]
@@ -69,7 +103,8 @@
     "migrated_from": "src/chain/topology.ts STEP_DEFS",
     "deviations": [
       "class 'coordinator' is not expressible under StepClassSchema (step|gate|advisor); entry/close coordinator steps authored as 'step'",
-      "per-step model/fallback_model are runtime materialization bindings, not authored-form fields (ADR-001 §2)"
+      "per-step model/fallback_model are runtime materialization bindings, not authored-form fields (ADR-001 \u00a72)",
+      "F3: legacy PARTIAL verdict has no authored route literal (pass|fail|escalate); expressed as bounded remediation loop (back_to diagnostician, cap 2) per recorded remediation-before-routes precedence; FAIL-vs-PARTIAL terminal disposition is runtime semantics."
     ]
   }
 }
