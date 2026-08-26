@@ -734,6 +734,13 @@ describe("comm adversarial/recovery acceptance (xtrm-1xn)", () => {
     expect(w.ledger.get("obl:k5")!.state).toBe("open");
     expect(report.unresolved_uncertain).toEqual([]);
 
+    // Command surface backs that comment directly (xtrm-1o8): two OPEN
+    // obligations sharing "req:shared" make recordReply REFUSE outright with
+    // typed ambiguous_correlation, listing both candidates.
+    await expect(
+      w.ledger.recordReply("req:shared", { channel_id: CH, message_id: rep.message_id, responder: "pB" }),
+    ).rejects.toMatchObject({ code: "ambiguous_correlation" });
+
     // Command surface strictness: the same physical message cannot be re-used
     // as the reply for a different obligation…
     await expect(
