@@ -1,0 +1,75 @@
+{
+  "schema_version": "xtrm.chain-source.v1",
+  "source_kind": "json",
+  "source_id": "sre-team",
+  "name": "sre-team",
+  "version": "1.0.0",
+  "title": "SRE triage chain",
+  "description": "Data-defined migration of the hard-coded sre-team vertical-slice topology (experiments/agentsession-sre-chain-vertical-slice/src/chain/topology.ts).",
+  "provenance": {
+    "origin": "migration:hard-coded-topology:src/chain/topology.ts@9a9a0c8 (xtrm-clg)",
+    "refs": [
+      "docs/runtime/reconciliation/runtime-decision-matrix.md#Q27",
+      "docs/runtime/adr/001-chain-authoring-compilation.md"
+    ]
+  },
+  "topology": {
+    "entry_step": "coordinator-entry",
+    "policy": {},
+    "steps": [
+      {
+        "step_id": "coordinator-entry",
+        "class": "step",
+        "specialist": { "name": "chain-coordinator" },
+        "depends_on": [],
+        "routes": []
+      },
+      {
+        "step_id": "explorer",
+        "class": "advisor",
+        "specialist": { "name": "explorer" },
+        "depends_on": ["coordinator-entry"],
+        "routes": []
+      },
+      {
+        "step_id": "observability",
+        "class": "advisor",
+        "specialist": { "name": "observability-analyst" },
+        "depends_on": ["coordinator-entry"],
+        "routes": []
+      },
+      {
+        "step_id": "diagnostician",
+        "class": "step",
+        "specialist": { "name": "sre-diagnostician" },
+        "depends_on": ["explorer", "observability"],
+        "routes": []
+      },
+      {
+        "step_id": "reviewer",
+        "class": "gate",
+        "specialist": { "name": "reviewer" },
+        "depends_on": ["diagnostician"],
+        "routes": [
+          { "gate": "reviewer", "verdict": "pass", "target": "coordinator-close" },
+          { "gate": "reviewer", "verdict": "fail", "target": "coordinator-close" }
+        ],
+        "remediation": { "back_to": "diagnostician", "max_iterations": 2 }
+      },
+      {
+        "step_id": "coordinator-close",
+        "class": "step",
+        "specialist": { "name": "chain-coordinator" },
+        "depends_on": ["reviewer"],
+        "routes": []
+      }
+    ]
+  },
+  "source_metadata": {
+    "migrated_from": "src/chain/topology.ts STEP_DEFS",
+    "deviations": [
+      "class 'coordinator' is not expressible under StepClassSchema (step|gate|advisor); entry/close coordinator steps authored as 'step'",
+      "per-step model/fallback_model are runtime materialization bindings, not authored-form fields (ADR-001 §2)"
+    ]
+  }
+}
