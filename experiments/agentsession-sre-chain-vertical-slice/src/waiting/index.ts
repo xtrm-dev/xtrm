@@ -186,7 +186,7 @@ export class WaitingRegistry {
    *  - exists and is OPEN (unknown_obligation / obligation_not_open);
    *  - direction check (borrowed from hzb): the ledger record's requester
    *    must equal THIS activation's participant_id — you wait only on your
-   *    own outstanding requests (wrong_requester);
+   *    own outstanding requests (wrong_direction);
    *  - self-target refusal: expected_responders must not include the waiter
    *    itself (self_target) — waiting on your own request for your own reply
    *    is structurally a deadlock;
