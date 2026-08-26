@@ -213,7 +213,7 @@ describe("waiting state + scheduler intents (xtrm-sf3)", () => {
     ).load();
     outcomes = await later.expireWaiters();
     expect(outcomes).toHaveLength(1);
-    expect(outcomes[0]!.intent_id).toBe(expiryIntentId("act-1"));
+    expect(outcomes[0]!.intent_id).toBe(expiryIntentId("act-1", 0));
 
     const rec = later.get("act-1")!;
     expect(rec.state).toBe("resumed_pending_dispatch");
@@ -277,5 +277,44 @@ describe("waiting state + scheduler intents (xtrm-sf3)", () => {
     expect(a[1]).toEqual(b[1]);
     // Sorted, deduped obligation_ids in the durable event.
     expect(JSON.parse(a[0][0]!).obligation_ids).toEqual(["obl:k1", "obl:k2"]);
+  });
+});
+
+describe("expiry intent exactness across re-entries (review finding 1)", () => {
+  test("two logical expiries of one activation produce two distinct intents", async () => {
+    const w = await world();
+    await openObligation(w, "k1", "p1", ["p2"]);
+    await openObligation(w, "k2", "p1", ["p2"]);
+    const reg2J = memWaitJournal();
+    const reg2I = memIntentJournal();
+    // Same journals are not shared; instead reuse w's journals via a second registry is overkill —
+    // drive the existing registry twice.
+    let t = 5_000;
+    const reg = await new WaitingRegistry(
+      w.ledger,
+      { append: w.waitJ.append.bind(w.waitJ), readAll: async () => (await w.waitJ.readAll()) },
+      { append: w.intentJ.append.bind(w.intentJ), readAll: async () => (await w.intentJ.readAll()) },
+      { now: () => (t += 10_000) },
+    ).load();
+
+    void reg2J; void reg2I;
+
+    await reg.enterWaiting("act-1", "p1", ["obl:k1"], 20_000);
+    let out = await reg.expireWaiters();
+    expect(out).toHaveLength(1);
+    const firstId = out[0]!.intent_id;
+    expect(firstId).toContain(":expiry:g0");
+
+    // Re-enter after the first expiry; the second logical wake must get a NEW id.
+    await reg.enterWaiting("act-1", "p1", ["obl:k2"], 40_000);
+    out = await reg.expireWaiters();
+    expect(out).toHaveLength(1);
+    const secondId = out[0]!.intent_id;
+    expect(secondId).toContain(":expiry:g1");
+    expect(secondId).not.toBe(firstId);
+
+    // Both intents durable in the journal.
+    const all = await w.intentJ.readAll();
+    expect(all.map((i) => i.intent_id)).toEqual(expect.arrayContaining([firstId, secondId]));
   });
 });

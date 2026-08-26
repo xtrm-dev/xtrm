@@ -66,7 +66,6 @@ export * from "./schemas.ts";
 export type WaitingErrorCode =
   | "unknown_obligation"
   | "obligation_not_open"
-  | "wrong_requester"
   | "self_target"
   | "mutual_wait"
   | "wait_ceiling_exceeded"
@@ -199,13 +198,22 @@ export class WaitingRegistry {
    *
    * Ceiling: obligation_ids are deduped + sorted (byte-deterministic events),
    * then capped at MAX_OBLIGATIONS_PER_WAIT (wait_ceiling_exceeded).
+   *
+   * Concurrency stance: validation + cycle check run against the projection
+   * as of call time; concurrent interleaved enterWaiting calls can each pass
+   * validation against stale state. Hosts MUST serialize registry commands
+   * per scheduler (single-scheduler invariant makes this the realistic shape);
+   * multi-writer serialization is the store's concern, mirroring the ledger.
    */
   async enterWaiting(activation_id: string, participant_id: string, obligationIds: string[], deadlineMs?: number | null): Promise<ActivationWaitRecord> {
     const current = this.waits.get(activation_id);
-    if (current && current.state !== "running") {
+    // Re-entry from resumed_pending_dispatch consumes the outstanding resume
+    // dispatch (the agent acted on its wake); only an ACTIVELY waiting
+    // activation may not re-enter (single-scheduler invariant).
+    if (current && current.state === "waiting_on_channel") {
       throw new WaitingError(
         "invalid_transition",
-        `activation "${activation_id}" is "${current.state}"; only "running" activations may enter waiting (single-scheduler invariant)`,
+        `activation "${activation_id}" is "${current.state}"; already actively waiting (single-scheduler invariant)`,
       );
     }
     const unique = [...new Set(obligationIds)].sort();
@@ -361,11 +369,16 @@ export class WaitingRegistry {
   async expireWaiters(): Promise<ResumeOutcome[]> {
     const now = this.nowMs();
     const outcomes: ResumeOutcome[] = [];
+    const allEvents = await this.waitingJournal.readAll();
     const due = [...this.waits.values()]
       .filter((r) => r.state === "waiting_on_channel" && r.deadline_ms !== null && r.deadline_ms < now)
       .sort((a, b) => a.activation_id.localeCompare(b.activation_id));
     for (const rec of due) {
-      const intentId = expiryIntentId(rec.activation_id);
+      // Generation counted BEFORE this entry's own entered event is consumed:
+      // entries are the Nth entered event for the activation (N starts at 1).
+      const priorEntries = countPriorEntries(allEvents, rec.activation_id);
+      const waitGeneration = Math.max(priorEntries - 1, 0);
+      const intentId = expiryIntentId(rec.activation_id, waitGeneration);
       const firstObligation = rec.waiting_reason?.obligation_ids[0] ?? "unknown";
       const emitted = await this.emitIntent({
         schema_version: WAITING_STATE_SCHEMA_VERSION,
@@ -435,6 +448,17 @@ export function resumeIntentId(activation_id: string, obligation_id: string, rep
   return `rintent:${activation_id}:${obligation_id}:${reply_message_id}`;
 }
 
-export function expiryIntentId(activation_id: string): string {
-  return `rintent:${activation_id}:expiry`;
+export function expiryIntentId(activation_id: string, waitGeneration: number): string {
+  return `rintent:${activation_id}:expiry:g${waitGeneration}`;
+}
+
+/**
+ * Wait generation = number of prior waiting.entered events for this
+ * activation (0-based for the current entry). Distinct logical expiries of
+ * distinct wait entries therefore never share an intent id — a re-entry
+ * after an expired wake produces a fresh id, so the scheduler receives one
+ * signal per logical wake (R2.8 "exact").
+ */
+function countPriorEntries(events: WaitingEvent[], activation_id: string): number {
+  return events.filter((e) => e.type === "waiting.entered" && e.activation_id === activation_id).length;
 }
