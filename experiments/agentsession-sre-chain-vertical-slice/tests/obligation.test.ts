@@ -3,11 +3,14 @@ import {
   canonicalEventLine,
   ObligationError,
   ObligationEventSchema,
+  ObligationInputError,
   ObligationLedger,
   projectAll,
+  REPLY_OBLIGATION_SCHEMA_VERSION,
   type ObligationEvent,
   type ObligationJournal,
 } from "../src/obligation/index.ts";
+import { ChannelCommunicationService, type ChannelCommStore, type ParticipantCursors, type StoredEnvelope } from "../src/channel-comm/index.ts";
 
 const T0 = 1_700_000_000_000;
 /** Deterministic injected clock: each ledger op advances 1s. */
@@ -108,6 +111,12 @@ describe("obligation ledger — atomic request/reply correlation (xtrm-hzb)", ()
     const ledger3 = await new ObligationLedger(journal, { now: clock }).load();
     expect(ledger3.get("obl:doomed")?.state).toBe("expired");
     expect(ledger3.listOpen().map((r) => r.obligation_id)).toEqual(["obl:live"]);
+
+    // Whole-projection reload equality: EVERY record (all states) is byte-identical
+    // after restart — not just spot-checked ids.
+    const projectionBeforeRestart = ledger2.list();
+    const ledger4 = await new ObligationLedger(journal, { now: clock }).load();
+    expect(ledger4.list()).toEqual(projectionBeforeRestart);
   });
 
   test("consumed-once: double reply rejected as typed error", async () => {
@@ -298,6 +307,217 @@ describe("obligation ledger — atomic request/reply correlation (xtrm-hzb)", ()
     expect(a.lines).toEqual(b.lines);
     expect(a.projection).toEqual(b.projection);
     expect(a.lines.every((l) => l === stableLine(JSON.parse(l)))).toBe(true); // canonical form throughout
+  });
+  test("writer mutex: interleaved async callers cannot append duplicate contradictory events", async () => {
+    const { ledger, journal } = await openedLedger();
+    await ledger.registerRequest({ ...baseInput, idempotency_key: "k1" });
+
+    // Two replies racing on the same correlation: exactly ONE replied event may land.
+    const race = await Promise.allSettled([
+      ledger.recordReply("req:k1", { channel_id: "chain:t1", message_id: "m1", responder: "p2" }),
+      ledger.recordReply("req:k1", { channel_id: "chain:t1", message_id: "m2", responder: "p2" }),
+    ]);
+    expect(race.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(journal.lines().filter((l) => l.includes('"type":"obligation.replied"'))).toHaveLength(1);
+
+    // Concurrent registrations of DISTINCT keys all land complete and distinct.
+    await Promise.all([
+      ledger.registerRequest({ ...baseInput, idempotency_key: "a" }),
+      ledger.registerRequest({ ...baseInput, idempotency_key: "b" }),
+      ledger.registerRequest({ ...baseInput, idempotency_key: "c" }),
+    ]);
+    // Same key raced concurrently: idempotency holds under interleave — one opened event only.
+    await Promise.all([
+      ledger.registerRequest({ ...baseInput, idempotency_key: "d" }),
+      ledger.registerRequest({ ...baseInput, idempotency_key: "d" }),
+    ]);
+    const events = await journal.readAll();
+    expect(events.filter((e) => e.type === "obligation.opened").map((e) => e.obligation_id).sort()).toEqual([
+      "obl:a", "obl:b", "obl:c", "obl:d", "obl:k1",
+    ]);
+    expect([...projectAll(events).keys()].sort()).toEqual(["obl:a", "obl:b", "obl:c", "obl:d", "obl:k1"]);
+  });
+
+  test("uncertain-replay gate: retry refuses unresolved observations until explicit reconcile-or-abandon", async () => {
+    const { ledger } = await openedLedger();
+    await ledger.registerRequest({ ...baseInput, idempotency_key: "old" });
+    await ledger.observeExternalReply("transport:e1", "req:old", "chain:t1");
+
+    try {
+      await ledger.retry("obl:old", { ...baseInput, idempotency_key: "new" }, "coord-1");
+      throw new Error("expected rejection");
+    } catch (e) {
+      const err = e as ObligationError;
+      expect(err.code).toBe("uncertain_pending");
+      expect(err.candidates).toEqual(["transport:e1"]);
+    }
+    // Refusal wrote NOTHING: old stays open with its observation intact.
+    expect(ledger.get("obl:old")?.state).toBe("open");
+    expect(ledger.get("obl:old")?.pending_external_observations).toEqual(["transport:e1"]);
+
+    // Explicit RECONCILE unlocks retry.
+    await ledger.settleFromStream([
+      { channel_id: "chain:t1", message_id: "chain:t1#2", author: { participant_id: "p2" }, correlation_id: "req:old" },
+    ]);
+    const succ = await ledger.retry("obl:old", { ...baseInput, idempotency_key: "new" }, "coord-1");
+    expect(succ.lineage.retry_of).toBe("obl:old");
+    expect(ledger.get("obl:old")?.state).toBe("superseded");
+  });
+
+  test("public API boundary rejects malformed inputs as typed ObligationInputError, never raw ZodError", async () => {
+    const { ledger } = await openedLedger();
+
+    // registerRequest: empty idempotency_key + missing required field → typed problems.
+    for (const bad of [
+      { ...baseInput, idempotency_key: "" },
+      { idempotency_key: "x", channel_id: "chain:t1", requester: "coord-1" } as unknown as Record<string, unknown>,
+      { ...baseInput, idempotency_key: "x", deadline_ms: -5 },
+    ]) {
+      try {
+        await ledger.registerRequest(bad as never);
+        throw new Error("expected rejection");
+      } catch (e) {
+        expect(e).toBeInstanceOf(ObligationInputError);
+        expect((e as ObligationInputError).code).toBe("invalid_input");
+        expect((e as ObligationInputError).problems.length).toBeGreaterThan(0);
+        expect((e as Error).name).not.toBe("ZodError");
+      }
+    }
+
+    // recordReply / confirmRequestSent / settle argument shapes parsed at the same boundary.
+    await ledger.registerRequest({ ...baseInput, idempotency_key: "ok" });
+    await expect(
+      ledger.recordReply("req:ok", { channel_id: "chain:t1", message_id: "", responder: "p2" }),
+    ).rejects.toBeInstanceOf(ObligationInputError);
+    await expect(
+      ledger.recordReply("", { channel_id: "chain:t1", message_id: "m", responder: "p2" }),
+    ).rejects.toBeInstanceOf(ObligationInputError);
+    await expect(ledger.confirmRequestSent("obl:ok", { message_id: "m", seq: -1 })).rejects.toBeInstanceOf(ObligationInputError);
+    await expect(ledger.settle("obl:ok", "")).rejects.toBeInstanceOf(ObligationInputError);
+    // Nothing above mutated the journal beyond the single valid registration.
+    expect(ledger.list()).toHaveLength(1);
+  });
+
+  test("reconciliation-on-load: voided-without-evidence surfaced via injected predicate, history untouched", async () => {
+    const journal = memJournal();
+    const sv = REPLY_OBLIGATION_SCHEMA_VERSION;
+    // Hand-crafted two-journal crash gap: obl:gap was voided in the ledger journal but its
+    // evidence entry never landed; obl:ok has both sides.
+    await journal.append({ schema_version: sv, type: "obligation.opened", obligation_id: "obl:gap", at_ms: T0, input: { ...baseInput, idempotency_key: "gap" } });
+    await journal.append({ schema_version: sv, type: "obligation.voided", obligation_id: "obl:gap", at_ms: T0 + 1_000, reason: "crash-window", cancelled_by: "coord-1" });
+    await journal.append({ schema_version: sv, type: "obligation.opened", obligation_id: "obl:ok", at_ms: T0 + 2_000, input: { ...baseInput, idempotency_key: "ok" } });
+    await journal.append({ schema_version: sv, type: "obligation.voided", obligation_id: "obl:ok", at_ms: T0 + 3_000, reason: "clean", cancelled_by: "coord-1" });
+
+    let evidenceIds = new Set(["obl:ok"]);
+    const ledger = await new ObligationLedger(journal, { now: tickClock(), evidenceExists: async (id) => evidenceIds.has(id) }).load();
+    // Gap DETECTED and reported with forensics; clean record absent.
+    expect(ledger.reconciliation.voided_without_evidence).toEqual([
+      { obligation_id: "obl:gap", voided_at_ms: T0 + 1_000, cancelled_by: "coord-1" },
+    ]);
+    // Detection ONLY: the record itself is NOT auto-mutated.
+    expect(ledger.get("obl:gap")?.state).toBe("voided");
+
+    // Once evidence exists, reload reports clean.
+    evidenceIds = new Set(["obl:ok", "obl:gap"]);
+    const relisted = await new ObligationLedger(journal, { now: tickClock(), evidenceExists: async (id) => evidenceIds.has(id) }).load();
+    expect(relisted.reconciliation.voided_without_evidence).toEqual([]);
+
+    // No predicate configured → no audit, empty report, no crash.
+    const plain = await new ObligationLedger(journal, { now: tickClock() }).load();
+    expect(plain.reconciliation.voided_without_evidence).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Seam integration proof (xtrm-1o8): ledger replyHandle output drives
+// ChannelCommunicationService.reply() end to end.
+// ---------------------------------------------------------------------------
+
+function fakeCommStore(): ChannelCommStore {
+  const messages: StoredEnvelope[] = [];
+  const cursors = new Map<string, ParticipantCursors>();
+  return {
+    async append(env) {
+      messages.push(structuredClone(env));
+    },
+    async readChannel(filter) {
+      return messages.filter((m) => !filter?.channel_id || m.channel_id === filter.channel_id).map((m) => structuredClone(m));
+    },
+    async findByIdempotencyKey(key) {
+      const hit = messages.find((m) => m.idempotency_key === key);
+      return hit ? structuredClone(hit) : null;
+    },
+    async getCursors(pid) {
+      return cursors.get(pid) ?? { last_read_seq: 0, last_ack_seq: 0 };
+    },
+    async setCursors(pid, c) {
+      cursors.set(pid, structuredClone(c));
+    },
+  };
+}
+
+describe("seam integration: ledger handle → ChannelCommunicationService.reply (xtrm-1o8)", () => {
+  test("ordering contract: unconfirmed handle (request_message_id='') fails reply()'s stream-scan; confirm first, then reply passes", async () => {
+    const NOW = 1_700_000_000_000;
+    const store = fakeCommStore();
+    const requester = new ChannelCommunicationService({ participant_id: "coord-1", participant_class: "coordinator" }, store, { now: () => NOW });
+    const responder = new ChannelCommunicationService({ participant_id: "p2", participant_class: "participant" }, store, { now: () => NOW });
+    const { ledger } = await openedLedger();
+
+    // Ledger-first registration, THEN the real send through channel-comm.
+    await ledger.registerRequest({ ...baseInput, idempotency_key: "k1" });
+    const req = await requester.request({
+      channel_id: "chain:t1",
+      kind: "work.turn",
+      body: { summary: "please check", refs: { result_id: "r1" } },
+      audience: { action_targets: ["p2"], visibility: "chain" },
+      idempotency_key: "k1",
+    });
+    expect(req.intent.request_id).toBe("req:k1"); // default correlation aligns with the ledger's
+
+    // ORDERING CONTRACT: replying against the UNCONFIRMED handle must NOT pass
+    // reply()'s double-reply stream scan — with request_message_id="" the request
+    // message itself ("chain:t1#1" !== "") counts as a prior correlated reply.
+    const unconfirmedHandle = ObligationLedger.replyHandle(ledger.get("obl:k1")!);
+    expect(unconfirmedHandle.request_message_id).toBe("");
+    const ackDraft = {
+      channel_id: "chain:t1",
+      kind: "work.ack",
+      body: { refs: [req.message_id], decision: "accept" },
+      audience: { action_targets: ["coord-1"], visibility: "targets" as const },
+      correlation_id: "req:k1",
+    };
+    await expect(responder.reply(unconfirmedHandle, { ...ackDraft, idempotency_key: "early" })).rejects.toMatchObject({
+      code: "already_replied",
+    });
+    // The premature rejection wrote NOTHING consumable by the ledger.
+    expect(ledger.get("obl:k1")?.state).toBe("open");
+
+    // Confirm first: request_ref completed from the REAL send result…
+    await ledger.confirmRequestSent("obl:k1", { message_id: req.message_id, seq: req.seq });
+    // …and NOW the same-shaped reply passes the stream scan (request itself excluded)
+    // and lands on the stream; the ledger then consumes it atomically.
+    const out = await responder.reply(ObligationLedger.replyHandle(ledger.get("obl:k1")!), { ...ackDraft, idempotency_key: "proper" });
+    const consumed = await ledger.recordReply("req:k1", { channel_id: "chain:t1", message_id: out.message_id, responder: "p2" });
+    expect(consumed.state).toBe("replied");
+    expect(consumed.request_ref.message_id).toBe(req.message_id);
+  });
+
+  test("ambiguous_correlation command surface: two open obligations sharing one correlation refuse recordReply outright", async () => {
+    const { ledger } = await openedLedger();
+    await ledger.registerRequest({ ...baseInput, idempotency_key: "a", correlation_id: "req:shared" });
+    await ledger.registerRequest({ ...baseInput, idempotency_key: "b", correlation_id: "req:shared" });
+    try {
+      await ledger.recordReply("req:shared", { channel_id: "chain:t1", message_id: "m1", responder: "p2" });
+      throw new Error("expected rejection");
+    } catch (e) {
+      const err = e as ObligationError;
+      expect(err.code).toBe("ambiguous_correlation");
+      expect(err.candidates.sort()).toEqual(["obl:a", "obl:b"]);
+    }
+    // Neither candidate absorbed anything: both stay open, journal holds zero replied events.
+    expect(ledger.get("obl:a")?.state).toBe("open");
+    expect(ledger.get("obl:b")?.state).toBe("open");
   });
 });
 

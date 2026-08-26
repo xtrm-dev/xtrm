@@ -31,10 +31,28 @@
  * LINEAGE (pi-intercom pattern, lineage-only): supersede/cancel/retry write
  * bookkeeping events with route-ownership checks (requester only); retryOf
  * NEVER auto-redelivers anything — no send happens anywhere in this module.
+ *
+ * UNCERTAIN-REPLAY GATE (xtrm-1o8, R2.7): retry() REFUSES an obligation with
+ * unresolved pending_external_observations (`uncertain_pending`) — superseding
+ * it would silently abandon an external effect we cannot confirm. The caller
+ * must reconcile explicitly (recordReply / settleFromStream) or abandon
+ * explicitly (cancel). Send-side uncertainty ITSELF is never decided here:
+ * detecting "the send may have landed" (timeout, transport ambiguity) and
+ * surfacing it via observeExternalReply() is the caller/transport layer's duty.
+ *
+ * WRITER SERIALIZATION (xtrm-1o8): every mutating command runs its whole
+ * validate→append→refold critical section behind an in-ledger promise-chain
+ * mutex, so interleaved async callers can never append against a stale
+ * projection fold. Cross-process serialization remains the store's concern
+ * (schemas.ts CONCURRENCY STANCE).
  */
 
+import { z } from "zod";
 import {
   ObligationEventSchema,
+  RegisterInputSchema,
+  ReplyRefSchema,
+  SentConfirmationSchema,
   REPLY_OBLIGATION_SCHEMA_VERSION,
   type Lineage,
   type ObligationEvent,
@@ -55,6 +73,7 @@ export { StoredEnvelopeSchema, type StoredEnvelope } from "../channel-comm/index
 export type ObligationErrorCode =
   | "unknown_correlation"
   | "ambiguous_correlation"
+  | "uncertain_pending"
   | "already_replied"
   | "wrong_direction"
   | "correlation_mismatch"
@@ -72,6 +91,39 @@ export class ObligationError extends Error {
     this.code = code;
     this.candidates = candidates;
   }
+}
+
+/**
+ * Boundary-validation rejection (xtrm-1o8): typed NormalizationError-style
+ * problem list — public API arguments are never rejected with raw ZodErrors.
+ */
+export interface ObligationInputProblem {
+  path: string;
+  message: string;
+}
+
+export class ObligationInputError extends Error {
+  readonly code = "invalid_input";
+  readonly problems: ObligationInputProblem[];
+  constructor(source: string, problems: ObligationInputProblem[]) {
+    super(`[invalid_input] ${source}: ${problems.map((pr) => `${pr.path}: ${pr.message}`).join("; ")}`);
+    this.name = "ObligationInputError";
+    this.problems = problems;
+  }
+}
+
+const NonEmptyId = z.string().min(1);
+
+/** Single parse point at the public API boundary: typed problems, never raw ZodErrors. */
+function parseArg<T>(schema: z.ZodType<T>, value: unknown, source: string): T {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw new ObligationInputError(
+      source,
+      result.error.issues.map((i) => ({ path: i.path.join(".") || "(root)", message: i.message })),
+    );
+  }
+  return result.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,10 +257,47 @@ export function projectAll(events: ObligationEvent[]): Map<string, ReplyObligati
 export interface LedgerOptions {
   /** Injectable clock for determinism; defaults to Date.now. */
   now?: () => number;
+  /**
+   * Two-journal atomicity audit (xtrm-1o8, from xtrm-2mi review): predicate over the
+   * companion evidence journal — does settlement evidence exist for this obligation?
+   * Injected because THIS module owns only the ledger journal. When provided,
+   * load() detects voided-without-evidence records (crash between the two appends)
+   * and surfaces them on `reconciliation`. DETECTION ONLY — history is never mutated.
+   */
+  evidenceExists?: (obligation_id: string) => Promise<boolean>;
+}
+
+/** Typed reconciliation-on-load report. Detection-only findings, no auto-repair. */
+export interface LedgerReconciliationReport {
+  /** Voided in the ledger journal but missing companion evidence. */
+  voided_without_evidence: Array<{ obligation_id: string; voided_at_ms: number | null; cancelled_by: string | undefined }>;
 }
 
 export class ObligationLedger {
   private records = new Map<string, ReplyObligationRecord>();
+  /** Promise-chain writer mutex tail; every mutating command chains onto it. */
+  private chain: Promise<unknown> = Promise.resolve();
+  private reconciliationReport: LedgerReconciliationReport = { voided_without_evidence: [] };
+
+  /**
+   * In-ledger append/command mutex (promise-chain serialization): the chained
+   * critical sections make validate→append→refold sequential even when callers
+   * interleave awaits. Cross-process writers remain the STORE's concern
+   * (schemas.ts CONCURRENCY STANCE) — this guards one ledger instance only.
+   */
+  private exclusive<T>(body: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(body);
+    this.chain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  /** Reconciliation-on-load findings (empty until a load() ran; detection-only). */
+  get reconciliation(): LedgerReconciliationReport {
+    return structuredClone(this.reconciliationReport);
+  }
 
   constructor(
     /** Public-read so FINALIZE-phase settlement ops (xtrm-2mi) append through the same journal; appends remain single-writer per the stance in schemas.ts. */
@@ -220,10 +309,32 @@ export class ObligationLedger {
     return this.opts.now ? this.opts.now() : Date.now();
   }
 
-  /** Reload projection from persisted events. Idempotent; call once at startup. */
+  /**
+   * Reload projection from persisted events. Idempotent; call once at startup.
+   * With `evidenceExists` configured, also runs the two-journal atomicity audit;
+   * findings surface on `reconciliation` — voided-without-evidence records are
+   * REPORTED, never auto-mutated.
+   */
   async load(): Promise<this> {
     this.records = projectAll(await this.journal.readAll());
+    this.reconciliationReport = await this.reconcileOnLoad();
     return this;
+  }
+
+  private async reconcileOnLoad(): Promise<LedgerReconciliationReport> {
+    const report: LedgerReconciliationReport = { voided_without_evidence: [] };
+    if (!this.opts.evidenceExists) return report;
+    for (const rec of this.records.values()) {
+      if (rec.state !== "voided") continue;
+      if (!(await this.opts.evidenceExists(rec.obligation_id))) {
+        report.voided_without_evidence.push({
+          obligation_id: rec.obligation_id,
+          voided_at_ms: rec.voided_at_ms,
+          cancelled_by: rec.lineage.cancelled_by,
+        });
+      }
+    }
+    return report;
   }
 
   private async append(event: ObligationEvent): Promise<void> {
@@ -244,6 +355,11 @@ export class ObligationLedger {
    * unchanged (completed idempotency key returns durable result, R2.6).
    */
   async registerRequest(input: RegisterInput): Promise<ReplyObligationRecord> {
+    const checked = parseArg(RegisterInputSchema, input, "registerRequest.input");
+    return this.exclusive(() => this.registerRequestInner(checked));
+  }
+
+  private async registerRequestInner(input: RegisterInput): Promise<ReplyObligationRecord> {
     const id = `obl:${input.idempotency_key}`;
     const existing = this.records.get(id);
     if (existing) return existing;
@@ -267,16 +383,20 @@ export class ObligationLedger {
 
   /** Complete request_ref after the send resolved. Purely additive forensics. */
   async confirmRequestSent(obligation_id: string, sent: { message_id: string; seq: number }): Promise<ReplyObligationRecord> {
-    this.getOrThrow(obligation_id);
-    await this.append({
-      schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
-      type: "obligation.request_sent",
-      obligation_id,
-      at_ms: this.nowMs(),
-      message_id: sent.message_id,
-      seq: sent.seq,
+    const id = parseArg(NonEmptyId, obligation_id, "confirmRequestSent.obligation_id");
+    const confirmed = parseArg(SentConfirmationSchema, sent, "confirmRequestSent.sent");
+    return this.exclusive(async () => {
+      this.getOrThrow(id);
+      await this.append({
+        schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
+        type: "obligation.request_sent",
+        obligation_id: id,
+        at_ms: this.nowMs(),
+        message_id: confirmed.message_id,
+        seq: confirmed.seq,
+      });
+      return structuredClone(this.records.get(id)!);
     });
-    return structuredClone(this.records.get(obligation_id)!);
   }
 
   /**
@@ -287,7 +407,13 @@ export class ObligationLedger {
    * append re-derives (single-writer stance, schemas.ts docblock).
    */
   async recordReply(correlation_id: string, ref: ReplyRef): Promise<ReplyObligationRecord> {
-    const rec = await this.resolveOpenByCorrelation(correlation_id, ref.channel_id);
+    const cid = parseArg(NonEmptyId, correlation_id, "recordReply.correlation_id");
+    const checked = parseArg(ReplyRefSchema, ref, "recordReply.ref");
+    return this.exclusive(() => this.recordReplyInner(cid, checked));
+  }
+
+  private async recordReplyInner(cid: string, ref: ReplyRef): Promise<ReplyObligationRecord> {
+    const rec = await this.resolveOpenByCorrelation(cid, ref.channel_id);
     if (rec.expected_responders.length > 0 && !rec.expected_responders.includes(ref.responder)) {
       throw new ObligationError(
         "wrong_direction",
@@ -343,18 +469,22 @@ export class ObligationLedger {
 
   /** replied → settled with opaque settlement-evidence pointer (append-only receipt, R2.6). */
   async settle(obligation_id: string, settlement_evidence: string): Promise<ReplyObligationRecord> {
-    const rec = this.getOrThrow(obligation_id);
-    if (rec.state !== "replied") {
-      throw new ObligationError("invalid_transition", `settle requires state "replied"; ${obligation_id} is "${rec.state}"`);
-    }
-    await this.append({
-      schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
-      type: "obligation.settled",
-      obligation_id,
-      at_ms: this.nowMs(),
-      settlement_evidence,
+    const id = parseArg(NonEmptyId, obligation_id, "settle.obligation_id");
+    const evidence = parseArg(NonEmptyId, settlement_evidence, "settle.settlement_evidence");
+    return this.exclusive(async () => {
+      const rec = this.getOrThrow(id);
+      if (rec.state !== "replied") {
+        throw new ObligationError("invalid_transition", `settle requires state "replied"; ${id} is "${rec.state}"`);
+      }
+      await this.append({
+        schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
+        type: "obligation.settled",
+        obligation_id: id,
+        at_ms: this.nowMs(),
+        settlement_evidence: evidence,
+      });
+      return structuredClone(this.records.get(id)!);
     });
-    return structuredClone(this.records.get(obligation_id)!);
   }
 
   /**
@@ -370,13 +500,20 @@ export class ObligationLedger {
 
   /** Create successor (lineage.supersedes = old), then mark old superseded. Bookkeeping only. */
   async supersede(old_id: string, new_input: RegisterInput, actor: string): Promise<ReplyObligationRecord> {
+    const oldId = parseArg(NonEmptyId, old_id, "supersede.old_id");
+    const checked = parseArg(RegisterInputSchema, new_input, "supersede.new_input");
+    const by = parseArg(NonEmptyId, actor, "supersede.actor");
+    return this.exclusive(() => this.supersedeInner(oldId, checked, by));
+  }
+
+  private async supersedeInner(old_id: string, new_input: RegisterInput, actor: string): Promise<ReplyObligationRecord> {
     const rec = this.getOrThrow(old_id);
     this.assertOwner(rec, actor);
     if (rec.state !== "open" && rec.state !== "replied") {
       throw new ObligationError("invalid_transition", `supersede requires open|replied; ${old_id} is "${rec.state}"`);
     }
     const lineage: Lineage = { ...(new_input.lineage ?? {}), supersedes: old_id };
-    const successor = await this.registerRequest({ ...new_input, lineage });
+    const successor = await this.registerRequestInner({ ...new_input, lineage }); // already inside the writer mutex
     await this.append({
       schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
       type: "obligation.superseded",
@@ -389,33 +526,62 @@ export class ObligationLedger {
 
   /** open|replied → voided with reason + cancelled_by lineage. Forensically queryable forever. */
   async cancel(obligation_id: string, reason: string, actor: string): Promise<ReplyObligationRecord> {
-    const rec = this.getOrThrow(obligation_id);
-    this.assertOwner(rec, actor);
-    if (rec.state !== "open" && rec.state !== "replied") {
-      throw new ObligationError("invalid_transition", `cancel requires open|replied; ${obligation_id} is "${rec.state}"`);
-    }
-    await this.append({
-      schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
-      type: "obligation.voided",
-      obligation_id,
-      at_ms: this.nowMs(),
-      reason,
-      cancelled_by: actor,
+    const id = parseArg(NonEmptyId, obligation_id, "cancel.obligation_id");
+    const why = parseArg(NonEmptyId, reason, "cancel.reason");
+    const by = parseArg(NonEmptyId, actor, "cancel.actor");
+    return this.exclusive(async () => {
+      const rec = this.getOrThrow(id);
+      this.assertOwner(rec, by);
+      if (rec.state !== "open" && rec.state !== "replied") {
+        throw new ObligationError("invalid_transition", `cancel requires open|replied; ${id} is "${rec.state}"`);
+      }
+      await this.append({
+        schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
+        type: "obligation.voided",
+        obligation_id: id,
+        at_ms: this.nowMs(),
+        reason: why,
+        cancelled_by: by,
+      });
+      return structuredClone(this.records.get(id)!);
     });
-    return structuredClone(this.records.get(obligation_id)!);
   }
 
   /**
    * New obligation with lineage.retry_of = old. Policy: if old is still
    * open|replied it becomes superseded; already-terminal old stays as-is.
+   * UNCERTAIN-REPLAY GATE (R2.7 decision, xtrm-1o8): an old obligation carrying
+   * unresolved pending_external_observations makes retry REFUSE with
+   * `uncertain_pending` instead of superseding. Routing choice: superseding
+   * would silently transfer an unconfirmable external effect ("did my request
+   * actually land?") onto a NEW send, compounding uncertainty; refusing forces
+   * the explicit decision — reconcile first (recordReply / settleFromStream)
+   * or abandon explicitly (cancel). Minimum viable: no auto-carry of
+   * observations into the successor, no timeout policy invented here.
    * NEVER redelivers: this writes obligation events only — sending the new
-   * request is the caller's explicit act.
+   * request is the caller's explicit act, and deciding WHEN a send is
+   * uncertain enough to surface via observeExternalReply() remains
+   * caller/transport-layer duty.
    */
   async retry(old_id: string, new_input: RegisterInput, actor: string): Promise<ReplyObligationRecord> {
+    const oldId = parseArg(NonEmptyId, old_id, "retry.old_id");
+    const checked = parseArg(RegisterInputSchema, new_input, "retry.new_input");
+    const by = parseArg(NonEmptyId, actor, "retry.actor");
+    return this.exclusive(() => this.retryInner(oldId, checked, by));
+  }
+
+  private async retryInner(old_id: string, new_input: RegisterInput, actor: string): Promise<ReplyObligationRecord> {
     const rec = this.getOrThrow(old_id);
     this.assertOwner(rec, actor);
+    if (rec.pending_external_observations.length > 0) {
+      throw new ObligationError(
+        "uncertain_pending",
+        `obligation ${old_id} carries ${rec.pending_external_observations.length} unresolved external observation(s); reconcile (recordReply/settleFromStream) or abandon (cancel) before retry`,
+        [...rec.pending_external_observations],
+      );
+    }
     const lineage: Lineage = { ...(new_input.lineage ?? {}), retry_of: old_id };
-    const successor = await this.registerRequest({ ...new_input, lineage });
+    const successor = await this.registerRequestInner({ ...new_input, lineage }); // already inside the writer mutex
     if (rec.state === "open" || rec.state === "replied") {
       await this.append({
         schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
@@ -430,15 +596,17 @@ export class ObligationLedger {
 
   /** open → expired past deadline (injected clock). Expired records stay queryable forever. */
   async expireOverdue(): Promise<string[]> {
-    const now = this.nowMs();
-    const expiredIds: string[] = [];
-    for (const rec of this.records.values()) {
-      if (rec.state === "open" && rec.deadline_ms !== null && rec.deadline_ms < now) {
-        await this.append({ schema_version: REPLY_OBLIGATION_SCHEMA_VERSION, type: "obligation.expired", obligation_id: rec.obligation_id, at_ms: now });
-        expiredIds.push(rec.obligation_id);
+    return this.exclusive(async () => {
+      const now = this.nowMs();
+      const expiredIds: string[] = [];
+      for (const rec of this.records.values()) {
+        if (rec.state === "open" && rec.deadline_ms !== null && rec.deadline_ms < now) {
+          await this.append({ schema_version: REPLY_OBLIGATION_SCHEMA_VERSION, type: "obligation.expired", obligation_id: rec.obligation_id, at_ms: now });
+          expiredIds.push(rec.obligation_id);
+        }
       }
-    }
-    return expiredIds;
+      return expiredIds;
+    });
   }
 
   /**
@@ -448,15 +616,20 @@ export class ObligationLedger {
    * or settleFromStream confirms against committed stream evidence.
    */
   async observeExternalReply(external_ref: string, correlation_id: string, channel_id: string): Promise<ReplyObligationRecord> {
-    const rec = await this.resolveOpenByCorrelation(correlation_id, channel_id);
-    await this.append({
-      schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
-      type: "obligation.external_observed",
-      obligation_id: rec.obligation_id,
-      at_ms: this.nowMs(),
-      external_ref,
+    const ext = parseArg(NonEmptyId, external_ref, "observeExternalReply.external_ref");
+    const cid = parseArg(NonEmptyId, correlation_id, "observeExternalReply.correlation_id");
+    const ch = parseArg(NonEmptyId, channel_id, "observeExternalReply.channel_id");
+    return this.exclusive(async () => {
+      const rec = await this.resolveOpenByCorrelation(cid, ch);
+      await this.append({
+        schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
+        type: "obligation.external_observed",
+        obligation_id: rec.obligation_id,
+        at_ms: this.nowMs(),
+        external_ref: ext,
+      });
+      return structuredClone(this.records.get(rec.obligation_id)!);
     });
-    return structuredClone(this.records.get(rec.obligation_id)!);
   }
 
   /**
@@ -486,8 +659,12 @@ export class ObligationLedger {
       try {
         await this.recordReply(msg.correlation_id, { channel_id: msg.channel_id, message_id: msg.message_id, responder: msg.author.participant_id });
         replied.push({ obligation_id: rec.obligation_id, message_id: msg.message_id });
-      } catch {
-        // raced into terminal between snapshot and append: leave for next pass
+      } catch (e) {
+        // Expected races ONLY: another command moved/consumed the edge between our
+        // snapshot and the serialized append (already_replied / wrong_direction /
+        // ambiguous_correlation are all ObligationError). Leave for the next pass.
+        // Anything else (bug, store failure) propagates.
+        if (!(e instanceof ObligationError)) throw e;
       }
     }
     const unresolved_uncertain = [...this.records.values()]

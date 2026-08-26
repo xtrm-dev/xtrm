@@ -126,6 +126,37 @@ export interface ReplyRef {
 }
 
 // ---------------------------------------------------------------------------
+// Boundary-validation schemas (xtrm-1o8): public API arguments are parsed ONCE
+// at the ledger entry points and rejected as typed ObligationInputError
+// problems — never raw ZodErrors. These describe the SAME shapes as the
+// interfaces above; the interfaces remain the static contract.
+// ---------------------------------------------------------------------------
+
+/** Validated RegisterInput. Strict: unknown fields are rejected at the trust boundary. */
+export const RegisterInputSchema = z
+  .object({
+    idempotency_key: OpaqueRef,
+    channel_id: OpaqueRef,
+    requester: OpaqueRef,
+    expected_responders: z.array(OpaqueRef),
+    deadline_ms: z.number().int().nonnegative().nullable().optional(),
+    correlation_id: OpaqueRef.optional(),
+    lineage: z
+      .object({ supersedes: OpaqueRef.optional(), retry_of: OpaqueRef.optional() })
+      .strict()
+      .optional(),
+    mandatory: z.boolean().optional(),
+  })
+  .strict();
+
+export const ReplyRefSchema = z
+  .object({ channel_id: OpaqueRef, message_id: OpaqueRef, responder: OpaqueRef })
+  .strict();
+
+/** confirmRequestSent confirmation payload. */
+export const SentConfirmationSchema = z.object({ message_id: OpaqueRef, seq: z.number().int().nonnegative() }).strict();
+
+// ---------------------------------------------------------------------------
 // Event journal — the ONLY write shape. Append-only; fold is total.
 // ---------------------------------------------------------------------------
 
@@ -136,6 +167,10 @@ const EventBase = {
 };
 
 export const ObligationEventSchema = z.discriminatedUnion("type", [
+  // input payload stance (xtrm-1o8 decision): z.record(z.unknown()) is RETAINED here.
+  // The payload is the RegisterInput validated at the registerRequest API boundary
+  // (RegisterInputSchema — strict, deep); duplicating that shape here would make the FOLD
+  // reject legacy journals over validation the command layer already guarantees.
   z.object({ ...EventBase, type: z.literal("obligation.opened"), input: z.record(z.unknown()) }).strict(),
   z
     .object({ ...EventBase, type: z.literal("obligation.request_sent"), message_id: OpaqueRef, seq: z.number().int() })
