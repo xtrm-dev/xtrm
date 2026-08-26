@@ -30,9 +30,9 @@
  * the runtime mechanical-failure kinds and the `chain.incident.*` wake
  * namespace entries. chain.incident.* are NOT a fifth transport family:
  * channels.md marks them a wake namespace inside runtime semantics, so they
- * carry `runtime` family semantics here (KIND_AUTHORITY/visibility) while
- * keeping their exact canon kind strings; familyOf returns their literal
- * prefix. Only intentional exclusion: the short CLI aliases (`turn`,
+ * carry `runtime` family semantics here (KIND_AUTHORITY / familyOf resolve
+ * them to "runtime") while keeping their exact canon kind strings. Only
+ * intentional exclusion: the short CLI aliases (`turn`,
  * `finding`, …) which §5.3 defines for CLI/prose brevity only — the wire
  * kind is always the full dotted name.
  *
@@ -101,9 +101,15 @@ export const MESSAGE_KINDS = [
 ] as const;
 export type MessageKind = (typeof MESSAGE_KINDS)[number];
 
-/** Family prefix of a kind; `note` has no family (§5.3 row family = "—"). */
+/**
+ * Family of a kind per §5.3 semantics: the dotted prefix, except `note`
+ * (family-less row) and `chain.incident.*`, which are wake-namespace entries
+ * carrying RUNTIME-family semantics, so they resolve to "runtime".
+ */
 export function familyOf(kind: MessageKind): Family | "note" {
-  return kind.split(".")[0] as Family | "note";
+  if (kind === "chain.incident.opened" || kind === "chain.incident.resolved") return "runtime";
+  if (kind === "note") return "note";
+  return kind.split(".")[0] as Family;
 }
 
 /** Canonical visibility values per §5.4. */

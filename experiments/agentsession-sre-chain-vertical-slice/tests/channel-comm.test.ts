@@ -104,7 +104,10 @@ describe("channel-comm semantic contracts", () => {
       idempotency_key: "sys-done",
     };
     await expect(participant.send(done)).rejects.toMatchObject({ code: "authority_denied" });
-    await expect(runtime.send(done)).resolves.toMatchObject({ seq: 1 });
+    // rejection also wrote its §10.1 audit-twin fact (stream stays self-contained)
+    let streamNow = await store.readChannel({ channel_id: CH });
+    expect(streamNow.filter((m) => m.kind === "runtime.message_rejected")).toHaveLength(1);
+    await runtime.send(done); // resolves; seq shifted by the audit fact
     const verdict = {
       channel_id: CH,
       kind: "work.verdict" as const,
@@ -112,8 +115,10 @@ describe("channel-comm semantic contracts", () => {
       audience: { action_targets: ["p1"], visibility: "targets" as const },
       idempotency_key: "v1",
     };
-    await expect(reviewerPolicy.send(verdict)).resolves.toMatchObject({ seq: 2 });
+    await expect(reviewerPolicy.send(verdict)).resolves.toHaveProperty("message_id");
     await expect(participant.send({ ...verdict, idempotency_key: "v2" })).rejects.toMatchObject({ code: "authority_denied" });
+    streamNow = await store.readChannel({ channel_id: CH });
+    expect(streamNow).toHaveLength(4); // done + verdict + 2 audit facts
   });
 
   test("author injection from call args is REJECTED (host-injected only)", async () => {
@@ -222,7 +227,11 @@ describe("channel-comm semantic contracts", () => {
       idempotency_key: "rep-ok",
       correlation_id: intent.request_id,
     });
-    expect(rep.message_id).toBe(`${CH}#2`);
+    // two prior rejections (mismatch + wrong replier) each wrote an audit fact;
+    // the valid reply lands after them
+    expect(rep.seq).toBeGreaterThan(intent.request_seq);
+    const streamAfter = await replier["store"].readChannel({ channel_id: CH });
+    expect(streamAfter.filter((m) => m.kind === "runtime.message_rejected")).toHaveLength(2);
     // double reply at contract level: handle consumed
     await expect(
       replier.reply(intent, {
@@ -278,6 +287,119 @@ describe("channel-comm semantic contracts", () => {
     expect(second).toEqual(first);
     const stream = await svc["store"].readChannel({});
     expect(stream).toHaveLength(1);
+  });
+
+  test("F1: complete §5.3 surface — mechanical failures, chain.incident.*, note", async () => {
+    const store = fakeStore();
+    const lane = (pid: string, cls: any) =>
+      new ChannelCommunicationService({ participant_id: pid, participant_class: cls }, store, { now: () => NOW });
+    const rt = lane("rt", "runtime");
+    const coord = lane("coord", "coordinator");
+    const cases: Array<[any, any, any]> = [
+      ["runtime.participant_died", { participant_id: "p9", job_id: "j1", reason: "crash", refs: [`${CH}#1`] }, rt],
+      ["runtime.gate_unresponsive", { participant_id: "p9", gate_kind: "review", timeout_ms: 5000 }, rt],
+      ["runtime.worktree_diverged", { worktree: "wt", base_ref: "abc123", reason: "diverged" }, rt],
+      ["runtime.evidence_ref_broken", { evidence_ref: "ev1", reason: "missing" }, rt],
+      ["runtime.pulse_delivery_failed", { pulse_ref: "pulse1", reason: "timeout", attempts: 3 }, rt],
+      ["runtime.budget_exhausted_mid_step", { budget_kind: "tokens", used: 100, limit: 100, participant_id: "p9" }, rt],
+      ["runtime.recursion_cap", { loop_kind: "retry", count: 5, hard_cap: true }, rt],
+      ["chain.incident.opened", { incident_kind: "gate_deadlock", summary: "s", refs: [`${CH}#1`], recovery_exhausted: true }, rt],
+      ["chain.incident.opened", { incident_kind: "gate_deadlock", summary: "s", refs: [`${CH}#2`], recovery_exhausted: true }, coord],
+      ["chain.incident.resolved", { incident_ref: "inc-1", outcome: "recovered", refs: [`${CH}#3`] }, coord],
+      ["chain.incident.resolved", { incident_ref: "inc-2", outcome: "manual" }, rt],
+      ["note", { text: "operator note" }, lane("anyone", "participant")],
+    ];
+    let n = 0;
+    for (const [kind, body, svc] of cases) {
+      const res = await svc.send({
+        channel_id: CH,
+        kind,
+        body,
+        audience: { action_targets: [], visibility: kind === "note" ? "chain" : "targets" },
+        idempotency_key: `f1-${n}`,
+      });
+      n += 1;
+      expect(res.seq).toBe(n);
+    }
+    // incident authority rows: participant may NOT open/resolve incidents
+    await expect(
+      lane("p1", "participant").send({
+        channel_id: CH,
+        kind: "chain.incident.opened",
+        body: { incident_kind: "k", summary: "s", refs: ["a#1"], recovery_exhausted: true },
+        audience: { action_targets: [], visibility: "targets" },
+        idempotency_key: "f1-denied",
+      }),
+    ).rejects.toMatchObject({ code: "authority_denied" });
+    // opened without recovery_exhausted:true is invalid per canon row
+    await expect(
+      rt.send({
+        channel_id: CH,
+        kind: "chain.incident.opened",
+        body: { incident_kind: "k", summary: "s", refs: ["a#1"], recovery_exhausted: false },
+        audience: { action_targets: [], visibility: "targets" },
+        idempotency_key: "f1-bad-open",
+      }),
+    ).rejects.toBeInstanceOf(ChannelValidationError);
+  });
+
+  test("F2: canon body shapes accepted verbatim; authority-smuggling still rejected", async () => {
+    const store = fakeStore();
+    const rt = new ChannelCommunicationService({ participant_id: "rt", participant_class: "runtime" }, store, { now: () => NOW });
+    // canon names participant_id / target accepted (previously renamed *_ref)
+    await rt.send({ channel_id: CH, kind: "runtime.member_joined", body: { participant_id: "p9", reason: "join" }, audience: { action_targets: [], visibility: "chain" }, idempotency_key: "mj1" });
+    await rt.send({ channel_id: CH, kind: "runtime.delivery_failed", body: { target: "p9", reason: "down" }, audience: { action_targets: [], visibility: "chain" }, idempotency_key: "df1" });
+    const stream = await store.readChannel({ channel_id: CH });
+    const joined = stream.find((m) => m.idempotency_key === "mj1");
+    expect(joined!.body).toEqual({ participant_id: "p9", reason: "join" });
+    const failed = stream.find((m) => m.idempotency_key === "df1");
+    expect(failed!.body).toEqual({ target: "p9", reason: "down" });
+    // old renamed fields no longer valid (strict schema pins canon shapes)
+    await expect(
+      rt.send({ channel_id: CH, kind: "runtime.member_joined", body: { participant_ref: "p9", reason: "join" }, audience: { action_targets: [], visibility: "chain" }, idempotency_key: "mj-bad" }),
+    ).rejects.toMatchObject({ code: "validation_failed" });
+    // authority-smuggling bodies STILL rejected: grant/capability claims
+    const p1 = new ChannelCommunicationService({ participant_id: "p1", participant_class: "participant" }, store, { now: () => NOW });
+    for (const [i, smuggled] of [
+      { summary: "x", capability: "system.swap" },
+      { summary: "x", permissions: ["all"] },
+      { summary: "x", author_key: "sk-live-1" },
+      { summary: "x", authority: "coordinator" },
+    ].entries()) {
+      const err = await p1
+        .send({ channel_id: CH, kind: "work.turn", body: smuggled, audience: { action_targets: [], visibility: "chain" }, idempotency_key: `smug-${i}` })
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(ChannelValidationError);
+      expect(err.problems.some((p: any) => p.code === "body_authority_assertion")).toBe(true);
+    }
+  });
+
+  test("F3: rejection audit-twin — exactly one stable runtime.message_rejected per identical bad draft", async () => {
+    const store = fakeStore();
+    const p1 = new ChannelCommunicationService({ participant_id: "p1", participant_class: "participant" }, store, { now: () => NOW });
+    const bad = { channel_id: CH, kind: "work.turn", body: {}, audience: { action_targets: [], visibility: "chain" }, idempotency_key: "bad-1" };
+    await expect(p1.send(bad)).rejects.toMatchObject({ code: "validation_failed" });
+    await expect(p1.send(structuredClone(bad))).rejects.toBeInstanceOf(ChannelValidationError); // identical retry
+    let stream = await store.readChannel({ channel_id: CH });
+    const audits = stream.filter((m) => m.kind === "runtime.message_rejected");
+    expect(audits).toHaveLength(1); // dedup by digest-derived idempotency key
+    const a = audits[0]!;
+    expect(a.author.participant_class).toBe("runtime"); // runtime audit boundary
+    expect(a.idempotency_key.startsWith(`audit:${CH}:`)).toBe(true);
+    expect(typeof a.body.offender_digest).toBe("string");
+    expect(Array.isArray(a.body.problem_codes)).toBe(true);
+    expect((a.body.problem_codes as string[]).length).toBeGreaterThan(0);
+    // a DIFFERENT bad draft gets its own audit fact; original error never masked
+    const other = { ...structuredClone(bad), kind: "work.finding", body: { severity: "nope" }, idempotency_key: "bad-2" };
+    await expect(p1.send(other)).rejects.toBeInstanceOf(ChannelValidationError);
+    stream = await store.readChannel({ channel_id: CH });
+    expect(stream.filter((m) => m.kind === "runtime.message_rejected")).toHaveLength(2);
+    // request() rejections also audit (single-parse path-qualified shape)
+    await expect(
+      p1.request({ channel_id: CH, kind: "work.proposal", body: { proposal_class: "bogus", summary: "x" }, audience: { action_targets: ["p2"], visibility: "private" }, idempotency_key: "rq-bad", expects_reply_from: ["p2"] }),
+    ).rejects.toMatchObject({ code: "validation_failed" });
+    stream = await store.readChannel({ channel_id: CH });
+    expect(stream.filter((m) => m.kind === "runtime.message_rejected")).toHaveLength(3);
   });
 
   test("determinism: identical stores + calls -> identical outputs", async () => {

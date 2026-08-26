@@ -4,13 +4,27 @@
  * Scope (bead xtrm-6yn): schemas, validation, host-enforced authority,
  * correlation handles, inbox/cursor semantics, pure functions.
  *
+ * CURSOR MODEL DEVIATION (documented): cursors here are per-participant
+ * per-channel SEQUENCE positions (`last_read_seq` / `last_ack_seq`).
+ * channels.md §5.1 makes the table-wide autoincrement `channel_messages.id`
+ * the sole DELIVERY cursor and demotes `seq` to a per-channel DISPLAY ordinal
+ * (`sp tail` readability only); real id allocation belongs to the store.
+ * This layer models cursors as seq because it owns no storage and its injected
+ * store interface is keyed by `(channel_id, seq)`; any production store must
+ * translate to §5.1 id-based cursors at this seam.
+ *
  * Explicit seams for later beads:
  *  - xtrm-hzb (obligation ledger/state machine): request() emits a
  *    RequestIntent VALUE and persists nothing about obligations. It does not
  *    track open/closed state; reply()'s double-reply check is a contract-level
- *    approximation (stream scan for an existing correlated reply). The ledger
- *    bead owns durable intent state and can wrap/replace reply() without an
- *    API break: handles are plain values, not service-held tokens.
+ *    approximation (stream scan for an existing correlated reply).
+ *    WRAP HONESTY: single-request/single-reply obligations wrap cleanly around
+ *    these methods (handles are plain values, not service-held tokens), but
+ *    multi-round or multi-replier obligation patterns do NOT flow through
+ *    reply()'s single-consumption scan and need their own surface on the
+ *    ledger side. Handle ISSUANCE and INTEGRITY are a mandatory xtrm-hzb
+ *    responsibility: reply() trusts caller-supplied RequestIntent handles
+ *    verbatim and performs no authenticity check of its own.
  *  - xtrm-sf3: no WAITING_ON_CHANNEL / scheduler wake here. Routing is hard,
  *    attention is soft, but nothing wakes anyone.
  *  - xtrm-2mi: FINALIZE enforcement absent by design.
@@ -19,9 +33,7 @@
  */
 
 import {
-  BODY_SCHEMAS,
   CHANNEL_MESSAGE_SCHEMA_VERSION,
-  EnvelopeDraftSchema,
   KIND_AUTHORITY,
   normalizeDraft,
   StoredEnvelopeSchema,
@@ -68,6 +80,41 @@ export class ChannelValidationError extends ChannelCommError {
     this.name = "ChannelValidationError";
     this.problems = problems;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Rejection audit-twin (channels.md §10.1 outcome classes: validation-reject /
+// authority-reject both write one runtime.message_rejected FACT for post-mortem
+// replay). Best-effort: never masks the original ChannelValidationError, and a
+// failing audit write still surfaces the original error.
+// ---------------------------------------------------------------------------
+
+/** Deterministic key-order-independent JSON stringify (for offender digests). */
+function stableStringify(v: unknown): string {
+  if (v === null || typeof v !== "object") return JSON.stringify(v ?? null);
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
+  const obj = v as Record<string, unknown>;
+  return `{${Object.keys(obj)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
+    .join(",")}}`;
+}
+
+/** FNV-1a 32-bit hex digest — deterministic across processes/runtimes. */
+function stableDigest(v: unknown): string {
+  const s = stableStringify(v);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+function extractChannelId(rawDraft: unknown): string | null {
+  if (typeof rawDraft !== "object" || rawDraft === null || Array.isArray(rawDraft)) return null;
+  const cid = (rawDraft as Record<string, unknown>).channel_id;
+  return typeof cid === "string" && cid.length > 0 ? cid : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -194,8 +241,17 @@ export class ChannelCommunicationService {
    * Idempotent, deterministic append. Same idempotency_key → the ORIGINAL
    * stored message ids are returned again; nothing is duplicated (store
    * contract enforced at this seam so every op inherits it).
+   *
+   * `seq` is allocated as max+1 within the channel and is a DISPLAY ordinal
+   * only (channels.md §5.1): within-channel order reads naturally in `sp tail`
+   * style projections, but delivery cursors and replay authority belong to the
+   * underlying store (table-wide message id), never to this value.
    */
-  private async commit(draft: EnvelopeDraft, correlationOverride?: string): Promise<SendResult> {
+  private async commit(
+    draft: EnvelopeDraft,
+    correlationOverride?: string,
+    authorOverride?: ChannelCommunicationService["author"],
+  ): Promise<SendResult> {
     const existing = await this.store.findByIdempotencyKey(draft.idempotency_key);
     if (existing) {
       return { message_id: existing.message_id, seq: existing.seq };
@@ -207,7 +263,7 @@ export class ChannelCommunicationService {
       channel_id: draft.channel_id,
       message_id: `${draft.channel_id}#${seq}`,
       seq,
-      author: { ...this.author },
+      author: { ...(authorOverride ?? this.author) },
       kind: draft.kind,
       body: draft.body,
       audience: draft.audience,
@@ -228,11 +284,51 @@ export class ChannelCommunicationService {
     return result.value;
   }
 
+  /**
+   * Rejection audit-twin (§10.1): on any ChannelValidationError from
+   * send/request/reply, best-effort append ONE `runtime.message_rejected`
+   * fact authored by the RUNTIME lane (the audit boundary, independent of the
+   * rejecting caller's class). Body carries stable problem codes plus a
+   * digest of the rejected draft; the idempotency key derives from that
+   * digest, so identical repeated attempts dedup to the single original fact.
+   * NEVER masks the original error; a failed audit write is swallowed and the
+   * original ChannelValidationError propagates.
+   */
+  private async emitRejectionAudit(rawDraft: unknown, error: ChannelValidationError): Promise<void> {
+    try {
+      const channelId = extractChannelId(rawDraft);
+      if (!channelId) return; // no placement target → nothing to audit against
+      const digest = stableDigest(rawDraft);
+      await this.commit(
+        {
+          channel_id: channelId,
+          kind: "runtime.message_rejected",
+          body: {
+            error_code: error.code,
+            problem_codes: error.problems.map((p) => p.code),
+            offender_digest: digest,
+          },
+          audience: { action_targets: [], visibility: "public_audit" },
+          idempotency_key: `audit:${channelId}:${digest}`,
+        },
+        undefined,
+        { participant_id: "runtime", participant_class: "runtime" },
+      );
+    } catch {
+      // best-effort: the ORIGINAL rejection must win
+    }
+  }
+
   /** Validate schema + body + authority + audience, then append. */
   async send(draft: unknown): Promise<SendResult> {
-    const value = ChannelCommunicationService.parseOrThrow(draft);
-    this.assertAuthority(value.kind);
-    return this.commit(value);
+    try {
+      const value = ChannelCommunicationService.parseOrThrow(draft);
+      this.assertAuthority(value.kind);
+      return await this.commit(value);
+    } catch (e) {
+      if (e instanceof ChannelValidationError) await this.emitRejectionAudit(draft, e);
+      throw e;
+    }
   }
 
   /**
@@ -242,24 +338,28 @@ export class ChannelCommunicationService {
    */
   async request(args: Omit<EnvelopeDraft, "correlation_id"> & { expects_reply_from?: string[] }): Promise<RequestResult> {
     const { expects_reply_from = [], ...rest } = args;
-    const parsed = EnvelopeDraftSchema.safeParse(rest);
-    if (!parsed.success) throw new ChannelValidationError([{ code: "validation_failed", path: "request", message: parsed.error.issues.map((i) => i.message).join("; ") }]);
-    this.assertAuthority(parsed.data.kind);
-    // Body validation + forbidden-key scan via normalizeDraft on the full draft.
-    const checked = ChannelCommunicationService.parseOrThrow(parsed.data);
-    const request_id = `req:${checked.idempotency_key}`;
-    const committed = await this.commit(checked, request_id);
-    return {
-      ...committed,
-      intent: {
-        request_id,
-        channel_id: checked.channel_id,
-        requested_by: this.author.participant_id,
-        expects: { reply_from: [...expects_reply_from] },
-        request_message_id: committed.message_id,
-        request_seq: committed.seq,
-      },
-    };
+    try {
+      // Single normalizeDraft pass: same path-qualified problem shape as send()
+      // (body.* / audience.* paths), no double parsing of args.
+      const checked = ChannelCommunicationService.parseOrThrow(rest);
+      this.assertAuthority(checked.kind);
+      const request_id = `req:${checked.idempotency_key}`;
+      const committed = await this.commit(checked, request_id);
+      return {
+        ...committed,
+        intent: {
+          request_id,
+          channel_id: checked.channel_id,
+          requested_by: this.author.participant_id,
+          expects: { reply_from: [...expects_reply_from] },
+          request_message_id: committed.message_id,
+          request_seq: committed.seq,
+        },
+      };
+    } catch (e) {
+      if (e instanceof ChannelValidationError) await this.emitRejectionAudit(rest, e);
+      throw e;
+    }
   }
 
   /**
@@ -272,6 +372,15 @@ export class ChannelCommunicationService {
    *    scan — durable open/closed obligation state belongs to xtrm-hzb.
    */
   async reply(handle: RequestIntent, draft: unknown): Promise<SendResult> {
+    try {
+      return await this.replyInner(handle, draft);
+    } catch (e) {
+      if (e instanceof ChannelValidationError) await this.emitRejectionAudit(draft, e);
+      throw e;
+    }
+  }
+
+  private async replyInner(handle: RequestIntent, draft: unknown): Promise<SendResult> {
     const value = ChannelCommunicationService.parseOrThrow(draft);
     this.assertAuthority(value.kind);
     if (value.correlation_id !== handle.request_id) {
@@ -321,6 +430,14 @@ export class ChannelCommunicationService {
     return this.commit(value);
   }
 
+  /** Shared addressed/attention classification (routing hard, attention soft). */
+  private static classify(msg: StoredEnvelope, viewer_id: string): { addressed: boolean; attention_only: boolean } {
+    const addressed = msg.audience.action_targets.includes(viewer_id);
+    const attention_only =
+      !addressed && msg.author.participant_id !== viewer_id && ["chain", "node", "public_audit"].includes(msg.audience.visibility);
+    return { addressed, attention_only };
+  }
+
   /** Pure observation: unread + visibility-filtered. NEVER mutates cursors. */
   async inbox(viewer: { participant_id: string; viewer_class: ViewerClass }, channel_id?: string): Promise<Inbox> {
     const cursors = await this.store.getCursors(viewer.participant_id);
@@ -329,12 +446,8 @@ export class ChannelCommunicationService {
     for (const msg of stream) {
       if (msg.seq <= cursors.last_read_seq) continue;
       if (!canSee(viewer, msg)) continue;
-      const addressed = msg.audience.action_targets.includes(viewer.participant_id);
-      const attentionOnly =
-        !addressed &&
-        msg.author.participant_id !== viewer.participant_id &&
-        ["chain", "node", "public_audit"].includes(msg.audience.visibility);
-      items.push({ ...msg, addressed, attention_only: attentionOnly });
+      const flags = ChannelCommunicationService.classify(msg, viewer.participant_id);
+      items.push({ ...msg, ...flags });
     }
     return { items, cursors };
   }
@@ -346,11 +459,7 @@ export class ChannelCommunicationService {
     return stream
       .filter((m) => m.seq > cursors.last_ack_seq)
       .filter((m) => canSee(viewer, m))
-      .map((msg) => ({
-        ...msg,
-        addressed: msg.audience.action_targets.includes(viewer.participant_id),
-        attention_only: false,
-      }));
+      .map((msg) => ({ ...msg, ...ChannelCommunicationService.classify(msg, viewer.participant_id) }));
   }
 
   /** Advancing READ never touches ACK (read != ack, API-shape-enforced). */
