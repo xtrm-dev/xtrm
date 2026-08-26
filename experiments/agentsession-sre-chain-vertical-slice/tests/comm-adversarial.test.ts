@@ -167,7 +167,7 @@ async function restart(w: World): Promise<World> {
   return { ...w, ledger, registry };
 }
 
-function lane(w: World, pid: string, participant_class: any = "participant") {
+function lane(w: World, pid: string, participant_class: "coordinator" | "participant" | "runtime" | "reviewer-policy" = "participant") {
   return new ChannelCommunicationService({ participant_id: pid, participant_class }, w.comm, { now: w.clk.now });
 }
 
