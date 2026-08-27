@@ -218,10 +218,13 @@ export class FinalizeController {
 
   /**
    * open|replied → voided by OPERATOR or COORDINATOR class only (ownership
-   * refusal mirrors hzb assertOwner). Appends the standard `obligation.voided`
-   * journal event through the ledger's own journal, then re-folds, so the
-   * voided state survives reload exactly like every other event. Records a
-   * resolving-evidence entry with the caller's evidence_ref (R2.7).
+   * refusal mirrors hzb assertOwner). Precondition-first (xtrm-2hn.3): the
+   * resolving-evidence sink and entry are resolved and validated BEFORE any
+   * durable mutation, so precondition failures write ZERO events anywhere.
+   * Appends the standard `obligation.voided` journal event through the
+   * ledger's own journal, then re-folds, so the voided state survives reload
+   * exactly like every other event. Records a resolving-evidence entry with
+   * the caller's evidence_ref (R2.7).
    */
   async voidObligation(obligation_id: string, actor_class: VoidActorClass, reason: string, evidence_ref: string): Promise<ReplyObligationRecord> {
     if (!(VOID_ACTOR_CLASSES as readonly string[]).includes(actor_class)) {
@@ -232,6 +235,7 @@ export class FinalizeController {
     if (rec.state !== "open" && rec.state !== "replied") {
       throw new ObligationError("invalid_transition", `void requires open|replied; ${obligation_id} is "${rec.state}"`);
     }
+    // Preconditions BEFORE any durable write: sink configured + entry valid.
     const event: ObligationEvent = {
       schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
       type: "obligation.voided",
@@ -240,7 +244,6 @@ export class FinalizeController {
       reason,
       cancelled_by: `${actor_class}:finalize`,
     };
-    await this.ledger.journal.append(event);
     const entry: SettlementEvidenceEntry = {
       schema_version: FINALIZE_SCHEMA_VERSION,
       action: "voided",
@@ -254,6 +257,11 @@ export class FinalizeController {
     if (!this.opts.evidence) {
       throw new ObligationError("invalid_transition", "voidObligation requires an evidence journal (R2.7 resolving evidence)");
     }
+    // TWO-JOURNAL PROTOCOL: evidence entry is precondition-validated first, then
+    // the voided event lands durably, then the evidence append mirrors it. If the
+    // crash window hits between those last two writes, recovery surfaces on reload
+    // via reconcileOnLoad → reconciliation.voided_without_evidence (detection-only).
+    await this.ledger.journal.append(event);
     await this.opts.evidence.append(entry);
     await this.ledger.load(); // re-fold from the journal: single source of truth
     const voided = this.ledger.get(obligation_id);

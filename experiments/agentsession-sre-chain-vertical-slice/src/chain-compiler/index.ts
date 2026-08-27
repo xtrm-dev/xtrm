@@ -233,13 +233,12 @@ export function compileChain(definition: ChainDefinition, opts: CompileOptions =
     frozen_topology: frozenTopology,
     effective: {
       scrutiny,
-      // ADR-004: compiled_capability_bounds is a compile-time UPPER BOUND
-      // only (step requests ∩ operator allowlist). The final
-      // ResolvedCapabilityGrant additionally requires SpecialistDefinition
-      // requirements, SpecialistActivationProfile, and actual runtime/sandbox
-      // availability — completed at PREPARE/ActivationSupervisor wiring.
-      // Runtime consumers MUST NOT treat this artifact as the final grant
-      // authority.
+      // ADR-004: compiled_capability_bounds is a COMPILE-TIME UPPER BOUND
+      // only (requests ∩ operator allowlist). The final ResolvedCapabilityGrant
+      // additionally requires SpecialistDefinition requirements,
+      // SpecialistActivationProfile, and runtime/sandbox availability —
+      // completed at PREPARE/ActivationSupervisor wiring. Runtime consumers
+      // MUST NOT treat this artifact as the final grant authority.
       compiled_capability_bounds: resolveCompiledCapabilityBounds(
         def.topology.steps,
         opts.grantsPolicy,

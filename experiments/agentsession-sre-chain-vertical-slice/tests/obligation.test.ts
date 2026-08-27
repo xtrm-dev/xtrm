@@ -11,6 +11,7 @@ import {
   type ObligationJournal,
 } from "../src/obligation/index.ts";
 import { ChannelCommunicationService, type ChannelCommStore, type ParticipantCursors, type StoredEnvelope } from "../src/channel-comm/index.ts";
+import { FinalizeController, type SettlementEvidenceEntry } from "../src/finalize/index.ts";
 
 const T0 = 1_700_000_000_000;
 /** Deterministic injected clock: each ledger op advances 1s. */
@@ -525,6 +526,99 @@ describe("seam integration: ledger handle → ChannelCommunicationService.reply 
 function stableLine(ev: unknown): string {
   return canonicalEventLine(ObligationEventSchema.parse(ev));
 }
+
+// ---------------------------------------------------------------------------
+// Two-journal mutation safety for voidObligation (xtrm-2hn.3): the resolving-
+// evidence sink is precondition-validated BEFORE any durable mutation.
+// ---------------------------------------------------------------------------
+
+function memEvidence(): { journal: { append(e: SettlementEvidenceEntry): Promise<void> }; entries: SettlementEvidenceEntry[] } {
+  const entries: SettlementEvidenceEntry[] = [];
+  return { journal: { async append(e) { entries.push(e); } }, entries };
+}
+
+async function voidable(ledger: ObligationLedger, key = "k1") {
+  await ledger.registerRequest({ ...baseInput, idempotency_key: key });
+  return new FinalizeController(ledger);
+}
+
+describe("voidObligation two-journal safety: precondition-before-mutation (xtrm-2hn.3)", () => {
+  test("(a) no evidence journal configured => typed rejection, ZERO durable events written", async () => {
+    const { ledger, journal } = await openedLedger();
+    await voidable(ledger);
+    const before = journal.lines().length;
+    const projectionBefore = ledger.list();
+    try {
+      // Controller constructed WITHOUT opts.evidence.
+      await new FinalizeController(ledger).voidObligation("obl:k1", "operator", "abort", "ev:x");
+      throw new Error("expected rejection");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ObligationError);
+      expect((e as ObligationError).code).toBe("invalid_transition");
+    }
+    expect(journal.lines()).toHaveLength(before); // nothing landed anywhere
+    expect(await journal.readAll()).toHaveLength(before);
+    expect(ledger.list()).toEqual(projectionBefore); // projection state unchanged
+    expect(ledger.get("obl:k1")?.state).toBe("open");
+  });
+
+  test("(b) evidence-append failure AFTER the void event persisted => reload reports voided_without_evidence", async () => {
+    const { ledger, journal } = await openedLedger();
+    let ctrl = await voidable(ledger);
+    // Sink present but appends fail (injected post-persist crash window).
+    const failing = { async append(_e: SettlementEvidenceEntry): Promise<void> { throw new Error("disk full"); } };
+    ctrl = new FinalizeController(ledger, { evidence: failing });
+    await expect(ctrl.voidObligation("obl:k1", "operator", "abort", "ev:x")).rejects.toThrow("disk full");
+    // The protocol's residual race: voided event IS durable, evidence is not.
+    expect((await journal.readAll()).filter((ev) => ev.type === "obligation.voided")).toHaveLength(1);
+    // Recovery protocol surfaces through reconciliation-on-load (detection-only).
+    const reloaded = await new ObligationLedger(journal, { now: tickClock(), evidenceExists: async () => false }).load();
+    expect(reloaded.reconciliation.voided_without_evidence).toEqual([
+      { obligation_id: "obl:k1", voided_at_ms: reloaded.get("obl:k1")?.voided_at_ms, cancelled_by: "operator:finalize" },
+    ]);
+    expect(reloaded.get("obl:k1")?.state).toBe("voided"); // history never auto-mutated
+  });
+
+  test("(c) happy path: valid evidence journal records the resolving entry; clean reconciliation on reload", async () => {
+    const { ledger, journal } = await openedLedger();
+    const ctrl = await voidable(ledger);
+    const evidence = memEvidence();
+    const voided = await new FinalizeController(ledger, { now: tickClock(), evidence: evidence.journal })
+      .voidObligation("obl:k1", "coordinator", "operator abort", "ev:void-1");
+    expect(voided.state).toBe("voided");
+    expect(evidence.entries).toHaveLength(1);
+    expect(evidence.entries[0]).toMatchObject({ action: "voided", obligation_id: "obl:k1", actor_class: "coordinator", evidence_ref: "ev:void-1" });
+    expect(journal.lines()).toContain(canonicalEventLine({
+      schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
+      type: "obligation.voided",
+      obligation_id: "obl:k1",
+      at_ms: voided.voided_at_ms!,
+      reason: "operator abort",
+      cancelled_by: "coordinator:finalize",
+    }));
+    // Clean pair on both journals => reload reconciles to an EMPTY report.
+    const reloaded = await new ObligationLedger(journal, { now: tickClock(), evidenceExists: async () => true }).load();
+    expect(reloaded.reconciliation.voided_without_evidence).toEqual([]);
+  });
+
+  test("(d) invalid evidence-entry payload blocks the journal write entirely", async () => {
+    const { ledger, journal } = await openedLedger();
+    await voidable(ledger);
+    const evidence = memEvidence();
+    const mounted = new FinalizeController(ledger, { now: tickClock(), evidence: evidence.journal });
+    let threw = false;
+    try {
+      await mounted.voidObligation("obl:k1", "operator", "abort", ""); // evidence_ref fails OpaqueRef min(1)
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+    expect(evidence.entries).toHaveLength(0);
+    expect(journal.lines().every((l) => !l.includes('"type":"obligation.voided"'))).toBe(true);
+    expect(await journal.readAll()).toHaveLength(1); // only the registration event
+    expect(ledger.get("obl:k1")?.state).toBe("open");
+  });
+});
 
 describe("xtrm-1o8 re-review repairs", () => {
   test("S1: supersede refuses uncertain-pending obligations (same gate as retry)", async () => {
