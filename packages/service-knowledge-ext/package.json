@@ -1,0 +1,26 @@
+{
+  "name": "@jaggerxtrm/pi-service-knowledge",
+  "version": "1.0.0",
+  "description": "Pi extension: service-knowledge registry status + drift notice (self-gating; zero surface without a registry). Relocated from core/pi-extensions (xtrm-6z6.5) to co-locate with the service-knowledge Python package it mirrors.",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "keywords": [
+    "pi",
+    "pi-package",
+    "extension",
+    "service-knowledge",
+    "xtrm"
+  ],
+  "files": [
+    "index.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "release": "npm publish --access public --tag latest",
+    "test": "bun test tests/"
+  },
+  "author": "xtrm",
+  "license": "MIT"
+}
