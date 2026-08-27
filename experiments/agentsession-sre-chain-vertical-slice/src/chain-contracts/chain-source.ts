@@ -158,7 +158,14 @@ export const VerdictRouteSchema = z
   })
   .strict();
 
-export const StepClassSchema = z.enum(["step", "gate", "advisor"]);
+/**
+ * Authored position classes. "coordinator" is a structural class, not a role
+ * (decision record: docs/design/qcy-f1-coordinator-vocabulary.md): coordinator
+ * entry/close positions author as class "coordinator" and round-trip verbatim;
+ * runtime authority seams already consume it (ParticipantClass includes
+ * "coordinator"; channel-comm COORDINATOR_CLASSES gates coordinator powers).
+ */
+export const StepClassSchema = z.enum(["step", "gate", "advisor", "coordinator"]);
 
 /**
  * One authored logical step. Identity is the stable logical `step_id`;

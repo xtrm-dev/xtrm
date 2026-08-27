@@ -18,13 +18,20 @@
  *
  * Canon: docs/runtime/prd/native-chain-runtime.md R2.6–R2.10 — receipts
  * append-only; uncertain blocks blind replay; recovery never destroys work.
+ *
+ * CANON UPDATE (bead xtrm-2hn.8, fallout of xtrm-2hn.4): the store assigns a
+ * GLOBAL monotonic message `id` at enqueue (channels.md §5.1) — the sole
+ * semantic cursor position; cursors are PER CHANNEL per participant shaped
+ * {last_read_message_id, last_ack_message_id}; `seq` is display-only and is
+ * never compared. Cases 9/14 and the shared fake store follow that canon.
  */
 
 import { describe, expect, test } from "bun:test";
 import {
   ChannelCommunicationService,
   type ChannelCommStore,
-  type ParticipantCursors,
+  type ChannelCursors,
+  emptyChannelCursors,
   type StoredEnvelope,
 } from "../src/channel-comm/index.ts";
 import {
@@ -112,13 +119,21 @@ function memIntentJournal(): IntentJournal & { lines: () => string[] } {
 
 /** In-memory channel store. Raw append() deliberately bypasses idempotency
  *  dedup so tests can simulate AT-LEAST-ONCE transport duplication below the
- *  service seam (the service dedups; the wire does not have to). */
+ *  service seam (the service dedups; the wire does not have to).
+ *  CANON: append() assigns the GLOBAL monotonically increasing message `id`
+ *  at enqueue; cursors are PER CHANNEL per participant
+ *  {last_read_message_id, last_ack_message_id} (mirrors the repaired module
+ *  seam; see src/channel-comm/index.ts §5.1 adoption). */
 function memCommStore(): ChannelCommStore & { lines: () => string[] } {
   const lines: string[] = [];
-  const cursors = new Map<string, ParticipantCursors>();
+  const cursors = new Map<string, ChannelCursors>();
+  const ck = (cid: string, pid: string) => `${cid}\u0000${pid}`;
+  let nextId = 0;
   return {
     async append(env: StoredEnvelope) {
-      lines.push(stableStringify(env));
+      const stored = { ...structuredClone(env), id: ++nextId };
+      lines.push(stableStringify(stored));
+      return structuredClone(stored);
     },
     async readChannel(filter) {
       return lines
@@ -129,11 +144,11 @@ function memCommStore(): ChannelCommStore & { lines: () => string[] } {
       const hit = (await this.readChannel({})).find((m) => m.idempotency_key === key);
       return hit ? structuredClone(hit) : null;
     },
-    async getCursors(pid) {
-      return cursors.get(pid) ?? { last_read_seq: 0, last_ack_seq: 0 };
+    async getCursors(cid, pid) {
+      return cursors.get(ck(cid, pid)) ?? emptyChannelCursors();
     },
-    async setCursors(pid, c) {
-      cursors.set(pid, structuredClone(c));
+    async setCursors(cid, pid, c) {
+      cursors.set(ck(cid, pid), structuredClone(c));
     },
     lines: () => [...lines],
   };
@@ -613,22 +628,25 @@ describe("comm adversarial/recovery acceptance (xtrm-1xn)", () => {
     const p1 = lane(w, "p1");
     const v = { participant_id: "p1", viewer_class: "participant" as const };
 
+    // Single-channel world: the store hands out global ids in arrival order,
+    // so numeric cursor positions coincide with the display ordinals used in
+    // the narrative (id N ↔ message "seq" N) while remaining canon-shaped.
     // Adversarial order: read EVERYTHING first, ack almost nothing.
-    await p1.advanceRead("p1", 3);
-    expect(await w.comm.getCursors("p1")).toEqual({ last_read_seq: 3, last_ack_seq: 0 });
+    await p1.advanceRead(CH, "p1", 3);
+    expect(await w.comm.getCursors(CH, "p1")).toEqual({ last_read_message_id: 3, last_ack_message_id: 0 });
     expect((await p1.inbox(v)).items).toHaveLength(0); // read excludes from inbox…
     expect(await p1.pendingAck(v)).toHaveLength(3); // …but the ack-set stays queryable
 
-    await p1.ackUpTo("p1", 1);
+    await p1.ackUpTo(CH, "p1", 1);
     // Ack advanced ONLY the ack cursor; read untouched.
-    expect(await w.comm.getCursors("p1")).toEqual({ last_read_seq: 3, last_ack_seq: 1 });
+    expect(await w.comm.getCursors(CH, "p1")).toEqual({ last_read_message_id: 3, last_ack_message_id: 1 });
     expect(await p1.pendingAck(v)).toHaveLength(2);
 
     // Regressive operations clamp, never rewind.
-    await p1.advanceRead("p1", 1);
-    expect((await w.comm.getCursors("p1")).last_read_seq).toBe(3);
-    await p1.ackUpTo("p1", 0);
-    expect((await w.comm.getCursors("p1")).last_ack_seq).toBe(1);
+    await p1.advanceRead(CH, "p1", 1);
+    expect((await w.comm.getCursors(CH, "p1")).last_read_message_id).toBe(3);
+    await p1.ackUpTo(CH, "p1", 0);
+    expect((await w.comm.getCursors(CH, "p1")).last_ack_message_id).toBe(1);
 
     // Reverse direction: ack BEFORE read on a fresh participant — ack never advances read.
     for (const i of [4, 5]) {
@@ -641,8 +659,8 @@ describe("comm adversarial/recovery acceptance (xtrm-1xn)", () => {
       });
     }
     const p2 = lane(w, "p2");
-    await p2.ackUpTo("p2", 2);
-    expect(await w.comm.getCursors("p2")).toEqual({ last_read_seq: 0, last_ack_seq: 2 });
+    await p2.ackUpTo(CH, "p2", 2);
+    expect(await w.comm.getCursors(CH, "p2")).toEqual({ last_read_message_id: 0, last_ack_message_id: 2 });
     const v2 = { participant_id: "p2", viewer_class: "participant" as const };
     expect((await p2.inbox(v2)).items).toHaveLength(2); // unread despite acked
   });
@@ -834,10 +852,10 @@ describe("comm adversarial/recovery acceptance (xtrm-1xn)", () => {
       await w.registry.enterWaiting("act-pA", "pA", ["obl:k2"], w.clk.now() + 1_000);
       w.clk.advance(2_000);
       await w.registry.expireWaiters();
-      // Cursors.
+      // Cursors (global-id positions scoped to the one channel).
       const svc = lane(w, "pA");
-      await svc.advanceRead("pA", 3);
-      await svc.ackUpTo("pA", 2);
+      await svc.advanceRead(CH, "pA", 3);
+      await svc.ackUpTo(CH, "pA", 2);
       // finalize: operator void with resolving evidence.
       const evidence: SettlementEvidenceEntry[] = [];
       const ctl = new FinalizeController(w.ledger, {
@@ -859,9 +877,121 @@ describe("comm adversarial/recovery acceptance (xtrm-1xn)", () => {
         verdict,
         waitRecords: w.registry.list(),
         obligationRecords: w.ledger.list(),
-        cursors: await w.comm.getCursors("pA"),
+        cursors: await w.comm.getCursors(CH, "pA"),
       };
     };
     expect(await run()).toEqual(await run());
+  });
+
+  test("15. same-idempotency-key across TWO service instances: one durable envelope; both callers resolve to the FIRST outcome; zero downstream duplicates", async () => {
+    /** Store seam carrying the service contract for real (commit() docblock:
+     *  "nothing is duplicated — store contract enforced at this seam"): the
+     *  SQL UNIQUE(idempotency_key) analog lives INSIDE append(). The
+     *  check+insert pair runs synchronously in one JS turn, so concurrent
+     *  writers that both miss their earlier findByIdempotencyKey probe still
+     *  land on exactly one row, regardless of interleaving. */
+    function atomicKeyStore(): ChannelCommStore & { lines: () => string[] } {
+      const lines: string[] = [];
+      const byKey = new Map<string, StoredEnvelope>();
+      let nextId = 0;
+      return {
+        async append(env: StoredEnvelope) {
+          const existing = byKey.get(env.idempotency_key);
+          if (existing) return structuredClone(existing);
+          const stored = { ...structuredClone(env), id: ++nextId };
+          lines.push(stableStringify(stored));
+          byKey.set(stored.idempotency_key, stored);
+          return structuredClone(stored);
+        },
+        async readChannel(filter) {
+          return [...byKey.values()]
+            .filter((m) => !filter?.channel_id || m.channel_id === filter.channel_id)
+            .map((m) => structuredClone(m));
+        },
+        async findByIdempotencyKey(key) {
+          const hit = byKey.get(key);
+          return hit ? structuredClone(hit) : null;
+        },
+        async getCursors(cid, pid) {
+          void cid;
+          void pid;
+          return emptyChannelCursors();
+        },
+        async setCursors() {},
+        lines: () => [...lines],
+      };
+    }
+
+    // One store, TWO instances of the same participant authority — the crash-
+    // retry replica shape (same lane resurrected in two processes).
+    const clk = mkClock();
+    const store = atomicKeyStore();
+    const laneA = new ChannelCommunicationService(
+      { participant_id: "pW", participant_class: "participant" },
+      store,
+      { now: clk.now },
+    );
+    const laneB = new ChannelCommunicationService(
+      { participant_id: "pW", participant_class: "participant" },
+      store,
+      { now: clk.now },
+    );
+    const responder = new ChannelCommunicationService(
+      { participant_id: "pR", participant_class: "participant" },
+      store,
+      { now: clk.now },
+    );
+    const seenProposals: string[] = [];
+
+    // Interleaving stress: launch order ALTERNATES per round; every round must
+    // deterministically converge to ONE envelope per key.
+    for (let round = 0; round < 25; round++) {
+      const key = `storm-${round}`;
+      const racers = round % 2 === 0 ? [laneA, laneB] : [laneB, laneA];
+      const draftBase = {
+        channel_id: CH,
+        kind: "work.proposal" as const,
+        body: { proposal_class: "evaluation_request", summary: "dup-key race" },
+        audience: { action_targets: ["pR"], visibility: "targets" as const },
+        idempotency_key: key,
+      };
+
+      if (round % 2 === 0) {
+        // request()/request() race: both resolve; second REUSES the first's
+        // committed outcome (ids) instead of minting a twin.
+        const [x, y] = await Promise.all([
+          racers[0].request({ ...draftBase, expects_reply_from: ["pR"] }),
+          racers[1].request({ ...draftBase, expects_reply_from: ["pR"] }),
+        ]);
+        expect(x.message_id).toBe(y.message_id);
+        expect(x.seq).toBe(y.seq);
+        expect(x.id).toBeDefined();
+        expect(x.id).toBe(y.id);
+        expect(y.intent).toEqual(x.intent); // identical handle ⇒ same handle value
+      } else {
+        // send()/send() race over the same guarantees.
+        const [a, b] = await Promise.all([racers[0].send(draftBase), racers[1].send(draftBase)]);
+        expect(a.message_id).toBe(b.message_id);
+        expect(a.id).toBe(b.id);
+        expect(a.seq).toBe(b.seq);
+      }
+
+      // Exactly ONE durable envelope for this key.
+      const durables = store.lines().filter((l) => l.includes(`"idempotency_key":"${key}"`));
+      expect(durables).toHaveLength(1);
+
+      // Downstream inbox never observes a duplicate proposal across ALL rounds.
+      const items = (await responder.inbox({ participant_id: "pR", viewer_class: "participant" })).items;
+      const proposals = items.filter((m) => m.kind === "work.proposal");
+      expect(proposals).toHaveLength(seenProposals.length + 1);
+      const msgId = proposals[proposals.length - 1]!.message_id;
+      expect(seenProposals.includes(msgId)).toBe(false);
+      seenProposals.push(msgId);
+    }
+
+    // Global integrity after the storm: distinct keys kept DISTINCT rows and ids.
+    expect(store.lines()).toHaveLength(25);
+    const ids = new Set(store.lines().map((l) => (JSON.parse(l) as StoredEnvelope).id));
+    expect(ids.size).toBe(25);
   });
 });

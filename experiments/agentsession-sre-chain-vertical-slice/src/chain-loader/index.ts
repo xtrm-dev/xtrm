@@ -34,13 +34,18 @@
  *     class "advisor", else class "step". The gate LEVEL (mandatory/final)
  *     is dispatcher metadata and is dropped (AuthoredStepSchema has no
  *     field for it). Verdict routes or remediation loops are never invented.
+ *     Authored `class` values on json/adhoc/imported inline topologies pass
+ *     through 1:1 — including "coordinator", which is a first-class authored
+ *     position class (docs/design/qcy-f1-coordinator-vocabulary.md); no class
+ *     is ever forced onto another.
  *   - `role:<x>` label → specialist { name: x }.
- *   - FORCED DEVIATION: the root step carries no `role:` label in any of
- *     the 15 assets (it is the container/entry step, not a model step),
- *     but AuthoredStepSchema structurally requires exactly one of
- *     specialist/executor. The loader encodes the root as
+ *   - FORCED DEVIATION (formula variant only): the root step carries no
+ *     `role:` label in any of the 15 assets (it is the container/entry step,
+ *     not a model step), but AuthoredStepSchema structurally requires exactly
+ *     one of specialist/executor. The loader encodes the root as
  *     executor { kind: "deterministic", ref: "formula-root" } — the only
- *     synthesized field in the whole mapping.
+ *     synthesized field in the whole mapping. This concerns executor binding,
+ *     not class vocabulary; coordinator classes round-trip untouched.
  *   - Var substitution: `{{var}}` tokens in the asset description and step
  *     title/description resolve from supplied vars, falling back to
  *     declared defaults. A declared required var with no value, a var with
