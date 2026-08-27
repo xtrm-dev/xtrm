@@ -114,44 +114,54 @@ export async function checkFinalization(input: FinalizeCheckInput): Promise<Fina
       code: r.state === "open" ? ("non_mandatory_open_downgraded" as const) : ("non_mandatory_replied_downgraded" as const),
     }));
 
+  async function buildRefs(records: readonly ReplyObligationRecord[]) {
+    return Promise.all(
+      records.map(async (r) => ({
+        obligation_id: r.obligation_id,
+        state: r.state as "open" | "replied",
+        waited_since: r.state === "replied" ? (r.replied_at_ms ?? r.created_at_ms) : r.created_at_ms,
+        mandatory: r.mandatory,
+        deadline_ms: r.deadline_ms,
+        pending_external_observations: [...r.pending_external_observations],
+        delivery_receipts:
+          input.receipts && r.state === "replied" ? receiptsToTriple(await input.receipts(r.obligation_id)) : null,
+      })),
+    );
+  }
+
+  function deriveCodes(records: readonly ReplyObligationRecord[], refs: Awaited<ReturnType<typeof buildRefs>>): ReasonCode[] {
+    const codes = new Set<ReasonCode>();
+    for (const r of records) {
+      if (r.pending_external_observations.length > 0) codes.add("pending_external_observation");
+      if (r.state === "open") codes.add("open_mandatory_inbound");
+      else codes.add("replied_not_settled");
+      if (input.receipts && r.state === "replied") {
+        const t = refs.find((x) => x.obligation_id === r.obligation_id)?.delivery_receipts;
+        if (t && !(t.transport_delivered && t.receiver_received && t.injected)) codes.add("receipt_triple_incomplete");
+      }
+    }
+    return [...codes].sort();
+  }
+
+  // UNCERTAIN RULE (R2.7), bead xtrm-2hn.2: uncertainty is a property of whether
+  // an external effect happened, not of record priority — so it is classified
+  // across ALL binding records (mandatory or not) BEFORE blocked/clear.
+  const uncertainObs = binding
+    .filter((r) => r.pending_external_observations.length > 0)
+    .map((r) => ({ obligation_id: r.obligation_id, external_refs: [...r.pending_external_observations] }));
+
+  if (uncertainObs.length > 0) {
+    const refs = await buildRefs(binding);
+    return FinalizeVerdictSchema.parse({ verdict: "uncertain", obligations: refs, observations: uncertainObs, reason_codes: deriveCodes(binding, refs), downgraded });
+  }
+
   const blocking = binding.filter((r) => r.mandatory);
   if (blocking.length === 0) {
     return FinalizeVerdictSchema.parse({ verdict: "clear", downgraded });
   }
 
-  const refs = await Promise.all(
-    blocking.map(async (r) => ({
-      obligation_id: r.obligation_id,
-      state: r.state as "open" | "replied",
-      waited_since: r.state === "replied" ? (r.replied_at_ms ?? r.created_at_ms) : r.created_at_ms,
-      mandatory: true,
-      deadline_ms: r.deadline_ms,
-      pending_external_observations: [...r.pending_external_observations],
-      delivery_receipts:
-        input.receipts && r.state === "replied" ? receiptsToTriple(await input.receipts(r.obligation_id)) : null,
-    })),
-  );
-
-  const codes = new Set<ReasonCode>();
-  for (const r of blocking) {
-    if (r.pending_external_observations.length > 0) codes.add("pending_external_observation");
-    if (r.state === "open") codes.add("open_mandatory_inbound");
-    else codes.add("replied_not_settled");
-    if (input.receipts && r.state === "replied") {
-      const t = refs.find((x) => x.obligation_id === r.obligation_id)?.delivery_receipts;
-      if (t && !(t.transport_delivered && t.receiver_received && t.injected)) codes.add("receipt_triple_incomplete");
-    }
-  }
-  const reason_codes = [...codes].sort();
-
-  const uncertainObs = blocking
-    .filter((r) => r.pending_external_observations.length > 0)
-    .map((r) => ({ obligation_id: r.obligation_id, external_refs: [...r.pending_external_observations] }));
-
-  if (uncertainObs.length > 0) {
-    return FinalizeVerdictSchema.parse({ verdict: "uncertain", obligations: refs, observations: uncertainObs, reason_codes, downgraded });
-  }
-  return FinalizeVerdictSchema.parse({ verdict: "blocked", obligations: refs, reason_codes, downgraded });
+  const refs = await buildRefs(blocking);
+  return FinalizeVerdictSchema.parse({ verdict: "blocked", obligations: refs, reason_codes: deriveCodes(blocking, refs), downgraded });
 }
 
 /** Binding rule: empty expected_responders = any visible participant (hzb stance). */
@@ -208,10 +218,13 @@ export class FinalizeController {
 
   /**
    * open|replied → voided by OPERATOR or COORDINATOR class only (ownership
-   * refusal mirrors hzb assertOwner). Appends the standard `obligation.voided`
-   * journal event through the ledger's own journal, then re-folds, so the
-   * voided state survives reload exactly like every other event. Records a
-   * resolving-evidence entry with the caller's evidence_ref (R2.7).
+   * refusal mirrors hzb assertOwner). Precondition-first (xtrm-2hn.3): the
+   * resolving-evidence sink and entry are resolved and validated BEFORE any
+   * durable mutation, so precondition failures write ZERO events anywhere.
+   * Appends the standard `obligation.voided` journal event through the
+   * ledger's own journal, then re-folds, so the voided state survives reload
+   * exactly like every other event. Records a resolving-evidence entry with
+   * the caller's evidence_ref (R2.7).
    */
   async voidObligation(obligation_id: string, actor_class: VoidActorClass, reason: string, evidence_ref: string): Promise<ReplyObligationRecord> {
     if (!(VOID_ACTOR_CLASSES as readonly string[]).includes(actor_class)) {
@@ -222,6 +235,7 @@ export class FinalizeController {
     if (rec.state !== "open" && rec.state !== "replied") {
       throw new ObligationError("invalid_transition", `void requires open|replied; ${obligation_id} is "${rec.state}"`);
     }
+    // Preconditions BEFORE any durable write: sink configured + entry valid.
     const event: ObligationEvent = {
       schema_version: REPLY_OBLIGATION_SCHEMA_VERSION,
       type: "obligation.voided",
@@ -230,7 +244,6 @@ export class FinalizeController {
       reason,
       cancelled_by: `${actor_class}:finalize`,
     };
-    await this.ledger.journal.append(event);
     const entry: SettlementEvidenceEntry = {
       schema_version: FINALIZE_SCHEMA_VERSION,
       action: "voided",
@@ -244,6 +257,11 @@ export class FinalizeController {
     if (!this.opts.evidence) {
       throw new ObligationError("invalid_transition", "voidObligation requires an evidence journal (R2.7 resolving evidence)");
     }
+    // TWO-JOURNAL PROTOCOL: evidence entry is precondition-validated first, then
+    // the voided event lands durably, then the evidence append mirrors it. If the
+    // crash window hits between those last two writes, recovery surfaces on reload
+    // via reconcileOnLoad → reconciliation.voided_without_evidence (detection-only).
+    await this.ledger.journal.append(event);
     await this.opts.evidence.append(entry);
     await this.ledger.load(); // re-fold from the journal: single source of truth
     const voided = this.ledger.get(obligation_id);

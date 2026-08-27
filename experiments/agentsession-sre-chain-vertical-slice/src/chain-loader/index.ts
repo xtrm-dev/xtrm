@@ -21,7 +21,7 @@
  * PRECEDENCE RULE ("formula wins executable shape"): the `.formula.json`
  * asset content ALONE determines the resolved shape. Prose docs, catalog
  * metadata, READMEs and dispatcher labels never alter it. Labels other than
- * `kind:` / `role:` / `advisor:` (`edge:`, `gate:`, `type:`, `scrutiny:`,
+ * `kind:` / `role:` / `advisor:` / `gate:` (`edge:`, `type:`, `scrutiny:`,
  * …) are dispatcher metadata and are DROPPED, not interpreted.
  *
  * Mapping (deterministic, 1:1 where the schema allows):
@@ -30,16 +30,22 @@
  *   - step `id` → step_id; `needs[]` → depends_on. Known asset-defect
  *     repair: needs referencing steps absent from the asset (conditionally
  *     dispatched advisors) are dropped; see mapFormulaSteps.
- *   - any `advisor:*` label → class "advisor", else class "step".
- *     Formulas declare no gate-class steps, verdict routes or remediation
- *     loops — none are invented.
+ *   - any `gate:*` label → class "gate"; any `advisor:*` label →
+ *     class "advisor", else class "step". The gate LEVEL (mandatory/final)
+ *     is dispatcher metadata and is dropped (AuthoredStepSchema has no
+ *     field for it). Verdict routes or remediation loops are never invented.
+ *     Authored `class` values on json/adhoc/imported inline topologies pass
+ *     through 1:1 — including "coordinator", which is a first-class authored
+ *     position class (docs/design/qcy-f1-coordinator-vocabulary.md); no class
+ *     is ever forced onto another.
  *   - `role:<x>` label → specialist { name: x }.
- *   - FORCED DEVIATION: the root step carries no `role:` label in any of
- *     the 15 assets (it is the container/entry step, not a model step),
- *     but AuthoredStepSchema structurally requires exactly one of
- *     specialist/executor. The loader encodes the root as
+ *   - FORCED DEVIATION (formula variant only): the root step carries no
+ *     `role:` label in any of the 15 assets (it is the container/entry step,
+ *     not a model step), but AuthoredStepSchema structurally requires exactly
+ *     one of specialist/executor. The loader encodes the root as
  *     executor { kind: "deterministic", ref: "formula-root" } — the only
- *     synthesized field in the whole mapping.
+ *     synthesized field in the whole mapping. This concerns executor binding,
+ *     not class vocabulary; coordinator classes round-trip untouched.
  *   - Var substitution: `{{var}}` tokens in the asset description and step
  *     title/description resolve from supplied vars, falling back to
  *     declared defaults. A declared required var with no value, a var with
@@ -173,10 +179,11 @@ function mapFormulaSteps(
 
   for (const s of asset.steps ?? []) {
     // Labels are substituted too (e.g. research-only declares
-    // "role:{{specialist}}") and then reduced: kind:/role:/advisor: drive
-    // mapping; every other label is dispatcher metadata and is dropped.
+    // "role:{{specialist}}") and then reduced: kind:/role:/advisor:/gate:
+    // drive mapping; every other label is dispatcher metadata and is dropped.
     const labels = (s.labels ?? []).map((l) => substitute(l, vars, problems));
     const isRoot = labels.includes("kind:root");
+    const isGate = labels.some((l) => l.startsWith("gate:"));
     const isAdvisor = labels.some((l) => l.startsWith("advisor:"));
     const role = labels.find((l) => l.startsWith("role:"))?.slice("role:".length);
     const title = s.title !== undefined ? substitute(s.title, vars, problems) : undefined;
@@ -188,7 +195,7 @@ function mapFormulaSteps(
 
     steps.push({
       step_id: s.id,
-      class: isAdvisor ? "advisor" : "step",
+      class: isGate ? "gate" : isAdvisor ? "advisor" : "step",
       ...(title !== undefined && title.length > 0 ? { title } : {}),
       // Root carries no role label in any shipped formula; the authored-form
       // schema requires exactly one of specialist/executor (see docblock).

@@ -27,7 +27,7 @@ import {
   RESOLVED_CHAIN_SCHEMA_VERSION,
   approveChain,
   compileChain,
-  resolveCapabilityGrants,
+  resolveCompiledCapabilityBounds,
   reviseChain,
   verifyFreezeIntegrity,
   type GrantsPolicy,
@@ -204,22 +204,22 @@ describe("scrutiny floor-only-raise", () => {
 // Capability grants — default deny
 // ---------------------------------------------------------------------------
 
-describe("resolveCapabilityGrants", () => {
+describe("resolveCompiledCapabilityBounds", () => {
   test("requested ∩ allowed granted; unrequested-but-allowed NOT granted; requested-but-unallowed NOT granted", () => {
     const r = compileGateChain(undefined, {
       allowed_tools: ["bash", "write"], // write allowed but never requested
       allowed_skills: ["triage"],
     });
     // bash+read requested, only bash allowed → grant is exactly [bash].
-    expect(r.effective.capability_grants["work"]).toEqual({ tools: ["bash"], skills: ["triage"] });
+    expect(r.effective.compiled_capability_bounds["work"]).toEqual({ tools: ["bash"], skills: ["triage"] });
     // Steps requesting nothing get empty grants.
-    expect(r.effective.capability_grants["root"]).toEqual({ tools: [], skills: [] });
-    expect(r.effective.capability_grants["check-gate"]).toEqual({ tools: [], skills: [] });
+    expect(r.effective.compiled_capability_bounds["root"]).toEqual({ tools: [], skills: [] });
+    expect(r.effective.compiled_capability_bounds["check-gate"]).toEqual({ tools: [], skills: [] });
   });
 
   test("default deny without a policy → all grants empty", () => {
     const r = compileGateChain();
-    for (const g of Object.values(r.effective.capability_grants)) {
+    for (const g of Object.values(r.effective.compiled_capability_bounds)) {
       expect(g).toEqual({ tools: [], skills: [] });
     }
   });
@@ -233,8 +233,8 @@ describe("resolveCapabilityGrants", () => {
         routes: [],
         capability_requests: { required_tools: ["bash", "net"], required_skills: ["exfil"] },
       },
-    ] as unknown as Parameters<typeof resolveCapabilityGrants>[0];
-    const grants = resolveCapabilityGrants(steps, { allowed_tools: ["read"], allowed_skills: [] });
+    ] as unknown as Parameters<typeof resolveCompiledCapabilityBounds>[0];
+    const grants = resolveCompiledCapabilityBounds(steps, { allowed_tools: ["read"], allowed_skills: [] });
     expect(grants["greedy"]).toEqual({ tools: [], skills: [] });
   });
 
@@ -247,12 +247,12 @@ describe("resolveCapabilityGrants", () => {
         routes: [],
         capability_requests: { required_tools: ["*"] },
       },
-    ] as unknown as Parameters<typeof resolveCapabilityGrants>[0];
+    ] as unknown as Parameters<typeof resolveCompiledCapabilityBounds>[0];
     // Allowlist "*" matches only a literal "*" request here — but real
     // tool requests are not expanded, so nothing else leaks.
-    const grants = resolveCapabilityGrants(steps, { allowed_tools: ["*"] });
+    const grants = resolveCompiledCapabilityBounds(steps, { allowed_tools: ["*"] });
     expect(grants["star"]!.tools).toEqual(["*"]);
-    expect(resolveCapabilityGrants(steps, { allowed_tools: ["bash"] })["star"]!.tools).toEqual([]);
+    expect(resolveCompiledCapabilityBounds(steps, { allowed_tools: ["bash"] })["star"]!.tools).toEqual([]);
   });
 });
 

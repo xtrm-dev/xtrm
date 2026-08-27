@@ -16,7 +16,7 @@
  *
  * Pure function set:
  *   - compileChain(definition, opts?)        → draft ResolvedChain
- *   - resolveCapabilityGrants(steps, policy) → per-step grant sets
+ *   - resolveCompiledCapabilityBounds(steps, policy) → per-step compiled bounds
  *   - approveChain(draft)                    → approved ResolvedChain
  *   - reviseChain(approved, nextDef, opts?)  → new draft at revision+1
  *   - verifyFreezeIntegrity(resolved, def?)  → true | throws
@@ -68,7 +68,7 @@ export const RESOLVED_CHAIN_SCHEMA_VERSION = "xtrm.resolved-chain.v1" as const;
 
 const ScrutinyLevel = z.enum(["none", "low", "medium", "high"]);
 
-const CapabilityGrantSchema = z
+const CompiledCapabilityBoundsSchema = z
   .object({
     tools: z.array(z.string().min(1)),
     skills: z.array(KebabCase),
@@ -102,7 +102,7 @@ export const ResolvedChainSchema = z
     effective: z
       .object({
         scrutiny: z.record(KebabCase, ScrutinyLevel),
-        capability_grants: z.record(KebabCase, CapabilityGrantSchema),
+        compiled_capability_bounds: z.record(KebabCase, CompiledCapabilityBoundsSchema),
       })
       .strict(),
     /** sha256 over canonicalJson of frozen_topology. */
@@ -111,7 +111,10 @@ export const ResolvedChainSchema = z
   .strict();
 
 export type ResolvedChain = z.infer<typeof ResolvedChainSchema>;
-export type CapabilityGrant = z.infer<typeof CapabilityGrantSchema>;
+
+/** Compile-time upper bound only — not the final grant authority (ADR-004);
+ *  see the complete note at the emission site in compileChain. */
+export type CompiledCapabilityBounds = z.infer<typeof CompiledCapabilityBoundsSchema>;
 
 /**
  * Operator policy input for capability binding (R1.15/R1.16). Absent or
@@ -167,17 +170,17 @@ function effectiveScrutiny(floor: Scrutiny, step: CompilerStep): Scrutiny {
 // ---------------------------------------------------------------------------
 
 /**
- * Grant = step request ∩ operator allowlist, DEFAULT DENY. Steps
- * requesting nothing get empty grants; requests are never copied
- * unfiltered. Pure; no wildcard expansion (see module docblock).
+ * Bound = step request ∩ operator allowlist, DEFAULT DENY. Steps requesting
+ * nothing get empty bounds; requests are never copied unfiltered. Pure; no
+ * wildcard expansion (see module docblock).
  */
-export function resolveCapabilityGrants(
+export function resolveCompiledCapabilityBounds(
   steps: readonly CompilerStep[],
   grantsPolicy: GrantsPolicy | undefined,
-): Record<string, CapabilityGrant> {
+): Record<string, CompiledCapabilityBounds> {
   const allowedTools = new Set(grantsPolicy?.allowed_tools ?? []);
   const allowedSkills = new Set(grantsPolicy?.allowed_skills ?? []);
-  const out: Record<string, CapabilityGrant> = {};
+  const out: Record<string, CompiledCapabilityBounds> = {};
   for (const step of steps) {
     const req = step.capability_requests;
     out[step.step_id] = {
@@ -230,7 +233,16 @@ export function compileChain(definition: ChainDefinition, opts: CompileOptions =
     frozen_topology: frozenTopology,
     effective: {
       scrutiny,
-      capability_grants: resolveCapabilityGrants(def.topology.steps, opts.grantsPolicy),
+      // ADR-004: compiled_capability_bounds is a COMPILE-TIME UPPER BOUND
+      // only (requests ∩ operator allowlist). The final ResolvedCapabilityGrant
+      // additionally requires SpecialistDefinition requirements,
+      // SpecialistActivationProfile, and runtime/sandbox availability —
+      // completed at PREPARE/ActivationSupervisor wiring. Runtime consumers
+      // MUST NOT treat this artifact as the final grant authority.
+      compiled_capability_bounds: resolveCompiledCapabilityBounds(
+        def.topology.steps,
+        opts.grantsPolicy,
+      ),
     },
     structure_fingerprint: sha256(canonicalJson(frozenTopology)),
   };

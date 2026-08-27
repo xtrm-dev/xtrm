@@ -278,6 +278,82 @@ describe("waiting state + scheduler intents (xtrm-sf3)", () => {
     // Sorted, deduped obligation_ids in the durable event.
     expect(JSON.parse(a[0][0]!).obligation_ids).toEqual(["obl:k1", "obl:k2"]);
   });
+
+  test("mutual-cycle double-entry under overlapping ops (xtrm-2hn.8): detected exactly once per entrant pair, refusal inert, survivor wake exact, loser re-enterable", async () => {
+    const w = await world();
+    await openObligation(w, "ka", "pA", ["pB"]); // A would wait on a reply from B
+    await openObligation(w, "kb", "pB", ["pA"]); // B would wait on a reply from A — mutually dependent
+
+    // Writer 1 (pB) enters cleanly. Commands are host-serialized at the
+    // registry seam per enterWaiting()'s single-scheduler contract; ops below
+    // keep OVERLAPPING live state (no wake/resolution between the entries).
+    const bEntered = await w.registry.enterWaiting("act-b", "pB", ["obl:kb"]);
+    expect(bEntered.state).toBe("waiting_on_channel");
+    const enteredLines = w.waitJ.lines().length;
+
+    // Writer 2 (pA) fires its mutually-dependent entry: cycle detected —
+    // exactly one typed resolution, zero journal residue for the loser.
+    const refusal = await w.registry.enterWaiting("act-a", "pA", ["obl:ka"]).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(refusal).toBeInstanceOf(WaitingError);
+    expect((refusal as WaitingError).code).toBe("mutual_wait");
+    expect((refusal as WaitingError).candidates).toContain("pA");
+    expect(w.waitJ.lines()).toHaveLength(enteredLines); // refused entry wrote NOTHING
+
+    // Adversarial double-entry REPLAY of the losing side: refused identically,
+    // still inert.
+    const replay = await w.registry.enterWaiting("act-a", "pA", ["obl:ka"]).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect((replay as WaitingError | null)?.code).toBe("mutual_wait");
+    expect(w.waitJ.lines()).toHaveLength(enteredLines);
+
+    // Overlapping ops: while B's wake processes, the losing side retries —
+    // the cycle persists until B stops waiting, so the retry MUST be refused
+    // inside the same window; the wake itself completes exactly once.
+    const [wakeOutcomes, overlapErr] = await Promise.all([
+      w.registry.onReplyRecorded({ obligation_id: "obl:kb", reply_message_id: "chain:t1#3" }),
+      w.registry.enterWaiting("act-a", "pA", ["obl:ka"]).then(
+        () => null,
+        (e: unknown) => e,
+      ),
+    ]);
+    expect((overlapErr as WaitingError | null)?.code).toBe("mutual_wait");
+    expect(wakeOutcomes).toHaveLength(1);
+    expect(wakeOutcomes[0]).toMatchObject({
+      activation_id: "act-b",
+      intent_id: resumeIntentId("act-b", "obl:kb", "chain:t1#3"),
+      reason: "reply_received",
+      emitted: true,
+    });
+
+    // No wake fired twice: replayed identical evidence emits nothing further.
+    expect(await w.registry.onReplyRecorded({ obligation_id: "obl:kb", reply_message_id: "chain:t1#3" })).toEqual([]);
+    expect(w.intentJ.lines()).toHaveLength(1);
+
+    // No lost wake intent on the refused side: nothing addressed to act-a was
+    // ever emitted before it legitimately entered.
+    expect(JSON.stringify(await w.intentJ.readAll()).includes("act-a")).toBe(false);
+
+    // Cycle dissolved (B resumed): the loser now enters normally and remains
+    // resumable per contract; its own wake is exact-once with a fresh id.
+    await expect(w.registry.enterWaiting("act-a", "pA", ["obl:ka"])).resolves.toMatchObject({ state: "waiting_on_channel" });
+    const aWake = await w.registry.onReplyRecorded({ obligation_id: "obl:ka", reply_message_id: "chain:t1#5" });
+    expect(aWake).toHaveLength(1);
+    expect(aWake[0]).toMatchObject({
+      activation_id: "act-a",
+      intent_id: resumeIntentId("act-a", "obl:ka", "chain:t1#5"),
+      reason: "reply_received",
+      emitted: true,
+    });
+    expect(await w.registry.onReplyRecorded({ obligation_id: "obl:ka", reply_message_id: "chain:t1#5" })).toEqual([]);
+    expect(w.intentJ.lines()).toHaveLength(2);
+    expect(w.registry.get("act-a")!.state).toBe("resumed_pending_dispatch");
+    expect(w.registry.get("act-b")!.state).toBe("resumed_pending_dispatch");
+  });
 });
 
 describe("expiry intent exactness across re-entries (review finding 1)", () => {

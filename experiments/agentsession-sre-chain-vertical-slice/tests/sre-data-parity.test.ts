@@ -14,11 +14,12 @@
  * equivalence by contract (normalize.ts).
  *
  * DOCUMENTED TRANSLATION DEVIATIONS (findings, see also data/sre-team.chain.json):
- *   F1. ParticipantClass "coordinator" has no AuthoredStepSchema equivalent
- *       (StepClassSchema = step|gate|advisor). Entry/close coordinator steps
- *       are authored as class "step" on BOTH sides of this comparison. This
- *       is a schema-vocabulary gap, not a harness shortcut — escalation-
- *       relevant if coordinator-class semantics are load-bearing downstream.
+ *   F1. RESOLVED (xtrm-2hn.5): ParticipantClass "coordinator" is now a
+ *       first-class authored position class (StepClassSchema =
+ *       step|gate|advisor|coordinator; decision:
+ *       docs/design/qcy-f1-coordinator-vocabulary.md). Coordinator entry/close
+ *       steps are authored as "coordinator" on BOTH sides — the former
+ *       mapClass shim is deleted and this comparison is as-authored.
  *   F2. Per-step model/fallback_model (topology.ts DEFAULT_MODEL/
  *       DEFAULT_FALLBACK) are not authored-form fields; model binding is a
  *       materialization-time concern per ADR-001 §2. Dropped on both sides.
@@ -61,11 +62,6 @@ const DATA_FILE = join(ROOT, "data", "sre-team.chain.json");
 // Hard-coded topology → equivalent InlineTopology (documented mapping)
 // ---------------------------------------------------------------------------
 
-/** F1: coordinator class has no authored equivalent; nearest is "step". */
-function mapClass(c: string): "step" | "gate" | "advisor" {
-  return c === "coordinator" ? "step" : (c as "step" | "gate" | "advisor");
-}
-
 /** F3: reviewer routing/remediation per the topology.ts docblock semantics. */
 function mapRoutesAndRemediation(stepId: string): Pick<InlineTopology["steps"][number], "routes" | "remediation"> {
   if (stepId !== "reviewer") return { routes: [] };
@@ -82,7 +78,7 @@ function mapRoutesAndRemediation(stepId: string): Pick<InlineTopology["steps"][n
 function hardcodedTopologyAsInline(): InlineTopology {
   const steps = buildFixedSreTopology().map((s) => ({
     step_id: s.step_id,
-    class: mapClass(s.class),
+    class: s.class, // as-authored: ParticipantClass round-trips 1:1 (F1 resolved)
     specialist: { name: s.role }, // role IS the specialist identity
     depends_on: [...s.needs],
     ...mapRoutesAndRemediation(s.step_id),
@@ -194,7 +190,7 @@ describe("structural parity: data-defined vs hard-coded topology", () => {
     expect(bindingsOf(dataDef)).toEqual(bindingsOf(mappedDef));
   });
 
-  test("identical classes under the documented coordinator mapping (F1)", () => {
+  test("identical classes, as-authored (F1 resolved: coordinator round-trips)", () => {
     expect(dataDef.topology.steps.map((s) => s.class)).toEqual(mappedDef.topology.steps.map((s) => s.class));
   });
 
