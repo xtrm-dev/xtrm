@@ -10,7 +10,7 @@ import {
   type ObligationEvent,
   type ObligationJournal,
 } from "../src/obligation/index.ts";
-import { ChannelCommunicationService, type ChannelCommStore, type ParticipantCursors, type StoredEnvelope } from "../src/channel-comm/index.ts";
+import { ChannelCommunicationService, type ChannelCursors, type ChannelCommStore, type StoredEnvelope } from "../src/channel-comm/index.ts";
 import { FinalizeController, type SettlementEvidenceEntry } from "../src/finalize/index.ts";
 
 const T0 = 1_700_000_000_000;
@@ -436,7 +436,7 @@ describe("obligation ledger — atomic request/reply correlation (xtrm-hzb)", ()
 
 function fakeCommStore(): ChannelCommStore {
   const messages: StoredEnvelope[] = [];
-  const cursors = new Map<string, ParticipantCursors>();
+  const cursors = new Map<string, ChannelCursors>();
   return {
     async append(env) {
       messages.push(structuredClone(env));
@@ -448,11 +448,11 @@ function fakeCommStore(): ChannelCommStore {
       const hit = messages.find((m) => m.idempotency_key === key);
       return hit ? structuredClone(hit) : null;
     },
-    async getCursors(pid) {
-      return cursors.get(pid) ?? { last_read_seq: 0, last_ack_seq: 0 };
+    async getCursors(channel_id, participant_id) {
+      return cursors.get(`${channel_id}|${participant_id}`) ?? { last_read_message_id: 0, last_ack_message_id: 0 };
     },
-    async setCursors(pid, c) {
-      cursors.set(pid, structuredClone(c));
+    async setCursors(channel_id, participant_id, c) {
+      cursors.set(`${channel_id}|${participant_id}`, structuredClone(c));
     },
   };
 }
@@ -573,8 +573,9 @@ describe("voidObligation two-journal safety: precondition-before-mutation (xtrm-
     expect((await journal.readAll()).filter((ev) => ev.type === "obligation.voided")).toHaveLength(1);
     // Recovery protocol surfaces through reconciliation-on-load (detection-only).
     const reloaded = await new ObligationLedger(journal, { now: tickClock(), evidenceExists: async () => false }).load();
+    expect(reloaded.get("obl:k1")?.state).toBe("voided");
     expect(reloaded.reconciliation.voided_without_evidence).toEqual([
-      { obligation_id: "obl:k1", voided_at_ms: reloaded.get("obl:k1")?.voided_at_ms, cancelled_by: "operator:finalize" },
+      { obligation_id: "obl:k1", voided_at_ms: reloaded.get("obl:k1")?.voided_at_ms ?? null, cancelled_by: "operator:finalize" },
     ]);
     expect(reloaded.get("obl:k1")?.state).toBe("voided"); // history never auto-mutated
   });

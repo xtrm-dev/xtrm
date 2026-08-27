@@ -960,8 +960,8 @@ describe("comm adversarial/recovery acceptance (xtrm-1xn)", () => {
         // request()/request() race: both resolve; second REUSES the first's
         // committed outcome (ids) instead of minting a twin.
         const [x, y] = await Promise.all([
-          racers[0].request({ ...draftBase, expects_reply_from: ["pR"] }),
-          racers[1].request({ ...draftBase, expects_reply_from: ["pR"] }),
+          racers[0]!.request({ ...draftBase, expects_reply_from: ["pR"] }),
+          racers[1]!.request({ ...draftBase, expects_reply_from: ["pR"] }),
         ]);
         expect(x.message_id).toBe(y.message_id);
         expect(x.seq).toBe(y.seq);
@@ -970,7 +970,7 @@ describe("comm adversarial/recovery acceptance (xtrm-1xn)", () => {
         expect(y.intent).toEqual(x.intent); // identical handle ⇒ same handle value
       } else {
         // send()/send() race over the same guarantees.
-        const [a, b] = await Promise.all([racers[0].send(draftBase), racers[1].send(draftBase)]);
+        const [a, b] = await Promise.all([racers[0]!.send(draftBase), racers[1]!.send(draftBase)]);
         expect(a.message_id).toBe(b.message_id);
         expect(a.id).toBe(b.id);
         expect(a.seq).toBe(b.seq);
