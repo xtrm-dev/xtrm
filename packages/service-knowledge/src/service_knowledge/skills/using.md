@@ -114,6 +114,28 @@ If no registered expert covers the user's need:
 1. Inform the user no expert exists for this domain
 2. Offer to create one: "I can create a service skill using `/creating-service-knowledge`"
 
+### 3.5 Absent or Stale Knowledge — commit corpus is first-class memory
+
+When the registry is absent, or a skill's knowledge is stale (drift marker
+present, `last_sync_ref` behind HEAD), do NOT block on updating
+service-knowledge. Memory priority per task:
+
+1. **service-knowledge, if present** — use the registry and skill bodies as-is;
+   never grep-hunt for `service-registry.json` speculatively.
+2. **Commit corpus — always available** — fall back to `git log -p --follow --
+   <file>` for per-file history, `git log --grep`/`--oneline` for corpus, and
+   diffs vs `last_sync_ref` when a registry states one. Commits do not go stale.
+3. **bd memories** — before workflow-sensitive questions, run
+   `bd memories <topic>` / `bd recall <key>`; write durable findings back with
+   `bd remember`.
+
+**Drift doctrine**: a drift marker (`.service-skills-drift-pending` or
+`service-knowledge status`) is **advisory**. Suggest the update, proceed with
+current knowledge + commit corpus in parallel; reconcile via
+`/updating-service-knowledge` and stamp `last_sync_ref` after. Never block task
+work on updating service-knowledge, and rebuild the index only after a
+successful reconcile.
+
 ---
 
 ## Session Start Hook
