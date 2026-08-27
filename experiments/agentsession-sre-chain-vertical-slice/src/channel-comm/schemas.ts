@@ -297,15 +297,20 @@ const AudienceSchema = z
   .strict();
 
 /**
- * Full envelope. `schema_version` pins `xtrm.channel-message.v1`; `author`
- * and `seq`/message identity are host-assigned AFTER validation of the
+ * Full envelope. `schema_version` pins `xtrm.channel-message.v1`; `author`,
+ * `id` and `seq`/message identity are host-assigned AFTER validation of the
  * caller's draft (drafts are validated against EnvelopeDraftSchema below).
+ *
+ * `id` (optional here because the SERVICE assembles pre-store) is the GLOBAL
+ * store-assigned monotonically increasing message id — the canonical semantic
+ * cursor position (`channel_messages.id` analog, §5.1). `seq` is display-only.
  */
 export const StoredEnvelopeSchema = z
   .object({
     schema_version: z.literal(CHANNEL_MESSAGE_SCHEMA_VERSION),
     channel_id: z.string().min(1),
     message_id: z.string().min(1),
+    id: z.number().int().positive().optional(),
     seq: z.number().int().positive(),
     author: z.object({ participant_id: z.string().min(1), participant_class: z.enum(PARTICIPANT_CLASSES) }).strict(),
     kind: z.enum(MESSAGE_KINDS),

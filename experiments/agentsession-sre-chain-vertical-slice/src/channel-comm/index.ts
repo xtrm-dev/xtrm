@@ -4,14 +4,28 @@
  * Scope (bead xtrm-6yn): schemas, validation, host-enforced authority,
  * correlation handles, inbox/cursor semantics, pure functions.
  *
- * CURSOR MODEL DEVIATION (documented): cursors here are per-participant
- * per-channel SEQUENCE positions (`last_read_seq` / `last_ack_seq`).
- * channels.md §5.1 makes the table-wide autoincrement `channel_messages.id`
- * the sole DELIVERY cursor and demotes `seq` to a per-channel DISPLAY ordinal
- * (`sp tail` readability only); real id allocation belongs to the store.
- * This layer models cursors as seq because it owns no storage and its injected
- * store interface is keyed by `(channel_id, seq)`; any production store must
- * translate to §5.1 id-based cursors at this seam.
+ * CANON ADOPTION (channels.md §5.1): the STORE assigns a global, monotonically
+ * increasing message `id` at enqueue — the table-wide `channel_messages.id`
+ * analog and the SOLE semantic cursor position (delivery/read/ack). Cursor
+ * storage is per participant PER CHANNEL
+ * (`last_read_message_id` / `last_ack_message_id`, subscription.last_seen_id-
+ * style retention); the injected store seams key cursors by
+ * `(channel_id, participant_id)`. Per-channel read state can therefore never
+ * cross-contaminate another channel. `seq` remains the per-channel DISPLAY
+ * ordinal with its historical meaning (`sp tail` readability) and is NEVER
+ * compared for filtering.
+ *
+ * VISIBILITY GATE: "chain"/"node" mean "authorized members of the container"
+ * (§5.4 ~line 208). This layer holds no membership table; hosts inject an
+ * `isContainerMember(participantId, containerId)` resolver via ServiceOptions.
+ * chain/node messages are visible iff the resolver returns true OR the viewer
+ * holds a coordinator-class lane (COORDINATOR_CLASSES override). With NO
+ * resolver configured the gate FAILS CLOSED for chain/node
+ * (private/targets/operator behaviors are unchanged).
+ *
+ * DEPRECATION NOTE: this layer previously modeled cursors as per-participant
+ * seq positions (`last_read_seq`/`last_ack_seq`), which leaked reads across
+ * channels because seq is channel-local.
  *
  * Explicit seams for later beads:
  *  - xtrm-hzb (obligation ledger/state machine): request() emits a
@@ -121,18 +135,31 @@ function extractChannelId(rawDraft: unknown): string | null {
 // Injected store — the ONLY effect boundary of this module.
 // ---------------------------------------------------------------------------
 
-/** Read vs ack cursors are independent values; neither implies the other. */
-export interface ParticipantCursors {
-  last_read_seq: number;
-  last_ack_seq: number;
+/**
+ * Read vs ack cursors are independent values; neither implies the other.
+ * Both are GLOBAL message-id positions scoped to ONE channel: the canonical
+ * `channel_messages.id` analog assigned by the store at enqueue (§5.1).
+ */
+export interface ChannelCursors {
+  last_read_message_id: number;
+  last_ack_message_id: number;
+}
+
+/** Zero cursor for a fresh channel subscription. */
+export function emptyChannelCursors(): ChannelCursors {
+  return { last_read_message_id: 0, last_ack_message_id: 0 };
 }
 
 export interface ChannelCommStore {
-  append(envelope: StoredEnvelope): Promise<void>;
+  /** Appends and returns the stored envelope carrying the STORE-ASSIGNED
+   *  global message `id` (the semantic cursor position). Stores that do not
+   *  assign ids yield an envelope without one; such envelopes are treated as
+   *  never-past-cursor (fail-visible). */
+  append(envelope: StoredEnvelope): Promise<StoredEnvelope | void>;
   readChannel(filter?: { channel_id?: string }): Promise<StoredEnvelope[]>;
   findByIdempotencyKey(idempotency_key: string): Promise<StoredEnvelope | null>;
-  getCursors(participant_id: string): Promise<ParticipantCursors>;
-  setCursors(participant_id: string, cursors: ParticipantCursors): Promise<void>;
+  getCursors(channel_id: string, participant_id: string): Promise<ChannelCursors>;
+  setCursors(channel_id: string, participant_id: string, cursors: ChannelCursors): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -151,7 +178,10 @@ export interface RequestIntent {
 
 export interface SendResult {
   message_id: string;
+  /** Per-channel DISPLAY ordinal (§5.1) — never a delivery/cursor position. */
   seq: number;
+  /** Global store-assigned message id when the store allocates ids. */
+  id?: number;
 }
 
 export interface RequestResult extends SendResult {
@@ -167,18 +197,34 @@ export interface InboxItem extends StoredEnvelope {
 
 export interface Inbox {
   items: InboxItem[];
-  cursors: ParticipantCursors;
+  /** Observed per-channel cursors keyed by channel_id (each query compares
+   *  each message against ITS OWN channel's read cursor only). */
+  cursors: Record<string, ChannelCursors>;
 }
 
 // ---------------------------------------------------------------------------
 // Visibility inclusion rule (channels.md ~line 208).
 // ---------------------------------------------------------------------------
 
+
+
+// ---------------------------------------------------------------------------
+// Visibility inclusion rule (channels.md §5.4 ~line 208) with an INJECTED
+// container-membership resolver for chain/node.
+// ---------------------------------------------------------------------------
+
 const COORDINATOR_CLASSES: readonly ViewerClass[] = ["coordinator", "runtime"];
+
+/** Container root of a channel id: channels are namespaced under their
+ *  container (e.g. "chain:t::explorer" ∈ container "chain:t"). */
+export function containerOfChannel(channel_id: string): string {
+  return channel_id.split("::")[0] ?? channel_id;
+}
 
 export function canSee(
   viewer: { participant_id: string; viewer_class: ViewerClass },
   msg: StoredEnvelope,
+  isContainerMember?: (participantId: string, containerId: string) => boolean,
 ): boolean {
   const targeted = msg.audience.action_targets.includes(viewer.participant_id);
   const isAuthor = msg.author.participant_id === viewer.participant_id;
@@ -190,14 +236,22 @@ export function canSee(
       return targeted || isCoordinator;
     case "chain":
     case "node":
-      // All authorized participants of the container; this layer has no
-      // membership model, so authorized = any lane holding a valid viewer.
-      return true;
+      // Authorized members of the container only; coordinator-class lanes
+      // override. No resolver configured → FAIL CLOSED.
+      if (isCoordinator) return true;
+      return isContainerMember
+        ? isContainerMember(viewer.participant_id, containerOfChannel(msg.channel_id))
+        : false;
     case "operator":
       return viewer.viewer_class === "operator" || isCoordinator;
     case "public_audit":
       return true;
   }
+}
+
+/** Past-cursor comparison on GLOBAL ids only. A message without a store-assigned id is never past any cursor (fail-visible, legacy fixtures). */
+function isPastCursor(messageId: number | undefined, cursorId: number | undefined): boolean {
+  return messageId !== undefined && cursorId !== undefined && messageId <= cursorId;
 }
 
 // ---------------------------------------------------------------------------
@@ -207,6 +261,9 @@ export function canSee(
 export interface ServiceOptions {
   /** Injectable clock for determinism; defaults to Date.now. */
   now?: () => number;
+  /** Container-membership resolver for chain/node visibility (§5.4).
+   *  Absent → chain/node fail closed for non-coordinator viewers. */
+  isContainerMember?: (participantId: string, containerId: string) => boolean;
 }
 
 export class ChannelCommunicationService {
@@ -254,7 +311,11 @@ export class ChannelCommunicationService {
   ): Promise<SendResult> {
     const existing = await this.store.findByIdempotencyKey(draft.idempotency_key);
     if (existing) {
-      return { message_id: existing.message_id, seq: existing.seq };
+      return {
+        message_id: existing.message_id,
+        seq: existing.seq,
+        ...(typeof existing.id === "number" ? { id: existing.id } : {}),
+      };
     }
     const siblings = await this.store.readChannel({ channel_id: draft.channel_id });
     const seq = siblings.reduce((mx, m) => Math.max(mx, m.seq), 0) + 1;
@@ -274,8 +335,10 @@ export class ChannelCommunicationService {
       created_at_ms: this.nowMs(),
     };
     StoredEnvelopeSchema.parse(envelope); // host-side post-assembly guard
-    await this.store.append(envelope);
-    return { message_id: envelope.message_id, seq };
+    const stored = await this.store.append(envelope);
+    // The store owns global id allocation at enqueue (§5.1); surface it when present.
+    const id = stored && typeof stored.id === "number" ? stored.id : undefined;
+    return { message_id: envelope.message_id, seq, ...(id !== undefined ? { id } : {}) };
   }
 
   private static parseOrThrow(draft: unknown): EnvelopeDraft {
@@ -438,43 +501,67 @@ export class ChannelCommunicationService {
     return { addressed, attention_only };
   }
 
-  /** Pure observation: unread + visibility-filtered. NEVER mutates cursors. */
+  /** Per-channel read cursor of a viewer, fetched once per distinct channel. */
+  private async cursorsFor(
+    participant_id: string,
+    channel_id: string,
+    cache: Map<string, ChannelCursors>,
+  ): Promise<ChannelCursors> {
+    let c = cache.get(channel_id);
+    if (!c) {
+      c = (await this.store.getCursors(channel_id, participant_id)) ?? emptyChannelCursors();
+      cache.set(channel_id, c);
+    }
+    return c;
+  }
+
+  /** Pure observation: unread + visibility-filtered. NEVER mutates cursors.
+   *  Read-filtering compares each message's GLOBAL id against ITS OWN
+   *  channel's per-participant read cursor — reads in one channel can never
+   *  mark another channel's messages as read. */
   async inbox(viewer: { participant_id: string; viewer_class: ViewerClass }, channel_id?: string): Promise<Inbox> {
-    const cursors = await this.store.getCursors(viewer.participant_id);
     const stream = await this.store.readChannel(channel_id ? { channel_id } : undefined);
+    const cache = new Map<string, ChannelCursors>();
     const items: InboxItem[] = [];
     for (const msg of stream) {
-      if (msg.seq <= cursors.last_read_seq) continue;
-      if (!canSee(viewer, msg)) continue;
+      const cursors = await this.cursorsFor(viewer.participant_id, msg.channel_id, cache);
+      if (isPastCursor(msg.id, cursors.last_read_message_id)) continue;
+      if (!canSee(viewer, msg, this.opts.isContainerMember)) continue;
       const flags = ChannelCommunicationService.classify(msg, viewer.participant_id);
       items.push({ ...msg, ...flags });
     }
-    return { items, cursors };
+    return { items, cursors: Object.fromEntries(cache) };
   }
 
-  /** Ack-set query: visibility-filtered items past the ack cursor, regardless of read cursor. */
+  /** Ack-set query: visibility-filtered items past the PER-CHANNEL ack cursor,
+   *  regardless of the read cursor (read ≠ ack). */
   async pendingAck(viewer: { participant_id: string; viewer_class: ViewerClass }, channel_id?: string): Promise<InboxItem[]> {
-    const cursors = await this.store.getCursors(viewer.participant_id);
     const stream = await this.store.readChannel(channel_id ? { channel_id } : undefined);
-    return stream
-      .filter((m) => m.seq > cursors.last_ack_seq)
-      .filter((m) => canSee(viewer, m))
-      .map((msg) => ({ ...msg, ...ChannelCommunicationService.classify(msg, viewer.participant_id) }));
+    const cache = new Map<string, ChannelCursors>();
+    const out: InboxItem[] = [];
+    for (const msg of stream) {
+      const cursors = await this.cursorsFor(viewer.participant_id, msg.channel_id, cache);
+      if (isPastCursor(msg.id, cursors.last_ack_message_id)) continue;
+      if (!canSee(viewer, msg, this.opts.isContainerMember)) continue;
+      out.push({ ...msg, ...ChannelCommunicationService.classify(msg, viewer.participant_id) });
+    }
+    return out;
   }
 
-  /** Advancing READ never touches ACK (read != ack, API-shape-enforced). */
-  async advanceRead(participant_id: string, upToSeq: number): Promise<ParticipantCursors> {
-    const cur = await this.store.getCursors(participant_id);
-    const next: ParticipantCursors = { ...cur, last_read_seq: Math.max(cur.last_read_seq, upToSeq) };
-    await this.store.setCursors(participant_id, next);
+  /** Advancing READ never touches ACK (read != ack, API-shape-enforced).
+   *  Cursor position is the GLOBAL message id; scope is ONE channel. */
+  async advanceRead(channel_id: string, participant_id: string, upToMessageId: number): Promise<ChannelCursors> {
+    const cur = await this.cursorsFor(participant_id, channel_id, new Map());
+    const next: ChannelCursors = { ...cur, last_read_message_id: Math.max(cur.last_read_message_id, upToMessageId) };
+    await this.store.setCursors(channel_id, participant_id, next);
     return next;
   }
 
-  /** Ack advances ONLY the ack cursor. */
-  async ackUpTo(participant_id: string, upToSeq: number): Promise<ParticipantCursors> {
-    const cur = await this.store.getCursors(participant_id);
-    const next: ParticipantCursors = { ...cur, last_ack_seq: Math.max(cur.last_ack_seq, upToSeq) };
-    await this.store.setCursors(participant_id, next);
+  /** Ack advances ONLY the ack cursor, scoped to one channel by message id. */
+  async ackUpTo(channel_id: string, participant_id: string, upToMessageId: number): Promise<ChannelCursors> {
+    const cur = await this.cursorsFor(participant_id, channel_id, new Map());
+    const next: ChannelCursors = { ...cur, last_ack_message_id: Math.max(cur.last_ack_message_id, upToMessageId) };
+    await this.store.setCursors(channel_id, participant_id, next);
     return next;
   }
 }

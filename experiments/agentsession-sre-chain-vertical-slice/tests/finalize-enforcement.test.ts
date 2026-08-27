@@ -245,6 +245,39 @@ describe("mandatory flag — legacy compatibility + downgrade policy", () => {
   });
 });
 
+describe("uncertain beats mandatory flag (bead xtrm-2hn.2)", () => {
+  test("non-mandatory obligation with pending observation → uncertain, never clear", async () => {
+    const { ledger } = await freshLedger();
+    await openObligation(ledger, "k-nm-ext", {}); // mandatory defaults false
+    await ledger.observeExternalReply("ext-ref-nm-1", "req:k-nm-ext", "chain:t1");
+    const rec = (await allRecords(ledger)).get("obl:k-nm-ext")!;
+    expect(rec.mandatory).toBe(false);
+
+    const v = await checkFinalization({ ...CHECK_BASE, obligations: [rec] });
+    expect(v.verdict).toBe("uncertain");
+    if (v.verdict !== "uncertain") return;
+    expect(v.observations).toEqual([{ obligation_id: "obl:k-nm-ext", external_refs: ["ext-ref-nm-1"] }]);
+    expect(v.reason_codes).toContain("pending_external_observation");
+    expect(v.downgraded.map((d) => d.obligation_id)).toEqual(["obl:k-nm-ext"]);
+  });
+
+  test("uncertainty precedes blocked: mandatory open w/o observations + non-mandatory with observation → uncertain", async () => {
+    const { ledger } = await freshLedger();
+    await openObligation(ledger, "k-mix-mand", { mandatory: true });
+    await openObligation(ledger, "k-mix-ext", {});
+    await ledger.observeExternalReply("ext-ref-mix-1", "req:k-mix-ext", "chain:t1");
+
+    const v = await checkFinalization({ ...CHECK_BASE, obligations: [...(await allRecords(ledger)).values()] });
+    expect(v.verdict).toBe("uncertain");
+    if (v.verdict !== "uncertain") return;
+    expect(v.observations).toEqual([{ obligation_id: "obl:k-mix-ext", external_refs: ["ext-ref-mix-1"] }]);
+    // Refs surface ALL binding records; the mandatory-open block reason is preserved alongside.
+    expect(v.obligations.map((o) => o.obligation_id)).toEqual(["obl:k-mix-ext", "obl:k-mix-mand"]);
+    expect([...v.reason_codes].sort()).toEqual(["open_mandatory_inbound", "pending_external_observation"]);
+    expect(v.downgraded.map((d) => d.obligation_id)).toEqual(["obl:k-mix-ext"]);
+  });
+});
+
 describe("voidObligation — class authority + resolving evidence (R2.7)", () => {
   test("coordinator and operator may void; evidence entry recorded; state survives reload", async () => {
     for (const actor_class of ["coordinator", "operator"] as const) {

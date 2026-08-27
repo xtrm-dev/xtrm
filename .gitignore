@@ -13,6 +13,10 @@ build/
 *.tsbuildinfo
 .turbo/
 
+# Python caches
+__pycache__/
+*.py[cod]
+
 # Editor / OS
 .DS_Store
 .idea/

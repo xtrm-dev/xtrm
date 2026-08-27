@@ -86,11 +86,42 @@ describe("formula assets — all 15 real assets", () => {
       expect(def.topology.steps.length).toBeGreaterThan(0);
       // entry_step is the kind:root step and exists.
       expect(def.topology.steps.some((s) => s.step_id === def.topology.entry_step)).toBe(true);
-      // No invented gates/routes/remediation.
+      // Gate-labeled steps keep their authored "gate" class; non-gate
+      // steps carry no routes/remediation (none are invented).
       for (const s of def.topology.steps) {
-        expect(s.class === "gate" || s.routes.length > 0 || s.remediation !== undefined).toBe(false);
+        expect(s.routes.length).toBe(0);
+        expect(s.remediation).toBeUndefined();
       }
     }
+  });
+
+  test("gate:* labels survive import as class \"gate\" across all 15 corpus assets", () => {
+    let gateStepCount = 0;
+    for (const f of files) {
+      const raw = JSON.parse(readFileSync(join(FORMULA_DIR, f), "utf8")) as {
+        steps?: Array<{ id: string; labels?: string[] }>;
+      };
+      const gateIds = new Set(
+        (raw.steps ?? []).filter((s) => (s.labels ?? []).some((l) => l.startsWith("gate:"))).map((s) => s.id),
+      );
+      const name = f.replace(/\.formula\.json$/, "");
+      const def = loadTemplate({ template: { name } }, catalog);
+      for (const s of def.topology.steps) {
+        if (gateIds.has(s.step_id)) {
+          expect(s.class).toBe("gate");
+          gateStepCount++;
+        }
+      }
+    }
+    expect(gateStepCount).toBeGreaterThan(0);
+  });
+
+  test("code-standard gates: seconder/test-runner/obligations-scanner/reviewer are class gate", () => {
+    const def = loadTemplate({ template: { name: "code-standard" } }, catalog);
+    for (const id of ["seconder", "test-runner", "obligations-scanner", "reviewer"]) {
+      expect(def.topology.steps.find((s) => s.step_id === id)!.class).toBe("gate");
+    }
+    expect(def.topology.steps.find((s) => s.step_id === "root")!.class).not.toBe("gate");
   });
 
   test("code-with-advisors dangling needs (conditional advisors) are dropped", () => {

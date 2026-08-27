@@ -3,37 +3,54 @@ import {
   ChannelCommunicationService,
   ChannelValidationError,
   type ChannelCommStore,
-  type ParticipantCursors,
+  type ChannelCursors,
+  emptyChannelCursors,
   type StoredEnvelope,
 } from "../src/channel-comm/index.ts";
 
-/** Deterministic in-memory fake store. */
+/**
+ * Deterministic in-memory fake store.
+ * CANON: append() assigns the GLOBAL monotonically increasing message `id`
+ * at enqueue (channel_messages.id analog); cursors are PER CHANNEL per
+ * participant {last_read_message_id, last_ack_message_id}.
+ */
 function fakeStore(): ChannelCommStore {
   const messages: StoredEnvelope[] = [];
-  const cursors = new Map<string, ParticipantCursors>();
+  const cursors = new Map<string, ChannelCursors>();
+  const key = (cid: string, pid: string) => `${cid}\u0000${pid}`;
+  let nextId = 0;
   return {
     async append(env) {
-      messages.push(structuredClone(env));
+      nextId += 1;
+      const stored = { ...structuredClone(env), id: nextId };
+      messages.push(stored);
+      return structuredClone(stored);
     },
     async readChannel(filter) {
       return messages.filter((m) => !filter?.channel_id || m.channel_id === filter.channel_id).map((m) => structuredClone(m));
     },
-    async findByIdempotencyKey(key) {
-      const hit = messages.find((m) => m.idempotency_key === key);
+    async findByIdempotencyKey(key_) {
+      const hit = messages.find((m) => m.idempotency_key === key_);
       return hit ? structuredClone(hit) : null;
     },
-    async getCursors(pid) {
-      return cursors.get(pid) ?? { last_read_seq: 0, last_ack_seq: 0 };
+    async getCursors(cid, pid) {
+      return cursors.get(key(cid, pid)) ?? emptyChannelCursors();
     },
-    async setCursors(pid, c) {
-      cursors.set(pid, structuredClone(c));
+    async setCursors(cid, pid, c) {
+      cursors.set(key(cid, pid), structuredClone(c));
     },
   };
 }
 
 const NOW = 1_700_000_000_000;
+/** Member resolver matching the previous authorized single-container expectations. */
+const memberOfEverything = () => true;
 const mk = (pid: string, cls: Parameters<typeof ChannelCommunicationService.prototype.send>[0] extends never ? never : any) =>
-  new ChannelCommunicationService({ participant_id: pid, participant_class: cls }, fakeStore(), { now: () => NOW });
+  new ChannelCommunicationService(
+    { participant_id: pid, participant_class: cls },
+    fakeStore(),
+    { now: () => NOW, isContainerMember: memberOfEverything },
+  );
 
 const CH = "chain:t1";
 
@@ -154,8 +171,16 @@ describe("channel-comm semantic contracts", () => {
       audience: { action_targets: ["p2"], visibility: "chain" },
       idempotency_key: "r1",
     });
-    const p2 = new ChannelCommunicationService({ participant_id: "p2", participant_class: "participant" }, p1["store"], { now: () => NOW });
-    const p3 = new ChannelCommunicationService({ participant_id: "p3", participant_class: "participant" }, p1["store"], { now: () => NOW });
+    const p2 = new ChannelCommunicationService(
+      { participant_id: "p2", participant_class: "participant" },
+      p1["store"],
+      { now: () => NOW, isContainerMember: memberOfEverything },
+    );
+    const p3 = new ChannelCommunicationService(
+      { participant_id: "p3", participant_class: "participant" },
+      p1["store"],
+      { now: () => NOW, isContainerMember: memberOfEverything },
+    );
     const in2 = await p2.inbox({ participant_id: "p2", viewer_class: "participant" });
     expect(in2.items).toHaveLength(1);
     expect(in2.items[0]!.addressed).toBe(true);
@@ -168,7 +193,12 @@ describe("channel-comm semantic contracts", () => {
 
   test("visibility inclusion rule per class", async () => {
     const store = fakeStore();
-    const coord = new ChannelCommunicationService({ participant_id: "coord", participant_class: "coordinator" }, store, { now: () => NOW });
+    // Resolver = previous authorized expectation (all viewers are container members).
+    const coord = new ChannelCommunicationService(
+      { participant_id: "coord", participant_class: "coordinator" },
+      store,
+      { now: () => NOW, isContainerMember: memberOfEverything },
+    );
     await coord.send({ channel_id: CH, kind: "work.turn", body: { summary: "s" }, audience: { action_targets: ["pb"], visibility: "private" }, idempotency_key: "priv" });
     await coord.send({ channel_id: CH, kind: "work.turn", body: { summary: "s" }, audience: { action_targets: ["pt"], visibility: "targets" }, idempotency_key: "tgt" });
     await coord.send({ channel_id: CH, kind: "work.turn", body: { summary: "s" }, audience: { action_targets: [], visibility: "operator" }, idempotency_key: "op" });
@@ -248,28 +278,39 @@ describe("channel-comm semantic contracts", () => {
   test("read != ack: advancing read never advances ack; ack-set stays queryable", async () => {
     const store = fakeStore();
     const runtime = new ChannelCommunicationService({ participant_id: "rt", participant_class: "runtime" }, store, { now: () => NOW });
-    for (const i of [1, 2]) {
-      await runtime.send({
-        channel_id: CH,
-        kind: "system.epoch_bump",
-        body: { reason: `r${i}` },
-        audience: { action_targets: ["p1"], visibility: "targets" },
-        idempotency_key: `bump-${i}`,
-      });
-    }
-    const p1 = new ChannelCommunicationService({ participant_id: "p1", participant_class: "participant" }, store, { now: () => NOW });
+    const b1 = await runtime.send({
+      channel_id: CH,
+      kind: "system.epoch_bump",
+      body: { reason: "r1" },
+      audience: { action_targets: ["p1"], visibility: "targets" },
+      idempotency_key: `bump-1`,
+    });
+    const b2 = await runtime.send({
+      channel_id: CH,
+      kind: "system.epoch_bump",
+      body: { reason: "r2" },
+      audience: { action_targets: ["p1"], visibility: "targets" },
+      idempotency_key: `bump-2`,
+    });
+    expect(b1.id).toBe(1);
+    expect(b2.id).toBe(2);
+    const p1 = new ChannelCommunicationService(
+      { participant_id: "p1", participant_class: "participant" },
+      store,
+      { now: () => NOW, isContainerMember: memberOfEverything },
+    );
     const v = { participant_id: "p1", viewer_class: "participant" as const };
     expect((await p1.inbox(v)).items).toHaveLength(2);
-    await p1.advanceRead("p1", 2);
-    let cur = await store.getCursors("p1");
-    expect(cur.last_read_seq).toBe(2);
-    expect(cur.last_ack_seq).toBe(0);
+    await p1.advanceRead(CH, "p1", b2.id!);
+    let cur = await store.getCursors(CH, "p1");
+    expect(cur.last_read_message_id).toBe(2);
+    expect(cur.last_ack_message_id).toBe(0);
     expect((await p1.inbox(v)).items).toHaveLength(0); // read excludes
     expect(await p1.pendingAck(v)).toHaveLength(2); // ack-set still queryable
-    await p1.ackUpTo("p1", 1);
-    cur = await store.getCursors("p1");
-    expect(cur.last_read_seq).toBe(2); // ack did not rewind/mutate read
-    expect(cur.last_ack_seq).toBe(1);
+    await p1.ackUpTo(CH, "p1", b1.id!);
+    cur = await store.getCursors(CH, "p1");
+    expect(cur.last_read_message_id).toBe(2); // ack did not rewind/mutate read
+    expect(cur.last_ack_message_id).toBe(1);
     expect(await p1.pendingAck(v)).toHaveLength(1);
   });
 
@@ -428,5 +469,125 @@ describe("channel-comm semantic contracts", () => {
       return { stream: await store.readChannel({}), req, reply };
     };
     expect(JSON.stringify(await run())).toEqual(JSON.stringify(await run()));
+  });
+
+  // -----------------------------------------------------------------------
+  // Canon regressions (xtrm-2hn.4): per-channel global-id cursors + the
+  // chain/node membership gate.
+  // -----------------------------------------------------------------------
+
+  test("CANON cursor: reading channel A far ahead does NOT mark low-id channel B messages read (no cross-contamination)", async () => {
+    const store = fakeStore();
+    const rt = new ChannelCommunicationService(
+      { participant_id: "rt", participant_class: "runtime" },
+      store,
+      { now: () => NOW },
+    );
+    const p1svc = new ChannelCommunicationService(
+      { participant_id: "p1", participant_class: "participant" },
+      store,
+      { now: () => NOW, isContainerMember: memberOfEverything },
+    );
+    const v = { participant_id: "p1", viewer_class: "participant" as const };
+
+    // Channel A: five messages (global ids 1..5, A-local seqs 1..5).
+    for (const i of [1, 2, 3, 4, 5]) {
+      await rt.send({
+        channel_id: "chain:A",
+        kind: "system.epoch_bump",
+        body: { reason: `a${i}` },
+        audience: { action_targets: ["p1"], visibility: "targets" },
+        idempotency_key: `ca-${i}`,
+      });
+    }
+    // Channel B: TWO messages with HIGHER global ids (6..7) but LOWER seqs (1..2).
+    const b1 = await rt.send({
+      channel_id: "chain:B",
+      kind: "system.epoch_bump",
+      body: { reason: "b1" },
+      audience: { action_targets: ["p1"], visibility: "targets" },
+      idempotency_key: "cb-1",
+    });
+    const b2 = await rt.send({
+      channel_id: "chain:B",
+      kind: "system.epoch_bump",
+      body: { reason: "b2" },
+      audience: { action_targets: ["p1"], visibility: "targets" },
+      idempotency_key: "cb-2",
+    });
+    expect(b1.id).toBe(6);
+    expect(b1.seq).toBe(1);
+    expect(b2.seq).toBe(2);
+
+    // Read ALL of channel A through its last message (id 5).
+    await p1svc.advanceRead("chain:A", "p1", 5);
+    expect((await p1svc.inbox(v, "chain:A")).items).toHaveLength(0); // A fully read
+
+    // Channel B survives UNTOUCHED: both messages surface unread. The old
+    // seq-based comparator (seq <= 5 globally) would have hidden BOTH because
+    // B's seqs are 1..2; ids 6..7 are past nothing in B's OWN cursor scope.
+    const inB = await p1svc.inbox(v, "chain:B");
+    expect(inB.items.map((m) => m.idempotency_key)).toEqual(["cb-1", "cb-2"]);
+    expect(inB.cursors["chain:B"]).toEqual(emptyChannelCursors());
+    // Sentinels proving seq no longer feeds filtering: A's read position (seq
+    // 5, id 5) exceeds B's seqs while B stays readable.
+    const omnibus = await p1svc.inbox(v);
+    expect(omnibus.items.map((m) => m.channel_id)).toEqual(["chain:B", "chain:B"]);
+    // Ack symmetry: acking all of A leaves B's ack-set intact too.
+    await p1svc.ackUpTo("chain:A", "p1", 5);
+    expect(await p1svc.pendingAck(v, "chain:B")).toHaveLength(2);
+  });
+
+  test("CANON visibility: chain/node gated by injected isContainerMember; fail closed without it; coordinator override preserved", async () => {
+    const store = fakeStore();
+    const chainMsg = {
+      kind: "work.turn" as const,
+      body: { summary: "chain-wide" },
+      audience: { action_targets: [], visibility: "chain" as const },
+    };
+    const sender = new ChannelCommunicationService(
+      { participant_id: "rt", participant_class: "participant" },
+      store,
+      { now: () => NOW },
+    );
+    const laneOn = (pid: string, cls: any, resolver?: (pid: string, cid: string) => boolean) =>
+      new ChannelCommunicationService(
+        { participant_id: pid, participant_class: cls },
+        store,
+        { now: () => NOW, ...(resolver ? { isContainerMember: resolver } : {}) },
+      );
+    await sender.send({ ...chainMsg, channel_id: CH, idempotency_key: "gate-chain" });
+
+    // Member sees it.
+    const memberV = { participant_id: "m1", viewer_class: "participant" as const };
+    expect((await laneOn("m1", "participant", () => true).inbox(memberV)).items).toHaveLength(1);
+    // Non-member (resolver false, non-coordinator class) does NOT.
+    const outV = { participant_id: "x1", viewer_class: "participant" as const };
+    expect((await laneOn("x1", "participant", () => false).inbox(outV)).items).toHaveLength(0);
+    // No resolver configured → FAIL CLOSED for a non-coordinator.
+    expect((await laneOn("y1", "participant").inbox({ ...outV, participant_id: "y1" })).items).toHaveLength(0);
+    // Coordinator override preserved even with resolver false / absent.
+    const coordV = { participant_id: "c9", viewer_class: "coordinator" as const };
+    expect((await laneOn("c9", "coordinator", () => false).inbox(coordV)).items).toHaveLength(1);
+    expect((await laneOn("c10", "coordinator").inbox(coordV)).items).toHaveLength(1);
+    // private/targets/operator unchanged by the gate (target hits regardless).
+    await sender.send({
+      channel_id: CH,
+      kind: "work.turn",
+      body: { summary: "directed" },
+      audience: { action_targets: ["t1"], visibility: "targets" },
+      idempotency_key: "gate-targets",
+    });
+    const tV = { participant_id: "t1", viewer_class: "participant" as const };
+    expect((await laneOn("t1", "participant", () => false).inbox(tV)).items.map((m) => m.idempotency_key)).toEqual(["gate-targets"]);
+    // pendingAck obeys the same gate for chain.
+    expect(await laneOn("m2", "participant", () => true).pendingAck(memberV)).toHaveLength(1);
+    expect(await laneOn("x2", "participant", () => false).pendingAck(outV)).toHaveLength(0);
+    // canSee() standalone honors the injected resolver contract directly.
+    const stored = (await store.readChannel({ channel_id: CH })).find((m) => m.idempotency_key === "gate-chain")!;
+    const { canSee } = await import("../src/channel-comm/index.ts");
+    expect(canSee(memberV, stored, () => true)).toBe(true);
+    expect(canSee(outV, stored, () => false)).toBe(false);
+    expect(canSee(outV, stored)).toBe(false);
   });
 });
