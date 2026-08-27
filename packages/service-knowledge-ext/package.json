@@ -15,12 +15,18 @@
   ],
   "files": [
     "index.ts",
-    "README.md"
+    "README.md",
+    "package.json"
   ],
   "scripts": {
     "release": "npm publish --access public --tag latest",
     "test": "bun test tests/"
   },
   "author": "xtrm",
-  "license": "MIT"
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
 }
