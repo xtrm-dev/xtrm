@@ -69,9 +69,10 @@ service-knowledge update      # pull the current package version into this repo
 ```
 service-knowledge install     # vendor machinery + wire hooks (idempotent)
 service-knowledge update      # pull installed package version into a consumer
-service-knowledge status      # report install state
+service-knowledge status      # report install state (+ drift marker state)
 service-knowledge migrate     # one-time service-skills → service-knowledge rename
 service-knowledge remove      # uninstall machinery + cache + hooks
+service-knowledge drift       # scan | clear  (drift marker + index rebuild)
 service-knowledge index       # build | rebuild | query | stats  (FTS5 evidence index)
 service-knowledge canary      # status | enable | disable        (auto-merge policy)
 ```
@@ -113,6 +114,51 @@ Default thresholds (all must hold before enable is accepted):
 | `verifier_fn_max`            | 0.05    |
 
 State lives at `.xtrm/state/service-knowledge/canary.json`.
+
+### `drift`
+
+Detects and reconciles service-knowledge drift (xtrm-6z6.2):
+
+```bash
+service-knowledge drift                # scan; writes marker if drifted
+service-knowledge drift clear          # remove marker(s) + rebuild evidence index
+```
+
+`drift` scans each service's territory for files changed since its last sync
+(`last_sync_ref` -> HEAD semantics) and, on drift, writes a pending marker at
+`.xtrm/.service-knowledge-drift-pending` with a per-service inventory. The
+legacy `.xtrm/.service-skills-drift-pending` name is recognized too — the
+canonical name wins when both exist, matching the pi extension's semantics.
+Reconcile stays skill-driven (`/updating-service-knowledge`); `drift clear`
+removes the marker and rebuilds the FTS5 evidence index AFTER a successful
+reconcile.
+
+---
+
+## Agent-facing doctrine: when service-knowledge is absent or stale
+
+For agents working in a repo that uses service-knowledge, the memory priority
+is:
+
+1. **service-knowledge, if present** — check for `service-registry.json`
+   (canonical: `.xtrm/skills/<pack>/service-knowledge/service-registry.json`)
+   before service-specific questions. Use it when present; ignore when absent —
+   never grep-hunt for it speculatively.
+2. **Commit corpus — always available, first-class memory** — when the registry
+   is absent or stale, fall back to `git log -p --follow -- <file>` for
+   per-file history, `git log --grep`/`--oneline` for corpus, and diffs vs
+   `last_sync_ref` when a registry states one. Commits do not go stale.
+3. **bd memories** — before workflow-sensitive questions, run
+   `bd memories <topic>` / `bd recall <key>`; write durable findings back with
+   `bd remember`. Underuse is the default failure mode — check before
+   re-deriving.
+
+**Drift doctrine**: if a drift marker (`.service-skills-drift-pending` or
+`service-knowledge status`) reports drift, treat it as **advisory**. Suggest
+the update, proceed with current knowledge + commit corpus in parallel;
+reconcile via `/updating-service-knowledge` and stamp `last_sync_ref` after.
+Never block task work on updating service-knowledge, and rebuild the index
+only after a successful reconcile.
 
 ---
 

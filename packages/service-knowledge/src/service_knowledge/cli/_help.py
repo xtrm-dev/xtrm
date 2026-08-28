@@ -38,11 +38,30 @@ See also: `service-knowledge status` to check drift without applying.
 """,
     "status": """\
 Reports install state for a consumer: package version, installed version,
-machinery directory, FTS5 cache presence, and umbrella pack summary. Read-only.
+machinery directory, FTS5 cache presence, umbrella pack summary, and the
+pending-drift marker state (both marker names recognized; canonical wins).
+Read-only.
 
 Examples:
   service-knowledge status
   service-knowledge status --path ~/my/repo
+""",
+    "drift": """\
+Detects service-knowledge drift: scans each service's territory for files
+changed since its last sync (`last_sync_ref` -> HEAD semantics) and, on drift,
+writes a pending marker at `.xtrm/.service-knowledge-drift-pending` with a
+per-service inventory. The legacy `.xtrm/.service-skills-drift-pending` name is
+recognized too (canonical wins when both exist); `clear` removes whichever is
+present. Read-only except for the marker under `<root>/.xtrm/`.
+
+Examples:
+  service-knowledge drift                    # scan + write marker if drifted
+  service-knowledge drift clear              # remove the pending marker(s)
+
+Reconcile stays skill-driven: run /updating-service-knowledge (the
+service-knowledge-sync specialist), which syncs the drifted SKILL.md and
+stamps `last_sync_ref`. After a successful reconcile the marker is removed and
+the FTS5 evidence index is rebuilt.
 """,
     "migrate": """\
 One-time rename of the legacy `service-skills` umbrella to `service-knowledge`.
@@ -425,6 +444,26 @@ Once the CLI is on PATH:
 
 `install` is idempotent. Re-run after upgrading the package version.
 Removes with `service-knowledge remove` (keeps the per-service knowledge).
+""",
+
+    "drift": """\
+Drift detection and reconciliation
+----------------------------------
+`service-knowledge drift` scans each service's territory for files changed
+since its last sync (`last_sync_ref` -> HEAD semantics) and, on drift, writes a
+pending marker at `.xtrm/.service-knowledge-drift-pending` with a per-service
+inventory. The legacy `.xtrm/.service-skills-drift-pending` name is recognized
+too (canonical wins when both exist); `drift clear` removes whichever is
+present and rebuilds the FTS5 evidence index.
+
+Drift is advisory, never required: a drift check on session start surfaces a
+notice; reconciliation stays skill-driven via `/updating-service-knowledge`
+(the service-knowledge-sync specialist), which syncs the drifted SKILL.md,
+stamps `last_sync_ref`, and triggers the index rebuild AFTER a successful
+reconcile.
+
+    service-knowledge drift          # scan + write marker if drifted
+    service-knowledge drift clear    # remove marker(s) + rebuild index
 """,
 }
 

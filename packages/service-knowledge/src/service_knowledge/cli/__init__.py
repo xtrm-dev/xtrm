@@ -10,7 +10,7 @@ import argparse
 import sys
 
 from service_knowledge import __version__
-from service_knowledge.cli import _help, canary_cmd, index_cmd, install, migrate, remove, status, update
+from service_knowledge.cli import _help, canary_cmd, drift, index_cmd, install, migrate, remove, status, update
 
 _SUBCOMMANDS = {
     "install": (install.run, "Install service-knowledge into a consumer repo (vendor + migrate + wire hooks)."),
@@ -20,6 +20,7 @@ _SUBCOMMANDS = {
     "remove": (remove.run, "Uninstall machinery + cache + hooks (keeps your per-service knowledge)."),
     "index": (index_cmd.run, "Build / query / inspect the per-repo FTS5 evidence index."),
     "canary": (canary_cmd.run, "Manage the per-repo auto-merge canary (status | enable | disable)."),
+    "drift": (drift.run, "Detect / clear service-knowledge drift (writes a pending marker)."),
 }
 
 
@@ -48,7 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"service-knowledge {__version__}")
     sub = parser.add_subparsers(dest="command", metavar="<command>")
     for name, (_fn, help_text) in _SUBCOMMANDS.items():
-        if name in ("index", "canary"):
+        if name in ("index", "canary", "drift"):
             continue  # registered below with nested actions
         sp = sub.add_parser(
             name,
@@ -61,6 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     # `index` and `canary` carry nested actions; register them separately.
     index_cmd.register(sub)
     canary_cmd.register(sub)
+    drift.register(sub)
 
     # `help <topic>` — concept-level explainers (workflow / verifier / mcp / …).
     help_p = sub.add_parser(

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>service-knowledge ext v1 — self-gating knowledge</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --edge:#30363d; --ink:#e6edf3; --dim:#8b949e;
+    --acc:#58a6ff; --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,"Segoe UI",Roboto,sans-serif;padding:32px 20px 60px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:22px;letter-spacing:-.01em;margin-bottom:4px}
+  h1 .v{color:var(--dim);font-weight:400}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:28px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--acc);margin:34px 0 12px}
+  code, .card li code, p code, pre code{font:12px var(--mono);background:#21262d;border:1px solid var(--edge);border-radius:4px;padding:1px 5px;color:var(--acc)}
+  pre{background:#0a0d12;border:1px solid var(--edge);border-radius:10px;padding:14px 16px;font:12.5px/1.6 var(--mono);overflow-x:auto;margin:10px 0}
+  pre .k{color:var(--purple)} pre .s{color:var(--green)} pre .c{color:var(--dim)} pre .f{color:var(--acc)}
+  /* decision tree */
+  .tree{display:grid;grid-template-columns:220px 1fr;gap:14px;align-items:start}
+  .decision{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:16px;font:12.5px/1.7 var(--mono)}
+  .decision .q{color:var(--amber);font-weight:600}
+  .branch{display:flex;flex-direction:column;gap:12px}
+  .out{border:1px solid var(--edge);border-radius:10px;padding:14px 16px}
+  .out h3{font-size:13.5px;margin-bottom:6px}
+  .out p{font-size:12.5px;color:var(--dim)}
+  .out.zero{border-left:3px solid var(--dim)}
+  .out.live{border-left:3px solid var(--green)}
+  .tag{display:inline-block;font:600 10.5px var(--mono);letter-spacing:.05em;border-radius:5px;padding:2px 7px;margin-right:6px;vertical-align:1px}
+  .tg{background:#12351c;color:var(--green)} .ta{background:#3a2b0d;color:var(--amber)} .tp{background:#2a2050;color:var(--purple)} .tb{background:#12283f;color:var(--acc)} .tr{background:#3a1216;color:var(--red)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:16px}
+  .card h3{font-size:13.5px;margin-bottom:8px}
+  .card ul{list-style:none}
+  .card li{font-size:12.5px;color:var(--dim);padding:3px 0 3px 16px;position:relative}
+  .card li::before{content:"›";position:absolute;left:2px;color:var(--acc)}
+  .flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .fnode{border:1px solid var(--edge);border-radius:8px;padding:8px 12px;font-size:12.5px;background:var(--panel)}
+  .fnode b{display:block;font-size:12.5px}
+  .fnode span{color:var(--dim);font-size:11.5px}
+  .fsep{align-self:center;color:var(--dim)}
+  .mem{background:#0a0d12;border:1px dashed var(--edge);border-radius:10px;padding:12px 16px;font-size:12.5px;color:var(--dim);margin-top:10px}
+  .mem b{color:var(--ink)}
+  .foot{margin-top:36px;color:var(--dim);font-size:12px;border-top:1px solid var(--edge);padding-top:14px}
+  @media(max-width:820px){.tree{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>service-knowledge ext v1 <span class="v">— zero surface unless the repo knows services</span></h1>
+  <div class="sub">core/packages/pi-extensions/extensions/service-knowledge · bead xtrm-6z6.1 · branch feature/xtrm-6z6.1-service-knowledge-ext · replaces the stale service-skills wrapper</div>
+
+  <h2>1 · Init-time gate — the whole design is this decision</h2>
+  <div class="tree">
+    <div class="decision">
+      <span class="q">scan(cwd)</span><br><br>
+      roots:<br>
+      &nbsp;<span class="s">.xtrm/skills</span><br>
+      &nbsp;<span class="s">.xtrm/skills/user/packs</span><br><br>
+      per pack:<br>
+      &nbsp;<span class="f">service-knowledge</span> wins<br>
+      &nbsp;over legacy <span class="c">service-skills</span><br><br>
+      hit = pack/&lt;umb&gt;/<span class="f">service-registry.json</span>
+    </div>
+    <div class="branch">
+      <div class="out zero">
+        <h3><span class="tag tr">no registry</span>register NOTHING</h3>
+        <p>no tool, no command, no session_start handler, no context bytes. The "grep first, use if present" ritual disappears — the extension is invisible in every repo that doesn't carry a registry. This is what makes global install safe.</p>
+      </div>
+      <div class="out live">
+        <h3><span class="tag tg">registry found</span>surface = note + status + guidance</h3>
+        <p><b>(a)</b> session_start context note — service count + drift state · <b>(b)</b> <code>/service-knowledge:status</code> — services, <code>last_sync_ref</code> vs git HEAD, drift marker, suggested action → <code>/updating-service-knowledge</code> · <b>(c)</b> guidance text pointing at the registry path</p>
+      </div>
+    </div>
+  </div>
+  <pre style="margin-top:14px"><span class="c">// verified against mercury/infra — the layout the stale ext was blind to:</span>
+/home/dawid/projects/mercury/infra/
+└── .xtrm/skills/
+    └── infra/
+        └── <span class="f">service-knowledge</span>/
+            ├── <span class="f">service-registry.json</span>   <span class="c">← 14 services</span>
+            └── services/&lt;id&gt;/SKILL.md</pre>
+
+  <h2>2 · Status command — one source of truth</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3><span class="tag tb">reads</span></h3>
+      <ul>
+        <li>registry JSON (validated; parse failure ⇒ treated as absent)</li>
+        <li><code>last_sync_ref</code> vs current git HEAD</li>
+        <li>drift marker <code>.service-skills-drift-pending</code> / package <code>drift status</code></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="tag tg">reports</span></h3>
+      <ul>
+        <li>service inventory + count</li>
+        <li>knowledge freshness (sync ref ⇄ HEAD)</li>
+        <li>suggested action — never a gate</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>3 · Drift doctrine — advisory, never blocking</h2>
+  <div class="flow">
+    <div class="fnode"><b>drift detected</b><span>post-merge or status probe</span></div><div class="fsep">→</div>
+    <div class="fnode"><b>suggest update</b><span>context note says so</span></div><div class="fsep">→</div>
+    <div class="fnode"><b>work proceeds anyway</b><span>stale data + commit corpus</span></div><div class="fsep">→</div>
+    <div class="fnode"><b>reconcile</b><span>/updating-service-knowledge</span></div><div class="fsep">→</div>
+    <div class="fnode"><b>stamp last_sync_ref</b><span>then rebuild index</span></div>
+  </div>
+  <div class="mem"><b>Memory priority (system-prompt doctrine):</b> ① service-registry if present — ignore if absent, never grep-hunt · ② <b>commit corpus is first-class memory</b> — <code>git log -p --follow -- &lt;file&gt;</code>, <code>git log --grep</code>, diff vs <code>last_sync_ref</code>; commits don't go stale · ③ <code>bd memories</code> / <code>bd recall</code> before re-deriving workflow facts.</div>
+
+  <h2>4 · What changed vs the retired wrapper</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3><span class="tag tr">before — service-skills</span></h3>
+      <ul>
+        <li>scanned only <code>.xtrm/skills/user/packs</code></li>
+        <li>knew only the <code>service-skills</code> umbrella</li>
+        <li><b>blind to canonical layout</b> — missed mercury's real registry entirely</li>
+        <li>registered surface without a registry contract</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="tag tg">after — service-knowledge</span></h3>
+      <ul>
+        <li>both roots, <code>find_umbrella_packs</code> semantics, reserved packs skipped</li>
+        <li>new umbrella wins over legacy (dual-path migration safe)</li>
+        <li>zero-surface gate, test-proven on fixture + canonical layouts</li>
+        <li><code>/service-knowledge:status</code> aligned with pkg CLI truth</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="foot">bead xtrm-6z6.1 CLOSED · commit 2a633eae · e2e smoke in progress (xtrm-vs7f8) · once on core main, every live pi session in a registry-repo gets the note + status automatically; everywhere else: nothing.</div>
+</div>
+</body>
+</html>
