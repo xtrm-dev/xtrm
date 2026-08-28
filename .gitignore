@@ -58,3 +58,4 @@ __pycache__/
 .specialists/db/*.db-wal
 .specialists/db/*.db-shm
 .worktrees/xtrm-2m3.10/xtrm-2m3.10-executor/
+.worktrees/
