@@ -131,6 +131,20 @@ export function validateMutation(
       if (!binding) {
         failures.push({ code: "binding_system_mismatch", detail: e.principal_binding.system });
       } else if (
+        binding.immutable_account_id === null &&
+        e.principal_binding.immutable_account_id !== null
+      ) {
+        // slice 3 residual F5 (asymmetry fix): an envelope claiming a
+        // NON-NULL platform account id must fail when the trusted
+        // principal-set config still carries null. The claimed account is
+        // not registered truth — fail closed in BOTH pre- and post-cutover
+        // states, without waiting for the cutoverComplete flag.
+        failures.push({
+          code: "binding_account_mismatch",
+          detail:
+            "envelope carries non-null immutable_account_id but trusted principal-set binding is null",
+        });
+      } else if (
         binding.immutable_account_id !== null &&
         e.principal_binding.immutable_account_id !== null &&
         binding.immutable_account_id !== e.principal_binding.immutable_account_id

@@ -62,6 +62,14 @@ export interface TrustedRuntimeContextInput {
     principalSets: Record<string, unknown>;
   };
   /**
+   * ROLE-BOUND ACTOR RESOLUTION (slice 3): maps a step role to the ONLY
+   * registered actor that may represent it in this lane. The actor id used
+   * in the execution identity is `roleActors[step.role]`; any caller-side
+   * `actorId` override that disagrees with the role binding is REJECTED
+   * (actor_role_mismatch). Missing role binding fails closed.
+   */
+  roleActors: Record<string, string>;
+  /**
    * Host-resolved assignment identity: the durable assignment beacon this
    * execution belongs to (e.g. chain root bead or step bead). Version is
    * the assignment's version; retries change attempt, not assignment.
@@ -69,11 +77,12 @@ export interface TrustedRuntimeContextInput {
   assignment: { id: string; version: number };
   /** Authority reference for this work (e.g. bead ref or jira issue ref). */
   authorityRef: string;
-  /** Runtime session id when the lane has one (pi session). */
-  runtimeSessionId?: string | null;
   /** Parent execution lineage when resuming/retrying. */
   parentExecutionId?: string | null;
-  /** Which actor_id to use; defaults to identity participant mapping. */
+  /**
+   * Optional single-run actor override. When provided it MUST equal the
+   * role-bound actor for `step.role`; anything else fails closed.
+   */
   actorId?: string;
   /** Which principal_set_id to use; must be allowed for the actor. */
   principalSetId?: string;
@@ -128,8 +137,10 @@ export function chainFingerprintDigests(chain: ResolvedChain): {
  *
  * Fails closed (throws Error with a stable reason prefix) when:
  *   - the participant identity is missing host-required fields;
- *   - the actor registry has no entry for the resolved actor_id (or the
+ *   - the step role has no role-bound actor (roleActors missing entry);
+ *   - the actor registry has no entry for the role-bound actor (or the
  *     entry does not parse);
+ *   - a caller-side actorId override does not equal the role-bound actor;
  *   - the principal-set registry has no entry for the resolved
  *     principal_set_id (or it does not parse);
  *   - the actor is not allowed to use the principal set;
@@ -146,29 +157,41 @@ export function resolveTrustedExecutionContext(
     throw new Error("execution_identity_missing");
   }
 
-  const actorId = input.actorId ?? participantActorId(input.identity, input.step);
-  const principalSetId = input.principalSetId ?? "";
+  // 2. ROLE-BOUND ACTOR (slice 3 residual F4): the step role names exactly
+  //    one registered actor for this lane. A caller-supplied override must
+  //    agree with the binding; anything else is rejected.
+  const boundActorId = input.roleActors[input.step.role];
+  if (!boundActorId) {
+    throw new Error(`actor_role_unbound: ${input.step.role}`);
+  }
+  if (input.actorId !== undefined && input.actorId !== boundActorId) {
+    throw new Error(
+      `actor_role_mismatch: requested ${input.actorId}, role ${input.step.role} is bound to ${boundActorId}`,
+    );
+  }
+  const actorId = boundActorId;
 
-  // 2. Actor must be registered and parseable.
+  // 3. Actor must be registered and parseable.
   const actorParse = ActorSchema.safeParse(input.registries.actors[actorId]);
   if (!actorParse.success) {
     throw new Error(`actor_missing_or_invalid: ${actorId}`);
   }
   const actor = actorParse.data;
 
-  // 3. Principal set must be registered and parseable.
+  // 4. Principal set must be registered and parseable.
+  const principalSetId = input.principalSetId ?? actor.allowed_principal_sets[0] ?? "";
   const psParse = PrincipalSetSchema.safeParse(input.registries.principalSets[principalSetId]);
   if (!psParse.success) {
     throw new Error(`principal_set_missing_or_invalid: ${principalSetId}`);
   }
   const principalSet = psParse.data;
 
-  // 4. Actor must be allowed to act through this principal set.
+  // 5. Actor must be allowed to act through this principal set.
   if (!actor.allowed_principal_sets.includes(principalSetId)) {
     throw new Error(`principal_set_not_allowed: ${actorId} -> ${principalSetId}`);
   }
 
-  // 5. Authority + assignment must be present (host-resolved).
+  // 6. Authority + assignment must be present (host-resolved).
   if (!input.authorityRef || input.authorityRef.trim() === "") {
     throw new Error("authority_ref_missing");
   }
@@ -176,9 +199,12 @@ export function resolveTrustedExecutionContext(
     throw new Error("assignment_missing_or_invalid");
   }
 
-  // 6. Assemble the full execution identity (attempt >=1; retries change
-  //    attempt, never participant/assignment).
+  // 7. Assemble the full execution identity (attempt >=1; retries change
+  //    attempt, never participant/assignment). runtime_session_id is READ
+  //    from the real lane's StepExecutionState.last_pi_session_id — it is
+  //    never accepted from the caller (slice 3 residual F3).
   const attempt = input.stepState.attempts >= 1 ? input.stepState.attempts : 1;
+  const runtimeSessionId = input.stepState.last_pi_session_id ?? null;
   const digests = chainFingerprintDigests(input.chain);
   const execution = ExecutionIdentitySchema.parse({
     schema_version: EXECUTION_SCHEMA_VERSION,
@@ -190,7 +216,7 @@ export function resolveTrustedExecutionContext(
     assignment_version: input.assignment.version,
     participant_id: input.identity.participant_id,
     parent_execution_id: input.parentExecutionId ?? null,
-    runtime_session_id: input.runtimeSessionId ?? null,
+    runtime_session_id: runtimeSessionId,
     generation: 1,
     authority_ref: input.authorityRef,
     policy_digest: digests.policy_digest,

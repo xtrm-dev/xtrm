@@ -120,3 +120,44 @@ attribution_strength: self_attested_web
 No signer is implemented in this slice; unkeyed hashes remain tamper
 evidence only. No credentials, accounts, connectors, daemons or production
 targets were created.
+
+## 8. Slice 3: real non-production mutation call site (xtrm-1zv)
+
+Slice 3 (PR for this document) closes the four residuals recorded at Slice 2
+acceptance. It still performs NO connector/account cutover and never touches
+production GitHub/Jira.
+
+1. Real mutation call site. `ChainRunInputs.provenance` (opt-in per run)
+   enables a scheduler hook (`src/chain/provenance-receipts.ts`) that emits
+   one provenance receipt per newly-satisfied step. The receipt binds a REAL
+   non-production GitHub-model mutation: `LocalGitCommitAdapter`
+   (`src/identity/adapters/local-git-commit.ts`) creates a git commit in a
+   designated scratch repo and returns the REAL commit SHA as the
+   platform-assigned object id. The adapter fails closed if the repo path
+   escapes the designated scratch root; no remotes are touched, nothing is
+   pushed. Receipt records persist under
+   `outputs/provenance-receipts/` (schema `xtrm.provenance-receipt.v1`).
+2. Runtime-session identity (review F3). `runtime_session_id` is read from
+   `StepExecutionState.last_pi_session_id` inside the adapter, never from a
+   host literal. Distinct runs at the same (participant, attempt) therefore
+   mint distinct receipts; deterministic execution ids remain valid because
+   the runtime session disambiguates.
+3. Role-bound actor (review F4). Actor resolution requires a role→actor
+   binding (`roleActors`); a caller-side `actorId` override that disagrees
+   with the binding fails closed (`actor_role_mismatch`), and a missing
+   binding fails (`actor_role_unbound`).
+4. Account-binding asymmetry (review F5). `validateMutation` now fails when
+   the envelope carries a non-null `immutable_account_id` while the trusted
+   principal-set binding is null — the asymmetry previously only checked the
+   envelope-null direction. Matching non-null ids still validate.
+
+Classification remains unchanged before cutover:
+
+```text
+authorship_mode: appropriate direct/relay mode
+attribution_strength: self_attested_web
+```
+
+No credentials, accounts, tokens, connectors, daemons or production targets
+are created by this slice. The canary's only side effect is a local commit
+inside a designated scratch repository.

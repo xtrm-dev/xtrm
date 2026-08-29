@@ -63,3 +63,26 @@ Tests: `tests/identity.test.ts` (`bun test tests/identity.test.ts`).
 - Before cutover the correct classification for live web mutations remains
   `self_attested_web` (direct/relay authorship mode). Unkeyed hashes are
   tamper evidence only.
+
+## Slice 3 (xtrm-1zv) — real mutation call site + residual hardening
+
+- `src/chain/provenance-receipts.ts` adds a REAL runtime call site: the
+  scheduler emits one provenance receipt per newly-satisfied step when the
+  run opts in (`ChainRunInputs.provenance`). Receipts bind a real
+  non-production platform mutation and persist under
+  `outputs/provenance-receipts/`.
+- `src/identity/adapters/local-git-commit.ts` is the real, non-production
+  GitHub-model mutation adapter: it creates a REAL git commit (with the
+  githubTrailers projection) in a designated scratch repo and returns the
+  REAL commit SHA as the platform-assigned object id. It fails closed when
+  the repo path escapes the designated scratch root; nothing is pushed.
+- F3: `runtime_session_id` is read from
+  `StepExecutionState.last_pi_session_id` inside the adapter — never from a
+  host literal — so distinct runs at the same attempt are disambiguated.
+- F4: actor resolution is role-bound (`roleActors`); a caller-side actor
+  override must equal the role-bound actor, otherwise resolution fails.
+- F5: `validateMutation` now fails when the envelope carries a non-null
+  `immutable_account_id` while the trusted principal-set binding is null
+  (account-binding asymmetry closed in both pre/post-cutover states).
+
+Tests: `tests/identity-slice3-runtime.test.ts`.

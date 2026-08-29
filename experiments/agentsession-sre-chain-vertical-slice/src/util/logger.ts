@@ -48,6 +48,8 @@ export function defaultRender(fact: RuntimeFact): string | null {
     "reviewer.verdict": "VERD ",
     "coordinator.action": "COORD",
     "escalation": "ESCLT",
+    "provenance.receipt": "PROV ",
+    "provenance.receipt.failed": "PROV!",
     "message.rejected": "MRJCT",
     "chain.close": "CLOSE",
   };

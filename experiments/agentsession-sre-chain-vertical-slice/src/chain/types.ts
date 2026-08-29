@@ -87,6 +87,8 @@ export interface StepExecutionState {
   last_agent_end_at?: string; // ISO
   last_satisfied_at?: string;
   remediation_loops: number; // for reviewer PARTIAL → diagnostician
+  /** Receipt id emitted by the provenance emitter (opt-in, slice 3). */
+  last_provenance_receipt_id?: string;
 }
 
 /** Chain-level status. */
@@ -251,7 +253,9 @@ export interface RuntimeFact {
     | "coordinator.action"
     | "escalation"
     | "message.rejected"
-    | "chain.close";
+    | "chain.close"
+    | "provenance.receipt"
+    | "provenance.receipt.failed";
   detail: string;
   meta?: Record<string, unknown>;
 }
