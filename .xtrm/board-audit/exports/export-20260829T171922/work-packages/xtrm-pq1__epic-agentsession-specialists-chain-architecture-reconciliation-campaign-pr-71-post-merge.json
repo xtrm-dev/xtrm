@@ -1,0 +1,369 @@
+{
+  "content_sha256": "e592499f407e38d0621d9da501c2f1ed01dd8af3396b4baf8d1caf407092c37a",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-pq1.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-pq1.2"
+      },
+      {
+        "children": [],
+        "id": "xtrm-pq1.3"
+      },
+      {
+        "children": [],
+        "id": "xtrm-pq1.4"
+      },
+      {
+        "children": [],
+        "id": "xtrm-pq1.5"
+      },
+      {
+        "children": [],
+        "id": "xtrm-pq1.6"
+      }
+    ],
+    "id": "xtrm-pq1"
+  },
+  "issues": {
+    "xtrm-pq1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "All 6 children resolved (pq1.1..pq1.6). Campaign phases complete:\n- Phase 0: inventory (done)\n- Phase 1: PR #71 validation + lockfile fix + push + merge (done, cef3cf8)\n- Phase 2: Specialists resolver audit (done)\n- Phase 3: real read-only mercury/infra AgentSession smoke (chain-sre-9ec830, run-sre-d8b91 → 5/6 satisfied, reviewer PASS after 2 remediation loops, drift guard fired correctly on 6th; handoff bundle at experiments/agentsession-sre-chain-vertical-slice/handoff/2026-08-19-real-infra-smoke/)\n- Phases 4-14: doc reconciliation delegated to web agent (out of scope for local session)\n- Phase 15: bead graph creation SKIPPED per user\n- Follow-up defects (pq1.3-.5) FIXED and pq1.6 decision recorded\n\n61/61 tests pass. Uncommitted diagnostic patches on worktree branch web/full-specialist-json-loader-2026-08-18 (topology default-model swap, model-resolver adapter, scheduler MUST-DO blocks, bridge messages dump control-flow fix, beads virtual-mode guards, sre-triage mcpq fallback doc). Do not commit as-is — file as production workstream when the generic Chain contract layer begins.",
+        "closed_at": "2026-08-19T06:07:07Z",
+        "comment_count": 0,
+        "created_at": "2026-08-19T00:42:21Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Governing Epic for the local architecture reconciliation campaign following PR #68/#69/#70/#71.\n\nScope THIS campaign (executed locally):\n- Phase 0: inventory (done)\n- Phase 1: PR #71 local validation + lockfile fix + push + merge (done, cef3cf8)\n- Phase 2: upstream Specialists resolver audit (done)\n- Phase 3: real read-only mercury/infra Specialist-JSON AgentSession smoke (in progress)\n- Phase 15: create durable Beads for next implementation workstream (do NOT execute)\n- Final handoff\n\nScope EXPLICITLY NOT in this campaign:\n- Canonical doc reconciliation (Phases 4-14) — being drafted by a separate web agent for local review\n- Generic Chain runtime implementation (A-L work packages) — that is the NEXT workstream\n\nRepository evidence:\n- PR #71 merged cef3cf8 2026-08-19\n- Real Mercury SRE JSONs at /home/dawid/projects/mercury/infra/.specialists/user\n- Experiment code at experiments/agentsession-sre-chain-vertical-slice\n- Upstream Specialists at /home/dawid/dev/specialists (SpecialistLoader.get/getEffective)",
+        "id": "xtrm-pq1",
+        "issue_type": "epic",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-19T00:42:21Z",
+        "status": "closed",
+        "title": "[epic] AgentSession/Specialists/Chain architecture reconciliation campaign (PR #71 post-merge)",
+        "updated_at": "2026-08-19T06:07:07Z"
+      }
+    },
+    "xtrm-pq1.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Mitigation verified. Live --specialist-json off run (run-sre-5da71, chain-sre-4d9417) reached closed_pass: coordinator-entry published coordinator.decision (ev-coordinato-dcfe-f9cbc0b4), explorer topology.map, observability observability.snapshot, diagnostician diagnostician.report, reviewer reviewer.verdict PASS, coordinator-close coordinator.decision; all 6 steps satisfied. Forensics: ~/.cache/agentsession-sre-chain-vertical-slice/run-sre-5da71/forensics/events.jsonl. --specialist-json required (run-sre-c8434) terminates blocked: legacy sre-coordinator JSON 86KB system layer (sp fan-out + using-specialists + sre-triage skills) drowns XTRM evidence contract, model returns text-only — pre-existing diagnostic gap #3/#4, ActivationSupervisor workstream, NOT a regression. Commit 16a4d52.",
+        "closed_at": "2026-08-19T05:06:12Z",
+        "comment_count": 0,
+        "created_at": "2026-08-19T00:49:29Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-19T00:49:30Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-pq1",
+            "issue_id": "xtrm-pq1.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "## Symptom\n\nReal Pi AgentSession + full ChainRun over /home/dawid/projects/mercury/infra ends at coordinator-entry with:\n\n  agent_end ok, 2 messages, pi_session=<uuid>\n  runtime ESCALATION: reducer produced no intents and chain not closed — blocked\n\nReproduces identically under `--specialist-json required` (pi_session=01a01779-c305-7ec9-a71d-fdd83330784b) and `--specialist-json off` (pi_session=01a0177c-3e6a-79d5-890c-ad16416f4597). Both runs preserved under experiments/agentsession-sre-chain-vertical-slice/.chain-runs/sre-smoke-20260819T004406Z/ and .../sre-baseline-20260819T004651Z/.\n\n## Reducer contract vs observed behavior\n\nsrc/chain/reducer.ts:65-74 satisfies coordinator-entry only when `coordinator.decision` evidence lands. roles/chain-coordinator.md:1-25 instructs the coordinator model to `evidence_publish` one `coordinator.decision` body then post one work.turn channel message. In both smokes the model returned agent_end after ~500ms with no tool calls (2 messages = user prompt + assistant text). No evidence, no channel message, no scheduler intent for advisors. Reducer honestly refuses to advance.\n\n## Diagnostic gap\n\nNeed the raw session transcript (assistant text + tool list Pi actually presented) to determine which of:\n1. tool registration path in agents/bridge.ts / specialist-bridge.ts is failing under CLI main.ts path\n2. system prompt assembly is not delivering the role prompt intact\n3. model behind opencode-go/deepseek-v4-flash proxy returns without invoking tools\n4. execution.output_type=synthesis compilation is short-circuiting the tool loop\n\nscripts/smoke_bridge_verbose.ts already dumps SESSION MESSAGES + tool list; reuse to isolate.\n\n## Scope discipline\n\nThis is a runtime-integration defect visible in the current experiment code post-#71 merge (cef3cf8). It reproduces without any Specialist JSON cognition. It belongs to the NEXT implementation workstream (PREPARE + ActivationSupervisor + result-contract validation), not this reconciliation campaign. Do NOT fix by hardening coordinator prompts alone — the underlying seam is what PR #70 called out: prompt-owned orchestration is fragile.\n\n## Evidence artefacts\n\n- experiments/agentsession-sre-chain-vertical-slice/.chain-runs/sre-smoke-20260819T004406Z/run-sre-c84b2/forensics/events.jsonl\n- experiments/agentsession-sre-chain-vertical-slice/.chain-runs/sre-baseline-20260819T004651Z/run-sre-cff92/forensics/events.jsonl\n- both chain-progress.json show coordinator-entry produced_result, 5 downstream steps waiting\n\n## No target mutation\n\ngit -C /home/dawid/projects/mercury/infra status confirms only pre-existing chore/py_backend-smml.4-otel-mcp-ghcr-pin diff (unrelated). No commits, no pushes, no config edits triggered by the smoke.",
+        "id": "xtrm-pq1.1",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready",
+          "integration",
+          "smoke"
+        ],
+        "notes": "Chain chain-sre-9ec830 proved the scheduler MUST-DO checklist patch (src/chain/scheduler.ts assignmentPrompt) makes coordinator dispatch evidence_publish + channel_post reliably under --specialist-json required. 5/6 steps satisfied, reviewer PASS after 2 remediation loops. Patch is uncommitted in worktree branch web/full-specialist-json-loader-2026-08-18. Handoff bundle: experiments/agentsession-sre-chain-vertical-slice/handoff/2026-08-19-real-infra-smoke/. See BRIEF.md §5 + patches/current-src/scheduler.ts.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-19T04:59:11Z",
+        "status": "closed",
+        "title": "coordinator model does not call evidence_publish — chain blocks at coordinator-entry under both --specialist-json required and off",
+        "updated_at": "2026-08-19T05:52:48Z"
+      }
+    },
+    "xtrm-pq1.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Fixed + verified. model-resolver.ts unifies built-in (pi-ai/compat) + custom providers (~/.pi/agent/models.json); smoke_bridge.ts dispatched coordinator-entry on commandcode/deepseek/deepseek-v4-flash, reached agent_end with evidence_publish(coordinator.decision)+channel_post(work.turn). Commit 16a4d52. See memory xtrm-pq1-2-verified-bridge-specialist-bridge-route.",
+        "closed_at": "2026-08-19T05:06:06Z",
+        "comment_count": 0,
+        "created_at": "2026-08-19T01:15:16Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-19T01:15:16Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-pq1",
+            "issue_id": "xtrm-pq1.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "## Symptom\n\nReal smoke against mercury/infra with SRE Specialist JSONs whose execution.model resolves to a Pi custom-provider ID (e.g. commandcode/deepseek/deepseek-v4-flash) fails at dispatch:\n\n  dispatch threw: model not found: commandcode/deepseek/deepseek-v4-flash\n\n## Root cause\n\nexperiments/agentsession-sre-chain-vertical-slice/src/agents/bridge.ts:127-133 and src/agents/specialist-bridge.ts:94-101 both do:\n\n  const primary = getModel(provider, id);  // from @earendil-works/pi-ai/compat\n\npi-ai/compat's getModel only resolves *built-in* providers (getBuiltinModel). Providers declared in ~/.pi/agent/models.json under `providers.<name>` (baseUrl + apiKey + api + authHeader + models[]) are custom — pi-coding-agent's own CLI loads them via core/model-runtime.js (class ModelRuntime), not via pi-ai/compat.\n\nBuilt-in providers pi-ai/compat resolves in this env: anthropic, deepseek, google, nvidia, opencode-go, zai. Custom providers registered in ~/.pi/agent/models.json (this machine: commandcode, nano-gpt, nvidia, qwencloud, zai) are invisible to bridge.ts.\n\n## Repro\n\n  bun scripts/inspect-specialist.ts --repo <target> --name sre-coordinator\n    -> resolves model string commandcode/deepseek/deepseek-v4-flash (compiler passes it through)\n  bun src/cli/main.ts --repo <target> --specialist-json required --incident ...\n    -> step.failed 'dispatch threw: model not found: commandcode/deepseek/deepseek-v4-flash'\n    -> reducer escalates chain\n\nTest evidence: .chain-runs/sre-smoke-v2-20260819T010347Z/run-sre-85e55/forensics/events.jsonl\n\n## Fix direction\n\nbridge.ts + specialist-bridge.ts should route through ModelRuntime (or an equivalent adapter that unifies built-in + custom providers). Options:\n\n1. Instantiate ModelRuntime from @earendil-works/pi-coding-agent, expose a wrapper getModelUnified(provider, id) that checks built-in first then custom via ModelRuntime.getAvailable(...).\n2. Preflight: at bridge init, read ~/.pi/agent/models.json, and for each custom provider call pi-ai's registerProvider(...) (if exposed) with its baseUrl/api/apiKey/models.\n3. Change Specialist JSON convention to only use built-in provider IDs (loses commandcode/nano-gpt/qwencloud gateway wrapping — arguably out of scope for the runtime to enforce).\n\nPreferred: (1) — matches what Pi CLI does natively.\n\n## Scope discipline\n\nSame as xtrm-pq1.1: this is a runtime-integration defect, not a Specialist JSON cognition defect. Belongs to the next implementation workstream (PREPARE + capability resolver + activation supervisor), not this reconciliation campaign.",
+        "id": "xtrm-pq1.2",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready",
+          "integration",
+          "smoke"
+        ],
+        "notes": "Proven fix: src/agents/model-resolver.ts (NEW, 47 lines) — falls through pi-ai/compat built-ins to ~/.pi/agent/models.json catalog. commandcode/deepseek/deepseek-v4-flash resolved end-to-end across all 6 chain steps today. Also required: src/chain/topology.ts DEFAULT_MODEL swapped to commandcode/deepseek/deepseek-v4-flash (opencode-go/deepseek-v4-flash starved reviewer in a prior run). Patches in worktree branch web/full-specialist-json-loader-2026-08-18. Handoff: experiments/agentsession-sre-chain-vertical-slice/handoff/2026-08-19-real-infra-smoke/patches/current-src/{model-resolver,topology}.ts.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-19T04:59:11Z",
+        "status": "closed",
+        "title": "bridge/specialist-bridge use pi-ai/compat getModel — misses custom providers from ~/.pi/agent/models.json (e.g. commandcode)",
+        "updated_at": "2026-08-19T05:52:48Z"
+      }
+    },
+    "xtrm-pq1.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Fixed: added 'Fallback when .mcpq.json is not in ancestors' paragraph to /home/dawid/.xtrm/skills/default/sre-triage/SKILL.md (9 lines, +0/-0 to any code). Both sre-coordinator and sre-observability-forensics specialists route through this skill, so single-file edit fixes both. Instructs the explicit '--config <target-infra>/.mcpq.json' fallback with mercury example. Note: this invalidates any frozen sre-triage SHA256 in future --specialist-json required runs (expected — that's the drift guard doing its job).",
+        "closed_at": "2026-08-19T06:06:47Z",
+        "comment_count": 0,
+        "created_at": "2026-08-19T05:52:49Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-19T05:52:49Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-pq1",
+            "issue_id": "xtrm-pq1.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Coordinator ran bare 'mcpq' in scratchpad mirror; mcpq walks up looking for .mcpq.json with ceiling /home/dawid, found none, declared observability UNAVAILABLE. Observability specialist used '--config /home/dawid/projects/mercury/.mcpq.json' and got everything. Blocking mismatch caused round-1 reviewer PARTIAL. FIX: coordinator prompt / sre-triage skill should teach the explicit --config fallback for scratchpad mirrors. Proof: run-sre-d8b91 evidence ev-coordinato-b56d-a6f59873 vs ev-observabil-185d-fc141b57.",
+        "id": "xtrm-pq1.3",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "xtrm-pq1: mcpq walk-up discovery gap in scratchpad mirror",
+        "updated_at": "2026-08-19T06:06:47Z"
+      }
+    },
+    "xtrm-pq1.4": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Fixed: two guard lines added to experiments/agentsession-sre-chain-vertical-slice/src/adapters/beads.ts noteBead() and closeBead() — 'if (beadId.startsWith(\"vsvs-\")) return;'. Virtual-mode step ids now short-circuit before invoking 'bd', eliminating the per-step 'no issue found matching vsvs-...' error blocks in dispatch.log. Startup info log '[beads-adapter] bd init unavailable ... using VIRTUAL step ids.' preserved. 61/61 tests pass.",
+        "closed_at": "2026-08-19T06:06:47Z",
+        "comment_count": 0,
+        "created_at": "2026-08-19T05:52:49Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-19T05:52:49Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-pq1",
+            "issue_id": "xtrm-pq1.4",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Beads adapter fires bd note/close per satisfied step even in VIRTUAL mode; every call fails with 'no issue found matching vsvs-...' and pollutes dispatch.log. Suppress the spam when running in virtual mode (bd init refused). Proof: run-sre-d8b91 dispatch.log — 4 identical [beads] noteBead/closeBead errors, one per satisfied step.",
+        "id": "xtrm-pq1.4",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "status": "closed",
+        "title": "xtrm-pq1: beads adapter VIRTUAL fallback log spam",
+        "updated_at": "2026-08-19T06:06:47Z"
+      }
+    },
+    "xtrm-pq1.5": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Fixed: LIVE MESSAGES dump block was placed INSIDE the catch{} clause in both src/agents/bridge.ts and src/agents/specialist-bridge.ts, so it only fired when session.prompt() threw — a successful activation went try→finally and skipped it entirely. Moved the block into finally{} (before session.dispose()) so it fires on both success and failure. Best-effort try/catch wrapper preserved. session.state.messages is still readable in finally (dispose not yet called). 61/61 tests pass. Next real-infra run should produce activation.msg.<role> facts (assistant/user/tool) alongside the existing activation.msg.start/end stream facts.",
+        "closed_at": "2026-08-19T06:06:48Z",
+        "comment_count": 0,
+        "created_at": "2026-08-19T05:52:50Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-19T05:52:50Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-pq1",
+            "issue_id": "xtrm-pq1.5",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "src/agents/{bridge,specialist-bridge}.ts has a post-agent-end block that walks session.state.messages and emits one activation.msg.<role> fact per message. Zero such facts across 2163 forensics events in run-sre-d8b91. Either the block throws silently (best-effort catch swallows it), or session.state.messages is empty at that point in the lifecycle. Diagnostic-only; does not affect chain correctness, but blocks the 'show me every message' UX.",
+        "id": "xtrm-pq1.5",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "status": "closed",
+        "title": "xtrm-pq1: bridge LIVE MESSAGES dump never emits",
+        "updated_at": "2026-08-19T06:06:48Z"
+      }
+    },
+    "xtrm-pq1.6": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Deferred to production ChainLoader/ChainCompiler workstream. Decision: keep scheduler MUST-DO blocks + reviewer verdict routing experiment-scoped for now. Rationale: these role-specific prompt-injection blocks proved themselves on the 2026-08-19 real-infra smoke (reviewer PASS after 2 remediation loops with correct routing — see xtrm-pq1 handoff BRIEF §5). But the generic Chain contract layer does not yet exist; hoisting the blocks now would encode experiment-specific role names (chain-coordinator, sre-diagnostician, reviewer) into a runtime that has no other consumer. Revisit when the production ChainLoader begins — at which point the split between 'per-role dispatch guidance' (production, generic) and 'per-experiment role prompts' (experiment-scoped) becomes a design question worth answering with the actual API in hand.",
+        "closed_at": "2026-08-19T05:57:21Z",
+        "comment_count": 0,
+        "created_at": "2026-08-19T05:52:50Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-19T05:52:50Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-pq1",
+            "issue_id": "xtrm-pq1.6",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "src/chain/scheduler.ts assignmentPrompt currently appends role-specific hard-requirement blocks (generic evidence_publish + channel_post checklist, reviewer PASS/PARTIAL/FAIL bare-word contract, coordinator-close system.done emission). Experiment-local today. Decide whether these belong in the generic Chain contract layer or stay experiment-scoped. Proof this works: run-sre-d8b91 reviewer PASS after 2 remediation loops with correct routing.",
+        "id": "xtrm-pq1.6",
+        "issue_type": "feature",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "xtrm-pq1: scheduler MUST-DO blocks + reviewer verdict routing — production decision",
+        "updated_at": "2026-08-19T05:57:21Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-19T00:49:30Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-pq1",
+        "issue_id": "xtrm-pq1.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-pq1.1",
+      "source_field": "dependencies",
+      "target": "xtrm-pq1",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-19T01:15:16Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-pq1",
+        "issue_id": "xtrm-pq1.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-pq1.2",
+      "source_field": "dependencies",
+      "target": "xtrm-pq1",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-19T05:52:49Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-pq1",
+        "issue_id": "xtrm-pq1.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-pq1.3",
+      "source_field": "dependencies",
+      "target": "xtrm-pq1",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-19T05:52:49Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-pq1",
+        "issue_id": "xtrm-pq1.4",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-pq1.4",
+      "source_field": "dependencies",
+      "target": "xtrm-pq1",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-19T05:52:50Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-pq1",
+        "issue_id": "xtrm-pq1.5",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-pq1.5",
+      "source_field": "dependencies",
+      "target": "xtrm-pq1",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-19T05:52:50Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-pq1",
+        "issue_id": "xtrm-pq1.6",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-pq1.6",
+      "source_field": "dependencies",
+      "target": "xtrm-pq1",
+      "type": "parent-child"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-pq1",
+  "root_title": "[epic] AgentSession/Specialists/Chain architecture reconciliation campaign (PR #71 post-merge)",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

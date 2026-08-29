@@ -1,0 +1,44 @@
+{
+  "content_sha256": "454f0ec7726f364d684a65bb88834bf5c0462429a1427cd3cf423a9b4b445b6d",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-3vx"
+  },
+  "issues": {
+    "xtrm-3vx": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Committed and pushed all specialists pending edits and untracked artifacts into PR #215; fixed README whitespace and verified clean diff.",
+        "closed_at": "2026-07-24T22:35:25Z",
+        "comment_count": 0,
+        "created_at": "2026-07-24T22:34:34Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nThe docs-ignore selection is committed and proposed in specialists PR #215, but final PR validation found one trailing-whitespace error in the intentionally included README edit.\n\n## SUCCESS\nRemove the whitespace-only defect, commit it to the existing docs-ignore branch, update PR #215, and verify the branch and PR are clean with the requested edits and untracked artifacts included.\n\n## SCOPE\n/home/dawid/dev/specialists/README.md, branch chore/docs-ignore-selection, PR #215.\n\n## NON_GOALS\n- Do not change the documentation selection or roadmap content.\n- Do not alter other repositories.\n- Do not merge the PR.\n\n## CONSTRAINTS\nPreserve all existing PR content and user-requested edits; whitespace-only correction only.\n\n## VALIDATION\n- [ ] git diff --check passes.\n- [ ] PR remains open and contains requested files.\n- [ ] Worktree is clean and branch tracks origin.\n\n## OUTPUT\nUpdated PR URL and validation evidence.",
+        "id": "xtrm-3vx",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-07-24T22:34:35Z",
+        "status": "closed",
+        "title": "Polish docs-ignore PR validation",
+        "updated_at": "2026-07-24T22:35:25Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-3vx",
+  "root_title": "Polish docs-ignore PR validation",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

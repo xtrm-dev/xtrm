@@ -1,0 +1,71 @@
+{
+  "content_sha256": "ab09facfe2273ede03a97407fbab0c70b6efe3bd7f2c97818211c096c1515f03",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-26T03:03:46Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-hzb",
+        "issue_id": "xtrm-1o8",
+        "metadata": "{}",
+        "type": "discovered-from"
+      },
+      "source": "xtrm-1o8",
+      "source_field": "dependencies",
+      "target": "xtrm-hzb",
+      "target_present_in_snapshot": true,
+      "target_title": "Durable ReplyObligation + atomic request/reply correlation",
+      "type": "discovered-from"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-1o8"
+  },
+  "issues": {
+    "xtrm-1o8": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via PR #100 (merged 9a9a0c8): uncertain gate on retry+supersede, writer mutex over full critical sections, typed input validation at all boundaries incl. settleFromStream tail, voided-without-evidence reconciliation-on-load, e2e 6yn seam proof. 22+14+10+16+13 suites pass; tsc clean. Review PARTIAL->repaired(0dfd01b)->PASS on exact final head.",
+        "closed_at": "2026-08-26T03:05:54Z",
+        "comment_count": 0,
+        "created_at": "2026-08-26T01:03:47Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-26T03:03:46Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-hzb",
+            "issue_id": "xtrm-1o8",
+            "metadata": "{}",
+            "type": "discovered-from"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Follow-ups from xtrm-hzb review + xtrm-2mi review residual, none blocking:\n\n1. UNCERTAIN-replay gate routing (R2.7): decide and implement where 'uncertain blocks blind replay' is enforced — retry() currently supersedes obligations carrying unresolved pending_external_observations without consulting them; send-side uncertainty unrepresented. Either a guard in the ledger or an explicit caller/transport-layer contract.\n2. Journal trust boundary: serialize appends at the store level (concurrent duplicate replied events are fold-tolerated but retained); validate obligation.opened.input payloads and public API inputs (currently z.record(unknown) / raw ZodError leaks).\n3. Seam integration test: drive ChannelCommunicationService.reply() end-to-end with a ledger replyHandle() (unconfirmed handle request_message_id='' trips 6yn stream-scan — assert ordering contract).\n4. Two-journal write atomicity (from 2mi review): if evidence.append throws after ledger.journal.append succeeded, a void lands without its evidence entry — reconcile-on-load or single-journal design.\n5. Nit sweep: wrong_direction vs reply_not_expected_from naming alignment; settleFromStream bare catch{}; whole-projection reload equality assertion.",
+        "id": "xtrm-1o8",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-26T02:32:41Z",
+        "status": "closed",
+        "title": "Obligation ledger boundary hardening + seam integration proof",
+        "updated_at": "2026-08-26T03:05:54Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-1o8",
+  "root_title": "Obligation ledger boundary hardening + seam integration proof",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

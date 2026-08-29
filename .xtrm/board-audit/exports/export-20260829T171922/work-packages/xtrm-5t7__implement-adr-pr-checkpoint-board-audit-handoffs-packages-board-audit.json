@@ -1,0 +1,44 @@
+{
+  "content_sha256": "0549d0d50fdaf409544bbe290dd405dca95ac21d5b4ff6d99bdb6b68fae35a12",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-5t7"
+  },
+  "issues": {
+    "xtrm-5t7": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "acceptance_criteria": "AC1 PR creation produces one complete handoff bound to exact remote PR head; AC2 caller branch/worktree unchanged; AC3 one canonical bd export --all per snapshot; AC4 open beads individually addressable via deterministic index; AC5 unchanged records keep identical canonical hashes, no rewritten content; AC6 new/changed/closed/reopened beads update projection; AC7 later PR push makes old head binding detectably stale; AC8 successful refresh binds new head + fresh snapshot; AC9 no-change checkpoint returns NO_CHANGES without transport commit; AC10 concurrent transport updates fail closed via lease; AC11 generated files cannot escape .xtrm/board-audit/**; AC12 per-bead read files cannot be compiled as Web mutations; AC13 existing handoff->proposal->reconcile->execute round-trip tests stay valid; AC14 failure leaves Beads and implementation checkout unchanged; AC15 confidentiality policy blocks auto publication before transport push; AC16 no implementation path invokes or depends on xt end",
+        "close_reason": "Merged via PR #56 (feature + work-package handoff + durable hook installer) and core #582 (tracked hook fix). 37/37 tests, live-verified on xtrm/specialists/core/market-data. Remaining per-repo mercury gate fixes (quant/treasury-cb CVEs etc.) are separate beads.",
+        "closed_at": "2026-08-15T07:45:21Z",
+        "comment_count": 0,
+        "created_at": "2026-08-15T04:36:14Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Implement the proposed ADR 'PR-checkpoint Board-Audit handoffs' in packages/board-audit: PR-checkpoint handoff publication on Git/PR delivery events. Reuses existing exporter, transport publisher, worktree lifecycle, lease handling. No watcher, no xt end coupling. New command: board-audit pr-checkpoint <pr> + pr-status; per-bead read projection under .xtrm/board-audit/snapshots/<id>/{issues,roots}, handoffs/pr-<n>.json, extended index.json; incremental canonical-hash publication with NO_CHANGES; STALE_CODE_HEAD freshness; confidentiality gate for automation; event adapter script.",
+        "id": "xtrm-5t7",
+        "issue_type": "task",
+        "notes": "PR #56 open (https://github.com/xtrm-dev/xtrm/pull/56); CI green (unit x2, Socket Security). Pushed xt/e6tq. Environment fix during push: /home/dawid/dev/xtrm/.beads/hooks/{pre-push,post-merge} had a missing-final-exit-0 bug (last command '[ $rc -ne 0 ]' false => hook exit 1) that failed EVERY push/merge in this repo; patched both hooks (outside bd-managed markers so reinstalls won't clobber).\nLIVE E2E VERIFIED on real GitHub: board-audit pr-checkpoint 56 published board-audit/pr-56 (b9acc89) bound to PR #56 head 75555dbe, snapshot 09507b9c, 14 open beads, 10 roots; pr-status --check -> FRESH rc=0; second run -> NO_CHANGES with transport branch SHA unchanged. Proof that the transport path ignores repo hooks/CI ([skip ci], --no-verify) and binds to the exact verified remote PR head.\nFIXED GAP: PR-checkpoint now publishes the bounded root/work-package handoff + per-root .editable.json artifacts (reuses existing exporter via core --from-raw, single acquisition preserved; index packages entries resolve them; stale export dirs pruned). Live-verified on PR #56: Work packages: 10, editables resolvable, pr-status FRESH; push f9018ac -> STALE_CODE_HEAD -> refresh -> FRESH cycle proven on the real PR.\nDURABILITY: hook fix survives bd hooks install (verified); versioned scripts/install-beads-hooks.sh + .bd-sync templates (if-idiom, BEADS_FSCK_TIMEOUT default) committed to PR #56; core fix committed as PR #582. Remaining: merge #56.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "Implement ADR: PR-checkpoint Board-Audit handoffs (packages/board-audit)",
+        "updated_at": "2026-08-15T07:45:21Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-5t7",
+  "root_title": "Implement ADR: PR-checkpoint Board-Audit handoffs (packages/board-audit)",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

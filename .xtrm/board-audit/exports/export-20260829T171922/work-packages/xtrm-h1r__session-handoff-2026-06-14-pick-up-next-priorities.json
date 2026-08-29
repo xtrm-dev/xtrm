@@ -1,0 +1,66 @@
+{
+  "content_sha256": "748371453b137ee865e003c14b6158c4712c628dc2aac07b7d3860b869559d2d",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-06-14T15:11:52Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-8fo",
+        "issue_id": "xtrm-h1r",
+        "metadata": "{}",
+        "type": "relates-to"
+      },
+      "source": "xtrm-h1r",
+      "source_field": "dependencies",
+      "target": "xtrm-8fo",
+      "target_present_in_snapshot": true,
+      "target_title": "Enable SSH commit signing + required_signatures on xtrm main",
+      "type": "relates-to"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-h1r"
+  },
+  "issues": {
+    "xtrm-h1r": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-06-14T13:11:42Z",
+        "created_by": "dawid",
+        "dependencies": [
+          {
+            "created_at": "2026-06-14T15:11:52Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-8fo",
+            "issue_id": "xtrm-h1r",
+            "metadata": "{}",
+            "type": "relates-to"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Handoff for session ending 2026-06-14.\n\n**SSOT report:** `.xtrm/reports/2026-06-14-978d9b0.md`\n\nRead the report first — it has the full summary, problems, open issues with context, and the ordered next-priority list. This bead is the live pointer into the board.\n\n**This session in one line:** folded all 9 premortem reasons from `docs/premortem-substrate/` into substrate canon across 8 documents; every owned-by link now has corresponding content in the target; closed xtrm-1jp (5th coordinator role).\n\n**Suggested next priorities (from report §Suggested Next Priority):**\n1. **substrate_design_en.md sync** — STALE per MOC, further diverged this session (~9 new sections in IT); separate sync project, needs its own bead. Recommend filing before starting.\n2. **xtrm-1jp follow-on: implement design.review pre-commit gate** — substrate top-of-doc revision protocol (R9) requires this gate before any rev-13+ canonical doc merge. Forensic family declared in forensic-event-contract.md §6 today; needs xt doctor wiring.\n3. **Stage 4.5: node-coordinator delivery demo** — added to substrate §15 today as blocking dependency for Stages 9+10 and any research-node work. Demo scope: one coordinator reads pulse, opens child container, journalizes, survives restart, respects deny, exercises failure_budget.\n4. **xtrm-8fo** — SSH commit signing + branch protection, ops/governance hygiene, can land any session.\n\nNo follow-up beads filed yet for priorities 1–3 (they were surfaced this session) — recommend filing them as the first work of the next session, linked discovered-from this handoff.",
+        "id": "xtrm-h1r",
+        "issue_type": "task",
+        "priority": 1,
+        "status": "open",
+        "title": "Session handoff 2026-06-14: pick up next priorities",
+        "updated_at": "2026-06-14T13:11:42Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-h1r",
+  "root_title": "Session handoff 2026-06-14: pick up next priorities",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

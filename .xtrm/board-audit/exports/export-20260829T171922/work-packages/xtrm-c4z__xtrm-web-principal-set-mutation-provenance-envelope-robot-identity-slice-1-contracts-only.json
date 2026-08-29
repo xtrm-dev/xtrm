@@ -1,0 +1,45 @@
+{
+  "content_sha256": "66eba2ddb1f4bb910faea307c6eb802a9368d420e656714e0eb4b8ffff22706a",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-c4z"
+  },
+  "issues": {
+    "xtrm-c4z": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via xtrm-dev/xtrm PR #99 (squash ebd8ca9). Independent non-author review PASS; 35/35 identity tests green; docs recorded; no credential/account actions performed.",
+        "closed_at": "2026-08-26T03:00:18Z",
+        "comment_count": 0,
+        "created_at": "2026-08-26T02:34:40Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Operator direction 2026-08-14 (robot identities dispatch; Jira ISSUE-87 is portfolio surface only). Robot identities are XTRM product identities, never Mercury robot accounts. Hard web constraint: all web agents share exactly ONE connected GitHub account and ONE connected Jira account, so the external principal identifies the web plane while logical actor + execution provenance stay separate and machine-readable.\n\nSlice scope (contracts + validation + projection rendering + tests, NO credentials/accounts/connectors):\nA. Contracts: xtrm.principal-set.v1 (per-platform bindings), xtrm.actor.v1 (logical actor independent of model/session/account, many-actors-to-one-principal cardinality), xtrm.execution-identity.v1 (attempt/assignment/participant/parent lineage/authority ref), xtrm.provenance.v1 envelope (authorship_mode closed enum incl legacy_unattributed, optional signature honestly classified).\nB. Trusted runtime context: actor/execution/assignment/authority resolved from trusted context structurally, caller/prompt override rejected (strict schemas + host-injected fields pattern per channel-comm author lane).\nC. Projection: compact visible attribution line + JSON rendering + GitHub commit trailers + Jira comment body/property shapes; content hash + returned external object ref binding.\nD. Validation: actor->principal-set authorization, assignment version + authority check, content-hash binding, fail-closed mismatch, uncertain side effects never blindly retried, no secret material.\nE. Tests: two actors share xtrm-web; payload-edit impersonation fails; human_direct != xtrm_web_direct; retry changes attempt not participant; tamper fails; legacy stays unknown; Mercury appears only in fixtures.\n\nNon-goals: no account/App/token creation, no connector cutover, no daemon/scheduler, no new DB, no hard-coded Mercury IDs in generic code, no crypto non-repudiation claims, no GATE-AUTH/Substrate/Channels scope absorption. Reuses existing contract family conventions (zod strict, canonicalJson, host-injected identity).",
+        "id": "xtrm-c4z",
+        "issue_type": "feature",
+        "notes": "Review-fix wave committed b403c91 and pushed; PR xtrm-dev/xtrm#99 opened (base main @ 9abd233). All 3 majors + minors from identity-slice-reviewer addressed: M1 signature covered by envelope hash; M2 explicit never-upgrade attribution classification in projections; M3 seal/bind verify prior integrity + strict-parse (no laundering path); m1 cutoverComplete binding enforcement; m2 legacy mode rejected at assembly; m3 extended secret patterns; receipt entropy 64-bit. Tests 34/34. Re-verification requested from reviewer; bead stays open until review PASS + PR merge.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-26T02:34:46Z",
+        "status": "closed",
+        "title": "XTRM web principal-set + mutation provenance envelope — robot identity slice 1 (contracts only)",
+        "updated_at": "2026-08-26T03:00:18Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-c4z",
+  "root_title": "XTRM web principal-set + mutation provenance envelope — robot identity slice 1 (contracts only)",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

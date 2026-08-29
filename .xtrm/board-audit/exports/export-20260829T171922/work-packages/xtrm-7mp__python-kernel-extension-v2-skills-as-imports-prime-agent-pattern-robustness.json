@@ -1,0 +1,259 @@
+{
+  "content_sha256": "3ec1aaeb9f8e795ea2389575104167843353a0a72c5ab7aec18044bc162fd79f",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-7mp.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-7mp.2"
+      },
+      {
+        "children": [],
+        "id": "xtrm-7mp.3"
+      },
+      {
+        "children": [],
+        "id": "xtrm-7mp.4"
+      }
+    ],
+    "id": "xtrm-7mp"
+  },
+  "issues": {
+    "xtrm-7mp": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Filed in wrong repo (source of truth is core/packages/pi-extensions, npm @jaggerxtrm/pi-extensions). Moved to core board as xtrm-h7uwi (same scope; epic = xtrm-h7uwi).",
+        "closed_at": "2026-08-27T20:57:07Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T20:54:59Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "id": "xtrm-7mp",
+        "issue_type": "epic",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-27T20:55:05Z",
+        "status": "closed",
+        "title": "python-kernel extension v2: skills-as-imports (prime-agent pattern) + robustness",
+        "updated_at": "2026-08-27T20:57:07Z"
+      }
+    },
+    "xtrm-7mp.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Filed in wrong repo (source of truth is core/packages/pi-extensions, npm @jaggerxtrm/pi-extensions). Moved to core board as xtrm-h7uwi.1 (same scope; epic = xtrm-h7uwi).",
+        "closed_at": "2026-08-27T20:57:01Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T20:55:00Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T22:55:00Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-7mp",
+            "issue_id": "xtrm-7mp.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "id": "xtrm-7mp.1",
+        "issue_type": "feature",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "skillbridge: mount python-backed skills as importable kernel modules (v1 + reload)",
+        "updated_at": "2026-08-27T20:57:01Z"
+      }
+    },
+    "xtrm-7mp.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Filed in wrong repo (source of truth is core/packages/pi-extensions, npm @jaggerxtrm/pi-extensions). Moved to core board as xtrm-h7uwi.2 (same scope; epic = xtrm-h7uwi).",
+        "closed_at": "2026-08-27T20:57:03Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T20:55:01Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T22:55:01Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-7mp",
+            "issue_id": "xtrm-7mp.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "id": "xtrm-7mp.2",
+        "issue_type": "feature",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "status": "closed",
+        "title": "python-kernel QoL: stdlib prelude + output truncation with shape hint",
+        "updated_at": "2026-08-27T20:57:03Z"
+      }
+    },
+    "xtrm-7mp.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Filed in wrong repo (source of truth is core/packages/pi-extensions, npm @jaggerxtrm/pi-extensions). Moved to core board as xtrm-h7uwi.3 (same scope; epic = xtrm-h7uwi).",
+        "closed_at": "2026-08-27T20:57:04Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T20:55:02Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T22:55:02Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-7mp",
+            "issue_id": "xtrm-7mp.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-27T22:55:04Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-7mp.1",
+            "issue_id": "xtrm-7mp.3",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 0,
+        "id": "xtrm-7mp.3",
+        "issue_type": "feature",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "status": "closed",
+        "title": "python-kernel audit seam: kernel-side mutation events visible to host (phase 2)",
+        "updated_at": "2026-08-27T20:57:04Z"
+      }
+    },
+    "xtrm-7mp.4": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Filed in wrong repo (source of truth is core/packages/pi-extensions, npm @jaggerxtrm/pi-extensions). Moved to core board as xtrm-h7uwi.4 (same scope; epic = xtrm-h7uwi).",
+        "closed_at": "2026-08-27T20:57:06Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T20:55:03Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T22:55:03Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-7mp",
+            "issue_id": "xtrm-7mp.4",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "id": "xtrm-7mp.4",
+        "issue_type": "chore",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "status": "closed",
+        "title": "pi-extensions workspace: git init + own beads board (tracks python-kernel work at home)",
+        "updated_at": "2026-08-27T20:57:06Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-27T22:55:00Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-7mp",
+        "issue_id": "xtrm-7mp.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-7mp.1",
+      "source_field": "dependencies",
+      "target": "xtrm-7mp",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T22:55:01Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-7mp",
+        "issue_id": "xtrm-7mp.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-7mp.2",
+      "source_field": "dependencies",
+      "target": "xtrm-7mp",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T22:55:04Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-7mp.1",
+        "issue_id": "xtrm-7mp.3",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-7mp.3",
+      "source_field": "dependencies",
+      "target": "xtrm-7mp.1",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T22:55:02Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-7mp",
+        "issue_id": "xtrm-7mp.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-7mp.3",
+      "source_field": "dependencies",
+      "target": "xtrm-7mp",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T22:55:03Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-7mp",
+        "issue_id": "xtrm-7mp.4",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-7mp.4",
+      "source_field": "dependencies",
+      "target": "xtrm-7mp",
+      "type": "parent-child"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-7mp",
+  "root_title": "python-kernel extension v2: skills-as-imports (prime-agent pattern) + robustness",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

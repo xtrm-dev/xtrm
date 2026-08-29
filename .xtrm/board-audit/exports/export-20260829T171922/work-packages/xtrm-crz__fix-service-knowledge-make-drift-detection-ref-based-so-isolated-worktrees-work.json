@@ -1,0 +1,40 @@
+{
+  "content_sha256": "d7712c3ec85789fb0007d6d6e278422982a992b77436f1e8ce5a7c5d8a74e8bb",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-crz"
+  },
+  "issues": {
+    "xtrm-crz": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-07-26T12:19:05Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "drift_detector.py:250 selects drift with 'fp.stat().st_mtime > last_sync'. A fresh git worktree checkout restamps every file's mtime, so any isolated run reports the entire registered territory as drifted. Measured in mercury-market-data at one commit with identical content: 64 items in the live repo vs 166 in a worktree of the same HEAD.\n\nEffect: xtrm-service-knowledge-reconcile.yaml had to be switched to worktree.enabled=false (it previously ran isolated and, combined with the tree being gitignored, silently reported ALIGNED against 64 real drift items).\n\nFix: select drift by comparing last_sync_ref..HEAD (git diff --name-only) instead of mtime, falling back to mtime only when last_sync_ref is empty/unresolvable. The service registry already stores last_sync_ref and service_knowledge_diff_scan.py already does ref-based diffing, so the machinery exists.\n\nAcceptance: scan_drift() returns identical results in a repo and in a fresh worktree of the same HEAD; then re-enable worktree.enabled=true in the reconcile workflow.",
+        "id": "xtrm-crz",
+        "issue_type": "bug",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "fix(service-knowledge): make drift detection ref-based so isolated worktrees work",
+        "updated_at": "2026-07-26T12:19:05Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-crz",
+  "root_title": "fix(service-knowledge): make drift detection ref-based so isolated worktrees work",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

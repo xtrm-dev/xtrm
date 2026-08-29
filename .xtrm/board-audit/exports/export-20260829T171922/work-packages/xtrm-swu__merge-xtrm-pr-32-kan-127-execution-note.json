@@ -1,0 +1,101 @@
+{
+  "content_sha256": "31b3cdf377b66e530f3d2c441b5f52161181d4ad75921c857132f4219b8b6399",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-swu.1"
+      }
+    ],
+    "id": "xtrm-swu"
+  },
+  "issues": {
+    "xtrm-swu": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Merged xtrm PR #32 after resolving the P1 gate-proof review; verified main commit 018e203247f4a9796a1677ec22281e9c7422f880 and published note.",
+        "closed_at": "2026-08-02T17:23:58Z",
+        "comment_count": 0,
+        "created_at": "2026-08-02T17:19:09Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nPR #32 contains the reviewed canonical KAN-127 sequencing note and is authorized for merge.\n\n## SUCCESS\nMerge xtrm-dev/xtrm PR #32 into main at its reviewed head and record the resulting merge commit.\n\n## SCOPE\nFinal PR metadata/check verification, GitHub merge, and post-merge main verification.\n\n## NON_GOALS\nDo not modify the PR patch, change the K0–K7 graph, merge unrelated PRs, or update local source files.\n\n## CONSTRAINTS\nMerge only reviewed head ed06ba222307030c7153c43cd2370262706b78a4. Stop if the head changes, checks fail, mergeability changes, or blocking review feedback appears.\n\n## VALIDATION\nConfirm PR state, head SHA, mergeability, reviews, required checks, merged state, merge commit, and main containment.\n\n## OUTPUT\nMerged PR #32 with immutable GitHub evidence and a closed task.",
+        "external_ref": "gh-xtrm-32",
+        "id": "xtrm-swu",
+        "issue_type": "task",
+        "notes": "## Merge evidence — 2026-08-02\n- Initial reviewed head: ed06ba222307030c7153c43cd2370262706b78a4.\n- Blocking P1 thread: discussion_r3699482962, complete GATE-IFACE proof set.\n- Fix commit pushed to PR head: 68e705d8053c6b905cc4af37935b097feb68b0ed.\n- Thread reply: https://github.com/xtrm-dev/xtrm/pull/32#discussion_r3699858029.\n- Thread resolved after the note enumerated I1.1, I1.2, I1.3/I1.4, consumer fixtures, and released-trio public-command smoke.\n- Final checks: Socket Security Project Report PASS; Pull Request Alerts PASS.\n- Final mergeability: CLEAN and MERGEABLE.\n- PR merged with squash at 2026-08-02T17:23:01Z.\n- Main commit: 018e203247f4a9796a1677ec22281e9c7422f880.\n- Published file verified on main and contains the corrected programme proof path.\n- Temporary worktree and local fix branch removed after merge.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-02T17:19:10Z",
+        "status": "closed",
+        "title": "Merge xtrm PR #32 — KAN-127 execution note",
+        "updated_at": "2026-08-02T17:23:58Z"
+      }
+    },
+    "xtrm-swu.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Resolved P1 scope: preserved the complete existing GATE-IFACE proof set without adding Codex as a prerequisite.",
+        "closed_at": "2026-08-02T17:22:10Z",
+        "comment_count": 0,
+        "created_at": "2026-08-02T17:22:06Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-02T19:22:06Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-swu",
+            "issue_id": "xtrm-swu.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nPR #32 has one unresolved P1 thread because its GATE-IFACE paragraph omits the complete programme proof set.\n\n## SUCCESS\nEnumerate I1.1, I1.2, I1.3, I1.4, consumer fixtures, and released-trio public-command smoke while keeping production Codex outside gate prerequisites.\n\n## SCOPE\nOne documentation update in xtrm-codex-kan-127-execution-note.md.\n\n## NON_GOALS\nDo not change K0–K7 ordering or make Codex part of GATE-IFACE proof.\n\n## CONSTRAINTS\nMatch xtrm-current-execution-plan.md sections 8.2 and I1.1–I1.4 exactly.\n\n## VALIDATION\nRun git diff --check and verify the resulting text against the canonical programme plan.\n\n## OUTPUT\nA focused commit that resolves review thread discussion_r3699482962.",
+        "external_ref": "gh-discussion-r3699482962",
+        "id": "xtrm-swu.1",
+        "issue_type": "task",
+        "notes": "Updated PR #32 note to enumerate I1.1 contract approval, I1.2 xtmux vertical slice, I1.3/I1.4 Specialists/Core fixtures, and released-trio public-command smoke. Production Codex remains outside the programme gate. git diff --check passed.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-02T17:22:07Z",
+        "status": "closed",
+        "title": "Address PR #32 P1 — preserve full GATE-IFACE proof set",
+        "updated_at": "2026-08-02T17:22:10Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-02T19:22:06Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-swu",
+        "issue_id": "xtrm-swu.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-swu.1",
+      "source_field": "dependencies",
+      "target": "xtrm-swu",
+      "type": "parent-child"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-swu",
+  "root_title": "Merge xtrm PR #32 — KAN-127 execution note",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

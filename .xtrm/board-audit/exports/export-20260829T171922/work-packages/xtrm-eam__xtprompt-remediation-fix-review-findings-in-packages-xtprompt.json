@@ -1,0 +1,526 @@
+{
+  "content_sha256": "ac24967ed02afd6d02ca6f5be26451353fe04299230809eceb902369ca62d4ff",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-eam.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-eam.2"
+      },
+      {
+        "children": [],
+        "id": "xtrm-eam.3"
+      },
+      {
+        "children": [],
+        "id": "xtrm-eam.4"
+      },
+      {
+        "children": [],
+        "id": "xtrm-eam.5"
+      },
+      {
+        "children": [],
+        "id": "xtrm-eam.6"
+      },
+      {
+        "children": [],
+        "id": "xtrm-eam.7"
+      },
+      {
+        "children": [],
+        "id": "xtrm-eam.8"
+      }
+    ],
+    "id": "xtrm-eam"
+  },
+  "issues": {
+    "xtrm-eam": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Epic complete. All 8 children closed with evidence. F1-F17 resolved: F1 critical (model-failure detection), F2/F3/F8 major (planning contract, vague heuristic, intent detection), F4-F7 CLI robustness, F9-F13 parsing hardening, F14-F17 info polish — all implemented, none wont-fix. Explore->execute->review subagent chain: 9 subagents, sequential dependency-ordered execution on shared files. Suite 43->66 tests all green; coverage 96.56% lines / 88.46% branches / 96.00% funcs (>=80%); npm pack ships src+README; PTY smoke 4/4 incl. Ctrl-C paths; README piped example exits 0 (live). Exit-code taxonomy 0/1/2/130 verified. Review verdict APPROVE (2 trivial nits fixed after review). Diff: 9 files under packages/xtprompt only, +556/-59, no new deps.",
+        "closed_at": "2026-08-14T22:27:36Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T20:41:06Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "# PROBLEM\n\nA deep review of packages/xtprompt (source, tests, installed dependency @earendil-works/pi-coding-agent@0.84.2, live PTY experiments) found one critical defect and several major ones. The critical defect (F1): ModelRuntime.completeSimple() resolves with stopReason:\"error\" on provider/auth/network/timeout failure instead of rejecting, so completeRewrite never detects real failures, retries every failure once (doubling cost and latency up to 2x45s), and reports a misleading \"model did not return an actionable rewrite\" message; the timeout and generic failure diagnostics are dead code. The README's own usage examples fail: short concrete prompts are classified vague (F3), and planning requests contradict their own output contract (F2). Auto-intent misclassifies development prompts as planning (F8). These defects break normal use and error reporting of a released CLI.\n\n# SUCCESS\n\nEvery finding from the review (F1-F17) is resolved or explicitly deferred with a tracked decision. completeRewrite detects real model failures on the first call, surfaces an honest diagnostic, and retries only malformed-but-valid output. The README usage examples produce the documented exit codes. Planning requests succeed on the first attempt. All tests pass (existing 43 plus new regression tests), coverage stays above the 80% thresholds, and the packed tarball still ships the four src files and README.\n\n# SCOPE\n\npackages/xtprompt only: src/app.mjs, src/cli.mjs, src/prompt.mjs, src/clipboard.mjs, test/ (prompt.test.mjs, app.test.mjs, clipboard.test.mjs, pty.test.mjs), README.md, package.json. The installed pi-coding-agent dependency is read-only reference, not modified.\n\n# NON_GOALS\n\n- No new CLI features or flags (no --api-key, no --list-models, no abort-on-SIGINT guarantee changes).\n- No changes to the pi-coding-agent dependency or its call contract beyond what the caller must handle (checking stopReason/errorMessage is a caller-side fix).\n- No support for extension-registered providers; README already documents they are not loaded.\n- No changes outside packages/xtprompt (no xtrm core, no other packages).\n\n# CONSTRAINTS\n\n- Exit-code contract is preserved: 0 success, 1 runtime/model failure, 2 invalid input/options/context/model selection, 130 interactive Ctrl-C.\n- Diagnostics must never include prompt text, resolved credentials, or model response bodies (existing tests enforce this; keep them green).\n- No new runtime dependencies.\n- Changes to the app.test.mjs harness (mock completeSimple must mirror the real resolved-error-message contract) land in the same change as the completeRewrite fix (T1) and are a precondition for T5 and T6, which share app.mjs/app.test.mjs.\n- Each fix ships its own regression test; the suite must stay green at every step (npm test in packages/xtprompt).\n- README claims and code must agree; where behavior is fixed, update README examples to prompts that pass.\n\n# VALIDATION\n\n- [ ] All child beads closed with evidence (test output, changed files, residual risks).\n- [ ] Existing suite green after each fix; new regression tests cover each fixed finding.\n- [ ] npm run test:coverage in packages/xtprompt passes the 80% line/branch/function thresholds.\n- [ ] Piped README example `echo \"analyze this failure\" | xtprompt --intent analysis` exits 0 (or the README example is corrected deliberately and the new example verified).\n- [ ] PTY smoke: interactive refine + :accept + Ctrl-C->130 still pass.\n- [ ] npm pack --dry-run still ships src/ and README.md.\n- [ ] No credential/prompt/body text in any diagnostic path (existing leak tests stay green).\n\n# OUTPUT\n\nAt epic close, the orchestrator reports: per-child handoff summaries, the integration evidence (full test + coverage + PTY + pack runs), the list of findings resolved vs deferred (with tracking IDs for deferred), and residual risks (live model call behavior not exercised; CRLF emission by real providers unverified).\n\n# REFERENCES\n\nFindings F1-F17 from the xtprompt review of 2026-08-14 (in-session report). Source anchor points: src/app.mjs:350-381 (completeRewrite/completeOnce), src/app.mjs:188-193 (clarifyDraft), src/prompt.mjs:47-54 (isVagueDraft), src/prompt.mjs:19-24 (INTENT_RULES), src/prompt.mjs:136-140 + 36-43 (planning output contract vs BASE_RULES), src/cli.mjs:7-14 (ask), src/clipboard.mjs:4-15 (writeClipboard).",
+        "id": "xtrm-eam",
+        "issue_type": "epic",
+        "labels": [
+          "contract:ready",
+          "xtprompt"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "closed",
+        "title": "xtprompt remediation: fix review findings in packages/xtprompt",
+        "updated_at": "2026-08-14T22:27:36Z"
+      }
+    },
+    "xtrm-eam.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "F1 fixed: completeRewrite detects resolved stopReason:'error'/errorMessage before retry; returns generic 'model request failed.', exit 1, no leak, no retry. Harness mock mirrors real resolved-error contract; throwing-path tests converted; regression + TimeoutError tests added. 45 tests green.",
+        "closed_at": "2026-08-14T22:27:22Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T21:14:40Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T21:14:40Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-eam",
+            "issue_id": "xtrm-eam.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 2,
+        "description": "# PROBLEM\n\nCritical. ModelRuntime.completeSimple() (installed 0.84.2) resolves with an AssistantMessage having content:[] and stopReason:\"error\" plus errorMessage on provider/auth/network/timeout failure; it never rejects (verified: dist/core/model-runtime.js:467, dist/api/lazy.js createSetupErrorMessage, dist/utils/event-stream.js result() is resolve-only). completeRewrite (src/app.mjs:350-367) therefore treats every real failure as \"malformed output\": it retries once (a second full model call, up to another 45s), then reports the misleading \"model did not return an actionable <xtprompt> rewrite after one retry.\" The TimeoutError/AbortError->\"timed out\" branch (:362-364) and the generic \"model request failed.\" branch (:365) are dead code against the real API; they fire only because the test harness mock throws. Real diagnostics (401, rate limit, network, timeout) never reach the user. Empirically confirmed: a call with no API key resolved with stopReason:\"error\", errorMessage:\"No API key for provider: openai\".\n\n# SUCCESS\n\ncompleteRewrite inspects the resolved message before retrying: a stopReason:\"error\" (or errorMessage present) result returns { error: \"model request failed.\" } immediately, no retry, exit code 1, no model output leaked. Retry happens only when content exists but is not actionable (no sentinel, clarification-only, control bytes). The test harness mock is updated to mirror the real contract: failure scenarios return resolved {content:[], stopReason:\"error\"} messages instead of throwing, and the old throwing-based tests are replaced with equivalents that assert no-retry-on-real-failure and honest diagnostics.\n\n# SCOPE\n\nsrc/app.mjs (completeRewrite, completeOnce at 350-381), test/app.test.mjs (harness completeSimple mock + the failure-path tests at :184-211), README.md only if diagnostic wording changes.\n\n# NON_GOALS\n\n- No change to pi-coding-agent itself.\n- No new timeout budget logic beyond the existing per-attempt 45s (a shared-budget question stays open; see epic open question).\n- No change to the retry-once semantics for malformed output.\n\n# CONSTRAINTS\n\n- Real provider failures must be distinguishable from malformed output by inspecting the resolved message fields (stopReason/errorMessage), not by catching.\n- Diagnostics stay secret-safe: never print errorMessage or the model body; the existing tests assert this.\n- The mock in app.test.mjs must represent the real API contract so the suite tests the same path production uses; keep exact-request-count assertions (1 call on real failure, 2 on malformed-then-recovered).\n- npm test and npm run test:coverage pass; coverage thresholds hold.\n\n# VALIDATION\n\n- [ ] New test: resolved {content:[], stopReason:\"error\"} response -> exactly 1 model call, exit 1, stderr \"xtprompt: model request failed.\" (no retry, no model output).\n- [ ] New test: timeout signal abort -> same no-retry, honest diagnostic path (or documented equivalence).\n- [ ] Existing tests: malformed-first-then-valid still does exactly 2 calls; malformed-retry failure still exits 1 with the \"not actionable\" message; model-error tests updated to resolved-error mocks still assert no leak.\n- [ ] Full suite + coverage run green.\n- [ ] The dead-code branches (:362-365) are either reachable again or removed with comment explaining the contract.\n\n# OUTPUT\n\nChanged files list, before/after behavior table for failure scenarios, test output for the suite + coverage, note on which error branch is now reachable, residual risk: whether real providers honor the abort signal at 45s (unverified without a live call).",
+        "id": "xtrm-eam.1",
+        "issue_type": "task",
+        "labels": [
+          " contract:ready",
+          "contract:ready",
+          "xtprompt"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "closed",
+        "title": "Fix model-failure detection in completeRewrite (F1)",
+        "updated_at": "2026-08-14T22:27:22Z"
+      }
+    },
+    "xtrm-eam.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "F2 fixed: planning output_format now requires exactly one <xtprompt> block containing the Markdown headers, matching BASE_RULES; no contradiction. Regression tests lock contract + first-attempt parse (no retry). 47 tests green.",
+        "closed_at": "2026-08-14T22:27:23Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T21:14:41Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T21:14:41Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-eam",
+            "issue_id": "xtrm-eam.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "# PROBLEM\n\nMajor. For intent planning, buildStructuredPrompt's output_format (src/prompt.mjs:136-140) tells the model \"Return Markdown with exact headers: ## PROBLEM ...\" with no sentinel, while BASE_RULES (src/prompt.mjs:36-43), appended to every request by buildSystemPrompt (:96-101), demands \"Return exactly one <xtprompt>...</xtprompt> block and nothing outside it.\" completeRewrite requires the sentinel via isActionableRewrite. A model following the task-specific header instruction produces no sentinel, fails the first attempt, and is forced through a retry (extra cost and latency) or fails entirely. This affects every planning-shaped request (explicit --intent planning and auto-detected).\n\n# SUCCESS\n\nPlanning requests carry a single, non-contradictory output contract. The first attempt succeeds for planning output in the common case. Either planning output is required inside the sentinel (recommended: \"Return Markdown with the exact headers inside the <xtprompt> block\"), or planning is exempted from the sentinel requirement and completeRewrite parses planning output directly. A regression test locks the chosen contract: the generated system prompt for a planning request contains no contradiction, and a valid planning-shaped response parses on the first attempt.\n\n# SCOPE\n\nsrc/prompt.mjs (buildStructuredPrompt output_format at :136-140, BASE_RULES at :36-43, buildSystemPrompt at :96-101; if parsing changes: parseSentinel/:180-185 and src/app.mjs completeRewrite/:350-381), test/prompt.test.mjs, test/app.test.mjs.\n\n# NON_GOALS\n\n- No change to the planning header set (## PROBLEM/## SUCCESS/## SCOPE/## NON_GOALS/## CONSTRAINTS/## VALIDATION/## OUTPUT) unless a decision records it.\n- No change to other intents' contracts.\n\n# CONSTRAINTS\n\n- The chosen contract must be testable via the generated system prompt text (no model calls required).\n- Keep the sentinel as the parse boundary for non-planning intents; if planning becomes sentinel-free, isolate that branch explicitly.\n- README's planning usage examples must still work with the chosen contract.\n\n# VALIDATION\n\n- [ ] Test: buildPromptRequest with intent planning -> system prompt contains a single consistent output instruction (either sentinel-wrapped headers or an explicit sentinel-free contract).\n- [ ] Test: a realistic planning-shaped model response (headers inside/without sentinel per the chosen contract) passes isActionableRewrite/parse on the first attempt.\n- [ ] Existing planning contract-header test (prompt.test.mjs:68-86) stays green or is updated deliberately with the new contract.\n- [ ] Full suite green.\n\n# OUTPUT\n\nChanged files, the chosen contract (sentinel-wrapped vs sentinel-free planning) with one-line rationale, test evidence, note on whether auto-detected planning requests also benefit (they use the same buildStructuredPrompt path).",
+        "id": "xtrm-eam.2",
+        "issue_type": "task",
+        "labels": [
+          " contract:ready",
+          "contract:ready",
+          "xtprompt"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "closed",
+        "title": "Resolve planning output-contract contradiction (F2)",
+        "updated_at": "2026-08-14T22:27:23Z"
+      }
+    },
+    "xtrm-eam.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "F3 fixed: structural concreteness checks now run before length gate; word-count gate replaced by all-vague-words check. 'analyze this failure', 'fix bug 42', README examples concrete; 'help' stays vague. README verified, no change needed. 48 tests green.",
+        "closed_at": "2026-08-14T22:27:24Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T21:14:41Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T21:14:41Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-eam",
+            "issue_id": "xtrm-eam.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "# PROBLEM\n\nMajor. isVagueDraft (src/prompt.mjs:47-54) classifies any prompt of 7 or fewer words as vague unless it contains a newline, colon, hash, digit, or dotted path. The README's own examples fail: `echo \"analyze this failure\" | xtprompt --intent analysis` exits 2 with \"prompt is too vague\" (empirically confirmed), and \"implement a health command for the cli\", \"plan the migration\", and \"write a release checklist for this package\" (exactly 7 words) all trigger the vague path. The concreteness checks (:50) run after the length gate (:49), so short concrete prompts like \"fix bug 42\" are always vague. This breaks documented usage in normal use: piped one-shots fail hard, TTY users get a surprise clarification question.\n\n# SUCCESS\n\nShort concrete prompts are not classified vague. The heuristic distinguishes underspecified drafts (bare \"help\", vague-word-only sentences) from concrete ones (action verb + named object) without requiring artificial length. README examples are verified against the new heuristic and either pass or are replaced with passing examples. The clarified-draft flow still triggers for genuinely vague input.\n\n# SCOPE\n\nsrc/prompt.mjs (isVagueDraft at :47-54, VAGUE_WORDS at :5-17), test/prompt.test.mjs (isVagueDraft tests at :22-29), README.md (usage examples), test/app.test.mjs (tests whose drafts rely on the old threshold: check the argv drafts in the harness and each test that expects exit 2 or clarification).\n\n# NON_GOALS\n\n- No change to the clarification UX (one question on TTY, exit 2 when piped, --no-clarify fail-fast).\n- No change to buildClarifiedDraft.\n\n# CONSTRAINTS\n\n- Reorder so the structural concreteness checks (newline/colon/hash, digit, dotted path) run before any length-based gate, or fold them into one decision.\n- The new heuristic must keep \"help\" and vague-word-only sentences vague.\n- Update every test draft and README example affected by the threshold change; the suite must stay green.\n\n# VALIDATION\n\n- [ ] Unit tests for the new heuristic: \"analyze this failure\" false; \"help\" true; \"help me improve this prompt today\" true; \"fix bug 42\" false; \"deploy to production\" decision recorded (expected: false unless deliberate); 7-word concrete prompts false.\n- [ ] README piped example verified end-to-end: `echo \"analyze this failure\" | node src/cli.mjs --intent analysis` no longer exits 2 before model setup (it may fail later on model/auth, but not on vagueness).\n- [ ] Existing vague-flow tests (app.test.mjs:106-155) updated and green.\n- [ ] Full suite green.\n\n# OUTPUT\n\nChanged files, the new decision table (input class -> vague yes/no), README diff, test evidence, note on any test drafts that needed updating and why.",
+        "id": "xtrm-eam.3",
+        "issue_type": "task",
+        "labels": [
+          " contract:ready",
+          "contract:ready",
+          "xtprompt"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "closed",
+        "title": "Rework the vague-draft heuristic (F3)",
+        "updated_at": "2026-08-14T22:27:24Z"
+      }
+    },
+    "xtrm-eam.4": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "F8 fixed: planning requires strong signals (## headers, non_goals, leading plan, 'plan the', migration/rollout plan framing); bare constraints/validation/plan keywords no longer steal development prompts. 6 regression cases; six-intent invariant kept. 49 tests green.",
+        "closed_at": "2026-08-14T22:27:24Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T21:14:41Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T21:14:41Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-eam",
+            "issue_id": "xtrm-eam.4",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "# PROBLEM\n\nMajor. INTENT_RULES (src/prompt.mjs:19-24) checks planning first, and the planning pattern set includes generic keywords constraints, validation, and plan. Development prompts routinely mention constraints and validation, so they auto-classify as planning (empirically confirmed: \"Implement a standalone prompt CLI with explicit constraints, validation, and output behavior.\" -> planning; \"Implement a release checklist for packages/xtprompt with validation.\" -> planning). Because planning forces the ## PROBLEM/## SCOPE header output contract, a development rewrite is silently converted into a planning-shaped prompt.\n\n# SUCCESS\n\nAuto-detection returns development (or the appropriate intent) for prompts whose primary action is implement/build/create/develop even when they mention constraints or validation. Planning is detected only on strong planning signals (## headers, plan/planning as the leading action, migration/rollout framing). Detection order and keyword sets are covered by regression tests.\n\n# SCOPE\n\nsrc/prompt.mjs (INTENT_RULES at :19-24), test/prompt.test.mjs (detectIntent tests at :14-20), test/app.test.mjs if any JSON-intent assertions depend on auto-detection.\n\n# NON_GOALS\n\n- No change to explicit --intent handling (it already bypasses detection).\n- No change to the planning header output format itself (that is F2's scope).\n\n# CONSTRAINTS\n\n- Keyword changes must not flip genuinely planning-shaped prompts (e.g. \"Plan this migration with ## SCOPE\") away from planning.\n- Keep the rule list exhaustive over INTENTS; detectIntent must still return one of the six documented intents.\n- Reconcile with F2's contract outcome (planning output shape) so the two changes do not fight.\n\n# VALIDATION\n\n- [ ] Tests: development prompts containing \"constraints\" and \"validation\" -> development; \"Plan this migration with ## SCOPE\" -> planning; analysis/refactor/generic cases unchanged.\n- [ ] The repo's own test drafts that currently auto-classify as planning are re-checked and the expected intent asserted.\n- [ ] Full suite green.\n\n# OUTPUT\n\nChanged files, the new planning detection rule with rationale, the full intent decision table before/after, test evidence.",
+        "id": "xtrm-eam.4",
+        "issue_type": "task",
+        "labels": [
+          " contract:ready",
+          "contract:ready",
+          "xtprompt"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "closed",
+        "title": "Fix auto-intent misclassification (F8)",
+        "updated_at": "2026-08-14T22:27:24Z"
+      }
+    },
+    "xtrm-eam.5": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "F4-F7 fixed: Ctrl-C at clarification -> 130 'interrupted.' (EOF/input error stays 1); unauthenticated explicit --model -> exit 2 before any completion call; SettingsManager failures degrade with warning; resolveCliModel warning to stderr; EPIPE -> quiet exit 0. PTY + spawn tests added; 55 tests green.",
+        "closed_at": "2026-08-14T22:27:25Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T21:14:42Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T21:14:42Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-eam",
+            "issue_id": "xtrm-eam.5",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-14T21:14:42Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-eam.1",
+            "issue_id": "xtrm-eam.5",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 0,
+        "description": "# PROBLEM\n\nMinor but user-visible defects in error paths. (F4) Ctrl-C at the clarification prompt exits 1 with \"clarification input failed.\" instead of signaling an interrupt (empirically confirmed via PTY: exit 1); ask() in src/cli.mjs:7-14 has no SIGINT handling. (F5) An explicit --model for an existing but unauthenticated provider passes selectModel (src/app.mjs:208-213; resolveCliModel deliberately resolves unauthenticated models) and fails later at completion with exit 1 and the F1 misdiagnosis, while README classifies invalid model selection as exit 2. (F6) SettingsManager.create/getDefaultProvider/getDefaultModel at src/app.mjs:215-217 are unguarded; a throw escapes selectModel as an unhandled rejection crash; resolveCliModel's warning (e.g. \"Using custom model id\") is silently dropped at :212. (F7) No EPIPE handling: `xtprompt ... | head -0` crashes with an uncaught error event on process.stdout.\n\n# SUCCESS\n\nCtrl-C at the clarification prompt exits 130 with an honest message (or a documented deliberate alternative). An unauthenticated explicit --model exits 2 with a clear \"not authenticated\" diagnostic before any completion call. A settings-read failure degrades to \"no default configured\" instead of crashing. resolveCliModel warnings reach stderr. Closed-pipe output exits cleanly without a stack trace.\n\n# SCOPE\n\nsrc/cli.mjs (ask at :7-14, main at :52-54), src/app.mjs (selectModel at :208-233, stdout/stderr write paths at :134-141), test/app.test.mjs, test/pty.test.mjs (a SIGINT-at-clarification case if feasible with the script harness).\n\n# NON_GOALS\n\n- No change to interactive-mode SIGINT semantics during in-flight model calls (that is F15, tracked separately in T7).\n- No change to the F1 retry logic (must be landed first; this task builds on its harness).\n\n# CONSTRAINTS\n\n- F5's fix (auth check after resolveCliModel) must run after F1's harness change is in place (T1 blocks this task) because both reshape app.test.mjs's model-failure mocks.\n- Diagnostics stay secret-safe and never echo the model body or prompt.\n- Exit codes stay within the documented 0/1/2/130 taxonomy.\n\n# VALIDATION\n\n- [ ] PTY test: Ctrl-C at \"What exact outcome...\" exits 130 with an interrupt message (or the accepted alternative is recorded in README and tested).\n- [ ] Test: --model with unauthenticated provider -> exit 2, stderr mentions not authenticated, zero completion calls.\n- [ ] Test: settingsManager.getDefaultProvider throws -> runCli still resolves models via getAvailable, no crash.\n- [ ] Test: resolveCliModel returns a warning -> warning appears on stderr.\n- [ ] Test: stdout write error (closed pipe) -> clean exit, no uncaught exception.\n- [ ] Full suite + coverage green.\n\n# OUTPUT\n\nChanged files, per-defect test evidence, exit-code table after the change, residual risk (EPIPE behavior on the real CLI pipe under different shells).",
+        "id": "xtrm-eam.5",
+        "issue_type": "task",
+        "labels": [
+          " contract:ready",
+          "contract:ready",
+          "xtprompt"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "CLI robustness and exit-code polish (F4-F7)",
+        "updated_at": "2026-08-14T22:27:25Z"
+      }
+    },
+    "xtrm-eam.6": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "F9-F13 fixed: 480-cap over code points (Array.from, no lone surrogate); CR allowed in control-byte gate (CRLF passes); isClarificationOnly catches unprefixed '?' sentences; extractAssistantText handles string content; parseSentinel rejects multi-block, single-block byte-identical. Regression tests each; README 480 'characters (code points)'. 60 tests green.",
+        "closed_at": "2026-08-14T22:27:26Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T21:14:42Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T21:14:42Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-eam.1",
+            "issue_id": "xtrm-eam.6",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-14T21:14:42Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-eam",
+            "issue_id": "xtrm-eam.6",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 0,
+        "description": "# PROBLEM\n\nMinor edge cases in parsing and filtering. (F9) normalizeContext slices UTF-16 code units (src/prompt.mjs:85-87), so 480 emoji/CJK code points become 240 \"characters\" and a boundary can split a surrogate pair into a lone surrogate (encoded as U+FFFD); the 480-char unit is undocumented. (F10) The control-byte filter range in isActionableRewrite (src/app.mjs:372) includes CR (0x0d), so a model response with CRLF line endings is rejected and can fail the whole run after one retry. (F11) isClarificationOnly (src/prompt.mjs:187-192) requires a leading interrogative word, so \"Need more details?\" passes and can be emitted as the final prompt. (F12) extractAssistantText (src/prompt.mjs:210-216) throws TypeError when message.content is a plain string instead of a parts array (empirically confirmed). (F13) parseSentinel (src/prompt.mjs:180-185) pairs first OPEN with last CLOSE, so multi-block output like <xtprompt>a</xtprompt> and <xtprompt>b</xtprompt> yields garbled content \"a</xtprompt> and <xtprompt>b\" that passes the actionable check and reaches stdout.\n\n# SUCCESS\n\nAll five edge cases are handled: the 480-cap is defined and implemented over code points (documented unit); CRLF model output is not falsely rejected; unprefixed clarification questions are caught or the detection contract is documented; extractAssistantText handles both string and parts-array content; multi-block sentinel output is rejected as malformed (retried) rather than garbled. Each case has a regression test.\n\n# SCOPE\n\nsrc/prompt.mjs (normalizeContext :85-87, isClarificationOnly :187-192, extractAssistantText :210-216, parseSentinel :180-185), src/app.mjs (isActionableRewrite :369-373), test/prompt.test.mjs, test/app.test.mjs, README.md (document the 480-char unit).\n\n# NON_GOALS\n\n- No change to which control bytes are allowed beyond excluding CR (TAB/LF stay allowed, C0-minus-TAB/LF/DEL/C1 stay rejected).\n- No clipboard payload-size guard (that is F14, tracked in T7).\n\n# CONSTRAINTS\n\n- parseSentinel change must keep the existing valid single-block behavior byte-for-byte.\n- The CR exemption must not re-open an injection vector; verify CR alone cannot form an OSC/CSI sequence (it cannot: sequences start with ESC).\n- isClarificationOnly broadening must not cause actionable question-phrased prompts to be retried excessively; keep the retry-once cap.\n- This task touches app.mjs regions adjacent to T1's edits; land after T1 (T1 blocks this task).\n\n# VALIDATION\n\n- [ ] Unit tests: normalizeContext with a 480+ astral-char string -> no lone surrogate, length documented and asserted; isClarificationOnly(\"Need more details?\") -> true (or contract documented); extractAssistantText({content:\"plain\"}) -> \"plain\" without throwing; parseSentinel multi-block -> undefined (malformed).\n- [ ] app-level test: a CRLF-wrapped <xtprompt> response is accepted on the first attempt (no retry).\n- [ ] Existing control-byte tests (app.test.mjs:192-205) stay green.\n- [ ] Full suite + coverage green.\n\n# OUTPUT\n\nChanged files, per-case before/after behavior, test evidence, the documented 480-char unit in README, residual risk (real providers' CRLF and string-content behavior still unverified without live calls).",
+        "id": "xtrm-eam.6",
+        "issue_type": "task",
+        "labels": [
+          " contract:ready",
+          "contract:ready",
+          "xtprompt"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "Prompt-parsing edge-case hardening (F9-F13)",
+        "updated_at": "2026-08-14T22:27:26Z"
+      }
+    },
+    "xtrm-eam.7": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "F14-F17 fixed (no wont-fix): OSC 52 >8KB base64 stderr warning (copy proceeds, exit codes unchanged); interactive Ctrl-C aborts in-flight refinement via AbortController -> 130 without 'timed out'; '@@' escape yields literal @ without file read (documented); writeClipboard return removed, consumers cleaned. README updated. 66 tests green.",
+        "closed_at": "2026-08-14T22:27:27Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T21:14:43Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T21:14:43Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-eam",
+            "issue_id": "xtrm-eam.7",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "# PROBLEM\n\nFour info-level observations from the review, no correctness impact, deferred by design. (F14) writeClipboard (src/clipboard.mjs:12) has no OSC 52 payload-size guard; near-1600-token rewrites can exceed terminal clipboard caps (4-16KB) and silently no-op with exit 0. (F15) Interactive SIGINT (cli.mjs readline handler) does not abort an in-flight refinement call; the initial rewrite at app.mjs:115 is not abortable; exit 130 only happens after the in-flight call returns. (F16) --context has no escape for literal @-prefixed text (src/app.mjs:197 always treats @x as a file path). (F17) writeClipboard's return value (\"OSC 52\"/\"tmux OSC 52\") is never consumed (src/app.mjs:145).\n\n# SUCCESS\n\nEach item is either implemented with a test or closed as wont-fix with a recorded reason on this bead. Suggested scope per item: F14 a size warning (>~8KB base64) on stderr before sending; F15 wiring Ctrl-C into the completion AbortSignal once readline is active and documenting the initial-call behavior; F16 a documented escape (e.g. leading backslash) or README note; F17 removing the return value or consuming it in a diagnostic.\n\n# SCOPE\n\nsrc/clipboard.mjs, src/app.mjs (runInteractive/completeRewrite signal wiring :235-328,350-381; readContext :195-206; clipboardOptions :343-348), src/cli.mjs (openInteractive :16-46), README.md, tests as needed.\n\n# NON_GOALS\n\n- None of these block the epic; if a fix is rejected, the reason is recorded here and the item stays closed as wont-fix.\n\n# CONSTRAINTS\n\n- F15 must not change the documented exit-code contract (Ctrl-C during a read stays 130).\n- F14 must not turn a copy failure into a different exit code than the documented 1 for clipboard failure.\n- No new dependencies.\n\n# VALIDATION\n\n- [ ] Each adopted item has a test; each rejected item has a wont-fix note on this bead.\n- [ ] Full suite green.\n- [ ] README documents any behavior change (clipboard size caveat, SIGINT abort, @ escape).\n\n# OUTPUT\n\nPer-item decision (implemented with evidence, or wont-fix with reason), changed files, test evidence.",
+        "id": "xtrm-eam.7",
+        "issue_type": "task",
+        "labels": [
+          "contract:ready",
+          "xtprompt"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "status": "closed",
+        "title": "Info-level polish backlog (F14-F17)",
+        "updated_at": "2026-08-14T22:27:27Z"
+      }
+    },
+    "xtrm-eam.8": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "acceptance_criteria": "Regression and smoke pass evidence recorded on this bead, matching the VALIDATION checklist above, with the exact commands used.",
+        "close_reason": "T8 gate passed with evidence on this bead: 66/66 tests, coverage 96.56/88.46/96.00 (>=80), pack ships src+README, PTY 4/4, README piped example exits 0 live.",
+        "closed_at": "2026-08-14T22:27:27Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T21:14:43Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T21:14:43Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-eam",
+            "issue_id": "xtrm-eam.8",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "# PROBLEM\n\nThe remediation changes (T1-T6) touch shared files (src/app.mjs, src/prompt.mjs, test/app.test.mjs) and change the mock contract in app.test.mjs to mirror the real resolved-error-message API. Without a consolidated regression and smoke pass, defects can slip through per-task test gaps, and the PTY/interactive path (the package's user-facing shell surface) is only covered by two existing tests.\n\n# SUCCESS\n\nOne verifiable pass proves the whole remediation: full unit suite green, coverage above the 80% thresholds, the README piped example behaves as documented, the PTY interactive flow (refine, :accept with exact OSC 52 bytes, Ctrl-C -> 130, Ctrl-C at clarification -> documented code) still works end-to-end, and the packed tarball ships the expected files. The pass is reproducible via the commands named below.\n\n# SCOPE\n\nCommand execution and evidence collection only, inside packages/xtprompt: node --test, node --test --experimental-test-coverage, npm pack --dry-run, and the PTY smoke sequence via test/pty.test.mjs. May update test files only to add regression coverage that the implementation tasks missed (document any additions on this bead).\n\n# NON_GOALS\n\n- No source changes under src/.\n- No new test framework; node:test only.\n\n# CONSTRAINTS\n\n- Run from packages/xtprompt after npm ci (the worktree ships no node_modules; document this precondition).\n- Evidence is recorded on this bead: per-file test results, coverage table, pack file list, PTY output.\n- This task gates epic close (the epic's VALIDATION checkboxes reference its evidence) but does not block any implementation task.\n\n# VALIDATION\n\n- [ ] node --test: all tests pass (existing 43 plus any new regression tests from T1-T6), 0 fail.\n- [ ] Coverage: line/branch/function >= 80% thresholds pass.\n- [ ] `echo \"analyze this failure\" | node src/cli.mjs --intent analysis` does not fail on vagueness (matches F3 outcome; may fail later on auth/model as documented).\n- [ ] pty.test.mjs: interactive refine + :accept + SIGINT->130 pass; a SIGINT-at-clarification case matches the F4 outcome.\n- [ ] npm pack --dry-run lists README.md, package.json, src/{app,cli,clipboard,prompt}.mjs.\n- [ ] Evidence (commands + output) recorded on this bead.\n\n# OUTPUT\n\nThe full evidence block (test output, coverage table, pack list, PTY results), any test files added and why, and a pass/fail verdict against the epic's VALIDATION checklist.",
+        "id": "xtrm-eam.8",
+        "issue_type": "task",
+        "labels": [
+          " contract:ready",
+          " testing",
+          "contract:ready",
+          "xtprompt"
+        ],
+        "notes": "T8 GATE EVIDENCE (2026-08-14): node --test -> 66 pass / 0 fail. Coverage: 96.56% lines / 88.46% branches / 96.00% funcs (thresholds 80%, exit 0). npm pack --dry-run ships README.md + package.json + src/app.mjs + src/cli.mjs + src/clipboard.mjs + src/prompt.mjs. PTY smoke 4/4: refine+:accept exact OSC 52; SIGINT->130; Ctrl-C at clarification->130 'interrupted.'; Ctrl-C mid-refinement aborts call ->130. README piped example 'echo \"analyze this failure\" | node src/cli.mjs --intent analysis' -> exit 0 (live call).",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "closed",
+        "title": "Test: xtprompt regression and smoke gate for F1-F13 fixes",
+        "updated_at": "2026-08-14T22:27:27Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-14T21:14:40Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-eam",
+        "issue_id": "xtrm-eam.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-eam.1",
+      "source_field": "dependencies",
+      "target": "xtrm-eam",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T21:14:41Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-eam",
+        "issue_id": "xtrm-eam.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-eam.2",
+      "source_field": "dependencies",
+      "target": "xtrm-eam",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T21:14:41Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-eam",
+        "issue_id": "xtrm-eam.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-eam.3",
+      "source_field": "dependencies",
+      "target": "xtrm-eam",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T21:14:41Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-eam",
+        "issue_id": "xtrm-eam.4",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-eam.4",
+      "source_field": "dependencies",
+      "target": "xtrm-eam",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T21:14:42Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-eam.1",
+        "issue_id": "xtrm-eam.5",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-eam.5",
+      "source_field": "dependencies",
+      "target": "xtrm-eam.1",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T21:14:42Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-eam",
+        "issue_id": "xtrm-eam.5",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-eam.5",
+      "source_field": "dependencies",
+      "target": "xtrm-eam",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T21:14:42Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-eam.1",
+        "issue_id": "xtrm-eam.6",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-eam.6",
+      "source_field": "dependencies",
+      "target": "xtrm-eam.1",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T21:14:42Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-eam",
+        "issue_id": "xtrm-eam.6",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-eam.6",
+      "source_field": "dependencies",
+      "target": "xtrm-eam",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T21:14:43Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-eam",
+        "issue_id": "xtrm-eam.7",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-eam.7",
+      "source_field": "dependencies",
+      "target": "xtrm-eam",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T21:14:43Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-eam",
+        "issue_id": "xtrm-eam.8",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-eam.8",
+      "source_field": "dependencies",
+      "target": "xtrm-eam",
+      "type": "parent-child"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-eam",
+  "root_title": "xtprompt remediation: fix review findings in packages/xtprompt",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

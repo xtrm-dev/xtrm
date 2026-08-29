@@ -1,0 +1,44 @@
+{
+  "content_sha256": "e2649da9f73cdb6b5e549d188c3902c71f90dbe20bb9a22b977842e4dcc6a417",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-v8u"
+  },
+  "issues": {
+    "xtrm-v8u": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Audited docs visibility across core and specialists; narrowed ignore rules, removed only internal/runtime paths from the indexes, and verified user-facing docs remain tracked.",
+        "closed_at": "2026-07-24T22:31:30Z",
+        "comment_count": 0,
+        "created_at": "2026-07-24T22:29:34Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nThe core and specialists repositories contain documentation subdirectories that are currently visible on GitHub despite local ignore intent. Broad or missing ignore rules risk hiding user-facing examples, migration notes, and public operator documentation while failing to remove already-tracked internal documents.\n\n## SUCCESS\nAudit both repositories, keep user-facing documentation tracked, ignore only selected internal/archive/planning subdirectories, remove only those selected paths from the Git indexes without deleting working-tree files, and leave direct docs/* files and retained public subdirectories tracked.\n\n## SCOPE\n- /home/dawid/dev/core/.gitignore and selected tracked docs subdirectories.\n- /home/dawid/dev/specialists/.gitignore and selected tracked docs subdirectories.\n- Existing local changes must be preserved.\n\n## NON_GOALS\n- Do not delete documentation from working trees.\n- Do not rewrite repository history.\n- Do not alter document contents or user-facing README/roadmap edits.\n- Do not push or open PRs as part of this task.\n\n## CONSTRAINTS\n- Use explicit subdirectory rules; never ignore all of docs/.\n- Preserve direct docs/* files.\n- Keep specialists examples, upgrade notes, operator docs, design/roadmap docs, and specialist handoff docs tracked unless audit evidence proves otherwise.\n- Verify ignore behavior with git check-ignore --no-index and index membership with git ls-files.\n\n## VALIDATION\n- [ ] Candidate subdirectories are evidence-classified as internal/archive/runtime or user-facing.\n- [ ] No broad docs/ ignore rule remains.\n- [ ] Only approved subdirectory paths are removed from the index; working-tree files remain.\n- [ ] Direct docs/* files and retained user-facing subdirectories remain tracked.\n- [ ] Git status/diff checks pass in both repositories.\n\n## OUTPUT\nReport the audit classification, exact ignore rules, retained user-facing surfaces, selected index removals, and verification results.",
+        "id": "xtrm-v8u",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-07-24T22:29:37Z",
+        "status": "closed",
+        "title": "Audit docs ignore scope across core and specialists",
+        "updated_at": "2026-07-24T22:31:30Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-v8u",
+  "root_title": "Audit docs ignore scope across core and specialists",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

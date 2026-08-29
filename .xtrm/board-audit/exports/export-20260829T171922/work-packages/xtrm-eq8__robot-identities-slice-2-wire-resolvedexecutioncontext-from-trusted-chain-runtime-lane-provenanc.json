@@ -1,0 +1,45 @@
+{
+  "content_sha256": "99cec598d0368278d5bcbdc88d9c11a806a68043ce4871edf844b83ae32548e7",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-eq8"
+  },
+  "issues": {
+    "xtrm-eq8": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via xtrm-dev/xtrm PR #105 (squash 3bf4bbe). Independent non-author review PASS; identity 35/35 + slice2 19/19 tests green; 6 pre-existing beads-adapter environment failures classified; no credential/account actions performed.",
+        "closed_at": "2026-08-29T15:18:50Z",
+        "comment_count": 0,
+        "created_at": "2026-08-29T14:47:34Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "OPERATOR DIRECTION (2026-08-14 robot identities dispatch; Jira ISSUE-87 portfolio surface only). Slice 1 (xtrm-c4z, PR #99) landed generic contracts: xtrm.principal-set.v1, xtrm.actor.v1, xtrm.execution-identity.v1, xtrm.provenance.v1 + trusted-context assembly, validation, GitHub/Jira projections, legacy attribution semantics, documented-not-executed cutover. Do NOT redesign Slice 1.\n\nSLICE 2 SCOPE (wire one real trusted lane into the landed contracts + prove one bounded end-to-end mutation canary, NO account/connector cutover):\nA. Trusted context source: use the existing chain-runtime scheduler lane (experiments/agentsession-sre-chain-vertical-slice/src/chain/scheduler.ts makeIdentity + ResolvedChain + StepExecutionState) as the trusted host/local execution lane. Add an adapter that populates ResolvedExecutionContext: actor, principal_set, execution identity, assignment/version, authority, participant/parent lineage, runtime session. Reject missing actor/assignment/execution/authority. Use a registered principal set. NEVER take identity fields from model/prompt-controlled payloads.\nB. No duplicate identity system: reuse existing participant_id/job_id/execution_id/runtime_session_id/assignment/authority semantics from the chain runtime + Slice 1 contracts; deterministic adapter where names differ. No parallel identity fields.\nC. Provenance projection canary: one bounded test/canary path projecting a real provenance record to a NON-production GitHub/Jira target (test fixture/dry-run adapter). Prove: trusted context -> envelope -> platform projection -> returned platform object id binding -> receipt validation. No account cutover; human connector account still in use => authorship_mode appropriate direct/relay mode, attribution_strength self_attested_web.\nD. Rebind safety: same receipt + different returned external object -> fails closed; already-bound receipt cannot be silently rebound.\nE. Runtime authority safety (negative tests): model/caller input cannot override actor_id, principal_set_id, execution_id, assignment_id, authority_ref, participant_id, parent_execution_id, authorship_mode, attribution_strength.\nF. Legacy behavior: no retroactive logical actors on old GitHub/Jira history; historical records without trusted identity remain legacy_unattributed.\nG. No authenticity overclaim: unkeyed hashes are tamper evidence only; do not rename/reinterpret self_attested_web; do not implement a signer to make the canary look stronger.\n\nNON-GOALS: no GitHub users/Apps/tokens, no Atlassian accounts/tokens, no ChatGPT connector changes, no credentials, no production services/daemons/schedulers/deployment. No GATE-AUTH redesign, no Substrate redesign, no Channels redesign, no Work Protocol redesign, no crypto attestation service, no Mercury-specific identity logic (Mercury only in fixtures/examples/policy adapters).\n\nACCEPTANCE:\n1. Adapter populates ResolvedExecutionContext from real chain-runtime scheduler state (fixture-backed tests bound to actual scheduler/identity code paths, not pure mocks alone).\n2. Identity fields cannot be smuggled via caller payload (negative tests for all 9 fields).\n3. Canary test: full chain trusted context -> assembleProvenance -> projection -> bindPlatformResult -> validateMutation -> receipt; classification self_attested_web.\n4. Rebind conflict + already-bound receipt fail closed (regression).\n5. Missing actor/assignment/execution/authority/principal binding fail closed.\n6. Legacy history remains legacy_unattributed.\n7. docs/identity mutation-provenance.md updated with slice 2 runtime-integration/canary note.\n8. identity + integration + negative tests pass; typecheck/lint/git diff --check clean. Independent non-author review PASS before merge.",
+        "id": "xtrm-eq8",
+        "issue_type": "feature",
+        "notes": "PR xtrm-dev/xtrm#105 merged (squash 3bf4bbe). Reviewed head b7b887d; merged tree byte-identical for all changed files. Independent non-author review PASS (verify at 687cd78 + delta confirm b7b887d). Identity 35/35 + slice2 19/19 green; full suite 311 pass / 6 pre-existing environmental beads-adapter failures (reproduced on pristine origin/main). Typecheck: 0 errors in touched files (PR also fixed 2 pre-existing identity-file typecheck errors); 5 pre-existing errors remain in untouched files. No credentials/accounts/connectors/daemons created; canary uses dry-run adapter only.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-29T14:47:37Z",
+        "status": "closed",
+        "title": "Robot identities slice 2: wire ResolvedExecutionContext from trusted chain-runtime lane + provenance canary",
+        "updated_at": "2026-08-29T15:18:50Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-eq8",
+  "root_title": "Robot identities slice 2: wire ResolvedExecutionContext from trusted chain-runtime lane + provenance canary",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

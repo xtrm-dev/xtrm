@@ -1,0 +1,43 @@
+{
+  "content_sha256": "6f31de99e9935997c991d9daa63eef4ec0168eb7435c30eb05b5b0b154ab860c",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-q9r"
+  },
+  "issues": {
+    "xtrm-q9r": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "dawid",
+        "close_reason": "Obsolete on inspection: canonical xtrm-tools bootstrap.py and drift_detector.py at .xtrm/skills/default/service-skills/scripts/ ALREADY address all 4 layered bugs (L0 umbrella probe bootstrap.py:190; L1 never_synced epoch fallback drift_detector.py:246-251; L2 last_sync_ref git SHA drift_detector.py:66; L3 gitnexus-first enrichment with tier classification + mtime fallback). Real bug is stale xt update sync in mercury-infra. Filed follow-up in infra to plan xt update --apply.",
+        "closed_at": "2026-06-18T15:12:28Z",
+        "comment_count": 0,
+        "created_at": "2026-06-18T15:10:34Z",
+        "created_by": "dawid",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## Problem\n\n`bootstrap.get_registry_path()` at `.xtrm/skills/default/service-skills/scripts/bootstrap.py:118-155`\nresolves the registry via 5 probes (env var → root symlink → pack root → legacy → create-at). The\npack-root probe (line 144) checks `<pack>/service-registry.json` only.\n\nMercury infra and other Mercury repos materialize the registry one level deeper at\n`<pack>/service-skills/service-registry.json` (the service-skills SKILL's own\ndirectory holds both the SKILL.md and the registry it owns). bootstrap.get_registry_path\nfalls through all probes and returns a non-existent create-at path. load_registry()\nreturns {\"services\": {}} and the drift detector scans 0 services in a permanent\nsilent-fail state.\n\n## Cross-repo context\n\nDiscovered while wiring drift detection in mercury-infra (bead infra-j2v8, closed\nwith option-A symlink workaround). Same defect affects every Mercury project that\nholds a service-skills pack — currently mercury-infra + the 8 other repos that\nadopted the pack via xt update.\n\n## Resolution (additive, non-breaking)\n\nAdd a 6th probe between lines 145 and 147:\n\n    if pack is not None:\n        pack_reg = pack / \"service-registry.json\"\n        if pack_reg.exists():\n            return pack_reg\n        # NEW: probe the canonical service-skills subdir.\n        ss_reg = pack / \"service-skills\" / \"service-registry.json\"\n        if ss_reg.exists():\n            return ss_reg\n\nThen update the create-at fallback (line 153) to use the service-skills subdir\nwhen it exists as a directory (so newly bootstrapped projects land at the right\nplace).\n\n## Acceptance\n\n- Smoke from mercury-infra: load_registry returns 15 services (was 0)\n- Smoke from xtrm-tools itself: no regression in existing test suite\n- No envvar / config change required by consumers\n\n## Out of scope\n\nDeeper drift detector debt (L1 silent-skip / L2 last_sync vs last_sync_ref / L3 mtime\nvs git SHA) — separate beads to be filed because L2 requires alignment with\ndev/specialists unitAI-4zask shape decision.\n\n## References\n\n- cross-repo discovered-from: mercury-infra bead `infra-j2v8` (closed via option-A symlink workaround)\n- related: dev/specialists `unitAI-4zask` (script-specialist post-merge pipeline shape decision)\n- code: .xtrm/skills/default/service-skills/scripts/bootstrap.py:118-155",
+        "id": "xtrm-q9r",
+        "issue_type": "bug",
+        "priority": 1,
+        "started_at": "2026-06-18T15:10:44Z",
+        "status": "closed",
+        "title": "bootstrap.get_registry_path: probe <pack>/service-skills/service-registry.json (drift detector L0)",
+        "updated_at": "2026-06-18T15:12:28Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-q9r",
+  "root_title": "bootstrap.get_registry_path: probe <pack>/service-skills/service-registry.json (drift detector L0)",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

@@ -1,0 +1,43 @@
+{
+  "content_sha256": "c92200c50d0108cb176fc0eadbc55666e2ae84e0b428feaca8ede875fad96dc2",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-6fe"
+  },
+  "issues": {
+    "xtrm-6fe": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "dawid",
+        "close_reason": "Shipped scripts/verify_mcpq.py + 'make verify-mcpq' target + doc section in docs/telemetry/mcp-query-surfaces.md. Five live-shape assertions (servers, prom count + mercury_ prefix, prom execute_query == 1, grafana count >= 40, grafana describe search_dashboards has limit/page/query). Sidecars-up gate: skips with clear remediation when missing; exits 0 in both ok and skip paths. --json mode for machine consumers. Verified both paths locally (ok with all sidecars up, skip when one stopped). PR scope: piggybacks on PR #76 (mcpq integration) since it's the same logical unit.",
+        "closed_at": "2026-06-10T11:27:08Z",
+        "comment_count": 0,
+        "created_at": "2026-06-10T10:23:30Z",
+        "created_by": "dawid",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nxtrm-2m3 epic Phase D shipped a `.mcpq.json` in `~/projects/mercury/infra` and PR mercuryintelligence/infra#76 to merge it. End-to-end was verified once from the orchestrator on 2026-06-10 against the live sidecars (`infra-prometheus-mcp` + `infra-grafana-mcp`). That single verification covers happy paths. To consider the mercury-infra integration durable, the infra repo should carry its OWN scripted verification (gated on sidecars-up) so anyone bootstrapping the repo can prove the wiring works without a one-off interactive session.\n\n## SUCCESS\n\nA scripted verification lives in `~/projects/mercury/infra/scripts/` (or `tests/`) that:\n1. Detects whether both sidecars are up via `docker ps --filter`.\n2. If down: prints clear instructions to start them (or skips).\n3. If up: runs the canonical smokes against `.mcpq.json` and asserts the expected shapes:\n   - `mcpq servers` lists exactly `grafana` and `prometheus`.\n   - `mcpq prometheus list-tools` returns exactly 6 `mercury_*`-prefixed tools.\n   - `mcpq prometheus call mercury_execute_query --arg query='up{job=\"prometheus\"}'` returns a vector with at least one sample value (`\"1\"` or numeric 1).\n   - `mcpq grafana list-tools` returns ≥40 tools.\n   - `mcpq grafana describe search_dashboards` shows the input schema with `query`/`limit`/`page`.\n4. Exit 0 on success, non-zero with a clear diagnostic on failure.\n5. Wired into whatever infra-side check harness already exists (`scripts/`, `Makefile`, CI workflow) — match the project's existing patterns rather than introducing a new one.\n6. Documents the script in mercury-infra's README or a focused doc under `docs/`.\n\n## SCOPE\n\n- Mercury-infra repo only (`~/projects/mercury/infra`).\n- New file(s) under `scripts/` or `tests/` per repo convention.\n- Optional doc under `docs/` or `README.md` snippet.\n- DO NOT touch the xtrm repo or `packages/mcpq`.\n\n## NON_GOALS\n\n- New unit coverage of `mcpq` internals (that's already in xtrm/packages/mcpq/tests).\n- Live-call assertions on tool outputs beyond basic shape (no \"prometheus must have N targets\") — drift would be expected and false-positives hurt.\n- Auth header tests (sidecars use static env-var creds; no rotation to verify).\n\n## CONSTRAINTS\n\n- Use whatever language matches infra repo conventions (bash + jq, python3, etc.).\n- Script must be runnable standalone without setting up a Python venv that doesn't already exist in the operator's path — install instructions belong in docs, not in the script.\n- Sidecar-up detection MUST gracefully skip rather than fail when sidecars are down (this script should be idempotent in any environment state).\n- Telemetry one-liner on stderr from `mcpq` MUST be ignored or asserted as JSON — don't let it leak into stdout parsing.\n- This is a SEPARATE issue from PR #76 — that PR just lands the `.mcpq.json`; this bead is the verification harness that exercises it.\n\n## VALIDATION\n\n- Run the script locally with sidecars up — exits 0, prints expected counts.\n- Run with one sidecar down — prints skip message, exits 0 (or whatever the repo convention is for skipped checks).\n- CI workflow (if applicable) picks up the script and runs it.\n- README/docs reference the script and what it asserts.\n\n## OUTPUT\n\n- New verification script(s) and any wiring (Makefile target, CI job, etc.).\n- Doc snippet showing how to run it.\n- Confirmation that PR #76 is merged before this can be tested end-to-end (or that the script reads `.mcpq.json` from a known path either way).\n\n## REFERENCES\n\n- xtrm-2m3 epic (closed 2026-06-10) — full mcpq CLI shipped at xtrm/packages/mcpq/\n- xtrm-2m3.7 (closed) — initial mercury-infra wiring + one-off verification\n- PR: https://github.com/mercuryintelligence/infra/pull/76 (`.mcpq.json` for the two sidecars)\n- xtrm Phase D smoke test pattern: packages/mcpq/tests/test_smoke.py (already gates on `docker ps`; mercury-infra script can mirror the same approach)\n- xtrm install path expected on host: `pip install -e <xtrm-repo>/packages/mcpq` (or the future PyPI release)\n\nSCRUTINY: medium",
+        "id": "xtrm-6fe",
+        "issue_type": "task",
+        "priority": 2,
+        "started_at": "2026-06-10T11:22:15Z",
+        "status": "closed",
+        "title": "Verify mcpq wiring in mercury-infra: scripted, sidecars-up-gated smoke",
+        "updated_at": "2026-06-10T11:27:08Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-6fe",
+  "root_title": "Verify mcpq wiring in mercury-infra: scripted, sidecars-up-gated smoke",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

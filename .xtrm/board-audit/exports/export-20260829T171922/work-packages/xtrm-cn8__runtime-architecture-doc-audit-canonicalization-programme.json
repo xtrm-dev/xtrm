@@ -1,0 +1,345 @@
+{
+  "content_sha256": "a1429e91296152e493fe1d1ef5d805770fd203766e6aad8b92b13f29a3c12efa",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-cn8.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-cn8.2"
+      },
+      {
+        "children": [],
+        "id": "xtrm-cn8.3"
+      },
+      {
+        "children": [],
+        "id": "xtrm-cn8.4"
+      },
+      {
+        "children": [],
+        "id": "xtrm-cn8.5"
+      },
+      {
+        "children": [],
+        "id": "xtrm-cn8.6"
+      }
+    ],
+    "id": "xtrm-cn8"
+  },
+  "issues": {
+    "xtrm-cn8": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Programme complete: corpus frozen (140 docs audited, gate PASS), runtime canon established (docs/runtime/ MOC+PRD+ADR-001..006) and merged via xtrm PRs #89/#90, specialists #270/#271, core #596. All residual children closed. Implementation continues in the new native-chain-runtime epic.",
+        "closed_at": "2026-08-22T23:13:01Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T04:24:24Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Full-corpus documentation audit across xtrm/specialists/core/xtmux/console: source register, absorption matrix, decision matrix, runtime PRD+ADR set, Specialists PRD/roadmap/execution-protocol reconciliation, execution plan update. No runtime code changes. Coordinator: local pi session (ultracode).",
+        "id": "xtrm-cn8",
+        "issue_type": "epic",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-22T04:24:32Z",
+        "status": "closed",
+        "title": "Runtime architecture doc audit + canonicalization programme",
+        "updated_at": "2026-08-22T23:13:01Z"
+      }
+    },
+    "xtrm-cn8.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Lane B audit complete: 15/15 sources read fully at specialists@0253e3e4; outputs under docs/runtime/reconciliation/lanes/ (canon audit, WP continuity x90 rows, source register). No canonical files modified.",
+        "closed_at": "2026-08-22T04:39:23Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T04:35:44Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T04:35:44Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-cn8",
+            "issue_id": "xtrm-cn8.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Read-only documentation audit of specialists docs/design corpus at 0253e3e4; outputs lane-b-specialists-canon-audit.md, lane-b-wp-continuity.json, lane-b-source-register.json under docs/runtime/reconciliation/lanes/.",
+        "id": "xtrm-cn8.1",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-22T04:35:49Z",
+        "status": "closed",
+        "title": "Lane B: specialists canon audit (roadmap/PRD/chains-prompt-evals/history/protocol)",
+        "updated_at": "2026-08-22T04:39:23Z"
+      }
+    },
+    "xtrm-cn8.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Lanes E+F outputs written to docs/runtime/reconciliation/lanes/ (7 files, JSON validated): channels canonical contract + substrate minimal durability kernel; no canonical files modified",
+        "closed_at": "2026-08-22T04:49:45Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T04:40:58Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T04:40:58Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-cn8",
+            "issue_id": "xtrm-cn8.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "id": "xtrm-cn8.2",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-22T04:41:06Z",
+        "status": "closed",
+        "title": "Lanes E+F: Channels + Substrate doc audit (read-only reconciliation outputs)",
+        "updated_at": "2026-08-22T04:49:45Z"
+      }
+    },
+    "xtrm-cn8.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "read-only lane audit complete",
+        "closed_at": "2026-08-22T04:53:20Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T04:48:52Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T04:48:52Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-cn8",
+            "issue_id": "xtrm-cn8.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "id": "xtrm-cn8.3",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-22T04:48:59Z",
+        "status": "closed",
+        "title": "Lane G: xtmux runtime + RuntimeSupervisor boundary audit (read-only reconciliation outputs)",
+        "updated_at": "2026-08-22T04:53:20Z"
+      }
+    },
+    "xtrm-cn8.4": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Lane J cross-reference/link/duplication audit complete. Outputs in docs/runtime/reconciliation/lanes/lane-j-{reference-integrity.md,reference-graph.json,broken-links.json}. No canonical files modified.",
+        "closed_at": "2026-08-22T05:08:15Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T04:52:06Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T04:52:06Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-cn8",
+            "issue_id": "xtrm-cn8.4",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "id": "xtrm-cn8.4",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-22T04:52:09Z",
+        "status": "closed",
+        "title": "Lane J: cross-reference/link/duplication audit (read-only reconciliation outputs)",
+        "updated_at": "2026-08-22T05:08:15Z"
+      }
+    },
+    "xtrm-cn8.5": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Delivered via specialists PR #271 (merged 79dbecc8): specialists-prd.md current canon, enhanced-prd preserved in history/, 90 WPs in wp-continuity.json.",
+        "closed_at": "2026-08-22T23:12:53Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T16:16:40Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T16:16:40Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-cn8",
+            "issue_id": "xtrm-cn8.5",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Follow-up from xtrm-cn8 (W4 partial): enhanced-prd.md remains programme-scope canon with wp-continuity.json added; consolidation into a current canonical specialists-prd.md (historical revision prose removed, WP continuity table inlined) still open. Evidence: docs/runtime/reconciliation/lanes/lane-b-wp-continuity.json (90 WPs), lane-b audit §12 residuals ported. Parent epic xtrm-cn8.",
+        "id": "xtrm-cn8.5",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "Specialists PRD consolidation into current canonical specialists-prd.md",
+        "updated_at": "2026-08-22T23:12:53Z"
+      }
+    },
+    "xtrm-cn8.6": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "XTRM portion complete: PR #90 merged after non-author review repair (ca41734). Core companion #596 landed earlier.",
+        "closed_at": "2026-08-22T23:11:06Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T16:16:41Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T16:16:41Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-cn8",
+            "issue_id": "xtrm-cn8.6",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "From xtrm-cn8 absorption matrix: replace xtrm-tree console architecture copies (console-architecture/-observability-spec/-test-guards) with pointers to console repo canon post-host-retirement; archive apps-console-scaffold-preflight.md; register core plans/delegation-architecture.md + orchestration-implementation.md in core superseded-designs.md and move to plans/deprecated/; skills vendor-drift remediation note in core skills-ownership.md.",
+        "id": "xtrm-cn8.6",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "Console/Core doc pointer reconciliation (C-3) + superseded-designs registration",
+        "updated_at": "2026-08-22T23:11:06Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-22T04:35:44Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-cn8",
+        "issue_id": "xtrm-cn8.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-cn8.1",
+      "source_field": "dependencies",
+      "target": "xtrm-cn8",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-22T04:40:58Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-cn8",
+        "issue_id": "xtrm-cn8.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-cn8.2",
+      "source_field": "dependencies",
+      "target": "xtrm-cn8",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-22T04:48:52Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-cn8",
+        "issue_id": "xtrm-cn8.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-cn8.3",
+      "source_field": "dependencies",
+      "target": "xtrm-cn8",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-22T04:52:06Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-cn8",
+        "issue_id": "xtrm-cn8.4",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-cn8.4",
+      "source_field": "dependencies",
+      "target": "xtrm-cn8",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-22T16:16:40Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-cn8",
+        "issue_id": "xtrm-cn8.5",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-cn8.5",
+      "source_field": "dependencies",
+      "target": "xtrm-cn8",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-22T16:16:41Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-cn8",
+        "issue_id": "xtrm-cn8.6",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-cn8.6",
+      "source_field": "dependencies",
+      "target": "xtrm-cn8",
+      "type": "parent-child"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-cn8",
+  "root_title": "Runtime architecture doc audit + canonicalization programme",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

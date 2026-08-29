@@ -1,0 +1,119 @@
+{
+  "content_sha256": "4c98f8bc5071fdbb828ad77433b37a90dda0549ee3c865593f20be88c553ecf4",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-26T02:00:04Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-hzb",
+        "issue_id": "xtrm-2mi",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-2mi",
+      "source_field": "dependencies",
+      "target": "xtrm-hzb",
+      "target_present_in_snapshot": true,
+      "target_title": "Durable ReplyObligation + atomic request/reply correlation",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-26T02:00:04Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-sf3",
+        "issue_id": "xtrm-2mi",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-2mi",
+      "source_field": "dependencies",
+      "target": "xtrm-sf3",
+      "target_present_in_snapshot": true,
+      "target_title": "Runtime-owned WAITING_ON_CHANNEL state + SchedulerIntent wake/resume",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-26T02:00:04Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy",
+        "issue_id": "xtrm-2mi",
+        "metadata": "{}",
+        "type": "discovered-from"
+      },
+      "source": "xtrm-2mi",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy",
+      "target_present_in_snapshot": true,
+      "target_title": "Native chain runtime: make SRE chain the first data-defined XTRM chain",
+      "type": "discovered-from"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-2mi"
+  },
+  "issues": {
+    "xtrm-2mi": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via PR #97 (merged 0456af2): FINALIZE enforcement structurally via finalizeGate; SETTLED-not-replied stance; UNCERTAIN escalates regardless of mandatory; backward-compatible mandatory flag; receipt-triple honesty. 18+128 tests pass; tsc clean. Review PARTIAL->repaired(11be20e)->PASS on exact final head. Two-journal atomicity residual folded into xtrm-1o8.",
+        "closed_at": "2026-08-26T02:08:51Z",
+        "comment_count": 0,
+        "created_at": "2026-08-26T00:00:04Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-26T02:00:04Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy",
+            "issue_id": "xtrm-2mi",
+            "metadata": "{}",
+            "type": "discovered-from"
+          },
+          {
+            "created_at": "2026-08-26T02:00:04Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-hzb",
+            "issue_id": "xtrm-2mi",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-26T02:00:04Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-sf3",
+            "issue_id": "xtrm-2mi",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 2,
+        "dependent_count": 0,
+        "description": "Fourth comm-runtime bead. FINALIZE (runtime-owned phase, R3.13) checks the durable obligation ledger: an agent with unresolved MANDATORY inbound obligations cannot finalize — agent finished != protocol completed. Runtime blocks finalization, surfaces the open obligations to the coordinator/operator, and only settles them on correlated reply, explicit operator void, or expiry policy.\n\nNon-mandatory inbound may be downgraded per policy but never silently dropped; every settlement records resolving evidence (R2.7).",
+        "id": "xtrm-2mi",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-26T01:38:24Z",
+        "status": "closed",
+        "title": "FINALIZE enforcement for unresolved mandatory inbound obligations",
+        "updated_at": "2026-08-26T02:08:51Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-2mi",
+  "root_title": "FINALIZE enforcement for unresolved mandatory inbound obligations",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

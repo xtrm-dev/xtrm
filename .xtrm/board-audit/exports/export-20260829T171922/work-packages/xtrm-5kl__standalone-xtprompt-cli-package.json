@@ -1,0 +1,170 @@
+{
+  "content_sha256": "4d8e3322fe8f3fdfe62f48a91ffa92a1b960d4d17cc6efc6a1b7f4f30263fa03",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-5kl.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-5kl.2"
+      }
+    ],
+    "id": "xtrm-5kl"
+  },
+  "issues": {
+    "xtrm-5kl": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Done: standalone xtprompt CLI package implemented and verified end-to-end under packages/xtprompt.",
+        "closed_at": "2026-08-14T18:14:36Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T18:00:22Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nThe contextual xtprompt prompt improver only exists as a Pi TUI extension. Users need the same structured one-shot prompt rewrite from a normal shell without starting an AgentSession or interactive Pi UI.\n\n## SUCCESS\n\nA standalone npm package exists at packages/xtprompt and installs an xtprompt executable. The executable accepts positional or stdin input, reuses Pi model/auth configuration through ModelRuntime, supports explicit model/intent/context controls, handles vague input safely, and emits plain text or JSON.\n\n## SCOPE\n\n- packages/xtprompt/ with package-local source, tests, README, manifest, and lockfile\n\n## NON_GOALS\n\n- No persistent conversation or AgentSession\n- No automatic project-file or prior-session context discovery\n- No Pi TUI integration changes\n- No custom provider implementation outside Pi ModelRuntime\n\n## CONSTRAINTS\n\n- Use Node 24 standard-library argument parsing, stdin, and readline APIs.\n- Use Pi ModelRuntime and resolveCliModel; do not implement provider clients or credential storage.\n- Never print credentials, auth headers, full environment data, or prompt content to stderr.\n- Plain output is the rewrite only; diagnostics go to stderr.\n\n## VALIDATION\n\n- [ ] Package-local unit and CLI integration tests pass.\n- [ ] Coverage is at least 80% for statements, branches, functions, and lines.\n- [ ] npm pack dry-run includes executable, README, and runtime source.\n- [ ] A real authenticated smoke invocation returns a non-empty rewrite when auth exists.\n- [ ] Failure smoke returns non-zero without secret material.\n\n## OUTPUT\n\nReport package files, options, verification commands, smoke evidence, coverage, and limitations.",
+        "id": "xtrm-5kl",
+        "issue_type": "epic",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "Standalone xtprompt CLI package",
+        "updated_at": "2026-08-14T18:14:36Z"
+      }
+    },
+    "xtrm-5kl.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Done: standalone @xtrm/xtprompt package implemented with ModelRuntime.completeSimple, Pi default model selection, CLI options, docs, and safe errors.",
+        "closed_at": "2026-08-14T18:14:35Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T18:00:22Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T18:00:22Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-5kl",
+            "issue_id": "xtrm-5kl.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nEpic xtrm-5kl needs a minimal shell-facing adapter around the proven xtprompt rewrite policy and Pi model runtime. The package must work without AgentSession state, tools, extension loading, or TUI APIs.\n\n## SUCCESS\n\npackages/xtprompt is an installable ESM npm package with an xtprompt bin. It accepts one prompt argument or stdin, supports --model, --intent, --context, --no-clarify, and --json, asks one terminal clarification for vague prompts, uses ModelRuntime.completeSimple(), validates the <xtprompt> response envelope with one retry, and documents exit behavior.\n\n## SCOPE\n\n- packages/xtprompt/package.json and package-lock.json\n- packages/xtprompt/src/\n- packages/xtprompt/README.md\n\n## NON_GOALS\n\n- No edits to the Pi extension\n- No AgentSession, tools, skill loading, or session persistence\n- No clipboard integration\n- No dynamic Pi extension-provider loading\n\n## CONSTRAINTS\n\n- Preserve the extension intent lattice, planning headers, vague-input policy, timeout, output cap, sentinel contract, and retry behavior.\n- Use Node standard library for CLI parsing and terminal input.\n- Reuse Pi auth/model configuration through ModelRuntime.create() and resolveCliModel().\n- Never expose secrets in diagnostics.\n\n## VALIDATION\n\n- [ ] Manifest exposes xtprompt and Node >=24 plus the Pi SDK dependency.\n- [ ] Positional and stdin input work.\n- [ ] Explicit and automatic intent work.\n- [ ] Context text and @file input are bounded and advisory.\n- [ ] Vague input clarifies once in a TTY or fails safely in non-TTY/no-clarify mode.\n- [ ] Model resolution, auth, timeout, malformed envelope, retry, and JSON/plain output have defined behavior.\n- [ ] Tests and coverage pass.\n\n## LIBRARIES\n\n- Reuse in repo: none found after searches for ModelRuntime, resolveCliModel, completeSimple, and xtprompt.\n- Installed deps: none at repository root.\n- Stdlib: node:util.parseArgs, node:readline/promises, node:fs/promises, node:process.\n- New dep: @earendil-works/pi-coding-agent@^0.84.1 for Pi model/auth compatibility.\n- Roll it: no provider/auth implementation; only rewrite policy and adapters.\n\n## OUTPUT\n\nChanged files, usage examples, test/coverage/pack/smoke evidence, and residual limitations.",
+        "id": "xtrm-5kl.1",
+        "issue_type": "task",
+        "notes": "Implementation complete in packages/xtprompt: package.json/package-lock.json, README.md, src/prompt.mjs, src/app.mjs, src/cli.mjs. Uses ModelRuntime.create(), resolveCliModel(), and completeSimple(); no AgentSession. Plain/JSON output, positional/stdin input, explicit intent/model/context, one TTY clarification, bounded context, timeout, sentinel retry, and secret-safe errors implemented.\nDefault model selection now uses Pi SettingsManager default provider/model first, then falls back to the first authenticated ModelRuntime model. Live default smoke selected openai-codex/gpt-5.6-sol and returned valid JSON.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-14T18:00:24Z",
+        "status": "closed",
+        "title": "Implement xtprompt one-shot CLI and package",
+        "updated_at": "2026-08-14T18:14:35Z"
+      }
+    },
+    "xtrm-5kl.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Done: 19 tests pass; coverage 92.42% lines, 82.26% branches, 90.32% functions; pack/install/live/failure smokes pass.",
+        "closed_at": "2026-08-14T18:14:35Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T18:00:23Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T18:00:23Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-5kl",
+            "issue_id": "xtrm-5kl.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-14T18:00:23Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-5kl.1",
+            "issue_id": "xtrm-5kl.2",
+            "metadata": "{}",
+            "type": "validates"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nThe shell package in xtrm-5kl.1 crosses argument, stdin, filesystem context, terminal clarification, Pi runtime, and output boundaries. Static checks cannot prove those paths.\n\n## SUCCESS\n\nPackage-local tests cover pure rewrite policy and subprocess CLI behavior, including success, JSON, failures, retry, bounded context, and secret-safe diagnostics.\n\n## SCOPE\n\n- packages/xtprompt/test/\n- Package-local test scripts and fixtures\n\n## NON_GOALS\n\n- No Pi provider-internal tests\n- No session or TUI tests\n- No live call in deterministic tests\n\n## CONSTRAINTS\n\n- Layer: shell + boundary; strategy: Node unit tests and subprocess integration with a fake runtime boundary, plus separate real-auth smoke.\n- Do not mock internal rewrite functions. Mock only model runtime.\n- Never read or print real credentials in deterministic tests.\n\n## VALIDATION\n\n- [ ] Positional and stdin prompts produce exact plain output.\n- [ ] JSON includes prompt, intent, and model identity.\n- [ ] Empty input, invalid intent/model, non-TTY vague input, malformed output, and model failure exit non-zero on stderr.\n- [ ] @file context is bounded and XML delimiters are escaped.\n- [ ] One malformed response retries once and valid second response succeeds.\n- [ ] Coverage reaches 80% for all four metrics.\n- [ ] Help smoke exits 0; authenticated rewrite smoke runs if auth exists.\n- [ ] npm pack dry-run includes runtime files and excludes tests.\n\nCritical paths covered: prompt to completion to parse to stdout; failures to non-zero stderr without secrets.\nKnown deferred path: extension-registered custom providers.\nDebuggability: stable concise stderr and exit codes; no stored telemetry for a stateless CLI.\n\n## OUTPUT\n\nExact test, coverage, pack, and smoke evidence.",
+        "id": "xtrm-5kl.2",
+        "issue_type": "task",
+        "notes": "Validation evidence: npm test 18/18 pass; npm run test:coverage overall lines 92.27%, branches 82.50%, functions 90.32%; npm audit reports 0 vulnerabilities; node --check passes all src/test .mjs; npm pack dry-run contains exactly README.md, package.json, and 3 src files; temp tarball install exposes xtprompt 0.1.0/help; empty-input installed-bin smoke exits 2 with zero stdout and concise stderr; live authenticated openai-codex/gpt-5.4-mini JSON rewrite succeeds.\nFinal suite after default-model change: 19/19 tests pass; coverage lines 92.42%, branches 82.26%, functions 90.32%. Final pack/install/failure smokes and npm audit remain clean.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-14T18:07:13Z",
+        "status": "closed",
+        "title": "Test: xtprompt CLI — unit, integration, and smoke",
+        "updated_at": "2026-08-14T18:14:35Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-14T18:00:22Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-5kl",
+        "issue_id": "xtrm-5kl.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-5kl.1",
+      "source_field": "dependencies",
+      "target": "xtrm-5kl",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T18:00:23Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-5kl",
+        "issue_id": "xtrm-5kl.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-5kl.2",
+      "source_field": "dependencies",
+      "target": "xtrm-5kl",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T18:00:23Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-5kl.1",
+        "issue_id": "xtrm-5kl.2",
+        "metadata": "{}",
+        "type": "validates"
+      },
+      "source": "xtrm-5kl.2",
+      "source_field": "dependencies",
+      "target": "xtrm-5kl.1",
+      "type": "validates"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-5kl",
+  "root_title": "Standalone xtprompt CLI package",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

@@ -1,0 +1,47 @@
+{
+  "content_sha256": "2fc6a5e5933487effe580d6bf709ceee02d9cb9bd55a82748af4597467a56f3a",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-cv3"
+  },
+  "issues": {
+    "xtrm-cv3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Prototype verified end-to-end on mercury-market-data: orphan branch + permanent worktree, flock, export into .xtrm/board-audit/, retention keep-3, raw-beads.jsonl no-op detection, fast-forward push (remote at 6268d0fc). Trigger wiring follow-up filed.",
+        "closed_at": "2026-08-22T00:40:37Z",
+        "comment_count": 0,
+        "created_at": "2026-08-21T23:58:48Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Replace per-checkpoint ad-hoc worktrees + transport branch sprawl with one permanent orphan worktree holding only .xtrm/board-audit assets. flock-serialized checkpoint: bd export -> commit -> push fast-forward. Trigger: explicit command now; timer/post-PR-create later. Trial from IDEAS.md 210926. Root cause context: market-data PR checkpoints dead since Aug 15 because xt end pushes before PR exists.",
+        "id": "xtrm-cv3",
+        "issue_type": "task",
+        "labels": [
+          "prototype"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-21T23:58:51Z",
+        "status": "closed",
+        "title": "board-audit: permanent export worktree (board-audit-export-do-not-cancel) prototype",
+        "updated_at": "2026-08-22T00:40:37Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-cv3",
+  "root_title": "board-audit: permanent export worktree (board-audit-export-do-not-cancel) prototype",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

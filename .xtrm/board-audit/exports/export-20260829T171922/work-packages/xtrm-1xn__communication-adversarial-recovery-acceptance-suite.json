@@ -1,0 +1,143 @@
+{
+  "content_sha256": "710cd1265d6d0f6c93ea308755620cc2c9ae675b54387c9ea9897f8d77d4a9fe",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-26T02:00:26Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-6yn",
+        "issue_id": "xtrm-1xn",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-1xn",
+      "source_field": "dependencies",
+      "target": "xtrm-6yn",
+      "target_present_in_snapshot": true,
+      "target_title": "ChannelCommunicationService semantic contracts: send / request / reply / inbox",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-26T02:00:26Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-hzb",
+        "issue_id": "xtrm-1xn",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-1xn",
+      "source_field": "dependencies",
+      "target": "xtrm-hzb",
+      "target_present_in_snapshot": true,
+      "target_title": "Durable ReplyObligation + atomic request/reply correlation",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-26T02:00:27Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-sf3",
+        "issue_id": "xtrm-1xn",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-1xn",
+      "source_field": "dependencies",
+      "target": "xtrm-sf3",
+      "target_present_in_snapshot": true,
+      "target_title": "Runtime-owned WAITING_ON_CHANNEL state + SchedulerIntent wake/resume",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-26T02:00:26Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy",
+        "issue_id": "xtrm-1xn",
+        "metadata": "{}",
+        "type": "discovered-from"
+      },
+      "source": "xtrm-1xn",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy",
+      "target_present_in_snapshot": true,
+      "target_title": "Native chain runtime: make SRE chain the first data-defined XTRM chain",
+      "type": "discovered-from"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-1xn"
+  },
+  "issues": {
+    "xtrm-1xn": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via PR #98 (merged 9abd233): 14-case invariant-asserting cross-layer adversarial/recovery suite; zero defect candidates on first run. Review PASS on exact head 4153b85 with full case->invariant mapping.",
+        "closed_at": "2026-08-26T02:32:40Z",
+        "comment_count": 0,
+        "created_at": "2026-08-26T00:00:26Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-26T02:00:26Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-6yn",
+            "issue_id": "xtrm-1xn",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-26T02:00:26Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy",
+            "issue_id": "xtrm-1xn",
+            "metadata": "{}",
+            "type": "discovered-from"
+          },
+          {
+            "created_at": "2026-08-26T02:00:27Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-sf3",
+            "issue_id": "xtrm-1xn",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-26T02:00:26Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-hzb",
+            "issue_id": "xtrm-1xn",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 3,
+        "dependent_count": 0,
+        "description": "Fifth comm-runtime bead: acceptance/Eval-Core-aligned suite proving the mechanics hold under adversarial and recovery conditions.\n\nMust cover (at minimum): duplicate request/reply delivery (idempotency keys); reply-before-obligation-visible races; obligation loss under crash between request-send and ledger-write (atomicity proof); uncertain outcomes blocking blind replay with recorded reconciliation evidence; wake intent loss/duplication (scheduler idempotency); FINALIZE blocked by unresolved mandatory obligations and released only on settle/void/expiry; body-cannot-grant-authority attempts rejected; read != ack and delivered != processed != replied asserted at every boundary.\n\nAligns subject set with runtime PRD R1.24 (compiler determinism, freeze integrity, replay equivalence...) — extends it with communication subjects without creating a second eval subsystem.",
+        "id": "xtrm-1xn",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-26T02:09:01Z",
+        "status": "closed",
+        "title": "Communication adversarial/recovery acceptance suite",
+        "updated_at": "2026-08-26T02:32:40Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-1xn",
+  "root_title": "Communication adversarial/recovery acceptance suite",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

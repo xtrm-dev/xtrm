@@ -1,0 +1,240 @@
+{
+  "content_sha256": "97caffac6ffb82eaf2587e19121790b88453466369ae0b0f8890af6597ccf4c9",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-qcy.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-qcy.2"
+      },
+      {
+        "children": [],
+        "id": "xtrm-qcy.3"
+      }
+    ],
+    "id": "xtrm-qcy"
+  },
+  "issues": {
+    "xtrm-qcy": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Epic complete. Original children: qcy.1 contracts (PR#91), qcy.2 ChainLoader (PR#92), qcy.3 pure compiler (PR#93). Discovered+closed: comm-runtime chain 6yn/hzb/sf3/2mi/1xn/1o8 (PRs #94-#100), SRE data migration + exact-fingerprint parity clg (PR#101). Q27 retirement test structurally satisfied — same chain authored as data, zero topology code in generic layers, exact fingerprints vs hard-coded form. Residual runtime-execution wiring is successor bead xtrm-q99, gated on C1.4/C1.5 <- I1.3+E1.4 outside this programme's authority. Epic close memo items recorded in memory (F1 coordinator vocabulary, F3 terminal disposition).",
+        "closed_at": "2026-08-26T03:29:39Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T23:13:20Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Implementation milestone documented in xtrm-dev/xtrm:docs/runtime/README.md and prd/native-chain-runtime.md §5 / ADR-001..003. Goal: real Specialist definitions + user/data-authored ChainDefinition + generic ChainLoader/compiler + ResolvedChain + proven reducer/scheduler + native participant runtime = same SRE workflow with ZERO SRE-specific runtime topology code. Order per README: ChainSource/ChainDefinition contracts -> ChainLoader -> pure compiler -> migrate sre-team topology TS -> data -> parity proof.",
+        "id": "xtrm-qcy",
+        "issue_type": "epic",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "Native chain runtime: make SRE chain the first data-defined XTRM chain",
+        "updated_at": "2026-08-26T03:29:39Z"
+      }
+    },
+    "xtrm-qcy.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Delivered via PR #91 (merged 6176f3f): four ChainSource variants + ChainDefinition normalized AST + deterministic normalization/canonical JSON/fingerprint + JSON Schema output + cycle detection. 38 contract tests pass; tsc clean in module. Non-author review FAIL->fixed(96129bc)->PASS on exact head.",
+        "closed_at": "2026-08-25T22:25:35Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T23:13:38Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-23T01:13:38Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy",
+            "issue_id": "xtrm-qcy.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "Define the two authored-form contracts per xtrm docs/runtime/adr/001: ChainSource (TemplateChainSource | JsonChainSource | AdHocChainSource persisted+versioned | ImportedWorkflowSource) and ChainDefinition (normalized AST; no physical job/session IDs; reviewable pre-freeze). Zod schema + JSON Schema output + determinism tests. No loader/compiler yet.",
+        "id": "xtrm-qcy.1",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-25T22:03:23Z",
+        "status": "closed",
+        "title": "ChainSource + ChainDefinition contracts: schema, variants, normalization",
+        "updated_at": "2026-08-25T22:25:35Z"
+      }
+    },
+    "xtrm-qcy.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via PR #92 (merged e8f005e): one loader, all four ChainSource variants → ChainDefinition. 15 formula assets load (formula-wins precedence), template catalog resolution, adhoc entry point, spec.yaml change-contract roots (recommended_template). 31+38 tests pass; tsc clean in module. Non-author review PARTIAL→repaired(0096e74)→PASS on exact final head.",
+        "closed_at": "2026-08-25T23:40:54Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T23:13:39Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-23T01:13:57Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy.1",
+            "issue_id": "xtrm-qcy.2",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-23T01:13:39Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy",
+            "issue_id": "xtrm-qcy.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 2,
+        "description": "One loader accepting all four ChainSource variants incl. existing 15 .formula.json compatibility assets (formula-wins-for-shape precedence) and spec.yaml change-contract roots with recommended_template annotation. Output: valid ChainDefinition. Per ADR-001 §pipeline.",
+        "id": "xtrm-qcy.2",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-25T23:10:01Z",
+        "status": "closed",
+        "title": "ChainLoader: load all ChainSource variants to ChainDefinition",
+        "updated_at": "2026-08-25T23:40:54Z"
+      }
+    },
+    "xtrm-qcy.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via PR #93 (merged c617e31): pure deterministic compiler, ResolvedChain + freeze semantics, capability binding at compile. 22+38+31 tests pass; tsc clean. Non-author review PASS on exact head dfda6c6 with no substantive findings.",
+        "closed_at": "2026-08-25T23:58:12Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T23:13:40Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-23T01:13:40Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy",
+            "issue_id": "xtrm-qcy.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-23T01:13:58Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy.2",
+            "issue_id": "xtrm-qcy.3",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 1,
+        "description": "Deterministic compiler: no shelling, no Beads mutation, no tmux, no model calls. Persisted ResolvedChain (immutable post-approval; structural change = new revision). Capability binding at compile. Compiler determinism + invalid-topology rejection become Eval Core subjects.",
+        "id": "xtrm-qcy.3",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-25T23:41:09Z",
+        "status": "closed",
+        "title": "Pure compiler -> ResolvedChain + freeze semantics",
+        "updated_at": "2026-08-25T23:58:12Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-23T01:13:38Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy",
+        "issue_id": "xtrm-qcy.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-qcy.1",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-23T01:13:57Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy.1",
+        "issue_id": "xtrm-qcy.2",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-qcy.2",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy.1",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-23T01:13:39Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy",
+        "issue_id": "xtrm-qcy.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-qcy.2",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-23T01:13:58Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy.2",
+        "issue_id": "xtrm-qcy.3",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-qcy.3",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy.2",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-23T01:13:40Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy",
+        "issue_id": "xtrm-qcy.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-qcy.3",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy",
+      "type": "parent-child"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-qcy",
+  "root_title": "Native chain runtime: make SRE chain the first data-defined XTRM chain",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

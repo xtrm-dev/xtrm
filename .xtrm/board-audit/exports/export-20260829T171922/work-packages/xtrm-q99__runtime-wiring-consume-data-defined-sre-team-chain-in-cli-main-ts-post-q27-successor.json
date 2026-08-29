@@ -1,0 +1,211 @@
+{
+  "content_sha256": "cc5f88832e5da75d782894bf0be8bd472dcfd4fd93f4bf0c5c1bc83906c1ed08",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:37Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn.1",
+        "issue_id": "xtrm-q99",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-q99",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn.1",
+      "target_present_in_snapshot": true,
+      "target_title": "R1 Preserve formula gate classes through ChainLoader import",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:38Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn.2",
+        "issue_id": "xtrm-q99",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-q99",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn.2",
+      "target_present_in_snapshot": true,
+      "target_title": "R2 FINALIZE: unresolved external observation beats mandatory flag (non-mandatory + pending => UNCERTAIN)",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:39Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn.3",
+        "issue_id": "xtrm-q99",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-q99",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn.3",
+      "target_present_in_snapshot": true,
+      "target_title": "R3 voidObligation two-journal safety: validate evidence store before any durable mutation",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:40Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn.4",
+        "issue_id": "xtrm-q99",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-q99",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn.4",
+      "target_present_in_snapshot": true,
+      "target_title": "R4 Channel cursors -> global message-id semantics + container-scoped visibility",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:40Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn.5",
+        "issue_id": "xtrm-q99",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-q99",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn.5",
+      "target_present_in_snapshot": true,
+      "target_title": "R5 Resolve coordinator authored-position vocabulary (F1) before materialization",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:41Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn.6",
+        "issue_id": "xtrm-q99",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-q99",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn.6",
+      "target_present_in_snapshot": true,
+      "target_title": "R6 Rename compiler capability_grants -> CompiledCapabilityBounds (ADR-004 boundary honesty)",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-26T05:27:12Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy",
+        "issue_id": "xtrm-q99",
+        "metadata": "{}",
+        "type": "discovered-from"
+      },
+      "source": "xtrm-q99",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy",
+      "target_present_in_snapshot": true,
+      "target_title": "Native chain runtime: make SRE chain the first data-defined XTRM chain",
+      "type": "discovered-from"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-q99"
+  },
+  "issues": {
+    "xtrm-q99": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-08-26T03:27:13Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T12:51:38Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn.2",
+            "issue_id": "xtrm-q99",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-27T12:51:40Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn.4",
+            "issue_id": "xtrm-q99",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-27T12:51:37Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn.1",
+            "issue_id": "xtrm-q99",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-27T12:51:39Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn.3",
+            "issue_id": "xtrm-q99",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-27T12:51:41Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn.6",
+            "issue_id": "xtrm-q99",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-27T12:51:40Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn.5",
+            "issue_id": "xtrm-q99",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-26T05:27:12Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy",
+            "issue_id": "xtrm-q99",
+            "metadata": "{}",
+            "type": "discovered-from"
+          }
+        ],
+        "dependency_count": 6,
+        "dependent_count": 0,
+        "description": "Successor to xtrm-clg (structural parity achieved, exact fingerprints). Remaining Q27 clause 'through generic runtime' requires runtime wiring explicitly out of xtrm-clg scope:\n\n1. Swap cli/main.ts off newResolvedChain/hard-coded topology → load data/sre-team.chain.json via ChainLoader → compileChain → freeze.\n2. Runtime execution-parity run vs legacy path (reducer/scheduler/evidence equivalence).\nPer execution plan this lands with C1.4 materializer / C1.5 composition CLI, which are gated on I1.3 + E1.4 — do NOT start before those gates pass.\n\nEpic close memo items to honor here: F1 coordinator-class authored-form vocabulary gap; F3 FAIL-vs-PARTIAL terminal disposition owned by runtime.",
+        "id": "xtrm-q99",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "open",
+        "title": "Runtime wiring: consume data-defined sre-team chain in cli/main.ts (post-Q27 successor)",
+        "updated_at": "2026-08-26T03:27:13Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-q99",
+  "root_title": "Runtime wiring: consume data-defined sre-team chain in cli/main.ts (post-Q27 successor)",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

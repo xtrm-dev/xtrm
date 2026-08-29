@@ -1,0 +1,574 @@
+{
+  "bd_version": "bd version 1.2.2 (6c124203e: HEAD@6c124203e771)",
+  "diagnostics": {
+    "derived_dotted_parent_links": [],
+    "unknown_parent_refs": [],
+    "unpackaged_selected_ids": []
+  },
+  "generated_at": "2026-08-29T15:19:23.893720+00:00",
+  "packages": [
+    {
+      "content_sha256": "fb94198847f56c6cb5b5a6d02e118932dfdc66b59b95f43f7bc9b57308828c1e",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-07e__release-flow-dev-integrates-main-stable-release-line-clone-safe-for-non-technical-users.json",
+      "issue_count": 1,
+      "root_id": "xtrm-07e",
+      "selected_issue_count": 1,
+      "title": "release-flow: dev integrates, main = stable release line (clone-safe for non-technical users)"
+    },
+    {
+      "content_sha256": "2ec838e584627833a9d785b5487518d3c2e94e5d4adee71cb40147addb58f1f3",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-09y__waitingregistry-hardening-detect-or-reject-unserialized-concurrent-mutual-entry-discovered-durin.json",
+      "issue_count": 1,
+      "root_id": "xtrm-09y",
+      "selected_issue_count": 1,
+      "title": "WaitingRegistry hardening: detect or reject unserialized concurrent mutual entry (discovered during 2hn.8)"
+    },
+    {
+      "content_sha256": "0efe3529d32ea606829909921732a21759fa3fe1eb345ec8c280318f2d8e9e6b",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-19w__vertical-slice-direct-agentsession-sre-chain-experiment.json",
+      "issue_count": 1,
+      "root_id": "xtrm-19w",
+      "selected_issue_count": 1,
+      "title": "Vertical slice: direct AgentSession SRE chain experiment"
+    },
+    {
+      "content_sha256": "8ff8e14153c6aa8f70d5818f113decbda25cf7b7be6ae1375c8922470bd4a6fd",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-1ia__bench-qualitative-finding-sp-rpc-fragility-vs-direct-agentsession.json",
+      "issue_count": 1,
+      "root_id": "xtrm-1ia",
+      "selected_issue_count": 1,
+      "title": "Bench qualitative finding: sp RPC fragility vs direct AgentSession"
+    },
+    {
+      "content_sha256": "693767a44894bdd442fe153fd62a35c7f5deaa573c2234a5ca079d2114f300b5",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-1jp__substrate-4-3-add-5th-coordinator-role-incident-handler-runtime-failure-kinds-closed-failed-as-v.json",
+      "issue_count": 1,
+      "root_id": "xtrm-1jp",
+      "selected_issue_count": 1,
+      "title": "substrate §4.3: add 5th coordinator role (incident handler) + runtime.* failure kinds + closed:failed-as-verdict invariant"
+    },
+    {
+      "content_sha256": "ab09facfe2273ede03a97407fbab0c70b6efe3bd7f2c97818211c096c1515f03",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-1o8__obligation-ledger-boundary-hardening-seam-integration-proof.json",
+      "issue_count": 1,
+      "root_id": "xtrm-1o8",
+      "selected_issue_count": 1,
+      "title": "Obligation ledger boundary hardening + seam integration proof"
+    },
+    {
+      "content_sha256": "710cd1265d6d0f6c93ea308755620cc2c9ae675b54387c9ea9897f8d77d4a9fe",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-1xn__communication-adversarial-recovery-acceptance-suite.json",
+      "issue_count": 1,
+      "root_id": "xtrm-1xn",
+      "selected_issue_count": 1,
+      "title": "Communication adversarial/recovery acceptance suite"
+    },
+    {
+      "content_sha256": "8619e2415d24be1b9917f53b333617908ff54865a5e87a57a544f7c6d83bc61d",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-2hn__qcy-post-review-remediation-packet-pre-q99-quality-gate.json",
+      "issue_count": 9,
+      "root_id": "xtrm-2hn",
+      "selected_issue_count": 9,
+      "title": "qcy post-review remediation packet (pre-q99 quality gate)"
+    },
+    {
+      "content_sha256": "a557d35bc98565c3a892c38f96298e84a92e1a0d961f4d65b446fc5f8a5a1951",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-2m3__mcpq-cli-skill-for-querying-docker-sidecar-mcp-servers-without-mcp-json-bloat.json",
+      "issue_count": 23,
+      "root_id": "xtrm-2m3",
+      "selected_issue_count": 23,
+      "title": "mcpq — CLI + skill for querying Docker-sidecar MCP servers without .mcp.json bloat"
+    },
+    {
+      "content_sha256": "4c98f8bc5071fdbb828ad77433b37a90dda0549ee3c865593f20be88c553ecf4",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-2mi__finalize-enforcement-for-unresolved-mandatory-inbound-obligations.json",
+      "issue_count": 1,
+      "root_id": "xtrm-2mi",
+      "selected_issue_count": 1,
+      "title": "FINALIZE enforcement for unresolved mandatory inbound obligations"
+    },
+    {
+      "content_sha256": "a80015af6003de897983443009edb4a4c3f7cd43ca30d5ac25defe0c2960f637",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-2zd__reconcile-mercury-devops-collaborator-with-xtrm-v1-runtime-and-ownership-semantics.json",
+      "issue_count": 5,
+      "root_id": "xtrm-2zd",
+      "selected_issue_count": 5,
+      "title": "Reconcile Mercury DevOps collaborator with XTRM v1 runtime and ownership semantics"
+    },
+    {
+      "content_sha256": "2a999d0b6140f8868b7bcdd35c5dddb25f094ae236409c9d08e73017bae21bb0",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-39e__ack-git-cliff-rollout-tune-scopes-reconcile-changelog.json",
+      "issue_count": 1,
+      "root_id": "xtrm-39e",
+      "selected_issue_count": 1,
+      "title": "Ack git-cliff rollout: tune scopes + reconcile CHANGELOG"
+    },
+    {
+      "content_sha256": "454f0ec7726f364d684a65bb88834bf5c0462429a1427cd3cf423a9b4b445b6d",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-3vx__polish-docs-ignore-pr-validation.json",
+      "issue_count": 1,
+      "root_id": "xtrm-3vx",
+      "selected_issue_count": 1,
+      "title": "Polish docs-ignore PR validation"
+    },
+    {
+      "content_sha256": "6bf8e100fbbd3e7cf85a29aaebc30ede757e49871f61e5b23f0598ed2490e301",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-401__fix-service-knowledge-skill-activator-decide-hard-blocks-when-the-index-is-merely-unimportable.json",
+      "issue_count": 1,
+      "root_id": "xtrm-401",
+      "selected_issue_count": 1,
+      "title": "fix(service-knowledge): skill_activator decide() hard-blocks when the index is merely unimportable"
+    },
+    {
+      "content_sha256": "315c0661bf10f5fd3622da782d23590039f4969862c0c41fff8c23710bb4c47d",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-56flm__epic-service-skills-reframe-deterministic-verifier-evidence-first-retrieval.json",
+      "issue_count": 2,
+      "root_id": "xtrm-56flm",
+      "selected_issue_count": 2,
+      "title": "Epic: service-skills reframe — deterministic verifier + evidence-first retrieval"
+    },
+    {
+      "content_sha256": "4d8e3322fe8f3fdfe62f48a91ffa92a1b960d4d17cc6efc6a1b7f4f30263fa03",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-5kl__standalone-xtprompt-cli-package.json",
+      "issue_count": 3,
+      "root_id": "xtrm-5kl",
+      "selected_issue_count": 3,
+      "title": "Standalone xtprompt CLI package"
+    },
+    {
+      "content_sha256": "0549d0d50fdaf409544bbe290dd405dca95ac21d5b4ff6d99bdb6b68fae35a12",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-5t7__implement-adr-pr-checkpoint-board-audit-handoffs-packages-board-audit.json",
+      "issue_count": 1,
+      "root_id": "xtrm-5t7",
+      "selected_issue_count": 1,
+      "title": "Implement ADR: PR-checkpoint Board-Audit handoffs (packages/board-audit)"
+    },
+    {
+      "content_sha256": "9c5e96139619cb68e89f0f2abf85d51429a33fea7c0a7000bdda2f33a8d574a1",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-5z4__reconciliation-pass-for-agentsession-sre-vertical-slice-post-pr-68.json",
+      "issue_count": 1,
+      "root_id": "xtrm-5z4",
+      "selected_issue_count": 1,
+      "title": "Reconciliation pass for AgentSession SRE vertical-slice (post PR #68)"
+    },
+    {
+      "content_sha256": "a94dd0fb536450501ce4d42cb75d488e8b35cd261489a0a00be12dbcbb82e88c",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-6e8__extend-service-knowledge-capabilities-for-docs-like-the-infra-telemetry-wiring-must-be-done-corr.json",
+      "issue_count": 1,
+      "root_id": "xtrm-6e8",
+      "selected_issue_count": 1,
+      "title": "extend service knowledge capabilities for docs like the infra telemetry wiring. must be done correctly and made sure no staleness risk"
+    },
+    {
+      "content_sha256": "04aa2b6808829dfbfa8baa45e6d15e98b8fc49922f9f972bab3514d4aeeb8499",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-6f5__update-xt-pi-role-integration-design-doc.json",
+      "issue_count": 1,
+      "root_id": "xtrm-6f5",
+      "selected_issue_count": 1,
+      "title": "Update xt pi role integration design doc"
+    },
+    {
+      "content_sha256": "c92200c50d0108cb176fc0eadbc55666e2ae84e0b428feaca8ede875fad96dc2",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-6fe__verify-mcpq-wiring-in-mercury-infra-scripted-sidecars-up-gated-smoke.json",
+      "issue_count": 1,
+      "root_id": "xtrm-6fe",
+      "selected_issue_count": 1,
+      "title": "Verify mcpq wiring in mercury-infra: scripted, sidecars-up-gated smoke"
+    },
+    {
+      "content_sha256": "3b72dcf34e8074ae25f5c957b39e18d1397c835187851846ecad4178ee489c57",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-6yn__channelcommunicationservice-semantic-contracts-send-request-reply-inbox.json",
+      "issue_count": 1,
+      "root_id": "xtrm-6yn",
+      "selected_issue_count": 1,
+      "title": "ChannelCommunicationService semantic contracts: send / request / reply / inbox"
+    },
+    {
+      "content_sha256": "ff7009a9159b96dcc8f6fac4ae5f885b92bc2094b069b7cca3aebf716266cbf8",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-6z6__service-knowledge-as-first-class-pi-extension-self-gating-drift-surfacing-commit-corpus-fallback.json",
+      "issue_count": 6,
+      "root_id": "xtrm-6z6",
+      "selected_issue_count": 6,
+      "title": "service-knowledge as first-class pi extension: self-gating, drift-surfacing, commit-corpus fallback"
+    },
+    {
+      "content_sha256": "3ec1aaeb9f8e795ea2389575104167843353a0a72c5ab7aec18044bc162fd79f",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-7mp__python-kernel-extension-v2-skills-as-imports-prime-agent-pattern-robustness.json",
+      "issue_count": 5,
+      "root_id": "xtrm-7mp",
+      "selected_issue_count": 5,
+      "title": "python-kernel extension v2: skills-as-imports (prime-agent pattern) + robustness"
+    },
+    {
+      "content_sha256": "b4bc4274baa8fd960b0bbfbda4f92bc70362a3956817c0c197451fbbde28bbb8",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-7t2__mention-context-renderer-module-in-xt-pi-role-design.json",
+      "issue_count": 1,
+      "root_id": "xtrm-7t2",
+      "selected_issue_count": 1,
+      "title": "Mention context-renderer module in xt pi role design"
+    },
+    {
+      "content_sha256": "0f0cdd2ef8d8be37abed4de8f99a46362fb664d05544e386057606e16d02fde8",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-8fo__enable-ssh-commit-signing-required-signatures-on-xtrm-main.json",
+      "issue_count": 1,
+      "root_id": "xtrm-8fo",
+      "selected_issue_count": 1,
+      "title": "Enable SSH commit signing + required_signatures on xtrm main"
+    },
+    {
+      "content_sha256": "63c137ffad120ea170a8ca2ce30c07a6c9fc5b5e5818a65f9cc7bbdeeb2f29da",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-957__board-audit-fanout-script-systemd-user-timer-for-automatic-checkpoints.json",
+      "issue_count": 1,
+      "root_id": "xtrm-957",
+      "selected_issue_count": 1,
+      "title": "board-audit: fanout script + systemd user timer for automatic checkpoints"
+    },
+    {
+      "content_sha256": "3457f92bbc95046979cdf25463de3db9c3c820fd606aedc40dd7e2087c96d439",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-9xx__clear-or-gate-legacy-tsc-debt-in-experiments-vertical-pre-existing-out-of-2hn-scope.json",
+      "issue_count": 1,
+      "root_id": "xtrm-9xx",
+      "selected_issue_count": 1,
+      "title": "Clear or gate legacy tsc debt in experiments vertical (pre-existing, out of 2hn scope)"
+    },
+    {
+      "content_sha256": "4421c595ceee8a38fb1d492d6cf97c8dae3b89b2cbee55b36af23b35969f4a11",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-aax__fold-tmux-placement-semantics-into-xt-pi-role-design.json",
+      "issue_count": 1,
+      "root_id": "xtrm-aax",
+      "selected_issue_count": 1,
+      "title": "Fold tmux placement semantics into xt pi role design"
+    },
+    {
+      "content_sha256": "03a35b83bee4872c8fc4dbef7b1276ebb69b33a018778bb483f4a850ff7da589",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-at9__board-audit-exporter-sanitize-transport-projection-to-close-gitleaks-generic-api-key-recurrence.json",
+      "issue_count": 1,
+      "root_id": "xtrm-at9",
+      "selected_issue_count": 1,
+      "title": "board-audit exporter: sanitize transport projection to close gitleaks generic-api-key recurrence"
+    },
+    {
+      "content_sha256": "6606843d85d636057bd86f5fb6c1044d46439fa72523a05e28851fe0dd517d48",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-auk__xtprompt-returns-clarification-questions-instead-of-rewritten-prompts.json",
+      "issue_count": 1,
+      "root_id": "xtrm-auk",
+      "selected_issue_count": 1,
+      "title": "xtprompt returns clarification questions instead of rewritten prompts"
+    },
+    {
+      "content_sha256": "66eba2ddb1f4bb910faea307c6eb802a9368d420e656714e0eb4b8ffff22706a",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-c4z__xtrm-web-principal-set-mutation-provenance-envelope-robot-identity-slice-1-contracts-only.json",
+      "issue_count": 1,
+      "root_id": "xtrm-c4z",
+      "selected_issue_count": 1,
+      "title": "XTRM web principal-set + mutation provenance envelope — robot identity slice 1 (contracts only)"
+    },
+    {
+      "content_sha256": "4c02bfaffe65050128711fc808dde65b6ff8d2e33c5198373719c83a3a6eb7b1",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-c5e__docs-devops-agent-observability-access-pattern-note.json",
+      "issue_count": 1,
+      "root_id": "xtrm-c5e",
+      "selected_issue_count": 1,
+      "title": "docs(devops): agent observability access pattern note"
+    },
+    {
+      "content_sha256": "35c96339725f6186a8a241fae6643bf661daed9619810321932ed83c7b2d7e98",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-c8w__fold-prime-agent-code-findings-into-native-harness-exploration-doc.json",
+      "issue_count": 1,
+      "root_id": "xtrm-c8w",
+      "selected_issue_count": 1,
+      "title": "Fold prime-agent code findings into native-harness exploration doc"
+    },
+    {
+      "content_sha256": "41663f5d1ee11a82e24f40b8b9c24820a9248c3f3c7a04c0a2ff3f0c71fbe047",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-clg__migrate-sre-chain-topology-ts-data-defined-chaindefinition-parity-proof.json",
+      "issue_count": 1,
+      "root_id": "xtrm-clg",
+      "selected_issue_count": 1,
+      "title": "Migrate SRE chain topology TS → data-defined ChainDefinition + parity proof"
+    },
+    {
+      "content_sha256": "a1429e91296152e493fe1d1ef5d805770fd203766e6aad8b92b13f29a3c12efa",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-cn8__runtime-architecture-doc-audit-canonicalization-programme.json",
+      "issue_count": 7,
+      "root_id": "xtrm-cn8",
+      "selected_issue_count": 7,
+      "title": "Runtime architecture doc audit + canonicalization programme"
+    },
+    {
+      "content_sha256": "8154b9e837fd50a6b818d45d8305ed77aa91b762be618b653f71713344a4fe9c",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-cq2__chain-runtime-emit-sre-triage-runs-bundle-at-terminal-state-satisfied-or-escalated.json",
+      "issue_count": 1,
+      "root_id": "xtrm-cq2",
+      "selected_issue_count": 1,
+      "title": "chain-runtime: emit sre-triage-runs bundle at terminal state (satisfied OR escalated)"
+    },
+    {
+      "content_sha256": "d7712c3ec85789fb0007d6d6e278422982a992b77436f1e8ce5a7c5d8a74e8bb",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-crz__fix-service-knowledge-make-drift-detection-ref-based-so-isolated-worktrees-work.json",
+      "issue_count": 1,
+      "root_id": "xtrm-crz",
+      "selected_issue_count": 1,
+      "title": "fix(service-knowledge): make drift detection ref-based so isolated worktrees work"
+    },
+    {
+      "content_sha256": "2fc6a5e5933487effe580d6bf709ceee02d9cb9bd55a82748af4597467a56f3a",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-cv3__board-audit-permanent-export-worktree-board-audit-export-do-not-cancel-prototype.json",
+      "issue_count": 1,
+      "root_id": "xtrm-cv3",
+      "selected_issue_count": 1,
+      "title": "board-audit: permanent export worktree (board-audit-export-do-not-cancel) prototype"
+    },
+    {
+      "content_sha256": "f12f7af622128b2748120398697c172c4c6c3c419f60fd2120b8604390c1191c",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-d1d__normalize-xtprompt-merge-scope-and-publish-main.json",
+      "issue_count": 1,
+      "root_id": "xtrm-d1d",
+      "selected_issue_count": 1,
+      "title": "Normalize xtprompt merge scope and publish main"
+    },
+    {
+      "content_sha256": "b2a211775ee25cca5a45c19fad8e0cc55cf8cd5e3306ac4da0457b94ae207e17",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-dli__executor-recover-pr3-service-knowledge-index-and-mcp.json",
+      "issue_count": 16,
+      "root_id": "xtrm-dli",
+      "selected_issue_count": 16,
+      "title": "executor: recover PR3 service-knowledge index and MCP"
+    },
+    {
+      "content_sha256": "ac24967ed02afd6d02ca6f5be26451353fe04299230809eceb902369ca62d4ff",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-eam__xtprompt-remediation-fix-review-findings-in-packages-xtprompt.json",
+      "issue_count": 9,
+      "root_id": "xtrm-eam",
+      "selected_issue_count": 9,
+      "title": "xtprompt remediation: fix review findings in packages/xtprompt"
+    },
+    {
+      "content_sha256": "99cec598d0368278d5bcbdc88d9c11a806a68043ce4871edf844b83ae32548e7",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-eq8__robot-identities-slice-2-wire-resolvedexecutioncontext-from-trusted-chain-runtime-lane-provenanc.json",
+      "issue_count": 1,
+      "root_id": "xtrm-eq8",
+      "selected_issue_count": 1,
+      "title": "Robot identities slice 2: wire ResolvedExecutionContext from trusted chain-runtime lane + provenance canary"
+    },
+    {
+      "content_sha256": "fdec1299ad060644e62ff8a6baf39842cbef50487a1a658e0f6b195f0a826e1c",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-f9a__cross-doc-audit-of-substrate-premortem-against-xtrm-vault.json",
+      "issue_count": 1,
+      "root_id": "xtrm-f9a",
+      "selected_issue_count": 1,
+      "title": "Cross-doc audit of substrate premortem against xtrm vault"
+    },
+    {
+      "content_sha256": "748371453b137ee865e003c14b6158c4712c628dc2aac07b7d3860b869559d2d",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-h1r__session-handoff-2026-06-14-pick-up-next-priorities.json",
+      "issue_count": 1,
+      "root_id": "xtrm-h1r",
+      "selected_issue_count": 1,
+      "title": "Session handoff 2026-06-14: pick up next priorities"
+    },
+    {
+      "content_sha256": "1d9fc6e18e3033a38c40326fb0e1b34398ffdd3d35c5b9a3ff5395728ee1b607",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-hzb__durable-replyobligation-atomic-request-reply-correlation.json",
+      "issue_count": 1,
+      "root_id": "xtrm-hzb",
+      "selected_issue_count": 1,
+      "title": "Durable ReplyObligation + atomic request/reply correlation"
+    },
+    {
+      "content_sha256": "133dda319db1141719991993d4e5154cb97acc838a8f97d76add79a2a53001e3",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-nka__xts-v1-minimal-shell-assistant-on-pi-sdk-pi-tui.json",
+      "issue_count": 21,
+      "root_id": "xtrm-nka",
+      "selected_issue_count": 21,
+      "title": "XTS v1 — minimal shell assistant on Pi SDK + pi-tui"
+    },
+    {
+      "content_sha256": "e592499f407e38d0621d9da501c2f1ed01dd8af3396b4baf8d1caf407092c37a",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-pq1__epic-agentsession-specialists-chain-architecture-reconciliation-campaign-pr-71-post-merge.json",
+      "issue_count": 7,
+      "root_id": "xtrm-pq1",
+      "selected_issue_count": 7,
+      "title": "[epic] AgentSession/Specialists/Chain architecture reconciliation campaign (PR #71 post-merge)"
+    },
+    {
+      "content_sha256": "cc5f88832e5da75d782894bf0be8bd472dcfd4fd93f4bf0c5c1bc83906c1ed08",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-q99__runtime-wiring-consume-data-defined-sre-team-chain-in-cli-main-ts-post-q27-successor.json",
+      "issue_count": 1,
+      "root_id": "xtrm-q99",
+      "selected_issue_count": 1,
+      "title": "Runtime wiring: consume data-defined sre-team chain in cli/main.ts (post-Q27 successor)"
+    },
+    {
+      "content_sha256": "6f31de99e9935997c991d9daa63eef4ec0168eb7435c30eb05b5b0b154ab860c",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-q9r__bootstrap-get-registry-path-probe-pack-service-skills-service-registry-json-drift-detector-l0.json",
+      "issue_count": 1,
+      "root_id": "xtrm-q9r",
+      "selected_issue_count": 1,
+      "title": "bootstrap.get_registry_path: probe <pack>/service-skills/service-registry.json (drift detector L0)"
+    },
+    {
+      "content_sha256": "97caffac6ffb82eaf2587e19121790b88453466369ae0b0f8890af6597ccf4c9",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-qcy__native-chain-runtime-make-sre-chain-the-first-data-defined-xtrm-chain.json",
+      "issue_count": 4,
+      "root_id": "xtrm-qcy",
+      "selected_issue_count": 4,
+      "title": "Native chain runtime: make SRE chain the first data-defined XTRM chain"
+    },
+    {
+      "content_sha256": "8cb9ffd48de84b0d526f9b5f82a884e7598ea54d08b0942bd2af30601364c57a",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-s6s__interactive-xtprompt-refinement-and-clipboard-acceptance.json",
+      "issue_count": 4,
+      "root_id": "xtrm-s6s",
+      "selected_issue_count": 4,
+      "title": "Interactive xtprompt refinement and clipboard acceptance"
+    },
+    {
+      "content_sha256": "f816e70f3d9f918cb35e783fe31bf669f7b3ab2d2e6c69c25aa882a1f2533708",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-sf3__runtime-owned-waiting-on-channel-state-schedulerintent-wake-resume.json",
+      "issue_count": 1,
+      "root_id": "xtrm-sf3",
+      "selected_issue_count": 1,
+      "title": "Runtime-owned WAITING_ON_CHANNEL state + SchedulerIntent wake/resume"
+    },
+    {
+      "content_sha256": "31b3cdf377b66e530f3d2c441b5f52161181d4ad75921c857132f4219b8b6399",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-swu__merge-xtrm-pr-32-kan-127-execution-note.json",
+      "issue_count": 2,
+      "root_id": "xtrm-swu",
+      "selected_issue_count": 2,
+      "title": "Merge xtrm PR #32 — KAN-127 execution note"
+    },
+    {
+      "content_sha256": "e2649da9f73cdb6b5e549d188c3902c71f90dbe20bb9a22b977842e4dcc6a417",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-v8u__audit-docs-ignore-scope-across-core-and-specialists.json",
+      "issue_count": 1,
+      "root_id": "xtrm-v8u",
+      "selected_issue_count": 1,
+      "title": "Audit docs ignore scope across core and specialists"
+    },
+    {
+      "content_sha256": "dd71fb566417ca822dfb9022ae7d0a111e807c0eca375919d2fa376dbc744bfb",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-w5m__bench-direct-agentsession-vs-sp-rpc-rss-cpu-wall.json",
+      "issue_count": 1,
+      "root_id": "xtrm-w5m",
+      "selected_issue_count": 1,
+      "title": "Bench: direct AgentSession vs sp RPC RSS/CPU/wall"
+    },
+    {
+      "content_sha256": "241baf1180d3fea086f306635a0c1dc699ebb25a12f96cd5f39666ae82edc6bc",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-x8n__show-interactive-shortcut-hint-on-startup.json",
+      "issue_count": 1,
+      "root_id": "xtrm-x8n",
+      "selected_issue_count": 1,
+      "title": "Show interactive shortcut hint on startup"
+    },
+    {
+      "content_sha256": "d054a02774e550e2921bc896be50b23725ec55c3fe895a622d6f75057c6289ab",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-xmm__resolve-pr-215-review-gate-findings.json",
+      "issue_count": 1,
+      "root_id": "xtrm-xmm",
+      "selected_issue_count": 1,
+      "title": "Resolve PR 215 review gate findings"
+    },
+    {
+      "content_sha256": "4133c12e546a79a7cdac652d9798db3e2b10bc35d1f967c8f6100b6377936f05",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-y9i__session-handoff-2026-06-10-pick-up-next-priorities.json",
+      "issue_count": 1,
+      "root_id": "xtrm-y9i",
+      "selected_issue_count": 1,
+      "title": "Session handoff 2026-06-10: pick up next priorities"
+    },
+    {
+      "content_sha256": "b33d905aa4cc1da2d23fa6c8794407cb62f4249f6ed27af589b332e07790368b",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-zja__board-audit-revamp-package-permanent-export-surfaces-are-canonical-gen-1-machinery-is-legacy.json",
+      "issue_count": 2,
+      "root_id": "xtrm-zja",
+      "selected_issue_count": 2,
+      "title": "board-audit: revamp package — permanent export surfaces are canonical, gen-1 machinery is legacy"
+    },
+    {
+      "content_sha256": "a9a899f0b3f2acdc656188a258cb31e0c990c534e95276da8729423f7e06e601",
+      "context_only_issue_count": 0,
+      "file": "work-packages/xtrm-zxb__prune-or-restore-dead-xtrm-hooks-entries-referenced-by-tracked-settings-json.json",
+      "issue_count": 1,
+      "root_id": "xtrm-zxb",
+      "selected_issue_count": 1,
+      "title": "Prune or restore dead .xtrm/hooks entries referenced by tracked settings.json"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "schema_version": "xtrm.board-audit.snapshot-manifest.v1",
+  "selection": {
+    "context_only_record_count": 0,
+    "requested_id": null,
+    "scope": "all",
+    "selected_record_count": 170
+  },
+  "source": {
+    "command": "bd export --all",
+    "raw_file": "raw-beads.jsonl",
+    "raw_record_count": 170,
+    "raw_sha256": "22e59b46231712650ce35b7f03d889ae9ce89556393ffe72d3489cb1c2e86b20"
+  }
+}

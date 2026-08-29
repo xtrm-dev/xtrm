@@ -1,0 +1,1392 @@
+{
+  "content_sha256": "133dda319db1141719991993d4e5154cb97acc838a8f97d76add79a2a53001e3",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-nka.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.10"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.11"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.12"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.13"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.14"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.15"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.2"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.3"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.4"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.5"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.6"
+      },
+      {
+        "children": [
+          {
+            "children": [],
+            "id": "xtrm-nka.7.1"
+          },
+          {
+            "children": [],
+            "id": "xtrm-nka.7.2"
+          },
+          {
+            "children": [],
+            "id": "xtrm-nka.7.3"
+          }
+        ],
+        "id": "xtrm-nka.7"
+      },
+      {
+        "children": [
+          {
+            "children": [],
+            "id": "xtrm-nka.8.1"
+          },
+          {
+            "children": [],
+            "id": "xtrm-nka.8.2"
+          }
+        ],
+        "id": "xtrm-nka.8"
+      },
+      {
+        "children": [],
+        "id": "xtrm-nka.9"
+      }
+    ],
+    "id": "xtrm-nka"
+  },
+  "issues": {
+    "xtrm-nka": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "XTS v1 complete. Per-child outcomes: .1 scaffold, .2 model resolution (explicit persisted selection from Pi inventory, no fallback), .3 silent bash/zsh shell context with pre-persistence redaction, .4 bounded stdin + small prompt, .5 safety gate (deny-default), .6 pi-tui conversation UI, .7 runtime/CLI wiring closed via verified children .7.1 pipe/stdin PASS, .7.2 TUI/Pi runtime PASS, .7.3 classifier/privacy PASS; .8 acceptance audit: 27/27 PRD §24 criteria evidenced in test/acceptance.md; .8.1 suite-crash root-caused as coordinator-harness interaction (no product defect); .9 independent audit drove 4 release-blocker fixes (pipe dispatch, first-launch model resolution, transcript retention, gate bypasses). Integration evidence: full suite 131/131 isolated; e2e 14/14 incl. PTY retained-answer and two-session persistence; perf cold ~60ms / TUI ~0.9s / Enter-to-answer 1.6-2.0s incl. model latency — init overhead far below model latency (PRD §18, criterion 26). Residual risks (PRD §25): sensitive-command redaction is conservative pattern-based, not a secret detector; classifier residual ceiling documented (aliases/functions/indirection/obfuscation/full AST); shell state is global across concurrent terminals (single fixed state file); live-model checks SKIP gracefully when unauthenticated.",
+        "closed_at": "2026-08-21T23:23:43Z",
+        "comment_count": 0,
+        "created_at": "2026-08-20T16:55:31Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nNormal coding agents (Pi/XTRM) carry far more runtime and cognitive machinery than a small terminal problem requires: skills, extensions, Beads, specialists, MCP, GitNexus, repository workflows. A user who just wants \"why did that pull fail?\" or \"what is listening on 8080?\" should not pay that startup and context cost. XTS must be a separate, closed-runtime terminal assistant that starts fast, carries bounded shell context automatically, exposes exactly one operational tool (bash) behind a deterministic safety gate, and stays materially smaller than a normal Pi session. PRD: packages/xts/xts-prd-0.1.0.md.\n\n## SUCCESS\n\nAn `xts` binary in packages/xts that satisfies all 27 PRD acceptance criteria (PRD §24): standalone startup with no Pi/XTRM resource discovery; explicit persisted model selection from Pi's ModelRuntime inventory; bounded shell context (cwd, last exit code, last 10 commands); one-shot `xts \"question\"`; stdin pipe mode with explicit bounded truncation; `xts run` through the deterministic dangerous-command gate; interactive conversation with streaming, prompt history, and persisted conversation history; compact TUI built on @earendil-works/pi-tui; startup overhead substantially below model latency.\n\n## SCOPE\n\n- packages/xts/ — new package (package.json, src/, test/, README.md, shell hook installer)\n- PRD contract: packages/xts/xts-prd-0.1.0.md (read-only reference)\n- Read-only dependencies (do NOT modify): @earendil-works/pi-coding-agent@0.84.2 (global SDK), @earendil-works/pi-tui@0.84.2, @aliou/pi-guardrails@0.16.1 (classifier reference)\n\n## NON_GOALS\n\n- No skills, Specialists, Beads, MCP, GitNexus, LSP, repository indexing, subagents, RLM, memory promotion, extension discovery, file-editing tools (PRD §5)\n- No automatic model switching/fallback; no automatic invocation after shell failures\n- No \"always allow\" / session-allow / policy editor / custom rule UI for the safety gate (PRD §14.2)\n- No full terminal transcript capture (PRD §9.3)\n- No fish/PowerShell support, no searchable global history, no model-switch shortcut (PRD §26)\n- Do NOT modify the Pi SDK, pi-tui, or pi-guardrails packages\n\n## CONSTRAINTS\n\n- Plain ESM JavaScript (.mjs) following packages/xtprompt convention; no build step, no TypeScript compile\n- node >= 24; tests via `node --test` (see test/README.md)\n- Startup must not initialize: skills, extensions, MCP, Beads subprocesses, GitNexus, AGENTS scanning, package inventory scanning, LSP, Python kernels (PRD §18)\n- Tool surface = bash only (PRD §13); guard via createAgentSession({ tools: [\"bash\"], ... }) with custom bash tool (createBashTool with operations/spawnHook)\n- Model selection explicit; persist { provider, id } in ~/.config/xtrm/xts.json; never silently substitute (PRD §8)\n- Shell integration must be silent (no post-command hints) (PRD §10)\n- Config location: ~/.config/xtrm/xts.json (small file)\n- Conversation persistence via Pi SessionManager (default ~/.pi/agent/sessions or per-PRD evaluation); PRD §17\n- Logging/telemetry contract: XTS may log to stderr (one-shot) or a debug env flag XTS_DEBUG=1; log lines: timestamp, level, component, event, duration_ms, redacted context. Never log credentials or command output payloads.\n\n## VALIDATION\n\n- [ ] All 27 PRD §24 acceptance criteria verified with concrete evidence\n- [ ] `node --test` suite green in packages/xts\n- [ ] Startup timing measured: cold process startup and time-to-TUI recorded in test/perf notes\n- [ ] Smoke run: `xts model` lists inventory, one-shot `echo hi | xts \"say hi\"` style checks work against authenticated models\n- [ ] Shell integration silent (no stdout pollution after a command)\n- [ ] Safety gate: dangerous command requires approval, denied commands not executed\n- [ ] No XTS startup path initializes skills/extensions/MCP/Beads (verified by code inspection + perf)\n- [ ] Per-task OUTPUT sections populated in bead close reasons\n\n## OUTPUT\n\nOrchestrator reports: per-child handoff summary referencing each bead's OUTPUT, integration evidence (smoke + tests), performance measurements, residual risks (open questions from PRD §25).\n\n## REFERENCES\n\n- PRD: packages/xts/xts-prd-0.1.0.md\n- SDK docs: /home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent/docs/sdk.md\n- TUI docs: .../pi-tui/dist/index.d.ts (Container/Input/Markdown/Box/VStack/SelectList)\n- Classifier reference: .../pi-guardrails/extensions/permission-gate/rules.ts + src/core/commands/dangerous.ts\n- Convention reference: packages/xtprompt/src/*.mjs",
+        "id": "xtrm-nka",
+        "issue_type": "epic",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "XTS v1 — minimal shell assistant on Pi SDK + pi-tui",
+        "updated_at": "2026-08-21T23:23:43Z"
+      }
+    },
+    "xtrm-nka.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Scaffold complete: package.json, cli.mjs (lazy SDK imports, dispatch), config.mjs (atomic write, tolerant read), README, 10/10 tests green, --help 47ms. See plan/plan.md.",
+        "closed_at": "2026-08-20T17:02:57Z",
+        "comment_count": 0,
+        "created_at": "2026-08-20T16:55:31Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-20T16:55:31Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 4,
+        "description": "## PROBLEM\n\nThe PRD requires a standalone binary `xts` in packages/xts (PRD §19) with a closed runtime surface and no build step. Nothing exists yet in packages/xts beyond the PRD markdown and empty docs/ and .pi/ directories. This task establishes the package skeleton every other task builds on: package.json with bin entry, the module entrypoints, and the tiny config module that all startup paths read.\n\n## SUCCESS\n\n- packages/xts/package.json exists with: name @xtrm/xts, type module, bin { \"xts\": \"src/cli.mjs\" }, engines node >=24, scripts.test = \"node --test\", files = [src, README.md]\n- src/cli.mjs is the executable entrypoint that parses argv (xts / xts \"question\" / xts run \"cmd\" / xts model) and dispatches; must not import the SDK at module top level (lazy-load inside handlers to keep startup fast)\n- src/config.ts-style module (plain .mjs) reading ~/.config/xtrm/xts.json: { model: { provider, id } }, with atomic write helper and tolerant read (missing/corrupt file => default)\n- README.md with usage, install, and dev notes\n- No build step; package runs directly under node 24\n\n## SCOPE\n\n- packages/xts/package.json (new)\n- packages/xts/src/cli.mjs (new, entrypoint)\n- packages/xts/src/config.mjs (new)\n- packages/xts/README.md (new)\n- Reference convention: packages/xtprompt/package.json, packages/xtprompt/src/cli.mjs\n\n## NON_GOALS\n\n- No CLI logic implementation beyond dispatch stubs (model selection, session, stdin, safety are separate tasks)\n- No TUI work\n- No dependency installation beyond the SDK package\n\n## CONSTRAINTS\n\n- Plain ESM .mjs; no build step; follow xtprompt package.json shape\n- cli.mjs must lazy-import heavy modules (pi-coding-agent) only inside command handlers so `xts --help` stays instant\n- Config file permissions: create ~/.config/xtrm/ with mode 0700 if missing\n- Do not touch packages outside packages/xts\n\n## VALIDATION\n\n- [ ] `node packages/xts/src/cli.mjs --help` exits 0 fast (<300ms) without loading the SDK\n- [ ] `node --check` passes on all new .mjs files\n- [ ] config module round-trip test: write {model:{provider,id}}, read back; corrupt file -> default; missing file -> default\n- [ ] `npm test` (node --test) green in packages/xts\n- [ ] package.json bin points at executable cli.mjs\n\n## LIBRARIES\n\n- Reuse in repo: packages/xtprompt/package.json + cli.mjs (convention)\n- Installed deps: @earendil-works/pi-coding-agent@0.84.2 (declared as dependency)\n- Stdlib: node:fs, node:path, node:os, node:url (import.meta.main pattern from xtprompt)\n- New dep candidate: none\n- Roll it: yes — package skeleton is the foundation\n\n## OUTPUT\n\nChanged files list, `node --check` + `npm test` evidence, `--help` timing measurement, config round-trip test output.",
+        "id": "xtrm-nka.1",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-20T16:56:18Z",
+        "status": "closed",
+        "title": "Scaffold XTS package — package.json, entrypoints, config types",
+        "updated_at": "2026-08-20T17:02:57Z"
+      }
+    },
+    "xtrm-nka.10": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "SYSTEM_PROMPT now permits an optional single-line HINT: teaching moment when genuinely useful (skip otherwise). Prompt ~110 estimated tokens, still under the 200 budget; new regression asserts instruction presence and skip wording; prompt suite 10/10. Live sanity check produced a correct one-line HINT (fuser -k tip for the port-8080 question). Note: user persisted model deepseek-v4-flash now returns HTTP 410 from the provider — run `xts model` to reselect; verification used gemini-3.7-flash in an isolated config dir without touching user config.",
+        "closed_at": "2026-08-22T00:03:17Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T00:01:27Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T00:01:27Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.10",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nXTS answers questions but does not leverage teachable moments; the operator wants the assistant to act as a light teaching surface for shell work.\n\n## SUCCESS\nSystem prompt instructs the model that, when appropriate and brief, it may end an answer with a single HINT: line teaching a useful related technique. Prompt stays under the 200-token budget; regression covers presence and budget.\n\n## SCOPE\npackages/xts/src/prompt.mjs, test/prompt.test.mjs.\n\n## NON_GOALS\nNo new CLI flags, no forced hints on every answer.\n\n## CONSTRAINTS\nKeep wording tight (~1-2 lines); hints optional at model discretion; SCRUTINY: low.\n\n## VALIDATION\nnode --test test/prompt.test.mjs green incl. new assertions; live one-shot sanity check.\n\n## OUTPUT\nDiff, test output, sample answer containing HINT.",
+        "id": "xtrm-nka.10",
+        "issue_type": "task",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "started_at": "2026-08-22T00:01:27Z",
+        "status": "closed",
+        "title": "executor: add HINT teaching line to XTS system prompt",
+        "updated_at": "2026-08-22T00:03:17Z"
+      }
+    },
+    "xtrm-nka.11": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "One-shot/pipe modes now print each model bash call to stderr: `$ <command>` (whitespace-collapsed, 120-char cap) on tool_execution_start and `-> ok|error` on end; stdout carries only the answer so pipes stay clean. Regression via stubbed --import loader asserts stderr rows + clean stdout; cli suite 23/23.",
+        "closed_at": "2026-08-22T00:08:00Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T00:06:28Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T00:06:28Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.11",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nInteractive TUI renders each bash call as a retained $ command row with bounded preview, but one-shot and pipe modes stream only assistant text, so users never see which commands ran (PRD §16 visual target shows tool rows as first-class output).\n\n## SUCCESS\nIn one-shot and pipe modes every model bash call prints `$ <command>` to stderr when it starts and an `-> exit N` status line on completion; stdout carries only the answer so pipes keep working; truncation of long commands applies.\n\n## SCOPE\npackages/xts/src/cli.mjs oneShot subscription, test/cli.test.mjs regression.\n\n## NON_GOALS\nNo TUI changes; no stdout pollution.\n\n## CONSTRAINTS\nstderr only; collapse whitespace; cap displayed command length (~120 chars); reuse event args.command; SCRUTINY: low.\n\n## VALIDATION\nStubbed-session subprocess regression asserting stderr contains the tool command while stdout stays clean; focused cli suite green.\n\n## OUTPUT\nDiff and test evidence.",
+        "id": "xtrm-nka.11",
+        "issue_type": "task",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "started_at": "2026-08-22T00:06:29Z",
+        "status": "closed",
+        "title": "executor: surface bash tool calls in one-shot and pipe modes",
+        "updated_at": "2026-08-22T00:08:00Z"
+      }
+    },
+    "xtrm-nka.12": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Durable default hook install shipped and enabled live. shellhook now prints pure hook code safe for eval (instructions moved to `xts shellhook --help`); scripts/postinstall.mjs runs on npm install/link, appending a marker-commented `eval \"$(xts shellhook)\"` to the $SHELL-matched rc (zsh->~/.zshrc, else ~/.bashrc), idempotent on rerun, skipped under XTS_SKIP_HOOK_INSTALL or CI, best-effort exit 0 always. User ~/.zshrc updated once (diff verified). Live proof: fresh interactive zsh wrote state.json {cwd, shell, lastExitCode, recentCommands} and `xts q --show-prompt` shows the recent commands. Tests: cli 25/25 incl. postinstall idempotency/opt-out subprocess test; cli+shell+prompt 48/48.",
+        "closed_at": "2026-08-22T00:18:33Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T00:11:02Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T00:11:02Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.12",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nCommand-history context stays dormant unless users manually wire the hook into their rc; the operator wants hook enablement to be a durable default for every install/update, and wants it enabled now.\n\n## SUCCESS\n`xts shellhook` emits pure hook code safe for eval (usage instructions move to --help/README); an idempotent postinstall appends a marked, silent eval line to the detected rc ($SHELL: zsh->~/.zshrc else ~/.bashrc); re-runs are no-ops; XTS_SKIP_HOOK_INSTALL or CI skips; install never fails on hook errors; existing machines get the line added once.\n\n## SCOPE\npackages/xts/src/cli.mjs (shellhook output split), scripts/postinstall.mjs (new), package.json scripts, test/cli.test.mjs updates.\n\n## NON_GOALS\nNo fish/PowerShell; no hook auto-uninstall; no changes to hook internals.\n\n## CONSTRAINTS\nPRD §10 silence preserved; marker-comment idempotency; postinstall catches everything and exits 0. SCRUTINY: medium.\n\n## VALIDATION\ncli tests green incl. updated shellhook expectations; postinstall unit check with temp HOME adds line once; real rc gets exactly one marker block; fresh interactive shell produces state.json with recent commands.\n\n## OUTPUT\nDiffs, test output, rc evidence, live state.json sample.",
+        "id": "xtrm-nka.12",
+        "issue_type": "task",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-22T00:11:02Z",
+        "status": "closed",
+        "title": "executor: make shell-hook installation durable and default",
+        "updated_at": "2026-08-22T00:18:33Z"
+      }
+    },
+    "xtrm-nka.13": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Fixed `xts | something` crash. Interactive now requires TTY on both stdin and stdout via exported missingInteractiveTtys() seam: piped-stdout repro (pty stdin + pipe stdout, the exact user scenario) exits 1 with `xts: interactive session requires a TTY on stdout. Did you mean: command | xts \"question\"?` — no stack trace. Process-level stdout EPIPE handler makes late consumer closes (`xts \"q\" | head`) exit quietly; non-EPIPE errors rethrow. Tests: cli 26/26 including a guard matrix covering both/neither/each side missing.",
+        "closed_at": "2026-08-22T01:56:09Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T01:51:34Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T01:51:34Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.13",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nRunning `xts | ls` leaves stdout as a pipe; interactive mode starts the alt-screen TUI against it and crashes with an unhandled EPIPE stack trace when the pipe consumer exits. One-shot streaming has the same exposure (e.g. piping through head).\n\n## SUCCESS\nInteractive mode refuses to start unless BOTH stdin and stdout are TTYs, with a clear stderr message and exit 1. A process-level EPIPE guard makes late pipe closes on stdout harmless (exit quietly) instead of throwing; other stdout errors still surface.\n\n## SCOPE\npackages/xts/src/cli.mjs (guard + interactive check), focused test.\n\n## NON_GOALS\nNo changes to pi-tui; no new modes.\n\n## CONSTRAINTS\nEPIPE handler ignores only errno -32/EPIPE and rethrows everything else; SCRUTINY: low.\n\n## VALIDATION\nSubprocess regression spawning cli with piped stdout asserts clean exit 1 + message (no stack trace); focused suites green.\n\n## OUTPUT\nDiff, test evidence.",
+        "id": "xtrm-nka.13",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-22T01:51:35Z",
+        "status": "closed",
+        "title": "debugger: handle EPIPE and require TTY stdout for interactive mode",
+        "updated_at": "2026-08-22T01:56:09Z"
+      }
+    },
+    "xtrm-nka.14": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Root cause: piped evidence carried no subject framing, so the model ran du/find in its own cwd and reported unrelated folders; a system-prompt-only rule made it notice the mismatch but not act on it. Fix is two-layer: SYSTEM_PROMPT states bash runs in the [shell context] cwd which may differ from the question subject (inspect by absolute path), and buildUserMessage stdin block now declares piped input as the SUBJECT of the request, instructing bash-tool inspection by absolute path — instruction adjacent to the data proved decisive. Live repro of `ls /tmp/ | xts \"how many files, size per folder\"` now inspects /tmp via bash and reports 2151 entries / 105 MB with per-directory sizes. Prompt ~190 estimated tokens (under 200 budget); prompt suite 10/10 with updated envelope assertions; cli+prompt+shell combined 49/49.",
+        "closed_at": "2026-08-22T02:11:24Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T02:06:18Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T02:06:18Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.14",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n`ls /tmp/ | xts \"how many files, size per folder\"` made the model run du/find in XTS launch cwd (~/dev/xtrm) and report unrelated folders, ignoring that the stdin evidence listed /tmp contents. The prompt never distinguishes the bash working directory from the subject of piped evidence.\n\n## SUCCESS\nSystem prompt states bash runs in the [shell context] cwd and that questions/piped stdin may refer to files elsewhere, which must be inspected by absolute path. Live repro answers about /tmp, not the launch dir. Budget stays under 200 estimated tokens.\n\n## SCOPE\npackages/xts/src/prompt.mjs (+ optional stdin block label), test/prompt.test.mjs.\n\n## NON_GOALS\nNo cwd switching, no new flags.\n\n## CONSTRAINTS\nPrompt stays small; SCRUTINY: low.\n\n## VALIDATION\nprompt suite green; live rerun of the exact failing command inspects /tmp.\n\n## OUTPUT\nDiff and before/after evidence.",
+        "id": "xtrm-nka.14",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-22T02:06:18Z",
+        "status": "closed",
+        "title": "executor: stop pipe-mode inspections of the wrong directory",
+        "updated_at": "2026-08-22T02:11:24Z"
+      }
+    },
+    "xtrm-nka.15": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Per-session isolation shipped and live-verified with two concurrent tmux zsh sessions: each exports a stable XTS_SESSION_ID ($$), writes private state.<id>.json / cmds.<id>.txt (0700/0600 preserved), prunes >7-day-old session files, and xts inherits the id so it reads only its own terminal — pane A saw only ISO-MARKER-ALPHA, pane B only ISO-MARKER-BRAVO. Key discovery: zsh fc-based capture is inherently cross-terminal when history sharing is enabled (shared ~/.zsh_history imports surface other terminals via fc -ln -1), so the zsh hook now captures via add-zsh-hook preexec ($1 = literal command line of THIS shell); bash keeps fc since bash does not mid-session import. Read side sanitizes the id against path traversal and falls back to legacy global paths when no id is set. Tests: shell 15/15 incl. per-session path matrix, preset-id hook writes for bash+zsh, privacy/mode rerun; cli+prompt 36/36.",
+        "closed_at": "2026-08-22T03:03:50Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T02:42:09Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T02:42:09Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.15",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nShell hooks write one global state file shared by every terminal; xts therefore sees recent commands from any open session, leaking cross-terminal context (audit finding #12) and racing concurrent shells.\n\n## SUCCESS\nEach interactive shell exports a stable XTS_SESSION_ID (pid+tty) and writes state.<id>.json / cmds.<id>.txt; xts reads only its inherited session file; sessions without the hook fall back to the legacy global paths; session files older than 7 days are pruned by the hook; concurrent terminals are isolated (verified live with two tmux panes).\n\n## SCOPE\npackages/xts/src/history/hook.bash, hook.zsh, src/history/shell.mjs, README privacy note, test/shell.test.mjs.\n\n## NON_GOALS\nNo cross-terminal aggregation mode; no daemon/cleanup process.\n\n## CONSTRAINTS\nSession id sanitized against path traversal; PRD §10 silence preserved; legacy no-id paths unchanged for compatibility; SCRUTINY: medium.\n\n## VALIDATION\nUnit: id-specific paths, traversal sanitization, fallback, prune logic. Live: two tmux panes with distinct markers prove mutual isolation and correct inheritance.\n\n## OUTPUT\nDiff, unit+live evidence.",
+        "id": "xtrm-nka.15",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready",
+          "security"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-22T02:42:09Z",
+        "status": "closed",
+        "title": "security-auditor: per-session shell history isolation",
+        "updated_at": "2026-08-22T03:03:50Z"
+      }
+    },
+    "xtrm-nka.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Model resolution done: model.mjs (listAvailable/resolveModel/requireAvailableModels/inventoryToJson/resolveOrSelectModel), ui/model-selector.mjs (pi-tui SelectList selector, pty-verified), cli wired (model + model --json). 16 model tests, 66/66 suite green. Persisted model: commandcode/deepseek/deepseek-v4-flash.",
+        "closed_at": "2026-08-20T17:31:58Z",
+        "comment_count": 0,
+        "created_at": "2026-08-20T16:55:32Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-20T16:55:32Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-20T16:55:32Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.1",
+            "issue_id": "xtrm-nka.2",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 2,
+        "description": "## PROBLEM\n\nPRD §8 requires explicit, persisted model selection sourced from Pi's model inventory — never Pi's default, never silent substitution. First launch must show a selector of available (authenticated) models; `xts model` reopens it; the selected provider/model pair persists to ~/.config/xtrm/xts.json.\n\n## SUCCESS\n\n- src/model.mjs: `resolveModel(runtime, config)` returns the persisted model if available; `listAvailable(runtime)` returns models from ModelRuntime.getAvailable() grouped by provider; `pickModel` runs the selector\n- Model inventory authority is Pi's ModelRuntime (built-ins + models.json + auth); XTS stores only the preference (PRD §8.2)\n- `xts model` opens a keyboard-navigable model selector (up/down, enter confirm, esc cancel) and persists selection; `xts model --json` (dev flag) prints the inventory for tests\n- First launch with no persisted model opens the selector; if selection cancelled -> exit 1 with clear message\n- Selected model unavailable (auth missing/removed): `xts` shows message + reopens selector; never auto-falls-back (PRD §8.4, §21)\n- Non-interactive fallback: when stdin is not a TTY and no model persisted, error clearly (no selector possible)\n\n## SCOPE\n\n- packages/xts/src/model.mjs (new)\n- packages/xts/src/config.mjs (extend read/write if needed)\n- packages/xts/src/ui/model-selector.mjs (new, minimal TUI selector using pi-tui)\n- packages/xts/src/cli.mjs (wire `xts model` and first-launch selector)\n\n## NON_GOALS\n\n- No model auto-cycle/fallback (PRD §8.4)\n- No OAuth login UI (auth stays Pi-owned; error message tells user to run `pi` to authenticate)\n- No settings UI\n\n## CONSTRAINTS\n\n- ModelRuntime.create() with default authPath/modelsPath (~/.pi/agent) so Pi auth + models.json are authoritative; allowModelNetwork: false, refreshOnCreate: false (startup must stay fast — snapshot + lazy refresh only)\n- Persist exactly { model: { provider, id } } in ~/.config/xtrm/xts.json (config.mjs owns file I/O)\n- If runtime.getAvailable() is empty: error message instructs configuring auth through Pi (`pi`) — no second auth system\n- Selector uses pi-tui (ProcessTerminal + Input/SelectList-style list or minimal custom component); keyboard: ↑↓ select, Enter confirm, Esc cancel\n- Must NOT silently choose a different model at session start\n\n## VALIDATION\n\n- [ ] `xts model --json` prints inventory JSON from ModelRuntime (grep test)\n- [ ] Config write/read round trip of selected model\n- [ ] First-launch path (no config) yields selector; cancel -> exit 1 with message\n- [ ] Missing/unavailable model -> clear error, no fallback substitution (unit test with stub runtime)\n- [ ] node --test green for model module tests\n\n## LIBRARIES\n\n- Reuse in repo: config.mjs from task 1; pi-tui selector pattern: pi-coding-agent dist/modes/interactive/components/model-selector.d.ts (read-only reference)\n- Installed deps: @earendil-works/pi-coding-agent (ModelRuntime), @earendil-works/pi-tui (ProcessTerminal, Container, Text, Input)\n- Stdlib: node:fs/promises\n- New dep candidate: none — reuse Pi inventory\n- Roll it: yes\n\n## OUTPUT\n\nmodel.mjs + selector implementation, test output, `xts model --json` sample, config file sample, evidence that unavailable model does not auto-fallback.",
+        "id": "xtrm-nka.2",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-20T17:03:02Z",
+        "status": "closed",
+        "title": "Model resolution — Pi ModelRuntime inventory + xts model selector + persistence",
+        "updated_at": "2026-08-20T17:31:58Z"
+      }
+    },
+    "xtrm-nka.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Shell context done: history/shell.mjs (state read, redaction, loadShellContext, formatShellContext), hook.bash + hook.zsh (silent, atomic, no jq), context.mjs re-export, cli shellhook wired. 12 shell tests; bash+zsh smokes show zero hook output and redaction works. 66/66 green.",
+        "closed_at": "2026-08-20T17:31:59Z",
+        "comment_count": 0,
+        "created_at": "2026-08-20T16:55:33Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-20T16:55:33Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-20T16:55:33Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.1",
+            "issue_id": "xtrm-nka.3",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 2,
+        "description": "## PROBLEM\n\nPRD §9/§10: standard invocations must automatically receive bounded shell context (cwd, shell identity, last exit code, last 10 commands) via a silent shell integration. The integration must print nothing after commands and must not capture stdout/stderr/transcripts.\n\n## SUCCESS\n\n- src/history/shell.mjs: reads bounded shell context — cwd, shell identity, last exit code, last N=10 commands — from a compact state file written by a silent shell hook\n- src/history/hook.sh: bash hook fragment + src/history/hook.zsh (or one generator with both) that writes the state file after each command; emits zero stdout/stderr\n- `xts shellhook` (dev command) prints the hook snippet for the current shell and instructions (source it in ~/.bashrc / ~/.zshrc); supports bash and zsh (PRD §10.2)\n- Context unavailable (no hook installed): XTS still works with cwd + stdin + manual question; recent-shell context clearly omitted (PRD §21)\n- Sensitive command filtering: commands containing obvious secret forms (token=, password=, api[_-]?key=, BEGIN PRIVATE KEY blocks, `key=...` assignment with long value) are redacted from the recent-command list (PRD §25 open item — implement deterministically and conservatively)\n\n## SCOPE\n\n- packages/xts/src/history/shell.mjs (new: state read + redaction)\n- packages/xts/src/history/hook.bash / hook.zsh (new)\n- packages/xts/src/cli.mjs (wire `xts shellhook` + context assembly)\n- packages/xts/src/context.mjs (new: assemble ShellContext envelope for the model prompt)\n\n## NON_GOALS\n\n- No transcript capture, no environment-variable capture, no scrollback capture (PRD §9.3, §22)\n- No fish/PowerShell hooks (PRD §26)\n- No auto-install of hooks into user shell config\n\n## CONSTRAINTS\n\n- Hook writes state to a fixed path: $XDG_STATE_HOME/xts/state.json or ~/.local/state/xts/state.json; format: { cwd, shell, lastExitCode, recentCommands: [...] } (last 10)\n- Hook must be silent: no echo, no ANSI output, no errors visible; failures must not affect the shell\n- Redaction: deterministic conservative patterns only (see SUCCESS); redacted entries replaced with \"[redacted]\"\n- ShellContext envelope rendered into the model prompt (prompt.mjs task 5 consumes it); this task provides the data module only\n- Do not touch model/prompt/safety/UI modules\n\n## VALIDATION\n\n- [ ] Unit tests: redaction patterns (secret forms redacted, normal commands intact), bounded N=10, corrupt/missing state -> graceful empty context\n- [ ] Manual smoke: install hook in bash, run commands, verify state file content and zero hook output\n- [ ] zsh hook syntax check (zsh -n if available)\n- [ ] `xts shellhook` prints snippet and instructions\n- [ ] node --test green\n\n## LIBRARIES\n\n- Reuse in repo: none beyond task 1 config\n- Installed deps: none new (hook is pure shell; state read uses node:fs)\n- Stdlib: node:fs, node:os\n- New dep candidate: none\n- Roll it: yes\n\n## OUTPUT\n\nshell.mjs + hooks + context.mjs, test evidence, sample state file, redaction test output, shellhook output sample.",
+        "id": "xtrm-nka.3",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-20T17:03:02Z",
+        "status": "closed",
+        "title": "Shell context — silent shell integration, cwd/lastExitCode/recent commands",
+        "updated_at": "2026-08-20T17:31:59Z"
+      }
+    },
+    "xtrm-nka.4": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Stdin+prompt done: src/stdin.mjs (bounded read, explicit truncation notice, mid-line finish rules, 8 tests), src/prompt.mjs (SYSTEM_PROMPT ~50 tokens, buildUserMessage envelope, estimateTokens). cli one-shot wired with non-blocking pipe detection (maybeReadStdin). 91/91 tests green.",
+        "closed_at": "2026-08-20T23:57:41Z",
+        "comment_count": 0,
+        "created_at": "2026-08-20T16:55:34Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-20T16:55:34Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.3",
+            "issue_id": "xtrm-nka.4",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-20T16:55:34Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.4",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 1,
+        "description": "## PROBLEM\n\nPRD §7.3/§11: `command | xts` and `command | xts \"question\"` must treat stdin as first-class evidence with bounded input and an explicit truncation notice. PRD §15: the system prompt must be intentionally small. Both feed the same prompt builder.\n\n## SUCCESS\n\n- src/stdin.mjs: reads stdin asynchronously; bounds input — max bytes (e.g. 64KB) and max lines (e.g. 2000); when truncated, records truncation metadata (original bytes/lines, what was kept) — silent truncation never happens (PRD §11.1)\n- src/prompt.mjs: builds the small XTS system prompt (PRD §15 conceptual content, tuned) + per-run user message envelope that includes: user instruction (if any), ShellContext (cwd, shell, lastExitCode, recentCommands from task 3), stdin evidence block (with visible \"stdin truncated\" notice when applicable), and the guarded-execution context marker\n- The envelope renders into the first user message sent to the model; system prompt stays fixed and small\n- Prompt builder is pure (no I/O) and unit-testable\n\n## SCOPE\n\n- packages/xts/src/stdin.mjs (new)\n- packages/xts/src/prompt.mjs (new)\n- packages/xts/src/context.mjs (consume; owned by task 3)\n- test/stdin.test.mjs, test/prompt.test.mjs (new)\n\n## NON_GOALS\n\n- No streaming stdin processing; no partial-read heuristics\n- No transcript capture\n\n## CONSTRAINTS\n\n- Truncation policy constants exported: MAX_STDIN_BYTES=65536, MAX_STDIN_LINES=2000; strategy: keep head, then head-of-tail marker \"[... stdin truncated: X of Y bytes (Z lines) ...]\" visible to model and user\n- System prompt token budget: keep under ~200 tokens; measured via prompt.mjs test asserting approximate length\n- ShellContext rendered compactly (one block, no prose) so tokens stay small\n- Do not emit secrets: stdin content is user-provided evidence (allowed), but the envelope must not auto-include env vars or credentials\n\n## VALIDATION\n\n- [ ] Unit tests: small stdin passes through whole; huge stdin truncated with visible notice; truncation metadata exact; prompt envelope contains cwd/exit code/recent commands/notice\n- [ ] System prompt size assert (< 200 tokens by heuristic char count)\n- [ ] node --test green\n\n## LIBRARIES\n\n- Reuse in repo: context.mjs (task 3), config.mjs (task 1)\n- Installed deps: none new\n- Stdlib: node:stream, node:buffer\n- New dep candidate: none\n- Roll it: yes\n\n## OUTPUT\n\nstdin.mjs + prompt.mjs + tests, sample built prompt (with and without stdin/truncation), token-size measurement.",
+        "id": "xtrm-nka.4",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-20T17:32:04Z",
+        "status": "closed",
+        "title": "Stdin pipe mode + bounded truncation + system prompt assembly",
+        "updated_at": "2026-08-20T23:57:41Z"
+      }
+    },
+    "xtrm-nka.5": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Safety gate done: safety/classify.mjs (deterministic, guardrails-parity + git destructive ops, extraPatterns), safety/approve.mjs (runGate, stdin fallback, default deny), run.mjs (executeGuarded). cli run wired. Manual evidence: echo hi execs; rm -rf denied not executed. 66/66 green.",
+        "closed_at": "2026-08-20T17:32:00Z",
+        "comment_count": 0,
+        "created_at": "2026-08-20T16:55:35Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-20T16:55:35Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.5",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-20T16:55:35Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.1",
+            "issue_id": "xtrm-nka.5",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 1,
+        "description": "## PROBLEM\n\nPRD §14: the bash tool must sit behind a deterministic, small safety gate. Dangerous commands (recursive destructive deletes, formatting, raw disk writes, privileged destructive ops, dangerous permission changes, destructive git ops, configured high-risk patterns) require explicit user approval before execution. Denied commands must not execute.\n\n## SUCCESS\n\n- src/safety/classify.mjs: command classifier returning { safe: true } or { safe: false, reason, pattern } for dangerous commands; adopts the minimal concept from pi-guardrails permission-gate (structural matchers for rm -rf, shred, sudo/doas/pkexec, dd of=, mkfs/wipefs/blkdiscard/fdisk/parted, chmod -R 777, chown -R, docker/podman dangerous flags) — implemented locally, not by loading the Guardrails package (PRD §14.1)\n- src/safety/approve.mjs: approval flow — interactive overlay/prompt (Enter approve once, Esc cancel) shown in the TUI; in one-shot (non-TTY) mode, approval prompts on stdin with clear y/n; default is deny (PRD §14.2)\n- Gate is integrated with the bash tool execution path so EVERY bash call goes through it: safe -> execute; dangerous -> approval -> execute or block; blocked -> model receives a clear \"command denied\" result, conversation continues (PRD §21)\n- `xts run \"command\"` uses the same gate (PRD §7.4): classify first, approve if dangerous, execute, pass result to model for interpretation when needed\n- Cancelled/denied commands are not executed (PRD §21)\n\n## SCOPE\n\n- packages/xts/src/safety/classify.mjs (new)\n- packages/xts/src/safety/approve.mjs (new)\n- packages/xts/src/runtime.mjs (integrate gate into bash tool via createBashTool operations/spawnHook or tool wrapper; owned by task 7 wiring — this task provides classify+approve and a `gateCommand(command, ctx)` function)\n- packages/xts/src/cli.mjs (wire `xts run`)\n\n## NON_GOALS\n\n- No \"always allow\"/session-allow/policy editor/custom rule UI (PRD §14.2)\n- No file-access policies (Guardrails policies/path-access are out of scope)\n- No loading the full @aliou/pi-guardrails package at runtime\n\n## CONSTRAINTS\n\n- Classifier is deterministic pure logic (no I/O); unit-testable\n- Structural matching: parse command words (simple tokenizer adequate for v1; full AST not required) and match command+flags; also support configured extra patterns from XTS config optional array\n- Default deny on approval timeout/EOF; one-shot mode must never execute a dangerous command without explicit user yes\n- Gate must run BEFORE any execution; wrap the bash tool so the gate sees every command (including chained `&&`/`|` segments — classify the whole string, conservative)\n- Redaction: do not log full command payloads in gate failure logs\n\n## VALIDATION\n\n- [ ] Unit tests: each dangerous pattern family classified dangerous with reason; benign variants (rm file, git pull, ls, npm test) classified safe; false-positive guards (rm -rf denied, rm -f file allowed, mkdir -p allowed)\n- [ ] Integration: `xts run \"rm -rf /tmp/x\"` prompts, deny -> not executed (evidence: temp dir still exists)\n- [ ] Integration: `xts run \"echo hi\"` executes without approval\n- [ ] Approved dangerous command executes\n- [ ] node --test green\n\n## LIBRARIES\n\n- Reuse in repo: none\n- Installed deps: none new at runtime (classifier implemented locally, adapted from @aliou/pi-guardrails@0.16.1 src/core/commands/dangerous.ts patterns — read-only reference)\n- Stdlib: none\n- New dep candidate: none — local implementation keeps XTS small and dependency-free\n- Roll it: yes\n\n## OUTPUT\n\nclassify.mjs + approve.mjs + tests, pattern coverage list, integration evidence for the three `xts run` scenarios above.",
+        "id": "xtrm-nka.5",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-20T17:03:03Z",
+        "status": "closed",
+        "title": "Safety gate — dangerous-command classifier + approval flow",
+        "updated_at": "2026-08-20T17:32:00Z"
+      }
+    },
+    "xtrm-nka.6": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "TUI done: src/ui/app.mjs (ConversationView: header cwd·model, scrollable Markdown conversation, input with prompt history, streaming delta, tool rows, Ctrl+C abort/exit; pty-verified pattern from model-selector), src/ui/approval.mjs (ApprovalOverlay + showApprovalOverlay + makeTuiApprovalHandler matching task-5 ctx contract), buildHeader/formatToolRow pure+tested. 91/91 green. Interactive mode wiring is task 7.",
+        "closed_at": "2026-08-20T23:57:41Z",
+        "comment_count": 0,
+        "created_at": "2026-08-20T16:55:35Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-20T16:55:36Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.2",
+            "issue_id": "xtrm-nka.6",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-20T16:55:36Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.6",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 1,
+        "description": "## PROBLEM\n\nPRD §16: XTS needs a minimal compact terminal UI built on @earendil-works/pi-tui: header (cwd · model), conversation history, input line, streaming assistant output, and overlays for model selection and dangerous-command approval. The UI must redraw stably and stay compact.\n\n## SUCCESS\n\n- src/ui/app.mjs: main TUI — header bar (cwd · model, per PRD §16.1 visual target), scrollable conversation area (user prompts + assistant markdown-ish text + tool rows like `$ git status`), input line with ↑/↓ prompt history, streaming delta updates from AgentSession events (message_update text_delta), graceful Ctrl+C/exit\n- src/ui/model-selector.mjs: overlay listing available models grouped by provider (from model.mjs), ↑↓ select, Enter confirm, Esc cancel (used by first launch and `xts model`)\n- src/ui/approval.mjs: overlay for dangerous command approval — shows the command and reason, Enter approve once / Esc cancel\n- Rendering uses pi-tui primitives (Container, Text, Input, Markdown, Box) with differential redraw; stable on resize\n- The TUI module never touches model/safety logic directly — it receives callbacks\n\n## SCOPE\n\n- packages/xts/src/ui/app.mjs (new)\n- packages/xts/src/ui/model-selector.mjs (new)\n- packages/xts/src/ui/approval.mjs (new)\n- packages/xts/src/ui/input.mjs (if a thin Input wrapper is needed)\n- Reference: pi-tui dist/index.d.ts (Container, Input, Markdown, Text, Box, VStack), pi-coding-agent examples/extensions for component patterns\n\n## NON_GOALS\n\n- No session-tree UI, no settings UI, no theme editor (PRD §5)\n- No fancy formatting beyond minimal Markdown rendering\n- No image rendering\n\n## CONSTRAINTS\n\n- pi-tui only — do not import pi's interactive mode component tree; build compact components (reuse presentation helpers by reference, not by loading xtrm-ui)\n- Keyboard: ↑/↓ prompt history in input; Enter sends; Esc in overlays cancels; Ctrl+C exits (confirm if streaming)\n- Streamed assistant text renders incrementally without full re-paint flicker\n- Tool execution rows render as `$ command` + bounded preview (borrow bounded-output-preview idea from XTRM UI presentation; no file/mutation of model results)\n- All UI code pure-render; I/O only through callbacks/handlers provided by runtime/app wiring\n\n## VALIDATION\n\n- [ ] Component unit tests where feasible (pure render functions produce expected lines)\n- [ ] Manual smoke in a terminal: interactive session renders header, prompt, answer, tool row, prompt history up/down\n- [ ] Overlay flows: model selector opens/cancels/confirms; approval overlay approves/cancels\n- [ ] Resize stability: resize terminal mid-session, no crash (documented manual check)\n- [ ] node --test green\n\n## LIBRARIES\n\n- Reuse in repo: none\n- Installed deps: @earendil-works/pi-tui@0.84.2 (Container, Input, Text, Markdown, Box, VStack, ProcessTerminal)\n- Stdlib: none\n- New dep candidate: none\n- Roll it: yes\n\n## OUTPUT\n\nui modules + tests, manual smoke notes (header, streaming, history, overlays), sample rendered frame.",
+        "id": "xtrm-nka.6",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-20T17:32:04Z",
+        "status": "closed",
+        "title": "TUI — conversation view, input, model selector overlay, approval overlay",
+        "updated_at": "2026-08-20T23:57:41Z"
+      }
+    },
+    "xtrm-nka.7": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Integration complete and independently verified through remediation children: .7.1 pipe/stdin PASS (both pipe forms read to EOF, hard caps, split UTF-8), .7.2 TUI/Pi runtime PASS (authoritative Model, single ModelRuntime, append-only transcript, visible errors, hydration, lifecycle cleanup), .7.3 safety/privacy PASS (30-probe classifier set, deny-before-exec sentinel, pre-persistence redaction, private modes, live Zsh capture). Closed surface and bash-only tool asserted at runtime. Full suite 129/129 in isolated run. Perf measurement and 27-criteria acceptance evidence owned by xtrm-nka.8, in progress.",
+        "closed_at": "2026-08-21T23:01:09Z",
+        "comment_count": 0,
+        "created_at": "2026-08-20T16:55:36Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-20T16:55:51Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.3",
+            "issue_id": "xtrm-nka.7",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-20T16:55:50Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.2",
+            "issue_id": "xtrm-nka.7",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-20T16:55:52Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.5",
+            "issue_id": "xtrm-nka.7",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-20T16:55:36Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.7",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-20T16:55:52Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.6",
+            "issue_id": "xtrm-nka.7",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-20T16:55:51Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.4",
+            "issue_id": "xtrm-nka.7",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-20T16:55:36Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.1",
+            "issue_id": "xtrm-nka.7",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 6,
+        "dependent_count": 1,
+        "description": "## PROBLEM\n\nPRD §12/§20: the pieces (model, context, stdin, prompt, safety, TUI) must integrate into a slim AgentSession runtime behind the four CLI modes (interactive, one-shot, pipe, run) with conversation persistence and a closed resource surface. This is the final wiring task.\n\n## SUCCESS\n\n- src/runtime.mjs: `createXtsSession({ model, cwd, tools })` — createAgentSession with: explicit model, tools: [\"bash\"] (+ custom bash tool through the safety gate), closed resource loader (no extensions/skills/prompt templates/context files), SettingsManager.inMemory or minimal, SessionManager persistence (per-PRD §17.2 evaluation; default SessionManager.create(cwd) for conversation history continuity), thinkingLevel off (fast) or settings-based\n- Closed surface verified: resourceLoader returns empty extensions/skills/prompts/themes/agentsFiles; system prompt = XTS prompt (PRD §12.1, acceptance 2/3/4)\n- src/cli.mjs wires all four modes:\n  - `xts` interactive: TUI + streaming + guarded bash + prompt history + conversation persistence\n  - `xts \"question\"` one-shot: print answer, exit (PRD §20.2)\n  - `command | xts [\"question\"]`: stdin evidence + answer, exit (PRD §20.3)\n  - `xts run \"command\"`: gate -> execute -> result to model for interpretation -> display (PRD §20.4)\n- Conversation persistence: interactive sessions continue previous turns; `SessionManager` handles message history save (PRD §17.2); one-shot uses in-memory or named session\n- Model unavailable at session start -> selector (from task 2) or clear error in non-TTY\n- All events wired: message streaming to TUI/stdout, tool execution rows, errors returned to model with exact shell evidence (PRD §21)\n\n## SCOPE\n\n- packages/xts/src/runtime.mjs (new)\n- packages/xts/src/cli.mjs (extend)\n- packages/xts/src/main.ts-style entry (if needed)\n- test/runtime.test.mjs, test/cli.test.mjs (integration tests with stubbed SDK where needed)\n\n## NON_GOALS\n\n- No RPC mode, no server mode, no extensions, no skills, no MCP wiring\n- No multi-session tree UI\n- No automatic model fallback\n\n## CONSTRAINTS\n\n- Lazy imports: the SDK (pi-coding-agent) imported only when a model-requiring mode runs, keeping `xts --help` and `xts shellhook` instant\n- ResourceLoader: implement minimal explicit loader returning empty collections (pattern: examples/sdk/12-full-control.ts resourceLoader object) — do NOT call DefaultResourceLoader discovery\n- SessionManager: default SessionManager.create(cwd) for interactive (conversation history); one-shot may use SessionManager.inMemory(cwd)\n- Bash tool: createBashTool with operations wrapping the safety gate (classify -> approve -> exec) so every model bash call is gated; `xts run` calls the same gate directly\n- Thinking level: off for fast answers (configurable later); auto-retry off to keep behavior deterministic\n- Errors: model/tool failures surface exact evidence; never report success on failure\n- All user-facing messages concise; exit codes: 0 success, 1 errors, 2 usage\n\n## VALIDATION\n\n- [ ] Integration test (stubbed SDK or live if auth available): one-shot returns answer text; pipe mode includes stdin evidence in prompt\n- [ ] Closed-surface assertion test: resourceLoader.getExtensions()/getSkills()/getPrompts()/getThemes()/getAgentsFiles() all empty; system prompt is the XTS prompt\n- [ ] Interactive smoke: start `xts` in a pty, send prompt, receive streamed answer, conversation persists to session file\n- [ ] `xts run` safe command executes; dangerous command gated\n- [ ] Perf: cold `xts --help` <300ms; `xts \"q\"` startup (model load + context) measured and reported\n- [ ] node --test green\n\n## LIBRARIES\n\n- Reuse in repo: tasks 1-6 modules\n- Installed deps: @earendil-works/pi-coding-agent@0.84.2 (createAgentSession, ModelRuntime, SessionManager, SettingsManager, createBashTool), @earendil-works/pi-tui@0.84.2\n- Stdlib: node:child_process (spawn for run mode), node:readline (one-shot approval fallback)\n- New dep candidate: none\n- Roll it: yes — final integration task\n\n## OUTPUT\n\nruntime.mjs + cli.mjs wiring, integration test output, closed-surface evidence, interactive smoke notes, perf measurements, sample session file path.",
+        "id": "xtrm-nka.7",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-20T23:57:45Z",
+        "status": "closed",
+        "title": "Runtime + CLI wiring — AgentSession integration, modes, persistence",
+        "updated_at": "2026-08-21T23:01:09Z"
+      }
+    },
+    "xtrm-nka.7.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "PASS after independent high-effort review. Both producer | xts and producer | xts question read non-TTY stdin to EOF, including delayed producers; TTY questions do not wait for stdin. readStdin enforces hard byte/line caps, preserves split UTF-8, and reports exact metadata/truncation. Focused tests 25/25; reviewer full suite 117/117; real bare/explicit/delayed/multichunk pipelines, PTY no-wait, cap boundaries, and 200 randomized UTF-8 cases passed. No manual commit or push.",
+        "closed_at": "2026-08-21T14:26:27Z",
+        "comment_count": 0,
+        "created_at": "2026-08-21T13:25:51Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-21T13:25:51Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.7",
+            "issue_id": "xtrm-nka.7.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nBare pipe mode routes to interactive and fails, delayed producers lose evidence after 150ms, byte limits can be exceeded, and split UTF-8 chunks are corrupted. These defects invalidate PRD AC16/18 and pipe-mode reliability.\n\n## SUCCESS\ncommand | xts analyzes complete bounded stdin; delayed producer data is retained; byte and line ceilings are hard; split multibyte input decodes correctly; truncation remains explicit.\n\n## SCOPE\npackages/xts/src/cli.mjs, src/stdin.mjs, test/cli.test.mjs, test/stdin.test.mjs.\n\n## NON_GOALS\nNo new CLI modes or streaming transcript capture.\n\n## CONSTRAINTS\nPreserve Unix pipe semantics and the PRD 64KiB/2000-line policy. Add regression tests before fixes. SCRUTINY: medium.\n\n## VALIDATION\nAutomate bare pipe, delayed pipe, strict byte/line caps, and split UTF-8 cases; run npm test.\n\n## OUTPUT\nRoot cause, changed files, exact test evidence, and residual limits.",
+        "id": "xtrm-nka.7.1",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-21T13:59:56Z",
+        "status": "closed",
+        "title": "debugger: fix XTS pipe dispatch and bounded stdin correctness",
+        "updated_at": "2026-08-21T14:26:27Z"
+      }
+    },
+    "xtrm-nka.7.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "All reviewer findings resolved. Authoritative Model resolution via runtime.getModel with single ModelRuntime per invocation; append-only chronological transcript retaining pre-tool and final answers; assistant stopReason=error rendered once (turn_end/agent_end dedupe) and one-shot exits 1 with stderr evidence; bashExecution hydration without toolResult duplication; TUI close + session dispose on setup failure; busy reset on prompt-prep failure; submit gated until session ready; MD_THEME codeBlock/quoteBorder correct. Reviewer PARTIAL gaps closed: real Markdown ANSI render assertion added (identity themes fail it) and one-shot error subprocess regression added via registered --import hooks loader. Evidence: ui 18/18, cli 22/22, model+runtime 23/23, full suite 129/129 in isolated background run. PTY/persistence end-to-end smoke explicitly routed to xtrm-nka.8 acceptance scope. Residual: none known in scope.",
+        "closed_at": "2026-08-21T22:55:44Z",
+        "comment_count": 0,
+        "created_at": "2026-08-21T13:25:51Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-21T13:25:52Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.7",
+            "issue_id": "xtrm-nka.7.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nThe TUI clears completed assistant text, misorders transcript nodes, renders code blocks as function source, omits successful tool previews/restored history, and hides first-launch provider errors. The selector returns a provider/id-only object that caused Pi stopReason=error with no visible failure.\n\n## SUCCESS\nEach user/assistant/tool turn remains in chronological order; completed text persists; Markdown code blocks render correctly; first-launch selection resolves an authoritative Pi Model object; assistant stopReason=error is visible and non-successful; persistent history is represented correctly.\n\n## SCOPE\npackages/xts/src/model.mjs, src/runtime.mjs, src/cli.mjs, src/ui/app.mjs, focused tests and PTY/VirtualTerminal smoke.\n\n## NON_GOALS\nNo full Pi InteractiveMode, session tree UI, or new product surface.\n\n## CONSTRAINTS\nFollow installed Pi 0.84.2 sdk.md/tui.md and examples/sdk/11-sessions.ts + 12-full-control.ts. Keep bash-only closed resources. Add regression tests before fixes. SCRUTINY: high.\n\n## VALIDATION\nFirst-launch live/stub model test, transcript component tests, code-block render test, PTY final-screen assertion using answer text not present in prompt, persistence smoke, npm test.\n\n## OUTPUT\nRoot cause, changed files, Pi-doc citations, and exact automated/manual evidence.",
+        "id": "xtrm-nka.7.2",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-21T13:44:33Z",
+        "status": "closed",
+        "title": "debugger: fix XTS TUI transcript retention and Pi model errors",
+        "updated_at": "2026-08-21T22:55:44Z"
+      }
+    },
+    "xtrm-nka.7.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "PASS after three review-fix loops and fresh independent verification. Classifier: 30-probe static set green (paths, wrappers/env, nested shells incl. env -S and ANSI-C, git options, xargs, find -exec, kill variants, rm -- operands, !/coproc/command -p/exec -a/setsid -f/stdbuf, control grammar) with position-aware scanning eliminating benign false positives; deny-before-exec preserved (runtime sentinel). Privacy: Bash/Zsh hooks redact generic/spaced secrets, password/bearer/RSA forms BEFORE persistence; live zsh -f -i probe: prior command captured, 0 secret leaks, hook stdout 0 bytes, modes dir 700 / files 600, no temp leftovers. Focused tests classify 21/21, shell 13/13; full suite 129/129 isolated. Residual documented ceiling: aliases/functions/indirection/obfuscation/full AST.",
+        "closed_at": "2026-08-21T23:00:49Z",
+        "comment_count": 0,
+        "created_at": "2026-08-21T13:25:52Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-21T13:25:52Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.7",
+            "issue_id": "xtrm-nka.7.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nThe deterministic classifier allows trivial high-risk bypasses through absolute command paths, shell -c, env assignments, git global options, and xargs, while false-positive splitting quoted literals. Fresh shell-hook state can also be created with permissive modes and stores unredacted raw history.\n\n## SUCCESS\nThe v1 gate conservatively detects the PRD high-risk families across common wrappers/path forms without parsing quoted literals as commands; recognized commands cannot execute without approval; shell-history state has private permissions and secret-bearing history is handled per explicit release policy.\n\n## SCOPE\npackages/xts/src/safety/**, src/history/hook.bash, hook.zsh, history/shell.mjs, related tests; pi-guardrails reference read-only.\n\n## NON_GOALS\nNo policy editor, always/session allow, full shell AST, or full Guardrails dependency.\n\n## CONSTRAINTS\nSecurity boundary is deterministic and deny-safe. State exact supported grammar and residual bypass ceiling. Add adversarial tests first. SCRUTINY: high.\n\n## VALIDATION\nTest /bin/rm, sh/bash -c, env assignments, git -C destructive operations, xargs, quoted literals, deny no-exec sentinel, hook permissions, and secret persistence policy; run npm test and security review.\n\n## OUTPUT\nThreat cases, implementation/test evidence, residual bypasses, and operator-visible limitations.",
+        "id": "xtrm-nka.7.3",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready",
+          "security"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-21T13:44:33Z",
+        "status": "closed",
+        "title": "security-auditor: harden XTS dangerous-command gate and history privacy",
+        "updated_at": "2026-08-21T23:00:49Z"
+      }
+    },
+    "xtrm-nka.8": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "All deliverables complete and independently reviewed. test/perf.mjs measures the real cli.mjs startup path via PTY: cold 61-64ms, warm full-process mean ~54-60ms, first visible TUI ~0.9s (ANSI-stripped detection), Enter-to-first-streamed-answer 1.6-2.0s including model latency, prompt 89 tokens, schema 128 tokens, RSS ~47MB — init overhead far below model latency per PRD §18. test/e2e.mjs: 14/14 genuine smokes verified by reviewer (PTY retained-answer with prompt-absent string, two-session persistence codeword recall in isolated XTS_STATE_DIR, dangerous-command no-exec sentinel, delayed bare/explicit pipes, live-model one-shot). test/acceptance.md maps all 27 PRD §24 criteria with honest statuses; reviewer spot-checked 1,5,6,9,16,18,21,23 confirmed, 26 now fully evidenced after perf rework. README verification section updated. Full suite 131/131 in isolated run. Reviewer PARTIAL findings (perf path completeness, stale metrics, bad criterion-19 reference, stale .7.3 note) all fixed and reproduced.",
+        "closed_at": "2026-08-21T23:23:09Z",
+        "comment_count": 0,
+        "created_at": "2026-08-20T16:55:37Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-20T16:55:37Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.8",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-20T16:55:37Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.7",
+            "issue_id": "xtrm-nka.8",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-21T13:21:13Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.9",
+            "issue_id": "xtrm-nka.8",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 2,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nPRD §18 requires performance metrics (cold/warm startup, time-to-TUI, prompt/tool token counts, peak RSS) and PRD §24 lists 27 acceptance criteria that must each be verifiable. The per-task tests cover seams; this task owns the integrated verification surface.\n\n## SUCCESS\n\n- test/perf.mjs: measures cold process startup, warm startup, time to first visible TUI (interactive smoke via pty), system-prompt token count (heuristic), tool-schema token count, peak RSS (process.memoryUsage / /usr/bin/time); prints a table; assertions: startup overhead substantially below typical model latency (target: full non-model startup < 1.5s, interactive TUI < 2s)\n- test/acceptance.md: checklist mapping each of the 27 PRD §24 criteria to its verification evidence (test name / smoke command / manual check), with status per criterion\n- test/e2e.mjs (or shell script): smoke suite — xts --help, xts shellhook output, config round trip, model inventory json, one-shot answer (live model if available, else documented skip), pipe mode, truncation notice, xts run safe/dangerous/deny paths, redaction checks; skips live-model checks when no authenticated model\n- Every acceptance criterion has either automated evidence or a documented manual check with exact commands\n\n## SCOPE\n\n- packages/xts/test/perf.mjs (new)\n- packages/xts/test/acceptance.md (new)\n- packages/xts/test/e2e.mjs (new)\n- packages/xts/README.md (update: verification section)\n\n## NON_GOALS\n\n- No CI wiring beyond the package test script (repo has no per-package CI requirement)\n- No publishing setup\n\n## CONSTRAINTS\n\n- Perf script must not require network/auth (measures only XTS initialization); uses child_process spawn + process.hrtime\n- Acceptance doc must map criteria 1-27 exactly (PRD §24) and mark each verified / not-verified / manual with evidence path\n- e2e smoke must exit non-zero on failure; live-model steps skip gracefully with SKIP reason when no model available\n- Do not modify implementation modules except fixing bugs found (report via OUTPUT)\n\n## VALIDATION\n\n- [ ] perf.mjs runs and prints metrics table; numbers recorded in acceptance.md\n- [ ] acceptance.md covers all 27 criteria with evidence\n- [ ] e2e.mjs passes on this machine (live-model steps SKIP or pass)\n- [ ] `npm test` green (all suites)\n- [ ] README verification section updated\n\n## LIBRARIES\n\n- Reuse in repo: none new\n- Installed deps: none new\n- Stdlib: node:child_process, node:process, node:fs\n- New dep candidate: none\n- Roll it: yes — final verification task\n\n## OUTPUT\n\nperf metrics table, acceptance.md with 27/27 status, e2e smoke output, README verification section.",
+        "id": "xtrm-nka.8",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-21T13:20:33Z",
+        "status": "closed",
+        "title": "Tests, performance measurement, and acceptance-criteria audit",
+        "updated_at": "2026-08-21T23:23:09Z"
+      }
+    },
+    "xtrm-nka.8.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Root cause identified: no product or test defect. Full packages/xts suite passes 129/129 (exit 0, ~5s) when run in an isolated background process; the coordinator-context crashes reproduced only when npm test was invoked through the orchestrator tool harness. Resolution: operational constraint recorded in memory xts-full-suite-coordinator-crash — the full suite must only be run per-file or via background isolation, never from the coordinator tool context. No source changes required.",
+        "closed_at": "2026-08-21T22:55:17Z",
+        "comment_count": 0,
+        "created_at": "2026-08-21T22:37:56Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-21T22:37:56Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.8",
+            "issue_id": "xtrm-nka.8.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nRunning `npm test` (node --test over all files) in packages/xts crashes or wedges the orchestrator host tool, while every focused per-file suite passes (model/runtime/ui/cli 61/61; safety 43/43; pipe 25/25 at last runs). Suspected cause class: a TTY/PTY-grabbing test, runaway child process, or resource exhaustion under node --test parallelism on this host.\n\n## SUCCESS\nIdentify the exact offending test/behavior, fix or isolate it (e.g. serial execution, child cleanup, PTY guard), so the full suite runs to completion without side effects on the invoking process.\n\n## SCOPE\npackages/xts/test/**, package.json test script only as needed.\n\n## NON_GOALS\nNo production source changes unless the test exposes a real bug.\n\n## CONSTRAINTS\nInvestigate via isolated single-file runs and timeouts first; never invoke the full suite from the coordinator context. SCRUTINY: medium.\n\n## VALIDATION\nFull suite completes with exit code and summary captured in a background/logged process; no hang; focused suites stay green.\n\n## OUTPUT\nRoot cause, changed files, evidence of a clean full-suite run.",
+        "id": "xtrm-nka.8.1",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-21T22:54:50Z",
+        "status": "closed",
+        "title": "debugger: investigate packages/xts full-suite npm test host crash",
+        "updated_at": "2026-08-21T22:55:17Z"
+      }
+    },
+    "xtrm-nka.8.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Fixed: e2e config round trip now sets process.env.XTS_CONFIG_DIR before importing config.mjs (configPaths reads env per call). Validated: real xts.json snapshot diffed before/after a full e2e run — byte-identical; e2e 14/14 pass. User config restored to commandcode/deepseek/deepseek-v4-flash and verified with a live one-shot (INSTALL-OK).",
+        "closed_at": "2026-08-21T23:50:52Z",
+        "comment_count": 0,
+        "created_at": "2026-08-21T23:49:49Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-21T23:49:49Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka.8",
+            "issue_id": "xtrm-nka.8.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nRunning test/e2e.mjs overwrites the real ~/.config/xtrm/xts.json with fixture-provider/fixture/model because the config round trip imports src/config.mjs into the parent process where XTS_CONFIG_DIR is unset; only spawned children get the isolated dir.\n\n## SUCCESS\nThe e2e config round trip writes only inside its temp configDir; running e2e leaves the real config byte-identical.\n\n## SCOPE\npackages/xts/test/e2e.mjs (minimal env fix).\n\n## NON_GOALS\nNo production changes.\n\n## CONSTRAINTS\nKeep the assertion semantics identical. SCRUTINY: low.\n\n## VALIDATION\nSnapshot real xts.json, run node test/e2e.mjs, diff snapshot — no change.\n\n## OUTPUT\nDiff, validation evidence.",
+        "id": "xtrm-nka.8.2",
+        "issue_type": "bug",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "started_at": "2026-08-21T23:49:50Z",
+        "status": "closed",
+        "title": "debugger: stop e2e config round trip from polluting real xts.json",
+        "updated_at": "2026-08-21T23:50:52Z"
+      }
+    },
+    "xtrm-nka.9": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Independent PRD/Pi 0.84.2 audit completed. Verified correct architecture: explicit closed ResourceLoader, Pi-owned model inventory, bash-only active tool surface, deny-default approval, small prompt, and Pi SessionManager persistence. Reproduced release blockers: bare pipe mode fails; first-launch selection yields incomplete model/hidden Pi error; TUI erases/misorders completed output; common dangerous command forms bypass approval; delayed and split-UTF8 stdin is lost/corrupted; byte cap is not hard; persisted messages are not rendered; xts run omits assistant interpretation/stderr evidence. Package tests pass 96/96 but lack these cases. Reopened xtrm-nka.7 and filed xtrm-nka.7.1/.7.2/.7.3. Full findings saved in bead notes and memory xts-nka-independent-audit.",
+        "closed_at": "2026-08-21T13:28:34Z",
+        "comment_count": 0,
+        "created_at": "2026-08-21T13:20:23Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-21T13:20:23Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-nka",
+            "issue_id": "xtrm-nka.9",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "## PROBLEM\nXTS implementation is mostly complete, but current runtime/TUI work has shown misleading green tests and uncertain Pi SDK integration behavior. The operator requested an independent correctness and PRD adherence review before the epic advances.\n\n## SUCCESS\nProduce a severity-ranked audit with exact file/line evidence, verify current failures and smoke behavior, identify test theatre, compare implementation with installed Pi 0.84.2 SDK/TUI docs and examples, and provide concrete remediation guidance to the active pane or take over only after coordination.\n\n## SCOPE\nRead-only review of packages/xts/**, xtrm-nka epic and children, pane %2843 state, and installed Pi docs/examples/types under @earendil-works/pi-coding-agent 0.84.2. No source edits until ownership is explicitly transferred.\n\n## NON_GOALS\nNo release, publish, commit, push, broad refactor, new product surface, or silent takeover of xtrm-nka.7.\n\n## CONSTRAINTS\nPreserve the active pane dirty tree. Distinguish observed evidence from assumptions. Use the PRD acceptance criteria and installed package docs as authority. SCRUTINY: none.\n\n## VALIDATION\nRun the package test suite, targeted reproductions for first-launch model selection, TUI response persistence/chronology, conversation persistence, bash gate bypasses, CLI modes, and closed-resource/tool assertions. Record exact commands and outcomes.\n\n## OUTPUT\nA review report in the bead close reason and operator response, plus beaded remediation tasks if defects remain.",
+        "id": "xtrm-nka.9",
+        "issue_type": "task",
+        "labels": [
+          "contract:ready",
+          "review"
+        ],
+        "notes": "Verified findings as of 2026-08-21 15:25 CEST:\nP1: bare pipe mode fails: `printf hello | node src/cli.mjs` => rc1 interactive-TTY error (cli.mjs:256-260 routes no positional to interactive before stdin detection), so PRD AC16 false.\nP1: TUI stores one Markdown node at body start and finalizeStreamBlock clears it (ui/app.mjs:107-113,179-195,214-229); completed answers disappear and chronology is wrong. Prior PTY test matched the echoed prompt string, not retained assistant output.\nP1 security: classifier returns safe for /bin/rm -rf, bash -c rm -rf, env FOO=1 rm -rf, git -C ... reset --hard, and xargs rm -rf; AC21 false. It also false-positives quoted literal separators.\nP1: first-launch selector returns provider/id-only model; live createXtsSession prompt resolved with empty output, while adding name produced output. Model must be re-resolved to Pi inventory model before session use; empty assistant errors must fail visibly.\nP2: delayed pipe evidence (>150ms) is discarded by maybeReadStdin timer; reproduced with sleep 0.4 producer.\nP2: stdin byte bound is not hard; readStdin(maxBytes=8) kept 9 bytes for 123456789 newline, so AC18 wording is false.\nP2: Markdown theme codeBlock returns a function (ui/app.mjs:31), rendering `(line)=>line` instead of code, contrary to pi-tui MarkdownTheme.\nP2: safe tool output previews are never appended on tool_execution_end success; task 6 claim exceeds implementation.\nP2: xts run does not pass command result to model and does not capture stderr for future interpretation; conflicts with PRD 7.4/20.4/21.\nP2: persistent model context resumes, but restored messages are not rendered into TUI.\nEvidence: package suite 96/96 passes, demonstrating coverage gaps/test theatre rather than correctness. runtime.test realCalled assertion is dead.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-21T13:20:27Z",
+        "status": "closed",
+        "title": "reviewer: audit XTS v1 against PRD and Pi 0.84.2 SDK",
+        "updated_at": "2026-08-21T13:28:34Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:31Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.1",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-22T00:01:27Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.10",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.10",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-22T00:06:28Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.11",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.11",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-22T00:11:02Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.12",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.12",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-22T01:51:34Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.13",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.13",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-22T02:06:18Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.14",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.14",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-22T02:42:09Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.15",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.15",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:32Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.1",
+        "issue_id": "xtrm-nka.2",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.2",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.1",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:32Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.2",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:33Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.1",
+        "issue_id": "xtrm-nka.3",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.3",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.1",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:33Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.3",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:34Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.3",
+        "issue_id": "xtrm-nka.4",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.4",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.3",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:34Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.4",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.4",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:35Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.1",
+        "issue_id": "xtrm-nka.5",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.5",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.1",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:35Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.5",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.5",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:36Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.2",
+        "issue_id": "xtrm-nka.6",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.6",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.2",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:36Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.6",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.6",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:36Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.1",
+        "issue_id": "xtrm-nka.7",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.7",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.1",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:50Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.2",
+        "issue_id": "xtrm-nka.7",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.7",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.2",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:51Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.3",
+        "issue_id": "xtrm-nka.7",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.7",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.3",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:51Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.4",
+        "issue_id": "xtrm-nka.7",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.7",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.4",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:52Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.5",
+        "issue_id": "xtrm-nka.7",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.7",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.5",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:52Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.6",
+        "issue_id": "xtrm-nka.7",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.7",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.6",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:36Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.7",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.7",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-21T13:25:51Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.7",
+        "issue_id": "xtrm-nka.7.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.7.1",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.7",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-21T13:25:52Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.7",
+        "issue_id": "xtrm-nka.7.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.7.2",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.7",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-21T13:25:52Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.7",
+        "issue_id": "xtrm-nka.7.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.7.3",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.7",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:37Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.7",
+        "issue_id": "xtrm-nka.8",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.8",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.7",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-21T13:21:13Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.9",
+        "issue_id": "xtrm-nka.8",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-nka.8",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.9",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-20T16:55:37Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.8",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.8",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-21T22:37:56Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.8",
+        "issue_id": "xtrm-nka.8.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.8.1",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.8",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-21T23:49:49Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka.8",
+        "issue_id": "xtrm-nka.8.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.8.2",
+      "source_field": "dependencies",
+      "target": "xtrm-nka.8",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-21T13:20:23Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-nka",
+        "issue_id": "xtrm-nka.9",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-nka.9",
+      "source_field": "dependencies",
+      "target": "xtrm-nka",
+      "type": "parent-child"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-nka",
+  "root_title": "XTS v1 — minimal shell assistant on Pi SDK + pi-tui",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

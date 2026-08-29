@@ -1,0 +1,328 @@
+{
+  "content_sha256": "a80015af6003de897983443009edb4a4c3f7cd43ca30d5ac25defe0c2960f637",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-2zd.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2zd.2"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2zd.3"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2zd.4"
+      }
+    ],
+    "id": "xtrm-2zd"
+  },
+  "issues": {
+    "xtrm-2zd": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 1,
+        "comments": [
+          {
+            "author": "jaggerxtrm",
+            "created_at": "2026-08-10T23:47:16Z",
+            "id": "565d3c0c-f4a1-568e-9d1a-4adc67b2d72d",
+            "issue_id": "xtrm-2zd",
+            "text": "2026-08-11 reconciliation proposal: rescope this June epic against the accepted 2026-08-09 XTRM v1 runtime reconciliation and current execution plan. xt/sp shell/job surfaces are retained only where they are current bridge implementations; the document must express durable semantic ownership, migration gates and sunset conditions rather than treating bridge commands as permanent architecture."
+          }
+        ],
+        "created_at": "2026-06-28T12:39:56Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\n`docs/devops/mercury-devops-collaborator.md` is still framed as a June pre-implementation design and presents several bridge mechanisms as if they were durable ownership boundaries: container-local shell for sync/rebase/locking/recovery/GC, `sp daemon`/job state as process supervision, `flock` as same-repo ownership, restart-time killing of `running` jobs, and operator observability centered on process/job surfaces. The accepted XTRM v1 runtime reconciliation now defines stronger semantics for workflow versus runtime supervision, durable execution identity, leases, mutation `uncertain`, replay/snapshot/recovery, Channels delivery, runtime-derived identity and target Substrate projections.\n\n## SUCCESS\n\nThe collaborator design is reconciled to current XTRM v1 semantics without pretending bridge implementations are final authorities. It clearly separates: Mercury/container policy and trust isolation; Beads durable work contracts; Specialists workflow/governance; the selected runtime's execution/session/recovery responsibilities; Channels semantic communication versus runtime delivery; Git/GitHub branch/commit/merge truth; and target Substrate work/execution projections. Every retained bridge mechanism is explicitly labeled with its current owner/evidence surface, target owner, migration gate and sunset condition.\n\n## SCOPE\n\n- `docs/devops/mercury-devops-collaborator.md` Sections 3-7\n- Section 8 only where pilot/bridge language must be corrected\n- Section 9 identity/observability corrections\n- focused references/migration matrix needed to keep the design aligned with current XTRM authorities\n\n## NON_GOALS\n\n- Do not implement the native Pi harness, Channels, Substrate or `specialists.execution.v1` in this epic.\n- Do not change Mercury infrastructure compose files, webhook receiver code or deployed bot services.\n- Do not weaken the existing trust/isolation model: no host bind mounts, bot PR-only, separate credentials and separate clones remain requirements.\n- Do not invent a sixth XTRM package or duplicate an existing mutable authority.\n- Do not freeze command flags or a transport choice that belongs to `GATE-HARNESS-ADR`.\n\n## CONSTRAINTS\n\n- `docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md` is the accepted semantic amendment.\n- `docs/shared/xtrm-current-execution-plan.md` remains sequencing authority; repository-local Beads remain executable truth.\n- Bridge commands/scripts may remain documented when they describe current operation, but must be explicitly separated from target semantic ownership.\n- Runtime supervision and workflow supervision must remain distinct.\n- Terminal panes/processes/jobs are projections/compatibility identities, not sufficient durable execution identity by themselves.\n\n## VALIDATION\n\n- [ ] Sections 3-9 no longer present bridge shell/process mechanisms as the final XTRM authority.\n- [ ] Git/GitHub is branch/commit/merge truth, while Beads remains durable work-contract/objective truth.\n- [ ] Specialists is described as workflow/governance authority rather than an implicit universal process supervisor.\n- [ ] Runtime lifecycle is expressed using durable execution/session/generation semantics, not pane/process/job-only semantics.\n- [ ] Same-resource exclusion is specified as lease/owned-resource semantics; `flock` may appear only as an explicitly temporary bridge.\n- [ ] Webhook/event side effects specify durable admission/idempotency and `uncertain` reconciliation where final outcome may be unknown.\n- [ ] Container restart recovery classifies durable executions rather than equating restart with unconditional job termination.\n- [ ] Channels semantic messages are separated from scheduler/runtime delivery and processing receipts.\n- [ ] Observability distinguishes principal/actor/assignment/participant/execution/runtime identity and exposes evidence/attention surfaces.\n- [ ] Every retained bridge has current owner, evidence surface, target owner, migration gate and sunset condition.\n- [ ] `service-skills-sync` is described as a pilot/bridge proving the container architecture, not as the permanent definition of XTRM runtime ownership.\n\n## OUTPUT\n\nFocused collaborator-doc update plus an authority/migration matrix that makes current bridge state, target semantic ownership, evidence surfaces, migration gates and sunset conditions explicit. The result must link back to the current execution plan and accepted runtime reconciliation so future implementation agents do not re-derive or contradict those boundaries.\n\n## REFERENCES\n\n- `docs/devops/mercury-devops-collaborator.md`\n- `docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md`\n- `docs/shared/xtrm-current-execution-plan.md`\n- `docs/shared/xtrm-v1-completion-ledger.md`\n- `docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md`\n- `docs/channels/channels.md`\n- xtrm-tools/Core implementation ownership tracked by the current programme graph\n- Specialists implementation ownership tracked by the current programme graph\n",
+        "id": "xtrm-2zd",
+        "issue_type": "epic",
+        "labels": [
+          "autonomous",
+          "devops-docs",
+          "durability"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "Reconcile Mercury DevOps collaborator with XTRM v1 runtime and ownership semantics",
+        "updated_at": "2026-08-10T23:47:07Z"
+      }
+    },
+    "xtrm-2zd.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-06-28T12:39:58Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-06-28T14:39:57Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd",
+            "issue_id": "xtrm-2zd.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nSections 4-5 correctly want webhook sync, a cron safety net and deterministic pre-flight, but they currently encode the implementation as inline Git shell plus `flock`, and the receiver may return HTTP 200 before dispatch is durably represented. That leaves durable admission, duplicate suppression, unknown side-effect state and mutable repo/worktree ownership implicit.\n\n## SUCCESS\n\nThe document preserves the useful three-layer freshness policy while expressing event handling as a durable workflow/runtime boundary: event admission and idempotency first, deterministic scheduler intent second, eligibility/lease resolution before mutable execution, and an explicit completed/failed-safe/`uncertain` outcome for side effects such as rebase/push/PR actions. Current shell commands may remain as bridge examples, but they are not the semantic authority.\n\n## SCOPE\n\n- `docs/devops/mercury-devops-collaborator.md` Sections 4-5\n- webhook admission and missed-dispatch semantics in the adjacent crash/race discussion\n- same-repo mutable ownership and rebase/PR side-effect handling\n\n## NON_GOALS\n\n- Do not remove the webhook + cron + exact-SHA pre-flight policy.\n- Do not choose RPC versus direct AgentSession here.\n- Do not design final runtime command flags.\n- Do not authorize autonomous conflict resolution.\n\n## CONSTRAINTS\n\n- Preferred conceptual flow: `event -> durable admission/idempotency -> scheduler intent -> lease/eligibility -> execution/delivery -> recorded outcome`.\n- A returned 200 must not be treated as proof that a downstream effect completed.\n- Unknown final side-effect state is `uncertain` and requires reconciliation rather than blind replay.\n- Same-resource exclusion is an owned lease/claim semantic; `flock` may be documented only as a bridge implementation if still used.\n- Conflict handling remains bounded: evidence/comment/escalation, no hand-written autonomous merge policy.\n\n## VALIDATION\n\n- [ ] Section 4 retains webhook/cron/pre-flight freshness layers but separates policy from bridge shell implementation.\n- [ ] Event/dispatch admission has a stable idempotency identity before non-trivial side effects.\n- [ ] Missed or ambiguous dispatch is represented as recoverable/`uncertain` state rather than inferred only from mirror lag.\n- [ ] Same-repo concurrency names lease/owned-resource semantics and does not present `flock` as the durable architecture.\n- [ ] Rebase/push/PR outcomes distinguish completed, failed-safe and unknown/`uncertain`.\n- [ ] `needs-rebase` and conflict escalation are evidence-driven and do not rely on operator memory.\n\n## OUTPUT\n\nDoc diff describing the durable event-admission, concurrency and rebase flow, with current bridge commands clearly marked and target ownership/migration gates referenced.\n",
+        "id": "xtrm-2zd.1",
+        "issue_type": "task",
+        "labels": [
+          "autonomous",
+          "devops-docs",
+          "durability"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "Reconcile sync, event admission, rebase and concurrency with XTRM v1 semantics",
+        "updated_at": "2026-08-10T23:47:07Z"
+      }
+    },
+    "xtrm-2zd.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-06-28T12:40:00Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-06-28T14:39:59Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd",
+            "issue_id": "xtrm-2zd.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nSections 6-7 equate container restart with orphaned `running` Specialists jobs and describe recovery/GC as process/job cleanup plus branch deletion in container-local shell. The accepted runtime model treats an execution as a durable object with lineage, runtime session identity and generation; restart may require resume, reconciliation, lease expiry or terminalization rather than unconditional stop. GC must likewise prove ownership and terminality before deleting resources.\n\n## SUCCESS\n\nThe collaborator design describes recovery as classification of durable execution state and owned resources. Restart recovery distinguishes terminal, resumable, orphaned, lease-expired, `uncertain` and irrecoverable cases; replay/snapshot/generation semantics are referenced where applicable; cleanup releases only resources whose ownership and terminality are proven. Git/worktree cleanup, runtime execution/session cleanup, Specialists workflow evidence, Channels delivery state and log/forensic retention remain separate concerns with separate evidence.\n\n## SCOPE\n\n- `docs/devops/mercury-devops-collaborator.md` Sections 6-7\n- adjacent restart/missed-work text\n- Section 9 observability only where recovery evidence must be exposed\n\n## NON_GOALS\n\n- Do not implement recovery classifiers, snapshot stores or GC commands.\n- Do not invent a Substrate daemon implementation in this document.\n- Do not change retention cadence unless the existing cadence conflicts with proven ownership/terminality requirements.\n\n## CONSTRAINTS\n\n- Conceptual restart flow: `inspect durable executions -> classify -> reconcile/recover/terminalize -> emit evidence`.\n- Runtime replay uses execution/generation/sequence semantics and must not rewrite Channels semantic ordering.\n- Existing Beads/worktree/lease authorities are reused where they own the concern; do not shadow them.\n- Destructive cleanup remains explicit/safe-by-default and must not delete resources merely because a process disappeared.\n\n## VALIDATION\n\n- [ ] Section 6 no longer treats every `running` job after restart as an unconditional stop target.\n- [ ] Recovery distinguishes terminal, resumable, orphaned, lease-expired, `uncertain` and irrecoverable outcomes.\n- [ ] Recovery evidence names execution identity/generation and current bridge job/session identifiers where relevant.\n- [ ] Section 7 separates Git branch/worktree GC, runtime execution/session cleanup, workflow evidence retention, Channels delivery retention and logs/forensics.\n- [ ] Every destructive cleanup action requires proven ownership plus terminality/expiry.\n- [ ] Pre-existing dependency/runtime cycles or uncertainty are reconciled rather than hidden by cleanup.\n\n## OUTPUT\n\nDoc diff plus explicit recovery/GC ownership table showing current bridge, durable evidence, target owner and safe terminalization/deletion condition.\n",
+        "id": "xtrm-2zd.2",
+        "issue_type": "task",
+        "labels": [
+          "autonomous",
+          "devops-docs",
+          "durability"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "Reconcile collaborator recovery and GC around durable executions and owned resources",
+        "updated_at": "2026-08-10T23:47:07Z"
+      }
+    },
+    "xtrm-2zd.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-06-28T12:40:01Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-06-28T14:40:01Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd",
+            "issue_id": "xtrm-2zd.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nThe collaborator design has a strong external GitHub bot identity but largely collapses internal runtime identity into Specialists jobs/processes and operator `docker exec` surfaces. It also predates the accepted separation between immutable Channels semantics and process-state-dependent runtime delivery. Without correction, audit/provenance can confuse the credentialed GitHub principal, logical XTRM actor, assignment participant and concrete execution attempt.\n\n## SUCCESS\n\nSections 3 and 9 distinguish external principal identity from XTRM actor/assignment/participant/execution/runtime lineage, and document how bridge `job_id`/process identifiers relate to the durable execution envelope. Operator observability exposes runtime execution state, evidence and Channels attention/delivery in addition to current `sp ps`/`sp feed` bridge commands. Semantic messages remain Channels-owned; scheduler/runtime owns eligibility, delivery attempts and processing receipts.\n\n## SCOPE\n\n- `docs/devops/mercury-devops-collaborator.md` Section 3 lifecycle/identity description\n- Section 9 operator observability\n- adjacent messaging/notification statements that conflate semantic message with process delivery\n\n## NON_GOALS\n\n- Do not implement Channels storage or Console/Agent Workspace.\n- Do not require every external principal field on every low-level runtime event.\n- Do not replace the dedicated GitHub bot identity or weaken credential isolation.\n- Do not make terminal panes/processes the source of runtime identity.\n\n## CONSTRAINTS\n\n- The design must be able to resolve/join at least `principal_id` where applicable, `actor_id`, `assignment_id`, `participant_id`, `execution_id`, `attempt`, `parent_execution_id`, bridge `job_id`, `runtime_session_id`, `generation` and `authority_ref`.\n- Authority-bearing sender identity is runtime-derived/validated; message body text cannot impersonate another actor/execution.\n- `ChannelMessage -> DeliveryIntent -> DeliveryAttempt -> ProcessingReceipt` is the semantic/runtime split; delivered is not processed.\n- Current `docker exec ... sp ps/feed/result` commands may remain documented as bridge observability, not the target ontology.\n\n## VALIDATION\n\n- [ ] GitHub bot principal identity is explicitly separated from internal XTRM actor/execution identity.\n- [ ] `job_id` is documented as a bridge/current runtime identifier rather than the complete durable identity.\n- [ ] Parent/child/recovery lineage can be joined through execution/session/generation fields.\n- [ ] Channels author identity is runtime-derived and body-not-authority is preserved.\n- [ ] Semantic message state is separated from runtime delivery/processing state.\n- [ ] Section 9 exposes evidence, execution state, attention/pending-delivery and recovery-relevant identity in addition to process/job views.\n\n## OUTPUT\n\nDoc diff and identity/observability crosswalk covering external principal, XTRM logical/workflow identity, runtime execution identity, current bridge identifiers, Channels delivery state and evidence locations.\n",
+        "id": "xtrm-2zd.3",
+        "issue_type": "task",
+        "labels": [
+          "autonomous",
+          "devops-docs",
+          "durability"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "status": "open",
+        "title": "Reconcile collaborator identity, runtime delivery and observability surfaces",
+        "updated_at": "2026-08-10T23:47:07Z"
+      }
+    },
+    "xtrm-2zd.4": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-08-10T23:47:12Z",
+        "dependencies": [
+          {
+            "created_at": "2026-08-10T23:47:12Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd.2",
+            "issue_id": "xtrm-2zd.4",
+            "metadata": "{}",
+            "type": "validates"
+          },
+          {
+            "created_at": "2026-08-10T23:47:12Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd",
+            "issue_id": "xtrm-2zd.4",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-10T23:47:12Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd.1",
+            "issue_id": "xtrm-2zd.4",
+            "metadata": "{}",
+            "type": "validates"
+          },
+          {
+            "created_at": "2026-08-10T23:47:12Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2zd.3",
+            "issue_id": "xtrm-2zd.4",
+            "metadata": "{}",
+            "type": "validates"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nA focused documentation correction can still become stale if each command name is treated as permanent ownership. The previous validation task checked only the historical xt/sp epics; the current XTRM programme now has explicit runtime reconciliation, native-harness ADR gating, Channels/runtime separation, completion-ledger authority and target Substrate projections that must all agree before this design can be considered reconciled.\n\n## SUCCESS\n\nEvery normative collaborator claim maps to a current semantic authority and, where the implementation is still a bridge, records the bridge owner, durable state/evidence source, target owner, migration gate and sunset condition. The final review catches contradictions against the accepted runtime reconciliation, current execution plan, completion ledger, Channels canon and harness decision path without creating new cross-repository boards or implementing those programmes here.\n\n## SCOPE\n\n- final `docs/devops/mercury-devops-collaborator.md` diff from xtrm-2zd.1/.2/.3\n- `docs/shared/xtrm-v1-runtime-reconciliation-and-termination-2026-08-09.md`\n- `docs/shared/xtrm-current-execution-plan.md` and JSON graph\n- `docs/shared/xtrm-v1-completion-ledger.md`\n- `docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md` and resulting harness ADR state\n- canonical Channels design and relevant Substrate target semantics\n- current Core/xtrm-tools and Specialists repository evidence where a bridge claim names them\n\n## NON_GOALS\n\n- Do not validate runtime code behavior beyond checking that the documentation does not claim unsupported capabilities.\n- Do not create new cross-repository executable hierarchy from this validation task.\n- Do not block the doc on future implementation where the claim is explicitly marked as target/future behind the correct gate.\n\n## CONSTRAINTS\n\n- Produce a claim matrix with: `capability | current bridge | semantic authority | durable state owner | evidence surface | target owner | migration gate | sunset condition`.\n- Current bridge facts must be verified against current repository/release evidence; target semantics must come from the canonical XTRM documents.\n- A bridge command may be retained only if the document does not imply that it permanently owns workflow/runtime semantics that belong elsewhere.\n- The validation is a document-level consistency gate, not code execution or release promotion.\n\n## VALIDATION\n\n- [ ] Every collaborator claim has one semantic authority and no duplicate mutable owner.\n- [ ] Current bridge commands/capabilities are supported by current repository/release evidence or explicitly marked planned/unreleased.\n- [ ] Runtime-specific claims respect `GATE-HARNESS-ADR` and do not prematurely freeze RPC versus native AgentSession ownership.\n- [ ] Channels semantic communication and runtime delivery are not conflated.\n- [ ] Beads work contracts/objectives remain durable authority; target Substrate projections do not create a competing lifecycle owner.\n- [ ] Trust/isolation requirements remain intact.\n- [ ] xtrm-2zd.1, xtrm-2zd.2 and xtrm-2zd.3 acceptance checks are all covered by the final claim matrix.\n- [ ] Residual open decisions are named with owning programme/gate rather than buried in prose.\n\n## OUTPUT\n\nChecklist-style authority/migration validation note plus corrected document links and a short residual-open-decisions section.\n",
+        "id": "xtrm-2zd.4",
+        "issue_type": "task",
+        "labels": [
+          "autonomous",
+          "devops-docs",
+          "durability"
+        ],
+        "priority": 1,
+        "status": "open",
+        "title": "Validate collaborator claims against current XTRM authorities and migration gates",
+        "updated_at": "2026-08-10T23:47:12Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-06-28T14:39:57Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd",
+        "issue_id": "xtrm-2zd.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2zd.1",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-06-28T14:39:59Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd",
+        "issue_id": "xtrm-2zd.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2zd.2",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-06-28T14:40:01Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd",
+        "issue_id": "xtrm-2zd.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2zd.3",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-10T23:47:12Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd",
+        "issue_id": "xtrm-2zd.4",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2zd.4",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-10T23:47:12Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd.1",
+        "issue_id": "xtrm-2zd.4",
+        "metadata": "{}",
+        "type": "validates"
+      },
+      "source": "xtrm-2zd.4",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd.1",
+      "type": "validates"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-10T23:47:12Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd.2",
+        "issue_id": "xtrm-2zd.4",
+        "metadata": "{}",
+        "type": "validates"
+      },
+      "source": "xtrm-2zd.4",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd.2",
+      "type": "validates"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-10T23:47:12Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2zd.3",
+        "issue_id": "xtrm-2zd.4",
+        "metadata": "{}",
+        "type": "validates"
+      },
+      "source": "xtrm-2zd.4",
+      "source_field": "dependencies",
+      "target": "xtrm-2zd.3",
+      "type": "validates"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-2zd",
+  "root_title": "Reconcile Mercury DevOps collaborator with XTRM v1 runtime and ownership semantics",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

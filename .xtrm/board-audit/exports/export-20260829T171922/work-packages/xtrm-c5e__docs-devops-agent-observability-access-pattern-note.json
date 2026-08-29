@@ -1,0 +1,43 @@
+{
+  "content_sha256": "4c02bfaffe65050128711fc808dde65b6ff8d2e33c5198373719c83a3a6eb7b1",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-c5e"
+  },
+  "issues": {
+    "xtrm-c5e": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "dawid",
+        "close_reason": "Wrote docs/devops/agent-observability-pattern.md documenting the three-layer agent observability methodology (mcpq CLI + walk-up .mcpq.json + live-query health skill + service-skills routing). Sits between mcp-sidecars-pattern.md and devops-system.md. Captures the three-iteration thought process and pointers to mcpq package + mercury-infra reference instance.",
+        "closed_at": "2026-06-10T15:21:07Z",
+        "comment_count": 0,
+        "created_at": "2026-06-10T15:19:14Z",
+        "created_by": "dawid",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nThe xtrm devops docs cover (a) MCP sidecar deployment (mcp-sidecars-pattern.md) and (b) broader system vision (devops-system.md), but miss the middle layer: how agents ergonomically *access* the sidecars without paying per-session token cost, and how live-query health surfaces compose with service-skills routing. This gap meant the same pattern had to be rediscovered when wiring mcpq into mercury-infra (infra-vh4) — the realization that \"mcpq IS the centralized health surface\" emerged only after a near-miss design that would have built a redundant cache + CLI.\n\n## SUCCESS\n\nA new pattern note at `docs/devops/agent-observability-pattern.md` documents the methodology so future products don't repeat the discovery process.\n\n## SCOPE\n\n- `docs/devops/agent-observability-pattern.md` (new file)\n\n## NON_GOALS\n\n- Modifying mcp-sidecars-pattern.md or devops-system.md (cross-link only).\n- Modifying the mcpq package or its skill.\n- Creating any code or config.\n\n## CONSTRAINTS\n\n- Match tone/length of existing devops pattern notes (~250 lines, concrete, thought-process visible).\n- Cross-link to mcpq package, mcpq skill, mercury-infra reference instance.\n- Capture the three iterations that landed the pattern (token cost → walk-up → live-query).\n\n## VALIDATION\n\n- [ ] File exists and renders as valid markdown.\n- [ ] All relative links resolve (mcpq package, mcp-sidecars-pattern, devops-system).\n- [ ] References mercury-infra files by absolute repo path (consumers may not have the repo cloned).\n\n## OUTPUT\n\n- One new doc file. PR optional (operator decides).\n\n## REFERENCES\n\n- mercury-infra beads: infra-6if, infra-vh4, infra-mhg\n- This monorepo beads: xtrm-2m3, xtrm-6fe",
+        "id": "xtrm-c5e",
+        "issue_type": "chore",
+        "priority": 3,
+        "started_at": "2026-06-10T15:19:18Z",
+        "status": "closed",
+        "title": "docs(devops): agent observability access pattern note",
+        "updated_at": "2026-06-10T15:21:07Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-c5e",
+  "root_title": "docs(devops): agent observability access pattern note",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

@@ -1,0 +1,44 @@
+{
+  "content_sha256": "d054a02774e550e2921bc896be50b23725ec55c3fe895a622d6f75057c6289ab",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-xmm"
+  },
+  "issues": {
+    "xtrm-xmm": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Resolved both review-gate blockers, rebased and pushed the fix, all required checks passed, merged PR #215, and fast-forwarded local specialists master.",
+        "closed_at": "2026-07-24T22:50:40Z",
+        "comment_count": 0,
+        "created_at": "2026-07-24T22:44:49Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nPR #215 cannot merge because the review gate reports two unresolved Codex threads: service-skills-sync still hard-codes legacy service-skills paths, and retained roadmap documents cite an archive file removed by the docs ignore cleanup.\n\n## SUCCESS\nUpdate the specialist prompt to prefer service-knowledge with legacy fallback for scope, migration, contract, and drift-sync paths; retain the cited archive source or update references so the PR remains internally navigable; push fixes and get PR #215 checks green.\n\n## SCOPE\n/home/dawid/dev/specialists/config/specialists/service-skills-sync.specialist.json; /home/dawid/dev/specialists/.gitignore; referenced roadmap documents and docs/archive/iron-review-hardening-qa-chain-substrate.md as needed; PR #215.\n\n## NON_GOALS\n- Do not merge unrelated runtime features.\n- Do not remove user-facing examples, roadmap, or upgrade docs.\n- Do not bypass or dismiss the review gate.\n\n## CONSTRAINTS\nPreserve the requested docs-ignore audit and all existing PR edits. Prefer service-knowledge first, service-skills fallback. Resolve the exact cited archive reference without broadening the ignored docs set.\n\n## VALIDATION\n- [ ] All hard-coded service path loops have service-knowledge-first fallback coverage.\n- [ ] Retained roadmap references resolve to tracked files.\n- [ ] PR checks pass, especially pr-review-gate.\n- [ ] Worktree is clean and PR remains the intended scope.\n\n## OUTPUT\nUpdated PR URL, commit SHAs, review findings resolved, and check evidence.",
+        "id": "xtrm-xmm",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-07-24T22:44:52Z",
+        "status": "closed",
+        "title": "Resolve PR 215 review gate findings",
+        "updated_at": "2026-07-24T22:50:40Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-xmm",
+  "root_title": "Resolve PR 215 review gate findings",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

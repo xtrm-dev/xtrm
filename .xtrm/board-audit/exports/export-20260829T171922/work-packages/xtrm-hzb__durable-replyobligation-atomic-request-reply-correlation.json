@@ -1,0 +1,95 @@
+{
+  "content_sha256": "1d9fc6e18e3033a38c40326fb0e1b34398ffdd3d35c5b9a3ff5395728ee1b607",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-26T01:59:25Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-6yn",
+        "issue_id": "xtrm-hzb",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-hzb",
+      "source_field": "dependencies",
+      "target": "xtrm-6yn",
+      "target_present_in_snapshot": true,
+      "target_title": "ChannelCommunicationService semantic contracts: send / request / reply / inbox",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-26T01:59:25Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy",
+        "issue_id": "xtrm-hzb",
+        "metadata": "{}",
+        "type": "discovered-from"
+      },
+      "source": "xtrm-hzb",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy",
+      "target_present_in_snapshot": true,
+      "target_title": "Native chain runtime: make SRE chain the first data-defined XTRM chain",
+      "type": "discovered-from"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-hzb"
+  },
+  "issues": {
+    "xtrm-hzb": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via PR #95 (merged bb9d7f1): durable ReplyObligation ledger, atomic request/reply correlation, lineage ops, UNCERTAIN handling per R2.7. 14+104 tests pass; tsc clean. Review PASS on exact head c0866be; boundary-hardening follow-ups filed as xtrm-1o8.",
+        "closed_at": "2026-08-26T01:04:55Z",
+        "comment_count": 0,
+        "created_at": "2026-08-25T23:59:25Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-26T01:59:25Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-6yn",
+            "issue_id": "xtrm-hzb",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-26T01:59:25Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy",
+            "issue_id": "xtrm-hzb",
+            "metadata": "{}",
+            "type": "discovered-from"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 3,
+        "description": "Second comm-runtime bead (discovered-from coordinator input). Persisted obligation record created ATOMICALLY with each semantic request: requester participant_id, channel/message ref, responder action_target, correlation id, state machine requested->replied->settled (plus expired/voided), idempotency key per R2.6.\n\nInvariants preserved: provider accepted != processed != replied (three distinct receipt points); read != ack; reply correlation must be atomic — no window where a reply can arrive before the obligation exists or after it is lost; uncertain outcomes block blind replay and reconciliation records resolving evidence (R2.7).\n\nNo polling API for agents: the obligation is runtime-owned bookkeeping, not agent memory.",
+        "id": "xtrm-hzb",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-26T00:40:31Z",
+        "status": "closed",
+        "title": "Durable ReplyObligation + atomic request/reply correlation",
+        "updated_at": "2026-08-26T01:04:55Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-hzb",
+  "root_title": "Durable ReplyObligation + atomic request/reply correlation",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}
