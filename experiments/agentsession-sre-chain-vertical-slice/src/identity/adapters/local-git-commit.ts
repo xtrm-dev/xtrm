@@ -9,11 +9,13 @@
  * under the run's state dir), carrying the githubTrailers projection.
  *
  * Safety boundary (fail closed):
- *   - the target repo MUST be inside the designated scratch root; a path
- *     that escapes (or resolves outside) it is rejected;
+ *   - the target repo MUST resolve (after symlink resolution) inside the
+ *     designated scratch root; a path that escapes the root — including via
+ *     a symlink planted at repoDir — is rejected;
  *   - no remotes are touched, nothing is pushed; commit is local-only;
  *   - the commit carries the XTRM trailers + receipt line via the standard
  *     projection, tagged with a canary marker subject;
+ *   - local git identity is set per-commit (never reads real user config);
  *   - a commit object is created only when the projection succeeds.
  *
  * The returned object id is a real commit SHA — the "platform object ID"
@@ -26,7 +28,6 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { sha256String } from "../../util/fs.ts";
 import { githubTrailers, compactAttributionLine } from "../projection.ts";
 import type { ProvenanceEnvelope } from "../schemas.ts";
 import type { PlatformMutationAdapter } from "../canary.ts";
@@ -50,18 +51,29 @@ export class LocalGitCommitAdapter implements PlatformMutationAdapter {
     this.repoDir = path.resolve(opts.repoDir);
   }
 
-  /** Containment guard: repoDir must resolve inside scratchRoot. */
+  /**
+   * Containment guard: repoDir must resolve inside scratchRoot AFTER
+   * symlink resolution. Lexical containment alone is bypassable by a
+   * repoDir that is a symlink to a directory outside the scratch root; an
+   * agent holding file-write tools could plant such a link. Both roots are
+   * realpath-resolved and the resolved repoDir must be strictly inside the
+   * resolved scratch root. Creates repoDir (and its parents) so a fresh
+   * scratch repo works, and returns the REAL path for all git operations.
+   */
   private assertContained(): string {
-    const rel = path.relative(this.scratchRoot, this.repoDir);
-    if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) {
-      throw new Error(
-        `local_git_adapter_outside_scratch: ${this.repoDir} is not inside ${this.scratchRoot}`,
-      );
-    }
     if (!fs.existsSync(this.scratchRoot)) {
       throw new Error(`local_git_adapter_missing_scratch_root: ${this.scratchRoot}`);
     }
-    return this.repoDir;
+    const realScratch = fs.realpathSync(this.scratchRoot);
+    fs.mkdirSync(this.repoDir, { recursive: true });
+    const realRepo = fs.realpathSync(this.repoDir);
+    const rel = path.relative(realScratch, realRepo);
+    if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) {
+      throw new Error(
+        `local_git_adapter_outside_scratch: ${this.repoDir} resolves to ${realRepo}, not inside ${realScratch}`,
+      );
+    }
+    return realRepo;
   }
 
   private async git(args: string[], cwd: string): Promise<string> {
@@ -80,12 +92,12 @@ export class LocalGitCommitAdapter implements PlatformMutationAdapter {
     envelope: ProvenanceEnvelope;
     target: { kind: string; issue?: string | null; repo?: string | null };
   }): Promise<{ external_id: string; content_sha256: string }> {
+    // Containment check runs first, before ANY filesystem or git side
+    // effect. repoDir is created inside assertContained when missing.
     const repoDir = this.assertContained();
-    await fsp.mkdir(repoDir, { recursive: true });
 
     // Init if not yet a repo (idempotent: local, non-production scratch).
     const isRepo = fs.existsSync(path.join(repoDir, ".git"));
-    await fsp.mkdir(repoDir, { recursive: true });
     if (!isRepo) {
       await this.git(["init", "-q"], repoDir);
       // Settle a local branch BEFORE the initial commit so rev-parse HEAD

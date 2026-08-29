@@ -328,6 +328,46 @@ describe("slice 3 — real non-production mutation adapter (F1)", () => {
       }),
     ).rejects.toThrow(/local_git_adapter_outside_scratch/);
   });
+
+  test("adapter ALLOWS a symlink-repoDir that resolves inside the scratch root", async () => {
+    // Positive control: realpath containment must not block legitimate
+    // nested links (e.g. a symlinked repo inside the scratch tree).
+    const realNested = path.join(scratch, "nested-real");
+    await fsp.mkdir(realNested, { recursive: true });
+    const linkInside = path.join(scratch, "inside-link");
+    await fsp.symlink(realNested, linkInside, "dir");
+    const adapter = new LocalGitCommitAdapter({ scratchRoot: scratch, repoDir: linkInside });
+    const r = resolveFor(realChain(), "explorer");
+    const result = await runProvenanceCanary({
+      context: r.resolution.context,
+      validationConfig: { registry: ACTORS, principalSets: PRINCIPAL_SETS },
+      payload: { content: "inside symlink ok", target: { kind: "github_commit", repo: linkInside } },
+      authorshipMode: "xtrm_local_direct",
+      adapter,
+    });
+    expect(result.external_id).toMatch(/^[0-9a-f]{40}$/);
+  });
+
+  test("adapter rejects a symlink-repoDir that escapes the scratch root (realpath)", async () => {
+    // Review Finding 1 (slice 3): lexical containment only was bypassable
+    // by a repoDir symlink pointing outside the scratch root. The guard now
+    // realpath-resolves both sides.
+    const outsideReal = await fsp.mkdtemp(path.join(tmpdir(), "xtrm-s3-symlink-out-"));
+    const linkDir = path.join(scratch, "escape-link");
+    await fsp.symlink(outsideReal, linkDir, "dir");
+    const adapter = new LocalGitCommitAdapter({ scratchRoot: scratch, repoDir: linkDir });
+    const r = resolveFor(realChain(), "explorer");
+    await expect(
+      runProvenanceCanary({
+        context: r.resolution.context,
+        validationConfig: { registry: ACTORS, principalSets: PRINCIPAL_SETS },
+        payload: { content: "symlink escape attempt", target: { kind: "github_commit", repo: linkDir } },
+        authorshipMode: "xtrm_local_direct",
+        adapter,
+      }),
+    ).rejects.toThrow(/local_git_adapter_outside_scratch/);
+    await fsp.rm(outsideReal, { recursive: true, force: true });
+  });
 });
 
 // ---------------------------------------------------------------- F1 — real call site

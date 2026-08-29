@@ -253,7 +253,9 @@ export interface RuntimeFact {
     | "coordinator.action"
     | "escalation"
     | "message.rejected"
-    | "chain.close";
+    | "chain.close"
+    | "provenance.receipt"
+    | "provenance.receipt.failed";
   detail: string;
   meta?: Record<string, unknown>;
 }

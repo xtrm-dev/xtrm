@@ -88,8 +88,13 @@ export async function emitStepProvenanceReceipts(
         kind: "provenance.receipt",
         detail: `receipt ${receipt.receipt_id} bound to ${receipt.external_object_id}`,
         meta: { receipt_id: receipt.receipt_id, external_object_id: receipt.external_object_id },
-      } as any);
+      });
     } catch (e: any) {
+      // At-most-once semantics: a step that already satisfied is not
+      // re-emitted on later iterations (prev.status === "satisfied"), so a
+      // failure here leaves the step without a receipt — surfaced via the
+      // failed fact for reconciliation rather than retried blind (same
+      // discipline as uncertain side effects in slice 1).
       ctx.onFact({
         ts: nowIso(),
         chain_id: ctx.chain.chain_id,
@@ -97,7 +102,7 @@ export async function emitStepProvenanceReceipts(
         step_id: stepId,
         kind: "provenance.receipt.failed",
         detail: `receipt emission failed: ${e?.message ?? e}`,
-      } as any);
+      });
     }
   }
   // Persist the per-step receipt ids so a resume does not re-emit.
