@@ -67,3 +67,56 @@ Local and host automation may later use separate least-privilege XTRM
 principal sets (`local_automation`, `host_automation`, `ops` kinds).
 Preferred mechanisms: private GitHub App installation tokens; Atlassian
 service account with scoped API tokens where supported.
+
+## 7. Slice 2: real trusted lane integration + projection canary (xtrm-eq8)
+
+Slice 2 (xtrm-eq8, PR #105) wires ONE real trusted XTRM host/local
+execution lane into these contracts and proves a bounded, non-production
+projection canary. Integration is proven by tests bound to the real
+scheduler lane functions (`makeIdentity`, `newResolvedChain`,
+`StepExecutionState`); no production mutation call site or platform adapter
+was added in this slice. It does not perform account or connector cutover.
+
+Trusted context source: the chain-runtime scheduler lane
+(`experiments/agentsession-sre-chain-vertical-slice/src/chain/scheduler.ts`,
+`makeIdentity` + frozen `ResolvedChain` + `StepExecutionState`). The
+scheduler resolves participant/execution identity BEFORE any
+model-controlled mutation code runs. The adapter
+(`src/chain/trusted-context.ts`) maps that lane deterministically into
+`ResolvedExecutionContext`:
+
+| Slice 1 field | Resolved from trusted lane / host |
+|---|---|
+| `participant_id` | scheduler `participant_id` (`chainId::role`) |
+| `execution_id` | scheduler `execution_id` (deterministic `exec-<participant>-<attempt>`; a retry mints a new attempt, so a new execution id) |
+| `attempt` | `StepExecutionState.attempts` |
+| `runtime_session_id` | host-supplied runtime session id (pi session) when the lane has one |
+| `assignment_id` / `assignment_version` | host-supplied assignment beacon (bead ref) + version |
+| `authority_ref` | host-supplied authority (bead ref / issue ref) |
+| `parent_execution_id` | host-supplied lineage on resume/retry |
+| `actor_id` | deterministic role projection (`<chain>/<role>`) or host-selected registered actor |
+| `principal_set_id` | registered principal set, must be allowed for the actor |
+
+Fail-closed: missing actor, missing registered principal set, actor not
+allowed for the set, missing assignment/version, missing authority, missing
+execution identity all throw at resolution time. Caller mutation payloads
+carry only content/target/source cursors; identity fields in a payload are
+rejected (`caller_identity_assertion`, extended key list).
+
+Canary: `src/identity/canary.ts` + `tests/identity-slice2-runtime.test.ts`
+prove trusted context → envelope → projection → injected platform adapter
+(dry-run GitHub fixture) → returned platform object id → binding
+(`bindPlatformResult`) → receipt validation (`validateMutation`). Rebind
+conflict and already-bound-receipt tampering fail closed. Legacy history
+remains `legacy_unattributed`.
+
+Classification before cutover remains:
+
+```text
+authorship_mode: appropriate direct/relay mode
+attribution_strength: self_attested_web
+```
+
+No signer is implemented in this slice; unkeyed hashes remain tamper
+evidence only. No credentials, accounts, connectors, daemons or production
+targets were created.

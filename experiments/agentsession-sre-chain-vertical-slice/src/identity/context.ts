@@ -27,6 +27,7 @@ import {
   type AuthorshipMode,
   type ExecutionIdentity,
   type PrincipalBinding,
+  type PrincipalSet,
   type ProvenanceEnvelope,
   type ProvenanceTarget,
 } from "./schemas.ts";
@@ -53,6 +54,8 @@ export const CALLER_IDENTITY_KEYS = [
   "principal_set_id",
   "principal_binding",
   "execution_id",
+  "assignment_id",
+  "assignment_version",
   "parent_execution_id",
   "participant_id",
   "authority_ref",

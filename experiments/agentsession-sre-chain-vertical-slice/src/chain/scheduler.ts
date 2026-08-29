@@ -152,7 +152,7 @@ export interface SchedulerContext {
   maxIterations?: number; // safety cap
 }
 
-function makeIdentity(chain: ResolvedChain, step: ChainStep, st: StepExecutionState): ParticipantIdentity {
+export function makeIdentity(chain: ResolvedChain, step: ChainStep, st: StepExecutionState): ParticipantIdentity {
   const pid = participantId(chain.chain_id, step.role);
   const attempt = st.attempts;
   const exec = executionId(pid, attempt);
