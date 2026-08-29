@@ -4,9 +4,11 @@
  * Wires the landed provenance contracts (xtrm-c4z / PR #99) to ONE real
  * trusted host/local execution lane: the chain-runtime scheduler. In this
  * vertical slice the scheduler resolves participant/execution identity
- * (makeIdentity) BEFORE any model-controlled mutation code runs, and the
- * tools inject that identity from the host closure. This module is that
- * lane's adapter into ResolvedExecutionContext.
+ * (makeIdentity) BEFORE any model-controlled mutation code runs. This
+ * module is that lane's adapter into ResolvedExecutionContext; the
+ * scheduler's tools already inject host.identity from the host closure.
+ * Integration is proven by tests bound to the real lane functions; no
+ * production mutation call site exists in this slice (no cutover).
  *
  * TRUST BOUNDARY:
  *   - identity fields (actor, principal set, execution, assignment,

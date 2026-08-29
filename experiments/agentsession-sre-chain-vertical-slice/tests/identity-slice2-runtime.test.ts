@@ -14,7 +14,6 @@ import { describe, test, expect } from "bun:test";
 import type { ChainStep, ParticipantIdentity, ResolvedChain, StepExecutionState } from "../src/chain/types.ts";
 import { makeIdentity } from "../src/chain/scheduler.ts";
 import { newResolvedChain, stepById } from "../src/chain/topology.ts";
-import { initialRunState } from "../src/chain/reducer.ts";
 import {
   participantActorId,
   resolveTrustedExecutionContext,
