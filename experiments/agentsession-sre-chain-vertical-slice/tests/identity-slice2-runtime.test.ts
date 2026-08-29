@@ -147,14 +147,17 @@ describe("slice 2 — trusted runtime context wiring (real scheduler lane)", () 
     expect(resolution.context.principal_set.principal_set_id).toBe(PRINCIPAL_SET.principal_set_id);
   });
 
-  test("participantActorId is deterministic for a chain step", () => {
+  test("participantActorId is deterministic and role-derived", () => {
     const chain = realChain();
     const step = stepById(chain, "reviewer");
     const st = stepStateFor("reviewer", 2);
     const identity = makeIdentity(chain, step, st);
-    expect(participantActorId(identity, step)).toBe(
-      `${chain.chain_id}/reviewer`.replace(identity.chain_id, identity.chain_id),
-    );
+    expect(participantActorId(identity, step)).toBe(`${chain.chain_id}/reviewer`);
+    // Sanitized: chain ids containing separator characters never leak into the actor id.
+    const oddChain = { ...chain, chain_id: "chain sre::x" };
+    const oddStep = { ...step, role: "observability-analyst" as const };
+    const oddIdentity = { ...identity, chain_id: oddChain.chain_id, step_id: oddStep.step_id } as ParticipantIdentity;
+    expect(participantActorId(oddIdentity, oddStep)).toBe("chain-sre-x/observability-analyst");
   });
 
   test("retry changes attempt, not participant or assignment (slice 1 semantics preserved)", () => {
