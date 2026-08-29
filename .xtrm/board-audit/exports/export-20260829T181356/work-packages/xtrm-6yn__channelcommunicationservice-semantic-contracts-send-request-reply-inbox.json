@@ -1,0 +1,44 @@
+{
+  "content_sha256": "3b72dcf34e8074ae25f5c957b39e18d1397c835187851846ecad4178ee489c57",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-6yn"
+  },
+  "issues": {
+    "xtrm-6yn": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via PR #94 (merged a1c0b8b): semantic contracts send/request/reply/inbox over channels.md canon. All 30 §5.3 kinds, host-injected authority, read!=ack, RequestIntent seam for xtrm-hzb, rejection audit-twin. 13+91 tests pass; tsc clean. Review PARTIAL->repaired(6ee1959)->PASS on exact final head.",
+        "closed_at": "2026-08-26T00:40:29Z",
+        "comment_count": 0,
+        "created_at": "2026-08-25T23:59:01Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 2,
+        "description": "Discovered-from coordinator architecture input (post-qcy.3). LLMs own collaboration CONTENT; the runtime owns collaboration MECHANICS. Agents must never have to remember to create monitors after requesting a reply, poll for it, change their own state to stay wakeable, inspect whether a reply arrived, or track mandatory inbound requests.\n\nContract: one ChannelCommunicationService exposing send / request / reply / inbox as SEMANTIC operations over the canonical Channels contract (docs/channels/channels.md — normative). Channels semantic authority preserved: participant_id stable logical recipient; activation/job/session identity separate; message body != authority; read != ack; delivered != processed != replied. NO provider-specific transport (no Claude SendMessage, no codex queue) inside this layer — those are xtmux-owned bounded spikes/adapters (xtmux#110, #114).\n\nOwnership split (post-#89 canon): Channels + chain runtime own semantic messages and reply obligations; xtmux owns provider delivery, observation, receipts, wake/injection, fallback, reconciliation.\n\nFor direct XTRM-hosted Pi AgentSessions: inject semantic tools through ActivationSupervisor. xtmux/tmux is not the correctness boundary. For interactive/external runtimes: route delivery intents via xtmux RuntimeSupervisor/provider adapters.\n\nPlacement guidance: pure semantic contracts first (schema + validation + correlation identity), no daemon.",
+        "id": "xtrm-6yn",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-26T00:01:12Z",
+        "status": "closed",
+        "title": "ChannelCommunicationService semantic contracts: send / request / reply / inbox",
+        "updated_at": "2026-08-26T00:40:29Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-6yn",
+  "root_title": "ChannelCommunicationService semantic contracts: send / request / reply / inbox",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

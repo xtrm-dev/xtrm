@@ -1,0 +1,326 @@
+{
+  "content_sha256": "ff7009a9159b96dcc8f6fac4ae5f885b92bc2094b069b7cca3aebf716266cbf8",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-6z6.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-6z6.2"
+      },
+      {
+        "children": [],
+        "id": "xtrm-6z6.3"
+      },
+      {
+        "children": [],
+        "id": "xtrm-6z6.4"
+      },
+      {
+        "children": [],
+        "id": "xtrm-6z6.5"
+      }
+    ],
+    "id": "xtrm-6z6"
+  },
+  "issues": {
+    "xtrm-6z6": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Epic complete 5/5, all verified independently: .1 self-gating ext v1 (closed during core phase, superseded by .5 relocation), .2 drift CLI + _help.py epilogs (0afab5a), .3 doctrine vocabulary across pkg/ext/specialists (9606a34/5851d42e/812280fc), .4 kernel binding (ff362610, merged to core main, 87/0/1skip isolated run), .5 relocation to standalone npm package (xtrm main 7d766bd, enrolled, local copy deleted with operator approval). E2E proven via enrolled-path discovery on real mercury/infra.",
+        "closed_at": "2026-08-28T00:25:20Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T21:08:11Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "PROBLEM: service-knowledge (~/dev/xtrm/packages/service-knowledge, v0.1.0, Python pkg: cli/canary/contracts/dispatch/eval/index/mcp/install/skills) is not agent-first: agents must grep for service-registry.json, drift handling is repo-local folklore (mercury-infra PoC only), and agents have no doctrine for what to do when knowledge is stale. Verified assets: existing wrapper extension core/packages/pi-extensions/extensions/service-skills/index.ts (134 lines: resolveRegistryPath umbrella/flat precedence, cataloger.py wiring); drift marker mechanism in mercury/infra (.xtrm/.service-skills-drift-pending: \"drift detected post-merge on main; services: 14; files: 53; action: run /updating-service-skills + stamp last_sync_ref\"); pi extension scoping (docs/extensions.md: global vs project-local .pi/extensions, project_trust lifecycle).\n\nDESgist PRINCIPLES: (1) self-gating beats per-repo install: extension ships globally in @jaggerxtrm/pi-extensions but registers ZERO surface when no registry exists in cwd - the \"check then use, not before\" becomes invisible, no trust ceremony, no wasted context. (2) never block on knowledge updates: stale registry is used as-is; update is suggested + queued; work proceeds; commits are the fallback memory (git log -p --follow, corpus). (3) drift check -> suggest -> reconcile -> stamp last_sync_ref -> rebuild index, all non-blocking. (4) python synergy: service_knowledge is importable in-kernel once skillbridge (core xtrm-h7uwi.1) lands - drift check + index rebuild as function calls, same gating signal (registry presence) can drive a per-repo driver prelude.\n\nCHILDREN: ext self-gating v1; drift loop generalization; commit-corpus doctrine + system-prompt landing (prompt block done in-session); kernel binding (depends core xtrm-h7uwi.1).\n\nNON_GOALS: no MCP server changes; no per-repo extension installation requirement; no blocking gates on drift.\n",
+        "id": "xtrm-6z6",
+        "issue_type": "epic",
+        "notes": "typo fix: 'DESgist PRINCIPLES' -> 'DESIGN PRINCIPLES'",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "status": "closed",
+        "title": "service-knowledge as first-class pi extension: self-gating, drift-surfacing, commit-corpus fallback",
+        "updated_at": "2026-08-28T00:25:20Z"
+      }
+    },
+    "xtrm-6z6.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "service-knowledge ext v1: self-gating registration (find_umbrella_packs semantics — roots [.xtrm/skills, .xtrm/skills/user/packs], NEW service-knowledge wins over LEGACY service-skills, reserved packs skipped, registry at pack/<umb>/service-registry.json). No registry → zero surface (no tool/command/handlers). With registry → session_start context note (service count + drift state) + /service-knowledge:status command (services, last_sync_ref vs HEAD, drift marker, suggested action pointing at /updating-service-knowledge). Stale service-skills extension retired (manifest.disabled with reason). 11 tests: fixture repos with/without registry, layout validation (mercury/infra canonical shape + .claude fallback dropped), status golden. Full pi-extensions suite 42 pass/0 fail; typecheck + check:pi-manifest + check:runtime-compat + check:package + payload-hygiene clean.",
+        "closed_at": "2026-08-27T21:58:48Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T21:08:12Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T23:08:12Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-6z6",
+            "issue_id": "xtrm-6z6.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "PROBLEM: current service-skills extension registers its context/tool unconditionally-ish and drift state is invisible; in repos without a registry it is dead weight.\nDESIGN: at extension init, synchronously scan cwd (reuse resolveRegistryPath from index.ts:33: .xtrm/skills/user/packs/*/service-skills/service-registry.json umbrella precedence, then flat, then .claude/skills fallback). No registry -> skip registerTool entirely, zero surface. Registry present -> register: (a) session_start context note with service count + drift state; (b) /service-knowledge:status command (services, last_sync_ref vs git HEAD, marker presence, suggested action); (c) guidance pointing at /updating-service-skills. Rename/wrap as service-knowledge ext inside @jaggerxtrm/pi-extensions; release per xtrm-h7uwi.4 contract.\nSUCCESS: repo without registry sees nothing; mercury/infra session shows service inventory + drift notice without any blocking; /service-knowledge:status output matches marker contents.\nVALIDATION: fixture repos with/without registry; snapshot extension surface; status command golden test.\nNON_GOALS: no auto-update execution in v1; no index rebuild trigger.\n",
+        "id": "xtrm-6z6.1",
+        "issue_type": "feature",
+        "notes": "CORRECTION (path contract): canonical resolution is the PKG contract, not the ext's stale copy - common.py find_umbrella_packs: roots [.xtrm/skills, .xtrm/skills/user/packs], NEW_UMBRELLA service-knowledge wins over LEGACY service-skills, registry at pack/<umbrella>/service-registry.json; services live at pack/<umbrella>/services/<id>/SKILL.md (_help.py). Verified on mercury/infra: .xtrm/skills/infra/service-knowledge/service-registry.json. FINDING: current core ext (service-skills/index.ts listPackDirs+resolveRegistryPath) is BLIND to this layout - it only scans user/packs and service-skills umbrella, so it misses mercury's real registry. v1 must mirror find_umbrella_packs semantics or shell out to 'service-knowledge status'. Skill renamed: /updating-service-knowledge (not -skills).",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-27T21:53:07Z",
+        "status": "closed",
+        "title": "service-knowledge ext v1: self-gating registration + drift notice (code lands in core/packages/pi-extensions)",
+        "updated_at": "2026-08-27T21:58:48Z"
+      }
+    },
+    "xtrm-6z6.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "drift CLI: service-knowledge drift (scan last_sync_ref->HEAD, writes .service-knowledge-drift-pending w/ per-service inventory + reconcile action), drift clear (removes marker + rebuilds FTS5 index), status now reports drift marker (dual names canonical-wins per 16118989), _help.py drift epilog + topic, mercury test_otel_drift contract ported to 7 tests. E2E: real mercury/infra read-only probe (17 services, legacy marker PRESENT, 16 drifted services/198 files, no writes); fixture round-trip drift->marker->clear+index rebuild. 71 pkg tests pass.",
+        "closed_at": "2026-08-27T23:36:27Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T21:08:14Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T23:08:13Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-6z6",
+            "issue_id": "xtrm-6z6.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "PROBLEM: drift detection is a mercury/infra-local mechanism (.xtrm/.service-skills-drift-pending marker + /updating-service-skills + last_sync_ref stamp). Not portable; other repos get nothing.\nDESIGN: promote to package CLI: `service-knowledge drift` (compare last_sync_ref -> HEAD touched service files; write .service-knowledge-drift-pending marker w/ per-service inventory like mercury's), `service-knowledge status` (read marker + registry), reconcile stays skill-driven (/updating-service-skills -> cataloger) then stamps last_sync_ref and triggers index rebuild. Port/reference: mercury/infra tests/test_otel_drift.py as contract seed. Agent contract: drift check on session start is advisory; update suggested, never required; index rebuild AFTER reconcile.\nSUCCESS: any repo with a registry gets drift markers on schema/source change; status output = single source of truth consumed by ext v1.\nVALIDATION: port test_otel_drift.py contract to pkg tests; e2e on a fixture repo: touch service file -> drift subcommand writes marker with correct file list.\nNON_GOALS: no daemon/watcher; drift computed on-demand (session start + explicit call).\n",
+        "id": "xtrm-6z6.2",
+        "issue_type": "feature",
+        "notes": "Layout contract: .xtrm/skills/<pack>/service-knowledge/services/<id>/SKILL.md (pkg _help.py:244); drift markers should live at pack/<umbrella>/ level; last_sync_ref semantics per registry.\nPRE-MERGE BLOCKER found in coordinator review of xtrm-6z6.1 delivery: ext index.ts DRIFT_MARKER_REL hardcodes only .xtrm/.service-knowledge-drift-pending — wave-1 repos still carry legacy .xtrm/.service-skills-drift-pending (mercury/infra reality), so drift status reports 'absent' on a repo with a pending legacy marker. Fix before merge: check both names (new wins), regression test with both markers. CLI help surface of the pkg remains untouched by the ext work (repo boundary) — drift/status CLI subcommands + _help.py epilogs land with THIS bead.\nlegacy marker compat shipped in ext (core commit 16118989): hasDriftMarker + driftMarkerPath check both .xtrm/.service-knowledge-drift-pending and legacy .xtrm/.service-skills-drift-pending (canonical wins); status/context surface actual marker path; verified on mercury/infra (legacy marker now reported PRESENT). 4 regression tests.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-27T23:29:39Z",
+        "status": "closed",
+        "title": "drift loop generalization: marker + last_sync_ref + reconcile flow in service-knowledge pkg",
+        "updated_at": "2026-08-27T23:36:27Z"
+      }
+    },
+    "xtrm-6z6.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "commit-corpus fallback doctrine mirrored: pkg README agent-facing section + drift CLI surface (xtrm worktree 9606a34), skills/using.md absent-or-stale section, core ext README 'When knowledge is absent or stale' (5851d42e), specialist prompt reconcile command name + drift doctrine (812280fc). Vocabulary audit: service-registry.json / /updating-service-knowledge / last_sync_ref agree across all four surfaces; zero stale /updating-service-skills action refs. Validation: fresh-session probe in mercury/infra — agent with doctrine in context PROCEEDS via commit corpus on drifted repo, never blocks. 138 pkg tests + specialists 12 audit tests + core 49 tests all pass.",
+        "closed_at": "2026-08-27T23:40:12Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T21:08:15Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T23:08:15Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-6z6",
+            "issue_id": "xtrm-6z6.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "PROBLEM: agents have no doctrine for stale/absent service-knowledge; they either block on updating it or hallucinate.\nDESIGN: doctrine: commits are first-class memory. Absent/stale registry -> per-file git log -p --follow + git log --grep corpus + diff vs last_sync_ref ARE the knowledge. Never block on updating service-knowledge: use stale data, suggest update, continue. Partially materialized in-session: global system-prompt block landed (~/.pi/agent/APPEND_SYSTEM.md, service-knowledge/commit-memory policy). REMAINING: mirror doctrine into (a) service-knowledge pkg README/docs (agent-facing section), (b) /scope + /using-service-skills skills if present, (c) extension guidance text so the prompt block and tool guidance agree on names (service-registry.json, /updating-service-skills, last_sync_ref).\nSUCCESS: same vocabulary across prompt, docs, extension; a fresh agent in a stale-knowledge repo proceeds via commit corpus without asking.\nVALIDATION: docs review; manual fresh-session probe in mercury/infra.\nNON_GOALS: no automation for the fallback beyond guidance.\n",
+        "id": "xtrm-6z6.3",
+        "issue_type": "feature",
+        "notes": "PROMPT BLOCK LANDED in-session (~/.pi/agent/APPEND_SYSTEM.md block 4: registry->commit-corpus->bd-memories priority + drift doctrine). Remaining: mirror doctrine into pkg docs + skills + extension guidance text.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-27T23:36:47Z",
+        "status": "closed",
+        "title": "commit-corpus fallback doctrine: docs + agent-facing guidance (system-prompt block landed)",
+        "updated_at": "2026-08-27T23:40:12Z"
+      }
+    },
+    "xtrm-6z6.4": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "kernel binding: when cwd has canonical service registry, python-kernel driver pre-imports installed service_knowledge (TS resolves path venv-aware via pythonBin -> PI_SK_PACKAGE_PATH; driver mounts at boot + after reset; failures to sk_errors never fatal). sk_rebuild() in-kernel index rebuild rides _AUDIT. E2E mercury/infra read-only: in-kernel 1 pack/17 services matches CLI exactly; search hits; fixture sk_rebuild items:1 + audit entry. 4 unit tests (gating present/absent, mount, audit). Core commit ff362610. 28 python-kernel tests pass.",
+        "closed_at": "2026-08-28T00:23:56Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T21:08:17Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T23:08:16Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-6z6",
+            "issue_id": "xtrm-6z6.4",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-27T23:08:17Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-6z6.1",
+            "issue_id": "xtrm-6z6.4",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 0,
+        "description": "PROBLEM: drift checks + index rebuild are CLI round trips today; with skillbridge (core xtrm-h7uwi.1) they become in-kernel imports.\nDESIGN: when registry present in cwd, python-kernel driver prelude ALSO mounts the installed service_knowledge package (sys.path or venv-aware) and pre-imports it, mirroring the extension's gating signal. Model experience: import service_knowledge; service_knowledge.drift.check(); service_knowledge.index.rebuild(). Index writes ride the audit seam (xtrm-h7uwi.3) so host sees mutations.\nSUCCESS: drift check + rebuild runnable from one cell; extension and kernel agree on registry presence.\nVALIDATION: fixture repo: in-kernel drift.check() matches CLI output.\nNON_GOALS: no kernel-only tool surface replacing the extension.\n",
+        "id": "xtrm-6z6.4",
+        "issue_type": "feature",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "started_at": "2026-08-28T00:14:00Z",
+        "status": "closed",
+        "title": "kernel binding: service_knowledge importable in python-kernel (blocks on core xtrm-h7uwi.1)",
+        "updated_at": "2026-08-28T00:23:56Z"
+      }
+    },
+    "xtrm-6z6.5": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Relocation complete + verified: ext lives at xtrm packages/service-knowledge-ext (@jaggerxtrm/pi-service-knowledge, pi.extensions key fixed by coordinator 7d766bd), xtrm main fast-forwarded (4 linear commits A/B/C/fix), core retired 56d4dec3, specialists wiring 57fbbfb9, enrolled in live settings, enrolled-path e2e green (mercury/infra discovery + zero-surface + coexistence), stale ~/.pi/agent/local/pi-extensions deleted with explicit operator approval (660K, unreferenced, v0.11.6).",
+        "closed_at": "2026-08-28T00:13:42Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T23:29:10Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-28T01:29:09Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-6z6",
+            "issue_id": "xtrm-6z6.5",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "PROBLEM: The service-knowledge TS extension mirrors contracts owned by the xtrm-repo Python package (find_umbrella_packs, registry path, drift markers, last_sync_ref, reconcile command). Today that contract crosses repos (pkg=xtrm, ext=core/pi-extensions), forcing cross-repo copy discipline on every pkg evolution. Operator direction: ext moves to THIS repo, individually packaged; python-kernel STAYS in core pi-extensions (operator agreed: domain-knowledge ext co-locates with its pkg; agent-critical kernel stays bundled).\n\nSTEPS:\n1. New npm pi-package (e.g. packages/service-knowledge-ext in xtrm): package.json with keywords [\"pi-package\"], pi.extensions entry, files, release script (copy pattern from core release:pi-extensions).\n2. git mv ext sources + tests from core/packages/pi-extensions/extensions/service-knowledge (post-16118989 state incl. legacy-marker fix); keep MIGRATION_NOTES pointing forward.\n3. Retire core-side ext (manifest.disabled with reason) so the bundle stops shipping it.\n4. specialists wiring: catalog entry package field -> new npm package name; session.ts resolver extPath adapts to new layout (precedent: resolvePiExtensionsPythonKernelRuntime, src/pi/session.ts:267).\n5. Enrollment: settings source-checkout entries updated; retire stale ~/.pi/agent/local/pi-extensions divergence in same pass (operator pre-approved deletion of that dead copy).\n6. E2E: fresh pi session in registry repo (mercury/infra) sees context note + status via NEW package; registry-less repo zero surface; specialists smoke: service-knowledge-sync still gets python tool + knowledge recipes; core pi-extensions suite green WITHOUT the ext; new package suite green.\nNON_GOALS: python-kernel stays put; no npm publish without operator; xtrm-ui and other extensions untouched.\nSEQUENCE: after 6z6.2+6z6.3 land (this is the 6z6 epic tail; contracts co-evolve there first).\n",
+        "id": "xtrm-6z6.5",
+        "issue_type": "chore",
+        "notes": "E2E verified: new package @jaggerxtrm/pi-service-knowledge works on mercury/infra (context note 17 services + legacy marker PRESENT + status command); registry-less zero surface; specialists session gets python tool + recipes; core suite green WITHOUT ext (32 pass); new package suite 16 pass. Staged commits: core 56d4dec3 (retire), xtrm worktree f3764e8 (new pkg), specialists 57fbbfb9 (wiring). READY TO DELETE STALE ~/.pi/agent/local/pi-extensions (v0.11.6, unreferenced, dead weight) — awaiting operator approval.\nFINAL GATE PASSED (enrolled path only, no -e flags): mercury/infra via ~/.pi/agent/settings.json package discovery — service-knowledge:status registered + context note 17 services (manifest fix 7d766bd validated end-to-end); registry-less repo zero surface; python tool (core bundle) coexists (42). Ready for deletion approval of ~/.pi/agent/local/pi-extensions — operator has NOT approved rm yet; holding.\nFINAL GATE PASSED (enrolled path only, no -e flags): mercury/infra via ~/.pi/agent/settings.json package discovery — service-knowledge:status registered + context note 17 services (manifest fix 7d766bd validated end-to-end); registry-less repo zero surface; python tool (core bundle) coexists (42). Ready for deletion approval of ~/.pi/agent/local/pi-extensions — operator has NOT approved rm yet; holding.\nFINAL GATE PASSED (worker, enrolled-path-only e2e): mercury/infra context note + status command registered via pure package discovery (RPC get_commands), 17 services + legacy drift marker surfaced; registry-less repo zero surface; coexistence with core bundle python tool verified. Relocation staged across core 56d4dec3 / xtrm main 7d766bd / specialists 57fbbfb9. Sole remaining step: operator-approved rm of stale ~/.pi/agent/local/pi-extensions.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-27T23:40:35Z",
+        "status": "closed",
+        "title": "relocate service-knowledge TS ext from core/pi-extensions to xtrm as standalone npm pi-package",
+        "updated_at": "2026-08-28T00:13:42Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-27T23:08:12Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-6z6",
+        "issue_id": "xtrm-6z6.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-6z6.1",
+      "source_field": "dependencies",
+      "target": "xtrm-6z6",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T23:08:13Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-6z6",
+        "issue_id": "xtrm-6z6.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-6z6.2",
+      "source_field": "dependencies",
+      "target": "xtrm-6z6",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T23:08:15Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-6z6",
+        "issue_id": "xtrm-6z6.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-6z6.3",
+      "source_field": "dependencies",
+      "target": "xtrm-6z6",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T23:08:17Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-6z6.1",
+        "issue_id": "xtrm-6z6.4",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-6z6.4",
+      "source_field": "dependencies",
+      "target": "xtrm-6z6.1",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T23:08:16Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-6z6",
+        "issue_id": "xtrm-6z6.4",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-6z6.4",
+      "source_field": "dependencies",
+      "target": "xtrm-6z6",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-28T01:29:09Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-6z6",
+        "issue_id": "xtrm-6z6.5",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-6z6.5",
+      "source_field": "dependencies",
+      "target": "xtrm-6z6",
+      "type": "parent-child"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-6z6",
+  "root_title": "service-knowledge as first-class pi extension: self-gating, drift-surfacing, commit-corpus fallback",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

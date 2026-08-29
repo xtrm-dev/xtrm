@@ -1,0 +1,45 @@
+{
+  "content_sha256": "6606843d85d636057bd86f5fb6c1044d46439fa72523a05e28851fe0dd517d48",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-auk"
+  },
+  "issues": {
+    "xtrm-auk": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Fixed: xtprompt now rejects clarification-only model output, retries as an actionable rewrite, and both reported examples pass live smoke tests.",
+        "closed_at": "2026-08-14T18:42:44Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T18:37:47Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## Problem\nThe installed xtprompt CLI can emit a bare clarification question as its final successful output. Reproductions include `xtprompt \"hello this is a test\"` followed by clarification answer `test`, and a review request that returns only a question about package/build commands. The CLI must produce an actionable enhanced prompt, not answer the draft or ask further questions in model output.\n\n## Acceptance criteria\n- Add regression coverage for model responses that are only clarification questions.\n- Strengthen the shared prompt contract or output validation so successful output is an actionable rewritten prompt.\n- Preserve the existing single CLI clarification for vague TTY input.\n- Verify both reported examples through authenticated smoke tests.\n- Keep existing tests and coverage gates passing.",
+        "id": "xtrm-auk",
+        "issue_type": "bug",
+        "notes": "Root cause: BASE_RULES and intent instructions told the model to clarify missing facts, while completeRewrite accepted every non-empty <xtprompt> block. Fix: require actionable rewrites, encode missing facts inside the prompt, detect one-line clarification-only questions, and retry once with an explicit correction. Verification: 20/20 tests pass; coverage 92.58% lines, 82.81% branches, 90.63% functions; syntax checks and npm audit pass; both user-reported live authenticated examples now return actionable prompts. GitNexus detect_changes found only the expected prompt-construction/rewrite flow.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-14T18:37:52Z",
+        "status": "closed",
+        "title": "xtprompt returns clarification questions instead of rewritten prompts",
+        "updated_at": "2026-08-14T18:42:44Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-auk",
+  "root_title": "xtprompt returns clarification questions instead of rewritten prompts",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

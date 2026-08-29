@@ -1,0 +1,44 @@
+{
+  "content_sha256": "35c96339725f6186a8a241fae6643bf661daed9619810321932ed83c7b2d7e98",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-c8w"
+  },
+  "issues": {
+    "xtrm-c8w": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Doc findings block added in worktree; PR follows.",
+        "closed_at": "2026-08-12T02:08:23Z",
+        "comment_count": 0,
+        "created_at": "2026-08-12T02:07:27Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Add the code-verified findings from PrimeIntellect-ai/prime-agent packages read (kernel/host bridge, version contract, interrupt ladder, in-process RLM children, snapshot semantics, doctrine prompts, python runtime package, fork evidence) to docs/shared/xtrm-native-harness-on-pi-architecture-exploration-2026-08-09.md under one block marked 'EXPLORE FURTHER AND DONT' TAKE AS AUTHORATIVE EVIDENCE'. Open PR from worktree, merge, delete worktree.",
+        "id": "xtrm-c8w",
+        "issue_type": "chore",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "started_at": "2026-08-12T02:07:33Z",
+        "status": "closed",
+        "title": "Fold prime-agent code findings into native-harness exploration doc",
+        "updated_at": "2026-08-12T02:08:23Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-c8w",
+  "root_title": "Fold prime-agent code findings into native-harness exploration doc",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

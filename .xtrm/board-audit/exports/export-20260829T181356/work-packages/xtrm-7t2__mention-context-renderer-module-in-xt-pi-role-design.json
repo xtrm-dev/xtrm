@@ -1,0 +1,44 @@
+{
+  "content_sha256": "b4bc4274baa8fd960b0bbfbda4f92bc70362a3956817c0c197451fbbde28bbb8",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-7t2"
+  },
+  "issues": {
+    "xtrm-7t2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Added explicit context-renderer.ts extraction point and runner.ts consumer relationship to design doc.",
+        "closed_at": "2026-07-06T15:26:20Z",
+        "comment_count": 0,
+        "created_at": "2026-07-06T15:25:46Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Add explicit src/specialist/context-renderer.ts extraction point and runner.ts consumer relationship to xt pi role design doc.",
+        "id": "xtrm-7t2",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-07-06T15:26:02Z",
+        "status": "closed",
+        "title": "Mention context-renderer module in xt pi role design",
+        "updated_at": "2026-07-06T15:26:20Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-7t2",
+  "root_title": "Mention context-renderer module in xt pi role design",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

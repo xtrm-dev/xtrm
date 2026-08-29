@@ -1,0 +1,95 @@
+{
+  "content_sha256": "41663f5d1ee11a82e24f40b8b9c24820a9248c3f3c7a04c0a2ff3f0c71fbe047",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-26T05:07:37Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy.2",
+        "issue_id": "xtrm-clg",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-clg",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy.2",
+      "target_present_in_snapshot": true,
+      "target_title": "ChainLoader: load all ChainSource variants to ChainDefinition",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-26T05:07:38Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy.3",
+        "issue_id": "xtrm-clg",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-clg",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy.3",
+      "target_present_in_snapshot": true,
+      "target_title": "Pure compiler -> ResolvedChain + freeze semantics",
+      "type": "blocks"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-clg"
+  },
+  "issues": {
+    "xtrm-clg": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via PR #101 (merged 4dc2cef): SRE workflow authored as data file (JsonChainSource), loaded+compiled through generic pipeline, EXACT-FINGERPRINT parity with hard-coded topology, zero-topology-code proof over all generic layers. 17 parity tests pass; review PASS on exact head 067dfce. Epic close memo items recorded: F1 coordinator-class vocabulary gap; F3 terminal-disposition runtime ownership.",
+        "closed_at": "2026-08-26T03:25:33Z",
+        "comment_count": 0,
+        "created_at": "2026-08-26T03:07:38Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-26T05:07:38Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy.3",
+            "issue_id": "xtrm-clg",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-26T05:07:37Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy.2",
+            "issue_id": "xtrm-clg",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 2,
+        "dependent_count": 0,
+        "description": "Final epic milestone per xtrm-qcy contract and Q27 retirement test: same behavior from a data-defined chain through the generic runtime, ZERO SRE-specific topology code.\n\nScope:\n1. Author the SRE workflow as a JsonChainSource (data file, not TS) using the qcy.1 schemas: steps/classes/specialist refs/deps/routes matching the current hard-coded sre-team topology in experiments/agentsession-sre-chain-vertical-slice/src/chain/ (types.ts/topology.ts are the source of truth for shape).\n2. Load via ChainLoader (qcy.2), compile via pure compiler (qcy.3), freeze.\n3. Parity proof: structural equivalence between the data-defined ResolvedChain and the hard-coded topology — same entry step, same step set, same dependency edges, same specialist bindings; plus behavioral parity at the simulation seam where feasible without new runtime work (this bead does NOT build new reducer/scheduler/runtime — it proves the DATA path reproduces the TOPOLOGY; runtime parity execution is explicitly out of scope if it requires runtime changes).\n4. Any SRE concept discovered still living in generic layers during migration → defect finding, fix or file.\n\nAcceptance: zero imports of sre-team topology constants outside the experiment's own legacy files; the data-defined chain compiles to a frozen ResolvedChain whose structure matches the hard-coded one (fingerprint-level comparison documented); findings recorded.",
+        "id": "xtrm-clg",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-26T03:08:28Z",
+        "status": "closed",
+        "title": "Migrate SRE chain topology TS → data-defined ChainDefinition + parity proof",
+        "updated_at": "2026-08-26T03:25:33Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-clg",
+  "root_title": "Migrate SRE chain topology TS → data-defined ChainDefinition + parity proof",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

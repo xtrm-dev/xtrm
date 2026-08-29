@@ -1,0 +1,72 @@
+{
+  "content_sha256": "241baf1180d3fea086f306635a0c1dc699ebb25a12f96cd5f39666ae82edc6bc",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-14T20:02:49Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-s6s",
+        "issue_id": "xtrm-x8n",
+        "metadata": "{}",
+        "type": "discovered-from"
+      },
+      "source": "xtrm-x8n",
+      "source_field": "dependencies",
+      "target": "xtrm-s6s",
+      "target_present_in_snapshot": true,
+      "target_title": "Interactive xtprompt refinement and clipboard acceptance",
+      "type": "discovered-from"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-x8n"
+  },
+  "issues": {
+    "xtrm-x8n": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Added and verified a one-line interactive startup hint pointing users to :help.",
+        "closed_at": "2026-08-14T20:04:25Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T20:02:48Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T20:02:49Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-s6s",
+            "issue_id": "xtrm-x8n",
+            "metadata": "{}",
+            "type": "discovered-from"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\nInteractive mode starts by displaying the rewritten prompt and `xtprompt>` without telling users that commands exist. Users should discover at least the `:help` command without reading external documentation.\n\n## SUCCESS\nEvery interactive session displays one concise startup hint before the first command prompt, naming `:help` and indicating that free text refines the current prompt.\n\n## SCOPE\n`packages/xtprompt/src/app.mjs`, focused package tests, and README only if behavior text needs synchronization.\n\n## NON_GOALS\nNo full command list on every turn, no full-screen menu, and no command redesign.\n\n## CONSTRAINTS\nKeep the hint to one line, print it once per interactive session, preserve stdout isolation, and do not affect one-shot mode.\n\n## VALIDATION\n- [ ] A regression test asserts the startup hint contains `:help`.\n- [ ] The hint appears exactly once even after refinements.\n- [ ] Existing interactive and one-shot tests pass.\n\n## OUTPUT\nReport changed files and test evidence.",
+        "id": "xtrm-x8n",
+        "issue_type": "task",
+        "notes": "Added one startup line: `xtprompt: Enter refinement text, or :help for commands.` It prints once before the first interactive input. Regression test asserts exactly one occurrence. Full tests and coverage pass; syntax checks pass; GitNexus impact LOW and final scope contains only runInteractive plus README.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-14T20:02:49Z",
+        "status": "closed",
+        "title": "Show interactive shortcut hint on startup",
+        "updated_at": "2026-08-14T20:04:25Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-x8n",
+  "root_title": "Show interactive shortcut hint on startup",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

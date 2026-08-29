@@ -1,0 +1,44 @@
+{
+  "content_sha256": "04aa2b6808829dfbfa8baa45e6d15e98b8fc49922f9f972bab3514d4aeeb8499",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-6f5"
+  },
+  "issues": {
+    "xtrm-6f5": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Updated xt pi role integration design doc with research findings, diagrams, simplified flows, phases, and guardrails.",
+        "closed_at": "2026-07-06T13:37:41Z",
+        "comment_count": 0,
+        "created_at": "2026-07-06T13:19:47Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Update docs/specialists/xt-pi-role-context-integration-brief.md with core/specialists research findings, diagrams, simplified explanations, and final bridge design.",
+        "id": "xtrm-6f5",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-07-06T13:19:58Z",
+        "status": "closed",
+        "title": "Update xt pi role integration design doc",
+        "updated_at": "2026-07-06T13:37:41Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-6f5",
+  "root_title": "Update xt pi role integration design doc",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

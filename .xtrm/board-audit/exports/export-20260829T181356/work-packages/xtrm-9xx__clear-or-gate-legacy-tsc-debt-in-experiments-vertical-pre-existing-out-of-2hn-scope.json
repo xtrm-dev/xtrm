@@ -1,0 +1,39 @@
+{
+  "content_sha256": "3457f92bbc95046979cdf25463de3db9c3c820fd606aedc40dd7e2087c96d439",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-9xx"
+  },
+  "issues": {
+    "xtrm-9xx": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-08-27T12:34:10Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "id": "xtrm-9xx",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "status": "open",
+        "title": "Clear or gate legacy tsc debt in experiments vertical (pre-existing, out of 2hn scope)",
+        "updated_at": "2026-08-27T12:34:10Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-9xx",
+  "root_title": "Clear or gate legacy tsc debt in experiments vertical (pre-existing, out of 2hn scope)",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

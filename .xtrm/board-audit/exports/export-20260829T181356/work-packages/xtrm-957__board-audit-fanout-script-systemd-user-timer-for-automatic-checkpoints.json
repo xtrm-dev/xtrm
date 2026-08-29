@@ -1,0 +1,44 @@
+{
+  "content_sha256": "63c137ffad120ea170a8ca2ce30c07a6c9fc5b5e5818a65f9cc7bbdeeb2f29da",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-957"
+  },
+  "issues": {
+    "xtrm-957": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Fanout script committed; systemd user service+timer installed and verified live (infra auto-pushed 5e4e3db on first run; no-op path clean across all 12 repos).",
+        "closed_at": "2026-08-22T02:33:00Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T02:29:30Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Wrap board-audit-export-wt in a per-repo loop and fire it from a systemd user timer (every 15 min) so export surfaces update without manual invocation. Linger already enabled. Closes the trigger gap left open by xtrm-cv3 / follow-up bead.",
+        "id": "xtrm-957",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-22T02:31:07Z",
+        "status": "closed",
+        "title": "board-audit: fanout script + systemd user timer for automatic checkpoints",
+        "updated_at": "2026-08-22T02:33:00Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-957",
+  "root_title": "board-audit: fanout script + systemd user timer for automatic checkpoints",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

@@ -1,0 +1,41 @@
+{
+  "content_sha256": "693767a44894bdd442fe153fd62a35c7f5deaa573c2234a5ca079d2114f300b5",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-1jp"
+  },
+  "issues": {
+    "xtrm-1jp": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "close_reason": "Landed: substrate §3.1 invariant (closed:failed is coordinator verdict) + §4.3 role 5 (incident handler, full Italian text with chain.incident.* + 7 runtime.* failure classes + reducer-purity constraint) + channels §7 runtime.* vocab expansion + new chain.incident.* family with explanatory blockquote. Plus ripple: chain_templates.md §2.9 + §3 incident-policy table for all 15 templates; forensic-event-contract.md §6 new chain.incident.* family with cardinality/redaction. All cross-references resolve.",
+        "closed_at": "2026-06-14T12:59:38Z",
+        "comment_count": 0,
+        "created_at": "2026-06-12T23:40:08Z",
+        "created_by": "dawid",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Folds three coupled findings from the premortem cross-doc audit (~/dev/xtrm/docs/premortem-substrate/) into substrate_design_it.md.\n\n# Problem\n\n§4.3 enumerates 4 coordinator roles: (1) entry gate, (2) borderline judge, (3) cross-chain hygiene via pulse, (4) close-time judge with memory distillation. None of them is the *runtime incident handler*. The close-time fallback covers \"coordinator cant write coordinator.release after N respawns → §5.10 failure-distillation terminal fallback\" — but that is the LLM-coordinator failing to *close* cleanly. It does not cover mid-run mechanical failures:\n\n- executor died mid-step (no agent_end within budget)\n- gate dispatched but no verdict within T\n- worktree diverged (base moved, branch cant FF)\n- evidence ref broken (referenced file/event missing)\n- pulse delivery failed after N attempts (cross-chain hygiene)\n- budget exhausted mid-step\n- recursion cap on coordinator-restitch loops\n\nToday these fall through to the orchestrator. The orchestrator owns *vision* (§4.3 due giudici, scope distinti), not intra-chain mechanics — wrong authority for runtime triage. Chain ends up closed:failed by runtime fallthrough rather than by an explicit judge verdict.\n\n# Proposal\n\n## 1. Add coordinator role #5 in §4.3 (incident handler durante esecuzione)\n\n> Il reducer è anche detector di failure meccanici. Su categorie deterministiche tenta recovery automatica (idempotency-keyed retry per transient errors, requeue per pulse dropped, respawn-via-journal §5.9 per context-window). Quando il recovery deterministico esaurisce il retry_budget o la failure è judgment-shaped (es. \"executor morto dopo write parziale al worktree\"), emette `chain.incident{kind, detected_at, mechanical_recovery_attempts, evidence_refs}`. Il coordinator sottoscrive `chain.incident.*` e decide entro autonomy: `retry_with_modifier`, `restitch_from_evidence:<ref>`, `escalate`, oppure `verdict: failed` con distillazione esplicita.\n\n## 2. Add runtime.* failure kinds to channels §7 vocabulary\n\n- runtime.participant_died\n- runtime.gate_unresponsive\n- runtime.worktree_diverged\n- runtime.evidence_ref_broken\n- runtime.pulse_delivery_failed\n- runtime.budget_exhausted_mid_step\n- runtime.recursion_cap\n\n(channels §7 already defines runtime.message_rejected and runtime.delivery_failed — extends the same family.)\n\n## 3. Add invariant to §3.1 (due layer di giudizio sempre presenti)\n\n> Un chain non fallisce mai per runtime fallthrough. Raggiunge `closed:done` via `coordinator.release` o `closed:failed` via verdict esplicito del coordinator. Lunico modo in cui un chain può morire SENZA verdict del coordinator è substrate-level unavailability (state.db unwritable, daemon crash) — failure class separata, owned dal substrate kernel, propagata come `substrate.unavailable` allorchestrator.\n\n## 4. Critical constraint: reducer stays pure (channels §11)\n\nDetection happens IN the reducer (mechanical state observation). The wake-coordinator intent is emitted by the after-hook with an idempotency key — exactly the pattern §11 already enforces for \"reducer pure, side effects in after-hook\". This is why detection must NOT call LLM/wake directly; it emits a chain.incident event and the after-hook is what actually wakes the coordinator subscriber.\n\n## 5. Cost containment\n\n- Reducer attempts deterministic mechanical recovery FIRST (idempotent retry, requeue) — most transient failures get fixed without waking the coordinator\n- Coordinator only wakes when recovery_attempts >= threshold OR failure class is judgment-shaped\n- Coordinator subscribes to chain.incident.* (selective subscription per channels §8 audience model) — does not read runtime.* observability stream\n- Existing autonomy budget bounds restitch loops (§5.10 hard_cap pattern)\n\n# Why\n\nPremortem reason §6 (chain coordinator over-specified) PARTIAL verdict was driven by missing crisp policy for runtime incident handling. The audit also flagged §4.3 close-time fallback as the only documented failure path — confirming the runtime gap. User instinct (\"chain shall not entirely fail by design — but I might be wrong\") maps to the weaker, defensible form: chain failure should be a *judge decision*, never a *runtime outcome*. Kernel-level disasters still terminate, but at a different layer.\n\n# Scope\n\n- docs/substrate/substrate_design_it.md §3.1 (invariant), §4.3 (5th role)\n- docs/channels/channels_plain_it.md §7 (runtime.* kinds vocabulary)\n- docs/premortem-substrate/audit-result.md (note R6 revised: PARTIAL → ADDRESSED once 5th role + invariant are folded in)\n\n# Non-goals\n\n- Implementing the runtime detector in specialists code (substrate is design-only until the substrate-bridge epic ships)\n- Defining the exact wire format of chain.incident (channels §11 idempotency key shape will dictate)\n- Resurrection / \"all participants died\" recovery — out of scope; substrate.unavailable handles that\n- sp merge / sp epic merge rework (separate epic per CLAUDE.md gotcha)\n\n# Validation\n\n- Each runtime.* kind listed in §4.3 maps to an existing failure mode the orchestrator handles today\n- §3.1 invariant survives a \"what if state.db dies\" probe (answer: substrate.unavailable, different class)\n- Reducer purity (channels §11) is preserved — detection IN reducer, wake intent in after-hook with idempotency key\n- Cost-bounding reasoning in #5 above remains valid given the channels §8 audience model\n\n# Output\n\nThree doc patches landed in substrate_design_it.md + channels_plain_it.md + a short note in audit-result.md updating R6.\n\n# Discovered from\n\nPremortem cross-doc audit ~/dev/xtrm/docs/premortem-substrate/ (synthesis.md + audit-result.md, 2026-06-13 session).",
+        "id": "xtrm-1jp",
+        "issue_type": "task",
+        "priority": 2,
+        "status": "closed",
+        "title": "substrate §4.3: add 5th coordinator role (incident handler) + runtime.* failure kinds + closed:failed-as-verdict invariant",
+        "updated_at": "2026-06-14T12:59:38Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-1jp",
+  "root_title": "substrate §4.3: add 5th coordinator role (incident handler) + runtime.* failure kinds + closed:failed-as-verdict invariant",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

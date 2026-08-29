@@ -1,0 +1,44 @@
+{
+  "content_sha256": "4421c595ceee8a38fb1d492d6cf97c8dae3b89b2cbee55b36af23b35969f4a11",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-aax"
+  },
+  "issues": {
+    "xtrm-aax": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Folded tmux placement semantics and package-import correction into xt pi role design.",
+        "closed_at": "2026-07-06T15:22:07Z",
+        "comment_count": 0,
+        "created_at": "2026-07-06T15:19:46Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Update docs/specialists/xt-pi-role-context-integration-brief.md with tmux-active-session behavior, placement flags, parent metadata, and distinction from worktree --in-place.",
+        "id": "xtrm-aax",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-07-06T15:19:48Z",
+        "status": "closed",
+        "title": "Fold tmux placement semantics into xt pi role design",
+        "updated_at": "2026-07-06T15:22:07Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-aax",
+  "root_title": "Fold tmux placement semantics into xt pi role design",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

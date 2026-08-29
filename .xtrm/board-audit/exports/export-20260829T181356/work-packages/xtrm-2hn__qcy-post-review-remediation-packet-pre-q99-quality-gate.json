@@ -1,0 +1,507 @@
+{
+  "content_sha256": "8619e2415d24be1b9917f53b333617908ff54865a5e87a57a544f7c6d83bc61d",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:26Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy",
+        "issue_id": "xtrm-2hn",
+        "metadata": "{}",
+        "type": "discovered-from"
+      },
+      "source": "xtrm-2hn",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy",
+      "target_present_in_snapshot": true,
+      "target_title": "Native chain runtime: make SRE chain the first data-defined XTRM chain",
+      "type": "discovered-from"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:36Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-1xn",
+        "issue_id": "xtrm-2hn.8",
+        "metadata": "{}",
+        "type": "discovered-from"
+      },
+      "source": "xtrm-2hn.8",
+      "source_field": "dependencies",
+      "target": "xtrm-1xn",
+      "target_present_in_snapshot": true,
+      "target_title": "Communication adversarial/recovery acceptance suite",
+      "type": "discovered-from"
+    }
+  ],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-2hn.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2hn.2"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2hn.3"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2hn.4"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2hn.5"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2hn.6"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2hn.7"
+      },
+      {
+        "children": [],
+        "id": "xtrm-2hn.8"
+      }
+    ],
+    "id": "xtrm-2hn"
+  },
+  "issues": {
+    "xtrm-2hn": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "EPIC COMPLETE via 8/8 child closures (subagent-executed lanes): R1 gate-class import preservation, R2 FINALIZE uncertainty-before-mandatory precedence, R3 voidObligation precondition-first two-journal safety (scope-corrected anchor), R4 global-id cursors + fail-closed container visibility, R5 coordinator vocabulary resolved as structural class w/ decision record, R6 CompiledCapabilityBounds rename w/ ADR-004 boundary gate, R7 hygiene purge/ignores/settings portability (68 staged deletions pending operator commit), R8 adversarial expansion (idempotency-race + mutual-cycle cases, canonized prior expectations). FINAL BATTERY on quiet host: 292 pass / 6 fail where ALL 6 are pre-existing beads-adapter env failures (stale bd binary vs Dolt v65 schema) — baseline shape preserved plus ~12 net new assertions across 298 tests. Verdict context: operator review PARTIAL satisfied for repair scope; runtime wiring remains gated to xtrm-q99 (C1.4/C1.5/I1.3/E1.4) which now dependency-unblocked from this packet. Follow-ups filed: xtrm-09y (registry hardening), xtrm-zxb (dead hooks), xtrm-9xx (legacy tsc debt). Work delivered as working-tree/vault-bot state per conservative git policy — no manual commits/pushes.",
+        "closed_at": "2026-08-27T12:36:20Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T10:51:26Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T12:51:26Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy",
+            "issue_id": "xtrm-2hn",
+            "metadata": "{}",
+            "type": "discovered-from"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "PROBLEM: Operator code-level review of closed epic xtrm-qcy (PRs #91-#101) returned PARTIAL: contract/compiler/parity programme legitimately complete; implementation not clean enough for runtime wiring. Four substantive defects (import gate loss, FINALIZE ordering, voidObligation two-journal mutation, cursor cross-contamination), F1 vocabulary gap, capability-grants naming hazard, hygiene regression. No architecture reset required - bounded repairs at seams the programme exposed.\n\nSUCCESS: All children closed; bun test green across experiments/agentsession-sre-chain-vertical-slice; xtrm-q99 unblocked by this packet (its C1.4/C1.5/I1.3/E1.4 gates remain independently binding).\n\nSCOPE: Single repo. R1 consumes specialists-repo formula corpus READ-ONLY (no code changes there). Context doc: docs/design/qcy-postreview-epic-plan.md (verified file:line anchors @ HEAD 688ea97).\n\nNON_GOALS: Do not reopen xtrm-qcy history. No new orchestration layers. Runtime wiring itself stays in xtrm-q99.",
+        "id": "xtrm-2hn",
+        "issue_type": "epic",
+        "notes": "Delivered & merged as PR #102 (squash 3c55fcd, base main): diff vs validated battery tree = exactly the 68 bytecode untracks; all R1-R8 content identical to tested state. Bytecode ignores on main prevent vault-bot re-adds going forward.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-27T10:51:43Z",
+        "status": "closed",
+        "title": "qcy post-review remediation packet (pre-q99 quality gate)",
+        "updated_at": "2026-08-27T16:12:43Z"
+      }
+    },
+    "xtrm-2hn.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Formula gate classes preserved end-to-end: chain-loader maps any gate:* label -> authored class 'gate' (gate > advisor > step precedence), tested across ALL 15 corpus assets (/home/dawid/dev/specialists/docs/design/roadmap/chain-templates) with count>0 guard; bug-asserting test replaced with positive coverage incl code-standard spot-proof (seconder/test-runner/obligations-scanner/reviewer = gate). Gate LEVEL (mandatory/final) residual-by-design: authored schema is strict without labels passthrough; recorded in bead notes. Evidence: bun tests/chain-loader.test.ts 33/0; sre-data-parity exact fingerprints unchanged; full EXP battery 292 pass / 6 pre-existing env fails. Delivered by subagent lane A.",
+        "closed_at": "2026-08-27T12:35:36Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T10:51:27Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T12:51:27Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn",
+            "issue_id": "xtrm-2hn.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "PROBLEM: ChainLoader formula import destroys gate semantics. Mapping contract (experiments/agentsession-sre-chain-vertical-slice/src/chain-loader/index.ts L23-48): advisor:* -> class advisor, everything else -> class step; gate:/edge:/scrutiny:/type: labels dropped as dispatcher metadata. Imported mandatory/final gates therefore compile into ResolvedChain as ordinary steps - this changes the meaning of existing compatibility assets, not just missing future functionality. tests/chain-loader.test.ts:91 asserts the buggy behavior (no imported step has class gate/routes/remediation): test encodes the bug instead of detecting it.\nAsset truth: 15-formula corpus at /home/dawid/dev/specialists/docs/design/roadmap/chain-templates/*.formula.json (READ-ONLY fixture). code-standard: seconder/test-runner/obligations-scanner carry gate:mandatory; reviewer carries gate:final.\n\nSUCCESS: Imported formulas preserve gate:* labels as authored class:\"gate\" positions through normalize -> ChainDefinition -> compileChain freeze. Spot-proofs required for code-standard, security-deep, reviewer: mandatory/final gates appear as gate-class authority positions, never plain steps.\n\nSCOPE: chain-loader mapping + required schema surface; loader test suite rewritten. Adversarial case folded here: \"formula gate labels survive import\". Regression against ALL 15 formula assets (every step authored with gate:* imports as class gate).\nNON_GOALS: No edits to the specialists repo corpus. edge:/scrutiny:/type: stay documented-dropped unless the compiler begins consuming them. No new loader source variants.\nCONSTRAINTS: sre-data-parity exact-fingerprint test must stay green (sre-team.chain.json contains no gate-labeled steps - verify, do not weaken the parity test).\nVALIDATION: bun test tests/chain-loader.test.ts then full bun test tests/ inside the experiment dir; reviewer PASS before close.\n",
+        "id": "xtrm-2hn.1",
+        "issue_type": "bug",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-27T11:06:08Z",
+        "status": "closed",
+        "title": "R1 Preserve formula gate classes through ChainLoader import",
+        "updated_at": "2026-08-27T12:35:36Z"
+      }
+    },
+    "xtrm-2hn.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Uncertainty now precedes the mandatory split: pending_external_observations classified over ALL binding records before clear/blocking branching => non-mandatory+pending yields UNCERTAIN (was: silent CLEAR). Refs/codes helpers shared so zero-uncertainty path is byte-identical legacy behavior; receipts consulted uniformly on uncertain path; determinism preserved. New precedence cases added (incl mixed mandatory-without-observation + non-mandatory-with-observation => UNCERTAIN). Evidence: finalize-enforcement 18/0, finalize 7/0, full battery green-noise-only. Delivered by subagent lane B.",
+        "closed_at": "2026-08-27T12:35:41Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T10:51:29Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T12:51:28Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn",
+            "issue_id": "xtrm-2hn.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "PROBLEM: checkFinalization (experiments/agentsession-sre-chain-vertical-slice/src/finalize/index.ts L107-124) splits downgraded vs blocking first and returns \"clear\" whenever blocking.length===0 BEFORE inspecting pending_external_observations; uncertainty codes are computed only on mandatory records. Result: non-mandatory obligation + unresolved external observation => FINALIZE clear. This contradicts PR #97's own claim (\"UNCERTAIN escalates regardless of mandatory flag\") and the R2.7 premise that uncertainty concerns whether an external effect happened, not record priority. Suite gap explains survival: tests exercise uncertainty only with mandatory:true.\n\nSUCCESS: ANY binding record (open or replied) with non-empty pending_external_observations yields UNCERTAIN, regardless of mandatory. Only after uncertainty is absent across ALL bindings: mandatory unresolved => BLOCKED (codes/receipts/deadline flow unchanged); non-mandatory unresolved/replied => clear + downgraded[] exactly as today. Verdict remains deterministic (records sorted by obligation_id, canonical code order).\n\nSCOPE: finalize/index.ts checkFinalization ordering + tests. Reuse existing reason codes; no FinalizeVerdict schema shape change expected.\nNON_GOALS: Receipts-triple logic untouched; expiry behavior untouched.\nVALIDATION: New adversarial cases: (a) non-mandatory + pending external observation -> UNCERTAIN; (b) mandatory + pending observation -> UNCERTAIN precedes BLOCKED classification consistently; existing mandatory/resolved cases stay green. bun test tests/finalize* then full suite.\n",
+        "id": "xtrm-2hn.2",
+        "issue_type": "bug",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-27T11:06:06Z",
+        "status": "closed",
+        "title": "R2 FINALIZE: unresolved external observation beats mandatory flag (non-mandatory + pending => UNCERTAIN)",
+        "updated_at": "2026-08-27T12:35:41Z"
+      }
+    },
+    "xtrm-2hn.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Two-journal mutation safety shipped after SCOPE CORRECTION (defect anchor was FinalizeController.voidObligation in src/finalize/index.ts L216-254, not obligation module): evidence-sink presence + entry construction + SettlementEvidenceEntrySchema.parse hoisted ABOVE ledger.journal.append; precondition failure = typed invalid_transition throw with ZERO durable events. Residual crash window documented inline and covered by reconcileOnLoad voided_without_evidence (test proves injected disk-full failure leaves exactly one voided event + reload reports reconciliation). obligation suite 26/0 (22 baseline + 4 new). Delivered by resumed subagent lane C.",
+        "closed_at": "2026-08-27T12:35:46Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T10:51:30Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T12:51:29Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn",
+            "issue_id": "xtrm-2hn.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "PROBLEM: voidObligation mutates the durable obligation journal before proving resolving-evidence storage exists. Order today: private append() persists to journal (src/obligation/index.ts L341-345), THEN opts.evidence absence throws, THEN evidence.append would run. Caller without an evidence journal ends in: obligation state voided-on-journal, resolving evidence absent, caller observed failure - exactly the unsafe state the two-journal review rule targets. PR #100 added load-time reconcileOnLoad detection of voided_without_evidence (L320-339): necessary recovery backstop, does not make the original mutation order correct.\n\nSUCCESS: Evidence-store precondition validated BEFORE any durable mutation: if store is missing/unusable => typed error, ZERO journal events written anywhere. If evidence append fails after the void event did persist, the defined recovery protocol applies and surfaces via the existing reconciliationReport on load; protocol documented inline where implemented.\n\nSCOPE: voidObligation flow + option validation in the obligation ledger module.\nNON_GOALS: No new transaction coordinator / journal unification unless achievable trivially through existing seams (guard + documented recovery beats building a protocol engine). registerRequest/request flows untouched.\nVALIDATION: Negative tests: (a) void with no evidence journal configured => throws AND zero journal events persisted; (b) injected evidence-append failure after void event => reload reports voided_without_evidence reconciliation entry. bun test tests/obligation* then full suite.\n",
+        "id": "xtrm-2hn.3",
+        "issue_type": "bug",
+        "notes": "SCOPE CORRECTION (2026-08-27): Defect anchor is EXP/src/finalize/index.ts FinalizeController.voidObligation L216-254 (ledger.journal.append L233 BEFORE SettlementEvidenceEntrySchema.parse L243 / opts.evidence guard L244), not src/obligation/index.ts as originally written — obligation/index.ts sites cited were generic append + reconcileOnLoad backstop only. Expanded edit surface: src/finalize/index.ts void flow + tests/obligation.test.ts coverage. Fix plan validated on-site by claimant session.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-27T11:06:11Z",
+        "status": "closed",
+        "title": "R3 voidObligation two-journal safety: validate evidence store before any durable mutation",
+        "updated_at": "2026-08-27T12:35:46Z"
+      }
+    },
+    "xtrm-2hn.4": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Cursor canon adopted, intermediate abstraction NOT preserved: store assigns global monotonic id at enqueue (SendResult.id); cursors per (channel_id,participant_id) as ChannelCursors{last_read_message_id,last_ack_message_id}; seq demoted display-only everywhere; multi-channel contamination killed by regression (read-A-high => B-low unread); visibility fail-closed for chain/node absent isContainerMember resolver, coordinator override retained, explicit non-member denial case. Legacy id-less stores fail-visible (documented). channel-comm 15/0, channels 9/0 independent-module untouched. Fallout (comm-adversarial case 9/14 cursor shapes) resolved under sibling xtrm-2hn.8. Delivered by subagent lane D.",
+        "closed_at": "2026-08-27T12:35:51Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T10:51:31Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T12:51:31Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn",
+            "issue_id": "xtrm-2hn.4",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "PROBLEM: Channel-comm cursor seam violates the canonical cursor contract and cross-contaminates channels. getCursors/setCursors are keyed by participant_id only, values {last_read_seq,last_ack_seq} are participant-wide, while msg.seq is a CHANNEL-LOCAL display ordinal; inbox compares them directly (src/channel-comm/index.ts L126, L447) => participant reads channel A through seq 20, channel B seq 1..5 messages all appear already-read. Service comments admit seq is display-only and the real store needs channel_messages.id. Related: canSee returns true unconditionally for chain/node visibility (L188-196) because no membership model exists - tolerable only behind a guaranteed pre-scoped store, unsafe as the eventual production API.\n\nSUCCESS: Cursor identity moved toward the canon NOW, preserving no intermediate abstraction: global channel_messages.id becomes the semantic read/ack cursor position (subscription.last_seen_id-style); seq demoted to display-only everywhere it is compared. Multi-channel correctness proven. Production visibility seam: either a membership resolver exists or the store/context construction makes foreign-container messages unsurfactable (the unconditional true case removed or provably unreachable).\n\nSCOPE: src/channel-comm/* cursors/storage/visibility contracts + seam fixtures/tests. Store seam may gain message-id lookup; API docs updated to name the canon (channel_messages.id, subscription.last_seen_id, seq=display).\nNON_GOALS: Scheduler/runtime integration stays xtrm-q99. Transport wire format beyond this module untouched.\nVALIDATION: Regressions: (a) read A high-seq => B low-seq still unread; (b) chain-visible message inaccessible to non-member OR provably-scoped store construction asserted; single-channel suite stays green. bun test tests/channel-comm* then full suite.\n",
+        "id": "xtrm-2hn.4",
+        "issue_type": "bug",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 1,
+        "started_at": "2026-08-27T11:06:10Z",
+        "status": "closed",
+        "title": "R4 Channel cursors -> global message-id semantics + container-scoped visibility",
+        "updated_at": "2026-08-27T12:35:51Z"
+      }
+    },
+    "xtrm-2hn.5": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "F1 RESOLVED — decision (B): coordinator IS the fourth structural authored class. Evidence-driven over option (A): runtime authority seams already key on literal class ('coordinator' in COORDINATOR_CLASSES channel-comm:216+, VOID_ACTOR_CLASSES finalize, scheduler makeIdentity copies step.class); role-based inference would heuristically parse dynamically-substituted template roles = new drift surface for identical observable behavior. StepClassSchema widened to [step,gate,advisor,coordinator]; data/sre-team.chain.json expresses entry/close truthfully; mapClass parity shim DELETED (as-authored comparison); FORCED DEVIATION bullet corrected to its real scope. Zero mechanical ripple required anywhere. Decision record: docs/design/qcy-f1-coordinator-vocabulary.md. Evidence: contracts 38/0 loader 33/0 parity 17/0 EXACT fingerprint equality compiler 22/0 finalize 7/0. Delivered by subagent wave-2 lane.",
+        "closed_at": "2026-08-27T12:35:56Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T10:51:33Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T12:51:32Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn",
+            "issue_id": "xtrm-2hn.5",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "PROBLEM (F1 from xtrm-qcy close memo): Authored vocabulary lacks coordinator. StepClassSchema = z.enum([\"step\",\"gate\",\"advisor\"]) (src/chain-contracts/chain-source.ts:161); legacy SRE topology holds coordinator-entry/close positions (hard-coded src/chain/topology.ts) force-mapped by the loader (FORCED DEVIATION note) onto ordinary step; sre-data-parity.test.ts encodes the mapClass deviation on both sides. Acceptable for Q27 structural parity; NOT acceptable once coordinator semantics become authority-bearing in materialization/runtime (C1.4, q99).\n\nSUCCESS: Explicit decision recorded and shipped end-to-end. First candidate per review inclination: coordinator = participant role + ordinary step/gate position (not a fourth structural class). Either outcome makes vocabulary consistent: schema accepts the authored form, the loader deviation disappears or becomes a principled mapping, sre-data-parity loses the raw-deviation footnote while staying exact-fingerprint-equal.\n\nSCOPE: Decision text (~30 lines) committed with the change; chain-contracts schema + loader comment surface; parity-test annotation update.\nNON_GOALS: No fourth-class compiler semantics beyond what the decision requires; materialization work stays q99/C1.4.\nVALIDATION: bun test tests/sre-data-parity.test.ts fingerprints remain EXACTLY equal (both sides updated coherently); schema round-trip tests green.\n",
+        "id": "xtrm-2hn.5",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-27T11:57:06Z",
+        "status": "closed",
+        "title": "R5 Resolve coordinator authored-position vocabulary (F1) before materialization",
+        "updated_at": "2026-08-27T12:35:56Z"
+      }
+    },
+    "xtrm-2hn.6": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Compile-time bound renamed honestly: CapabilityGrantSchema->CompiledCapabilityBoundsSchema, resolveCapabilityGrants->resolveCompiledCapabilityBounds, output property capability_grants->compiled_capability_bounds, exported type CompiledCapabilityBounds. ADR-004 boundary comment gate at emission site names missing inputs (SpecialistDefinition requirements, SpecialistActivationProfile, runtime/sandbox availability) and PREPARE/ActivationSupervisor completion point with MUST-NOT-treat-as-final-authority rule for q99 wiring. Exit greps zero stale refs across EXP src+tests. compiler 22/0; sre-data-parity fingerprints untouched (grants never hashed). No secondary consumers existed. Delivered by subagent lane E.",
+        "closed_at": "2026-08-27T12:36:01Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T10:51:34Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T12:51:33Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn",
+            "issue_id": "xtrm-2hn.6",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "PROBLEM: Pure compiler emits its result under the name capability_grants (schema L105 CapabilityGrantSchema, operator allowlist intersection L178 allowed_tools, emission L233 resolveCapabilityGrants - src/chain-compiler/index.ts), but the value is only step-requests INTERSECT operator allowed_tools/allowed_skills: a compile-time upper bound. Accepted ADR-004 defines ResolvedCapabilityGrant as SpecialistDefinition requirements + chain/step policy + operator policy + runtime/sandbox availability. Compiler lacks resolved SpecialistDefinition, SpecialistActivationProfile, and real runtime/sandbox availability. Keeping the grandiose name invites q99 to treat compile-time allowlists as final grant authority and skip the sandbox half.\n\nSUCCESS: Artifact renamed (preferred CompiledCapabilityBounds; PolicyAllowedRequests acceptable) across exports/schema/callers; doc comment states the bound nature, enumerates the missing ADR-004 inputs, and names PREPARE/ActivationSupervisor resolution as the completion point. q99-facing contract line recorded so runtime wiring cannot misread.\n\nSCOPE: chain-compiler renames + dependent tests + short boundary doc. Run GitNexus impact before editing the renamed symbols (in-module rename expected).\nNON_GOALS: NO partial ADR-004 implementation here; no ActivationProfile/PREPARE work (successor territory).\nVALIDATION: Full bun test tests/ green after rename; grep confirms zero stale capability_grants references inside experiment src; detect_changes scope clean.\n",
+        "id": "xtrm-2hn.6",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-27T11:10:19Z",
+        "status": "closed",
+        "title": "R6 Rename compiler capability_grants -> CompiledCapabilityBounds (ADR-004 boundary honesty)",
+        "updated_at": "2026-08-27T12:36:01Z"
+      }
+    },
+    "xtrm-2hn.7": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Hygiene restored + hardened: __pycache__//*.py[cod] ignore rules live on HEAD (via vault-bot commit d582592); settings.json portability rewrite applied and committed ( prefixes, precedent-backed by existing lines); repo-wide sweep proved zero deliberate .pyc readers. NOTE: bot reset the staged untrack once; RESTAGED post-battery — 68 bytecode files currently staged-D awaiting operator commit, index clean (git ls-files pycache=0). Dead-hook discovery spun to follow-up xtrm-zxb. Delivered by subagent lane F.",
+        "closed_at": "2026-08-27T12:36:06Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T10:51:35Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T12:51:35Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn",
+            "issue_id": "xtrm-2hn.7",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "PROBLEM: PR #91 merged hygiene regressions unrelated to its scope, still present on main: (1) Python bytecode tracked (git ls-files | grep pycache: packages/arena-top/src/arena_top/__pycache__/*.pyc, arena-top/tests/__pycache__/*.pyc, packages/mcpq/src/mcpq/__pycache__/*.pyc et al.); (2) .gitignore lacks __pycache__/ and *.py[cod]; (3) .claude/settings.json tracked with machine-specific absolute paths (/home/dawid/dev/xtrm/.xtrm/hooks/...). Signal echo: PR #95 carried an unrelated stray packages/xts/package-lock.json line (diff-scope discipline reminder only).\n\nSTEPS:\n1. Verify no legitimate consumer depends on the tracked .pyc artifacts.\n2. Untrack all __pycache__ content (git rm -r --cached); commit purge.\n3. Append __pycache__/ and *.py[cod] rules to .gitignore.\n4. Decide .claude/settings.json disposition (relative-path portable vs local-only ignore); apply minimal edit.\n5. Prove: fresh status shows zero bytecode entering tracking; local builds regenerate caches safely.\n\nVALIDATION: git ls-files | grep pycache exits empty; bun test experiment suite unaffected; diff confined to the files listed above.\nNON_GOALS: Other settings reshuffle; lockfile surgery.\nNOTE: Independent of R1-R6; land BEFORE further large PRs to avoid repeat contamination.\n",
+        "id": "xtrm-2hn.7",
+        "issue_type": "chore",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "started_at": "2026-08-27T11:12:31Z",
+        "status": "closed",
+        "title": "R7 Repo hygiene: purge tracked bytecode, add cache ignores, settings.json portability audit",
+        "updated_at": "2026-08-27T12:36:06Z"
+      }
+    },
+    "xtrm-2hn.8": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Adversarial successor coverage landed: comm-adversarial canonized to global-id/per-channel cursor semantics (memCommStore rebuilt; case 9 read!=ack invariant intent preserved; case 14 cosmetic alignment) 15/15 incl NEW case 15 two-service identical-idempotency-key race over one store (25 alternating rounds: one durable envelope, both callers resolve to first outcome, zero downstream dupes). waiting.test.ts NEW mutual-cycle pair case 11/11 (typed mutual_wait once, wake exactly once, loser re-enterable/resumable). Boundary observation (unserialized concurrent entry slips detection) spun to follow-up xtrm-09y instead of bending product/tests. Delivered by subagent wave-2 lane.",
+        "closed_at": "2026-08-27T12:36:15Z",
+        "comment_count": 0,
+        "created_at": "2026-08-27T10:51:36Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T12:51:36Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-1xn",
+            "issue_id": "xtrm-2hn.8",
+            "metadata": "{}",
+            "type": "discovered-from"
+          },
+          {
+            "created_at": "2026-08-27T12:51:36Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn",
+            "issue_id": "xtrm-2hn.8",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "PROBLEM: Closed xtrm-1xn suite (PR #98, 14 cases) encoded pre-review expectations and missed the defect classes found in the code-level review. Designated successor home (xtrm-1xn CLOSED) for adversarial additions belonging to no single repair bead.\n\nCASES (minimum set):\n1. Two ChannelCommunicationService instances concurrently process an identical idempotency key => exactly-one durable outcome, duplicate rejected/idempotent.\n2. Two WaitingRegistry writers concurrently enter a mutual wait cycle => deterministic single cycle detection; no double-fire, no lost wake intent.\n\nTraceability of cases folded elsewhere (do not duplicate here): non-mandatory+pending observation -> UNCERTAIN (R2); void zero-mutation + evidence-failure-after-mutation (R3); channel A/B read-state contamination + non-member visibility (R4); formula gate-label survival (R1).\n\nSEQUENCING: Land after/with R2-R4 repairs - assertions must encode repaired semantics, never incidentally-current behavior.\nSCOPE: experiments/agentsession-sre-chain-vertical-slice/tests adversarial/recovery suite area; reuse existing harness.\nNON_GOALS: No new framework/fixtures; no coverage of surfaces outside comm/waiting pair interactions.\nVALIDATION: Full bun test tests/ green including new cases; every case asserts a named invariant.\n",
+        "id": "xtrm-2hn.8",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-27T11:55:12Z",
+        "status": "closed",
+        "title": "R8 Adversarial suite expansion (xtrm-1xn successor): service-instance + waiting-cycle concurrency pairs",
+        "updated_at": "2026-08-27T12:36:15Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:27Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn",
+        "issue_id": "xtrm-2hn.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2hn.1",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:28Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn",
+        "issue_id": "xtrm-2hn.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2hn.2",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:29Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn",
+        "issue_id": "xtrm-2hn.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2hn.3",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:31Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn",
+        "issue_id": "xtrm-2hn.4",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2hn.4",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:32Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn",
+        "issue_id": "xtrm-2hn.5",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2hn.5",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:33Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn",
+        "issue_id": "xtrm-2hn.6",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2hn.6",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:35Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn",
+        "issue_id": "xtrm-2hn.7",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2hn.7",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-27T12:51:36Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn",
+        "issue_id": "xtrm-2hn.8",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-2hn.8",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn",
+      "type": "parent-child"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-2hn",
+  "root_title": "qcy post-review remediation packet (pre-q99 quality gate)",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

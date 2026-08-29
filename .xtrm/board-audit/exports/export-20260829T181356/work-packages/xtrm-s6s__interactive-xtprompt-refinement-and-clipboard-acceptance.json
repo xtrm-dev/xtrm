@@ -1,0 +1,269 @@
+{
+  "content_sha256": "8cb9ffd48de84b0d526f9b5f82a884e7598ea54d08b0942bd2af30601364c57a",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-s6s.1"
+      },
+      {
+        "children": [],
+        "id": "xtrm-s6s.2"
+      },
+      {
+        "children": [],
+        "id": "xtrm-s6s.3"
+      }
+    ],
+    "id": "xtrm-s6s"
+  },
+  "issues": {
+    "xtrm-s6s": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Implemented and verified interactive xtprompt refinement, OSC52 copy, :accept lifecycle, failure recovery, documentation, and full test/smoke coverage.",
+        "closed_at": "2026-08-14T19:51:25Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T18:48:08Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\n`xtprompt` currently performs one rewrite and exits. Users must manually select and copy the result, and they cannot refine the generated prompt without starting a new command and reconstructing context.\n\n## SUCCESS\n\n`xtprompt` supports explicit one-shot clipboard copy and an opt-in interactive refinement session. A user can refine the current prompt through multiple turns, inspect or undo revisions, then run `:accept` to copy the accepted prompt and exit cleanly.\n\n## SCOPE\n\n`packages/xtprompt/src/`, package-local tests, CLI help, and `packages/xtprompt/README.md`.\n\n## NON_GOALS\n\n- Do not add Pi `AgentSession`, tools, project inspection, persistence, or conversation resumption.\n- Do not build a full-screen TUI, editor, or general chat client.\n- Do not add a clipboard dependency or platform-specific GUI integration in the first version.\n\n## CONSTRAINTS\n\n- Preserve the current one-shot behavior unless `--copy` or `--interactive` is selected.\n- Use an in-memory refinement loop over `ModelRuntime.completeSimple()`; each turn receives the accepted current prompt plus one refinement instruction.\n- Use OSC 52 for remote-terminal clipboard transfer, including tmux passthrough, without contaminating normal stdout.\n- Status and failure diagnostics go to stderr. Never log credentials or hidden model content.\n- `:accept` exits only after dispatching the clipboard sequence; failed refinements keep the last valid prompt available.\n\n## VALIDATION\n\n- [ ] Existing one-shot tests remain green.\n- [ ] Clipboard encoding and tmux wrapping have deterministic unit coverage.\n- [ ] Interactive commands and failure recovery have CLI integration coverage.\n- [ ] A PTY smoke proves `:accept` exits and emits a clipboard sequence without leaving a readline process.\n- [ ] A live authenticated smoke proves at least two refinement turns produce a non-empty accepted prompt.\n\n## OUTPUT\n\nReport the command surface, interaction transcript, changed files, test and smoke evidence, clipboard compatibility limits, and residual risks.",
+        "id": "xtrm-s6s",
+        "issue_type": "epic",
+        "notes": "SCRUTINY: medium. Implementation delegated sequentially because clipboard and interactive tasks overlap in app/tests.\nCompleted through three delegated subagents: clipboard executor, interactive executor, and cumulative test/review agent. Final live and automated evidence recorded on xtrm-s6s.3.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-14T19:11:36Z",
+        "status": "closed",
+        "title": "Interactive xtprompt refinement and clipboard acceptance",
+        "updated_at": "2026-08-14T19:51:25Z"
+      }
+    },
+    "xtrm-s6s.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Implemented and verified OSC 52 clipboard output, tmux passthrough, --copy integration, tests, and documentation.",
+        "closed_at": "2026-08-14T19:18:37Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T18:48:09Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T18:48:09Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-s6s",
+            "issue_id": "xtrm-s6s.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 1,
+        "description": "## PROBLEM\n\nOne-shot `xtprompt` output must be selected and copied manually. On this SSH-oriented workflow, GUI clipboard libraries cannot reliably reach the operator's local clipboard.\n\n## SUCCESS\n\n`xtprompt --copy \"draft\"` preserves normal prompt output and also sends the rewritten prompt through OSC 52. Tmux sessions receive the required passthrough wrapper. Copy failures produce concise stderr diagnostics and never replace a successful prompt with control data on stdout.\n\n## SCOPE\n\n`packages/xtprompt/src/clipboard.mjs` (new), argument/output wiring in `packages/xtprompt/src/app.mjs`, help and README text, and focused tests.\n\n## NON_GOALS\n\n- No clipboard read support.\n- No `clipboardy`, `xclip`, `wl-copy`, `pbcopy`, or desktop-session discovery.\n- No automatic copying unless `--copy` is explicitly selected or `:accept` is used by the later interactive task.\n\n## CONSTRAINTS\n\n- Encode prompt bytes as Base64 and emit OSC 52 only to an injected terminal/control stream, never ordinary stdout.\n- Support plain terminal and tmux passthrough forms.\n- Reject copy when no TTY/control stream is available instead of silently claiming success.\n- Diagnostics may state outcome and transport only; do not echo the prompt.\n- Telemetry is limited to exit code and concise stderr because this local CLI has no persistent logging subsystem.\n\n## VALIDATION\n\n- [ ] Unit tests assert exact plain and tmux OSC 52 sequences for Unicode input.\n- [ ] CLI integration asserts `--copy` retains plain/JSON stdout and invokes clipboard output once after a valid rewrite.\n- [ ] Negative tests assert no clipboard write on model failure and clear behavior without a TTY.\n- [ ] PTY smoke checks exit code 0 and captured OSC 52 bytes.\n\n## LIBRARIES\n\n- **Reuse in repo:** existing `runCli` output boundary and dependency-injection test harness.\n- **Installed deps:** none applicable; Pi SDK does not provide clipboard transport.\n- **Stdlib:** `Buffer.from(text).toString(\"base64\")` and writable streams cover OSC 52.\n- **New dep candidate:** none; desktop clipboard packages do not solve remote SSH reliably.\n- **Roll it:** yes, as a small terminal protocol encoder with no external dependency.\n\n## OUTPUT\n\nHand back changed files, exact option behavior, unit/integration/PT​​Y evidence, and terminal compatibility limitations.",
+        "id": "xtrm-s6s.1",
+        "issue_type": "task",
+        "notes": "SCRUTINY: medium. Executor must use TDD, no new dependency, and no git operations.\nImplemented by delegated subagent and independently verified. Changed clipboard.mjs, app.mjs, cli.mjs, clipboard/app tests, README. Parent verification: npm test and coverage pass; syntax checks pass; pack contains clipboard runtime. Exact plain/tmux OSC 52 sequences are covered.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-14T19:11:37Z",
+        "status": "closed",
+        "title": "Add OSC 52 clipboard output and --copy",
+        "updated_at": "2026-08-14T19:18:37Z"
+      }
+    },
+    "xtrm-s6s.2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Implemented and verified in-memory interactive refinement with accept/copy, undo, show, help, quit, and failure recovery.",
+        "closed_at": "2026-08-14T19:32:48Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T18:48:10Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T18:48:10Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-s6s",
+            "issue_id": "xtrm-s6s.2",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-14T18:48:11Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-s6s.1",
+            "issue_id": "xtrm-s6s.2",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nA one-shot rewrite cannot be incrementally refined. Re-running the command loses the accepted prompt state and gives the user no structured way to accept, undo, or quit.\n\n## SUCCESS\n\n`xtprompt --interactive \"draft\"` creates an initial rewrite, then accepts free-text refinement instructions until the user runs a command. `:accept` copies the current prompt and exits, `:show` reprints it, `:undo` restores the previous valid revision, `:help` lists commands, and `:quit`/EOF exits without copying.\n\n## SCOPE\n\nInteractive orchestration in `packages/xtprompt/src/app.mjs` and `src/cli.mjs`, refinement request policy in `src/prompt.mjs`, CLI help/README, and integration tests. Reuse the clipboard primitive from the sibling task.\n\n## NON_GOALS\n\n- No Pi `AgentSession`, tools, automatic code inspection, session files, resume command, or full conversation transcript.\n- No full-screen TUI, syntax highlighting, multiline editor, named sessions, or branching history.\n- No unbounded history; keep current and previous valid prompt only.\n\n## CONSTRAINTS\n\n- Require a TTY for interactive mode.\n- Treat non-command input as a refinement instruction, not as a new source prompt or general chat.\n- Send only current prompt, latest refinement instruction, intent, and bounded advisory context to `completeSimple()`.\n- A failed or clarification-only rewrite must preserve the current prompt and keep the loop usable.\n- `:accept` must use the clipboard task's injected transport and close readline resources deterministically.\n- User-visible state changes and failures go to stderr; deliberate prompt display remains readable and secret-safe. Do not persist prompts or model responses.\n\n## VALIDATION\n\n- [ ] Integration tests cover initial rewrite, two refinements, `:show`, `:undo`, `:help`, `:accept`, `:quit`, EOF, and unsupported commands.\n- [ ] Failure tests prove model/copy errors preserve the last valid prompt and leave no hanging readline handle.\n- [ ] Existing one-shot positional/stdin/JSON behavior remains unchanged.\n- [ ] PTY smoke runs a scripted refinement followed by `:accept` and verifies clean exit plus OSC 52 emission.\n- [ ] Live authenticated smoke verifies a two-turn refinement produces an actionable accepted prompt.\n\n## LIBRARIES\n\n- **Reuse in repo:** `completeRewrite`, prompt sentinel validation, model selection, and `node:readline/promises` already used by `src/cli.mjs`.\n- **Installed deps:** existing Pi SDK `ModelRuntime.completeSimple()` remains the model boundary.\n- **Stdlib:** `node:readline/promises` provides the line-oriented loop and deterministic close.\n- **New dep candidate:** none; a TUI framework is unnecessary for this command loop.\n- **Roll it:** yes, as a small in-memory state loop over existing functions.\n\n## OUTPUT\n\nHand back the command grammar, state-transition behavior, transcript samples, changed files, tests, live smoke evidence, and explicit non-agent limitations.",
+        "id": "xtrm-s6s.2",
+        "issue_type": "task",
+        "notes": "SCRUTINY: medium. Depends on verified xtrm-s6s.1 clipboard primitive. Use TDD, no AgentSession, no git operations.\nImplemented by delegated subagent and independently verified. Added --interactive/-i, current+previous state loop, refinement requests, :show/:undo/:help/:accept/:quit, EOF and failure recovery, docs and integration tests. Parent reran tests, coverage, syntax, and help successfully.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-14T19:18:38Z",
+        "status": "closed",
+        "title": "Add interactive prompt refinement loop and :accept",
+        "updated_at": "2026-08-14T19:32:48Z"
+      }
+    },
+    "xtrm-s6s.3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Validated cumulative clipboard and interactive flows with 43 tests, PTY/SIGINT coverage, coverage gates, audit, pack, and live two-turn smoke.",
+        "closed_at": "2026-08-14T19:51:24Z",
+        "comment_count": 0,
+        "created_at": "2026-08-14T18:48:10Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-14T18:48:11Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-s6s.1",
+            "issue_id": "xtrm-s6s.3",
+            "metadata": "{}",
+            "type": "validates"
+          },
+          {
+            "created_at": "2026-08-14T18:48:10Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-s6s",
+            "issue_id": "xtrm-s6s.3",
+            "metadata": "{}",
+            "type": "parent-child"
+          },
+          {
+            "created_at": "2026-08-14T18:48:12Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-s6s.2",
+            "issue_id": "xtrm-s6s.3",
+            "metadata": "{}",
+            "type": "validates"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nClipboard control sequences and interactive readline lifecycle are shell boundaries that unit coverage alone cannot prove. The two implementation tasks need a combined behavioral gate.\n\n## SUCCESS\n\nTests prove exact clipboard protocol bytes, stateful refinement behavior, failure recovery, process cleanup, and preserved one-shot compatibility. A PTY smoke and live authenticated refinement provide integrated evidence.\n\n## SCOPE\n\n`packages/xtprompt/test/`, package test scripts if required, and ephemeral PTY/live smoke commands. Covers implementation issues `xtrm-s6s.1` and `xtrm-s6s.2`.\n\n## NON_GOALS\n\n- No assertion that a specific terminal application visibly updates its OS clipboard; OSC 52 has no acknowledgment protocol.\n- No desktop GUI automation or cross-platform clipboard matrix.\n- No model-quality golden snapshots.\n\n## CONSTRAINTS\n\n- Layer: shell plus terminal boundary.\n- Strategy: unit protocol checks + injected integration tests + subprocess/PT​​Y smoke + one live authenticated check.\n- Tests must use deterministic fake model responses except the explicitly named live smoke.\n- Capture control bytes as artifacts or escaped hex/base64; do not dump accepted prompt contents into persistent logs.\n- Classify failures as implementation regression, terminal capability limitation, model/auth failure, or infrastructure timeout.\n\n## VALIDATION\n\n- [ ] `npm test` passes with success and failure paths for both implementation tasks.\n- [ ] `npm run test:coverage` remains above 80% for lines, branches, and functions.\n- [ ] Exact OSC 52 and tmux byte assertions pass for ASCII and Unicode.\n- [ ] Scripted interactive process exits for `:accept`, `:quit`, EOF, SIGINT, model failure, and copy failure.\n- [ ] One-shot help, positional, stdin, JSON, and error contracts remain green.\n- [ ] Live two-turn smoke records command, exit outcome, and non-empty accepted result without storing credentials.\n\n## LIBRARIES\n\n- **Reuse in repo:** existing Node test harness, fake ModelRuntime, subprocess help smoke, and PTY `script` command pattern.\n- **Installed deps:** none needed.\n- **Stdlib:** `node:test`, `assert`, streams, and subprocesses.\n- **New dep candidate:** none.\n- **Roll it:** no new test framework.\n\n## OUTPUT\n\nReturn critical-path map, exact commands and outcomes, escaped OSC evidence, coverage totals, live-smoke classification, and known terminal limitations.",
+        "id": "xtrm-s6s.3",
+        "issue_type": "task",
+        "notes": "SCRUTINY: medium. Validate cumulative clipboard + interactive implementation; fix only test/review findings within epic scope. No git operations.\nDelegated validation added option-conflict checks, secret-safe clarification/input failures, terminal-control-byte rejection, static unsupported-command diagnostics, SIGINT exit 130, and deterministic PTY tests. Parent verification: 43/43 tests pass; coverage 94.59% lines, 85.15% branches, 93.33% functions; audit 0; syntax and pack pass. Parent live adaptive PTY smoke with openai-codex/gpt-5.4-mini sent 3 inputs, completed 2 refinements, dispatched OSC52, and exited 0. An earlier eager piped-input smoke timed out after one refinement and was classified as harness pacing; adaptive prompt-driven PTY passed.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-14T19:32:49Z",
+        "status": "closed",
+        "title": "Test interactive xtprompt clipboard and refinement flows",
+        "updated_at": "2026-08-14T19:51:24Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-14T18:48:09Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-s6s",
+        "issue_id": "xtrm-s6s.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-s6s.1",
+      "source_field": "dependencies",
+      "target": "xtrm-s6s",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T18:48:11Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-s6s.1",
+        "issue_id": "xtrm-s6s.2",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-s6s.2",
+      "source_field": "dependencies",
+      "target": "xtrm-s6s.1",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T18:48:10Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-s6s",
+        "issue_id": "xtrm-s6s.2",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-s6s.2",
+      "source_field": "dependencies",
+      "target": "xtrm-s6s",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T18:48:10Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-s6s",
+        "issue_id": "xtrm-s6s.3",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-s6s.3",
+      "source_field": "dependencies",
+      "target": "xtrm-s6s",
+      "type": "parent-child"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T18:48:11Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-s6s.1",
+        "issue_id": "xtrm-s6s.3",
+        "metadata": "{}",
+        "type": "validates"
+      },
+      "source": "xtrm-s6s.3",
+      "source_field": "dependencies",
+      "target": "xtrm-s6s.1",
+      "type": "validates"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-14T18:48:12Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-s6s.2",
+        "issue_id": "xtrm-s6s.3",
+        "metadata": "{}",
+        "type": "validates"
+      },
+      "source": "xtrm-s6s.3",
+      "source_field": "dependencies",
+      "target": "xtrm-s6s.2",
+      "type": "validates"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-s6s",
+  "root_title": "Interactive xtprompt refinement and clipboard acceptance",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

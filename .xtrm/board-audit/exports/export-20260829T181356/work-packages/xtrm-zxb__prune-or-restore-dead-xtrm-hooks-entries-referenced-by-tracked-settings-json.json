@@ -1,0 +1,66 @@
+{
+  "content_sha256": "a9a899f0b3f2acdc656188a258cb31e0c990c534e95276da8729423f7e06e601",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-27T14:34:03Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-2hn.7",
+        "issue_id": "xtrm-zxb",
+        "metadata": "{}",
+        "type": "discovered-from"
+      },
+      "source": "xtrm-zxb",
+      "source_field": "dependencies",
+      "target": "xtrm-2hn.7",
+      "target_present_in_snapshot": true,
+      "target_title": "R7 Repo hygiene: purge tracked bytecode, add cache ignores, settings.json portability audit",
+      "type": "discovered-from"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-zxb"
+  },
+  "issues": {
+    "xtrm-zxb": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "comment_count": 0,
+        "created_at": "2026-08-27T12:34:03Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-27T14:34:03Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-2hn.7",
+            "issue_id": "xtrm-zxb",
+            "metadata": "{}",
+            "type": "discovered-from"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "id": "xtrm-zxb",
+        "issue_type": "chore",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 3,
+        "status": "open",
+        "title": "Prune or restore dead .xtrm/hooks entries referenced by tracked settings.json",
+        "updated_at": "2026-08-27T12:34:03Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-zxb",
+  "root_title": "Prune or restore dead .xtrm/hooks entries referenced by tracked settings.json",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

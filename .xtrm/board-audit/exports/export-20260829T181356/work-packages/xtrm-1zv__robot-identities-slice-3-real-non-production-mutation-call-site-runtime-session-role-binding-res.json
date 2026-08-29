@@ -1,0 +1,72 @@
+{
+  "content_sha256": "24162bc01878fa7fe38e58bff360f8dde7ce4fb607853e0ea141c37d6071c039",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-29T17:28:08Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-eq8",
+        "issue_id": "xtrm-1zv",
+        "metadata": "{}",
+        "type": "discovered-from"
+      },
+      "source": "xtrm-1zv",
+      "source_field": "dependencies",
+      "target": "xtrm-eq8",
+      "target_present_in_snapshot": true,
+      "target_title": "Robot identities slice 2: wire ResolvedExecutionContext from trusted chain-runtime lane + provenance canary",
+      "type": "discovered-from"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-1zv"
+  },
+  "issues": {
+    "xtrm-1zv": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via xtrm-dev/xtrm PR #106 (squash 3fc6922). Independent non-author review PASS (all 9 questions, symlink containment remediated + delta-confirmed); identity 35/35 + slice2 19/19 + slice3 14/14 tests green; 6 pre-existing beads-adapter environment failures classified; no credential/account actions performed.",
+        "closed_at": "2026-08-29T16:13:51Z",
+        "comment_count": 0,
+        "created_at": "2026-08-29T15:28:05Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-29T17:28:08Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-eq8",
+            "issue_id": "xtrm-1zv",
+            "metadata": "{}",
+            "type": "discovered-from"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "OPERATOR DIRECTION (2026-08-29 reconciliation; Jira ISSUE-87 comment 12571). Slice 2 (xtrm-eq8, PR #105, squash 3bf4bbe) accepted: trusted ResolvedExecutionContext from chain-runtime scheduler, dry-run provenance canary, self_attested_web classification, no cutover.\n\nSLICE 3 SCOPE (resolve the four residual issues from the Slice 2 independent review before any credential enters the system):\n1. REAL NON-PRODUCTION MUTATION ADAPTER: give runProvenanceCanary (src/identity/canary.ts) a real call site against an explicitly designated non-production GitHub/Jira test target, replacing the injectable dry-run fixture as the exercised path. Keep it non-production and reversible; do NOT touch real xtrm-web accounts or connectors.\n2. RUNTIME-SESSION IDENTITY CORRECTION: resolve runtime_session_id from StepExecutionState.last_pi_session_id inside src/chain/trusted-context.ts instead of a host-supplied literal, so distinct real runs at the same (participant, attempt) are disambiguated (review F3).\n3. ACCOUNT-BINDING ASYMMETRY FIX (review F5, pre-existing): validateMutation must fail when the envelope carries a NON-NULL immutable_account_id while the trusted principal-set config binding is NULL. Currently only the envelope-null-with-cutoverComplete direction is checked.\n4. ROLE-BOUND ACTOR OVERRIDE GUARD (review F4): constrain the actorId override in resolveTrustedExecutionContext so the selected registered actor must be associated with the step role; reject any other registered actor. Fine while host-only, but required before a real mutation call site exists.\n\nCANARY SHAPE (once residual 1-4 land):\n  real non-production mutation adapter\n    -> trusted ResolvedExecutionContext\n    -> real runtime_session_id from StepExecutionState\n    -> role-bound actor resolution\n    -> provenance projection\n    -> actual platform object ID\n    -> bindPlatformResult\n    -> validateMutation\n    -> independent receipt verification\n\nGATE BOUNDARY: do NOT perform connector cutover in this slice. Cutover remains a human-only operator action: create the single xtrm-web GitHub/Jira identities, connect Web to them, then run a reversible canary. This slice must NOT create accounts, tokens, Apps, or change connectors.\n\nACCEPTANCE:\n1. Canary exercises a real non-production adapter call site (or documented test-target adapter bound to actual runtime state), not only a pure fixture.\n2. runtime_session_id populated from StepExecutionState.last_pi_session_id in the adapter; regression test proves two distinct runs at same attempt get distinct receipts.\n3. Non-null envelope account id against null config binding fails closed (test added; cutoverComplete semantics unchanged).\n4. actorId override rejected when the actor is not bound to the step role (test added).\n5. identity 35/35 + slice2 19/19 + new tests green; typecheck no new errors; git diff --check clean; independent non-author review PASS before merge.",
+        "id": "xtrm-1zv",
+        "issue_type": "task",
+        "notes": "PR xtrm-dev/xtrm#106 merged (squash 3fc6922). Reviewed head ad5c5ec; merged tree byte-identical for all 12 changed files. Independent non-author review PASS at ca52227 + delta PASS after symlink-containment remediation (ad5c5ec). Identity 35/35 + slice2 19/19 + slice3 14/14 green; full suite 325 pass / 6 pre-existing environmental beads-adapter failures (ENOSPC spike was full /tmp tmpfs, not code; TMPDIR-on-disk rerun clean). Symlink escape + positive/negative containment tests added. Typecheck 0 errors in touched files. No credentials/accounts/connectors created; canary side effect = local git commit in designated scratch repo only.",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-29T15:43:12Z",
+        "status": "closed",
+        "title": "Robot identities slice 3: real non-production mutation call site + runtime-session/role-binding residuals",
+        "updated_at": "2026-08-29T16:13:51Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-1zv",
+  "root_title": "Robot identities slice 3: real non-production mutation call site + runtime-session/role-binding residuals",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

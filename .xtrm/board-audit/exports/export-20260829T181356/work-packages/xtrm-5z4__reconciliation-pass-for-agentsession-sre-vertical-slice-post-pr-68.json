@@ -1,0 +1,41 @@
+{
+  "content_sha256": "9c5e96139619cb68e89f0f2abf85d51429a33fea7c0a7000bdda2f33a8d574a1",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-5z4"
+  },
+  "issues": {
+    "xtrm-5z4": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "claude/fd41a",
+        "close_reason": "Reconciliation pass complete. Beads topology now uses native bd q --parent + -t epic; --force removed from normal closure path; both semantic fixtures (false-premise, true-regression) deterministic; adversarial authority unit-covered at the same host validator a real AgentSession hits; sre_exec regex boundary characterized with 3 explicit limitations; inspect.sh reconciled (tail-all follows all four streams); experiment-report.md sections 10-12 added. 48/48 tests pass. Live crash/resume + real-target smoke documented as scripts/*.md limitations of this offline pass to avoid double-billing the model quota consumed by the parallel bench stream.",
+        "closed_at": "2026-08-17T23:43:23Z",
+        "comment_count": 0,
+        "created_at": "2026-08-17T23:13:23Z",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "id": "xtrm-5z4",
+        "issue_type": "task",
+        "notes": "Reconciliation pass started. Read spec + report + adapter + reducer/scheduler/store/channels/tools/bridge/inspect/setup-fixture. Confirmed PR #68 (8b75247) reachable. Plan: (1) migrate beads adapter from fake dep-add parent to native bd create --parent; introduce distinct ChainRun Epic vs external root ref, remove --force on normal closure. (2) split fixture into false-premise + true-regression deterministic scenarios. (3) add real-AgentSession adversarial authority eval. (4) rerun kill/resume against new topology. (5) characterize sre_exec bash -lc negative surface. (6) reconcile inspect.sh (unified stream honesty). (7) reconcile experiment-report.md. (8) final smoke.\nReconciliation code complete. All 48 tests pass (was 16 pre-pass). Delta: +32 tests across beads-adapter/authority-adversarial/sre-exec-authority/fixture-scenarios. Files modified: 9 (README, experiment-report, inspect.sh, setup-fixture.sh, adapters/beads, chain/scheduler, chain/types, cli/main, tools/index). Files added: 7 (scripts/adversarial-authority.md, scripts/crash-resume.md, src/tools/policy.ts, 4 new test files). Key architectural corrections:\n1) Beads adapter now uses native bd q --parent + -t epic with --external-ref for provenance; removed fake dep-add step->root and removed --force from closeBead. New BeadsMap fields: chain_epic_id, external_root_bead_ref (root_bead_id retained as legacy read fallback). Native Epic + parent-child hierarchy confirmed via bd show --json.\n2) setup-fixture.sh takes false-premise|true-regression; both deterministic; scenario stamp in README.md.\n3) Adversarial authority coverage: 8 unit tests exercising all 6 vectors at the same checkAuthority validator a real AgentSession tool call hits; live-model driver documented in scripts/adversarial-authority.md.\n4) sre_exec regex boundary characterized in 12 tests including 3 explicit LIMITATION cases (dollar-paren command sub + wrapper, path traversal via cat, env var extraction via allowlisted printenv).\n5) inspect.sh: tail-all mode follows all four streams; tail/tail-forensics docs its scope; show_beads renders chain_epic_id + external_root_bead_ref.\n6) experiment-report.md: TBDs removed, section 6.1 updated to reflect --force removal, new sections 10 (reconciliation record), 11 (proven vs not-yet-proven), 12 (promotions).\n7) Live crash/resume against reconciled topology + real-target smoke are scoped as scripts/crash-resume.md and documented as limitations of this offline pass to avoid double-billing the model quota consumed by the parallel bench.\nCommands to reproduce: (a) bun test tests/ -> 48 pass 0 fail; (b) bash scripts/setup-fixture.sh false-premise -> deterministic 2-commit history where memory_limit is 64Mi at both commits; (c) bash scripts/setup-fixture.sh true-regression -> deterministic 2-commit 512Mi->64Mi diff.\nPR opened: https://github.com/xtrm-dev/xtrm/pull/69 (branch xt/lzdb, commit d34ff79). 16 files (+1352/-154). Base: main @ 8b75247.",
+        "priority": 2,
+        "status": "closed",
+        "title": "Reconciliation pass for AgentSession SRE vertical-slice (post PR #68)",
+        "updated_at": "2026-08-17T23:45:16Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-5z4",
+  "root_title": "Reconciliation pass for AgentSession SRE vertical-slice (post PR #68)",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

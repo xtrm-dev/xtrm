@@ -1,0 +1,95 @@
+{
+  "content_sha256": "8154b9e837fd50a6b818d45d8305ed77aa91b762be618b653f71713344a4fe9c",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-19T04:11:07Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-pq1.1",
+        "issue_id": "xtrm-cq2",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-cq2",
+      "source_field": "dependencies",
+      "target": "xtrm-pq1.1",
+      "target_present_in_snapshot": true,
+      "target_title": "coordinator model does not call evidence_publish — chain blocks at coordinator-entry under both --specialist-json required and off",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-19T04:11:07Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-pq1.2",
+        "issue_id": "xtrm-cq2",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-cq2",
+      "source_field": "dependencies",
+      "target": "xtrm-pq1.2",
+      "target_present_in_snapshot": true,
+      "target_title": "bridge/specialist-bridge use pi-ai/compat getModel — misses custom providers from ~/.pi/agent/models.json (e.g. commandcode)",
+      "type": "blocks"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-cq2"
+  },
+  "issues": {
+    "xtrm-cq2": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Bundle writer live + verified both terminal states. finalize.ts writeSreTriageBundle called from scheduler terminal handler. Satisfied: run-sre-49874 closed_pass -> mercury/infra/.xtrm/skills/infra/service-knowledge/services/sre-triage-runs/20260819T051345Z_chain-sre-341453/ (11 files, chain-report.v1 schema, keys match seed 20260819T015344Z exactly, no secrets). Escalated: synth chain-sre-ecbfb1 -> 20260819T052624Z_chain-sre-ecbfb1/ (6 files, terminal_state escalated). sre-triage.bundle.written in both forensics (grep verified). Write failure = fact.warning non-fatal (unit-tested). 7 tests tests/finalize.test.ts; suite 68 pass. Commit 56c81c2.",
+        "closed_at": "2026-08-19T05:37:38Z",
+        "comment_count": 0,
+        "created_at": "2026-08-19T04:11:02Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-19T04:11:07Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-pq1.1",
+            "issue_id": "xtrm-cq2",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-19T04:11:07Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-pq1.2",
+            "issue_id": "xtrm-cq2",
+            "metadata": "{}",
+            "type": "blocks"
+          }
+        ],
+        "dependency_count": 2,
+        "dependent_count": 0,
+        "description": "## PROBLEM\n\nThe archive shape lives in mercury/infra (epic infra-223r, local bead infra-223r.5): every terminal sre-triage chain run must write a durable per-run bundle into the target repo at `services/sre-triage-runs/<UTC>_<chain_id_short>/`. Nothing in this chain runtime emits bundles today — the archive stays empty except for the seeded example in mercury/infra (.3). The WRITER must live here (experiments/agentsession-sre-chain-vertical-slice/src/chain), not in mercury/infra.\n\n## SUCCESS\n\nA small pure function (in a new src/chain/finalize.ts, or in scheduler.ts) called from the terminal-state handler emits a bundle for BOTH terminal states (satisfied AND escalated) at exactly:\n\n    <target-repo>/.xtrm/skills/infra/service-knowledge/services/sre-triage-runs/<UTC>_<chain_id_short>/\n\nwith the deterministic file list:\n\n- chain-report.v1.json (schema key 'schema': 'chain-report.v1' at top level; includes next_actions[] array)\n- report.md (coordinator hand-written narrative: incident brief, findings, gotchas, fixes, workarounds, deferred, next-actions — written by the coordinator as its coordinator.decision evidence body, materialized by this writer)\n- gotchas.jsonl (one JSON object per line: {\"kind\":..., \"resource\":..., \"symptom\":..., \"evidence_ref\":..., \"fix_applied\":..., \"worked\":true|false, \"prior_run_refs\":[]})\n- evidence/*.json (the run's evidence entries from evidence/index.jsonl, expanded one file each)\n- forensics.jsonl (copy of forensics/events.jsonl)\n- messages.jsonl (copy of channels/messages.jsonl)\n\nPlus ONE structured event in the run's forensics/events.jsonl:\n\n    sre-triage.bundle.written  fields: {chain_id, chain_run_id, bundle_path, terminal_state, files_written[], bytes_written, elapsed_ms}\n\n## SCOPE\n\n- src/chain/finalize.ts (new) or scheduler.ts — the terminal-state handler hook.\n- Reuse src/chain/store.ts paths() for the run's evidence/forensics/messages sources.\n\n## NON_GOALS\n\n- No new package. Writer is a small pure function.\n- Failure to write the bundle is a fact.warning (NOT fatal) — a write failure must not sink an otherwise-successful chain.\n- Do NOT change the bundle shape declared in mercury/infra .3/.4 — this repo materializes it.\n- No changes to mercury/infra from this issue.\n\n## CONSTRAINTS\n\n- Writer: small pure function in finalize.ts (or scheduler.ts) called from the terminal-state handler; no new package.\n- Bundle path template: services/sre-triage-runs/<UTC>_<chain_id_short>/ (UTC ISO compact, e.g. 20260819T015344Z).\n- Redaction: no raw secrets, no full env dumps, no PII in report.md or gotchas.jsonl.\n- The sre-triage.bundle.written event fields: {chain_id, chain_run_id, bundle_path, terminal_state, files_written, bytes_written, elapsed_ms}.\n- Sequencing: this issue references the two existing findings filed earlier — xtrm-pq1.1 (coordinator contract adherence: coordinator must call evidence_publish(kind=coordinator.decision)) and xtrm-pq1.2 (bridge/custom-provider resolution: model not found for commandcode/deepseek/deepseek-v4-flash). The bundle writer depends on both landing: pq1.1 fixes coordinator-entry satisfaction (so a run reaches terminal state), pq1.2 fixes specialist dispatch on custom providers.\n\n## VALIDATION\n\n- [ ] One live chain run emits a bundle at the exact path template with all six required files.\n- [ ] Bundle passes the shape check from mercury/infra infra-223r.3 (chain-report.v1.json schema key, gotchas.jsonl line shape, report.md headings).\n- [ ] sre-triage.bundle.written event present in that run's forensics/events.jsonl (grep passes).\n- [ ] Both terminal states covered: satisfied run AND escalated run each emit.\n- [ ] Write failure does not crash the chain (fact.warning only).\n\n## OUTPUT\n\n- Path of the first live-emitted bundle under services/sre-triage-runs/.\n- One grep line from that run's forensics showing sre-triage.bundle.written.\n- Confirmation of both terminal states covered.\n\n## LIBRARIES\n\nN/A — small pure TS function in the existing experiment package.\n\n## NOTES\n\nFiled from mercury/infra epic infra-223r (local tracking bead infra-223r.5). The mercury/infra side owns the SHAPE (docs in services/sre-triage-runs/SKILL.md + INDEXING-DECISION.md); this issue owns the WRITER. Cross-repo sequencing: do NOT merge before xtrm-pq1.1 + xtrm-pq1.2 are addressed (they fix coordinator-entry satisfaction + custom-provider dispatch that a real chain needs to reach terminal state).",
+        "id": "xtrm-cq2",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-19T04:27:21Z",
+        "status": "closed",
+        "title": "chain-runtime: emit sre-triage-runs bundle at terminal state (satisfied OR escalated)",
+        "updated_at": "2026-08-19T05:37:38Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-cq2",
+  "root_title": "chain-runtime: emit sre-triage-runs bundle at terminal state (satisfied OR escalated)",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

@@ -1,0 +1,95 @@
+{
+  "content_sha256": "f816e70f3d9f918cb35e783fe31bf669f7b3ab2d2e6c69c25aa882a1f2533708",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-26T01:59:42Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-hzb",
+        "issue_id": "xtrm-sf3",
+        "metadata": "{}",
+        "type": "blocks"
+      },
+      "source": "xtrm-sf3",
+      "source_field": "dependencies",
+      "target": "xtrm-hzb",
+      "target_present_in_snapshot": true,
+      "target_title": "Durable ReplyObligation + atomic request/reply correlation",
+      "type": "blocks"
+    },
+    {
+      "raw": {
+        "created_at": "2026-08-26T01:59:42Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-qcy",
+        "issue_id": "xtrm-sf3",
+        "metadata": "{}",
+        "type": "discovered-from"
+      },
+      "source": "xtrm-sf3",
+      "source_field": "dependencies",
+      "target": "xtrm-qcy",
+      "target_present_in_snapshot": true,
+      "target_title": "Native chain runtime: make SRE chain the first data-defined XTRM chain",
+      "type": "discovered-from"
+    }
+  ],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-sf3"
+  },
+  "issues": {
+    "xtrm-sf3": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Delivered via PR #96 (merged 3e8ac9c): runtime-owned WAITING_ON_CHANNEL + exact/idempotent SchedulerIntent wake, no agent-facing channel_wait. 10+118 tests pass; tsc clean. Review PARTIAL(expiry intent collision)->repaired(6c0f7d5)->PASS on exact final head.",
+        "closed_at": "2026-08-26T01:38:23Z",
+        "comment_count": 0,
+        "created_at": "2026-08-25T23:59:43Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-26T01:59:42Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-hzb",
+            "issue_id": "xtrm-sf3",
+            "metadata": "{}",
+            "type": "blocks"
+          },
+          {
+            "created_at": "2026-08-26T01:59:42Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-qcy",
+            "issue_id": "xtrm-sf3",
+            "metadata": "{}",
+            "type": "discovered-from"
+          }
+        ],
+        "dependency_count": 1,
+        "dependent_count": 2,
+        "description": "Third comm-runtime bead. When an activation blocks on a pending reply obligation, the RUNTIME transitions it to WAITING_ON_CHANNEL and the scheduler owns resume via SchedulerIntent (exact + idempotent per R2.8) when the correlated reply lands. Agents never poll, never self-mark wakeable, never inspect for arrival.\n\nchannel_wait MUST NOT be exposed as the normal agent mechanism — it is at most a diagnostic/escape hatch; semantic waiting is runtime-mediated.\n\nPreserves: single-scheduler invariant (channels.md); scheduler indirection (emitResumeIntent writes intents, never direct enqueue); participant != activation != session identity separation; xtmux owns physical wake/injection mechanics for external runtimes.",
+        "id": "xtrm-sf3",
+        "issue_type": "task",
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-26T01:04:57Z",
+        "status": "closed",
+        "title": "Runtime-owned WAITING_ON_CHANNEL state + SchedulerIntent wake/resume",
+        "updated_at": "2026-08-26T01:38:23Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-sf3",
+  "root_title": "Runtime-owned WAITING_ON_CHANNEL state + SchedulerIntent wake/resume",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

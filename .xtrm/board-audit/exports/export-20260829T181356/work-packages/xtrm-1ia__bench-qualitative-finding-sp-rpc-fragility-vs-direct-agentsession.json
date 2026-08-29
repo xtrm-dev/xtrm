@@ -1,0 +1,41 @@
+{
+  "content_sha256": "8ff8e14153c6aa8f70d5818f113decbda25cf7b7be6ae1375c8922470bd4a6fd",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-1ia"
+  },
+  "issues": {
+    "xtrm-1ia": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Merged as PR #70 (main). §13 documents the sp fragility finding + partial direct-side numbers.",
+        "closed_at": "2026-08-18T00:07:57Z",
+        "comment_count": 0,
+        "created_at": "2026-08-18T00:05:16Z",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "id": "xtrm-1ia",
+        "issue_type": "task",
+        "priority": 2,
+        "started_at": "2026-08-18T00:05:17Z",
+        "status": "closed",
+        "title": "Bench qualitative finding: sp RPC fragility vs direct AgentSession",
+        "updated_at": "2026-08-18T00:07:57Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-1ia",
+  "root_title": "Bench qualitative finding: sp RPC fragility vs direct AgentSession",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

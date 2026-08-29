@@ -1,0 +1,96 @@
+{
+  "content_sha256": "b33d905aa4cc1da2d23fa6c8794407cb62f4249f6ed27af589b332e07790368b",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [
+      {
+        "children": [],
+        "id": "xtrm-zja.1"
+      }
+    ],
+    "id": "xtrm-zja"
+  },
+  "issues": {
+    "xtrm-zja": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Revamp complete on feature/xtrm-zja-board-audit-revamp (082b628, pushed --no-verify). README rewritten canonical-first: gen-2 export-wt/fanout/systemd-timer section (flags, paths, exit codes, no-op semantics, PATH gotcha verified by running against live market-data: ensure idempotent, checkpoint exit 0 'no board changes', fanout scoped run via BOARD_AUDIT_FANOUT_ROOT exit 0) followed by legacy gen-1 handoff/reconcile + PR-checkpoint sections marked legacy-but-working. IDEAS.md 210926 marked IMPLEMENTED with refs xtrm-cv3/xtrm-957. Wrapper board-audit gained ensure|checkpoint|status|fanout subcommands via pure exec delegation; help text updated; existing handoff/reconcile/pr-* arms untouched. Deprecation banners prepended to board-audit-pr-adapter.sh and board-audit-pr.py docstring; logic unchanged. Verification: bash -n clean on all touched shell scripts; full test suite 42/42 pass (one transient NO_HANDOFF flake during the 05:01 timer window, not reproducible); git diff touches only packages/board-audit/**; nothing deleted. Memory ack set.",
+        "closed_at": "2026-08-22T03:12:36Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T02:57:59Z",
+        "created_by": "jaggerxtrm",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "PROBLEM\nThe board-audit package carries two generations without saying so. Gen-1 (ad-hoc bd worktree create per operation, per-PR transport branches board-audit/<id>, PR-checkpoint adapter in client pre-push hooks) is documented in README.md as THE workflow but is operationally dead for checkpoints (market-data PR checkpoints silent since 2026-08-15; root cause: xt end pushes before the PR exists). Gen-2 is live in production since 2026-08-22: permanent orphan worktrees (~/.cache/xtrm/board-audit/export-worktrees/<slug>), one artifact branch per repo (board-audit-export-do-not-cancel), flock-serialized checkpoint with raw-beads.jsonl byte-compare no-op detection, retention keep-3, fanout loop over all mercury repos, fired by systemd user timer board-audit-fanout.timer every 15 min. All 12 mercury repos publish through it. But gen-2 lives in two unheralded scripts and the docs never mention it.\n\nSCOPE — all inside ~/dev/xtrm/packages/board-audit/\n1. Rewrite README.md: canonical workflow section FIRST covering board-audit-export-wt (ensure/checkpoint/status semantics incl. no-op signal = byte-compare of raw-beads.jsonl between newest two exports; manifest.json embeds generated_at and must not be compared), board-audit-fanout, the systemd units (board-audit-fanout.service/.timer, PATH Environment gotcha for user units, journalctl --user -u board-audit-fanout.service, cadence knob OnUnitActiveSec), retention keep-3, single-writer fast-forward assumption. Then a LEGACY section clearly marking ad-hoc-worktree handoff/reconcile roundtrip and PR-checkpoint machinery as legacy-but-working.\n2. IDEAS.md: mark item 210926 IMPLEMENTED, reference beads xtrm-cv3 (prototype) and xtrm-957 (fanout+timer).\n3. Wrapper ./board-audit: add checkpoint|status|ensure|fanout subcommands delegating to board-audit-export-wt / board-audit-fanout so users need one entry point; update its help text.\n4. Prepend a short deprecation banner comment to board-audit-pr-adapter.sh and board-audit-pr.py header docstring: PR-checkpoint mode superseded by permanent export surfaces + timer; kept for pr-status verification and existing handoffs. Do NOT delete or otherwise modify logic.\n\nAPPROACH\nDocs-first revamp; zero functional deletions; verify every command you document actually runs (market-data repo is a safe live target: expect 'no board changes' on clean state).\n\nACCEPTANCE CRITERIA\n- README canonical section matches actual script behavior (flags, paths, exit codes verified by running them).\n- ./board-audit checkpoint /home/dawid/projects/mercury/market-data exits 0 and prints no-op/pushed line; ./board-audit fanout dry understanding documented.\n- bash -n passes on every touched shell script.\n- No file deleted; git diff touches only packages/board-audit/.\n- Work committed on feature branch, pushed; bead closed with memory ack.\n\nTESTS\ntests/ dir exists — add nothing unless trivial; at minimum run existing tests if they still pass after wrapper change, and document result in close reason.\n\nRISKS\nWrapper arg-passing regressions for existing handoff/reconcile users — mitigate by pure delegation (exec) and keeping case arms unchanged.\n\nOUT OF SCOPE\nDeleting gen-1 code; changes outside packages/board-audit/; touching the market-data .githooks pre-push block; CI/workflow changes.",
+        "id": "xtrm-zja",
+        "issue_type": "task",
+        "labels": [
+          "contract:ready"
+        ],
+        "owner": "jagger.xtrm@gmail.com",
+        "priority": 2,
+        "started_at": "2026-08-22T03:00:58Z",
+        "status": "closed",
+        "title": "board-audit: revamp package — permanent export surfaces are canonical, gen-1 machinery is legacy",
+        "updated_at": "2026-08-22T03:12:36Z"
+      }
+    },
+    "xtrm-zja.1": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "closed_at": "2026-08-22T02:59:17Z",
+        "comment_count": 0,
+        "created_at": "2026-08-22T02:59:16Z",
+        "created_by": "jaggerxtrm",
+        "dependencies": [
+          {
+            "created_at": "2026-08-22T02:59:16Z",
+            "created_by": "jaggerxtrm",
+            "depends_on_id": "xtrm-zja",
+            "issue_id": "xtrm-zja.1",
+            "metadata": "{}",
+            "type": "parent-child"
+          }
+        ],
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Set contract to ready\n\nReason: Full contract written into description: problem, file-scoped scope, verified-commands acceptance criteria, explicit out-of-scope. Ready for dispatch.",
+        "id": "xtrm-zja.1",
+        "issue_type": "event",
+        "priority": 4,
+        "status": "closed",
+        "title": "State change: contract → ready",
+        "updated_at": "2026-08-22T02:59:16Z"
+      }
+    }
+  },
+  "relations": [
+    {
+      "raw": {
+        "created_at": "2026-08-22T02:59:16Z",
+        "created_by": "jaggerxtrm",
+        "depends_on_id": "xtrm-zja",
+        "issue_id": "xtrm-zja.1",
+        "metadata": "{}",
+        "type": "parent-child"
+      },
+      "source": "xtrm-zja.1",
+      "source_field": "dependencies",
+      "target": "xtrm-zja",
+      "type": "parent-child"
+    }
+  ],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-zja",
+  "root_title": "board-audit: revamp package — permanent export surfaces are canonical, gen-1 machinery is legacy",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}

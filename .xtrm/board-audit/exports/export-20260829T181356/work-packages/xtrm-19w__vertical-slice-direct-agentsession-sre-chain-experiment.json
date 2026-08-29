@@ -1,0 +1,42 @@
+{
+  "content_sha256": "0efe3529d32ea606829909921732a21759fa3fe1eb345ec8c280318f2d8e9e6b",
+  "diagnostics": {
+    "dangling_relations": [],
+    "derived_dotted_parent_links": [],
+    "multiple_parent_nodes": []
+  },
+  "external_relations": [],
+  "hierarchy": {
+    "children": [],
+    "id": "xtrm-19w"
+  },
+  "issues": {
+    "xtrm-19w": {
+      "selection_state": "selected",
+      "source": {
+        "_type": "issue",
+        "assignee": "jaggerxtrm",
+        "close_reason": "Vertical slice shipped as PR #68 → main 8b75247. Both fixture and real-target runs closed_pass; resume + bead-closure + schema validator round-2 fixes landed. See experiments/agentsession-sre-chain-vertical-slice/experiment-report.md. Handed to web-coordinator.",
+        "closed_at": "2026-08-17T22:52:49Z",
+        "comment_count": 0,
+        "created_at": "2026-08-17T21:31:32Z",
+        "dependency_count": 0,
+        "dependent_count": 0,
+        "description": "Runnable Bun/TS experiment implementing docs/harness/experiments/agentsession-sre-chain-vertical-slice-2026-08-17.md. Non-canonical, bounded, read-only. Baseline: .specialists/user/sre-* team from mercury-infra.",
+        "id": "xtrm-19w",
+        "issue_type": "task",
+        "priority": 2,
+        "started_at": "2026-08-17T21:31:33Z",
+        "status": "closed",
+        "title": "Vertical slice: direct AgentSession SRE chain experiment",
+        "updated_at": "2026-08-17T22:52:49Z"
+      }
+    }
+  },
+  "relations": [],
+  "repository": "xtrm-dev/xtrm",
+  "root_id": "xtrm-19w",
+  "root_title": "Vertical slice: direct AgentSession SRE chain experiment",
+  "schema_version": "xtrm.board-audit.work-package.v1",
+  "scope": "all"
+}
