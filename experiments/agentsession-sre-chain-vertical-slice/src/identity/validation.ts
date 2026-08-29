@@ -138,6 +138,7 @@ export function validateMutation(
         failures.push({ code: "binding_account_mismatch" });
       }
       if (
+        binding &&
         cfg.cutoverComplete === true &&
         e.principal_binding.immutable_account_id === null
       ) {

@@ -46,3 +46,20 @@ config to reject envelope bindings that still claim a null immutable
 account id.
 
 Tests: `tests/identity.test.ts` (`bun test tests/identity.test.ts`).
+
+## Slice 2 (xtrm-eq8) — trusted runtime wiring + canary
+
+- `src/chain/trusted-context.ts` (runtime side) resolves
+  `ResolvedExecutionContext` from the REAL chain-runtime scheduler lane
+  (exported `makeIdentity` + `ResolvedChain` + `StepExecutionState`). No
+  identity field is accepted from model/tool payloads.
+- `src/identity/canary.ts` runs the bounded non-production projection canary
+  (trusted context -> envelope -> projection -> platform adapter -> bind ->
+  receipt validation). The adapter is injected; production connectors are
+  NOT wired (no cutover).
+- `tests/identity-slice2-runtime.test.ts` covers the end-to-end canary,
+  identity-smuggling rejects, fail-closed rejection paths, rebind-conflict
+  regression, and legacy attribution.
+- Before cutover the correct classification for live web mutations remains
+  `self_attested_web` (direct/relay authorship mode). Unkeyed hashes are
+  tamper evidence only.
