@@ -27,6 +27,7 @@ import { dispatchActivation } from "../agents/bridge.ts";
 import { runtimePost } from "../channels/index.ts";
 import { executionId, nowIso, participantId } from "../util/ids.ts";
 import { stepById } from "./topology.ts";
+import { emitStepProvenanceReceipts } from "./provenance-receipts.ts";
 import { chainEpicIdOf, closeBead, noteBead } from "../adapters/beads.ts";
 import * as fsp from "node:fs/promises";
 import * as pathmod from "node:path";
@@ -328,6 +329,12 @@ export async function runToCompletion(
 
     // Reconcile beads for any newly-satisfied steps (spec §11: bounded Bead evidence/note).
     await reconcileBeads(ctx, run, newRunState, evidence);
+
+    // Opt-in provenance receipts (slice 3, residual F1): when the run's
+    // inputs carry a provenance config, each newly-satisfied step emits a
+    // REAL non-production mutation receipt (designated scratch git commit).
+    // No-op when provenance is not enabled.
+    await emitStepProvenanceReceipts(ctx, run, newRunState);
 
     if (newRunState.status.startsWith("closed_")) {
       const beadsMap = await loadBeadsMap(ctx.paths);

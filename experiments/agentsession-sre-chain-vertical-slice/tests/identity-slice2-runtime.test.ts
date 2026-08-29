@@ -62,6 +62,15 @@ const REGISTRIES = {
   principalSets: { [PRINCIPAL_SET.principal_set_id]: PRINCIPAL_SET },
 };
 
+/** role -> the single registered actor representing that role (slice 3 F4). */
+const ROLE_ACTORS: Record<string, string> = {
+  "chain-coordinator": ACTOR.actor_id,
+  explorer: ACTOR.actor_id,
+  "observability-analyst": ACTOR.actor_id,
+  "sre-diagnostician": ACTOR.actor_id,
+  reviewer: ACTOR.actor_id,
+};
+
 function realChain(): ResolvedChain {
   return newResolvedChain({
     chain_id: "chain-sre-canary",
@@ -76,13 +85,14 @@ function realChain(): ResolvedChain {
   });
 }
 
-function stepStateFor(stepId: string, attempts = 1): StepExecutionState {
+function stepStateFor(stepId: string, attempts = 1, piSession?: string): StepExecutionState {
   return {
     step_id: stepId,
     participant_id: "",
     attempts,
     status: "running",
     remediation_loops: 0,
+    last_pi_session_id: piSession ?? `pi-session-${stepId}-${attempts}`,
   };
 }
 
@@ -97,9 +107,9 @@ function resolveForStep(chain: ResolvedChain, step: ChainStep, st: StepExecution
       step,
       stepState: st,
       registries: REGISTRIES,
+      roleActors: ROLE_ACTORS,
       assignment: { id: `bead:${chain.root_bead_id}`, version: 1 },
       authorityRef: `bead:${chain.root_bead_id}`,
-      runtimeSessionId: "pi-session-canary-1",
       actorId: ACTOR.actor_id,
       principalSetId: PRINCIPAL_SET.principal_set_id,
     }),
@@ -139,7 +149,10 @@ describe("slice 2 — trusted runtime context wiring (real scheduler lane)", () 
     expect(resolution.context.execution.assignment_id).toBe(`bead:${chain.root_bead_id}`);
     expect(resolution.context.execution.assignment_version).toBe(1);
     expect(resolution.context.execution.authority_ref).toBe(`bead:${chain.root_bead_id}`);
-    expect(resolution.context.execution.runtime_session_id).toBe("pi-session-canary-1");
+    // F3 (slice 3): runtime_session_id is read from StepExecutionState.last_pi_session_id
+    expect(resolution.context.execution.runtime_session_id).toBe(
+      `pi-session-${step.step_id}-1`,
+    );
     expect(resolution.context.execution.policy_digest).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(resolution.context.execution.toolchain_digest).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(resolution.context.actor.actor_id).toBe(ACTOR.actor_id);
@@ -187,6 +200,7 @@ describe("slice 2 — trusted runtime context wiring (real scheduler lane)", () 
       step,
       stepState: st,
       registries: REGISTRIES,
+      roleActors: ROLE_ACTORS,
       assignment: { id: "bead:xtrm-eq8", version: 1 },
       authorityRef: "bead:xtrm-eq8",
       parentExecutionId: identity.execution_id,
@@ -315,6 +329,7 @@ describe("slice 2 — fail-closed rejection paths", () => {
       step,
       stepState: st,
       registries: REGISTRIES,
+      roleActors: ROLE_ACTORS,
       assignment: { id: "bead:xtrm-eq8", version: 1 },
       authorityRef: "bead:xtrm-eq8",
       actorId: ACTOR.actor_id,
