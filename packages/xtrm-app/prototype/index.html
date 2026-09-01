@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>XTRM Episodes — GUI Prototype</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="app">
+  <header class="titlebar">
+    <div class="title-left">
+      <div class="window-dots"><i></i><i></i><i></i></div>
+      <div class="brand">Codex Assistant</div>
+      <nav class="menu"><span>File</span><span>Edit</span><span>View</span><span>Help</span></nav>
+    </div>
+    <div class="title-right">
+      <div class="online"><i></i><span>Agent online</span></div>
+      <button class="icon-btn">⌘</button>
+      <button class="icon-btn">⚙</button>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="side-title">Conversations</div>
+      <button class="new-btn">+ New</button>
+    </div>
+
+    <div class="tree">
+      <section class="branch">
+        <div class="branch-title"><span>▾</span><span>main</span><span class="dot"></span></div>
+        <div class="branch-sub">Primary line</div>
+        <div class="branch-body">
+          <div class="tree-item active" data-episode="14"><div class="label"><span class="ep">Ep 14</span><span class="desc">Inspect folder structure</span></div><span class="state"></span></div>
+          <div class="tree-item" data-episode="15"><div class="label"><span class="ep">Ep 15</span><span class="desc">Create README</span></div><span class="state"></span></div>
+          <div class="tree-item"><div class="label"><span class="ep">Ep 16</span><span class="desc">Plan CI workflow</span></div><span class="state"></span></div>
+        </div>
+      </section>
+
+      <section class="branch">
+        <div class="branch-title"><span>▾</span><span>feature/docs</span><span class="dot"></span></div>
+        <div class="branch-sub">Forked from Ep 13</div>
+        <div class="branch-body">
+          <div class="tree-item"><div class="label"><span class="ep">Ep 8</span><span class="desc">Outline docs</span></div><span class="state"></span></div>
+          <div class="tree-item"><div class="label"><span class="ep">Ep 9</span><span class="desc">Write getting started</span></div><span class="state"></span></div>
+        </div>
+        <span class="compressed">+3 compressed</span>
+      </section>
+
+      <section class="branch">
+        <div class="branch-title"><span>▸</span><span>experiment/perf</span><span class="dot"></span></div>
+        <div class="branch-sub">Performance spike</div>
+        <span class="compressed">+5 compressed</span>
+      </section>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="episode-bar">
+      <div class="episode-label">
+        <span>Episodes</span>
+        <small>conversation timeline</small>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-episode="14">
+          <span class="tab-title">Inspect folder structure</span>
+          <span class="tab-meta">Ep 14 · 3m 42s · 14 tools</span>
+          <span class="tab-state"></span>
+        </button>
+        <button class="tab" data-episode="15">
+          <span class="tab-title">Create README</span>
+          <span class="tab-meta">Ep 15 · 5m 03s · 9 tools</span>
+          <span class="tab-state"></span>
+        </button>
+        <button class="tab">
+          <span class="tab-title">Plan CI workflow</span>
+          <span class="tab-meta">Ep 16 · not started</span>
+          <span class="tab-state"></span>
+        </button>
+      </div>
+
+      <button class="zoom-btn" id="zoomOut">Zoom out</button>
+    </div>
+
+    <section class="workspace" id="workspace">
+      <div class="content">
+        <div class="episode-head">
+          <div class="episode-head-left">
+            <span class="episode-index" id="episodeIndex">Ep 14</span>
+            <span class="episode-name" id="episodeName">Inspect folder and summarize structure</span>
+          </div>
+          <div class="episode-meta" id="episodeMeta">3m 42s · 14 tools · complete</div>
+        </div>
+
+        <div class="ingress">
+          <div class="section-kicker">Ingress</div>
+          <div class="prompt" id="promptText">Quickly inspect this folder, read a few files, and summarize the structure.</div>
+          <div class="path-chip">⌘ ~/Documents/Codex</div>
+        </div>
+
+        <div class="activity" id="activityToggle">
+          <div class="activity-main">
+            <strong>Activity</strong>
+            <span class="activity-stats" id="activityStats">6 turns · 14 tools · 2 messages · 1 retry</span>
+          </div>
+          <span class="activity-arrow" id="activityArrow">⌄</span>
+        </div>
+
+        <div class="response">
+          <div class="response-top">
+            <div class="section-kicker" style="margin-bottom:0">Agent response</div>
+            <div class="badge-row"><span class="badge" id="toolBadge">14 tools</span><span class="badge">6 files</span></div>
+          </div>
+          <p id="responseLead">I inspected the folder and read the key files. Here is the concise structure:</p>
+          <div class="response-grid" id="responseGrid">
+            <pre id="treeBlock">~/Documents/Codex
+├── .agents/
+├── .codex/
+├── .git/
+├── outputs/
+└── work/</pre>
+            <ul id="summaryList">
+              <li>No regular files exist in the root.</li>
+              <li>All subdirectories are present but mostly empty.</li>
+              <li><code>.git</code> contains repository metadata.</li>
+              <li><code>outputs/</code> and <code>work/</code> are placeholders for generated artifacts.</li>
+            </ul>
+          </div>
+          <div class="activity-detail" id="activityDetail">
+            <div>00:12 · read directory tree</div>
+            <div>00:29 · inspect repository metadata</div>
+            <div>01:18 · retry one file probe</div>
+            <div>02:44 · synthesize response</div>
+          </div>
+        </div>
+
+        <div class="protocol">
+          <div class="protocol-left">
+            <div class="protocol-title">Status</div>
+            <div class="steps">
+              <span class="step"><i></i>agent stopped</span>
+              <span class="step"><i></i>result submitted</span>
+              <span class="step"><i></i>validated</span>
+              <span class="step"><i></i>complete</span>
+            </div>
+          </div>
+          <button class="trace">View trace</button>
+        </div>
+
+        <div class="composer">
+          <input placeholder="Message Codex Assistant…" />
+          <button class="chip-btn">Files</button>
+          <button class="chip-btn">Tools</button>
+          <button class="chip-btn">Workspace</button>
+          <button class="chip-btn">Claude Sonnet</button>
+          <button class="send">↑</button>
+        </div>
+      </div>
+
+      <aside class="overview">
+        <div class="overview-head">
+          <strong>Overview</strong>
+          <span class="overview-controls">− &nbsp; 100% &nbsp; +</span>
+        </div>
+        <div class="overview-cards">
+          <div class="mini-card active" data-episode="14"><strong>Ep 14</strong><span>Inspect folder structure</span><small>3m 42s · 14 tools</small></div>
+          <div class="mini-card" data-episode="15"><strong>Ep 15</strong><span>Create README</span><small>5m 03s · 9 tools</small></div>
+          <div class="mini-card"><strong>Ep 16</strong><span>Plan CI workflow</span><small>not started</small></div>
+        </div>
+        <div class="overview-foot">Select an episode or zoom out for the full card map.</div>
+      </aside>
+
+      <div class="cards-view" id="cardsView">
+        <div class="cards-header">
+          <div>
+            <h2>Episodes overview</h2>
+            <p>Jump between interactions or inspect a compressed branch.</p>
+          </div>
+          <button class="zoom-btn" id="zoomIn">Back to episode</button>
+        </div>
+        <div class="cards-grid">
+          <article class="episode-card active" data-episode="14">
+            <div class="card-top"><span class="card-index">Ep 14 · main</span><span class="card-state"></span></div>
+            <h3>Inspect folder and summarize structure</h3>
+            <div class="card-preview">Quickly inspect this folder, read a few files, and summarize the structure.</div>
+            <div class="card-meta">6 turns · 14 tools · 3m 42s</div>
+          </article>
+
+          <article class="episode-card" data-episode="15">
+            <div class="card-top"><span class="card-index">Ep 15 · main</span><span class="card-state"></span></div>
+            <h3>Create README</h3>
+            <div class="card-preview">Write a compact README from the structure we just inspected.</div>
+            <div class="card-meta">4 turns · 9 tools · 5m 03s</div>
+          </article>
+
+          <article class="episode-card">
+            <div class="card-top"><span class="card-index">Ep 16 · main</span><span class="card-state"></span></div>
+            <h3>Plan CI workflow</h3>
+            <div class="card-preview">Add a basic lint and test workflow after the README lands.</div>
+            <div class="card-meta">not started</div>
+          </article>
+
+          <article class="episode-card">
+            <div class="card-top"><span class="card-index">feature/docs</span><span class="card-state"></span></div>
+            <h3>Compressed fork</h3>
+            <div class="card-preview">3 episodes collapsed into one branch summary. Expand only when needed.</div>
+            <div class="card-meta">Ep 8 → Ep 10 · +3 compressed</div>
+          </article>
+
+          <article class="episode-card">
+            <div class="card-top"><span class="card-index">experiment/perf</span><span class="card-state"></span></div>
+            <h3>Performance exploration</h3>
+            <div class="card-preview">Experimental branch with benchmark and profiling work.</div>
+            <div class="card-meta">+5 compressed</div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="./app.js"></script>
+</body>
+</html>
