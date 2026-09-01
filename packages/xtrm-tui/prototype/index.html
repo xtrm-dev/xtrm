@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XTRM Agent TUI Prototype</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body data-toolview="compressed">
+<div class="term">
+  <div class="topline">
+    <div class="top-left">
+      <span class="brand">XTRM</span>
+      <span class="sep">·</span>
+      <span>core</span>
+      <span class="context">feature/xtrm-agent-tui</span>
+    </div>
+    <div class="top-right">
+      <span>gpt-5.6-sol</span>
+      <span class="sep">·</span>
+      <span>ctx 65%</span>
+      <span class="sep">·</span>
+      <span>thinking high</span>
+    </div>
+  </div>
+
+  <div class="episode-strip">
+    <div class="episode-title">EPISODES</div>
+    <div class="tabs">
+      <button class="tab active" data-episode="1"><div class="name">Recover work state</div><div class="meta">Ep 1 · 6 turns · 8 tools</div></button>
+      <button class="tab" data-episode="2"><div class="name">Review extension contract</div><div class="meta">Ep 2 · 4 turns · 12 tools</div></button>
+      <button class="tab" data-episode="3"><div class="name">Implement renderer</div><div class="meta">Ep 3 · running</div></button>
+    </div>
+    <button class="zoom" id="episodesBtn">Ctrl+E overview</button>
+  </div>
+
+  <main class="viewport" id="viewport">
+    <div class="episode-head">
+      <strong id="episodeHeading">Ep 1 · Recover work state</strong>
+      <span id="episodeMeta">1m 03s · settled</span>
+    </div>
+
+    <div class="user" id="userText">Recover the interrupted extension task, verify current state, then continue the writer.</div>
+
+    <div class="thinking"><b>Thinking...</b> · Inspecting current branch and durable task state · 2.3k <span>(Ctrl+T expand)</span></div>
+
+    <div class="activity-heading">
+      <span>ACTIVITY · <span id="activitySummary">6 turns · 8 tools · 1 message</span></span>
+      <span id="viewLabel">compressed</span>
+    </div>
+
+    <section class="tool-stack" id="tools">
+      <div class="tool">
+        <div class="primary"><span class="bullet">•</span><span class="verb">Ran</span><span class="subject">cd /home/dawid/dev/core/.xtrm/worktrees/core-xt-pi-core-extgap &amp;&amp; bd show xtrm-1k07w.4 --json</span><span class="meta">2.6s · 2.3KB</span></div>
+        <div class="preview">{"description":"Recover Alpine extension contract…","notes":"review PASS superseded by security audit…"}</div>
+        <div class="footer">showing 1/19 lines · 2.3KB</div>
+        <div class="expanded-extra preview">{"close_reason":null,"status":"in_progress","assignee":"pi/core-extgap"}</div>
+      </div>
+
+      <div class="tool">
+        <div class="primary"><span class="bullet">•</span><span class="verb">Read</span><span class="subject">packages/pi-extensions/extensions/xtrm-ui/index.ts</span><span class="meta">1.3s · 65KB</span></div>
+        <div class="preview">registerXtrmUiTools(pi, getPrefs)
+applyXtrmChrome(ctx, prefs, getThinkingLevel)
+ctx.ui.setToolsExpanded(false)</div>
+        <div class="footer">showing 3/1782 lines · 65KB</div>
+        <div class="expanded-extra preview">… native bash/read/edit/write/find/grep/ls renderers
+… external tool frame patch
+… thinking row patch
+… commands and persisted preferences</div>
+      </div>
+
+      <div class="tool">
+        <div class="primary"><span class="bullet">•</span><span class="verb">Sent</span><span class="subject">native intercom → 01a05e35</span><span class="meta">10s · 24B</span></div>
+        <div class="preview">Message sent to 01a05e35</div>
+        <div class="footer">1 line</div>
+      </div>
+
+      <div class="tool">
+        <div class="primary"><span class="bullet">•</span><span class="verb">Edited</span><span class="subject">README.md</span><span class="meta">+18 -3 · 0.8s</span></div>
+        <div class="preview">@@ extension source contract
++ source-tree execution is allowed only when explicitly selected
++ packed artifact remains the release path</div>
+        <div class="footer">diff preview · +18 -3</div>
+        <div class="expanded-extra preview">+ document required_tools downgrade semantics
++ document offline source behavior
++ document deny-list limitations</div>
+      </div>
+    </section>
+
+    <section class="agent">
+      <div class="label">Agent response</div>
+      <p id="agentText">Recovered the task and resumed the existing worker. The durable bead, branch, and prior commit were intact; the review had identified missing contract requirements rather than a runtime failure.</p>
+      <pre id="agentBlock">active task   unitAI-xoum6
+branch        agent/pi/unitAI-xoum6-readme
+commit        1f81d357
+next          writer → review → validation</pre>
+    </section>
+  </main>
+
+  <div class="status">
+    <div class="view">tool view: <strong id="toolViewText">compressed</strong> · Ctrl+O cycles compressed → normal → expanded</div>
+    <div class="keys"><span><kbd>Ctrl+E</kbd> episodes</span><span><kbd>Ctrl+B</kbd> branches</span><span><kbd>Ctrl+T</kbd> thinking</span></div>
+  </div>
+
+  <div class="composer">
+    <span class="promptmark">›</span>
+    <input id="composer" placeholder="Message agent…  / for commands">
+    <span class="model">sol · high</span>
+  </div>
+
+  <div class="bottom">
+    <div class="left"><span>Pi SDK</span><span>xtrm-ui native</span><span>cwd ~/dev/core</span></div>
+    <div>esc interrupt · alt+enter follow-up · ctrl+l model</div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="dialog">
+    <div class="dialog-head">
+      <div><h2>Episode overview</h2><div class="hint">Enter jump · B branches · Esc close</div></div>
+      <div class="toolbar"><button class="mini-btn" id="treeBtn">branch tree</button><button class="mini-btn" id="closeBtn">close</button></div>
+    </div>
+    <div class="cards">
+      <div class="card active" data-card="1"><span class="n">EP 1 · settled</span><h3>Recover work state</h3><p>6 turns · 8 tools · 1m 03s</p></div>
+      <div class="card" data-card="2"><span class="n">EP 2 · settled</span><h3>Review extension contract</h3><p>4 turns · 12 tools · 2m 16s</p></div>
+      <div class="card" data-card="3"><span class="n">EP 3 · running</span><h3>Implement renderer</h3><p>3 turns · 5 tools · live</p></div>
+      <div class="card"><span class="n">FORK · docs-ui</span><h3>Alternative compact chrome</h3><p>+4 visually compressed</p></div>
+      <div class="card"><span class="n">FORK · renderer-spike</span><h3>External tool rendering experiment</h3><p>+3 visually compressed</p></div>
+    </div>
+    <div class="tree" id="tree">
+      <div class="line"><span class="branch">main</span></div>
+      <div class="line">├─ Ep 1 Recover work state</div>
+      <div class="line">├─ Ep 2 Review extension contract</div>
+      <div class="line">└─ Ep 3 Implement renderer</div>
+      <div class="line">   ├─ <span class="branch">docs-ui</span><span class="compressed-pill">+4 compressed</span></div>
+      <div class="line">   └─ <span class="branch">renderer-spike</span><span class="compressed-pill">+3 compressed</span></div>
+    </div>
+  </div>
+</div>
+
+<script src="./app.js"></script>
+</body>
+</html>
