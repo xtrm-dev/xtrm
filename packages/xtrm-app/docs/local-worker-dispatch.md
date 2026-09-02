@@ -2,21 +2,90 @@
 
 Build the first real Linux vertical in `xtrm-dev/xtrm/packages/xtrm-app`. Treat this package as the canonical implementation root for the Episode-based human↔agent desktop app.
 
-Read `docs/implementation-packet.md` and the starter provider/event interfaces.
+Read, in order:
+
+1. `docs/adoption-audit.md`;
+2. `docs/implementation-packet.md`;
+3. the starter provider/event interfaces.
+
+## Adoption-first rule
+
+Do not start by implementing commodity agent-client infrastructure from scratch.
+
+Before writing the corresponding production code, execute the bounded adoption spikes from `docs/adoption-audit.md` for:
+
+```text
+APP-SPIKE-1  acp-components
+APP-SPIKE-2  ACP Kit
+APP-SPIKE-3  native Pi versus Pi-over-ACP
+APP-SPIKE-4  long-session projection/lazy hydration
+```
+
+For every evaluated dependency/component, record:
+
+```text
+DEPEND / ADAPT / REFERENCE / REJECT
+exact repository/package + version/commit
+license
+what XTRM can delete/not implement because of the adoption
+integration friction
+product-identity constraints
+```
+
+Do not silently vendor or copy source.
+
+The default target after research is:
+
+```text
+XTRM-owned product layer
+  EpisodeWorkspace
+  EpisodeTabStrip
+  EpisodeOverview
+  ConversationGraph
+  branch compression
+
+reused/adapted interaction primitives
+  composer
+  markdown
+  tool/diff/file UI
+  permissions
+
+runtime
+  PiNativeAdapter -> AgentSessionRuntime
+  AcpAdapter -> ACP Kit -> ACP-speaking agents
+```
+
+Do not force Pi through ACP merely for uniformity. Native Pi remains preferred until semantic parity is proven for the Episode requirements.
+
+## Product identity rule
+
+Reuse machinery, not another application's identity.
+
+The final application must remain recognizably XTRM through:
+
+- Episode-based interaction rather than an endless chat transcript;
+- thin horizontal Episode tabs;
+- zoomed-out Episode-card navigation;
+- first-class conversation/fork topology;
+- visual non-destructive branch compression;
+- restrained monochrome/graphite visual language with one accent family;
+- XTRM terminology and later XTRM runtime projections.
+
+Do not adopt an upstream `WorkbenchShell`, theme, navigation hierarchy, or chat-first layout wholesale if it makes Episodes secondary.
+
+## Runtime cold start
 
 Before implementation:
+
 1. resolve the current default head of `earendil-works/pi`;
-2. record installed versions of `@earendil-works/pi-coding-agent`,
-   `@earendil-works/pi-agent-core`, Node and Bun;
-3. verify `createAgentSessionRuntime`, `AgentSessionEvent.agent_settled`,
-   `SessionManager.getTree`, `navigateTree`, `fork`, and compaction against the
-   exact installed/source API;
-4. characterize the current Claude Agent SDK TypeScript API from official docs
-   and the installed package before writing the Claude adapter.
+2. record installed versions of `@earendil-works/pi-coding-agent`, `@earendil-works/pi-agent-core`, Node and Bun;
+3. verify `createAgentSessionRuntime`, `AgentSessionEvent.agent_settled`, `SessionManager.getTree`, `navigateTree`, `fork`, and compaction against the exact installed/source API;
+4. characterize the current Claude Agent SDK TypeScript API only if a direct Claude path remains necessary after the ACP adoption spike;
+5. re-verify licenses and current versions of any adopted external dependency.
 
-Do not start with Claude. Land the Pi vertical first.
+Land the Pi vertical first. Generic non-Pi provider work should prefer one ACP adapter/runtime over one custom adapter per provider.
 
-The runtime contract is:
+The native Pi runtime contract is:
 
 ```text
 idle Send -> episode_started
@@ -29,11 +98,10 @@ agent_settled -> episode_settled
 
 Do not close an Episode on `agent_end`.
 
-Use a Tauri 2 React/TypeScript shell with a Node 24 sidecar unless local evidence
-shows that this choice creates unacceptable packaging/runtime friction. If so,
-document the evidence and use Electron as the bounded fallback.
+Use a Tauri 2 React/TypeScript shell with a Node 24 sidecar unless local evidence shows that this choice creates unacceptable packaging/runtime friction. If so, document the evidence and use Electron as the bounded fallback.
 
 The first accepted milestone is:
+
 - Linux app launches;
 - cwd selection;
 - real Pi session;
@@ -45,10 +113,10 @@ The first accepted milestone is:
 - UI-only branch compression works;
 - restart reconstructs sessions/episodes;
 - abort works;
-- tests prove agent_end retry does not prematurely close an Episode.
+- tests prove `agent_end` retry does not prematurely close an Episode;
+- adoption report proves which commodity components/runtime pieces were reused and which remained XTRM-specific.
 
-Preserve the provider transcript as source of truth. Add only a small app-owned
-SQLite metadata/index layer where necessary.
+Preserve the provider transcript as source of truth. Add only a small app-owned SQLite metadata/index layer where necessary.
 
 Do not introduce Specialists/XTRM chain runtime concepts in this v0.
 
