@@ -1,4 +1,4 @@
-"""Per-repo FTS5 evidence index (research §3, PR3).
+"""Per-repo FTS5 evidence index (research §3; shipped in v0.3.0).
 
 Public surface:
 

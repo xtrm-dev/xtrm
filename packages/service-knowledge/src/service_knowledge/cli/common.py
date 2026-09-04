@@ -310,7 +310,7 @@ def install_git_hooks(root: Path) -> list[str]:
 
 
 def ensure_cache(root: Path) -> list[str]:
-    """Create the empty FTS5 cache file (PR3 populates the schema). Idempotent."""
+    """Create the empty FTS5 cache file (schema + rows populated by index build). Idempotent."""
     cache = root / CACHE_REL
     if cache.exists():
         return []

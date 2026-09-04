@@ -206,7 +206,7 @@ def _has_registry(root: Path) -> bool:
 
 
 def _rebuild_knowledge_index(root: Path) -> None:
-    """PR3: refresh the derived FTS5 evidence index post-merge so index_state.source_ref tracks
+    """Refresh the derived FTS5 evidence index post-merge so index_state.source_ref tracks
     HEAD. Uses the installed service-knowledge package; a missing/broken package is a silent
     no-op (the index is advisory and must never fail a merge)."""
     try:
@@ -231,7 +231,7 @@ def main() -> int:
     if branch and branch not in allowed:
         return 0
 
-    # PR3: rebuild the derived knowledge index on every default-branch merge.
+    # Rebuild the derived knowledge index on every default-branch merge.
     _rebuild_knowledge_index(root)
 
     # Cost-bounded drift scan (mtime pre-filter + gitnexus tiering, since last_sync_ref).
