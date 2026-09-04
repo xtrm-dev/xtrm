@@ -12,7 +12,7 @@ description: >-
 allowed-tools: Bash(python3 *), Read, Grep, Glob, Write
 ---
 
-# Service Skills
+# Service Knowledge
 
 The single entry point for a project's **service-knowledge** system. Each service gets a
 dedicated expert package — architecture, data flows, failure modes, runnable health checks,

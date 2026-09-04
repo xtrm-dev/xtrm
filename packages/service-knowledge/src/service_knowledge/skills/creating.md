@@ -1,5 +1,5 @@
 
-# Creating Service Skills
+# Creating Service Knowledge
 
 > Detailed **create** flow for the `service-knowledge` router. Invoked via `/service-knowledge` (create) or `/creating-service-knowledge` as the specific create trigger.
 >
@@ -473,7 +473,7 @@ A skill is **complete** (not a draft) when ALL of these are true:
 **Registration:**
 - [ ] `references/deep_dive.md` Phase 2 checklist completed
 - [ ] Official docs links in References section verified
-- [ ] Service registered in `.claude/skills/service-registry.json`
+- [ ] Service registered in the repo service registry (`.xtrm/skills/<pack>/service-knowledge/service-registry.json`)
 - [ ] `PreToolUse` skill activator hook confirmed in `.claude/settings.json`
 - [ ] User informed: skill auto-activates on territory file access and service-name commands
 
@@ -511,10 +511,10 @@ After successful completion:
 
 Write to:
 - ✅ `.xtrm/skills/<pack>/service-knowledge/services/<service-id>/` (new skill packages)
-- ✅ `.claude/skills/service-registry.json` (registration)
+- ✅ repo service registry (registration; `.claude/skills/` is the legacy view)
 
 Do not:
-- ❌ Modify source code outside `.claude/skills/`
+- ❌ Modify source code outside the skill/registry tree (`.xtrm/skills/`, `.claude/skills/` view)
 - ❌ Delete existing skills or registry entries
 
 ---

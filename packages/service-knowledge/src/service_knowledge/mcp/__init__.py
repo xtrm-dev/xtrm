@@ -1,6 +1,6 @@
 """Read-only MCP tools for the service-knowledge index (research §3.8).
 
-Three tools ship in PR3; ``knowledge_probes`` and ``knowledge_conflicts`` are deferred to
+Three tools ship (stable since v0.3.0); ``knowledge_probes`` and ``knowledge_conflicts`` are deferred to
 follow-up beads (advisory extras, low value at MVP) and are documented as such in the API
 surface. There is deliberately no ``answer()`` endpoint — the layer returns evidence only.
 """

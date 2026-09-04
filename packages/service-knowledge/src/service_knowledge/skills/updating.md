@@ -1,5 +1,5 @@
 
-# Updating Service Skills
+# Updating Service Knowledge
 
 > Detailed **update / drift-sync** flow for the `service-knowledge` router.
 >
@@ -228,7 +228,7 @@ record the gap, and leave the service flagged for a follow-up gitnexus pass. Do 
 
 Write to:
 - ✅ `.claude/skills/*/SKILL.md` — skill documentation updates
-- ✅ `.claude/skills/service-registry.json` — territory and sync timestamp updates
+- ✅ repo service registry (`.xtrm/skills/<pack>/service-knowledge/service-registry.json`) — territory and sync timestamp updates
 
 Avoid:
 - ❌ Modify source code (read-only access to service territories)

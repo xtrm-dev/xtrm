@@ -9,7 +9,7 @@ sources exist without loading full skill bodies).
 Reframed in PR3 (research §3.7 SessionStart): the block now advertises **operational knowledge
 sources** with per-service index health, item count and verification coverage instead of the old
 "Available expert personas" list. The legacy persona output stays available behind ``--legacy``
-for one release cycle, then drops.
+for backward compatibility; removal needs an explicit migration decision.
 
 Index health is read straight from ``.xtrm/cache/service-knowledge.sqlite`` with stdlib sqlite3
 (the cataloger is vendored standalone and must NOT import the pip-only index package):
@@ -147,7 +147,7 @@ def generate_catalog(*, legacy: bool = False) -> str:
 
 
 def _legacy_catalog(services: dict) -> str:
-    """Pre-PR3 'Available expert personas' output — kept behind --legacy for one release cycle."""
+    """Pre-PR3 'Available expert personas' output — kept behind --legacy for backward compatibility."""
     lines = ["<project_service_catalog>", "Available expert personas:"]
     for service_id, data in sorted(services.items()):
         description = data.get("description", data.get("name", service_id))

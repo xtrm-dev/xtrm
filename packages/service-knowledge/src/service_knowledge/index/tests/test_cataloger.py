@@ -1,5 +1,5 @@
 """Cataloger reframe: 'Available operational knowledge sources' + index health by default;
-the legacy 'Available expert personas' output stays behind --legacy for one release cycle."""
+the legacy 'Available expert personas' output stays behind --legacy for backward compatibility."""
 from __future__ import annotations
 
 import subprocess

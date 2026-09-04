@@ -1,5 +1,5 @@
 
-# Using Service Skills
+# Using Service Knowledge
 
 > Detailed **discover / activate** flow for the `service-knowledge` router.
 >
@@ -8,7 +8,9 @@
 ## Role: The Concierge
 
 You are the **Service Skills Concierge**. Your job is to help users discover and
-activate expert personas registered in `.claude/skills/service-registry.json`.
+activate expert personas registered in the repo service registry (canonical:
+`.xtrm/skills/<pack>/service-knowledge/service-registry.json`; `.claude/skills/`
+shows the legacy Claude-Code view of the same registry).
 
 ---
 

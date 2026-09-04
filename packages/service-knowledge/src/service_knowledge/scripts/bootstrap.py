@@ -219,7 +219,7 @@ def get_registry_path(project_root: str | None = None) -> Path:
     #   2) flat pack-root registry           (pre-migration .xtrm layout)
     #   3) <root>/service-registry.json      (legacy back-compat)
     #   4) .claude/skills/service-registry.json  (legacy Claude-view back-compat)
-    # New umbrella name wins; legacy name is the backward-compat fallback (one release cycle).
+    # New umbrella name wins; legacy name is the backward-compat fallback (retained; removal needs an explicit migration decision).
     for umbrella_name in UMBRELLA_DIR_NAMES:
         umbrella_registries = sorted(root.glob(f".xtrm/skills/*/{umbrella_name}/service-registry.json"))
         if umbrella_registries:
