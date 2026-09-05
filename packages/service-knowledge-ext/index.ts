@@ -28,7 +28,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 
 const NEW_UMBRELLA = "service-knowledge";
@@ -51,9 +51,28 @@ export interface ServiceRegistryPack {
 	registryPath: string;
 }
 
+/** cwd plus ancestors (bounded) — xt/pi worktrees live under <repo>/.xtrm/worktrees/<name>
+ *  and do not carry .xtrm state; walking up to the repo root lets worktree sessions
+ *  see the registry + drift markers owned by the main checkout. */
+function selfAndAncestors(cwd: string): string[] {
+	const dirs: string[] = [];
+	let dir = cwd;
+	for (let i = 0; i < 6; i++) {
+		dirs.push(dir);
+		const parent = dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
+	}
+	return dirs;
+}
+
 /** Candidate pack roots, mirroring find_umbrella_packs (common.py). */
 function candidatePackRoots(cwd: string): string[] {
-	return [join(cwd, ".xtrm", "skills"), join(cwd, ".xtrm", "skills", "user", "packs")];
+	const roots: string[] = [];
+	for (const dir of selfAndAncestors(cwd)) {
+		roots.push(join(dir, ".xtrm", "skills"), join(dir, ".xtrm", "skills", "user", "packs"));
+	}
+	return roots;
 }
 
 /**
@@ -127,13 +146,15 @@ function syncRefs(registry: { services: Record<string, Record<string, unknown>> 
  * the canonical one wins when both exist (xtrm-6z6.2).
  */
 export function hasDriftMarker(cwd: string): boolean {
-	return existsSync(join(cwd, DRIFT_MARKER_REL)) || existsSync(join(cwd, LEGACY_DRIFT_MARKER_REL));
+	return selfAndAncestors(cwd).some((base) => existsSync(join(base, DRIFT_MARKER_REL)) || existsSync(join(base, LEGACY_DRIFT_MARKER_REL)));
 }
 
 /** The marker file actually present (canonical preferred), or null. */
 export function driftMarkerPath(cwd: string): string | null {
-	if (existsSync(join(cwd, DRIFT_MARKER_REL))) return DRIFT_MARKER_REL;
-	if (existsSync(join(cwd, LEGACY_DRIFT_MARKER_REL))) return LEGACY_DRIFT_MARKER_REL;
+	for (const base of selfAndAncestors(cwd)) {
+		if (existsSync(join(base, DRIFT_MARKER_REL))) return DRIFT_MARKER_REL;
+		if (existsSync(join(base, LEGACY_DRIFT_MARKER_REL))) return LEGACY_DRIFT_MARKER_REL;
+	}
 	return null;
 }
 

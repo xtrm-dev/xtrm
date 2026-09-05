@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memory doctrine — progressive retrieval, never bulk</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --edge:#30363d; --ink:#e6edf3; --dim:#8b949e;
+    --acc:#58a6ff; --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,"Segoe UI",Roboto,sans-serif;padding:32px 20px 60px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:22px;letter-spacing:-.01em;margin-bottom:4px}
+  h1 .v{color:var(--dim);font-weight:400}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:28px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--acc);margin:34px 0 12px}
+  .lane{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 0}
+  .step{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:14px}
+  .step .n{font:600 11px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+  .step .t{font-weight:600;margin:6px 0 4px;font-size:14px}
+  .step .d{font-size:12.5px;color:var(--dim)}
+  .arrow{display:flex;justify-content:center;color:var(--dim);font-size:16px;margin:-2px 0}
+  pre{background:#0a0d12;border:1px solid var(--edge);border-radius:10px;padding:14px 16px;font:12.5px/1.6 var(--mono);overflow-x:auto;margin:10px 0}
+  pre .k{color:var(--purple)} pre .s{color:var(--green)} pre .c{color:var(--dim)} pre .f{color:var(--acc)}
+  code{font:12px var(--mono);background:#21262d;border:1px solid var(--edge);border-radius:4px;padding:1px 5px;color:var(--acc)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:16px}
+  .card h3{font-size:13px;margin-bottom:8px}
+  .card p, .card li{font-size:13px;color:var(--dim)}
+  ul{padding-left:18px}
+  li{margin:4px 0}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+  th,td{border:1px solid var(--edge);padding:7px 10px;text-align:left}
+  th{color:var(--dim);font:600 11px var(--mono);text-transform:uppercase;letter-spacing:.05em}
+  td code{font-size:11.5px}
+  .ok{color:var(--green)} .bad{color:var(--red)} .warn{color:var(--amber)}
+  .tag{font:600 10px var(--mono);border-radius:4px;padding:2px 7px;margin-right:6px;letter-spacing:.04em}
+  .tag.problem{background:#3d1e20;color:var(--red);border:1px solid #6e2b30}
+  .tag.fix{background:#12281e;color:var(--green);border:1px solid #1f4b32}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Memory doctrine <span class="v">— progressive retrieval, never bulk</span></h1>
+<div class="sub">APPEND_SYSTEM.md prompt block · python-kernel <code>preflight()</code> prelude binding · core repo, 2026-02</div>
+
+<h2>The problem it kills</h2>
+<div class="grid2">
+  <div class="card">
+    <h3><span class="tag problem">BULK</span>bd prime dumps the store</h3>
+    <p>Session-start injection of the entire memory store. Measured in <code>~/dev/core</code>: <b class="bad">384,750 bytes ≈ 100k tokens</b> of memories the model must carry (or silently lose to truncation) before any work begins.</p>
+  </div>
+  <div class="card">
+    <h3><span class="tag fix">TARGETED</span>retrieve at the moment of need</h3>
+    <p>Nothing is loaded until a trigger fires. The agent interrogates <i>the one file it is about to touch</i> — commits, diffs, memories — and prints a bounded digest. Context cost: kilobytes.</p>
+  </div>
+</div>
+
+<h2>The retrieval ladder (priority order, per repo)</h2>
+<div class="lane">
+  <div class="step"><div class="n">Layer 1</div><div class="t">service-knowledge</div><div class="d"><code>service-registry.json</code> if present — else ignore, never grep-hunt.</div></div>
+  <div class="step"><div class="n">Layer 2</div><div class="t">bd memories</div><div class="d"><code>bd memories &lt;topic&gt;</code>, <code>bd recall &lt;key&gt;</code> — targeted search, never the full list.</div></div>
+  <div class="step"><div class="n">Layer 3</div><div class="t">commit corpus</div><div class="d"><code>git log --follow</code> with full bodies. Commits never go stale.</div></div>
+  <div class="step"><div class="n">Workbench</div><div class="t">python kernel</div><div class="d">Persistent state = the retrieval engine. Load once, filter across cells.</div></div>
+  <div class="step"><div class="n">Write-back</div><div class="t">bd remember</div><div class="d"><code>bd remember "&lt;insight&gt;" --key &lt;slug&gt;</code> so the next session retrieves.</div></div>
+</div>
+
+<h2>The trigger → preflight ritual</h2>
+<pre>
+<span class="c"># triggers: about to edit a file · fixing a bug · implementing ·
+# gitnexus flags a file/symbol critical or medium impact</span>
+<span class="f">preflight</span>(repo, path, n=4)
+  ├─ git log --follow --format=<span class="s">'%h %ad %s + full body'</span>   <span class="c"># subjects alone hide the why</span>
+  ├─ git diff HEAD --stat -- &lt;file&gt;                        <span class="c"># history + working state, together</span>
+  ├─ bd memories &lt;basename&gt;                                <span class="c"># prior incidents, constraints</span>
+  └─ prints a bounded digest; returns the records          <span class="c"># 0 commits = wrong path (guard)</span>
+</pre>
+<div class="sub">Read-only (no _AUDIT entries). Verified live on <code>.githooks/pre-push</code>: 10 commits with bodies surfaced <code>d6ca0627 fix(hooks): pre-push chain must exit 0 [exit-status-bug]</code> — corroborating the bd memory about the same incident. Two memory layers agreeing = the system working.</div>
+
+<h2>Context-window safety (why the kernel can't bust you)</h2>
+<ul>
+  <li><b>State lives outside the window.</b> 1,430-commit corpora sit in the python process heap; the conversation only sees what a cell prints.</li>
+  <li><b>Hard output cap per cell:</b> 20KB (head 8KB + tail 4KB + marker), full output spilled to a temp file. Absolute ceiling 200KB.</li>
+  <li><b>One footgun:</b> the driver evals the last expression — a bare <code>commits</code> as the final line dumps its repr (truncated, but wasteful). End cells with <code>len()</code> / top-N / aggregates.</li>
+</ul>
+
+<h2>What shipped — Route A: baked into the kernel prelude</h2>
+<table>
+  <tr><th>file</th><th>Δ</th><th>what</th></tr>
+  <tr><td><code>extensions/python-kernel/index.ts</code></td><td>+53</td><td><code>preflight()</code> at DRIVER module scope · bound in <code>_apply_prelude()</code> (try/NameError — the xtrm-vs7f8 reset invariant) + initial <code>_ns</code> bind · tool description + promptGuideline teach it</td></tr>
+  <tr><td><code>tests/python-kernel.test.ts</code></td><td>+23</td><td>boot binding · hermetic wrong-path guard · survives <code>reset: true</code></td></tr>
+  <tr><td><code>scripts/verify-python-kernel-v2.mjs</code></td><td>+5 markers</td><td>def / bind / durable / record-format / test-presence</td></tr>
+  <tr><td><code>extensions/python-kernel/README.md</code></td><td>+13</td><td>prelude contract documents the function</td></tr>
+</table>
+<table>
+  <tr><th>gate (from the commit-body manual)</th><th>result</th></tr>
+  <tr><td><code>bun test tests/python-kernel.test.ts</code></td><td class="ok">29/29</td></tr>
+  <tr><td><code>verify-python-kernel-v2</code></td><td class="ok">29 checks</td></tr>
+  <tr><td><code>tsc --noEmit</code></td><td class="ok">clean</td></tr>
+  <tr><td><code>check:pi-extension-manifest</code></td><td class="ok">ok</td></tr>
+</table>
+
+<h2>DRIVER-change lore (two bugs the gates caught)</h2>
+<div class="grid2">
+  <div class="card">
+    <h3><span class="tag problem">BUG 1</span>backticks in a docstring</h3>
+    <p>The DRIVER is a TS template literal — a backtick anywhere in the Python source terminates it. Bun failed at parse: <code>expected ";" but found "bd"</code>. Fix: no backticks in DRIVER strings.</p>
+  </div>
+  <div class="card">
+    <h3><span class="tag problem">BUG 2</span>the escape layer ate a backslash</h3>
+    <p><code>\\n</code> typed through the edit-JSON layer landed as <code>\n</code> in the file; TS translated it into a real newline inside a Python string literal → kernel exited at boot. Diagnosis: extract the DRIVER raw vs runtime (eval the template like TS does) and diff. The file needs <code>\\n</code>.</p>
+  </div>
+</div>
+
+<h2>Session flow, end to end</h2>
+<pre>
+<span class="c"># 1. trigger fires (gitnexus: critical impact on hooks/pre-push)</span>
+<span class="f">preflight</span>(<span class="s">"/home/dawid/dev/core"</span>, <span class="s">".githooks/pre-push"</span>)
+<span class="c">#   == .githooks/pre-push: 10 commits ==</span>
+<span class="c">#     2026-08-20 487e6074 feat(hooks): board-audit ...</span>
+<span class="c">#     2026-08-15 d6ca0627 fix(hooks): pre-push chain must exit 0 on success [exit-status-bug]</span>
+<span class="c">#   == bd memory keys: ['core-repo-hooks-githooks-pre-push-pre-commit', ...] ==</span>
+
+<span class="c"># 2. follow-up queries reuse kernel state — zero re-fetching</span>
+cs = <span class="f">preflight</span>(repo, path)          <span class="c"># records persisted in `cs`</span>
+[l <span class="k">for</span> l <span class="k">in</span> cs <span class="k">if</span> <span class="s">'exit'</span> <span class="k">in</span> l[2]]  <span class="c"># filter across cells</span>
+
+<span class="c"># 3. edit with the why in hand; the corpus feeds the commit message</span>
+<span class="c"># 4. bd remember "pre-push exit-0 chain guarded by X" --key pre-push-exit0</span>
+</pre>
+
+<div class="sub" style="margin-top:28px">Alternative rejected: Route B (skillbridge-mounted module, zero core edit, hot-reload) — kept as staging ground; Route A makes the function part of the shipped tool contract. Skipped: version bump/publish, e2e smoke transcript.</div>
+
+</div>
+</body>
+</html>

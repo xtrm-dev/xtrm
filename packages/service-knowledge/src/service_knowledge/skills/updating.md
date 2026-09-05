@@ -89,6 +89,28 @@ Found 1 drifted service(s):
 > / `gitnexus_impact`, or the CLI), **never** to grep-only string hunting. Grep is a secondary
 > cross-check, never the basis for an "unchanged" verdict.
 
+### Worktree gotchas (read before trusting any scan output)
+
+These bite in `xt pi` / `xt claude` **worktree** sessions (where drift is most often
+reconciled):
+
+1. **The mtime pre-filter is useless in a worktree.** Every checked-out file's mtime is
+   newer than `last_sync`, so `scan` reports near-everything as drifted — and beyond
+   `DRIFT_MAX_ENRICH` (default 200) it falls back to mtime-only (`tier=unknown`) entirely.
+   Do **not** trust the scan's file list as ground truth. **The authoritative drifted set is
+   the git diff**: `git diff <last_sync_ref>..HEAD --name-only` intersected with each
+   service's territory globs. Compute that intersection in the kernel once (fnmatch); use
+   it, not the scan list, for per-service triage.
+2. **The drift marker is on the MAIN checkout, not the worktree.** The extension and CLI
+   resolve `.xtrm/.service-knowledge-drift-pending` (or legacy `.service-skills-drift-pending`)
+   by walking up from the worktree to the main checkout. Deleting the marker in the worktree
+   does **not** clear it — the `drift: PENDING` note persists until the PR that deletes it
+   **merges**. It is advisory; never block on it.
+3. **`index build` reflects MAIN, not your branch.** The index is built from the consumer
+   root's SKILL.md files — in a worktree, that means the main checkout. After editing SKILLs
+   on a branch, a rebuild will not show your branch's content until the PR merges. That is
+   correct behavior, not a failure; verify branch edits by reading the branch file directly.
+
 ### Step 2 — Read the current skill
 
 ```
@@ -171,6 +193,23 @@ version:
 service-knowledge index build
 service-knowledge index stats
 ```
+
+In an `xt pi` / `xt claude` worktree, the installed `service-knowledge` CLI may not be on
+PATH and the worktree cwd is NOT the consumer root. Mount the package in the python kernel
+once and pass the consumer root explicitly (state persists across cells):
+
+```python
+import sys
+sys.path.insert(0, "/home/dawid/dev/xtrm/packages/service-knowledge/src")
+import service_knowledge
+from service_knowledge import index
+stats = index.build("/home/dawid/projects/mercury/infra")   # consumer ROOT, not the worktree cwd
+print(stats)
+```
+
+Keep `ROOT` as a kernel variable and pass it to every call — `build(Path("."))` in a
+worktree scans the wrong tree. Prefer in-kernel `service_knowledge.*` calls over
+`PYTHONPATH=... python3 -m` one-shots (fresh process per call, no state, noisier).
 
 ### Step 7 — Mark as synced
 
