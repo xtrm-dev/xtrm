@@ -1,20 +1,72 @@
-# XTRM GUI PRD
+# XTRM Agentic Operating Environment PRD
 
-**Status:** Draft v0.1 — implementation baseline  
+**Status:** Draft v0.2 — product-direction baseline  
 **Package:** `xtrm-dev/xtrm/packages/xtrm-app`  
-**Product:** Linux-first XTRM desktop agent application  
+**Product surface:** XTRM Console / desktop agent harness  
 **Primary runtime:** Pi `AgentSessionRuntime`  
-**Primary interaction unit:** `Frame` (internal contract: `InteractionFrame`)
+**Primary interaction unit:** `Frame` (`InteractionFrame`)  
+**Primary planning unit:** executable work contract (Issue / Bead / step contract)
 
 ## 1. Product objective
 
-Build a Linux-first desktop application for ordinary human ↔ agent work that provides a different interaction model from the conventional infinite vertical chat transcript while preserving Pi as the underlying agent harness and ecosystem.
+Build an agent-native operating environment for planning, executing, coordinating, observing, and governing work across repositories, projects, products, and programs.
 
-The product must prove that XTRM can present agent work through bounded, navigable **Frames** without replacing Pi's mature runtime, session, extension, skill, prompt, model, authentication, and context machinery.
+XTRM is not primarily a chat client, IDE skin, task tracker, or multi-agent dashboard. It is a unified work environment where:
 
-The initial product is not the governed Specialists/ChainRun console. Specialists, Channels, result contracts, and governed workflow state are later integrations over the same interaction substrate.
+```text
+planning
+execution
+coordination
+observability
+evidence
+governance
+```
 
-## 2. Core product concept: Frame
+are projections of the same underlying work substrate.
+
+The product must preserve Pi as the initial mature agent harness and ecosystem while introducing XTRM-owned interaction and planning paradigms above it.
+
+The core product thesis is:
+
+> **XTRM does not treat planning, agent interaction, multi-agent coordination, and observability as separate products. They are projections of the same governed work substrate.**
+
+The vision is broad, but delivery must remain staged. The first accepted vertical still needs to prove the interaction substrate against real provider activity before the full coordinated/governed environment is considered implemented.
+
+## 2. Product primitives
+
+Three UI primitives define normal XTRM interaction:
+
+```text
+MAIN SURFACE
+work
+
+DRAWER
+inspect / control / traverse
+
+COMPOSER
+instruct / reference / coordinate
+```
+
+These primitives are reused across first-class entities rather than giving every subsystem an isolated application shell.
+
+First-class entities may include:
+
+```text
+Repository
+Issue / Bead / Step
+Epic / parent work contract
+Frame
+Agent
+Chain / ChainRun
+Program workstream / assignment
+Artifact
+Pull request / commit
+Evidence item
+```
+
+The same entity may be projected differently depending on whether it is primary work, secondary inspection, or structured context attached to the composer.
+
+## 3. Core interaction concept: Frame
 
 A `Frame` represents one human interaction and all agent activity that belongs to it until the agent is fully settled.
 
@@ -28,15 +80,17 @@ Frame
 │  ├─ reasoning/thinking presentation
 │  ├─ assistant messages
 │  ├─ tool executions
+│  ├─ agent-to-agent interactions
+│  ├─ specialist dispatches
+│  ├─ chain activity
 │  ├─ retries
 │  ├─ compaction
-│  └─ other runtime activity
+│  ├─ review/evidence activity
+│  └─ other normalized runtime activity
 └─ settled response
 ```
 
 User-facing terminology is `Frame`.
-
-The internal contract should use a more explicit name such as `InteractionFrame` to avoid ambiguity with browser frames, rendering frames, protocol frames, or stack frames.
 
 Reserved terminology:
 
@@ -47,7 +101,7 @@ step   workflow/chain concept
 Frame  XTRM human-facing interaction unit
 ```
 
-The working definition is:
+The working boundary is:
 
 ```text
 idle user submit
@@ -62,71 +116,939 @@ provider becomes truly settled
 
 For Pi, `agent_settled` is the authoritative initial close boundary. `agent_end` alone is not sufficient because retries, compaction retries, or queued continuation may still occur.
 
-## 3. Product differentiation
-
-The GUI must not present the session as one unbounded vertical transcript.
-
-The default interaction model is horizontal navigation across Frames:
+Initial Frame status vocabulary:
 
 ```text
-Frame 12 | Frame 13 | Frame 14 | Frame 15
+working
+settled
+failed
+aborted
 ```
 
-Each Frame contains:
+A minimal conceptual contract:
 
 ```text
-request
-activity collapsed by default
-settled response
+InteractionFrame
+  id
+  sessionRef
+  branchRef
+  parentFrameId?
+  ingress
+  startedAt
+  settledAt?
+  status
+  activity
+  response
 ```
 
-A Zoom Out action changes the read model to an overview of Frames.
+## 4. Conversation history paradigm
+
+XTRM must not present the session as one unbounded vertical transcript.
+
+The current Frame is foreground work. Conversation history is available immediately but is not permanent screen chrome.
+
+Default composition:
+
+```text
+selected Frame
+  request
+  activity
+  response
+  composer
+  ─────────────────
+  recent Frame history dock
+```
+
+The recent-history dock sits beneath the composer and provides immediate navigation among nearby Frames.
+
+A History action expands a larger history surface upward from the dock. That surface has at least two projections:
+
+```text
+Frames
+  interaction-centric overview
+
+Tree
+  provider-native branch/fork topology
+```
+
+The model is:
+
+```text
+current Frame
+  = foreground work
+
+recent Frames dock
+  = immediate history
+
+Frames view
+  = interaction history
+
+Tree view
+  = alternate/fork topology
+```
 
 Conversation forks and branches are first-class and visible.
 
 Visual branch compression is non-destructive and must not mutate provider-native transcript history.
 
-## 4. Product identity
-
-The target is not a reskinned ACP client, OpenCode clone, Pi desktop clone, or generic agent dashboard.
-
-Reuse commodity infrastructure aggressively, but keep the XTRM interaction model and visual language product-owned.
-
-XTRM owns:
+For Pi:
 
 ```text
-Frame identity and boundaries
-horizontal Frame navigation
-Frame overview
-conversation/fork information architecture
-visual branch compression
-activity-density policy
-XTRM naming and interaction vocabulary
-XTRM visual system
-later governed runtime projections
+SessionManager tree
+        ↓
+ConversationGraph projector
+        ↓
+Frames / Tree projections
 ```
 
-A screenshot should remain recognizably XTRM after provider names and logos are removed.
+Keep same-session branch navigation distinct from independent session fork.
 
-Visual direction:
+User-facing actions include:
 
-- restrained monochrome/graphite surfaces;
-- one restrained accent family;
-- thin separators instead of box-heavy cards;
-- narrow, readable content column where appropriate;
-- browser-tab-like Frame chrome;
-- dense but calm information presentation;
-- minimal provider branding;
-- no rainbow status system;
-- no dashboard-like permanent panel clutter.
+```text
+Branch here
+Fork as new conversation
+```
 
-## 5. Pi compatibility is a product requirement
+Visual branch compression remains UI-only unless an explicit provider/runtime compaction operation is invoked.
+
+## 5. Repository context and Console shell
+
+The global repository selector is persistent context and must not be replaced by generic navigation.
+
+The conceptual hierarchy is:
+
+```text
+current Console surface
+        ↓
+eligible repositories
+        ↓
+selected repository / working context
+        ↓
+selected view
+```
+
+The left Console rail provides repository context and major product surfaces.
+
+Candidate top-level surfaces:
+
+```text
+Issues / Planning
+Graph
+Agent
+Agents
+Specialists / Chains
+Program
+Observability
+Explore
+```
+
+The repository rail must be truly collapsible: collapsed mode reduces the rail itself, not only its labels. It should preserve recognizable repository and navigation affordances without crowding the workspace.
+
+The Agent surface must fit cleanly inside the global Console shell. It must not add another permanent conversation sidebar inside the main workspace.
+
+## 6. Main surface contract
+
+The main surface is for primary work.
+
+Examples:
+
+```text
+Issues
+  primary work = planning and contract refinement
+
+Agent
+  primary work = selected agent session / current Frame
+
+Agents
+  primary work = live fleet / execution presence
+
+Program
+  primary work = cross-repository intent and governance
+
+Graph
+  primary work = relationship topology
+```
+
+A main surface should not duplicate the same entity information that is already available in the drawer. It should focus on the work mode that justifies becoming the primary surface.
+
+## 7. Global drawer contract
+
+The drawer is the global secondary interaction surface.
+
+Its purpose is to understand, control, and traverse related work without losing the current primary workspace.
+
+The same canonical drawer shell must be used across Issues, Agents, Program, Graph, Agent activity, and other surfaces. Do not create parallel entity-specific drawer implementations.
+
+### 7.1 Drawer states
+
+The drawer supports four primary states:
+
+```text
+CLOSED
+  only the right inspector rail is visible
+
+CONTEXTUAL
+  open on the currently inspected entity
+
+PINNED
+  entity remains selected while the user navigates primary surfaces
+
+MAXIMIZED
+  deep inspection / execution-control mode
+```
+
+A separate `FOLLOW LIVE` property may be active for live entities such as agents or chains.
+
+### 7.2 Inspector rail
+
+The collapsed inspector rail remains visible on the right side of the content area.
+
+Requirements:
+
+- it does not overlap primary content in collapsed mode;
+- it has the same vertical inset and system radius as the expanded drawer geometry;
+- when expanded it becomes physically attached to the drawer with no gap;
+- it remains narrow and does not become a second navigation sidebar.
+
+### 7.3 Drawer maximize
+
+Maximized drawer mode is for deep inspection, not a generic fullscreen modal.
+
+When maximized:
+
+```text
+collapsed repository rail | expanded inspector rail + large drawer
+```
+
+Requirements:
+
+- the drawer approaches the left collapsed repository rail but never overlaps it;
+- maximizing automatically collapses the repository rail if it was open;
+- restoring reopens the repository rail only if maximize caused that collapse;
+- a repository rail manually collapsed before maximize remains collapsed after restore;
+- drawer rail and drawer remain one attached visual object;
+- the main workspace remains conceptually present behind the secondary surface.
+
+### 7.4 Drawer navigation stack
+
+The drawer maintains traversal history so a user can move through related entities without abandoning the primary surface.
+
+Example:
+
+```text
+Agent: pi-main
+  ↓
+Issue: b73q.4
+  ↓
+Chain: SCID remediation
+  ↓
+Agent: test-engineer
+
+‹ back
+```
+
+### 7.5 Promote to primary surface
+
+Inspected entities may expose an action that promotes them into their primary work surface.
+
+For agents this action is `Open session`.
+
+Example:
+
+```text
+Agents list
+  click pi-main
+    → Agent drawer
+
+Open session
+    → pi-main becomes the main Agent surface
+```
+
+The key rule for Agents is:
+
+> **Agent presence is inspected in the drawer; agent work is performed in the Agent surface.**
+
+When the current agent already occupies the main Agent surface, the drawer should normally inspect adjacent entities rather than duplicate the current agent.
+
+Useful combinations include:
+
+```text
+MAIN
+pi-main session
+
+DRAWER
+quant-reviewer
+```
+
+or:
+
+```text
+MAIN
+test-engineer session
+
+DRAWER
+pi-main coordinator
+```
+
+This provides lightweight comparative inspection without permanent split panes.
+
+### 7.6 Drawer interaction with composer
+
+Drawer actions should feed structured references or commands into the composer rather than opening disconnected modal workflows.
+
+Examples:
+
+```text
+Agent drawer → Message
+  composer target becomes @agent:quant-reviewer
+
+Issue drawer → Attach contract
+  composer receives @issue:b73q.4
+
+Chain drawer → Attach chain
+  composer receives @chain:scid-remediation
+```
+
+### 7.7 Drawer MUST / MUST NOT
+
+The drawer MUST:
+
+- inspect any first-class entity;
+- preserve the current primary workspace;
+- support entity traversal with history/back;
+- expose entity-specific actions according to authority;
+- bridge planning, execution, coordination, and evidence;
+- support contextual, pinned, and maximized states;
+- optionally follow live entities;
+- promote an inspected entity into its primary surface;
+- integrate typed references and actions with the composer.
+
+The drawer MUST NOT:
+
+- become another permanent navigation sidebar;
+- duplicate the content of the primary surface;
+- create parallel entity-specific drawer shells;
+- invent a separate source of execution or telemetry truth;
+- obscure repository context when maximized.
+
+## 8. Planning is a first-class product surface
+
+Issues / Beads are not merely a task list. They are XTRM's executable planning language.
+
+The product principle is:
+
+> **Tracked work cannot execute until its contract is complete.**
+
+A tracked work item should be able to represent, when applicable:
+
+```text
+Problem
+Outcome / success
+Scope
+Non-goals
+Constraints
+Inputs
+Expected outputs
+Dependencies
+Validation
+Scrutiny / review expectation
+Authority
+Owner / role
+```
+
+The exact schema may differ by issue class or step role, but planning information required for execution must live in the tracked contract rather than in parallel Markdown plans or hidden coordinator prompts.
+
+The UI should make contract readiness explicit.
+
+Illustrative lifecycle:
+
+```text
+DRAFT
+  missing required contract fields
+
+READY
+  contract complete
+  gating dependencies satisfied
+
+CLAIMED
+  execution identity assigned
+
+IN PROGRESS
+
+IN REVIEW
+
+DONE
+```
+
+`READY` is an execution gate, not merely a cosmetic status.
+
+Planning surfaces should use calm Jira-like rows for collections. Tables are reserved for true matrices.
+
+The Issue drawer is where the full contract, execution, and evidence relationship becomes inspectable.
+
+Example:
+
+```text
+b73q.4
+Correct SCID attribution
+
+READY
+
+Contract
+  ...
+
+Execution
+  ● pi-main
+    Frame 15
+
+Children
+  quant-reviewer
+  test-engineer
+
+Evidence
+  commits
+  tests
+  review
+```
+
+This makes the continuity explicit:
+
+```text
+contract
++
+execution
++
+evidence
+```
+
+## 9. Program is not a second task tracker
+
+Program provides cross-repository intent, governance, portfolio state, and reconciliation.
+
+Program may own or project concepts such as:
+
+```text
+workstreams
+assignments
+authority
+portfolio state
+decisions
+evidence
+reconciliation
+cross-repository lineage
+```
+
+Executable repository work remains authoritative in Issues / Beads / step contracts.
+
+Program must not duplicate executable work descriptions, statuses, subtasks, or acceptance state as a parallel tracker.
+
+The Console may project Program and executable work together because it is a read model, not because the underlying records are duplicated.
+
+Example:
+
+```text
+WS-003
+  ↓
+EXP-023
+  ↓ executable implementation
+market-data:b73q
+market-data:b73q.4
+infra:xxx
+```
+
+The Program drawer should emphasize traversal to executable work and evidence rather than recreate an Issue drawer with copied fields.
+
+## 10. Typed references and first-class composer commands
+
+The composer is not a plain text box only. It is a structured coordination surface.
+
+XTRM should support typed references such as:
+
+```text
+@issue:b73q.4
+@epic:b73q
+@agent:rates-coordinator
+@frame:15
+@artifact:<id>
+@program:EXP-020
+@chain:<id>
+@pr:<number>
+```
+
+These references must not be decorative prompt text. They should resolve to structured context objects with identity, source reference, current state, and authority metadata where applicable.
+
+Conceptual contract:
+
+```text
+ContextReference
+  kind
+  id
+  source
+  revision?
+  currentState?
+  authority?
+```
+
+Candidate first-class commands include:
+
+```text
+/plan
+/work
+/message
+/dispatch
+/review
+/run-chain
+/open
+```
+
+Examples:
+
+```text
+/work @issue:b73q.4
+/plan @epic:b73q
+/message @agent:quant-reviewer
+/run-chain @issue:b73q
+```
+
+Autocomplete should resolve concrete repository-local and workspace-wide entities rather than forcing users to memorize IDs.
+
+## 11. Agent identity, roles, and capabilities
+
+XTRM should not present `Agents` and `Specialists` as fundamentally different species.
+
+An XTRM agent has:
+
+```text
+identity
+role
+capabilities
+authority
+runtime
+execution context
+```
+
+Roles may include:
+
+```text
+coordinator
+executor
+reviewer
+researcher
+test engineer
+SRE
+specialist capability profiles
+```
+
+A Specialist is an agent with a specific capability / contract profile. A coordinator is an agent with planning, dispatch, fan-out/fan-in, or acceptance authority within its authority envelope.
+
+Internally do not define `Specialist == Pi subagent`.
+
+Pi child sessions are one possible implementation mechanism, not the semantic definition of a Specialist.
+
+## 12. First-class Agents presence view
+
+XTRM needs a first-class surface for observing active and recent agents across the current repository or workspace.
+
+The default presentation should be list-first rather than graph-first.
+
+Example:
+
+```text
+ACTIVE AGENTS
+
+market-data
+
+● pi-main
+  Coordinator
+  b73q · Worker cleanup and pruning
+  Frame 15 · thinking
+  12s
+
+  ├─ ● quant-reviewer
+  │    reviewer · b73q.4
+  │    inspecting
+  │
+  └─ ○ test-engineer
+       waiting on implementation
+
+console
+
+● claude-ui
+  Executor
+  forge-7xu
+  editing Sidebar.tsx
+  41s
+```
+
+Useful grouping modes include:
+
+```text
+repository
+work item
+parent agent
+chain
+role
+```
+
+Clicking an agent opens its drawer.
+
+`Open session` promotes that agent into the main Agent surface.
+
+Clicking its work item opens the Issue / Program entity in the drawer.
+
+Clicking its chain opens ChainRun inspection.
+
+A topology/graph projection may exist as a secondary view for complex relationships, but it should not be the default fleet view.
+
+## 13. Agent drawer
+
+The Agent drawer is a central interaction surface for live execution.
+
+Recommended tabs:
+
+```text
+Overview
+Live
+Work
+Coordination
+Telemetry
+Evidence
+```
+
+### Overview
+
+Show compact identity and execution context:
+
+```text
+identity
+role
+runtime
+model
+repository
+working directory
+current contract
+current Frame
+parent coordinator
+children
+status
+started
+last activity
+```
+
+### Live
+
+Show a semantic live execution projection rather than a raw log stream.
+
+Example:
+
+```text
+14:23:02  reading src/scid.rs
+14:23:08  tool · rg sentinel
+14:23:11  tool · read record.rs
+14:23:24  message → quant-reviewer
+14:23:39  quant-reviewer replied
+14:23:44  reasoning
+14:23:57  editing summary.rs
+```
+
+Each event may expand into richer evidence or raw detail when available.
+
+### Work
+
+Show the current executable contract and parent/child relationship.
+
+Example:
+
+```text
+b73q
+  SCID remediation
+
+b73q.4
+  Correct price attribution
+
+contract state: READY
+execution: active
+acceptance: pending
+```
+
+Useful actions:
+
+```text
+Open issue
+Attach issue to composer
+Open parent epic
+Open Program assignment
+```
+
+### Coordination
+
+Show semantic coordination state:
+
+```text
+Parent
+  pi-main
+
+Children
+  quant-reviewer
+  test-engineer
+
+Messages
+  → quant-reviewer
+  ← quant-reviewer
+
+Chain
+  SCID remediation
+  2 / 4 gates
+```
+
+### Telemetry
+
+Show contextual operational telemetry such as:
+
+```text
+runtime
+model
+context utilization
+tokens
+tool calls
+retries
+compactions
+children
+messages
+cost where available
+last heartbeat
+```
+
+This is a lightweight execution view, not an embedded monitoring dashboard.
+
+### Evidence
+
+Show concrete execution evidence:
+
+```text
+commits
+diffs
+tests
+reviews
+tool evidence
+result-contract evidence
+forensic events
+```
+
+### Agent actions
+
+Actions are authority-derived, not universally available.
+
+Possible actions include:
+
+```text
+Open session
+Message
+Steer
+Follow-up
+Request review
+Dispatch specialist
+Start chain
+Pause
+Resume
+Stop
+```
+
+The UI must not expose controls the current principal is not authorized to invoke.
+
+## 14. Agent-to-agent interactions inside Frames
+
+Multi-agent work must not be hidden behind opaque generic tool calls.
+
+The Frame activity stream should normalize semantic interactions such as:
+
+```text
+Tool
+Agent message
+Specialist dispatch
+Chain launch
+Review request
+Result receipt
+Handoff
+Retry
+Compaction
+```
+
+Example presentation:
+
+```text
+Ran 4 commands
+
+Messaged rates-specialist
+  "Verify SCID price semantics against the format spec"
+
+rates-specialist replied
+  conclusion · evidence · 3 refs
+
+Dispatched test-engineer
+  b73q.4 · validation contract
+
+test-engineer
+  running · 7/12 checks
+```
+
+The transport implementation may be Channels, intercom, provider-native messaging, or another adapter. The UI should represent the semantic interaction, not expose transport machinery as the product concept.
+
+Provider messaging is transport. It does not grant workflow authority.
+
+## 15. Chains and governed execution
+
+A Chain is a governed autonomous execution of a contract, not merely a UI grouping of agents.
+
+A user may eventually invoke autonomous execution from an Issue or Epic:
+
+```text
+Issue / Epic
+  ↓
+/run-chain
+  ↓
+resolved governed execution
+```
+
+The resulting ChainRun may coordinate agents such as:
+
+```text
+Coordinator
+    │
+    ├── implementation agent
+    ├── test engineer
+    └── reviewer
+```
+
+The default UI need not show a graph permanently.
+
+A Chain may appear inline in Frame activity as:
+
+```text
+Chain · SCID remediation          3/4 gates
+
+✓ implementation
+● validation
+○ review
+○ acceptance
+```
+
+Clicking the Chain opens ChainRun inspection in the drawer.
+
+The GUI must project the existing governed runtime / evidence model rather than create a second contradictory terminal state machine.
+
+## 16. Observability, telemetry, and evidence
+
+Observability is part of work, not only a separate monitoring dashboard.
+
+Contextual telemetry belongs near the entity being worked on.
+
+For an Agent:
+
+```text
+runtime
+model
+tokens
+context utilization
+tool calls
+retries
+compactions
+children
+messages
+cost
+last heartbeat
+```
+
+For a Chain:
+
+```text
+wall time
+aggregate model spend
+workers
+failed attempts
+retries
+gate latency
+```
+
+For an Issue:
+
+```text
+executions
+failed attempts
+review iterations
+time to acceptance
+```
+
+A separate Observability surface may provide fleet-wide analysis and comparisons.
+
+Telemetry and evidence shown by the GUI must remain projections of canonical runtime/evidence contracts. Prometheus or UI-local counters must not become the authoritative source of execution truth.
+
+Existing XTRM forensic / AgentOps event contracts should be reused and extended where needed rather than replaced by a GUI-only event model.
+
+## 17. Activity normalization
+
+The GUI should consume normalized semantic activity records rather than provider-specific raw event blobs.
+
+A base tool activity may resemble:
+
+```text
+ToolActivity
+  kind
+  title
+  subject
+  status
+  duration
+  count/diff metadata
+  preview
+  fullResultRef
+  locations?
+  diff?
+```
+
+The broader activity vocabulary should be extensible to coordination and governance:
+
+```text
+ToolActivity
+AgentMessageActivity
+SpecialistDispatchActivity
+ChainActivity
+ReviewActivity
+EvidenceActivity
+RetryActivity
+CompactionActivity
+```
+
+Heavy output must support deferred/lazy rendering so long sessions do not require mounting all tool result content.
+
+Activity is collapsed by default unless the current state requires attention.
+
+## 18. Input semantics
+
+For the Pi-native vertical:
+
+```text
+session idle + normal Send
+    → new Frame
+
+session running + explicit steer
+    → same Frame
+
+session settled + next normal Send
+    → next Frame
+```
+
+Do not silently classify every queued/follow-up/steering message as a new Frame until those semantics are explicitly designed and tested.
+
+Commands and typed references are orthogonal to Frame creation. A structured reference attached to a normal idle submit still creates a normal new Frame unless the invoked command has explicit alternate semantics.
+
+## 19. Pi compatibility is a product requirement
 
 XTRM is an alternative product/interface around Pi, not a replacement for Pi's harness.
 
-The initial implementation must preserve Pi-native behavior unless XTRM has an explicit reason to add governance or a presentation translation.
+The implementation must preserve Pi-native behavior unless XTRM has an explicit reason to add governance or presentation translation.
 
-Required compatibility surface:
+Required compatibility surface includes:
 
 ```text
 Pi built-in tools
@@ -153,7 +1075,7 @@ The implementation must use Pi's existing runtime/resource machinery where possi
 
 The default Pi path should use `DefaultResourceLoader` or the exact current equivalent from the installed Pi version.
 
-## 6. Extension compatibility model
+## 20. Extension compatibility model
 
 Most Pi extension behavior should remain usable in the GUI.
 
@@ -172,7 +1094,7 @@ session persistence entries
 
 Pi TUI-specific custom components cannot be rendered directly by a React GUI.
 
-The GUI must therefore distinguish:
+The GUI must distinguish:
 
 ```text
 portable semantic extension behavior
@@ -199,11 +1121,9 @@ title
 custom surface
 ```
 
-The TUI host may use Pi-native TUI implementations. The GUI host may provide React/Tauri equivalents.
-
 Do not promise visual parity for arbitrary TUI-only extension components.
 
-## 7. Shared interaction substrate
+## 21. Shared interaction substrate
 
 The GUI must not depend on TUI rendering code.
 
@@ -238,11 +1158,13 @@ ToolActivity
 ConversationGraph
 SessionHost
 ExtensionBinding
+ContextReference
+AgentIdentity
 ```
 
-Do not create a new shared package until actual duplication justifies one. Shared contracts may initially live in one package with clear ownership and later be extracted.
+Do not create a new shared package until actual duplication justifies one.
 
-## 8. Provider/event model
+## 22. Provider/event model
 
 The GUI must not branch directly on provider-specific event names.
 
@@ -255,7 +1177,7 @@ adapter
         ↓
 small XTRM interaction-event vocabulary
         ↓
-FrameProjector
+FrameProjector / agent presence projector
         ↓
 GUI state
 ```
@@ -275,9 +1197,9 @@ navigateTree
 fork
 ```
 
-Pi remains native-first for v0 because its event/tree/settled semantics map directly to the product model.
+Pi remains native-first because its event/tree/settled semantics map directly to the product model.
 
-## 9. Non-Pi agents and ACP
+## 23. Non-Pi agents and ACP
 
 Do not immediately implement one custom adapter per ACP-capable agent.
 
@@ -301,7 +1223,7 @@ Evaluate `AcpKit/acp-kit` as the preferred generic ACP runtime before building e
 
 Characterize provider-specific adapters only when a provider capability cannot be represented through the generic ACP lane without losing required product semantics.
 
-## 10. Open-source adoption policy
+## 24. Open-source adoption policy
 
 Before implementing commodity agent-client infrastructure, evaluate maintained permissively licensed implementations.
 
@@ -314,67 +1236,19 @@ REFERENCE study architecture/tests/failure handling only
 REJECT    do not adopt
 ```
 
-High-priority references:
+High-priority references remain:
 
-### `zvzuola/acp-components`
+- `zvzuola/acp-components` for bounded session/workspace state, tool UI, permissions, diff/file, composer, Tauri abstraction, and session CRUD/fork mechanics;
+- `AcpKit/acp-kit` for non-Pi ACP runtime lifecycle;
+- OpenCode `session-ui` for projection, tool rendering, deferred rendering, virtualization, diff/review, and composer state-machine ideas;
+- Panes for Tauri 2 + React architecture, sidecar lifecycle, SQLite/FTS, session replay, crash recovery, lazy hydration, and Linux packaging;
+- Hermes IDE as reference only while its licensing terms restrict competing IDE/editor use.
 
-Candidate for dependency/adaptation of:
-
-- session/workspace state;
-- streaming stores;
-- tool call UI primitives;
-- permissions;
-- diff/file components;
-- composer;
-- Tauri platform abstraction;
-- session CRUD/fork mechanics.
-
-Do not adopt its stock workbench shell if it forces chat-first information architecture.
-
-### `AcpKit/acp-kit`
-
-Candidate dependency for non-Pi ACP runtime lifecycle:
-
-- spawn/connect;
-- initialize/auth;
-- host adapters;
-- session lifecycle;
-- normalized message/reasoning/tool/turn events;
-- raw traffic diagnostics.
-
-### OpenCode `session-ui`
-
-Reference/adaptation target for:
-
-- turn/message projection;
-- tool rendering primitives;
-- default-open policy;
-- deferred heavy rendering;
-- virtualization;
-- diff/review surfaces;
-- composer state-machine ideas.
+Do not adopt a stock workbench shell if it forces chat-first information architecture.
 
 Do not copy OpenCode's vertical transcript navigation model.
 
-### Panes
-
-Reference/adaptation target for:
-
-- Tauri 2 + React architecture;
-- sidecar lifecycle;
-- SQLite/FTS;
-- session replay;
-- crash recovery;
-- long-session lazy hydration;
-- Linux packaging/updater patterns.
-
-### Hermes IDE
-
-Reference only while its current BSL terms restrict competing IDE/editor use.
-
-Study lifecycle/recovery patterns, but do not copy production code into XTRM.
-
-## 11. Desktop process architecture
+## 25. Desktop process architecture
 
 Initial target:
 
@@ -397,11 +1271,11 @@ Electron remains a bounded fallback only if Tauri + sidecar packaging creates di
 
 The provider SDK/runtime must not run inside the WebView when it depends on Node process APIs.
 
-## 12. Persistence and authority
+## 26. Persistence and authority
 
 Provider/session history remains authoritative for transcript and branch topology.
 
-The GUI should not create a second authoritative transcript database in v0.
+The GUI should not create a second authoritative transcript database.
 
 Provider-owned truth includes:
 
@@ -412,6 +1286,8 @@ provider session identity
 provider-native branch/fork history
 compaction entries
 ```
+
+Canonical planning / governance / evidence sources remain authoritative for their own domains. The GUI is a projection layer and action surface, not a replacement source of truth.
 
 App-owned state may include:
 
@@ -424,251 +1300,148 @@ selected Frame
 UI-collapsed branches
 favorites/pins
 layout/window state
+drawer pin/navigation state
 provider-independent graph edges not recoverable from provider
 ```
 
 A small SQLite application index is acceptable where useful.
 
-## 13. Frame state model
+## 27. Visual system and product identity
 
-Initial status vocabulary:
+The target is not a reskinned ACP client, OpenCode clone, Pi desktop clone, GitHub Dark imitation, Linear imitation, or generic monitoring dashboard.
 
-```text
-working
-settled
-failed
-aborted
-```
+XTRM and Mercury Intelligence are sibling products in the same family. They should share family-level design discipline without sharing identity accent or becoming visually interchangeable.
 
-Do not expose full governed XTRM result-validation states in the ordinary v0 app.
-
-A minimal conceptual contract:
+Current XTRM identity direction:
 
 ```text
-InteractionFrame
-  id
-  sessionRef
-  branchRef
-  parentFrameId?
-  ingress
-  startedAt
-  settledAt?
-  status
-  activity
-  response
+base identity          #833CF0
+dark-surface text role accessible light violet derivative
 ```
 
-Exact storage shape may change after real Pi reconstruction tests.
+Design principles:
 
-## 14. Input semantics
+- restrained neutral surfaces;
+- XTRM Violet used sparingly for identity, selection, and focus;
+- dark theme uses an accessible lighter violet role rather than forcing the base identity color onto small text;
+- thin separators and structure before shadow;
+- 6 / 8 / 12 px radius family;
+- no card soup;
+- no glassmorphism;
+- no large pill-heavy UI;
+- no rainbow status system;
+- no general monospace aesthetic;
+- calm Jira-like collection rows;
+- continuous reading surfaces for agent response/source content;
+- graph only when relationships are the primary task;
+- comfortable default density, compact mode optional;
+- narrow readable content column where appropriate;
+- minimal provider branding.
 
-For v0:
+A screenshot should remain recognizably XTRM after provider names and logos are removed.
 
-```text
-session idle + normal Send
-    → new Frame
+## 28. Performance requirements
 
-session running + explicit steer
-    → same Frame
-
-session settled + next normal Send
-    → next Frame
-```
-
-Do not silently classify every queued/follow-up/steering message as a new Frame until those semantics are explicitly designed and tested.
-
-## 15. Conversation topology
-
-Use provider-native topology rather than fabricating a parallel graph.
-
-For Pi:
-
-```text
-SessionManager tree
-        ↓
-ConversationGraph projector
-        ↓
-GUI branch tree
-```
-
-Keep same-session branch navigation distinct from independent session fork.
-
-User-facing actions may eventually include:
-
-```text
-Branch here
-Fork as new conversation
-```
-
-Visual branch compression is UI-only in v0:
-
-```text
-raw provider history unchanged
-        ↓
-+N compressed
-```
-
-Semantic/context compression remains a separate provider/runtime operation.
-
-## 16. Core GUI surfaces
-
-Required v0 surfaces:
-
-```text
-AppShell
-├─ project/session sidebar
-├─ FrameTabStrip
-├─ FrameViewport
-│  ├─ ingress
-│  ├─ ActivityDisclosure
-│  └─ settled response
-├─ Composer
-├─ FrameOverview
-└─ ConversationTree
-```
-
-The normal screen must show the selected Frame rather than the entire historical transcript.
-
-## 17. Activity presentation
-
-Activity is collapsed by default.
-
-The GUI should consume normalized activity records rather than provider-specific raw event blobs.
-
-Examples:
-
-```text
-ToolActivity
-  kind
-  title
-  subject
-  status
-  duration
-  count/diff metadata
-  preview
-  fullResultRef
-  locations?
-  diff?
-```
-
-Heavy output must support deferred/lazy rendering so long sessions do not require mounting all tool result content.
-
-## 18. Performance requirements
-
-The GUI must remain responsive when sessions contain many Frames and large tool outputs.
-
-Adopt proven projection/virtualization/lazy-hydration patterns before inventing custom rendering infrastructure.
+The GUI must remain responsive when sessions contain many Frames, active agents, and large tool outputs.
 
 Required properties:
 
 - selected Frame navigation does not mount all prior Frames;
-- Zoom Out remains responsive with large session histories;
+- Frames history remains responsive with large session histories;
+- Tree projection is lazy where possible;
 - large tool results are not eagerly mounted;
 - switching Frames preserves independent scroll/view state where useful;
-- background session activity does not disappear because a React component unmounted.
+- background session activity does not disappear because a React component unmounted;
+- Agents presence view does not require mounting every raw event;
+- drawer live-follow uses bounded/lazy projection rather than replaying the full session on every update;
+- graph views defer expensive layout and rendering until explicitly opened.
 
-## 19. Implementation sequence
+Adopt proven projection/virtualization/lazy-hydration patterns before inventing custom rendering infrastructure.
 
-Do not build a large backend before proving the interaction model.
+## 29. Delivery sequence
 
-Do not implement GUI, TUI, Specialists, Channels, and provider coordination simultaneously.
+The product vision is intentionally broader than the first deliverable. Do not attempt to ship the full operating environment in one implementation wave.
 
-Recommended waves:
-
-### Wave 1 — shared Pi-native substrate
+### v0 — Pi-native Agent surface and Console substrate
 
 Prove:
 
 ```text
-AgentSessionRuntime
+Pi AgentSessionRuntime
 DefaultResourceLoader
-extensions/skills/prompts/context
+extensions / skills / prompts / context
 FrameProjector
 activity normalization
-conversation graph
-resume/fork/reconstruction
+agent_settled boundary
+current Frame
+recent Frames dock
+Frames history view
+Tree history view
+resume / fork / reconstruction
+composer
+repository context
+shared inspector drawer shell
+true left-rail collapse
+right inspector rail
+normal / maximized drawer behavior
 ```
 
-### Wave 2 — TUI vertical proves the substrate
+Also provide the first read-only or low-risk Issues / planning projection sufficient to connect Frames to tracked work without attempting full governance.
 
-The TUI is the shortest path to verifying Pi parity and Frame semantics.
+### v0.5 — executable planning and agent presence
 
-### Wave 3 — GUI implementation begins
-
-Start once these contracts are stable enough to consume:
+Add:
 
 ```text
-InteractionFrame
-FrameProjector
-ToolActivity
-ConversationGraph
-SessionHost
-ExtensionBinding
+executable Issue / Bead contract presentation
+contract readiness / READY gate projection
+typed @ references
+/plan
+/work
+/message
+first-class Agents presence view
+Open session
+basic contextual telemetry
+issue ↔ agent ↔ Frame traversal
 ```
 
-TUI polish does not need to be complete first.
+### v1 — coordinated governed execution
 
-### Wave 4 — coordination capability adapters
-
-Add Pi intercom / Claude-link / native provider messaging as ordinary interactive capabilities.
-
-### Wave 5 — governed integration
-
-Project Specialists, Channels, ResultContract, and ChainRun state onto the already-proven interaction substrate.
-
-## 20. Specialists integration direction
-
-Specialists are not required for v0.
-
-First prove:
+Add:
 
 ```text
-human
-→ XTRM
-→ Pi AgentSession
-→ tools/extensions/skills
-→ Frames
+coordinator / specialist interactions
+agent-to-agent messaging projection
+specialist dispatch / result / resume / stop
+ChainRun projection
+/run-chain
+issue / epic → autonomous governed chain
+Program projection without executable-work duplication
+evidence integration
+richer telemetry
+Observability surface
 ```
 
-Later, a Specialist may feel like a first-class sub-agent in the UX:
+### Later
+
+Potential later integrations include:
 
 ```text
-main agent
-→ Specialist invocation
-→ Specialist activity
-→ result
+remote multi-host scheduling
+richer ACP provider coverage
+advanced governance / result validation
+persistent artifact workspaces
+remote execution
+additional coordination transports
 ```
 
-Internally do not define `Specialist == Pi subagent`.
+## 30. Explicit non-goals for the first vertical
 
-A Specialist may carry identity, capability bounds, result contracts, and governed activation semantics. Pi child sessions are one possible implementation mechanism.
+The first accepted vertical does not require:
 
-## 21. Coordination transports
-
-Pi intercom, Pi↔Claude link, Claude-native peer messaging, and future provider-native transports are not v0 requirements.
-
-When added, distinguish interactive transport from governed workflow authority.
-
-```text
-interactive XTRM
-  provider-native transport may be exposed directly as capability
-
-governed ChainRun
-  semantic coordination
-      ↓
-    Channels
-      ↓
-  provider transport adapter
-```
-
-Provider messaging is transport. It does not grant workflow authority.
-
-## 22. Explicit non-goals for v0
-
-- Specialists chains;
-- ResolvedChain / ChainRun UI;
-- Channels workflow authority;
-- XTRM result validation;
+- complete Specialists chain governance;
+- full ChainRun control UI;
+- universal Channels workflow authority;
 - remote multi-host scheduling;
 - replacing Pi persistence;
 - replacing Pi extension/skill discovery;
@@ -676,80 +1449,93 @@ Provider messaging is transport. It does not grant workflow authority.
 - destructive branch compression;
 - exact visual parity for arbitrary Pi TUI extension components;
 - one custom provider adapter per agent without evidence it is needed;
-- building a complete IDE before the Frame model is proven.
+- a second Program task tracker;
+- a second GUI-native telemetry authority;
+- building a complete IDE before the Frame model is proven;
+- implementing every planned slash command before the typed-reference substrate exists.
 
-## 23. Acceptance criteria
+## 31. Acceptance criteria — first Agent vertical
 
-The first accepted GUI vertical must prove all of the following against real provider activity, not mocked-only flows:
+The first accepted Agent vertical must prove all of the following against real provider activity, not mocked-only flows:
 
 1. Linux application launches.
-2. Operator selects or opens a working directory.
+2. Operator selects or opens a working directory / repository context.
 3. A real Pi session is created through Pi runtime APIs.
 4. Pi's normal resource discovery remains active.
-5. Existing compatible extensions, skills, prompts, AGENTS/context, settings, models and auth remain available.
+5. Existing compatible extensions, skills, prompts, AGENTS/context, settings, models, and auth remain available.
 6. A first user submit creates Frame 1.
 7. Real assistant/tool/retry activity is projected into Frame 1.
 8. `agent_end(willRetry=true)` does not settle Frame 1.
 9. `agent_settled` settles Frame 1 exactly once.
 10. A second idle submit creates Frame 2.
 11. Frame 1 and Frame 2 are switchable without re-prompting the agent.
-12. Activity is collapsed by default and can be inspected.
-13. Zoom Out displays all Frames and navigates back to one Frame.
-14. Pi session tree is projected into the conversation tree.
-15. Same-session branch and independent fork preserve the original path.
-16. UI branch compression does not mutate provider history.
-17. Restart/reopen reconstructs the session and Frame projection deterministically enough for product use.
-18. Abort/cancel does not fabricate settled success.
-19. Background session state survives component unmount/remount.
-20. The UI remains responsive with a synthetic large-session fixture.
-21. No existing Pi-compatible extension becomes activation authority merely because it is installed.
-22. The interface remains recognizably XTRM with provider branding removed.
+12. Current Frame remains the foreground work surface rather than appearing in an unbounded transcript.
+13. Recent Frames are reachable from a dock beneath the composer.
+14. History expands into a Frames projection without permanently occupying a sidebar.
+15. The same history can switch to a provider-native Tree / fork projection.
+16. Activity groups are collapsed by default and can be inspected.
+17. Individual tool activity can expose command/output detail lazily.
+18. Repository context persists while switching Console surfaces.
+19. The global repository rail truly collapses its physical width.
+20. The canonical right inspector rail remains visible in collapsed state without overlapping primary content.
+21. The drawer opens attached to the inspector rail with no gap.
+22. The drawer can maximize without covering the collapsed repository rail.
+23. Maximizing the drawer auto-collapses and correctly restores repository context according to the state rules in this PRD.
+24. At least one first-class entity can be inspected in the drawer and promoted to a primary surface.
+25. `Open session` promotes an inspected Agent into the main Agent surface once the Agents projection exists.
+26. Background runtime activity remains alive when the visible Frame or surface changes.
+27. Long tool outputs do not require eager mounting of the full session history.
+28. No GUI-local state contradicts provider-owned session history.
 
-## 24. Adoption spike gates
+## 32. Acceptance criteria — planning / coordination expansion
 
-Before broad custom implementation, record explicit decisions for:
+The v0.5 / v1 expansion is accepted only when the following properties are proven against real canonical sources and runtime behavior:
 
-```text
-GUI-SPIKE-1  acp-components
-GUI-SPIKE-2  ACP Kit
-GUI-SPIKE-3  native Pi vs Pi-over-ACP semantic parity
-GUI-SPIKE-4  long-session rendering/lazy hydration
-```
+1. Issue / Bead contracts are projected from their authoritative source rather than copied into a second tracker.
+2. Contract readiness is derived from explicit required fields / gates rather than a cosmetic UI toggle.
+3. Typed Issue / Agent / Frame references resolve to structured context objects.
+4. `/work` can bind an Agent Frame/session to a concrete executable work contract.
+5. Agents presence reflects real active execution identity and does not infer presence from stale UI state.
+6. `Open session` switches to the selected real provider session without creating a duplicate conversation.
+7. Agent-to-agent interactions are rendered semantically in Frame activity while preserving underlying transport provenance.
+8. Agent drawer actions are authority-derived.
+9. ChainRun UI projects canonical governed runtime/evidence state and does not invent a parallel terminal state machine.
+10. Program links cross-repository intent to executable work without duplicating Issue/Bead authority.
+11. Telemetry and Evidence tabs are backed by canonical runtime / forensic / AgentOps sources where applicable.
+12. UI-local counters, Prometheus projections, or cached summaries cannot override canonical execution/evidence truth.
 
-Each spike must conclude with:
+## 33. Product decision summary
 
-```text
-DEPEND / ADAPT / REFERENCE / REJECT
-exact package/version/commit
-license
-integration friction
-product constraints
-custom code avoided or retained
-```
-
-## 25. Later product explorations
-
-These are intentionally not v0 acceptance requirements:
-
-- richer governed status overlays;
-- first-class Specialist cards/children;
-- Channels/coordination visualization;
-- provider-to-provider communication traces;
-- richer evidence/diff review surfaces;
-- optional remote agent host;
-- semantic context compression controls;
-- full multi-pane agent workspace.
-
-## 26. Final product invariant
-
-The GUI succeeds when XTRM can change how agent work is navigated and understood without discarding Pi's runtime and ecosystem.
-
-In compact form:
+The direction established by this PRD is:
 
 ```text
-Pi remains the harness.
-XTRM owns the interaction model.
-Open-source infrastructure is reused where it is commodity.
-Frames are the primary human navigation unit.
-Governed orchestration arrives later over the same substrate.
+                         XTRM
+                          │
+        ┌─────────────────┼──────────────────┐
+        │                 │                  │
+      PLAN               ACT              OBSERVE
+        │                 │                  │
+      Issues            Frames             Agents
+      Epics             Composer           Chains
+      Program           Tools              Telemetry
+      Contracts         Messages           Evidence
+        │                 │                  │
+        └────────────── COORDINATE ─────────┘
+                          │
+                    Specialists
+                    Coordinators
+                    Channels
+                    ChainRun
 ```
+
+Below the product layer:
+
+```text
+Pi / ACP / provider runtimes
+Beads / executable work contracts
+Git
+Program
+XTRM forensic / AgentOps evidence
+```
+
+The defining product behavior is not that XTRM has all of these features. It is that planning, execution, coordination, observation, and evidence remain connected as the same work moves through them.
