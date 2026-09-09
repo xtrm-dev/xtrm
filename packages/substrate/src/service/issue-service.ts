@@ -13,7 +13,24 @@ import {
   type Project,
   type ResolvedIssue,
 } from "../domain/issue.ts";
-import { assertContractShape, hashContract, type WorkContract } from "../domain/contract.ts";
+import {
+  assertContractShape,
+  hashContract,
+  isValidScrutiny,
+  validateContextRefs,
+  validateOwnership,
+  type WorkContract,
+} from "../domain/contract.ts";
+import {
+  deriveReadiness,
+  isBlockerSatisfied,
+  resolveInheritedContext,
+  scopeCovers,
+  type ContextRef,
+  type ReadinessAttestation,
+  type ReadinessReport,
+  type ResolvedContext,
+} from "../domain/readiness.ts";
 import { EDGE_KINDS, wouldCreateCycle, type EdgeKind } from "../domain/edge.ts";
 import { mutateOnce, nextInNamespace, withTransaction } from "../store/transactions.ts";
 
@@ -30,6 +47,8 @@ export interface CreateIssueInput {
   parentId?: string;
   aliases?: Array<{ alias: string; kind: string }>;
   authoredBy?: string;
+  ownership?: unknown;
+  contextRefs?: unknown[];
 }
 
 export interface StoredEdge {
@@ -111,6 +130,10 @@ export class IssueService {
     const id = newIssueId();
     const humanNumber = nextInNamespace(this.db, "human_ref", project.id);
     const contractHash = hashContract(input.contract);
+    const ownershipFindings = validateOwnership(input.ownership);
+    if (ownershipFindings.length > 0) throw new Error(`invalid ownership: ${ownershipFindings[0]!.message}`);
+    const contextFindings = validateContextRefs(input.contextRefs ?? []);
+    if (contextFindings.length > 0) throw new Error(`invalid contextRefs: ${contextFindings[0]!.message}`);
     this.db
       .prepare(
         `INSERT INTO issues (id, project_id, human_number, kind, title, lifecycle_state,
@@ -122,9 +145,17 @@ export class IssueService {
       .prepare(
         `INSERT INTO issue_revisions (issue_id, revision, contract_hash, contract_json,
           context_refs_json, ownership_json, authored_by, source_json, created_at)
-         VALUES (?, 1, ?, ?, '[]', NULL, ?, NULL, ?)`,
+         VALUES (?, 1, ?, ?, ?, ?, ?, NULL, ?)`,
       )
-      .run(id, contractHash, JSON.stringify(input.contract), input.authoredBy ?? "unknown", now);
+      .run(
+        id,
+        contractHash,
+        JSON.stringify(input.contract),
+        JSON.stringify(input.contextRefs ?? []),
+        input.ownership == null ? null : JSON.stringify(input.ownership),
+        input.authoredBy ?? "unknown",
+        now,
+      );
     this.appendEvent(id, "issue.created", { humanRef: formatHumanRef(project.prefix, humanNumber) });
     for (const a of input.aliases ?? []) this.insertAlias(id, a.alias, a.kind, now);
     if (input.parentId) this.linkParent(id, input.parentId, now);
@@ -132,37 +163,80 @@ export class IssueService {
   }
 
   // Revision-on-contract-change (PRD §10): identical contract is a no-op.
+  // Revision metadata (ownership/contextRefs) carries forward unless the
+  // caller overrides it; the new revision revalidates structurally at read.
   updateContract(
     issueId: string,
     contract: WorkContract,
     authoredBy: string,
-    opts?: { expectedRevision?: number; idempotencyKey?: string },
+    opts?: { expectedRevision?: number; idempotencyKey?: string; ownership?: unknown; contextRefs?: unknown[] },
   ): { issue: ResolvedIssue; created: boolean } {
     assertContractShape(contract);
     const key = opts?.idempotencyKey;
     return withTransaction(this.db, () =>
       key
-        ? mutateOnce(this.db, "command", key, () => this.revise(issueId, contract, authoredBy, opts?.expectedRevision))
-        : this.revise(issueId, contract, authoredBy, opts?.expectedRevision),
+        ? mutateOnce(this.db, "command", key, () =>
+            this.revise(issueId, contract, authoredBy, opts?.expectedRevision, opts?.ownership, opts?.contextRefs),
+          )
+        : this.revise(issueId, contract, authoredBy, opts?.expectedRevision, opts?.ownership, opts?.contextRefs),
     );
   }
 
-  private revise(issueId: string, contract: WorkContract, authoredBy: string, expectedRevision?: number): { issue: ResolvedIssue; created: boolean } {
+  private revise(
+    issueId: string,
+    contract: WorkContract,
+    authoredBy: string,
+    expectedRevision?: number,
+    ownership?: unknown,
+    contextRefs?: unknown[],
+  ): { issue: ResolvedIssue; created: boolean } {
     const issue = this.requireIssue(issueId);
     if (expectedRevision !== undefined && issue.currentRevision !== expectedRevision) {
       throw new Error(`revision conflict on ${issueId}: expected ${expectedRevision}, current ${issue.currentRevision}`);
     }
     const hash = hashContract(contract);
-    if (hash === issue.currentContractHash) return { issue: this.view(issueId), created: false };
+    if (hash === issue.currentContractHash && ownership === undefined && contextRefs === undefined) {
+      return { issue: this.view(issueId), created: false };
+    }
+    const current = this.getRevision(issueId, issue.currentRevision);
+    const nextOwnership = ownership === undefined ? current.ownership : ownership;
+    const nextContextRefs = contextRefs === undefined ? current.contextRefs : contextRefs;
+    const ownershipFindings = validateOwnership(nextOwnership);
+    if (ownershipFindings.length > 0) throw new Error(`invalid ownership: ${ownershipFindings[0]!.message}`);
+    const contextFindings = validateContextRefs(nextContextRefs);
+    if (contextFindings.length > 0) throw new Error(`invalid contextRefs: ${contextFindings[0]!.message}`);
+    if (hash === issue.currentContractHash) {
+      const now = Date.now();
+      this.db
+        .prepare("UPDATE issue_revisions SET ownership_json = ?, context_refs_json = ? WHERE issue_id = ? AND revision = ?")
+        .run(
+          nextOwnership == null ? null : JSON.stringify(nextOwnership),
+          JSON.stringify(nextContextRefs),
+          issueId,
+          issue.currentRevision,
+        );
+      this.touch(issueId, now);
+      this.appendEvent(issueId, "issue.metadata", { revision: issue.currentRevision });
+      return { issue: this.view(issueId), created: false };
+    }
     const now = Date.now();
     const revision = issue.currentRevision + 1;
     this.db
       .prepare(
         `INSERT INTO issue_revisions (issue_id, revision, contract_hash, contract_json,
           context_refs_json, ownership_json, authored_by, source_json, created_at)
-         VALUES (?, ?, ?, ?, '[]', NULL, ?, NULL, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
       )
-      .run(issueId, revision, hash, JSON.stringify(contract), authoredBy, now);
+      .run(
+        issueId,
+        revision,
+        hash,
+        JSON.stringify(contract),
+        JSON.stringify(nextContextRefs),
+        nextOwnership == null ? null : JSON.stringify(nextOwnership),
+        authoredBy,
+        now,
+      );
     this.db
       .prepare("UPDATE issues SET current_revision = ?, current_contract_hash = ?, updated_at = ? WHERE id = ?")
       .run(revision, hash, now, issueId);
@@ -504,6 +578,236 @@ export class IssueService {
         this.db.prepare("INSERT OR IGNORE INTO seq_counters (namespace, name, next_val) VALUES ('child_slot', ?, ?)").run(parent, slot + 1);
       }
     });
+  }
+
+  // -- readiness (PRD §§12-13, 15, 39.1) ---------------------------------------
+  // CLI and every integration share this service (PRD §5): no caller derives
+  // readiness or dispatch authority anywhere else. Blocked/claimed are
+  // derived projections, never stored flags. hasActiveClaim is always false
+  // until Phase 3 lands the claims table; the seam is already in place.
+
+  attestReadiness(
+    issueId: string,
+    input: {
+      outcome: "ready" | "reject";
+      policy: string;
+      attestedBy: string;
+      evidenceRefs?: string[];
+      blockingGaps?: string[];
+    },
+  ): ReadinessAttestation {
+    if (input.outcome !== "ready" && input.outcome !== "reject") throw new Error(`unknown attestation outcome: ${String(input.outcome)}`);
+    if (!input.policy.trim()) throw new Error("attestation policy must be non-empty");
+    if (!input.attestedBy.trim()) throw new Error("attestedBy must be non-empty");
+    for (const [field, values] of [["evidenceRefs", input.evidenceRefs], ["blockingGaps", input.blockingGaps]] as const) {
+      if (values !== undefined && (!Array.isArray(values) || values.some((e) => typeof e !== "string"))) {
+        throw new Error(`${field} must be an array of strings when present`);
+      }
+    }
+    return withTransaction(this.db, () => {
+      const issue = this.requireIssue(issueId);
+      const now = Date.now();
+      const r = this.db
+        .prepare(
+          `INSERT INTO readiness_attestations
+             (issue_id, issue_revision, contract_hash, outcome, policy, attested_by,
+              evidence_refs_json, blocking_gaps_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        )
+        .get(
+          issueId,
+          issue.currentRevision,
+          issue.currentContractHash,
+          input.outcome,
+          input.policy,
+          input.attestedBy,
+          JSON.stringify(input.evidenceRefs ?? []),
+          JSON.stringify(input.blockingGaps ?? []),
+          now,
+        ) as { id: number };
+      this.appendEvent(issueId, "issue.attested", {
+        outcome: input.outcome,
+        revision: issue.currentRevision,
+        contractHash: issue.currentContractHash,
+      });
+      return {
+        id: Number(r.id),
+        issueId,
+        issueRevision: issue.currentRevision,
+        contractHash: issue.currentContractHash,
+        outcome: input.outcome,
+        policy: input.policy,
+        attestedBy: input.attestedBy,
+        evidenceRefs: input.evidenceRefs ?? [],
+        blockingGaps: input.blockingGaps ?? [],
+        createdAt: now,
+      };
+    });
+  }
+
+  latestAttestation(issueId: string): ReadinessAttestation | null {
+    this.requireIssue(issueId);
+    const r = row<Row>(
+      this.db,
+      "SELECT * FROM readiness_attestations WHERE issue_id = ? ORDER BY id DESC LIMIT 1",
+      issueId,
+    );
+    return r ? this.toAttestation(r) : null;
+  }
+
+  setDeferral(issueId: string, deferUntil: number | null): ResolvedIssue {
+    if (deferUntil !== null && (!Number.isInteger(deferUntil) || deferUntil < 0)) {
+      throw new Error("deferUntil must be a non-negative integer timestamp or null");
+    }
+    return withTransaction(this.db, () => {
+      this.requireIssue(issueId);
+      const now = Date.now();
+      this.db.prepare("UPDATE issues SET defer_until = ?, updated_at = ? WHERE id = ?").run(deferUntil, now, issueId);
+      this.appendEvent(issueId, "issue.deferred", { deferUntil });
+      return this.view(issueId);
+    });
+  }
+
+  // SCRUTINY is policy input: only a named level is accepted, and the policy
+  // seam in readiness.ts enforces it at dispatch. Unknown levels fail here.
+  setScrutiny(issueId: string, scrutiny: string): ResolvedIssue {
+    if (!isValidScrutiny(scrutiny)) throw new Error(`invalid scrutiny level: ${scrutiny}`);
+    return withTransaction(this.db, () => {
+      this.requireIssue(issueId);
+      const now = Date.now();
+      this.db.prepare("UPDATE issues SET scrutiny = ?, updated_at = ? WHERE id = ?").run(scrutiny, now, issueId);
+      this.appendEvent(issueId, "issue.metadata", { field: "scrutiny", scrutiny });
+      return this.view(issueId);
+    });
+  }
+
+  setOwnership(issueId: string, ownership: unknown): ResolvedIssue {
+    const findings = validateOwnership(ownership);
+    if (findings.length > 0) throw new Error(`invalid ownership: ${findings[0]!.message}`);
+    return withTransaction(this.db, () => {
+      const issue = this.requireIssue(issueId);
+      const now = Date.now();
+      this.db
+        .prepare("UPDATE issue_revisions SET ownership_json = ? WHERE issue_id = ? AND revision = ?")
+        .run(ownership == null ? null : JSON.stringify(ownership), issueId, issue.currentRevision);
+      this.touch(issueId, now);
+      this.appendEvent(issueId, "issue.metadata", { revision: issue.currentRevision, field: "ownership" });
+      return this.view(issueId);
+    });
+  }
+
+  // Journal/memory kinds are rejected: journal entries are continuity,
+  // never planning authority (PRD §43). Fail-closed at write and at read.
+  setContextRefs(issueId: string, refs: unknown[]): ResolvedIssue {
+    const findings = validateContextRefs(refs);
+    if (findings.length > 0) throw new Error(`invalid contextRefs: ${findings[0]!.message}`);
+    return withTransaction(this.db, () => {
+      const issue = this.requireIssue(issueId);
+      const now = Date.now();
+      this.db
+        .prepare("UPDATE issue_revisions SET context_refs_json = ? WHERE issue_id = ? AND revision = ?")
+        .run(JSON.stringify(refs), issueId, issue.currentRevision);
+      this.touch(issueId, now);
+      this.appendEvent(issueId, "issue.metadata", { revision: issue.currentRevision, field: "contextRefs" });
+      return this.view(issueId);
+    });
+  }
+
+  unsatisfiedBlockers(issueId: string): string[] {
+    this.requireIssue(issueId);
+    const blockers = rows<Row>(
+      this.db,
+      "SELECT from_issue FROM issue_edges WHERE to_issue = ? AND kind = 'blocks' AND active = 1 ORDER BY from_issue",
+      issueId,
+    ).map((r) => r["from_issue"] as string);
+    return blockers.filter((b) => {
+      try {
+        return !isBlockerSatisfied(this.requireIssue(b).lifecycleState);
+      } catch {
+        return true;
+      }
+    });
+  }
+
+  // Single shared readiness projection (PRD §5). Pass `now` in tests to
+  // control deferral without wall-clock coupling.
+  getReadiness(issueId: string, opts?: { now?: number }): ReadinessReport {
+    const issue = this.requireIssue(issueId);
+    const rev = this.getRevision(issueId, issue.currentRevision);
+    return deriveReadiness({
+      issueId,
+      revision: issue.currentRevision,
+      contractHash: issue.currentContractHash,
+      contract: rev.contract,
+      scrutiny: issue.scrutiny,
+      ownership: rev.ownership,
+      contextRefs: rev.contextRefs,
+      lifecycleState: issue.lifecycleState,
+      deferUntil: issue.deferUntil,
+      attestation: this.latestAttestation(issueId),
+      unsatisfiedBlockers: this.unsatisfiedBlockers(issueId),
+      now: opts?.now ?? Date.now(),
+      hasActiveClaim: false,
+    });
+  }
+
+  // Fail-closed dispatch gate (PRD §§12.3, 39.1): throws unless the issue is
+  // derived ready. requestedScope may NARROW the authorized activation but
+  // never expand it — a hidden prompt that widens SCOPE is rejected (A5).
+  assertDispatchable(issueId: string, opts?: { now?: number; requestedScope?: string[] }): ReadinessReport {
+    const report = this.getReadiness(issueId, opts);
+    if (!report.dispatchable) {
+      throw new Error(`not dispatchable: ${issueId} is ${report.state}: ${report.reasons.join("; ")}`);
+    }
+    if (opts?.requestedScope) {
+      const rev = this.getRevision(issueId, report.revision);
+      const contract = rev.contract as { scope?: unknown };
+      const contractScope = Array.isArray(contract.scope) ? (contract.scope as string[]) : [];
+      const { ok, expanded } = scopeCovers(contractScope, opts.requestedScope);
+      if (!ok) throw new Error(`scope expansion rejected: ${expanded.join(", ")} outside contract SCOPE (§39.1)`);
+    }
+    return report;
+  }
+
+  // Deterministic context inheritance with source provenance (PRD §15).
+  // Walks the parent chain root → leaf; the leaf wins per key and every
+  // value records its source issue + revision. Throws fail-closed on
+  // journal/memory authority claims and on parent cycles.
+  getResolvedContext(issueId: string): ResolvedContext {
+    const leaf = this.requireIssue(issueId);
+    const lineage: string[] = [issueId];
+    const seen = new Set<string>([issueId]);
+    let cur: string | null = issueId;
+    for (;;) {
+      const parent = this.getParent(cur);
+      if (!parent) break;
+      if (seen.has(parent.id)) throw new Error(`fail-closed: parent cycle detected at ${parent.id}`);
+      seen.add(parent.id);
+      lineage.unshift(parent.id);
+      cur = parent.id;
+    }
+    const chain = lineage.map((id) => {
+      const issue = this.requireIssue(id);
+      const rev = this.getRevision(id, issue.currentRevision);
+      return { issueId: id, revision: issue.currentRevision, refs: (rev.contextRefs ?? []) as ContextRef[] };
+    });
+    const { entries, hash } = resolveInheritedContext(chain);
+    return { issueId, revision: leaf.currentRevision, entries, hash };
+  }
+
+  private toAttestation(r: Row): ReadinessAttestation {
+    return {
+      id: r["id"] as number,
+      issueId: r["issue_id"] as string,
+      issueRevision: r["issue_revision"] as number,
+      contractHash: r["contract_hash"] as string,
+      outcome: r["outcome"] as "ready" | "reject",
+      policy: r["policy"] as string,
+      attestedBy: r["attested_by"] as string,
+      evidenceRefs: JSON.parse((r["evidence_refs_json"] as string) ?? "[]"),
+      blockingGaps: JSON.parse((r["blocking_gaps_json"] as string) ?? "[]"),
+      createdAt: r["created_at"] as number,
+    };
   }
 
   // -- internals ---------------------------------------------------------------
