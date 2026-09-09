@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { version as v1, name as n1, sql as sql1 } from "./001_baseline.ts";
 import { version as v2, name as n2, sql as sql2 } from "./002_projections_sync.ts";
 import { version as v3, name as n3, sql as sql3 } from "./003_readiness.ts";
+import { version as v4, name as n4, sql as sql4 } from "./004_claims_leases.ts";
 
 // Append-only migration runner. Landed migrations are never edited: a
 // checksum mismatch or an unknown DB version fails closed (PRD §46).
@@ -17,6 +18,7 @@ const MIGRATIONS: Migration[] = [
   { version: v1, name: n1, sql: sql1 },
   { version: v2, name: n2, sql: sql2 },
   { version: v3, name: n3, sql: sql3 },
+  { version: v4, name: n4, sql: sql4 },
 ];
 
 const REQUIRED_TABLES = [
@@ -27,6 +29,8 @@ const REQUIRED_TABLES = [
   "issue_locator_history",
   "issue_edges",
   "readiness_attestations",
+  "issue_claims",
+  "workspace_leases",
   "issue_events",
   "seq_counters",
   "idempotency_keys",
