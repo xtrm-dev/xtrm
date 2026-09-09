@@ -38,6 +38,10 @@ __pycache__/
 .xtrm/*
 !.xtrm/board-audit/
 !.xtrm/board-audit/**
+!.xtrm/provenance/
+.xtrm/provenance/*
+!.xtrm/provenance/bundles/
+!.xtrm/provenance/bundles/**
 .specialists/
 .wolf/
 .beads/
