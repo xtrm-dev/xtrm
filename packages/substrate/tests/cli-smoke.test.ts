@@ -164,6 +164,33 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     assert.match(env.error, /unresolvable|unknown/i);
   });
 
+  it("renders children indented under parents in human tree output", () => {
+    const { dir, dbPath } = setupDb();
+    const c = contractFile(dir, "c.json", { problem: "P", success: "S" });
+    const parent = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "Parent", "--kind", "task", "--contract", c]).data as {
+      humanRef: string;
+    };
+    const child = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "Child", "--kind", "task", "--contract", c, "--parent", parent.humanRef]).data as {
+      humanRef: string;
+    };
+    // human forest view: child indented under its parent
+    const forest = runCli(["--db", dbPath, "issue", "tree", "--project", "prj_demo"]);
+    assert.equal(forest.code, 0, forest.stderr);
+    const lines = forest.stdout.split("\n");
+    const parentLine = lines.find((l) => l.includes(parent.humanRef));
+    const childLine = lines.find((l) => l.includes(child.humanRef));
+    assert.ok(parentLine && !parentLine.startsWith(" "), "root starts at depth 0");
+    assert.ok(childLine && childLine.startsWith("  ") && !childLine.startsWith("    "), "child indented one level");
+    // human single-root view walks too
+    const single = runCli(["--db", dbPath, "issue", "tree", "--root", parent.humanRef]);
+    assert.equal(single.code, 0, single.stderr);
+    assert.ok(single.stdout.split("\n").some((l) => l.startsWith("  ") && l.includes(child.humanRef)));
+    // JSON shape unchanged: nested children array intact
+    const json = cli(dbPath, ["issue", "tree", "--project", "prj_demo"]).data as Array<{ children: unknown[] }>;
+    assert.equal(json.length, 1);
+    assert.equal(json[0]?.children.length, 1);
+  });
+
   it("the sb bin runs as a real process", () => {
     const { dbPath } = setupDb();
     const out = execFileSync(process.execPath, [SB, "--db", dbPath, "--json", "issue", "list", "--project", "prj_demo"], { encoding: "utf8" });

@@ -130,19 +130,20 @@ function emit(ctx: Ctx, command: string, data: unknown): CliResult {
   const push = (s: Record<string, unknown>): void => {
     lines.push(human(s));
   };
+  const walk = (t: Record<string, unknown>, depth: number): void => {
+    lines.push(`${"  ".repeat(depth)}${human(t)}`);
+    for (const c of (t["children"] as Array<Record<string, unknown>>)) walk(c, depth + 1);
+  };
   if (Array.isArray(data)) {
     for (const d of data as Array<Record<string, unknown>>) {
-      if (typeof d["locator"] === "string") push(d);
+      if (Array.isArray(d["children"])) walk(d, 0);
+      else if (typeof d["locator"] === "string") push(d);
       else lines.push(JSON.stringify(d));
     }
+  } else if (data !== null && typeof data === "object" && Array.isArray((data as Record<string, unknown>)["children"])) {
+    walk(data as Record<string, unknown>, 0);
   } else if (data !== null && typeof data === "object" && typeof (data as Record<string, unknown>)["locator"] === "string") {
     push(data as Record<string, unknown>);
-  } else if (data !== null && typeof data === "object" && Array.isArray((data as Record<string, unknown>)["children"])) {
-    const walk = (t: Record<string, unknown>, depth: number): void => {
-      lines.push(`${"  ".repeat(depth)}${human(t)}`);
-      for (const c of (t["children"] as Array<Record<string, unknown>>)) walk(c, depth + 1);
-    };
-    walk(data as Record<string, unknown>, 0);
   } else {
     lines.push(JSON.stringify(data));
   }
