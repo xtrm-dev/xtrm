@@ -29,6 +29,14 @@ function hookEntries() {
 }
 
 describe("packaged plugin (xtrm-iip.1)", () => {
+  it("does not redeclare the auto-loaded hooks path (xtrm-iip.10)", () => {
+    // Live session 2.1.266: a manifest `hooks` key plus the standard
+    // hooks/hooks.json double-loads ("Duplicate hooks file detected");
+    // validate --strict is blind to it, so the pin lives here.
+    assert.equal((manifest as Record<string, unknown>)["hooks"], undefined, "plugin.json must not redeclare hooks/hooks.json");
+    assert.ok(manifest.mcpServers, "manifest must declare mcpServers - .mcp.json at the default path is NOT auto-discovered");
+  });
+
   it("declares an author, without which validate --strict fails", () => {
     // Measured: Claude Code 2.1.266 emits "author: No author information
     // provided" as a warning, and --strict turns warnings into errors, so a
