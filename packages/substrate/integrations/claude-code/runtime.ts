@@ -1,8 +1,12 @@
 // Shared Claude-integration runtime: DB resolution + issue discovery.
-// Follows the sb CLI precedence (PRD epic shared requirement: structured
-// JSON + concise projections) without importing the CLI: --db flag value,
-// SUBSTRATE_DB env, then ~/.xtrm/state.db. Issue discovery never assumes
-// .xtrm/hooks scripts exist (P0 census): env, then .substrate-issue file.
+// ONE AUTHORITY (bead xtrm-iip.2, closeout E2): every Substrate surface —
+// sb, Pi, Claude MCP server, plugin scripts — resolves the database as
+// explicit override else SUBSTRATE_DB env else ~/.xtrm/state.db. No code
+// path defaults to a repo-local database; a repo-local DB would fork the
+// canonical store and break sb/Pi/Claude row agreement. Follows the sb CLI
+// precedence without importing the CLI: --db flag value, SUBSTRATE_DB env,
+// then ~/.xtrm/state.db. Issue discovery never assumes .xtrm/hooks scripts
+// exist (P0 census): env, then .substrate-issue file.
 
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -21,8 +25,10 @@ export interface SubstrateHandles {
   resume: ResumeService;
 }
 
+export const CANONICAL_DB_PATH = join(homedir(), ".xtrm", "state.db");
+
 export function resolveDbPath(explicit?: string): string {
-  return explicit ?? process.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db");
+  return explicit ?? process.env["SUBSTRATE_DB"] ?? CANONICAL_DB_PATH;
 }
 
 export function openHandles(dbPath?: string): SubstrateHandles {
