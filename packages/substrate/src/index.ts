@@ -9,6 +9,7 @@ export * from "./store/sqlite.ts";
 export * from "./store/transactions.ts";
 export * from "./service/issue-service.ts";
 export * from "./service/integration-service.ts";
+export * as workitems from "./workitems/index.ts";
 export * from "./service/journal-service.ts";
 export * from "./service/resume-service.ts";
 export * from "./service/provenance-service.ts";
