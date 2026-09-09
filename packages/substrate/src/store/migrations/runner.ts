@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { version as v1, name as n1, sql as sql1 } from "./001_baseline.ts";
+import { version as v2, name as n2, sql as sql2 } from "./002_projections_sync.ts";
 
 // Append-only migration runner. Landed migrations are never edited: a
 // checksum mismatch or an unknown DB version fails closed (PRD §46).
@@ -11,7 +12,10 @@ interface Migration {
   sql: string;
 }
 
-const MIGRATIONS: Migration[] = [{ version: v1, name: n1, sql: sql1 }];
+const MIGRATIONS: Migration[] = [
+  { version: v1, name: n1, sql: sql1 },
+  { version: v2, name: n2, sql: sql2 },
+];
 
 const REQUIRED_TABLES = [
   "projects",
@@ -23,6 +27,9 @@ const REQUIRED_TABLES = [
   "issue_events",
   "seq_counters",
   "idempotency_keys",
+  "external_bindings",
+  "integration_inbox",
+  "projection_outbox",
 ];
 
 function checksum(sql: string): string {

@@ -4,3 +4,8 @@ export * from "./domain/edge.ts";
 export * from "./store/sqlite.ts";
 export * from "./store/transactions.ts";
 export * from "./service/issue-service.ts";
+export * from "./service/integration-service.ts";
+export * from "./projections/types.ts";
+export * as githubProjection from "./projections/github/mapping.ts";
+export * as jiraProjection from "./projections/jira/mapping.ts";
+export * as filesystemProjection from "./projections/filesystem/render.ts";
