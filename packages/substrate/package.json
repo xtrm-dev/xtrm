@@ -9,6 +9,8 @@
   "files": [
     "src",
     "cli",
+    "integrations",
+    "skills",
     "README.md"
   ],
   "scripts": {
@@ -19,6 +21,9 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "^0.84.4",
+    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "typebox": "^1.3.7",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
