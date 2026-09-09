@@ -36,8 +36,11 @@ interface Ctx {
 
 // -- PRD-45 compact projections (presentation of service data) ---------------
 
+// Machine id rides inside the JSON projection only: human() picks named
+// fields, so one-line output never shows the opaque id (display rules).
 function issueSummary(i: ResolvedIssue): Record<string, unknown> {
   return {
+    id: i.id,
     locator: i.locator,
     humanRef: i.humanRef,
     title: i.title,
