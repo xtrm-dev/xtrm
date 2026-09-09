@@ -24,10 +24,19 @@ Durable work substrate, Phase 1 (domain + SQLite kernel). Library-first: the
 - Corrupt schema or unknown migration state refuses startup/mutation.
 - Uncertain external effects are recorded `uncertain`, never guessed.
 
+## CLI (P4)
+
+`cli/sb.ts` (`bin: sb`) is a thin adapter over the typed service — no SQL,
+no business logic. Verbs: `issue
+create/show/edit/validate/list/ready/tree/children/relate/claim/release/close`
+plus `plan check/apply`. Every Issue-taking command accepts all five ID
+forms via `resolveRef`. `--json` emits the `substrate-cli/v1` envelope
+(see `cli/schema.json`, version 1.0.0, additive-only compat); otherwise one
+concise human line per item (locator · humanRef · title [state revN]).
+
 ## Deferred to later phases
 
-Readiness/attestation (P2), claims/leases (P3), CLI (P4), journal (P5),
-provenance (P8), projections/outbox workers (P10), import compat (P11).
+Journal (P5), provenance (P8), import compat (P11).
 
 ## Develop
 
