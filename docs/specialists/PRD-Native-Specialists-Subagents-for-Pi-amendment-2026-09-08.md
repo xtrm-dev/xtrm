@@ -128,7 +128,7 @@ Per Specialist, show where available:
 ```text
 Specialist role/name
 model + thinking level
-work item / Bead / future Substrate issue
+work item / Issue (Bead alias where migrated)
 meaningful state
 elapsed time
 context-window / token usage

@@ -24,7 +24,7 @@ Today, the Specialist runtime already contains significant value:
 - output schemas and required output keys;
 - capability/tool policy;
 - execution extensions;
-- Beads integration;
+- Substrate integration;
 - permission tiers;
 - timeout/stall policy;
 - retry behavior;
@@ -75,7 +75,7 @@ The Specialist remains:
 - persistent;
 - interactive;
 - resumable;
-- Bead-backed;
+- Issue-backed;
 - capability-governed;
 - lease-governed;
 - observable;
@@ -156,8 +156,8 @@ The implementation must allow a coordinator to:
 3. avoid `sp run` as the normal interactive path;
 4. avoid launching an `xt` terminal/session merely to obtain a Specialist;
 5. use the effective layered Specialist definition from `SpecialistLoader`;
-6. require a real dispatchable Bead for tracked work;
-7. prevent free-form prompt text from silently supplementing an incomplete Bead;
+6. require a real dispatchable Issue for tracked work;
+7. prevent free-form prompt text from silently supplementing an incomplete Issue;
 8. derive a bounded activation-specific `StepContract`;
 9. keep child Specialist sessions persistent;
 10. attach interactively to any child Specialist;
@@ -232,7 +232,7 @@ A Specialist is a persistent typed participant, not a disposable prompt.
 
 SpecialistLoader is authoritative for the effective Specialist.
 
-A Bead is authoritative tracked work.
+A Substrate Issue revision is authoritative tracked work.
 
 A StepContract bounds one activation.
 
@@ -448,7 +448,7 @@ mandatory rule template sets
 mandatory inline rules
 permission policy
 notes behavior
-Beads integration
+Substrate integration
 output file behavior
 ```
 
@@ -567,7 +567,7 @@ Future schedulers must be able to construct the same request.
 
 ---
 
-# 12. Bead dispatch gate
+# 12. Issue dispatch gate
 
 The current Substrate Issue revision is the authoritative tracked-work contract (shared readiness service — Phase 9 authority replacement; `beadId` aliases still resolve to the same Issue).
 
@@ -688,7 +688,7 @@ Tracked work must never use free-form delegation text to compensate for bad dura
 Forbidden behavior:
 
 ```text
-Bead incomplete
+Issue incomplete
     ↓
 delegate anyway
     ↓
@@ -698,9 +698,9 @@ explain missing scope in tool argument
 Required:
 
 ```text
-Bead incomplete
+Issue incomplete
     ↓
-update Bead
+update Issue
     ↓
 dispatch
 ```
@@ -745,7 +745,7 @@ interface StepContract {
 Compilation inputs:
 
 ```text
-ready root Bead
+ready root Issue
 SpecialistDefinition
 participant role
 current evidence
@@ -771,7 +771,7 @@ ROLE RULES
     "You are the reviewer..."
 
 ROOT WORK CONTRACT
-    complete Bead contract
+    complete Issue contract
 
 STEP CONTRACT
     bounded activation mandate
@@ -801,7 +801,7 @@ This extension does not create native Substrate step-issues.
 Current interactive flow:
 
 ```text
-ready Bead
+ready Issue
     ↓
 derived StepContract
     ↓
@@ -1014,7 +1014,7 @@ reply
 Examples:
 
 ```text
-"The Bead is ambiguous between option A and B."
+"The Issue is ambiguous between option A and B."
 
 "The implementation moved from package X to Y."
 
@@ -1107,7 +1107,7 @@ A Specialist message cannot:
 
 ```text
 grant writer lease
-expand Bead scope
+expand Issue scope
 approve destructive work
 override NON_GOALS
 skip required validation
@@ -1530,7 +1530,7 @@ OUTPUT
 then:
 
 ```text
-update Bead
+update Issue
     ↓
 persist updated contract
     ↓
@@ -1777,7 +1777,7 @@ This abstraction is intentionally compatible with a future Substrate-backed impl
 Before a write-capable activation starts:
 
 ```text
-validate Bead
+validate Issue
     ↓
 resolve Specialist
     ↓
@@ -2366,7 +2366,7 @@ Native hosting must preserve:
 ```text
 activation traceability
 Specialist identity
-Bead correlation
+Issue correlation
 workspace correlation
 participant identity
 activation identity
@@ -2514,7 +2514,7 @@ Include:
 
 ```text
 requesting participant
-bead
+issue
 Specialist
 requested model
 workspace
@@ -2717,7 +2717,7 @@ what a Specialist is
 what a Specialist is not
 when to delegate
 when not to delegate
-Bead readiness
+Issue readiness
 seven-section contract
 SCRUTINY
 native delegation
@@ -2754,7 +2754,7 @@ Suggested wording conceptually:
 A Specialist is a persistent typed participant backed by:
 
 - an effective Specialist definition;
-- a durable Bead work contract;
+- a durable Issue work contract;
 - a bounded StepContract;
 - a Pi AgentSession;
 - resolved capabilities;
@@ -2795,13 +2795,13 @@ obtain another concurrent writer
 
 ---
 
-# 88. Bead guidance
+# 88. Issue guidance
 
 The skill must state:
 
-> The Bead is the task. The delegation call is not a second task prompt.
+> The Issue is the task. The delegation call is not a second task prompt.
 
-If the Bead is incomplete:
+If the Issue is incomplete:
 
 ```text
 update it
@@ -2830,7 +2830,7 @@ reply
 If yes:
 
 ```text
-update Bead
+update Issue
 refresh activation context
 reply
 ```
@@ -2910,7 +2910,7 @@ The skill should state:
 
 ```text
 interactive path:
-Bead → StepContract → Activation
+Issue → StepContract → Activation
 
 future Chain path:
 ResolvedChain → materialized step work → StepContract → Activation
@@ -2924,7 +2924,7 @@ Do not create artificial child work items just because a subagent exists.
 
 The `specialist_delegate` tool description should explain, concisely:
 
-> Delegate a ready Bead to a configured XTRM Specialist as a persistent native Pi subagent. The Specialist may ask questions, report findings, or escalate while remaining alive. Read-only Specialists may run concurrently. Write-capable Specialists share the current worktree and require the exclusive workspace writer lease; the coordinator is also fenced from mutation while that lease is held. Do not use free-form delegation to supplement an incomplete Bead.
+> Delegate a ready Issue to a configured XTRM Specialist as a persistent native Pi subagent. The Specialist may ask questions, report findings, or escalate while remaining alive. Read-only Specialists may run concurrently. Write-capable Specialists share the current worktree and require the exclusive workspace writer lease; the coordinator is also fenced from mutation while that lease is held. Do not use free-form delegation to supplement an incomplete Issue.
 
 ---
 
@@ -3409,7 +3409,7 @@ task_template
 mandatory rule layers
 tool advisory where applicable
 StepContract
-Bead context
+Issue context
 ```
 
 Do not flatten these into one ad-hoc string without respecting current semantics.
@@ -3683,7 +3683,7 @@ resume
 
 ---
 
-## Phase 3 — Bead hard gate
+## Phase 3 — Issue hard gate
 
 Implement:
 
@@ -3933,7 +3933,7 @@ Child resumes in same session.
 
 Child identifies a scope mismatch.
 
-Coordinator updates Bead before sending revised durable instructions.
+Coordinator updates Issue before sending revised durable instructions.
 
 ---
 
@@ -3959,7 +3959,7 @@ It is not stored merely as an untyped message.
 
 ---
 
-## O — ready Bead gate
+## O — ready Issue gate
 
 Draft/incomplete work cannot dispatch.
 
@@ -4110,9 +4110,9 @@ Native activation produces durable lifecycle records.
 
 ---
 
-## AK — Bead lineage
+## AK — Issue lineage
 
-Forensic query can recover originating Bead from activation.
+Forensic query can recover originating Issue from activation.
 
 ---
 
@@ -4278,7 +4278,7 @@ operator:
 
 coordinator
     ↓
-uses/updates ready Bead
+uses/updates ready Issue
     ↓
 delegates researcher
 
@@ -4453,7 +4453,7 @@ The following invariants are release-blocking:
 ```text
 1. SpecialistLoader remains authoritative.
 
-2. Tracked work requires a ready Bead.
+2. Tracked work requires a ready Issue.
 
 3. Free-form delegation cannot replace durable work.
 

@@ -32,10 +32,10 @@ Invariants (full list in [README](../README.md)); the load-bearing ones: agent f
 
 ### R1 — Authoring & compilation
 1. One `ChainLoader` accepts all ChainSource variants; ad-hoc composition is persisted as a versioned source artifact before execution (never ephemeral prose).
-2. One pure compiler emits a persisted `ResolvedChain`: no shelling, no Beads mutation, no tmux, no model calls during compile.
+2. One pure compiler emits a persisted `ResolvedChain`: no shelling, no work-store mutation, no tmux, no model calls during compile.
 3. Structural change after freeze requires a new reviewed revision.
 4. Templates remain supported compatibility sources; user JSON, agent-composed chains, and imported formulas converge through the same loader/compiler.
-5. Beads materialization happens only after freeze; the materializer must not invent a second dependency graph.
+5. Substrate materialization happens only after freeze; the materializer must not invent a second dependency graph.
 
 ### R2 — Durability & recovery
 6. Every external effect carries an idempotency key; receipts are append-only.
@@ -60,7 +60,7 @@ Invariants (full list in [README](../README.md)); the load-bearing ones: agent f
 19. Evidence travels pointer-first; work refs are opaque; no direct resume bypass.
 
 ### R6 — Work/evidence authority
-20. Beads is the authoritative work/acceptance surface and durable external projection of ChainRuns; root Epic = native parent; step beads children; blocks edges between steps only; cross-DB refs stay opaque.
+20. Substrate Issues are the authoritative work/acceptance surface and durable external projection of ChainRuns; root Epic = native parent; step issues children; blocks edges between steps only; cross-DB refs stay opaque (Phase 11 cutover; Beads IDs resolve as aliases).
 21. Git is integration truth. Evidence validation gates chain satisfaction; self-report never satisfies a step.
 
 ### R7 — Supervision boundaries

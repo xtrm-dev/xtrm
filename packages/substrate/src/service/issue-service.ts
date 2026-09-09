@@ -278,13 +278,16 @@ export class IssueService {
   resolveRef(ref: string): ResolvedIssue {
     const q = ref.trim();
     if (q.startsWith("iss_")) return this.view(q);
+    // A human-shaped ref that matches no project/row falls through to alias
+    // and locator lookup: Beads IDs such as xtrm-401 parse as PREFIX-NUMBER
+    // but live on as aliases after import (G45). Found live by the P11 pilot.
     const human = parseHumanRef(q);
     if (human) {
       const p = row<Row>(this.db, "SELECT id FROM projects WHERE prefix = ?", human.prefix);
-      if (!p) throw new Error(`unresolvable ref: ${ref}`);
-      const hit = row<Row>(this.db, "SELECT id FROM issues WHERE project_id = ? AND human_number = ?", p["id"] as string, human.number);
-      if (!hit) throw new Error(`unresolvable ref: ${ref}`);
-      return this.view(hit["id"] as string);
+      const hit = p
+        ? row<Row>(this.db, "SELECT id FROM issues WHERE project_id = ? AND human_number = ?", p["id"] as string, human.number)
+        : undefined;
+      if (hit) return this.view(hit["id"] as string);
     }
     const alias = row<Row>(this.db, "SELECT issue_id FROM issue_aliases WHERE alias = ?", q);
     if (alias) return this.view(alias["issue_id"] as string);
