@@ -207,6 +207,18 @@ Pi–Claude provider boundary with nothing arriving (delivery only via tmux
 pane). SendMessage success is Claude-to-Claude evidence only, never a
 cross-provider acknowledgement; XTRM use needs its own receipt.
 
+## 9. Hard precondition: the session must negotiate MCP 2026-07-28
+
+Claude Code 2.1.266 opens MCP at 2025-11-25 by default. The plugin requires
+`MCP_SDK_GENERATION=v2` plus `MCP_PROTOCOL_NEGOTIATION=auto` in the session
+environment; without them the server correctly rejects under `legacy: reject`
+and the tools are silently absent (the absence caches ~15min, so the failure
+looks intermittent).
+
+`legacy: reject` stands per brief F/I — no silent downgrade. The
+precondition is deployment reality, documented here, not coded: the server
+must not guess its way onto a legacy protocol to be convenient.
+
 ## Sources
 
 All accessed 2026-09-09.
