@@ -16,6 +16,7 @@ const manifest = JSON.parse(read(".claude-plugin/plugin.json")) as {
   author?: { name?: string };
   hooks?: string;
   mcpServers?: string;
+  experimental?: { monitors?: string };
 };
 const hooks = JSON.parse(read("hooks/hooks.json")) as {
   hooks: Record<string, { hooks: { type: string; command: string; args?: string[] }[] }[]>;
@@ -23,6 +24,7 @@ const hooks = JSON.parse(read("hooks/hooks.json")) as {
 const mcp = JSON.parse(read(".mcp.json")) as {
   mcpServers: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
 };
+const monitors = JSON.parse(read("monitors/monitors.json")) as Array<{ name?: string; when?: string }>;
 
 function hookEntries() {
   return Object.values(hooks.hooks).flatMap((matchers) => matchers.flatMap((m) => m.hooks));
@@ -35,6 +37,12 @@ describe("packaged plugin (xtrm-iip.1)", () => {
     // validate --strict is blind to it, so the pin lives here.
     assert.equal((manifest as Record<string, unknown>)["hooks"], undefined, "plugin.json must not redeclare hooks/hooks.json");
     assert.ok(manifest.mcpServers, "manifest must declare mcpServers - .mcp.json at the default path is NOT auto-discovered");
+    assert.equal(manifest.experimental?.monitors, "./monitors/monitors.json", "manifest must declare the monitors path - monitors/ is NOT auto-discovered (xtrm-iip.12)");
+    // Live rig proof: the bare skill name never fires; the gate must use the
+    // plugin-namespaced form even though the docs example shows the bare
+    // form. Pin the namespace so the gate cannot silently regress.
+    const gate = monitors.find((m) => m.name === "substrate-events")?.when;
+    assert.equal(gate, "on-skill-invoke:substrate:using-substrate", "monitor gate must name the namespaced skill (xtrm-iip.12)");
   });
 
   it("declares an author, without which validate --strict fails", () => {
