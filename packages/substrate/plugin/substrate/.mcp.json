@@ -1,0 +1,9 @@
+{
+  "$comment": "No env block. The database is resolved by the runtime as explicit override, else SUBSTRATE_DB from the environment, else ~/.xtrm/state.db (bead xtrm-iip.2). A SUBSTRATE_DB default here would fork the canonical store away from sb and Pi; packages/substrate/tests/db-authority.test.ts pins its absence.",
+  "mcpServers": {
+    "substrate": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/substrate-mcp.ts"]
+    }
+  }
+}

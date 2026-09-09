@@ -11,6 +11,7 @@
     "cli",
     "integrations",
     "skills",
+    "plugin",
     "README.md"
   ],
   "scripts": {
