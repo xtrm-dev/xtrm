@@ -20,6 +20,7 @@ import {
   toolJournalAppend,
   toolProvenanceTrace,
 } from "../integrations/pi/handlers.ts";
+import { discoverIssueRef } from "../integrations/claude-code/runtime.ts";
 import { contract } from "./helpers.ts";
 
 function setup() {
@@ -73,6 +74,64 @@ describe("tool surface over the typed service", () => {
     } finally {
       delete process.env["SUBSTRATE_ISSUE"];
     }
+  });
+});
+
+// Converged env names (xtrm-iip.9): SUBSTRATE_ISSUE_REF wins on both
+// surfaces; SUBSTRATE_ISSUE is the backcompat alias. Three per surface.
+
+describe("issue-ref env alias (xtrm-iip.9)", () => {
+  function withEnv(vars: Record<string, string | undefined>, fn: () => void): void {
+    const prior: Record<string, string | undefined> = {};
+    for (const k of Object.keys(vars)) prior[k] = process.env[k];
+    try {
+      for (const [k, v] of Object.entries(vars)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+      fn();
+    } finally {
+      for (const [k, v] of Object.entries(prior)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  }
+
+  it("Pi: _REF wins over the legacy name", () => {
+    withEnv({ SUBSTRATE_ISSUE_REF: "PI-REF", SUBSTRATE_ISSUE: "PI-OLD" }, () => {
+      assert.equal(new SessionBindings().boundRef("nope"), "PI-REF");
+    });
+  });
+
+  it("Pi: legacy name still binds when _REF is unset", () => {
+    withEnv({ SUBSTRATE_ISSUE_REF: undefined, SUBSTRATE_ISSUE: "PI-OLD" }, () => {
+      assert.equal(new SessionBindings().boundRef("nope"), "PI-OLD");
+    });
+  });
+
+  it("Pi: neither name binds nothing", () => {
+    withEnv({ SUBSTRATE_ISSUE_REF: undefined, SUBSTRATE_ISSUE: undefined }, () => {
+      assert.equal(new SessionBindings().boundRef("nope"), null);
+    });
+  });
+
+  it("Claude: _REF wins over the legacy name", () => {
+    withEnv({ SUBSTRATE_ISSUE_REF: "C-REF", SUBSTRATE_ISSUE: "C-OLD" }, () => {
+      assert.equal(discoverIssueRef(), "C-REF");
+    });
+  });
+
+  it("Claude: legacy name still resolves when _REF is unset", () => {
+    withEnv({ SUBSTRATE_ISSUE_REF: undefined, SUBSTRATE_ISSUE: "C-OLD" }, () => {
+      assert.equal(discoverIssueRef(), "C-OLD");
+    });
+  });
+
+  it("Claude: neither name resolves nothing", () => {
+    withEnv({ SUBSTRATE_ISSUE_REF: undefined, SUBSTRATE_ISSUE: undefined }, () => {
+      assert.equal(discoverIssueRef(), null);
+    });
   });
 });
 
