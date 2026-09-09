@@ -2,6 +2,12 @@ import type { DatabaseSync } from "node:sqlite";
 
 // Transaction rule (PRD §7.3): check revision/idempotency, validate, mutate,
 // event, revision, commit atomically — or commit nothing.
+//
+// Re-entrant via SAVEPOINTs: service methods each own their transaction, so
+// a multi-command flow (e.g. atomic PlanDraft apply) composes them inside one
+// outer transaction and still rolls back all-or-nothing. Depth is tracked per
+// database handle; a nested failure rolls back to its savepoint and the outer
+// transaction still fails, preserving the all-or-nothing rule.
 
 // Counter namespaces. 'human_ref' and 'child_slot' share one table but never
 // collide: the namespace is part of the primary key.
@@ -13,11 +19,36 @@ export type CounterNamespace = (typeof COUNTER_NAMESPACES)[number];
 export const IDEMPOTENCY_NAMESPACES = ["command", "plan", "inbox", "outbox"] as const;
 export type IdempotencyNamespace = (typeof IDEMPOTENCY_NAMESPACES)[number];
 
+const txDepth = new WeakMap<DatabaseSync, number>();
+
 export function withTransaction<T>(db: DatabaseSync, fn: () => T): T {
+  const depth = txDepth.get(db) ?? 0;
+  if (depth > 0) {
+    const sp = `xtrm_sp_${depth}`;
+    txDepth.set(db, depth + 1);
+    db.exec(`SAVEPOINT ${sp}`);
+    try {
+      const result = fn();
+      db.exec(`RELEASE ${sp}`);
+      txDepth.set(db, depth);
+      return result;
+    } catch (err) {
+      try {
+        db.exec(`ROLLBACK TO ${sp}`);
+        db.exec(`RELEASE ${sp}`);
+      } catch {
+        /* rollback of a failed savepoint must not mask the cause */
+      }
+      txDepth.set(db, depth);
+      throw err;
+    }
+  }
+  txDepth.set(db, 1);
   db.exec("BEGIN IMMEDIATE");
   try {
     const result = fn();
     db.exec("COMMIT");
+    txDepth.set(db, 0);
     return result;
   } catch (err) {
     try {
@@ -25,6 +56,7 @@ export function withTransaction<T>(db: DatabaseSync, fn: () => T): T {
     } catch {
       /* rollback of a failed transaction must not mask the cause */
     }
+    txDepth.set(db, 0);
     throw err;
   }
 }
