@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -249,5 +249,19 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     assert.equal(env.schema, SCHEMA_VERSION);
     assert.equal(env.ok, true);
     assert.deepEqual(env.data, []);
+  });
+
+  it("the linked sb bin (argv without .ts) enters main (xtrm-7wc.5.5)", () => {
+    // Regression: the npm bin is a symlink named `sb`, so argv[1] never
+    // ends with sb.ts. Mirror npm link exactly: symlink named `sb` at the
+    // real CLI (a byte copy loses the .ts target Node strips types by).
+    const { dbPath } = setupDb();
+    const dir = mkdtempSync(join(tmpdir(), "sb-bin-"));
+    const link = join(dir, "sb");
+    symlinkSync(SB, link);
+    const out = execFileSync(link, ["--db", dbPath, "--json", "issue", "list", "--project", "prj_demo"], { encoding: "utf8" });
+    const env = JSON.parse(out) as { schema: string; ok: boolean };
+    assert.equal(env.schema, SCHEMA_VERSION);
+    assert.equal(env.ok, true);
   });
 });

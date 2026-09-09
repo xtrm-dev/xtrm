@@ -810,7 +810,10 @@ function runExport(
 
 // -- process main --------------------------------------------------------------
 
-const invokedAsMain = process.argv[1]?.endsWith("sb.ts") ?? false;
+const invokedPath = process.argv[1] ?? "";
+// Direct node invocation (argv ends with sb.ts) and the npm-linked bin
+// (argv is the sb symlink) both enter main; anything else is a library import.
+const invokedAsMain = invokedPath.endsWith("sb.ts") || invokedPath.endsWith("/sb") || invokedPath === "sb";
 if (invokedAsMain) {
   const result = runCli(process.argv.slice(2));
   if (result.stdout) process.stdout.write(result.stdout);
