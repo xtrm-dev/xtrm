@@ -3,5 +3,6 @@
   "version": "0.1.0",
   "description": "Substrate durable work substrate for Claude Code: MCP tools over the typed service, plus PreCompact/PostCompact/SessionStart lifecycle (PRD §§24, 38).",
   "author": { "name": "XTRM" },
-  "mcpServers": "./.mcp.json"
+  "mcpServers": "./.mcp.json",
+  "experimental": { "monitors": "./monitors/monitors.json" }
 }
