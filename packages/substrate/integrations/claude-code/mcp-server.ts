@@ -74,7 +74,11 @@ function strArg(args: Record<string, unknown>, field: string, required: boolean)
 
 // Direct library call per tool; each call opens and closes its own handle
 // (MCP servers are long-lived; the WAL store is the shared authority).
+// Dispatch order (xtrm-7wc.8.1): the tool name validates BEFORE any handle
+// opens, so an unknown tool never touches the filesystem and its rejection
+// cannot be masked by a database error on machines without ~/.xtrm/.
 export async function callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+  if (!(MCP_TOOLS as readonly { name: string }[]).some((t) => t.name === name)) throw new Error(`unknown tool: ${name}`);
   const dbPath = args["dbPath"] !== undefined ? strArg(args, "dbPath", false) : undefined;
   const handles = openHandles(dbPath);
   try {
