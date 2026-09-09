@@ -6,7 +6,7 @@
 
 ## Authority hierarchy
 
-1. **Released code + Beads/Git evidence** — what actually shipped. `current-release-snapshot.md` (specialists) classifies delivery state; nothing here claims implementation ahead of it.
+1. **Released code + Substrate/Git evidence** — what actually shipped. `current-release-snapshot.md` (specialists) classifies delivery state; nothing here claims implementation ahead of it.
 2. **This directory** — integrated runtime model: what the pieces *are* and how they compose.
 3. **Domain authorities** (not copied here, only referenced):
    - Channels contract: [`../channels/channels.md`](../channels/channels.md)
@@ -34,7 +34,7 @@ Durable execution          ChainRun  (bound 1:1 to Container(kind=chain))
 Participant runtime profile SpecialistActivationProfile
 Physical invocation        Activation → attempt → AgentSession
 Communication              Channels
-Work/evidence authority    Beads + Evidence        Integration truth: Git
+Work/evidence authority    Substrate Issues + Evidence        Integration truth: Git
 Deterministic progression  pure reducer → SchedulerIntent[] → effect executor → reducer
 ```
 

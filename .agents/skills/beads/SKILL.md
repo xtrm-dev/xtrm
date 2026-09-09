@@ -3,9 +3,15 @@ name: beads
 description: Use when working in a repository that uses bd or Beads for durable project task tracking, issue dependencies, blocker management, multi-session handoff, or shared work memory. Trigger when the user asks to find ready work, claim or close tasks, create follow-up work, inspect blockers, recover project context, or choose between local planning and persistent project tracking.
 ---
 
-# Beads
+# Beads (read/import compatibility only)
 
-Use Beads as the shared project task system. Local plans, scratch files, and personal memories are useful, but they are not the durable source of truth for project work.
+> **Phase 11 cutover (bead xtrm-7wc.12):** Substrate (`sb`) owns durable work.
+> This skill remains for Beads-backed repositories and for `sb import beads`
+> intake only. For Substrate-tracked work, use
+> `packages/substrate/skills/using-substrate/SKILL.md` instead. Historical
+> Beads IDs resolve as Substrate aliases.
+
+Use Beads as the shared project task system wherever Beads is still the tracker. Local plans, scratch files, and personal memories are useful, but they are not the durable source of truth for project work.
 
 ## First Step
 

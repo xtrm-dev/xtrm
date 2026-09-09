@@ -6,7 +6,8 @@
 // human projections (hierarchical locator + durable reference; the opaque
 // machine ID appears only in --json output).
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { importBeads, type BeadsEdgeRecord, type BeadsIssueRecord } from "../src/compatibility/beads/import.ts";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
@@ -168,14 +169,16 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
   const command = group && verb ? `${group}.${verb}` : (group ?? "");
   let db: ReturnType<typeof openSubstrate> | null = null;
   try {
-    if (!group || !verb) throw new Error("usage: sb [--db PATH] [--json] <issue|plan|journal> <verb> [args...]");
+    if (!group || (!verb && group !== "export")) throw new Error("usage: sb [--db PATH] [--json] <issue|plan|journal|provenance|import|export> <verb> [args...]");
     db = openSubstrate(ctx.dbPath);
     const svc = new IssueService(db);
     if (group === "issue") return runIssue(db, svc, ctx, command, verb, flags, rest);
     if (group === "plan") return runPlan(db, svc, ctx, command, verb, flags);
     if (group === "journal") return runJournal(db, svc, ctx, command, verb, flags, rest);
     if (group === "provenance") return runProvenance(db, svc, ctx, command, verb, flags, rest);
-    throw new Error(`unknown group: ${group} (want issue|plan|journal|provenance)`);
+    if (group === "import") return runImport(db, svc, ctx, command, verb, flags);
+    if (group === "export") return runExport(db, svc, ctx, command, verb, flags);
+    throw new Error(`unknown group: ${group} (want issue|plan|journal|provenance|import|export)`);
   } catch (err) {
     return fail(ctx, command, err);
   } finally {
@@ -615,6 +618,75 @@ function runPlan(
   if (verb === "check") return emit(ctx, command, planning.check(draft));
   if (verb === "apply") return emit(ctx, command, planning.apply(draft));
   throw new Error(`unknown plan verb: ${verb} (want check|apply)`);
+}
+
+function readJsonLines(value: string): unknown[] {
+  let text: string;
+  try {
+    text = readFileSync(value, "utf8");
+  } catch {
+    throw new Error(`cannot read import file: ${value}`);
+  }
+  const out: unknown[] = [];
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    try {
+      out.push(JSON.parse(t));
+    } catch {
+      throw new Error(`invalid JSONL in ${value}: ${t.slice(0, 80)}`);
+    }
+  }
+  return out;
+}
+
+function runImport(
+  _db: ReturnType<typeof openSubstrate>,
+  svc: IssueService,
+  ctx: Ctx,
+  command: string,
+  verb: string,
+  flags: Map<string, string | true>,
+): CliResult {
+  if (verb !== "beads") throw new Error(`unknown import verb: ${verb} (want beads)`);
+  const file = flag(flags, "file") ?? (() => { throw new Error("--file <beads-export.jsonl> is required"); })();
+  const project = flag(flags, "project") ?? (() => { throw new Error("--project is required"); })();
+  const edgesFile = flag(flags, "edges-file");
+  const createProject = flag(flags, "create-project");
+  const dryRun = flags.has("dry-run");
+  const records = readJsonLines(file).filter((r) => (r as { _type?: unknown })._type !== "memory") as BeadsIssueRecord[];
+  const edges = edgesFile ? (readJsonArg(edgesFile) as BeadsEdgeRecord[]) : [];
+  if (dryRun) {
+    return emit(ctx, command, {
+      dryRun: true,
+      records: records.length,
+      edges: Array.isArray(edges) ? edges.length : 0,
+      note: "no mutations performed; re-run without --dry-run to import",
+    });
+  }
+  let create: { prefix: string; name: string } | undefined;
+  if (createProject) {
+    const i = createProject.indexOf(":");
+    if (i < 0) throw new Error("--create-project wants PREFIX:Name");
+    create = { prefix: createProject.slice(0, i), name: createProject.slice(i + 1) };
+  }
+  return emit(ctx, command, importBeads(svc, project, records, Array.isArray(edges) ? edges : [], { createProject: create }));
+}
+
+function runExport(
+  _db: ReturnType<typeof openSubstrate>,
+  svc: IssueService,
+  ctx: Ctx,
+  command: string,
+  verb: string,
+  flags: Map<string, string | true>,
+): CliResult {
+  if (verb !== undefined && verb !== "project") throw new Error(`unknown export verb: ${verb} (want project)`);
+  const project = flag(flags, "project") ?? (() => { throw new Error("--project is required"); })();
+  const snapshot = svc.exportProject(project);
+  const file = flag(flags, "file");
+  if (file) writeFileSync(file, JSON.stringify(snapshot));
+  return emit(ctx, command, snapshot);
 }
 
 // -- process main --------------------------------------------------------------

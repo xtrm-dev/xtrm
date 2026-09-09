@@ -1,6 +1,8 @@
 # PRD — Substrate Light: Minimal Native XTRM Work Graph
 
-**Status:** Draft v0.1  
+> **Superseded** by `substrate-issues-v0-prd.md` as the implementation baseline (Phase 11 cutover, bead xtrm-7wc.12). Retained for history; do not implement from this document.
+
+**Status:** Draft v0.1 — SUPERSEDED  
 **Date:** 2026-09-08  
 **Canonical parent design:** `docs/substrate/substrate_design_it.md`  
 **Purpose:** land the smallest coherent Substrate Issue kernel before further Chain work

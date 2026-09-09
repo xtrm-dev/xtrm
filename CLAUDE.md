@@ -11,17 +11,17 @@ Clearly distinguish verified facts, observations, assumptions, inferences, recom
 
 Two task systems coexist in this repo. Use both; do not substitute one for the other.
 
-- **Beads (`bd`)** — top-level durable tracking. Authoritative for ownership, dependencies, cross-session memory, and closure. Read the rest of this file and run `bd prime` for beads context before starting work. File, claim, and close work here.
-- **Native integrated task system** (`TaskCreate` / `TaskList` / `TaskGet` / `TaskUpdate` / `TaskExecute`) — this-session execution tracking. Use it to mirror the active bead and break it into smaller intermediate steps. Ephemeral; does not replace beads.
+- **Substrate (`sb`)** — top-level durable work authority. Owns issues, claims, journal continuity, and provenance. Read the rest of this file and run `sb issue ready` / `sb issue resume` for work context before starting work. Inspect, claim, and close work here. Historical Beads IDs resolve as aliases; `bd` is read/import compatibility only.
+- **Native integrated task system** (`TaskCreate` / `TaskList` / `TaskGet` / `TaskUpdate` / `TaskExecute`) — this-session execution tracking. Use it to mirror the active issue and break it into smaller intermediate steps. Ephemeral; does not replace Substrate.
 
-Rule: when you pick up a bead, create native tasks that track it — reference the bead ID in each task title (e.g. `N.N summary — status (worker %NNNN)`) — and add any smaller intermediate steps as native sub-tasks. Beads own the durable record; native tasks own the in-flight breakdown.
+Rule: when you pick up an issue, create native tasks that track it — reference the issue ref in each task title (e.g. `XTRM-227 summary — status (worker %NNNN)`) — and add any smaller intermediate steps as native sub-tasks. Substrate owns the durable record; native tasks own the in-flight breakdown.
 
-Example native task list mirroring beads:
-- ◼ N.N smoke container global surface — BLOCKS RELEASE (worker %NNNN)
-- ◼ N.N status test flake under load (worker %NNNN)
+Example native task list mirroring Substrate:
+- ◼ XTRM-227 smoke container global surface — BLOCKS RELEASE (worker %NNNN)
+- ◼ XTRM-228 status test flake under load (worker %NNNN)
 - ◻ Pre-release smoke run against current main branches
-- ◻ Dispatch N.N stale doc metrics + N.N Claude inbox surface
-- ◻ Dispatch N.N, N.N, N.N remaining small beads
+- ◻ Dispatch XTRM-229 stale doc metrics + XTRM-230 Claude inbox surface
+- ◻ Dispatch XTRM-231, XTRM-232, XTRM-233 remaining small issues
 <!-- END INJECTED BLOCK -->
 
 <!-- xtrm:start -->
@@ -32,20 +32,20 @@ Example native task list mirroring beads:
 
 ## Session start
 
-1. `bd prime` — load workflow context and active claims.
-2. `bd memories <topic>` / `bd recall <key>` — retrieve durable context before answering questions or changing workflow-sensitive code.
-3. Catch up on recent work: check handoff/next-session beads, latest `xt report` handoffs, recent merged/closed PRs, and `bd list --status=in_progress`.
+1. `sb issue ready` / `sb issue resume <ref>` — load workflow context, active claims, and journal continuity.
+2. `sb journal since <ref> <cursor>` — read only what changed since the last checkpoint; the journal is continuity, not memory.
+3. Catch up on recent work: check handoff/next-session issues, latest `xt report` handoffs, recent merged/closed PRs, and `sb issue ready`.
 4. `bv --robot-triage --format toon` or `bv --robot-next` — choose work when needed. Never run bare `bv`.
 5. If board state is unclear, run `/issue-triage` or the robot triage/plan commands before editing.
 6. For service/docs/project context, run `/scope` or `/using-service-skills`; note stale/missing service skills before relying on them.
-7. `bd ready` / `bd show <id>` / `bd update <id> --claim` — inspect and claim before edits.
-8. For non-trivial work, use Claude Code task planning features (TaskCreate/TodoWrite-style when available) before proceeding; keep the plan synchronized with the active bead.
+7. `sb issue show <ref>` / `sb issue claim <ref> --holder <name>` — inspect and claim before edits. Never implement from a title + description issue: repair the contract first.
+8. For non-trivial work, use Claude Code task planning features (TaskCreate/TodoWrite-style when available) before proceeding; keep the plan synchronized with the active issue.
 
 ## Operating rules
 
-- Beads is authoritative for ownership, dependencies, memory gates, and closure.
+- Substrate is authoritative for ownership, dependencies, claims, journal continuity, and closure.
 - Claude-local task plans are required for non-trivial/multi-step work but are ephemeral execution tracking only.
-- Close beads and satisfy memory ack before commit: `bd remember` when useful, then `bd kv set memory-acked:<id> saved:<key>` or `nothing novel:<reason>`, then `bd close <id> --reason="..."`.
+- Close issues before commit: `sb issue close <ref>` after validation and provenance are recorded.
 - Ask before destructive, irreversible, production-impacting, or history-rewriting actions.
 - Do not ask repetitive “Proceed?” confirmations for normal implementation once scope is clear.
 
@@ -53,8 +53,8 @@ Example native task list mirroring beads:
 
 Use these as the minimal operational surface; use `--help` for full syntax.
 
-- `bd prime`, `bd ready`, `bd list --status=in_progress`, `bd show <id>`
-- `bd update <id> --claim`, `bd remember "<insight>"`, `bd close <id> --reason="..."`
+- `sb issue ready`, `sb issue list --project <id>`, `sb issue show <ref>`
+- `sb issue claim <ref> --holder <name>`, `sb issue close <ref>`, `sb issue resume <ref>`
 - `bv --robot-triage --format toon`, `bv --robot-next` — never bare `bv`
 - `xt report list` / latest report file, `xt update --apply`, `xt end`
 - `gh pr list --state merged --limit 5` or equivalent host CLI when PR context matters
@@ -64,7 +64,7 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 
 | Need | Use |
 |---|---|
-| xtrm/beads workflow | `/using-xtrm`; `bd --help`; `xt --help` |
+| Substrate workflow | `/using-substrate`; `sb --help`; `xt --help` |
 | Specialist orchestration | latest `/using-specialists-*`, prefer `/using-specialists-v3`; check `sp --help` + `sp list` first |
 | Service/docs/project context | canonical service-skills skill set: `/scope`, `/using-service-skills` |
 | Planning/tests/docs | `/planning`, `/test-planning`, `/sync-docs` |
@@ -97,41 +97,41 @@ Use these as the minimal operational surface; use `--help` for full syntax.
 
 This file provides instructions and context for AI coding agents working on this project.
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
-## Beads Issue Tracker
+<!-- BEGIN SUBSTRATE INTEGRATION v:1 profile:minimal (Phase 11 cutover: replaces the Beads block; bd is read/import compatibility only) -->
+## Substrate Issue Tracker
 
-This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
+This project uses **Substrate (`sb`)** for durable work. Run `sb issue ready` for available work and `sb issue resume <ref>` for continuity.
 
 ### Quick Reference
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>         # Complete work
+sb issue ready          # Find dispatchable work
+sb issue show <ref>     # View issue + readiness + claim
+sb issue claim <ref> --holder <name>  # Claim work atomically
+sb issue close <ref>    # Complete work
 ```
 
 ### Rules
 
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- Run `bd prime` for detailed command reference and session close protocol
-- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
+- Use `sb` for ALL durable work tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists as durable records
+- Never implement from a title + description issue; repair the contract first
+- Use resume capsules and journal cursors for continuity — do NOT maintain ad-hoc Markdown handoffs
 
-**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
+**Architecture in one line:** issues live in SQLite/WAL (`~/.xtrm/state.db`); `sb` CLI, Pi extension, and Claude plugin consume the typed service; historical Beads IDs resolve as aliases; `sb import beads` migrates boards without dual-write.
 
 ## Agent Context Profiles
 
-The managed Beads block is task-tracking guidance, not permission to override repository, user, or orchestrator instructions.
+The managed Substrate block is task-tracking guidance, not permission to override repository, user, or orchestrator instructions.
 
-- **Conservative (default)**: Use `bd` for task tracking. Do not run git commits, git pushes, or Dolt remote sync unless explicitly asked. At handoff, report changed files, validation, and suggested next commands.
-- **Minimal**: Keep tool instruction files as pointers to `bd prime`; use the same conservative git policy unless active instructions say otherwise.
-- **Team-maintainer**: Only when the repository explicitly opts in, agents may close beads, run quality gates, commit, and push as part of session close. A current "do not commit" or "do not push" instruction still wins.
+- **Conservative (default)**: Use `sb` for work tracking. Do not run git commits or git pushes unless explicitly asked. At handoff, report changed files, validation, and suggested next commands.
+- **Minimal**: Keep tool instruction files as pointers to `sb --help`; use the same conservative git policy unless active instructions say otherwise.
+- **Team-maintainer**: Only when the repository explicitly opts in, agents may close issues, run quality gates, commit, and push as part of session close. A current "do not commit" or "do not push" instruction still wins.
 
 ## Session Completion
 
-This protocol applies when ending a Beads implementation workflow. It is subordinate to explicit user, repository, and orchestrator instructions.
+This protocol applies when ending a Substrate-tracked implementation workflow. It is subordinate to explicit user, repository, and orchestrator instructions.
 
-1. **File issues for remaining work** - Create beads for anything that needs follow-up
+1. **File issues for remaining work** - Create Substrate issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
 4. **Handle git/sync by active profile**:
@@ -147,10 +147,10 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 5. **Hand off** - Summarize changes, validation, issue status, and any blocked sync/commit/push step
 
 **Critical rules:**
-- Explicit user or orchestrator instructions override this Beads block.
+- Explicit user or orchestrator instructions override this Substrate block.
 - Do not commit or push without clear authority from the active profile or the current user request.
 - If a required sync or push is blocked, stop and report the exact command and error.
-<!-- END BEADS INTEGRATION -->
+<!-- END SUBSTRATE INTEGRATION -->
 
 
 ## Build & Test

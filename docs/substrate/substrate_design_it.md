@@ -2103,3 +2103,15 @@ Quindi per substrate specificamente, la bias è **read live + join in the reader
 ### 17.5 Naming caveat
 
 Due cose distinte condividono la parola "substrate." Questo documento intende l'**engine**: il package `sb`, l'authoritative read-write store. È diverso da qualsiasi *projection tables* `substrate_*` che possano esistere nel vecchio gitboard refactor — quelle sono una rebuildable read-only copy e fanno parte di ciò che è disposable. Stessa parola, due referents; don't collide them.
+
+## Nota di cutover — Substrate Issues v0 (2026-09-09, bead xtrm-7wc.12)
+
+Le parti issue-system di questo documento (nuovo sistema issue, validatore,
+relazioni, e ogni assunto che assegna a Beads l'autorità sul lavoro durevole)
+sono **sostituite** da `substrate-issues-v0-prd.md` e dall'implementazione in
+`packages/substrate/`. Gli ID Beads storici restano alias risolvibili.
+
+The issue-system parts of this document are **superseded** by
+`substrate-issues-v0-prd.md` and the `packages/substrate/` implementation.
+Beads IDs survive as resolvable aliases. The rest — Containers, Chains,
+Channels, memory — remains the target architecture.
