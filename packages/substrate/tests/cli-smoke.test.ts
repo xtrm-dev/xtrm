@@ -164,6 +164,25 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     assert.match(env.error, /unresolvable|unknown/i);
   });
 
+  it("rejects unknown flags instead of silently dropping intent (xtrm-7wc.5.4)", () => {
+    const { dir, dbPath } = setupDb();
+    const c = contractFile(dir, "c.json", { problem: "P", success: "S" });
+    const created = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", c]).data as {
+      humanRef: string;
+    };
+    // the E2E case: --summary does not exist; the entry must not store
+    // nothing with exit 0
+    const bad = runCli(["--db", dbPath, "--json", "journal", "append", created.humanRef, "--kind", "finding", "--summary", "dropped text"]);
+    assert.equal(bad.code, 1);
+    const env = JSON.parse(bad.stdout) as { ok: boolean; error: string };
+    assert.equal(env.ok, false);
+    assert.match(env.error, /--summary/);
+    // every documented verb still parses: spot-check one flag per group
+    cli(dbPath, ["issue", "validate", created.humanRef]);
+    cli(dbPath, ["journal", "show", created.humanRef, "--limit", "5"]);
+    cli(dbPath, ["project", "create", "--prefix", "OK", "--name", "fine"]);
+  });
+
   it("renders children indented under parents in human tree output", () => {
     const { dir, dbPath } = setupDb();
     const c = contractFile(dir, "c.json", { problem: "P", success: "S" });

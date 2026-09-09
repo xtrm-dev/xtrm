@@ -163,6 +163,54 @@ function fail(ctx: Ctx, command: string, err: unknown): CliResult {
 
 // -- entry -------------------------------------------------------------------
 
+// Fail-closed flag validation (xtrm-7wc.5.4): parseArgs accepts any --flag
+// shape, so each command declares its allowlist here. An unknown flag
+// names the offender instead of silently dropping operator intent.
+const GLOBAL_FLAGS = ["db", "json"];
+
+const FLAG_ALLOWLIST: Record<string, string[]> = {
+  "issue.create": ["project", "title", "kind", "contract", "parent", "priority", "scrutiny"],
+  "issue.show": [],
+  "issue.edit": ["contract", "expected-revision"],
+  "issue.validate": [],
+  "issue.attest": ["outcome", "policy", "attested-by", "evidence-refs", "blocking-gaps"],
+  "issue.list": ["project"],
+  "issue.ready": ["project"],
+  "issue.tree": ["project", "root"],
+  "issue.children": [],
+  "issue.relate": ["from", "to", "kind"],
+  "issue.claim": ["holder", "ttl-ms", "activation"],
+  "issue.release": ["holder", "activation"],
+  "issue.close": [],
+  "issue.resume": [],
+  "project.create": ["prefix", "name", "id"],
+  "plan.check": ["file"],
+  "plan.apply": ["file"],
+  "journal.append": ["kind", "run", "participant", "activation", "session", "mechanical", "semantic", "refs"],
+  "journal.checkpoint": ["run", "participant", "activation", "session", "mechanical", "semantic", "refs", "workspace", "branch", "base-commit", "head-commit"],
+  "journal.show": ["kind", "limit"],
+  "journal.since": [],
+  "journal.render": ["sequence"],
+  "provenance.dispatch": ["claim-id", "workspace", "participant", "activation", "attempt", "session", "base-commit"],
+  "provenance.trace": [],
+  "provenance.commit": [],
+  "provenance.receipt": [],
+  "provenance.pr": [],
+  "provenance.bundle": ["repo-root"],
+  "import.beads": ["file", "project", "edges-file", "create-project", "dry-run"],
+  "export.": ["project", "file"],
+  "export.project": ["project", "file"],
+};
+
+const KNOWN_GROUPS = new Set(["issue", "project", "plan", "journal", "provenance", "import", "export"]);
+
+function assertKnownFlags(flags: Map<string, string | true>, command: string): void {
+  const allowed = new Set([...GLOBAL_FLAGS, ...(FLAG_ALLOWLIST[command] ?? [])]);
+  for (const name of flags.keys()) {
+    if (!allowed.has(name)) throw new Error(`unknown flag --${name} for \`${command}\` (see usage)`);
+  }
+}
+
 export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
   const { flags, positionals } = parseArgs(argv);
   const ctx: Ctx = {
@@ -174,6 +222,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
   let db: ReturnType<typeof openSubstrate> | null = null;
   try {
     if (!group || (!verb && group !== "export")) throw new Error("usage: sb [--db PATH] [--json] <issue|project|plan|journal|provenance|import|export> <verb> [args...]");
+    if (group && KNOWN_GROUPS.has(group)) assertKnownFlags(flags, `${group}.${verb ?? ""}`);
     db = openSubstrate(ctx.dbPath);
     const svc = new IssueService(db);
     if (group === "issue") return runIssue(db, svc, ctx, command, verb, flags, rest);
