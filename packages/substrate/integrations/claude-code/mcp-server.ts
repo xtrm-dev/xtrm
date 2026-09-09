@@ -31,6 +31,22 @@ export const SUBSTRATE_SERVER_NAME = "substrate";
 export const SUBSTRATE_SERVER_VERSION = "0.1.0";
 export const SUBSTRATE_PROTOCOL_REVISION = "2026-07-28";
 
+// Direct-execution entry as a callable (closeout E1): the packaged plugin
+// mounts the server through serveMain() instead of importing the SDK
+// itself, so the whole serving graph comes from substrate's own ESM
+// imports. Importing @modelcontextprotocol/server a second time through a
+// require-anchored seam loads the CJS build beside the ESM build, and the
+// dual-instance mix crashes modern requests (CJS installDiscoverHandler
+// reads an uninitialized _supportedProtocolVersions). One graph, one build.
+export function serveMain(): void {
+  serveStdio(() => buildServer(), {
+    legacy: "reject",
+    onerror: (err) => {
+      console.error(`[substrate-mcp] ${err.message}`);
+    },
+  });
+}
+
 const dbPathSchema = z.string().optional();
 
 // Every handler opens and closes its own handle per call (the WAL store is
@@ -238,10 +254,5 @@ const invokedAsMain =
     }
   })();
 if (invokedAsMain) {
-  serveStdio(() => buildServer(), {
-    legacy: "reject",
-    onerror: (err) => {
-      console.error(`[substrate-mcp] ${err.message}`);
-    },
-  });
+  serveMain();
 }

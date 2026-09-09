@@ -36,11 +36,20 @@ describe("one state.db authority (xtrm-iip.2)", () => {
     });
   });
 
-  it("the packaged plugin ships no repo-local database default", () => {
+  it("the legacy integration manifest ships no repo-local database default", () => {
     const manifest = JSON.parse(readFileSync(new URL("../integrations/claude-code/plugin.json", import.meta.url), "utf8")) as {
       mcpServers?: Record<string, { env?: Record<string, string> }>;
     };
     for (const [name, server] of Object.entries(manifest.mcpServers ?? {})) {
+      assert.equal(server.env?.["SUBSTRATE_DB"], undefined, `${name} must not default SUBSTRATE_DB to a repo-local DB`);
+    }
+  });
+
+  it("the packaged plugin ships no repo-local database default", () => {
+    const mcp = JSON.parse(readFileSync(new URL("../plugin/substrate/.mcp.json", import.meta.url), "utf8")) as {
+      mcpServers?: Record<string, { env?: Record<string, string> }>;
+    };
+    for (const [name, server] of Object.entries(mcp.mcpServers ?? {})) {
       assert.equal(server.env?.["SUBSTRATE_DB"], undefined, `${name} must not default SUBSTRATE_DB to a repo-local DB`);
     }
   });
