@@ -1,0 +1,426 @@
+// Journal service (PRD §20): append-only Issue-scoped Work Journal with the
+// mechanical-first checkpoint guarantee (§20.4). The mechanical checkpoint
+// is committed before the optional semantic summarizer runs, so a
+// summarizer failure — or a process killed mid-summarization — still leaves
+// resumable mechanical state. Compaction is lossy conversation management,
+// never durable work state (§5); this service is the durable side that
+// Phases 6/7 (Pi/Claude seams) consume. No host wiring lives here.
+
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import { withTransaction } from "../store/transactions.ts";
+import type { IssueService } from "./issue-service.ts";
+import {
+  assertSemanticCheckpoint,
+  isJournalKind,
+  newJournalEntryId,
+  validateEvidenceRefs,
+  validateMechanicalCheckpoint,
+  validateSemanticCheckpoint,
+  type EvidenceRef,
+  type JournalEntry,
+  type JournalKind,
+  type MechanicalCheckpoint,
+  type SemanticCheckpoint,
+} from "../domain/journal.ts";
+
+interface Row {
+  [key: string]: unknown;
+}
+
+function row<T>(db: DatabaseSync, sql: string, ...params: SQLInputValue[]): T | undefined {
+  return db.prepare(sql).get(...params) as T | undefined;
+}
+
+function rows<T>(db: DatabaseSync, sql: string, ...params: SQLInputValue[]): T[] {
+  return db.prepare(sql).all(...params) as T[];
+}
+
+export interface AppendEntryInput {
+  kind: JournalKind;
+  runId?: string;
+  participantId?: string;
+  activationId?: string;
+  sessionId?: string;
+  mechanical?: MechanicalCheckpoint;
+  semantic?: SemanticCheckpoint;
+  refs?: EvidenceRef[];
+}
+
+export interface CollectMechanicalInput {
+  runId?: string;
+  participantId?: string;
+  activationId?: string;
+  sessionId?: string;
+  workspace?: string;
+  branch?: string;
+  baseCommit?: string;
+  headCommit?: string;
+  changedFiles?: string[];
+  commitsSincePrevious?: string[];
+  specialistRefs?: string[];
+  pendingAsks?: string[];
+  externalBindings?: Array<{ provider: string; scope: string; remoteId: string }>;
+  mechanical?: Partial<MechanicalCheckpoint>;
+}
+
+export type Summarizer = (
+  persisted: JournalEntry,
+  mechanical: MechanicalCheckpoint,
+) => SemanticCheckpoint | Promise<SemanticCheckpoint>;
+
+export interface CheckpointOptions extends CollectMechanicalInput {
+  kind?: "checkpoint" | "compaction";
+  refs?: EvidenceRef[];
+  summarizer?: Summarizer;
+}
+
+export interface CheckpointResult {
+  entry: JournalEntry;
+  degraded: boolean;
+  reason?: string;
+}
+
+// Phase 6/7 seam (§§23-24): hosts call this, never checkpoint() directly
+// when a fallback decision is needed. Mechanical-write failure must not
+// block overflow-recovery compaction: the caller proceeds with the host
+// default and reconciles later.
+export interface CompactionCheckpointResult {
+  entry: JournalEntry | null;
+  degraded: boolean;
+  reason?: string;
+  fallbackToDefault: boolean;
+}
+
+export interface JournalDelta {
+  issueId: string;
+  afterSequence: number;
+  entries: JournalEntry[];
+  nextCursor: number;
+}
+
+function trunc(s: string, max = 2000): string {
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
+export class JournalService {
+  private readonly db: DatabaseSync;
+  private readonly issues: IssueService;
+
+  constructor(db: DatabaseSync, issues: IssueService) {
+    this.db = db;
+    this.issues = issues;
+  }
+
+  appendEntry(issueId: string, input: AppendEntryInput): JournalEntry {
+    if (!isJournalKind(input.kind)) throw new Error(`unknown journal kind: ${String(input.kind)}`);
+    if (input.refs !== undefined) {
+      const problems = validateEvidenceRefs(input.refs);
+      if (problems.length > 0) throw new Error(`invalid journal refs: ${problems[0]}`);
+    }
+    if (input.semantic !== undefined) assertSemanticCheckpoint(input.semantic);
+    if (input.mechanical !== undefined) {
+      const problems = validateMechanicalCheckpoint(input.mechanical);
+      if (problems.length > 0) throw new Error(`invalid mechanical checkpoint: ${problems[0]}`);
+      if (input.mechanical.issueId !== issueId) {
+        throw new Error("mechanical.issueId must match the appended issue");
+      }
+    }
+    if ((input.kind === "checkpoint" || input.kind === "compaction") && input.mechanical === undefined) {
+      throw new Error(`journal kind "${input.kind}" requires a mechanical checkpoint (§20.4)`);
+    }
+    return withTransaction(this.db, () => {
+      const issue = this.issues.getIssue(issueId);
+      const prev = row<{ m: number | null }>(
+        this.db,
+        "SELECT MAX(sequence) AS m FROM issue_journal WHERE issue_id = ?",
+        issueId,
+      );
+      const sequence = (prev?.m ?? 0) + 1;
+      const now = Date.now();
+      const id = newJournalEntryId();
+      this.db
+        .prepare(
+          `INSERT INTO issue_journal
+             (id, issue_id, issue_revision, sequence, run_id, participant_id,
+              activation_id, session_id, kind, mechanical_json, semantic_json,
+              refs_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          issueId,
+          issue.currentRevision,
+          sequence,
+          input.runId ?? null,
+          input.participantId ?? null,
+          input.activationId ?? null,
+          input.sessionId ?? null,
+          input.kind,
+          input.mechanical ? JSON.stringify(input.mechanical) : null,
+          input.semantic ? JSON.stringify(input.semantic) : null,
+          JSON.stringify(input.refs ?? []),
+          now,
+        );
+      this.issues.appendEvent(issueId, "journal.appended", { entry: id, sequence, kind: input.kind });
+      return this.requireEntry(id);
+    });
+  }
+
+  getEntry(id: string): JournalEntry {
+    return this.requireEntry(id);
+  }
+
+  listEntries(issueId: string, opts?: { kind?: JournalKind; limit?: number }): JournalEntry[] {
+    this.issues.getIssue(issueId);
+    let sql = "SELECT * FROM issue_journal WHERE issue_id = ?";
+    const params: SQLInputValue[] = [issueId];
+    if (opts?.kind !== undefined) {
+      if (!isJournalKind(opts.kind)) throw new Error(`unknown journal kind: ${String(opts.kind)}`);
+      sql += " AND kind = ?";
+      params.push(opts.kind);
+    }
+    sql += " ORDER BY sequence";
+    if (opts?.limit !== undefined) {
+      if (!Number.isInteger(opts.limit) || opts.limit <= 0) throw new Error("limit must be a positive integer");
+      sql += " LIMIT ?";
+      params.push(opts.limit);
+    }
+    return rows<Row>(this.db, sql, ...params).map((r) => this.toEntry(r));
+  }
+
+  // Cursor read (§20.5): only entries after the supplied sequence cursor.
+  // A resumed agent reads the delta, never the whole journal.
+  since(issueId: string, cursor: number): JournalDelta {
+    if (!Number.isInteger(cursor) || cursor < 0) throw new Error("cursor must be a non-negative integer sequence");
+    this.issues.getIssue(issueId);
+    const entries = rows<Row>(
+      this.db,
+      "SELECT * FROM issue_journal WHERE issue_id = ? AND sequence > ? ORDER BY sequence",
+      issueId,
+      cursor,
+    ).map((r) => this.toEntry(r));
+    const top = row<{ m: number | null }>(this.db, "SELECT MAX(sequence) AS m FROM issue_journal WHERE issue_id = ?", issueId);
+    return { issueId, afterSequence: cursor, entries, nextCursor: top?.m ?? cursor };
+  }
+
+  latestCheckpoint(issueId: string): JournalEntry | null {
+    this.issues.getIssue(issueId);
+    const r = row<Row>(
+      this.db,
+      "SELECT * FROM issue_journal WHERE issue_id = ? AND kind IN ('checkpoint', 'compaction') ORDER BY sequence DESC LIMIT 1",
+      issueId,
+    );
+    return r ? this.toEntry(r) : null;
+  }
+
+  // Host-known state merged over service-derived state. Derived values win
+  // for revision/hash/claim/blockers/children (durable truth); host values
+  // win for execution context the service cannot see (workspace, commits).
+  collectMechanical(issueId: string, input: CollectMechanicalInput = {}): MechanicalCheckpoint {
+    const issue = this.issues.getIssue(issueId);
+    const claim = this.issues.getActiveClaim(issueId);
+    const pendingBlockers = this.issues.unsatisfiedBlockers(issueId);
+    const childSummary = this.issues.listChildren(issueId).map((c) => {
+      let checkpointRef: string | null = null;
+      try {
+        const latest = this.latestCheckpoint(c.id);
+        checkpointRef = latest ? `${latest.id}#${latest.sequence}` : null;
+      } catch {
+        checkpointRef = null;
+      }
+      return {
+        issueId: c.id,
+        locator: c.locator,
+        lifecycleState: c.lifecycleState,
+        revision: c.currentRevision,
+        checkpointRef,
+        blockedBy: this.issues.unsatisfiedBlockers(c.id),
+      };
+    });
+    const now = Date.now();
+    const merged: MechanicalCheckpoint = {
+      issueId,
+      issueRevision: issue.currentRevision,
+      contractHash: issue.currentContractHash,
+      collectedAt: now,
+      claimHolder: claim?.holder ?? null,
+      claimActivationId: claim?.activationId ?? null,
+      claimExpiresAt: claim?.expiresAt ?? null,
+      participantId: input.participantId ?? null,
+      activationId: input.activationId ?? null,
+      sessionId: input.sessionId ?? null,
+      runId: input.runId ?? null,
+      workspace: input.workspace ?? null,
+      branch: input.branch ?? null,
+      baseCommit: input.baseCommit ?? null,
+      headCommit: input.headCommit ?? null,
+      changedFiles: input.changedFiles ?? [],
+      commitsSincePrevious: input.commitsSincePrevious ?? [],
+      pendingBlockers,
+      childSummary,
+      specialistRefs: input.specialistRefs ?? [],
+      pendingAsks: input.pendingAsks ?? [],
+      externalBindings: input.externalBindings ?? [],
+      cursor: null,
+      ...input.mechanical,
+    };
+    // Derived durable truth wins over host overrides for identity fields.
+    merged.issueId = issueId;
+    merged.issueRevision = issue.currentRevision;
+    merged.contractHash = issue.currentContractHash;
+    return merged;
+  }
+
+  enrichEntry(entryId: string, semantic: SemanticCheckpoint): JournalEntry {
+    assertSemanticCheckpoint(semantic);
+    return withTransaction(this.db, () => {
+      const current = this.requireEntry(entryId);
+      this.db.prepare("UPDATE issue_journal SET semantic_json = ? WHERE id = ?").run(JSON.stringify(semantic), entryId);
+      this.issues.appendEvent(current.issueId, "journal.checkpoint_enriched", { entry: entryId, sequence: current.sequence });
+      return this.requireEntry(entryId);
+    });
+  }
+
+  // Mechanical-first ordering (§20.4): the mechanical entry commits before
+  // the summarizer starts, so the summarizer can observe it (D22) and its
+  // failure still leaves resumable state (D23).
+  async checkpoint(issueId: string, opts: CheckpointOptions = {}): Promise<CheckpointResult> {
+    const kind = opts.kind ?? "checkpoint";
+    const mechanical = this.collectMechanical(issueId, opts);
+    const entry = this.appendEntry(issueId, {
+      kind,
+      runId: opts.runId,
+      participantId: opts.participantId,
+      activationId: opts.activationId,
+      sessionId: opts.sessionId,
+      mechanical,
+      refs: opts.refs,
+    });
+    // Stamp the occupied cursor onto the durable row (post-commit update:
+    // the mechanical row itself was already durable before this runs).
+    withTransaction(this.db, () => {
+      const stored = this.requireEntry(entry.id);
+      this.db
+        .prepare("UPDATE issue_journal SET mechanical_json = ? WHERE id = ?")
+        .run(JSON.stringify({ ...stored.mechanical, cursor: stored.sequence }), entry.id);
+    });
+    const persisted = this.requireEntry(entry.id);
+    if (!opts.summarizer) return { entry: persisted, degraded: false };
+    try {
+      const semantic = await opts.summarizer(persisted, persisted.mechanical!);
+      const enriched = this.enrichEntry(persisted.id, semantic);
+      return { entry: enriched, degraded: false };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      try {
+        this.issues.appendEvent(issueId, "journal.checkpoint_degraded", {
+          entry: persisted.id,
+          sequence: persisted.sequence,
+          reason,
+        });
+      } catch {
+        // The degraded marker is best-effort: the mechanical row is
+        // already durable, which is the guarantee that matters.
+      }
+      return { entry: persisted, degraded: true, reason };
+    }
+  }
+
+  async compactionCheckpoint(issueId: string, opts: CheckpointOptions = {}): Promise<CompactionCheckpointResult> {
+    try {
+      const result = await this.checkpoint(issueId, opts);
+      return { ...result, fallbackToDefault: result.degraded };
+    } catch (err) {
+      // SQLite write failure (§§23.2/24.3): never block overflow-recovery
+      // compaction. The host falls back to its default summary and a later
+      // reconciliation reconstructs from retained evidence.
+      const reason = err instanceof Error ? err.message : String(err);
+      return { entry: null, degraded: true, reason, fallbackToDefault: true };
+    }
+  }
+
+  // One shared rendering for the journal checkpoint and the host compaction
+  // summary (§23.1): two independent summaries must never disagree.
+  renderCheckpoint(entry: JournalEntry): string {
+    const lines = [`CHECKPOINT ${entry.id} seq${entry.sequence} ${entry.kind} rev${entry.issueRevision}`];
+    const m = entry.mechanical;
+    if (m) {
+      const bits = [`rev${m.issueRevision} ${m.contractHash.slice(0, 12)}`];
+      if (m.claimHolder) bits.push(`claim ${m.claimHolder}`);
+      if (m.pendingBlockers?.length) bits.push(`blockers ${m.pendingBlockers.join(",")}`);
+      if (m.childSummary?.length) {
+        bits.push(`children ${m.childSummary.map((c) => `${c.locator ?? c.issueId}:${c.lifecycleState ?? "?"}`).join(",")}`);
+      }
+      if (m.headCommit) bits.push(`head ${m.headCommit.slice(0, 12)}`);
+      lines.push(`MECHANICAL: ${bits.join("; ")}`);
+    }
+    const s = entry.semantic;
+    if (!s) {
+      lines.push("SEMANTIC: (mechanical-only; summarizer pending or degraded)");
+      return lines.join("\n");
+    }
+    lines.push(`SUMMARY: ${trunc(s.summary)}`);
+    if (s.completed?.length) lines.push(`COMPLETED: ${s.completed.map((e) => trunc(e, 500)).join(" | ")}`);
+    if (s.current) lines.push(`CURRENT: ${trunc(s.current, 500)}`);
+    if (s.next?.length) lines.push(`NEXT: ${s.next.map((e) => trunc(e, 500)).join(" | ")}`);
+    if (s.blocked?.length) lines.push(`BLOCKED: ${s.blocked.map((e) => trunc(e, 500)).join(" | ")}`);
+    if (s.openQuestions?.length) lines.push(`OPEN QUESTIONS: ${s.openQuestions.map((e) => trunc(e, 500)).join(" | ")}`);
+    if (s.keyDecisions?.length) lines.push(`DECISIONS: ${s.keyDecisions.map((e) => trunc(e, 500)).join(" | ")}`);
+    if (s.materialFindings?.length) lines.push(`FINDINGS: ${s.materialFindings.map((e) => trunc(e, 500)).join(" | ")}`);
+    return lines.join("\n");
+  }
+
+  private requireEntry(id: string): JournalEntry {
+    const r = row<Row>(this.db, "SELECT * FROM issue_journal WHERE id = ?", id);
+    if (!r) throw new Error(`unknown journal entry: ${id}`);
+    return this.toEntry(r);
+  }
+
+  // Semantic is validated on read (§20.4 contract): a corrupt row fails
+  // closed rather than resuming an agent from a malformed summary.
+  private toEntry(r: Row): JournalEntry {
+    const kind = r["kind"] as string;
+    if (!isJournalKind(kind)) throw new Error(`fail-closed: corrupt journal kind on ${r["id"]}`);
+    let semantic: SemanticCheckpoint | null = null;
+    if (r["semantic_json"] != null) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(r["semantic_json"] as string);
+      } catch {
+        throw new Error(`fail-closed: corrupt semantic checkpoint on ${r["id"]}`);
+      }
+      const problems = validateSemanticCheckpoint(parsed);
+      if (problems.length > 0) throw new Error(`fail-closed: invalid semantic checkpoint on ${r["id"]}: ${problems[0]}`);
+      semantic = parsed as SemanticCheckpoint;
+    }
+    let mechanical: MechanicalCheckpoint | null = null;
+    if (r["mechanical_json"] != null) {
+      try {
+        mechanical = JSON.parse(r["mechanical_json"] as string) as MechanicalCheckpoint;
+      } catch {
+        throw new Error(`fail-closed: corrupt mechanical checkpoint on ${r["id"]}`);
+      }
+    }
+    let refs: EvidenceRef[] = [];
+    try {
+      refs = JSON.parse((r["refs_json"] as string) ?? "[]") as EvidenceRef[];
+    } catch {
+      throw new Error(`fail-closed: corrupt journal refs on ${r["id"]}`);
+    }
+    return {
+      id: r["id"] as string,
+      issueId: r["issue_id"] as string,
+      issueRevision: r["issue_revision"] as number,
+      sequence: r["sequence"] as number,
+      runId: (r["run_id"] as string | null) ?? null,
+      participantId: (r["participant_id"] as string | null) ?? null,
+      activationId: (r["activation_id"] as string | null) ?? null,
+      sessionId: (r["session_id"] as string | null) ?? null,
+      kind,
+      mechanical,
+      semantic,
+      refs,
+      createdAt: r["created_at"] as number,
+    };
+  }
+}

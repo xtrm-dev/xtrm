@@ -12,6 +12,11 @@ import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { PlanningService } from "../src/service/planning-service.ts";
+import { JournalService } from "../src/service/journal-service.ts";
+import { ResumeService } from "../src/service/resume-service.ts";
+import { IntegrationService } from "../src/service/integration-service.ts";
+import { isJournalKind } from "../src/domain/journal.ts";
+import type { JournalEntry } from "../src/domain/journal.ts";
 import type { ResolvedIssue } from "../src/domain/issue.ts";
 
 export const SCHEMA_VERSION = "substrate-cli/v1";
@@ -162,12 +167,13 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
   const command = group && verb ? `${group}.${verb}` : (group ?? "");
   let db: ReturnType<typeof openSubstrate> | null = null;
   try {
-    if (!group || !verb) throw new Error("usage: sb [--db PATH] [--json] <issue|plan> <verb> [args...]");
+    if (!group || !verb) throw new Error("usage: sb [--db PATH] [--json] <issue|plan|journal> <verb> [args...]");
     db = openSubstrate(ctx.dbPath);
     const svc = new IssueService(db);
-    if (group === "issue") return runIssue(svc, ctx, command, verb, flags, rest);
+    if (group === "issue") return runIssue(db, svc, ctx, command, verb, flags, rest);
     if (group === "plan") return runPlan(db, svc, ctx, command, verb, flags);
-    throw new Error(`unknown group: ${group} (want issue|plan)`);
+    if (group === "journal") return runJournal(db, svc, ctx, command, verb, flags, rest);
+    throw new Error(`unknown group: ${group} (want issue|plan|journal)`);
   } catch (err) {
     return fail(ctx, command, err);
   } finally {
@@ -185,6 +191,7 @@ function needRef(rest: string[]): string {
 }
 
 function runIssue(
+  db: ReturnType<typeof openSubstrate>,
   svc: IssueService,
   ctx: Ctx,
   command: string,
@@ -309,8 +316,191 @@ function runIssue(
       const closed = svc.setLifecycleState(resolved.id, "done");
       return emit(ctx, command, issueSummary(closed));
     }
+    case "resume": {
+      // High-level continuity operation (§21): derived capsule, never a
+      // mutable source of truth. Root epics aggregate children by
+      // reference; transcripts stay out (§22).
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      const journal = new JournalService(db, svc);
+      const resume = new ResumeService(db, svc, journal, { external: new IntegrationService(db, svc) });
+      const capsule = resume.buildCapsule(resolved.id);
+      if (ctx.json) return emit(ctx, command, capsule);
+      return { code: 0, stdout: resume.renderCapsule(capsule) + "\n", stderr: "" };
+    }
     default:
       throw new Error(`unknown issue verb: ${verb}`);
+  }
+}
+
+// -- journal verbs (Phase 5, bead xtrm-7wc.6) ----------------------------------
+// Thin over JournalService/ResumeService: no SQL, no business logic here.
+// Checkpoint ordering (§20.4) is enforced in the service; the CLI only
+// carries argv/file bytes and renders the result.
+
+function journalSummary(e: JournalEntry): Record<string, unknown> {
+  return {
+    id: e.id,
+    sequence: e.sequence,
+    kind: e.kind,
+    issueRevision: e.issueRevision,
+    hasMechanical: e.mechanical !== null,
+    hasSemantic: e.semantic !== null,
+    createdAt: e.createdAt,
+  };
+}
+
+function journalLine(svc: IssueService, e: JournalEntry): string {
+  const issue = svc.getIssue(e.issueId);
+  return `${issue.locator} · ${issue.humanRef} · seq${e.sequence} ${e.kind} rev${e.issueRevision}${e.semantic ? "" : " (mechanical-only)"}`;
+}
+
+// Host-supplied mechanical fragments omit identity: default it from the
+// live issue so --mechanical stays a partial override, not a full restate.
+function mechanicalArg(svc: IssueService, issueId: string, raw: string): Record<string, unknown> {
+  const provided = readJsonArg(raw) as Record<string, unknown>;
+  if (provided === null || typeof provided !== "object" || Array.isArray(provided)) return provided;
+  if (provided["issueId"] !== undefined) return provided;
+  const issue = svc.getIssue(issueId);
+  return {
+    issueId,
+    issueRevision: issue.currentRevision,
+    contractHash: issue.currentContractHash,
+    collectedAt: Date.now(),
+    ...provided,
+  };
+}
+
+function runJournal(
+  db: ReturnType<typeof openSubstrate>,
+  svc: IssueService,
+  ctx: Ctx,
+  command: string,
+  verb: string,
+  flags: Map<string, string | true>,
+  rest: string[],
+): CliResult {
+  const journal = new JournalService(db, svc);
+  const contextFlags = {
+    runId: flag(flags, "run"),
+    participantId: flag(flags, "participant"),
+    activationId: flag(flags, "activation"),
+    sessionId: flag(flags, "session"),
+  };
+  switch (verb) {
+    case "append": {
+      const ref = needRef(rest);
+      const kindRaw = flag(flags, "kind") ?? (() => { throw new Error("--kind is required"); })();
+      if (!isJournalKind(kindRaw)) throw new Error(`unknown journal kind: ${kindRaw}`);
+      const resolved = svc.resolveRef(ref);
+      const mechRaw = flag(flags, "mechanical");
+      const semRaw = flag(flags, "semantic");
+      const refsRaw = flag(flags, "refs");
+      const entry = journal.appendEntry(resolved.id, {
+        kind: kindRaw,
+        ...contextFlags,
+        mechanical: mechRaw !== undefined ? (mechanicalArg(svc, resolved.id, mechRaw) as never) : undefined,
+        semantic: semRaw !== undefined ? (readJsonArg(semRaw) as never) : undefined,
+        refs: refsRaw !== undefined ? (readJsonArg(refsRaw) as never) : undefined,
+      });
+      if (ctx.json) return emit(ctx, command, journalSummary(entry));
+      return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
+    }
+    case "checkpoint": {
+      // Mechanical-first (§20.4): the mechanical row commits before the
+      // optional --semantic enrichment. Invalid semantic still leaves the
+      // resumable mechanical entry and reports degraded (exit 0).
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      const mechRaw = flag(flags, "mechanical");
+      const semRaw = flag(flags, "semantic");
+      const refsRaw = flag(flags, "refs");
+      const hostMechanical =
+        mechRaw !== undefined
+          ? (mechanicalArg(svc, resolved.id, mechRaw) as never)
+          : journal.collectMechanical(resolved.id, {
+              ...contextFlags,
+              workspace: flag(flags, "workspace"),
+              branch: flag(flags, "branch"),
+              baseCommit: flag(flags, "base-commit"),
+              headCommit: flag(flags, "head-commit"),
+            });
+      const entry = journal.appendEntry(resolved.id, {
+        kind: "checkpoint",
+        ...contextFlags,
+        mechanical: hostMechanical,
+        refs: refsRaw !== undefined ? (readJsonArg(refsRaw) as never) : undefined,
+      });
+      if (semRaw === undefined) {
+        if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), degraded: false });
+        return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
+      }
+      try {
+        const enriched = journal.enrichEntry(entry.id, readJsonArg(semRaw) as never);
+        if (ctx.json) return emit(ctx, command, { ...journalSummary(enriched), degraded: false });
+        return { code: 0, stdout: journalLine(svc, enriched) + "\n", stderr: "" };
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        svc.appendEvent(resolved.id, "journal.checkpoint_degraded", { entry: entry.id, sequence: entry.sequence, reason });
+        if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), degraded: true, reason });
+        return { code: 0, stdout: `${journalLine(svc, entry)} [degraded: ${reason}]\n`, stderr: "" };
+      }
+    }
+    case "show": {
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      const kindRaw = flag(flags, "kind");
+      if (kindRaw !== undefined && !isJournalKind(kindRaw)) throw new Error(`unknown journal kind: ${kindRaw}`);
+      const limitRaw = flag(flags, "limit");
+      const entries = journal.listEntries(resolved.id, {
+        kind: kindRaw as never,
+        limit: limitRaw !== undefined ? Number(limitRaw) : undefined,
+      });
+      if (ctx.json) return emit(ctx, command, entries.map(journalSummary));
+      const lines = entries.map((e) => journalLine(svc, e));
+      return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : "(no journal entries)") + "\n", stderr: "" };
+    }
+    case "since": {
+      // Cursor read (§20.5): only entries after the sequence cursor.
+      const ref = needRef(rest);
+      const cursorRaw = rest[1] ?? (() => { throw new Error("a sequence cursor is required (0 reads all entries)"); })();
+      const cursor = Number(cursorRaw);
+      if (!Number.isInteger(cursor) || cursor < 0) throw new Error("cursor must be a non-negative integer sequence");
+      const resolved = svc.resolveRef(ref);
+      const delta = journal.since(resolved.id, cursor);
+      const data = {
+        afterSequence: delta.afterSequence,
+        nextCursor: delta.nextCursor,
+        entries: delta.entries.map(journalSummary),
+      };
+      if (ctx.json) return emit(ctx, command, data);
+      const lines = delta.entries.map((e) => journalLine(svc, e));
+      return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : `(no entries since ${cursor})`) + "\n", stderr: "" };
+    }
+    case "render": {
+      // Shared checkpoint/compaction rendering (§23.1): the journal
+      // checkpoint and the host compaction summary render identically.
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      const seqRaw = flag(flags, "sequence");
+      let entry: JournalEntry;
+      if (seqRaw !== undefined) {
+        const seq = Number(seqRaw);
+        if (!Number.isInteger(seq) || seq <= 0) throw new Error("--sequence must be a positive integer");
+        const found = journal.listEntries(resolved.id).find((e) => e.sequence === seq);
+        if (!found) throw new Error(`no journal entry at sequence ${seq}`);
+        entry = found;
+      } else {
+        const latest = journal.latestCheckpoint(resolved.id);
+        if (!latest) throw new Error("no checkpoint yet for this issue");
+        entry = latest;
+      }
+      const text = journal.renderCheckpoint(entry);
+      if (ctx.json) return emit(ctx, command, { entryId: entry.id, sequence: entry.sequence, text });
+      return { code: 0, stdout: text + "\n", stderr: "" };
+    }
+    default:
+      throw new Error(`unknown journal verb: ${verb} (want append|checkpoint|show|since|render)`);
   }
 }
 
