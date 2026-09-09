@@ -169,16 +169,17 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
   const command = group && verb ? `${group}.${verb}` : (group ?? "");
   let db: ReturnType<typeof openSubstrate> | null = null;
   try {
-    if (!group || (!verb && group !== "export")) throw new Error("usage: sb [--db PATH] [--json] <issue|plan|journal|provenance|import|export> <verb> [args...]");
+    if (!group || (!verb && group !== "export")) throw new Error("usage: sb [--db PATH] [--json] <issue|project|plan|journal|provenance|import|export> <verb> [args...]");
     db = openSubstrate(ctx.dbPath);
     const svc = new IssueService(db);
     if (group === "issue") return runIssue(db, svc, ctx, command, verb, flags, rest);
+    if (group === "project") return runProject(svc, ctx, command, verb, flags);
     if (group === "plan") return runPlan(db, svc, ctx, command, verb, flags);
     if (group === "journal") return runJournal(db, svc, ctx, command, verb, flags, rest);
     if (group === "provenance") return runProvenance(db, svc, ctx, command, verb, flags, rest);
     if (group === "import") return runImport(db, svc, ctx, command, verb, flags);
     if (group === "export") return runExport(db, svc, ctx, command, verb, flags);
-    throw new Error(`unknown group: ${group} (want issue|plan|journal|provenance|import|export)`);
+    throw new Error(`unknown group: ${group} (want issue|project|plan|journal|provenance|import|export)`);
   } catch (err) {
     return fail(ctx, command, err);
   } finally {
@@ -261,6 +262,33 @@ function runIssue(
         structurallyValid: r.structurallyValid,
         attestationCurrent: r.attestationCurrent,
         unsatisfiedBlockers: r.unsatisfiedBlockers,
+      });
+    }
+    case "attest": {
+      const ref = needRef(rest);
+      const outcome = flag(flags, "outcome") ?? (() => { throw new Error("--outcome <ready|reject> is required"); })();
+      const policy = flag(flags, "policy") ?? (() => { throw new Error("--policy is required"); })();
+      const attestedBy = flag(flags, "attested-by") ?? (() => { throw new Error("--attested-by is required"); })();
+      const list = (name: string): string[] | undefined => {
+        const raw = flag(flags, name);
+        if (raw === undefined) return undefined;
+        return String(raw).split(",").map((e) => e.trim()).filter((e) => e.length > 0);
+      };
+      const resolved = svc.resolveRef(ref);
+      const attestation = svc.attestReadiness(resolved.id, {
+        outcome: outcome as never,
+        policy,
+        attestedBy,
+        evidenceRefs: list("evidence-refs"),
+        blockingGaps: list("blocking-gaps"),
+      });
+      return emit(ctx, command, {
+        id: attestation.id,
+        issueId: attestation.issueId,
+        issueRevision: attestation.issueRevision,
+        outcome: attestation.outcome,
+        policy: attestation.policy,
+        attestedBy: attestation.attestedBy,
       });
     }
     case "list": {
@@ -601,6 +629,21 @@ function runProvenance(
     default:
       throw new Error(`unknown provenance verb: ${verb} (want dispatch|trace|commit|receipt|pr|bundle)`);
   }
+}
+
+function runProject(
+  svc: IssueService,
+  ctx: Ctx,
+  command: string,
+  verb: string,
+  flags: Map<string, string | true>,
+): CliResult {
+  if (verb !== "create") throw new Error(`unknown project verb: ${verb} (want create)`);
+  const prefix = flag(flags, "prefix") ?? (() => { throw new Error("--prefix <PREFIX> is required"); })();
+  const name = flag(flags, "name") ?? (() => { throw new Error("--name <name> is required"); })();
+  const id = flag(flags, "id");
+  const project = svc.createProject({ prefix, name, ...(id !== undefined ? { id: String(id) } : {}) });
+  return emit(ctx, command, { id: project.id, prefix: project.prefix, name: project.name });
 }
 
 function runPlan(

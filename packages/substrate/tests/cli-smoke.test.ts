@@ -57,13 +57,14 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     assert.equal(edited.revision, 2);
     assert.equal(edited.revisionCreated, true);
 
-    // attest via the typed service (no attest verb: attestation is service
-    // authority, the CLI only proves the service)
-    const db = openSubstrate(dbPath);
-    const svc = new IssueService(db);
-    const issue = svc.resolveRef(created.humanRef);
-    svc.attestReadiness(issue.id, { outcome: "ready", policy: "default", attestedBy: "smoke" });
-    db.close();
+    // attest through the CLI (attestation stays service authority; the CLI
+    // only carries the actor + policy + outcome bytes)
+    const attested = cli(dbPath, ["issue", "attest", created.humanRef, "--outcome", "ready", "--policy", "default", "--attested-by", "smoke"]).data as {
+      outcome: string; policy: string; attestedBy: string;
+    };
+    assert.equal(attested.outcome, "ready");
+    assert.equal(attested.policy, "default");
+    assert.equal(attested.attestedBy, "smoke");
 
     // validate + ready agree through the CLI
     const validated = cli(dbPath, ["issue", "validate", created.humanRef]).data as { state: string; dispatchable: boolean };
@@ -77,6 +78,23 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     const closed = cli(dbPath, ["issue", "close", created.humanRef]).data as { lifecycleState: string };
     assert.equal(closed.lifecycleState, "done");
     cli(dbPath, ["issue", "release", created.humanRef, "--holder", "smoke-holder"]);
+  });
+
+  it("creates a project through the CLI", () => {
+    const dir = mkdtempSync(join(tmpdir(), "sb-smoke-"));
+    const dbPath = join(dir, "state.db");
+    const project = cli(dbPath, ["project", "create", "--prefix", "NEW", "--name", "fresh"]).data as {
+      id: string; prefix: string; name: string;
+    };
+    assert.equal(project.id, "prj_new");
+    assert.equal(project.prefix, "NEW");
+    assert.equal(project.name, "fresh");
+    // issues land in the CLI-created project with zero service calls
+    const c = contractFile(dir, "c.json", { problem: "P", success: "S" });
+    const created = cli(dbPath, ["issue", "create", "--project", project.id, "--title", "T", "--kind", "task", "--contract", c]).data as {
+      humanRef: string;
+    };
+    assert.equal(created.humanRef, "NEW-1");
   });
 
   it("resolves all five ID forms through every Issue-taking command", () => {
