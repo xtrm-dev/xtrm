@@ -219,6 +219,15 @@ looks intermittent).
 precondition is deployment reality, documented here, not coded: the server
 must not guess its way onto a legacy protocol to be convenient.
 
+## 10. Plugin discovery asymmetry (all fail silently, validate passes)
+
+`hooks/hooks.json` auto-discovers and must NOT be declared in the manifest
+(a `hooks` key double-loads the set). `.mcp.json` and `monitors/monitors.json`
+are NOT auto-discovered and MUST be declared (`mcpServers`,
+`experimental.monitors`). A monitor skill gate needs the plugin-namespaced
+skill name (`on-skill-invoke:substrate:using-substrate`), not the bare
+docs-example form (`on-skill-invoke:using-substrate`), which never fires.
+
 ## Sources
 
 All accessed 2026-09-09.
