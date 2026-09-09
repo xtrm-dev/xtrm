@@ -1,0 +1,43 @@
+name: substrate tests
+
+on:
+  push:
+    paths:
+      - "packages/substrate/**"
+      - ".github/workflows/substrate-tests.yml"
+  pull_request:
+    paths:
+      - "packages/substrate/**"
+      - ".github/workflows/substrate-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/substrate/package-lock.json
+
+      # typecheck requires installed host deps: unresolved Pi imports
+      # cascade into implicit-any errors, so install before anything else.
+      - name: Install substrate deps
+        working-directory: packages/substrate
+        run: npm ci --no-audit --no-fund
+
+      - name: Substrate typecheck
+        working-directory: packages/substrate
+        run: npm run typecheck
+
+      - name: Substrate tests
+        working-directory: packages/substrate
+        run: npm test
