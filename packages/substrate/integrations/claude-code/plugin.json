@@ -6,8 +6,7 @@
   "mcpServers": {
     "substrate": {
       "command": "node",
-      "args": ["packages/substrate/integrations/claude-code/mcp-server.ts"],
-      "env": { "SUBSTRATE_DB": "${CLAUDE_PROJECT_DIR}/.xtrm/state.db" }
+      "args": ["packages/substrate/integrations/claude-code/mcp-server.ts"]
     }
   }
 }
