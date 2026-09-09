@@ -120,7 +120,15 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     assert.ok(!first.error && !second.error);
     assert.deepEqual(first.result, second.result);
     const result = first.result as { tools: Array<{ name: string }>; resultType: string; ttlMs: number; cacheScope: string };
-    assert.deepEqual(result.tools.map((t) => t.name), ["issue_get"]);
+    assert.deepEqual(result.tools.map((t) => t.name), [
+      "issue_get",
+      "issue_list",
+      "issue_ready",
+      "journal_append",
+      "journal_show",
+      "provenance_trace",
+      "resume_capsule",
+    ]);
     assert.equal(result.resultType, "complete");
     assert.equal(typeof result.ttlMs, "number");
     assert.ok(["public", "private"].includes(result.cacheScope));
@@ -157,6 +165,30 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
       else process.env["HOME"] = priorHome;
       rmSync(emptyHome, { recursive: true, force: true });
     }
+  });
+
+  it("every tool executes against a tmp DB through the server (xtrm-iip.4)", async () => {
+    const args = { dbPath: s.dbPath };
+    const call = async (name: string, extra: Record<string, unknown>) => {
+      const res = await wire.send("tools/call", { name, arguments: { ...args, ...extra }, _meta: meta() });
+      assert.ok(!res.error, `${name}: ${JSON.stringify(res.error)}`);
+      return JSON.parse(
+        ((res.result as { content: Array<{ text: string }> }).content[0] as { text: string }).text,
+      ) as unknown;
+    };
+    const listed = (await call("issue_list", {})) as unknown[];
+    assert.ok(Array.isArray(listed) && listed.length === 1);
+    const ready = (await call("issue_ready", {})) as unknown[];
+    assert.ok(Array.isArray(ready));
+    const appended = (await call("journal_append", { ref: s.humanRef, kind: "finding", summary: "e4 finding" })) as Record<string, unknown>;
+    assert.ok(appended["entryId"]);
+    const shown = (await call("journal_show", { ref: s.humanRef })) as Array<{ semantic: { summary: string } }>;
+    assert.ok(shown.some((e) => e.semantic?.summary === "e4 finding"));
+    const capsule = (await call("resume_capsule", { ref: s.humanRef })) as Record<string, unknown>;
+    assert.ok(capsule["capsule"] && typeof capsule["rendered"] === "string");
+    const trace = (await call("provenance_trace", { ref: s.humanRef })) as Record<string, unknown>;
+    assert.equal(trace["humanRef"], s.humanRef);
+    assert.ok(Array.isArray(trace["receipts"]));
   });
 
   it("tool call over real stdio reads the same row sb wrote (tmp DB)", async () => {

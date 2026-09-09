@@ -23,48 +23,201 @@ import { pathToFileURL } from "node:url";
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
+import { isJournalKind } from "../../src/domain/journal.ts";
+import { ProvenanceService } from "../../src/service/provenance-service.ts";
 import { openHandles } from "./runtime.ts";
 
 export const SUBSTRATE_SERVER_NAME = "substrate";
 export const SUBSTRATE_SERVER_VERSION = "0.1.0";
 export const SUBSTRATE_PROTOCOL_REVISION = "2026-07-28";
 
+const dbPathSchema = z.string().optional();
+
+// Every handler opens and closes its own handle per call (the WAL store is
+// the shared authority; E2 resolution lives inside openHandles). No
+// business logic here: parse, call the typed service, render JSON.
+function textPayload(value: unknown): { content: Array<{ type: "text"; text: string }> } {
+  return { content: [{ type: "text", text: JSON.stringify(value) }] };
+}
+
+function issueSummaryJson(i: {
+  id: string;
+  locator: string;
+  humanRef: string;
+  title: string;
+  kind: string;
+  lifecycleState: string;
+  currentRevision: number;
+}): Record<string, unknown> {
+  return {
+    id: i.id,
+    locator: i.locator,
+    humanRef: i.humanRef,
+    title: i.title,
+    kind: i.kind,
+    lifecycleState: i.lifecycleState,
+    revision: i.currentRevision,
+  };
+}
+
 export function buildServer(): McpServer {
   const server = new McpServer(
     { name: SUBSTRATE_SERVER_NAME, version: SUBSTRATE_SERVER_VERSION },
     // Static tool list: listChanged stays false (brief K — do not advertise
-    // subscriptions that do not exist). E4 flips this only if it adds them.
+    // subscriptions that do not exist).
     { capabilities: { tools: { listChanged: false } } },
   );
+  // Deterministic registration order (stable tools/list for client and
+  // prompt-cache stability, brief P). E6 wake/event tools are out of scope.
   server.registerTool(
     "issue_get",
     {
-      description: "Resolve an issue ref to its summary via the typed service (E3 thin proof; E4 owns the full surface).",
-      inputSchema: z.object({
-        ref: z.string().min(1),
-        dbPath: z.string().optional(),
-      }),
+      description: "Resolve an issue ref to its summary plus readiness state.",
+      inputSchema: z.object({ ref: z.string().min(1), dbPath: dbPathSchema }),
     },
     async ({ ref, dbPath }) => {
       const handles = openHandles(dbPath);
       try {
         const i = handles.svc.resolveRef(ref);
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                id: i.id,
-                locator: i.locator,
-                humanRef: i.humanRef,
-                title: i.title,
-                kind: i.kind,
-                lifecycleState: i.lifecycleState,
-                revision: i.currentRevision,
-              }),
-            },
-          ],
-        };
+        const readiness = handles.svc.getReadiness(i.id);
+        return textPayload({
+          ...issueSummaryJson(i),
+          readinessState: readiness.state,
+          dispatchable: readiness.dispatchable,
+        });
+      } finally {
+        handles.db.close();
+      }
+    },
+  );
+  server.registerTool(
+    "issue_list",
+    {
+      description: "List issue summaries for a project (explicit, SUBSTRATE_PROJECT, or single-project default; never guesses).",
+      inputSchema: z.object({ project: z.string().optional(), dbPath: dbPathSchema }),
+    },
+    async ({ project, dbPath }) => {
+      const handles = openHandles(dbPath);
+      try {
+        const projectId = handles.svc.resolveProject({
+          explicit: project ?? undefined,
+          env: process.env["SUBSTRATE_PROJECT"],
+          gitRoot: null,
+        }).projectId;
+        return textPayload(handles.svc.listIssues(projectId).map(issueSummaryJson));
+      } finally {
+        handles.db.close();
+      }
+    },
+  );
+  server.registerTool(
+    "issue_ready",
+    {
+      description: "List dispatchable-ready issues for a project (same resolution as issue_list).",
+      inputSchema: z.object({ project: z.string().optional(), dbPath: dbPathSchema }),
+    },
+    async ({ project, dbPath }) => {
+      const handles = openHandles(dbPath);
+      try {
+        const projectId = handles.svc.resolveProject({
+          explicit: project ?? undefined,
+          env: process.env["SUBSTRATE_PROJECT"],
+          gitRoot: null,
+        }).projectId;
+        const out = [];
+        for (const i of handles.svc.listIssues(projectId)) {
+          const r = handles.svc.getReadiness(i.id);
+          if (r.dispatchable) out.push({ ...issueSummaryJson(i), readinessState: r.state, dispatchable: true });
+        }
+        return textPayload(out);
+      } finally {
+        handles.db.close();
+      }
+    },
+  );
+  server.registerTool(
+    "journal_append",
+    {
+      description: "Append a journal entry (finding/decision/handoff/milestone/blocker) with a semantic summary.",
+      inputSchema: z.object({
+        ref: z.string().min(1),
+        kind: z.string().min(1),
+        summary: z.string().min(1),
+        sessionId: z.string().optional(),
+        dbPath: dbPathSchema,
+      }),
+    },
+    async ({ ref, kind, summary, sessionId, dbPath }) => {
+      if (!isJournalKind(kind)) throw new Error(`unknown journal kind: ${kind}`);
+      const handles = openHandles(dbPath);
+      try {
+        const id = handles.svc.resolveRef(ref).id;
+        const entry = handles.journal.appendEntry(id, {
+          kind,
+          sessionId: sessionId ?? undefined,
+          semantic: { summary: summary.slice(0, 2000) },
+        });
+        return textPayload({ entryId: entry.id, sequence: entry.sequence });
+      } finally {
+        handles.db.close();
+      }
+    },
+  );
+  server.registerTool(
+    "journal_show",
+    {
+      description: "Show journal entries for an issue, newest last (full bodies).",
+      inputSchema: z.object({ ref: z.string().min(1), limit: z.number().int().positive().optional(), dbPath: dbPathSchema }),
+    },
+    async ({ ref, limit, dbPath }) => {
+      const handles = openHandles(dbPath);
+      try {
+        const id = handles.svc.resolveRef(ref).id;
+        return textPayload(
+          handles.journal.listEntries(id, limit !== undefined ? { limit } : undefined).map((e) => ({
+            id: e.id,
+            sequence: e.sequence,
+            kind: e.kind,
+            sessionId: e.sessionId,
+            mechanical: e.mechanical,
+            semantic: e.semantic,
+            createdAt: e.createdAt,
+          })),
+        );
+      } finally {
+        handles.db.close();
+      }
+    },
+  );
+  server.registerTool(
+    "provenance_trace",
+    {
+      description: "Full ProvenanceService trace for an issue (bindings, receipts with artifacts, attestation, claims). Read-model only.",
+      inputSchema: z.object({ ref: z.string().min(1), dbPath: dbPathSchema }),
+    },
+    async ({ ref, dbPath }) => {
+      const handles = openHandles(dbPath);
+      try {
+        const id = handles.svc.resolveRef(ref).id;
+        const provenance = new ProvenanceService(handles.db, handles.svc, handles.journal);
+        return textPayload(provenance.trace(id));
+      } finally {
+        handles.db.close();
+      }
+    },
+  );
+  server.registerTool(
+    "resume_capsule",
+    {
+      description: "Build the Resume Capsule for an issue (contract + latest checkpoint + deltas) with its rendering.",
+      inputSchema: z.object({ ref: z.string().min(1), dbPath: dbPathSchema }),
+    },
+    async ({ ref, dbPath }) => {
+      const handles = openHandles(dbPath);
+      try {
+        const id = handles.svc.resolveRef(ref).id;
+        const capsule = handles.resume.buildCapsule(id);
+        return textPayload({ capsule, rendered: handles.resume.renderCapsule(capsule) });
       } finally {
         handles.db.close();
       }
