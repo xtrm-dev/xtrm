@@ -143,6 +143,7 @@ export class ResumeService {
       c.latestCheckpoint ? `${c.latestCheckpoint.id} seq${c.latestCheckpoint.sequence} ${c.latestCheckpoint.kind}` : "(none yet)",
     ];
     const s = c.latestCheckpoint?.semantic;
+    if (s?.summary) lines.push("", "SUMMARY", s.summary);
     if (s) {
       if (s.completed?.length) lines.push("", "DONE", ...s.completed.map((e) => `- ${e}`));
       if (s.current) lines.push("", "CURRENT", s.current);

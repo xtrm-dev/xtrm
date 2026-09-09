@@ -198,6 +198,7 @@ describe("resume capsules (D25, D29)", () => {
     assert.match(text, /ISSUE XTRM-1/);
     assert.match(text, /LATEST CHECKPOINT/);
     assert.match(text, /CHANGES SINCE CHECKPOINT/);
+    assert.match(text, /SUMMARY[\s\S]*first slice done/);
   });
 
   it("D29: root resume summarizes children by reference without copying transcripts", async () => {
