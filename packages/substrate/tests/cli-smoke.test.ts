@@ -45,11 +45,11 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
 
     // create
     const created = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "Smoke", "--kind", "task", "--contract", c1, "--scrutiny", "LOW"]).data as {
-      locator: string; humanRef: string; revision: number;
+      id: string; locator: string; humanRef: string; revision: number;
     };
     assert.match(created.locator, /^DEMO-1$/);
     assert.equal(created.humanRef, "DEMO-1");
-    assert.ok(!("id" in created), "machine ID stays out of summaries");
+    assert.match(created.id, /^iss_/, "JSON create carries the machine ID (xtrm-7wc.5.2)");
 
     // contract (edit) bumps the revision
     const c2 = contractFile(dir, "c2.json", { problem: "Smoke problem v2", success: "Smoke success" });
