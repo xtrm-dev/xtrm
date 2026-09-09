@@ -1,0 +1,28 @@
+{
+  "name": "@xtrm/substrate",
+  "version": "0.1.0",
+  "description": "Durable work substrate: issue graph over SQLite/WAL (library-first; sb CLI consumes this)",
+  "type": "module",
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "restricted"
+  }
+}
