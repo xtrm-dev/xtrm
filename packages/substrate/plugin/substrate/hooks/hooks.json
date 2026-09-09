@@ -36,6 +36,17 @@
             "timeout": 10000
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/wake-on-event.mjs"],
+            "asyncRewake": true,
+            "timeout": 900000
+          }
+        ]
       }
     ]
   }
