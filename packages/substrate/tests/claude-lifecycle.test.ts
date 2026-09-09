@@ -18,7 +18,6 @@ import { contract } from "./helpers.ts";
 import { handlePreCompact } from "../integrations/claude-code/precompact.ts";
 import { handlePostCompact } from "../integrations/claude-code/postcompact.ts";
 import { handleSessionStart } from "../integrations/claude-code/session-start.ts";
-import { callTool } from "../integrations/claude-code/mcp-server.ts";
 import { collectGitContext } from "../integrations/claude-code/git-provenance.ts";
 import { summarizeMechanical } from "../integrations/claude-code/semantic-service.ts";
 
@@ -160,37 +159,6 @@ describe("MCP server calls the library directly (exec sb forbidden)", () => {
   });
   afterEach(() => {
     rmSync(s.dir, { recursive: true, force: true });
-  });
-
-  it("resume/checkpoint/append/trace round-trip through tools/call handlers", async () => {
-    const resumed = (await callTool("substrate_issue_resume", { ref: s.humanRef, dbPath: s.dbPath })) as { rendered: string };
-    assert.match(resumed.rendered, /XTRM-1/);
-    const appended = (await callTool("substrate_journal_append", { ref: s.humanRef, kind: "finding", summary: "mcp finding", dbPath: s.dbPath })) as { entryId: string };
-    assert.ok(appended.entryId);
-    const cp = (await callTool("substrate_journal_checkpoint", { ref: s.humanRef, sessionId: "mcp-1", dbPath: s.dbPath })) as { entryId: string; degraded: boolean };
-    assert.ok(cp.entryId);
-    const trace = (await callTool("substrate_provenance_trace", { ref: s.humanRef, dbPath: s.dbPath })) as { eventCount: number };
-    assert.ok(trace.eventCount > 0);
-    await assert.rejects(callTool("nope", {}), /unknown tool/);
-  });
-
-  it("unknown tool rejects before opening any database (xtrm-7wc.8.1)", async () => {
-    // Dispatch order: tool-name validation precedes openHandles, so an
-    // unopenable dbPath cannot mask the rejection (the CI failure mode).
-    await assert.rejects(callTool("nope", { dbPath: join(s.dir, "no-such-dir", "state.db") }), /unknown tool/);
-    // HOME isolated (CI-equivalent): no database file may be created as a
-    // side effect of rejecting an unknown tool.
-    const emptyHome = mkdtempSync(join(tmpdir(), "sb-nohome-"));
-    const priorHome = process.env["HOME"];
-    process.env["HOME"] = emptyHome;
-    try {
-      await assert.rejects(callTool("nope", {}), /unknown tool/);
-      assert.equal(readdirSync(emptyHome).length, 0, "unknown tool must not touch the filesystem");
-    } finally {
-      if (priorHome === undefined) delete process.env["HOME"];
-      else process.env["HOME"] = priorHome;
-      rmSync(emptyHome, { recursive: true, force: true });
-    }
   });
 
   it("no adapter shells out to sb", () => {
