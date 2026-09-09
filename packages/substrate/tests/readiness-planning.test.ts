@@ -378,4 +378,24 @@ describe("atomic planning (B11-B14)", () => {
     assert.equal(ctx.svc.getIssue(target.id).currentRevision, 2);
     assert.equal(ctx.svc.getReadiness(target.id).state, "draft");
   });
+
+  it("12.3 claim branch (xtrm-7wc.3.1): attested + unblocked + claimed derives claimed/not-dispatchable; release restores ready", () => {
+    // Pins the amended §12.3 derivation end-to-end (C17 in claims-leases
+    // covers the claim mechanics; this pins the derivation order: the
+    // claim branch sits after blockers and before otherwise-yes).
+    const issue = readyIssue(ctx);
+    assert.equal(ctx.svc.getReadiness(issue.id).state, "ready");
+    ctx.svc.claimIssue(issue.id, "holder", { activationId: "a1" });
+    const claimed = ctx.svc.getReadiness(issue.id);
+    assert.equal(claimed.state, "claimed");
+    assert.equal(claimed.dispatchable, false);
+    assert.ok(claimed.reasons.some((r) => r.includes("active claim")));
+    assert.throws(() => ctx.svc.assertDispatchable(issue.id), /not dispatchable/);
+    // Rival claim refused at claim time (anti-steal); release restores ready.
+    assert.throws(() => ctx.svc.claimIssue(issue.id, "rival", { activationId: "a2" }), /claim-held/);
+    ctx.svc.releaseClaim(issue.id, "holder", { activationId: "a1" });
+    const released = ctx.svc.getReadiness(issue.id);
+    assert.equal(released.state, "ready");
+    assert.equal(released.dispatchable, true);
+  });
 });

@@ -683,8 +683,16 @@ structural contract invalid?        → no
 current semantic attestation absent?→ no
 unsatisfied blocking edge?          → no
 required external prerequisite bad? → no
+active claim holds the issue?       → no (state `claimed`)
 otherwise                           → yes
 ```
+
+A `claimed` issue is not dispatchable to others: the holder dispatches
+through the claim → binding pipeline (the dispatch gate accepts `ready` +
+`claimed`; the claim already passed structure, attestation, blockers, and
+scrutiny). Releasing the claim restores `ready`. The ready queue therefore
+lists unheld work only — a second dispatcher is refused at claim time with
+holder info (anti-steal), never by silently widening dispatch authority.
 
 There is no normal `--allow-unready` escape hatch.
 
