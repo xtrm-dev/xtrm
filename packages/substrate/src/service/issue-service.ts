@@ -32,6 +32,17 @@ import {
   type ResolvedContext,
 } from "../domain/readiness.ts";
 import { EDGE_KINDS, wouldCreateCycle, type EdgeKind } from "../domain/edge.ts";
+import {
+  DEFAULT_CLAIM_TTL_MS,
+  DEFAULT_LEASE_TTL_MS,
+  isLiveClaim,
+  isLiveLease,
+  normalizeWorkspace,
+  sameHolder,
+  type IssueClaim,
+  type WorkspaceIdentity,
+  type WorkspaceLease,
+} from "../domain/claim.ts";
 import { mutateOnce, nextInNamespace, withTransaction } from "../store/transactions.ts";
 
 // CRUD / revision / edge scope only (P1). Readiness, claims, journal,
@@ -49,6 +60,22 @@ export interface CreateIssueInput {
   authoredBy?: string;
   ownership?: unknown;
   contextRefs?: unknown[];
+}
+
+export interface AttestReadinessInput {
+  outcome: "ready" | "reject";
+  policy: string;
+  attestedBy: string;
+  evidenceRefs?: string[];
+  blockingGaps?: string[];
+}
+
+export interface ClaimOptions {
+  activationId?: string;
+  ttlMs?: number;
+  now?: number;
+  expectedRevision?: number;
+  idempotencyKey?: string;
 }
 
 export interface StoredEdge {
@@ -583,19 +610,15 @@ export class IssueService {
   // -- readiness (PRD §§12-13, 15, 39.1) ---------------------------------------
   // CLI and every integration share this service (PRD §5): no caller derives
   // readiness or dispatch authority anywhere else. Blocked/claimed are
-  // derived projections, never stored flags. hasActiveClaim is always false
-  // until Phase 3 lands the claims table; the seam is already in place.
+  // derived projections, never stored flags; `claimed` comes from the live
+  // claim row via hasActiveClaim (Phase 3).
 
-  attestReadiness(
-    issueId: string,
-    input: {
-      outcome: "ready" | "reject";
-      policy: string;
-      attestedBy: string;
-      evidenceRefs?: string[];
-      blockingGaps?: string[];
-    },
-  ): ReadinessAttestation {
+  attestReadiness(issueId: string, input: AttestReadinessInput): ReadinessAttestation {
+    this.assertAttestInput(input);
+    return withTransaction(this.db, () => this.insertAttestationTx(issueId, input, Date.now()));
+  }
+
+  private assertAttestInput(input: AttestReadinessInput): void {
     if (input.outcome !== "ready" && input.outcome !== "reject") throw new Error(`unknown attestation outcome: ${String(input.outcome)}`);
     if (!input.policy.trim()) throw new Error("attestation policy must be non-empty");
     if (!input.attestedBy.trim()) throw new Error("attestedBy must be non-empty");
@@ -604,9 +627,12 @@ export class IssueService {
         throw new Error(`${field} must be an array of strings when present`);
       }
     }
-    return withTransaction(this.db, () => {
-      const issue = this.requireIssue(issueId);
-      const now = Date.now();
+  }
+
+  // Tx-scoped: the caller must already hold the transaction. Lets claimReady
+  // attest and claim atomically without nesting transactions.
+  private insertAttestationTx(issueId: string, input: AttestReadinessInput, now: number): ReadinessAttestation {
+    const issue = this.requireIssue(issueId);
       const r = this.db
         .prepare(
           `INSERT INTO readiness_attestations
@@ -642,7 +668,6 @@ export class IssueService {
         blockingGaps: input.blockingGaps ?? [],
         createdAt: now,
       };
-    });
   }
 
   latestAttestation(issueId: string): ReadinessAttestation | null {
@@ -732,6 +757,11 @@ export class IssueService {
   // Single shared readiness projection (PRD §5). Pass `now` in tests to
   // control deferral without wall-clock coupling.
   getReadiness(issueId: string, opts?: { now?: number }): ReadinessReport {
+    const now = opts?.now ?? Date.now();
+    return this.readinessReport(issueId, now, this.openClaim(issueId, now) !== null);
+  }
+
+  private readinessReport(issueId: string, now: number, hasActiveClaim: boolean): ReadinessReport {
     const issue = this.requireIssue(issueId);
     const rev = this.getRevision(issueId, issue.currentRevision);
     return deriveReadiness({
@@ -746,8 +776,8 @@ export class IssueService {
       deferUntil: issue.deferUntil,
       attestation: this.latestAttestation(issueId),
       unsatisfiedBlockers: this.unsatisfiedBlockers(issueId),
-      now: opts?.now ?? Date.now(),
-      hasActiveClaim: false,
+      now,
+      hasActiveClaim,
     });
   }
 
@@ -793,6 +823,393 @@ export class IssueService {
     });
     const { entries, hash } = resolveInheritedContext(chain);
     return { issueId, revision: leaf.currentRevision, entries, hash };
+  }
+
+  // -- claims (PRD §17) --------------------------------------------------------
+  // Atomic, lease-backed work ownership. Exactly one live claim per issue:
+  // serialized check-then-insert inside one transaction, backed by the
+  // partial unique index on open rows. `claimed` state is derived in
+  // getReadiness from the live row, never stored on the issue.
+  // Tx-scoped helpers (claimTx) assume the caller holds the transaction so
+  // claimReady stays a single transaction without nesting.
+
+  claimIssue(issueId: string, holder: string, opts?: ClaimOptions): IssueClaim {
+    this.assertHolder(holder);
+    const key = opts?.idempotencyKey;
+    return withTransaction(this.db, () =>
+      key
+        ? mutateOnce(this.db, "command", key, () =>
+            this.claimTx(issueId, holder, opts?.activationId, opts?.ttlMs, opts?.now ?? Date.now(), opts?.expectedRevision),
+          )
+        : this.claimTx(issueId, holder, opts?.activationId, opts?.ttlMs, opts?.now ?? Date.now(), opts?.expectedRevision),
+    );
+  }
+
+  // Attest + claim in one transaction: the claim binds the freshly attested
+  // revision, so no edit can slip between attestation and ownership.
+  claimReady(
+    issueId: string,
+    holder: string,
+    attestation: AttestReadinessInput,
+    opts?: ClaimOptions,
+  ): { attestation: ReadinessAttestation; claim: IssueClaim } {
+    this.assertHolder(holder);
+    this.assertAttestInput(attestation);
+    return withTransaction(this.db, () => {
+      const now = opts?.now ?? Date.now();
+      const att = this.insertAttestationTx(issueId, attestation, now);
+      const claim = this.claimTx(issueId, holder, opts?.activationId, opts?.ttlMs, now, opts?.expectedRevision);
+      return { attestation: att, claim };
+    });
+  }
+
+  private claimTx(
+    issueId: string,
+    holder: string,
+    activationId: string | undefined,
+    ttlMs: number | undefined,
+    now: number,
+    expectedRevision: number | undefined,
+  ): IssueClaim {
+    const issue = this.requireIssue(issueId);
+    if (expectedRevision !== undefined && issue.currentRevision !== expectedRevision) {
+      throw new Error(`revision conflict on ${issueId}: expected ${expectedRevision}, current ${issue.currentRevision}`);
+    }
+    const open = this.openClaim(issueId, now);
+    const unclosed = open ?? this.unclosedClaim(issueId);
+    if (unclosed) {
+      if (isLiveClaim(unclosed, now)) {
+        // Idempotent same-holder retry (C16); anything else is steal (C17).
+        if (sameHolder(unclosed, holder, activationId ?? null)) return unclosed;
+        throw new Error(
+          `claim-held: ${issueId} is live-held by ${unclosed.holder} until ${unclosed.expiresAt} (anti-steal)`,
+        );
+      }
+      // Expired: reclaim per policy (C18) — close the old generation first
+      // so the open-row slot is never double-held.
+      this.closeClaimRow(unclosed.id, now);
+      this.appendEvent(issueId, "claim.expired", {
+        claim: unclosed.id,
+        generation: unclosed.generation,
+        holder: unclosed.holder,
+      });
+    }
+    // Claimable-state check in the same transaction: drafts and ambiguous
+    // work cannot be claimed (§5, A1). hasActiveClaim is false here — the
+    // live row would have thrown above, the expired row is just closed.
+    const report = this.readinessReport(issueId, now, false);
+    if (!report.dispatchable) {
+      throw new Error(`not-claimable: ${issueId} is ${report.state}: ${report.reasons.join("; ")}`);
+    }
+    const ttl = ttlMs ?? DEFAULT_CLAIM_TTL_MS;
+    if (!Number.isInteger(ttl) || ttl <= 0) throw new Error("claim ttlMs must be a positive integer");
+    const prev = row<{ g: number }>(this.db, "SELECT MAX(generation) AS g FROM issue_claims WHERE issue_id = ?", issueId);
+    const generation = (prev?.g ?? 0) + 1;
+    const acquiredAt = now;
+    const r = this.db
+      .prepare(
+        `INSERT INTO issue_claims
+           (issue_id, issue_revision, contract_hash, holder, activation_id,
+            acquired_at, expires_at, released_at, generation)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?) RETURNING id`,
+      )
+      .get(
+        issueId,
+        issue.currentRevision,
+        issue.currentContractHash,
+        holder,
+        activationId ?? null,
+        acquiredAt,
+        acquiredAt + ttl,
+        generation,
+      ) as { id: number };
+    this.appendEvent(issueId, "claim.acquired", { claim: Number(r.id), generation, holder });
+    return {
+      id: Number(r.id),
+      issueId,
+      issueRevision: issue.currentRevision,
+      contractHash: issue.currentContractHash,
+      holder,
+      activationId: activationId ?? null,
+      acquiredAt,
+      expiresAt: acquiredAt + ttl,
+      releasedAt: null,
+      generation,
+    };
+  }
+
+  renewClaim(issueId: string, holder: string, opts?: { activationId?: string; ttlMs?: number; now?: number }): IssueClaim {
+    this.assertHolder(holder);
+    return withTransaction(this.db, () => {
+      const now = opts?.now ?? Date.now();
+      const open = this.unclosedClaim(issueId);
+      if (!open) throw new Error(`no-claim: ${issueId} has no open claim to renew`);
+      if (!isLiveClaim(open, now)) throw new Error(`claim-expired: ${issueId} generation ${open.generation} expired; reclaim with claimIssue`);
+      if (!sameHolder(open, holder, opts?.activationId ?? null)) {
+        throw new Error(`claim-held: ${issueId} is live-held by ${open.holder} (anti-steal)`);
+      }
+      const ttl = opts?.ttlMs ?? DEFAULT_CLAIM_TTL_MS;
+      if (!Number.isInteger(ttl) || ttl <= 0) throw new Error("claim ttlMs must be a positive integer");
+      const expiresAt = now + ttl;
+      this.db.prepare("UPDATE issue_claims SET expires_at = ? WHERE id = ?").run(expiresAt, open.id);
+      this.appendEvent(issueId, "claim.renewed", { claim: open.id, generation: open.generation, expiresAt });
+      return { ...open, expiresAt };
+    });
+  }
+
+  // Holder-only release. No open row is an idempotent no-op (returns null).
+  releaseClaim(issueId: string, holder: string, opts?: { activationId?: string; now?: number }): IssueClaim | null {
+    this.assertHolder(holder);
+    return withTransaction(this.db, () => {
+      const now = opts?.now ?? Date.now();
+      const open = this.unclosedClaim(issueId);
+      if (!open) return null;
+      if (!sameHolder(open, holder, opts?.activationId ?? null)) {
+        throw new Error(`claim-held: ${issueId} is held by ${open.holder}; only the holder releases (anti-steal)`);
+      }
+      this.closeClaimRow(open.id, now);
+      this.appendEvent(issueId, "claim.released", { claim: open.id, generation: open.generation });
+      return { ...open, releasedAt: now };
+    });
+  }
+
+  getActiveClaim(issueId: string, opts?: { now?: number }): IssueClaim | null {
+    this.requireIssue(issueId);
+    return this.openClaim(issueId, opts?.now ?? Date.now());
+  }
+
+  listClaims(issueId: string): IssueClaim[] {
+    this.requireIssue(issueId);
+    return rows<Row>(this.db, "SELECT * FROM issue_claims WHERE issue_id = ? ORDER BY id", issueId).map((r) =>
+      this.toClaim(r),
+    );
+  }
+
+  // -- workspace writer leases (PRD §18) ---------------------------------------
+  // Distinct from issue claims (§5): at most one live writer per workspace,
+  // readers coexist without leases. Coordinator/parent mutation tools call
+  // assertCanWrite first and are fenced while a child writer owns the
+  // workspace (C21). Lease rows are the audit trail (no per-issue events:
+  // leases are workspace-scoped, not issue-scoped).
+
+  acquireWriterLease(
+    workspace: string | WorkspaceIdentity,
+    holder: string,
+    opts?: {
+      activationId?: string;
+      repositoryRoot?: string;
+      branch?: string;
+      ttlMs?: number;
+      now?: number;
+      idempotencyKey?: string;
+    },
+  ): WorkspaceLease {
+    this.assertHolder(holder);
+    const key = opts?.idempotencyKey;
+    return withTransaction(this.db, () =>
+      key
+        ? mutateOnce(this.db, "command", key, () =>
+            this.acquireLeaseTx(workspace, holder, opts?.activationId, opts?.repositoryRoot, opts?.branch, opts?.ttlMs, opts?.now ?? Date.now()),
+          )
+        : this.acquireLeaseTx(workspace, holder, opts?.activationId, opts?.repositoryRoot, opts?.branch, opts?.ttlMs, opts?.now ?? Date.now()),
+    );
+  }
+
+  private acquireLeaseTx(
+    workspace: string | WorkspaceIdentity,
+    holder: string,
+    activationId: string | undefined,
+    repositoryRoot: string | undefined,
+    branch: string | undefined,
+    ttlMs: number | undefined,
+    now: number,
+  ): WorkspaceLease {
+    const key = normalizeWorkspace(workspace);
+    if (typeof workspace === "object") {
+      repositoryRoot ??= workspace.repositoryRoot;
+      branch ??= workspace.branch;
+    }
+    const open = this.unclosedLease(key);
+    if (open) {
+      if (isLiveLease(open, now)) {
+        if (sameHolder(open, holder, activationId ?? null)) return open;
+        throw new Error(`lease-held: workspace ${key} is write-held by ${open.holder} until ${open.expiresAt} (anti-steal)`);
+      }
+      this.db.prepare("UPDATE workspace_leases SET released_at = ? WHERE id = ?").run(now, open.id);
+    }
+    const ttl = ttlMs ?? DEFAULT_LEASE_TTL_MS;
+    if (!Number.isInteger(ttl) || ttl <= 0) throw new Error("lease ttlMs must be a positive integer");
+    const prev = row<{ g: number }>(this.db, "SELECT MAX(generation) AS g FROM workspace_leases WHERE workspace = ?", key);
+    const generation = (prev?.g ?? 0) + 1;
+    const r = this.db
+      .prepare(
+        `INSERT INTO workspace_leases
+           (workspace, repository_root, branch, holder, activation_id,
+            acquired_at, expires_at, released_at, generation)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?) RETURNING id`,
+      )
+      .get(key, repositoryRoot ?? null, branch ?? null, holder, activationId ?? null, now, now + ttl, generation) as {
+      id: number;
+    };
+    return {
+      id: Number(r.id),
+      workspace: key,
+      repositoryRoot: repositoryRoot ?? null,
+      branch: branch ?? null,
+      holder,
+      activationId: activationId ?? null,
+      acquiredAt: now,
+      expiresAt: now + ttl,
+      releasedAt: null,
+      generation,
+    };
+  }
+
+  renewWriterLease(
+    workspace: string | WorkspaceIdentity,
+    holder: string,
+    opts?: { activationId?: string; ttlMs?: number; now?: number },
+  ): WorkspaceLease {
+    this.assertHolder(holder);
+    return withTransaction(this.db, () => {
+      const key = normalizeWorkspace(workspace);
+      const now = opts?.now ?? Date.now();
+      const open = this.unclosedLease(key);
+      if (!open) throw new Error(`no-lease: workspace ${key} has no open writer lease to renew`);
+      if (!isLiveLease(open, now)) throw new Error(`lease-expired: workspace ${key} generation ${open.generation} expired; re-acquire`);
+      if (!sameHolder(open, holder, opts?.activationId ?? null)) {
+        throw new Error(`lease-held: workspace ${key} is write-held by ${open.holder} (anti-steal)`);
+      }
+      const ttl = opts?.ttlMs ?? DEFAULT_LEASE_TTL_MS;
+      if (!Number.isInteger(ttl) || ttl <= 0) throw new Error("lease ttlMs must be a positive integer");
+      const expiresAt = now + ttl;
+      this.db.prepare("UPDATE workspace_leases SET expires_at = ? WHERE id = ?").run(expiresAt, open.id);
+      return { ...open, expiresAt };
+    });
+  }
+
+  // Holder-only release. No open lease is an idempotent no-op (returns null).
+  releaseWriterLease(
+    workspace: string | WorkspaceIdentity,
+    holder: string,
+    opts?: { activationId?: string; now?: number },
+  ): WorkspaceLease | null {
+    this.assertHolder(holder);
+    return withTransaction(this.db, () => {
+      const key = normalizeWorkspace(workspace);
+      const now = opts?.now ?? Date.now();
+      const open = this.unclosedLease(key);
+      if (!open) return null;
+      if (!sameHolder(open, holder, opts?.activationId ?? null)) {
+        throw new Error(`lease-held: workspace ${key} is held by ${open.holder}; only the holder releases (anti-steal)`);
+      }
+      this.db.prepare("UPDATE workspace_leases SET released_at = ? WHERE id = ?").run(now, open.id);
+      return { ...open, releasedAt: now };
+    });
+  }
+
+  getWriterLease(workspace: string | WorkspaceIdentity, opts?: { now?: number }): WorkspaceLease | null {
+    const key = normalizeWorkspace(workspace);
+    const open = this.unclosedLease(key);
+    const now = opts?.now ?? Date.now();
+    return open && isLiveLease(open, now) ? open : null;
+  }
+
+  listWorkspaceLeases(workspace?: string | WorkspaceIdentity): WorkspaceLease[] {
+    const rs = workspace === undefined
+      ? rows<Row>(this.db, "SELECT * FROM workspace_leases ORDER BY id")
+      : rows<Row>(this.db, "SELECT * FROM workspace_leases WHERE workspace = ? ORDER BY id", normalizeWorkspace(workspace));
+    return rs.map((r) => this.toLease(r));
+  }
+
+  // -- read/write authority helpers (PRD §§5, 18) -------------------------------
+  // Readers coexist without leases; writers are exclusive. Mutation-capable
+  // tools (coordinator included) must pass assertCanWrite before mutating.
+
+  holdsWriterLease(
+    workspace: string | WorkspaceIdentity,
+    holder: string,
+    opts?: { activationId?: string; now?: number },
+  ): boolean {
+    const live = this.getWriterLease(workspace, opts);
+    return live !== null && sameHolder(live, holder, opts?.activationId ?? null);
+  }
+
+  assertCanWrite(
+    workspace: string | WorkspaceIdentity,
+    holder: string,
+    opts?: { activationId?: string; now?: number },
+  ): void {
+    const key = normalizeWorkspace(workspace);
+    const live = this.getWriterLease(key, opts);
+    if (!live) throw new Error(`lease-fenced: workspace ${key} has no live writer lease held by ${holder}`);
+    if (!sameHolder(live, holder, opts?.activationId ?? null)) {
+      throw new Error(`lease-fenced: workspace ${key} is write-held by ${live.holder}; ${holder} is fenced (C21)`);
+    }
+  }
+
+  // Read authority is unconditional: N readers coexist with the writer (C20).
+  canReadWorkspace(): boolean {
+    return true;
+  }
+
+  private assertHolder(holder: string): void {
+    if (!holder.trim()) throw new Error("claim/lease holder must be non-empty");
+  }
+
+  // Latest unreleased row, regardless of expiry. Liveness is derived by the
+  // caller via isLiveClaim/isLiveLease — never a stored flag.
+  private unclosedClaim(issueId: string): IssueClaim | null {
+    const r = row<Row>(this.db, "SELECT * FROM issue_claims WHERE issue_id = ? AND released_at IS NULL ORDER BY id DESC LIMIT 1", issueId);
+    return r ? this.toClaim(r) : null;
+  }
+
+  private openClaim(issueId: string, now: number): IssueClaim | null {
+    const c = this.unclosedClaim(issueId);
+    return c && isLiveClaim(c, now) ? c : null;
+  }
+
+  private closeClaimRow(id: number, now: number): void {
+    this.db.prepare("UPDATE issue_claims SET released_at = ? WHERE id = ? AND released_at IS NULL").run(now, id);
+  }
+
+  private unclosedLease(workspace: string): WorkspaceLease | null {
+    const r = row<Row>(
+      this.db,
+      "SELECT * FROM workspace_leases WHERE workspace = ? AND released_at IS NULL ORDER BY id DESC LIMIT 1",
+      workspace,
+    );
+    return r ? this.toLease(r) : null;
+  }
+
+  private toClaim(r: Row): IssueClaim {
+    return {
+      id: r["id"] as number,
+      issueId: r["issue_id"] as string,
+      issueRevision: r["issue_revision"] as number,
+      contractHash: r["contract_hash"] as string,
+      holder: r["holder"] as string,
+      activationId: (r["activation_id"] as string | null) ?? null,
+      acquiredAt: r["acquired_at"] as number,
+      expiresAt: r["expires_at"] as number,
+      releasedAt: (r["released_at"] as number | null) ?? null,
+      generation: r["generation"] as number,
+    };
+  }
+
+  private toLease(r: Row): WorkspaceLease {
+    return {
+      id: r["id"] as number,
+      workspace: r["workspace"] as string,
+      repositoryRoot: (r["repository_root"] as string | null) ?? null,
+      branch: (r["branch"] as string | null) ?? null,
+      holder: r["holder"] as string,
+      activationId: (r["activation_id"] as string | null) ?? null,
+      acquiredAt: r["acquired_at"] as number,
+      expiresAt: r["expires_at"] as number,
+      releasedAt: (r["released_at"] as number | null) ?? null,
+      generation: r["generation"] as number,
+    };
   }
 
   private toAttestation(r: Row): ReadinessAttestation {
