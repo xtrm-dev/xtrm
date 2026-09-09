@@ -45,6 +45,11 @@ export class SessionBindings {
       const hit = this.map.get(sessionId);
       if (hit) return hit;
     }
+    // Converged names (bead xtrm-iip.9): SUBSTRATE_ISSUE_REF wins everywhere;
+    // SUBSTRATE_ISSUE remains as a backcompat alias so existing operator
+    // setups keep working.
+    const ref = process.env["SUBSTRATE_ISSUE_REF"];
+    if (ref && ref.trim()) return ref.trim();
     const env = process.env["SUBSTRATE_ISSUE"];
     return env && env.trim() ? env.trim() : null;
   }

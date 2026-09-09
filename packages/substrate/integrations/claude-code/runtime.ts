@@ -40,10 +40,13 @@ export function openHandles(dbPath?: string): SubstrateHandles {
   return { dbPath: resolved, db, svc, journal, resume };
 }
 
-// SUBSTRATE_ISSUE_REF wins (hook env); otherwise <cwd>/.substrate-issue.
+// SUBSTRATE_ISSUE_REF wins (hook env); SUBSTRATE_ISSUE is the backcompat
+// alias (bead xtrm-iip.9); otherwise <cwd>/.substrate-issue.
 export function discoverIssueRef(cwd?: string): string | null {
   const env = process.env["SUBSTRATE_ISSUE_REF"]?.trim();
   if (env) return env;
+  const legacy = process.env["SUBSTRATE_ISSUE"]?.trim();
+  if (legacy) return legacy;
   if (cwd) {
     const p = join(cwd, ".substrate-issue");
     if (existsSync(p)) {
