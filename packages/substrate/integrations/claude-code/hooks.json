@@ -1,0 +1,21 @@
+{
+  "$comment": "Claude lifecycle wiring (PRD §§24, 38, 54). PreCompact supports command/HTTP/MCP-tool hooks; prompt/agent hooks are NOT supported on PreCompact, so every entry here is type command (a plain adapter process that calls the typed Substrate service). No entry references .xtrm/hooks scripts (P0 census: absent; settings.json refs stale).",
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/substrate/integrations/claude-code/precompact.ts\"", "timeout": 30000 }]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/substrate/integrations/claude-code/postcompact.ts\"", "timeout": 10000 }]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/substrate/integrations/claude-code/session-start.ts\"", "timeout": 10000 }]
+      }
+    ]
+  }
+}

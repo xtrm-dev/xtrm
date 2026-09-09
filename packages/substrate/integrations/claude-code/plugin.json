@@ -1,0 +1,13 @@
+{
+  "name": "substrate",
+  "version": "0.1.0",
+  "description": "Substrate durable work substrate for Claude Code: MCP tools + PreCompact/PostCompact/SessionStart lifecycle over the typed service (PRD §§24, 38).",
+  "hooks": "./hooks.json",
+  "mcpServers": {
+    "substrate": {
+      "command": "node",
+      "args": ["packages/substrate/integrations/claude-code/mcp-server.ts"],
+      "env": { "SUBSTRATE_DB": "${CLAUDE_PROJECT_DIR}/.xtrm/state.db" }
+    }
+  }
+}
