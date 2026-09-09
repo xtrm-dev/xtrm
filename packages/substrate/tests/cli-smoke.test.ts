@@ -191,6 +191,38 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     assert.equal(json[0]?.children.length, 1);
   });
 
+  it("journal show returns entry bodies; since stays compact (xtrm-7wc.6.2)", () => {
+    const { dir, dbPath } = setupDb();
+    const c = contractFile(dir, "c.json", { problem: "P", success: "S" });
+    const created = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", c]).data as {
+      humanRef: string;
+    };
+    cli(dbPath, [
+      "journal", "append", created.humanRef, "--kind", "finding",
+      "--semantic", JSON.stringify({ summary: "The cache never invalidates", current: "Proving it", next: ["Fix it"] }),
+    ]);
+    // JSON show round-trips the full body
+    const shown = cli(dbPath, ["journal", "show", created.humanRef]).data as Array<{
+      semantic: { summary: string; current: string; next: string[] } | null;
+      mechanical: unknown;
+    }>;
+    assert.equal(shown.length, 1);
+    assert.equal(shown[0]?.semantic?.summary, "The cache never invalidates");
+    assert.deepEqual(shown[0]?.semantic?.next, ["Fix it"]);
+    // human show prints the entry text under the header line
+    const human = runCli(["--db", dbPath, "journal", "show", created.humanRef]);
+    assert.equal(human.code, 0, human.stderr);
+    assert.ok(human.stdout.includes("summary: The cache never invalidates"));
+    assert.ok(human.stdout.includes("current: Proving it"));
+    // since stays compact: headers only, no bodies
+    const delta = cli(dbPath, ["journal", "since", created.humanRef, "0"]).data as {
+      entries: Array<Record<string, unknown>>;
+    };
+    assert.equal(delta.entries.length, 1);
+    assert.ok(!("semantic" in (delta.entries[0] as Record<string, unknown>)));
+    assert.ok(!("mechanical" in (delta.entries[0] as Record<string, unknown>)));
+  });
+
   it("the sb bin runs as a real process", () => {
     const { dbPath } = setupDb();
     const out = execFileSync(process.execPath, [SB, "--db", dbPath, "--json", "issue", "list", "--project", "prj_demo"], { encoding: "utf8" });
