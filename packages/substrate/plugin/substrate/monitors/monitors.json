@@ -1,0 +1,8 @@
+[
+  {
+    "name": "substrate-events",
+    "description": "New Substrate events on the bound issue",
+    "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/scripts/tail-events.mjs",
+    "when": "on-skill-invoke:using-substrate"
+  }
+]
