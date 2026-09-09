@@ -1,7 +1,7 @@
 # @xtrm/substrate
 
-Durable work substrate, Phase 1 (domain + SQLite kernel). Library-first: the
-`sb` CLI, Pi extension, and Claude plugin consume `IssueService`, never SQL.
+Durable work substrate (Substrate Issues v0). Library-first: the `sb` CLI,
+Pi extension, and Claude plugin consume the typed service, never SQL.
 
 ## Layout
 
@@ -10,8 +10,10 @@ Durable work substrate, Phase 1 (domain + SQLite kernel). Library-first: the
 - `src/store/sqlite.ts` — WAL opener, fail-closed (§§7, 46–47)
 - `src/store/migrations/` — append-only runner; landed migrations never edited
 - `src/store/transactions.ts` — §7.3 transaction rule + idempotency primitives
-- `src/service/issue-service.ts` — CRUD / revision / edge scope only
-- `tests/` — acceptance A7–A10, G47, crash-restart, concurrency, fail-closed
+- `src/service/` — issues, readiness/planning, claims/leases, journal/resume
+- `integrations/pi/` — native Pi extension over the typed service
+- `skills/using-substrate/` — agent doctrine (Pi content owned here)
+- `tests/` — per-phase acceptance plus CLI and integration smoke
 
 ## Rules this kernel enforces
 
@@ -34,9 +36,21 @@ forms via `resolveRef`. `--json` emits the `substrate-cli/v1` envelope
 (see `cli/schema.json`, version 1.0.0, additive-only compat); otherwise one
 concise human line per item (locator · humanRef · title [state revN]).
 
+## Pi integration (P6)
+
+`integrations/pi/` consumes the typed service directly (never `exec sb`):
+eight model tools (`substrate_issue_*`, `substrate_journal_*`,
+`substrate_provenance_trace`), session→issue bindings, `session_start`
+resume surfacing, and a `session_before_compact` handler (mechanical
+checkpoint first, secondary-model semantic, custom summary or host-default
+fallback). Host-agnostic logic in `handlers.ts`; Pi wiring in
+`extension.ts` (API verified against installed Pi 0.84 docs at build time).
+Skill: `skills/using-substrate/SKILL.md` (Pi content owned here; the Claude
+lane consumes it read-only).
+
 ## Deferred to later phases
 
-Journal (P5), provenance (P8), import compat (P11).
+Claude integration (P7), provenance (P8), import compat (P11).
 
 ## Develop
 
