@@ -14,6 +14,7 @@ import { IssueService } from "../src/service/issue-service.ts";
 import { PlanningService } from "../src/service/planning-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
+import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { isJournalKind } from "../src/domain/journal.ts";
 import type { JournalEntry } from "../src/domain/journal.ts";
@@ -173,7 +174,8 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
     if (group === "issue") return runIssue(db, svc, ctx, command, verb, flags, rest);
     if (group === "plan") return runPlan(db, svc, ctx, command, verb, flags);
     if (group === "journal") return runJournal(db, svc, ctx, command, verb, flags, rest);
-    throw new Error(`unknown group: ${group} (want issue|plan|journal)`);
+    if (group === "provenance") return runProvenance(db, svc, ctx, command, verb, flags, rest);
+    throw new Error(`unknown group: ${group} (want issue|plan|journal|provenance)`);
   } catch (err) {
     return fail(ctx, command, err);
   } finally {
@@ -501,6 +503,100 @@ function runJournal(
     }
     default:
       throw new Error(`unknown journal verb: ${verb} (want append|checkpoint|show|since|render)`);
+  }
+}
+
+// -- provenance verbs (Phase 8, bead xtrm-7wc.9) --------------------------------
+// Thin over ProvenanceService: dispatch freezes the exact revision/hash,
+// trace/commit/receipt/pr reconstruct lineage from host-owned rows.
+// Receipt allocation and commit binding stay host-driven (hooks/service);
+// the CLI exposes dispatch (host operator), bundle finalization, and the
+// four PRD §30 read queries.
+
+function bindingSummary(b: { id: string; issueId: string; issueRevision: number; contractHash: string }): Record<string, unknown> {
+  return { bindingId: b.id, issueId: b.issueId, revision: b.issueRevision, contractHash: b.contractHash };
+}
+
+function runProvenance(
+  db: ReturnType<typeof openSubstrate>,
+  svc: IssueService,
+  ctx: Ctx,
+  command: string,
+  verb: string,
+  flags: Map<string, string | true>,
+  rest: string[],
+): CliResult {
+  const provenance = new ProvenanceService(db, svc, new JournalService(db, svc));
+  switch (verb) {
+    case "dispatch": {
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      const claimRaw = flag(flags, "claim-id");
+      const binding = provenance.dispatch(resolved.id, {
+        workspace: flag(flags, "workspace") ?? process.cwd(),
+        participantId: flag(flags, "participant"),
+        activationId: flag(flags, "activation"),
+        attemptId: flag(flags, "attempt"),
+        sessionId: flag(flags, "session"),
+        baseCommit: flag(flags, "base-commit"),
+        claimId: claimRaw !== undefined ? Number(claimRaw) : undefined,
+      });
+      return emit(ctx, command, bindingSummary(binding));
+    }
+    case "trace": {
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      const t = provenance.trace(resolved.id);
+      if (ctx.json) return emit(ctx, command, t);
+      const lines = [
+        `${t.humanRef} rev${t.revision} ${t.contractHash.slice(0, 12)} [${t.lifecycleState}]`,
+        `bindings: ${t.bindings.length} receipts: ${t.receipts.length} checkpoints: ${t.checkpoints.length}`,
+        `commits: ${t.commits.length > 0 ? t.commits.join(",") : "(none)"}`,
+        `prs: ${t.prs.length > 0 ? t.prs.map((p) => p.value).join(",") : "(none)"}`,
+      ];
+      return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
+    }
+    case "commit": {
+      const sha = rest[0] ?? (() => { throw new Error("a 40-char commit SHA is required"); })();
+      const hits = provenance.findByCommit(sha).map(({ receipt, binding }) => ({
+        receipt: receipt.id,
+        ...bindingSummary(binding),
+        commitSha: receipt.commitSha,
+      }));
+      if (ctx.json) return emit(ctx, command, hits);
+      return { code: 0, stdout: (hits.length > 0 ? hits.map((h) => JSON.stringify(h)).join("\n") : "(no binding for commit)") + "\n", stderr: "" };
+    }
+    case "receipt": {
+      const id = rest[0] ?? (() => { throw new Error("a receipt id is required"); })();
+      const receipt = provenance.getReceipt(id);
+      const data = { receipt, binding: bindingSummary(provenance.getBinding(receipt.executionBindingId)), artifacts: provenance.listArtifacts(id) };
+      if (ctx.json) return emit(ctx, command, data);
+      return { code: 0, stdout: JSON.stringify(data) + "\n", stderr: "" };
+    }
+    case "pr": {
+      const ref = rest[0] ?? (() => { throw new Error("a provider PR ref is required"); })();
+      const hits = provenance.findByPr(ref).map(({ receipt, binding }) => ({
+        receipt: receipt.id,
+        ...bindingSummary(binding),
+      }));
+      if (ctx.json) return emit(ctx, command, hits);
+      return { code: 0, stdout: (hits.length > 0 ? hits.map((h) => JSON.stringify(h)).join("\n") : "(no binding for pr)") + "\n", stderr: "" };
+    }
+    case "bundle": {
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      const { bundle, path } = provenance.generateBundle(resolved.id, { repoRoot: flag(flags, "repo-root") ?? process.cwd() });
+      return emit(ctx, command, {
+        bundleId: bundle.bundleId,
+        path,
+        issueRevision: bundle.issueRevision,
+        contractHash: bundle.contractHash,
+        bindings: bundle.executionBindingIds.length,
+        commits: bundle.commitShas.length,
+      });
+    }
+    default:
+      throw new Error(`unknown provenance verb: ${verb} (want dispatch|trace|commit|receipt|pr|bundle)`);
   }
 }
 
