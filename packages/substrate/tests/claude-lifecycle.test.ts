@@ -7,7 +7,7 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
@@ -172,6 +172,25 @@ describe("MCP server calls the library directly (exec sb forbidden)", () => {
     const trace = (await callTool("substrate_provenance_trace", { ref: s.humanRef, dbPath: s.dbPath })) as { eventCount: number };
     assert.ok(trace.eventCount > 0);
     await assert.rejects(callTool("nope", {}), /unknown tool/);
+  });
+
+  it("unknown tool rejects before opening any database (xtrm-7wc.8.1)", async () => {
+    // Dispatch order: tool-name validation precedes openHandles, so an
+    // unopenable dbPath cannot mask the rejection (the CI failure mode).
+    await assert.rejects(callTool("nope", { dbPath: join(s.dir, "no-such-dir", "state.db") }), /unknown tool/);
+    // HOME isolated (CI-equivalent): no database file may be created as a
+    // side effect of rejecting an unknown tool.
+    const emptyHome = mkdtempSync(join(tmpdir(), "sb-nohome-"));
+    const priorHome = process.env["HOME"];
+    process.env["HOME"] = emptyHome;
+    try {
+      await assert.rejects(callTool("nope", {}), /unknown tool/);
+      assert.equal(readdirSync(emptyHome).length, 0, "unknown tool must not touch the filesystem");
+    } finally {
+      if (priorHome === undefined) delete process.env["HOME"];
+      else process.env["HOME"] = priorHome;
+      rmSync(emptyHome, { recursive: true, force: true });
+    }
   });
 
   it("no adapter shells out to sb", () => {
