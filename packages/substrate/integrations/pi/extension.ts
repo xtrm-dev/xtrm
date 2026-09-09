@@ -19,7 +19,17 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
-import { convertToLlm, defineTool, serializeConversation, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  convertToLlm,
+  defineTool,
+  serializeConversation,
+  type AgentToolUpdateCallback,
+  type ExtensionAPI,
+  type ExtensionCommandContext,
+  type ExtensionContext,
+  type SessionBeforeCompactEvent,
+  type SessionStartEvent,
+} from "@earendil-works/pi-coding-agent";
 import {
   SessionBindings,
   openServices,
@@ -64,7 +74,7 @@ export default function (pi: ExtensionAPI): void {
       label: "Substrate issue get",
       description: "Get a Substrate issue with contract, readiness, claim, and attestation. Ref accepts machine ID, durable reference, locator, historical locator, or alias.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }) }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         return textResult(await withServices((svc) => toolIssueGet(svc, { ref: params.ref as string })));
       },
     }),
@@ -73,7 +83,7 @@ export default function (pi: ExtensionAPI): void {
       label: "Substrate issue search",
       description: "Search Substrate issues within a project by title/reference substring, optionally filtered by kind.",
       parameters: Type.Object({ project: Type.String({ description: "Project id" }), query: Type.Optional(Type.String({ description: "Substring match" })), kind: Type.Optional(Type.String({ description: "Issue kind" })) }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         return textResult(
           await withServices((svc) =>
             toolIssueSearch(svc, { project: params.project as string, query: params.query as string | undefined, kind: params.kind as string | undefined }),
@@ -86,7 +96,13 @@ export default function (pi: ExtensionAPI): void {
       label: "Substrate issue claim",
       description: "Claim a dispatchable Substrate issue for a holder. Binds the Pi session to the issue for checkpoints and resume.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), holder: Type.String({ description: "Claim holder" }), activationId: Type.Optional(Type.String({ description: "Activation id" })), sessionId: Type.Optional(Type.String({ description: "Pi session id" })) }),
-      async execute(_id, params, _signal, _onUpdate, ctx) {
+      async execute(
+        _id: string,
+        params: Record<string, unknown>,
+        _signal: AbortSignal | undefined,
+        _onUpdate: AgentToolUpdateCallback<{ ok: boolean }> | undefined,
+        ctx: ExtensionContext,
+      ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
         return textResult(
           await withServices((svc) => toolIssueClaim(svc, bindings, { ref: params.ref as string, holder: params.holder as string, activationId: params.activationId as string | undefined, sessionId })),
@@ -98,7 +114,7 @@ export default function (pi: ExtensionAPI): void {
       label: "Substrate issue update",
       description: "Revise a Substrate issue contract (revision-on-change; identical contracts are a no-op).",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), contract: Type.Unknown({ description: "Seven-field work contract" }) }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         return textResult(await withServices((svc) => toolIssueUpdate(svc, { ref: params.ref as string, contract: params.contract })));
       },
     }),
@@ -107,7 +123,13 @@ export default function (pi: ExtensionAPI): void {
       label: "Substrate journal append",
       description: "Append a journal entry (checkpoint, handoff, milestone, decision, finding, blocker, compaction) to an issue.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), kind: Type.String({ description: "Entry kind" }), sessionId: Type.Optional(Type.String({ description: "Pi session id" })) }),
-      async execute(_id, params, _signal, _onUpdate, ctx) {
+      async execute(
+        _id: string,
+        params: Record<string, unknown>,
+        _signal: AbortSignal | undefined,
+        _onUpdate: AgentToolUpdateCallback<{ ok: boolean }> | undefined,
+        ctx: ExtensionContext,
+      ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
         return textResult(await withServices((svc) => toolJournalAppend(svc, { ref: params.ref as string, kind: params.kind as string, sessionId })));
       },
@@ -117,7 +139,13 @@ export default function (pi: ExtensionAPI): void {
       label: "Substrate journal checkpoint",
       description: "Write a mechanical-first journal checkpoint for an issue.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), sessionId: Type.Optional(Type.String({ description: "Pi session id" })), headCommit: Type.Optional(Type.String({ description: "Head commit SHA" })) }),
-      async execute(_id, params, _signal, _onUpdate, ctx) {
+      async execute(
+        _id: string,
+        params: Record<string, unknown>,
+        _signal: AbortSignal | undefined,
+        _onUpdate: AgentToolUpdateCallback<{ ok: boolean }> | undefined,
+        ctx: ExtensionContext,
+      ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
         return textResult(
           await withServices((svc) => toolJournalCheckpoint(svc, { ref: params.ref as string, sessionId, headCommit: params.headCommit as string | undefined })),
@@ -129,7 +157,7 @@ export default function (pi: ExtensionAPI): void {
       label: "Substrate issue resume",
       description: "Build the bounded resume capsule for an issue: contract, checkpoint, deltas, blockers, claim, provenance.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }) }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         const capsule = await withServices((svc) => toolIssueResume(svc, { ref: params.ref as string }));
         return { content: [{ type: "text" as const, text: capsule }], details: { ok: true } };
       },
@@ -139,7 +167,7 @@ export default function (pi: ExtensionAPI): void {
       label: "Substrate provenance trace",
       description: "Trace issue lineage: revision, attestation, claim, checkpoints, event spine. Receipt-backed trace lands in Phase 8.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }) }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         return textResult(await withServices((svc) => toolProvenanceTrace(svc, { ref: params.ref as string })));
       },
     }),
@@ -148,21 +176,21 @@ export default function (pi: ExtensionAPI): void {
 
   pi.registerCommand("substrate-resume", {
     description: "Print the Substrate resume capsule for the session-bound issue",
-    handler: async (_args, ctx) => {
+    handler: async (_args: string, ctx: ExtensionCommandContext) => {
       const sessionId = ctx?.sessionManager?.getSessionId?.();
       const capsule = await withServices((svc) => resumeForSession(svc, bindings, sessionId));
       ctx.ui.notify(capsule ?? "No Substrate issue bound to this session (substrate_issue_claim or SUBSTRATE_ISSUE).", capsule ? "info" : "warning");
     },
   });
 
-  pi.on("session_start", async (event, ctx) => {
+  pi.on("session_start", async (event: SessionStartEvent, ctx: ExtensionContext) => {
     if (event.reason !== "resume" && event.reason !== "new" && event.reason !== "fork") return;
     const sessionId = ctx?.sessionManager?.getSessionId?.() ?? event.previousSessionFile;
     const capsule = await withServices((svc) => resumeForSession(svc, bindings, sessionId)).catch(() => null);
     if (capsule) ctx.ui.notify(`Substrate resume available — run /substrate-resume for the full capsule.\n${capsule.split("\n").slice(0, 6).join("\n")}`, "info");
   });
 
-  pi.on("session_before_compact", async (event, ctx) => {
+  pi.on("session_before_compact", async (event: SessionBeforeCompactEvent, ctx: ExtensionContext) => {
     const sessionId = ctx?.sessionManager?.getSessionId?.();
     const ref = bindings.boundRef(sessionId);
     if (!ref) return;
