@@ -521,7 +521,7 @@ Primary model-facing tool:
 ```ts
 specialist_delegate({
   specialist: "researcher",
-  bead: "ISSUE-58",
+  issue: "ISSUE-58",
   model?: "provider/model"
 })
 ```
@@ -533,12 +533,12 @@ Invalid:
 ```ts
 specialist_delegate({
   specialist: "executor",
-  bead: "ISSUE-58",
+  issue: "ISSUE-58",
   task: "also rewrite the unrelated auth cache"
 })
 ```
 
-If tracked work is missing required information, the Bead must be fixed.
+If tracked work is missing required information, the Issue must be fixed (Substrate revision + readiness attestation — Phase 9 authority replacement; the Bead alias still resolves).
 
 ---
 
@@ -549,7 +549,7 @@ Conceptual type:
 ```ts
 interface ActivationRequest {
   specialist: string;
-  beadId: string;
+  issueId: string;
   modelOverride?: string;
 
   requestedByParticipantId: string;
@@ -569,12 +569,12 @@ Future schedulers must be able to construct the same request.
 
 # 12. Bead dispatch gate
 
-The current Bead remains the authoritative tracked-work contract.
+The current Substrate Issue revision is the authoritative tracked-work contract (shared readiness service — Phase 9 authority replacement; `beadId` aliases still resolve to the same Issue).
 
 Before AgentSession creation:
 
 ```text
-resolve Bead
+resolve Issue
     ↓
 read contract state
     ↓
@@ -641,7 +641,7 @@ Example:
 ```text
 SPECIALIST_DISPATCH_REJECTED
 
-bead:
+issue:
   ISSUE-58
 
 specialist:
@@ -736,7 +736,8 @@ interface StepContract {
   provenance: {
     specialist: string;
     generatedAt: number;
-    sourceBeadRevision?: string;
+    sourceIssueRevision?: number;
+    sourceContractHash?: string;
   };
 }
 ```
@@ -1407,7 +1408,7 @@ interface ActivationResult {
   participantId: string;
   attemptId: string;
 
-  beadId: string;
+  issueId: string;
 
   status:
     | "completed"
@@ -2061,7 +2062,7 @@ Example:
 ```ts
 specialist_delegate({
   specialist: "overthinker",
-  bead: "unitAI-123",
+  issue: "unitAI-123",
   model: "openai/gpt-5.6"
 })
 ```
@@ -3061,7 +3062,7 @@ Example:
 ```ts
 specialist_delegate({
   specialist: "executor",
-  bead: "ISSUE-58",
+  issue: "ISSUE-58",
   model: "openai/gpt-5.6"
 })
 ```

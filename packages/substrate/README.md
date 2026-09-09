@@ -48,9 +48,18 @@ fallback). Host-agnostic logic in `handlers.ts`; Pi wiring in
 Skill: `skills/using-substrate/SKILL.md` (Pi content owned here; the Claude
 lane consumes it read-only).
 
+## WorkItemStore + Specialists gate (P9)
+
+`src/workitems/` is the backend-neutral seam (§35): `SubstrateIssueStore`
+canonical, `BeadsWorkItemStore` temporary read-only compatibility (no
+dual-write), `dispatch-gate.ts` replacing Bead dispatch authority with
+Substrate readiness + execution binding (no prompt smuggling by
+construction — the gate takes no prompt text). Conformance record:
+`docs/substrate/phase10-conformance.md`.
+
 ## Deferred to later phases
 
-Claude integration (P7), provenance (P8), import compat (P11).
+Beads migration + instruction cutover (P11).
 
 ## Develop
 
