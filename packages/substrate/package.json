@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "description": "Durable work substrate: issue graph over SQLite/WAL (library-first; sb CLI consumes this)",
   "type": "module",
+  "bin": {
+    "sb": "cli/sb.ts"
+  },
   "files": [
     "src",
+    "cli",
     "README.md"
   ],
   "scripts": {

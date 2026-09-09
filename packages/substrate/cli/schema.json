@@ -1,0 +1,19 @@
+{
+  "$comment": "sb CLI output envelope schema, version substrate-cli/v1. Compat rule: additive-only — new optional fields may appear inside data; removing or renaming a field, changing the envelope keys (schema/command/ok/data/error), or changing the meaning of an existing field requires a major version bump plus a consumer migration note. Consumers must ignore unknown fields inside data and must never parse human (non---json) output.",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "sb-envelope",
+  "version": "1.0.0",
+  "type": "object",
+  "required": ["schema", "command", "ok"],
+  "properties": {
+    "schema": { "type": "string", "const": "substrate-cli/v1" },
+    "command": { "type": "string" },
+    "ok": { "type": "boolean" },
+    "data": {},
+    "error": { "type": "string" }
+  },
+  "allOf": [
+    { "if": { "properties": { "ok": { "const": true } } }, "then": { "required": ["data"] } },
+    { "if": { "properties": { "ok": { "const": false } } }, "then": { "required": ["error"] } }
+  ]
+}
