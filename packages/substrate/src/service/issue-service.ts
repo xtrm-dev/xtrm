@@ -136,6 +136,72 @@ export class IssueService {
     return { id: p["id"] as string, prefix: p["prefix"] as string, name: p["name"] as string, createdAt: p["created_at"] as number };
   }
 
+  // -- checkout links (cwd-aware project resolution, bead xtrm-7wc.5.6) --
+  // DB-side mapping only: git root -> project id, zero repo writes.
+  // Only link/unlink write here; resolution reads live every call.
+
+  linkCheckout(gitRoot: string, projectId?: string): { gitRoot: string; projectId: string } {
+    const root = gitRoot.trim();
+    if (!root) throw new Error("not inside a git checkout: cd into a checkout, or pass --project");
+    let target = projectId;
+    if (target === undefined) {
+      const all = rows<Row>(this.db, "SELECT id FROM projects ORDER BY id");
+      if (all.length === 0) throw new Error("no projects exist yet: create one first (sb project create), then link it");
+      if (all.length > 1) throw new Error("several projects exist: pass --project <id> to link this checkout explicitly");
+      target = all[0]?.["id"] as string;
+    }
+    this.getProject(target);
+    return withTransaction(this.db, () => {
+      this.db
+        .prepare("INSERT INTO checkout_links (git_root, project_id, linked_at) VALUES (?, ?, ?) ON CONFLICT(git_root) DO UPDATE SET project_id = excluded.project_id, linked_at = excluded.linked_at")
+        .run(root, target, Date.now());
+      return { gitRoot: root, projectId: target };
+    });
+  }
+
+  unlinkCheckout(gitRoot: string): boolean {
+    const root = gitRoot.trim();
+    if (!root) throw new Error("not inside a git checkout: cd into a checkout, or pass --project");
+    return withTransaction(this.db, () => {
+      const res = this.db.prepare("DELETE FROM checkout_links WHERE git_root = ?").run(root);
+      return (res.changes as number) > 0;
+    });
+  }
+
+  listLinks(): Array<{ gitRoot: string; projectId: string; linkedAt: number }> {
+    return rows<Row>(this.db, "SELECT git_root, project_id, linked_at FROM checkout_links ORDER BY git_root").map((r) => ({
+      gitRoot: r["git_root"] as string,
+      projectId: r["project_id"] as string,
+      linkedAt: r["linked_at"] as number,
+    }));
+  }
+
+  // Project precedence: explicit flag > SUBSTRATE_PROJECT env > linked
+  // checkout (git root of cwd) > single-project default > fail closed.
+  // Never guesses across candidates: ambiguity lists ids + prefixes with
+  // link instructions. The caller discovers the git root (presentation
+  // edge); the mapping read stays here so resolution is always live.
+  resolveProject(input: { explicit?: string; env?: string; gitRoot?: string | null }): { projectId: string; source: "flag" | "env" | "link" | "single" } {
+    if (input.explicit !== undefined) return { projectId: this.getProject(input.explicit).id, source: "flag" };
+    if (input.env !== undefined && input.env.trim() !== "") return { projectId: this.getProject(input.env.trim()).id, source: "env" };
+    if (input.gitRoot) {
+      const link = row<Row>(this.db, "SELECT project_id FROM checkout_links WHERE git_root = ?", input.gitRoot);
+      if (link) {
+        const id = link["project_id"] as string;
+        try {
+          return { projectId: this.getProject(id).id, source: "link" };
+        } catch {
+          throw new Error(`linked project ${id} no longer exists: re-link this checkout (sb project link --project <id>)`);
+        }
+      }
+    }
+    const all = rows<Row>(this.db, "SELECT id, prefix FROM projects ORDER BY id");
+    if (all.length === 1) return { projectId: all[0]?.["id"] as string, source: "single" };
+    if (all.length === 0) throw new Error("no project selected and no projects exist: create one (sb project create) or pass --project");
+    const names = all.map((r) => `${r["id"]} (${r["prefix"]})`).join(", ");
+    throw new Error(`no project selected among several: ${names}. Pass --project <id>, set SUBSTRATE_PROJECT, or link this checkout (sb project link --project <id>)`);
+  }
+
   // -- issues -------------------------------------------------------------
 
   createIssue(input: CreateIssueInput, opts?: { idempotencyKey?: string }): ResolvedIssue {

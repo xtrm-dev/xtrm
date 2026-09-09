@@ -6,6 +6,7 @@
 // human projections (hierarchical locator + durable reference; the opaque
 // machine ID appears only in --json output).
 
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { importBeads, type BeadsEdgeRecord, type BeadsIssueRecord } from "../src/compatibility/beads/import.ts";
 import { homedir } from "node:os";
@@ -184,6 +185,8 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.close": [],
   "issue.resume": [],
   "project.create": ["prefix", "name", "id"],
+  "project.link": ["project"],
+  "project.unlink": [],
   "plan.check": ["file"],
   "plan.apply": ["file"],
   "journal.append": ["kind", "run", "participant", "activation", "session", "mechanical", "semantic", "refs"],
@@ -244,6 +247,28 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
   }
 }
 
+// cwd-aware resolution (bead xtrm-7wc.5.6): the CLI discovers the git root
+// (presentation edge); the git-root->project mapping read stays in the
+// service so resolution is live every invocation. Non-git cwd yields null
+// and the service falls through to single-project default / fail-closed.
+function discoverGitRoot(): string | null {
+  try {
+    const out = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const root = out.trim();
+    return root === "" ? null : root;
+  } catch {
+    return null;
+  }
+}
+
+function projectOf(svc: IssueService, flags: Map<string, string | true>): string {
+  return svc.resolveProject({
+    explicit: flag(flags, "project") ?? undefined,
+    env: process.env["SUBSTRATE_PROJECT"],
+    gitRoot: discoverGitRoot(),
+  }).projectId;
+}
+
 function needRef(rest: string[]): string {
   if (!rest[0]) throw new Error("an issue ref is required (machine ID, durable reference, locator, historical locator, or alias)");
   return rest[0];
@@ -260,7 +285,7 @@ function runIssue(
 ): CliResult {
   switch (verb) {
     case "create": {
-      const project = flag(flags, "project") ?? (() => { throw new Error("--project is required"); })();
+      const project = projectOf(svc, flags);
       const title = flag(flags, "title") ?? (() => { throw new Error("--title is required"); })();
       const kind = flag(flags, "kind") ?? (() => { throw new Error("--kind is required"); })();
       const contractRaw = flag(flags, "contract") ?? (() => { throw new Error("--contract <file|json> is required"); })();
@@ -345,11 +370,11 @@ function runIssue(
       });
     }
     case "list": {
-      const project = flag(flags, "project") ?? (() => { throw new Error("--project is required"); })();
+      const project = projectOf(svc, flags);
       return emit(ctx, command, svc.listIssues(project).map(issueSummary));
     }
     case "ready": {
-      const project = flag(flags, "project") ?? (() => { throw new Error("--project is required"); })();
+      const project = projectOf(svc, flags);
       const out = [];
       for (const i of svc.listIssues(project)) {
         const r = svc.getReadiness(i.id);
@@ -358,8 +383,8 @@ function runIssue(
       return emit(ctx, command, out);
     }
     case "tree": {
-      const project = flag(flags, "project");
       const root = flag(flags, "root");
+      const project = root ? undefined : projectOf(svc, flags);
       if (root) return emit(ctx, command, treeSummary(svc, svc.resolveRef(root).id));
       if (!project) throw new Error("--project or --root is required");
       const roots = svc.listIssues(project).filter((i) => svc.getParent(i.id) === null);
@@ -714,7 +739,19 @@ function runProject(
   verb: string,
   flags: Map<string, string | true>,
 ): CliResult {
-  if (verb !== "create") throw new Error(`unknown project verb: ${verb} (want create)`);
+  if (verb === "link") {
+    const root = discoverGitRoot();
+    if (!root) throw new Error("not inside a git checkout: cd into the checkout to link, or pass --project per command");
+    const only = flag(flags, "project");
+    const linked = svc.linkCheckout(root, only ?? undefined);
+    return emit(ctx, command, { gitRoot: linked.gitRoot, projectId: linked.projectId });
+  }
+  if (verb === "unlink") {
+    const root = discoverGitRoot();
+    if (!root) throw new Error("not inside a git checkout: nothing to unlink");
+    return emit(ctx, command, { gitRoot: root, unlinked: svc.unlinkCheckout(root) });
+  }
+  if (verb !== "create") throw new Error(`unknown project verb: ${verb} (want create|link|unlink)`);
   const prefix = flag(flags, "prefix") ?? (() => { throw new Error("--prefix <PREFIX> is required"); })();
   const name = flag(flags, "name") ?? (() => { throw new Error("--name <name> is required"); })();
   const id = flag(flags, "id");
