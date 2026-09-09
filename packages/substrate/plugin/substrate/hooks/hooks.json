@@ -47,6 +47,16 @@
             "timeout": 900000
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/session-precondition.mjs"],
+            "timeout": 10000
+          }
+        ]
       }
     ]
   }
