@@ -392,6 +392,26 @@ function journalLine(svc: IssueService, e: JournalEntry): string {
   return `${issue.locator} · ${issue.humanRef} · seq${e.sequence} ${e.kind} rev${e.issueRevision}${e.semantic ? "" : " (mechanical-only)"}`;
 }
 
+// Full-body human rendering for `journal show` (xtrm-7wc.6.2): the header
+// line plus the entry-scoped semantic text. `since` stays compact by
+// contract; mechanical payloads ride JSON only, presence-only here.
+function journalBody(e: JournalEntry): string[] {
+  const lines: string[] = [];
+  const sem = e.semantic;
+  if (!sem) return lines;
+  lines.push(`  summary: ${sem.summary}`);
+  if (sem.current) lines.push(`  current: ${sem.current}`);
+  for (const [label, values] of [
+    ["completed", sem.completed],
+    ["next", sem.next],
+    ["blocked", sem.blocked],
+    ["findings", sem.materialFindings],
+  ] as const) {
+    if (values && values.length > 0) lines.push(`  ${label}: ${values.join("; ")}`);
+  }
+  return lines;
+}
+
 // Host-supplied mechanical fragments omit identity: default it from the
 // live issue so --mechanical stays a partial override, not a full restate.
 function mechanicalArg(svc: IssueService, issueId: string, raw: string): Record<string, unknown> {
@@ -493,8 +513,11 @@ function runJournal(
         kind: kindRaw as never,
         limit: limitRaw !== undefined ? Number(limitRaw) : undefined,
       });
-      if (ctx.json) return emit(ctx, command, entries.map(journalSummary));
-      const lines = entries.map((e) => journalLine(svc, e));
+      // show returns full entry bodies (semantic + mechanical payloads in
+      // JSON; semantic text under the header line in human). since stays
+      // compact: deltas carry journalSummary only.
+      if (ctx.json) return emit(ctx, command, entries.map((e) => ({ ...journalSummary(e), semantic: e.semantic, mechanical: e.mechanical })));
+      const lines = entries.flatMap((e) => [journalLine(svc, e), ...journalBody(e)]);
       return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : "(no journal entries)") + "\n", stderr: "" };
     }
     case "since": {
