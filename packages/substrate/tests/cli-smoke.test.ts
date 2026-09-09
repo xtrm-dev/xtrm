@@ -242,6 +242,17 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     assert.ok(!("mechanical" in (delta.entries[0] as Record<string, unknown>)));
   });
 
+  it("empty human list prints a marker; JSON stays an empty array (xtrm-7wc.5.7)", () => {
+    const { dbPath } = setupDb();
+    const human = runCli(["--db", dbPath, "issue", "list", "--project", "prj_demo"]);
+    assert.equal(human.code, 0, human.stderr);
+    assert.equal(human.stdout.trim(), "(no issues)");
+    const ready = runCli(["--db", dbPath, "issue", "ready", "--project", "prj_demo"]);
+    assert.equal(ready.stdout.trim(), "(no issues)");
+    const json = cli(dbPath, ["issue", "list", "--project", "prj_demo"]).data as unknown[];
+    assert.deepEqual(json, []);
+  });
+
   it("the sb bin runs as a real process", () => {
     const { dbPath } = setupDb();
     const out = execFileSync(process.execPath, [SB, "--db", dbPath, "--json", "issue", "list", "--project", "prj_demo"], { encoding: "utf8" });

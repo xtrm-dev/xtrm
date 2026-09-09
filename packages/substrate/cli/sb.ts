@@ -139,6 +139,9 @@ function emit(ctx: Ctx, command: string, data: unknown): CliResult {
     for (const c of (t["children"] as Array<Record<string, unknown>>)) walk(c, depth + 1);
   };
   if (Array.isArray(data)) {
+    // Empty issue-family output says so (xtrm-7wc.5.7): exit 0 with zero
+    // bytes is indistinguishable from broken output. JSON untouched.
+    if (data.length === 0) lines.push("(no issues)");
     for (const d of data as Array<Record<string, unknown>>) {
       if (Array.isArray(d["children"])) walk(d, 0);
       else if (typeof d["locator"] === "string") push(d);
