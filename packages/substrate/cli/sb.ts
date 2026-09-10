@@ -85,6 +85,29 @@ function human(summary: Record<string, unknown>): string {
   return `${summary["locator"]} · ${summary["humanRef"]} · ${summary["title"]} [${state} rev${summary["revision"]}]`;
 }
 
+// Contract sections for human show (bead xtrm-7wc.5.9): the contract is the
+// work, so show prints it inline — no --full flag, documented in the bead.
+// Canonical section order first, then any extra keys in insertion order.
+function contractSections(contract: unknown): string[] {
+  if (contract === null || typeof contract !== "object" || Array.isArray(contract)) return [];
+  const c = contract as Record<string, unknown>;
+  const lines: string[] = [];
+  const render = (key: string, value: unknown): void => {
+    if (typeof value === "string") lines.push(`## ${key}`, value);
+    else if (Array.isArray(value)) {
+      lines.push(`## ${key}`);
+      for (const item of value) lines.push(typeof item === "string" ? `- ${item}` : `- ${JSON.stringify(item)}`);
+    } else lines.push(`## ${key}`, JSON.stringify(value));
+  };
+  for (const key of ["problem", "success", "scope", "nonGoals", "constraints", "validation", "output"]) {
+    if (c[key] !== undefined) render(key, c[key]);
+  }
+  for (const [key, value] of Object.entries(c)) {
+    if (!["problem", "success", "scope", "nonGoals", "constraints", "validation", "output"].includes(key)) render(key, value);
+  }
+  return lines;
+}
+
 // -- argv --------------------------------------------------------------------
 
 const BOOLEAN_FLAGS = new Set(["json"]);
@@ -309,16 +332,20 @@ function runIssue(
       const ref = needRef(rest);
       const resolved = svc.resolveRef(ref);
       const readiness = svc.getReadiness(resolved.id);
-      return emit(ctx, command, {
+      const contract = svc.getRevision(resolved.id, resolved.currentRevision).contract;
+      const payload = {
         ...issueSummary(resolved),
         contractHash: resolved.currentContractHash,
+        contract,
         readinessState: readiness.state,
         dispatchable: readiness.dispatchable,
         reasons: readiness.reasons,
         attestation: svc.latestAttestation(resolved.id),
         claim: svc.getActiveClaim(resolved.id),
         provenance: provenanceSummary(svc, resolved.id),
-      });
+      };
+      if (ctx.json) return emit(ctx, command, payload);
+      return { code: 0, stdout: [human(issueSummary(resolved)), ...contractSections(contract)].join("\n") + "\n", stderr: "" };
     }
     case "edit": {
       const ref = needRef(rest);
