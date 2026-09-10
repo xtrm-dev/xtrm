@@ -21,7 +21,7 @@ import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { isJournalKind } from "../src/domain/journal.ts";
-import type { JournalEntry } from "../src/domain/journal.ts";
+import type { JournalEntry, JournalKind } from "../src/domain/journal.ts";
 import type { ResolvedIssue } from "../src/domain/issue.ts";
 
 export const SCHEMA_VERSION = "substrate-cli/v1";
@@ -219,7 +219,7 @@ usage:
   sb doctor [--db PATH] [--json]
 
 groups:
-  issue       create|show|edit|validate|attest|list|ready|tree|children|relate|claim|release|close|resume
+  issue       create|show|edit|note|validate|attest|list|ready|tree|children|relate|unrelate|claim|release|state|close|reopen|defer|cancel|archive|resume
   project     create|link|unlink
   plan        check|apply
   journal     append|checkpoint|show|since|render
@@ -253,27 +253,38 @@ link is the cwd checkout -> project mapping (informational; never flips health).
 
   create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--parent <ref>] [--priority <n>] [--scrutiny <s>]
   show <ref>
-  edit <ref> --contract <file|json> [--expected-revision <n>]
+  edit <ref> [--contract <file|json>] [--title <t>] [--priority <n>] [--scrutiny <s>] [--ownership <file|json>] [--context-refs <file|json>] [--expected-revision <n>]
+  note <ref> ["text"] [--kind <note|finding|decision|blocker|milestone|handoff>] [--file <path|->]
   validate <ref>
   attest <ref> --outcome <ready|reject> --policy <p> --attested-by <who> [--evidence-refs <a,b>] [--blocking-gaps <a,b>]
   list [--project <id>] | ready [--project <id>]
   tree [--project <id> | --root <ref>] | children <ref>
   relate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates>
+  unrelate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates>
   claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>]
   release <ref> --holder <who> [--activation <id>]
-  close <ref>
+  state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>]
+  close|reopen|cancel|archive <ref>
+  defer <ref> [--until <ms|clear>]
   resume <ref>
 
-<ref> is a machine ID, durable reference, locator, historical locator, or alias.`,
+<ref> is a machine ID, durable reference, locator, historical locator, or alias.
+title/priority are metadata (no revision); contract/ownership/context-refs/scrutiny are
+execution-relevant (new revision, readiness invalidated). notes are append-only journal
+entries and never bump the revision.`,
   "issue.create": `usage: sb issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--parent <ref>] [--priority <n>] [--scrutiny <s>]
 
 creates an issue; --contract takes a JSON file path or inline JSON.`,
   "issue.show": `usage: sb issue show <ref>
 
 prints the issue header plus the contract body (human) or full payload (with --json).`,
-  "issue.edit": `usage: sb issue edit <ref> --contract <file|json> [--expected-revision <n>]
+  "issue.edit": `usage: sb issue edit <ref> [--contract <file|json>] [--title <t>] [--priority <n>] [--scrutiny <s>] [--ownership <file|json>] [--context-refs <file|json>] [--expected-revision <n>]
 
-replaces the contract (optimistic concurrency via --expected-revision).`,
+--title/--priority are metadata (no revision, readiness retained); --contract/--ownership/
+--context-refs/--scrutiny are execution-relevant (new revision, readiness invalidated).`,
+  "issue.note": `usage: sb issue note <ref> ["text"] [--kind <note|finding|decision|blocker|milestone|handoff>] [--file <path|->]
+
+appends an append-only journal note (no revision bump). --file - reads stdin.`,
   "issue.validate": `usage: sb issue validate <ref>
 
 reports readiness state, structural validity, attestation currency, blockers.`,
@@ -287,11 +298,30 @@ lists dispatchable issues only.`,
   "issue.relate": `usage: sb issue relate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates>
 
 parent_child is structural and not exposed here.`,
+  "issue.unrelate": `usage: sb issue unrelate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates>
+
+deactivates the active edge between the endpoints for the given kind.`,
   "issue.claim": `usage: sb issue claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>]`,
   "issue.release": `usage: sb issue release <ref> --holder <who> [--activation <id>]`,
   "issue.close": `usage: sb issue close <ref>
 
-moves the issue to lifecycle state done.`,
+moves the issue to lifecycle state done (alias for: sb issue state <ref> done).`,
+  "issue.state": `usage: sb issue state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>]
+
+sets the lifecycle state; every transition emits a durable issue.lifecycle event.
+--until sets/clears the deferral timestamp (meaningful with deferred).`,
+  "issue.reopen": `usage: sb issue reopen <ref>
+
+alias for: sb issue state <ref> open.`,
+  "issue.defer": `usage: sb issue defer <ref> [--until <ms|clear>]
+
+alias for: sb issue state <ref> deferred [--until <ms|clear>].`,
+  "issue.cancel": `usage: sb issue cancel <ref>
+
+alias for: sb issue state <ref> cancelled.`,
+  "issue.archive": `usage: sb issue archive <ref>
+
+alias for: sb issue state <ref> archived.`,
   "issue.resume": `usage: sb issue resume <ref>
 
 builds the continuity capsule (derived, never a source of truth).`,
@@ -422,7 +452,8 @@ const GLOBAL_FLAGS = ["db", "json"];
 const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.create": ["project", "title", "kind", "contract", "parent", "priority", "scrutiny"],
   "issue.show": [],
-  "issue.edit": ["contract", "expected-revision"],
+  "issue.edit": ["contract", "title", "priority", "scrutiny", "ownership", "context-refs", "expected-revision"],
+  "issue.note": ["kind", "file"],
   "issue.validate": [],
   "issue.attest": ["outcome", "policy", "attested-by", "evidence-refs", "blocking-gaps"],
   "issue.list": ["project"],
@@ -430,9 +461,15 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.tree": ["project", "root"],
   "issue.children": [],
   "issue.relate": ["from", "to", "kind"],
+  "issue.unrelate": ["from", "to", "kind"],
   "issue.claim": ["holder", "ttl-ms", "activation"],
   "issue.release": ["holder", "activation"],
   "issue.close": [],
+  "issue.state": ["until"],
+  "issue.reopen": [],
+  "issue.defer": ["until"],
+  "issue.cancel": [],
+  "issue.archive": [],
   "issue.resume": [],
   "project.create": ["prefix", "name", "id"],
   "project.link": ["project"],
@@ -533,6 +570,19 @@ function needRef(rest: string[]): string {
   return rest[0];
 }
 
+// --until parsing shared by `issue state` and `issue defer`: a millisecond
+// timestamp sets the deferral, "clear" removes it, absence leaves it alone.
+function applyDeferUntil(svc: IssueService, issueId: string, raw: string | undefined): void {
+  if (raw === undefined) return;
+  if (raw === "clear") {
+    svc.setDeferral(issueId, null);
+    return;
+  }
+  const ts = Number(raw);
+  if (!Number.isInteger(ts) || ts < 0) throw new Error("--until must be a non-negative integer millisecond timestamp or \"clear\"");
+  svc.setDeferral(issueId, ts);
+}
+
 function runIssue(
   db: ReturnType<typeof openSubstrate>,
   svc: IssueService,
@@ -581,14 +631,86 @@ function runIssue(
       return { code: 0, stdout: [human(issueSummary(resolved)), ...contractSections(contract)].join("\n") + "\n", stderr: "" };
     }
     case "edit": {
+      // §24 classification: title/priority are metadata (no revision,
+      // readiness retained); contract/ownership/context-refs/scrutiny are
+      // execution-relevant (new revision, readiness invalidated). At least
+      // one mutation flag is required.
       const ref = needRef(rest);
-      const contractRaw = flag(flags, "contract") ?? (() => { throw new Error("--contract <file|json> is required"); })();
+      const contractRaw = flag(flags, "contract");
+      const title = flag(flags, "title");
+      const priorityRaw = flag(flags, "priority");
+      const scrutiny = flag(flags, "scrutiny");
+      const ownershipRaw = flag(flags, "ownership");
+      const contextRaw = flag(flags, "context-refs");
+      if (
+        contractRaw === undefined &&
+        title === undefined &&
+        priorityRaw === undefined &&
+        scrutiny === undefined &&
+        ownershipRaw === undefined &&
+        contextRaw === undefined
+      ) {
+        throw new Error("nothing to edit: pass --contract, --title, --priority, --scrutiny, --ownership, or --context-refs");
+      }
       const resolved = svc.resolveRef(ref);
+      let id = resolved.id;
+      let revisionCreated = false;
+      if (title !== undefined) {
+        id = svc.setTitle(id, title).id;
+      }
+      if (priorityRaw !== undefined) {
+        const priority = Number(priorityRaw);
+        if (!Number.isInteger(priority)) throw new Error("--priority must be an integer");
+        id = svc.setPriority(id, priority).id;
+      }
       const expected = flag(flags, "expected-revision");
-      const { issue, created } = svc.updateContract(resolved.id, readJsonArg(contractRaw) as never, "sb-cli", {
-        expectedRevision: expected !== undefined ? Number(expected) : undefined,
+      if (contractRaw !== undefined || ownershipRaw !== undefined || contextRaw !== undefined) {
+        const base =
+          contractRaw !== undefined
+            ? (readJsonArg(contractRaw) as never)
+            : (svc.getRevision(id, svc.getIssue(id).currentRevision).contract as never);
+        const { issue, created } = svc.updateContract(id, base, "sb-cli", {
+          expectedRevision: expected !== undefined ? Number(expected) : undefined,
+          ownership: ownershipRaw !== undefined ? readJsonArg(ownershipRaw) : undefined,
+          contextRefs: contextRaw !== undefined ? (readJsonArg(contextRaw) as unknown[]) : undefined,
+        });
+        id = issue.id;
+        revisionCreated = revisionCreated || created;
+      }
+      if (scrutiny !== undefined) {
+        const before = svc.getIssue(id).currentRevision;
+        const next = svc.setScrutiny(id, scrutiny);
+        revisionCreated = revisionCreated || next.currentRevision !== before;
+        id = next.id;
+      }
+      return emit(ctx, command, { ...issueSummary(svc.getIssue(id)), revisionCreated });
+    }
+    case "note": {
+      // §22 convenience over JournalService: append-only, no revision bump.
+      const ref = needRef(rest);
+      const kindRaw = flag(flags, "kind") ?? "note";
+      const NOTE_KINDS = ["note", "finding", "decision", "blocker", "milestone", "handoff"] as const;
+      if (!(NOTE_KINDS as readonly string[]).includes(kindRaw)) {
+        throw new Error(`unknown note kind: ${kindRaw} (want ${NOTE_KINDS.join("|")})`);
+      }
+      const file = flag(flags, "file");
+      const positionalText = rest.slice(1).join(" ");
+      let text: string;
+      if (file !== undefined) {
+        if (positionalText.trim() !== "") throw new Error("pass text or --file, not both");
+        text = file === "-" ? readFileSync(0, "utf8") : readFileSync(file, "utf8");
+      } else {
+        text = positionalText;
+      }
+      if (text.trim() === "") throw new Error('a note text is required (positional "text" or --file <path|->)');
+      const resolved = svc.resolveRef(ref);
+      const journal = new JournalService(db, svc);
+      const entry = journal.appendEntry(resolved.id, {
+        kind: kindRaw as JournalKind,
+        semantic: { summary: text },
       });
-      return emit(ctx, command, { ...issueSummary(svc.getIssue(issue.id)), revisionCreated: created });
+      if (ctx.json) return emit(ctx, command, journalSummary(entry));
+      return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
     }
     case "validate": {
       const ref = needRef(rest);
@@ -666,6 +788,14 @@ function runIssue(
       const edge = svc.addEdge(svc.resolveRef(from).id, svc.resolveRef(to).id, kind as never);
       return emit(ctx, command, { id: edge.id, kind: edge.kind, from: edge.fromIssue, to: edge.toIssue });
     }
+    case "unrelate": {
+      const from = flag(flags, "from") ?? (() => { throw new Error("--from <ref> is required"); })();
+      const to = flag(flags, "to") ?? (() => { throw new Error("--to <ref> is required"); })();
+      const kind = flag(flags, "kind") ?? (() => { throw new Error("--kind is required"); })();
+      if (kind === "parent_child") throw new Error("parent_child is structural: reparenting is not exposed over unrelate in v0");
+      const removed = svc.removeEdgeByEndpoints(svc.resolveRef(from).id, svc.resolveRef(to).id, kind as never);
+      return emit(ctx, command, { edge: removed.edge, kind: removed.kind });
+    }
     case "claim": {
       const ref = needRef(rest);
       const holder = flag(flags, "holder") ?? (() => { throw new Error("--holder is required"); })();
@@ -684,11 +814,47 @@ function runIssue(
       const released = svc.releaseClaim(resolved.id, holder, { activationId: flag(flags, "activation") });
       return emit(ctx, command, { released: released !== null });
     }
+    case "state": {
+      // §26 canonical lifecycle operation. --until sets/clears the
+      // deferral timestamp alongside the state transition.
+      const ref = needRef(rest);
+      const to = (rest[1] ?? (() => { throw new Error("a lifecycle state is required: open|deferred|done|cancelled|archived"); })()).toLowerCase();
+      const STATES = ["open", "deferred", "done", "cancelled", "archived"] as const;
+      if (!(STATES as readonly string[]).includes(to)) {
+        throw new Error(`unknown lifecycle state: ${rest[1]} (want open|deferred|done|cancelled|archived)`);
+      }
+      const resolved = svc.resolveRef(ref);
+      const moved = svc.setLifecycleState(resolved.id, to as (typeof STATES)[number]);
+      applyDeferUntil(svc, moved.id, flag(flags, "until"));
+      return emit(ctx, command, issueSummary(svc.getIssue(moved.id)));
+    }
     case "close": {
       const ref = needRef(rest);
       const resolved = svc.resolveRef(ref);
       const closed = svc.setLifecycleState(resolved.id, "done");
       return emit(ctx, command, issueSummary(closed));
+    }
+    case "reopen": {
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "open")));
+    }
+    case "defer": {
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      const moved = svc.setLifecycleState(resolved.id, "deferred");
+      applyDeferUntil(svc, moved.id, flag(flags, "until"));
+      return emit(ctx, command, issueSummary(svc.getIssue(moved.id)));
+    }
+    case "cancel": {
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "cancelled")));
+    }
+    case "archive": {
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "archived")));
     }
     case "resume": {
       // High-level continuity operation (§21): derived capsule, never a

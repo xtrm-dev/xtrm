@@ -13,6 +13,7 @@ export const JOURNAL_KINDS = [
   "finding",
   "blocker",
   "compaction",
+  "note",
 ] as const;
 export type JournalKind = (typeof JOURNAL_KINDS)[number];
 
