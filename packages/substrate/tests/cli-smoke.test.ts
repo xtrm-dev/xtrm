@@ -154,6 +154,18 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     assert.equal(list.length, 2);
   });
 
+  it("show returns the current contract body (xtrm-7wc.5.9)", () => {
+    const { dir, dbPath } = setupDb();
+    const body = contract({ problem: "read me back", success: "visible", scope: ["s1"], nonGoals: [], constraints: [], validation: [], output: [] });
+    const created = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", contractFile(dir, "c.json", body as unknown as Record<string, unknown>)]).data as { humanRef: string };
+    const shown = cli(dbPath, ["issue", "show", created.humanRef]).data as { contract: unknown };
+    assert.deepEqual(shown.contract, body);
+    const human = runCli(["--db", dbPath, "issue", "show", created.humanRef]);
+    assert.equal(human.code, 0, human.stderr);
+    assert.ok(human.stdout.includes("## problem") && human.stdout.includes("read me back"), human.stdout);
+    assert.ok(human.stdout.includes("## scope") && human.stdout.includes("- s1"), human.stdout);
+  });
+
   it("fails closed with the error envelope, never a stack", () => {
     const { dbPath } = setupDb();
     const res = runCli(["--db", dbPath, "--json", "issue", "show", "NOPE-999"]);
