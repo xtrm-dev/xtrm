@@ -10,8 +10,10 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { importBeads, type BeadsEdgeRecord, type BeadsIssueRecord } from "../src/compatibility/beads/import.ts";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
+import { assertSchemaHealthy } from "../src/store/migrations/runner.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { PlanningService } from "../src/service/planning-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
@@ -110,7 +112,7 @@ function contractSections(contract: unknown): string[] {
 
 // -- argv --------------------------------------------------------------------
 
-const BOOLEAN_FLAGS = new Set(["json"]);
+const BOOLEAN_FLAGS = new Set(["json", "help", "version", "dry-run"]);
 
 function parseArgs(argv: string[]): { flags: Map<string, string | true>; positionals: string[] } {
   const flags = new Map<string, string | true>();
@@ -188,6 +190,228 @@ function fail(ctx: Ctx, command: string, err: unknown): CliResult {
   return { code: 1, stdout: "", stderr: `sb: ${command}: ${message}\n` };
 }
 
+// -- help / version / doctor (§28) --------------------------------------------
+// Side-effect-free surface: help and version return before SQLite opens, so
+// `HOME=/empty sb --help` exits 0 without creating a database. Doctor is the
+// one diagnostic that opens state.db (to check it) and reports health.
+
+let cachedVersion: string | null = null;
+
+function cliVersion(): string {
+  if (cachedVersion) return cachedVersion;
+  try {
+    const pkg = JSON.parse(
+      readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8"),
+    ) as { version?: unknown };
+    cachedVersion = typeof pkg.version === "string" ? pkg.version : "0.0.0-unknown";
+  } catch {
+    cachedVersion = "0.0.0-unknown";
+  }
+  return cachedVersion;
+}
+
+const HELP_TOP = `sb — Substrate work tracker CLI
+
+usage:
+  sb [--db PATH] [--json] <group> <verb> [args...]
+  sb --help | sb help [group [verb]] [--json]
+  sb --version
+  sb doctor [--db PATH] [--json]
+
+groups:
+  issue       create|show|edit|validate|attest|list|ready|tree|children|relate|claim|release|close|resume
+  project     create|link|unlink
+  plan        check|apply
+  journal     append|checkpoint|show|since|render
+  provenance  dispatch|trace|commit|receipt|pr|bundle
+  import      beads
+  export      project
+
+flags:
+  --db PATH   state.db path (default $SUBSTRATE_DB or ~/.xtrm/state.db)
+  --json      machine-readable envelope {schema, command, ok, data|error}
+
+help and --version never open or create the database.
+per-verb help: sb issue create --help  |  sb help issue create`;
+
+const COMMAND_HELP: Record<string, string> = {
+  top: HELP_TOP,
+  help: `usage: sb help [group [verb]] [--json]  |  sb <group> [<verb>] --help
+
+prints this help without opening the database. With --json, emits the same
+content as machine-readable data (capability detection for agents).`,
+  version: `usage: sb --version [--json]
+
+prints the CLI version (parseable semver, e.g. "sb 0.1.0") without opening
+or creating the database.`,
+  doctor: `usage: sb doctor [--db PATH] [--json]
+
+exit 0 when state.db opens and the schema is healthy, 1 otherwise.
+--json data: {dbPath, schemaHealthy, schemaError, projects, link, linkError, gitRoot}.
+link is the cwd checkout -> project mapping (informational; never flips health).`,
+  issue: `usage: sb issue <verb> [args...]
+
+  create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--parent <ref>] [--priority <n>] [--scrutiny <s>]
+  show <ref>
+  edit <ref> --contract <file|json> [--expected-revision <n>]
+  validate <ref>
+  attest <ref> --outcome <ready|reject> --policy <p> --attested-by <who> [--evidence-refs <a,b>] [--blocking-gaps <a,b>]
+  list [--project <id>] | ready [--project <id>]
+  tree [--project <id> | --root <ref>] | children <ref>
+  relate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates>
+  claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>]
+  release <ref> --holder <who> [--activation <id>]
+  close <ref>
+  resume <ref>
+
+<ref> is a machine ID, durable reference, locator, historical locator, or alias.`,
+  "issue.create": `usage: sb issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--parent <ref>] [--priority <n>] [--scrutiny <s>]
+
+creates an issue; --contract takes a JSON file path or inline JSON.`,
+  "issue.show": `usage: sb issue show <ref>
+
+prints the issue header plus the contract body (human) or full payload (with --json).`,
+  "issue.edit": `usage: sb issue edit <ref> --contract <file|json> [--expected-revision <n>]
+
+replaces the contract (optimistic concurrency via --expected-revision).`,
+  "issue.validate": `usage: sb issue validate <ref>
+
+reports readiness state, structural validity, attestation currency, blockers.`,
+  "issue.attest": `usage: sb issue attest <ref> --outcome <ready|reject> --policy <p> --attested-by <who> [--evidence-refs <a,b>] [--blocking-gaps <a,b>]`,
+  "issue.list": `usage: sb issue list [--project <id>]`,
+  "issue.ready": `usage: sb issue ready [--project <id>]
+
+lists dispatchable issues only.`,
+  "issue.tree": `usage: sb issue tree [--project <id> | --root <ref>]`,
+  "issue.children": `usage: sb issue children <ref>`,
+  "issue.relate": `usage: sb issue relate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates>
+
+parent_child is structural and not exposed here.`,
+  "issue.claim": `usage: sb issue claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>]`,
+  "issue.release": `usage: sb issue release <ref> --holder <who> [--activation <id>]`,
+  "issue.close": `usage: sb issue close <ref>
+
+moves the issue to lifecycle state done.`,
+  "issue.resume": `usage: sb issue resume <ref>
+
+builds the continuity capsule (derived, never a source of truth).`,
+  project: `usage: sb project <verb>
+
+  create --prefix <PREFIX> --name <name> [--id <id>]
+  link [--project <id>]     link the cwd checkout to a project
+  unlink                    remove the cwd checkout link`,
+  "project.create": `usage: sb project create --prefix <PREFIX> --name <name> [--id <id>]`,
+  "project.link": `usage: sb project link [--project <id>]
+
+links the cwd git checkout to a project (single-project DBs link implicitly).`,
+  "project.unlink": `usage: sb project unlink`,
+  plan: `usage: sb plan <check|apply> --file <plan.json>
+
+check validates a plan draft; apply executes it.`,
+  "plan.check": `usage: sb plan check --file <plan.json>`,
+  "plan.apply": `usage: sb plan apply --file <plan.json>`,
+  journal: `usage: sb journal <verb> <ref> [flags]
+
+  append <ref> --kind <checkpoint|handoff|milestone|decision|finding|blocker|compaction> [--mechanical <file|json>] [--semantic <file|json>] [--refs <file|json>] [--run/--participant/--activation/--session <id>]
+  checkpoint <ref> [same flags plus --workspace/--branch/--base-commit/--head-commit]
+  show <ref> [--kind <k>] [--limit <n>]
+  since <ref> <cursor>
+  render <ref> [--sequence <n>]`,
+  "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--refs <file|json>]`,
+  "journal.checkpoint": `usage: sb journal checkpoint <ref> [--mechanical <file|json>] [--semantic <file|json>] [--workspace/--branch/--base-commit/--head-commit <v>]`,
+  "journal.show": `usage: sb journal show <ref> [--kind <k>] [--limit <n>]
+
+returns full entry bodies (human prints semantic text; since stays compact).`,
+  "journal.since": `usage: sb journal since <ref> <cursor>
+
+cursor read: only entries after the sequence cursor (0 reads all).`,
+  "journal.render": `usage: sb journal render <ref> [--sequence <n>]
+
+renders the latest (or selected) checkpoint as text.`,
+  provenance: `usage: sb provenance <verb>
+
+  dispatch <ref> [--workspace/--participant/--activation/--attempt/--session/--base-commit/--claim-id <v>]
+  trace <ref> | commit <sha> | receipt <id> | pr <ref>
+  bundle <ref> [--repo-root <dir>]`,
+  "provenance.dispatch": `usage: sb provenance dispatch <ref> [--workspace <dir>] [--participant/--activation/--attempt/--session/--base-commit <v>] [--claim-id <n>]`,
+  "provenance.trace": `usage: sb provenance trace <ref>`,
+  "provenance.commit": `usage: sb provenance commit <40-char-sha>`,
+  "provenance.receipt": `usage: sb provenance receipt <id>`,
+  "provenance.pr": `usage: sb provenance pr <provider-ref>`,
+  "provenance.bundle": `usage: sb provenance bundle <ref> [--repo-root <dir>]`,
+  import: `usage: sb import beads --file <export.jsonl> --project <id> [--edges-file <f>] [--create-project <PREFIX:Name>] [--dry-run]`,
+  "import.beads": `usage: sb import beads --file <export.jsonl> --project <id> [--edges-file <f>] [--create-project <PREFIX:Name>] [--dry-run]
+
+one-way Beads migration; --dry-run reports counts without mutating.`,
+  export: `usage: sb export [project] --project <id> [--file <path>]
+
+writes the project snapshot (to --file when given) and prints it.`,
+  "export.project": `usage: sb export project --project <id> [--file <path>]`,
+};
+
+const HELP_COMMANDS = Object.keys(COMMAND_HELP).filter((k) => k !== "top");
+
+function renderHelp(ctx: Ctx, topic: string[]): CliResult {
+  const key = topic.length === 0 ? "top" : topic.length <= 2 ? topic.join(".") : "";
+  const text = COMMAND_HELP[key];
+  if (!text) {
+    return fail(ctx, "help", new Error(topic.length > 2 ? `too many help args: ${topic.join(" ")} (want [group [verb]])` : `unknown help topic: ${topic.join(" ")} (see sb --help)`));
+  }
+  if (ctx.json) return emit(ctx, "help", { version: cliVersion(), topic: topic.join(" ") || null, text, commands: HELP_COMMANDS });
+  return { code: 0, stdout: text + "\n", stderr: "" };
+}
+
+function renderVersion(ctx: Ctx): CliResult {
+  if (ctx.json) return emit(ctx, "version", { version: cliVersion() });
+  return { code: 0, stdout: `sb ${cliVersion()}\n`, stderr: "" };
+}
+
+function runDoctor(ctx: Ctx): CliResult {
+  const gitRoot = discoverGitRoot();
+  let schemaHealthy = false;
+  let schemaError: string | null = null;
+  let projectCount: number | null = null;
+  let link: Record<string, unknown> | null = null;
+  let linkError: string | null = null;
+  try {
+    const db = openSubstrate(ctx.dbPath);
+    try {
+      assertSchemaHealthy(db);
+      schemaHealthy = true;
+      const count = db.prepare("SELECT COUNT(*) AS n FROM projects").get() as { n: number };
+      projectCount = count.n;
+      try {
+        const svc = new IssueService(db);
+        const r = svc.resolveProject({ env: process.env["SUBSTRATE_PROJECT"], gitRoot });
+        link = { projectId: r.projectId, source: r.source, gitRoot };
+      } catch (err) {
+        linkError = err instanceof Error ? err.message : String(err);
+      }
+    } finally {
+      db.close();
+    }
+  } catch (err) {
+    schemaError = err instanceof Error ? err.message : String(err);
+    linkError = "unavailable: schema unhealthy";
+  }
+  const data = { dbPath: ctx.dbPath, schemaHealthy, schemaError, projects: projectCount, link, linkError, gitRoot };
+  if (ctx.json) {
+    return {
+      code: schemaHealthy ? 0 : 1,
+      stdout: JSON.stringify({ schema: SCHEMA_VERSION, command: "doctor", ok: schemaHealthy, ...(schemaHealthy ? {} : { error: schemaError }), data }) + "\n",
+      stderr: "",
+    };
+  }
+  const lines = [
+    `sb doctor: ${schemaHealthy ? "healthy" : "UNHEALTHY"}`,
+    `state.db: ${ctx.dbPath}`,
+    `schema: ${schemaHealthy ? "healthy" : `unhealthy: ${schemaError}`}`,
+    `projects: ${projectCount ?? "(unknown)"}`,
+    link ? `project: ${String(link["projectId"])} (source: ${String(link["source"])})` : `project: (unlinked: ${linkError})`,
+  ];
+  return { code: schemaHealthy ? 0 : 1, stdout: lines.join("\n") + "\n", stderr: schemaHealthy ? "" : `sb: doctor: ${schemaError}\n` };
+}
+
 // -- entry -------------------------------------------------------------------
 
 // Fail-closed flag validation (xtrm-7wc.5.4): parseArgs accepts any --flag
@@ -226,6 +450,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "provenance.receipt": [],
   "provenance.pr": [],
   "provenance.bundle": ["repo-root"],
+  "doctor": [],
   "import.beads": ["file", "project", "edges-file", "create-project", "dry-run"],
   "export.": ["project", "file"],
   "export.project": ["project", "file"],
@@ -248,8 +473,16 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
   };
   const [group, verb, ...rest] = positionals;
   const command = group && verb ? `${group}.${verb}` : (group ?? "");
+  // Side-effect-free surface (§28): help/version never open SQLite.
+  if (flags.has("help") || group === "help") return renderHelp(ctx, flags.has("help") ? positionals : positionals.slice(1));
+  if (flags.has("version") || group === "version") return renderVersion(ctx);
   let db: ReturnType<typeof openSubstrate> | null = null;
   try {
+    if (group === "doctor") {
+      assertKnownFlags(flags, "doctor");
+      if (verb !== undefined) throw new Error("usage: sb doctor [--db PATH] [--json] (doctor takes no verbs)");
+      return runDoctor(ctx);
+    }
     if (!group || (!verb && group !== "export")) throw new Error("usage: sb [--db PATH] [--json] <issue|project|plan|journal|provenance|import|export> <verb> [args...]");
     if (group && KNOWN_GROUPS.has(group)) assertKnownFlags(flags, `${group}.${verb ?? ""}`);
     db = openSubstrate(ctx.dbPath);
