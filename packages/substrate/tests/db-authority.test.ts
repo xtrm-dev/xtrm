@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { CANONICAL_DB_PATH, resolveDbPath } from "../integrations/claude-code/runtime.ts";
@@ -36,13 +36,10 @@ describe("one state.db authority (xtrm-iip.2)", () => {
     });
   });
 
-  it("the legacy integration manifest ships no repo-local database default", () => {
-    const manifest = JSON.parse(readFileSync(new URL("../integrations/claude-code/plugin.json", import.meta.url), "utf8")) as {
-      mcpServers?: Record<string, { env?: Record<string, string> }>;
-    };
-    for (const [name, server] of Object.entries(manifest.mcpServers ?? {})) {
-      assert.equal(server.env?.["SUBSTRATE_DB"], undefined, `${name} must not default SUBSTRATE_DB to a repo-local DB`);
-    }
+  it("exactly one plugin manifest is named substrate (§7, xtrm-6qu.6)", () => {
+    assert.equal(existsSync(new URL("../integrations/claude-code/plugin.json", import.meta.url)), false, "legacy integrations manifest retired; plugin/substrate is canonical");
+    const manifest = JSON.parse(readFileSync(new URL("../plugin/substrate/.claude-plugin/plugin.json", import.meta.url), "utf8")) as { name?: string };
+    assert.equal(manifest.name, "substrate");
   });
 
   it("the packaged plugin ships no repo-local database default", () => {

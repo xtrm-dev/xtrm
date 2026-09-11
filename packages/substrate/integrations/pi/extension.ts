@@ -22,6 +22,7 @@ import { Type } from "@earendil-works/pi-ai";
 import {
   convertToLlm,
   defineTool,
+  isToolCallEventType,
   serializeConversation,
   type AgentToolUpdateCallback,
   type ExtensionAPI,
@@ -31,6 +32,7 @@ import {
   type SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import {
+  decidePiEditCall,
   SessionBindings,
   openServices,
   resumeForSession,
@@ -173,6 +175,21 @@ export default function (pi: ExtensionAPI): void {
     }),
   ];
   for (const t of tools) pi.registerTool(t);
+
+  // Edit/write authority (§§38-39, bead xtrm-6qu.6): the blocking tool_call
+  // gate. Unbound sessions edit freely; a session bound to an Issue may
+  // mutate only under its own live claim (holder + activation). Fail-open
+  // on unreadable state so a corrupt gate never bricks Pi.
+  pi.on("tool_call", async (event, ctx) => {
+    if (!isToolCallEventType("edit", event) && !isToolCallEventType("write", event)) return;
+    try {
+      const sessionId = ctx?.sessionManager?.getSessionId?.();
+      const decision = await withServices((svc) => decidePiEditCall(svc, bindings, { sessionId: sessionId ?? undefined, workspace: ctx?.cwd }));
+      if (!decision.allow) return { block: true, reason: decision.reason ?? "no live claim" };
+    } catch {
+      return;
+    }
+  });
 
   pi.registerCommand("substrate-resume", {
     description: "Print the Substrate resume capsule for the session-bound issue",

@@ -1,6 +1,21 @@
 {
   "$comment": "Claude lifecycle wiring (PRD §§24, 38, 54). PreCompact supports command/HTTP/MCP-tool hooks; prompt/agent hooks are NOT supported on PreCompact, so every entry here is type command (a plain adapter process that calls the typed Substrate service). No entry references .xtrm/hooks scripts (P0 census: absent; settings.json refs stale).",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/substrate/integrations/claude-code/edit-gate.ts\"", "timeout": 5000 }]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/substrate/integrations/claude-code/commit-check.ts\"", "timeout": 5000 }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/substrate/integrations/claude-code/stop-gate.ts\"", "timeout": 10000 }]
+      }
+    ],
     "PreCompact": [
       {
         "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/packages/substrate/integrations/claude-code/precompact.ts\"", "timeout": 30000 }]
