@@ -38,6 +38,13 @@ cmd_guard_substrate() {
   local reqoff
   reqoff="$(grep -rn --include='*.ts' -E "require\(['\"](node|bun):sqlite['\"]\)" "$dir/src" "$dir/cli" "$dir/integrations" 2>/dev/null | grep -v '^[^:]*src/store/sqlite\.ts:' || true)"
   [ -z "$reqoff" ] || fail "guard-substrate: sqlite require() outside src/store/sqlite.ts: $(printf '%s' "$reqoff" | cut -d: -f1 | sort -u | tr '\n' ' ')"
+  # Dynamic import() of a runtime sqlite module is a value load on every
+  # runtime (no type-erasure), so reject it in src/cli/integrations
+  # outright. Scope stays tight: the injected Bun service path loads
+  # src, so plugin/skills trees are out of scope by design.
+  local dynoff
+  dynoff="$(grep -rn --include='*.ts' -E "import[[:space:]]*\([[:space:]]*.?(node|bun):sqlite" "$dir/src" "$dir/cli" "$dir/integrations" 2>/dev/null || true)"
+  [ -z "$dynoff" ] || fail "guard-substrate: dynamic sqlite import(): $(printf '%s' "$dynoff" | cut -d: -f1 | sort -u | tr '\n' ' ')"
   pass "guard-substrate: neutral imports (lazy driver seam only in src/store/sqlite.ts)"
 }
 
