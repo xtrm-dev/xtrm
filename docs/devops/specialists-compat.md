@@ -1,0 +1,84 @@
+# Specialists Compat — Private Gate for Public SHAs
+
+Bead: `xtrm-6qu.7.1.1` · Workflow: `.github/workflows/specialists-compat.yml` ·
+Harness: `.github/scripts/specialists-compat.sh`
+
+## Why this exists
+
+`xtrm` is private and `xtrm-dev/specialists` is public. Public CI cannot
+install or vendor `@xtrm/substrate` (no credentials, no disclosure, no npm
+publication). This private workflow is the only place where a public
+Specialists commit meets the real substrate package: it checks out the
+public repo at an exact pinned SHA, injects `packages/substrate` through
+the neutral `WorkItemStore` seam (`XTRM_SUBSTRATE_DIR`), and runs the
+Bun 1.3.14 integration/parity suite. The durable run URL plus the two
+immutable SHAs gate the Specialists merge.
+
+## SHA policy (fail closed)
+
+- `specialists_sha` dispatch input must be a full 40-char lowercase commit
+  SHA. Anything else fails at the first step.
+- The SHA must be reachable on `xtrm-dev/specialists` origin. A commit that
+  exists only on a local machine or an unpushed branch fails the checkout
+  step by construction. Never substitute a branch name or a local path.
+- After checkout the workflow verifies `git rev-parse HEAD == input SHA`
+  and aborts on any difference.
+- The xtrm side runs at the workflow's own commit (`github.sha`). Final
+  gating runs must be on xtrm main at `f8b2ebf` (PR #172, Bun seam) or
+  later: earlier SHAs lack the `.7.2` sameHolder claimed-path fix that the
+  Specialists consumer-side strict checks assume, and pre-`f8b2ebf` SHAs
+  lack the lazy `bun:sqlite`/`node:sqlite` driver seam the parity runtime
+  requires. Do not call parity against a pre-`f8b2ebf` xtrm commit final.
+
+## Seam contract (agreed with the Specialists spec lane)
+
+- Factory: `createWorkItemBoundary(ports)` from
+  `src/activation/workitem-store.ts` (also exported from `src/lib.ts`),
+  with ports `{ issues, provenance, store, gate }`.
+- Opener alternative: `openWorkItemBoundary({ dbPath?, substrateDir? })`,
+  which dynamic-imports from `substrateDir` or `XTRM_SUBSTRATE_DIR` and
+  fails closed with `work_item_store_unavailable` unless every expected
+  export is present. It also validates `package.json` name identity
+  (`@xtrm/substrate`) before deep imports.
+- Parity command (Bun 1.3.14):
+  `XTRM_SUBSTRATE_DIR=<abs path to built @xtrm/substrate> bun --bun vitest run tests/integration/substrate-parity.test.ts`
+  covering migration → create → view/check/bind revision+hash stability,
+  A-claim/B-dispatch holder refusal, and journal. The suite skips without
+  the env var so public CI stays green.
+
+## Manual dispatch
+
+1. Confirm the candidate Specialists SHA is pushed and reachable:
+   `git ls-remote https://github.com/xtrm-dev/specialists.git <sha>`
+   must print the SHA. Empty output means: do not dispatch, the run will
+   (correctly) fail.
+2. Actions → `specialists compat (private)` → Run workflow →
+   `specialists_sha = <full SHA>` → Run.
+3. Wait for green. A red run blocks the Specialists merge until the cause
+   is fixed on the appropriate side.
+
+## Result verification (what counts as a gate)
+
+All required, all in one run:
+
+- [ ] SHA gate: input format valid, `HEAD == input SHA` verified.
+- [ ] Substrate identity: `package.json` name is `@xtrm/substrate`.
+- [ ] Neutral imports: no static `node:sqlite`/`bun:sqlite` value import
+      anywhere in substrate `src`/`cli`/`integrations`; lazy conditional
+      `require()` only in `src/store/sqlite.ts` (mirrors
+      `tests/sqlite-runtime.test.ts`).
+- [ ] Parity suite green under Bun 1.3.14 with `XTRM_SUBSTRATE_DIR` set.
+- [ ] Full Specialists suite green (provider parity, no regressions).
+- [ ] Typecheck/build green; `bun install --frozen-lockfile` clean.
+- [ ] Clean tree in both checkouts.
+- [ ] Step summary records xtrm HEAD, Specialists HEAD, PASS, and the run URL.
+
+Record the run URL and both SHAs on `xtrm-6qu.7.1` and on the Specialists
+PR. Only pass/fail and bounded non-sensitive diagnostics leave this repo:
+the workflow has no artifact-upload step and never prints private source.
+
+## Negative proof
+
+Dispatch with a malformed SHA (e.g. `deadbeef`) or an unreachable SHA:
+the run must fail at the SHA gate or the checkout step. A negative run
+that passes is a workflow defect — file it before any merge-gating claim.
