@@ -41,7 +41,7 @@ substrate_issue_update <ref>         revise the contract (no-op if identical)
 substrate_journal_append <ref>       checkpoint/handoff/milestone/decision/…
 substrate_journal_checkpoint <ref>   mechanical-first checkpoint now
 substrate_issue_resume <ref>         bounded resume capsule (rendered text)
-substrate_provenance_trace <ref>     event-spine lineage (receipts land in P8)
+substrate_provenance_trace <ref>     event-spine lineage (bindings, receipts with artifacts, attestation, claims)
 ```
 
 `<ref>` accepts all five forms: machine ID (`iss_…`), durable reference
