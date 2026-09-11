@@ -1,6 +1,42 @@
 {
   "$comment": "Claude lifecycle wiring (PRD §§24, 38, 54). Every entry is type command: PreCompact supports command/HTTP/MCP-tool hooks, not prompt or agent hooks. Paths resolve through ${CLAUDE_PLUGIN_ROOT} so the plugin works from any install location — never ${CLAUDE_PROJECT_DIR}/packages/substrate/..., which only exists inside the xtrm checkout. Exec form (command + args) is used because each entry references a path placeholder: args elements are passed verbatim with no shell quoting. Scripts are .mjs on purpose: the integration modules self-invoke on process.argv[1].endsWith(\"precompact.ts\"), so a .ts entry script here would double-execute the handler.",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/edit-gate.mjs"],
+            "timeout": 5000
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/commit-check.mjs"],
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/stop-gate.mjs"],
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
     "PreCompact": [
       {
         "hooks": [

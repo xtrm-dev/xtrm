@@ -11,6 +11,7 @@ import { IssueService } from "../../src/service/issue-service.ts";
 import { JournalService, type Summarizer } from "../../src/service/journal-service.ts";
 import { ResumeService } from "../../src/service/resume-service.ts";
 import { isJournalKind } from "../../src/domain/journal.ts";
+import { sameHolder } from "../../src/domain/claim.ts";
 import type { ResolvedIssue } from "../../src/domain/issue.ts";
 
 export interface SubstrateServices {
@@ -226,6 +227,64 @@ export async function runBeforeCompact(svc: SubstrateServices, input: BeforeComp
   const capsule = svc.resume.buildCapsule(resolved.id);
   const summary = `${svc.journal.renderCheckpoint(checkpoint.entry)}\n\n${svc.resume.renderCapsule(capsule)}`;
   return { entryId: checkpoint.entry.id, sequence: checkpoint.entry.sequence, degraded: false, fallbackToDefault: false, summary };
+}
+
+// -- gates ported from Beads (§§38-39, bead xtrm-6qu.6) -----------------------------
+// Host-agnostic evaluations over plain resolved state: the Pi permission
+// model owns enforcement, so these report decisions instead of blocking.
+// Claude-side enforcement lives in integrations/claude-code/{edit,commit,stop}-*.
+//
+// Pi production wiring disposition: Pi 0.84 exposes no PreToolUse gate, so
+// evaluateEditGate has no automatic production caller in extension.ts — the
+// host permission model calls it before mutating tools (substrate_issue_update)
+// when the operator wires it. The decision stays fail-closed on holder
+// mismatch so a future caller inherits the safe default.
+
+export interface EditGateState {
+  issueRef: string | null;
+  claim?: { holder: string; activationId: string | null } | null;
+  claimed?: boolean;
+  holder?: string | null;
+  activationId?: string | null;
+  leaseHeldByOther: boolean;
+  leaseHolder?: string | null;
+}
+
+export function evaluateEditGate(state: EditGateState): { allow: boolean; reason?: string } {
+  if (!state.issueRef) return { allow: true };
+  if (state.leaseHeldByOther) {
+    return { allow: false, reason: `workspace writer lease held by ${state.leaseHolder ?? "another holder"}` };
+  }
+  const claim = state.claim ?? null;
+  const claimed = claim !== null || state.claimed === true;
+  if (!claimed) return { allow: false, reason: `no live claim on ${state.issueRef}; claim first` };
+  if (claim) {
+    if (!state.holder) return { allow: false, reason: `live claim on ${state.issueRef} held by ${claim.holder}; no current holder supplied` };
+    if (!sameHolder(claim, state.holder, state.activationId ?? null)) {
+      return { allow: false, reason: `live claim on ${state.issueRef} held by ${claim.holder}; holder ${state.holder} may not mutate` };
+    }
+  }
+  return { allow: true };
+}
+
+export interface StopContinuityState {
+  issueRef: string | null;
+  claimed: boolean;
+  holder?: string | null;
+  checkpointsSinceClaim: number;
+  blockers: number;
+  handoffs: number;
+}
+
+export function evaluateStopContinuity(state: StopContinuityState): { needsCheckpoint: boolean; continuity: string | null } {
+  if (!state.issueRef || !state.claimed) return { needsCheckpoint: false, continuity: null };
+  return {
+    needsCheckpoint: state.checkpointsSinceClaim === 0,
+    continuity:
+      `live claim on ${state.issueRef} (holder ${state.holder ?? "unknown"}): ` +
+      `${state.checkpointsSinceClaim} checkpoint(s), ${state.blockers} blocker(s), ${state.handoffs} handoff(s) since claim. ` +
+      `work stays open; resume with \`sb issue resume ${state.issueRef}\`.`,
+  };
 }
 
 // -- session start ---------------------------------------------------------------
