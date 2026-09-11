@@ -1,0 +1,184 @@
+// Local private install + native enrollment contract (bead xtrm-6qu.13):
+// package identity + Pi manifest, Claude marketplace metadata, setup.ts
+// plan/check fail-closed behavior, and enrollment verification against
+// fixture HOME dirs. Scratch dirs stay under /var/tmp (/tmp is a 2G tmpfs).
+
+import { describe, it, after } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  EXPECTED_PACKAGE_NAME,
+  MARKETPLACE_NAME,
+  PLUGIN_SPEC,
+  checkBeadsAbsent,
+  checkClaudeMarketplaceEnrolled,
+  checkClaudePluginEnrolled,
+  checkEnrollment,
+  checkPiEnrolled,
+  planCommands,
+  planInstall,
+  resolveSubstrateDir,
+} from "../integrations/setup.ts";
+
+const PKG_ROOT = new URL("..", import.meta.url).pathname;
+const SETUP_TS = new URL("../integrations/setup.ts", import.meta.url).pathname;
+const SCRATCH_BASE = "/var/tmp";
+
+const created: string[] = [];
+
+after(() => {
+  for (const d of created) rmSync(d, { recursive: true, force: true });
+});
+
+function scratch(prefix: string): string {
+  const d = mkdtempSync(join(SCRATCH_BASE, prefix));
+  created.push(d);
+  return d;
+}
+
+describe("local install source (xtrm-6qu.13)", () => {
+  it("package identity is @xtrm/substrate with a canonical Pi manifest", () => {
+    const pkg = JSON.parse(readFileSync(join(PKG_ROOT, "package.json"), "utf8")) as {
+      name?: string;
+      keywords?: string[];
+      pi?: { extensions?: string[] };
+    };
+    assert.equal(pkg.name, EXPECTED_PACKAGE_NAME);
+    assert.ok(pkg.keywords?.includes("pi-package"), "keywords must include pi-package");
+    assert.ok(Array.isArray(pkg.pi?.extensions) && pkg.pi.extensions.length > 0, "pi.extensions must list the extension entry");
+    for (const entry of pkg.pi?.extensions ?? []) {
+      assert.ok(!entry.startsWith("/") && !entry.startsWith("~"), `pi extension entry must be package-relative, got ${entry}`);
+      assert.ok(existsSync(join(PKG_ROOT, entry)), `pi extension entry must exist: ${entry}`);
+    }
+  });
+
+  it("Claude marketplace metadata is relative, strict-clean, and installable", () => {
+    const mktPath = join(PKG_ROOT, ".claude-plugin", "marketplace.json");
+    assert.ok(existsSync(mktPath), "marketplace manifest must exist at package root");
+    const mkt = JSON.parse(readFileSync(mktPath, "utf8")) as {
+      name?: string;
+      plugins?: Array<{ name?: string; source?: string }>;
+    };
+    assert.equal(mkt.name, MARKETPLACE_NAME);
+    assert.equal(mkt.plugins?.length, 1);
+    const source = mkt.plugins?.[0]?.source ?? "";
+    assert.ok(!source.startsWith("/") && !source.includes(":"), `plugin source must be relative, got ${source}`);
+    assert.ok(existsSync(join(PKG_ROOT, source, ".claude-plugin", "plugin.json")), "marketplace source must resolve to the plugin dir");
+    assert.equal(mkt.plugins?.[0]?.name, "substrate");
+  });
+
+  it("resolveSubstrateDir accepts the real checkout via env", () => {
+    const r = resolveSubstrateDir(undefined, { XTRM_SUBSTRATE_DIR: PKG_ROOT });
+    assert.equal(r.ok, true);
+    assert.equal(r.dir, realpathSync(PKG_ROOT));
+  });
+
+  it("resolveSubstrateDir fails closed: missing env, relative, absent, wrong package", () => {
+    assert.equal(resolveSubstrateDir(undefined, {}).ok, false, "missing env must fail");
+    assert.equal(resolveSubstrateDir("relative/path", {}).ok, false, "relative path must fail");
+    assert.equal(resolveSubstrateDir(join(SCRATCH_BASE, "sb-no-such-dir-xyz"), {}).ok, false, "absent path must fail");
+    const wrong = scratch("sb-wrong-pkg.");
+    writeFileSync(join(wrong, "package.json"), JSON.stringify({ name: "@other/pkg" }));
+    const r = resolveSubstrateDir(wrong, {});
+    assert.equal(r.ok, false, "wrong package name must fail");
+    assert.match(r.error ?? "", /@xtrm\/substrate/, "error names the expected package");
+  });
+
+  it("planInstall emits nothing on failure (fail before mutation)", () => {
+    const bad = planInstall(join(SCRATCH_BASE, "sb-no-such-dir-xyz"), {});
+    assert.equal(bad.ok, false);
+    assert.equal(bad.commands, undefined, "no commands may be emitted on failure");
+    const wrong = scratch("sb-wrong-plan.");
+    writeFileSync(join(wrong, "package.json"), JSON.stringify({ name: "@other/pkg" }));
+    const bad2 = planInstall(wrong, {});
+    assert.equal(bad2.ok, false);
+    assert.equal(bad2.commands, undefined);
+  });
+
+  it("planCommands are deterministic, native, and non-interactive", () => {
+    const cmds = planCommands(PKG_ROOT);
+    const byLabel = Object.fromEntries(cmds.map((c) => [c.label, c]));
+    assert.deepEqual(cmds.map((c) => c.cmd), ["npm", "node", "pi", "claude", "claude", "claude", "claude"]);
+    assert.deepEqual(byLabel["install Pi package"].args, ["install", PKG_ROOT, "--approve"]);
+    assert.deepEqual(byLabel["add Claude marketplace"].args, ["plugin", "marketplace", "add", PKG_ROOT, "--scope", "user"]);
+    assert.deepEqual(byLabel["install Claude plugin"].args, ["plugin", "install", PLUGIN_SPEC, "-s", "user", "-y", "--json"]);
+    assert.ok(byLabel["strict-validate marketplace"].args.includes("--strict"), "marketplace validation is strict");
+    assert.ok(byLabel["strict-validate plugin"].args.includes("--strict"), "plugin validation is strict");
+    for (const c of cmds) {
+      assert.ok(c.args.every((a) => typeof a === "string" && a.length > 0), "args are concrete strings, no prompting");
+      assert.ok(!c.args.includes("--interactive"), "no interactive flags");
+    }
+    assert.deepEqual(planCommands(PKG_ROOT), cmds, "plan output is deterministic");
+  });
+
+  it("symlinked checkout aliases still resolve and enroll (realpath)", () => {
+    const linkBase = scratch("sb-linkbase.");
+    const link = join(linkBase, "substrate-alias");
+    symlinkSync(PKG_ROOT, link);
+    const r = resolveSubstrateDir(link, {});
+    assert.equal(r.ok, true, "symlinked checkout must resolve");
+    const home = scratch("sb-alias-home.");
+    mkdirSync(join(home, ".pi", "agent"), { recursive: true });
+    writeFileSync(join(home, ".pi", "agent", "settings.json"), JSON.stringify({ packages: [link] }));
+    mkdirSync(join(home, ".claude", "plugins"), { recursive: true });
+    writeFileSync(
+      join(home, ".claude", "plugins", "known_marketplaces.json"),
+      JSON.stringify({ [MARKETPLACE_NAME]: { source: { source: "directory", path: link }, installLocation: link } }),
+    );
+    assert.equal(checkPiEnrolled(PKG_ROOT, home).ok, true, "aliased Pi entry must match");
+    assert.equal(checkClaudeMarketplaceEnrolled(PKG_ROOT, home).ok, true, "aliased marketplace entry must match");
+  });
+
+  it("CLI rejects a missing --dir value explicitly", () => {
+    const r = spawnSync("node", [SETUP_TS, "plan", "--dir"], { encoding: "utf8" });
+    assert.equal(r.status, 2, "trailing --dir must exit 2, not fall back silently");
+    assert.match(r.stderr, /--dir requires/);
+  });
+
+  it("enrollment reports not-enrolled under an empty HOME", () => {
+    const home = scratch("sb-empty-home.");
+    const checks = checkEnrollment(PKG_ROOT, home);
+    const byName = Object.fromEntries(checks.map((c) => [c.name, c]));
+    assert.equal(byName["pi-enrolled"].ok, false);
+    assert.equal(byName["claude-marketplace-enrolled"].ok, false);
+    assert.equal(byName["claude-plugin-enrolled"].ok, false);
+    assert.equal(byName["beads-absent"].ok, true, "empty HOME has no Beads remnants");
+  });
+
+  it("enrollment detects Pi/Claude registry fixtures pointing at the checkout", () => {
+    const home = scratch("sb-enrolled-home.");
+    mkdirSync(join(home, ".pi", "agent"), { recursive: true });
+    writeFileSync(join(home, ".pi", "agent", "settings.json"), JSON.stringify({ packages: [PKG_ROOT] }));
+    mkdirSync(join(home, ".claude", "plugins"), { recursive: true });
+    writeFileSync(
+      join(home, ".claude", "plugins", "known_marketplaces.json"),
+      JSON.stringify({ [MARKETPLACE_NAME]: { source: { source: "directory", path: PKG_ROOT }, installLocation: PKG_ROOT } }),
+    );
+    writeFileSync(
+      join(home, ".claude", "plugins", "installed_plugins.json"),
+      JSON.stringify({ plugins: { [`substrate@${MARKETPLACE_NAME}`]: [{ installPath: PKG_ROOT }] } }),
+    );
+    assert.equal(checkPiEnrolled(PKG_ROOT, home).ok, true);
+    assert.equal(checkClaudeMarketplaceEnrolled(PKG_ROOT, home).ok, true);
+    assert.equal(checkClaudePluginEnrolled(home).ok, true);
+    assert.equal(checkBeadsAbsent(home).ok, true);
+  });
+
+  it("enrollment rejects registries pointing elsewhere and flags Beads remnants", () => {
+    const home = scratch("sb-stale-home.");
+    mkdirSync(join(home, ".pi", "agent"), { recursive: true });
+    writeFileSync(join(home, ".pi", "agent", "settings.json"), JSON.stringify({ packages: ["npm:beads", "/elsewhere/substrate"] }));
+    mkdirSync(join(home, ".claude", "plugins"), { recursive: true });
+    writeFileSync(
+      join(home, ".claude", "plugins", "known_marketplaces.json"),
+      JSON.stringify({ "beads-marketplace": { installLocation: "/x" } }),
+    );
+    assert.equal(checkPiEnrolled(PKG_ROOT, home).ok, false, "foreign checkout must not count");
+    assert.equal(checkClaudeMarketplaceEnrolled(PKG_ROOT, home).ok, false);
+    const beads = checkBeadsAbsent(home);
+    assert.equal(beads.ok, false, "Beads remnants must fail the absence check");
+    assert.match(beads.detail ?? "", /beads/i);
+  });
+});

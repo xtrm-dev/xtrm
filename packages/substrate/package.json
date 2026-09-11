@@ -6,12 +6,24 @@
   "bin": {
     "sb": "cli/sb.ts"
   },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "substrate",
+    "xtrm"
+  ],
+  "pi": {
+    "extensions": [
+      "./integrations/pi/extension.ts"
+    ]
+  },
   "files": [
     "src",
     "cli",
     "integrations",
     "skills",
     "plugin",
+    ".claude-plugin/marketplace.json",
     "README.md"
   ],
   "scripts": {

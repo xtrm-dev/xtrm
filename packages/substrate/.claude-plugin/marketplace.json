@@ -1,0 +1,14 @@
+{
+  "name": "substrate",
+  "description": "Local Substrate marketplace: installs the substrate plugin from an authorized local checkout (no npm publication required).",
+  "owner": {
+    "name": "XTRM"
+  },
+  "plugins": [
+    {
+      "name": "substrate",
+      "source": "./plugin/substrate",
+      "description": "Substrate durable work substrate for Claude Code: MCP tools over the typed service, plus PreCompact/PostCompact/SessionStart lifecycle."
+    }
+  ]
+}
