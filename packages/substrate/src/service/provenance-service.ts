@@ -9,7 +9,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { withTransaction } from "../store/transactions.ts";
-import { normalizeWorkspace } from "../domain/claim.ts";
+import { normalizeWorkspace, sameHolder } from "../domain/claim.ts";
 import {
   newExecutionBindingId,
   validateDispatchInput,
@@ -108,6 +108,19 @@ export class ProvenanceService {
       const active = this.issues.getActiveClaim(issueId, { now });
       if (input.claimId !== undefined && input.claimId !== null) {
         if (!active || active.id !== input.claimId) throw new Error(`dispatch rejected: claim ${input.claimId} is not the live claim on ${issueId}`);
+      }
+      // Claimed dispatch is fenced by the live claim: participant +
+      // activation must be the live holder (sameHolder). ClaimId omission
+      // does not bypass authority; omitted/mismatched identity fails
+      // closed. Ready/unclaimed stays open for the claim-first flow.
+      if (active) {
+        const participant = input.participantId;
+        if (typeof participant !== "string" || participant.trim() === "") {
+          throw new Error(`dispatch rejected: ${issueId} is live-held by ${active.holder}; participant is required (anti-steal)`);
+        }
+        if (!sameHolder(active, participant, input.activationId ?? null)) {
+          throw new Error(`dispatch rejected: ${issueId} is live-held by ${active.holder}; holder/activation mismatch (anti-steal)`);
+        }
       }
       const id = newExecutionBindingId();
       this.db
