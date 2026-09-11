@@ -1,0 +1,198 @@
+name: specialists compat (private)
+
+# Private gate for public Specialists SHAs (bead xtrm-6qu.7.1.1).
+#
+# Direction: xtrm is private, Specialists (xtrm-dev/specialists) is public.
+# Public CI cannot resolve @xtrm/substrate, so this private workflow checks
+# out the public repo at an exact pinned SHA, injects the local substrate
+# package through the neutral WorkItemStore seam (XTRM_SUBSTRATE_DIR), and
+# runs the Bun 1.3.14 integration/parity suite. The durable run URL plus the
+# immutable xtrm + Specialists SHAs gate the Specialists merge.
+#
+# Log hygiene (contract CONSTRAINTS): no step uploads artifacts and no step
+# prints private source. The user-controlled SHA expression appears ONLY in
+# `env:` (never interpolated into shell); shell uses the quoted
+# "$SPECIALISTS_SHA" variable. Steps that execute repo code (parity, full
+# suite, typecheck/build) redirect full output to $RUNNER_TEMP logs and
+# print only command name + PASS/FAIL, because failed assertions may dump
+# source snippets. Remaining diagnostics are pass/fail lines, SHAs, package
+# names/versions, and file paths only. There is deliberately no
+# actions/upload-artifact step in this file.
+
+on:
+  workflow_dispatch:
+    inputs:
+      specialists_sha:
+        description: "Full 40-char immutable Specialists commit SHA (must be reachable on xtrm-dev/specialists origin)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Fixed group (deliberately no SHA interpolation anywhere outside env:).
+  # Runs queue FIFO; cancel is never safe for a merge gate.
+  group: specialists-compat-private
+  cancel-in-progress: false
+
+jobs:
+  compat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The workflow_dispatch SHA enters shell ONLY through this variable.
+    env:
+      SPECIALISTS_SHA: ${{ inputs.specialists_sha }}
+    steps:
+      # -- Fail-closed input gate: full immutable SHA only, no branch/tag. --
+      - name: Validate SHA input (fail closed)
+        run: |
+          if ! printf '%s' "$SPECIALISTS_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "specialists_sha must be a full 40-char lowercase commit SHA" >&2
+            exit 1
+          fi
+          echo "ok sha format: $SPECIALISTS_SHA"
+
+      - name: Checkout xtrm (private)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Record xtrm SHA
+        run: |
+          echo "ok xtrm HEAD: $(git rev-parse HEAD)"
+          git status --porcelain | head -n 5
+
+      - name: Set up Node 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/substrate/package-lock.json
+
+      # --ignore-scripts: no lifecycle script is required (lockfile has
+      #    hasInstallScript flags only on nested pure-JS deps; verified by a
+      #    local --ignore-scripts install + typecheck + tests). --
+      - name: Install substrate deps (frozen, no scripts)
+        working-directory: packages/substrate
+        run: |
+          log="$RUNNER_TEMP/npm-ci.log"
+          if npm ci --ignore-scripts --no-audit --no-fund >"$log" 2>&1; then
+            echo "ok npm ci: PASS (frozen, --ignore-scripts)"
+          else
+            rc=$?
+            echo "FAIL npm ci (exit $rc) — full log retained on the runner only, never uploaded" >&2
+            exit "$rc"
+          fi
+
+      # -- Proves package identity + lazy-driver neutral imports (no static
+      #    node:sqlite/bun:sqlite value import; xtrm-6qu.7.4 invariant). --
+      - name: Substrate identity + neutral-import guard
+        run: bash .github/scripts/specialists-compat.sh guard-substrate packages/substrate
+
+      # -- Public checkout at the EXACT input SHA. actions/checkout fails
+      #    closed when the SHA is not reachable on origin (no branch
+      #    substitution, no local path). --
+      - name: Checkout Specialists at exact SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: xtrm-dev/specialists
+          ref: ${{ env.SPECIALISTS_SHA }}
+          path: specialists
+          persist-credentials: false
+
+      - name: Verify Specialists HEAD == input SHA (fail closed)
+        run: bash .github/scripts/specialists-compat.sh verify-specialists specialists "$SPECIALISTS_SHA"
+
+      - name: Set up Bun 1.3.14
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.3.14"
+
+      # --ignore-scripts: install lifecycle scripts are untrusted code on
+      #    a networked runner. Any candidate that truly needs one fails
+      #    closed here, never silently — re-confirm no postinstall and no
+      #    trustedDependencies for the exact candidate SHA during
+      #    pre-dispatch review (evidence for the prior candidate: 8 pure-JS
+      #    deps, neither field present). --
+      - name: Specialists frozen install (no scripts)
+        working-directory: specialists
+        run: |
+          log="$RUNNER_TEMP/bun-install.log"
+          if bun install --frozen-lockfile --ignore-scripts >"$log" 2>&1; then
+            echo "ok bun install: PASS (frozen, --ignore-scripts)"
+          else
+            rc=$?
+            echo "FAIL bun install (exit $rc) — full log retained on the runner only, never uploaded" >&2
+            exit "$rc"
+          fi
+
+      # -- Seam surface presence on both sides (early fail-closed with
+      #    path-only diagnostics before the parity run). --
+      - name: Seam export presence (fail closed)
+        run: bash .github/scripts/specialists-compat.sh guard-seam packages/substrate specialists
+
+      # -- Live proof: bun:sqlite migration -> issue -> claim ->
+      #    ExecutionBinding, holder refusal, journal. Full output goes to a
+      #    runner-local log; only PASS/FAIL reaches the log stream. --
+      - name: Substrate parity suite (Bun 1.3.14)
+        working-directory: specialists
+        env:
+          XTRM_SUBSTRATE_DIR: ${{ github.workspace }}/packages/substrate
+        run: |
+          log="$RUNNER_TEMP/parity.log"
+          if bun --bun vitest run tests/integration/substrate-parity.test.ts >"$log" 2>&1; then
+            echo "ok parity: PASS (tests/integration/substrate-parity.test.ts)"
+          else
+            rc=$?
+            echo "FAIL parity (exit $rc) — full log retained on the runner only, never uploaded" >&2
+            exit "$rc"
+          fi
+
+      # -- Full suite: provider parity + no regressions. Same log rule. --
+      - name: Specialists full suite (Bun 1.3.14)
+        working-directory: specialists
+        env:
+          XTRM_SUBSTRATE_DIR: ${{ github.workspace }}/packages/substrate
+        run: |
+          log="$RUNNER_TEMP/full.log"
+          if bun --bun vitest run >"$log" 2>&1; then
+            echo "ok full suite: PASS"
+          else
+            rc=$?
+            echo "FAIL full suite (exit $rc) — full log retained on the runner only, never uploaded" >&2
+            exit "$rc"
+          fi
+
+      - name: Typecheck / build proof
+        working-directory: specialists
+        run: |
+          log="$RUNNER_TEMP/prove-node-outer.log"
+          if bash ../.github/scripts/specialists-compat.sh prove-node . >"$log" 2>&1; then
+            echo "ok prove-node: PASS (typecheck/build)"
+          else
+            rc=$?
+            echo "FAIL prove-node (exit $rc) — full log retained on the runner only, never uploaded" >&2
+            exit "$rc"
+          fi
+
+      # The ./specialists checkout is untracked content inside the xtrm
+      # tree by construction, so the xtrm root is checked excluding it.
+      - name: Clean tree proof
+        run: |
+          bash .github/scripts/specialists-compat.sh clean-tree ./specialists
+          dirty="$(git status --porcelain -- . ':!specialists' | head -n 10)"
+          if [ -n "$dirty" ]; then echo "FAIL clean-tree: dirty xtrm tree: $dirty" >&2; exit 1; fi
+          echo "ok clean-tree: xtrm root clean ($(git rev-parse --short HEAD), excluding ./specialists checkout)"
+
+      - name: Gate summary (SHAs only, no private content)
+        run: |
+          {
+            echo "## specialists-compat gate"
+            echo ""
+            echo "- xtrm HEAD: $(git rev-parse HEAD)"
+            echo "- specialists HEAD: $(git -C specialists rev-parse HEAD) (input $SPECIALISTS_SHA)"
+            echo "- result: PASS — parity + full suite + typecheck/build + frozen install + clean tree"
+            echo "- run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
