@@ -299,18 +299,40 @@ export class IssueService {
     const contextFindings = validateContextRefs(nextContextRefs);
     if (contextFindings.length > 0) throw new Error(`invalid contextRefs: ${contextFindings[0]!.message}`);
     if (hash === issue.currentContractHash) {
+      // Execution-bearing metadata change with an identical contract (§24):
+      // still opens a new revision so the prior readiness attestation
+      // (bound to revision + hash) is invalidated. Compare first so a
+      // restated identical value stays a no-op.
+      const sameOwnership =
+        ownership === undefined || JSON.stringify(nextOwnership ?? null) === JSON.stringify(current.ownership ?? null);
+      const sameContext =
+        contextRefs === undefined || JSON.stringify(nextContextRefs) === JSON.stringify(current.contextRefs);
+      if (sameOwnership && sameContext) {
+        return { issue: this.view(issueId), created: false };
+      }
       const now = Date.now();
+      const revision = issue.currentRevision + 1;
       this.db
-        .prepare("UPDATE issue_revisions SET ownership_json = ?, context_refs_json = ? WHERE issue_id = ? AND revision = ?")
+        .prepare(
+          `INSERT INTO issue_revisions (issue_id, revision, contract_hash, contract_json,
+            context_refs_json, ownership_json, authored_by, source_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+        )
         .run(
-          nextOwnership == null ? null : JSON.stringify(nextOwnership),
-          JSON.stringify(nextContextRefs),
           issueId,
-          issue.currentRevision,
+          revision,
+          hash,
+          JSON.stringify(contract),
+          JSON.stringify(nextContextRefs),
+          nextOwnership == null ? null : JSON.stringify(nextOwnership),
+          authoredBy,
+          now,
         );
-      this.touch(issueId, now);
-      this.appendEvent(issueId, "issue.metadata", { revision: issue.currentRevision });
-      return { issue: this.view(issueId), created: false };
+      this.db
+        .prepare("UPDATE issues SET current_revision = ?, current_contract_hash = ?, updated_at = ? WHERE id = ?")
+        .run(revision, hash, now, issueId);
+      this.appendEvent(issueId, "issue.revised", { revision, contractHash: hash });
+      return { issue: this.view(issueId), created: true };
     }
     const now = Date.now();
     const revision = issue.currentRevision + 1;
@@ -522,6 +544,29 @@ export class IssueService {
       if (e["active"] === 0) return;
       this.db.prepare("UPDATE issue_edges SET active = 0 WHERE id = ?").run(edgeId);
       this.appendEvent(e["to_issue"] as string, "edge.removed", { kind: e["kind"], edge: edgeId });
+    });
+  }
+
+  // Typed unrelate (§27): deactivates the single active edge between the
+  // endpoints for the given kind. parent_child stays structural (setParent).
+  removeEdgeByEndpoints(fromId: string, toId: string, kind: EdgeKind): { edge: number; kind: EdgeKind } {
+    if (kind === "parent_child") throw new Error("use setParent for parent_child edges");
+    if (!(EDGE_KINDS as readonly string[]).includes(kind)) throw new Error(`unknown edge kind: ${kind}`);
+    this.requireIssue(fromId);
+    this.requireIssue(toId);
+    return withTransaction(this.db, () => {
+      const e = row<Row>(
+        this.db,
+        "SELECT id FROM issue_edges WHERE from_issue = ? AND to_issue = ? AND kind = ? AND active = 1 ORDER BY id LIMIT 1",
+        fromId,
+        toId,
+        kind,
+      );
+      if (!e) throw new Error(`no active ${kind} edge from ${fromId} to ${toId}`);
+      const edgeId = e["id"] as number;
+      this.db.prepare("UPDATE issue_edges SET active = 0 WHERE id = ?").run(edgeId);
+      this.appendEvent(toId, "edge.removed", { kind, edge: edgeId });
+      return { edge: edgeId, kind };
     });
   }
 
@@ -762,47 +807,88 @@ export class IssueService {
     });
   }
 
-  // SCRUTINY is policy input: only a named level is accepted, and the policy
-  // seam in readiness.ts enforces it at dispatch. Unknown levels fail here.
-  setScrutiny(issueId: string, scrutiny: string): ResolvedIssue {
+  // SCRUTINY is execution-relevant (§24): the change opens a new revision
+  // (same contract, new revision number) so the prior attestation — bound
+  // to revision + hash — is invalidated. Only a named level is accepted.
+  setScrutiny(issueId: string, scrutiny: string, authoredBy = "sb-cli"): ResolvedIssue {
     if (!isValidScrutiny(scrutiny)) throw new Error(`invalid scrutiny level: ${scrutiny}`);
     return withTransaction(this.db, () => {
-      this.requireIssue(issueId);
+      const issue = this.requireIssue(issueId);
+      if (issue.scrutiny === scrutiny) return this.view(issueId);
+      const current = this.getRevision(issueId, issue.currentRevision);
       const now = Date.now();
-      this.db.prepare("UPDATE issues SET scrutiny = ?, updated_at = ? WHERE id = ?").run(scrutiny, now, issueId);
-      this.appendEvent(issueId, "issue.metadata", { field: "scrutiny", scrutiny });
+      const revision = issue.currentRevision + 1;
+      this.db
+        .prepare(
+          `INSERT INTO issue_revisions (issue_id, revision, contract_hash, contract_json,
+            context_refs_json, ownership_json, authored_by, source_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+        )
+        .run(
+          issueId,
+          revision,
+          issue.currentContractHash,
+          JSON.stringify(current.contract),
+          JSON.stringify(current.contextRefs),
+          current.ownership == null ? null : JSON.stringify(current.ownership),
+          authoredBy,
+          now,
+        );
+      this.db
+        .prepare("UPDATE issues SET scrutiny = ?, current_revision = ?, updated_at = ? WHERE id = ?")
+        .run(scrutiny, revision, now, issueId);
+      this.appendEvent(issueId, "issue.revised", { revision, contractHash: issue.currentContractHash, field: "scrutiny", scrutiny });
       return this.view(issueId);
     });
   }
 
-  setOwnership(issueId: string, ownership: unknown): ResolvedIssue {
+  // Ownership is execution-relevant (§24): routes through revise so a
+  // changed value opens a new revision and invalidates readiness. A
+  // restated identical value stays a no-op.
+  setOwnership(issueId: string, ownership: unknown, authoredBy = "sb-cli"): ResolvedIssue {
     const findings = validateOwnership(ownership);
     if (findings.length > 0) throw new Error(`invalid ownership: ${findings[0]!.message}`);
-    return withTransaction(this.db, () => {
-      const issue = this.requireIssue(issueId);
-      const now = Date.now();
-      this.db
-        .prepare("UPDATE issue_revisions SET ownership_json = ? WHERE issue_id = ? AND revision = ?")
-        .run(ownership == null ? null : JSON.stringify(ownership), issueId, issue.currentRevision);
-      this.touch(issueId, now);
-      this.appendEvent(issueId, "issue.metadata", { revision: issue.currentRevision, field: "ownership" });
-      return this.view(issueId);
-    });
+    const issue = this.requireIssue(issueId);
+    const current = this.getRevision(issueId, issue.currentRevision);
+    if (JSON.stringify(ownership ?? null) === JSON.stringify(current.ownership ?? null)) return this.view(issueId);
+    const { issue: next } = this.updateContract(issueId, current.contract as WorkContract, authoredBy, { ownership });
+    return next;
   }
 
   // Journal/memory kinds are rejected: journal entries are continuity,
   // never planning authority (PRD §43). Fail-closed at write and at read.
-  setContextRefs(issueId: string, refs: unknown[]): ResolvedIssue {
+  // Execution-relevant (§24): a changed value opens a new revision via
+  // revise; a restated identical value stays a no-op.
+  setContextRefs(issueId: string, refs: unknown[], authoredBy = "sb-cli"): ResolvedIssue {
     const findings = validateContextRefs(refs);
     if (findings.length > 0) throw new Error(`invalid contextRefs: ${findings[0]!.message}`);
+    const issue = this.requireIssue(issueId);
+    const current = this.getRevision(issueId, issue.currentRevision);
+    if (JSON.stringify(refs) === JSON.stringify(current.contextRefs)) return this.view(issueId);
+    const { issue: next } = this.updateContract(issueId, current.contract as WorkContract, authoredBy, { contextRefs: refs });
+    return next;
+  }
+
+  // Metadata-only mutations (§24): title / priority emit an issue.metadata
+  // event and never touch the contract revision, so readiness is retained.
+  setTitle(issueId: string, title: string): ResolvedIssue {
+    if (!title.trim()) throw new Error("title must be non-empty");
     return withTransaction(this.db, () => {
-      const issue = this.requireIssue(issueId);
+      this.requireIssue(issueId);
       const now = Date.now();
-      this.db
-        .prepare("UPDATE issue_revisions SET context_refs_json = ? WHERE issue_id = ? AND revision = ?")
-        .run(JSON.stringify(refs), issueId, issue.currentRevision);
-      this.touch(issueId, now);
-      this.appendEvent(issueId, "issue.metadata", { revision: issue.currentRevision, field: "contextRefs" });
+      this.db.prepare("UPDATE issues SET title = ?, updated_at = ? WHERE id = ?").run(title, now, issueId);
+      this.appendEvent(issueId, "issue.metadata", { field: "title", title });
+      return this.view(issueId);
+    });
+  }
+
+  setPriority(issueId: string, priority: number): ResolvedIssue {
+    if (!Number.isInteger(priority)) throw new Error("priority must be an integer");
+    return withTransaction(this.db, () => {
+      this.requireIssue(issueId);
+      const now = Date.now();
+      this.db.prepare("UPDATE issues SET priority = ?, updated_at = ? WHERE id = ?").run(priority, now, issueId);
+      this.appendEvent(issueId, "issue.metadata", { field: "priority", priority });
       return this.view(issueId);
     });
   }
@@ -1373,13 +1459,15 @@ export class IssueService {
 
   // Export-excluded: lifecycle transitions, readiness, claims, journal.
   // Those arrive with their owning phases; this service never invents them.
+  // Every transition emits a durable issue.lifecycle event (§26) carrying
+  // the from/to pair so lineage is explicit for all five states.
   setLifecycleState(issueId: string, state: LifecycleState): ResolvedIssue {
     if (!(LIFECYCLE_STATES as readonly string[]).includes(state)) throw new Error(`unknown lifecycle state: ${state}`);
     return withTransaction(this.db, () => {
-      this.requireIssue(issueId);
+      const before = this.requireIssue(issueId);
       const now = Date.now();
       this.db.prepare("UPDATE issues SET lifecycle_state = ?, updated_at = ? WHERE id = ?").run(state, now, issueId);
-      this.appendEvent(issueId, state === "done" ? "issue.done" : "issue.cancelled", { state });
+      this.appendEvent(issueId, "issue.lifecycle", { from: before.lifecycleState, to: state });
       return this.view(issueId);
     });
   }

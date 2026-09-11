@@ -169,7 +169,11 @@ describe("readiness gate (A1-A6 + adversarial)", () => {
     });
     ctx.svc.attestReadiness(i.id, { outcome: "ready", policy: "prod-only-critical", attestedBy: "tester" });
     assert.equal(ctx.svc.getReadiness(i.id).state, "draft");
+    // Scrutiny is execution-relevant (§24): the change opens a new revision
+    // and invalidates the prior attestation, so re-attest before dispatch.
     ctx.svc.setScrutiny(i.id, "CRITICAL");
+    assert.equal(ctx.svc.getReadiness(i.id).attestationCurrent, false);
+    ctx.svc.attestReadiness(i.id, { outcome: "ready", policy: "prod-only-critical", attestedBy: "tester" });
     assert.equal(ctx.svc.assertDispatchable(i.id).dispatchable, true);
   });
 
@@ -228,7 +232,7 @@ describe("readiness gate (A1-A6 + adversarial)", () => {
     assert.equal(resolved.hash, ctx.svc.getResolvedContext(leaf.id).hash);
   });
 
-  it("contract revise preserves ownership/context; metadata-only revise amends in place", () => {
+  it("contract revise preserves ownership/context; execution-bearing metadata opens a revision (§24)", () => {
     const i = ctx.svc.createIssue({
       projectId: "prj_xtrm",
       title: "x",
@@ -243,9 +247,16 @@ describe("readiness gate (A1-A6 + adversarial)", () => {
     const rev = ctx.svc.getRevision(i.id, 2);
     assert.deepEqual(rev.ownership, { paths: ["a"] });
     assert.deepEqual(rev.contextRefs, [{ key: "k", value: 1 }]);
+    // Ownership is execution-relevant: same contract hash, new revision, so
+    // the prior attestation no longer binds.
     const meta = ctx.svc.updateContract(i.id, contract({ success: "new" }), "op", { ownership: { paths: ["b"] } });
-    assert.equal(meta.created, false);
-    assert.deepEqual(ctx.svc.getRevision(i.id, 2).ownership, { paths: ["b"] });
+    assert.equal(meta.created, true);
+    assert.equal(ctx.svc.getIssue(i.id).currentRevision, 3);
+    assert.deepEqual(ctx.svc.getRevision(i.id, 3).ownership, { paths: ["b"] });
+    // Restated identical metadata stays a no-op.
+    const noop = ctx.svc.updateContract(i.id, contract({ success: "new" }), "op", { ownership: { paths: ["b"] } });
+    assert.equal(noop.created, false);
+    assert.equal(ctx.svc.getIssue(i.id).currentRevision, 3);
   });
 });
 
