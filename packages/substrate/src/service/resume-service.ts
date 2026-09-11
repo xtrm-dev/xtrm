@@ -4,7 +4,7 @@
 // Root-epic resume (§22) summarizes child state by reference — child
 // transcripts and child journal bodies are never copied in.
 
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "../store/database.ts";
 import type { IssueService } from "./issue-service.ts";
 import type { JournalService } from "./journal-service.ts";
 import type { JournalEntry } from "../domain/journal.ts";

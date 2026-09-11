@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "./database.ts";
 
 // Transaction rule (PRD §7.3): check revision/idempotency, validate, mutate,
 // event, revision, commit atomically — or commit nothing.

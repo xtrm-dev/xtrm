@@ -1,4 +1,4 @@
-import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
 import { IssueService } from "./issue-service.ts";
 import { mutateOnce, withTransaction } from "../store/transactions.ts";
 import { hashMappedContent } from "../projections/types.ts";

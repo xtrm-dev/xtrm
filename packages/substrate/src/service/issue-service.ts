@@ -1,4 +1,4 @@
-import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
 import {
   ISSUE_KINDS,
   LIFECYCLE_STATES,
