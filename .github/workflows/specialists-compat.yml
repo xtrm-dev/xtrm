@@ -62,7 +62,6 @@ jobs:
       - name: Record xtrm SHA
         run: |
           echo "ok xtrm HEAD: $(git rev-parse HEAD)"
-          git status --porcelain | head -n 5
 
       - name: Set up Node 24
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -179,11 +178,25 @@ jobs:
 
       # The ./specialists checkout is untracked content inside the xtrm
       # tree by construction, so the xtrm root is checked excluding it.
+      # Capture/truncation rules live inline below (pipefail-safe).
       - name: Clean tree proof
         run: |
           bash .github/scripts/specialists-compat.sh clean-tree ./specialists
-          dirty="$(git status --porcelain -- . ':!specialists' | head -n 10)"
-          if [ -n "$dirty" ]; then echo "FAIL clean-tree: dirty xtrm tree: $dirty" >&2; exit 1; fi
+          # Fail-closed capture: a git-status failure must FAIL, never read
+          # as a clean tree. No pipe into head: under the runner's pipefail
+          # a long dirty list makes head close early and git die with
+          # SIGPIPE/141 before the diagnostic prints. Truncation uses
+          # printf, and the failure output is paths-only (no contents),
+          # inside log-hygiene rules.
+          if ! dirty="$(git status --porcelain -- . ':!specialists')"; then
+            echo "FAIL clean-tree: git status failed" >&2
+            exit 1
+          fi
+          if [ -n "$dirty" ]; then
+            echo "FAIL clean-tree: dirty xtrm tree (paths only, truncated):" >&2
+            printf '%.800s\n' "$dirty" >&2
+            exit 1
+          fi
           echo "ok clean-tree: xtrm root clean ($(git rev-parse --short HEAD), excluding ./specialists checkout)"
 
       - name: Gate summary (SHAs only, no private content)
