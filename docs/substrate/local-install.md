@@ -45,16 +45,20 @@ node_modules/                             present only after npm install (step 1
 
 ## 1. `sb` binary provision (fresh machines)
 
-`sb` is TypeScript run on Node ≥ 24 (native type-stripping, no build step):
+`sb` is TypeScript run on Node ≥ 24 (native type-stripping, no build step),
+provisioned on PATH in two steps — both required. A global link alone leaves
+runtime deps (uuid et al.) missing; source deps alone leave no PATH binary:
 
-1. `npm --prefix "$XTRM_SUBSTRATE_DIR" install --no-audit --no-fund`
-   (public registry deps only; the package itself is never published)
-2. `node "$XTRM_SUBSTRATE_DIR/cli/sb.ts" --version` must exit 0.
+1. `npm --prefix "$XTRM_SUBSTRATE_DIR" ci --ignore-scripts --no-audit --no-fund`
+   (deterministic from the lockfile; public registry deps only — the package
+   itself is never published; `--ignore-scripts` runs no checkout code)
+2. `npm install --global "$XTRM_SUBSTRATE_DIR" --ignore-scripts --no-audit --no-fund`
+   (links the checkout globally; installer must have a writable global prefix)
+3. `sb --version` (literal PATH binary) must exit 0.
 
-Optional PATH shim: symlink a `sb` on PATH at
-`$XTRM_SUBSTRATE_DIR/cli/sb.ts` (shebang `#!/usr/bin/env node`, exec bit
-set). Enrollment check `sb-enrolled` runs step 2 and fails with
-"node_modules missing" when step 1 was skipped.
+Enrollment check `sb-enrolled` finds `sb` via PATH search, requires its
+realpath to equal `$XTRM_SUBSTRATE_DIR/cli/sb.ts` (a foreign `sb` fails),
+then runs `sb --version`. Node-direct invocation is not accepted as proof.
 
 ## 2. Pi enrollment (canonical local package)
 
@@ -95,10 +99,16 @@ claude plugin validate "$XTRM_SUBSTRATE_DIR/plugin/substrate" --strict --json
 
 Enrollment checks `claude-marketplace-enrolled` (marketplace `substrate`
 registered **and** pointing at the checkout, not elsewhere),
-`claude-plugin-enrolled` (`substrate@<marketplace>` in
-`installed_plugins.json`), and `claude-strict-live` (both strict
-validations pass live). `beads-absent` fails when any Beads
-package/extension/marketplace remnant remains.
+`claude-plugin-enrolled` (exactly `substrate@substrate`: live
+`claude plugin list --json` shows the id enabled, else the on-disk registry
+carries the exact key **and** the marketplace is bound to this checkout —
+installed copies live in a Claude cache dir, so installPath is never
+compared; a `substrate@other-marketplace` never satisfies the spec),
+and `claude-strict-live` (both strict validations pass live under the
+checked HOME). `beads-absent` fails on any Beads remnant across
+installed packages/marketplaces, Pi settings extensions + hook commands,
+Claude settings hook commands + plugin keys, and installed plugin dir
+names.
 
 ## 4. `setup.ts` plan/check invocation + JSON stability
 
@@ -119,20 +129,44 @@ Shape stability vs #168 (additive only — old keys verbatim):
 - `check --json`: `{ ok, claude, pi, naming }` **plus** `dir` and
   `enrollment` (`Check[]`: `sb-enrolled`, `pi-enrolled`,
   `claude-marketplace-enrolled`, `claude-plugin-enrolled`,
-  `claude-strict-live`, `beads-absent`). Exit 0 only when source checks
-  AND enrollment are all green; exit 1 otherwise.
+  `claude-strict-live`, `beads-absent`). **Overall health is the exit
+  code, not the top-level `ok`: `ok` stays source-only for #168
+  compatibility, and the exit is 0 only when source checks AND every
+  enrollment entry are green (exit 1 otherwise).** Live subprocesses
+  observe the checked home (HOME threaded into the child,
+  CLAUDE_CONFIG_DIR dropped), so `--dir`/env selection governs
+  validation too. `xt doctor` stays model-call-free: Pi load is proven
+  once at init (next section), not on every check.
+
+## 5. Pi load verification (load, not just registration)
+
+`pi list`/settings prove enrollment, not load. The final plan command
+proves the extension loads and its tools register:
+
+```sh
+pi --no-session -p "Reply with only the comma-separated names of the substrate_* tools available to you, or the single word NONE."
+```
+
+Live fresh-HOME evidence (this lane): exit 0 with
+`substrate_issue_get, substrate_issue_search, substrate_issue_claim,
+substrate_issue_update, substrate_journal_append, substrate_journal_checkpoint,
+substrate_issue_resume, substrate_provenance_trace` — all 8 tools.
 
 Programmatic entry points: `resolveSubstrateDir(explicit?, env?)`,
 `planInstall(explicit?, env?)` (fail-closed: no `commands` on error),
 `planCommands(dir)`, `checkEnrollment(pkgRoot?, home?)`, plus the unchanged
-#168 `installPlan()` / `fullCheck()`.
+#168 `installPlan()` / `fullCheck()`. Argument order is always
+`(pkgRoot, home)` — e.g. `checkClaudePluginEnrolled(pkgRoot, home)`
+(single-arg callers from the first revision must add `pkgRoot` first).
 
-## 5. Fresh-machine acceptance (what `xt doctor` proves)
+## 6. Fresh-machine acceptance (what `xt doctor` proves)
 
 Under a fresh HOME/PATH with `TMPDIR=/var/tmp` (`/tmp` is a 2G tmpfs —
-never use it for scratch): `sb --version` exits 0, a scratch project links,
-Pi lists/loads the Substrate extension and tools, the Claude marketplace
-installs the plugin with strict validation and live discovery green,
-`setup.ts check` reports all enrolled, and no Beads
-package/extension/hook/marketplace is installed. Negative probes
-(wrong package name, missing/relative path) exit before any mutation.
+never use it for scratch): deterministic `npm ci` + global link put a PATH
+`sb` resolving to the checkout (`sb --version` exits 0), a scratch project
+links, Pi lists the package AND a load probe reports all 8 substrate tools,
+the Claude marketplace installs exactly `substrate@substrate` with strict
+validation and live discovery green, `setup.ts check` reports all enrolled,
+and no Beads package/extension/hook/marketplace remnant remains. Negative
+probes (wrong package name, missing/relative path, wrong-marketplace
+plugin, foreign `sb`, hook residue) fail before any mutation.

@@ -9,14 +9,20 @@
 //
 // A8 native enrollment (xtrm-6qu.13): XTRM_SUBSTRATE_DIR (or --dir) selects an
 // authorized local checkout. resolveSubstrateDir validates it fail-closed
-// (absolute, exists, package.json name === @xtrm/substrate, required layout)
-// BEFORE any command is emitted, so wrong-package/missing-path failures never
-// mutate. planCommands emits deterministic non-interactive native commands
-// (npm + node sb + `pi install <dir> --approve` + claude marketplace
-// add/install + claude validate --strict). checkEnrollment verifies ACTUAL
-// enrollment (sb --version runs, Pi settings list the package, Claude
-// marketplace + plugin installed, strict validation passes, no Beads
-// remnants) — not source presence alone.
+// (absolute, exists, package.json name === @xtrm/substrate, required layout,
+// realpath-canonicalized) BEFORE any command is emitted, so
+// wrong-package/missing-path failures never mutate. planCommands emits
+// deterministic non-interactive native commands in run order: `npm ci`
+// (deterministic source deps) + global link (PATH `sb`) + literal
+// `sb --version` + `pi install <dir> --approve` + claude marketplace
+// add/install + `claude validate --strict` x2 + a Pi load probe that asks the
+// model to report the registered substrate tools. checkEnrollment verifies
+// ACTUAL enrollment (PATH `sb` resolving to this checkout, Pi settings,
+// Claude marketplace binding, exact substrate@substrate installed+enabled,
+// live strict validation, no Beads package/extension/hook remnants) — not
+// source presence alone. Live subprocesses run under the SUPPLIED home
+// (HOME threaded, CLAUDE_CONFIG_DIR dropped), never the process HOME, and
+// `xt doctor` stays model-call-free: the Pi load probe runs once at init.
 //
 // JSON shape stability vs #168: `plan --json` keeps `surfaces` verbatim and
 // adds `dir` + `commands`. `check --json` keeps `ok/claude/pi/naming`
@@ -24,7 +30,7 @@
 // keep working; new consumers read the additive keys.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { accessSync, constants, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
@@ -273,19 +279,29 @@ export interface PlannedCommand {
 }
 
 // Deterministic native enrollment commands for a VALIDATED checkout dir.
-// Every command is non-interactive (--no-audit/--no-fund/-y/--json/--approve
-// /--scope/--strict). Callers must resolveSubstrateDir first; this function
-// assumes `dir` already passed validation and emits no diagnostics itself.
+// Every command is non-interactive (--ignore-scripts/--no-audit/--no-fund/
+// -y/--json/--approve/--scope/--strict). Callers must resolveSubstrateDir
+// first; this function assumes `dir` already passed validation and emits no
+// diagnostics itself. Shell each entry verbatim as argv (never shell:true),
+// in order, aborting on the first nonzero exit. `sb` is provisioned on PATH
+// in two steps: deterministic `npm ci` for source deps (global link alone
+// leaves uuid et al. missing), then a global link of the checkout, then a
+// literal `sb --version`. The final Pi step proves load, not just
+// registration: it asks the model to report the registered substrate tools.
+export const PI_LOAD_PROMPT = "Reply with only the comma-separated names of the substrate_* tools available to you, or the single word NONE.";
+
 export function planCommands(dir: string): PlannedCommand[] {
   const pluginDir = join(dir, "plugin", "substrate");
   return [
-    { label: "install sb dependencies", cmd: "npm", args: ["--prefix", dir, "install", "--no-audit", "--no-fund"] },
-    { label: "verify sb binary", cmd: "node", args: [join(dir, "cli", "sb.ts"), "--version"] },
+    { label: "install sb dependencies (deterministic)", cmd: "npm", args: ["--prefix", dir, "ci", "--ignore-scripts", "--no-audit", "--no-fund"] },
+    { label: "link sb onto PATH", cmd: "npm", args: ["install", "--global", dir, "--ignore-scripts", "--no-audit", "--no-fund"] },
+    { label: "verify sb on PATH", cmd: "sb", args: ["--version"] },
     { label: "install Pi package", cmd: "pi", args: ["install", dir, "--approve"] },
     { label: "add Claude marketplace", cmd: "claude", args: ["plugin", "marketplace", "add", dir, "--scope", "user"] },
     { label: "install Claude plugin", cmd: "claude", args: ["plugin", "install", PLUGIN_SPEC, "-s", "user", "-y", "--json"] },
     { label: "strict-validate marketplace", cmd: "claude", args: ["plugin", "validate", dir, "--strict", "--json"] },
     { label: "strict-validate plugin", cmd: "claude", args: ["plugin", "validate", pluginDir, "--strict", "--json"] },
+    { label: "verify Pi loads substrate tools", cmd: "pi", args: ["--no-session", "-p", PI_LOAD_PROMPT] },
   ];
 }
 
@@ -315,13 +331,43 @@ function firstLine(s: string): string {
   return s.split("\n", 1)[0]?.slice(0, 200) ?? "";
 }
 
-function runCapture(cmd: string, args: string[], timeoutMs = 60000): { ok: boolean; out: string } {
+function childEnv(home: string): Record<string, string | undefined> {
+  // Thread the SUPPLIED home into the child so live probes observe the
+  // checked HOME, never the process HOME. CLAUDE_CONFIG_DIR would override
+  // HOME for claude, so it is dropped from the child env.
+  const env: Record<string, string | undefined> = { ...process.env, HOME: home };
+  delete env["CLAUDE_CONFIG_DIR"];
+  return env;
+}
+
+function runRaw(cmd: string, args: string[], opts: { timeoutMs?: number; home?: string } = {}): { ok: boolean; out: string } {
+  const { timeoutMs = 60000, home } = opts;
   try {
-    const out = execFileSync(cmd, args, { encoding: "utf8", timeout: timeoutMs, stdio: ["ignore", "pipe", "pipe"] });
-    return { ok: true, out: firstLine(out) };
+    const out = execFileSync(cmd, args, {
+      encoding: "utf8",
+      timeout: timeoutMs,
+      stdio: ["ignore", "pipe", "pipe"],
+      ...(home !== undefined ? { env: childEnv(home) } : {}),
+    });
+    return { ok: true, out };
   } catch (err) {
-    const msg = err instanceof Error ? firstLine(err.message) : String(err).slice(0, 200);
+    const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, out: msg };
+  }
+}
+
+function runCapture(cmd: string, args: string[], opts: { timeoutMs?: number; home?: string } = {}): { ok: boolean; out: string } {
+  const r = runRaw(cmd, args, opts);
+  return { ok: r.ok, out: firstLine(r.out) };
+}
+
+function runJson(cmd: string, args: string[], home: string, timeoutMs = 60000): { ok: boolean; value?: unknown } {
+  const r = runRaw(cmd, args, { timeoutMs, home });
+  if (!r.ok) return { ok: false };
+  try {
+    return { ok: true, value: JSON.parse(r.out) };
+  } catch {
+    return { ok: false };
   }
 }
 
@@ -337,11 +383,36 @@ function samePath(a: string, b: string): boolean {
   return canonical(a) === canonical(b);
 }
 
+// sb must work as a literal PATH binary resolving to THIS checkout: the
+// plan links the checkout globally after a deterministic `npm ci`, because a
+// global link alone leaves runtime deps (uuid et al.) missing. node-direct
+// invocation is not accepted as enrollment proof.
+function findOnPath(name: string, pathEnv = process.env["PATH"] ?? ""): string | null {
+  for (const dir of pathEnv.split(":")) {
+    if (!dir) continue;
+    const candidate = join(dir, name);
+    try {
+      accessSync(candidate, constants.X_OK);
+      const st = statSync(candidate);
+      if (st.isFile()) return candidate;
+    } catch {
+      // not present/executable here — keep scanning
+    }
+  }
+  return null;
+}
+
 export function checkSbEnrolled(pkgRoot: string = PKG_ROOT): Check {
   if (!existsSync(join(pkgRoot, "node_modules"))) {
-    return { name: "sb-enrolled", ok: false, detail: "node_modules missing: run `npm --prefix <dir> install` first" };
+    return { name: "sb-enrolled", ok: false, detail: "node_modules missing: run the `npm ci` plan step first" };
   }
-  const r = runCapture("node", [join(pkgRoot, "cli", "sb.ts"), "--version"]);
+  const found = findOnPath("sb");
+  if (found === null) return { name: "sb-enrolled", ok: false, detail: "no `sb` on PATH: run the global-link plan step first" };
+  const expected = join(pkgRoot, "cli", "sb.ts");
+  if (!samePath(found, expected)) {
+    return { name: "sb-enrolled", ok: false, detail: "PATH `sb` resolves elsewhere, not to this checkout" };
+  }
+  const r = runCapture("sb", ["--version"]);
   return { name: "sb-enrolled", ok: r.ok, detail: r.ok ? r.out || "sb --version exits 0" : `sb --version failed: ${r.out}` };
 }
 
@@ -367,26 +438,92 @@ export function checkClaudeMarketplaceEnrolled(pkgRoot: string = PKG_ROOT, home:
   return { name: "claude-marketplace-enrolled", ok: hit, detail: hit ? `marketplace ${MARKETPLACE_NAME} points at the checkout` : `marketplace ${MARKETPLACE_NAME} points elsewhere (${loc || "unknown"})` };
 }
 
-export function checkClaudePluginEnrolled(home: string = homedir()): Check {
+// The plugin must be exactly substrate@substrate. Installed copies live in
+// a Claude cache dir (installPath never equals the checkout), so provenance
+// is proven by the marketplace binding: the `substrate` marketplace must be
+// registered AT this checkout (checkClaudeMarketplaceEnrolled). Evidence
+// order: live `claude plugin list --json` (exact id, enabled) first, then
+// the on-disk registry with the marketplace cross-check.
+export function checkClaudePluginEnrolled(pkgRoot: string = PKG_ROOT, home: string = homedir()): Check {
+  const live = runJson("claude", ["plugin", "list", "--json"], home);
+  if (live.ok && Array.isArray(live.value)) {
+    const hit = (live.value as Array<{ id?: unknown; enabled?: unknown }>).some((p) => p.id === PLUGIN_SPEC && p.enabled !== false);
+    if (hit) return { name: "claude-plugin-enrolled", ok: true, detail: `live: plugin ${PLUGIN_SPEC} installed and enabled` };
+  }
   const registry = join(home, ".claude", "plugins", "installed_plugins.json");
-  if (!existsSync(registry)) return { name: "claude-plugin-enrolled", ok: false, detail: "no Claude plugins installed" };
+  if (!existsSync(registry)) return { name: "claude-plugin-enrolled", ok: false, detail: `plugin ${PLUGIN_SPEC} not installed` };
   const parsed = readJson(registry);
   const plugins = ((parsed.value ?? {}) as { plugins?: Record<string, unknown> }).plugins ?? {};
-  const hit = Object.keys(plugins).some((k) => (k.split("@")[0] ?? k).toLowerCase() === PLUGIN_NAME);
-  return { name: "claude-plugin-enrolled", ok: hit, detail: hit ? `plugin ${PLUGIN_SPEC} installed` : `plugin ${PLUGIN_SPEC} not installed` };
+  if (!parsed.ok || !(PLUGIN_SPEC in plugins)) {
+    return { name: "claude-plugin-enrolled", ok: false, detail: `plugin ${PLUGIN_SPEC} not installed` };
+  }
+  const bound = checkClaudeMarketplaceEnrolled(pkgRoot, home).ok;
+  return {
+    name: "claude-plugin-enrolled",
+    ok: bound,
+    detail: bound
+      ? `registry: plugin ${PLUGIN_SPEC} installed, marketplace bound to the checkout`
+      : `plugin ${PLUGIN_SPEC} registered but marketplace ${MARKETPLACE_NAME} does not point at this checkout`,
+  };
 }
 
-export function checkClaudeStrictLive(pkgRoot: string = PKG_ROOT): Check {
-  const mkt = runCapture("claude", ["plugin", "validate", pkgRoot, "--strict", "--json"]);
+export function checkClaudeStrictLive(pkgRoot: string = PKG_ROOT, home: string = homedir()): Check {
+  const mkt = runCapture("claude", ["plugin", "validate", pkgRoot, "--strict", "--json"], { home });
   if (!mkt.ok) return { name: "claude-strict-live", ok: false, detail: `marketplace strict validation failed: ${mkt.out}` };
-  const plg = runCapture("claude", ["plugin", "validate", join(pkgRoot, "plugin", "substrate"), "--strict", "--json"]);
+  const plg = runCapture("claude", ["plugin", "validate", join(pkgRoot, "plugin", "substrate"), "--strict", "--json"], { home });
   return { name: "claude-strict-live", ok: plg.ok, detail: plg.ok ? "marketplace + plugin strict-validate green" : `plugin strict validation failed: ${plg.out}` };
 }
 
+// Beads absence covers every home-scoped Beads surface, not just names:
+// installed packages/marketplaces (probe), Pi settings extensions + hook
+// commands, Claude settings hook commands + plugin keys, and installed
+// plugin/marketplace dir names. Any /beads/i hit fails the check.
+function collectBeadsStrings(value: unknown, path: string, out: string[]): void {
+  if (typeof value === "string") {
+    if (/beads/i.test(value)) out.push(`${path}: ${value.slice(0, 120)}`);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((v, i) => collectBeadsStrings(v, `${path}[${i}]`, out));
+    return;
+  }
+  if (value !== null && typeof value === "object") {
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (/beads/i.test(k)) out.push(`${path}.${k}`);
+      collectBeadsStrings(v, `${path}.${k}`, out);
+    }
+  }
+}
+
 export function checkBeadsAbsent(home: string = homedir()): Check {
-  const naming = probeInstalledPlugins(home);
-  const remnants = naming.beadsRemnants;
-  return { name: "beads-absent", ok: remnants.length === 0, detail: remnants.length === 0 ? "no Beads package/extension/hook remnants" : `Beads remnants: ${remnants.join(", ")}` };
+  const remnants = [...probeInstalledPlugins(home).beadsRemnants];
+  const piSettings = join(home, ".pi", "agent", "settings.json");
+  if (existsSync(piSettings)) {
+    const parsed = readJson(piSettings);
+    if (parsed.ok && typeof parsed.value === "object" && parsed.value !== null) {
+      const { packages: _packages, ...rest } = parsed.value as Record<string, unknown>;
+      void _packages;
+      collectBeadsStrings(rest, "pi-settings", remnants);
+    }
+  }
+  for (const settingsFile of [join(home, ".claude", "settings.json"), join(home, ".claude.json")]) {
+    if (existsSync(settingsFile)) {
+      const parsed = readJson(settingsFile);
+      if (parsed.ok) collectBeadsStrings(parsed.value, settingsFile.endsWith(".claude.json") ? "claude.json" : "claude-settings", remnants);
+    }
+  }
+  for (const sub of ["marketplaces", "cache"]) {
+    const dir = join(home, ".claude", "plugins", sub);
+    if (!existsSync(dir)) continue;
+    try {
+      for (const entry of readdirSync(dir)) {
+        if (/beads/i.test(entry)) remnants.push(`plugins/${sub}/${entry}`);
+      }
+    } catch {
+      // best-effort: unreadable dirs never flip health alone
+    }
+  }
+  return { name: "beads-absent", ok: remnants.length === 0, detail: remnants.length === 0 ? "no Beads package/extension/hook remnants" : `Beads remnants: ${remnants.slice(0, 10).join(", ")}` };
 }
 
 export function checkEnrollment(pkgRoot: string = PKG_ROOT, home: string = homedir()): Check[] {
@@ -394,8 +531,8 @@ export function checkEnrollment(pkgRoot: string = PKG_ROOT, home: string = homed
     checkSbEnrolled(pkgRoot),
     checkPiEnrolled(pkgRoot, home),
     checkClaudeMarketplaceEnrolled(pkgRoot, home),
-    checkClaudePluginEnrolled(home),
-    checkClaudeStrictLive(pkgRoot),
+    checkClaudePluginEnrolled(pkgRoot, home),
+    checkClaudeStrictLive(pkgRoot, home),
     checkBeadsAbsent(home),
   ];
 }

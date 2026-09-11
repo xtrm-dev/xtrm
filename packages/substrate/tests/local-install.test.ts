@@ -11,12 +11,14 @@ import { join } from "node:path";
 import {
   EXPECTED_PACKAGE_NAME,
   MARKETPLACE_NAME,
+  PI_LOAD_PROMPT,
   PLUGIN_SPEC,
   checkBeadsAbsent,
   checkClaudeMarketplaceEnrolled,
   checkClaudePluginEnrolled,
   checkEnrollment,
   checkPiEnrolled,
+  checkSbEnrolled,
   planCommands,
   planInstall,
   resolveSubstrateDir,
@@ -100,12 +102,16 @@ describe("local install source (xtrm-6qu.13)", () => {
   it("planCommands are deterministic, native, and non-interactive", () => {
     const cmds = planCommands(PKG_ROOT);
     const byLabel = Object.fromEntries(cmds.map((c) => [c.label, c]));
-    assert.deepEqual(cmds.map((c) => c.cmd), ["npm", "node", "pi", "claude", "claude", "claude", "claude"]);
+    assert.deepEqual(cmds.map((c) => c.cmd), ["npm", "npm", "sb", "pi", "claude", "claude", "claude", "claude", "pi"]);
+    assert.deepEqual(byLabel["install sb dependencies (deterministic)"].args, ["--prefix", PKG_ROOT, "ci", "--ignore-scripts", "--no-audit", "--no-fund"]);
+    assert.deepEqual(byLabel["link sb onto PATH"].args, ["install", "--global", PKG_ROOT, "--ignore-scripts", "--no-audit", "--no-fund"]);
+    assert.deepEqual(byLabel["verify sb on PATH"].args, ["--version"]);
     assert.deepEqual(byLabel["install Pi package"].args, ["install", PKG_ROOT, "--approve"]);
     assert.deepEqual(byLabel["add Claude marketplace"].args, ["plugin", "marketplace", "add", PKG_ROOT, "--scope", "user"]);
     assert.deepEqual(byLabel["install Claude plugin"].args, ["plugin", "install", PLUGIN_SPEC, "-s", "user", "-y", "--json"]);
     assert.ok(byLabel["strict-validate marketplace"].args.includes("--strict"), "marketplace validation is strict");
     assert.ok(byLabel["strict-validate plugin"].args.includes("--strict"), "plugin validation is strict");
+    assert.deepEqual(byLabel["verify Pi loads substrate tools"].args, ["--no-session", "-p", PI_LOAD_PROMPT]);
     for (const c of cmds) {
       assert.ok(c.args.every((a) => typeof a === "string" && a.length > 0), "args are concrete strings, no prompting");
       assert.ok(!c.args.includes("--interactive"), "no interactive flags");
@@ -137,6 +143,27 @@ describe("local install source (xtrm-6qu.13)", () => {
     assert.match(r.stderr, /--dir requires/);
   });
 
+  it("sb must be a PATH binary resolving to this checkout", () => {
+    const savedPath = process.env["PATH"] ?? "";
+    const goodBin = scratch("sb-goodbin.");
+    symlinkSync(join(PKG_ROOT, "cli", "sb.ts"), join(goodBin, "sb"));
+    const foreignBin = scratch("sb-foreignbin.");
+    symlinkSync("/bin/true", join(foreignBin, "sb"));
+    const emptyBin = scratch("sb-emptybin.");
+    try {
+      process.env["PATH"] = `${goodBin}:${savedPath}`;
+      assert.equal(checkSbEnrolled(PKG_ROOT).ok, true, "sb linked to the checkout must enroll");
+      process.env["PATH"] = `${foreignBin}:${savedPath}`;
+      const foreign = checkSbEnrolled(PKG_ROOT);
+      assert.equal(foreign.ok, false, "sb resolving elsewhere must not enroll");
+      assert.match(foreign.detail ?? "", /elsewhere/);
+      process.env["PATH"] = `${emptyBin}:/nonexistent-path-xyz`;
+      assert.equal(checkSbEnrolled(PKG_ROOT).ok, false, "absent sb must not enroll");
+    } finally {
+      process.env["PATH"] = savedPath;
+    }
+  });
+
   it("enrollment reports not-enrolled under an empty HOME", () => {
     const home = scratch("sb-empty-home.");
     const checks = checkEnrollment(PKG_ROOT, home);
@@ -162,8 +189,59 @@ describe("local install source (xtrm-6qu.13)", () => {
     );
     assert.equal(checkPiEnrolled(PKG_ROOT, home).ok, true);
     assert.equal(checkClaudeMarketplaceEnrolled(PKG_ROOT, home).ok, true);
-    assert.equal(checkClaudePluginEnrolled(home).ok, true);
+    assert.equal(checkClaudePluginEnrolled(PKG_ROOT, home).ok, true);
     assert.equal(checkBeadsAbsent(home).ok, true);
+  });
+
+  it("plugin from a wrong marketplace does not enroll", () => {
+    const home = scratch("sb-wrongmkt-home.");
+    mkdirSync(join(home, ".claude", "plugins"), { recursive: true });
+    writeFileSync(
+      join(home, ".claude", "plugins", "known_marketplaces.json"),
+      JSON.stringify({ [MARKETPLACE_NAME]: { source: { source: "directory", path: PKG_ROOT }, installLocation: PKG_ROOT } }),
+    );
+    writeFileSync(
+      join(home, ".claude", "plugins", "installed_plugins.json"),
+      JSON.stringify({ plugins: { "substrate@evil-marketplace": [{ installPath: "/x" }] } }),
+    );
+    const c = checkClaudePluginEnrolled(PKG_ROOT, home);
+    assert.equal(c.ok, false, "substrate from another marketplace must not satisfy the exact spec");
+  });
+
+  it("Beads hook residue in settings fails the absence check", () => {
+    const home = scratch("sb-hookres-home.");
+    mkdirSync(join(home, ".pi", "agent"), { recursive: true });
+    writeFileSync(
+      join(home, ".pi", "agent", "settings.json"),
+      JSON.stringify({ packages: [], extensions: ["/x/beads-ext"], hooks: { SessionStart: [{ command: "node /x/beads-hook.mjs" }] } }),
+    );
+    mkdirSync(join(home, ".claude", "plugins"), { recursive: true });
+    writeFileSync(
+      join(home, ".claude", "settings.json"),
+      JSON.stringify({
+        hooks: { Stop: [{ hooks: [{ type: "command", command: "node /x/beads-compact-restore.mjs" }] }] },
+        enabledPlugins: { "beads@beads-marketplace": true },
+      }),
+    );
+    const beads = checkBeadsAbsent(home);
+    assert.equal(beads.ok, false, "hook/extension/plugin residue must fail");
+    assert.match(beads.detail ?? "", /beads/i);
+  });
+
+  it("explicit home governs, not the process HOME", () => {
+    const enrolled = scratch("sb-gov-enrolled.");
+    mkdirSync(join(enrolled, ".pi", "agent"), { recursive: true });
+    writeFileSync(join(enrolled, ".pi", "agent", "settings.json"), JSON.stringify({ packages: [PKG_ROOT] }));
+    const empty = scratch("sb-gov-empty.");
+    const savedHome = process.env["HOME"];
+    process.env["HOME"] = empty;
+    try {
+      assert.equal(checkPiEnrolled(PKG_ROOT, enrolled).ok, true, "explicit home must win over process HOME");
+      assert.equal(checkPiEnrolled(PKG_ROOT, empty).ok, false);
+    } finally {
+      if (savedHome === undefined) delete process.env["HOME"];
+      else process.env["HOME"] = savedHome;
+    }
   });
 
   it("enrollment rejects registries pointing elsewhere and flags Beads remnants", () => {
