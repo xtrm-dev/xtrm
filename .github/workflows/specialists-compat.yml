@@ -62,7 +62,6 @@ jobs:
       - name: Record xtrm SHA
         run: |
           echo "ok xtrm HEAD: $(git rev-parse HEAD)"
-          git status --porcelain | head -n 5
 
       - name: Set up Node 24
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -179,10 +178,7 @@ jobs:
 
       # The ./specialists checkout is untracked content inside the xtrm
       # tree by construction, so the xtrm root is checked excluding it.
-      # No pipe into head: under the runner's pipefail a long dirty list
-      # makes head close early and git die with SIGPIPE/141 before the
-      # diagnostic prints. Truncation uses printf, and the failure output
-      # is paths-only (no contents), inside log-hygiene rules.
+      # Capture/truncation rules live inline below (pipefail-safe).
       - name: Clean tree proof
         run: |
           bash .github/scripts/specialists-compat.sh clean-tree ./specialists
