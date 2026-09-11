@@ -7,6 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
+import { JournalService } from "../src/service/journal-service.ts";
 import { importBeads } from "../src/compatibility/beads/import.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
 import { contract } from "./helpers.ts";
@@ -49,24 +50,42 @@ function cli(dbPath: string, argv: string[]): unknown {
   return env.data;
 }
 
+type ReceiptV3 = {
+  schema: string;
+  dryRun: boolean;
+  project: string;
+  inputs: { records: number; issues: number; memoriesSkipped: number; inlineEdges: number; fileEdges: number };
+  result: {
+    created: string[]; skippedPresent: string[]; edgeErrors: string[]; unready: string[];
+    hierarchyApplied: Array<{ parent: string; child: string }>; hierarchyErrors: string[]; depFailures: string[];
+  };
+  counts: { created: number; skipped: number; edgeRowsBefore: number; edgeRowsAfter: number };
+  verifier: { checks: Array<{ check: string; ok: boolean }> };
+  verdict: string;
+};
+
 describe("G44: import is idempotent", () => {
   it("second run skips every alias without mutating", () => {
     const { dbPath, exportPath, edgesPath } = setup();
-    const first = cli(dbPath, ["import", "beads", "--file", exportPath, "--edges-file", edgesPath, "--project", "prj_mig"]) as {
-      created: string[]; skippedPresent: string[]; edgeErrors: string[];
-    };
-    assert.deepEqual([...first.created].sort(), ["bd-done", "bd-epic", "bd-thin"]);
-    assert.deepEqual(first.edgeErrors, []);
+    const first = cli(dbPath, ["import", "beads", "--file", exportPath, "--edges-file", edgesPath, "--project", "prj_mig"]) as ReceiptV3;
+    assert.equal(first.verdict, "PASS");
+    assert.deepEqual([...first.result.created].sort(), ["bd-done", "bd-epic", "bd-thin"]);
+    assert.deepEqual(first.result.edgeErrors, []);
     const db = openSubstrate(dbPath);
-    const count = new IssueService(db).listIssues("prj_mig").length;
+    const svc = new IssueService(db);
+    const count = svc.listIssues("prj_mig").length;
+    const edgeRows = svc.listActiveEdges().length;
     db.close();
-    const second = cli(dbPath, ["import", "beads", "--file", exportPath, "--edges-file", edgesPath, "--project", "prj_mig"]) as {
-      created: string[]; skippedPresent: string[];
-    };
-    assert.deepEqual(second.created, []);
-    assert.deepEqual([...second.skippedPresent].sort(), ["bd-done", "bd-epic", "bd-thin"]);
+    const second = cli(dbPath, ["import", "beads", "--file", exportPath, "--edges-file", edgesPath, "--project", "prj_mig"]) as ReceiptV3;
+    assert.equal(second.verdict, "PASS");
+    assert.deepEqual(second.result.created, []);
+    assert.deepEqual([...second.result.skippedPresent].sort(), ["bd-done", "bd-epic", "bd-thin"]);
     const db2 = openSubstrate(dbPath);
-    assert.equal(new IssueService(db2).listIssues("prj_mig").length, count);
+    const svc2 = new IssueService(db2);
+    assert.equal(svc2.listIssues("prj_mig").length, count);
+    // Check 7: rerun grows neither issues nor edge rows.
+    assert.equal(svc2.listActiveEdges().length, edgeRows);
+    assert.equal(second.counts.edgeRowsBefore, second.counts.edgeRowsAfter);
     db2.close();
   });
 });
@@ -74,9 +93,10 @@ describe("G44: import is idempotent", () => {
 describe("G45/G46: aliases resolve, thin work lands unready", () => {
   it("beads IDs resolve; nothing imported is dispatchable", () => {
     const { dbPath, exportPath, edgesPath } = setup();
-    const result = cli(dbPath, ["import", "beads", "--file", exportPath, "--edges-file", edgesPath, "--project", "prj_mig"]) as {
-      unready: string[]; created: string[];
-    };
+    const receipt = cli(dbPath, ["import", "beads", "--file", exportPath, "--edges-file", edgesPath, "--project", "prj_mig"]) as ReceiptV3;
+    assert.equal(receipt.verdict, "PASS");
+    assert.ok(receipt.verifier.checks.every((c) => c.ok));
+    const result = receipt.result;
     assert.equal(result.unready.length, result.created.length);
     const db = openSubstrate(dbPath);
     const svc = new IssueService(db);
@@ -162,6 +182,84 @@ describe("G45: human-shaped beads IDs resolve as aliases, not dead human refs", 
       ], []);
       assert.deepEqual(again.created, []);
       assert.deepEqual(again.skippedPresent, ["xtrm-401"]);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe("A9 receipt parity: dry-run and apply share inputs + envelope", () => {
+  it("identical inputs census and envelope keys on both paths", () => {
+    const { dbPath, exportPath, edgesPath } = setup();
+    const dry = cli(dbPath, ["import", "beads", "--file", exportPath, "--edges-file", edgesPath, "--project", "prj_mig", "--dry-run"]) as ReceiptV3;
+    assert.equal(dry.dryRun, true);
+    const applied = cli(dbPath, ["import", "beads", "--file", exportPath, "--edges-file", edgesPath, "--project", "prj_mig"]) as ReceiptV3;
+    assert.equal(applied.dryRun, false);
+    assert.equal(applied.verdict, "PASS");
+    assert.deepEqual(applied.inputs, dry.inputs);
+    assert.equal(applied.schema, "substrate-import-receipt/v1");
+    assert.equal(dry.schema, "substrate-import-receipt/v1");
+  });
+});
+
+describe("A9 verdict: FAIL exits nonzero with the receipt attached", () => {
+  it("unknown edge endpoint fails closed with ok:false + data", () => {
+    const { exportPath } = setup();
+    const dir = mkdtempSync(join(tmpdir(), "substrate-migf-"));
+    const badEdges = join(dir, "bad.json");
+    writeFileSync(badEdges, JSON.stringify([{ issue_id: "bd-thin", depends_on_id: "ghost", type: "blocks" }]));
+    const dbPath2 = join(dir, "s.db");
+    const fail = runCli(["--db", dbPath2, "--json", "import", "beads", "--file", exportPath, "--edges-file", badEdges, "--project", "prj_mig", "--create-project", "MIG:Migration"]);
+    assert.equal(fail.code, 1);
+    const env = JSON.parse(fail.stdout) as { schema: string; ok: boolean; error: string; data: ReceiptV3 };
+    assert.equal(env.schema, SCHEMA_VERSION);
+    assert.equal(env.ok, false);
+    assert.ok(env.error.includes("FAIL"));
+    assert.equal(env.data.verdict, "FAIL");
+    assert.equal(env.data.result.edgeErrors.length, 1);
+  });
+});
+
+describe("A9 intake: inline deps authoritative; notes/comments to journal", () => {
+  it("inline dependencies[] apply without --edges-file; history lands in journal", () => {
+    const dir = mkdtempSync(join(tmpdir(), "substrate-migi-"));
+    const dbPath = join(dir, "s.db");
+    const exportPath = join(dir, "beads.jsonl");
+    const lines = [
+      { _type: "issue", id: "w-epic", title: "Epic", description: "PROBLEM: p\nSUCCESS: s", status: "open", priority: 1, issue_type: "epic", created_by: "human:x" },
+      {
+        _type: "issue", id: "w-task", title: "Task", description: "plain carried text", status: "closed", priority: 0,
+        issue_type: "task", created_by: "human:y", notes: "historical note body",
+        comments: [{ id: "c1", issue_id: "w-task", author: "human:z", created_at: "2026-01-01", text: "first comment" }],
+        close_reason: "shipped", dependencies: [{ issue_id: "w-task", depends_on_id: "w-epic", type: "parent-child" }],
+      },
+    ];
+    writeFileSync(exportPath, lines.map((l) => JSON.stringify(l)).join("\n"));
+    const receipt = cli(dbPath, ["import", "beads", "--file", exportPath, "--project", "prj_mig", "--create-project", "MIG:Migration"]) as ReceiptV3;
+    assert.equal(receipt.verdict, "PASS");
+    assert.equal(receipt.inputs.inlineEdges, 1);
+    assert.equal(receipt.result.hierarchyApplied.length, 1);
+    assert.equal(receipt.result.notesApplied.length, 1);
+    assert.equal(receipt.result.commentsApplied.length, 1);
+    assert.equal(receipt.result.closeReasonCarried.length, 1);
+    const db = openSubstrate(dbPath);
+    try {
+      const svc = new IssueService(db);
+      const taskId = svc.resolveRef("w-task").id;
+      assert.equal(svc.getParent(taskId)?.humanRef, svc.resolveRef("w-epic").humanRef);
+      assert.equal(svc.resolveRef("w-task").lifecycleState, "done");
+      const journal = new JournalService(db, svc);
+      const entries = journal.listEntries(taskId, { kind: "note" });
+      const keys = entries.flatMap((e) => e.refs.map((r) => r.key));
+      assert.ok(keys.includes("beads-note:w-task"));
+      assert.ok(keys.includes("beads-comment:c1"));
+      const rev = svc.getRevision(taskId, svc.getIssue(taskId).currentRevision);
+      const problem = String((rev.contract as { problem: string }).problem);
+      assert.ok(!problem.includes("historical note body"));
+      assert.ok(!problem.includes("first comment"));
+      const second = cli(dbPath, ["import", "beads", "--file", exportPath, "--project", "prj_mig"]) as ReceiptV3;
+      assert.equal(second.verdict, "PASS");
+      assert.equal(journal.listEntries(taskId, { kind: "note" }).length, entries.length);
     } finally {
       db.close();
     }
