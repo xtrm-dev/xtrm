@@ -26,15 +26,30 @@ Pi extension, and Claude plugin consume the typed service, never SQL.
 - Corrupt schema or unknown migration state refuses startup/mutation.
 - Uncertain external effects are recorded `uncertain`, never guessed.
 
-## CLI (P4)
+## CLI
 
 `cli/sb.ts` (`bin: sb`) is a thin adapter over the typed service — no SQL,
-no business logic. Verbs: `issue
-create/show/edit/validate/list/ready/tree/children/relate/claim/release/close`
-plus `plan check/apply`. Every Issue-taking command accepts all five ID
-forms via `resolveRef`. `--json` emits the `substrate-cli/v1` envelope
-(see `cli/schema.json`, version 1.0.0, additive-only compat); otherwise one
-concise human line per item (locator · humanRef · title [state revN]).
+no business logic. Groups: `issue` (create/show/edit/note/validate/attest/
+list/ready/tree/children/relate/unrelate/claim/release/state/close/reopen/
+defer/cancel/archive/resume), `project` (create/link/unlink), `plan`
+(check/apply), `journal` (append/checkpoint/show/since/render), `provenance`
+(dispatch/trace/commit/receipt/pr/bundle), `import beads`, `export project`.
+Every Issue-taking command accepts all five ID forms via `resolveRef`.
+`--json` emits the `substrate-cli/v1` envelope (see `cli/schema.json`,
+version 1.0.0, additive-only compat); otherwise one concise human line per
+item (locator · humanRef · title [state revN]).
+
+Side-effect-free surfaces: `sb --help` / `sb help [group [verb]] [--json]`
+and `sb --version` never open or create `state.db`. `sb doctor [--json]`
+reports `{dbPath, schemaHealthy, schemaError, projects, link, linkError,
+gitRoot}` and exits 0 healthy / 1 otherwise. `sb issue note` is
+append-only journal (no revision bump); `sb issue edit --title/--priority`
+is metadata (no revision) while `--contract/--ownership/--context-refs/
+--scrutiny` is execution-relevant (new revision, readiness invalidated);
+`sb issue state` is the canonical lifecycle operation with
+close/reopen/defer/cancel/archive aliases; `sb issue unrelate` deactivates a
+typed edge fail-closed (`parent_child` stays structural). Start at
+`docs/substrate/README.md` for the operator walkthrough.
 
 ## Pi integration (P6)
 
@@ -57,9 +72,12 @@ Substrate readiness + execution binding (no prompt smuggling by
 construction — the gate takes no prompt text). Conformance record:
 `docs/substrate/phase10-conformance.md`.
 
-## Deferred to later phases
+## Beads migration
 
-Beads migration + instruction cutover (P11).
+One-way import only (no dual-write, no reverse sync):
+`sb import beads --file <export.jsonl> --project <id> [--edges-file <f>]
+[--create-project <PREFIX:Name>] [--dry-run]`. Imported Beads IDs live on
+as aliases, so old refs keep resolving.
 
 ## Develop
 
