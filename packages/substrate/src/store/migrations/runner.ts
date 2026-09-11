@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "../database.ts";
 import { version as v1, name as n1, sql as sql1 } from "./001_baseline.ts";
 import { version as v2, name as n2, sql as sql2 } from "./002_projections_sync.ts";
 import { version as v3, name as n3, sql as sql3 } from "./003_readiness.ts";

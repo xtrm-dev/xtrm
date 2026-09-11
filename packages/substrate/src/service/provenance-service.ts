@@ -7,7 +7,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
 import { withTransaction } from "../store/transactions.ts";
 import { normalizeWorkspace, sameHolder } from "../domain/claim.ts";
 import {

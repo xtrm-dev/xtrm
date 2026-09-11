@@ -94,3 +94,8 @@ npm run typecheck # tsc --noEmit
 
 Constraint: keep `src/` to erasable TypeScript (no enums, no parameter
 properties) so tests run directly on Node ≥24 without a build.
+
+Runtime support: the library imports in-process on Node ≥24 (`node:sqlite`)
+and on Bun ≥1.3 (`bun:sqlite`); `openSubstrate()` selects the driver at
+runtime with no static `node:sqlite` import. Bun acceptance:
+`TMPDIR=/var/tmp bun tests/bun-acceptance.ts`.

@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "../store/database.ts";
 import { ISSUE_KINDS, type ResolvedIssue } from "../domain/issue.ts";
 import { validateContractStructure } from "../domain/contract.ts";
 import { EDGE_KINDS, wouldCreateCycle, type GraphLink } from "../domain/edge.ts";

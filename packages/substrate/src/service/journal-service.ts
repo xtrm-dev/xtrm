@@ -6,7 +6,7 @@
 // never durable work state (§5); this service is the durable side that
 // Phases 6/7 (Pi/Claude seams) consume. No host wiring lives here.
 
-import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
 import { withTransaction } from "../store/transactions.ts";
 import type { IssueService } from "./issue-service.ts";
 import {
