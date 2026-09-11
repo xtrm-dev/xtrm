@@ -30,6 +30,28 @@ immutable SHAs gate the Specialists merge.
   lack the lazy `bun:sqlite`/`node:sqlite` driver seam the parity runtime
   requires. Do not call parity against a pre-`f8b2ebf` xtrm commit final.
 
+## Pre-dispatch human review (required, no exceptions)
+
+The workflow executes untrusted public code (install scripts, test
+suites) on a runner that also holds the private tree, and the runner
+has unrestricted network egress. No YAML structure removes that: a
+malicious public SHA could read the private checkout and exfiltrate it
+(F2 residual risk, accepted and stated here). The control is a human
+review by a trusted operator BEFORE every dispatch:
+
+- Provenance: who pushed the SHA, to which ref, and does the push
+  match the expected Specialists lane/branch and author?
+- Diff: review the full diff of the candidate SHA against the last
+  gated Specialists SHA. It must contain only expected A7 boundary
+  work (seam, parity tests, auth/provider fixes). Unexplained build,
+  install-script, network, or filesystem-touching changes are a veto.
+- Pin: dispatch the exact reviewed SHA (full 40-char), never a branch
+  name. Re-review on any SHA change, however small.
+
+Live `workflow_dispatch` success/negative runs happen only after this
+workflow merges to the default branch. The bead stays open through both
+run URLs being recorded.
+
 ## Seam contract (agreed with the Specialists spec lane)
 
 - Factory: `createWorkItemBoundary(ports)` from
@@ -48,6 +70,7 @@ immutable SHAs gate the Specialists merge.
 
 ## Manual dispatch
 
+0. Complete the pre-dispatch human review above. No review, no dispatch.
 1. Confirm the candidate Specialists SHA is pushed and reachable. A bare
    `git ls-remote <url> <sha>` does NOT prove this (the pattern matches
    ref names, not commit objects). Use one of:

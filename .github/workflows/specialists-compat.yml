@@ -31,7 +31,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: specialists-compat-${{ inputs.specialists_sha }}
+  # Fixed group (deliberately no SHA interpolation anywhere outside env:).
+  # Runs queue FIFO; cancel is never safe for a merge gate.
+  group: specialists-compat-private
   cancel-in-progress: false
 
 jobs:
@@ -142,7 +144,7 @@ jobs:
         working-directory: specialists
         run: |
           log="$RUNNER_TEMP/prove-node-outer.log"
-          if bash "${{ github.workspace }}/.github/scripts/specialists-compat.sh" prove-node . >"$log" 2>&1; then
+          if bash ../.github/scripts/specialists-compat.sh prove-node . >"$log" 2>&1; then
             echo "ok prove-node: PASS (typecheck/build)"
           else
             rc=$?
