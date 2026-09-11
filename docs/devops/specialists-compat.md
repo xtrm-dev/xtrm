@@ -48,10 +48,15 @@ immutable SHAs gate the Specialists merge.
 
 ## Manual dispatch
 
-1. Confirm the candidate Specialists SHA is pushed and reachable:
-   `git ls-remote https://github.com/xtrm-dev/specialists.git <sha>`
-   must print the SHA. Empty output means: do not dispatch, the run will
-   (correctly) fail.
+1. Confirm the candidate Specialists SHA is pushed and reachable. A bare
+   `git ls-remote <url> <sha>` does NOT prove this (the pattern matches
+   ref names, not commit objects). Use one of:
+   - ref comparison: `git ls-remote <url> 'refs/heads/xt/spec-lane-a7-boundary'`
+     must print the candidate SHA on that ref; or
+   - exact fetch: in an empty scratch repo,
+     `git fetch <url> <full-sha>` must succeed.
+   Anything else means: do not dispatch, the run will (correctly) fail
+   at checkout.
 2. Actions → `specialists compat (private)` → Run workflow →
    `specialists_sha = <full SHA>` → Run.
 3. Wait for green. A red run blocks the Specialists merge until the cause
@@ -75,7 +80,11 @@ All required, all in one run:
 
 Record the run URL and both SHAs on `xtrm-6qu.7.1` and on the Specialists
 PR. Only pass/fail and bounded non-sensitive diagnostics leave this repo:
-the workflow has no artifact-upload step and never prints private source.
+the workflow has no artifact-upload step, the dispatch SHA enters shell
+only through the quoted `$SPECIALISTS_SHA` variable, and every step that
+executes repo code redirects full output to runner-local `$RUNNER_TEMP`
+logs while printing command name + PASS/FAIL only — failed assertions may
+dump source snippets, so that output never reaches the log stream.
 
 ## Negative proof
 

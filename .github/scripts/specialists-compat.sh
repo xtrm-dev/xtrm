@@ -72,18 +72,32 @@ cmd_guard_seam() {
 cmd_prove_node() {
   local dir="${1:?specialists dir required}"
   # Frozen install proof is a separate workflow step; here typecheck/build.
+  # Each command's full output is captured to a local log file and only
+  # the command name + PASS/FAIL reaches stdout: compiler output may echo
+  # source snippets, which must never enter CI logs. Logs starting with
+  # $RUNNER_TEMP are runner-local and never uploaded.
+  local logbase="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+  run_quiet() {
+    local name="$1"; shift
+    local log="$logbase/prove-node-$name.log"
+    if (cd "$dir" && "$@" >"$log" 2>&1); then
+      rm -f -- "$log"
+      pass "prove-node: $name PASS"
+    else
+      local rc=$?
+      echo "FAIL prove-node: $name (exit $rc) — log retained locally at $log, never uploaded" >&2
+      exit "$rc"
+    fi
+  }
   if node -e 'process.exit(typeof require(process.argv[1]+"/package.json").scripts?.typecheck === "string" ? 0 : 1)' "$dir" 2>/dev/null; then
-    (cd "$dir" && bun run typecheck) || fail "prove-node: bun run typecheck failed"
-    pass "prove-node: typecheck (bun run typecheck)"
+    run_quiet typecheck bun run typecheck
   elif [ -f "$dir/tsconfig.json" ]; then
-    (cd "$dir" && bunx tsc --noEmit) || fail "prove-node: bunx tsc --noEmit failed"
-    pass "prove-node: typecheck (bunx tsc --noEmit)"
+    run_quiet typecheck bunx tsc --noEmit
   else
     fail "prove-node: no typecheck script and no tsconfig.json"
   fi
   if node -e 'process.exit(typeof require(process.argv[1]+"/package.json").scripts?.build === "string" ? 0 : 1)' "$dir" 2>/dev/null; then
-    (cd "$dir" && bun run build) || fail "prove-node: bun run build failed"
-    pass "prove-node: build (bun run build)"
+    run_quiet build bun run build
   else
     pass "prove-node: build skipped (no build script; typecheck gates)"
   fi
