@@ -45,6 +45,11 @@ review by a trusted operator BEFORE every dispatch:
   gated Specialists SHA. It must contain only expected A7 boundary
   work (seam, parity tests, auth/provider fixes). Unexplained build,
   install-script, network, or filesystem-touching changes are a veto.
+- Install surface: confirm the candidate `package.json` declares no
+  `postinstall`/`preinstall` scripts and no `trustedDependencies` —
+  the workflow installs with `--ignore-scripts`, so a candidate that
+  needs a lifecycle script fails closed. Never remove the flag to
+  force a green run.
 - Pin: dispatch the exact reviewed SHA (full 40-char), never a branch
   name. Re-review on any SHA change, however small.
 - Acknowledge and record: before dispatching, write on `xtrm-6qu.7.1`

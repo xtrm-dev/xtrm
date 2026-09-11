@@ -110,9 +110,12 @@ jobs:
         with:
           bun-version: "1.3.14"
 
-      # --ignore-scripts: candidate c6b5d24a declares no postinstall and
-      #    no trustedDependencies (8 pure-JS deps); anything that truly
-      #    needs a lifecycle script fails closed here, never silently. --
+      # --ignore-scripts: install lifecycle scripts are untrusted code on
+      #    a networked runner. Any candidate that truly needs one fails
+      #    closed here, never silently — re-confirm no postinstall and no
+      #    trustedDependencies for the exact candidate SHA during
+      #    pre-dispatch review (evidence for the prior candidate: 8 pure-JS
+      #    deps, neither field present). --
       - name: Specialists frozen install (no scripts)
         working-directory: specialists
         run: |
