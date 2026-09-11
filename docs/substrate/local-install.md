@@ -140,17 +140,24 @@ Shape stability vs #168 (additive only — old keys verbatim):
 
 ## 5. Pi load verification (load, not just registration)
 
-`pi list`/settings prove enrollment, not load. The final plan command
-proves the extension loads and its tools register:
+`pi list`/settings prove enrollment, not load — and a model prompt would
+need provider auth/quota/network while its exit code cannot prove which
+tools registered. The final plan command is a model-free SDK probe instead
+(`integrations/pi-load-check.ts`, run as `node <checkout>/integrations/
+pi-load-check.ts --json` under the target HOME): it builds a
+`DefaultResourceLoader` against the enrolled agentDir, creates an agent
+session with an in-memory `SessionManager` (no turn ever runs), asserts the
+exact 8 `substrate_*` tools are registered with zero relevant extension
+load errors, then disposes the session. Exit 0/1/2 = loaded / not-loaded /
+invalid checkout. `xt doctor` stays free of it: load is proven once at init.
 
-```sh
-pi --no-session -p "Reply with only the comma-separated names of the substrate_* tools available to you, or the single word NONE."
-```
-
-Live fresh-HOME evidence (this lane): exit 0 with
-`substrate_issue_get, substrate_issue_search, substrate_issue_claim,
-substrate_issue_update, substrate_journal_append, substrate_journal_checkpoint,
-substrate_issue_resume, substrate_provenance_trace` — all 8 tools.
+Live offline evidence (this lane, `PI_OFFLINE=1`, no credentials,
+fresh HOME): exit 0 with `tools` = `substrate_issue_get,
+substrate_issue_search, substrate_issue_claim, substrate_issue_update,
+substrate_issue_resume, substrate_journal_append, substrate_journal_
+checkpoint, substrate_provenance_trace`, `missing` = [],
+`extensionErrors` = []. Empty HOME exits 1 with all 8 missing; a broken
+extension exits 1 with the relevant load error recorded.
 
 Programmatic entry points: `resolveSubstrateDir(explicit?, env?)`,
 `planInstall(explicit?, env?)` (fail-closed: no `commands` on error),

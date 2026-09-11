@@ -15,8 +15,9 @@
 // deterministic non-interactive native commands in run order: `npm ci`
 // (deterministic source deps) + global link (PATH `sb`) + literal
 // `sb --version` + `pi install <dir> --approve` + claude marketplace
-// add/install + `claude validate --strict` x2 + a Pi load probe that asks the
-// model to report the registered substrate tools. checkEnrollment verifies
+// add/install + `claude validate --strict` x2 + a model-free Pi load probe
+// (integrations/pi-load-check.ts: SDK loader + in-memory session assert the
+// 8 tools register with zero relevant extension errors). checkEnrollment verifies
 // ACTUAL enrollment (PATH `sb` resolving to this checkout, Pi settings,
 // Claude marketplace binding, exact substrate@substrate installed+enabled,
 // live strict validation, no Beads package/extension/hook remnants) — not
@@ -287,11 +288,14 @@ export interface PlannedCommand {
 // in two steps: deterministic `npm ci` for source deps (global link alone
 // leaves uuid et al. missing), then a global link of the checkout, then a
 // literal `sb --version`. The final Pi step proves load, not just
-// registration: it asks the model to report the registered substrate tools.
-export const PI_LOAD_PROMPT = "Reply with only the comma-separated names of the substrate_* tools available to you, or the single word NONE.";
+// registration: a model-free SDK probe (DefaultResourceLoader +
+// in-memory session) asserts the 8 substrate tools register with zero
+// relevant extension errors — no provider auth, quota, or network, and no
+// model output to interpret (integrations/pi-load-check.ts).
 
 export function planCommands(dir: string): PlannedCommand[] {
   const pluginDir = join(dir, "plugin", "substrate");
+  const loadProbe = join(dir, "integrations", "pi-load-check.ts");
   return [
     { label: "install sb dependencies (deterministic)", cmd: "npm", args: ["--prefix", dir, "ci", "--ignore-scripts", "--no-audit", "--no-fund"] },
     { label: "link sb onto PATH", cmd: "npm", args: ["install", "--global", dir, "--ignore-scripts", "--no-audit", "--no-fund"] },
@@ -301,7 +305,7 @@ export function planCommands(dir: string): PlannedCommand[] {
     { label: "install Claude plugin", cmd: "claude", args: ["plugin", "install", PLUGIN_SPEC, "-s", "user", "-y", "--json"] },
     { label: "strict-validate marketplace", cmd: "claude", args: ["plugin", "validate", dir, "--strict", "--json"] },
     { label: "strict-validate plugin", cmd: "claude", args: ["plugin", "validate", pluginDir, "--strict", "--json"] },
-    { label: "verify Pi loads substrate tools", cmd: "pi", args: ["--no-session", "-p", PI_LOAD_PROMPT] },
+    { label: "verify Pi loads substrate tools", cmd: "node", args: [loadProbe, "--json"] },
   ];
 }
 

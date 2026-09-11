@@ -11,7 +11,6 @@ import { join } from "node:path";
 import {
   EXPECTED_PACKAGE_NAME,
   MARKETPLACE_NAME,
-  PI_LOAD_PROMPT,
   PLUGIN_SPEC,
   checkBeadsAbsent,
   checkClaudeMarketplaceEnrolled,
@@ -102,7 +101,7 @@ describe("local install source (xtrm-6qu.13)", () => {
   it("planCommands are deterministic, native, and non-interactive", () => {
     const cmds = planCommands(PKG_ROOT);
     const byLabel = Object.fromEntries(cmds.map((c) => [c.label, c]));
-    assert.deepEqual(cmds.map((c) => c.cmd), ["npm", "npm", "sb", "pi", "claude", "claude", "claude", "claude", "pi"]);
+    assert.deepEqual(cmds.map((c) => c.cmd), ["npm", "npm", "sb", "pi", "claude", "claude", "claude", "claude", "node"]);
     assert.deepEqual(byLabel["install sb dependencies (deterministic)"].args, ["--prefix", PKG_ROOT, "ci", "--ignore-scripts", "--no-audit", "--no-fund"]);
     assert.deepEqual(byLabel["link sb onto PATH"].args, ["install", "--global", PKG_ROOT, "--ignore-scripts", "--no-audit", "--no-fund"]);
     assert.deepEqual(byLabel["verify sb on PATH"].args, ["--version"]);
@@ -111,7 +110,7 @@ describe("local install source (xtrm-6qu.13)", () => {
     assert.deepEqual(byLabel["install Claude plugin"].args, ["plugin", "install", PLUGIN_SPEC, "-s", "user", "-y", "--json"]);
     assert.ok(byLabel["strict-validate marketplace"].args.includes("--strict"), "marketplace validation is strict");
     assert.ok(byLabel["strict-validate plugin"].args.includes("--strict"), "plugin validation is strict");
-    assert.deepEqual(byLabel["verify Pi loads substrate tools"].args, ["--no-session", "-p", PI_LOAD_PROMPT]);
+    assert.deepEqual(byLabel["verify Pi loads substrate tools"].args, [join(PKG_ROOT, "integrations", "pi-load-check.ts"), "--json"]);
     for (const c of cmds) {
       assert.ok(c.args.every((a) => typeof a === "string" && a.length > 0), "args are concrete strings, no prompting");
       assert.ok(!c.args.includes("--interactive"), "no interactive flags");
