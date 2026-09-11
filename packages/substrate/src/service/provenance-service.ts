@@ -88,7 +88,7 @@ export class ProvenanceService {
   // Later contract edits never mutate it: a new dispatch binds the new
   // revision instead. Claim linkage is verified against the live claim row.
 
-  dispatch(issueId: string, input: DispatchInput, opts?: { now?: number; expectedClaim?: ExpectedClaimPin | null }): ExecutionBinding {
+  dispatch(issueId: string, input: DispatchInput, opts?: { now?: number; expectedClaim?: ExpectedClaimPin | null; expectedRevision?: number; expectedContractHash?: string }): ExecutionBinding {
     const problems = validateDispatchInput(input);
     if (problems.length > 0) throw new Error(`invalid dispatch input: ${problems[0]}`);
     const workspace = normalizeWorkspace(input.workspace);
@@ -104,6 +104,29 @@ export class ProvenanceService {
       const report = this.issues.getReadiness(issueId, { now });
       if (report.state !== "ready" && report.state !== "claimed") {
         throw new Error(`not dispatchable: ${issueId} is ${report.state}: ${report.reasons.join("; ")}`);
+      }
+      // Atomic revision pin: when the caller carries the revision/hash
+      // observed at check time, the live values inside this same
+      // transaction must still equal them. Mismatch fails closed before
+      // INSERT so no row can bind a rotated contract and no event is
+      // appended; scope validated at check then holds against the bound
+      // revision by construction. Undefined means no pin (direct-service
+      // callers that bypass the gate).
+      if (opts?.expectedRevision !== undefined) {
+        if (!Number.isInteger(opts.expectedRevision)) {
+          throw new Error(`dispatch rejected: invalid expected revision pin on ${issueId}`);
+        }
+        if (report.revision !== opts.expectedRevision) {
+          throw new Error(`dispatch rejected: revision changed since check on ${issueId} (expected rev ${opts.expectedRevision}, live rev ${report.revision}; repair and retry)`);
+        }
+      }
+      if (opts?.expectedContractHash !== undefined) {
+        if (typeof opts.expectedContractHash !== "string" || opts.expectedContractHash.trim() === "") {
+          throw new Error(`dispatch rejected: invalid expected contract hash pin on ${issueId}`);
+        }
+        if (report.contractHash !== opts.expectedContractHash) {
+          throw new Error(`dispatch rejected: contract changed since check on ${issueId} (repair and retry)`);
+        }
       }
       const resolved = this.issues.getResolvedContext(issueId);
       const active = this.issues.getActiveClaim(issueId, { now });

@@ -101,7 +101,7 @@ export function dispatchToSpecialist(
     sessionId: req.sessionId ?? null,
     workspace: req.workspace,
     baseCommit: req.baseCommit ?? null,
-  }, { expectedClaim: check.expectedClaim });
+  }, { expectedClaim: check.expectedClaim, expectedRevision: check.revision, expectedContractHash: check.contractHash });
   if (binding.issueRevision !== check.revision || binding.contractHash !== check.contractHash) {
     throw new Error("dispatch rejected: binding diverged from the gated revision (concurrent edit; repair and retry)");
   }

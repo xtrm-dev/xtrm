@@ -281,3 +281,65 @@ describe("A7-auth TOCTOU: check pin re-verified atomically before INSERT", () =>
     assert.equal(binding.claimId, check.expectedClaim!.id);
   });
 });
+
+describe("A7-auth TOCTOU revision: contract edit between check and dispatch binds nothing", () => {
+  let s: ReturnType<typeof scratch>;
+  beforeEach(() => { s = scratch(); });
+  afterEach(() => { try { s.db.close(); } catch { /* closed */ } rmSync(s.dir, { recursive: true, force: true }); });
+
+  function dispatchedCount(issueId: string): number {
+    return s.svc.listEvents(issueId).filter((e) => e.type === "provenance.dispatched").length;
+  }
+
+  it("contract change between check and dispatch rejects with zero bindings and zero dispatched events", () => {
+    const issue = readyIssue(s.svc, "toctou-rev");
+    s.svc.claimIssue(issue.id, "holder-A");
+    const check = checkDispatch(s.svc, { ref: issue.id, specialist: "executor", holder: "holder-A", workspace: "/tmp/w", requestedScope: ["a"] });
+    assert.equal(s.prov.listBindings(issue.id).length, 0);
+    assert.equal(dispatchedCount(issue.id), 0);
+    // Rotate the contract and re-attest so the issue stays dispatchable
+    // at rev 2: identity pins still match, only the revision pin differs.
+    s.svc.updateContract(issue.id, contract({ problem: "rotated problem", success: "rotated success" }), "tester");
+    s.svc.attestReadiness(issue.id, { outcome: "ready", policy: "default", attestedBy: "tester" });
+    assert.throws(
+      () => s.prov.dispatch(check.issueId, { workspace: s.dir, participantId: "holder-A" }, {
+        expectedClaim: check.expectedClaim,
+        expectedRevision: check.revision,
+        expectedContractHash: check.contractHash,
+      }),
+      /revision changed since check/,
+    );
+    assert.equal(s.prov.listBindings(issue.id).length, 0, "rejected dispatch writes no binding");
+    assert.equal(dispatchedCount(issue.id), 0, "rejected dispatch appends no dispatched event");
+  });
+
+  it("stale revision pin without any mutation rejects with zero bindings and zero dispatched events", () => {
+    const issue = readyIssue(s.svc, "toctou-stale-rev");
+    const check = checkDispatch(s.svc, { ref: issue.id, specialist: "executor", holder: "anyone", workspace: "/tmp/w" });
+    assert.throws(
+      () => s.prov.dispatch(check.issueId, { workspace: s.dir, participantId: "anyone" }, {
+        expectedClaim: check.expectedClaim,
+        expectedRevision: check.revision + 1,
+        expectedContractHash: check.contractHash,
+      }),
+      /revision changed since check/,
+    );
+    assert.equal(s.prov.listBindings(issue.id).length, 0, "rejected dispatch writes no binding");
+    assert.equal(dispatchedCount(issue.id), 0, "rejected dispatch appends no dispatched event");
+  });
+
+  it("stale contract hash pin rejects with zero bindings and zero dispatched events", () => {
+    const issue = readyIssue(s.svc, "toctou-stale-hash");
+    const check = checkDispatch(s.svc, { ref: issue.id, specialist: "executor", holder: "anyone", workspace: "/tmp/w" });
+    assert.throws(
+      () => s.prov.dispatch(check.issueId, { workspace: s.dir, participantId: "anyone" }, {
+        expectedClaim: check.expectedClaim,
+        expectedRevision: check.revision,
+        expectedContractHash: "0".repeat(64),
+      }),
+      /contract changed since check/,
+    );
+    assert.equal(s.prov.listBindings(issue.id).length, 0, "rejected dispatch writes no binding");
+    assert.equal(dispatchedCount(issue.id), 0, "rejected dispatch appends no dispatched event");
+  });
+});
