@@ -57,7 +57,7 @@ describe("E30: dispatch binds the exact revision/hash", () => {
   it("freezes revision/hash/context; later edits bind anew without mutating", () => {
     const { issue } = readyIssue(s.svc);
     const prov = new ProvenanceService(s.db, s.svc);
-    const b1 = prov.dispatch(issue.id, { workspace: s.dir, participantId: "p1", attemptId: "a1" });
+    const b1 = prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1", attemptId: "a1" });
     assert.equal(b1.issueRevision, 1);
     assert.equal(b1.contractHash, s.svc.getIssue(issue.id).currentContractHash);
     assert.equal(b1.claimId, s.svc.getActiveClaim(issue.id)?.id);
@@ -65,7 +65,7 @@ describe("E30: dispatch binds the exact revision/hash", () => {
 
     s.svc.updateContract(issue.id, contract({ problem: "v2 problem", success: "v2 success" }), "tester");
     s.svc.attestReadiness(issue.id, { outcome: "ready", policy: "default", attestedBy: "tester" });
-    const b2 = prov.dispatch(issue.id, { workspace: s.dir });
+    const b2 = prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1" });
     assert.equal(b2.issueRevision, 2);
     assert.notEqual(b2.contractHash, b1.contractHash);
     assert.equal(prov.getBinding(b1.id).issueRevision, 1, "first binding is immutable");
@@ -88,7 +88,7 @@ describe("E31-E33: trailers, SHA binding, rewrite reconciliation", () => {
   it("trailers attach idempotently; post-commit binds the exact SHA", () => {
     const { issue } = readyIssue(s.svc);
     const prov = new ProvenanceService(s.db, s.svc);
-    const binding = prov.dispatch(issue.id, { workspace: s.dir });
+    const binding = prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1" });
     const receipt = prov.allocateReceipt(binding.id);
     assert.equal(receipt.commitSha, null, "open receipt has no SHA yet (§28.3)");
 
@@ -107,7 +107,7 @@ describe("E31-E33: trailers, SHA binding, rewrite reconciliation", () => {
   it("amend/rebase supersedes the old SHA and moves the receipt head", () => {
     const { issue } = readyIssue(s.svc);
     const prov = new ProvenanceService(s.db, s.svc);
-    const receipt = prov.allocateReceipt(prov.dispatch(issue.id, { workspace: s.dir }).id);
+    const receipt = prov.allocateReceipt(prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1" }).id);
     prov.bindCommit(receipt.id, SHA_A);
     const { reconciled } = prov.reconcileRewrite(SHA_A, SHA_B);
     assert.equal(reconciled, 1);
@@ -129,7 +129,7 @@ describe("E34-E35: both query directions", () => {
     const journal = new JournalService(s.db, s.svc);
     journal.appendEntry(issue.id, { kind: "checkpoint", mechanical: journal.collectMechanical(issue.id) });
     const prov = new ProvenanceService(s.db, s.svc, journal);
-    const receipt = prov.allocateReceipt(prov.dispatch(issue.id, { workspace: s.dir, attemptId: "att-1" }).id);
+    const receipt = prov.allocateReceipt(prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1", attemptId: "att-1" }).id);
     prov.bindCommit(receipt.id, SHA_A);
     prov.attachArtifact(receipt.id, "pr", "github:xtrm/xtrm#121", { provider: "github" });
 
@@ -168,7 +168,7 @@ describe("E36: bundle survives SQLite loss with the exact contract", () => {
     });
     void checkpoint;
     const prov = new ProvenanceService(s.db, s.svc, journal);
-    const receipt = prov.allocateReceipt(prov.dispatch(issue.id, { workspace: s.dir }).id, {
+    const receipt = prov.allocateReceipt(prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1" }).id, {
       validationRefs: [{ kind: "validation", value: "tests green" }],
     });
     prov.bindCommit(receipt.id, SHA_C);
@@ -212,14 +212,14 @@ describe("E37: executor cannot forge host-owned receipts", () => {
     assert.throws(() => prov.getReceipt(parsed.receiptId!), /unknown receipt/);
     assert.deepEqual(prov.findByCommit(SHA_A), [], "no host binding, no resolution");
     assert.throws(() => prov.bindCommit("rcp_forged-by-model", SHA_A), /unknown receipt/);
-    assert.throws(() => prov.bindCommit(prov.allocateReceipt(prov.dispatch(issue.id, { workspace: s.dir }).id).id, "not-a-sha"), /invalid commit SHA/);
+    assert.throws(() => prov.bindCommit(prov.allocateReceipt(prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1" }).id).id, "not-a-sha"), /invalid commit SHA/);
     assert.throws(() => prov.attachArtifact(prov.allocateReceipt(prov.listBindings(issue.id)[0]!.id).id, "commit", SHA_B), /use bindCommit/);
   });
 
   it("receipts freeze the binding revision even after the issue advances", () => {
     const { issue } = readyIssue(s.svc);
     const prov = new ProvenanceService(s.db, s.svc);
-    const binding = prov.dispatch(issue.id, { workspace: s.dir });
+    const binding = prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1" });
     s.svc.updateContract(issue.id, contract({ problem: "v2", success: "v2s" }), "tester");
     const receipt = prov.allocateReceipt(binding.id);
     assert.equal(receipt.issueRevision, 1, "copied from binding, not live state");
@@ -235,7 +235,7 @@ describe("sb provenance verbs", () => {
   it("dispatch -> trace -> commit -> receipt -> pr -> bundle over the CLI", () => {
     const { issue } = readyIssue(s.svc);
     const humanRef = issue.humanRef;
-    const d = cli(s.dbPath, ["provenance", "dispatch", humanRef, "--workspace", s.dir]) as { bindingId: string; revision: number };
+    const d = cli(s.dbPath, ["provenance", "dispatch", humanRef, "--workspace", s.dir, "--participant", "holder-1"]) as { bindingId: string; revision: number };
     assert.equal(d.revision, 1);
 
     // Receipt + commit binding happen host-side (service), then queries run via CLI.

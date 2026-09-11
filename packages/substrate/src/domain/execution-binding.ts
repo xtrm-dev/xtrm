@@ -33,6 +33,17 @@ export interface DispatchInput {
   baseCommit?: string | null;
 }
 
+// Gate pin for atomic dispatch: the exact live claim observed by
+// checkDispatch (id + generation), or null when no live claim was
+// observed. Carried into provenance.dispatch and re-verified inside the
+// same transaction before INSERT so claim expiry/release/reclaim between
+// check and dispatch fails closed with no row written. Undefined means
+// no pin was supplied (direct-service callers that bypass the gate).
+export interface ExpectedClaimPin {
+  id: number;
+  generation: number;
+}
+
 export function newExecutionBindingId(): string {
   return `exb_${uuidv7()}`;
 }
