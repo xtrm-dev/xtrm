@@ -144,12 +144,13 @@ Shape stability vs #168 (additive only — old keys verbatim):
 need provider auth/quota/network while its exit code cannot prove which
 tools registered. The final plan command is a model-free SDK probe instead
 (`integrations/pi-load-check.ts`, run as `node <checkout>/integrations/
-pi-load-check.ts --json` under the target HOME): it builds a
+pi-load-check.ts --dir <checkout> --json` under the target HOME): it builds a
 `DefaultResourceLoader` against the enrolled agentDir, creates an agent
 session with an in-memory `SessionManager` (no turn ever runs), asserts the
 exact 8 `substrate_*` tools are registered with zero relevant extension
-load errors, then disposes the session. Exit 0/1/2 = loaded / not-loaded /
-invalid checkout. `xt doctor` stays free of it: load is proven once at init.
+load errors, then disposes the session. `--dir` revalidates the exact
+authorized source inside the probe, so a checkout that lost the script
+fails closed. Exit 0/1/2 = loaded / not-loaded / invalid checkout. `xt doctor` stays free of it: load is proven once at init.
 
 Live offline evidence (this lane, `PI_OFFLINE=1`, no credentials,
 fresh HOME): exit 0 with `tools` = `substrate_issue_get,

@@ -119,20 +119,27 @@ export function checkPiExtension(pkgRoot: string = PKG_ROOT): Check[] {
   return checks;
 }
 
-// -- §7 plugin naming: no two plugins named substrate ---------------------------
-// Probes the live Claude install registry plus the Pi package list. Returns
-// every installed name matching /substrate/i with its source so xt doctor
-// can flag duplicates or stale beads machinery.
+// -- §7 plugin naming: one substrate per surface -----------------------------
+// Probes the live Claude install registry plus the Pi package list. Names
+// are normalized to logical surface identities (`claude:substrate`,
+// `pi:substrate`): two different Pi checkout paths are the SAME logical
+// install, so duplicates means >1 within either surface. Exactly one Pi +
+// one Claude is the designed dual-surface state and never a duplicate.
+// Files that exist but cannot be read/parsed are recorded in
+// `inspectionErrors` (missing files are fine); absence proofs must fail
+// closed when inspection was impossible.
 
 export interface NamingProbe {
   substratePlugins: Array<{ name: string; source: string }>;
   beadsRemnants: string[];
   duplicates: boolean;
+  inspectionErrors: string[];
 }
 
 export function probeInstalledPlugins(home: string = homedir()): NamingProbe {
   const substratePlugins: NamingProbe["substratePlugins"] = [];
   const beadsRemnants: string[] = [];
+  const inspectionErrors: string[] = [];
   const registry = join(home, ".claude", "plugins", "installed_plugins.json");
   if (existsSync(registry)) {
     try {
@@ -140,12 +147,12 @@ export function probeInstalledPlugins(home: string = homedir()): NamingProbe {
       for (const [key, installs] of Object.entries(data.plugins ?? {})) {
         const short = key.split("@")[0] ?? key;
         if (/substrate/i.test(short)) {
-          for (const inst of installs) substratePlugins.push({ name: short, source: inst.installPath ?? "unknown" });
+          for (const inst of installs) substratePlugins.push({ name: "claude:substrate", source: inst.installPath ?? "unknown" });
         }
         if (/beads/i.test(short)) beadsRemnants.push(short);
       }
     } catch {
-      // corrupt registry degrades to empty, never flips health
+      inspectionErrors.push(registry);
     }
   }
   // Marketplaces are available-but-not-installed sources; a beads
@@ -159,7 +166,7 @@ export function probeInstalledPlugins(home: string = homedir()): NamingProbe {
         if (/beads/i.test(key) && !beadsRemnants.includes(key)) beadsRemnants.push(key);
       }
     } catch {
-      // best-effort
+      inspectionErrors.push(known);
     }
   }
   const piSettings = join(home, ".pi", "agent", "settings.json");
@@ -167,20 +174,22 @@ export function probeInstalledPlugins(home: string = homedir()): NamingProbe {
     try {
       const data = JSON.parse(readFileSync(piSettings, "utf8")) as { packages?: unknown[] };
       for (const p of data.packages ?? []) {
-        if (typeof p === "string" && /substrate/i.test(p)) substratePlugins.push({ name: p, source: "pi-packages" });
+        if (typeof p === "string" && /substrate/i.test(p)) substratePlugins.push({ name: "pi:substrate", source: "pi-packages" });
         if (typeof p === "string" && /beads/i.test(p)) beadsRemnants.push(`pi:${p}`);
       }
     } catch {
-      // best-effort
+      inspectionErrors.push(piSettings);
     }
   }
-  const names = substratePlugins.map((s) => s.name.toLowerCase());
-  // A true duplicate is the SAME name from two sources (e.g. substrate@a +
-  // substrate@b). Mere count > 1 is the designed dual-surface state: the Pi
-  // package entry (a path) plus the Claude plugin (name `substrate`) must be
-  // able to coexist, otherwise full enrollment could never report healthy
-  // (xtrm-6qu.13: `xt doctor` passes only when BOTH surfaces are enrolled).
-  return { substratePlugins, beadsRemnants, duplicates: new Set(names).size !== names.length };
+  const names = substratePlugins.map((s) => s.name);
+  // Duplicates means >1 within either surface. Exactly one Pi + one Claude
+  // is the designed dual-surface state: it must coexist, otherwise full
+  // enrollment could never report healthy (xt doctor passes only when BOTH
+  // surfaces are enrolled).
+  const counts = new Map<string, number>();
+  for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);
+  const duplicates = [...counts.values()].some((c) => c > 1);
+  return { substratePlugins, beadsRemnants, duplicates, inspectionErrors };
 }
 
 // -- A8 local-checkout contract (xtrm-6qu.13) ----------------------------------
@@ -199,6 +208,7 @@ export const REQUIRED_LAYOUT = [
   "package.json",
   "cli/sb.ts",
   "integrations/setup.ts",
+  "integrations/pi-load-check.ts",
   "integrations/pi/extension.ts",
   "integrations/pi/handlers.ts",
   "plugin/substrate/.claude-plugin/plugin.json",
@@ -305,7 +315,7 @@ export function planCommands(dir: string): PlannedCommand[] {
     { label: "install Claude plugin", cmd: "claude", args: ["plugin", "install", PLUGIN_SPEC, "-s", "user", "-y", "--json"] },
     { label: "strict-validate marketplace", cmd: "claude", args: ["plugin", "validate", dir, "--strict", "--json"] },
     { label: "strict-validate plugin", cmd: "claude", args: ["plugin", "validate", pluginDir, "--strict", "--json"] },
-    { label: "verify Pi loads substrate tools", cmd: "node", args: [loadProbe, "--json"] },
+    { label: "verify Pi loads substrate tools", cmd: "node", args: [loadProbe, "--dir", dir, "--json"] },
   ];
 }
 
@@ -500,20 +510,28 @@ function collectBeadsStrings(value: unknown, path: string, out: string[]): void 
 }
 
 export function checkBeadsAbsent(home: string = homedir()): Check {
-  const remnants = [...probeInstalledPlugins(home).beadsRemnants];
+  const naming = probeInstalledPlugins(home);
+  const remnants = [...naming.beadsRemnants];
+  const uninspectable = [...naming.inspectionErrors];
+  const readJsonStrict = (path: string): unknown => {
+    // Missing files are fine (fresh HOME); existing-but-unreadable files
+    // fail the absence proof closed: hooks could hide where we cannot look.
+    if (!existsSync(path)) return null;
+    const parsed = readJson(path);
+    if (!parsed.ok) uninspectable.push(path);
+    return parsed.ok ? parsed.value : null;
+  };
   const piSettings = join(home, ".pi", "agent", "settings.json");
-  if (existsSync(piSettings)) {
-    const parsed = readJson(piSettings);
-    if (parsed.ok && typeof parsed.value === "object" && parsed.value !== null) {
-      const { packages: _packages, ...rest } = parsed.value as Record<string, unknown>;
-      void _packages;
-      collectBeadsStrings(rest, "pi-settings", remnants);
-    }
+  const piValue = readJsonStrict(piSettings);
+  if (piValue !== null && typeof piValue === "object") {
+    const { packages: _packages, ...rest } = piValue as Record<string, unknown>;
+    void _packages;
+    collectBeadsStrings(rest, "pi-settings", remnants);
   }
   for (const settingsFile of [join(home, ".claude", "settings.json"), join(home, ".claude.json")]) {
-    if (existsSync(settingsFile)) {
-      const parsed = readJson(settingsFile);
-      if (parsed.ok) collectBeadsStrings(parsed.value, settingsFile.endsWith(".claude.json") ? "claude.json" : "claude-settings", remnants);
+    const value = readJsonStrict(settingsFile);
+    if (value !== null && value !== undefined) {
+      collectBeadsStrings(value, settingsFile.endsWith(".claude.json") ? "claude.json" : "claude-settings", remnants);
     }
   }
   for (const sub of ["marketplaces", "cache"]) {
@@ -524,8 +542,11 @@ export function checkBeadsAbsent(home: string = homedir()): Check {
         if (/beads/i.test(entry)) remnants.push(`plugins/${sub}/${entry}`);
       }
     } catch {
-      // best-effort: unreadable dirs never flip health alone
+      uninspectable.push(dir);
     }
+  }
+  if (uninspectable.length > 0) {
+    return { name: "beads-absent", ok: false, detail: `could not inspect (fail closed): ${[...new Set(uninspectable)].slice(0, 5).join(", ")}` };
   }
   return { name: "beads-absent", ok: remnants.length === 0, detail: remnants.length === 0 ? "no Beads package/extension/hook remnants" : `Beads remnants: ${remnants.slice(0, 10).join(", ")}` };
 }
