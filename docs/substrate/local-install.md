@@ -124,8 +124,8 @@ explicit-but-invalid dir fails closed with exit 2 on stderr for both verbs.
 Shape stability vs #168 (additive only — old keys verbatim):
 
 - `plan --json`: `{ surfaces: [...] }` **plus** `dir` and `commands`
-  (`[{ label, cmd, args }]` — the seven native commands from §1–§3 in run
-  order). Exit 0. On validation failure: stderr error, exit 2, no `commands`.
+  (`[{ label, cmd, args }]` — the nine native commands from §1–§3 plus §5
+  in run order). Exit 0. On validation failure: stderr error, exit 2, no `commands`.
 - `check --json`: `{ ok, claude, pi, naming }` **plus** `dir` and
   `enrollment` (`Check[]`: `sb-enrolled`, `pi-enrolled`,
   `claude-marketplace-enrolled`, `claude-plugin-enrolled`,
