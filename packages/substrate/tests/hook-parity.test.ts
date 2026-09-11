@@ -113,7 +113,7 @@ describe("§54 hook parity", () => {
       const nudged = handleCommitCheck({ command: "git commit -m x", cwd: s.dir, issueRef: s.humanRef, dbPath: s.dbPath });
       assert.equal(nudged.allow, true);
       assert.ok(nudged.nudge, "claim without dispatch nudges");
-      const binding = prov.dispatch(s.issueId, { workspace: s.dir, claimId: claim.id });
+      const binding = prov.dispatch(s.issueId, { workspace: s.dir, claimId: claim.id, participantId: "op" });
       prov.allocateReceipt(binding.id);
       const quiet = handleCommitCheck({ command: "git commit -m x", cwd: s.dir, issueRef: s.humanRef, dbPath: s.dbPath });
       assert.equal(quiet.allow, true);
