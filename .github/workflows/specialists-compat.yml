@@ -186,7 +186,16 @@ jobs:
       - name: Clean tree proof
         run: |
           bash .github/scripts/specialists-compat.sh clean-tree ./specialists
-          dirty="$(git status --porcelain -- . ':!specialists' || true)"
+          # Fail-closed capture: a git-status failure must FAIL, never read
+          # as a clean tree. No pipe into head: under the runner's pipefail
+          # a long dirty list makes head close early and git die with
+          # SIGPIPE/141 before the diagnostic prints. Truncation uses
+          # printf, and the failure output is paths-only (no contents),
+          # inside log-hygiene rules.
+          if ! dirty="$(git status --porcelain -- . ':!specialists')"; then
+            echo "FAIL clean-tree: git status failed" >&2
+            exit 1
+          fi
           if [ -n "$dirty" ]; then
             echo "FAIL clean-tree: dirty xtrm tree (paths only, truncated):" >&2
             printf '%.800s\n' "$dirty" >&2
