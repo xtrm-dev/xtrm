@@ -1,0 +1,114 @@
+<!-- CANONICAL SOURCE. Generated consumers (e.g. ~/.xtrm/skills/default/using-xtrm/SKILL.md)
+     are produced from this file by the xtrm-6qu.8 generator work (§47). Do not hand-edit
+     consumers to fix doctrine; fix this file, then regenerate. -->
+
+# Using XTRM (canonical Substrate-native doctrine)
+
+You are one participant in a durable multi-agent work system, not an isolated
+chat session. Work moves between sessions, peers, Specialists, and later
+runtime stages. Design every step so a fresh worker reaches the executable
+state from durable sources alone, without previous chat history.
+
+## Authority stack (non-negotiable)
+
+```text
+Substrate owns durable work.
+
+Git owns code truth.
+
+A ready Issue revision is the executable contract. Never implement from a
+title + description issue.
+
+The Journal records progress and continuity. The Journal is not authority:
+Journal != Issue.
+
+Findings may become memory candidates at closeout; they are never reusable
+truth by themselves: Journal != Memory.
+
+Messages coordinate. They never silently change the contract.
+
+Executor output never self-certifies. Provenance records what execution
+actually produced: worker summary != provenance.
+```
+
+## The contract
+
+An executable Issue revision answers:
+
+```text
+PROBLEM      why this work exists and what is wrong or missing
+SUCCESS      observable end state
+SCOPE        files, systems, work boundary the worker owns
+NON_GOALS    nearby work it must not absorb
+CONSTRAINTS  invariants, compatibility, safety, ownership rules
+VALIDATION   commands, checks, evidence that prove success
+OUTPUT       durable result the worker must produce
+```
+
+plus execution policy: SCRUTINY, ownership, and context. If any of these is
+missing or stale, stop and repair the Issue through `/planning` (new revision
+plus readiness attestation). Never smuggle missing requirements into a prompt,
+a message, or a journal entry.
+
+## Ordinary worker loop
+
+```text
+Issue → claim → resume → execute → journal → validate → provenance → close/handoff
+```
+
+1. **Resolve and read.** `sb issue show <ref>` — read the exact revision and
+   its readiness (`sb issue validate <ref>`; attestation via
+   `sb issue attest <ref> --outcome ready --policy <p> --attested-by <who>`).
+   A draft, incomplete, or contradicted Issue is not executable.
+2. **Claim.** `sb issue claim <ref> --holder <who>` before editing or
+   dispatching; `sb issue release <ref> --holder <who>` when done. A claim is
+   an atomic lease, not an assignee label, and mutation requires the writer
+   lease.
+3. **Resume.** `sb issue resume <ref>` renders the Resume Capsule: current
+   revision, latest checkpoint, journal delta, claim, blockers, child status,
+   pending asks, provenance state. Read only the delta
+   (`sb journal since <ref> <cursor>`), never the full history, never the old
+   chat.
+4. **Execute and journal.** Append typed continuity as work happens —
+   `sb issue note <ref> "text" --kind <kind>` (`--file <path|->` for long
+   text): note (ordinary annotation), finding (observation), decision
+   (choice + reason), blocker (external dependency), milestone (progress
+   boundary), handoff (continuation). Entries are append-only and never bump
+   the Issue revision. For mechanical payloads use `sb journal append <ref>
+   --kind … --mechanical …` and `sb journal checkpoint <ref>` at durable
+   boundaries (checkpoint and compaction kinds). Do not journal every shell
+   command.
+5. **Authority changed? Stop.** If SCOPE, SUCCESS, NON_GOALS, CONSTRAINTS,
+   VALIDATION, OUTPUT, ownership, or scrutiny must change, pause execution and
+   repair via `/planning`. The old readiness is invalid on the new revision.
+6. **Validate.** Run the contract's VALIDATION and classify failures before
+   touching unrelated code: in-scope regression, pre-existing failure, or
+   infrastructure failure.
+7. **Provenance, then close or hand off.** Record what execution produced
+   (`sb provenance dispatch <ref>`, traceable via `sb provenance trace <ref>`);
+   checkpoint; then close through the lifecycle surface
+   (`sb issue state <ref> done`, or the `close | reopen | defer | cancel |
+   archive` aliases) or hand off with a bounded Journal handoff entry plus
+   blockers, pending work, and provenance refs — and release the claim.
+
+## Classification rules that prevent silent invalidation
+
+- `sb issue edit <ref> --title … --priority …` is metadata: no revision, no
+  readiness change.
+- `sb issue edit <ref> --contract … --ownership … --context-refs …
+  --scrutiny …` (guard races with `--expected-revision N`) is
+  execution-bearing: new revision, readiness invalidated.
+- `sb issue relate / unrelate --from <a> --to <b> --kind …` mutates the
+  graph, never the contract.
+- Never retain a readiness attestation across an execution-relevant mutation.
+
+## Routing
+
+Small, obvious work stays in this session when delegation costs more than it
+saves. Delegate when a bounded role, independent context, explicit
+permissions, retained evidence, or a review/test/security gate adds value;
+Specialists consume the same contract-quality rule through their own dispatch
+surface. Generic contract authoring is `/planning`; cold-start, resume, and
+context-pressure handoff are `starting-and-resuming-work`; peer messaging is
+the multiplexing surface. A fresh worker needs none of your chat — only the
+Issue revision, the capsule, and the journal delta.
