@@ -122,9 +122,17 @@ cmd_clean_tree() {
   local d
   for d in "$@"; do
     [ -d "$d" ] || fail "clean-tree: not a directory: $d"
+    # Fail-closed capture with no pipe into head: under pipefail a long
+    # dirty list makes head close early and git die with SIGPIPE/141
+    # before any diagnostic prints (observed in CI). Truncation uses
+    # printf; failure output is paths-only (no contents).
     local dirty
-    dirty="$(git -C "$d" status --porcelain | head -n 10)"
-    [ -z "$dirty" ] || fail "clean-tree: dirty tree in $d: $dirty"
+    if ! dirty="$(git -C "$d" status --porcelain)"; then
+      fail "clean-tree: git status failed in $d"
+    fi
+    if [ -n "$dirty" ]; then
+      fail "clean-tree: dirty tree in $d (paths only, truncated): $(printf '%.800s' "$dirty")"
+    fi
     pass "clean-tree: $d clean ($(git -C "$d" rev-parse --short HEAD))"
   done
 }
