@@ -16,7 +16,7 @@ import { scopeCovers } from "../domain/readiness.ts";
 import { sameHolder } from "../domain/claim.ts";
 import { IssueService } from "../service/issue-service.ts";
 import { ProvenanceService } from "../service/provenance-service.ts";
-import type { ExecutionBinding } from "../domain/execution-binding.ts";
+import type { ExecutionBinding, ExpectedClaimPin } from "../domain/execution-binding.ts";
 import type { ReadinessReport } from "../domain/readiness.ts";
 
 export interface SpecialistDispatchRequest {
@@ -37,6 +37,10 @@ export interface DispatchCheck {
   revision: number;
   contractHash: string;
   report: ReadinessReport;
+  // Pinned live claim observed at check time (id + generation), or null
+  // when no live claim existed. Carried into provenance.dispatch and
+  // re-verified atomically before INSERT; mismatch fails closed.
+  expectedClaim: ExpectedClaimPin | null;
 }
 
 // Fail-closed pre-activation check: no mutation, no AgentSession yet. Throws
@@ -77,7 +81,8 @@ export function checkDispatch(issues: IssueService, req: SpecialistDispatchReque
     const { ok, expanded } = scopeCovers(contractScope, req.requestedScope);
     if (!ok) throw new Error(`dispatch rejected: scope expansion outside contract SCOPE (§39.1): ${expanded.join(", ")}`);
   }
-  return { issueId: id, revision: report.revision, contractHash: report.contractHash, report };
+  const expectedClaim: ExpectedClaimPin | null = active ? { id: active.id, generation: active.generation } : null;
+  return { issueId: id, revision: report.revision, contractHash: report.contractHash, report, expectedClaim };
 }
 
 // Full dispatch: gate first, then the host-owned execution binding. The
@@ -96,7 +101,7 @@ export function dispatchToSpecialist(
     sessionId: req.sessionId ?? null,
     workspace: req.workspace,
     baseCommit: req.baseCommit ?? null,
-  });
+  }, { expectedClaim: check.expectedClaim });
   if (binding.issueRevision !== check.revision || binding.contractHash !== check.contractHash) {
     throw new Error("dispatch rejected: binding diverged from the gated revision (concurrent edit; repair and retry)");
   }

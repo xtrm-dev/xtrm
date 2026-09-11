@@ -14,6 +14,7 @@ import {
   newExecutionBindingId,
   validateDispatchInput,
   type DispatchInput,
+  type ExpectedClaimPin,
   type ExecutionBinding,
 } from "../domain/execution-binding.ts";
 import {
@@ -87,7 +88,7 @@ export class ProvenanceService {
   // Later contract edits never mutate it: a new dispatch binds the new
   // revision instead. Claim linkage is verified against the live claim row.
 
-  dispatch(issueId: string, input: DispatchInput, opts?: { now?: number }): ExecutionBinding {
+  dispatch(issueId: string, input: DispatchInput, opts?: { now?: number; expectedClaim?: ExpectedClaimPin | null }): ExecutionBinding {
     const problems = validateDispatchInput(input);
     if (problems.length > 0) throw new Error(`invalid dispatch input: ${problems[0]}`);
     const workspace = normalizeWorkspace(input.workspace);
@@ -108,6 +109,27 @@ export class ProvenanceService {
       const active = this.issues.getActiveClaim(issueId, { now });
       if (input.claimId !== undefined && input.claimId !== null) {
         if (!active || active.id !== input.claimId) throw new Error(`dispatch rejected: claim ${input.claimId} is not the live claim on ${issueId}`);
+      }
+      // Atomic gate pin: when the caller carries the claim observed at
+      // check time, the live claim inside this same transaction must still
+      // equal it (id + generation, including expected-null meaning still
+      // no live claim). Mismatch fails closed before INSERT so no row can
+      // bind a rotated or newly-appeared claim. Undefined means no pin was
+      // supplied (direct-service callers that bypass the gate).
+      if (opts?.expectedClaim !== undefined) {
+        const expected = opts.expectedClaim;
+        if (expected !== null) {
+          if (typeof expected !== "object" || !Number.isInteger(expected.id) || !Number.isInteger(expected.generation)) {
+            throw new Error(`dispatch rejected: invalid expected claim pin on ${issueId}`);
+          }
+          if (!active || active.id !== expected.id || active.generation !== expected.generation) {
+            throw new Error(`dispatch rejected: live claim changed since check on ${issueId} (expected claim ${expected.id} gen ${expected.generation}; repair and retry)`);
+          }
+        } else {
+          if (active) {
+            throw new Error(`dispatch rejected: claim ${active.id} appeared after check on ${issueId} (expected no live claim; repair and retry)`);
+          }
+        }
       }
       // Claimed dispatch is fenced by the live claim: participant +
       // activation must be the live holder (sameHolder). ClaimId omission

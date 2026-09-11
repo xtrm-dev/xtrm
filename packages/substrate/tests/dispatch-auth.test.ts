@@ -210,3 +210,74 @@ describe("A7-auth binding: dispatchToSpecialist pins identity without divergence
     assert.equal(binding.participantId, "anyone");
   });
 });
+
+describe("A7-auth TOCTOU: check pin re-verified atomically before INSERT", () => {
+  let s: ReturnType<typeof scratch>;
+  beforeEach(() => { s = scratch(); });
+  afterEach(() => { try { s.db.close(); } catch { /* closed */ } rmSync(s.dir, { recursive: true, force: true }); });
+
+  it("claim generation change between check and dispatch rejects with no insert", () => {
+    const issue = readyIssue(s.svc, "toctou-gen");
+    s.svc.claimIssue(issue.id, "holder-A");
+    const check = checkDispatch(s.svc, { ref: issue.id, specialist: "executor", holder: "holder-A", workspace: "/tmp/w" });
+    assert.ok(check.expectedClaim !== null);
+    // Rotate the claim: same holder, new generation + id.
+    s.svc.releaseClaim(issue.id, "holder-A");
+    const rotated = s.svc.claimIssue(issue.id, "holder-A");
+    assert.notEqual(rotated.id, check.expectedClaim!.id);
+    assert.throws(
+      () => s.prov.dispatch(check.issueId, { workspace: s.dir, participantId: "holder-A" }, { expectedClaim: check.expectedClaim }),
+      /live claim changed since check/,
+    );
+    assert.equal(s.prov.listBindings(issue.id).length, 0, "rejected dispatch writes no binding");
+  });
+
+  it("claim released (expected claim, now null) rejects with no insert", () => {
+    const issue = readyIssue(s.svc, "toctou-release");
+    s.svc.claimIssue(issue.id, "holder-A");
+    const check = checkDispatch(s.svc, { ref: issue.id, specialist: "executor", holder: "holder-A", workspace: "/tmp/w" });
+    s.svc.releaseClaim(issue.id, "holder-A");
+    assert.equal(s.svc.getActiveClaim(issue.id), null);
+    assert.throws(
+      () => s.prov.dispatch(check.issueId, { workspace: s.dir, participantId: "holder-A" }, { expectedClaim: check.expectedClaim }),
+      /live claim changed since check/,
+    );
+    assert.equal(s.prov.listBindings(issue.id).length, 0, "rejected dispatch writes no binding");
+  });
+
+  it("claim appearing after expected-null check rejects with no insert", () => {
+    const issue = readyIssue(s.svc, "toctou-appear");
+    const check = checkDispatch(s.svc, { ref: issue.id, specialist: "executor", holder: "anyone", workspace: "/tmp/w" });
+    assert.equal(check.expectedClaim, null);
+    // Same holder claims after the check so identity alone would pass;
+    // the expected-null pin must still fail closed (retry path).
+    s.svc.claimIssue(issue.id, "anyone");
+    assert.throws(
+      () => s.prov.dispatch(check.issueId, { workspace: s.dir, participantId: "anyone" }, { expectedClaim: null }),
+      /appeared after check/,
+    );
+    assert.equal(s.prov.listBindings(issue.id).length, 0, "rejected dispatch writes no binding");
+  });
+
+  it("direct-service call with stale claimId rejects with no insert", () => {
+    const issue = readyIssue(s.svc, "toctou-stale");
+    const first = s.svc.claimIssue(issue.id, "holder-A");
+    s.svc.releaseClaim(issue.id, "holder-A");
+    const second = s.svc.claimIssue(issue.id, "holder-A");
+    assert.notEqual(second.id, first.id);
+    // No expectedClaim pin (direct-service path): stale claimId still fails.
+    assert.throws(
+      () => s.prov.dispatch(issue.id, { workspace: s.dir, claimId: first.id, participantId: "holder-A" }),
+      /not the live claim/,
+    );
+    assert.equal(s.prov.listBindings(issue.id).length, 0, "rejected dispatch writes no binding");
+  });
+
+  it("matching pin allows (no rotation)", () => {
+    const issue = readyIssue(s.svc, "toctou-ok");
+    s.svc.claimIssue(issue.id, "holder-A");
+    const check = checkDispatch(s.svc, { ref: issue.id, specialist: "executor", holder: "holder-A", workspace: "/tmp/w" });
+    const binding = s.prov.dispatch(check.issueId, { workspace: s.dir, participantId: "holder-A" }, { expectedClaim: check.expectedClaim });
+    assert.equal(binding.claimId, check.expectedClaim!.id);
+  });
+});
