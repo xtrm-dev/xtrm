@@ -179,11 +179,19 @@ jobs:
 
       # The ./specialists checkout is untracked content inside the xtrm
       # tree by construction, so the xtrm root is checked excluding it.
+      # No pipe into head: under the runner's pipefail a long dirty list
+      # makes head close early and git die with SIGPIPE/141 before the
+      # diagnostic prints. Truncation uses printf, and the failure output
+      # is paths-only (no contents), inside log-hygiene rules.
       - name: Clean tree proof
         run: |
           bash .github/scripts/specialists-compat.sh clean-tree ./specialists
-          dirty="$(git status --porcelain -- . ':!specialists' | head -n 10)"
-          if [ -n "$dirty" ]; then echo "FAIL clean-tree: dirty xtrm tree: $dirty" >&2; exit 1; fi
+          dirty="$(git status --porcelain -- . ':!specialists' || true)"
+          if [ -n "$dirty" ]; then
+            echo "FAIL clean-tree: dirty xtrm tree (paths only, truncated):" >&2
+            printf '%.800s\n' "$dirty" >&2
+            exit 1
+          fi
           echo "ok clean-tree: xtrm root clean ($(git rev-parse --short HEAD), excluding ./specialists checkout)"
 
       - name: Gate summary (SHAs only, no private content)
