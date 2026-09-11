@@ -98,9 +98,12 @@ the full payload with `--json` (envelope `substrate-cli/v1`, additive-only).
 Readiness is derived, never stored (`sb issue validate <ref>`). Operational
 states: `terminal → deferred → draft → blocked → claimed → ready`. Only
 `blocks` edges affect readiness; a cancelled prerequisite stays unsatisfied
-(abandoned work is replanned, never silently treated as done). Only `ready`
-(and `claimed`, which records the holder) is dispatchable — see
-`sb issue ready [--project <id>]`: dispatchable issues only. Semantic sign-off
+(abandoned work is replanned, never silently treated as done). `sb issue ready [--project <id>]` lists only `ready` issues: `dispatchable`
+is true exactly when the derived state is `ready`. `claimed` records the
+holder but is not itself dispatchable; the Specialists claim→binding gate
+may continue a correctly preclaimed Issue once holder + activation authority
+checks pass. Any missing enforcement on that path is owned by A7-auth (bead
+xtrm-6qu.7.2) and is not claimed fixed here. Semantic sign-off
 is explicit: `sb issue attest <ref> --outcome <ready|reject> --policy <p>
 --attested-by <who>`.
 
@@ -219,7 +222,11 @@ eight model tools (`substrate_issue_get/search/claim/update`,
 `substrate_provenance_trace`), session→issue bindings, `session_start`
 resume surfacing, and a `session_before_compact` handler (mechanical
 checkpoint first, secondary-model semantic, custom summary or host-default
-fallback). Agent doctrine: `packages/substrate/skills/using-substrate/`.
+fallback). A blocking `tool_call` edit/write gate enforces claim +
+workspace-lease authority by holder + activation (unbound sessions allow;
+no-claim / foreign-holder / missing-holder / activation-mismatch /
+foreign-workspace-lease block). Agent doctrine:
+`packages/substrate/skills/using-substrate/`.
 
 ## Claude integration
 
@@ -229,7 +236,14 @@ parses CLI text). Tools (`issue_get/list/ready`, `journal_append/show`,
 order. One store, resolved as explicit override, else `SUBSTRATE_DB`, else
 `~/.xtrm/state.db` — the plugin ships no repo-local default (that would fork
 the canonical store). Lifecycle runs as `PreCompact` (mechanical first, then
-semantic) / `PostCompact` / `SessionStart(compact)` hooks. Plugin:
+semantic) / `PostCompact` / `SessionStart(compact)` hooks. Edit, commit,
+and stop gates (§38, merged A6): the edit gate enforces claim +
+workspace-lease authority like the Pi side; the commit check nudges (never
+blocks) when Issue / revision / contract-hash / claim / binding context is
+missing — the post-commit SHA bind recovers a receipt-less commit; the stop
+gate checks durable continuity (active claim, writer lease, checkpoints
+since claim, pending blocker/handoff entries) and writes a mechanical
+checkpoint when none exists, never blocking exit. Plugin:
 `packages/substrate/plugin/substrate/`; doctrine:
 `plugin/substrate/skills/using-substrate/` (Authority block byte-identical
 with the Pi half — `tests/plugin-packaging.test.ts` fails on drift).
@@ -262,6 +276,11 @@ link. Exit 0 healthy, 1 otherwise.
 
 - [`substrate-issues-v0-prd.md`](./substrate-issues-v0-prd.md) — full product
   requirements (normative detail behind every section above).
+- [`sbcloseout2-adr.md`](./sbcloseout2-adr.md) — migration ADR, verbatim
+  source of §29 and the phase plan.
+- [`sbcloseout3-adr.md`](./sbcloseout3-adr.md) — amendment A1 (journal,
+  outcomes, actor identity, session lineage, provenance, documentation
+  contract), accepted for implementation, with PRD cross-link.
 - [`e5-acceptance-transcript.md`](./e5-acceptance-transcript.md) — recorded
   live acceptance evidence.
 - [`phase10-conformance.md`](./phase10-conformance.md) — WorkItemStore /
