@@ -5,8 +5,8 @@
 // session held no claim; this gate asks the typed service instead of bd kv.
 // Library-first: handleEditGate calls IssueService in-process, never execs
 // `sb`, never parses CLI text. Fail-open on unreadable state (a corrupt DB
-// must not brick the session); fail-closed on nothing — the decision only
-// ever reports what the service returned.
+// must not brick the session); fail-closed when a resolved Issue lacks the
+// current claim holder + activation authority.
 
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
 import { sameHolder } from "../../src/domain/claim.ts";

@@ -35,25 +35,52 @@ export function openServices(dbPath: string): SubstrateServices {
 // process can rebind. Values are issue refs; resolution happens at use, so a
 // stale binding fails loudly at the service instead of pointing nowhere.
 
+export interface SessionIdentity {
+  ref: string;
+  holder: string | null;
+  activationId: string | null;
+}
+
 export class SessionBindings {
-  private readonly map = new Map<string, string>();
-  bind(sessionId: string, ref: string): void {
+  private readonly map = new Map<string, SessionIdentity>();
+  bind(sessionId: string, ref: string, identity?: { holder?: string | null; activationId?: string | null }): void {
     if (!sessionId.trim() || !ref.trim()) throw new Error("bind requires a session id and an issue ref");
-    this.map.set(sessionId, ref);
+    this.map.set(sessionId, { ref, holder: identity?.holder ?? null, activationId: identity?.activationId ?? null });
   }
   boundRef(sessionId: string | undefined): string | null {
-    if (sessionId) {
-      const hit = this.map.get(sessionId);
-      if (hit) return hit;
-    }
-    // Converged names (bead xtrm-iip.9): SUBSTRATE_ISSUE_REF wins everywhere;
-    // SUBSTRATE_ISSUE remains as a backcompat alias so existing operator
-    // setups keep working.
-    const ref = process.env["SUBSTRATE_ISSUE_REF"];
-    if (ref && ref.trim()) return ref.trim();
-    const env = process.env["SUBSTRATE_ISSUE"];
-    return env && env.trim() ? env.trim() : null;
+    return this.identityFor(sessionId)?.ref ?? null;
   }
+  /** Claim identity for a session: stored holder+activation win, env is the fallback. */
+  identityFor(sessionId: string | undefined): SessionIdentity | null {
+    const stored = sessionId ? (this.map.get(sessionId) ?? null) : null;
+    const ref = stored?.ref ?? boundRefFromEnv();
+    if (!ref) return null;
+    return {
+      ref,
+      holder: stored?.holder ?? envHolder(),
+      activationId: stored?.activationId ?? envActivation(),
+    };
+  }
+}
+
+function boundRefFromEnv(): string | null {
+  // Converged names (bead xtrm-iip.9): SUBSTRATE_ISSUE_REF wins everywhere;
+  // SUBSTRATE_ISSUE remains as a backcompat alias so existing operator
+  // setups keep working.
+  const ref = process.env["SUBSTRATE_ISSUE_REF"];
+  if (ref && ref.trim()) return ref.trim();
+  const env = process.env["SUBSTRATE_ISSUE"];
+  return env && env.trim() ? env.trim() : null;
+}
+
+function envHolder(): string | null {
+  const h = process.env["SUBSTRATE_HOLDER"];
+  return h && h.trim() ? h.trim() : null;
+}
+
+function envActivation(): string | null {
+  const a = process.env["SUBSTRATE_ACTIVATION_ID"];
+  return a && a.trim() ? a.trim() : null;
 }
 
 function summary(i: ResolvedIssue): Record<string, unknown> {
@@ -106,7 +133,7 @@ export function toolIssueClaim(
     activationId: params.activationId,
     ttlMs: params.ttlMs,
   });
-  if (params.sessionId) bindings.bind(params.sessionId, resolved.id);
+  if (params.sessionId) bindings.bind(params.sessionId, resolved.id, { holder: params.holder, activationId: params.activationId });
   return { issueId: claim.issueId, holder: claim.holder, expiresAt: claim.expiresAt, generation: claim.generation };
 }
 
@@ -230,15 +257,10 @@ export async function runBeforeCompact(svc: SubstrateServices, input: BeforeComp
 }
 
 // -- gates ported from Beads (§§38-39, bead xtrm-6qu.6) -----------------------------
-// Host-agnostic evaluations over plain resolved state: the Pi permission
-// model owns enforcement, so these report decisions instead of blocking.
-// Claude-side enforcement lives in integrations/claude-code/{edit,commit,stop}-*.
-//
-// Pi production wiring disposition: Pi 0.84 exposes no PreToolUse gate, so
-// evaluateEditGate has no automatic production caller in extension.ts — the
-// host permission model calls it before mutating tools (substrate_issue_update)
-// when the operator wires it. The decision stays fail-closed on holder
-// mismatch so a future caller inherits the safe default.
+// Host-agnostic evaluations over plain resolved state. Claude-side
+// enforcement lives in integrations/claude-code/{edit,commit,stop}-*; Pi
+// production enforcement is the tool_call handler in extension.ts, which
+// routes edit/write calls through decidePiEditCall below.
 
 export interface EditGateState {
   issueRef: string | null;
@@ -265,6 +287,53 @@ export function evaluateEditGate(state: EditGateState): { allow: boolean; reason
     }
   }
   return { allow: true };
+}
+
+// Production decision for the Pi tool_call gate (extension.ts): resolve the
+// session binding to its Issue plus claim identity, then apply the same
+// holder+activation authority as the Claude edit gate. Fail-closed on a
+// resolved live claim with missing/mismatched holder; fail-open on
+// unreadable state (unknown ref, dead DB handle) so a corrupt gate never
+// bricks the session.
+export function decidePiEditCall(
+  svc: SubstrateServices,
+  bindings: SessionBindings,
+  opts: { sessionId?: string; workspace?: string } = {},
+): { allow: boolean; reason?: string; issueRef: string | null } {
+  try {
+    const identity = bindings.identityFor(opts.sessionId);
+    if (!identity) return { allow: true, issueRef: null };
+    let issueId: string;
+    try {
+      issueId = svc.issues.resolveRef(identity.ref).id;
+    } catch {
+      return { allow: true, issueRef: identity.ref };
+    }
+    const claim = svc.issues.getActiveClaim(issueId);
+    let leaseHeldByOther = false;
+    let leaseHolder: string | null | undefined;
+    try {
+      const lease = svc.issues.getWriterLease(opts.workspace ?? process.cwd());
+      if (lease && !(identity.holder && sameHolder(lease, identity.holder, identity.activationId))) {
+        leaseHeldByOther = true;
+        leaseHolder = lease.holder;
+      }
+    } catch {
+      // lease unreadable: the claim decision below still enforces authority.
+    }
+    const decision = evaluateEditGate({
+      issueRef: identity.ref,
+      claim: claim ? { holder: claim.holder, activationId: claim.activationId } : null,
+      claimed: claim !== null,
+      holder: identity.holder,
+      activationId: identity.activationId,
+      leaseHeldByOther,
+      leaseHolder,
+    });
+    return { ...decision, issueRef: identity.ref };
+  } catch {
+    return { allow: true, issueRef: null };
+  }
 }
 
 export interface StopContinuityState {
