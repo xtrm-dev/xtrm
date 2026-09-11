@@ -102,9 +102,10 @@ cmd_prove_node() {
   if node -e 'process.exit(typeof require(process.argv[1]+"/package.json").scripts?.build === "string" ? 0 : 1)' "$dir" 2>/dev/null; then
     # Build emits dist/ (not gitignored upstream), so remove it right
     # away: the clean-tree proof must see the pristine checkout.
+    local rc=0
     run_quiet build bun run build || rc=$?
     rm -rf -- "$dir/dist"
-    [ "${rc:-0}" -eq 0 ] || exit "$rc"
+    [ "$rc" -eq 0 ] || exit "$rc"
   else
     pass "prove-node: build skipped (no build script; typecheck gates)"
   fi

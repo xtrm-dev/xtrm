@@ -74,7 +74,7 @@ run URLs being recorded.
   export is present. It also validates `package.json` name identity
   (`@xtrm/substrate`) before deep imports.
 - Parity command (Bun 1.3.14):
-  `XTRM_SUBSTRATE_DIR=<abs path to built @xtrm/substrate> bun --bun vitest run tests/integration/substrate-parity.test.ts`
+  `XTRM_SUBSTRATE_DIR=<abs path to the source checkout / package directory> bun --bun vitest run tests/integration/substrate-parity.test.ts`
   covering migration → create → view/check/bind revision+hash stability,
   A-claim/B-dispatch holder refusal, and journal. The suite skips without
   the env var so public CI stays green.
