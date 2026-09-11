@@ -241,9 +241,11 @@ and stop gates (§38, merged A6): the edit gate enforces claim +
 workspace-lease authority like the Pi side; the commit check nudges (never
 blocks) when Issue / revision / contract-hash / claim / binding context is
 missing — the post-commit SHA bind recovers a receipt-less commit; the stop
-gate checks durable continuity (active claim, writer lease, checkpoints
-since claim, pending blocker/handoff entries) and writes a mechanical
-checkpoint when none exists, never blocking exit. Plugin:
+gate checks durable continuity (active claim, checkpoint count since the
+claim, recorded blocker/handoff entry counts) and writes a mechanical
+checkpoint when the session would otherwise leave none, never blocking
+exit. Pending-entry, writer-lease, activation, and ask coverage are not
+claimed here (routed to .7/.10). Plugin:
 `packages/substrate/plugin/substrate/`; doctrine:
 `plugin/substrate/skills/using-substrate/` (Authority block byte-identical
 with the Pi half — `tests/plugin-packaging.test.ts` fails on drift).
