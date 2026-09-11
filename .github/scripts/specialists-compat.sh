@@ -76,28 +76,35 @@ cmd_prove_node() {
   # the command name + PASS/FAIL reaches stdout: compiler output may echo
   # source snippets, which must never enter CI logs. Logs starting with
   # $RUNNER_TEMP are runner-local and never uploaded.
-  local logbase="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+  local logbase="${RUNNER_TEMP:-${TMPDIR:-/var/tmp}}"
   run_quiet() {
     local name="$1"; shift
     local log="$logbase/prove-node-$name.log"
     if (cd "$dir" && "$@" >"$log" 2>&1); then
       rm -f -- "$log"
       pass "prove-node: $name PASS"
+      return 0
     else
       local rc=$?
       echo "FAIL prove-node: $name (exit $rc) — log retained locally at $log, never uploaded" >&2
-      exit "$rc"
+      return "$rc"
     fi
   }
   if node -e 'process.exit(typeof require(process.argv[1]+"/package.json").scripts?.typecheck === "string" ? 0 : 1)' "$dir" 2>/dev/null; then
-    run_quiet typecheck bun run typecheck
+    run_quiet typecheck bun run typecheck || return $?
+  elif node -e 'process.exit(typeof require(process.argv[1]+"/package.json").scripts?.lint === "string" ? 0 : 1)' "$dir" 2>/dev/null; then
+    run_quiet typecheck bun run lint || return $?
   elif [ -f "$dir/tsconfig.json" ]; then
-    run_quiet typecheck bunx tsc --noEmit
+    run_quiet typecheck bunx tsc --noEmit || return $?
   else
-    fail "prove-node: no typecheck script and no tsconfig.json"
+    fail "prove-node: no typecheck/lint script and no tsconfig.json"
   fi
   if node -e 'process.exit(typeof require(process.argv[1]+"/package.json").scripts?.build === "string" ? 0 : 1)' "$dir" 2>/dev/null; then
-    run_quiet build bun run build
+    # Build emits dist/ (not gitignored upstream), so remove it right
+    # away: the clean-tree proof must see the pristine checkout.
+    run_quiet build bun run build || rc=$?
+    rm -rf -- "$dir/dist"
+    [ "${rc:-0}" -eq 0 ] || exit "$rc"
   else
     pass "prove-node: build skipped (no build script; typecheck gates)"
   fi

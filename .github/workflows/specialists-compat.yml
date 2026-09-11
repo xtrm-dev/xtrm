@@ -71,9 +71,20 @@ jobs:
           cache: npm
           cache-dependency-path: packages/substrate/package-lock.json
 
-      - name: Install substrate deps (frozen)
+      # --ignore-scripts: no lifecycle script is required (lockfile has
+      #    hasInstallScript flags only on nested pure-JS deps; verified by a
+      #    local --ignore-scripts install + typecheck + tests). --
+      - name: Install substrate deps (frozen, no scripts)
         working-directory: packages/substrate
-        run: npm ci --no-audit --no-fund
+        run: |
+          log="$RUNNER_TEMP/npm-ci.log"
+          if npm ci --ignore-scripts --no-audit --no-fund >"$log" 2>&1; then
+            echo "ok npm ci: PASS (frozen, --ignore-scripts)"
+          else
+            rc=$?
+            echo "FAIL npm ci (exit $rc) — full log retained on the runner only, never uploaded" >&2
+            exit "$rc"
+          fi
 
       # -- Proves package identity + lazy-driver neutral imports (no static
       #    node:sqlite/bun:sqlite value import; xtrm-6qu.7.4 invariant). --
@@ -99,9 +110,20 @@ jobs:
         with:
           bun-version: "1.3.14"
 
-      - name: Specialists frozen install
+      # --ignore-scripts: candidate c6b5d24a declares no postinstall and
+      #    no trustedDependencies (8 pure-JS deps); anything that truly
+      #    needs a lifecycle script fails closed here, never silently. --
+      - name: Specialists frozen install (no scripts)
         working-directory: specialists
-        run: bun install --frozen-lockfile
+        run: |
+          log="$RUNNER_TEMP/bun-install.log"
+          if bun install --frozen-lockfile --ignore-scripts >"$log" 2>&1; then
+            echo "ok bun install: PASS (frozen, --ignore-scripts)"
+          else
+            rc=$?
+            echo "FAIL bun install (exit $rc) — full log retained on the runner only, never uploaded" >&2
+            exit "$rc"
+          fi
 
       # -- Seam surface presence on both sides (early fail-closed with
       #    path-only diagnostics before the parity run). --

@@ -47,6 +47,12 @@ review by a trusted operator BEFORE every dispatch:
   install-script, network, or filesystem-touching changes are a veto.
 - Pin: dispatch the exact reviewed SHA (full 40-char), never a branch
   name. Re-review on any SHA change, however small.
+- Acknowledge and record: before dispatching, write on `xtrm-6qu.7.1`
+  (and later the Specialists PR) that you reviewed the provenance and
+  diff of the exact SHA and that you acknowledge the F2 premise — the
+  public code under test receives read access to the private tree on a
+  runner with unrestricted egress, so only a reviewed SHA ever runs.
+  No acknowledgment, no dispatch.
 
 Live `workflow_dispatch` success/negative runs happen only after this
 workflow merges to the default branch. The bead stays open through both
