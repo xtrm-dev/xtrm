@@ -1394,7 +1394,9 @@ function runImport(
   // nothing was created; single-run delta bounded by applied rows).
   const rowDelta = edgeRowsAfter - edgeRowsBefore;
   const appliedRows = result.edgesApplied.length + result.hierarchyApplied.length;
-  check("7-edge-row-stability", true, rowDelta <= appliedRows);
+  // Strict on rerun (nothing created -> zero row growth, the true G44
+  // idempotency bar); bounded on first import (in-place updates stay under).
+  check("7-edge-row-stability", true, result.created.length === 0 ? rowDelta === 0 : rowDelta <= appliedRows);
   const counts = {
     created: result.created.length,
     skipped: result.skippedPresent.length,

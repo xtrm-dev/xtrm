@@ -75,6 +75,7 @@ describe("G44: import is idempotent", () => {
     const svc = new IssueService(db);
     const count = svc.listIssues("prj_mig").length;
     const edgeRows = svc.listActiveEdges().length;
+    const doneEvents = svc.listEvents(svc.resolveRef("bd-done").id).length;
     db.close();
     const second = cli(dbPath, ["import", "beads", "--file", exportPath, "--edges-file", edgesPath, "--project", "prj_mig"]) as ReceiptV3;
     assert.equal(second.verdict, "PASS");
@@ -86,6 +87,8 @@ describe("G44: import is idempotent", () => {
     // Check 7: rerun grows neither issues nor edge rows.
     assert.equal(svc2.listActiveEdges().length, edgeRows);
     assert.equal(second.counts.edgeRowsBefore, second.counts.edgeRowsAfter);
+    // Skipped rows are never re-touched: no new lifecycle events on rerun.
+    assert.equal(svc2.listEvents(svc2.resolveRef("bd-done").id).length, doneEvents);
     db2.close();
   });
 });
