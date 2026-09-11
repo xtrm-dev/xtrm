@@ -107,11 +107,13 @@ cmd_prove_node() {
     fail "prove-node: no typecheck/lint script and no tsconfig.json"
   fi
   if node -e 'process.exit(typeof require(process.argv[1]+"/package.json").scripts?.build === "string" ? 0 : 1)' "$dir" 2>/dev/null; then
-    # Build emits dist/ (not gitignored upstream), so remove it right
-    # away: the clean-tree proof must see the pristine checkout.
     local rc=0
     run_quiet build bun run build || rc=$?
-    rm -rf -- "$dir/dist"
+    # No cleanup here by design: a successful build must leave the
+    # committed dist/ output byte-identical, and the clean-tree proof owns
+    # verifying that. Any post-build dirt is real build drift in the
+    # candidate, never something this harness may delete, restore, or
+    # exclude.
     [ "$rc" -eq 0 ] || exit "$rc"
   else
     pass "prove-node: build skipped (no build script; typecheck gates)"
