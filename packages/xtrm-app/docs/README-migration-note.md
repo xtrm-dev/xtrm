@@ -1,0 +1,1 @@
+The Console v2 migration documents in this branch are additive planning artifacts for review. They do not authorize production deployment, delete the current Console, or start the full Agent/Frames runtime implementation.
