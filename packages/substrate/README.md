@@ -36,16 +36,20 @@ defer/cancel/archive/resume), `project` (create/link/unlink), `plan`
 (dispatch/trace/commit/receipt/pr/bundle), `import beads`, `export project`.
 Every Issue-taking command accepts all five ID forms via `resolveRef`.
 `--json` emits the `substrate-cli/v1` envelope (see `cli/schema.json`,
-version 1.0.0, additive-only compat); otherwise one concise human line per
-item (locator · humanRef · title [state revN]).
+version 1.0.0, additive-only compat); human output is command-specific —
+list/ready render one concise line per item
+(locator · humanRef · title [state revN]), while `show` prints the header
+plus the multi-line contract body.
 
 Side-effect-free surfaces: `sb --help` / `sb help [group [verb]] [--json]`
 and `sb --version` never open or create `state.db`. `sb doctor [--json]`
-reports `{dbPath, schemaHealthy, schemaError, projects, link, linkError,
-gitRoot}` and exits 0 healthy / 1 otherwise. `sb issue note` is
+reports the keys `dbPath`, `schemaHealthy`, `schemaError`, `projects`,
+`link`, `linkError`, `gitRoot` and exits 0 healthy / 1 otherwise.
+`sb issue note` is
 append-only journal (no revision bump); `sb issue edit --title/--priority`
-is metadata (no revision) while `--contract/--ownership/--context-refs/
---scrutiny` is execution-relevant (new revision, readiness invalidated);
+is metadata (no revision) while the `--contract`, `--ownership`,
+`--context-refs`, and `--scrutiny` flags are execution-relevant
+(new revision, readiness invalidated);
 `sb issue state` is the canonical lifecycle operation with
 close/reopen/defer/cancel/archive aliases; `sb issue unrelate` deactivates a
 typed edge fail-closed (`parent_child` stays structural). Start at
@@ -75,8 +79,9 @@ construction — the gate takes no prompt text). Conformance record:
 ## Beads migration
 
 One-way import only (no dual-write, no reverse sync):
-`sb import beads --file <export.jsonl> --project <id> [--edges-file <f>]
-[--create-project <PREFIX:Name>] [--dry-run]`. Imported Beads IDs live on
+`sb import beads --file <export.jsonl> --project <id>` with optional
+`[--edges-file <f>]`, `[--create-project <PREFIX:Name>]`, and `[--dry-run]`.
+Imported Beads IDs live on
 as aliases, so old refs keep resolving.
 
 ## Develop

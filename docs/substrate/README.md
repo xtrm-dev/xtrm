@@ -104,8 +104,8 @@ holder but is not itself dispatchable; the Specialists claim→binding gate
 may continue a correctly preclaimed Issue once holder + activation authority
 checks pass. Any missing enforcement on that path is owned by A7-auth (bead
 xtrm-6qu.7.2) and is not claimed fixed here. Semantic sign-off
-is explicit: `sb issue attest <ref> --outcome <ready|reject> --policy <p>
---attested-by <who>`.
+is explicit (`sb issue attest` with `--outcome`, `--policy`, and
+`--attested-by`):
 
 ## Claims and leases
 
@@ -139,8 +139,8 @@ At least one mutation flag is required; unknown flags fail closed by name.
 
 ## Journal methodology
 
-The Journal is continuity, never authority. Kinds: `checkpoint, handoff,
-milestone, decision, finding, blocker, compaction, note`. Findings here never
+The Journal is continuity, never authority. Kinds: checkpoint, handoff,
+milestone, decision, finding, blocker, compaction, note. Findings here never
 become reusable truth without a separate promotion step (v0 has none).
 
 ```sh
@@ -269,8 +269,9 @@ current runtime instructions must not reference Beads authority.
 sb doctor [--db PATH] [--json]
 ```
 
-`--json` data: `{dbPath, schemaHealthy, schemaError, projects, link,
-linkError, gitRoot}` — the machine contract; human text is aid only. Text
+`--json` data carries the keys `dbPath`, `schemaHealthy`, `schemaError`,
+`projects`, `link`, `linkError`, `gitRoot` — the machine contract; human
+text is aid only. Text
 mode prints health, state.db path, schema state, project count, and the cwd
 link. Exit 0 healthy, 1 otherwise.
 
