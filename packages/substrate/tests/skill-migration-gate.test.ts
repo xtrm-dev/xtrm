@@ -13,7 +13,7 @@ import { contract } from "./helpers.ts";
 // (docs/substrate/skill-migration-gate.md, bead xtrm-6qu.4).
 //
 // Static part: every applicable gate check G1-G16 maps to literal markers
-// that must appear in the staged skill source. Per-skill applicability is
+// that must appear in the normative migration reference. Per-skill applicability is
 // taken from the gate doc ("Per-skill applicability"): using-xtrm carries
 // all 16; planning carries G1/G2/G8/G9/G13-G16 mandatory with the rest by
 // reference; starting-and-resuming-work carries G1-G4/G6-G7/G13-G16

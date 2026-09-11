@@ -1,11 +1,11 @@
 <!-- A4→A8→A9 handoff. This map is the coordination record; it makes no
      installed-copy changes itself. -->
 
-# Staged sources → canonical installed Core skills: promotion map
+# Normative references → canonical installed Core skills: promotion map
 
-**Boundary statement.** xtrm-6qu.4 claims source-level conformance only: the
-staged canonical sources pass the SKILL-MIGRATION-GATE statically and their
-taught verbs are proven live against the `sb` CLI
+**Boundary statement.** xtrm-6qu.4 claims reference-level conformance only:
+the normative migration references pass the SKILL-MIGRATION-GATE statically
+and their taught verbs are proven live against the `sb` CLI
 (`skill-migration-gate.test.ts`: 64/64, suite 270/270). A4 does **not** claim
 installed-workflow acceptance — a worker performing the full lifecycle from
 an installed skill copy is proven only by the A9 sweep and the A10
@@ -14,7 +14,7 @@ acceptance gates on merged main. No installed copy in this bead was written.
 ## Promotion path
 
 ```text
-A4 staged canonical sources (this bead, xtrm repo)
+A4 normative migration references (this bead, xtrm repo)
   docs/substrate/skill-migration-gate.md
   docs/substrate/skills/using-xtrm.md
   docs/substrate/skills/planning.md
@@ -33,7 +33,7 @@ A10 acceptance (§§49–55, §57): fresh-machine, upgrade, workflow,
 
 ## Source → consumer mapping
 
-| Staged source (A4) | A8 generator input becomes | Installed consumer (A9 installs) |
+| Normative reference (A4) | A8 generator input becomes | Installed consumer (A9 installs, after A5) |
 |---|---|---|
 | `docs/substrate/skills/using-xtrm.md` | Core `using-xtrm` template content | `~/.xtrm/skills/default/using-xtrm/SKILL.md` (replaces Beads-first copy) |
 | `docs/substrate/skills/planning.md` | Core `planning` template content | `~/.xtrm/skills/default/planning/SKILL.md` |
