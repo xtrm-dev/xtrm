@@ -32,9 +32,9 @@ immutable SHAs gate the Specialists merge.
 
 ## Pre-dispatch human review (required, no exceptions)
 
-The workflow executes untrusted public code (install scripts, test
-suites) on a runner that also holds the private tree, and the runner
-has unrestricted network egress. No YAML structure removes that: a
+The workflow runs install tooling and test/typecheck/build suites from
+the public candidate on a runner that also holds the private tree, and
+the runner has unrestricted network egress. No YAML structure removes that: a
 malicious public SHA could read the private checkout and exfiltrate it
 (F2 residual risk, accepted and stated here). The control is a human
 review by a trusted operator BEFORE every dispatch:
@@ -113,8 +113,9 @@ All required, all in one run:
 - [ ] Step summary records xtrm HEAD, Specialists HEAD, PASS, and the run URL.
 
 Record the run URL and both SHAs on `xtrm-6qu.7.1` and on the Specialists
-PR. Only pass/fail and bounded non-sensitive diagnostics leave this repo:
-the workflow has no artifact-upload step, the dispatch SHA enters shell
+PR. Workflow-owned logs emit only pass/fail and bounded non-sensitive
+diagnostics; this does not mitigate the acknowledged F2
+unrestricted-egress risk. The workflow has no artifact-upload step, the dispatch SHA enters shell
 only through the quoted `$SPECIALISTS_SHA` variable, and every step that
 executes repo code redirects full output to runner-local `$RUNNER_TEMP`
 logs while printing command name + PASS/FAIL only — failed assertions may
