@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "test": "node --test tests/*.test.ts",
+    "test:bun": "bun tests/bun-acceptance.ts",
     "typecheck": "tsc --noEmit"
   },
   "engines": {

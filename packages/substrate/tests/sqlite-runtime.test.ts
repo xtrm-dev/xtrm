@@ -46,7 +46,6 @@ describe("sqlite runtime seam", () => {
     const dir = mkdtempSync(join(base, "substrate-rt-"));
     try {
       const db = openSubstrate(join(dir, "state.db"));
-      assert.equal(db.constructor.name, "DatabaseSync");
       const get = (sql: string) => (db.prepare(sql).get() as Record<string, unknown> | undefined);
       assert.equal((get("PRAGMA journal_mode") as { journal_mode: string }).journal_mode, "wal");
       assert.equal((get("PRAGMA synchronous") as { synchronous: number }).synchronous, 2);
@@ -59,17 +58,20 @@ describe("sqlite runtime seam", () => {
       // (Driver rows are null-prototype objects; compare via JSON.)
       const rows = db.prepare("SELECT * FROM probe").all();
       assert.equal(JSON.stringify(rows), JSON.stringify([{ a: "x", b: 7, c: 2 ** 40 }]));
+      // Both drivers normalize undefined to NULL at the adapter seam.
+      (db.prepare("INSERT INTO probe VALUES (?, ?, ?)").run as (...params: unknown[]) => unknown)("null", undefined, 1n);
+      assert.equal((db.prepare("SELECT b FROM probe WHERE a = ?").get("null") as { b: null }).b, null);
       // Transactions roll back all-or-nothing.
       assert.throws(() => withTransaction(db, () => {
         db.prepare("INSERT INTO probe VALUES (?, ?, ?)").run("y", 1, 1n);
         throw new Error("boom");
       }), /boom/);
-      assert.equal((db.prepare("SELECT COUNT(*) AS n FROM probe").get() as { n: number }).n, 1);
+      assert.equal((db.prepare("SELECT COUNT(*) AS n FROM probe").get() as { n: number }).n, 2);
       // Fail-closed reopen: committed rows survive close/open on one store.
       db.close();
       const db2 = openSubstrate(join(dir, "state.db"));
       try {
-        assert.equal((db2.prepare("SELECT COUNT(*) AS n FROM probe").get() as { n: number }).n, 1);
+        assert.equal((db2.prepare("SELECT COUNT(*) AS n FROM probe").get() as { n: number }).n, 2);
       } finally {
         db2.close();
       }

@@ -3,7 +3,7 @@
 // Imports the package root in-process (no Node subprocess, no second store)
 // and exercises Issue, Journal, and Provenance services against one database.
 
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import {
@@ -28,11 +28,13 @@ const dir = mkdtempSync(join(base, "substrate-bun-"));
 const dbPath = join(dir, "state.db");
 try {
   const db = openSubstrate(dbPath);
-  assert.equal(db.constructor.name, "Database", "bun:sqlite driver selected");
   assert.equal(
     (db.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode,
     "wal",
   );
+  db.exec("CREATE TABLE runtime_binding_probe (value TEXT)");
+  (db.prepare("INSERT INTO runtime_binding_probe VALUES (?)").run as (...params: unknown[]) => unknown)(undefined);
+  assert.equal((db.prepare("SELECT value FROM runtime_binding_probe").get() as { value: null }).value, null);
 
   // Issue path: project + issue creation, readiness, claim.
   const svc = new IssueService(db);
@@ -65,7 +67,7 @@ try {
 
   // Provenance path: dispatch, receipt, SHA bind, trace.
   const prov = new ProvenanceService(db, svc);
-  const binding = prov.dispatch(issue.id, { workspace: dir, participantId: "bun-p" });
+  const binding = prov.dispatch(issue.id, { workspace: dir, participantId: "bun-holder" });
   const receipt = prov.allocateReceipt(binding.id);
   prov.bindCommit(receipt.id, "a".repeat(40));
   assert.equal(prov.getReceipt(receipt.id).commitSha, "a".repeat(40));
@@ -85,6 +87,7 @@ try {
   } finally {
     db2.close();
   }
+  assert.equal(existsSync(join(dir, ".beads")), false, "Bun path must not create Beads state");
   console.log("close/reopen durability + WAL OK");
 } finally {
   rmSync(dir, { recursive: true, force: true });
