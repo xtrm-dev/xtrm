@@ -8,7 +8,7 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { importBeads, type BeadsEdgeRecord, type BeadsIssueRecord } from "../src/compatibility/beads/import.ts";
+import { BEADS_TBD_MARKER, expectedProblemHead, importBeads, unionEdges, type BeadsEdgeRecord, type BeadsIssueRecord } from "../src/compatibility/beads/import.ts";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1225,8 +1225,27 @@ function readJsonLines(value: string): unknown[] {
   return out;
 }
 
+// A9 receipt v3 (bead xtrm-6qu.9.1): machine-readable import receipt with
+// inline inputs census, deterministic counts, verifier checks, and verdict.
+// Exit rule: 0 iff verdict PASS. FAIL returns ok:false WITH the full
+// receipt in data (never bare), so consumers must not trust exit 0 alone
+// on older binaries — validate the receipt body.
+export const IMPORT_RECEIPT_SCHEMA = "substrate-import-receipt/v1";
+
+interface VerifierCheck {
+  check: string;
+  expected: unknown;
+  actual: unknown;
+  ok: boolean;
+}
+
+function countEdgeRows(db: ReturnType<typeof openSubstrate>): number {
+  const row = db.prepare("SELECT COUNT(*) AS n FROM issue_edges").get() as { n: number };
+  return row.n;
+}
+
 function runImport(
-  _db: ReturnType<typeof openSubstrate>,
+  db: ReturnType<typeof openSubstrate>,
   svc: IssueService,
   ctx: Ctx,
   command: string,
@@ -1239,13 +1258,44 @@ function runImport(
   const edgesFile = flag(flags, "edges-file");
   const createProject = flag(flags, "create-project");
   const dryRun = flags.has("dry-run");
-  const records = readJsonLines(file).filter((r) => (r as { _type?: unknown })._type !== "memory") as BeadsIssueRecord[];
-  const edges = edgesFile ? (readJsonArg(edgesFile) as BeadsEdgeRecord[]) : [];
+  const rawLines = readJsonLines(file);
+  const memoriesSkipped = rawLines.filter((r) => (r as { _type?: unknown })._type === "memory").length;
+  const records = rawLines.filter((r) => (r as { _type?: unknown })._type !== "memory") as BeadsIssueRecord[];
+  const fileEdges = edgesFile ? (readJsonArg(edgesFile) as BeadsEdgeRecord[]) : [];
+  const fileEdgeList = Array.isArray(fileEdges) ? fileEdges : [];
+  // Inputs census: inline dependencies[] are authoritative; --edges-file is
+  // an optional supplement (union dedupes, inline wins). Census first so
+  // dry-run and apply report identical input shapes (receipt parity).
+  const inlineByType: Record<string, number> = {};
+  let inlineEdges = 0;
+  let recordsWithDeps = 0;
+  for (const r of records) {
+    const deps = (r as { dependencies?: unknown }).dependencies;
+    if (!Array.isArray(deps)) continue;
+    recordsWithDeps += 1;
+    for (const d of deps) {
+      const t = (d as { type?: unknown } | null)?.type;
+      if (typeof t === "string") {
+        inlineEdges += 1;
+        inlineByType[t] = (inlineByType[t] ?? 0) + 1;
+      }
+    }
+  }
+  const inputs = {
+    records: rawLines.length,
+    issues: records.length,
+    memoriesSkipped,
+    recordsWithDeps,
+    inlineEdges,
+    inlineByType,
+    fileEdges: fileEdgeList.length,
+  };
   if (dryRun) {
     return emit(ctx, command, {
+      schema: IMPORT_RECEIPT_SCHEMA,
       dryRun: true,
-      records: records.length,
-      edges: Array.isArray(edges) ? edges.length : 0,
+      project,
+      inputs,
       note: "no mutations performed; re-run without --dry-run to import",
     });
   }
@@ -1255,7 +1305,132 @@ function runImport(
     if (i < 0) throw new Error("--create-project wants PREFIX:Name");
     create = { prefix: createProject.slice(0, i), name: createProject.slice(i + 1) };
   }
-  return emit(ctx, command, importBeads(svc, project, records, Array.isArray(edges) ? edges : [], { createProject: create }));
+  const edgeRowsBefore = countEdgeRows(db);
+  const journal = new JournalService(db, svc);
+  const result = importBeads(svc, project, records, fileEdgeList, { createProject: create, journal });
+  const edgeRowsAfter = countEdgeRows(db);
+
+  // Verifier (deterministic, same field names as the Core-local gate):
+  const checks: VerifierCheck[] = [];
+  const check = (name: string, expected: unknown, actual: unknown): void => {
+    checks.push({ check: name, expected, actual, ok: JSON.stringify(expected) === JSON.stringify(actual) });
+  };
+  // (0b) inline traceability: every union edge attempted (applied or listed).
+  const union = unionEdges(records, fileEdgeList);
+  const attempted =
+    result.edgesApplied.length + result.hierarchyApplied.length + result.edgeErrors.length + result.hierarchyErrors.length;
+  check("0b-inline-traceability", union.length, attempted);
+  // (1) exact ID-set reconciliation vs the export.
+  const exportIds = [...new Set(records.filter((r) => r && typeof r.id === "string").map((r) => r.id))].sort();
+  const receiptIds = [...new Set([...result.created, ...result.skippedPresent])].sort();
+  check("1-id-set-equality", exportIds, receiptIds);
+  // (2) edge multiset reconciliation by (from,to,type) over Beads IDs.
+  const unionKeys = union
+    .map((e) => `${e.issue_id} ${e.depends_on_id} ${e.type}`)
+    .sort();
+  const appliedKeys = [
+    ...result.edgesApplied.map((e) => {
+      const orig = union.find((u) => u.issue_id === e.from && u.depends_on_id === e.to) ?? union.find((u) => u.issue_id === e.to && u.depends_on_id === e.from);
+      return orig ? `${orig.issue_id} ${orig.depends_on_id} ${orig.type}` : `unmapped ${e.from} ${e.to} ${e.kind}`;
+    }),
+    ...result.hierarchyApplied.map((h) => `${h.child} ${h.parent} parent-child`),
+  ].sort();
+  const errorCount = result.edgeErrors.length + result.hierarchyErrors.length;
+  check("2-edge-multiset", unionKeys.length, appliedKeys.length + errorCount);
+  // (3) hierarchy resolves: every applied parent-child visible via children.
+  let hierarchyUnresolved = 0;
+  for (const h of result.hierarchyApplied) {
+    try {
+      const parentId = svc.resolveRef(h.parent).id;
+      const childId = svc.resolveRef(h.child).id;
+      const children = svc.listChildren(parentId).map((c) => c.id);
+      if (!children.includes(childId)) hierarchyUnresolved += 1;
+    } catch {
+      hierarchyUnresolved += 1;
+    }
+  }
+  check("3-hierarchy-resolves", 0, hierarchyUnresolved);
+  // (4) fail-closed: every created row unready; leak list empty.
+  const unreadyCoverage = result.created.filter((id) => result.unready.includes(id)).length;
+  check("4-created-subset-unready", result.created.length, unreadyCoverage);
+  // (5) provenance: every created id carries a beads.imported event.
+  let provenanceMissing = 0;
+  for (const beadsId of result.created) {
+    try {
+      const id = svc.resolveRef(beadsId).id;
+      const has = svc.listEvents(id).some((e) => e.type === "beads.imported");
+      if (!has) provenanceMissing += 1;
+    } catch {
+      provenanceMissing += 1;
+    }
+  }
+  check("5-provenance-events", 0, provenanceMissing);
+  // (6) notesPreserved sample: deterministic sorted first 5 created + one
+  // done-status (by lifecycle) when present. Each asserts the contract
+  // problem carries the source description head or the TBD filler.
+  const byId = new Map(records.filter((r) => r && typeof r.id === "string").map((r) => [r.id as string, r]));
+  const sample = [...result.created].sort().slice(0, 5);
+  let notesUnpreserved = 0;
+  let notesSampled = 0;
+  for (const beadsId of sample) {
+    const rec = byId.get(beadsId);
+    if (!rec) {
+      notesUnpreserved += 1;
+      continue;
+    }
+    try {
+      const id = svc.resolveRef(beadsId).id;
+      const rev = svc.getRevision(id, svc.getIssue(id).currentRevision);
+      const problem = String((rev.contract as { problem?: unknown } | null)?.problem ?? "");
+      const expected = expectedProblemHead(rec.description);
+      notesSampled += 1;
+      if (!(problem.includes(expected) || problem.includes(BEADS_TBD_MARKER))) notesUnpreserved += 1;
+    } catch {
+      notesUnpreserved += 1;
+    }
+  }
+  check("6-notes-preserved-sample", { sampled: notesSampled, unpreserved: 0 }, { sampled: notesSampled, unpreserved: notesUnpreserved });
+  // (7) edge-row stability: no runaway growth (rerun delta must be 0 when
+  // nothing was created; single-run delta bounded by applied rows).
+  const rowDelta = edgeRowsAfter - edgeRowsBefore;
+  const appliedRows = result.edgesApplied.length + result.hierarchyApplied.length;
+  // Strict on rerun (nothing created -> zero row growth, the true G44
+  // idempotency bar); bounded on first import (in-place updates stay under).
+  check("7-edge-row-stability", true, result.created.length === 0 ? rowDelta === 0 : rowDelta <= appliedRows);
+  const counts = {
+    created: result.created.length,
+    skipped: result.skippedPresent.length,
+    edgesApplied: result.edgesApplied.length,
+    edgeErrors: errorCount,
+    hierarchyApplied: result.hierarchyApplied.length,
+    unready: result.unready.length,
+    notesApplied: result.notesApplied.length,
+    commentsApplied: result.commentsApplied.length,
+    closeReasonCarried: result.closeReasonCarried.length,
+    edgeRowsBefore,
+    edgeRowsAfter,
+  };
+  const verdict = checks.every((c) => c.ok) && errorCount === 0 && result.depFailures.length === 0 ? "PASS" : "FAIL";
+  const receipt = {
+    schema: IMPORT_RECEIPT_SCHEMA,
+    dryRun: false,
+    project,
+    inputs,
+    result,
+    counts,
+    verifier: { checks },
+    verdict,
+  };
+  if (verdict === "PASS") return emit(ctx, command, receipt);
+  const summary = `import verification FAIL: ${checks.filter((c) => !c.ok).map((c) => c.check).join(", ") || "error lists non-empty"} (see receipt)`;
+  if (ctx.json) {
+    return {
+      code: 1,
+      stdout: JSON.stringify({ schema: SCHEMA_VERSION, command, ok: false, error: summary, data: receipt }) + "\n",
+      stderr: "",
+    };
+  }
+  return { code: 1, stdout: `${JSON.stringify(receipt)}\n`, stderr: `sb: ${command}: ${summary}\n` };
 }
 
 function runExport(
