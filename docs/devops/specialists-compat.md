@@ -6,7 +6,7 @@ Harness: `.github/scripts/specialists-compat.sh`
 ## Why this exists
 
 `xtrm` is private and `xtrm-dev/specialists` is public. Public CI cannot
-install or vendor `@xtrm/substrate` (no credentials, no disclosure, no npm
+install or vendor `@jaggerxtrm/substrate` (no credentials, no disclosure, no npm
 publication). This private workflow is the only place where a public
 Specialists commit meets the real substrate package: it checks out the
 public repo at an exact pinned SHA, injects `packages/substrate` through
@@ -72,7 +72,7 @@ run URLs being recorded.
   which dynamic-imports from `substrateDir` or `XTRM_SUBSTRATE_DIR` and
   fails closed with `work_item_store_unavailable` unless every expected
   export is present. It also validates `package.json` name identity
-  (`@xtrm/substrate`) before deep imports.
+  (`@jaggerxtrm/substrate`) before deep imports.
 - Parity command (Bun 1.3.14):
   `XTRM_SUBSTRATE_DIR=<abs path to the source checkout / package directory> bun --bun vitest run tests/integration/substrate-parity.test.ts`
   covering migration → create → view/check/bind revision+hash stability,
@@ -101,7 +101,7 @@ run URLs being recorded.
 All required, all in one run:
 
 - [ ] SHA gate: input format valid, `HEAD == input SHA` verified.
-- [ ] Substrate identity: `package.json` name is `@xtrm/substrate`.
+- [ ] Substrate identity: `package.json` name is `@jaggerxtrm/substrate`.
 - [ ] Neutral imports: no static `node:sqlite`/`bun:sqlite` value import
       anywhere in substrate `src`/`cli`/`integrations`; lazy conditional
       `require()` only in `src/store/sqlite.ts` (mirrors

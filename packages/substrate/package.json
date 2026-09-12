@@ -1,5 +1,5 @@
 {
-  "name": "@xtrm/substrate",
+  "name": "@jaggerxtrm/substrate",
   "version": "0.1.0",
   "description": "Durable work substrate: issue graph over SQLite/WAL (library-first; sb CLI consumes this)",
   "type": "module",
