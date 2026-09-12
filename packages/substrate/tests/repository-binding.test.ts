@@ -172,7 +172,11 @@ describe("migration 008 on the live prj_xtrm store shape (§90)", () => {
     const reopened = openSubstrate(path);
     try {
       const svc = new IssueService(reopened);
-      assert.equal(svc.resolveProject({ gitRoot: "/home/dawid/dev/xtrm" }).projectId, "prj_xtrm");
+      const resolved = svc.resolveProject({ gitRoot: "/home/dawid/dev/xtrm" });
+      assert.equal(resolved.projectId, "prj_xtrm");
+      // checkout_links stays the explicit local alias/cache (never the
+      // removed global-cardinality default).
+      assert.deepEqual(resolved, { projectId: "prj_xtrm", source: "link" });
       const issues = svc.listIssues("prj_xtrm");
       assert.deepEqual(
         issues.map((i) => i.humanRef).sort(),

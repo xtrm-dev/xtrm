@@ -235,7 +235,8 @@ describe("sb provenance verbs", () => {
   it("dispatch -> trace -> commit -> receipt -> pr -> bundle over the CLI", () => {
     const { issue } = readyIssue(s.svc);
     const humanRef = issue.humanRef;
-    const d = cli(s.dbPath, ["provenance", "dispatch", humanRef, "--workspace", s.dir, "--participant", "holder-1"]) as { bindingId: string; revision: number };
+    // Mutation is project-scoped (ADR §5): select the Project the scratch seeded.
+    const d = cli(s.dbPath, ["provenance", "dispatch", humanRef, "--workspace", s.dir, "--participant", "holder-1", "--project", "prj_xtrm"]) as { bindingId: string; revision: number };
     assert.equal(d.revision, 1);
 
     // Receipt + commit binding happen host-side (service), then queries run via CLI.
@@ -262,7 +263,7 @@ describe("sb provenance verbs", () => {
     assert.equal(r.receipt.id, receiptId);
     const p = cli(s.dbPath, ["provenance", "pr", "github:xtrm/xtrm#1"]) as Array<{ receipt: string }>;
     assert.equal(p[0]!.receipt, receiptId);
-    const b = cli(s.dbPath, ["provenance", "bundle", humanRef, "--repo-root", s.dir]) as { bundleId: string; contractHash: string };
+    const b = cli(s.dbPath, ["provenance", "bundle", humanRef, "--repo-root", s.dir, "--project", "prj_xtrm"]) as { bundleId: string; contractHash: string };
     assert.match(b.bundleId, /^bnd_/);
     assert.equal(b.contractHash, s.svc.getIssue(issue.id).currentContractHash);
   });

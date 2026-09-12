@@ -263,14 +263,14 @@ describe("sb journal verbs + issue resume", () => {
       const created = cli(["issue", "create", "--project", "prj_demo", "--title", "J", "--kind", "task", "--contract", c1, "--scrutiny", "LOW"]) as {
         humanRef: string;
       };
-      const appended = cli(["journal", "append", created.humanRef, "--kind", "finding"]) as {
+      const appended = cli(["journal", "append", created.humanRef, "--kind", "finding", "--project", "prj_demo"]) as {
         sequence: number; kind: string;
       };
       assert.equal(appended.sequence, 1);
       assert.equal(appended.kind, "finding");
       const semFile = join(dir, "sem.json");
       writeFileSync(semFile, JSON.stringify({ summary: "cli checkpoint" }));
-      const cp = cli(["journal", "checkpoint", created.humanRef, "--semantic", semFile]) as {
+      const cp = cli(["journal", "checkpoint", created.humanRef, "--semantic", semFile, "--project", "prj_demo"]) as {
         sequence: number; degraded: boolean;
       };
       assert.equal(cp.sequence, 2);
@@ -287,7 +287,7 @@ describe("sb journal verbs + issue resume", () => {
       assert.match(rendered.text, /cli checkpoint/);
       const badSem = join(dir, "bad.json");
       writeFileSync(badSem, JSON.stringify({ summary: "" }));
-      const degraded = cli(["journal", "checkpoint", created.humanRef, "--semantic", badSem]) as {
+      const degraded = cli(["journal", "checkpoint", created.humanRef, "--semantic", badSem, "--project", "prj_demo"]) as {
         degraded: boolean; reason: string;
       };
       assert.equal(degraded.degraded, true);

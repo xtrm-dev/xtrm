@@ -1,14 +1,14 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
-import { contract } from "./helpers.ts";
+import { contract, repoEnv } from "./helpers.ts";
 import { buildServer, SUBSTRATE_PROTOCOL_REVISION, SUBSTRATE_SERVER_NAME } from "../integrations/claude-code/mcp-server.ts";
 
 // Acceptance xtrm-iip.3 (closeout E3): SDK v2, strict 2026-07-28,
@@ -176,9 +176,9 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
         ((res.result as { content: Array<{ text: string }> }).content[0] as { text: string }).text,
       ) as unknown;
     };
-    const listed = (await call("issue_list", {})) as unknown[];
+    const listed = (await call("issue_list", { project: "prj_xtrm" })) as unknown[];
     assert.ok(Array.isArray(listed) && listed.length === 1);
-    const ready = (await call("issue_ready", {})) as unknown[];
+    const ready = (await call("issue_ready", { project: "prj_xtrm" })) as unknown[];
     assert.ok(Array.isArray(ready));
     const appended = (await call("journal_append", { ref: s.humanRef, kind: "finding", summary: "e4 finding" })) as Record<string, unknown>;
     assert.ok(appended["entryId"]);
@@ -227,6 +227,48 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
       assert.equal(row.title, "mcp work");
     } finally {
       child.kill();
+    }
+  });
+
+  it("issue_list derives identity from the process cwd repository and fails closed otherwise (ADR §5)", async () => {
+    const env = repoEnv("sb-mcp-repo-");
+    const prev = process.cwd();
+    try {
+      const repo = env.gitRepo("mcp-repo");
+      assert.equal(env.inCwd(repo, () => env.run(["init"])).code, 0, "init the cwd repository");
+      const contractFile = join(env.temp("sb-mcp-c-"), "c.json");
+      writeFileSync(contractFile, JSON.stringify(contract({ problem: "mcp repo", success: "mcp repo" })));
+      assert.equal(
+        env.inCwd(repo, () => env.run(["issue", "create", "--title", "repo work", "--kind", "task", "--contract", contractFile])).code,
+        0,
+      );
+
+      // No `project` argument: the repository binding from cwd resolves it.
+      process.chdir(repo);
+      try {
+        const res = await wire.send("tools/call", { name: "issue_list", arguments: { dbPath: env.dbPath }, _meta: meta() });
+        assert.ok(!res.error, JSON.stringify(res.error));
+        const text = ((res.result as { content: Array<{ text: string }> }).content[0] as { text: string }).text;
+        const listed = JSON.parse(text) as Array<{ humanRef: string }>;
+        assert.deepEqual(listed.map((i) => i.humanRef), ["MCPREPO-1"]);
+      } finally {
+        process.chdir(prev);
+      }
+
+      // An uninitialized sibling repository fails closed instead of falling
+      // back to the single Project in the database.
+      const other = env.gitRepo("mcp-other");
+      process.chdir(other);
+      try {
+        const res = await wire.send("tools/call", { name: "issue_list", arguments: { dbPath: env.dbPath }, _meta: meta() });
+        const failure = res.error !== undefined ? JSON.stringify(res.error) : JSON.stringify(res.result);
+        assert.match(failure, /Run `sb init`/, "uninitialized repository must fail closed");
+      } finally {
+        process.chdir(prev);
+      }
+    } finally {
+      process.chdir(prev);
+      env.restore();
     }
   });
 });

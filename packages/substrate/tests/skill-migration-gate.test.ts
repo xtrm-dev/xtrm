@@ -513,6 +513,12 @@ function cli(dbPath: string, argv: string[]): { code: number; data: any } {
   return { code: res.code, data: env.data };
 }
 
+// Mutating verbs are project-scoped (ADR §5): every mutation names prj_gate.
+const PROJECT_ARGS = ["--project", "prj_gate"];
+function mut(dbPath: string, argv: string[]): { code: number; data: any } {
+  return cli(dbPath, [...argv, ...PROJECT_ARGS]);
+}
+
 function contractFile(dir: string, name: string, overrides: Record<string, unknown> = {}): string {
   const p = join(dir, name);
   writeFileSync(p, JSON.stringify({ ...contract(), ...overrides }));
@@ -528,18 +534,18 @@ describe("skill-migration-gate live: using-xtrm transcript", () => {
     assert.equal(created.revision, 1);
 
     // Metadata edit: no revision, readiness untouched.
-    const meta = cli(dbPath, ["issue", "edit", created.humanRef, "--title", "Gate renamed", "--priority", "2"]).data;
+    const meta = mut(dbPath, ["issue", "edit", created.humanRef, "--title", "Gate renamed", "--priority", "2"]).data;
     assert.equal(meta.revision, 1);
     assert.equal(meta.revisionCreated, false);
 
     // Execution-bearing edit: new revision, readiness invalidated.
     const c2 = contractFile(dir, "c2.json", { problem: "Gate problem v2", success: "Gate success" });
-    const edited = cli(dbPath, ["issue", "edit", created.humanRef, "--contract", c2]).data;
+    const edited = mut(dbPath, ["issue", "edit", created.humanRef, "--contract", c2]).data;
     assert.equal(edited.revision, 2);
     assert.equal(edited.revisionCreated, true);
 
     // Convenience note: append-only continuity, no revision bump.
-    const noted = cli(dbPath, ["issue", "note", created.humanRef, "takeover observation", "--kind", "finding"]).data;
+    const noted = mut(dbPath, ["issue", "note", created.humanRef, "takeover observation", "--kind", "finding"]).data;
     assert.equal(noted.kind, "finding");
     assert.equal(noted.issueRevision, 2);
     assert.equal(cli(dbPath, ["issue", "show", created.humanRef]).data.revision, 2);
@@ -549,10 +555,10 @@ describe("skill-migration-gate live: using-xtrm transcript", () => {
     const before = cli(dbPath, ["issue", "validate", created.humanRef]).data;
     assert.equal(before.revision, 2);
     assert.equal(before.attestationCurrent, false);
-    const attested = cli(dbPath, ["issue", "attest", created.humanRef, "--outcome", "ready", "--policy", "default", "--attested-by", "gate"]).data;
+    const attested = mut(dbPath, ["issue", "attest", created.humanRef, "--outcome", "ready", "--policy", "default", "--attested-by", "gate"]).data;
     assert.equal(attested.outcome, "ready");
     assert.equal(cli(dbPath, ["issue", "validate", created.humanRef]).data.dispatchable, true);
-    const meta2 = cli(dbPath, ["issue", "edit", created.humanRef, "--title", "Gate renamed again"]).data;
+    const meta2 = mut(dbPath, ["issue", "edit", created.humanRef, "--title", "Gate renamed again"]).data;
     assert.equal(meta2.revision, 2);
     assert.equal(meta2.revisionCreated, false);
     const retained = cli(dbPath, ["issue", "validate", created.humanRef]).data;
@@ -560,7 +566,7 @@ describe("skill-migration-gate live: using-xtrm transcript", () => {
     assert.equal(retained.attestationCurrent, true);
 
     // Claim -> resume capsule renders the executed revision.
-    const claimed = cli(dbPath, ["issue", "claim", created.humanRef, "--holder", "gate-holder"]).data;
+    const claimed = mut(dbPath, ["issue", "claim", created.humanRef, "--holder", "gate-holder"]).data;
     assert.equal(claimed.holder, "gate-holder");
     const capsule = cli(dbPath, ["issue", "resume", created.humanRef]).data;
     assert.equal(capsule.humanRef, "GATE-1");
@@ -568,25 +574,25 @@ describe("skill-migration-gate live: using-xtrm transcript", () => {
 
     // Durable checkpoint, then the lifecycle round-trip: defer -> open ->
     // (close/reopen/state aliases all land on lifecycleState).
-    const checkpoint = cli(dbPath, ["journal", "checkpoint", created.humanRef]).data;
+    const checkpoint = mut(dbPath, ["journal", "checkpoint", created.humanRef]).data;
     assert.equal(checkpoint.kind, "checkpoint");
-    assert.equal(cli(dbPath, ["issue", "defer", created.humanRef]).data.lifecycleState, "deferred");
-    assert.equal(cli(dbPath, ["issue", "state", created.humanRef, "open"]).data.lifecycleState, "open");
+    assert.equal(mut(dbPath, ["issue", "defer", created.humanRef]).data.lifecycleState, "deferred");
+    assert.equal(mut(dbPath, ["issue", "state", created.humanRef, "open"]).data.lifecycleState, "open");
 
     // Graph round-trip on a second issue: relate then unrelate.
     const second = cli(dbPath, ["issue", "create", "--project", "prj_gate", "--title", "Gate two", "--kind", "task", "--contract", c1, "--scrutiny", "LOW"]).data;
     assert.equal(second.humanRef, "GATE-2");
-    const related = cli(dbPath, ["issue", "relate", "--from", created.humanRef, "--to", second.humanRef, "--kind", "blocks"]).data;
+    const related = mut(dbPath, ["issue", "relate", "--from", created.humanRef, "--to", second.humanRef, "--kind", "blocks"]).data;
     assert.equal(related.kind, "blocks");
-    const unrelated = cli(dbPath, ["issue", "unrelate", "--from", created.humanRef, "--to", second.humanRef, "--kind", "blocks"]).data;
+    const unrelated = mut(dbPath, ["issue", "unrelate", "--from", created.humanRef, "--to", second.humanRef, "--kind", "blocks"]).data;
     assert.equal(unrelated.kind, "blocks");
 
     // Close via the lifecycle alias, then release.
-    const closed = cli(dbPath, ["issue", "close", created.humanRef]).data;
+    const closed = mut(dbPath, ["issue", "close", created.humanRef]).data;
     assert.equal(closed.lifecycleState, "done");
-    assert.equal(cli(dbPath, ["issue", "state", created.humanRef, "open"]).data.lifecycleState, "open");
-    assert.equal(cli(dbPath, ["issue", "state", created.humanRef, "done"]).data.lifecycleState, "done");
-    assert.equal(cli(dbPath, ["issue", "release", created.humanRef, "--holder", "gate-holder"]).data.released, true);
+    assert.equal(mut(dbPath, ["issue", "state", created.humanRef, "open"]).data.lifecycleState, "open");
+    assert.equal(mut(dbPath, ["issue", "state", created.humanRef, "done"]).data.lifecycleState, "done");
+    assert.equal(mut(dbPath, ["issue", "release", created.humanRef, "--holder", "gate-holder"]).data.released, true);
 
     // Journal delta stays readable after close (continuity survives).
     const delta = cli(dbPath, ["journal", "since", created.humanRef, "0"]).data;
@@ -609,10 +615,10 @@ describe("skill-migration-gate live: planning check/apply", () => {
         { fromKey: "b", toKey: "a", kind: "blocks" },
       ],
     }));
-    const check = cli(dbPath, ["plan", "check", "--file", planPath]).data;
+    const check = mut(dbPath, ["plan", "check", "--file", planPath]).data;
     assert.equal(check.ok, false);
     assert.ok(check.blockCycles.length > 0, "cycle must be reported");
-    const refused = runCli(["--db", dbPath, "--json", "plan", "apply", "--file", planPath]);
+    const refused = runCli(["--db", dbPath, "--json", "plan", "apply", "--file", planPath, "--project", "prj_gate"]);
     assert.equal(refused.code, 1);
     assert.match(refused.stdout, /cycle/i);
   });
@@ -627,8 +633,8 @@ describe("skill-migration-gate live: planning check/apply", () => {
       ],
       edges: [],
     }));
-    assert.equal(cli(dbPath, ["plan", "check", "--file", planPath]).data.ok, true);
-    const applied = cli(dbPath, ["plan", "apply", "--file", planPath]).data;
+    assert.equal(mut(dbPath, ["plan", "check", "--file", planPath]).data.ok, true);
+    const applied = mut(dbPath, ["plan", "apply", "--file", planPath]).data;
     assert.equal(applied.applied, true);
     assert.equal(applied.issues.length, 1);
     const list = cli(dbPath, ["issue", "list", "--project", "prj_gate"]).data as Array<{ humanRef: string }>;
@@ -637,7 +643,7 @@ describe("skill-migration-gate live: planning check/apply", () => {
     assert.ok(first, "planned issue must be listed");
     const ref = first.humanRef;
     assert.equal(cli(dbPath, ["issue", "validate", ref]).data.dispatchable, false, "planned issue needs attestation before dispatch");
-    assert.equal(cli(dbPath, ["issue", "attest", ref, "--outcome", "ready", "--policy", "default", "--attested-by", "gate"]).data.outcome, "ready");
+    assert.equal(mut(dbPath, ["issue", "attest", ref, "--outcome", "ready", "--policy", "default", "--attested-by", "gate"]).data.outcome, "ready");
     assert.equal(cli(dbPath, ["issue", "validate", ref]).data.dispatchable, true);
   });
 });

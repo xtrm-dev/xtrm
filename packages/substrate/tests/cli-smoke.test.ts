@@ -32,6 +32,13 @@ function cli(dbPath: string, argv: string[]): { code: number; data: unknown; raw
   return { code: res.code, data: env.data, raw: res.stdout };
 }
 
+// Mutating verbs are project-scoped (ADR §5): each mutation names the Project
+// it was seeded into.
+const PROJECT_ARGS = ["--project", "prj_demo"];
+function mut(dbPath: string, argv: string[]): { code: number; data: unknown; raw: string } {
+  return cli(dbPath, [...argv, ...PROJECT_ARGS]);
+}
+
 function contractFile(dir: string, name: string, overrides: Record<string, unknown> = {}): string {
   const p = join(dir, name);
   writeFileSync(p, JSON.stringify({ ...contract(), ...overrides }));
@@ -53,13 +60,13 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
 
     // contract (edit) bumps the revision
     const c2 = contractFile(dir, "c2.json", { problem: "Smoke problem v2", success: "Smoke success" });
-    const edited = cli(dbPath, ["issue", "edit", created.humanRef, "--contract", c2]).data as { revision: number; revisionCreated: boolean };
+    const edited = mut(dbPath, ["issue", "edit", created.humanRef, "--contract", c2]).data as { revision: number; revisionCreated: boolean };
     assert.equal(edited.revision, 2);
     assert.equal(edited.revisionCreated, true);
 
     // attest through the CLI (attestation stays service authority; the CLI
     // only carries the actor + policy + outcome bytes)
-    const attested = cli(dbPath, ["issue", "attest", created.humanRef, "--outcome", "ready", "--policy", "default", "--attested-by", "smoke"]).data as {
+    const attested = mut(dbPath, ["issue", "attest", created.humanRef, "--outcome", "ready", "--policy", "default", "--attested-by", "smoke"]).data as {
       outcome: string; policy: string; attestedBy: string;
     };
     assert.equal(attested.outcome, "ready");
@@ -73,11 +80,11 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     assert.ok(ready.some((r) => r.humanRef === "DEMO-1"));
 
     // claim -> close
-    const claimed = cli(dbPath, ["issue", "claim", created.humanRef, "--holder", "smoke-holder"]).data as { holder: string };
+    const claimed = mut(dbPath, ["issue", "claim", created.humanRef, "--holder", "smoke-holder"]).data as { holder: string };
     assert.equal(claimed.holder, "smoke-holder");
-    const closed = cli(dbPath, ["issue", "close", created.humanRef]).data as { lifecycleState: string };
+    const closed = mut(dbPath, ["issue", "close", created.humanRef]).data as { lifecycleState: string };
     assert.equal(closed.lifecycleState, "done");
-    cli(dbPath, ["issue", "release", created.humanRef, "--holder", "smoke-holder"]);
+    mut(dbPath, ["issue", "release", created.humanRef, "--holder", "smoke-holder"]);
   });
 
   it("creates a project through the CLI", () => {
@@ -127,7 +134,7 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     // children + relate + tree + list exercise the remaining verbs
     const kids = cli(dbPath, ["issue", "children", lone.humanRef]).data as Array<{ humanRef: string }>;
     assert.ok(kids.some((k) => k.humanRef === child.humanRef));
-    cli(dbPath, ["issue", "relate", "--from", child.humanRef, "--to", parent.humanRef, "--kind", "relates_to"]);
+    mut(dbPath, ["issue", "relate", "--from", child.humanRef, "--to", parent.humanRef, "--kind", "relates_to"]);
     const tree = cli(dbPath, ["issue", "tree", "--project", "prj_demo"]).data as unknown[];
     assert.ok(tree.length >= 1);
     const list = cli(dbPath, ["issue", "list", "--project", "prj_demo"]).data as unknown[];
@@ -145,9 +152,9 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
       ],
       edges: [{ fromKey: "a", toKey: "b", kind: "blocks" }],
     }));
-    const check = cli(dbPath, ["plan", "check", "--file", planPath]).data as { ok: boolean };
+    const check = mut(dbPath, ["plan", "check", "--file", planPath]).data as { ok: boolean };
     assert.equal(check.ok, true);
-    const applied = cli(dbPath, ["plan", "apply", "--file", planPath]).data as { applied: boolean; issues: unknown[] };
+    const applied = mut(dbPath, ["plan", "apply", "--file", planPath]).data as { applied: boolean; issues: unknown[] };
     assert.equal(applied.applied, true);
     assert.equal(applied.issues.length, 2);
     const list = cli(dbPath, ["issue", "list", "--project", "prj_demo"]).data as unknown[];
@@ -228,7 +235,7 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     const created = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", c]).data as {
       humanRef: string;
     };
-    cli(dbPath, [
+    mut(dbPath, [
       "journal", "append", created.humanRef, "--kind", "finding",
       "--semantic", JSON.stringify({ summary: "The cache never invalidates", current: "Proving it", next: ["Fix it"] }),
     ]);

@@ -37,6 +37,7 @@ describe("sb help/version/doctor (§28): side-effect-free surface", () => {
       ["import", "--help"],
       ["import", "beads", "--help"],
       ["doctor", "--help"],
+      ["init", "--help"],
       ["help", "issue", "create"],
     ]) {
       const res = runCli(argv, { dbPath: join(mkdtempSync(join(tmpdir(), "sb-help-")), "x.db") });
@@ -65,6 +66,7 @@ describe("sb help/version/doctor (§28): side-effect-free surface", () => {
     assert.match(data.version, /^\d+\.\d+\.\d+/);
     assert.ok(data.text.includes("usage:"));
     assert.ok(data.commands.includes("issue.create") && data.commands.includes("doctor"));
+    assert.ok(data.commands.includes("init"), "init is a registered help surface");
   });
 
   it("unknown help topics fail closed", () => {
@@ -76,16 +78,44 @@ describe("sb help/version/doctor (§28): side-effect-free surface", () => {
   it("doctor reports healthy with parseable JSON fields", () => {
     const dir = mkdtempSync(join(tmpdir(), "sb-doc-"));
     const dbPath = join(dir, "state.db");
-    const human = runCli(["--db", dbPath, "doctor"]);
-    assert.equal(human.code, 0, human.stderr);
-    assert.match(human.stdout, /healthy/);
-    assert.match(human.stdout, /state\.db:/);
-    const env = jsonEnv(runCli(["--db", dbPath, "doctor", "--json"]));
-    assert.equal(env.command, "doctor");
-    assert.equal(env.ok, true);
-    const data = env.data as { dbPath: string; schemaHealthy: boolean; projects: number; gitRoot: unknown };
-    assert.equal(data.dbPath, dbPath);
-    assert.equal(data.schemaHealthy, true);
+    const savedProject = process.env["SUBSTRATE_PROJECT"];
+    delete process.env["SUBSTRATE_PROJECT"];
+    try {
+      const human = runCli(["--db", dbPath, "doctor"]);
+      assert.equal(human.code, 0, human.stderr);
+      assert.match(human.stdout, /healthy/);
+      assert.match(human.stdout, /state\.db:/);
+      assert.match(human.stdout, /repository: .*initialized: false/);
+      const env = jsonEnv(runCli(["--db", dbPath, "doctor", "--json"]));
+      assert.equal(env.command, "doctor");
+      assert.equal(env.ok, true);
+      const data = env.data as {
+        dbPath: string;
+        schemaHealthy: boolean;
+        projects: number;
+        gitRoot: unknown;
+        repository: { repositoryKey: string | null; gitRoot: string | null; initialized: boolean; baseBranch: string | null; identityError: string | null };
+        project: { id: string } | null;
+        projectError: string | null;
+        effectiveOverride: string | null;
+        link: unknown;
+        linkError: unknown;
+      };
+      assert.equal(data.dbPath, dbPath);
+      assert.equal(data.schemaHealthy, true);
+      // The suite runs inside a real Git checkout, but this temp DB has no
+      // binding for it: repository facts are real, initialization is false,
+      // and the bound Project stays null (ADR §17).
+      assert.equal(typeof data.repository, "object");
+      assert.equal(typeof data.repository.repositoryKey, "string");
+      assert.equal(data.repository.gitRoot, data.gitRoot);
+      assert.equal(data.repository.initialized, false);
+      assert.equal(data.project, null);
+      assert.equal(data.effectiveOverride, null);
+      assert.ok(!JSON.stringify(data).includes('"single"'), "doctor must not emit source:\"single\"");
+    } finally {
+      if (savedProject !== undefined) process.env["SUBSTRATE_PROJECT"] = savedProject;
+    }
   });
 
   it("doctor exits nonzero with parseable JSON on corrupt state.db", () => {

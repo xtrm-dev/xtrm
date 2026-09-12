@@ -176,14 +176,35 @@ export class IssueService {
     }));
   }
 
-  // Project precedence: explicit flag > SUBSTRATE_PROJECT env > linked
-  // checkout (git root of cwd) > single-project default > fail closed.
-  // Never guesses across candidates: ambiguity lists ids + prefixes with
-  // link instructions. The caller discovers the git root (presentation
-  // edge); the mapping read stays here so resolution is always live.
-  resolveProject(input: { explicit?: string; env?: string; gitRoot?: string | null }): { projectId: string; source: "flag" | "env" | "link" | "single" } {
+  // Project precedence (ADR sbcloseout4 §4): explicit flag > SUBSTRATE_PROJECT
+  // env > initialized repository identity (repository_bindings by derived
+  // repositoryKey) > explicit checkout link (local alias/cache) > fail closed.
+  // Global database cardinality is never evidence (ADR §5): there is no
+  // `projects.length === 1` shortcut, so an unrelated uninitialized repository
+  // can never read or mutate another Project's Issues by accident. The caller
+  // discovers the Git common root and derives the repository key (presentation
+  // edge); the mapping reads stay here so resolution is always live.
+  resolveProject(input: {
+    explicit?: string;
+    env?: string;
+    gitRoot?: string | null;
+    repositoryKey?: string | null;
+  }): { projectId: string; source: "flag" | "env" | "binding" | "link" } {
     if (input.explicit !== undefined) return { projectId: this.getProject(input.explicit).id, source: "flag" };
     if (input.env !== undefined && input.env.trim() !== "") return { projectId: this.getProject(input.env.trim()).id, source: "env" };
+    const repositoryKey = (input.repositoryKey ?? "").trim();
+    if (repositoryKey !== "") {
+      const bound = this.matchRepositoryBinding(repositoryKey);
+      if (bound !== null) {
+        try {
+          return { projectId: this.getProject(bound).id, source: "binding" };
+        } catch {
+          throw new Error(
+            `repository ${repositoryKey} is bound to missing project ${bound}: repair the repository binding or re-run \`sb init\``,
+          );
+        }
+      }
+    }
     if (input.gitRoot) {
       const linked = this.matchLinkedCheckout(input.gitRoot);
       if (linked) {
@@ -194,11 +215,32 @@ export class IssueService {
         }
       }
     }
-    const all = rows<Row>(this.db, "SELECT id, prefix FROM projects ORDER BY id");
-    if (all.length === 1) return { projectId: all[0]?.["id"] as string, source: "single" };
-    if (all.length === 0) throw new Error("no project selected and no projects exist: create one (sb project create) or pass --project");
-    const names = all.map((r) => `${r["id"]} (${r["prefix"]})`).join(", ");
-    throw new Error(`no project selected among several: ${names}. Pass --project <id>, set SUBSTRATE_PROJECT, or link this checkout (sb project link --project <id>)`);
+    // Fail closed with the reason and the repair action (ADR §§5, 85).
+    const override = "or pass --project <id> / set SUBSTRATE_PROJECT for a deliberate cross-project override";
+    if (repositoryKey !== "") {
+      throw new Error(
+        `this repository is not initialized for Substrate: no repository binding for ${repositoryKey}. ` +
+          `Run \`sb init\` to bind this repository to a Project, ${override}`,
+      );
+    }
+    if (input.gitRoot) {
+      throw new Error(
+        `this checkout is not initialized for Substrate: no repository binding or checkout link for ${input.gitRoot}. ` +
+          `Run \`sb init\` from inside the repository to bind it to a Project, ${override}`,
+      );
+    }
+    throw new Error(
+      "no project selected and the working directory is not inside a Git checkout: Run `sb init` from inside the repository, " +
+        override,
+    );
+  }
+
+  // Repository binding read (migration 008): the canonical authority for
+  // repository -> Project (ADR §13). The caller derives the repository key;
+  // this read stays live so a re-init or repair is visible immediately.
+  private matchRepositoryBinding(repositoryKey: string): string | null {
+    const r = row<Row>(this.db, "SELECT project_id FROM repository_bindings WHERE repository_key = ?", repositoryKey);
+    return r ? (r["project_id"] as string) : null;
   }
 
   // A checkout is not always handed in as the repository root. The CLI
@@ -409,6 +451,21 @@ export class IssueService {
     const current = this.findByCurrentLocator(q);
     if (current) return current;
     throw new Error(`unresolvable ref: ${ref}`);
+  }
+
+  // Ref-scoped mutation guard (ADR §5): the resolved Issue must belong to the
+  // effective project context. An explicit ref is not a context override — a
+  // ref from another Project is refused unless the caller selected that
+  // Project deliberately (--project / SUBSTRATE_PROJECT).
+  resolveRefInProject(ref: string, projectId: string): ResolvedIssue {
+    const issue = this.resolveRef(ref);
+    if (issue.projectId !== projectId) {
+      throw new Error(
+        `ref ${ref} belongs to project ${issue.projectId}, not the effective project ${projectId}: ` +
+          `pass --project ${issue.projectId} to act on it deliberately`,
+      );
+    }
+    return issue;
   }
 
   getIssue(id: string): ResolvedIssue {

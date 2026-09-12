@@ -25,6 +25,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { isJournalKind } from "../../src/domain/journal.ts";
 import { ProvenanceService } from "../../src/service/provenance-service.ts";
+import { discoverRepository } from "../../cli/sb.ts";
 import { openHandles } from "./runtime.ts";
 
 export const SUBSTRATE_SERVER_NAME = "substrate";
@@ -52,6 +53,12 @@ const dbPathSchema = z.string().optional();
 // Every handler opens and closes its own handle per call (the WAL store is
 // the shared authority; E2 resolution lives inside openHandles). No
 // business logic here: parse, call the typed service, render JSON.
+//
+// Project resolution is repository-relative (ADR §§4-5): the process cwd is
+// discovered as a Git repository and the derived repositoryKey is handed to
+// the resolver, so an uninitialized repository fails closed with the
+// `sb init` guidance instead of falling back to a single global Project.
+// `null` discovery (not a Git checkout) also fails closed in the resolver.
 function textPayload(value: unknown): { content: Array<{ type: "text"; text: string }> } {
   return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
@@ -109,16 +116,18 @@ export function buildServer(): McpServer {
   server.registerTool(
     "issue_list",
     {
-      description: "List issue summaries for a project (explicit, SUBSTRATE_PROJECT, or single-project default; never guesses).",
+      description: "List issue summaries for a project (explicit project, SUBSTRATE_PROJECT, or this repository's binding; fails closed for an uninitialized repository).",
       inputSchema: z.object({ project: z.string().optional(), dbPath: dbPathSchema }),
     },
     async ({ project, dbPath }) => {
       const handles = openHandles(dbPath);
       try {
+        const repo = discoverRepository();
         const projectId = handles.svc.resolveProject({
           explicit: project ?? undefined,
           env: process.env["SUBSTRATE_PROJECT"],
-          gitRoot: null,
+          gitRoot: repo.gitRoot,
+          repositoryKey: repo.identity?.repositoryKey ?? null,
         }).projectId;
         return textPayload(handles.svc.listIssues(projectId).map(issueSummaryJson));
       } finally {
@@ -135,10 +144,12 @@ export function buildServer(): McpServer {
     async ({ project, dbPath }) => {
       const handles = openHandles(dbPath);
       try {
+        const repo = discoverRepository();
         const projectId = handles.svc.resolveProject({
           explicit: project ?? undefined,
           env: process.env["SUBSTRATE_PROJECT"],
-          gitRoot: null,
+          gitRoot: repo.gitRoot,
+          repositoryKey: repo.identity?.repositoryKey ?? null,
         }).projectId;
         const out = [];
         for (const i of handles.svc.listIssues(projectId)) {
