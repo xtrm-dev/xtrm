@@ -14,11 +14,14 @@ import { contract } from "./helpers.ts";
 //
 // Static part: every applicable gate check G1-G16 maps to literal markers
 // that must appear in the normative migration reference. Per-skill applicability is
-// taken from the gate doc ("Per-skill applicability"): using-xtrm carries
-// all 16; planning carries G1/G2/G8/G9/G13-G16 mandatory with the rest by
-// reference; starting-and-resuming-work carries G1-G4/G6-G7/G13-G16
-// mandatory with the rest by reference. All 16 hold on all three skills
-// after the owner revision, so no it.todo GAPs remain.
+// taken from the gate doc ("Per-skill applicability") plus the A5 directive:
+// using-xtrm carries all 16; planning carries G1/G2/G8/G9/G13-G16 mandatory
+// with the rest by reference; starting-and-resuming-work carries
+// G1-G4/G6-G7/G13-G16 mandatory with the rest by reference;
+// using-specialists (§34) carries all 16; implementation (§35) and review
+// (§36) carry their mandatory checks directly with the rest by explicit
+// statement or reference. All 16 hold on all six skills after the owner
+// revisions, so no it.todo GAPs remain.
 //
 // Verb currency: the xtrm-6qu.1 lifecycle surfaces are landed and must be
 // taught as current truth — `sb issue note --kind
@@ -45,6 +48,10 @@ function readDoc(rel: string): string {
 const USING = "docs/substrate/skills/using-xtrm.md";
 const PLANNING = "docs/substrate/skills/planning.md";
 const STARTING = "docs/substrate/skills/starting-and-resuming-work.md";
+// A5 normative migration references (bead xtrm-6qu.5, ADR §§34-36 + §§13-20).
+const SPEC = "docs/substrate/skills/using-specialists.md";
+const IMPL = "docs/substrate/skills/implementation.md";
+const REVIEW = "docs/substrate/skills/review.md";
 const GATE = "docs/substrate/skill-migration-gate.md";
 
 // --- G16 matcher -----------------------------------------------------------
@@ -90,7 +97,10 @@ function stalePendingOffenses(text: string): string[] {
 
 // Per-doc landed expectations, grounded in what each doc actually teaches:
 // the gate states the canonical set; using-xtrm (spine) teaches all of it;
-// planning teaches note/close/edit/relate; starting teaches note/state/close.
+// planning teaches note/close/edit/relate; starting teaches note/state/close;
+// using-specialists (§34 dispatch) teaches note/state/close/release;
+// implementation (§35 execution) teaches note/edit-classification/relate plus
+// state/close/release; review (§36) teaches note reads plus state/close/release.
 function landedPatternsFor(rel: string): RegExp[] {
   if (rel === GATE) {
     return [
@@ -135,6 +145,40 @@ function landedPatternsFor(rel: string): RegExp[] {
     return [
       /sb issue\s+note/,
       /--kind handoff/,
+      /sb issue\s+state/,
+      /sb issue\s+close/,
+      /sb issue\s+release/,
+    ];
+  }
+  if (rel === SPEC) {
+    return [
+      /sb issue\s+note/,
+      /--kind handoff/,
+      /sb issue\s+state/,
+      /sb issue\s+close/,
+      /sb issue\s+release/,
+    ];
+  }
+  if (rel === IMPL) {
+    return [
+      /sb issue\s+note/,
+      /--kind handoff/,
+      /sb issue\s+state/,
+      /sb issue\s+close/,
+      /sb issue\s+release/,
+      /issue edit[^\n]*--title/,
+      /--contract/,
+      /--ownership/,
+      /--context-refs/,
+      /--scrutiny/,
+      /relate/,
+      /unrelate/,
+    ];
+  }
+  if (rel === REVIEW) {
+    return [
+      /sb issue\s+note/,
+      /--kind finding/,
       /sb issue\s+state/,
       /sb issue\s+close/,
       /sb issue\s+release/,
@@ -307,6 +351,77 @@ function staticSuite(skillName: string, rel: string, checks: Check[], gaps: Arra
 staticSuite("using-xtrm (all 16)", USING, USING_CHECKS, []);
 staticSuite("planning (mandatory + by-reference)", PLANNING, PLANNING_CHECKS, PLANNING_GAPS);
 staticSuite("starting-and-resuming-work (mandatory + by-reference)", STARTING, STARTING_CHECKS, STARTING_GAPS);
+
+// --- A5 marker tables (bead xtrm-6qu.5; ADR §§34-36 over §§13-20) --------------
+// using-specialists (§34) carries all 16: it is the dispatch spine for
+// specialist work. implementation (§35) and review (§36) carry their
+// mandatory checks directly and hold the rest by explicit statement or
+// reference to the owning reference (no forked doctrine).
+
+const SPEC_CHECKS: Check[] = [
+  { id: "G1", patterns: [/PROBLEM/, /SUCCESS/, /SCOPE/, /NON_GOALS/, /CONSTRAINTS/, /VALIDATION/, /OUTPUT/, /SCRUTINY/, /executable/, /exact revision/] },
+  { id: "G2", patterns: [/sb issue validate/, /sb issue attest/, /--outcome ready/] },
+  { id: "G3", patterns: [/sb issue claim/, /--holder/, /sb issue release/, /atomic lease/, /not an assignee/] },
+  { id: "G4", patterns: [/sb issue\s+note/, /sb journal append/, /sb journal checkpoint/, /sb journal since/, /never bump the Issue revision/] },
+  { id: "G5", patterns: [/finding \(observation\)/, /choice \+ reason/, /blocker \(external/, /progress boundary/, /handoff \(continuation\)/, /ordinary annotation/, /Do not journal every shell command/] },
+  { id: "G6", patterns: [/sb journal checkpoint/, /mechanical/, /durable/] },
+  { id: "G7", patterns: [/sb issue resume/, /Resume Capsule/, /sb journal since/, /never from chat/] },
+  { id: "G8", patterns: [/stop →/, /\/planning/, /new readiness attestation/, /Never smuggle/] },
+  { id: "G9", patterns: [/Journal != Issue/] },
+  { id: "G10", patterns: [/Journal != Memory/] },
+  { id: "G11", patterns: [/Messages != authority/, /never silently change the contract/] },
+  { id: "G12", patterns: [/sb provenance dispatch/, /sb provenance trace/, /Provenance != progress/] },
+  { id: "G13", patterns: [/Issue stays authority/, /provenance refs/, /next worker uses the/] },
+  { id: "G14", patterns: [/sb issue\s+state/, /close\s*\|\s*reopen\s*\|\s*defer\s*\|\s*cancel\s*\|\s*archive/, /sb issue\s+release/] },
+  { id: "G15", patterns: [/without previous chat history/] },
+  { id: "G16", patterns: [] },
+];
+
+const IMPL_CHECKS: Check[] = [
+  { id: "G1", patterns: [/PROBLEM/, /SUCCESS/, /SCOPE/, /NON_GOALS/, /CONSTRAINTS/, /VALIDATION/, /OUTPUT/, /SCRUTINY/, /executable contract/, /exact revision/] },
+  { id: "G2", patterns: [/sb issue validate/, /sb issue attest/, /--outcome ready/, /re-validated/] },
+  { id: "G3", patterns: [/sb issue claim/, /--holder/, /sb issue release/, /writer lease/, /not an assignee/] },
+  { id: "G4", patterns: [/sb issue\s+note/, /sb journal append/, /sb journal checkpoint/, /sb journal since/, /sb journal show/, /sb journal render/] },
+  { id: "G5", patterns: [/→ Journal finding/, /→ Journal decision/, /→ Journal blocker/, /→ Journal milestone/, /→ Journal handoff/, /→ Journal note/, /Do not journal every shell command/] },
+  { id: "G6", patterns: [/sb journal checkpoint/, /mechanical checkpoint/, /mechanical state first/] },
+  { id: "G7", patterns: [/sb issue resume/, /Resume Capsule/, /sb journal since/] },
+  { id: "G8", patterns: [/execution pauses/, /Issue revision/, /new readiness attestation/, /Never silently put the new scope/] },
+  { id: "G9", patterns: [/Journal != Issue/] },
+  { id: "G10", patterns: [/Journal != Memory/] },
+  { id: "G11", patterns: [/Messages != authority/, /never silently/] },
+  { id: "G12", patterns: [/sb provenance dispatch/, /sb provenance trace/, /Provenance != progress/] },
+  { id: "G13", patterns: [/Issue stays authority/, /provenance refs/, /restarts/] },
+  { id: "G14", patterns: [/sb issue\s+state/, /close\|reopen\|defer\|cancel\|archive/, /sb issue\s+release/] },
+  { id: "G15", patterns: [/without previous chat history/] },
+  { id: "G16", patterns: [] },
+];
+
+const REVIEW_CHECKS: Check[] = [
+  { id: "G1", patterns: [/PROBLEM/, /SUCCESS/, /SCOPE/, /NON_GOALS/, /CONSTRAINTS/, /VALIDATION/, /OUTPUT/, /SCRUTINY/, /executable contract/, /exact revision/] },
+  { id: "G2", patterns: [/sb issue validate/, /sb issue attest/, /readiness attestation/] },
+  { id: "G3", patterns: [/sb issue claim/, /sb issue release/, /atomic lease, not an assignee/] },
+  { id: "G4", patterns: [/sb issue\s+note/, /sb journal since/, /sb journal show/, /never bump the revision/] },
+  // Kind meanings owned by the implementation reference; the reviewer
+  // consumes findings/decisions and never redefines them.
+  { id: "G5", patterns: [/Kind meanings/, /finding\/decision\/blocker\/milestone\/handoff\/note/, /do not journal every shell/] },
+  { id: "G6", patterns: [/mechanical checkpoint first/, /sb journal checkpoint/] },
+  { id: "G7", patterns: [/sb issue resume/, /Resume Capsule/, /sb journal since/] },
+  { id: "G8", patterns: [/planning\/revision cycle/, /new readiness attestation/, /SCOPE, SUCCESS,/] },
+  { id: "G9", patterns: [/does not silently mutate/, /Journal != Issue/] },
+  { id: "G10", patterns: [/Journal != Memory/] },
+  { id: "G11", patterns: [/Messages != authority/, /never silently/] },
+  { id: "G12", patterns: [/sb provenance trace/, /Provenance != progress/] },
+  { id: "G13", patterns: [/Issue stays authority/, /provenance refs/, /restarts from/, /sb issue resume/] },
+  { id: "G14", patterns: [/sb issue\s+state/, /close\|reopen\|defer\|cancel\|archive/, /sb issue\s+release/] },
+  { id: "G15", patterns: [/without previous chat history/] },
+  { id: "G16", patterns: [] },
+];
+
+const A5_GAPS: Array<{ id: string; gap: string }> = [];
+
+staticSuite("using-specialists §34 (all 16)", SPEC, SPEC_CHECKS, A5_GAPS);
+staticSuite("implementation §35 (mandatory + by-statement)", IMPL, IMPL_CHECKS, A5_GAPS);
+staticSuite("review §36 (mandatory + by-reference)", REVIEW, REVIEW_CHECKS, A5_GAPS);
 
 // --- Fail direction: matchers are not vacuous ------------------------------
 
