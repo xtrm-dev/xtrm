@@ -640,6 +640,19 @@ export class IssueService {
     }));
   }
 
+  // Exact alias lookup, no ref parsing. Importers must use this as their
+  // "already imported" probe instead of resolveRef: a legacy Beads id can be
+  // shaped like a durable ref (id `core-076` parses as CORE-76), resolveRef
+  // prefers the ref parse, and a present-but-unrelated issue would then be
+  // mistaken for the imported record — silently dropping it and re-pointing
+  // its edges at the wrong issue.
+  issueIdForAlias(alias: string): string | null {
+    const a = alias.trim();
+    if (!a) return null;
+    const hit = row<Row>(this.db, "SELECT issue_id FROM issue_aliases WHERE alias = ?", a);
+    return hit ? (hit["issue_id"] as string) : null;
+  }
+
   // -- events -----------------------------------------------------------------
 
   // Public so later phases and tests can record markers such as

@@ -47,7 +47,19 @@ export interface ImportResult {
   edgesFromFile: number;
   // Hierarchy split out of edgesApplied: parent-child resolves via setParent.
   hierarchyApplied: Array<{ parent: string; child: string }>;
+  // Parent-child links the single-parent model could not represent: the child
+  // was already parented by an earlier link in this import, and Substrate holds
+  // one parent per child. Reported, never silently dropped.
+  hierarchySuperseded: Array<{ parent: string; child: string }>;
+  // Parent-child links refused by the single-parent model because the source
+  // board declares a cycle. Substrate refuses the cycle by design; the link is
+  // declared here so a re-run never looks like a silent failure.
+  hierarchyRefused: Array<{ parent: string; child: string; reason: string }>;
   hierarchyErrors: string[];
+  // Cross-board references (`external:<board>:<id>`): the endpoint belongs to
+  // another project's board and must never be imported here. Declared, not an
+  // import error; the link is materialisable once that board lands.
+  externalRefs: string[];
   // Inline entries that failed to apply (redefined check 0b: every inline
   // entry is attempted; failures land here and fail the verdict).
   depFailures: string[];
@@ -182,7 +194,10 @@ export function importBeads(
     edgesFromInline: 0,
     edgesFromFile: 0,
     hierarchyApplied: [],
+    hierarchySuperseded: [],
+    hierarchyRefused: [],
     hierarchyErrors: [],
+    externalRefs: [],
     depFailures: [],
     notesApplied: [],
     notesSkipped: [],
@@ -198,12 +213,14 @@ export function importBeads(
     if (!r || typeof r.id !== "string" || !r.id.trim()) continue;
     const beadsId = r.id;
     // G44: alias presence means already imported — skip without mutating.
-    try {
-      beadToIssue.set(beadsId, svc.resolveRef(beadsId).id);
+    // Exact alias lookup, never resolveRef: a legacy id shaped like a durable
+    // ref (id `core-076` parses as CORE-76) would otherwise match an unrelated
+    // issue, skip the record, and re-point its edges at that issue.
+    const imported = svc.issueIdForAlias(beadsId);
+    if (imported !== null) {
+      beadToIssue.set(beadsId, imported);
       result.skippedPresent.push(beadsId);
       continue;
-    } catch {
-      /* not yet imported */
     }
     const title = str(r.title) ?? "(untitled beads import)";
     const description = str(r.description) ?? "";
@@ -371,6 +388,11 @@ export function importBeads(
     const b = beadToIssue.get(e.depends_on_id);
     if (!a || !b) {
       const msg = `${e.issue_id} -> ${e.depends_on_id} [${e.type}]: endpoint not imported`;
+      // A cross-board reference is foreign by design, not a failed import.
+      if (/^external:/i.test(e.issue_id) || /^external:/i.test(e.depends_on_id)) {
+        result.externalRefs.push(msg);
+        continue;
+      }
       result.edgeErrors.push(msg);
       if (e.source === "inline") result.depFailures.push(msg);
       continue;
@@ -392,7 +414,16 @@ export function importBeads(
         // setParent short-circuits on identical reparent; the key makes
         // resume-before-commit safe as well.
         svc.setParent(a, b, { idempotencyKey: `beads-parent:${e.issue_id}` });
-        result.hierarchyApplied.push({ parent: e.depends_on_id, child: e.issue_id });
+        // Single-parent model: a child declared under two parents keeps the
+        // first (the per-child key makes the later call a no-op). Record what
+        // actually holds; the superseded link is reported, not counted as
+        // applied — otherwise the verifier's hierarchy check reports a state
+        // the database was never going to reach.
+        if (svc.listChildren(b).some((c) => c.id === a)) {
+          result.hierarchyApplied.push({ parent: e.depends_on_id, child: e.issue_id });
+        } else {
+          result.hierarchySuperseded.push({ parent: e.depends_on_id, child: e.issue_id });
+        }
       } else {
         const key = `beads-edge:${e.issue_id}:${e.depends_on_id}:${kind}`;
         if (kind === "blocks") {
@@ -406,10 +437,19 @@ export function importBeads(
       if (e.source === "inline") result.edgesFromInline += 1;
       else result.edgesFromFile += 1;
     } catch (err) {
-      const msg = `${e.issue_id} -> ${e.depends_on_id} [${e.type}]: ${err instanceof Error ? err.message : String(err)}`;
-      if (kindMap[e.type] === "parent_child") result.hierarchyErrors.push(msg);
-      else result.edgeErrors.push(msg);
-      if (e.source === "inline") result.depFailures.push(msg);
+      const detail = err instanceof Error ? err.message : String(err);
+      const msg = `${e.issue_id} -> ${e.depends_on_id} [${e.type}]: ${detail}`;
+      const cycleRefused = /parent cycle rejected/.test(detail);
+      if (kindMap[e.type] === "parent_child" && cycleRefused) {
+        // Source-board cycle: Substrate refuses it by design, so it is a
+        // declared refusal rather than an import failure.
+        result.hierarchyRefused.push({ parent: e.depends_on_id, child: e.issue_id, reason: detail });
+      } else if (kindMap[e.type] === "parent_child") {
+        result.hierarchyErrors.push(msg);
+      } else {
+        result.edgeErrors.push(msg);
+      }
+      if (e.source === "inline" && !cycleRefused) result.depFailures.push(msg);
     }
   }
   return result;

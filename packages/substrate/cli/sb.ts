@@ -1328,10 +1328,20 @@ function runImport(
   const check = (name: string, expected: unknown, actual: unknown): void => {
     checks.push({ check: name, expected, actual, ok: JSON.stringify(expected) === JSON.stringify(actual) });
   };
+  // Legacy Beads ids can be shaped like durable refs (`core-076` parses as
+  // CORE-76), and resolveRef prefers the ref parse. The verifier must inspect
+  // the record that was actually imported, so it resolves by exact alias first.
+  const importedIssueId = (beadsId: string): string => svc.issueIdForAlias(beadsId) ?? svc.resolveRef(beadsId).id;
   // (0b) inline traceability: every union edge attempted (applied or listed).
   const union = unionEdges(records, fileEdgeList);
   const attempted =
-    result.edgesApplied.length + result.hierarchyApplied.length + result.edgeErrors.length + result.hierarchyErrors.length;
+    result.edgesApplied.length +
+    result.hierarchyApplied.length +
+    result.hierarchySuperseded.length +
+    result.hierarchyRefused.length +
+    result.externalRefs.length +
+    result.edgeErrors.length +
+    result.hierarchyErrors.length;
   check("0b-inline-traceability", union.length, attempted);
   // (1) exact ID-set reconciliation vs the export.
   const exportIds = [...new Set(records.filter((r) => r && typeof r.id === "string").map((r) => r.id))].sort();
@@ -1347,15 +1357,17 @@ function runImport(
       return orig ? `${orig.issue_id} ${orig.depends_on_id} ${orig.type}` : `unmapped ${e.from} ${e.to} ${e.kind}`;
     }),
     ...result.hierarchyApplied.map((h) => `${h.child} ${h.parent} parent-child`),
+    ...result.hierarchySuperseded.map((h) => `${h.child} ${h.parent} parent-child`),
+    ...result.hierarchyRefused.map((h) => `${h.child} ${h.parent} parent-child`),
   ].sort();
   const errorCount = result.edgeErrors.length + result.hierarchyErrors.length;
-  check("2-edge-multiset", unionKeys.length, appliedKeys.length + errorCount);
+  check("2-edge-multiset", unionKeys.length, appliedKeys.length + errorCount + result.externalRefs.length);
   // (3) hierarchy resolves: every applied parent-child visible via children.
   let hierarchyUnresolved = 0;
   for (const h of result.hierarchyApplied) {
     try {
-      const parentId = svc.resolveRef(h.parent).id;
-      const childId = svc.resolveRef(h.child).id;
+      const parentId = importedIssueId(h.parent);
+      const childId = importedIssueId(h.child);
       const children = svc.listChildren(parentId).map((c) => c.id);
       if (!children.includes(childId)) hierarchyUnresolved += 1;
     } catch {
@@ -1370,7 +1382,7 @@ function runImport(
   let provenanceMissing = 0;
   for (const beadsId of result.created) {
     try {
-      const id = svc.resolveRef(beadsId).id;
+      const id = importedIssueId(beadsId);
       const has = svc.listEvents(id).some((e) => e.type === "beads.imported");
       if (!has) provenanceMissing += 1;
     } catch {
@@ -1392,7 +1404,7 @@ function runImport(
       continue;
     }
     try {
-      const id = svc.resolveRef(beadsId).id;
+      const id = importedIssueId(beadsId);
       const rev = svc.getRevision(id, svc.getIssue(id).currentRevision);
       const problem = String((rev.contract as { problem?: unknown } | null)?.problem ?? "");
       const expected = expectedProblemHead(rec.description);
@@ -1416,6 +1428,9 @@ function runImport(
     edgesApplied: result.edgesApplied.length,
     edgeErrors: errorCount,
     hierarchyApplied: result.hierarchyApplied.length,
+    hierarchySuperseded: result.hierarchySuperseded.length,
+    hierarchyRefused: result.hierarchyRefused.length,
+    externalRefs: result.externalRefs.length,
     unready: result.unready.length,
     notesApplied: result.notesApplied.length,
     commentsApplied: result.commentsApplied.length,
