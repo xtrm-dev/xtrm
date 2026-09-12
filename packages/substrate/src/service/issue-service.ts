@@ -641,6 +641,29 @@ export class IssueService {
         revisions: this.listRevisions(id),
         aliases: this.listAliases(id),
         locatorHistory: this.locatorHistory(id),
+        // Bulk history surface (A9 receipt v3): migrated Beads notes/
+        // comments land as journal kind "note"; export carries them so
+        // verifiers can confirm history survival without per-issue reads.
+        // Additive: importProject ignores this key (snapshot consumers
+        // must not treat it as authority for re-import).
+        journal: rows<Row>(this.db, "SELECT sequence, kind, semantic_json, refs_json FROM issue_journal WHERE issue_id = ? ORDER BY sequence", id).map(
+          (r) => {
+            let summary: string | null = null;
+            let refs: unknown = [];
+            try {
+              const sem = JSON.parse((r["semantic_json"] as string | null) ?? "null") as { summary?: unknown } | null;
+              if (sem && typeof sem["summary"] === "string") summary = sem["summary"] as string;
+            } catch {
+              summary = null;
+            }
+            try {
+              refs = JSON.parse((r["refs_json"] as string | null) ?? "[]");
+            } catch {
+              refs = [];
+            }
+            return { sequence: r["sequence"], kind: r["kind"], summary, refs };
+          },
+        ),
       })),
       edges: rows<Row>(
         this.db,

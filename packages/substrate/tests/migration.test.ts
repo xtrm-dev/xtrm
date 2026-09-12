@@ -58,6 +58,9 @@ type ReceiptV3 = {
   result: {
     created: string[]; skippedPresent: string[]; edgeErrors: string[]; unready: string[];
     hierarchyApplied: Array<{ parent: string; child: string }>; hierarchyErrors: string[]; depFailures: string[];
+    edgesFromInline: number; edgesFromFile: number;
+    notesApplied: string[]; notesSkipped: string[]; commentsApplied: string[]; commentsSkipped: string[];
+    closeReasonCarried: string[]; closeReasonMissing: string[];
   };
   counts: { created: number; skipped: number; edgeRowsBefore: number; edgeRowsAfter: number };
   verifier: { checks: Array<{ check: string; ok: boolean }> };
@@ -263,6 +266,17 @@ describe("A9 intake: inline deps authoritative; notes/comments to journal", () =
       const second = cli(dbPath, ["import", "beads", "--file", exportPath, "--project", "prj_mig"]) as ReceiptV3;
       assert.equal(second.verdict, "PASS");
       assert.equal(journal.listEntries(taskId, { kind: "note" }).length, entries.length);
+      // Bulk notes surface: export-project carries journal so verifiers
+      // confirm history survival without per-issue reads (Core #649).
+      const snap = cli(dbPath, ["export", "--project", "prj_mig"]) as {
+        issues: Array<{ issue: { id: string }; journal: Array<{ kind: string; summary: string | null; refs: Array<{ kind: string; key: string }> }> }>;
+      };
+      const taskSnap = snap.issues.find((e) => svc.resolveRef("w-task").id === e.issue.id);
+      assert.ok(taskSnap);
+      const snapKeys = taskSnap!.journal.flatMap((j) => j.refs.map((r) => r.key));
+      assert.ok(snapKeys.includes("beads-note:w-task"));
+      assert.ok(snapKeys.includes("beads-comment:c1"));
+      assert.ok(taskSnap!.journal.some((j) => j.summary === "first comment"));
     } finally {
       db.close();
     }
