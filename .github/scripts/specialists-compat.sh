@@ -22,8 +22,11 @@ cmd_guard_substrate() {
   [ -f "$dir/package.json" ] || fail "guard-substrate: no package.json in $dir"
   local identity
   identity="$(node --input-type=module -e 'import {readFileSync} from "node:fs";const p=JSON.parse(readFileSync(process.argv[1]+"/package.json","utf8"));process.stdout.write(p.name+"@"+p.version)' "$dir")"
-  case "$identity" in "@xtrm/substrate@"*) ;;
-    *) fail "guard-substrate: package identity is $identity, want @xtrm/substrate" ;;
+  # Identity the seam and the public Specialists SHA both expect. This tracks
+  # the published name: @xtrm/substrate was renamed to @jaggerxtrm/substrate
+  # (XTRM-267, ca36465), and 0.1.0/0.1.1 are published under the new name.
+  case "$identity" in "@jaggerxtrm/substrate@"*) ;;
+    *) fail "guard-substrate: package identity is $identity, want @jaggerxtrm/substrate" ;;
   esac
   pass "guard-substrate: identity $identity"
   # Neutral-import guard (xtrm-6qu.7.4 invariant, mirrored from
