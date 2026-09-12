@@ -5,11 +5,11 @@
 //   node integrations/setup.ts check --json    full health report, exit 0/1
 //   node integrations/setup.ts plan --json     declarative install plan
 // Pure functions take explicit roots so tests drive them with temp dirs;
-// defaults resolve relative to this file inside the @xtrm/substrate package.
+// defaults resolve relative to this file inside the @jaggerxtrm/substrate package.
 //
 // A8 native enrollment (xtrm-6qu.13): XTRM_SUBSTRATE_DIR (or --dir) selects an
 // authorized local checkout. resolveSubstrateDir validates it fail-closed
-// (absolute, exists, package.json name === @xtrm/substrate, required layout,
+// (absolute, exists, package.json name === @jaggerxtrm/substrate, required layout,
 // realpath-canonicalized) BEFORE any command is emitted, so
 // wrong-package/missing-path failures never mutate. planCommands emits
 // deterministic non-interactive native commands in run order: `npm ci`
@@ -195,11 +195,11 @@ export function probeInstalledPlugins(home: string = homedir()): NamingProbe {
 // -- A8 local-checkout contract (xtrm-6qu.13) ----------------------------------
 // XTRM_SUBSTRATE_DIR (or --dir / explicit arg) is the ONLY authorized local
 // install source. It must be absolute and point at a directory whose
-// package.json name is exactly @xtrm/substrate with the expected layout.
+// package.json name is exactly @jaggerxtrm/substrate with the expected layout.
 // Resolution is pure validation: it never mutates, so callers must resolve
 // BEFORE emitting or running any install command (fail closed pre-mutation).
 
-export const EXPECTED_PACKAGE_NAME = "@xtrm/substrate";
+export const EXPECTED_PACKAGE_NAME = "@jaggerxtrm/substrate";
 export const MARKETPLACE_NAME = "substrate";
 export const PLUGIN_NAME = "substrate";
 export const PLUGIN_SPEC = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
@@ -272,9 +272,9 @@ export function installPlan(pkgRoot: string = PKG_ROOT): InstallPlan {
       {
         surface: "pi-extension",
         source: join(pkgRoot, "integrations", "pi", "extension.ts"),
-        target: "pi extension host (package @xtrm/substrate)",
+        target: "pi extension host (package @jaggerxtrm/substrate)",
         steps: [
-          "ensure @xtrm/substrate is resolvable by the Pi session",
+          "ensure @jaggerxtrm/substrate is resolvable by the Pi session",
           "load integrations/pi/extension.ts as the substrate extension",
           "verify tools substrate_issue_get/search/claim/update + journal + resume register",
         ],

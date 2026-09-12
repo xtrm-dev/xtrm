@@ -42,7 +42,7 @@ function scratch(prefix: string): string {
 }
 
 describe("local install source (xtrm-6qu.13)", () => {
-  it("package identity is @xtrm/substrate with a canonical Pi manifest", () => {
+  it("package identity is @jaggerxtrm/substrate with a canonical Pi manifest", () => {
     const pkg = JSON.parse(readFileSync(join(PKG_ROOT, "package.json"), "utf8")) as {
       name?: string;
       keywords?: string[];
@@ -86,7 +86,7 @@ describe("local install source (xtrm-6qu.13)", () => {
     writeFileSync(join(wrong, "package.json"), JSON.stringify({ name: "@other/pkg" }));
     const r = resolveSubstrateDir(wrong, {});
     assert.equal(r.ok, false, "wrong package name must fail");
-    assert.match(r.error ?? "", /@xtrm\/substrate/, "error names the expected package");
+    assert.match(r.error ?? "", /@jaggerxtrm\/substrate/, "error names the expected package");
   });
 
   it("planInstall emits nothing on failure (fail before mutation)", () => {

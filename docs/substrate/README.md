@@ -37,7 +37,7 @@ historical Beads IDs resolve as aliases after import.
 
 ## Installation through xt
 
-`sb` ships as the `bin: sb` entry of `@xtrm/substrate`
+`sb` ships as the `bin: sb` entry of `@jaggerxtrm/substrate`
 (`packages/substrate/cli/sb.ts`, erasable TypeScript, Node ≥24, no build
 step). Fleet bootstrap entry is `xt init` (installed `xt` CLI, verified present).
 `xt`-level health reporting over the `sb --help` / `--version` / `doctor`

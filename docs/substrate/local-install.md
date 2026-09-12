@@ -10,7 +10,7 @@ diagnostics carry only short status lines (versions, counts, names).
 ## 0. Source selection: `XTRM_SUBSTRATE_DIR`
 
 The ONLY authorized local install source. It must be an **absolute** path to
-a directory whose `package.json` `name` is exactly `@xtrm/substrate`.
+a directory whose `package.json` `name` is exactly `@jaggerxtrm/substrate`.
 `integrations/setup.ts` `resolveSubstrateDir()` enforces this fail-closed
 (wrong name, relative path, missing dir, or incomplete layout returns an
 error and `planInstall()` emits **zero** commands — failure always precedes
@@ -33,7 +33,7 @@ sets the other.
 Exact layout `xt init` may assume under `$XTRM_SUBSTRATE_DIR`:
 
 ```text
-package.json                              name == @xtrm/substrate
+package.json                              name == @jaggerxtrm/substrate
 cli/sb.ts                                 sb entry (shebang + exec bit)
 integrations/setup.ts                     plan/check contract (this file's owner)
 integrations/pi/extension.ts              Pi extension entry

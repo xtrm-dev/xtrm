@@ -5,7 +5,7 @@
 // Resolution order, first hit wins:
 //
 //   1. SUBSTRATE_HOME          operator override; the substrate package root
-//   2. @xtrm/substrate         installed package (normal deployment)
+//   2. @jaggerxtrm/substrate         installed package (normal deployment)
 //   3. repo-relative           running from inside the xtrm checkout (dev)
 //
 // Only substrate's own modules resolve through here. The plugin deliberately
@@ -45,8 +45,8 @@ async function resolveRoot() {
     }
   }
 
-  if (await tryImport("@xtrm/substrate/integrations/claude-code/runtime.ts")) {
-    root = { base: "@xtrm/substrate/", package: true };
+  if (await tryImport("@jaggerxtrm/substrate/integrations/claude-code/runtime.ts")) {
+    root = { base: "@jaggerxtrm/substrate/", package: true };
     return root;
   }
 
@@ -57,8 +57,8 @@ async function resolveRoot() {
   }
 
   throw new Error(
-    "substrate plugin: cannot locate the @xtrm/substrate package. " +
-      "Set SUBSTRATE_HOME to its root, or install @xtrm/substrate where the plugin runs.",
+    "substrate plugin: cannot locate the @jaggerxtrm/substrate package. " +
+      "Set SUBSTRATE_HOME to its root, or install @jaggerxtrm/substrate where the plugin runs.",
   );
 }
 
@@ -68,7 +68,7 @@ async function resolveRoot() {
  */
 export async function resolveSubstrate(file) {
   const r = await resolveRoot();
-  const specifier = r.package ? `@xtrm/substrate/integrations/claude-code/${file}` : new URL(`integrations/claude-code/${file}`, r.base).href;
+  const specifier = r.package ? `@jaggerxtrm/substrate/integrations/claude-code/${file}` : new URL(`integrations/claude-code/${file}`, r.base).href;
   const mod = await tryImport(specifier);
   if (!mod) throw new Error(`substrate plugin: cannot resolve integrations/claude-code/${file}`);
   return mod;

@@ -1,4 +1,4 @@
-# @xtrm/substrate
+# @jaggerxtrm/substrate
 
 Durable work substrate (Substrate Issues v0). Library-first: the `sb` CLI,
 Pi extension, and Claude plugin consume the typed service, never SQL.
