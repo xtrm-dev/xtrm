@@ -15,6 +15,8 @@ import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { assertSchemaHealthy } from "../src/store/migrations/runner.ts";
 import { IssueService } from "../src/service/issue-service.ts";
+import { RepositoryService } from "../src/service/repository-service.ts";
+import { deriveBaseBranch, deriveRepositoryIdentity, type RepositoryIdentity } from "../src/domain/repository.ts";
 import { PlanningService } from "../src/service/planning-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
@@ -216,9 +218,11 @@ usage:
   sb [--db PATH] [--json] <group> <verb> [args...]
   sb --help | sb help [group [verb]] [--json]
   sb --version
+  sb init [--db PATH] [--json]
   sb doctor [--db PATH] [--json]
 
 groups:
+  init        initialize this repository (bind it to a Project; idempotent)
   issue       create|show|edit|note|validate|attest|list|ready|tree|children|relate|unrelate|claim|release|state|close|reopen|defer|cancel|archive|resume
   project     create|link|unlink
   plan        check|apply
@@ -244,82 +248,99 @@ content as machine-readable data (capability detection for agents).`,
 
 prints the CLI version (parseable semver, e.g. "sb 0.1.0") without opening
 or creating the database.`,
+  init: `usage: sb init [--db PATH] [--json]
+
+initialize this Git repository for Substrate: discover the Git common root,
+derive the repository identity, detect the base branch, create or adopt the
+deterministic Project, bind the repository, and cache the local checkout
+alias. Atomic and idempotent; a second run reports idempotent: true and
+created: false. No project metadata is needed.
+
+--json data: {repository: {repositoryKey, canonicalRemote, local, gitRoot},
+project: {id, prefix, name}, baseBranch, created, adopted, idempotent}.`,
   doctor: `usage: sb doctor [--db PATH] [--json]
 
 exit 0 when state.db opens and the schema is healthy, 1 otherwise.
---json data: {dbPath, schemaHealthy, schemaError, projects, link, linkError, gitRoot}.
-link is the cwd checkout -> project mapping (informational; never flips health).`,
+--json data: {dbPath, schemaHealthy, schemaError, projects, gitRoot,
+repository: {repositoryKey, gitRoot, initialized, baseBranch, identityError},
+project, projectError, effectiveOverride, link, linkError}.
+repository.initialized is a repository_bindings fact (never a resolveProject
+success and never true because of an override); link is the effective cwd ->
+project mapping (informational; never flips health).`,
   issue: `usage: sb issue <verb> [args...]
 
   create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--parent <ref>] [--priority <n>] [--scrutiny <s>]
   show <ref>
-  edit <ref> [--contract <file|json>] [--title <t>] [--priority <n>] [--scrutiny <s>] [--ownership <file|json>] [--context-refs <file|json>] [--expected-revision <n>]
-  note <ref> ["text"] [--kind <note|finding|decision|blocker|milestone|handoff>] [--file <path|->]
+  edit <ref> [--project <id>] [--contract <file|json>] [--title <t>] [--priority <n>] [--scrutiny <s>] [--ownership <file|json>] [--context-refs <file|json>] [--expected-revision <n>]
+  note <ref> ["text"] [--project <id>] [--kind <note|finding|decision|blocker|milestone|handoff>] [--file <path|->]
   validate <ref>
-  attest <ref> --outcome <ready|reject> --policy <p> --attested-by <who> [--evidence-refs <a,b>] [--blocking-gaps <a,b>]
+  attest <ref> --outcome <ready|reject> --policy <p> --attested-by <who> [--project <id>] [--evidence-refs <a,b>] [--blocking-gaps <a,b>]
   list [--project <id>] | ready [--project <id>]
   tree [--project <id> | --root <ref>] | children <ref>
-  relate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates>
-  unrelate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates>
-  claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>]
-  release <ref> --holder <who> [--activation <id>]
-  state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>]
-  close|reopen|cancel|archive <ref>
-  defer <ref> [--until <ms|clear>]
+  relate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates> [--project <id>]
+  unrelate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates> [--project <id>]
+  claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>] [--project <id>]
+  release <ref> --holder <who> [--activation <id>] [--project <id>]
+  state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>] [--project <id>]
+  close|reopen|cancel|archive <ref> [--project <id>]
+  defer <ref> [--until <ms|clear>] [--project <id>]
   resume <ref>
 
 <ref> is a machine ID, durable reference, locator, historical locator, or alias.
 title/priority are metadata (no revision); contract/ownership/context-refs/scrutiny are
 execution-relevant (new revision, readiness invalidated). notes are append-only journal
-entries and never bump the revision.`,
+entries and never bump the revision. Mutating verbs resolve the effective project
+context (--project > SUBSTRATE_PROJECT > repository binding > checkout link) and refuse
+a ref from another Project unless that Project is selected deliberately; run \`sb init\`
+once inside the repository to bind it.`,
   "issue.create": `usage: sb issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--parent <ref>] [--priority <n>] [--scrutiny <s>]
 
 creates an issue; --contract takes a JSON file path or inline JSON.`,
   "issue.show": `usage: sb issue show <ref>
 
 prints the issue header plus the contract body (human) or full payload (with --json).`,
-  "issue.edit": `usage: sb issue edit <ref> [--contract <file|json>] [--title <t>] [--priority <n>] [--scrutiny <s>] [--ownership <file|json>] [--context-refs <file|json>] [--expected-revision <n>]
+  "issue.edit": `usage: sb issue edit <ref> [--project <id>] [--contract <file|json>] [--title <t>] [--priority <n>] [--scrutiny <s>] [--ownership <file|json>] [--context-refs <file|json>] [--expected-revision <n>]
 
 --title/--priority are metadata (no revision, readiness retained); --contract/--ownership/
 --context-refs/--scrutiny are execution-relevant (new revision, readiness invalidated).`,
-  "issue.note": `usage: sb issue note <ref> ["text"] [--kind <note|finding|decision|blocker|milestone|handoff>] [--file <path|->]
+  "issue.note": `usage: sb issue note <ref> ["text"] [--project <id>] [--kind <note|finding|decision|blocker|milestone|handoff>] [--file <path|->]
 
 appends an append-only journal note (no revision bump). --file - reads stdin.`,
   "issue.validate": `usage: sb issue validate <ref>
 
 reports readiness state, structural validity, attestation currency, blockers.`,
-  "issue.attest": `usage: sb issue attest <ref> --outcome <ready|reject> --policy <p> --attested-by <who> [--evidence-refs <a,b>] [--blocking-gaps <a,b>]`,
+  "issue.attest": `usage: sb issue attest <ref> --outcome <ready|reject> --policy <p> --attested-by <who> [--project <id>] [--evidence-refs <a,b>] [--blocking-gaps <a,b>]`,
   "issue.list": `usage: sb issue list [--project <id>]`,
   "issue.ready": `usage: sb issue ready [--project <id>]
 
 lists dispatchable issues only.`,
   "issue.tree": `usage: sb issue tree [--project <id> | --root <ref>]`,
   "issue.children": `usage: sb issue children <ref>`,
-  "issue.relate": `usage: sb issue relate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates>
+  "issue.relate": `usage: sb issue relate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates> [--project <id>]
 
 parent_child is structural and not exposed here.`,
-  "issue.unrelate": `usage: sb issue unrelate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates>
+  "issue.unrelate": `usage: sb issue unrelate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates> [--project <id>]
 
 deactivates the active edge between the endpoints for the given kind.`,
-  "issue.claim": `usage: sb issue claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>]`,
-  "issue.release": `usage: sb issue release <ref> --holder <who> [--activation <id>]`,
-  "issue.close": `usage: sb issue close <ref>
+  "issue.claim": `usage: sb issue claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>] [--project <id>]`,
+  "issue.release": `usage: sb issue release <ref> --holder <who> [--activation <id>] [--project <id>]`,
+  "issue.close": `usage: sb issue close <ref> [--project <id>]
 
 moves the issue to lifecycle state done (alias for: sb issue state <ref> done).`,
-  "issue.state": `usage: sb issue state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>]
+  "issue.state": `usage: sb issue state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>] [--project <id>]
 
 sets the lifecycle state; every transition emits a durable issue.lifecycle event.
 --until sets/clears the deferral timestamp (meaningful with deferred).`,
-  "issue.reopen": `usage: sb issue reopen <ref>
+  "issue.reopen": `usage: sb issue reopen <ref> [--project <id>]
 
 alias for: sb issue state <ref> open.`,
-  "issue.defer": `usage: sb issue defer <ref> [--until <ms|clear>]
+  "issue.defer": `usage: sb issue defer <ref> [--until <ms|clear>] [--project <id>]
 
 alias for: sb issue state <ref> deferred [--until <ms|clear>].`,
-  "issue.cancel": `usage: sb issue cancel <ref>
+  "issue.cancel": `usage: sb issue cancel <ref> [--project <id>]
 
 alias for: sb issue state <ref> cancelled.`,
-  "issue.archive": `usage: sb issue archive <ref>
+  "issue.archive": `usage: sb issue archive <ref> [--project <id>]
 
 alias for: sb issue state <ref> archived.`,
   "issue.resume": `usage: sb issue resume <ref>
@@ -338,8 +359,12 @@ links the cwd git checkout to a project (single-project DBs link implicitly).`,
   plan: `usage: sb plan <check|apply> --file <plan.json>
 
 check validates a plan draft; apply executes it.`,
-  "plan.check": `usage: sb plan check --file <plan.json>`,
-  "plan.apply": `usage: sb plan apply --file <plan.json>`,
+  "plan.check": `usage: sb plan check --file <plan.json> [--project <id>]`,
+  "plan.apply": `usage: sb plan apply --file <plan.json> [--project <id>]
+
+validates the draft against the effective project context (ADR §5): every draft
+target must belong to it unless --project / SUBSTRATE_PROJECT selects another
+Project deliberately.`,
   journal: `usage: sb journal <verb> <ref> [flags]
 
   append <ref> --kind <checkpoint|handoff|milestone|decision|finding|blocker|compaction> [--mechanical <file|json>] [--semantic <file|json>] [--refs <file|json>] [--run/--participant/--activation/--session <id>]
@@ -347,8 +372,8 @@ check validates a plan draft; apply executes it.`,
   show <ref> [--kind <k>] [--limit <n>]
   since <ref> <cursor>
   render <ref> [--sequence <n>]`,
-  "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--refs <file|json>]`,
-  "journal.checkpoint": `usage: sb journal checkpoint <ref> [--mechanical <file|json>] [--semantic <file|json>] [--workspace/--branch/--base-commit/--head-commit <v>]`,
+  "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--refs <file|json>] [--project <id>]`,
+  "journal.checkpoint": `usage: sb journal checkpoint <ref> [--mechanical <file|json>] [--semantic <file|json>] [--workspace/--branch/--base-commit/--head-commit <v>] [--project <id>]`,
   "journal.show": `usage: sb journal show <ref> [--kind <k>] [--limit <n>]
 
 returns full entry bodies (human prints semantic text; since stays compact).`,
@@ -363,12 +388,12 @@ renders the latest (or selected) checkpoint as text.`,
   dispatch <ref> [--workspace/--participant/--activation/--attempt/--session/--base-commit/--claim-id <v>]
   trace <ref> | commit <sha> | receipt <id> | pr <ref>
   bundle <ref> [--repo-root <dir>]`,
-  "provenance.dispatch": `usage: sb provenance dispatch <ref> [--workspace <dir>] [--participant/--activation/--attempt/--session/--base-commit <v>] [--claim-id <n>]`,
+  "provenance.dispatch": `usage: sb provenance dispatch <ref> [--workspace <dir>] [--participant/--activation/--attempt/--session/--base-commit <v>] [--claim-id <n>] [--project <id>]`,
   "provenance.trace": `usage: sb provenance trace <ref>`,
   "provenance.commit": `usage: sb provenance commit <40-char-sha>`,
   "provenance.receipt": `usage: sb provenance receipt <id>`,
   "provenance.pr": `usage: sb provenance pr <provider-ref>`,
-  "provenance.bundle": `usage: sb provenance bundle <ref> [--repo-root <dir>]`,
+  "provenance.bundle": `usage: sb provenance bundle <ref> [--repo-root <dir>] [--project <id>]`,
   import: `usage: sb import beads --file <export.jsonl> --project <id> [--edges-file <f>] [--create-project <PREFIX:Name>] [--dry-run]`,
   "import.beads": `usage: sb import beads --file <export.jsonl> --project <id> [--edges-file <f>] [--create-project <PREFIX:Name>] [--dry-run]
 
@@ -396,11 +421,20 @@ function renderVersion(ctx: Ctx): CliResult {
   return { code: 0, stdout: `sb ${cliVersion()}\n`, stderr: "" };
 }
 
+// `sb doctor` (ADR §17): repository identity/binding, the effective project
+// and the explicit override are three separate facts. `repository.initialized`
+// is a repository_bindings fact — never a successful resolveProject and never
+// true because of an override or a checkout alias.
 function runDoctor(ctx: Ctx): CliResult {
-  const gitRoot = discoverGitRoot();
+  const repo = discoverRepository();
+  const effectiveOverride = (process.env["SUBSTRATE_PROJECT"] ?? "").trim() === "" ? null : process.env["SUBSTRATE_PROJECT"]!.trim();
   let schemaHealthy = false;
   let schemaError: string | null = null;
   let projectCount: number | null = null;
+  let initialized = false;
+  let baseBranch = repo.baseBranch;
+  let project: { id: string; prefix: string; name: string } | null = null;
+  let projectError: string | null = null;
   let link: Record<string, unknown> | null = null;
   let linkError: string | null = null;
   try {
@@ -410,21 +444,56 @@ function runDoctor(ctx: Ctx): CliResult {
       schemaHealthy = true;
       const count = db.prepare("SELECT COUNT(*) AS n FROM projects").get() as { n: number };
       projectCount = count.n;
+      const svc = new IssueService(db);
+      const binding = repo.identity === null ? null : new RepositoryService(db).getBinding(repo.identity.repositoryKey);
+      initialized = binding !== null;
+      if (binding !== null) {
+        baseBranch = binding.baseBranch ?? repo.baseBranch;
+        try {
+          const bound = svc.getProject(binding.projectId);
+          project = { id: bound.id, prefix: bound.prefix, name: bound.name };
+        } catch (err) {
+          projectError = err instanceof Error ? err.message : String(err);
+        }
+      }
       try {
-        const svc = new IssueService(db);
-        const r = svc.resolveProject({ env: process.env["SUBSTRATE_PROJECT"], gitRoot });
-        link = { projectId: r.projectId, source: r.source, gitRoot };
+        const r = svc.resolveProject({
+          env: effectiveOverride ?? undefined,
+          gitRoot: repo.gitRoot,
+          repositoryKey: repo.identity?.repositoryKey ?? null,
+        });
+        link = { projectId: r.projectId, source: r.source, gitRoot: repo.gitRoot };
       } catch (err) {
         linkError = err instanceof Error ? err.message : String(err);
+        projectError = projectError ?? linkError;
       }
     } finally {
       db.close();
     }
   } catch (err) {
     schemaError = err instanceof Error ? err.message : String(err);
-    linkError = "unavailable: schema unhealthy";
+    projectError = "unavailable: schema unhealthy";
+    linkError = projectError;
   }
-  const data = { dbPath: ctx.dbPath, schemaHealthy, schemaError, projects: projectCount, link, linkError, gitRoot };
+  const data = {
+    dbPath: ctx.dbPath,
+    schemaHealthy,
+    schemaError,
+    projects: projectCount,
+    gitRoot: repo.gitRoot,
+    repository: {
+      repositoryKey: repo.identity?.repositoryKey ?? null,
+      gitRoot: repo.gitRoot,
+      initialized,
+      baseBranch,
+      identityError: repo.identityError,
+    },
+    project,
+    projectError,
+    effectiveOverride,
+    link,
+    linkError,
+  };
   if (ctx.json) {
     return {
       code: schemaHealthy ? 0 : 1,
@@ -437,9 +506,72 @@ function runDoctor(ctx: Ctx): CliResult {
     `state.db: ${ctx.dbPath}`,
     `schema: ${schemaHealthy ? "healthy" : `unhealthy: ${schemaError}`}`,
     `projects: ${projectCount ?? "(unknown)"}`,
-    link ? `project: ${String(link["projectId"])} (source: ${String(link["source"])})` : `project: (unlinked: ${linkError})`,
+    `repository: ${repo.identity?.repositoryKey ?? "(unknown: not a Git checkout)"} (initialized: ${initialized}, base branch: ${baseBranch ?? "(unknown)"})`,
+    project !== null
+      ? `project: ${project.id} (${project.prefix})${link !== null ? ` [source: ${String(link["source"])}]` : ""}`
+      : `project: (none: ${projectError ?? "not initialized"})`,
+    effectiveOverride !== null
+      ? `effectiveOverride: ${effectiveOverride} (effective context only; the repository stays uninitialized)`
+      : "effectiveOverride: (none)",
   ];
   return { code: schemaHealthy ? 0 : 1, stdout: lines.join("\n") + "\n", stderr: schemaHealthy ? "" : `sb: doctor: ${schemaError}\n` };
+}
+
+// `sb init` (ADR §§2, 6, 84): discover -> Git common root -> derive repository
+// identity -> detect base branch -> derive/find Project -> bind repository ->
+// register the local checkout alias -> verify. Binding, deterministic adoption,
+// the collision policy and the alias cache live in
+// RepositoryService.bindRepository — this is not CLI recursion into
+// `project create` + `project link`, and it never invents identity (ADR §98).
+function runInit(db: ReturnType<typeof openSubstrate>, svc: IssueService, ctx: Ctx): CliResult {
+  const repo = discoverRepository();
+  if (repo.gitRoot === null) throw new Error("not inside a Git repository: cd into the repository checkout and run `sb init`");
+  if (repo.identity === null) {
+    throw new Error(
+      `cannot derive a repository identity: ${repo.identityError ?? "no canonical remote and no Git common root"}. ` +
+        "Configure a canonical 'origin' remote or initialize from inside the repository checkout",
+    );
+  }
+  const repos = new RepositoryService(db);
+  const result = repos.bindRepository({
+    identity: repo.identity,
+    commonRoot: repo.gitRoot,
+    baseBranch: repo.baseBranch,
+  });
+  const binding = repos.getBinding(repo.identity.repositoryKey);
+  if (binding === null) {
+    throw new Error(`repository binding verification failed for ${repo.identity.repositoryKey}: re-run \`sb init\``);
+  }
+  // Verify the bound project resolves through the normal authority path.
+  const resolved = svc.resolveProject({ gitRoot: repo.gitRoot, repositoryKey: repo.identity.repositoryKey });
+  if (resolved.projectId !== binding.projectId) {
+    throw new Error(
+      `repository binding verification failed: ${repo.identity.repositoryKey} resolves to ${resolved.projectId}, not ${binding.projectId}`,
+    );
+  }
+  const project = svc.getProject(binding.projectId);
+  const data = {
+    repository: {
+      repositoryKey: repo.identity.repositoryKey,
+      canonicalRemote: repo.identity.canonicalRemote,
+      local: repo.identity.local,
+      gitRoot: repo.gitRoot,
+    },
+    project: { id: project.id, prefix: project.prefix, name: project.name },
+    baseBranch: binding.baseBranch,
+    created: result.created,
+    adopted: result.adopted,
+    idempotent: result.idempotent,
+  };
+  if (ctx.json) return emit(ctx, "init", data);
+  const lines = [
+    `sb init: repository ${repo.identity.repositoryKey}`,
+    `  git root: ${repo.gitRoot}`,
+    `  project: ${project.id} (${project.prefix})`,
+    `  base branch: ${binding.baseBranch ?? "(unknown)"}`,
+    `  binding: created=${result.created} adopted=${result.adopted} idempotent=${result.idempotent}`,
+  ];
+  return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
 }
 
 // -- entry -------------------------------------------------------------------
@@ -452,48 +584,49 @@ const GLOBAL_FLAGS = ["db", "json"];
 const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.create": ["project", "title", "kind", "contract", "parent", "priority", "scrutiny"],
   "issue.show": [],
-  "issue.edit": ["contract", "title", "priority", "scrutiny", "ownership", "context-refs", "expected-revision"],
-  "issue.note": ["kind", "file"],
+  "issue.edit": ["project", "contract", "title", "priority", "scrutiny", "ownership", "context-refs", "expected-revision"],
+  "issue.note": ["project", "kind", "file"],
   "issue.validate": [],
-  "issue.attest": ["outcome", "policy", "attested-by", "evidence-refs", "blocking-gaps"],
+  "issue.attest": ["project", "outcome", "policy", "attested-by", "evidence-refs", "blocking-gaps"],
   "issue.list": ["project"],
   "issue.ready": ["project"],
   "issue.tree": ["project", "root"],
   "issue.children": [],
-  "issue.relate": ["from", "to", "kind"],
-  "issue.unrelate": ["from", "to", "kind"],
-  "issue.claim": ["holder", "ttl-ms", "activation"],
-  "issue.release": ["holder", "activation"],
-  "issue.close": [],
-  "issue.state": ["until"],
-  "issue.reopen": [],
-  "issue.defer": ["until"],
-  "issue.cancel": [],
-  "issue.archive": [],
+  "issue.relate": ["project", "from", "to", "kind"],
+  "issue.unrelate": ["project", "from", "to", "kind"],
+  "issue.claim": ["project", "holder", "ttl-ms", "activation"],
+  "issue.release": ["project", "holder", "activation"],
+  "issue.close": ["project"],
+  "issue.state": ["project", "until"],
+  "issue.reopen": ["project"],
+  "issue.defer": ["project", "until"],
+  "issue.cancel": ["project"],
+  "issue.archive": ["project"],
   "issue.resume": [],
   "project.create": ["prefix", "name", "id"],
   "project.link": ["project"],
   "project.unlink": [],
-  "plan.check": ["file"],
-  "plan.apply": ["file"],
-  "journal.append": ["kind", "run", "participant", "activation", "session", "mechanical", "semantic", "refs"],
-  "journal.checkpoint": ["run", "participant", "activation", "session", "mechanical", "semantic", "refs", "workspace", "branch", "base-commit", "head-commit"],
+  "plan.check": ["project", "file"],
+  "plan.apply": ["project", "file"],
+  "journal.append": ["project", "kind", "run", "participant", "activation", "session", "mechanical", "semantic", "refs"],
+  "journal.checkpoint": ["project", "run", "participant", "activation", "session", "mechanical", "semantic", "refs", "workspace", "branch", "base-commit", "head-commit"],
   "journal.show": ["kind", "limit"],
   "journal.since": [],
   "journal.render": ["sequence"],
-  "provenance.dispatch": ["claim-id", "workspace", "participant", "activation", "attempt", "session", "base-commit"],
+  "provenance.dispatch": ["project", "claim-id", "workspace", "participant", "activation", "attempt", "session", "base-commit"],
   "provenance.trace": [],
   "provenance.commit": [],
   "provenance.receipt": [],
   "provenance.pr": [],
-  "provenance.bundle": ["repo-root"],
+  "provenance.bundle": ["project", "repo-root"],
+  "init.": [],
   "doctor": [],
   "import.beads": ["file", "project", "edges-file", "create-project", "dry-run"],
   "export.": ["project", "file"],
   "export.project": ["project", "file"],
 };
 
-const KNOWN_GROUPS = new Set(["issue", "project", "plan", "journal", "provenance", "import", "export"]);
+const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export"]);
 
 function assertKnownFlags(flags: Map<string, string | true>, command: string): void {
   const allowed = new Set([...GLOBAL_FLAGS, ...(FLAG_ALLOWLIST[command] ?? [])]);
@@ -520,10 +653,14 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
       if (verb !== undefined) throw new Error("usage: sb doctor [--db PATH] [--json] (doctor takes no verbs)");
       return runDoctor(ctx);
     }
-    if (!group || (!verb && group !== "export")) throw new Error("usage: sb [--db PATH] [--json] <issue|project|plan|journal|provenance|import|export> <verb> [args...]");
+    if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|import|export> <verb> [args...]");
     if (group && KNOWN_GROUPS.has(group)) assertKnownFlags(flags, `${group}.${verb ?? ""}`);
     db = openSubstrate(ctx.dbPath);
     const svc = new IssueService(db);
+    if (group === "init") {
+      if (verb !== undefined) throw new Error("usage: sb init [--db PATH] [--json] (init takes no verbs)");
+      return runInit(db, svc, ctx);
+    }
     if (group === "issue") return runIssue(db, svc, ctx, command, verb, flags, rest);
     if (group === "project") return runProject(svc, ctx, command, verb, flags);
     if (group === "plan") return runPlan(db, svc, ctx, command, verb, flags);
@@ -555,27 +692,92 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
 // repository; its parent is the primary checkout root, so worktrees resolve
 // to the same project as their repository. Falls back to --show-toplevel on
 // git < 2.31 (no --path-format), which degrades to the previous behaviour.
+function gitOut(args: string[]): string | null {
+  try {
+    const out = execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const trimmed = out.trim();
+    return trimmed === "" ? null : trimmed;
+  } catch {
+    return null;
+  }
+}
+
 function discoverGitRoot(): string | null {
-  const gitOut = (args: string[]): string | null => {
-    try {
-      const out = execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-      const trimmed = out.trim();
-      return trimmed === "" ? null : trimmed;
-    } catch {
-      return null;
-    }
-  };
   const commonDir = gitOut(["rev-parse", "--path-format=absolute", "--git-common-dir"]);
   if (commonDir !== null) return dirname(commonDir);
   return gitOut(["rev-parse", "--show-toplevel"]);
 }
 
+interface RepositoryDiscovery {
+  gitRoot: string | null;
+  identity: RepositoryIdentity | null;
+  identityError: string | null;
+  baseBranch: string | null;
+}
+
+// `git remote -v` rows: "origin\t<url> (fetch)". Same name+url seen as both
+// fetch and push is one remote.
+function parseRemotes(text: string | null): Array<{ name: string; url: string }> {
+  if (text === null) return [];
+  const remotes: Array<{ name: string; url: string }> = [];
+  for (const line of text.split("\n")) {
+    const m = /^(\S+)\t(\S+)\s+\((?:fetch|push)\)$/.exec(line.trim());
+    if (!m) continue;
+    const remote = { name: m[1]!, url: m[2]! };
+    if (!remotes.some((r) => r.name === remote.name && r.url === remote.url)) remotes.push(remote);
+  }
+  return remotes;
+}
+
+// Repository discovery (ADR §§6-10). discoverGitRoot stays the worktree-aware
+// common-root read; this sibling adds the identity evidence (remotes ->
+// deriveRepositoryIdentity) and the base-branch evidence. Every Git read fails
+// soft: a non-repository cwd, absent remote HEAD or ambiguous remotes yield
+// nulls and the caller fails closed rather than inventing identity (ADR §98).
+// `git rev-parse --abbrev-ref HEAD` is read because ADR §10 names the current
+// branch as evidence the operator can see; deriveBaseBranch deliberately never
+// uses it as a base, so a feature branch / detached HEAD cannot become one.
+export function discoverRepository(): RepositoryDiscovery {
+  const gitRoot = discoverGitRoot();
+  const remotes = parseRemotes(gitOut(["remote", "-v"]));
+  let identity: RepositoryIdentity | null = null;
+  let identityError: string | null = null;
+  try {
+    identity = deriveRepositoryIdentity({ commonRoot: gitRoot, remotes });
+  } catch (err) {
+    identityError = err instanceof Error ? err.message : String(err);
+  }
+  const branches = gitOut(["branch", "--format=%(refname:short)"]);
+  return {
+    gitRoot,
+    identity,
+    identityError,
+    baseBranch: deriveBaseBranch({
+      remoteHead: gitOut(["symbolic-ref", "refs/remotes/origin/HEAD"]),
+      configuredDefault: gitOut(["config", "init.defaultBranch"]),
+      currentBranch: gitOut(["rev-parse", "--abbrev-ref", "HEAD"]),
+      localBranches: branches === null ? [] : branches.split("\n"),
+    }),
+  };
+}
+
+// Effective project context (ADR §4): explicit flag > SUBSTRATE_PROJECT >
+// initialized repository identity > explicit checkout link > fail closed.
 function projectOf(svc: IssueService, flags: Map<string, string | true>): string {
+  const repo = discoverRepository();
   return svc.resolveProject({
     explicit: flag(flags, "project") ?? undefined,
     env: process.env["SUBSTRATE_PROJECT"],
-    gitRoot: discoverGitRoot(),
+    gitRoot: repo.gitRoot,
+    repositoryKey: repo.identity?.repositoryKey ?? null,
   }).projectId;
+}
+
+// Ref-scoped mutation guard (ADR §5): the effective context must resolve and
+// the ref must belong to it. `--project <other>` keeps deliberate
+// cross-project work possible (ADR §16).
+function refInContext(svc: IssueService, flags: Map<string, string | true>, ref: string): ResolvedIssue {
+  return svc.resolveRefInProject(ref, projectOf(svc, flags));
 }
 
 function needRef(rest: string[]): string {
@@ -619,7 +821,7 @@ function runIssue(
         contract: readJsonArg(contractRaw) as never,
         priority: flag(flags, "priority") !== undefined ? Number(flag(flags, "priority")) : undefined,
         scrutiny: flag(flags, "scrutiny"),
-        parentId: parent ? svc.resolveRef(parent).id : undefined,
+        parentId: parent ? svc.resolveRefInProject(parent, project).id : undefined,
         authoredBy: "sb-cli",
       });
       return emit(ctx, command, issueSummary(svc.getIssue(issue.id)));
@@ -665,7 +867,7 @@ function runIssue(
       ) {
         throw new Error("nothing to edit: pass --contract, --title, --priority, --scrutiny, --ownership, or --context-refs");
       }
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       let id = resolved.id;
       let revisionCreated = false;
       if (title !== undefined) {
@@ -716,7 +918,7 @@ function runIssue(
         text = positionalText;
       }
       if (text.trim() === "") throw new Error('a note text is required (positional "text" or --file <path|->)');
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       const journal = new JournalService(db, svc);
       const entry = journal.appendEntry(resolved.id, {
         kind: kindRaw as JournalKind,
@@ -750,7 +952,7 @@ function runIssue(
         if (raw === undefined) return undefined;
         return String(raw).split(",").map((e) => e.trim()).filter((e) => e.length > 0);
       };
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       const attestation = svc.attestReadiness(resolved.id, {
         outcome: outcome as never,
         policy,
@@ -798,7 +1000,8 @@ function runIssue(
       const to = flag(flags, "to") ?? (() => { throw new Error("--to <ref> is required"); })();
       const kind = flag(flags, "kind") ?? (() => { throw new Error("--kind is required"); })();
       if (kind === "parent_child") throw new Error("parent_child is structural: reparenting is not exposed over relate in v0");
-      const edge = svc.addEdge(svc.resolveRef(from).id, svc.resolveRef(to).id, kind as never);
+      const context = projectOf(svc, flags);
+      const edge = svc.addEdge(svc.resolveRefInProject(from, context).id, svc.resolveRefInProject(to, context).id, kind as never);
       return emit(ctx, command, { id: edge.id, kind: edge.kind, from: edge.fromIssue, to: edge.toIssue });
     }
     case "unrelate": {
@@ -806,14 +1009,15 @@ function runIssue(
       const to = flag(flags, "to") ?? (() => { throw new Error("--to <ref> is required"); })();
       const kind = flag(flags, "kind") ?? (() => { throw new Error("--kind is required"); })();
       if (kind === "parent_child") throw new Error("parent_child is structural: reparenting is not exposed over unrelate in v0");
-      const removed = svc.removeEdgeByEndpoints(svc.resolveRef(from).id, svc.resolveRef(to).id, kind as never);
+      const context = projectOf(svc, flags);
+      const removed = svc.removeEdgeByEndpoints(svc.resolveRefInProject(from, context).id, svc.resolveRefInProject(to, context).id, kind as never);
       return emit(ctx, command, { edge: removed.edge, kind: removed.kind });
     }
     case "claim": {
       const ref = needRef(rest);
       const holder = flag(flags, "holder") ?? (() => { throw new Error("--holder is required"); })();
       const ttl = flag(flags, "ttl-ms");
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       const claim = svc.claimIssue(resolved.id, holder, {
         activationId: flag(flags, "activation"),
         ttlMs: ttl !== undefined ? Number(ttl) : undefined,
@@ -823,7 +1027,7 @@ function runIssue(
     case "release": {
       const ref = needRef(rest);
       const holder = flag(flags, "holder") ?? (() => { throw new Error("--holder is required"); })();
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       const released = svc.releaseClaim(resolved.id, holder, { activationId: flag(flags, "activation") });
       return emit(ctx, command, { released: released !== null });
     }
@@ -836,37 +1040,37 @@ function runIssue(
       if (!(STATES as readonly string[]).includes(to)) {
         throw new Error(`unknown lifecycle state: ${rest[1]} (want open|deferred|done|cancelled|archived)`);
       }
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       const moved = svc.setLifecycleState(resolved.id, to as (typeof STATES)[number]);
       applyDeferUntil(svc, moved.id, flag(flags, "until"));
       return emit(ctx, command, issueSummary(svc.getIssue(moved.id)));
     }
     case "close": {
       const ref = needRef(rest);
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       const closed = svc.setLifecycleState(resolved.id, "done");
       return emit(ctx, command, issueSummary(closed));
     }
     case "reopen": {
       const ref = needRef(rest);
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "open")));
     }
     case "defer": {
       const ref = needRef(rest);
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       const moved = svc.setLifecycleState(resolved.id, "deferred");
       applyDeferUntil(svc, moved.id, flag(flags, "until"));
       return emit(ctx, command, issueSummary(svc.getIssue(moved.id)));
     }
     case "cancel": {
       const ref = needRef(rest);
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "cancelled")));
     }
     case "archive": {
       const ref = needRef(rest);
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "archived")));
     }
     case "resume": {
@@ -965,7 +1169,7 @@ function runJournal(
       const ref = needRef(rest);
       const kindRaw = flag(flags, "kind") ?? (() => { throw new Error("--kind is required"); })();
       if (!isJournalKind(kindRaw)) throw new Error(`unknown journal kind: ${kindRaw}`);
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       const mechRaw = flag(flags, "mechanical");
       const semRaw = flag(flags, "semantic");
       const refsRaw = flag(flags, "refs");
@@ -984,7 +1188,7 @@ function runJournal(
       // optional --semantic enrichment. Invalid semantic still leaves the
       // resumable mechanical entry and reports degraded (exit 0).
       const ref = needRef(rest);
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       const mechRaw = flag(flags, "mechanical");
       const semRaw = flag(flags, "semantic");
       const refsRaw = flag(flags, "refs");
@@ -1104,7 +1308,7 @@ function runProvenance(
   switch (verb) {
     case "dispatch": {
       const ref = needRef(rest);
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       const claimRaw = flag(flags, "claim-id");
       const binding = provenance.dispatch(resolved.id, {
         workspace: flag(flags, "workspace") ?? process.cwd(),
@@ -1158,7 +1362,7 @@ function runProvenance(
     }
     case "bundle": {
       const ref = needRef(rest);
-      const resolved = svc.resolveRef(ref);
+      const resolved = refInContext(svc, flags, ref);
       const { bundle, path } = provenance.generateBundle(resolved.id, { repoRoot: flag(flags, "repo-root") ?? process.cwd() });
       return emit(ctx, command, {
         bundleId: bundle.bundleId,
@@ -1201,6 +1405,31 @@ function runProject(
   return emit(ctx, command, { id: project.id, prefix: project.prefix, name: project.name });
 }
 
+// Fail closed when a PlanDraft targets a Project outside the effective
+// repository context. Update specs are keyed by their stored Issue's Project
+// (the draft's projectId is not authoritative on updates).
+function requireDraftInContext(svc: IssueService, flags: Map<string, string | true>, draft: unknown): void {
+  const issues = (draft as { issues?: unknown } | null | undefined)?.issues;
+  if (!Array.isArray(issues)) return;
+  const context = projectOf(svc, flags);
+  for (const spec of issues as Array<{ key?: string; projectId?: string; updateIssueId?: string }>) {
+    let target = spec.projectId;
+    if (spec.updateIssueId !== undefined) {
+      try {
+        target = svc.getIssue(spec.updateIssueId).projectId;
+      } catch {
+        continue; // unknown update target is reported by planning.check
+      }
+    }
+    if (target !== context) {
+      throw new Error(
+        `plan target ${spec.key ?? "?"} belongs to project ${target ?? "(none)"}, not the effective project ${context}: ` +
+          `pass --project ${target} to plan against it deliberately`,
+      );
+    }
+  }
+}
+
 function runPlan(
   db: ReturnType<typeof openSubstrate>,
   svc: IssueService,
@@ -1211,6 +1440,11 @@ function runPlan(
 ): CliResult {
   const file = flag(flags, "file") ?? (() => { throw new Error("--file <plan.json> is required"); })();
   const draft = readJsonArg(file) as never;
+  // Repository-relative planning (ADR §5): every draft target must belong to
+  // the effective project context. The draft carries explicit projectIds; this
+  // guard keeps a plan file from mutating another repository's Issues unless
+  // the operator selects that Project deliberately (--project / SUBSTRATE_PROJECT).
+  requireDraftInContext(svc, flags, draft);
   // PlanningService owns check/apply; the CLI only carries the file bytes.
   const planning = new PlanningService(db, svc);
   if (verb === "check") return emit(ctx, command, planning.check(draft));

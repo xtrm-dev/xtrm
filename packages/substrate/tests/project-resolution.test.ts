@@ -9,10 +9,12 @@ import { IssueService } from "../src/service/issue-service.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
 import { contract } from "./helpers.ts";
 
-// Acceptance xtrm-7wc.5.6 (cwd-aware project resolution): precedence
-// flag > env > linked checkout > single-project default > fail-closed,
-// link/unlink round-trip, non-git skip, real-checkout CLI test, and a
-// freshness probe (service write -> linked CLI read).
+// Repository-relative project resolution (xtrm-7wc.5.6, corrected by
+// XTRM-252.2 / ADR §§4-5): precedence flag > env > repository binding >
+// explicit checkout link > fail-closed. Global database cardinality is never
+// evidence, so an uninitialized repository fails closed with the `sb init`
+// guidance. Also covers the link/unlink round-trip, non-git skip, a
+// real-checkout CLI test, and a freshness probe (service write -> CLI read).
 
 function setup(): { dir: string; dbPath: string; svc: IssueService; db: ReturnType<typeof openSubstrate> } {
   const dir = mkdtempSync(join(tmpdir(), "sb-resolve-"));
@@ -31,23 +33,46 @@ describe("project resolution (xtrm-7wc.5.6)", () => {
     rmSync(ctx.dir, { recursive: true, force: true });
   });
 
-  it("precedence: flag beats env beats link beats single default", () => {
+  it("precedence: flag beats env beats repository binding beats checkout link", () => {
     ctx.svc.createProject({ id: "prj_a", prefix: "A", name: "a" });
     ctx.svc.createProject({ id: "prj_b", prefix: "B", name: "b" });
-    ctx.svc.linkCheckout("/repo", "prj_a");
-    assert.equal(ctx.svc.resolveProject({ explicit: "prj_b", env: "prj_a", gitRoot: "/repo" }).projectId, "prj_b");
-    assert.equal(ctx.svc.resolveProject({ env: "prj_b", gitRoot: "/repo" }).source, "env");
-    assert.deepEqual(ctx.svc.resolveProject({ gitRoot: "/repo" }), { projectId: "prj_a", source: "link" });
+    ctx.svc.linkCheckout("/repo", "prj_b");
+    // The checkout link is the local alias/cache; the binding is authority.
+    ctx.db
+      .prepare("INSERT INTO repository_bindings (repository_key, project_id, base_branch, canonical_remote, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run("github.com/a/service", "prj_a", "main", "github.com/a/service", 1, 1);
+    assert.equal(ctx.svc.resolveProject({ explicit: "prj_b", env: "prj_a", gitRoot: "/repo", repositoryKey: "github.com/a/service" }).projectId, "prj_b");
+    assert.equal(ctx.svc.resolveProject({ explicit: "prj_b", env: "prj_a", gitRoot: "/repo", repositoryKey: "github.com/a/service" }).source, "flag");
+    assert.equal(ctx.svc.resolveProject({ env: "prj_b", gitRoot: "/repo", repositoryKey: "github.com/a/service" }).source, "env");
+    assert.deepEqual(ctx.svc.resolveProject({ gitRoot: "/repo", repositoryKey: "github.com/a/service" }), { projectId: "prj_a", source: "binding" });
+    // No binding for this key: the explicit checkout link still resolves.
+    assert.deepEqual(ctx.svc.resolveProject({ gitRoot: "/repo", repositoryKey: "github.com/other/service" }), { projectId: "prj_b", source: "link" });
   });
 
-  it("single-project default applies; zero and several fail closed with guidance", () => {
-    assert.throws(() => ctx.svc.resolveProject({}), /no projects exist.*sb project create/);
+  it("global database cardinality is never evidence: uninitialized repositories fail closed with `sb init` guidance", () => {
+    // Zero projects.
+    assert.throws(() => ctx.svc.resolveProject({}), /Run `sb init`/);
+    // Exactly one project is still not evidence for this repository (ADR §5).
     ctx.svc.createProject({ id: "prj_only", prefix: "ONLY", name: "only" });
-    assert.deepEqual(ctx.svc.resolveProject({}), { projectId: "prj_only", source: "single" });
-    assert.deepEqual(ctx.svc.resolveProject({ gitRoot: "/unlinked" }), { projectId: "prj_only", source: "single" });
+    assert.throws(() => ctx.svc.resolveProject({}), /not inside a Git checkout.*Run `sb init`/);
+    assert.throws(() => ctx.svc.resolveProject({ gitRoot: "/unlinked" }), /not initialized.*Run `sb init`/);
+    assert.throws(() => ctx.svc.resolveProject({ gitRoot: "/unlinked", repositoryKey: "github.com/x/service" }), /github\.com\/x\/service.*Run `sb init`/);
+    // Several projects do not change the fail-closed outcome either.
     ctx.svc.createProject({ id: "prj_second", prefix: "SECOND", name: "second" });
-    assert.throws(() => ctx.svc.resolveProject({}), /prj_only.*prj_second.*sb project link/);
+    assert.throws(() => ctx.svc.resolveProject({}), /Run `sb init`/);
     assert.throws(() => ctx.svc.resolveProject({ gitRoot: "/unlinked" }), /SUBSTRATE_PROJECT/);
+  });
+
+  it("a binding that points at a missing project fails closed, never a silent fallback", () => {
+    ctx.db.exec("PRAGMA foreign_keys = OFF");
+    ctx.db
+      .prepare("INSERT INTO repository_bindings (repository_key, project_id, base_branch, canonical_remote, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run("github.com/gone/service", "prj_gone", null, "github.com/gone/service", 1, 1);
+    ctx.db.exec("PRAGMA foreign_keys = ON");
+    assert.throws(
+      () => ctx.svc.resolveProject({ repositoryKey: "github.com/gone/service" }),
+      /bound to missing project prj_gone.*repair/i,
+    );
   });
 
   it("link round-trip: link, re-link moves, unlink removes; unknown project refused", () => {
@@ -96,7 +121,7 @@ describe("project resolution (xtrm-7wc.5.6)", () => {
         // unlinked checkout with zero projects: fail-closed with guidance
         const bare = runCli(["--db", ctx.dbPath, "--json", "issue", "list"]);
         assert.equal(bare.code, 1);
-        assert.match(bare.stdout, /sb project create/);
+        assert.match(bare.stdout, /Run `sb init`/);
         // create + link from inside the checkout (project verb takes no cwd flags)
         const project = cli(["project", "create", "--prefix", "LINK", "--name", "linked"]) as { id: string };
         const linked = cli(["project", "link"]) as { gitRoot: string; projectId: string };

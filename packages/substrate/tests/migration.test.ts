@@ -165,7 +165,7 @@ describe("G49: the sb workflow needs no bd binary", () => {
     const c = join(dir, "c.json");
     writeFileSync(c, JSON.stringify(contract()));
     const created = run(["issue", "create", "--project", "prj_mig", "--title", "T", "--kind", "task", "--contract", c, "--scrutiny", "LOW"]) as { humanRef: string };
-    run(["issue", "close", created.humanRef]);
+    run(["issue", "close", created.humanRef, "--project", "prj_mig"]);
     const list = run(["issue", "list", "--project", "prj_mig"]) as unknown[];
     assert.ok(list.length >= 1);
   });
