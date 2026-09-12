@@ -1,6 +1,6 @@
 {
   "name": "@jaggerxtrm/substrate",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Durable work substrate: issue graph over SQLite/WAL (library-first; sb CLI consumes this)",
   "type": "module",
   "main": "./src/index.ts",
