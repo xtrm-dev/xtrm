@@ -1485,7 +1485,22 @@ const invokedPath = process.argv[1] ?? "";
 const invokedAsMain = invokedPath.endsWith("sb.ts") || invokedPath.endsWith("/sb") || invokedPath === "sb";
 if (invokedAsMain) {
   const result = runCli(process.argv.slice(2));
+  // An early-closing reader (`sb ... | head`) makes stdout/stderr emit EPIPE.
+  // That is a normal end of output, not a failure: without a handler it
+  // surfaces as an unhandled 'error' event that replaces the real exit code.
+  const ignoreBrokenPipe = (err: Error): void => {
+    if ((err as NodeJS.ErrnoException).code !== "EPIPE") throw err;
+  };
+  process.stdout.on("error", ignoreBrokenPipe);
+  process.stderr.on("error", ignoreBrokenPipe);
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
-  process.exit(result.code);
+  // Exit by setting process.exitCode and letting the event loop drain rather
+  // than calling process.exit(): writes to a pipe are asynchronous, so
+  // process.exit() discards whatever has not flushed and silently truncated
+  // piped output at the 64 KiB pipe buffer (XTRM-331). Every database handle is
+  // closed inside runCli, so nothing else holds the process open, and Node/Bun
+  // flush pending stdout/stderr before a natural exit. A large write reported
+  // on stderr is delivered for the same reason; the exit code is unchanged.
+  process.exitCode = result.code;
 }
