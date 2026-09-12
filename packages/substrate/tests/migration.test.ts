@@ -281,6 +281,43 @@ describe("A9 intake: inline deps authoritative; notes/comments to journal", () =
       db.close();
     }
   });
+
+  it("array-form notes ingest with indexed keys; unhandled shapes count skipped", () => {
+    const dir = mkdtempSync(join(tmpdir(), "substrate-migi-arr-"));
+    const dbPath = join(dir, "s.db");
+    const exportPath = join(dir, "beads.jsonl");
+    const lines = [
+      {
+        _type: "issue", id: "w-arr", title: "Arr", description: "plain", status: "open",
+        issue_type: "task", created_by: "human:y",
+        notes: [
+          { id: "n1", author: "human:a", created_at: "2026-02-01", text: "first array note" },
+          { text: "second array note" },
+          { id: "n3" },
+        ],
+      },
+      {
+        _type: "issue", id: "w-odd", title: "Odd", description: "plain", status: "open",
+        issue_type: "task", created_by: "human:y", notes: 42,
+      },
+    ];
+    writeFileSync(exportPath, lines.map((l) => JSON.stringify(l)).join("\n"));
+    const receipt = cli(dbPath, ["import", "beads", "--file", exportPath, "--project", "prj_mig", "--create-project", "MIG:Migration"]) as ReceiptV3;
+    assert.equal(receipt.verdict, "PASS");
+    assert.equal(receipt.result.notesApplied.length, 1);
+    assert.deepEqual(receipt.result.notesSkipped, ["w-odd"]);
+    const db = openSubstrate(dbPath);
+    try {
+      const svc = new IssueService(db);
+      const journal = new JournalService(db, svc);
+      const keys = journal.listEntries(svc.resolveRef("w-arr").id, { kind: "note" })
+        .flatMap((e) => e.refs.map((r) => r.key));
+      assert.ok(keys.includes("beads-note:w-arr:n1"));
+      assert.ok(keys.some((k) => k.startsWith("beads-note:w-arr:index:")));
+    } finally {
+      db.close();
+    }
+  });
 });
 
 describe("importer unit: section mapping without the CLI", () => {

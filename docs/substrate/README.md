@@ -101,9 +101,11 @@ states: `terminal → deferred → draft → blocked → claimed → ready`. Onl
 (abandoned work is replanned, never silently treated as done). `sb issue ready [--project <id>]` lists only `ready` issues: `dispatchable`
 is true exactly when the derived state is `ready`. `claimed` records the
 holder but is not itself dispatchable; the Specialists claim→binding gate
-may continue a correctly preclaimed Issue once holder + activation authority
-checks pass. Any missing enforcement on that path is owned by A7-auth (bead
-xtrm-6qu.7.2) and is not claimed fixed here. Semantic sign-off
+continues a correctly preclaimed Issue only after holder + activation
+authority checks pass inside the binding transaction (merged A7-auth,
+bead xtrm-6qu.7.2: claim, holder, activation, revision, and contract hash
+are revalidated atomically before INSERT; mismatches fail closed).
+Semantic sign-off
 is explicit (`sb issue attest` with `--outcome`, `--policy`, and
 `--attested-by`):
 

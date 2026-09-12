@@ -37,6 +37,7 @@ const AUTHORITY_CLAIMS: RegExp[] = [
   /beads?\s+is\s+authoritative/i,
   /bead\s+is\s+authoritative\s+tracked\s+work/i,
   /the\s+bead\s+is\s+the\s+task/i,
+  /the\s+bead\s+is\s+the\s+prompt/i,
   /use\s+`?bd`?\s+for\s+(all|durable)/i,
   /this\s+project\s+uses\s+\*\*`?bd/i,
   /issues\s+live\s+in\s+(a\s+local\s+)?dolt/i,
@@ -46,6 +47,8 @@ const WORKFLOW_COMMANDS: RegExp[] = [
   /run\s+`?bd\s+prime/i,
   /`?bd\s+(ready|show|update|close|remember|where)\b[^`]*#?\s*(find|view|claim|complete|refresh)/i,
   /bd\s+dolt\s+push/i,
+  /bd\s+update\s+--claim/i,
+  /bd\s+hooks\s+install/i,
 ];
 
 const REQUIRED: Array<{ file: string; pattern: RegExp }> = [
@@ -76,4 +79,21 @@ describe("G48: no normative Beads-authority statement in cutover instructions", 
       assert.ok(pattern.test(text), `${file} missing Substrate authority marker: ${pattern}`);
     });
   }
+});
+
+describe("§49: no beads/dolt/bv required deps in substrate manifest", () => {
+  it("packages/substrate/package.json", () => {
+    const manifest = JSON.parse(
+      readFileSync(join(ROOT, "packages/substrate/package.json"), "utf8"),
+    ) as Record<string, Record<string, string> | undefined>;
+    for (const section of ["dependencies", "peerDependencies", "optionalDependencies"] as const) {
+      for (const name of Object.keys(manifest[section] ?? {})) {
+        const lower = name.toLowerCase();
+        assert.ok(
+          !lower.includes("beads") && !lower.includes("dolt") && lower !== "bd" && lower !== "bv",
+          `substrate manifest must not require Beads/Dolt dep: ${section}.${name}`,
+        );
+      }
+    }
+  });
 });
