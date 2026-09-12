@@ -310,6 +310,14 @@ Claude Code
 
 The new Specialist-native runtime is currently architecturally correct in its AgentSession/activation model, but its Beads-specific work boundary must be replaced.
 
+**Implementation status: IMPLEMENTED.** The replacement has landed in `xtrm-dev/specialists`. Implementing
+commit: `4bc708f9` — "feat: migrate native activation boundary to Substrate work items (xtrm-6qu.7)". The
+runtime boundary is `src/activation/workitem-store.ts` (`createWorkItemBoundary` / `openWorkItemBoundary`),
+which consumes Substrate Issues and carries no static dependency on Substrate and none on Beads;
+`src/activation/native-host.ts` opens every work item through it, and the compatibility `bead_id` parameter
+name now resolves to a Substrate Issue locator at the tool boundary. The architectural decisions in this
+section are unchanged — only their implementation status was stale.
+
 Remove load-bearing runtime concepts such as:
 
 ```text

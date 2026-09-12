@@ -866,12 +866,20 @@ The interface is part of the stopping point.
 
 Native Specialists should stop depending directly on Beads syntax.
 
-Current bridge path:
+**Implementation status: IMPLEMENTED.** The migration has landed in `xtrm-dev/specialists`. Implementing
+commit: `4bc708f9` — "feat: migrate native activation boundary to Substrate work items (xtrm-6qu.7)". The
+Beads bridge path previously shown here no longer exists; the shipped path is below.
+
+Implemented path:
 
 ```text
-NativeActivationHost
+specialist_dispatch
     ↓
-bd / Beads context
+WorkItemStore boundary (src/activation/workitem-store.ts)
+    ↓
+Substrate Issue: view / check / bind
+    ↓
+SpecialistLoader
     ↓
 Markdown section parser
     ↓
