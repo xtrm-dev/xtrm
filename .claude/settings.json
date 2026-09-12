@@ -4,16 +4,6 @@
       {
         "hooks": [
           {
-            "command": "node \"$CLAUDE_PROJECT_DIR/.xtrm/hooks/beads-claim-sync.mjs\"",
-            "timeout": 5000,
-            "type": "command"
-          }
-        ],
-        "matcher": "Bash|execute_shell_command|bash"
-      },
-      {
-        "hooks": [
-          {
             "command": "node \"$CLAUDE_PROJECT_DIR/.xtrm/hooks/quality-check.cjs\"",
             "timeout": 30000,
             "type": "command"
@@ -24,7 +14,7 @@
             "type": "command"
           }
         ],
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol"
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit"
       },
       {
         "hooks": [
@@ -34,7 +24,7 @@
             "type": "command"
           }
         ],
-        "matcher": "Bash|Grep|Read|Glob|mcp__serena__find_symbol|mcp__serena__get_symbols_overview|mcp__serena__search_for_pattern|mcp__serena__find_referencing_symbols|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol|mcp__serena__rename_symbol"
+        "matcher": "Bash|Grep|Read|Glob"
       },
       {
         "hooks": [
@@ -44,7 +34,7 @@
             "type": "command"
           }
         ],
-        "matcher": "Write|Edit|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol"
+        "matcher": "Write|Edit"
       },
       {
         "hooks": [
@@ -74,18 +64,6 @@
         "matcher": ""
       }
     ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "command": "node \"$CLAUDE_PROJECT_DIR/.xtrm/hooks/beads-compact-save.mjs\"",
-            "timeout": 5000,
-            "type": "command"
-          }
-        ],
-        "script": "beads-compact-save.mjs"
-      }
-    ],
     "PreToolUse": [
       {
         "hooks": [
@@ -93,14 +71,9 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.xtrm/hooks/worktree-boundary.mjs\"",
             "timeout": 2000,
             "type": "command"
-          },
-          {
-            "command": "node \"$CLAUDE_PROJECT_DIR/.xtrm/hooks/beads-edit-gate.mjs\"",
-            "timeout": 5000,
-            "type": "command"
           }
         ],
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol"
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit"
       },
       {
         "hooks": [
@@ -115,21 +88,11 @@
       {
         "hooks": [
           {
-            "command": "node \"$CLAUDE_PROJECT_DIR/.xtrm/hooks/beads-commit-gate.mjs\"",
-            "timeout": 5000,
-            "type": "command"
-          }
-        ],
-        "matcher": "Bash"
-      },
-      {
-        "hooks": [
-          {
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/service-skills/scripts/skill_activator.py\"",
             "type": "command"
           }
         ],
-        "matcher": "Read|Write|Edit|Glob|Grep|Bash|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol"
+        "matcher": "Read|Write|Edit|Glob|Grep|Bash"
       }
     ],
     "SessionStart": [
@@ -137,11 +100,6 @@
         "hooks": [
           {
             "command": "node \"$CLAUDE_PROJECT_DIR/.xtrm/hooks/using-xtrm-reminder.mjs\"",
-            "type": "command"
-          },
-          {
-            "command": "node \"$CLAUDE_PROJECT_DIR/.xtrm/hooks/beads-compact-restore.mjs\"",
-            "timeout": 5000,
             "type": "command"
           },
           {
@@ -158,8 +116,7 @@
             "timeout": 3000,
             "type": "command"
           }
-        ],
-        "script": "beads-compact-restore.mjs"
+        ]
       },
       {
         "hooks": [
@@ -169,31 +126,6 @@
           }
         ],
         "matcher": ""
-      },
-      {
-        "hooks": [
-          {
-            "command": "bd prime --hook-json",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "command": "node \"$CLAUDE_PROJECT_DIR/.xtrm/hooks/beads-stop-gate.mjs\"",
-            "timeout": 5000,
-            "type": "command"
-          },
-          {
-            "command": "node \"$CLAUDE_PROJECT_DIR/.xtrm/hooks/beads-memory-gate.mjs\"",
-            "timeout": 8000,
-            "type": "command"
-          }
-        ]
       }
     ],
     "UserPromptSubmit": [
