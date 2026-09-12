@@ -7,6 +7,7 @@ import { version as v4, name as n4, sql as sql4 } from "./004_claims_leases.ts";
 import { version as v5, name as n5, sql as sql5 } from "./005_journal.ts";
 import { version as v6, name as n6, sql as sql6 } from "./006_provenance.ts";
 import { version as v7, name as n7, sql as sql7 } from "./007_checkout_links.ts";
+import { version as v8, name as n8, sql as sql8 } from "./008_repository_bindings.ts";
 
 // Append-only migration runner. Landed migrations are never edited: a
 // checksum mismatch or an unknown DB version fails closed (PRD §46).
@@ -25,6 +26,7 @@ const MIGRATIONS: Migration[] = [
   { version: v5, name: n5, sql: sql5 },
   { version: v6, name: n6, sql: sql6 },
   { version: v7, name: n7, sql: sql7 },
+  { version: v8, name: n8, sql: sql8 },
 ];
 
 const REQUIRED_TABLES = [
@@ -41,6 +43,7 @@ const REQUIRED_TABLES = [
   "issue_journal",
   "execution_bindings",
   "checkout_links",
+  "repository_bindings",
   "work_receipts",
   "artifact_bindings",
   "seq_counters",
