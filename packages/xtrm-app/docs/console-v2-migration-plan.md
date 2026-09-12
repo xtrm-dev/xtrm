@@ -258,7 +258,33 @@ Conar itself is reference-only unless a license review explicitly authorizes mor
 
 DeepSeek Harness concepts may be DEPEND/ADAPT/REFERENCE only after exact license/API review; do not import its task authority or replace Pi/Substrate ownership.
 
-## 12. Acceptance for the base tranche
+**Status (2026-09-12 audit round): completed.** The gate above is satisfied by:
+
+- `console-v2-audit-conar-ui.md` — Conar @ `d50f1d1`, AGPL-3.0; primitive matrix and licensing.
+- `console-v2-audit-deepseek-harness.md` — DeepSeek Harness @ `c291e79`, MIT; architecture matrix, `DEPEND` count 0.
+- `console-v2-audit-console-v1-preservation.md` — Console @ `4b0d9f5`; preservation/migration matrix and defect register.
+- `console-v2-audit-substrate-issues-contract.md` — xtrm @ `9263f91`; typed-service contract and read-projection gaps.
+- `console-v2-audit-console-program-graph-drawer.md` — Console @ `4b0d9f5`; Beads materializer, drawer, Program, Graph, Observability, Specialists.
+
+Normative adoption decisions are in `adoption-audit.md` §10–12; the refined shell architecture is in `console-v2-shell-architecture.md`.
+
+## 12. Refinements after the 2026-09-12 audit round
+
+The section 3 implementation order stands. The following additions are required, all derived from verified source findings:
+
+1. **Placement must be decided before step 1.** The canonical-implementation-root statement in `implementation-packet.md` and the host authority statement in `Jaggerxtrm/console/docs/architecture/console-architecture.md` disagree. See `console-v2-shell-architecture.md` §1.
+2. **Shell mechanics changed the meaning of step 2.** The global icon rail is XTRM-owned new work, not an adaptation of Conar — Conar has no rail. See `console-v2-shell-architecture.md` §3.
+3. **Step 3 depends on panel mechanics.** The collapsed contextual sidebar is a reserved 44px sibling element, not a zero-width panel, because the adopted panel primitive has no `collapsedSize`. See `console-v2-shell-architecture.md` §4.2.
+4. **Step 4 must resolve the Console v1 defect register.** In particular the 24 h event counts presented as open PR/issue counts, and the identical `"Issues"` label for GitHub Issues and XTRM Issues.
+5. **Step 5 must be geometrically protected, and the five v1 drawer shells must not be ported.** `BeadSideDrawer`, `ProgrammeEntityDrawer`, `OperationsDrawer`, the dead-but-mounted `RightSidebar`, and `IssueOverlay` each have their own portal, resize, `Escape` handler, and tab model. Build one primitive in wave D. See `console-v2-shell-architecture.md` §6, §7.2, §7.6.
+6. **Step 6 is gated on Substrate package readiness.** No package entry point, no root-exported readiness types, no batched read path today. See `console-v2-audit-substrate-issues-contract.md` §4.3.
+7. **Step 7 must carry group labels.** `Program` belongs under `Governance`; `Graph`/`Observability` under `System`; otherwise Program reads as a peer of executable work. See `console-v2-shell-architecture.md` §8.2.
+8. **A latent database collision must be resolved.** Console's `resolveStateDaemonPaths` targets `~/.xtrm/state.db`, byte-identical to Substrate's canonical path. See `console-v2-shell-architecture.md` R3.
+9. **The Beads materializer is already the correct shape and must keep its single writer.** `packages/core/src/materializer/beads-adapter.ts:51` is the only production writer of `substrate_issues` / `substrate_dependencies` / `substrate_issue_edges`, and its delta-vs-resync tombstone split is load-bearing (a naive `tombstoneMissing` in the delta path caused a cross-project wipe). Do not "simplify" it and do not add a second writer; the migration keeps the adapter and swaps the source, keyed by an adapter-declared source identity rather than a hardcoded `beads:` string prefix. See `console-v2-audit-console-program-graph-drawer.md` §2, §7.
+
+Wave definitions and gates are in `console-v2-shell-architecture.md` §13. The base tranche ends after wave G; wave H (Agent/Frames) is a separately contracted tranche and must not start merely because the shell exposes an Agent destination.
+
+## 13. Acceptance for the base tranche
 
 The base tranche is ready for broader Agent implementation only when:
 

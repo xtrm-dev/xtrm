@@ -2,7 +2,17 @@
 
 **Status:** implementation guidance / adoption gate  
 **Scope:** `packages/xtrm-app`  
-**Product:** Linux-first XTRM desktop agent application
+**Product:** XTRM agent-first operating environment (Console v2 base shell + later Agent/Frames runtime)
+
+> **2026-09-12 audit round.** This document now also records the Console v2 base-UI adoption decisions.
+> Full evidence is in the pinned audit artifacts:
+>
+> - `console-v2-audit-conar-ui.md` — Conar UI craftsmanship and primitive adoption (`wannabespace/conar` @ `d50f1d1`, AGPL-3.0)
+> - `console-v2-audit-deepseek-harness.md` — Agent/observability architecture compatibility (`deepseek-ai/deepseek-harness` @ `c291e79`, MIT)
+> - `console-v2-audit-console-v1-preservation.md` — current Console preservation/migration matrix (`Jaggerxtrm/console` @ `4b0d9f5`)
+> - `console-v2-audit-substrate-issues-contract.md` — Substrate typed-service integration contract (`xtrm-dev/xtrm` @ `9263f91`)
+>
+> Sections 10–12 below are the normative adoption decisions extracted from those audits.
 
 ## 1. Governing decision
 
@@ -441,3 +451,135 @@ or another already-approved reference provide this?
 If yes, evaluate adoption first.
 
 If custom code is still chosen, record the concrete reason: missing semantic capability, incompatible ownership, unacceptable dependency, license, performance, security, or product identity.
+
+## 10. Conar audit — base-UI adoption decisions (2026-09-12)
+
+Audited: `wannabespace/conar` @ `d50f1d12790a5e3e32b16baaae46c732bd36ff35`, **AGPL-3.0** at the repository root, product identity "Tamery" (database client, package scope `@tamery`). Full evidence: `console-v2-audit-conar-ui.md`.
+
+### 10.1 Shell verdict (material correction)
+
+The operator's "double-sidebar" observation does **not** describe a persistent global icon rail. `VERIFIED`: Conar's shell is `title bar + left contextual navigator + tabbed workspace (+ collapsible bottom query logger) + right contextual chat panel`, composed inside a single `motion-panels` resizable group (`apps/app/src/routes/_protected/connection/$resourceId.tsx:115-179`). The navigator is route-scoped and absent on the dashboard route. The product's own minimum-window copy names the real layout: "the navigator, tabs and chat side by side".
+
+Consequences:
+
+1. Conar supplies **no precedent** for the XTRM persistent global icon rail. The rail is an XTRM invention and must be designed from scratch.
+2. Conar's contextual sidebar collapses to **extent 0** and relocates its reopen affordance into the workspace tab bar. That **contradicts** the XTRM requirement (collapse to a narrow rounded reopen rail, never a second icon menu, affordance stays at the collapse edge).
+3. Conar's drawer viewport is `fixed inset-0 z-50` with a `75%`-wide popup. That **contradicts** the XTRM requirement that a maximized drawer must never cover the global rail.
+4. What Conar *does* validate is the **mechanism**: an independently sized, keyboard- and ARIA-correct, collapse-aware panel stack with a fill center, plus drag-threshold collapse and persisted open/width state.
+
+### 10.2 Dispositions
+
+| primitive / concern | disposition | note |
+|---|---|---|
+| Collapse-aware resizable panel + separator + fill center | **DEPEND** | `motion-panels` MIT — the single highest-value dependency in this audit |
+| Panel motion / mode-switch / list reorder | **DEPEND** | `motion` MIT |
+| Collapse-to-narrow-rounded-reopen-rail affordance | **ADAPT** | `motion-panels` gives the animation and 1px focusable separator; the rounded rail element and its reserved width are XTRM-owned (~30 lines) |
+| Maximized drawer that cannot cover the rail | **ADAPT** | Base UI Drawer primitive + XTRM-owned portal/container scoping; Conar's mounting is REJECT |
+| Menu / popover / tooltip / tabs / dialog / drawer / select primitives | **DEPEND** | `@base-ui/react` MIT (PROPOSAL — see §12.4 for the Radix migration question) |
+| Command palette / fuzzy list | **DEPEND** | `cmdk` MIT |
+| Icon family | **DEPEND** | `@hugeicons/react` + `@hugeicons/core-free-icons` MIT; single family, thin wrapper |
+| Virtualization | **DEPEND** | `@tanstack/react-virtual` MIT |
+| Global hotkeys | **DEPEND** | `@tanstack/react-hotkeys` MIT |
+| Class-name utility, scroll affordances, toaster | **DEPEND** | `cn` MIT, `shadcn` CSS preset MIT, `tailwind-scrollbar` MIT, `sonner` MIT |
+| Persisted UI state (collapse + width + theme) | **DEPEND** | `seitu` MIT (`createWebStorageValue`), optionally with `arktype` MIT schema validation |
+| Variant matrix authoring | **DEPEND (library)** / **REFERENCE (recipes)** | `class-variance-authority` Apache-2.0 — NOTICE obligations apply |
+| Type / space / radius scale, tokens, dark-light ladder | **REFERENCE** | XTRM owns its token values; the four-tier surface ladder and a single alpha knob are the reusable pattern |
+| Sidebar row/list primitives | **REFERENCE** | Conar's rows derive from shadcn's MIT sidebar shape; do not copy AGPL class strings |
+| All `@tamery/**` source (ui kit, app, table, shared) | **REJECT** | AGPL-3.0, no per-file notices; contamination risk |
+| `packages/ui/src/components/aceternity/*` | **REJECT** | No licence/attribution header; upstream (Aceternity) terms must be checked independently — do not launder through Conar |
+| `custom/resize-handle.tsx` | **REJECT** | Superseded by `motion-panels` separators; no pointer capture, no keyboard, no ARIA |
+| Decorative overlays / marketing effects / animated brand | **REJECT** | Product-identity leakage, no shell value, extra Apache-2.0 NOTICE surface |
+| `memoza@1.3.1` | **REJECT until licensed** | No `license` field and no `LICENSE` in the published tarball (`UNKNOWN`) |
+
+### 10.3 Legal rule (restated for this audit)
+
+Reading Conar for structure, dimensions, sequencing, and library selection is permitted. Copying, translating, paraphrasing-with-substitution, or mechanically reformatting Conar-owned source — including its CSS class recipes and its `@theme` / `:root` / `.dark` token blocks — is prohibited. No case in this audit required it: every mechanism XTRM needs is obtainable from a permissively licensed upstream package listed in §12.
+
+---
+
+## 11. DeepSeek Harness audit — Agent/observability compatibility decisions (2026-09-12)
+
+Audited: `deepseek-ai/deepseek-harness` @ `c291e7961a515f6d7af9304e7fd1d257929aef26`, **MIT** (`Copyright (c) 2026 DeepSeek`); Cordis is vendored MIT under `Copyright (c) 2021-present Shigma`; `native/system` is BSD-3-Clause. Full evidence: `console-v2-audit-deepseek-harness.md`.
+
+### 11.1 Governing result
+
+**DEPEND count: 0.** Every harness package declares the source-vendored `@deepseek-ai/cordis` as a peer, and the framework layer is republished under the same scope. Any `DEPEND` imports a second plugin/DI runtime beside Pi, which the hard boundaries exclude. The value of this repository is **specifications**, not code.
+
+Two facts that do matter:
+
+- `@deepseek-ai/dsh-llm-pi-ai` depends on `@earendil-works/pi-ai@^0.85.1`. Pi and DeepSeek Harness already share one model-provider library. Align XTRM's provider/model catalog semantics there, not on DeepSeek's `LlmRuntime`.
+- DeepSeek's own doctrine ("model-visible ⟺ logged"; durable session events vs live `agent/*` events as three separate domains) is the cleanest written statement of the durable/live separation XTRM needs for Frames and Observability.
+
+### 11.2 Dispositions
+
+| DeepSeek concept | XTRM equivalent | disposition | transferable / forbidden |
+|---|---|---|---|
+| Agent registry + durable identity | `Agent` | **ADAPT** | registry operations `get/list/roots/isOwnedBy`; "presence is not liveness proof". Forbidden: collapsing agent identity onto provider `SessionId` |
+| create / resume / dispose lifecycle | `AgentSession`, Specialists activation | **ADAPT** | fixed publication order with rollback pairing; `dispose()` as an owner-held capability |
+| Parent relationships | `AgentRelation.kind` | **ADAPT** | split runtime ownership from durable lineage; never conflate |
+| Fork lineage | `AgentRelation.kind = fork` | **ADAPT** | fork seed = completed-turn prefix captured once, then owned by the child |
+| Session identity | `AgentSession` | **REFERENCE** | map to `AgentSession.externalId`; provider keeps durable session authority |
+| Durable SessionEvent log | `Evidence` + existing forensic authority | **REFERENCE** | adopt only as a compatibility/verification projection; NOT as a second transcript store |
+| Live `agent/*` events | XTRM live Agent events | **REFERENCE** | naming/shape reference only; do not put foreign names on XTRM's bus |
+| Durable-vs-live separation | not yet written in XTRM | **ADAPT** | highest-value doctrine: record which events survive restart and which are explicitly transient |
+| Typed projection architecture | `Frame` | **ADAPT** | `ProjectionDefinition`-style unit with `stateVersion`, watermark, consistent cut, change suppression; no Cordis, no `ctx.inject`, no Zod |
+| Tool-call lifecycle | XTRM tool surface | **ADAPT** | pre/execute/post envelope + scoped restriction + loud unknown-name validation |
+| Streaming | XTRM live output | **ADAPT** | chunks transient; exactly one durable settlement per attempt |
+| Cancellation | XTRM stop/interrupt | **ADAPT** | closed cause union (`user \| parent \| hook \| disposed`) with first-cause-wins |
+| Inbox / followup / steer / inject | XTRM steer/followup | **ADAPT** | two ordered boundaries (`next-turn` / `next-step`), non-waking `inject`, durable splice record, `keepInbox` |
+| Agent Teams roster | Specialists → unified Agents | **REFERENCE** | shape only; role identity stays with XTRM |
+| Mailbox / peer messaging | `AgentRelation.kind = peer` | **REFERENCE** | queued-minus-delivered recovery idea only |
+| Team task DAG | Substrate Issues | **REJECT** | a second task authority = dual-write and reconciliation debt |
+| Telemetry / logging | `TelemetryEvent`, AgentOps evidence | **ADAPT** | redaction waterfall before emit; fail-closed on a throwing rule; harness ends at `emit()` |
+| Approvals | none in the XTRM model | **REFERENCE** | closed fail-closed outcome enum + durable asked/decided audit pair |
+| Remote/client projection, Web UI, desktop | Console v2 | **REFERENCE** | no code reuse; the two-stream `snapshot`+append / `control` baseline-then-replace shape is worth a shell-level decision |
+| SDK / ACP / profiles / bundles / storage / jobs / plan / goal / invariants | XTRM control plane | **REFERENCE** | no Console v2 requirement |
+
+### 11.3 Hard boundaries (unchanged)
+
+Pi remains native-first. Substrate Issues remains executable-work authority. No second transcript/session source of truth. No import of DeepSeek team/roster/task authority. No DeepSeek or Cordis runtime beside Pi.
+
+---
+
+## 12. Base-UI dependency decision list (Console v2 shell)
+
+The only packages XTRM may `DEPEND` for the base Console v2 shell, with versions verified from per-version registry metadata. License text/notices must be retained in the implementation PR.
+
+| package | version (audited in Conar) | license | purpose |
+|---|---|---|---|
+| `motion-panels` | `0.4.0` (latest `0.5.1`) | MIT | collapse-aware resizable rail/sidebar/inspector panels + fill center |
+| `motion` | `13.2.0` | MIT | panel/mode/list motion |
+| `@base-ui/react` | `1.7.0` (latest `1.8.0`) | MIT | menus, popovers, tooltips, tabs, dialogs, drawer, select, scroll-area |
+| `@hugeicons/react` + `@hugeicons/core-free-icons` | `1.1.10` / `4.3.0` | MIT | single icon family |
+| `cmdk` | `1.1.1` | MIT | command palette |
+| `@tanstack/react-virtual` | `3.14.10` | MIT | virtualization |
+| `@tanstack/react-hotkeys` | `0.10.0` | MIT | global hotkeys |
+| `cn` | `0.2.4` | MIT | class-name merge |
+| `shadcn` (CSS preset) | `4.20.1` | MIT | scroll-fade / no-scrollbar utilities |
+| `seitu` | `0.16.1` | MIT | persisted UI state |
+| `arktype` | `2.2.3` | MIT | schema validation of persisted state |
+| `sonner` | `2.0.8` | MIT | toasts |
+| `tailwind-scrollbar` | `4.0.2` | MIT | scrollbar styling |
+| `class-variance-authority` | `0.7.1` | Apache-2.0 | variant matrices (NOTICE) |
+| `tailwindcss` (`+ tw-animate-css`, `@tailwindcss/typography`) | `4.3.3` / `1.4.0` / `0.5.20` | MIT | styling |
+| `@fontsource-variable/geist{,-mono}` | `5.3.0` | OFL-1.1 | fonts |
+
+### 12.1 Pre-1.0 dependency risk
+
+`motion-panels@0.4.0` is a `0.x` package with a single maintainer. Mitigation: pin an exact version, wrap every `motion-panels` primitive behind an XTRM-owned shell adapter module so the dependency has exactly one import site, and record the fallback — XTRM-owned CSS-custom-property width math plus a plain focusable separator. Do not spread `motion-panels` imports through feature code.
+
+### 12.2 Reopen-rail mechanics gap
+
+`motion-panels` has no `collapsedSize`: collapse is always to extent `0`. The XTRM "collapse to a narrow rounded reopen rail" therefore cannot be a bare `collapsed` panel. Two XTRM-owned options, to be chosen at implementation wave B:
+
+- **PROPOSAL B1** — the collapsed rail is a sibling fixed-width element (not a `ResizablePanel`); expanding replaces it with the sized panel.
+- **PROPOSAL B2** — the sidebar panel is never `collapsed`; at rail width it renders only the reopen affordance and the library's separator handles drag-out.
+`UNKNOWN` which better satisfies "restore returns the prior sidebar state" together with drawer maximize auto-collapse.
+
+### 12.3 Drawer scoping gap
+
+`@base-ui/react` Drawer portals to `document.body` in Conar. XTRM requires the maximized drawer to leave the global rail visible. This requires either a portal `container` override into the workspace region or an `absolute` drawer inside a `relative` shell region, plus an explicit z-index contract. Verify container-override support in the pinned `@base-ui/react` version during wave D; `UNKNOWN` until then.
+
+### 12.4 Radix migration question (PROPOSAL, needs an operator decision)
+
+Console v1 uses `@radix-ui/react-accordion`, `react-collapsible`, `react-tooltip` (`apps/console/package.json`). Adopting `@base-ui/react` as the single primitive layer means either a bounded migration of those three surfaces or accepting two primitive libraries during the transition. Running two libraries indefinitely violates the "one coherent primitive layer" goal; the recommended path is to adopt `@base-ui/react` for all new Console v2 surfaces and migrate the three Radix usages as their Console v1 surfaces are replaced (waves C and D).
