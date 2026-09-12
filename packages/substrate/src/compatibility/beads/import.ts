@@ -261,8 +261,31 @@ export function importBeads(
     // entries (reruns skip created issues entirely).
     const journal = opts?.journal;
     const noteTexts: Array<{ key: string; text: string; author: string | null; createdAt: string | null }> = [];
-    const note = str(r.notes);
-    if (note) noteTexts.push({ key: `beads-note:${beadsId}`, text: note, author: str(r.created_by), createdAt: null });
+    // notes is a string in real `bd export` output; array-form (or any other
+    // present-but-unhandled shape) must never vanish silently — ingest what
+    // has text, count the rest as skipped so the receipt stays loud.
+    const notesRaw = (r as { notes?: unknown }).notes;
+    if (typeof notesRaw === "string" && notesRaw.trim()) {
+      noteTexts.push({ key: `beads-note:${beadsId}`, text: notesRaw, author: str(r.created_by), createdAt: null });
+    } else if (Array.isArray(notesRaw)) {
+      let idx = 0;
+      for (const n of notesRaw) {
+        if (!n || typeof n !== "object") continue;
+        const rec = n as Record<string, unknown>;
+        const text = str(rec["text"]);
+        if (!text) continue;
+        noteTexts.push({
+          key: `beads-note:${beadsId}:${str(rec["id"]) ?? `index:${idx}`}`,
+          text,
+          author: str(rec["author"]) ?? str(r.created_by),
+          createdAt: str(rec["created_at"]) ?? str(rec["created"]),
+        });
+        idx += 1;
+      }
+      if (idx === 0) result.notesSkipped.push(beadsId);
+    } else if (notesRaw !== undefined && notesRaw !== null) {
+      result.notesSkipped.push(beadsId);
+    }
     const comments = (r as { comments?: unknown }).comments;
     if (Array.isArray(comments)) {
       for (const c of comments) {
@@ -312,8 +335,11 @@ export function importBeads(
         ],
       });
       existing.add(n.key);
-      if (n.key.startsWith("beads-note:")) result.notesApplied.push(beadsId);
-      else result.commentsApplied.push(n.key);
+      // notesApplied counts issues with notes ingested (once per issue);
+      // commentsApplied counts ingested comment keys.
+      if (n.key.startsWith("beads-note:")) {
+        if (!result.notesApplied.includes(beadsId)) result.notesApplied.push(beadsId);
+      } else result.commentsApplied.push(n.key);
     }
   }
 

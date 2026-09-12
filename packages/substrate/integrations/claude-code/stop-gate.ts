@@ -1,8 +1,11 @@
 // Substrate stop gate (§38, bead xtrm-6qu.6). Replaces beads-stop-gate.mjs.
 //
 // Beads nudged on an unclosed claim at stop. The Substrate version checks
-// durable continuity before exit: active claim, writer lease, journal
+// durable continuity before exit: active claim (holder), journal
 // checkpoints since the claim, pending blocker/handoff entries. Unfinished
+// NOTE: this gate reads the issue claim only; it does not enforce the
+// workspace writer lease (§18) — lease enforcement lives in the tool_call /
+// dispatch authority path (A6/A7). The gate never blocks exit.
 // work may remain open — the requirement is continuity, not fake
 // completion. Like its predecessor this gate never blocks exit (Stop-hook
 // contract: exit 0; continuity context on stdout); it writes a mechanical
