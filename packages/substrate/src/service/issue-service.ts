@@ -185,13 +185,12 @@ export class IssueService {
     if (input.explicit !== undefined) return { projectId: this.getProject(input.explicit).id, source: "flag" };
     if (input.env !== undefined && input.env.trim() !== "") return { projectId: this.getProject(input.env.trim()).id, source: "env" };
     if (input.gitRoot) {
-      const link = row<Row>(this.db, "SELECT project_id FROM checkout_links WHERE git_root = ?", input.gitRoot);
-      if (link) {
-        const id = link["project_id"] as string;
+      const linked = this.matchLinkedCheckout(input.gitRoot);
+      if (linked) {
         try {
-          return { projectId: this.getProject(id).id, source: "link" };
+          return { projectId: this.getProject(linked).id, source: "link" };
         } catch {
-          throw new Error(`linked project ${id} no longer exists: re-link this checkout (sb project link --project <id>)`);
+          throw new Error(`linked project ${linked} no longer exists: re-link this checkout (sb project link --project <id>)`);
         }
       }
     }
@@ -200,6 +199,32 @@ export class IssueService {
     if (all.length === 0) throw new Error("no project selected and no projects exist: create one (sb project create) or pass --project");
     const names = all.map((r) => `${r["id"]} (${r["prefix"]})`).join(", ");
     throw new Error(`no project selected among several: ${names}. Pass --project <id>, set SUBSTRATE_PROJECT, or link this checkout (sb project link --project <id>)`);
+  }
+
+  // A checkout is not always handed in as the repository root. The CLI
+  // canonicalizes with `git rev-parse --git-common-dir`, but in-process
+  // consumers pass process.cwd(), which in a worktree is a path inside the
+  // repository (Specialists' work-item store creates inline issues this way).
+  // The longest linked ancestor wins, so every worktree of a repository keys
+  // to that repository's project, while a checkout that links itself still
+  // overrides an enclosing checkout.
+  // ponytail: path containment, not `git rev-parse` — the service stays pure
+  // and the caller owns git discovery. Ceiling: an unlinked checkout nested
+  // inside a linked one inherits the outer project; link the inner checkout
+  // explicitly to override it.
+  private matchLinkedCheckout(gitRoot: string): string | null {
+    const target = gitRoot.replace(/\/+$/, "") || "/";
+    let bestRoot = "";
+    let bestProject: string | null = null;
+    for (const r of rows<Row>(this.db, "SELECT git_root, project_id FROM checkout_links")) {
+      const root = (r["git_root"] as string).replace(/\/+$/, "") || "/";
+      if (target !== root && !target.startsWith(root === "/" ? "/" : `${root}/`)) continue;
+      if (root.length > bestRoot.length) {
+        bestRoot = root;
+        bestProject = r["project_id"] as string;
+      }
+    }
+    return bestProject;
   }
 
   // -- issues -------------------------------------------------------------
@@ -613,6 +638,19 @@ export class IssueService {
       alias: r["alias"] as string,
       kind: r["kind"] as string,
     }));
+  }
+
+  // Exact alias lookup, no ref parsing. Importers must use this as their
+  // "already imported" probe instead of resolveRef: a legacy Beads id can be
+  // shaped like a durable ref (id `core-076` parses as CORE-76), resolveRef
+  // prefers the ref parse, and a present-but-unrelated issue would then be
+  // mistaken for the imported record — silently dropping it and re-pointing
+  // its edges at the wrong issue.
+  issueIdForAlias(alias: string): string | null {
+    const a = alias.trim();
+    if (!a) return null;
+    const hit = row<Row>(this.db, "SELECT issue_id FROM issue_aliases WHERE alias = ?", a);
+    return hit ? (hit["issue_id"] as string) : null;
   }
 
   // -- events -----------------------------------------------------------------
