@@ -547,14 +547,27 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
 // (presentation edge); the git-root->project mapping read stays in the
 // service so resolution is live every invocation. Non-git cwd yields null
 // and the service falls through to single-project default / fail-closed.
+//
+// Repository, not worktree (ADR sbcloseout4 §7): a git worktree has its own
+// toplevel but shares the repository's git directory, so keying on
+// --show-toplevel gives every worktree a different identity and misses the
+// repository's link row. --git-common-dir is shared by all worktrees of a
+// repository; its parent is the primary checkout root, so worktrees resolve
+// to the same project as their repository. Falls back to --show-toplevel on
+// git < 2.31 (no --path-format), which degrades to the previous behaviour.
 function discoverGitRoot(): string | null {
-  try {
-    const out = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    const root = out.trim();
-    return root === "" ? null : root;
-  } catch {
-    return null;
-  }
+  const gitOut = (args: string[]): string | null => {
+    try {
+      const out = execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+      const trimmed = out.trim();
+      return trimmed === "" ? null : trimmed;
+    } catch {
+      return null;
+    }
+  };
+  const commonDir = gitOut(["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  if (commonDir !== null) return dirname(commonDir);
+  return gitOut(["rev-parse", "--show-toplevel"]);
 }
 
 function projectOf(svc: IssueService, flags: Map<string, string | true>): string {
