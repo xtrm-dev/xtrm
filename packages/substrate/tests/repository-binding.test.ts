@@ -166,7 +166,7 @@ function identityForRemoteKey(repositoryKey: string): RepositoryIdentity {
   return { repositoryKey, canonicalRemote: repositoryKey, local: false };
 }
 
-describe("migration 008 on the live prj_xtrm store shape (§90)", () => {
+describe("migrations 008-009 on the live prj_xtrm store shape (§90)", () => {
   it("adds repository_bindings without touching or dropping any existing row", () => {
     const dir = tempDir("sb-mig008-");
     const path = join(dir, "state.db");
