@@ -354,7 +354,7 @@ builds the continuity capsule (derived, never a source of truth).`,
   "project.create": `usage: sb project create --prefix <PREFIX> --name <name> [--id <id>]`,
   "project.link": `usage: sb project link [--project <id>]
 
-links the cwd git checkout to a project (single-project DBs link implicitly).`,
+links the cwd git checkout to a project (an administrative alias; normal work uses 'sb init').`,
   "project.unlink": `usage: sb project unlink`,
   plan: `usage: sb plan <check|apply> --file <plan.json>
 
@@ -683,7 +683,8 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
 // cwd-aware resolution (bead xtrm-7wc.5.6): the CLI discovers the git root
 // (presentation edge); the git-root->project mapping read stays in the
 // service so resolution is live every invocation. Non-git cwd yields null
-// and the service falls through to single-project default / fail-closed.
+// and the service falls through to the repository binding, then the checkout
+// link, then fail closed with the `sb init` guidance (ADR sbcloseout4 §§4-5).
 //
 // Repository, not worktree (ADR sbcloseout4 §7): a git worktree has its own
 // toplevel but shares the repository's git directory, so keying on

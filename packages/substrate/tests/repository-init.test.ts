@@ -166,6 +166,18 @@ describe("sb init: multi-clone and remote normalization (ADR §§87-88)", () => 
     assert.equal((a.data as InitData).project.id, "prj_service");
     assert.equal((a.data as InitData).created, true);
 
+    // The second clone shares the identity BEFORE it runs init: the binding is
+    // keyed by the canonical remote, not by the checkout path (ADR §87), so it
+    // is shared identity rather than a leak into another Project.
+    const contractFile = join(env.temp("sb-clone-c-"), "c.json");
+    writeFileSync(contractFile, JSON.stringify(contract({ problem: "shared", success: "shared" })));
+    const created = env.inCwd(cloneA, () => env.run(["issue", "create", "--title", "shared work", "--kind", "task", "--contract", contractFile]));
+    assert.equal(created.code, 0, created.stderr || created.stdout);
+    assert.equal((created.data as { humanRef: string }).humanRef, "SERVICE-1");
+    const preInit = env.inCwd(cloneB, () => env.run(["issue", "list"]));
+    assert.equal(preInit.code, 0, preInit.stderr || preInit.stdout);
+    assert.deepEqual((preInit.data as Array<{ humanRef: string }>).map((i) => i.humanRef), ["SERVICE-1"]);
+
     const b = env.inCwd(cloneB, () => env.run(["init"]));
     assert.equal(b.code, 0, b.stderr || b.stdout);
     assert.equal((b.data as InitData).repository.repositoryKey, "github.com/acme/service");
