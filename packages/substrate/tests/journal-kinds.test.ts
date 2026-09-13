@@ -211,7 +211,6 @@ describe("ADR §92 three-session acceptance", () => {
   it("d: session C reconstructs the whole lineage without old transcripts", async () => {
     const dir = mkdtempSync(join(tmpdir(), "sb-adr92-"));
     const dbPath = join(dir, "state.db");
-    const TRANSCRIPT = "RAW-CHAT-TRANSCRIPT-DO-NOT-JOURNAL-77";
     let db = openSubstrate(dbPath);
     try {
       let svc = new IssueService(db);
@@ -312,7 +311,13 @@ describe("ADR §92 three-session acceptance", () => {
       assert.equal(entry?.participantId, "specialist-1");
       assert.equal(entry?.activationId, "act-1");
       assert.ok(receipt.id.startsWith("rcp_"), "receipt allocated");
-      assert.ok(!resumeC.renderCapsule(capsuleC).includes(TRANSCRIPT), "no old transcript is required or present");
+      // The cross-issue no-leak property is asserted where a body actually
+      // exists: test e journals CHILD-JOURNAL-BODY-BLUEBERRY markers into
+      // children and requires the parent capsule to exclude them. The honest
+      // assertion here is boundedness, which fails if a journal body were ever
+      // copied into the capsule by value.
+      const capsuleSize = JSON.stringify(capsuleC).length;
+      assert.ok(capsuleSize > 0 && capsuleSize < 10_000, `session C capsule stays bounded (${capsuleSize} bytes)`);
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });

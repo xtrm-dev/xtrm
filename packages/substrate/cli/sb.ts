@@ -335,7 +335,7 @@ once inside the repository to bind it.`,
 creates an issue; --contract takes a JSON file path or inline JSON.`,
   "issue.show": `usage: sb issue show <ref>
 
-prints the issue header plus the contract body (human) or full payload (with --json).`,
+prints the issue header plus the contract body (human) or full payload (with --json), followed by a bounded operational context: the most recent journal entries (summaries truncated), the newest entry per kind, per-kind counts, the closure view and the provenance summary. The full journal is never dumped; use "sb journal show" for bodies.`,
   "issue.edit": `usage: sb issue edit <ref> [--project <id>] [--contract <file|json>] [--title <t>] [--priority <n>] [--scrutiny <s>] [--ownership <file|json>] [--context-refs <file|json>] [--expected-revision <n>]
 
 --title/--priority are metadata (no revision, readiness retained); --contract/--ownership/
@@ -407,7 +407,7 @@ Project deliberately.`,
   journal: `usage: sb journal <verb> <ref> [flags]
 
   append <ref> --kind <checkpoint|handoff|milestone|decision|finding|blocker|result|compaction|note> [--mechanical <file|json>] [--semantic <file|json>] [--result <file|json>] [--refs <file|json>] [--run/--participant/--activation/--session <id>]
-  checkpoint <ref> [same flags plus --workspace/--branch/--base-commit/--head-commit]
+  checkpoint <ref> [same flags except --result, plus --workspace/--branch/--base-commit/--head-commit]
   show <ref> [--kind <k>] [--limit <n>]
   since <ref> <cursor>
   latest <ref> [--kind <k>]
