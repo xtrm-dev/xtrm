@@ -121,6 +121,25 @@ function snapshot(path: string): Record<string, unknown[]> {
   return out;
 }
 
+// A later migration may add nullable columns. "Additive" means no existing
+// value changed, so compare on the pre-migration column set and ignore
+// columns the old store did not have.
+function onPreMigrationColumns(after: Record<string, unknown[]>, before: Record<string, unknown[]>): Record<string, unknown[]> {
+  const out: Record<string, unknown[]> = {};
+  for (const [table, rows] of Object.entries(before)) {
+    const keys = rows.length > 0 ? Object.keys(rows[0] as object) : [];
+    out[table] = (after[table] ?? []).map((r) => {
+      const rec = r as Record<string, unknown>;
+      // node:sqlite rows are null-prototype objects; keep that shape so the
+      // comparison stays value-based.
+      const picked: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+      for (const k of keys) picked[k] = rec[k];
+      return picked;
+    });
+  }
+  return out;
+}
+
 const dirs: string[] = [];
 
 function tempDir(prefix: string): string {
@@ -156,9 +175,12 @@ describe("migration 008 on the live prj_xtrm store shape (§90)", () => {
 
     const db = openSubstrate(path);
     const version = db.prepare("SELECT MAX(version) AS v FROM schema_migrations").get() as { v: number };
-    assert.equal(version.v, 8);
+    // Head advances with every landed migration; 008 is proven applied below.
+    assert.equal(version.v, 9);
     const applied = db.prepare("SELECT name FROM schema_migrations WHERE version = 8").get() as { name: string };
     assert.equal(applied.name, "repository-bindings");
+    const head = db.prepare("SELECT name FROM schema_migrations WHERE version = 9").get() as { name: string };
+    assert.equal(head.name, "journal-result-payload");
     const bindings = db.prepare("SELECT COUNT(*) AS n FROM repository_bindings").get() as { n: number };
     assert.equal(bindings.n, 0);
     // The Project surface is untouched: prj_xtrm is neither duplicated nor renumbered.
@@ -166,7 +188,11 @@ describe("migration 008 on the live prj_xtrm store shape (§90)", () => {
     assert.deepEqual(projects.map((p) => p.id), ["prj_core", "prj_mmd", "prj_specialists", "prj_xtrm"]);
     db.close();
 
-    assert.deepEqual(snapshot(path), before, "migration 008 must be additive");
+    assert.deepEqual(
+      onPreMigrationColumns(snapshot(path), before),
+      before,
+      "landed migrations must be additive: no pre-existing row value changes",
+    );
 
     // checkout_links is demoted to a cache, not deleted: resolution still uses it.
     const reopened = openSubstrate(path);

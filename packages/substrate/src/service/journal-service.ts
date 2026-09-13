@@ -10,16 +10,20 @@ import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
 import { withTransaction } from "../store/transactions.ts";
 import type { IssueService } from "./issue-service.ts";
 import {
+  assertResultPayload,
   assertSemanticCheckpoint,
   isJournalKind,
   newJournalEntryId,
   validateEvidenceRefs,
   validateMechanicalCheckpoint,
+  validateResultPayload,
   validateSemanticCheckpoint,
+  JOURNAL_KINDS,
   type EvidenceRef,
   type JournalEntry,
   type JournalKind,
   type MechanicalCheckpoint,
+  type ResultPayload,
   type SemanticCheckpoint,
 } from "../domain/journal.ts";
 
@@ -43,6 +47,7 @@ export interface AppendEntryInput {
   sessionId?: string;
   mechanical?: MechanicalCheckpoint;
   semantic?: SemanticCheckpoint;
+  result?: ResultPayload;
   refs?: EvidenceRef[];
 }
 
@@ -98,8 +103,39 @@ export interface JournalDelta {
   nextCursor: number;
 }
 
+// Bounded operational context for `sb issue show` (ADR §50): latest entry per
+// kind plus a short recent window and per-kind counts. Never the whole journal.
+// `summary`/`outcome` are the only text fields carried, so a large journal
+// cannot enlarge the default show output without bound.
+export interface JournalContextEntry {
+  entryId: string;
+  sequence: number;
+  kind: JournalKind;
+  issueRevision: number;
+  createdAt: number;
+  summary: string | null;
+  outcome: string | null;
+}
+
+export interface JournalOperationalContext {
+  recent: JournalContextEntry[];
+  latestByKind: JournalContextEntry[];
+  latestCheckpoint: { entryId: string; sequence: number } | null;
+  countsByKind: Record<string, number>;
+  total: number;
+}
+
+export const DEFAULT_CONTEXT_LIMIT = 10;
+export const MAX_CONTEXT_LIMIT = 50;
+
 function trunc(s: string, max = 2000): string {
   return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
+const CONTEXT_SUMMARY_MAX = 280;
+
+function contextTrunc(s: string | null): string | null {
+  return s === null ? null : s.length > CONTEXT_SUMMARY_MAX ? `${s.slice(0, CONTEXT_SUMMARY_MAX)}…` : s;
 }
 
 export class JournalService {
@@ -118,6 +154,7 @@ export class JournalService {
       if (problems.length > 0) throw new Error(`invalid journal refs: ${problems[0]}`);
     }
     if (input.semantic !== undefined) assertSemanticCheckpoint(input.semantic);
+    if (input.result !== undefined) assertResultPayload(input.result);
     if (input.mechanical !== undefined) {
       const problems = validateMechanicalCheckpoint(input.mechanical);
       if (problems.length > 0) throw new Error(`invalid mechanical checkpoint: ${problems[0]}`);
@@ -127,6 +164,14 @@ export class JournalService {
     }
     if ((input.kind === "checkpoint" || input.kind === "compaction") && input.mechanical === undefined) {
       throw new Error(`journal kind "${input.kind}" requires a mechanical checkpoint (§20.4)`);
+    }
+    // A result is a bounded execution outcome, never an unbounded body: the
+    // kind is only legal with a validated ResultPayload (§§29, 39).
+    if (input.kind === "result" && input.result === undefined) {
+      throw new Error('journal kind "result" requires a bounded result payload (§29)');
+    }
+    if (input.kind !== "result" && input.result !== undefined) {
+      throw new Error(`journal kind "${input.kind}" does not carry a result payload`);
     }
     return withTransaction(this.db, () => {
       const issue = this.issues.getIssue(issueId);
@@ -143,8 +188,8 @@ export class JournalService {
           `INSERT INTO issue_journal
              (id, issue_id, issue_revision, sequence, run_id, participant_id,
               activation_id, session_id, kind, mechanical_json, semantic_json,
-              refs_json, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              result_json, refs_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
@@ -158,6 +203,7 @@ export class JournalService {
           input.kind,
           input.mechanical ? JSON.stringify(input.mechanical) : null,
           input.semantic ? JSON.stringify(input.semantic) : null,
+          input.result ? JSON.stringify(input.result) : null,
           JSON.stringify(input.refs ?? []),
           now,
         );
@@ -211,6 +257,107 @@ export class JournalService {
       issueId,
     );
     return r ? this.toEntry(r) : null;
+  }
+
+  // Newest entry overall, or newest entry of one kind (ADR §49 `latest`).
+  latest(issueId: string, opts?: { kind?: JournalKind }): JournalEntry | null {
+    this.issues.getIssue(issueId);
+    if (opts?.kind !== undefined && !isJournalKind(opts.kind)) {
+      throw new Error(`unknown journal kind: ${String(opts.kind)}`);
+    }
+    const r =
+      opts?.kind !== undefined
+        ? row<Row>(
+            this.db,
+            "SELECT * FROM issue_journal WHERE issue_id = ? AND kind = ? ORDER BY sequence DESC LIMIT 1",
+            issueId,
+            opts.kind,
+          )
+        : row<Row>(this.db, "SELECT * FROM issue_journal WHERE issue_id = ? ORDER BY sequence DESC LIMIT 1", issueId);
+    return r ? this.toEntry(r) : null;
+  }
+
+  // Bounded reverse-chronological window returned in chronological order
+  // (ADR §49 `timeline`). Unlike listEntries (oldest-first with LIMIT), this
+  // selects the newest `limit` entries and then orders them forwards.
+  timeline(issueId: string, opts?: { kind?: JournalKind; limit?: number }): JournalEntry[] {
+    this.issues.getIssue(issueId);
+    if (opts?.kind !== undefined && !isJournalKind(opts.kind)) {
+      throw new Error(`unknown journal kind: ${String(opts.kind)}`);
+    }
+    const limit = opts?.limit ?? 50;
+    if (!Number.isInteger(limit) || limit <= 0) throw new Error("limit must be a positive integer");
+    let sql = "SELECT * FROM issue_journal WHERE issue_id = ?";
+    const params: SQLInputValue[] = [issueId];
+    if (opts?.kind !== undefined) {
+      sql += " AND kind = ?";
+      params.push(opts.kind);
+    }
+    sql += " ORDER BY sequence DESC LIMIT ?";
+    params.push(limit);
+    return rows<Row>(this.db, sql, ...params)
+      .map((r) => this.toEntry(r))
+      .reverse();
+  }
+
+  // Bounded operational context for `sb issue show` (ADR §50). Every read
+  // here is bounded; the whole journal is never materialized.
+  operationalContext(issueId: string, opts?: { limit?: number }): JournalOperationalContext {
+    this.issues.getIssue(issueId);
+    const limit = opts?.limit ?? DEFAULT_CONTEXT_LIMIT;
+    if (!Number.isInteger(limit) || limit <= 0) throw new Error("limit must be a positive integer");
+    const bounded = Math.min(limit, MAX_CONTEXT_LIMIT);
+    const recent = rows<Row>(
+      this.db,
+      "SELECT * FROM issue_journal WHERE issue_id = ? ORDER BY sequence DESC LIMIT ?",
+      issueId,
+      bounded,
+    )
+      .map((r) => this.toContextEntry(this.toEntry(r)))
+      .reverse();
+    const latestByKind: JournalContextEntry[] = [];
+    for (const kind of JOURNAL_KINDS) {
+      const r = row<Row>(
+        this.db,
+        "SELECT * FROM issue_journal WHERE issue_id = ? AND kind = ? ORDER BY sequence DESC LIMIT 1",
+        issueId,
+        kind,
+      );
+      if (r) latestByKind.push(this.toContextEntry(this.toEntry(r)));
+    }
+    latestByKind.reverse();
+    const countsByKind: Record<string, number> = {};
+    let total = 0;
+    for (const r of rows<{ kind: string; n: number }>(
+      this.db,
+      "SELECT kind, COUNT(*) AS n FROM issue_journal WHERE issue_id = ? GROUP BY kind",
+      issueId,
+    )) {
+      countsByKind[r.kind] = r.n;
+      total += r.n;
+    }
+    const cp = this.latestCheckpoint(issueId);
+    return {
+      recent,
+      latestByKind,
+      latestCheckpoint: cp ? { entryId: cp.id, sequence: cp.sequence } : null,
+      countsByKind,
+      total,
+    };
+  }
+
+  private toContextEntry(e: JournalEntry): JournalContextEntry {
+    return {
+      entryId: e.id,
+      sequence: e.sequence,
+      kind: e.kind,
+      issueRevision: e.issueRevision,
+      createdAt: e.createdAt,
+      // Truncated so a single huge entry (or 60 of them) cannot enlarge the
+      // default show output without bound.
+      summary: contextTrunc(e.semantic?.summary ?? e.result?.summary ?? null),
+      outcome: e.result?.outcome ?? null,
+    };
   }
 
   // Host-known state merged over service-derived state. Derived values win
@@ -393,6 +540,18 @@ export class JournalService {
       if (problems.length > 0) throw new Error(`fail-closed: invalid semantic checkpoint on ${r["id"]}: ${problems[0]}`);
       semantic = parsed as SemanticCheckpoint;
     }
+    let result: ResultPayload | null = null;
+    if (r["result_json"] != null) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(r["result_json"] as string);
+      } catch {
+        throw new Error(`fail-closed: corrupt result payload on ${r["id"]}`);
+      }
+      const problems = validateResultPayload(parsed);
+      if (problems.length > 0) throw new Error(`fail-closed: invalid result payload on ${r["id"]}: ${problems[0]}`);
+      result = parsed as ResultPayload;
+    }
     let mechanical: MechanicalCheckpoint | null = null;
     if (r["mechanical_json"] != null) {
       try {
@@ -419,6 +578,7 @@ export class JournalService {
       kind,
       mechanical,
       semantic,
+      result,
       refs,
       createdAt: r["created_at"] as number,
     };

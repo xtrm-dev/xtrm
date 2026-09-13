@@ -19,11 +19,12 @@ import { RepositoryService } from "../src/service/repository-service.ts";
 import { deriveBaseBranch, deriveRepositoryIdentity, type RepositoryIdentity } from "../src/domain/repository.ts";
 import { PlanningService } from "../src/service/planning-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
+import type { JournalOperationalContext } from "../src/service/journal-service.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
-import { isJournalKind } from "../src/domain/journal.ts";
-import type { JournalEntry, JournalKind } from "../src/domain/journal.ts";
+import { assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
+import type { JournalEntry, JournalKind, ResultPayload } from "../src/domain/journal.ts";
 import type { ResolvedIssue } from "../src/domain/issue.ts";
 
 export const SCHEMA_VERSION = "substrate-cli/v1";
@@ -74,6 +75,42 @@ function provenanceSummary(
     lastEventType: last?.type ?? null,
     lastEventAt: last?.createdAt ?? null,
   };
+}
+
+// Bounded closure summary for `issue show` (ADR §50). Closure persistence is
+// owned by a later bead; this derives a projection from live lifecycle state
+// and the durable lifecycle events, and never invents a reason.
+const TERMINAL_LIFECYCLE = new Set(["done", "cancelled", "archived"]);
+
+function closureSummary(svc: IssueService, issue: ResolvedIssue): Record<string, unknown> {
+  let closedAt: number | null = null;
+  for (const e of svc.listEvents(issue.id)) {
+    if (e.type !== "issue.lifecycle") continue;
+    const p = e.payload as { to?: unknown } | null;
+    if (p && typeof p.to === "string" && TERMINAL_LIFECYCLE.has(p.to)) closedAt = e.createdAt;
+  }
+  return {
+    lifecycleState: issue.lifecycleState,
+    closed: TERMINAL_LIFECYCLE.has(issue.lifecycleState),
+    closedAt,
+    reason: null,
+  };
+}
+
+// Bounded human projection: one line per kind at most (bounded vocabulary),
+// plus counts. A large journal never enlarges this output.
+function renderOperationalContext(ctx: JournalOperationalContext): string[] {
+  const lines = ["", "OPERATIONAL CONTEXT", `journal: ${ctx.total} entries`];
+  if (ctx.latestByKind.length > 0) {
+    lines.push("latest by kind:");
+    for (const e of ctx.latestByKind) {
+      const bit = e.summary ? ` ${e.summary.slice(0, 200)}` : "";
+      lines.push(`- seq${e.sequence} ${e.kind}:${bit}`);
+    }
+  } else {
+    lines.push("(no journal entries)");
+  }
+  return lines;
 }
 
 function treeSummary(svc: IssueService, id: string): Record<string, unknown> {
@@ -303,9 +340,11 @@ prints the issue header plus the contract body (human) or full payload (with --j
 
 --title/--priority are metadata (no revision, readiness retained); --contract/--ownership/
 --context-refs/--scrutiny are execution-relevant (new revision, readiness invalidated).`,
-  "issue.note": `usage: sb issue note <ref> ["text"] [--project <id>] [--kind <note|finding|decision|blocker|milestone|handoff>] [--file <path|->]
+  "issue.note": `usage: sb issue note <ref> ["text"] [--project <id>] [--kind <note|finding|decision|blocker|milestone|handoff|result>] [--file <path|->]
 
-appends an append-only journal note (no revision bump). --file - reads stdin.`,
+appends an append-only journal note (no revision bump). --file - reads stdin.
+"result" is a bounded execution outcome: the text becomes result.summary and
+an optional --result <file|json> supplies the structured payload.`,
   "issue.validate": `usage: sb issue validate <ref>
 
 reports readiness state, structural validity, attestation currency, blockers.`,
@@ -367,12 +406,18 @@ target must belong to it unless --project / SUBSTRATE_PROJECT selects another
 Project deliberately.`,
   journal: `usage: sb journal <verb> <ref> [flags]
 
-  append <ref> --kind <checkpoint|handoff|milestone|decision|finding|blocker|compaction> [--mechanical <file|json>] [--semantic <file|json>] [--refs <file|json>] [--run/--participant/--activation/--session <id>]
+  append <ref> --kind <checkpoint|handoff|milestone|decision|finding|blocker|result|compaction|note> [--mechanical <file|json>] [--semantic <file|json>] [--result <file|json>] [--refs <file|json>] [--run/--participant/--activation/--session <id>]
   checkpoint <ref> [same flags plus --workspace/--branch/--base-commit/--head-commit]
   show <ref> [--kind <k>] [--limit <n>]
   since <ref> <cursor>
-  render <ref> [--sequence <n>]`,
-  "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--refs <file|json>] [--project <id>]`,
+  latest <ref> [--kind <k>]
+  timeline <ref> [--kind <k>] [--limit <n>]
+  render <ref> [--sequence <n>]
+
+Every verb runs over one JournalService; latest/timeline are bounded reads.`,
+  "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--result <file|json>] [--refs <file|json>] [--project <id>]
+
+--kind result requires a bounded --result payload (summary required).`,
   "journal.checkpoint": `usage: sb journal checkpoint <ref> [--mechanical <file|json>] [--semantic <file|json>] [--workspace/--branch/--base-commit/--head-commit <v>] [--project <id>]`,
   "journal.show": `usage: sb journal show <ref> [--kind <k>] [--limit <n>]
 
@@ -380,6 +425,12 @@ returns full entry bodies (human prints semantic text; since stays compact).`,
   "journal.since": `usage: sb journal since <ref> <cursor>
 
 cursor read: only entries after the sequence cursor (0 reads all).`,
+  "journal.latest": `usage: sb journal latest <ref> [--kind <k>]
+
+newest entry, or the newest entry of the given kind.`,
+  "journal.timeline": `usage: sb journal timeline <ref> [--kind <k>] [--limit <n>]
+
+bounded recent window in chronological order (default limit 50).`,
   "journal.render": `usage: sb journal render <ref> [--sequence <n>]
 
 renders the latest (or selected) checkpoint as text.`,
@@ -585,7 +636,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.create": ["project", "title", "kind", "contract", "parent", "priority", "scrutiny"],
   "issue.show": [],
   "issue.edit": ["project", "contract", "title", "priority", "scrutiny", "ownership", "context-refs", "expected-revision"],
-  "issue.note": ["project", "kind", "file"],
+  "issue.note": ["project", "kind", "file", "result"],
   "issue.validate": [],
   "issue.attest": ["project", "outcome", "policy", "attested-by", "evidence-refs", "blocking-gaps"],
   "issue.list": ["project"],
@@ -608,10 +659,12 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "project.unlink": [],
   "plan.check": ["project", "file"],
   "plan.apply": ["project", "file"],
-  "journal.append": ["project", "kind", "run", "participant", "activation", "session", "mechanical", "semantic", "refs"],
+  "journal.append": ["project", "kind", "run", "participant", "activation", "session", "mechanical", "semantic", "result", "refs"],
   "journal.checkpoint": ["project", "run", "participant", "activation", "session", "mechanical", "semantic", "refs", "workspace", "branch", "base-commit", "head-commit"],
   "journal.show": ["kind", "limit"],
   "journal.since": [],
+  "journal.latest": ["kind"],
+  "journal.timeline": ["kind", "limit"],
   "journal.render": ["sequence"],
   "provenance.dispatch": ["project", "claim-id", "workspace", "participant", "activation", "attempt", "session", "base-commit"],
   "provenance.trace": [],
@@ -832,6 +885,9 @@ function runIssue(
       const resolved = svc.resolveRef(ref);
       const readiness = svc.getReadiness(resolved.id);
       const contract = svc.getRevision(resolved.id, resolved.currentRevision).contract;
+      // Bounded operational context (ADR §50): every read is bounded, so a
+      // large journal never enlarges the default show output.
+      const operationalContext = new JournalService(db, svc).operationalContext(resolved.id);
       const payload = {
         ...issueSummary(resolved),
         contractHash: resolved.currentContractHash,
@@ -842,9 +898,17 @@ function runIssue(
         attestation: svc.latestAttestation(resolved.id),
         claim: svc.getActiveClaim(resolved.id),
         provenance: provenanceSummary(svc, resolved.id),
+        closure: closureSummary(svc, resolved),
+        operationalContext,
       };
       if (ctx.json) return emit(ctx, command, payload);
-      return { code: 0, stdout: [human(issueSummary(resolved)), ...contractSections(contract)].join("\n") + "\n", stderr: "" };
+      return {
+        code: 0,
+        stdout:
+          [human(issueSummary(resolved)), ...contractSections(contract), ...renderOperationalContext(operationalContext)].join("\n") +
+          "\n",
+        stderr: "",
+      };
     }
     case "edit": {
       // §24 classification: title/priority are metadata (no revision,
@@ -903,9 +967,10 @@ function runIssue(
     }
     case "note": {
       // §22 convenience over JournalService: append-only, no revision bump.
+      // A Journal entry never becomes authority and never touches the contract.
       const ref = needRef(rest);
       const kindRaw = flag(flags, "kind") ?? "note";
-      const NOTE_KINDS = ["note", "finding", "decision", "blocker", "milestone", "handoff"] as const;
+      const NOTE_KINDS = ["note", "finding", "decision", "blocker", "milestone", "handoff", "result"] as const;
       if (!(NOTE_KINDS as readonly string[]).includes(kindRaw)) {
         throw new Error(`unknown note kind: ${kindRaw} (want ${NOTE_KINDS.join("|")})`);
       }
@@ -921,11 +986,25 @@ function runIssue(
       if (text.trim() === "") throw new Error('a note text is required (positional "text" or --file <path|->)');
       const resolved = refInContext(svc, flags, ref);
       const journal = new JournalService(db, svc);
+      const resultRaw = flag(flags, "result");
+      let result: ResultPayload | undefined;
+      if (resultRaw !== undefined) {
+        const parsed = readJsonArg(resultRaw) as ResultPayload;
+        assertResultPayload(parsed);
+        result = parsed;
+      } else if (kindRaw === "result") {
+        // Text is the bounded result summary; structured fields stay optional.
+        result = { summary: text };
+      }
+      if (kindRaw !== "result" && result !== undefined) {
+        throw new Error("--result is only meaningful with --kind result");
+      }
       const entry = journal.appendEntry(resolved.id, {
         kind: kindRaw as JournalKind,
-        semantic: { summary: text },
+        semantic: kindRaw === "result" ? undefined : { summary: text },
+        result,
       });
-      if (ctx.json) return emit(ctx, command, journalSummary(entry));
+      if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), result: entry.result });
       return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
     }
     case "validate": {
@@ -1173,15 +1252,17 @@ function runJournal(
       const resolved = refInContext(svc, flags, ref);
       const mechRaw = flag(flags, "mechanical");
       const semRaw = flag(flags, "semantic");
+      const resRaw = flag(flags, "result");
       const refsRaw = flag(flags, "refs");
       const entry = journal.appendEntry(resolved.id, {
         kind: kindRaw,
         ...contextFlags,
         mechanical: mechRaw !== undefined ? (mechanicalArg(svc, resolved.id, mechRaw) as never) : undefined,
         semantic: semRaw !== undefined ? (readJsonArg(semRaw) as never) : undefined,
+        result: resRaw !== undefined ? (readJsonArg(resRaw) as ResultPayload) : undefined,
         refs: refsRaw !== undefined ? (readJsonArg(refsRaw) as never) : undefined,
       });
-      if (ctx.json) return emit(ctx, command, journalSummary(entry));
+      if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), result: entry.result });
       return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
     }
     case "checkpoint": {
@@ -1237,7 +1318,7 @@ function runJournal(
       // show returns full entry bodies (semantic + mechanical payloads in
       // JSON; semantic text under the header line in human). since stays
       // compact: deltas carry journalSummary only.
-      if (ctx.json) return emit(ctx, command, entries.map((e) => ({ ...journalSummary(e), semantic: e.semantic, mechanical: e.mechanical })));
+      if (ctx.json) return emit(ctx, command, entries.map((e) => ({ ...journalSummary(e), semantic: e.semantic, mechanical: e.mechanical, result: e.result })));
       const lines = entries.flatMap((e) => [journalLine(svc, e), ...journalBody(e)]);
       return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : "(no journal entries)") + "\n", stderr: "" };
     }
@@ -1257,6 +1338,39 @@ function runJournal(
       if (ctx.json) return emit(ctx, command, data);
       const lines = delta.entries.map((e) => journalLine(svc, e));
       return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : `(no entries since ${cursor})`) + "\n", stderr: "" };
+    }
+    case "latest": {
+      // Bounded single-entry read over the same JournalService (§49).
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      const kindRaw = flag(flags, "kind");
+      if (kindRaw !== undefined && !isJournalKind(kindRaw)) throw new Error(`unknown journal kind: ${kindRaw}`);
+      const entry = journal.latest(resolved.id, kindRaw !== undefined ? { kind: kindRaw } : undefined);
+      if (!entry) {
+        const label = kindRaw !== undefined ? ` (kind ${kindRaw})` : "";
+        throw new Error(`no journal entry${label} for this issue`);
+      }
+      if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), semantic: entry.semantic, result: entry.result });
+      return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
+    }
+    case "timeline": {
+      // Bounded recent window in chronological order (§49).
+      const ref = needRef(rest);
+      const resolved = svc.resolveRef(ref);
+      const kindRaw = flag(flags, "kind");
+      if (kindRaw !== undefined && !isJournalKind(kindRaw)) throw new Error(`unknown journal kind: ${kindRaw}`);
+      const limitRaw = flag(flags, "limit");
+      const limit = limitRaw !== undefined ? Number(limitRaw) : undefined;
+      if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) throw new Error("--limit must be a positive integer");
+      const entries = journal.timeline(resolved.id, {
+        kind: kindRaw as JournalKind | undefined,
+        limit,
+      });
+      if (ctx.json) {
+        return emit(ctx, command, { count: entries.length, entries: entries.map(journalSummary) });
+      }
+      const lines = entries.map((e) => journalLine(svc, e));
+      return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : "(no journal entries)") + "\n", stderr: "" };
     }
     case "render": {
       // Shared checkpoint/compaction rendering (§23.1): the journal
@@ -1281,7 +1395,7 @@ function runJournal(
       return { code: 0, stdout: text + "\n", stderr: "" };
     }
     default:
-      throw new Error(`unknown journal verb: ${verb} (want append|checkpoint|show|since|render)`);
+      throw new Error(`unknown journal verb: ${verb} (want append|checkpoint|show|since|latest|timeline|render)`);
   }
 }
 
