@@ -63,9 +63,22 @@ and fail closed across Projects.
 
 ## project — administration (normal work uses `sb init`)
 
+Advanced/recovery surface only (ADR sbcloseout4 §18), not the normal
+onboarding workflow. New repositories start with `sb init`.
+
 - `project create --prefix <PREFIX> --name <name>` — low-level creation.
-- `project link [--project <id>]` — link the cwd checkout to a project.
-- `project unlink` — remove the cwd checkout link.
+- `project link --project <id>` — link the cwd checkout to a project.
+  `--project` is required: bare `project link` never infers the Project.
+- `project unlink` — remove the cwd checkout link (the local alias only).
+- `project list` — list every project in this database.
+- `project show [--project <id>]` — show one project with its repository
+  bindings; without `--project` it shows the resolved project, and an
+  uninitialized checkout fails closed instead of guessing.
+- `project links` — list the local checkout aliases (inspection; the
+  repository binding is the authority).
+- `project repair` — re-establish the cwd checkout alias from the
+  repository binding and verify resolution. Fails closed without a
+  binding: run `sb init`.
 
 ## plan
 

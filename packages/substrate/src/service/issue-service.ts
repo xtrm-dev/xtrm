@@ -136,6 +136,18 @@ export class IssueService {
     return { id: p["id"] as string, prefix: p["prefix"] as string, name: p["name"] as string, createdAt: p["created_at"] as number };
   }
 
+  // Low-level administration read (ADR sbcloseout4 §18): every project row
+  // for `sb project list`. Read-only; resolution policy lives in
+  // resolveProject, not here.
+  listProjects(): Project[] {
+    return rows<Row>(this.db, "SELECT id, prefix, name, created_at FROM projects ORDER BY id").map((p) => ({
+      id: p["id"] as string,
+      prefix: p["prefix"] as string,
+      name: p["name"] as string,
+      createdAt: p["created_at"] as number,
+    }));
+  }
+
   // -- checkout links (cwd-aware project resolution, bead xtrm-7wc.5.6) --
   // DB-side mapping only: git root -> project id, zero repo writes.
   // Only link/unlink write here; resolution reads live every call.

@@ -261,7 +261,7 @@ usage:
 groups:
   init        initialize this repository (bind it to a Project; idempotent)
   issue       create|show|edit|note|validate|attest|list|ready|tree|children|relate|unrelate|claim|release|state|close|reopen|defer|cancel|archive|resume
-  project     create|link|unlink
+  project     create|link|unlink|list|show|links|repair
   plan        check|apply
   journal     append|checkpoint|show|since|render
   provenance  dispatch|trace|commit|receipt|pr|bundle
@@ -388,13 +388,66 @@ builds the continuity capsule (derived, never a source of truth).`,
   project: `usage: sb project <verb>
 
   create --prefix <PREFIX> --name <name> [--id <id>]
-  link [--project <id>]     link the cwd checkout to a project
-  unlink                    remove the cwd checkout link`,
-  "project.create": `usage: sb project create --prefix <PREFIX> --name <name> [--id <id>]`,
-  "project.link": `usage: sb project link [--project <id>]
+  link --project <id>      link the cwd checkout to a project (explicit only)
+  unlink                    remove the cwd checkout link
+  list                      list all projects
+  show [--project <id>]     show one project (defaults to the resolved project)
+  links                     list local checkout aliases (inspection)
+  repair                    re-establish the cwd checkout alias from the repository binding
 
-links the cwd git checkout to a project (an administrative alias; normal work uses 'sb init').`,
-  "project.unlink": `usage: sb project unlink`,
+Advanced/recovery surface only (ADR sbcloseout4 §18): not the normal onboarding
+workflow. New repositories start with 'sb init'.`,
+  "project.create": `usage: sb project create --prefix <PREFIX> --name <name> [--id <id>]
+
+Advanced/recovery surface only (ADR sbcloseout4 §18): not the normal onboarding
+workflow. New repositories start with 'sb init'.`,
+  "project.link": `usage: sb project link --project <id>
+
+links the cwd git checkout to a project (an administrative alias; normal work uses 'sb init').
+--project is required: bare 'sb project link' never infers the Project, not even when
+exactly one Project exists (ADR sbcloseout4 §18).
+
+Advanced/recovery surface only: not the normal onboarding workflow. New
+repositories start with 'sb init'.`,
+  "project.unlink": `usage: sb project unlink
+
+removes the cwd checkout link (the local alias; the repository binding is untouched).
+
+Advanced/recovery surface only (ADR sbcloseout4 §18): not the normal onboarding
+workflow. New repositories start with 'sb init'.`,
+  "project.list": `usage: sb project list
+
+lists every project in this database (id, prefix, name).
+
+Advanced/recovery surface only (ADR sbcloseout4 §18): not the normal onboarding
+workflow. New repositories start with 'sb init'.`,
+  "project.show": `usage: sb project show [--project <id>]
+
+shows one project: identity, the repository bindings pointing at it, and the
+resolution source. Without --project (or SUBSTRATE_PROJECT) the project is the
+one the corrected resolver selects for this checkout, and an uninitialized
+checkout fails closed instead of guessing (ADR sbcloseout4 §§4-5).
+
+Advanced/recovery surface only (ADR sbcloseout4 §18): not the normal onboarding
+workflow. New repositories start with 'sb init'.`,
+  "project.links": `usage: sb project links
+
+lists the local checkout aliases (git root -> project) known to this database,
+with the cwd checkout root for comparison. Aliases are a cache: the repository
+binding is the authority (ADR sbcloseout4 §13).
+
+Advanced/recovery surface only (ADR sbcloseout4 §18): not the normal onboarding
+workflow. New repositories start with 'sb init'.`,
+  "project.repair": `usage: sb project repair
+
+recovery: re-establishes the cwd checkout alias from this repository's binding
+(the authority), then verifies the checkout resolves to the bound project
+through the corrected resolver. Repairs a missing or corrupted local alias;
+never creates a binding, never adopts or renames a project, never touches
+issues. Without a repository binding it fails closed: run 'sb init'.
+
+Advanced/recovery surface only (ADR sbcloseout4 §18): not the normal onboarding
+workflow. New repositories start with 'sb init'.`,
   plan: `usage: sb plan <check|apply> --file <plan.json>
 
 check validates a plan draft; apply executes it.`,
@@ -568,7 +621,7 @@ function runDoctor(ctx: Ctx): CliResult {
   return { code: schemaHealthy ? 0 : 1, stdout: lines.join("\n") + "\n", stderr: schemaHealthy ? "" : `sb: doctor: ${schemaError}\n` };
 }
 
-// `sb init` (ADR §§2, 6, 84): discover -> Git common root -> derive repository
+// 'sb init' (ADR §§2, 6, 84): discover -> Git common root -> derive repository
 // identity -> detect base branch -> derive/find Project -> bind repository ->
 // register the local checkout alias -> verify. Binding, deterministic adoption,
 // the collision policy and the alias cache live in
@@ -576,7 +629,7 @@ function runDoctor(ctx: Ctx): CliResult {
 // `project create` + `project link`, and it never invents identity (ADR §98).
 function runInit(db: ReturnType<typeof openSubstrate>, svc: IssueService, ctx: Ctx): CliResult {
   const repo = discoverRepository();
-  if (repo.gitRoot === null) throw new Error("not inside a Git repository: cd into the repository checkout and run `sb init`");
+  if (repo.gitRoot === null) throw new Error("not inside a Git repository: cd into the repository checkout and run 'sb init'");
   if (repo.identity === null) {
     throw new Error(
       `cannot derive a repository identity: ${repo.identityError ?? "no canonical remote and no Git common root"}. ` +
@@ -657,6 +710,10 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "project.create": ["prefix", "name", "id"],
   "project.link": ["project"],
   "project.unlink": [],
+  "project.list": [],
+  "project.show": ["project"],
+  "project.links": [],
+  "project.repair": [],
   "plan.check": ["project", "file"],
   "plan.apply": ["project", "file"],
   "journal.append": ["project", "kind", "run", "participant", "activation", "session", "mechanical", "semantic", "result", "refs"],
@@ -715,7 +772,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
       return runInit(db, svc, ctx);
     }
     if (group === "issue") return runIssue(db, svc, ctx, command, verb, flags, rest);
-    if (group === "project") return runProject(svc, ctx, command, verb, flags);
+    if (group === "project") return runProject(db, svc, ctx, command, verb, flags);
     if (group === "plan") return runPlan(db, svc, ctx, command, verb, flags);
     if (group === "journal") return runJournal(db, svc, ctx, command, verb, flags, rest);
     if (group === "provenance") return runProvenance(db, svc, ctx, command, verb, flags, rest);
@@ -737,7 +794,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
 // (presentation edge); the git-root->project mapping read stays in the
 // service so resolution is live every invocation. Non-git cwd yields null
 // and the service falls through to the repository binding, then the checkout
-// link, then fail closed with the `sb init` guidance (ADR sbcloseout4 §§4-5).
+// link, then fail closed with the 'sb init' guidance (ADR sbcloseout4 §§4-5).
 //
 // Repository, not worktree (ADR sbcloseout4 §7): a git worktree has its own
 // toplevel but shares the repository's git directory, so keying on
@@ -1493,7 +1550,13 @@ function runProvenance(
   }
 }
 
+// Low-level project administration (ADR sbcloseout4 §18): advanced/recovery
+// surface only, never the normal onboarding workflow ('sb init'). Every verb
+// that selects a project goes through the corrected resolver (fail-closed,
+// no cardinality inference); `link` additionally requires --project so bare
+// `sb project link` can never infer the sole Project.
 function runProject(
+  db: ReturnType<typeof openSubstrate>,
   svc: IssueService,
   ctx: Ctx,
   command: string,
@@ -1502,9 +1565,15 @@ function runProject(
 ): CliResult {
   if (verb === "link") {
     const root = discoverGitRoot();
-    if (!root) throw new Error("not inside a git checkout: cd into the checkout to link, or pass --project per command");
+    if (!root) throw new Error("not inside a git checkout: cd into the checkout to link with --project <id>");
     const only = flag(flags, "project");
-    const linked = svc.linkCheckout(root, only ?? undefined);
+    if (only === undefined) {
+      throw new Error(
+        "sb project link requires --project <id> explicitly: it never infers the Project, not even when exactly " +
+          "one Project exists. This is an advanced/recovery surface; new repositories start with 'sb init'.",
+      );
+    }
+    const linked = svc.linkCheckout(root, String(only));
     return emit(ctx, command, { gitRoot: linked.gitRoot, projectId: linked.projectId });
   }
   if (verb === "unlink") {
@@ -1512,12 +1581,100 @@ function runProject(
     if (!root) throw new Error("not inside a git checkout: nothing to unlink");
     return emit(ctx, command, { gitRoot: root, unlinked: svc.unlinkCheckout(root) });
   }
-  if (verb !== "create") throw new Error(`unknown project verb: ${verb} (want create|link|unlink)`);
+  if (verb === "list") {
+    return emit(ctx, command, svc.listProjects());
+  }
+  if (verb === "show") {
+    const repo = discoverRepository();
+    const resolved = svc.resolveProject({
+      explicit: flag(flags, "project") ?? undefined,
+      env: process.env["SUBSTRATE_PROJECT"],
+      gitRoot: repo.gitRoot,
+      repositoryKey: repo.identity?.repositoryKey ?? null,
+    });
+    const project = svc.getProject(resolved.projectId);
+    const bindings = new RepositoryService(db).bindingsForProject(project.id).map((b) => ({
+      repositoryKey: b.repositoryKey,
+      baseBranch: b.baseBranch,
+      canonicalRemote: b.canonicalRemote,
+    }));
+    return emit(ctx, command, {
+      id: project.id,
+      prefix: project.prefix,
+      name: project.name,
+      createdAt: project.createdAt,
+      source: resolved.source,
+      bindings,
+    });
+  }
+  if (verb === "links") {
+    return emit(ctx, command, { gitRoot: discoverGitRoot(), links: svc.listLinks() });
+  }
+  if (verb === "repair") {
+    return runProjectRepair(db, svc, ctx, command);
+  }
+  if (verb !== "create") throw new Error(`unknown project verb: ${verb} (want create|link|unlink|list|show|links|repair)`);
   const prefix = flag(flags, "prefix") ?? (() => { throw new Error("--prefix <PREFIX> is required"); })();
   const name = flag(flags, "name") ?? (() => { throw new Error("--name <name> is required"); })();
   const id = flag(flags, "id");
   const project = svc.createProject({ prefix, name, ...(id !== undefined ? { id: String(id) } : {}) });
   return emit(ctx, command, { id: project.id, prefix: project.prefix, name: project.name });
+}
+
+// `sb project repair` (ADR sbcloseout4 §18): recovery for a missing or
+// corrupted local checkout alias. The repository binding is the authority:
+// the alias is re-established from the bound project id (explicit, never
+// inferred), then the checkout is verified through the corrected resolver.
+// Repair never creates a binding, never adopts or renames a project, and
+// never touches issues — without a binding it fails closed into 'sb init'.
+function runProjectRepair(
+  db: ReturnType<typeof openSubstrate>,
+  svc: IssueService,
+  ctx: Ctx,
+  command: string,
+): CliResult {
+  const repo = discoverRepository();
+  if (repo.gitRoot === null) throw new Error("not inside a git checkout: cd into the checkout to repair, or run 'sb init'");
+  if (repo.identity === null) {
+    throw new Error(
+      `cannot derive a repository identity: ${repo.identityError ?? "no canonical remote and no Git common root"}. ` +
+        "Run 'sb init' to bind this repository to a Project.",
+    );
+  }
+  const repositoryKey = repo.identity.repositoryKey;
+  const binding = new RepositoryService(db).getBinding(repositoryKey);
+  if (binding === null) {
+    throw new Error(
+      `this repository has no binding for ${repositoryKey}: repair cannot invent one. ` +
+        "Run 'sb init' to bind this repository to a Project.",
+    );
+  }
+  let bound: { id: string; prefix: string; name: string };
+  try {
+    bound = svc.getProject(binding.projectId);
+  } catch {
+    throw new Error(
+      `repository ${repositoryKey} is bound to missing project ${binding.projectId}: repair the repository binding ` +
+        "(inspect repository_bindings) or re-run 'sb init'.",
+    );
+  }
+  const previous = svc.listLinks().find((l) => l.gitRoot === repo.gitRoot)?.projectId ?? null;
+  svc.linkCheckout(repo.gitRoot, bound.id);
+  const resolved = svc.resolveProject({ gitRoot: repo.gitRoot, repositoryKey });
+  if (resolved.projectId !== bound.id) {
+    throw new Error(
+      `repair verification failed: ${repositoryKey} resolves to ${resolved.projectId}, not the bound project ` +
+        `${bound.id}. Run 'sb init' to re-bind this repository.`,
+    );
+  }
+  return emit(ctx, command, {
+    gitRoot: repo.gitRoot,
+    repositoryKey,
+    projectId: bound.id,
+    previous,
+    repaired: previous !== bound.id,
+    source: resolved.source,
+  });
 }
 
 // Fail closed when a PlanDraft targets a Project outside the effective

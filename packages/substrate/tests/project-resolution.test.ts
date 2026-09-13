@@ -122,9 +122,10 @@ describe("project resolution (xtrm-7wc.5.6)", () => {
         const bare = runCli(["--db", ctx.dbPath, "--json", "issue", "list"]);
         assert.equal(bare.code, 1);
         assert.match(bare.stdout, /Run `sb init`/);
-        // create + link from inside the checkout (project verb takes no cwd flags)
+        // create + explicit link from inside the checkout (project link
+        // never infers: bare `project link` refuses even with one project)
         const project = cli(["project", "create", "--prefix", "LINK", "--name", "linked"]) as { id: string };
-        const linked = cli(["project", "link"]) as { gitRoot: string; projectId: string };
+        const linked = cli(["project", "link", "--project", project.id]) as { gitRoot: string; projectId: string };
         assert.equal(linked.projectId, project.id);
         // service write -> linked CLI read (freshness: no cached resolution)
         const cpath = join(repo, "c.json");
