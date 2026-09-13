@@ -5,6 +5,9 @@
 
 import { v7 as uuidv7 } from "uuid";
 
+// Bounded nine-kind vocabulary (ADR §22): note, finding, decision, blocker,
+// milestone, handoff, result, checkpoint, compaction. Do not multiply
+// near-synonymous kinds; do not reduce everything to `note`.
 export const JOURNAL_KINDS = [
   "checkpoint",
   "handoff",
@@ -12,6 +15,7 @@ export const JOURNAL_KINDS = [
   "decision",
   "finding",
   "blocker",
+  "result",
   "compaction",
   "note",
 ] as const;
@@ -83,6 +87,83 @@ export interface EvidenceRef {
   value?: unknown;
 }
 
+// Bounded result payload (ADR §29, §39): a durable execution outcome that may
+// exist with zero Git commits. Publication is bounded on purpose — arbitrary
+// raw model output stays in runtime storage and is referenced, never dumped
+// into the Journal. The field set is closed: unknown keys are rejected so a
+// host cannot smuggle an unbounded body in through a new key.
+// ponytail: whole result text is bounded per field; raise if a real body
+// needs it, but keep the reference-not-dump rule (ADR §39).
+const RESULT_MAX_TEXT = 4000;
+const RESULT_MAX_ITEMS = 100;
+const RESULT_MAX_ITEM_TEXT = 1000;
+
+export const RESULT_STRING_FIELDS = ["summary", "attempted", "outcome"] as const;
+export const RESULT_ARRAY_FIELDS = [
+  "completed",
+  "validation",
+  "findings",
+  "artifactRefs",
+  "receiptRefs",
+  "provenanceRefs",
+] as const;
+export const RESULT_FIELDS = [...RESULT_STRING_FIELDS, ...RESULT_ARRAY_FIELDS] as const;
+
+export interface ResultPayload {
+  summary: string;
+  attempted?: string;
+  outcome?: string;
+  completed?: string[];
+  validation?: string[];
+  findings?: string[];
+  artifactRefs?: string[];
+  receiptRefs?: string[];
+  provenanceRefs?: string[];
+}
+
+export function validateResultPayload(value: unknown): string[] {
+  const problems: string[] = [];
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return ["result payload must be an object"];
+  }
+  const r = value as Record<string, unknown>;
+  for (const key of Object.keys(r)) {
+    if (!(RESULT_FIELDS as readonly string[]).includes(key)) {
+      problems.push(`result.${key} is not a bounded result field (want ${RESULT_FIELDS.join("|")})`);
+    }
+  }
+  const summary = r["summary"];
+  if (typeof summary !== "string" || summary.trim() === "") {
+    problems.push("result.summary must be a non-empty string");
+  } else if (summary.length > RESULT_MAX_TEXT) {
+    problems.push(`result.summary must be at most ${RESULT_MAX_TEXT} characters`);
+  }
+  for (const f of ["attempted", "outcome"] as const) {
+    const v = r[f];
+    if (v === undefined) continue;
+    if (typeof v !== "string" || v.trim() === "") problems.push(`result.${f} must be a non-empty string when present`);
+    else if (v.length > RESULT_MAX_TEXT) problems.push(`result.${f} must be at most ${RESULT_MAX_TEXT} characters`);
+  }
+  for (const f of RESULT_ARRAY_FIELDS) {
+    const v = r[f];
+    if (v === undefined) continue;
+    if (!stringArray(v)) {
+      problems.push(`result.${f} must be an array of strings when present`);
+      continue;
+    }
+    if (v.length > RESULT_MAX_ITEMS) problems.push(`result.${f} must hold at most ${RESULT_MAX_ITEMS} items`);
+    if (v.some((e) => e.length > RESULT_MAX_ITEM_TEXT)) {
+      problems.push(`result.${f} items must be at most ${RESULT_MAX_ITEM_TEXT} characters`);
+    }
+  }
+  return problems;
+}
+
+export function assertResultPayload(value: unknown): asserts value is ResultPayload {
+  const problems = validateResultPayload(value);
+  if (problems.length > 0) throw new Error(`invalid result payload: ${problems[0]}`);
+}
+
 export interface JournalEntry {
   id: string;
   issueId: string;
@@ -95,6 +176,7 @@ export interface JournalEntry {
   kind: JournalKind;
   mechanical: MechanicalCheckpoint | null;
   semantic: SemanticCheckpoint | null;
+  result: ResultPayload | null;
   refs: EvidenceRef[];
   createdAt: number;
 }

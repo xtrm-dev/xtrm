@@ -19,6 +19,36 @@ export interface ChildCapsuleSummary {
   revision: number;
   checkpointRef: string | null;
   blockedBy: string[];
+  // Reference + bounded outcome only: a coordinator capsule recovers that a
+  // child produced a result without copying the child's Journal body (§22, §51).
+  latestResult: { ref: string; outcome: string | null } | null;
+}
+
+// Own-issue bounded result projection (§29, §39). The summary is the bounded
+// result summary, never a raw model dump.
+export interface ResultRef {
+  entryId: string;
+  sequence: number;
+  summary: string;
+  outcome: string | null;
+  artifactRefs: string[];
+  receiptRefs: string[];
+}
+
+export interface DecisionRef {
+  entryId: string;
+  sequence: number;
+  summary: string;
+}
+
+// Derived release view (ADR §51 programme/release state). Closure persistence
+// is owned elsewhere; this is a bounded projection over live durable state.
+export interface ReleaseState {
+  lifecycleState: string;
+  blockers: string[];
+  childrenDone: number;
+  childrenTotal: number;
+  allChildrenDone: boolean | null;
 }
 
 export interface ResumeCapsule {
@@ -36,6 +66,9 @@ export interface ResumeCapsule {
   latestCheckpoint: JournalEntry | null;
   delta: { afterSequence: number; entries: JournalEntry[]; nextCursor: number };
   children: ChildCapsuleSummary[];
+  results: ResultRef[];
+  criticalDecisions: DecisionRef[];
+  release: ReleaseState;
   blockers: string[];
   claim: IssueClaim | null;
   asks: string[];
@@ -48,6 +81,11 @@ export interface ResumeCapsule {
 interface ExternalProvider {
   listBindings(issueId: string): Array<{ provider: string; remoteScope: string; remoteId: string; url?: string | null }>;
 }
+
+// Bounded windows for the capsule: a resume reconstructs high-signal state,
+// never a dump of the whole journal.
+const CAPSULE_RESULT_LIMIT = 5;
+const CAPSULE_DECISION_LIMIT = 5;
 
 export class ResumeService {
   private readonly issues: IssueService;
@@ -69,11 +107,18 @@ export class ResumeService {
     const delta = this.journal.since(issueId, latestCheckpoint?.sequence ?? 0);
     const children: ChildCapsuleSummary[] = this.issues.listChildren(issueId).map((c) => {
       let checkpointRef: string | null = null;
+      let latestResult: { ref: string; outcome: string | null } | null = null;
       try {
         const latest = this.journal.latestCheckpoint(c.id);
         checkpointRef = latest ? `${latest.id}#${latest.sequence}` : null;
       } catch {
         checkpointRef = null;
+      }
+      try {
+        const result = this.journal.latest(c.id, { kind: "result" });
+        latestResult = result ? { ref: `${result.id}#${result.sequence}`, outcome: result.result?.outcome ?? null } : null;
+      } catch {
+        latestResult = null;
       }
       return {
         issueId: c.id,
@@ -84,8 +129,29 @@ export class ResumeService {
         revision: c.currentRevision,
         checkpointRef,
         blockedBy: this.issues.unsatisfiedBlockers(c.id),
+        latestResult,
       };
     });
+    const results: ResultRef[] = this.journal.timeline(issueId, { kind: "result", limit: CAPSULE_RESULT_LIMIT }).map((e) => ({
+      entryId: e.id,
+      sequence: e.sequence,
+      summary: e.result?.summary ?? "",
+      outcome: e.result?.outcome ?? null,
+      artifactRefs: e.result?.artifactRefs ?? [],
+      receiptRefs: e.result?.receiptRefs ?? [],
+    }));
+    const criticalDecisions: DecisionRef[] = this.journal
+      .timeline(issueId, { kind: "decision", limit: CAPSULE_DECISION_LIMIT })
+      .map((e) => ({ entryId: e.id, sequence: e.sequence, summary: e.semantic?.summary ?? "" }));
+    const blockers = this.issues.unsatisfiedBlockers(issueId);
+    const childrenDone = children.filter((c) => c.lifecycleState === "done").length;
+    const release: ReleaseState = {
+      lifecycleState: issue.lifecycleState,
+      blockers,
+      childrenDone,
+      childrenTotal: children.length,
+      allChildrenDone: children.length === 0 ? null : childrenDone === children.length,
+    };
     const asks = dedupe([
       ...(latestCheckpoint?.mechanical?.pendingAsks ?? []),
       ...(latestCheckpoint?.semantic?.openQuestions ?? []),
@@ -107,6 +173,9 @@ export class ResumeService {
       latestCheckpoint,
       delta: { afterSequence: delta.afterSequence, entries: delta.entries, nextCursor: delta.nextCursor },
       children,
+      results,
+      criticalDecisions,
+      release,
       blockers: this.issues.unsatisfiedBlockers(issueId),
       claim: this.issues.getActiveClaim(issueId),
       asks,
@@ -156,9 +225,26 @@ export class ResumeService {
       lines.push("", "CHILDREN");
       for (const ch of c.children) {
         const blocked = ch.blockedBy.length > 0 ? ` blocked by ${ch.blockedBy.join(",")}` : "";
-        lines.push(`- ${ch.locator} ${ch.humanRef} ${ch.lifecycleState} rev${ch.revision} @${ch.checkpointRef ?? "no-checkpoint"}${blocked}`);
+        const result = ch.latestResult ? ` result@${ch.latestResult.ref}${ch.latestResult.outcome ? ` (${ch.latestResult.outcome})` : ""}` : "";
+        lines.push(`- ${ch.locator} ${ch.humanRef} ${ch.lifecycleState} rev${ch.revision} @${ch.checkpointRef ?? "no-checkpoint"}${result}${blocked}`);
       }
     }
+    lines.push("", "RESULTS");
+    lines.push(
+      ...(c.results.length > 0
+        ? c.results.map((r) => `- seq${r.sequence}${r.outcome ? ` ${r.outcome}` : ""}: ${truncate(r.summary, 500)}`)
+        : ["(none)"]),
+    );
+    lines.push("", "CRITICAL DECISIONS");
+    lines.push(
+      ...(c.criticalDecisions.length > 0
+        ? c.criticalDecisions.map((d) => `- seq${d.sequence}: ${truncate(d.summary, 500)}`)
+        : ["(none)"]),
+    );
+    lines.push("", "RELEASE");
+    lines.push(
+      `state ${c.release.lifecycleState}; children done ${c.release.childrenDone}/${c.release.childrenTotal}; ${c.release.blockers.length > 0 ? `blockers ${c.release.blockers.join(",")}` : "no blockers"}`,
+    );
     lines.push(
       "",
       "CHANGES SINCE CHECKPOINT",
@@ -178,4 +264,9 @@ export class ResumeService {
 
 function dedupe(values: string[]): string[] {
   return [...new Set(values.map((v) => v.trim()).filter((v) => v !== ""))];
+}
+
+// Capsule text stays bounded even when a result summary is long (§39).
+function truncate(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max)}…` : s;
 }
