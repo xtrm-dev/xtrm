@@ -165,21 +165,33 @@ export function buildServer(): McpServer {
   server.registerTool(
     "journal_append",
     {
-      description: "Append a journal entry (finding/decision/handoff/milestone/blocker) with a semantic summary.",
+      description: "Append a journal entry (finding/decision/handoff/milestone/blocker) with a semantic summary. The ref must belong to this repository's Project unless an explicit project override is passed; fails closed for an uninitialized repository.",
       inputSchema: z.object({
         ref: z.string().min(1),
         kind: z.string().min(1),
         summary: z.string().min(1),
         sessionId: z.string().optional(),
+        project: z.string().optional(),
         dbPath: dbPathSchema,
       }),
     },
-    async ({ ref, kind, summary, sessionId, dbPath }) => {
+    async ({ ref, kind, summary, sessionId, project, dbPath }) => {
       if (!isJournalKind(kind)) throw new Error(`unknown journal kind: ${kind}`);
       const handles = openHandles(dbPath);
       try {
-        const id = handles.svc.resolveRef(ref).id;
-        const entry = handles.journal.appendEntry(id, {
+        // A journal append is a mutation, so it resolves the effective
+        // repository context and refuses a ref from another Project (ADR §§4-5,
+        // 85): the read-only tools may inspect across Projects by explicit ref,
+        // a write may not.
+        const repo = discoverRepository();
+        const projectId = handles.svc.resolveProject({
+          explicit: project ?? undefined,
+          env: process.env["SUBSTRATE_PROJECT"],
+          gitRoot: repo.gitRoot,
+          repositoryKey: repo.identity?.repositoryKey ?? null,
+        }).projectId;
+        const issue = handles.svc.resolveRefInProject(ref, projectId);
+        const entry = handles.journal.appendEntry(issue.id, {
           kind,
           sessionId: sessionId ?? undefined,
           semantic: { summary: summary.slice(0, 2000) },

@@ -73,4 +73,17 @@ describe("worktree acceptance (ADR §86)", () => {
       db.close();
     }
   });
+
+  it("a FRESH init from a detached worktree binds main, not the detached HEAD (ADR §10, §86)", () => {
+    const main = env.gitRepo("detached-init", { remote: "git@github.com:acme/detached-init.git" });
+    const detached = join(env.temp("sb-wt-det-"), "detached");
+    env.git(main, ["worktree", "add", "-q", "--detach", detached]);
+
+    const init = env.inCwd(detached, () => env.run(["init"]));
+    assert.equal(init.code, 0, init.stderr || init.stdout);
+    const data = init.data as { baseBranch: string | null; project: { id: string }; created: boolean };
+    assert.equal(data.created, true, "first init from the detached worktree creates the binding");
+    assert.equal(data.baseBranch, "main");
+    assert.equal(data.project.id, "prj_detached_init");
+  });
 });

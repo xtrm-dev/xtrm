@@ -180,7 +180,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     assert.ok(Array.isArray(listed) && listed.length === 1);
     const ready = (await call("issue_ready", { project: "prj_xtrm" })) as unknown[];
     assert.ok(Array.isArray(ready));
-    const appended = (await call("journal_append", { ref: s.humanRef, kind: "finding", summary: "e4 finding" })) as Record<string, unknown>;
+    const appended = (await call("journal_append", { ref: s.humanRef, kind: "finding", summary: "e4 finding", project: "prj_xtrm" })) as Record<string, unknown>;
     assert.ok(appended["entryId"]);
     const shown = (await call("journal_show", { ref: s.humanRef })) as Array<{ semantic: { summary: string } }>;
     assert.ok(shown.some((e) => e.semantic?.summary === "e4 finding"));
@@ -263,6 +263,59 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
         const res = await wire.send("tools/call", { name: "issue_list", arguments: { dbPath: env.dbPath }, _meta: meta() });
         const failure = res.error !== undefined ? JSON.stringify(res.error) : JSON.stringify(res.result);
         assert.match(failure, /Run `sb init`/, "uninitialized repository must fail closed");
+      } finally {
+        process.chdir(prev);
+      }
+    } finally {
+      process.chdir(prev);
+      env.restore();
+    }
+  });
+
+  it("journal_append is project-scoped: it fails closed and refuses a foreign ref (ADR §5)", async () => {
+    const env = repoEnv("sb-mcp-w-");
+    const prev = process.cwd();
+    try {
+      const a = env.gitRepo("mcp-wa");
+      assert.equal(env.inCwd(a, () => env.run(["init"])).code, 0, "init repo A");
+      const contractFile = join(env.temp("sb-mcp-wc-"), "c.json");
+      writeFileSync(contractFile, JSON.stringify(contract({ problem: "mcp wa", success: "mcp wa" })));
+      assert.equal(
+        env.inCwd(a, () => env.run(["issue", "create", "--title", "wa work", "--kind", "task", "--contract", contractFile])).code,
+        0,
+      );
+      const b = env.gitRepo("mcp-wb");
+      assert.equal(env.inCwd(b, () => env.run(["init"])).code, 0, "init repo B");
+      assert.equal(
+        env.inCwd(b, () => env.run(["issue", "create", "--title", "wb work", "--kind", "task", "--contract", contractFile])).code,
+        0,
+      );
+
+      const append = (args: Record<string, unknown>) =>
+        wire.send("tools/call", { name: "journal_append", arguments: { kind: "finding", summary: "mcp scoped", ...args, dbPath: env.dbPath }, _meta: meta() });
+
+      // An uninitialized repository cannot write anywhere.
+      const orphan = env.gitRepo("mcp-wc");
+      process.chdir(orphan);
+      try {
+        const res = await append({ ref: "MCPWA-1" });
+        const failure = res.error !== undefined ? JSON.stringify(res.error) : JSON.stringify(res.result);
+        assert.match(failure, /Run `sb init`/, "an uninitialized repository must not append to another Project's Issue");
+      } finally {
+        process.chdir(prev);
+      }
+
+      // From B, writing into A requires the deliberate override (ADR §16).
+      process.chdir(b);
+      try {
+        const refused = await append({ ref: "MCPWA-1" });
+        const failure = refused.error !== undefined ? JSON.stringify(refused.error) : JSON.stringify(refused.result);
+        assert.match(failure, /belongs to project prj_mcp_wa, not the effective project prj_mcp_wb/);
+        assert.match(failure, /pass --project prj_mcp_wa/);
+        const deliberate = await append({ ref: "MCPWA-1", project: "prj_mcp_wa" });
+        assert.ok(!deliberate.error, JSON.stringify(deliberate.error));
+        const entryId = (JSON.parse(((deliberate.result as { content: Array<{ text: string }> }).content[0] as { text: string }).text) as { entryId: string }).entryId;
+        assert.ok(entryId);
       } finally {
         process.chdir(prev);
       }

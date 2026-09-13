@@ -53,6 +53,23 @@ describe("multi-repository isolation (ADR §85)", () => {
     const note = env.inCwd(b, () => env.run(["journal", "append", "ALPHA-1", "--kind", "finding"]));
     assert.equal(note.code, 1);
     assert.match(note.error ?? "", /Run `sb init`/);
+    const checkpoint = env.inCwd(b, () => env.run(["journal", "checkpoint", "ALPHA-1"]));
+    assert.equal(checkpoint.code, 1);
+    assert.match(checkpoint.error ?? "", /Run `sb init`/);
+    const dispatch = env.inCwd(b, () => env.run(["provenance", "dispatch", "ALPHA-1", "--participant", "intruder"]));
+    assert.equal(dispatch.code, 1);
+    assert.match(dispatch.error ?? "", /Run `sb init`/);
+    const planFile = join(env.temp("sb-iso-pc-"), "plan.json");
+    writeFileSync(
+      planFile,
+      JSON.stringify({
+        planKey: "iso-check",
+        issues: [{ key: "x", projectId: "prj_alpha", title: "X", kind: "task", contract: contract(), scrutiny: "LOW" }],
+      }),
+    );
+    const planCheck = env.inCwd(b, () => env.run(["plan", "check", "--file", planFile]));
+    assert.equal(planCheck.code, 1);
+    assert.match(planCheck.error ?? "", /Run `sb init`/);
   });
 
   it("after init in B, A sees only A's Issues and B only B's", () => {
