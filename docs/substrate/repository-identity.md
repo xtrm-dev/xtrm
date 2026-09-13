@@ -84,10 +84,11 @@ remote when clone recognition matters.
 ## Advanced overrides (reference)
 
 Resolution order: explicit per-command `--project` → explicit
-`SUBSTRATE_PROJECT` environment → initialized repository identity → fail
-closed. There is deliberately no "only one project in the database, use
-it" shortcut. An override grants effective context only: `sb doctor`
-still reports the repository itself uninitialized, and `xt init` still
+`SUBSTRATE_PROJECT` environment → initialized repository identity →
+checkout link (an administrative alias written by `sb project link`, kept for
+compatibility) → fail closed. There is deliberately no "only one project in the
+database, use it" shortcut. An override grants effective context only: `sb doctor`
+still reports the repository itself uninitialized, and `sb init` still
 initializes rather than accepting the override as a binding.
 
 ## Collision handling (reference)
