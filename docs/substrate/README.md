@@ -277,6 +277,18 @@ text is aid only. Text
 mode prints health, state.db path, schema state, project count, and the cwd
 link. Exit 0 healthy, 1 otherwise.
 
+## Operator documentation (ADR §67)
+
+Start here for day-to-day operation — this README plus:
+
+- [`workflow.md`](./workflow.md) — clone → `sb init` → issue lifecycle (the normal path).
+- [`journal.md`](./journal.md) — full Journal reference (ADR §68 checklist, every kind with an example).
+- [`provenance.md`](./provenance.md) — forward/reverse lineage graphs with real commands (ADR §69).
+- [`repository-identity.md`](./repository-identity.md) — one global state.db, one Project per repository, `sb init`, overrides, collisions (ADR §70).
+- [`cli.md`](./cli.md) — every `sb` group and verb, MCP/Pi tool inventory.
+
+The PRD ([`substrate-issues-v0-prd.md`](./substrate-issues-v0-prd.md)) remains architectural authority; operator docs explain the finished system. Internals belong in reference docs.
+
 ## Reference to full PRD
 
 - [`substrate-issues-v0-prd.md`](./substrate-issues-v0-prd.md) — full product
@@ -285,7 +297,11 @@ link. Exit 0 healthy, 1 otherwise.
   source of §29 and the phase plan.
 - [`sbcloseout3-adr.md`](./sbcloseout3-adr.md) — amendment A1 (journal,
   outcomes, actor identity, session lineage, provenance, documentation
-  contract), accepted for implementation, with PRD cross-link.
+  contract), SUPERSEDED by [`sbcloseout4-adr.md`](./sbcloseout4-adr.md),
+  which is the single authority for these concepts. Read sbcloseout4.
+- [`sbcloseout4-adr.md`](./sbcloseout4-adr.md) — ACCEPTED 2026-09-12:
+  repository identity, Journal, outcomes, session lineage, provenance,
+  and the final agentic work model. Supersedes sbcloseout3-adr.md.
 - [`e5-acceptance-transcript.md`](./e5-acceptance-transcript.md) — recorded
   live acceptance evidence.
 - [`phase10-conformance.md`](./phase10-conformance.md) — WorkItemStore /

@@ -1,6 +1,6 @@
 # PRD — XTRM Substrate Issues v0
 
-> **Amendment relationship:** [ADR Amendment A1](./sbcloseout3-adr.md) (P0 / release-blocking, accepted) amends the parent closeout ADR [sbcloseout2-adr.md](./sbcloseout2-adr.md). Its implementation board is xtrm-vza; sbcloseout2 remains authoritative for xtrm-6qu scope. Implement from this baseline plus the amendment text as written. Do not implement from conflicting summaries.
+> **Amendment relationship:** [ADR Amendment A1](./sbcloseout3-adr.md) (P0 / release-blocking, accepted) amends the parent closeout ADR [sbcloseout2-adr.md](./sbcloseout2-adr.md). Its implementation board is xtrm-vza; sbcloseout2 remains authoritative for xtrm-6qu scope. [sbcloseout4-adr.md](./sbcloseout4-adr.md) (ACCEPTED 2026-09-12) supersedes sbcloseout3-adr.md as the single authority for repository identity, Journal, outcomes, session lineage, provenance, and documentation. Operator entry point: [README.md](./README.md) and the [workflow.md](./workflow.md) hierarchy (workflow, journal, provenance, repository-identity, cli). Implement from this baseline plus the amendment text as written. Do not implement from conflicting summaries.
 
 **Status:** Final design / implementation baseline v1.0  
 **Date:** 2026-09-09  

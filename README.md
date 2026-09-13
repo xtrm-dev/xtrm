@@ -17,6 +17,7 @@ xtrm/
 - [`docs/monorepo-migration.md`](docs/monorepo-migration.md) — migration strategy (fresh umbrella + per-package graft)
 - [`docs/state-store-options.md`](docs/state-store-options.md) — two-tier state architecture
 - [`docs/substrate/substrate_design_it.md`](docs/substrate/substrate_design_it.md) — substrate domain design
+- [`docs/substrate/README.md`](docs/substrate/README.md) — Substrate operator starting point; hierarchy: `workflow.md`, `journal.md`, `provenance.md`, `repository-identity.md`, `cli.md`
 - [`docs/telemetry/forensic-event-contract.md`](docs/telemetry/forensic-event-contract.md) — `xtrm.forensic.v1` envelope
 - [`docs/xtrm-MOC.md`](docs/xtrm-MOC.md) — map of content
 
