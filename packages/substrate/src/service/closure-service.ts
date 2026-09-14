@@ -212,12 +212,25 @@ export class ClosureService {
     if (typeof input.reason !== "string" || input.reason.trim() === "") {
       throw new Error("a reopen reason is required (--reason): reopening appends a durable reopen event");
     }
-    normalizeExecutionContext(input.executionContext ?? null);
+    // Reopen must not silently drop what the caller supplied (C1 review
+    // P2-1): a provided actor has to be a usable label, and the provided
+    // envelope is persisted on the reopen event rather than validated and
+    // discarded.
+    if (input.actor !== undefined && (typeof input.actor !== "string" || input.actor.trim() === "")) {
+      throw new Error("actor must be a non-empty string when provided");
+    }
+    const actor = typeof input.actor === "string" ? input.actor.trim() : null;
+    const reopenContext = normalizeExecutionContext(input.executionContext ?? null);
     const prior = this.listClosures(issueId).map((c) => c.closureId);
     const now = input.now ?? Date.now();
     this.db.prepare("UPDATE issues SET lifecycle_state = 'open', updated_at = ? WHERE id = ?").run(now, issueId);
     this.issues.appendEvent(issueId, "issue.lifecycle", { from: issue.lifecycleState, to: "open" });
-    this.issues.appendEvent(issueId, "issue.reopened", { reason: input.reason.trim(), priorClosures: prior });
+    this.issues.appendEvent(issueId, "issue.reopened", {
+      reason: input.reason.trim(),
+      priorClosures: prior,
+      ...(actor !== null ? { actor } : {}),
+      ...(reopenContext !== null ? { executionContext: reopenContext } : {}),
+    });
     this.insertAttempt(issueId, "reopen", "completed", null, input.reason.trim(), null, null, now);
     return { issueId, lifecycleState: "open" };
   }
