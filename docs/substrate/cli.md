@@ -88,8 +88,10 @@ onboarding workflow. New repositories start with `sb init`.
 
 ## journal
 
-- `journal append <ref> --kind <checkpoint|handoff|milestone|decision|finding|blocker|compaction|note> [--mechanical/--semantic/--refs <file|json>]` —
-  full journal surface; `checkpoint`/`compaction` require a mechanical row.
+- `journal append <ref> --kind <checkpoint|handoff|milestone|decision|finding|blocker|result|compaction|note> [--mechanical/--semantic/--refs <file|json>] [--result <file|json>]` —
+  full journal surface; `checkpoint`/`compaction` require a mechanical row, `result` requires a bounded
+  `--result` payload. `result` carries a bounded execution outcome with an optional result payload and is
+  required for a meaningful settlement: a progress note or a contract edit must not be used in place of a result.
 - `journal checkpoint <ref>` — mechanical-first checkpoint now.
 - `journal show <ref> [--kind <k>] [--limit <n>]` — full bodies, newest last.
 - `journal since <ref> <cursor>` — compact delta after cursor (0 reads all).
@@ -125,15 +127,32 @@ in stable order (served in-process, never via CLI text):
 
 ```text
 issue_get  issue_list  issue_ready
-journal_append  journal_show
+issue_claim  issue_update  issue_note  issue_close
+journal_append  journal_checkpoint  journal_show  journal_query
 provenance_trace  provenance_session  provenance_activation  resume_capsule
 ```
 
+`issue_get` read one Issue with live readiness; `issue_list` / `issue_ready`
+search one Project (all Issues / dispatchable only); `issue_claim`
+op-discriminated lease (`op` claim|release, exactly one live holder);
+`issue_update` metadata vs revision-bearing writes; `issue_note` append-only
+journal fast path; `issue_close` canonical close with bounded outcome,
+reason and cited refs; `journal_append` full nine-kind surface;
+`journal_checkpoint` mechanical-first checkpoint now; `journal_show`
+full-body read; `journal_query` op-discriminated bounded reads
+(`op` since|latest|timeline); `provenance_trace` lineage spine;
+`resume_capsule` derived continuity capsule with rendering.
+
 Every tool carries a description (normative instruction surface, ADR
-§63). The normative description inventory belongs to M1: until M1 lands
-an exported registration inventory, this page records the tool names and
-their one-line roles, and the release gate checks name presence only —
-description depth is PENDING, owner M1.
+§63): what the tool changes, what it does not change, whether the Issue
+revision changes, whether readiness goes stale, when to use the Journal
+instead of a contract edit, and what actor/session/provenance context is
+added automatically. Journal-facing tools explain all nine kinds (ADR §64).
+The exported registration inventory lives in
+`packages/substrate/integrations/claude-code/mcp-server.ts`
+(`MCP_TOOL_NAMES`, `MCP_TOOL_DESCRIPTIONS`), and the release gate checks
+name presence, non-trivial description depth and inventory agreement —
+description inventory LANDED, owner M1.
 
 ## Pi tools
 

@@ -56,6 +56,17 @@ export interface CheckpointInput {
   changedFiles?: string[];
 }
 
+/**
+ * Authority boundary for work-item backends: the typed seam every host (sb,
+ * Pi, MCP) drives instead of touching a store directly. Durability belongs to
+ * the backend implementation; this interface only admits operations with
+ * explicit durability semantics. Side effects are backend mutations (claim,
+ * release, update, note, checkpoint); reads never mutate. Revision-bearing
+ * updates surface revisionCreated so callers know readiness went stale;
+ * metadata writes do not. Implementations must attach stored actor/session
+ * envelopes automatically and stay idempotent on retry; unknown refs and
+ * cross-project writes fail closed.
+ */
 export interface WorkItemStore {
   readonly backend: "substrate" | "beads";
   get(ref: string): IssueView;

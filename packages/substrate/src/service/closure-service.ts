@@ -89,6 +89,18 @@ export interface BeadsClosureInput {
   closedAt?: number;
 }
 
+/**
+ * Authority for first-class Closure: the only writer of immutable Closure
+ * rows answering why an Issue became terminal. Side effects are the durable
+ * transactional close/cancel writes (Closure row plus lifecycle rest plus closed event);
+ * reopen appends a reopen event and keeps every historical Closure row
+ * untouched. The Closure pins the current revision and contract hash but never
+ * mints a revision, and terminal readiness ends dispatchability until reopen
+ * and re-attestation. Automatic metadata: outcome, reason, actor, execution
+ * envelope, closed-at timestamp and validation/result/receipt/artifact refs.
+ * Closes are idempotent only by explicit retry of the same terminal intent;
+ * unknown outcomes, missing reasons and already-terminal issues fail closed.
+ */
 export class ClosureService {
   private readonly db: DatabaseSync;
   private readonly issues: IssueService;
@@ -100,6 +112,7 @@ export class ClosureService {
 
   // -- close (canonical: sb issue close <ref> --outcome <o> --reason <r>) ---
 
+  /** Canonical close: validates outcome and reason, writes the immutable row and rests the lifecycle terminal. */
   closeIssue(issueId: string, input: CloseIssueInput): Closure {
     try {
       return withTransaction(this.db, () => this.closeTx(issueId, input, "close"));
@@ -195,6 +208,7 @@ export class ClosureService {
   // Keeps every historical Closure row untouched, appends a reopen event,
   // and restores lifecycle state to open (ADR §45).
 
+  /** Restores open while keeping every Closure row; history is appended, never rewritten. */
   reopenIssue(issueId: string, input: ReopenIssueInput): { issueId: string; lifecycleState: string } {
     try {
       return withTransaction(this.db, () => this.reopenTx(issueId, input));

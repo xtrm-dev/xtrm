@@ -321,6 +321,13 @@ deterministic Project, bind the repository, and cache the local checkout
 alias. Atomic and idempotent; a second run reports idempotent: true and
 created: false. No project metadata is needed.
 
+Methodology: one Git repository maps to exactly one Project; the derived
+repository identity (remote plus local fingerprint) is the authority, and
+the checkout alias is only a cache. Worktrees and clones of the same
+repository share the binding — never create a second Project for a
+worktree. An uninitialized checkout fails closed on every mutating verb:
+run sb init once inside the repository to bind it.
+
 --json data: {repository: {repositoryKey, canonicalRemote, local, gitRoot},
 project: {id, prefix, name}, baseBranch, created, adopted, idempotent}.`,
   doctor: `usage: sb doctor [--db PATH] [--json]
@@ -337,7 +344,7 @@ project mapping (informational; never flips health).`,
   create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--parent <ref>] [--priority <n>] [--scrutiny <s>]
   show <ref>
   edit <ref> [--project <id>] [--contract <file|json>] [--title <t>] [--priority <n>] [--scrutiny <s>] [--ownership <file|json>] [--context-refs <file|json>] [--expected-revision <n>]
-  note <ref> ["text"] [--project <id>] [--kind <note|finding|decision|blocker|milestone|handoff>] [--file <path|->]
+  note <ref> ["text"] [--project <id>] [--kind <note|finding|decision|blocker|milestone|handoff|result>] [--file <path|->]
   validate <ref>
   attest <ref> --outcome <ready|reject> --policy <p> --attested-by <who> [--project <id>] [--evidence-refs <a,b>] [--blocking-gaps <a,b>]
   list [--project <id>] | ready [--project <id>]
@@ -368,12 +375,27 @@ prints the issue header plus the contract body (human) or full payload (with --j
   "issue.edit": `usage: sb issue edit <ref> [--project <id>] [--contract <file|json>] [--title <t>] [--priority <n>] [--scrutiny <s>] [--ownership <file|json>] [--context-refs <file|json>] [--expected-revision <n>]
 
 --title/--priority are metadata (no revision, readiness retained); --contract/--ownership/
---context-refs/--scrutiny are execution-relevant (new revision, readiness invalidated).`,
+--context-refs/--scrutiny are execution-relevant (new revision, readiness invalidated).
+
+Do not use this tool for progress, findings, decisions, handoffs or results.
+Use the Journal for those (sb issue note, sb journal append, sb journal
+checkpoint). Edit changes what the work IS; the Journal records what
+HAPPENED. A revision-bearing edit invalidates prior readiness and
+attestation: re-validate and re-attest before dispatch, and pass
+--expected-revision when racing another writer.`,
   "issue.note": `usage: sb issue note <ref> ["text"] [--project <id>] [--kind <note|finding|decision|blocker|milestone|handoff|result>] [--file <path|->]
 
 appends an append-only journal note (no revision bump). --file - reads stdin.
 "result" is a bounded execution outcome: the text becomes result.summary and
-an optional --result <file|json> supplies the structured payload.`,
+an optional --result <file|json> supplies the structured payload.
+
+Methodology: this is the fast path into the Journal — use it (never issue
+edit) for annotations, discovered facts, chosen courses, blockers,
+progress boundaries, continuation state and bounded outcomes. Notes carry
+continuity, never execution authority: they never change the revision and
+never go stale on readiness. A progress note or a contract edit must not be
+used in place of a result: meaningful settlement needs the bounded result
+payload that close cites.`,
   "issue.validate": `usage: sb issue validate <ref>
 
 reports readiness state, structural validity, attestation currency, blockers.`,
@@ -394,7 +416,15 @@ deactivates the active edge between the endpoints for the given kind.`,
   "issue.release": `usage: sb issue release <ref> --holder <who> [--activation <id>] [--project <id>]`,
   "issue.close": `usage: sb issue close <ref> --outcome <completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned> --reason <r> [--actor <who>] [--participant <id>] [--run <id>] [--activation <id>] [--attempt <id>] [--result <a,b>] [--receipt <a,b>] [--validation <a,b>] [--artifact <a,b>] [--project <id>]
 
-writes an immutable Closure row (outcome, reason, actor, session, revision/hash, refs) and rests on done (cancelled for the cancelled outcome). Bare \`sb issue close <ref>\` stays the legacy lifecycle alias (no Closure invented).`,
+writes an immutable Closure row (outcome, reason, actor, session, revision/hash, refs) and rests on done (cancelled for the cancelled outcome). Bare \`sb issue close <ref>\` stays the legacy lifecycle alias (no Closure invented).
+
+Methodology: close answers WHY the Issue became terminal. Pick the bounded
+outcome honestly (completed, superseded, duplicate, wont_fix, invalid,
+cancelled, abandoned); the reason lives in the Closure row, never only in
+git log. Cite the settlement evidence: --result journal result refs for the
+bounded outcome, --validation/--receipt/--artifact for the proof. Closure
+rows are immutable history -- a mistaken close reopens, it never rewrites.
+Stopping one execution is NOT a close: release the claim instead.`,
   "issue.state": `usage: sb issue state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>] [--project <id>]
 
 sets the lifecycle state; every transition emits a durable issue.lifecycle event.
@@ -496,10 +526,29 @@ Project deliberately.`,
   timeline <ref> [--kind <k>] [--limit <n>]
   render <ref> [--sequence <n>]
 
+Methodology: the Journal is Issue-scoped continuity, never authority.
+Entries record what happened; they never change the contract, the revision
+or readiness. note annotates, finding records a discovered fact, decision
+records a chosen course plus rationale, blocker an unresolved condition,
+milestone a progress boundary, handoff bounded continuation state, result a
+bounded outcome with a versioned payload, checkpoint a resumability
+boundary, compaction a conversation checkpoint. Checkpoint and compaction
+require a mechanical row; result requires the bounded payload and must not
+be appended as a plain note. Reads are bounded: show for bodies, since for
+the delta after a cursor, latest/timeline for windows.
+
 Every verb runs over one JournalService; latest/timeline are bounded reads.`,
   "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--result <file|json>] [--refs <file|json>] [--project <id>]
 
---kind result requires a bounded --result payload (summary required).`,
+--kind result requires a bounded --result payload (summary required).
+
+Methodology: append records continuity, never authority — the revision
+never moves and readiness never goes stale. result carries a bounded
+execution outcome with an optional result payload and is required for a
+meaningful settlement: a progress note or a contract edit must not be used
+in place of a result. checkpoint/compaction require the mechanical row;
+query with show/since/latest/timeline, and resume from the capsule, not
+from a full dump.`,
   "journal.checkpoint": `usage: sb journal checkpoint <ref> [--mechanical <file|json>] [--semantic <file|json>] [--workspace/--branch/--base-commit/--head-commit <v>] [--project <id>]`,
   "journal.show": `usage: sb journal show <ref> [--kind <k>] [--limit <n>]
 
@@ -521,9 +570,24 @@ renders the latest (or selected) checkpoint as text.`,
   dispatch <ref> [--workspace/--participant/--activation/--attempt/--session/--base-commit/--claim-id <v>]
   trace <ref> | commit <sha> | receipt <id> | pr <ref>
   session <session-id> | activation <activation-id>
-  bundle <ref> [--repo-root <dir>]`,
+  bundle <ref> [--repo-root <dir>]
+
+Methodology: provenance is the evidence spine, not narration. Dispatch
+binds an execution to the Issue revision BEFORE work starts, so a later
+contract edit binds anew instead of silently re-authorizing. Trace reads
+the spine (bindings, receipts with artifacts, attestation, claims,
+closure); commit/receipt/pr walk it backwards from an external id; session
+and activation answer what one session touched or one activation produced.
+Record what happened in the Journal and close with cited refs; never edit
+the contract to narrate history.`,
   "provenance.dispatch": `usage: sb provenance dispatch <ref> [--workspace <dir>] [--participant/--activation/--attempt/--session/--base-commit <v>] [--claim-id <n>] [--project <id>]`,
-  "provenance.trace": `usage: sb provenance trace <ref>`,
+  "provenance.trace": `usage: sb provenance trace <ref>
+
+reads the full lineage spine: execution bindings with their pinned
+revisions, receipts with artifacts, attestation currency, claims and the
+closure view. Read-model only: nothing is created, and the revision never
+moves. Methodology: trace to verify before dispatch and to audit after
+close; the spine shows evidence, the Journal tells the story.`,
   "provenance.commit": `usage: sb provenance commit <40-char-sha>`,
   "provenance.receipt": `usage: sb provenance receipt <id>`,
   "provenance.pr": `usage: sb provenance pr <provider-ref>`,

@@ -91,6 +91,18 @@ function bindingFromRow(r: Row): RepositoryBinding {
   };
 }
 
+/**
+ * Authority for repository identity and bindings: derives the repository key,
+ * adopts or creates the deterministic Project, and owns the durable
+ * repository-to-project binding rows in the WAL store. Init is atomic and idempotent; repair
+ * re-establishes only the local checkout alias, never a binding. Side effects
+ * are binding and alias writes. Identity resolution never moves an Issue
+ * revision and never stales readiness; an unbound repository fails closed
+ * with the sb init guidance instead of guessing. Automatic metadata: bindings
+ * stamp canonical remote, local fingerprint, base branch and timestamps.
+ * Repeated init is idempotent; colliding bindings and missing checkouts fail
+ * closed.
+ */
 export class RepositoryService {
   private readonly db: DatabaseSync;
   private readonly issues: IssueService;

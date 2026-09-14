@@ -87,6 +87,17 @@ interface ExternalProvider {
 const CAPSULE_RESULT_LIMIT = 5;
 const CAPSULE_DECISION_LIMIT = 5;
 
+/**
+ * Authority for Resume Capsules: builds the bounded continuity view from the
+ * Issue, latest checkpoint, deltas, blockers, claim and provenance. The
+ * capsule is derived, never durable and never a source of truth, so this
+ * service has no write side effects. It reports the revision it was built
+ * from; a newer revision renders a prior capsule stale, and the carried
+ * readiness is a point-in-time derivation that must be re-validated before
+ * dispatch. No automatic metadata is minted (it assembles stored envelopes).
+ * Reads are idempotent and pure; unknown refs and missing checkpoints fail
+ * closed with errors rather than fabricated continuity.
+ */
 export class ResumeService {
   private readonly issues: IssueService;
   private readonly journal: JournalService;
@@ -98,6 +109,7 @@ export class ResumeService {
     this.external = opts?.external ?? null;
   }
 
+  /** Assembles the bounded continuity view from live rows; derived output, never stored or trusted as authority. */
   buildCapsule(issueId: string): ResumeCapsule {
     const issue = this.issues.getIssue(issueId);
     const revision = this.issues.getRevision(issueId, issue.currentRevision);
@@ -199,6 +211,7 @@ export class ResumeService {
 
   // Text shape follows the §21 conceptual result. Child state renders as
   // one line per child (reference + projection); bodies stay out (§22).
+  /** Renders the derived capsule as bounded text; rendering invents no state beyond the capsule rows. */
   renderCapsule(c: ResumeCapsule): string {
     const contract = c.contract as { problem?: unknown; success?: unknown };
     const lines = [
