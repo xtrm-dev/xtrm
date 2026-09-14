@@ -109,8 +109,18 @@ export const RESULT_ARRAY_FIELDS = [
 ] as const;
 export const RESULT_FIELDS = [...RESULT_STRING_FIELDS, ...RESULT_ARRAY_FIELDS] as const;
 
+// Version envelope (XTRM-339): `resultVersion` is written inside the existing
+// JSON payload — no sibling column, no migration. 1 is the only known
+// version. Missing version reads as 1 (pre-change rows stay readable);
+// any other version fails closed with a message naming the version.
+// `result.outcome` stays a free string: no closure-outcome enum is invented
+// here (that is C1's); a future version may add bounded fields alongside it.
+export const RESULT_VERSION = 1;
+export const KNOWN_RESULT_VERSIONS = [1] as const;
+
 export interface ResultPayload {
   summary: string;
+  resultVersion?: number;
   attempted?: string;
   outcome?: string;
   completed?: string[];
@@ -127,7 +137,16 @@ export function validateResultPayload(value: unknown): string[] {
     return ["result payload must be an object"];
   }
   const r = value as Record<string, unknown>;
+  const version = r["resultVersion"];
+  if (version !== undefined) {
+    if (typeof version !== "number" || !Number.isInteger(version)) {
+      problems.push(`result.resultVersion ${JSON.stringify(version)} is unknown (want ${RESULT_VERSION})`);
+    } else if (!(KNOWN_RESULT_VERSIONS as readonly number[]).includes(version)) {
+      problems.push(`result.resultVersion ${version} is unknown (want ${RESULT_VERSION})`);
+    }
+  }
   for (const key of Object.keys(r)) {
+    if (key === "resultVersion") continue;
     if (!(RESULT_FIELDS as readonly string[]).includes(key)) {
       problems.push(`result.${key} is not a bounded result field (want ${RESULT_FIELDS.join("|")})`);
     }

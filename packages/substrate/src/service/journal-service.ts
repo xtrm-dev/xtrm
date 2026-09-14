@@ -19,6 +19,7 @@ import {
   validateResultPayload,
   validateSemanticCheckpoint,
   JOURNAL_KINDS,
+  RESULT_VERSION,
   type EvidenceRef,
   type JournalEntry,
   type JournalKind,
@@ -173,6 +174,9 @@ export class JournalService {
     if (input.kind !== "result" && input.result !== undefined) {
       throw new Error(`journal kind "${input.kind}" does not carry a result payload`);
     }
+    // Version envelope (XTRM-339): stamped at append time, never UPDATEd.
+    // Unknown versions already failed closed in assertResultPayload above.
+    const result = input.result !== undefined ? { resultVersion: RESULT_VERSION, ...input.result } : undefined;
     return withTransaction(this.db, () => {
       const issue = this.issues.getIssue(issueId);
       const prev = row<{ m: number | null }>(
@@ -203,7 +207,7 @@ export class JournalService {
           input.kind,
           input.mechanical ? JSON.stringify(input.mechanical) : null,
           input.semantic ? JSON.stringify(input.semantic) : null,
-          input.result ? JSON.stringify(input.result) : null,
+          input.result ? JSON.stringify(result) : null,
           JSON.stringify(input.refs ?? []),
           now,
         );
@@ -550,7 +554,9 @@ export class JournalService {
       }
       const problems = validateResultPayload(parsed);
       if (problems.length > 0) throw new Error(`fail-closed: invalid result payload on ${r["id"]}: ${problems[0]}`);
-      result = parsed as ResultPayload;
+      // Pre-change rows carry no version: default to 1 so they stay readable.
+      const raw = parsed as Record<string, unknown>;
+      result = { resultVersion: RESULT_VERSION, ...raw } as ResultPayload;
     }
     let mechanical: MechanicalCheckpoint | null = null;
     if (r["mechanical_json"] != null) {
