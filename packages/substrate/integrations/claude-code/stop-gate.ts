@@ -114,7 +114,8 @@ export async function handleStopGate(input: StopGateInput = {}): Promise<StopGat
     const readiness = handles.svc.getReadiness(issueId);
     const prov = new ProvenanceService(handles.db, handles.svc, handles.journal);
     const openReceipts = prov.listReceipts(issueId).filter((r) => r.commitSha === null && r.finalizedAt === null).length;
-    const closureReady = results > 0 && pendingAsks.length === 0 && openBlockers.length === 0;
+    const closureReady =
+      results > 0 && pendingAsks.length === 0 && openBlockers.length === 0 && openReceipts === 0;
     const signals: StopGateSignals = {
       hasActiveClaim: true,
       holder: claim.holder,
@@ -131,6 +132,7 @@ export async function handleStopGate(input: StopGateInput = {}): Promise<StopGat
     };
     // §76: at most one checkpoint, only when the session leaves none.
     let checkpointed = false;
+    let checkpointFailed = false;
     if (checkpoints === 0) {
       try {
         await handles.journal.checkpoint(issueId, {
@@ -141,7 +143,10 @@ export async function handleStopGate(input: StopGateInput = {}): Promise<StopGat
         });
         checkpointed = true;
       } catch {
+        // Still never blocks and still exits 0, but the operator must be able
+        // to tell "no checkpoint needed" from "the checkpoint write failed".
         checkpointed = false;
+        checkpointFailed = true;
       }
     }
     const parts = [
@@ -159,6 +164,14 @@ export async function handleStopGate(input: StopGateInput = {}): Promise<StopGat
     }
     if (openBlockers.length > 0) {
       parts.push(`open blockers: ${openBlockers.join(", ")}.`);
+    }
+    if (checkpointFailed) {
+      parts.push(`checkpoint write failed; continuity depends on the entries already on record.`);
+    }
+    if (openReceipts > 0) {
+      parts.push(
+        `${openReceipts} receipt(s) are still open; bind or finalize provenance before treating the work as closure-ready.`,
+      );
     }
     if (handoffs === 0 && !closureReady) {
       parts.push(`no handoff since claim; write one with \`sb journal append ${issueRef} --kind handoff\` if the next session needs context.`);
