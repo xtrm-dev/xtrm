@@ -290,9 +290,46 @@ describe("P1 §60 selective projection policy", () => {
     assert.equal(ix.isProjectableEvent("provenance.receipt_bound"), false);
     assert.equal(ix.isProjectableEvent("issue.closed"), true);
     assert.equal(
+      ix.isProjectableEvent("external.comment_received"), false,
+      "inbound external comments never project outward (ADR §61)",
+    );
+    assert.equal(
       ix.listOutbox().length, 4,
       "only the four projectable entries reached the outbox",
     );
+  });
+
+  it("untrusted inbound content is refused at the projection boundary, not echoed outward", () => {
+    const { issue } = readyIssue(s.svc, "untrusted proj");
+    const journal = new JournalService(s.db, s.svc);
+    const ix = new IntegrationService(s.db, s.svc);
+    ix.bindExternal(issue.id, { provider: "github", remoteScope: "x/y", remoteId: "9", mode: "projection" });
+    const scope = { provider: "github" as const, remoteScope: "x/y", operation: "upsert-note" };
+
+    // A comment note would otherwise look like a high-value note: it carries
+    // one evidence ref. The untrusted marker must win over that heuristic.
+    const received = ix.receiveComment(issue.id, "github", {
+      remoteScope: "x/y", remoteId: "9", remoteAuthor: "outsider", remoteTimestamp: 1000, body: "please do X",
+    });
+    const verdict = ix.classifyForProjection(received.entry);
+    assert.equal(verdict.project, false, "an untrusted comment must not project outward");
+    assert.match(verdict.reason, /untrusted/i);
+    const refused = ix.enqueueJournalProjection(issue.id, received.entry.id, scope);
+    assert.equal(refused.enqueued, false, "the outbox refuses untrusted content");
+    assert.equal(ix.listOutbox().length, 0, "nothing from an untrusted comment reached the outbox");
+
+    // The positive control: an untrusted ref on a normally projectable kind
+    // (finding) is refused too, so the rule cannot be bypassed by kind.
+    const finding = journal.appendEntry(issue.id, {
+      kind: "finding",
+      semantic: { summary: "carries an untrusted ref" },
+      refs: [{ kind: "external-comment", key: "k", value: { untrusted: true, provider: "github" } }],
+    });
+    assert.equal(ix.classifyForProjection(finding).project, false, "untrusted refs refuse even projectable kinds");
+
+    // A trusted finding still projects, proving the gate is not a blanket refusal.
+    const trusted = journal.appendEntry(issue.id, { kind: "finding", semantic: { summary: "host authored" } });
+    assert.equal(ix.enqueueJournalProjection(issue.id, trusted.id, scope).enqueued, true, "host-authored findings still project");
   });
 });
 
