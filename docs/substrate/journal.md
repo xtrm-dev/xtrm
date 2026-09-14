@@ -100,6 +100,25 @@ Git commits: the outcome is the entry, not a commit. The payload is
 mandatory, and a non-`result` kind must not carry one. Publication stays
 bounded: never paste raw model output.
 
+Version envelope (`resultVersion: 1`, XTRM-339): every new `result` row is
+written with `resultVersion: 1` inside the existing JSON payload — no
+sibling column, no migration. Rows written before the envelope carry no
+version and read back defaulted to 1 with the payload intact. A row
+carrying an unknown version fails closed on read and on write with a
+message naming the version (e.g. `result.resultVersion 2 is unknown
+(want 1)`), never by silently ignoring fields. Mixed-version policy
+(rollout order matters): a binary built before XTRM-339 has a closed
+validator with no `resultVersion` exception, so it rejects EVERY versioned
+row — including `resultVersion: 1` — as an unknown field; it cannot
+distinguish known from unknown versions. Therefore deploy the
+XTRM-339-capable reader before any writer emits versioned rows. The new
+reader accepts legacy version-less rows as implicit v1; old readers fail
+closed on all newly versioned rows (including v1); future v2 rows fail
+closed under v1 readers. `result.outcome` remains a free
+string: no closure-outcome enum is invented here — that vocabulary is
+C1's, and aligning the two vocabularies is a future versioned change, not
+this one.
+
 ### `checkpoint` — mechanical-first durable state (requires mechanical row)
 
 ```bash
