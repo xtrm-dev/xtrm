@@ -40,12 +40,21 @@ export const NON_PROJECTABLE_EVENT_TYPES: readonly string[] = [
   "claim.released",
   "claim.expired",
   "activation.cancelled",
+  // Inbound external comments are coordination data, never outward content:
+  // they are refused rather than echoed (ADR §61).
+  "external.comment_received",
 ];
 
 export interface ProjectionCandidate {
   kind: JournalKind;
   /** Evidence refs carried by the entry (empty = bare prose). */
   refCount: number;
+  /**
+   * Evidence refs explicitly marked untrusted (ADR §61). Untrusted external
+   * content is coordination data and must never be echoed outward: it is
+   * refused before the projectable-kind allowlist is even consulted.
+   */
+  untrustedRefCount: number;
 }
 
 /**
@@ -55,6 +64,12 @@ export interface ProjectionCandidate {
  * milestone/handoff/blocker stay local (selective allowlist, ADR §60).
  */
 export function shouldProjectJournalEntry(candidate: ProjectionCandidate): { project: boolean; reason: string } {
+  if (candidate.untrustedRefCount > 0) {
+    return {
+      project: false,
+      reason: "untrusted external content never projects outward (ADR §61)",
+    };
+  }
   if ((MECHANICAL_JOURNAL_KINDS as readonly string[]).includes(candidate.kind)) {
     return { project: false, reason: `mechanical kind "${candidate.kind}" never projects (ADR §60)` };
   }
@@ -73,8 +88,19 @@ export function shouldProjectClosure(): { project: boolean; reason: string } {
   return { project: true, reason: "closure projects (ADR §60)" };
 }
 
-/** Runtime/transport event types never project, even when journal-adjacent. */
+/**
+ * Runtime/transport event types never project, even when journal-adjacent.
+ * `issue.closed` is the one projectable event: it is host-authored terminal
+ * state, not inbound external content. `external.comment_received` is NOT
+ * projectable — inbound comments stay coordination data (ADR §61).
+ */
 export function isProjectableEventType(type: string): boolean {
   if ((NON_PROJECTABLE_EVENT_TYPES as readonly string[]).includes(type)) return false;
-  return type.startsWith("external.comment_received") || type === "issue.closed";
+  return type === "issue.closed";
+}
+
+/** True when an evidence ref carries the untrusted marker (ADR §61). */
+export function isUntrustedRef(ref: { value?: unknown }): boolean {
+  const value = ref?.value;
+  return typeof value === "object" && value !== null && (value as { untrusted?: unknown }).untrusted === true;
 }

@@ -6,6 +6,7 @@ import { mutateOnce, withTransaction } from "../store/transactions.ts";
 import { hashMappedContent } from "../projections/types.ts";
 import {
   isProjectableEventType,
+  isUntrustedRef,
   shouldProjectClosure,
   shouldProjectJournalEntry,
 } from "../projections/policy.ts";
@@ -467,7 +468,10 @@ export class IntegrationService {
   // not. Returns projected:false with a reason instead of enqueuing.
 
   classifyForProjection(entry: JournalEntry): { project: boolean; reason: string } {
-    return shouldProjectJournalEntry({ kind: entry.kind, refCount: entry.refs.length });
+    // Untrusted refs are counted here so the policy can refuse them before any
+    // allowlist widening admits inbound external content (ADR §61).
+    const untrustedRefCount = entry.refs.filter((ref) => isUntrustedRef(ref as { value?: unknown })).length;
+    return shouldProjectJournalEntry({ kind: entry.kind, refCount: entry.refs.length, untrustedRefCount });
   }
 
   enqueueJournalProjection(
