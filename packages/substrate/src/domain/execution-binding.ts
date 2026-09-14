@@ -6,6 +6,11 @@
 
 import { v7 as uuidv7 } from "uuid";
 import type { WorkspaceIdentity } from "./claim.ts";
+import {
+  normalizeExecutionContext,
+  validateExecutionContext,
+  type ExecutionContext,
+} from "./execution-context.ts";
 
 export interface ExecutionBinding {
   id: string;
@@ -21,6 +26,9 @@ export interface ExecutionBinding {
   workspace: string;
   baseCommit: string | null;
   createdAt: number;
+  // Shared versioned envelope (X1): the authoritative runtime input.
+  // Flat columns above stay as query-compatible projections of it.
+  executionContext: ExecutionContext | null;
 }
 
 export interface DispatchInput {
@@ -31,6 +39,9 @@ export interface DispatchInput {
   sessionId?: string | null;
   workspace: string | WorkspaceIdentity;
   baseCommit?: string | null;
+  // Authoritative optional runtime input (ADR §57): replaces manual
+  // --session/--activation/--attempt/--participant/--branch flags.
+  executionContext?: ExecutionContext | null;
 }
 
 // Gate pin for atomic dispatch: the exact live claim observed by
@@ -69,6 +80,9 @@ export function validateDispatchInput(input: unknown): string[] {
   }
   if (d["claimId"] !== undefined && d["claimId"] !== null && !Number.isInteger(d["claimId"])) {
     problems.push("claimId must be an integer when present");
+  }
+  if (d["executionContext"] !== undefined && d["executionContext"] !== null) {
+    for (const p of validateExecutionContext(d["executionContext"])) problems.push(p);
   }
   return problems;
 }

@@ -4,6 +4,7 @@
 // exists from PreCompact; this only names the host summary beside it.
 
 import { createHash } from "node:crypto";
+import { enrichExecutionContext } from "../../src/domain/execution-context.ts";
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
 
 export interface PostCompactInput {
@@ -36,10 +37,13 @@ export function handlePostCompact(input: PostCompactInput = {}): PostCompactResu
     const issueId = resolveIssueId(handles.svc, issueRef);
     const entry = handles.journal.appendEntry(issueId, {
       kind: "finding",
+      // Provider session, not participant identity (§98); see precompact.ts.
       sessionId: input.session_id,
-      participantId: input.session_id,
       semantic: { summary: summary.slice(0, 2000) },
       refs: [{ kind: "claude-compact-summary", key: hashSummary(summary) }],
+      executionContext: enrichExecutionContext({
+        host: input.session_id ? { type: "claude", sessionId: input.session_id } : null,
+      }),
     });
     return { ok: true, entryId: entry.id };
   } catch (err) {

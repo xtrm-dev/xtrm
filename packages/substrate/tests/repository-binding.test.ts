@@ -175,12 +175,19 @@ describe("migrations 008-009 on the live prj_xtrm store shape (§90)", () => {
 
     const db = openSubstrate(path);
     const version = db.prepare("SELECT MAX(version) AS v FROM schema_migrations").get() as { v: number };
-    // Head advances with every landed migration; 008 is proven applied below.
-    assert.equal(version.v, 9);
+    // Head advances with every landed migration; 008/009 are proven applied
+    // below, and X1 lands 010 on top without touching existing rows.
+    assert.equal(version.v, 10);
     const applied = db.prepare("SELECT name FROM schema_migrations WHERE version = 8").get() as { name: string };
     assert.equal(applied.name, "repository-bindings");
-    const head = db.prepare("SELECT name FROM schema_migrations WHERE version = 9").get() as { name: string };
-    assert.equal(head.name, "journal-result-payload");
+    const head9 = db.prepare("SELECT name FROM schema_migrations WHERE version = 9").get() as { name: string };
+    assert.equal(head9.name, "journal-result-payload");
+    const head = db.prepare("SELECT name FROM schema_migrations WHERE version = 10").get() as { name: string };
+    assert.equal(head.name, "execution-context-envelope");
+    for (const t of ["execution_bindings", "issue_journal"]) {
+      const cols = db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>;
+      assert.ok(cols.some((c) => c.name === "execution_context_json"), `${t} carries the envelope column`);
+    }
     const bindings = db.prepare("SELECT COUNT(*) AS n FROM repository_bindings").get() as { n: number };
     assert.equal(bindings.n, 0);
     // The Project surface is untouched: prj_xtrm is neither duplicated nor renumbered.

@@ -3,6 +3,7 @@ export * from "./domain/contract.ts";
 export * from "./domain/edge.ts";
 export * from "./domain/claim.ts";
 export * from "./domain/journal.ts";
+export * from "./domain/execution-context.ts";
 export * from "./domain/execution-binding.ts";
 export * from "./domain/repository.ts";
 export * from "./domain/repository-discovery.ts";

@@ -10,6 +10,7 @@
 
 import { collectGitContext } from "./git-provenance.ts";
 import { createSemanticSummarizer, readTranscriptTail } from "./semantic-service.ts";
+import { enrichExecutionContext } from "../../src/domain/execution-context.ts";
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
 
 export interface PreCompactInput {
@@ -40,13 +41,20 @@ export async function handlePreCompact(input: PreCompactInput = {}): Promise<Pre
     const transcriptTail = readTranscriptTail(input.transcript_path ?? null);
     const result = await handles.journal.compactionCheckpoint(issueId, {
       kind: "compaction",
+      // A provider session id is NOT a participant id (§98): the session is
+      // recorded as a session (flat sessionId + typed host.sessionId), and
+      // participant identity stays absent until a trusted path knows it.
       sessionId: input.session_id,
-      participantId: input.session_id,
       workspace: git.workspace ?? undefined,
       branch: git.branch ?? undefined,
       headCommit: git.headCommit ?? undefined,
       changedFiles: git.changedFiles,
       summarizer: createSemanticSummarizer({ transcriptTail }),
+      // Trusted Claude path (X1, ADR §97): host-known Claude session id +
+      // R4 env session propagate automatically; nothing parsed from prose.
+      executionContext: enrichExecutionContext({
+        host: input.session_id ? { type: "claude", sessionId: input.session_id } : null,
+      }),
     });
     if (!result.entry) {
       return { continue: true, entryId: null, sequence: null, degraded: true, reason: result.reason ?? "checkpoint write failed; host default compaction proceeds" };
