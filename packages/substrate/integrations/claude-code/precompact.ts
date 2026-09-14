@@ -10,7 +10,7 @@
 
 import { collectGitContext } from "./git-provenance.ts";
 import { createSemanticSummarizer, readTranscriptTail } from "./semantic-service.ts";
-import { enrichExecutionContext } from "../../src/domain/execution-context.ts";
+import { enrichExecutionContext, type ActorType } from "../../src/domain/execution-context.ts";
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
 import { armPipeDrain } from "../write-and-exit.ts";
 
@@ -20,6 +20,14 @@ export interface PreCompactInput {
   cwd?: string;
   issueRef?: string;
   dbPath?: string;
+  // H1 (§76): the checkpoint carries actor + session identity. Actor is
+  // caller-supplied typed input (never parsed from prose, §98); the
+  // participant falls back to the trusted SUBSTRATE_HOLDER env; the XTRM
+  // session id/name enrich automatically from the exact R4 env contract
+  // inside enrichExecutionContext. Unknown stays absent.
+  actor?: { type: ActorType; id?: string; name?: string } | null;
+  participantId?: string | null;
+  holder?: string | null;
 }
 
 export interface PreCompactResult {
@@ -46,6 +54,7 @@ export async function handlePreCompact(input: PreCompactInput = {}): Promise<Pre
       // recorded as a session (flat sessionId + typed host.sessionId), and
       // participant identity stays absent until a trusted path knows it.
       sessionId: input.session_id,
+      participantId: input.participantId ?? input.holder ?? process.env["SUBSTRATE_HOLDER"] ?? undefined,
       workspace: git.workspace ?? undefined,
       branch: git.branch ?? undefined,
       headCommit: git.headCommit ?? undefined,
@@ -53,7 +62,11 @@ export async function handlePreCompact(input: PreCompactInput = {}): Promise<Pre
       summarizer: createSemanticSummarizer({ transcriptTail }),
       // Trusted Claude path (X1, ADR §97): host-known Claude session id +
       // R4 env session propagate automatically; nothing parsed from prose.
+      // H1: explicit typed actor (when the caller knows it) travels in the
+      // same envelope so the checkpoint carries actor + session identity.
       executionContext: enrichExecutionContext({
+        actor: input.actor ?? null,
+        participantId: input.participantId ?? input.holder ?? process.env["SUBSTRATE_HOLDER"] ?? null,
         host: input.session_id ? { type: "claude", sessionId: input.session_id } : null,
       }),
     });
