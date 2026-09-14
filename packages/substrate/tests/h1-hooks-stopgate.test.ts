@@ -290,6 +290,31 @@ describe("H1 stop gate: §77 scenario matrix, never a false completion", () => {
     assertStillOpen(s.dbPath, s.issueId);
   });
 
+  it("an open receipt blocks the closure-ready advice until provenance is bound", async () => {
+    claim(s);
+    const { db, svc, journal } = served();
+    const prov = new ProvenanceService(db, svc, journal);
+    let bindingId = "";
+    try {
+      await journal.checkpoint(s.issueId, { sessionId: "sess-1" });
+      journal.appendEntry(s.issueId, { kind: "result", result: { summary: "done", outcome: "PASS" } });
+      // Dispatch + allocate a receipt and leave it unfinalized: the work looks
+      // finished but its provenance is not bound yet.
+      const binding = prov.dispatch(s.issueId, { workspace: s.dir, participantId: "op" });
+      bindingId = binding.id;
+      prov.allocateReceipt(bindingId);
+    } finally {
+      db.close();
+    }
+    const r = await handleStopGate({ cwd: s.dir, session_id: "sess-1", issueRef: s.humanRef, dbPath: s.dbPath });
+    assert.equal(r.allow, true, "the gate still never blocks");
+    assert.equal(r.signals?.openReceipts, 1, "the open receipt is surfaced");
+    assert.equal(r.signals?.closureReady, false, "an open receipt is not closure-ready");
+    assert.notEqual(r.action, "closure-ready");
+    assert.match(r.continuity ?? "", /receipt\(s\) are still open/);
+    assertStillOpen(s.dbPath, s.issueId);
+  });
+
   it("release/retain per policy: default retains, opt-in releases the holder claim", async () => {
     claim(s, "op");
     const keep = await handleStopGate({ cwd: s.dir, issueRef: s.humanRef, dbPath: s.dbPath });
