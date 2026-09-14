@@ -90,10 +90,11 @@ terminal state with its own reason; failure history stays queryable
 (closures lacking provenance and results lacking receipts are first-class
 queries, not silent gaps).
 
-> No closure-outcome enum exists in `src/domain` or `src/service` today
-> (the only outcome enum is the attestation `ready|reject` in
-> `src/domain/readiness.ts`, which authorizes a revision — it is not
-> closure). Lifecycle states (`open|deferred|done|cancelled|archived`)
-> plus the close reason are the current closure vocabulary. A normative
-> closure-outcome enum is PENDING, owner C1; the release gate records the
-> pending state and goes live when the enum lands.
+> The normative closure-outcome enum lives in `src/domain/closure.ts`
+> (owner C1): `completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned`.
+> It is distinct from lifecycle state (`open|deferred|done|cancelled|archived`)
+> and from the attestation `ready|reject` outcome in `src/domain/readiness.ts`,
+> which authorizes a revision — it is not closure. The canonical close is
+> `sb issue close <ref> --outcome <o> --reason <r>`; it writes an immutable
+> Closure row (migration 011) and rests on `done` (`cancelled` for the
+> cancelled outcome).

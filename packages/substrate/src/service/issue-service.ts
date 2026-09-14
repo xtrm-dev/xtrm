@@ -777,6 +777,13 @@ export class IssueService {
         `SELECT e.* FROM issue_edges e JOIN issues i ON i.id = e.from_issue WHERE i.project_id = ? ORDER BY e.id`,
         projectId,
       ).map((r) => this.toEdge(r)),
+      // First-class Closure carry-over (C1): immutable closure rows plus
+      // the durable attempt history travel with the snapshot so verifiers
+      // can confirm closure survival without per-issue reads. Additive:
+      // importProject ignores unknown keys, and old snapshots without
+      // these keys import cleanly (missing reads as empty).
+      closures: this.exportClosures(projectId),
+      closureAttempts: this.exportClosureAttempts(projectId),
       counters: {
         humanRefNext:
           (row<Row>(this.db, "SELECT next_val FROM seq_counters WHERE namespace = 'human_ref' AND name = ?", projectId)?.["next_val"] as number | undefined) ??
@@ -785,11 +792,41 @@ export class IssueService {
     };
   }
 
+  // Closure snapshot reads (C1): raw rows cross verbatim; the
+  // ClosureService re-validates on read. Missing tables (a snapshot path
+  // that predates migration 011) read as empty rather than failing the
+  // whole export.
+  private exportClosures(projectId: string): unknown[] {
+    try {
+      return rows<Row>(
+        this.db,
+        `SELECT c.* FROM issue_closures c JOIN issues i ON i.id = c.issue_id WHERE i.project_id = ? ORDER BY c.closed_at, c.closure_id`,
+        projectId,
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  private exportClosureAttempts(projectId: string): unknown[] {
+    try {
+      return rows<Row>(
+        this.db,
+        `SELECT a.* FROM closure_attempts a JOIN issues i ON i.id = a.issue_id WHERE i.project_id = ? ORDER BY a.id`,
+        projectId,
+      );
+    } catch {
+      return [];
+    }
+  }
+
   importProject(snapshot: Record<string, unknown>): void {
     const data = snapshot as {
       project: Project;
       issues: Array<{ issue: Issue; revisions: IssueRevision[]; aliases: Array<{ alias: string; kind: string }>; locatorHistory: string[] }>;
       edges: StoredEdge[];
+      closures?: Array<Record<string, unknown>>;
+      closureAttempts?: Array<Record<string, unknown>>;
     };
     withTransaction(this.db, () => {
       const now = Date.now();
@@ -835,6 +872,60 @@ export class IssueService {
             "INSERT INTO issue_edges (from_issue, to_issue, kind, child_slot, active, created_at) VALUES (?, ?, ?, ?, ?, ?)",
           )
           .run(e.fromIssue, e.toIssue, e.kind, e.childSlot, e.active ? 1 : 0, e.createdAt);
+      }
+      // Closure restore (C1): rows cross verbatim, INSERT OR IGNORE so a
+      // re-import never duplicates history. Attempts reference closures by
+      // id, so closures restore first.
+      for (const c of data.closures ?? []) {
+        this.db
+          .prepare(
+            `INSERT OR IGNORE INTO issue_closures
+               (closure_id, issue_id, issue_revision, contract_hash, terminal_state, outcome,
+                reason, actor, execution_context_json, validation_refs_json,
+                journal_result_refs_json, receipt_refs_json, artifact_refs_json,
+                source, legacy_state, closed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            c["closure_id"] as SQLInputValue,
+            c["issue_id"] as SQLInputValue,
+            c["issue_revision"] as SQLInputValue,
+            c["contract_hash"] as SQLInputValue,
+            c["terminal_state"] as SQLInputValue,
+            c["outcome"] as SQLInputValue,
+            c["reason"] as SQLInputValue,
+            c["actor"] as SQLInputValue,
+            c["execution_context_json"] as SQLInputValue,
+            c["validation_refs_json"] as SQLInputValue,
+            c["journal_result_refs_json"] as SQLInputValue,
+            c["receipt_refs_json"] as SQLInputValue,
+            c["artifact_refs_json"] as SQLInputValue,
+            c["source"] as SQLInputValue,
+            c["legacy_state"] as SQLInputValue,
+            c["closed_at"] as SQLInputValue,
+          );
+      }
+      for (const a of data.closureAttempts ?? []) {
+        this.db
+          .prepare(
+            `INSERT INTO closure_attempts (issue_id, kind, status, outcome, reason, error, closure_id, created_at)
+             SELECT ?, ?, ?, ?, ?, ?, ?, ?
+             WHERE NOT EXISTS (SELECT 1 FROM closure_attempts WHERE issue_id = ? AND kind = ? AND status = ? AND created_at = ?)`,
+          )
+          .run(
+            a["issue_id"] as SQLInputValue,
+            a["kind"] as SQLInputValue,
+            a["status"] as SQLInputValue,
+            a["outcome"] as SQLInputValue,
+            a["reason"] as SQLInputValue,
+            a["error"] as SQLInputValue,
+            a["closure_id"] as SQLInputValue,
+            a["created_at"] as SQLInputValue,
+            a["issue_id"] as SQLInputValue,
+            a["kind"] as SQLInputValue,
+            a["status"] as SQLInputValue,
+            a["created_at"] as SQLInputValue,
+          );
       }
       const maxHuman = data.issues.reduce((m, e) => Math.max(m, e.issue.humanNumber), 0);
       this.db.prepare("INSERT OR IGNORE INTO seq_counters (namespace, name, next_val) VALUES ('human_ref', ?, ?)").run(

@@ -24,6 +24,8 @@ export type { RepositoryDiscovery };
 import { PlanningService } from "../src/service/planning-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import type { JournalOperationalContext } from "../src/service/journal-service.ts";
+import { ClosureService } from "../src/service/closure-service.ts";
+import { CLOSURE_OUTCOMES, isClosureOutcome } from "../src/domain/closure.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
@@ -82,12 +84,33 @@ function provenanceSummary(
   };
 }
 
-// Bounded closure summary for `issue show` (ADR §50). Closure persistence is
-// owned by a later bead; this derives a projection from live lifecycle state
-// and the durable lifecycle events, and never invents a reason.
+// Bounded closure summary for `issue show` (ADR §§50, 96). The Closure
+// row is the authority when one exists (outcome, reason, actor, session
+// and refs durable in the store, never only in git log); otherwise this
+// derives a projection from live lifecycle state and the durable
+// lifecycle events, and never invents a reason.
 const TERMINAL_LIFECYCLE = new Set(["done", "cancelled", "archived"]);
 
-function closureSummary(svc: IssueService, issue: ResolvedIssue): Record<string, unknown> {
+function closureSummary(db: ReturnType<typeof openSubstrate>, svc: IssueService, issue: ResolvedIssue): Record<string, unknown> {
+  try {
+    const latest = new ClosureService(db, svc).getLatestClosure(issue.id);
+    if (latest !== null) {
+      return {
+        lifecycleState: issue.lifecycleState,
+        closed: true,
+        closedAt: latest.closedAt,
+        closureId: latest.closureId,
+        outcome: latest.outcome,
+        reason: latest.reason,
+        actor: latest.actor,
+        session: latest.executionContext?.xtrmSessionId ?? latest.executionContext?.host?.sessionId ?? null,
+        revision: latest.issueRevision,
+        contractHash: latest.contractHash,
+      };
+    }
+  } catch {
+    /* pre-C1 database or read fault: fall through to the derived view */
+  }
   let closedAt: number | null = null;
   for (const e of svc.listEvents(issue.id)) {
     if (e.type !== "issue.lifecycle") continue;
@@ -324,7 +347,8 @@ project mapping (informational; never flips health).`,
   claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>] [--project <id>]
   release <ref> --holder <who> [--activation <id>] [--project <id>]
   state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>] [--project <id>]
-  close|reopen|cancel|archive <ref> [--project <id>]
+  close <ref> --outcome <o> --reason <r> [--result/--receipt/--validation/--artifact <a,b>] (canonical first-class close; bare close|reopen|cancel stay legacy lifecycle aliases)
+  reopen <ref> --reason <r> | cancel <ref> --reason <r> | archive <ref> [--project <id>]
   defer <ref> [--until <ms|clear>] [--project <id>]
   resume <ref>
 
@@ -368,22 +392,22 @@ parent_child is structural and not exposed here.`,
 deactivates the active edge between the endpoints for the given kind.`,
   "issue.claim": `usage: sb issue claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>] [--project <id>]`,
   "issue.release": `usage: sb issue release <ref> --holder <who> [--activation <id>] [--project <id>]`,
-  "issue.close": `usage: sb issue close <ref> [--project <id>]
+  "issue.close": `usage: sb issue close <ref> --outcome <completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned> --reason <r> [--actor <who>] [--participant <id>] [--run <id>] [--activation <id>] [--attempt <id>] [--result <a,b>] [--receipt <a,b>] [--validation <a,b>] [--artifact <a,b>] [--project <id>]
 
-moves the issue to lifecycle state done (alias for: sb issue state <ref> done).`,
+writes an immutable Closure row (outcome, reason, actor, session, revision/hash, refs) and rests on done (cancelled for the cancelled outcome). Bare \`sb issue close <ref>\` stays the legacy lifecycle alias (no Closure invented).`,
   "issue.state": `usage: sb issue state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>] [--project <id>]
 
 sets the lifecycle state; every transition emits a durable issue.lifecycle event.
 --until sets/clears the deferral timestamp (meaningful with deferred).`,
-  "issue.reopen": `usage: sb issue reopen <ref> [--project <id>]
+  "issue.reopen": `usage: sb issue reopen <ref> --reason <r> [--actor <who>] [--project <id>]
 
-alias for: sb issue state <ref> open.`,
+keeps every historical Closure row untouched, appends a reopen event, and restores lifecycle state to open. Bare \`sb issue reopen <ref>\` stays the legacy lifecycle alias (alias for: sb issue state <ref> open).`,
   "issue.defer": `usage: sb issue defer <ref> [--until <ms|clear>] [--project <id>]
 
 alias for: sb issue state <ref> deferred [--until <ms|clear>].`,
-  "issue.cancel": `usage: sb issue cancel <ref> [--project <id>]
+  "issue.cancel": `usage: sb issue cancel <ref> --reason <r> [--actor <who>] [--result <a,b>] [--receipt <a,b>] [--validation <a,b>] [--artifact <a,b>] [--project <id>]
 
-alias for: sb issue state <ref> cancelled.`,
+writes a terminal Closure with the cancelled outcome resting on the cancelled lifecycle state. Stopping one execution is NOT this verb: release the claim (\`sb issue release\`) instead, which leaves lifecycle and Closure untouched. Bare \`sb issue cancel <ref>\` stays the legacy lifecycle alias (alias for: sb issue state <ref> cancelled).`,
   "issue.archive": `usage: sb issue archive <ref> [--project <id>]
 
 alias for: sb issue state <ref> archived.`,
@@ -705,11 +729,11 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.unrelate": ["project", "from", "to", "kind"],
   "issue.claim": ["project", "holder", "ttl-ms", "activation"],
   "issue.release": ["project", "holder", "activation"],
-  "issue.close": ["project"],
+  "issue.close": ["project", "outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact"],
   "issue.state": ["project", "until"],
-  "issue.reopen": ["project"],
+  "issue.reopen": ["project", "reason", "actor", "participant", "run", "activation", "attempt"],
   "issue.defer": ["project", "until"],
-  "issue.cancel": ["project"],
+  "issue.cancel": ["project", "outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact"],
   "issue.archive": ["project"],
   "issue.resume": [],
   "project.create": ["prefix", "name", "id"],
@@ -832,6 +856,63 @@ function applyDeferUntil(svc: IssueService, issueId: string, raw: string | undef
   svc.setDeferral(issueId, ts);
 }
 
+// Closure flag helpers (C1, ADR §96): the canonical close/reopen/cancel
+// surface. Any closure-scoped flag opts into the Closure path; bare verbs
+// stay legacy lifecycle aliases.
+const CLOSURE_FLAGS = ["outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact"];
+
+function hasClosureFlags(flags: Map<string, string | true>): boolean {
+  return CLOSURE_FLAGS.some((f) => flags.has(f));
+}
+
+// Comma-separated ref lists (--result a,b --receipt c). Single values stay
+// single; absence stays absent (never invented).
+function splitList(raw: string | undefined): string[] | undefined {
+  if (raw === undefined) return undefined;
+  const out = raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  return out;
+}
+
+// Runtime-known identity binds automatically through the X1 envelope:
+// explicit typed flags plus the R4 env session. --session is deliberately
+// absent: session identity is runtime-known (XTRM_SESSION_ID), never a
+// CLI-invented label (§98).
+function closeEnvelope(flags: Map<string, string | true>): ReturnType<typeof enrichExecutionContext> {
+  const activation = flag(flags, "activation");
+  const attempt = flag(flags, "attempt");
+  const actor = flag(flags, "actor");
+  return enrichExecutionContext({
+    actor: actor ? { type: "human", name: actor } : null,
+    participantId: flag(flags, "participant") ?? null,
+    runId: flag(flags, "run") ?? null,
+    specialist: activation || attempt ? { activationId: activation ?? null, attemptId: attempt ?? null } : null,
+  });
+}
+
+function closurePayload(c: {
+  closureId: string; issueId: string; issueRevision: number; contractHash: string;
+  terminalState: string; outcome: string; reason: string; actor: string;
+  executionContext: unknown; validationRefs: string[]; journalResultRefs: string[];
+  receiptRefs: string[]; artifactRefs: string[]; closedAt: number;
+}): Record<string, unknown> {
+  return {
+    closureId: c.closureId,
+    issueId: c.issueId,
+    issueRevision: c.issueRevision,
+    contractHash: c.contractHash,
+    terminalState: c.terminalState,
+    outcome: c.outcome,
+    reason: c.reason,
+    actor: c.actor,
+    executionContext: c.executionContext,
+    validationRefs: c.validationRefs,
+    journalResultRefs: c.journalResultRefs,
+    receiptRefs: c.receiptRefs,
+    artifactRefs: c.artifactRefs,
+    closedAt: c.closedAt,
+  };
+}
+
 function runIssue(
   db: ReturnType<typeof openSubstrate>,
   svc: IssueService,
@@ -878,7 +959,7 @@ function runIssue(
         attestation: svc.latestAttestation(resolved.id),
         claim: svc.getActiveClaim(resolved.id),
         provenance: provenanceSummary(svc, resolved.id),
-        closure: closureSummary(svc, resolved),
+        closure: closureSummary(db, svc, resolved),
         operationalContext,
       };
       if (ctx.json) return emit(ctx, command, payload);
@@ -1106,15 +1187,51 @@ function runIssue(
       return emit(ctx, command, issueSummary(svc.getIssue(moved.id)));
     }
     case "close": {
+      // Canonical first-class close (C1, ADR §96): with --outcome/--reason
+      // this writes an immutable Closure row (outcome, reason, actor,
+      // session, revision/hash, refs) and rests on done (cancelled for
+      // the cancelled outcome). Bare `close <ref>` stays the legacy
+      // lifecycle alias (no Closure invented) so existing flows keep working.
       const ref = needRef(rest);
       const resolved = refInContext(svc, flags, ref);
-      const closed = svc.setLifecycleState(resolved.id, "done");
-      return emit(ctx, command, issueSummary(closed));
+      if (!hasClosureFlags(flags)) {
+        const closed = svc.setLifecycleState(resolved.id, "done");
+        return emit(ctx, command, issueSummary(closed));
+      }
+      const outcomeRaw = flag(flags, "outcome") ?? (() => { throw new Error(`--outcome is required (want ${CLOSURE_OUTCOMES.join("|")})`); })();
+      if (!isClosureOutcome(outcomeRaw)) throw new Error(`unknown closure outcome: ${outcomeRaw} (want ${CLOSURE_OUTCOMES.join("|")})`);
+      const reason = flag(flags, "reason") ?? (() => { throw new Error("--reason is required: the close reason lives in the Closure row, never only in git log (§43)"); })();
+      const closures = new ClosureService(db, svc);
+      const closure = closures.closeIssue(resolved.id, {
+        outcome: outcomeRaw,
+        reason,
+        actor: flag(flags, "actor") ?? "sb-cli",
+        executionContext: closeEnvelope(flags),
+        validationRefs: splitList(flag(flags, "validation")),
+        journalResultRefs: splitList(flag(flags, "result")),
+        receiptRefs: splitList(flag(flags, "receipt")),
+        artifactRefs: splitList(flag(flags, "artifact")),
+      });
+      return emit(ctx, command, { ...issueSummary(svc.getIssue(resolved.id)), closure: closurePayload(closure) });
     }
     case "reopen": {
+      // Canonical reopen (C1, ADR §45): with --reason this keeps every
+      // historical Closure row untouched, appends a reopen event, and
+      // restores lifecycle state to open. Bare `reopen <ref>` stays the
+      // legacy lifecycle alias.
       const ref = needRef(rest);
       const resolved = refInContext(svc, flags, ref);
-      return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "open")));
+      if (flag(flags, "reason") === undefined && !hasClosureFlags(flags)) {
+        return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "open")));
+      }
+      const reason = flag(flags, "reason") ?? (() => { throw new Error("--reason is required: reopening appends a durable reopen event"); })();
+      const closures = new ClosureService(db, svc);
+      const reopened = closures.reopenIssue(resolved.id, {
+        reason,
+        actor: flag(flags, "actor"),
+        executionContext: closeEnvelope(flags),
+      });
+      return emit(ctx, command, { ...issueSummary(svc.getIssue(reopened.issueId)), reopened: reopened.lifecycleState });
     }
     case "defer": {
       const ref = needRef(rest);
@@ -1124,9 +1241,33 @@ function runIssue(
       return emit(ctx, command, issueSummary(svc.getIssue(moved.id)));
     }
     case "cancel": {
+      // Canonical issue cancellation (C1, ADR §§42, 46): with --reason
+      // this writes a terminal Closure with the cancelled outcome resting
+      // on the cancelled lifecycle state. Stopping one execution is NOT
+      // this verb — release the claim (`sb issue release`) instead, which
+      // leaves lifecycle and Closure untouched. Bare `cancel <ref>` stays
+      // the legacy lifecycle alias.
       const ref = needRef(rest);
       const resolved = refInContext(svc, flags, ref);
-      return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "cancelled")));
+      if (!hasClosureFlags(flags)) {
+        return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "cancelled")));
+      }
+      const outcomeRaw = flag(flags, "outcome");
+      if (outcomeRaw !== undefined && outcomeRaw !== "cancelled") {
+        throw new Error(`cancel carries the cancelled outcome, not ${outcomeRaw} (want cancelled)`);
+      }
+      const reason = flag(flags, "reason") ?? (() => { throw new Error("--reason is required: the cancellation reason lives in the Closure row, never only in git log (§43)"); })();
+      const closures = new ClosureService(db, svc);
+      const closure = closures.cancelIssue(resolved.id, {
+        reason,
+        actor: flag(flags, "actor") ?? "sb-cli",
+        executionContext: closeEnvelope(flags),
+        validationRefs: splitList(flag(flags, "validation")),
+        journalResultRefs: splitList(flag(flags, "result")),
+        receiptRefs: splitList(flag(flags, "receipt")),
+        artifactRefs: splitList(flag(flags, "artifact")),
+      });
+      return emit(ctx, command, { ...issueSummary(svc.getIssue(resolved.id)), closure: closurePayload(closure) });
     }
     case "archive": {
       const ref = needRef(rest);
@@ -1765,7 +1906,8 @@ function runImport(
   }
   const edgeRowsBefore = countEdgeRows(db);
   const journal = new JournalService(db, svc);
-  const result = importBeads(svc, project, records, fileEdgeList, { createProject: create, journal });
+  const closures = new ClosureService(db, svc);
+  const result = importBeads(svc, project, records, fileEdgeList, { createProject: create, journal, closures });
   const edgeRowsAfter = countEdgeRows(db);
 
   // Verifier (deterministic, same field names as the Core-local gate):
