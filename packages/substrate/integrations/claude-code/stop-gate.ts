@@ -12,6 +12,7 @@
 // checkpoint when the session would otherwise leave none.
 
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
+import { enrichExecutionContext } from "../../src/domain/execution-context.ts";
 
 export interface StopGateInput {
   cwd?: string;
@@ -47,7 +48,12 @@ export async function handleStopGate(input: StopGateInput = {}): Promise<StopGat
     let checkpointed = false;
     if (checkpoints === 0) {
       try {
-        await handles.journal.checkpoint(issueId, { sessionId: input.session_id });
+        await handles.journal.checkpoint(issueId, {
+          sessionId: input.session_id,
+          executionContext: enrichExecutionContext({
+            host: input.session_id ? { type: "claude", sessionId: input.session_id } : null,
+          }),
+        });
         checkpointed = true;
       } catch {
         checkpointed = false;

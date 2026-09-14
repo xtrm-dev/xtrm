@@ -12,6 +12,7 @@ import { JournalService, type Summarizer } from "../../src/service/journal-servi
 import { ResumeService } from "../../src/service/resume-service.ts";
 import { isJournalKind } from "../../src/domain/journal.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
+import { enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
 import type { ResolvedIssue } from "../../src/domain/issue.ts";
 
 export interface SubstrateServices {
@@ -83,6 +84,30 @@ function envActivation(): string | null {
   return a && a.trim() ? a.trim() : null;
 }
 
+// Trusted Pi execution context (X1, ADR §§36-37, 97): host type + Pi
+// session id are host-known (sessionManager/binding), the XTRM session
+// id/name come from the exact R4 env contract only. An explicit trusted
+// envelope wins field-by-field; nothing is parsed from prose (§98).
+function piExecutionContext(opts: {
+  sessionId?: string | null;
+  holder?: string | null;
+  activationId?: string | null;
+  executionContext?: ExecutionContext | null;
+}): ExecutionContext | null {
+  const base = opts.executionContext ?? undefined;
+  return enrichExecutionContext({
+    actor: base?.actor ?? null,
+    participantId: base?.participantId ?? opts.holder ?? null,
+    xtrmSessionId: base?.xtrmSessionId ?? null,
+    xtrmSessionName: base?.xtrmSessionName ?? null,
+    host: base?.host ?? (opts.sessionId ? { type: "pi", sessionId: opts.sessionId } : null),
+    runId: base?.runId ?? null,
+    chainRunId: base?.chainRunId ?? null,
+    specialist: base?.specialist ?? (opts.activationId ? { activationId: opts.activationId } : null),
+    workspace: base?.workspace ?? null,
+  });
+}
+
 function summary(i: ResolvedIssue): Record<string, unknown> {
   return {
     locator: i.locator,
@@ -150,7 +175,7 @@ export function toolIssueUpdate(
 
 export function toolJournalAppend(
   svc: SubstrateServices,
-  params: { ref: string; kind: string; sessionId?: string; participantId?: string; activationId?: string; runId?: string },
+  params: { ref: string; kind: string; sessionId?: string; participantId?: string; activationId?: string; runId?: string; executionContext?: ExecutionContext | null },
 ): Record<string, unknown> {
   if (!isJournalKind(params.kind)) throw new Error(`unknown journal kind: ${params.kind}`);
   const resolved = svc.issues.resolveRef(params.ref);
@@ -160,19 +185,26 @@ export function toolJournalAppend(
     participantId: params.participantId,
     activationId: params.activationId,
     runId: params.runId,
+    executionContext: piExecutionContext({
+      sessionId: params.sessionId ?? null,
+      holder: params.participantId ?? null,
+      activationId: params.activationId ?? null,
+      executionContext: params.executionContext ?? null,
+    }),
   });
   return { entryId: entry.id, sequence: entry.sequence, kind: entry.kind };
 }
 
 export async function toolJournalCheckpoint(
   svc: SubstrateServices,
-  params: { ref: string; sessionId?: string; headCommit?: string; changedFiles?: string[] },
+  params: { ref: string; sessionId?: string; headCommit?: string; changedFiles?: string[]; executionContext?: ExecutionContext | null },
 ): Promise<Record<string, unknown>> {
   const resolved = svc.issues.resolveRef(params.ref);
   const r = await svc.journal.checkpoint(resolved.id, {
     sessionId: params.sessionId,
     headCommit: params.headCommit,
     changedFiles: params.changedFiles,
+    executionContext: piExecutionContext({ sessionId: params.sessionId ?? null, executionContext: params.executionContext ?? null }),
   });
   return { entryId: r.entry.id, sequence: r.entry.sequence, degraded: r.degraded };
 }
@@ -213,6 +245,7 @@ export interface BeforeCompactInput {
   issueRef: string;
   sessionId?: string;
   summarizer?: Summarizer;
+  executionContext?: ExecutionContext | null;
 }
 
 export interface BeforeCompactResult {
@@ -237,6 +270,7 @@ export async function runBeforeCompact(svc: SubstrateServices, input: BeforeComp
     kind: "compaction",
     sessionId: input.sessionId,
     summarizer: input.summarizer,
+    executionContext: piExecutionContext({ sessionId: input.sessionId ?? null, executionContext: input.executionContext ?? null }),
   });
   if (!checkpoint.entry) {
     return fallback;

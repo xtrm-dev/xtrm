@@ -4,6 +4,13 @@
 // without a separate promotion step, which v0 does not implement.
 
 import { v7 as uuidv7 } from "uuid";
+import {
+  executionContextFromLegacy,
+  normalizeExecutionContext,
+  projectFlatIdentity,
+  validateExecutionContext,
+  type ExecutionContext,
+} from "./execution-context.ts";
 
 // Bounded nine-kind vocabulary (ADR §22): note, finding, decision, blocker,
 // milestone, handoff, result, checkpoint, compaction. Do not multiply
@@ -198,6 +205,9 @@ export interface JournalEntry {
   result: ResultPayload | null;
   refs: EvidenceRef[];
   createdAt: number;
+  // Shared versioned envelope (X1): the authoritative runtime input.
+  // Flat columns stay as query-compatible projections of it.
+  executionContext: ExecutionContext | null;
 }
 
 function stringArray(value: unknown): value is string[] {

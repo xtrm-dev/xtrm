@@ -18,6 +18,13 @@ import {
   type ExecutionBinding,
 } from "../domain/execution-binding.ts";
 import {
+  executionContextFromLegacy,
+  normalizeExecutionContext,
+  projectFlatIdentity,
+  validateExecutionContext,
+  type ExecutionContext,
+} from "../domain/execution-context.ts";
+import {
   ARTIFACT_KINDS,
   attachTrailers,
   formatTrailers,
@@ -64,7 +71,9 @@ export interface ProvenanceTrace {
   attestation: unknown | null;
   claims: unknown[];
   bindings: ExecutionBinding[];
-  receipts: Array<WorkReceipt & { artifacts: ArtifactBinding[] }>;
+  // Each receipt carries the exact shared envelope inherited through its
+  // execution binding (X1) — queried, never duplicated.
+  receipts: Array<WorkReceipt & { artifacts: ArtifactBinding[]; executionContext: ExecutionContext | null }>;
   checkpoints: CheckpointSummary[];
   commits: string[];
   prs: Array<{ value: string; provider: string | null }>;
@@ -158,12 +167,25 @@ export class ProvenanceService {
       // activation must be the live holder (sameHolder). ClaimId omission
       // does not bypass authority; omitted/mismatched identity fails
       // closed. Ready/unclaimed stays open for the claim-first flow.
+      // Identity is read through the central projection: the envelope and
+      // the legacy flat fields must agree exactly where both represent a
+      // value (conflicts throw fail-closed); the provider-unknown legacy
+      // session stays flat-only per §98.
+      const dispatchContext = normalizeExecutionContext(input.executionContext ?? null);
+      const dispatchFlat = projectFlatIdentity(dispatchContext, {
+        participantId: input.participantId ?? null,
+        activationId: input.activationId ?? null,
+        attemptId: input.attemptId ?? null,
+        sessionId: input.sessionId ?? null,
+        workspace,
+        baseCommit: input.baseCommit ?? null,
+      });
       if (active) {
-        const participant = input.participantId;
+        const participant = dispatchFlat.participantId;
         if (typeof participant !== "string" || participant.trim() === "") {
           throw new Error(`dispatch rejected: ${issueId} is live-held by ${active.holder}; participant is required (anti-steal)`);
         }
-        if (!sameHolder(active, participant, input.activationId ?? null)) {
+        if (!sameHolder(active, participant, dispatchFlat.activationId)) {
           throw new Error(`dispatch rejected: ${issueId} is live-held by ${active.holder}; holder/activation mismatch (anti-steal)`);
         }
       }
@@ -173,13 +195,14 @@ export class ProvenanceService {
           `INSERT INTO execution_bindings
              (id, issue_id, issue_revision, contract_hash, resolved_context_hash,
               claim_id, participant_id, activation_id, attempt_id, session_id,
-              workspace, base_commit, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              workspace, base_commit, execution_context_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id, issueId, report.revision, report.contractHash, resolved.hash,
-          active?.id ?? null, input.participantId ?? null, input.activationId ?? null,
-          input.attemptId ?? null, input.sessionId ?? null, workspace, input.baseCommit ?? null, now,
+          active?.id ?? null, dispatchFlat.participantId, dispatchFlat.activationId,
+          dispatchFlat.attemptId, dispatchFlat.sessionId, dispatchFlat.workspace, dispatchFlat.baseCommit,
+          dispatchContext ? JSON.stringify(dispatchContext) : null, now,
         );
       this.issues.appendEvent(issueId, "provenance.dispatched", {
         binding: id, revision: report.revision, contractHash: report.contractHash, claim: active?.id ?? null,
@@ -239,6 +262,14 @@ export class ProvenanceService {
   getReceipt(id: string): WorkReceipt {
     if (!isValidReceiptId(id)) throw new Error(`unknown receipt: ${id}`);
     return this.requireReceipt(id);
+  }
+
+  // WorkReceipts inherit the exact shared envelope through their execution
+  // binding (X1): no duplicated JSON on work_receipts. This is the explicit
+  // consumption point used by typed/provenance output (see trace()).
+  receiptExecutionContext(receiptId: string): ExecutionContext | null {
+    const receipt = this.requireReceipt(receiptId);
+    return this.requireBinding(receipt.executionBindingId).executionContext;
   }
 
   listReceipts(issueId: string): WorkReceipt[] {
@@ -374,7 +405,12 @@ export class ProvenanceService {
   trace(issueId: string): ProvenanceTrace {
     const issue = this.issues.getIssue(issueId);
     const bindings = this.listBindings(issueId);
-    const receipts = this.listReceipts(issueId).map((r) => ({ ...r, artifacts: this.listArtifacts(r.id) }));
+    const bindingById = new Map(bindings.map((b) => [b.id, b]));
+    const receipts = this.listReceipts(issueId).map((r) => ({
+      ...r,
+      artifacts: this.listArtifacts(r.id),
+      executionContext: bindingById.get(r.executionBindingId)?.executionContext ?? null,
+    }));
     const checkpoints = this.checkpointSummaries(issueId);
     const commits = [...new Set(receipts.flatMap((r) => r.artifacts).filter((a) => a.kind === "commit").map((a) => a.value))];
     const prs = receipts
@@ -503,6 +539,33 @@ export class ProvenanceService {
   }
 
   private toBinding(r: Row): ExecutionBinding {
+    const flat = {
+      participantId: (r["participant_id"] as string | null) ?? null,
+      activationId: (r["activation_id"] as string | null) ?? null,
+      attemptId: (r["attempt_id"] as string | null) ?? null,
+      sessionId: (r["session_id"] as string | null) ?? null,
+      runId: null,
+      workspace: r["workspace"] as string,
+      baseCommit: (r["base_commit"] as string | null) ?? null,
+    };
+    // Stored envelope wins; legacy rows (execution_context_json NULL)
+    // project their flat columns to a v1 envelope, or absent when nothing
+    // is known (§98). Corrupt JSON fails closed.
+    let executionContext: ExecutionContext | null = null;
+    const raw = r["execution_context_json"] as string | null | undefined;
+    if (raw !== null && raw !== undefined) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        throw new Error(`fail-closed: corrupt execution context on ${r["id"]}`);
+      }
+      const problems = validateExecutionContext(parsed);
+      if (problems.length > 0) throw new Error(`fail-closed: invalid execution context on ${r["id"]}: ${problems[0]}`);
+      executionContext = normalizeExecutionContext(parsed);
+    } else {
+      executionContext = executionContextFromLegacy(flat, { timestamp: r["created_at"] as number });
+    }
     return {
       id: r["id"] as string,
       issueId: r["issue_id"] as string,
@@ -510,13 +573,14 @@ export class ProvenanceService {
       contractHash: r["contract_hash"] as string,
       resolvedContextHash: r["resolved_context_hash"] as string,
       claimId: (r["claim_id"] as number | null) ?? null,
-      participantId: (r["participant_id"] as string | null) ?? null,
-      activationId: (r["activation_id"] as string | null) ?? null,
-      attemptId: (r["attempt_id"] as string | null) ?? null,
-      sessionId: (r["session_id"] as string | null) ?? null,
+      participantId: flat.participantId,
+      activationId: flat.activationId,
+      attemptId: flat.attemptId,
+      sessionId: flat.sessionId,
       workspace: r["workspace"] as string,
-      baseCommit: (r["base_commit"] as string | null) ?? null,
+      baseCommit: flat.baseCommit,
       createdAt: r["created_at"] as number,
+      executionContext,
     };
   }
 

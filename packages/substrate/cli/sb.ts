@@ -28,6 +28,7 @@ import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
+import { enrichExecutionContext } from "../src/domain/execution-context.ts";
 import type { JournalEntry, JournalKind, ResultPayload } from "../src/domain/journal.ts";
 import type { ResolvedIssue } from "../src/domain/issue.ts";
 
@@ -1223,6 +1224,14 @@ function runJournal(
     activationId: flag(flags, "activation"),
     sessionId: flag(flags, "session"),
   };
+  // Automatic enrichment (X1, ADR §57): manual flags stay for recovery and
+  // testing, while the R4 env session attaches automatically. The CLI does
+  // not invent a host provider for --session (unknown stays unknown, §98).
+  const contextEnvelope = enrichExecutionContext({
+    participantId: contextFlags.participantId ?? null,
+    runId: contextFlags.runId ?? null,
+    specialist: contextFlags.activationId ? { activationId: contextFlags.activationId } : null,
+  });
   switch (verb) {
     case "append": {
       const ref = needRef(rest);
@@ -1240,6 +1249,7 @@ function runJournal(
         semantic: semRaw !== undefined ? (readJsonArg(semRaw) as never) : undefined,
         result: resRaw !== undefined ? (readJsonArg(resRaw) as ResultPayload) : undefined,
         refs: refsRaw !== undefined ? (readJsonArg(refsRaw) as never) : undefined,
+        executionContext: contextEnvelope,
       });
       if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), result: entry.result });
       return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
@@ -1268,6 +1278,7 @@ function runJournal(
         ...contextFlags,
         mechanical: hostMechanical,
         refs: refsRaw !== undefined ? (readJsonArg(refsRaw) as never) : undefined,
+        executionContext: contextEnvelope,
       });
       if (semRaw === undefined) {
         if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), degraded: false });
@@ -1412,6 +1423,12 @@ function runProvenance(
         sessionId: flag(flags, "session"),
         baseCommit: flag(flags, "base-commit"),
         claimId: claimRaw !== undefined ? Number(claimRaw) : undefined,
+        executionContext: enrichExecutionContext({
+          participantId: flag(flags, "participant") ?? null,
+          specialist: flag(flags, "activation") || flag(flags, "attempt")
+            ? { activationId: flag(flags, "activation") ?? null, attemptId: flag(flags, "attempt") ?? null }
+            : null,
+        }),
       });
       return emit(ctx, command, bindingSummary(binding));
     }

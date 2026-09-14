@@ -24,6 +24,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { isJournalKind } from "../../src/domain/journal.ts";
+import { enrichExecutionContext } from "../../src/domain/execution-context.ts";
 import { ProvenanceService } from "../../src/service/provenance-service.ts";
 import { discoverRepository } from "../../src/domain/repository-discovery.ts";
 import { openHandles } from "./runtime.ts";
@@ -195,6 +196,9 @@ export function buildServer(): McpServer {
           kind,
           sessionId: sessionId ?? undefined,
           semantic: { summary: summary.slice(0, 2000) },
+          executionContext: enrichExecutionContext({
+            host: sessionId ? { type: "claude", sessionId } : null,
+          }),
         });
         return textPayload({ entryId: entry.id, sequence: entry.sequence });
       } finally {

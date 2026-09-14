@@ -27,6 +27,13 @@ import {
   type ResultPayload,
   type SemanticCheckpoint,
 } from "../domain/journal.ts";
+import {
+  executionContextFromLegacy,
+  normalizeExecutionContext,
+  projectFlatIdentity,
+  validateExecutionContext,
+  type ExecutionContext,
+} from "../domain/execution-context.ts";
 
 interface Row {
   [key: string]: unknown;
@@ -50,6 +57,9 @@ export interface AppendEntryInput {
   semantic?: SemanticCheckpoint;
   result?: ResultPayload;
   refs?: EvidenceRef[];
+  // Authoritative optional runtime input (ADR §57): replaces manual
+  // --session/--activation/--attempt/--participant/--branch flags.
+  executionContext?: ExecutionContext | null;
 }
 
 export interface CollectMechanicalInput {
@@ -67,6 +77,7 @@ export interface CollectMechanicalInput {
   pendingAsks?: string[];
   externalBindings?: Array<{ provider: string; scope: string; remoteId: string }>;
   mechanical?: Partial<MechanicalCheckpoint>;
+  executionContext?: ExecutionContext | null;
 }
 
 export type Summarizer = (
@@ -177,6 +188,17 @@ export class JournalService {
     // Version envelope (XTRM-339): stamped at append time, never UPDATEd.
     // Unknown versions already failed closed in assertResultPayload above.
     const result = input.result !== undefined ? { resultVersion: RESULT_VERSION, ...input.result } : undefined;
+    // Shared envelope (X1): normalized fail-closed, then projected to the
+    // flat columns through the central projection: agreement is enforced
+    // (conflicts throw fail-closed), with the documented flat-only
+    // exception for provider-unknown legacy sessions.
+    const ctx = normalizeExecutionContext(input.executionContext ?? null);
+    const flat = projectFlatIdentity(ctx, {
+      participantId: input.participantId ?? null,
+      activationId: input.activationId ?? null,
+      sessionId: input.sessionId ?? null,
+      runId: input.runId ?? null,
+    });
     return withTransaction(this.db, () => {
       const issue = this.issues.getIssue(issueId);
       const prev = row<{ m: number | null }>(
@@ -192,23 +214,24 @@ export class JournalService {
           `INSERT INTO issue_journal
              (id, issue_id, issue_revision, sequence, run_id, participant_id,
               activation_id, session_id, kind, mechanical_json, semantic_json,
-              result_json, refs_json, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              result_json, refs_json, execution_context_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
           issueId,
           issue.currentRevision,
           sequence,
-          input.runId ?? null,
-          input.participantId ?? null,
-          input.activationId ?? null,
-          input.sessionId ?? null,
+          flat.runId,
+          flat.participantId,
+          flat.activationId,
+          flat.sessionId,
           input.kind,
           input.mechanical ? JSON.stringify(input.mechanical) : null,
           input.semantic ? JSON.stringify(input.semantic) : null,
           input.result ? JSON.stringify(result) : null,
           JSON.stringify(input.refs ?? []),
+          ctx ? JSON.stringify(ctx) : null,
           now,
         );
       this.issues.appendEvent(issueId, "journal.appended", { entry: id, sequence, kind: input.kind });
@@ -446,6 +469,7 @@ export class JournalService {
       sessionId: opts.sessionId,
       mechanical,
       refs: opts.refs,
+      executionContext: opts.executionContext ?? null,
     });
     // Stamp the occupied cursor onto the durable row (post-commit update:
     // the mechanical row itself was already durable before this runs).
@@ -572,6 +596,28 @@ export class JournalService {
     } catch {
       throw new Error(`fail-closed: corrupt journal refs on ${r["id"]}`);
     }
+    // Stored envelope wins; legacy rows project flat columns to v1, or
+    // absent when nothing is known (§98). Corrupt JSON fails closed.
+    let executionContext: ExecutionContext | null = null;
+    const rawCtx = r["execution_context_json"] as string | null | undefined;
+    if (rawCtx !== null && rawCtx !== undefined) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(rawCtx);
+      } catch {
+        throw new Error(`fail-closed: corrupt execution context on ${r["id"]}`);
+      }
+      const problems = validateExecutionContext(parsed);
+      if (problems.length > 0) throw new Error(`fail-closed: invalid execution context on ${r["id"]}: ${problems[0]}`);
+      executionContext = normalizeExecutionContext(parsed);
+    } else {
+      executionContext = executionContextFromLegacy({
+        participantId: (r["participant_id"] as string | null) ?? null,
+        activationId: (r["activation_id"] as string | null) ?? null,
+        sessionId: (r["session_id"] as string | null) ?? null,
+        runId: (r["run_id"] as string | null) ?? null,
+      }, { timestamp: r["created_at"] as number });
+    }
     return {
       id: r["id"] as string,
       issueId: r["issue_id"] as string,
@@ -587,6 +633,7 @@ export class JournalService {
       result,
       refs,
       createdAt: r["created_at"] as number,
+      executionContext,
     };
   }
 }

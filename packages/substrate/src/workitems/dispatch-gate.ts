@@ -14,6 +14,7 @@
 
 import { scopeCovers } from "../domain/readiness.ts";
 import { sameHolder } from "../domain/claim.ts";
+import { enrichExecutionContext, normalizeExecutionContext, type ExecutionContext } from "../domain/execution-context.ts";
 import { IssueService } from "../service/issue-service.ts";
 import { ProvenanceService } from "../service/provenance-service.ts";
 import type { ExecutionBinding, ExpectedClaimPin } from "../domain/execution-binding.ts";
@@ -30,6 +31,9 @@ export interface SpecialistDispatchRequest {
   baseCommit?: string;
   claimId?: number;
   requestedScope?: string[];
+  // Coordinator-supplied envelope (X1, ADR §37): parent/coordinator lineage
+  // in, specialist child identity out. Trusted typed input only.
+  executionContext?: ExecutionContext | null;
 }
 
 export interface DispatchCheck {
@@ -93,6 +97,54 @@ export function dispatchToSpecialist(
   req: SpecialistDispatchRequest,
 ): { check: DispatchCheck; binding: ExecutionBinding } {
   const check = checkDispatch(issues, req);
+  // Coordinator → Specialist lineage (ADR §§34, 37) with no dual
+  // semantics. The top-level participant is ALWAYS the current specialist
+  // participant (req.holder, gate-verified against the live claim), so the
+  // flat participant_id column and the envelope agree by construction. The
+  // parent coordinator identity moves to the closed coordinator leg: a
+  // parent participant that differs from the holder, and the coordinator
+  // session that performed this dispatch (the parent execution's provider
+  // session — the only parent session the envelope knows). The parent host
+  // leg is NOT inherited: host.sessionId names the session of the execution
+  // the envelope describes, and the child's session is unknown until
+  // activation (S1 territory). Likewise the child actor is always
+  // specialist — inheriting a parent `coordinator` actor would mislabel the
+  // child. The XTRM session stays shared. Retry/resume keeps one activation
+  // across distinct attempt ids — both stay queryable (§97).
+  const base = normalizeExecutionContext(req.executionContext ?? null) ?? undefined;
+  const parentParticipant = base?.participantId ?? null;
+  const coordinator = {
+    participantId:
+      base?.coordinator?.participantId ??
+      (parentParticipant !== null && parentParticipant !== req.holder ? parentParticipant : null),
+    sessionId: base?.coordinator?.sessionId ?? base?.host?.sessionId ?? null,
+  };
+  const specialist = {
+    name: base?.specialist?.name ?? req.specialist,
+    activationId: base?.specialist?.activationId ?? req.activationId ?? null,
+    attemptId: base?.specialist?.attemptId ?? req.attemptId ?? null,
+    agentSessionId: base?.specialist?.agentSessionId ?? null,
+  };
+  const executionContext = enrichExecutionContext({
+    actor: { type: "specialist" },
+    participantId: req.holder,
+    xtrmSessionId: base?.xtrmSessionId ?? null,
+    xtrmSessionName: base?.xtrmSessionName ?? null,
+    host: null,
+    runId: base?.runId ?? null,
+    chainRunId: base?.chainRunId ?? null,
+    coordinator:
+      coordinator.participantId !== null || coordinator.sessionId !== null ? coordinator : null,
+    specialist,
+    // The execution checkout IS known at the gate (req.workspace/baseCommit),
+    // so the envelope carries it instead of leaving the authority
+    // location-blind while only the flat column knows the path (X1 review
+    // P1-2). A coordinator envelope with a location still wins; any
+    // disagreement with the flat column fails closed downstream.
+    workspace:
+      base?.workspace ??
+      (req.workspace ? { worktree: req.workspace, ...(req.baseCommit ? { baseCommit: req.baseCommit } : {}) } : null),
+  });
   const binding = provenance.dispatch(check.issueId, {
     claimId: req.claimId ?? null,
     participantId: req.holder,
@@ -101,6 +153,7 @@ export function dispatchToSpecialist(
     sessionId: req.sessionId ?? null,
     workspace: req.workspace,
     baseCommit: req.baseCommit ?? null,
+    executionContext,
   }, { expectedClaim: check.expectedClaim, expectedRevision: check.revision, expectedContractHash: check.contractHash });
   if (binding.issueRevision !== check.revision || binding.contractHash !== check.contractHash) {
     throw new Error("dispatch rejected: binding diverged from the gated revision (concurrent edit; repair and retry)");
