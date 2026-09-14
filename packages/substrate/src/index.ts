@@ -5,6 +5,7 @@ export * from "./domain/claim.ts";
 export * from "./domain/journal.ts";
 export * from "./domain/execution-binding.ts";
 export * from "./domain/repository.ts";
+export * from "./domain/repository-discovery.ts";
 export * from "./domain/provenance.ts";
 export * from "./store/sqlite.ts";
 export * from "./store/transactions.ts";

@@ -25,7 +25,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { isJournalKind } from "../../src/domain/journal.ts";
 import { ProvenanceService } from "../../src/service/provenance-service.ts";
-import { discoverRepository } from "../../cli/sb.ts";
+import { discoverRepository } from "../../src/domain/repository-discovery.ts";
 import { openHandles } from "./runtime.ts";
 
 export const SUBSTRATE_SERVER_NAME = "substrate";
