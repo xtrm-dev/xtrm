@@ -105,6 +105,8 @@ Kind doctrine and examples: [`journal.md`](./journal.md).
 - `provenance trace <ref>` — full lineage spine.
 - `provenance commit <40-char-sha>` / `provenance receipt <id>` /
   `provenance pr <provider-ref>` — reverse lookups.
+- `provenance session <session-id>` / `provenance activation <activation-id>` —
+  session-centric queries (what a session touched / what an activation produced).
 - `provenance bundle <ref>` — portable evidence set.
 
 Graphs and closure doctrine: [`provenance.md`](./provenance.md).
@@ -124,7 +126,7 @@ in stable order (served in-process, never via CLI text):
 ```text
 issue_get  issue_list  issue_ready
 journal_append  journal_show
-provenance_trace  resume_capsule
+provenance_trace  provenance_session  provenance_activation  resume_capsule
 ```
 
 Every tool carries a description (normative instruction surface, ADR

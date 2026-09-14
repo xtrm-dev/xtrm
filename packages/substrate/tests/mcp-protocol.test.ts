@@ -127,6 +127,8 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
       "journal_append",
       "journal_show",
       "provenance_trace",
+      "provenance_session",
+      "provenance_activation",
       "resume_capsule",
     ]);
     assert.equal(result.resultType, "complete");
@@ -189,6 +191,10 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     const trace = (await call("provenance_trace", { ref: s.humanRef })) as Record<string, unknown>;
     assert.equal(trace["humanRef"], s.humanRef);
     assert.ok(Array.isArray(trace["receipts"]));
+    const sess = (await call("provenance_session", { sessionId: "no-such-session" })) as Record<string, unknown>;
+    assert.deepEqual(sess["issueIds"], []);
+    const act = (await call("provenance_activation", { activationId: "no-such-activation" })) as Record<string, unknown>;
+    assert.deepEqual(act["issueIds"], []);
   });
 
   it("tool call over real stdio reads the same row sb wrote (tmp DB)", async () => {

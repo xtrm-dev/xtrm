@@ -250,6 +250,38 @@ export function buildServer(): McpServer {
     },
   );
   server.registerTool(
+    "provenance_session",
+    {
+      description: "Session-centric provenance: what did this session touch (issues, bindings, receipts, artifacts, result count). Read-model only.",
+      inputSchema: z.object({ sessionId: z.string().min(1), dbPath: dbPathSchema }),
+    },
+    async ({ sessionId, dbPath }) => {
+      const handles = openHandles(dbPath);
+      try {
+        const provenance = new ProvenanceService(handles.db, handles.svc, handles.journal);
+        return textPayload(provenance.sessionDetail(sessionId));
+      } finally {
+        handles.db.close();
+      }
+    },
+  );
+  server.registerTool(
+    "provenance_activation",
+    {
+      description: "Activation-centric provenance: what did this activation produce (issues, bindings, receipts, artifacts). Read-model only.",
+      inputSchema: z.object({ activationId: z.string().min(1), dbPath: dbPathSchema }),
+    },
+    async ({ activationId, dbPath }) => {
+      const handles = openHandles(dbPath);
+      try {
+        const provenance = new ProvenanceService(handles.db, handles.svc, handles.journal);
+        return textPayload(provenance.activationDetail(activationId));
+      } finally {
+        handles.db.close();
+      }
+    },
+  );
+  server.registerTool(
     "resume_capsule",
     {
       description: "Build the Resume Capsule for an issue (contract + latest checkpoint + deltas) with its rendering.",
