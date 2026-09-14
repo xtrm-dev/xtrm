@@ -42,6 +42,12 @@ import {
 } from "../domain/provenance.ts";
 import type { IssueService } from "./issue-service.ts";
 import type { JournalService } from "./journal-service.ts";
+import type { JournalEntry } from "../domain/journal.ts";
+import {
+  isClosureOutcome,
+  type Closure,
+  type ClosureOutcome,
+} from "../domain/closure.ts";
 
 export const BUNDLE_DIR = ".xtrm/provenance/bundles";
 
@@ -368,6 +374,251 @@ export class ProvenanceService {
     ).map((r) => this.toArtifact(r));
   }
 
+  // -- P1 reference queries (ADR §§80-81) -------------------------------------
+  // Every answer below is built from host-owned rows (bindings, journal
+  // entries, receipts, artifacts, closures) joined by id — never from
+  // strings embedded in prose (ADR §58). A commit message is not a Journal
+  // entry, Closure or result (ADR §59): only rows resolve here.
+
+  private requireJournal(): JournalService {
+    if (!this.journal) throw new Error("provenance queries require a JournalService");
+    return this.journal;
+  }
+
+  /** All bounded result payloads recorded for an Issue (ADR §80). */
+  resultsForIssue(issueId: string): JournalEntry[] {
+    this.issues.getIssue(issueId);
+    return this.requireJournal().listEntries(issueId, { kind: "result" });
+  }
+
+  /** Newest bounded result for an Issue, or null (ADR §80 `latest result`). */
+  latestResult(issueId: string): JournalEntry | null {
+    this.issues.getIssue(issueId);
+    return this.requireJournal().latest(issueId, { kind: "result" });
+  }
+
+  /** Decisions recorded for an Issue (ADR §80). */
+  decisionsForIssue(issueId: string): JournalEntry[] {
+    this.issues.getIssue(issueId);
+    return this.requireJournal().listEntries(issueId, { kind: "decision" });
+  }
+
+  /**
+   * Current blockers for an Issue (ADR §80): unsatisfied `blocks` edges
+   * (durable truth) plus recorded journal blocker entries (coordination).
+   */
+  currentBlockers(issueId: string): { blockers: string[]; entries: JournalEntry[] } {
+    this.issues.getIssue(issueId);
+    return {
+      blockers: this.issues.unsatisfiedBlockers(issueId),
+      entries: this.requireJournal().listEntries(issueId, { kind: "blocker" }),
+    };
+  }
+
+  /** Distinct session ids that touched an Issue via bindings or journal (ADR §80). */
+  sessionsForIssue(issueId: string): string[] {
+    this.issues.getIssue(issueId);
+    const fromBindings = rows<{ session_id: string | null }>(
+      this.db,
+      "SELECT DISTINCT session_id FROM execution_bindings WHERE issue_id = ? AND session_id IS NOT NULL",
+      issueId,
+    ).map((r) => r.session_id as string);
+    const fromJournal = rows<{ session_id: string | null }>(
+      this.db,
+      "SELECT DISTINCT session_id FROM issue_journal WHERE issue_id = ? AND session_id IS NOT NULL",
+      issueId,
+    ).map((r) => r.session_id as string);
+    return [...new Set([...fromBindings, ...fromJournal])].sort();
+  }
+
+  /** Distinct activation ids bound to an Issue via bindings or journal (ADR §80). */
+  activationsForIssue(issueId: string): string[] {
+    this.issues.getIssue(issueId);
+    const fromBindings = rows<{ activation_id: string | null }>(
+      this.db,
+      "SELECT DISTINCT activation_id FROM execution_bindings WHERE issue_id = ? AND activation_id IS NOT NULL",
+      issueId,
+    ).map((r) => r.activation_id as string);
+    const fromJournal = rows<{ activation_id: string | null }>(
+      this.db,
+      "SELECT DISTINCT activation_id FROM issue_journal WHERE issue_id = ? AND activation_id IS NOT NULL",
+      issueId,
+    ).map((r) => r.activation_id as string);
+    return [...new Set([...fromBindings, ...fromJournal])].sort();
+  }
+
+  /** Distinct Issue ids a session touched via bindings or journal (ADR §§80-81). */
+  issuesForSession(sessionId: string): string[] {
+    if (typeof sessionId !== "string" || sessionId.trim() === "") return [];
+    const fromBindings = rows<{ issue_id: string }>(
+      this.db,
+      "SELECT DISTINCT issue_id FROM execution_bindings WHERE session_id = ?",
+      sessionId,
+    ).map((r) => r.issue_id);
+    const fromJournal = rows<{ issue_id: string }>(
+      this.db,
+      "SELECT DISTINCT issue_id FROM issue_journal WHERE session_id = ?",
+      sessionId,
+    ).map((r) => r.issue_id);
+    return [...new Set([...fromBindings, ...fromJournal])].sort();
+  }
+
+  /**
+   * Session-centric provenance (ADR §81): what did this session touch —
+   * Issues, bindings, receipts, artifacts and result count.
+   */
+  sessionDetail(sessionId: string): {
+    sessionId: string;
+    issueIds: string[];
+    bindingIds: string[];
+    receiptIds: string[];
+    artifacts: Array<{ receiptId: string; kind: string; value: string; provider: string | null }>;
+    resultCount: number;
+  } {
+    const issueIds = this.issuesForSession(sessionId);
+    const bindings = rows<Row>(this.db, "SELECT * FROM execution_bindings WHERE session_id = ? ORDER BY created_at, id", sessionId)
+      .map((r) => this.toBinding(r));
+    const receiptIds: string[] = [];
+    const artifacts: Array<{ receiptId: string; kind: string; value: string; provider: string | null }> = [];
+    for (const b of bindings) {
+      const receipts = rows<Row>(this.db, "SELECT * FROM work_receipts WHERE execution_binding_id = ? ORDER BY created_at, id", b.id);
+      for (const rr of receipts) {
+        const receiptId = rr["id"] as string;
+        receiptIds.push(receiptId);
+        for (const a of this.listArtifacts(receiptId)) {
+          artifacts.push({ receiptId, kind: a.kind, value: a.value, provider: a.provider });
+        }
+      }
+    }
+    let resultCount = 0;
+    for (const issueId of issueIds) {
+      resultCount += rows<Row>(
+        this.db,
+        "SELECT id FROM issue_journal WHERE issue_id = ? AND session_id = ? AND kind = 'result'",
+        issueId,
+        sessionId,
+      ).length;
+    }
+    return {
+      sessionId,
+      issueIds,
+      bindingIds: bindings.map((b) => b.id),
+      receiptIds,
+      artifacts,
+      resultCount,
+    };
+  }
+
+  /**
+   * Activation-centric provenance (ADR §81): what did this activation
+   * produce — Issues, bindings, receipts and artifacts.
+   */
+  activationDetail(activationId: string): {
+    activationId: string;
+    issueIds: string[];
+    bindingIds: string[];
+    receiptIds: string[];
+    artifacts: Array<{ receiptId: string; kind: string; value: string; provider: string | null }>;
+  } {
+    if (typeof activationId !== "string" || activationId.trim() === "") {
+      return { activationId, issueIds: [], bindingIds: [], receiptIds: [], artifacts: [] };
+    }
+    const boundIssues = rows<{ issue_id: string }>(
+      this.db,
+      "SELECT DISTINCT issue_id FROM execution_bindings WHERE activation_id = ?",
+      activationId,
+    ).map((r) => r.issue_id);
+    const journalIssues = rows<{ issue_id: string }>(
+      this.db,
+      "SELECT DISTINCT issue_id FROM issue_journal WHERE activation_id = ?",
+      activationId,
+    ).map((r) => r.issue_id);
+    const issueIds = [...new Set([...boundIssues, ...journalIssues])].sort();
+    const bindings = rows<Row>(this.db, "SELECT * FROM execution_bindings WHERE activation_id = ? ORDER BY created_at, id", activationId)
+      .map((r) => this.toBinding(r));
+    const receiptIds: string[] = [];
+    const artifacts: Array<{ receiptId: string; kind: string; value: string; provider: string | null }> = [];
+    for (const b of bindings) {
+      const receipts = rows<Row>(this.db, "SELECT * FROM work_receipts WHERE execution_binding_id = ? ORDER BY created_at, id", b.id);
+      for (const rr of receipts) {
+        const receiptId = rr["id"] as string;
+        receiptIds.push(receiptId);
+        for (const a of this.listArtifacts(receiptId)) {
+          artifacts.push({ receiptId, kind: a.kind, value: a.value, provider: a.provider });
+        }
+      }
+    }
+    return { activationId, issueIds, bindingIds: bindings.map((b) => b.id), receiptIds, artifacts };
+  }
+
+  /** Closure rows for an Issue in outcome order (ADR §80 `closure outcomes`). */
+  closureOutcomes(issueId: string): Closure[] {
+    this.issues.getIssue(issueId);
+    return rows<Row>(this.db, "SELECT * FROM issue_closures WHERE issue_id = ? ORDER BY closed_at, closure_id", issueId).map((r) =>
+      this.toClosure(r),
+    );
+  }
+
+  /**
+   * Closures lacking provenance (ADR §80): terminal Issues with no Closure
+   * row, plus Closure rows whose result/receipt/validation/artifact ref
+   * lists are all empty (a bare reason with no evidence links).
+   */
+  closuresLackingProvenance(opts?: { limit?: number }): Array<{ issueId: string; reason: string }> {
+    const out: Array<{ issueId: string; reason: string }> = [];
+    const limit = opts?.limit ?? 200;
+    for (const r of rows<{ id: string }>(
+      this.db,
+      "SELECT id FROM issues WHERE lifecycle_state IN ('done', 'cancelled') ORDER BY id LIMIT ?",
+      limit,
+    )) {
+      const closures = rows<Row>(this.db, "SELECT * FROM issue_closures WHERE issue_id = ?", r.id).map((c) => this.toClosure(c));
+      if (closures.length === 0) {
+        out.push({ issueId: r.id, reason: "terminal-without-closure" });
+        continue;
+      }
+      for (const c of closures) {
+        if (
+          c.journalResultRefs.length === 0 && c.receiptRefs.length === 0 &&
+          c.validationRefs.length === 0 && c.artifactRefs.length === 0
+        ) {
+          out.push({ issueId: r.id, reason: `closure-without-refs:${c.closureId}` });
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Results lacking receipts (ADR §80): bounded result entries with no
+   * receipt covering their revision and no Closure citing them. Scoped to
+   * one Issue, or across all Issues when omitted.
+   */
+  resultsLackingReceipts(issueId?: string): JournalEntry[] {
+    const scope = issueId !== undefined ? [issueId] : rows<{ id: string }>(this.db, "SELECT id FROM issues ORDER BY id").map((r) => r.id);
+    const out: JournalEntry[] = [];
+    for (const id of scope) {
+      let results: JournalEntry[];
+      try {
+        results = this.requireJournal().listEntries(id, { kind: "result" });
+      } catch {
+        continue;
+      }
+      if (results.length === 0) continue;
+      const receipts = this.listReceipts(id);
+      const cited = new Set<string>();
+      for (const c of this.closureOutcomes(id)) {
+        for (const ref of c.journalResultRefs) cited.add(ref);
+      }
+      for (const e of results) {
+        if (cited.has(e.id)) continue;
+        const covered = receipts.some((r) => r.issueRevision >= e.issueRevision);
+        if (!covered) out.push(e);
+      }
+    }
+    return out;
+  }
+
   // -- inverse lookups (E34) ---------------------------------------------------
   // Trailer text alone never appears here: only host-bound rows resolve.
 
@@ -602,6 +853,45 @@ export class ProvenanceService {
       commitSha: (r["commit_sha"] as string | null) ?? null,
       createdAt: r["created_at"] as number,
       finalizedAt: (r["finalized_at"] as number | null) ?? null,
+    };
+  }
+
+  private toClosure(r: Row): Closure {
+    const outcome = r["outcome"] as string;
+    if (!isClosureOutcome(outcome)) throw new Error(`fail-closed: corrupt closure outcome ${JSON.stringify(outcome)}`);
+    const terminalState = r["terminal_state"] as string;
+    if (terminalState !== "done" && terminalState !== "cancelled") {
+      throw new Error(`fail-closed: corrupt closure terminal state ${JSON.stringify(terminalState)}`);
+    }
+    const list = (key: string): string[] => {
+      const raw = r[key] as string | null | undefined;
+      if (raw === null || raw === undefined || raw === "") return [];
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as string[]) : [];
+    };
+    const source = r["source"] as string;
+    const outcomeTyped = outcome as ClosureOutcome;
+    return {
+      closureId: r["closure_id"] as string,
+      issueId: r["issue_id"] as string,
+      issueRevision: r["issue_revision"] as number,
+      contractHash: r["contract_hash"] as string,
+      terminalState,
+      outcome: outcomeTyped,
+      reason: r["reason"] as string,
+      actor: r["actor"] as string,
+      executionContext: (() => {
+        const rawCtx = r["execution_context_json"] as string | null | undefined;
+        if (rawCtx === null || rawCtx === undefined) return null;
+        return normalizeExecutionContext(JSON.parse(rawCtx));
+      })(),
+      validationRefs: list("validation_refs_json"),
+      journalResultRefs: list("journal_result_refs_json"),
+      receiptRefs: list("receipt_refs_json"),
+      artifactRefs: list("artifact_refs_json"),
+      source: source === "beads" ? "beads" : "sb",
+      legacyState: (r["legacy_state"] as string | null) ?? null,
+      closedAt: r["closed_at"] as number,
     };
   }
 

@@ -1,7 +1,14 @@
 import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
 import { IssueService } from "./issue-service.ts";
+import { JournalService } from "./journal-service.ts";
+import type { JournalEntry } from "../domain/journal.ts";
 import { mutateOnce, withTransaction } from "../store/transactions.ts";
 import { hashMappedContent } from "../projections/types.ts";
+import {
+  isProjectableEventType,
+  shouldProjectClosure,
+  shouldProjectJournalEntry,
+} from "../projections/policy.ts";
 import {
   BINDING_MODES,
   PROVIDERS,
@@ -124,6 +131,34 @@ export interface RemoteEdit {
   remoteId: string;
   remoteVersion: string;
   mapped: { title?: string; body?: string };
+}
+
+// Inbound external comment (ADR §61, P1 stretch): untrusted coordination
+// input from a provider surface (GitHub/Jira comment). Every field is
+// required so the trust boundary is explicit at the ingestion edge.
+export interface ExternalComment {
+  remoteScope: string;
+  remoteId: string;
+  remoteAuthor: string;
+  remoteTimestamp: number;
+  body: string;
+}
+
+export function validateExternalComment(payload: unknown): ExternalComment {
+  if (!isRecord(payload)) throw new Error("invalid external comment: must be an object");
+  const remoteTimestamp = payload["remoteTimestamp"];
+  if (typeof remoteTimestamp !== "number" || !Number.isFinite(remoteTimestamp) || remoteTimestamp <= 0) {
+    throw new Error("invalid external comment: remoteTimestamp must be a positive epoch ms number");
+  }
+  const body = payload["body"];
+  if (typeof body !== "string" || body.trim() === "") throw new Error("invalid external comment: body must be a non-empty string");
+  return {
+    remoteScope: reqString(payload, "remoteScope"),
+    remoteId: reqString(payload, "remoteId"),
+    remoteAuthor: reqString(payload, "remoteAuthor"),
+    remoteTimestamp,
+    body,
+  };
 }
 
 export function validateRemoteEdit(payload: unknown): RemoteEdit {
@@ -422,6 +457,108 @@ export class IntegrationService {
         provider, scope: edit.remoteScope, remote: edit.remoteId, remoteVersion: edit.remoteVersion, fields: Object.keys(edit.mapped),
       });
       return { status: "drift", issueId: binding.issueId };
+    });
+  }
+
+  // -- selective outbound projection (ADR §60, P1) ----------------------------
+  // Allowlist enforcement in front of the outbox: important findings,
+  // decisions, results, closures and high-value notes project; mechanical
+  // checkpoints, compaction checkpoints and low-level runtime events do
+  // not. Returns projected:false with a reason instead of enqueuing.
+
+  classifyForProjection(entry: JournalEntry): { project: boolean; reason: string } {
+    return shouldProjectJournalEntry({ kind: entry.kind, refCount: entry.refs.length });
+  }
+
+  enqueueJournalProjection(
+    issueId: string,
+    entryId: string,
+    input: { provider: Provider; remoteScope: string; operation: string },
+    opts?: { now?: number },
+  ): { entry: OutboxEntry | null; enqueued: boolean; reason: string } {
+    const journal = new JournalService(this.db, this.issues);
+    const entry = journal.getEntry(entryId);
+    if (entry.issueId !== issueId) throw new Error(`journal entry ${entryId} does not belong to ${issueId}`);
+    const verdict = this.classifyForProjection(entry);
+    if (!verdict.project) return { entry: null, enqueued: false, reason: verdict.reason };
+    const payload = {
+      kind: entry.kind,
+      entryId: entry.id,
+      sequence: entry.sequence,
+      issueRevision: entry.issueRevision,
+      summary: entry.semantic?.summary ?? entry.result?.summary ?? null,
+      outcome: entry.result?.outcome ?? null,
+      refs: entry.refs,
+    };
+    return this.enqueueProjection(issueId, {
+      provider: input.provider,
+      remoteScope: input.remoteScope,
+      operation: input.operation,
+      payload,
+      contentHash: hashMappedContent(payload),
+    }, opts);
+  }
+
+  /** Closure projection verdict: closures always project (ADR §60). */
+  classifyClosureForProjection(): { project: boolean; reason: string } {
+    return shouldProjectClosure();
+  }
+
+  /** Runtime/transport event gate: low-level events never project (ADR §60). */
+  isProjectableEvent(type: string): boolean {
+    return isProjectableEventType(type);
+  }
+
+  // -- inbound external comments (ADR §61, P1 stretch) ------------------------
+  // An external comment enters as an Issue-local journal note carrying the
+  // provider, remote id, remote author and remote timestamp as evidence
+  // refs, plus an `external.comment_received` event marked untrusted. The
+  // Issue contract is never touched: no new revision, no readiness change,
+  // no executable authority. Callers must route follow-ups through XTRM
+  // planning, never by promoting the comment text.
+
+  receiveComment(
+    issueId: string,
+    provider: Provider,
+    payload: unknown,
+    opts?: { now?: number },
+  ): { entry: JournalEntry; revision: number } {
+    if (!(PROVIDERS as readonly string[]).includes(provider)) throw new Error(`unknown provider: ${provider}`);
+    const comment = validateExternalComment(payload);
+    const journal = new JournalService(this.db, this.issues);
+    return withTransaction(this.db, () => {
+      const before = this.issues.getIssue(issueId);
+      const entry = journal.appendEntry(issueId, {
+        kind: "note",
+        semantic: { summary: comment.body.slice(0, 2000) },
+        refs: [{
+          kind: "external-comment",
+          key: `${provider}:${comment.remoteScope}#${comment.remoteId}`,
+          value: {
+            provider,
+            remoteScope: comment.remoteScope,
+            remoteId: comment.remoteId,
+            remoteAuthor: comment.remoteAuthor,
+            remoteTimestamp: comment.remoteTimestamp,
+            untrusted: true,
+          },
+        }],
+      });
+      this.issues.appendEvent(issueId, "external.comment_received", {
+        provider,
+        remoteScope: comment.remoteScope,
+        remoteId: comment.remoteId,
+        remoteAuthor: comment.remoteAuthor,
+        remoteTimestamp: comment.remoteTimestamp,
+        entry: entry.id,
+        untrusted: true,
+        note: "coordination data only; never executable authority (ADR §61)",
+      });
+      const after = this.issues.getIssue(issueId);
+      if (after.currentRevision !== before.currentRevision) {
+        throw new Error("fail-closed: inbound comment changed the Issue revision");
+      }
+      return { entry, revision: after.currentRevision };
     });
   }
 

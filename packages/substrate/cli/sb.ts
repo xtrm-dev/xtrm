@@ -292,7 +292,7 @@ groups:
   project     create|link|unlink|list|show|links|repair
   plan        check|apply
   journal     append|checkpoint|show|since|render
-  provenance  dispatch|trace|commit|receipt|pr|bundle
+  provenance  dispatch|trace|commit|receipt|pr|session|activation|bundle
   import      beads
   export      project
 
@@ -520,12 +520,19 @@ renders the latest (or selected) checkpoint as text.`,
 
   dispatch <ref> [--workspace/--participant/--activation/--attempt/--session/--base-commit/--claim-id <v>]
   trace <ref> | commit <sha> | receipt <id> | pr <ref>
+  session <session-id> | activation <activation-id>
   bundle <ref> [--repo-root <dir>]`,
   "provenance.dispatch": `usage: sb provenance dispatch <ref> [--workspace <dir>] [--participant/--activation/--attempt/--session/--base-commit <v>] [--claim-id <n>] [--project <id>]`,
   "provenance.trace": `usage: sb provenance trace <ref>`,
   "provenance.commit": `usage: sb provenance commit <40-char-sha>`,
   "provenance.receipt": `usage: sb provenance receipt <id>`,
   "provenance.pr": `usage: sb provenance pr <provider-ref>`,
+  "provenance.session": `usage: sb provenance session <session-id>
+
+what did this session touch: issues, bindings, receipts, artifacts, result count.`,
+  "provenance.activation": `usage: sb provenance activation <activation-id>
+
+what did this activation produce: issues, bindings, receipts, artifacts.`,
   "provenance.bundle": `usage: sb provenance bundle <ref> [--repo-root <dir>] [--project <id>]`,
   import: `usage: sb import beads --file <export.jsonl> --project <id> [--edges-file <f>] [--create-project <PREFIX:Name>] [--dry-run]`,
   "import.beads": `usage: sb import beads --file <export.jsonl> --project <id> [--edges-file <f>] [--create-project <PREFIX:Name>] [--dry-run]
@@ -757,6 +764,8 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "provenance.commit": [],
   "provenance.receipt": [],
   "provenance.pr": [],
+  "provenance.session": [],
+  "provenance.activation": [],
   "provenance.bundle": ["project", "repo-root"],
   "init.": [],
   "doctor": [],
@@ -1625,8 +1634,30 @@ function runProvenance(
         commits: bundle.commitShas.length,
       });
     }
+    case "session": {
+      const sessionId = rest[0] ?? (() => { throw new Error("a session id is required"); })();
+      const detail = provenance.sessionDetail(sessionId);
+      if (ctx.json) return emit(ctx, command, detail);
+      const lines = [
+        `session ${detail.sessionId}: issues ${detail.issueIds.length} bindings ${detail.bindingIds.length} receipts ${detail.receiptIds.length} results ${detail.resultCount}`,
+        `issues: ${detail.issueIds.length > 0 ? detail.issueIds.join(",") : "(none)"}`,
+        `artifacts: ${detail.artifacts.length > 0 ? detail.artifacts.map((a) => `${a.kind}:${a.value}`).join(",") : "(none)"}`,
+      ];
+      return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
+    }
+    case "activation": {
+      const activationId = rest[0] ?? (() => { throw new Error("an activation id is required"); })();
+      const detail = provenance.activationDetail(activationId);
+      if (ctx.json) return emit(ctx, command, detail);
+      const lines = [
+        `activation ${detail.activationId}: issues ${detail.issueIds.length} bindings ${detail.bindingIds.length} receipts ${detail.receiptIds.length}`,
+        `issues: ${detail.issueIds.length > 0 ? detail.issueIds.join(",") : "(none)"}`,
+        `artifacts: ${detail.artifacts.length > 0 ? detail.artifacts.map((a) => `${a.kind}:${a.value}`).join(",") : "(none)"}`,
+      ];
+      return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
+    }
     default:
-      throw new Error(`unknown provenance verb: ${verb} (want dispatch|trace|commit|receipt|pr|bundle)`);
+      throw new Error(`unknown provenance verb: ${verb} (want dispatch|trace|commit|receipt|pr|session|activation|bundle)`);
   }
 }
 
