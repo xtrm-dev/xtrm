@@ -60,14 +60,25 @@ it. Corrupt schema or unknown migration state refuses startup/mutation
 
 ## Project / repository linking
 
+Normal onboarding is `sb init` (ADR sbcloseout4 §4): it discovers the Git
+common root, derives the repository identity, binds the repository, and
+creates or adopts the deterministic Project. The `sb project` verbs are an
+advanced recovery surface (§18), not the normal workflow.
+
 ```sh
+sb init                            # normal onboarding: bind this repository
 sb project create --prefix <PREFIX> --name <name>
-sb project link [--project <id>]   # link the cwd checkout to a project
+sb project link --project <id>      # link the cwd checkout to a project (explicit)
 sb project unlink                  # remove the cwd checkout link
 ```
 
-Single-project databases link implicitly. `sb doctor` reports the cwd
-checkout → project mapping as informational only (it never flips health).
+Resolution is fail-closed and never infers a Project from cardinality.
+`sb project link` requires an explicit `--project` and refuses to guess even
+when exactly one Project exists. `resolveProject` order is explicit
+`--project`, then `SUBSTRATE_PROJECT`, then the repository binding, then an
+explicit checkout link, then refusal with `sb init` guidance. `sb doctor`
+reports the cwd checkout → project mapping as informational only (it never
+flips health).
 
 ## Issue identity
 
