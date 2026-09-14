@@ -22,6 +22,7 @@ import {
   createAgentSession,
 } from "@earendil-works/pi-coding-agent";
 import { resolveSubstrateDir } from "./setup.ts";
+import { armPipeDrain } from "./write-and-exit.ts";
 
 export const EXPECTED_SUBSTRATE_TOOLS = [
   "substrate_issue_get",
@@ -89,6 +90,15 @@ export async function probePiLoad(pkgRoot: string, home: string): Promise<LoadPr
 
 const invokedAsMain = process.argv[1]?.endsWith("pi-load-check.ts") ?? false;
 if (invokedAsMain) {
+  // XTRM-335: every exit below drains (exitCode + natural return). The usage
+  // guards halt via else-branching, not forced exit.
+  armPipeDrain();
+  await piLoadCheckMain();
+}
+
+// XTRM-335: main body as a function so usage-error paths halt with `return`
+// after setting exitCode (drain) instead of process.exit() (truncate).
+async function piLoadCheckMain(): Promise<void> {
   const json = process.argv.includes("--json");
   const flagValue = (flag: string): string | undefined => {
     const i = process.argv.indexOf(flag);
@@ -99,12 +109,14 @@ if (invokedAsMain) {
   const homeRaw = flagValue("--home");
   if (process.argv.includes("--dir") && dirRaw === undefined) {
     process.stderr.write("pi-load-check: --dir requires an absolute path value\n");
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
   const resolved = resolveSubstrateDir(dirRaw);
   if (!resolved.ok && (dirRaw !== undefined || process.env["XTRM_SUBSTRATE_DIR"] !== undefined)) {
     process.stderr.write(`pi-load-check: ${resolved.error}\n`);
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
   const HERE = dirname(fileURLToPath(import.meta.url));
   const dir = resolved.ok ? (resolved.dir as string) : join(HERE, "..");
@@ -115,5 +127,7 @@ if (invokedAsMain) {
     process.stdout.write(`${result.ok ? "ok" : "FAIL"} pi-load tools=[${result.tools.join(",") || "none"}] missing=[${result.missing.join(",") || "none"}]\n`);
     for (const e of result.extensionErrors) process.stdout.write(`FAIL extension ${e.path} — ${e.error}\n`);
   }
-  process.exit(result.ok ? 0 : 1);
+  // XTRM-335: exitCode + natural drain so the result JSON is never truncated
+  // on a pipe; exit code unchanged (0 loaded, 1 missing/errors).
+  process.exitCode = result.ok ? 0 : 1;
 }

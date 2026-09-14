@@ -18,6 +18,13 @@
 //   SUBSTRATE_WAKE_POLL_MS     poll interval, default 5000
 
 import { resolveSubstrate } from "./resolve-substrate.mjs";
+import { armPipeDrain } from "./write-and-exit.mjs";
+
+// XTRM-335: the two guards below are proven zero-byte quiet paths (no write
+// precedes either). The wake path writes one short line then drains via
+// exitCode; exit codes unchanged (2 wake, 0 quiet). armPipeDrain() swallows
+// only EPIPE.
+armPipeDrain();
 
 const EXIT_WAKE = 2;
 const EXIT_QUIET = 0;
@@ -53,6 +60,7 @@ const baseline = eventCount();
 if (baseline === null) process.exit(EXIT_QUIET);
 
 const deadline = Date.now() + timeoutMs;
+let woke = false;
 while (Date.now() < deadline) {
   await new Promise((r) => setTimeout(r, pollMs));
   const now = eventCount();
@@ -64,8 +72,9 @@ while (Date.now() < deadline) {
       `Substrate event on ${ref}: ${now - baseline} new event(s) since this watcher armed. ` +
         `Read the durable record with resume_capsule ${ref} before acting.\n`,
     );
-    process.exit(EXIT_WAKE);
+    woke = true;
+    break;
   }
 }
 
-process.exit(EXIT_QUIET);
+process.exitCode = woke ? EXIT_WAKE : EXIT_QUIET;

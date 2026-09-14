@@ -35,6 +35,7 @@ import { accessSync, constants, existsSync, readdirSync, readFileSync, realpathS
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
+import { armPipeDrain } from "./write-and-exit.ts";
 
 export interface Check {
   name: string;
@@ -572,6 +573,10 @@ export function fullCheck(opts: { pluginDir?: string; pkgRoot?: string; home?: s
 
 const invokedAsMain = process.argv[1]?.endsWith("setup.ts") ?? false;
 if (invokedAsMain) {
+  // XTRM-335: every exit below drains (exitCode + natural return). The usage
+  // guards halt via else-branching, not forced exit, so even their short
+  // error lines are never cut off on a pipe.
+  armPipeDrain();
   const verb = process.argv[2] ?? "check";
   const json = process.argv.includes("--json");
   const dirFlag = process.argv.indexOf("--dir");
@@ -581,8 +586,15 @@ if (invokedAsMain) {
   // never start with `--`, so a flag-like token is always a missing value.
   if (dirFlag >= 0 && (dirRaw === undefined || dirRaw.startsWith("--"))) {
     process.stderr.write(`${verb}: --dir requires an absolute path value\n`);
-    process.exit(2);
+    process.exitCode = 2;
+  } else {
+    setupMain(verb, json, dirRaw);
   }
+}
+
+// XTRM-335: main body as a function so usage-error paths halt with `return`
+// after setting exitCode (drain) instead of process.exit() (truncate).
+function setupMain(verb: string, json: boolean, dirRaw: string | undefined): void {
   const dirOpt = dirRaw;
   const resolved = resolveSubstrateDir(dirOpt);
   // --dir/XTRM_SUBSTRATE_DIR is authoritative when present; otherwise fall
@@ -591,7 +603,8 @@ if (invokedAsMain) {
   // plan/check against a different checkout would be a silent wrong-target.
   if (!resolved.ok && (dirOpt !== undefined || process.env["XTRM_SUBSTRATE_DIR"] !== undefined)) {
     process.stderr.write(`${verb}: ${resolved.error}\n`);
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
   const pkgRoot = resolved.ok ? (resolved.dir as string) : PKG_ROOT;
   const pluginDir = join(pkgRoot, "plugin", "substrate");
@@ -603,18 +616,24 @@ if (invokedAsMain) {
       for (const s of plan.surfaces) process.stdout.write(`${s.surface}: ${s.source} -> ${s.target}\n  ${s.steps.join("\n  ")}\n`);
       for (const c of out.commands) process.stdout.write(`$ ${c.cmd} ${c.args.join(" ")}  # ${c.label}\n`);
     }
-    process.exit(0);
-  }
-  const report = fullCheck({ pluginDir, pkgRoot });
-  const enrollment = checkEnrollment(pkgRoot);
-  const enrolled = enrollment.every((c) => c.ok);
-  const full = { ...report, dir: pkgRoot, enrollment };
-  if (json) {
-    process.stdout.write(JSON.stringify(full, null, 2) + "\n");
+    // XTRM-335: plan/check payloads scale with the enumerated inventory, so
+    // exit via exitCode and let the pipe drain instead of truncating it.
+    process.exitCode = 0;
   } else {
-    for (const c of [...report.claude, ...report.pi]) process.stdout.write(`${c.ok ? "ok" : "FAIL"} ${c.name}${c.detail ? ` — ${c.detail}` : ""}\n`);
-    process.stdout.write(`naming: ${report.naming.substratePlugins.length} substrate plugin(s)${report.naming.duplicates ? " DUPLICATE" : ""}; beads remnants: ${report.naming.beadsRemnants.join(",") || "none"}\n`);
-    for (const c of enrollment) process.stdout.write(`${c.ok ? "ok" : "FAIL"} ${c.name}${c.detail ? ` — ${c.detail}` : ""}\n`);
+    const report = fullCheck({ pluginDir, pkgRoot });
+    const enrollment = checkEnrollment(pkgRoot);
+    const enrolled = enrollment.every((c) => c.ok);
+    const full = { ...report, dir: pkgRoot, enrollment };
+    if (json) {
+      process.stdout.write(JSON.stringify(full, null, 2) + "\n");
+    } else {
+      for (const c of [...report.claude, ...report.pi]) process.stdout.write(`${c.ok ? "ok" : "FAIL"} ${c.name}${c.detail ? ` — ${c.detail}` : ""}\n`);
+      process.stdout.write(`naming: ${report.naming.substratePlugins.length} substrate plugin(s)${report.naming.duplicates ? " DUPLICATE" : ""}; beads remnants: ${report.naming.beadsRemnants.join(",") || "none"}\n`);
+      for (const c of enrollment) process.stdout.write(`${c.ok ? "ok" : "FAIL"} ${c.name}${c.detail ? ` — ${c.detail}` : ""}\n`);
+    }
+    // XTRM-335: `check --json` scales with the home inventory (naming probe
+    // echoes every remnant entry), so this is the plausible >64 KiB path:
+    // exitCode + natural drain, exit code unchanged (0 healthy, 1 otherwise).
+    process.exitCode = report.ok && enrolled ? 0 : 1;
   }
-  process.exit(report.ok && enrolled ? 0 : 1);
 }

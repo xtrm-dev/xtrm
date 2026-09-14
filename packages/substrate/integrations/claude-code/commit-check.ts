@@ -12,6 +12,7 @@
 
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
 import { ProvenanceService } from "../../src/service/provenance-service.ts";
+import { armPipeDrain } from "../write-and-exit.ts";
 
 export interface CommitCheckInput {
   command?: string;
@@ -91,6 +92,7 @@ function readStdin(): Promise<string> {
 
 const invokedAsMain = process.argv[1]?.endsWith("commit-check.ts") ?? false;
 if (invokedAsMain) {
+  armPipeDrain(); // XTRM-335: quiet guards below may exit immediately (proven zero-byte); every write path drains via exitCode.
   const raw = await readStdin();
   let hook: Record<string, unknown> = {};
   if (raw.trim() !== "") {
@@ -108,7 +110,9 @@ if (invokedAsMain) {
     session_id: hook["session_id"] as string | undefined,
     issueRef: process.env["SUBSTRATE_ISSUE_REF"],
   });
+  // XTRM-335: the two exits above are proven zero-byte quiet paths (no write
+  // precedes either); only this write-then-terminate path drains via exitCode.
   if (!result.intercept || !result.nudge) process.exit(0);
   process.stdout.write(JSON.stringify({ additionalContext: result.nudge }) + "\n");
-  process.exit(0);
+  process.exitCode = 0;
 }

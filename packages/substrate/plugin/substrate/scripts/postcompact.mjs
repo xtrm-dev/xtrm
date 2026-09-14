@@ -3,9 +3,13 @@
 
 import { resolveSubstrate } from "./resolve-substrate.mjs";
 import { readHookInput } from "./read-hook-input.mjs";
+import { armPipeDrain } from "./write-and-exit.mjs";
+
+// XTRM-335: write-then-terminate drains via exitCode. armPipeDrain() swallows only EPIPE.
+armPipeDrain();
 
 const { handlePostCompact } = await resolveSubstrate("postcompact.ts");
 const result = handlePostCompact(await readHookInput());
 
 process.stdout.write(JSON.stringify({ ok: true, entryId: result.entryId, reason: result.reason ?? null }) + "\n");
-process.exit(0);
+process.exitCode = 0;

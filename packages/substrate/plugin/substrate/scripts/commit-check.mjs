@@ -6,6 +6,12 @@
 
 import { resolveSubstrate } from "./resolve-substrate.mjs";
 import { readHookInput } from "./read-hook-input.mjs";
+import { armPipeDrain } from "./write-and-exit.mjs";
+
+// XTRM-335: write-then-terminate drains via exitCode. The non-Bash guard is
+// a proven zero-byte quiet path (no write precedes it). armPipeDrain()
+// swallows only EPIPE.
+armPipeDrain();
 
 const { handleCommitCheck } = await resolveSubstrate("commit-check.ts");
 const hook = await readHookInput();
@@ -20,4 +26,4 @@ const result = handleCommitCheck({
 if (result.intercept && result.nudge) {
   process.stdout.write(JSON.stringify({ additionalContext: result.nudge }) + "\n");
 }
-process.exit(0);
+process.exitCode = 0;

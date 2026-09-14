@@ -12,6 +12,7 @@ import { collectGitContext } from "./git-provenance.ts";
 import { createSemanticSummarizer, readTranscriptTail } from "./semantic-service.ts";
 import { enrichExecutionContext } from "../../src/domain/execution-context.ts";
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
+import { armPipeDrain } from "../write-and-exit.ts";
 
 export interface PreCompactInput {
   session_id?: string;
@@ -95,6 +96,7 @@ function readStdin(): Promise<string> {
 
 const invokedAsMain = process.argv[1]?.endsWith("precompact.ts") ?? false;
 if (invokedAsMain) {
+  armPipeDrain(); // XTRM-335: every write path drains via exitCode; EPIPE guard only.
   const raw = await readStdin();
   let input: PreCompactInput = {};
   if (raw.trim() !== "") {
@@ -106,6 +108,7 @@ if (invokedAsMain) {
   }
   const result = await handlePreCompact(input);
   // Command-hook contract: exit 0 always; JSON on stdout is advisory.
+  // XTRM-335: write-then-terminate drains via exitCode; exit code unchanged (0).
   process.stdout.write(JSON.stringify({ continue: result.continue, entryId: result.entryId, sequence: result.sequence, degraded: result.degraded, reason: result.reason ?? null }) + "\n");
-  process.exit(0);
+  process.exitCode = 0;
 }

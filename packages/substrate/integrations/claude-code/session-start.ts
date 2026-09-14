@@ -5,6 +5,7 @@
 // Non-compact sources are a no-op.
 
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
+import { armPipeDrain } from "../write-and-exit.ts";
 
 export interface SessionStartInput {
   source?: string;
@@ -59,6 +60,7 @@ function readStdin(): Promise<string> {
 
 const invokedAsMain = process.argv[1]?.endsWith("session-start.ts") ?? false;
 if (invokedAsMain) {
+  armPipeDrain(); // XTRM-335: every write path drains via exitCode; EPIPE guard only.
   const raw = await readStdin();
   let input: SessionStartInput = {};
   if (raw.trim() !== "") {
@@ -78,5 +80,6 @@ if (invokedAsMain) {
       reason: result.reason ?? null,
     }) + "\n",
   );
-  process.exit(0);
+  // XTRM-335: write-then-terminate drains via exitCode; exit code unchanged (0).
+  process.exitCode = 0;
 }

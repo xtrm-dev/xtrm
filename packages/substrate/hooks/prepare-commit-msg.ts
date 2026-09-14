@@ -13,11 +13,17 @@ import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
+import { armPipeDrain } from "../integrations/write-and-exit.ts";
 
 function dbPath(): string {
   return process.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db");
 }
 
+// XTRM-335: the quiet exits below are the only immediate exits left (proven
+// zero-byte: no stream write precedes them). The error path drains via
+// exitCode + natural return. armPipeDrain() keeps a closed reader from
+// surfacing as an unhandled EPIPE crash.
+armPipeDrain();
 const messageFile = process.argv[2];
 if (!messageFile) process.exit(0);
 const receiptId = process.env["XTRM_RECEIPT_ID"];
@@ -31,7 +37,7 @@ try {
   writeFileSync(messageFile, svc.trailersForCommit(receiptId, message));
 } catch (err) {
   process.stderr.write(`xtrm prepare-commit-msg: ${err instanceof Error ? err.message : String(err)}\n`);
-  process.exit(1);
+  process.exitCode = 1;
 } finally {
   try {
     db?.close();
