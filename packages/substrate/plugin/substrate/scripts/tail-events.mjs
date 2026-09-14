@@ -13,6 +13,13 @@
 // monitor running.
 
 import { resolveSubstrate } from "./resolve-substrate.mjs";
+import { armPipeDrain } from "./write-and-exit.mjs";
+
+// XTRM-335: both guards below are the only immediate exits left (proven
+// zero-byte quiet paths: no stream write precedes either). The monitor loop
+// writes lines indefinitely and never calls process.exit. armPipeDrain()
+// swallows only EPIPE.
+armPipeDrain();
 
 const ref = process.env["SUBSTRATE_ISSUE_REF"];
 if (!ref) process.exit(0);

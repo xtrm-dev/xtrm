@@ -6,6 +6,7 @@
 import { createHash } from "node:crypto";
 import { enrichExecutionContext } from "../../src/domain/execution-context.ts";
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
+import { armPipeDrain } from "../write-and-exit.ts";
 
 export interface PostCompactInput {
   session_id?: string;
@@ -75,6 +76,7 @@ function readStdin(): Promise<string> {
 
 const invokedAsMain = process.argv[1]?.endsWith("postcompact.ts") ?? false;
 if (invokedAsMain) {
+  armPipeDrain(); // XTRM-335: every write path drains via exitCode; EPIPE guard only.
   const raw = await readStdin();
   let input: PostCompactInput = {};
   if (raw.trim() !== "") {
@@ -86,5 +88,6 @@ if (invokedAsMain) {
   }
   const result = handlePostCompact(input);
   process.stdout.write(JSON.stringify({ ok: true, entryId: result.entryId, reason: result.reason ?? null }) + "\n");
-  process.exit(0);
+  // XTRM-335: write-then-terminate drains via exitCode; exit code unchanged (0).
+  process.exitCode = 0;
 }

@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
+import { armPipeDrain } from "../integrations/write-and-exit.ts";
 
 function dbPath(): string {
   return process.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db");
@@ -23,14 +24,18 @@ function headSha(cwd: string): string | null {
   }
 }
 
+// XTRM-335: the quiet no-receipt exit below is the only immediate exit left
+// (proven zero-byte: no stream write precedes it). Every path that writes
+// drains via exitCode + natural return, halted by else-branching.
+// armPipeDrain() keeps a closed reader from surfacing as an EPIPE crash.
+armPipeDrain();
 const receiptId = process.env["XTRM_RECEIPT_ID"];
 if (!receiptId) process.exit(0);
 const sha = process.env["XTRM_COMMIT_SHA"] ?? headSha(process.env["XTRM_REPO_ROOT"] ?? process.cwd());
 if (!sha) {
   process.stderr.write("xtrm post-commit: cannot resolve HEAD SHA\n");
-  process.exit(1);
-}
-
+  process.exitCode = 1;
+} else {
 let db: ReturnType<typeof openSubstrate> | null = null;
 try {
   db = openSubstrate(dbPath());
@@ -38,11 +43,12 @@ try {
   svc.bindCommit(receiptId, sha);
 } catch (err) {
   process.stderr.write(`xtrm post-commit: ${err instanceof Error ? err.message : String(err)}\n`);
-  process.exit(1);
+  process.exitCode = 1;
 } finally {
   try {
     db?.close();
   } catch {
     /* close must not mask the result */
   }
+}
 }

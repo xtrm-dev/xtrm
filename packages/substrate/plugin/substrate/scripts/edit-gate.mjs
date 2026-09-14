@@ -9,6 +9,11 @@
 
 import { resolveSubstrate } from "./resolve-substrate.mjs";
 import { readHookInput } from "./read-hook-input.mjs";
+import { armPipeDrain } from "./write-and-exit.mjs";
+
+// XTRM-335: write-then-terminate drains via exitCode; the allow path writes
+// nothing. armPipeDrain() swallows only EPIPE.
+armPipeDrain();
 
 const { handleEditGate } = await resolveSubstrate("edit-gate.ts");
 const hook = await readHookInput();
@@ -26,4 +31,4 @@ const result = handleEditGate({
 if (!result.allow) {
   process.stdout.write(JSON.stringify({ decision: "block", reason: result.reason ?? "no live claim" }) + "\n");
 }
-process.exit(0);
+process.exitCode = 0;

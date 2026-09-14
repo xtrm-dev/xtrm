@@ -9,8 +9,13 @@
 // leaves the tools just as absent as unset vars, so wrong values warn.
 // Converts silence into an actionable message WITHOUT weakening
 // legacy:reject. Never fails the session: any error degrades to no
-// warning and exit 0, per hook discipline. No imports, no service, no
-// filesystem — pure env read.
+// warning and exit 0, per hook discipline. No service, no filesystem —
+// pure env read plus the local drain helper (no CLI tree, no TS loader).
+
+import { armPipeDrain } from "./write-and-exit.mjs";
+
+// XTRM-335: write-then-terminate drains via exitCode. armPipeDrain() swallows only EPIPE.
+armPipeDrain();
 
 function preconditionWarning() {
   try {
@@ -36,4 +41,4 @@ process.stdout.write(
     reason: context ? "mcp-precondition-unmet" : null,
   }) + "\n",
 );
-process.exit(0);
+process.exitCode = 0;

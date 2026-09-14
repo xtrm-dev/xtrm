@@ -9,6 +9,7 @@
 // current claim holder + activation authority.
 
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
+import { armPipeDrain } from "../write-and-exit.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
 import type { IssueService } from "../../src/service/issue-service.ts";
 
@@ -143,6 +144,7 @@ function readStdin(): Promise<string> {
 
 const invokedAsMain = process.argv[1]?.endsWith("edit-gate.ts") ?? false;
 if (invokedAsMain) {
+  armPipeDrain(); // XTRM-335: quiet guards below may exit immediately (proven zero-byte); every write path drains via exitCode.
   const raw = await readStdin();
   let hook: Record<string, unknown> = {};
   if (raw.trim() !== "") {
@@ -164,7 +166,9 @@ if (invokedAsMain) {
     workspace: (hook["cwd"] as string | undefined) ?? process.cwd(),
   });
   // PreToolUse contract: exit 0 always; a block is JSON on stdout.
+  // XTRM-335: the allow exit is a proven zero-byte quiet path; only the
+  // write-then-terminate path drains via exitCode.
   if (result.allow) process.exit(0);
   process.stdout.write(JSON.stringify({ decision: "block", reason: result.reason ?? "no live claim" }) + "\n");
-  process.exit(0);
+  process.exitCode = 0;
 }

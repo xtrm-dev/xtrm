@@ -13,6 +13,7 @@
 
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
 import { enrichExecutionContext } from "../../src/domain/execution-context.ts";
+import { armPipeDrain } from "../write-and-exit.ts";
 
 export interface StopGateInput {
   cwd?: string;
@@ -94,6 +95,7 @@ function readStdin(): Promise<string> {
 
 const invokedAsMain = process.argv[1]?.endsWith("stop-gate.ts") ?? false;
 if (invokedAsMain) {
+  armPipeDrain(); // XTRM-335: quiet guards below may exit immediately (proven zero-byte); every write path drains via exitCode.
   const raw = await readStdin();
   let hook: Record<string, unknown> = {};
   if (raw.trim() !== "") {
@@ -108,7 +110,9 @@ if (invokedAsMain) {
     session_id: hook["session_id"] as string | undefined,
     issueRef: process.env["SUBSTRATE_ISSUE_REF"],
   });
+  // XTRM-335: the no-continuity exit is a proven zero-byte quiet path; only
+  // the write-then-terminate path drains via exitCode.
   if (!result.continuity) process.exit(0);
   process.stdout.write(JSON.stringify({ additionalContext: result.continuity }) + "\n");
-  process.exit(0);
+  process.exitCode = 0;
 }
