@@ -324,6 +324,17 @@ export interface EnrichInput {
 // for tests). Returns null when nothing is known — the caller stores an
 // absent envelope rather than a fabricated one (§98). Never parses prose
 // or display labels; never mints session/activation/participant identity.
+/**
+ * Authority for automatic actor/session/provenance enrichment: merges trusted
+ * typed input with the exact R4 env contract into the shared versioned
+ * envelope (X1). Pure computation with no durable side effects; persistence
+ * belongs to the journal and provenance writers. Enrichment never moves a
+ * revision and never stales readiness. Automatic metadata: actor, participant,
+ * session, host, run, coordinator, specialist, workspace and timestamp are
+ * attached when known and left absent otherwise (nothing is invented).
+ * Idempotent for identical input; unknown versions and conflicting flat
+ * identity fail closed with validation errors.
+ */
 export function enrichExecutionContext(
   input: EnrichInput | null | undefined,
   env: Record<string, string | undefined> = process.env,

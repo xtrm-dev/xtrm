@@ -87,6 +87,18 @@ export interface ProvenanceTrace {
   closureRevision: number | null;
 }
 
+/**
+ * Authority for the lineage spine: execution bindings, work receipts with
+ * artifacts, attestation currency, claims and the closure view, read from the
+ * WAL store that stays the durable authority. Trace and reverse lookups are
+ * read-only with no side effects; dispatch and receipt writes are
+ * transactional rows that pin the Issue revision and contract hash, so a later
+ * contract edit binds anew instead of silently re-authorizing. Reads never
+ * move the revision and never stale readiness. Automatic metadata: bindings
+ * and receipts stamp actor, session, execution envelope and timestamps at
+ * write time. Reads are idempotent; dispatch against a stale revision,
+ * unknown commits and missing receipts fail closed.
+ */
 export class ProvenanceService {
   private readonly db: DatabaseSync;
   private readonly issues: IssueService;
@@ -103,6 +115,7 @@ export class ProvenanceService {
   // Later contract edits never mutate it: a new dispatch binds the new
   // revision instead. Claim linkage is verified against the live claim row.
 
+  /** Binds one execution to the live revision before work starts; later edits bind anew. */
   dispatch(issueId: string, input: DispatchInput, opts?: { now?: number; expectedClaim?: ExpectedClaimPin | null; expectedRevision?: number; expectedContractHash?: string }): ExecutionBinding {
     const problems = validateDispatchInput(input);
     if (problems.length > 0) throw new Error(`invalid dispatch input: ${problems[0]}`);
@@ -653,6 +666,7 @@ export class ProvenanceService {
   // checkpoint -> commits -> validation -> PR -> closure from Substrate
   // rows. Missing legs are null/empty, never invented.
 
+  /** Reads the whole evidence spine in one derived view; pure read, safe to call before dispatch and after close. */
   trace(issueId: string): ProvenanceTrace {
     const issue = this.issues.getIssue(issueId);
     const bindings = this.listBindings(issueId);

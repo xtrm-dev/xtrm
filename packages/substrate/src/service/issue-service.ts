@@ -100,6 +100,20 @@ function rows<T>(db: DatabaseSync, sql: string, ...params: SQLInputValue[]): T[]
   return db.prepare(sql).all(...params) as T[];
 }
 
+/**
+ * Authority for Issue rows, revisions, claims, attestations and edges: every
+ * durable Issue mutation lands here against the WAL store, which is the single
+ * durable authority shared by sb, MCP, Pi and hooks. Side effects are
+ * transactional SQLite writes plus one issue.* event row per mutation.
+ * Title/priority writes are metadata (no revision, readiness retained);
+ * contract, ownership, context-refs and scrutiny writes mint a new revision
+ * and invalidate prior readiness and attestation. Reads derive readiness live,
+ * so readiness never goes stale on a read. Automatic metadata: revision rows
+ * stamp author, contract hash and timestamp; claims stamp holder, activation,
+ * generation and expiry. Mutations are idempotent under idempotency keys and
+ * same-holder reclaim; cross-holder steal, revision conflicts and unknown refs
+ * fail closed with errors, never partial writes.
+ */
 export class IssueService {
   private readonly db: DatabaseSync;
   constructor(db: DatabaseSync) {
@@ -283,6 +297,7 @@ export class IssueService {
 
   // -- issues -------------------------------------------------------------
 
+  /** Pins the seven-field contract at write time as revision 1; identical retry under one idempotency key returns the first row. */
   createIssue(input: CreateIssueInput, opts?: { idempotencyKey?: string }): ResolvedIssue {
     assertContractShape(input.contract);
     if (!input.title.trim()) throw new Error("title must be non-empty");
@@ -337,6 +352,7 @@ export class IssueService {
   // Revision-on-contract-change (PRD §10): identical contract is a no-op.
   // Revision metadata (ownership/contextRefs) carries forward unless the
   // caller overrides it; the new revision revalidates structurally at read.
+  /** Revision-bearing write: changed contracts mint a new revision and invalidate readiness; byte-identical contracts are a no-op. */
   updateContract(
     issueId: string,
     contract: WorkContract,
@@ -1132,6 +1148,7 @@ export class IssueService {
 
   // Single shared readiness projection (PRD §5). Pass `now` in tests to
   // control deferral without wall-clock coupling.
+  /** Derived dispatchability from state, structure, attestation currency and blockers; computed live, never stored. */
   getReadiness(issueId: string, opts?: { now?: number }): ReadinessReport {
     const now = opts?.now ?? Date.now();
     return this.readinessReport(issueId, now, this.openClaim(issueId, now) !== null);
@@ -1209,6 +1226,7 @@ export class IssueService {
   // Tx-scoped helpers (claimTx) assume the caller holds the transaction so
   // claimReady stays a single transaction without nesting.
 
+  /** Atomic lease with exactly one live holder; same-holder reclaim returns the live row, steal and expired generations fail closed. */
   claimIssue(issueId: string, holder: string, opts?: ClaimOptions): IssueClaim {
     this.assertHolder(holder);
     const key = opts?.idempotencyKey;
@@ -1334,6 +1352,7 @@ export class IssueService {
   }
 
   // Holder-only release. No open row is an idempotent no-op (returns null).
+  /** Surrenders the live lease; lifecycle and Closure stay untouched (stopping work is not closing it). */
   releaseClaim(issueId: string, holder: string, opts?: { activationId?: string; now?: number }): IssueClaim | null {
     this.assertHolder(holder);
     return withTransaction(this.db, () => {

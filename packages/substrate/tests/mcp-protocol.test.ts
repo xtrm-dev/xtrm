@@ -69,6 +69,7 @@ function scratchDb(): { dir: string; dbPath: string; humanRef: string } {
     scrutiny: "LOW",
     authoredBy: "tester",
   });
+  svc.attestReadiness(issue.id, { outcome: "ready", policy: "default", attestedBy: "tester" });
   db.close();
   return { dir, dbPath, humanRef: issue.humanRef };
 }
@@ -124,8 +125,14 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
       "issue_get",
       "issue_list",
       "issue_ready",
+      "issue_claim",
+      "issue_update",
+      "issue_note",
+      "issue_close",
       "journal_append",
+      "journal_checkpoint",
       "journal_show",
+      "journal_query",
       "provenance_trace",
       "provenance_session",
       "provenance_activation",
@@ -186,6 +193,23 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     assert.ok(appended["entryId"]);
     const shown = (await call("journal_show", { ref: s.humanRef })) as Array<{ semantic: { summary: string } }>;
     assert.ok(shown.some((e) => e.semantic?.summary === "e4 finding"));
+    const noted = (await call("issue_note", { ref: s.humanRef, kind: "milestone", summary: "e4 milestone", project: "prj_xtrm" })) as Record<string, unknown>;
+    assert.ok(noted["entryId"]);
+    const checkpointed = (await call("journal_checkpoint", { ref: s.humanRef, summary: "e4 checkpoint", project: "prj_xtrm" })) as Record<string, unknown>;
+    assert.ok(checkpointed["entryId"]);
+    assert.equal(checkpointed["degraded"], false);
+    const since = (await call("journal_query", { op: "since", ref: s.humanRef, cursor: 0 })) as { entries: unknown[]; nextCursor: number };
+    assert.ok(since.entries.length >= 3);
+    const latest = (await call("journal_query", { op: "latest", ref: s.humanRef, kind: "checkpoint" })) as { kind: string };
+    assert.equal(latest["kind"], "checkpoint");
+    const timeline = (await call("journal_query", { op: "timeline", ref: s.humanRef, limit: 2 })) as unknown[];
+    assert.equal(timeline.length, 2);
+    const updated = (await call("issue_update", { ref: s.humanRef, title: "mcp work renamed", project: "prj_xtrm" })) as Record<string, unknown>;
+    assert.equal(updated["revisionCreated"], false);
+    const claimed = (await call("issue_claim", { op: "claim", ref: s.humanRef, holder: "mcp-tester", project: "prj_xtrm" })) as Record<string, unknown>;
+    assert.equal((claimed["claim"] as { holder: string }).holder, "mcp-tester");
+    const released = (await call("issue_claim", { op: "release", ref: s.humanRef, holder: "mcp-tester", project: "prj_xtrm" })) as Record<string, unknown>;
+    assert.equal(released["op"], "release");
     const capsule = (await call("resume_capsule", { ref: s.humanRef })) as Record<string, unknown>;
     assert.ok(capsule["capsule"] && typeof capsule["rendered"] === "string");
     const trace = (await call("provenance_trace", { ref: s.humanRef })) as Record<string, unknown>;
@@ -195,6 +219,9 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     assert.deepEqual(sess["issueIds"], []);
     const act = (await call("provenance_activation", { activationId: "no-such-activation" })) as Record<string, unknown>;
     assert.deepEqual(act["issueIds"], []);
+    const closed = (await call("issue_close", { ref: s.humanRef, outcome: "completed", reason: "mcp e2e done", actor: "mcp-tester", project: "prj_xtrm" })) as Record<string, unknown>;
+    assert.equal(closed["outcome"], "completed");
+    assert.equal(closed["terminalState"], "done");
   });
 
   it("tool call over real stdio reads the same row sb wrote (tmp DB)", async () => {

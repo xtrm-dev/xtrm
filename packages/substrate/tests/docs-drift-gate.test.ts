@@ -4,6 +4,7 @@ import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { JOURNAL_KINDS } from "../src/domain/journal.ts";
+import { MCP_TOOL_DESCRIPTIONS, MCP_TOOL_NAMES } from "../integrations/claude-code/mcp-server.ts";
 
 // Documentation anti-drift gate (ADR §§82-83, bead XTRM-252.11 / XTRM-263).
 //
@@ -11,19 +12,21 @@ import { JOURNAL_KINDS } from "../src/domain/journal.ts";
 // RUN TIME — never a copied list that can go stale:
 // - Journal kinds: imported JOURNAL_KINDS (src/domain/journal.ts).
 // - CLI registrations: COMMAND_HELP keys parsed from cli/sb.ts source.
-// - MCP tool names: registerTool names parsed from
-//   integrations/claude-code/mcp-server.ts source.
+// - MCP tool names: TOOL_DEFS entries parsed from
+//   integrations/claude-code/mcp-server.ts source (M1 registers through one
+//   table, so per-call registerTool literals no longer exist).
+// - MCP descriptions: the exported MCP_TOOL_DESCRIPTIONS inventory (M1).
 // - Skill command references: `sb <group> [<verb>]` mentions parsed out of
 //   the skill files, resolved against the CLI registrations above.
 //
-// Two conditions are genuinely PENDING (no definition exists yet):
+// One condition is genuinely PENDING (no definition exists yet):
 // - closure-outcome enum (owner C1): no ClosureOutcome enum anywhere in
 //   src/domain or src/service. The gate asserts the absence AND the
 //   PENDING marker in the docs, so landing the enum fails the gate until
 //   the docs go live — the anti-drift property.
-// - MCP description inventory (owner M1): tool names are checked live,
-//   normative description depth stays PENDING until M1 lands an exported
-//   registration inventory.
+// - MCP description inventory (owner M1, LANDED): tool names are checked
+//   live against TOOL_DEFS, and the exported MCP_TOOL_DESCRIPTIONS inventory
+//   carries the normative depth the gate asserts label by label.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..", "..", "..");
@@ -60,8 +63,14 @@ export function knownGroups(): Set<string> {
 
 export function mcpToolNames(): string[] {
   const src = readSrc("integrations/claude-code/mcp-server.ts");
-  const names = [...src.matchAll(/registerTool\(\s*"([^"]+)"/g)].map((m) => m[1]!);
-  assert.ok(names.length > 0, "mcp-server.ts must register at least one tool");
+  const start = src.indexOf("const TOOL_DEFS");
+  // TOOL_DEFS is the terminal statement of the registration table: it ends
+  // where the exported-inventory marker comment begins (the table body
+  // itself contains nested array literals, so a bare "];" search ends early).
+  const end = src.indexOf("// Exported registration inventory", start);
+  assert.ok(start >= 0 && end > start, "TOOL_DEFS table must exist in mcp-server.ts");
+  const names = [...src.slice(start, end).matchAll(/name: "([^"]+)"/g)].map((m) => m[1]!);
+  assert.ok(names.length > 0, "TOOL_DEFS must register at least one tool");
   return names;
 }
 
@@ -278,10 +287,22 @@ describe("docs-drift-gate: MCP tools", () => {
     const missing = mcpToolNames().filter((t) => !cli.includes(t));
     assert.deepEqual(missing, [], "registered MCP tools missing from operator docs");
   });
-  it("MCP description depth is recorded PENDING (owner M1)", () => {
+  it("MCP description inventory is landed (owner M1)", () => {
     const cli = readDoc(CLI_DOC);
-    assert.match(cli, /PENDING/, "cli.md must record the pending MCP inventory state");
+    // Exported inventory agrees with the registration table (never a copy).
+    assert.deepEqual([...MCP_TOOL_NAMES].sort(), [...mcpToolNames()].sort(), "exported MCP inventory must match TOOL_DEFS");
+    assert.ok(MCP_TOOL_NAMES.length >= 13, "M1 final set covers get/search, claim/release, update, note, close, append/checkpoint/show/query, trace, resume");
+    for (const name of MCP_TOOL_NAMES) {
+      assert.ok(cli.includes(name), `${name} must be named in the operator docs`);
+      const description = MCP_TOOL_DESCRIPTIONS[name];
+      assert.ok(typeof description === "string" && description.length >= 200, `${name} must carry a non-trivial normative description`);
+      for (const label of ["Changes:", "Does not change:", "Revision:", "Readiness:", "Use the Journal instead:", "Automatic context:"]) {
+        assert.ok(description.includes(label), `${name} description must state ${label}`);
+      }
+    }
+    assert.match(cli, /LANDED/, "cli.md must record the landed MCP inventory state");
     assert.match(cli, /M1/, "cli.md must name M1 as the owner of the MCP inventory");
+    assert.doesNotMatch(cli, /PENDING/, "cli.md must no longer record the MCP inventory as pending");
   });
 });
 
@@ -400,6 +421,9 @@ describe("docs-drift-gate matchers fail on regressed content", () => {
     const names = mcpToolNames();
     assert.ok(names.includes("resume_capsule"), "resume_capsule must come from the registration scan");
     assert.ok(names.includes("provenance_trace"), "provenance_trace must come from the registration scan");
-    assert.ok(names.length >= 7, "all seven MCP tools must be found by the scan");
+    assert.ok(names.includes("issue_claim"), "op-discriminated issue_claim must come from the registration scan");
+    assert.ok(names.includes("journal_query"), "op-discriminated journal_query must come from the registration scan");
+    assert.deepEqual([...names].sort(), [...MCP_TOOL_NAMES].sort(), "scan and export must agree exactly");
+    assert.ok(names.length >= 13, "the full M1 tool set must be found by the scan");
   });
 });

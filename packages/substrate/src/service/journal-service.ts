@@ -150,6 +150,20 @@ function contextTrunc(s: string | null): string | null {
   return s === null ? null : s.length > CONTEXT_SUMMARY_MAX ? `${s.slice(0, CONTEXT_SUMMARY_MAX)}…` : s;
 }
 
+/**
+ * Authority for the Issue-scoped Work Journal: the only writer of journal
+ * rows, owning append-only durability in the WAL store (entries are never
+ * updated, only superseded by newer entries). Side effects are one journal row
+ * plus one journal.appended event per append, committed before any semantic
+ * enrichment runs, so enrichment failure still leaves resumable mechanical
+ * state. Appends never touch the Issue revision and never stale readiness:
+ * the Journal carries continuity, never execution authority. Automatic
+ * metadata: every entry pins issue revision, sequence, timestamp and the
+ * shared versioned execution envelope. Appends are idempotent only when the
+ * caller reuses an idempotency boundary (sequence allocation is
+ * insert-once); unknown kinds, missing mechanical rows for checkpoint or
+ * compaction, and result payloads on non-result kinds fail closed.
+ */
 export class JournalService {
   private readonly db: DatabaseSync;
   private readonly issues: IssueService;
@@ -159,6 +173,7 @@ export class JournalService {
     this.issues = issues;
   }
 
+  /** Single append-only write allocating the next sequence; continuity only, never execution authority. */
   appendEntry(issueId: string, input: AppendEntryInput): JournalEntry {
     if (!isJournalKind(input.kind)) throw new Error(`unknown journal kind: ${String(input.kind)}`);
     if (input.refs !== undefined) {
@@ -390,6 +405,7 @@ export class JournalService {
   // Host-known state merged over service-derived state. Derived values win
   // for revision/hash/claim/blockers/children (durable truth); host values
   // win for execution context the service cannot see (workspace, commits).
+  /** Gathers what the host already knows without model reasoning; the resumability floor every checkpoint commits first. */
   collectMechanical(issueId: string, input: CollectMechanicalInput = {}): MechanicalCheckpoint {
     const issue = this.issues.getIssue(issueId);
     const claim = this.issues.getActiveClaim(issueId);
@@ -445,6 +461,7 @@ export class JournalService {
     return merged;
   }
 
+  /** Attaches the semantic summary after the mechanical row has committed; enrichment failure never loses resumability. */
   enrichEntry(entryId: string, semantic: SemanticCheckpoint): JournalEntry {
     assertSemanticCheckpoint(semantic);
     return withTransaction(this.db, () => {

@@ -47,9 +47,18 @@ export interface DispatchCheck {
   expectedClaim: ExpectedClaimPin | null;
 }
 
-// Fail-closed pre-activation check: no mutation, no AgentSession yet. Throws
-// on draft/unready/blocked/non-dispatchable, on stale scope, and on any
-// requestedScope outside the contract SCOPE (§39.1).
+/**
+ * Settlement-adapter gate for Specialist dispatch: the fail-closed
+ * pre-activation check that stands between readiness authority and host
+ * execution. Reads the IssueService authority (revision, readiness, live
+ * claim) with no mutation and no durable side effects. Never moves the
+ * revision; reports the pinned revision and contract hash the later binding
+ * freezes, so a newer revision renders the check stale by construction.
+ * Attaches no metadata itself (the returned pin feeds provenance.dispatch,
+ * which stamps actor, session and envelope automatically). Pure and
+ * idempotent per durable state; draft, unready, blocked, terminal, stale
+ * scope and holder mismatch fail closed before any AgentSession exists.
+ */
 export function checkDispatch(issues: IssueService, req: SpecialistDispatchRequest): DispatchCheck {
   if (!req.specialist.trim()) throw new Error("dispatch rejected: specialist is required");
   if (!req.holder.trim()) throw new Error("dispatch rejected: holder is required");
@@ -89,8 +98,21 @@ export function checkDispatch(issues: IssueService, req: SpecialistDispatchReque
   return { issueId: id, revision: report.revision, contractHash: report.contractHash, report, expectedClaim };
 }
 
-// Full dispatch: gate first, then the host-owned execution binding. The
-// binding freezes revision/hash/context; later contract edits bind anew.
+/**
+ * Settlement-adapter dispatch: gates through checkDispatch, then writes the
+ * host-owned execution binding that settles a Specialist activation onto the
+ * pinned revision under the IssueService authority. Side effects are limited
+ * to the binding row insert; the binding row itself is durable in the WAL store; the frozen
+ * revision, hash and coordinator-to-specialist lineage make later contract
+ * edits bind anew instead of silently re-authorizing. Dispatch never edits
+ * the contract and never appends journal entries; settlement evidence lands
+ * afterwards as bounded journal result entries cited by close. Readiness is
+ * consumed, not changed, and the binding goes stale on any newer revision.
+ * Automatic metadata: participant, activation, attempt, session and workspace
+ * envelope attached at bind time. Dispatch is not idempotent across calls
+ * (each call binds a new execution); gate-then-bind is one transaction, and
+ * stale pins, holder mismatch and scope expansion fail closed.
+ */
 export function dispatchToSpecialist(
   issues: IssueService,
   provenance: ProvenanceService,

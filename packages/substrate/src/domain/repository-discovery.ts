@@ -70,6 +70,16 @@ function parseRemotes(text: string | null): Array<{ name: string; url: string }>
 // `git rev-parse --abbrev-ref HEAD` is read because ADR §10 names the current
 // branch as evidence the operator can see; deriveBaseBranch deliberately never
 // uses it as a base, so a feature branch / detached HEAD cannot become one.
+/**
+ * Authority for cwd repository discovery: resolves the Git common dir (shared
+ * across worktrees), derives the repository identity, and reports the bound
+ * state without opening the store, so discovery itself has no side effects
+ * on durable state. Discovery never moves an Issue revision and never stales
+ * readiness; outside a checkout it returns null identity and resolution fails
+ * closed downstream. Automatic metadata: the derived repository key, git root
+ * and base branch feed every later binding. Pure and idempotent per process
+ * state; unknown layouts degrade to null, never to a guessed identity.
+ */
 export function discoverRepository(): RepositoryDiscovery {
   const gitRoot = discoverGitRoot();
   const remotes = parseRemotes(gitOut(["remote", "-v"]));
