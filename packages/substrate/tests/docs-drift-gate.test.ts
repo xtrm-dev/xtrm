@@ -285,14 +285,14 @@ describe("docs-drift-gate: MCP tools", () => {
   });
 });
 
-// --- Gate: closure outcomes (PENDING, owner C1) --------------------------------
+// --- Gate: closure outcomes (LANDED, owner C1) --------------------------------
 
 describe("docs-drift-gate: closure outcomes", () => {
-  it("no closure-outcome enum exists yet, and the docs say so (PENDING C1)", () => {
-    assert.equal(closureEnumPresent(), false, "a closure-outcome enum landed in src: flip this gate live (owner C1)");
+  it("the closure-outcome enum exists, and the docs describe the landed state (C1)", () => {
+    assert.equal(closureEnumPresent(), true, "C1 landed: src/domain/closure.ts must carry the ClosureOutcome vocabulary");
     const prov = readDoc(PROV_DOC);
-    assert.match(prov, /PENDING/, "provenance.md must record the pending closure-outcome state");
-    assert.match(prov, /C1/, "provenance.md must name C1 as the owner of the closure-outcome enum");
+    assert.doesNotMatch(prov, /closure-outcome enum is PENDING/, "provenance.md must no longer record the closure-outcome enum as pending");
+    assert.match(prov, /C1/, "provenance.md must name C1 as the owner of the landed closure-outcome enum");
   });
 });
 

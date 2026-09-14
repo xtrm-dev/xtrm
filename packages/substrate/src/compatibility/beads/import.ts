@@ -7,8 +7,9 @@
 // edges/hierarchy under per-edge idempotency keys, so resume is just re-run
 // with zero row growth. No writes ever go back to Beads: no dual-write (§42).
 
-import { IssueService } from "../../service/issue-service.ts";
+import type { IssueService } from "../../service/issue-service.ts";
 import type { JournalService } from "../../service/journal-service.ts";
+import type { ClosureService } from "../../service/closure-service.ts";
 import type { IssueKind } from "../../domain/issue.ts";
 import { ISSUE_KINDS } from "../../domain/issue.ts";
 
@@ -177,6 +178,11 @@ export function importBeads(
     // Historical intake writer. Absent -> notes/comments are counted as
     // skipped (receipt lists them) rather than silently dropped.
     journal?: JournalService;
+    // First-class Closure intake (C1): closed records land a Closure row
+    // (source=beads) instead of burying the reason in event prose. Absent
+    // -> legacy behavior (lifecycle only), so direct-service callers that
+    // predate C1 keep working.
+    closures?: ClosureService;
   },
 ): ImportResult {
   try {
@@ -450,6 +456,28 @@ export function importBeads(
         result.edgeErrors.push(msg);
       }
       if (e.source === "inline" && !cycleRefused) result.depFailures.push(msg);
+    }
+  }
+  // Closure intake (C1): every record that rests terminal gets a Closure
+  // row preserving the verbatim reason, legacy status, transition
+  // timestamp, and recorded author with source=beads. Open records get no
+  // row; reruns are idempotent (recordBeadsClosure skips issues that
+  // already carry a Closure). The beads.imported event above stays as
+  // import provenance; the Closure row is the queryable authority.
+  const closures = opts?.closures;
+  if (closures) {
+    for (const r of records) {
+      if (!r || typeof r.id !== "string") continue;
+      const issueId = beadToIssue.get(r.id);
+      if (!issueId) continue;
+      const target = mapStatus(r.status);
+      if (target === "open") continue;
+      const author = str(r.created_by) ?? opts?.authoredBy ?? "beads-import";
+      closures.recordBeadsClosure(issueId, {
+        reason: str(r.close_reason) ?? "",
+        actor: author,
+        legacyState: str(r.status) ?? "closed",
+      });
     }
   }
   return result;
