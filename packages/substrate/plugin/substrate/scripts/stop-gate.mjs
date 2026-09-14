@@ -17,6 +17,10 @@ const result = await handleStopGate({
   cwd: hook.cwd ?? process.cwd(),
   session_id: hook.session_id,
   issueRef: process.env["SUBSTRATE_ISSUE_REF"],
+  holder: process.env["SUBSTRATE_HOLDER"],
+  activationId: process.env["SUBSTRATE_ACTIVATION_ID"],
+  // H1 §77 release/retain policy: default retains; opt-in release.
+  releaseClaim: process.env["SUBSTRATE_STOP_RELEASE_CLAIM"] === "1",
 });
 
 if (result.continuity) {

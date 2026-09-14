@@ -370,6 +370,9 @@ export function decidePiEditCall(
   }
 }
 
+// H1 §77 five-signal input. resultsSinceClaim / pendingAsks / closureReady
+// are additive: older callers that only know claim+checkpoint+blocker+
+// handoff keep working and read as "unfinished, continuity unknown".
 export interface StopContinuityState {
   issueRef: string | null;
   claimed: boolean;
@@ -377,17 +380,35 @@ export interface StopContinuityState {
   checkpointsSinceClaim: number;
   blockers: number;
   handoffs: number;
+  resultsSinceClaim?: number;
+  pendingAsks?: string[];
+  closureReady?: boolean;
 }
 
-export function evaluateStopContinuity(state: StopContinuityState): { needsCheckpoint: boolean; continuity: string | null } {
-  if (!state.issueRef || !state.claimed) return { needsCheckpoint: false, continuity: null };
-  return {
-    needsCheckpoint: state.checkpointsSinceClaim === 0,
-    continuity:
-      `live claim on ${state.issueRef} (holder ${state.holder ?? "unknown"}): ` +
-      `${state.checkpointsSinceClaim} checkpoint(s), ${state.blockers} blocker(s), ${state.handoffs} handoff(s) since claim. ` +
-      `work stays open; resume with \`sb issue resume ${state.issueRef}\`.`,
-  };
+export type PiStopAction = "silent" | "checkpointed" | "continuity" | "closure-ready";
+
+export function evaluateStopContinuity(state: StopContinuityState): {
+  needsCheckpoint: boolean;
+  continuity: string | null;
+  action: PiStopAction;
+} {
+  if (!state.issueRef || !state.claimed) return { needsCheckpoint: false, continuity: null, action: "silent" };
+  const needsCheckpoint = state.checkpointsSinceClaim === 0;
+  const results = state.resultsSinceClaim ?? 0;
+  const asks = state.pendingAsks ?? [];
+  const action: PiStopAction = state.closureReady
+    ? "closure-ready"
+    : needsCheckpoint
+      ? "checkpointed"
+      : "continuity";
+  const bits =
+    `live claim on ${state.issueRef} (holder ${state.holder ?? "unknown"}): ` +
+    `${state.checkpointsSinceClaim} checkpoint(s), ${state.blockers} blocker(s), ${state.handoffs} handoff(s), ${results} result(s) since claim. `;
+  const next = state.closureReady
+    ? `closure-ready: result → validation/provenance → close; the gate never closes for you. `
+    : `${results === 0 ? "no result recorded since claim; ending now is fine, work stays open. " : ""}${asks.length > 0 ? `pending asks: ${asks.join("; ")}. ` : ""}` +
+      `work stays open; resume with \`sb issue resume ${state.issueRef}\`.`;
+  return { needsCheckpoint, continuity: bits + next, action };
 }
 
 // -- session start ---------------------------------------------------------------
