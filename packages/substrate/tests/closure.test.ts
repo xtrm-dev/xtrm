@@ -205,6 +205,9 @@ describe("C1 reopen immutability", () => {
     const reopened2 = events.filter((e) => e.type === "issue.reopened");
     assert.equal(reopened2.length, 1);
     assert.deepEqual((reopened2[0]!.payload as { priorClosures: string[] }).priorClosures, [first.closureId]);
+    // The supplied actor must be durable, not validated and dropped (C1
+    // review P2-1): a reopen that silently discarded it would fail here.
+    assert.equal((reopened2[0]!.payload as { actor?: string }).actor, "holder-b");
     // A second close writes a second Closure; both stay queryable.
     const second = closures.closeIssue(issue.id, { outcome: "completed", reason: "actually done", actor: "holder-c" });
     assert.notEqual(second.closureId, first.closureId);
