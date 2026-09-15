@@ -551,10 +551,10 @@ const TOOL_DEFS: ToolDef[] = [
       "Does not change: no Issue field, no contract, no claim, no provenance row, and never the lifecycle state. " +
       "Revision: the Issue revision never changes; the mechanical row pins revision and contract hash for correlation only. " +
       "Readiness: never goes stale; checkpoints carry resumability, never execution authority. " +
-      "Use the Journal instead: this IS the Journal — checkpoint now so a later session resumes from mechanical state, " +
-      "and record decisions and outcomes as separate entries rather than editing the contract. " +
-      "Use the Journal instead: this IS the Journal checkpoint path; a progress note or a contract edit must not be used " +
-      "in place of a result -- record outcomes as kind result entries. " +
+      "Use the Journal instead: this IS the Journal checkpoint path — checkpoint now so a later session resumes from " +
+      "mechanical state, and record decisions, progress notes and outcomes as separate entries rather than editing the " +
+      "contract; a progress note or a contract edit must not be used in place of a result — record outcomes as kind " +
+      "result entries. " +
       "Automatic context: the mechanical row is collected automatically (revision, contract hash, claim, workspace, branch, " +
       "commits where available) and the shared versioned execution envelope is attached automatically; " +
       "an optional semantic summary enriches the entry afterwards without risking the committed mechanical state. " +

@@ -291,7 +291,7 @@ groups:
   issue       create|show|edit|note|validate|attest|list|ready|tree|children|relate|unrelate|claim|release|state|close|reopen|defer|cancel|archive|resume
   project     create|link|unlink|list|show|links|repair
   plan        check|apply
-  journal     append|checkpoint|show|since|render
+  journal     append|checkpoint|show|since|latest|timeline|render
   provenance  dispatch|trace|commit|receipt|pr|session|activation|bundle
   import      beads
   export      project

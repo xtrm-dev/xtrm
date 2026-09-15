@@ -37,6 +37,14 @@ describe("m1 help methodology: edit refusal and close outcome vocabulary", () =>
       for (const outcome of CLOSURE_OUTCOMES) {
         assert.ok(out.includes(outcome), `${args.join(" ")} must name outcome ${outcome}`);
       }
+      // XTRM-252.16: the vocabulary must live on the `usage:` line itself. When
+      // the assertion only searches the whole page, a usage line that drops the
+      // outcome list survives on the surrounding prose.
+      const usage = out.split("\n").find((line) => line.includes("usage:")) ?? "";
+      assert.match(usage, /usage:\s*sb issue close/, `${args.join(" ")} printed no close usage line`);
+      for (const outcome of CLOSURE_OUTCOMES) {
+        assert.ok(usage.includes(outcome), `${args.join(" ")} usage line must name outcome ${outcome}`);
+      }
     }
   });
 });
