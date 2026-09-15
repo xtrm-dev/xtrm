@@ -99,3 +99,13 @@ Runtime support: the library imports in-process on Node ≥24 (`node:sqlite`)
 and on Bun ≥1.3 (`bun:sqlite`); `openSubstrate()` selects the driver at
 runtime with no static `node:sqlite` import. Bun acceptance:
 `TMPDIR=/var/tmp bun tests/bun-acceptance.ts`.
+
+Installed-layout caveat: the entry points shipped in this package are
+TypeScript (`bin: cli/sb.ts`, `main: ./src/index.ts`) and there is no build
+step. Node strips TypeScript types only for files outside `node_modules`, so
+an **installed** copy — `npm install`, i.e. a `node_modules` layout — aborts
+at load with `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`, and no flag lifts
+that (`--experimental-strip-types` and `--experimental-transform-types` both
+refuse). Installed use therefore requires Bun ≥1.3. Node ≥24 works from a
+source or symlinked checkout, which is how the `sb` CLI and the Claude plugin
+are deployed in this repository.

@@ -1,7 +1,7 @@
 {
   "name": "@jaggerxtrm/substrate",
   "version": "0.2.0",
-  "description": "Durable work substrate: issue graph over SQLite/WAL (library-first; sb CLI consumes this)",
+  "description": "Durable work substrate: issue graph over SQLite/WAL (library-first; sb CLI consumes this). Installed copies require Bun: the shipped entry points are TypeScript and Node refuses to strip types under node_modules (ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING); Node >=24 works from a source or symlinked checkout.",
   "type": "module",
   "main": "./src/index.ts",
   "bin": {
