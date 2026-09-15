@@ -24,7 +24,8 @@
 
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { writeFileSync, readFileSync, realpathSync } from "node:fs";
+import { writeFileSync, readFileSync, realpathSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
@@ -251,10 +252,20 @@ describe("A1 §89 basename-collision determinism", () => {
     const idA = (initA.data as { project: { id: string } }).project.id;
     const idB = (initB.data as { project: { id: string } }).project.id;
     assert.notEqual(idA, idB, "collision must not share a Project");
-    assert.ok(!idA.match(/_[0-9a-f]{4,}$/) || idA.includes("org"), `deterministic, not random: ${idA}`);
+    // XTRM-252.18: the old assertion was a disjunction that passed on either leg
+    // alone, so it accepted any id shape. Pin determinism on BOTH ids and prove
+    // the loser of the collision is owner-qualified: ids are `prj_<slug>` with no
+    // random/hex suffix, the winner keeps the basename candidate, the loser takes
+    // the owner-qualified candidate.
+    for (const id of [idA, idB]) {
+      assert.ok(!/_[0-9a-f]{4,}$/.test(id), `deterministic, not random: ${id}`);
+    }
+    assert.ok(idB.includes("org"), `the collision loser is owner-qualified: ${idB}`);
     // Second init of each stays stable.
     const againA = env.inCwd(repoA, () => env.run(["init"]));
-    assert.equal((againA.data as { project: { id: string } }).project.id, idA);
+    const againB = env.inCwd(repoB, () => env.run(["init"]));
+    assert.equal((againA.data as { project: { id: string } }).project.id, idA, "the winner stays stable across re-init");
+    assert.equal((againB.data as { project: { id: string } }).project.id, idB, "the loser stays stable across re-init");
     const refA = createInRepo(env, repoA, "a work");
     const refB = createInRepo(env, repoB, "b work");
     assert.notEqual(refA.split("-")[0], refB.split("-")[0]);
@@ -439,6 +450,19 @@ describe("A1 §93 coordinator capsule without child-transcript duplication", () 
     assert.equal(capsule.code, 0, capsule.stderr || capsule.stdout);
     const text = JSON.stringify(capsule.data);
     assert.ok(!text.includes(markers[0]!) && !text.includes(markers[1]!), "no child transcript leaks into the root capsule");
+    // XTRM-252.18: marker absence alone passes on an empty capsule. Pin the
+    // positive recovery content: both children by reference, each with its
+    // latest checkpoint ref, plus the root's own checkpoint.
+    const caps = capsule.data as {
+      children: Array<{ humanRef: string; checkpointRef: string | null }>;
+      latestCheckpoint: { id: string; sequence: number } | null;
+    };
+    assert.equal(caps.children.length, 2, "the root capsule recovers both children by reference");
+    for (const child of caps.children) {
+      assert.ok(child.humanRef, "each child is carried by its durable ref");
+      assert.ok(child.checkpointRef, `child ${child.humanRef} carries its latest checkpoint ref`);
+    }
+    assert.ok(caps.latestCheckpoint?.id, "the root capsule carries its own latest checkpoint");
   });
 });
 
@@ -756,28 +780,65 @@ describe("A1 §103 definition of complete (mechanical record)", () => {
     // Help teaches the same model on every surface.
     const helpInit = env.inCwd(repo, () => env.run(["init"], { json: false }));
     assert.match(helpInit.stdout, /repository/i);
+    // XTRM-252.18: the close help output was discarded (`void closeHelp`), so
+    // the §103 claim "help teaches one model" had no assertion behind it.
     const closeHelp = env.run(["issue", "close", "--help"] as unknown as string[]);
-    void closeHelp;
+    assert.equal(closeHelp.code, 0, closeHelp.stderr || closeHelp.stdout);
+    // env.run injects --json, so the help page arrives inside the envelope as a
+    // `text` field and the raw stdout is one line of JSON that also carries the
+    // Methodology paragraph. Read the usage line from the text, or a
+    // usage-line regression is masked by the surrounding prose.
+    const closeText = (closeHelp.data as { text?: string } | undefined)?.text ?? closeHelp.stdout;
+    const closeUsage = closeText.split("\n").find((line) => line.includes("usage:")) ?? "";
+    assert.match(closeUsage, /usage: sb issue close/, "close help must show the canonical command form");
+    for (const outcome of CLOSURE_OUTCOMES) {
+      assert.ok(closeUsage.includes(outcome), `issue close --help usage line must name outcome ${outcome}`);
+    }
     // Bounded vocabularies are the documented ones.
     assert.ok((JOURNAL_KINDS as readonly string[]).includes("result"));
     assert.ok((CLOSURE_OUTCOMES as readonly string[]).includes("completed"));
-    // Operator docs exist and name the same surfaces.
-    const root = new URL("../../docs/substrate/", import.meta.url);
-    void root;
+    // Operator docs exist. From packages/substrate/tests/ the repo root is three
+    // levels up: `../../docs/substrate` resolved to packages/docs/substrate,
+    // which does not exist, and the URL was discarded, so this check was vacuous.
+    const docsRoot = fileURLToPath(new URL("../../../docs/substrate/", import.meta.url));
+    for (const doc of ["README", "workflow", "journal", "provenance", "repository-identity", "cli"]) {
+      const docPath = join(docsRoot, `${doc}.md`);
+      assert.ok(existsSync(docPath), `operator doc must exist: ${docPath}`);
+      assert.ok(readFileSync(docPath, "utf8").trim().length > 0, `operator doc must not be empty: ${docPath}`);
+    }
   });
 });
+
+// XTRM-252.18: the guard must be insensitive to whitespace, receivers and
+// comment styles. A literal `length === 1` substring match missed
+// `projects.length==1` and treated a `/* … */` comment as live code.
+function cardinalityShortcuts(source: string): string[] {
+  const withoutComments = (line: string): string =>
+    line
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/^\s*(\/\/|\*|#|<!--).*$/, " ");
+  return source
+    .split("\n")
+    .map((line) => withoutComments(line).replace(/\s+/g, " ").trim())
+    .filter((line) => line !== "" && /\b(length|size|count)\s*===?\s*1\b/.test(line));
+}
 
 describe("A1 negative-control guard: no global-cardinality shortcut", () => {
   it("resolveProject has no live projects.length===1 inference and no source single", () => {
     const src = readFileSync(new URL("../src/service/issue-service.ts", import.meta.url), "utf8");
-    // The only permitted mention is the documenting comment that the shortcut
-    // is rejected; no live code may infer a project from cardinality (any
-    // `.length === 1` on a projects query inside live code is the shortcut).
-    const liveShortcut = src.split("\n").filter((l) => l.includes("length === 1") && !l.trim().startsWith("//") && !l.trim().startsWith("*") && !l.trim().startsWith("* "));
-    assert.deepEqual(liveShortcut, [], "no live global-cardinality inference");
+    assert.deepEqual(cardinalityShortcuts(src), [], "no live global-cardinality inference");
     assert.ok(src.includes("Global database cardinality is never evidence"), "the invariant stays documented");
     assert.ok(!src.match(/source\s*[:=]\s*["']single["']/), "single-project source must stay removed");
     const cliSrc = readFileSync(new URL("../cli/sb.ts", import.meta.url), "utf8");
     assert.ok(!cliSrc.match(/source\s*[:=]\s*["']single["']/), "CLI must not carry the removed single-project source");
+  });
+
+  it("the guard rejects whitespace, receiver and comment variants", () => {
+    assert.equal(cardinalityShortcuts("if (projects.length === 1) return all[0];").length, 1);
+    assert.equal(cardinalityShortcuts("if(projects.length==1) return all[0];").length, 1);
+    assert.equal(cardinalityShortcuts("const only = rows.size == 1 ? rows[0] : null;").length, 1);
+    assert.equal(cardinalityShortcuts("// projects.length === 1 is rejected (ADR §5)").length, 0);
+    assert.equal(cardinalityShortcuts("/* projects.length === 1 is rejected */").length, 0);
+    assert.equal(cardinalityShortcuts("const two = projects.length === 2;").length, 0);
   });
 });
