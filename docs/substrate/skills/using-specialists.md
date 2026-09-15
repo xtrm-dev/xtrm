@@ -41,6 +41,16 @@ requirements that belong in the Issue contract.
 
 ## Contract precondition
 
+If Substrate reports this repository is uninitialized: run `sb init`.
+
+```text
+sb init
+```
+
+Never guess the only project, invent a project id, or manually create/link
+during normal work. Contract changes use only `sb issue edit` and
+`sb plan apply`; progress uses the Journal.
+
 A specialist receives a durable XTRM work item. A ready Issue revision is the executable
 contract, and it must already be usable before dispatch:
 
@@ -100,10 +110,43 @@ Specialist execution findings belong in the Issue Journal where durable continui
 warrants them, using the landed kinds:
 
 ```text
-sb issue note <ref> "text" --kind note|finding|decision|blocker|milestone|handoff
-sb journal append <ref> --kind finding|decision|blocker|milestone|handoff|checkpoint|compaction
+sb issue note <ref> "text" --kind note|finding|decision|blocker|milestone|handoff|result
+sb journal append <ref> --kind finding|decision|blocker|milestone|handoff|result|checkpoint|compaction|note
 sb journal checkpoint <ref>     # mechanical checkpoint at durable boundaries
 sb journal show <ref> / sb journal since <ref> <cursor> / sb journal render <ref>
+```
+
+Canonical kind mapping (ADR §73):
+
+```text
+material fact
+→ finding
+
+architectural choice
+→ decision
+
+blocked condition
+→ blocker
+
+progress boundary
+→ milestone
+
+handoff
+→ handoff
+
+completed bounded run
+→ result
+
+ordinary useful annotation
+→ note
+
+ordinary annotation
+→ note
+
+authorized work changed
+→ STOP
+→ /planning
+→ new Issue revision
 ```
 
 A continuation entry uses the handoff kind directly:
@@ -160,8 +203,24 @@ pre-existing / infrastructure) before touching unrelated code.
 
 Close through the lifecycle surface only after validation + provenance +
 checkpoint: `sb issue state <ref> done` (or the
-`close|reopen|defer|cancel|archive` aliases; `sb issue close <ref>` is the done
-transition most lanes use), then release the claim.
+`close|reopen|defer|cancel|archive` aliases; `sb issue close <ref> --outcome
+<o> --reason <r>` writes the structured Closure with result, receipt,
+validation, artifact refs), then release the claim.
+
+Before closure: SUCCESS satisfied, VALIDATION complete, required OUTPUT exists,
+material result durable, important decisions/findings durable, provenance
+sufficient, and no incompatible blocker remains. Do not close solely because a
+commit exists.
+
+## Coordinator duties (ADR §74)
+
+Coordinator workflows periodically inspect children, claims, pending asks, new
+results, blockers, provenance, and release gates, and journal only material
+root-level state. No giant rewritten root description. No child transcript
+duplication. Do not duplicate full child Journal bodies. Inspect with
+`sb issue children <ref>`, `sb issue tree`, `sb issue show <ref>`,
+`sb issue resume <ref>`, `sb journal since <ref> <cursor>`, and
+`sb provenance trace <ref>`.
 
 ## What this skill deliberately does not own
 

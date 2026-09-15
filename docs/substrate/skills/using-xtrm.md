@@ -75,7 +75,8 @@ Issue → claim → resume → execute → journal → validate → provenance �
    `sb issue note <ref> "text" --kind <kind>` (`--file <path|->` for long
    text): note (ordinary annotation), finding (observation), decision
    (choice + reason), blocker (external dependency), milestone (progress
-   boundary), handoff (continuation). Entries are append-only and never bump
+   boundary), handoff (continuation), result (completed bounded run).
+   Full kind mapping lives in Journal kinds (ADR §73) below. Entries are append-only and never bump
    the Issue revision. For mechanical payloads use `sb journal append <ref>
    --kind … --mechanical …` and `sb journal checkpoint <ref>` at durable
    boundaries (checkpoint and compaction kinds). Do not journal every shell
@@ -114,3 +115,158 @@ surface. Generic contract authoring is `/planning`; cold-start, resume, and
 context-pressure handoff are `starting-and-resuming-work`; peer messaging is
 the multiplexing surface. A fresh worker needs none of your chat — only the
 Issue revision, the capsule, and the journal delta.
+
+## Initialization (ADR §72)
+
+If Substrate reports this repository is uninitialized:
+run `sb init`.
+
+```text
+sb init
+```
+
+Never guess the only project, invent a project id, or manually create/link
+during normal work. One Git repository maps to exactly one Project; `sb init`
+derives the repository identity, creates or adopts the deterministic Project,
+binds the repository, and caches the checkout alias. Worktrees and clones of
+the same repository share the binding. Contract changes use only
+`sb issue edit` and `sb plan apply`; progress uses the Journal.
+
+## Journal kinds (ADR §73)
+
+Canonical guidance:
+
+```text
+material fact
+→ finding
+
+architectural choice
+→ decision
+
+blocked condition
+→ blocker
+
+progress boundary
+→ milestone
+
+handoff
+→ handoff
+
+completed bounded run
+→ result
+
+ordinary useful annotation
+→ note
+
+ordinary annotation
+→ note
+
+authorized work changed
+→ STOP
+→ /planning
+→ new Issue revision
+```
+
+Live verbs (append-only; notes never bump the revision):
+
+```text
+sb issue note <ref> "text" --kind note|finding|decision|blocker|milestone|handoff|result
+sb journal append <ref> --kind finding|decision|blocker|milestone|handoff|result|checkpoint|compaction|note
+sb journal checkpoint <ref>
+sb journal show <ref> / sb journal since <ref> <cursor> / sb journal render <ref>
+```
+
+A result carries a bounded payload and does not close the Issue. Checkpoint
+and compaction require a mechanical row. Do not journal every shell command.
+If authorized work changed, execution pauses → `/planning` → new Issue
+revision → new readiness attestation → execution resumes. Never smuggle new
+scope into prompts, messages, or journal entries.
+
+## Coordinator methodology (ADR §§51, 74)
+
+Coordinator Journals represent programme continuity, not child transcript
+aggregation. A root/coordinator Journal contains programme decisions,
+cross-child blockers, integration milestones, child status transitions,
+critical path, pending questions, dispatch/retry decisions, and release
+gates. A coordinator checkpoint references child Issues, child states, latest
+child checkpoints, active claims, active Specialists, pending asks, and
+important receipts/PRs. Do not duplicate full child Journal bodies.
+
+Coordinator workflows periodically inspect children, claims, pending asks, new
+results, blockers, provenance, and release gates, and journal only material
+root-level state. No giant rewritten root description. No child transcript
+duplication. Inspect with `sb issue children <ref>`, `sb issue tree`,
+`sb issue show <ref>`, `sb issue resume <ref>`, `sb journal since <ref>
+<cursor>`, and `sb provenance trace <ref>`.
+
+## Ordinary-worker methodology (ADR §52)
+
+Ordinary workers journal high-signal durable facts only. Do journal a material
+finding, an important decision, an external blocker, a meaningful milestone, a
+handoff, a result, and a checkpoint. Do not journal every shell command, every
+tool call, chain-of-thought, transient speculation, or routine exploration.
+
+## Reviewer and validator methodology (ADR §53)
+
+Reviewers and validators are actors. Their durable output may include a Journal
+result, Journal findings, validation refs, and receipt/evidence refs. Example
+outcome `PASS_WITH_NOTES` with findings listed plus evidence refs. No commit
+required. A reviewer finding that changes authorized requirements is a
+planning cycle, not a comment edit.
+
+## Issue versus Journal boundary (ADR §54)
+
+The Issue owns execution authority. The Journal records what happens.
+
+```text
+progress update
+→ Journal
+
+finding
+→ Journal
+
+decision within existing authority
+→ Journal
+
+blocker
+→ Journal
+
+result
+→ Journal
+
+handoff
+→ Journal
+```
+
+But SCOPE changes, SUCCESS changes, CONSTRAINT changes, VALIDATION changes,
+OUTPUT changes, and material scrutiny/ownership changes require stop execution
+→ `/planning` → new Issue revision → readiness → continue. Do not use Journal
+entries to bypass contract revision.
+
+Explicit boundaries: Journal != Issue. Journal != Memory. Messages !=
+authority. Provenance != progress notes. Messages coordinate but never silently
+change the contract. Executor summaries are claims; provenance records what
+execution produced.
+
+## Resume methodology (ADR §55)
+
+Normal continuation reconstructs from current Issue revision plus latest
+checkpoint plus Journal delta since checkpoint plus claim plus blockers plus
+child status plus pending asks plus provenance state. This produces the Resume
+Capsule (`sb issue resume <ref>` plus `sb journal since <ref> <cursor>`). A
+worker should not need the previous chat transcript.
+
+## Closeout (ADR §75)
+
+Before closure: SUCCESS satisfied, VALIDATION complete, required OUTPUT exists,
+material result durable, important decisions/findings durable, provenance
+sufficient, and no incompatible blocker remains. Then write structured Closure:
+
+```text
+sb issue close <ref> --outcome <completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned> --reason <r> --result <a,b> --receipt <a,b> --validation <a,b> --artifact <a,b>
+sb issue release <ref> --holder <who>
+```
+
+Do not close solely because a commit exists. Closure answers why the Issue
+became terminal; the reason lives in the Closure row, never only in git log.
+Stopping one execution is not a close: release the claim instead.

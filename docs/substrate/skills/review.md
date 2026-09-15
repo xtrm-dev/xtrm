@@ -14,6 +14,15 @@
 Review judges a pinned Issue revision against what execution actually produced. It
 does not re-author the contract in a comment thread.
 
+If Substrate reports this repository is uninitialized: run `sb init`.
+
+```text
+sb init
+```
+
+Never guess the only project, invent a project id, or manually create/link
+during normal work.
+
 ## What the reviewer consumes (§36)
 
 ```text
@@ -90,6 +99,47 @@ command — record findings with evidence, not a command log. Kind meanings
 (finding/decision/blocker/milestone/handoff/note) are owned by the implementation
 reference; the reviewer consumes findings and decisions, never redefines them.
 
+Canonical kind mapping (ADR §73):
+
+```text
+material fact
+→ finding
+
+architectural choice
+→ decision
+
+blocked condition
+→ blocker
+
+progress boundary
+→ milestone
+
+handoff
+→ handoff
+
+completed bounded run
+→ result
+
+ordinary useful annotation
+→ note
+
+ordinary annotation
+→ note
+
+authorized work changed
+→ STOP
+→ /planning
+→ new Issue revision
+```
+
+Reviewers and validators are actors. Their durable output may include a Journal
+result, Journal findings, validation refs, and receipt/evidence refs. Example
+outcome `PASS_WITH_NOTES` with findings listed plus evidence refs. No commit
+required. Ordinary workers journal high-signal durable facts only: a material
+finding, an important decision, an external blocker, a meaningful milestone, a
+handoff, a result, and a checkpoint. Do not journal every shell command, every
+tool call, chain-of-thought, transient speculation, or routine exploration.
+
 ## Handoff, close, and compaction around review (§§19–20)
 
 Review handoff = Issue stays authority + bounded Journal handoff/checkpoint
@@ -101,10 +151,22 @@ provenance state, durable Substrate state wins.
 
 Review lanes close through the lifecycle surface
 (`sb issue state <ref> done`, or the `close|reopen|defer|cancel|archive`
-aliases; `sb issue close <ref>` performs the done transition) after validation + provenance + checkpoint, with the claim released
+aliases; `sb issue close <ref> --outcome <o> --reason <r>` writes the structured
+Closure with result, receipt, validation, artifact refs) after validation + provenance + checkpoint, with the claim released
 (`sb issue claim <ref> --holder <who>` to acquire, `sb issue release <ref> --holder <who>`
 to release). A claim is an atomic lease, not an assignee label, and review-lane
 mutation requires the writer lease.
+
+Before closure: SUCCESS satisfied, VALIDATION complete, required OUTPUT exists,
+material result durable, important decisions/findings durable, provenance
+sufficient, and no incompatible blocker remains. Do not close solely because a
+commit exists. Contract changes use only `sb issue edit` and `sb plan apply`;
+progress uses the Journal.
+
+Coordinator workflows periodically inspect children, claims, pending asks, new
+results, blockers, provenance, and release gates, and journal only material
+root-level state. No giant rewritten root description. No child transcript
+duplication.
 
 No active Beads commands. Historical Beads references, where unavoidable, are
 explicitly marked as history ("retired", "formerly", "migration") and never as
