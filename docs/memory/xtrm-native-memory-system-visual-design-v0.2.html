@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>XTRM Native Memory System v0.2</title>
+<style>
+:root{
+  --bg:#090c11;--panel:#101621;--panel2:#151d2a;--line:#273247;
+  --fg:#edf2f8;--muted:#96a2b3;--blue:#5b8cff;--cyan:#61d6ff;
+  --green:#6fd69a;--amber:#f1c56f;--red:#ff7b8d;--purple:#b89aff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:
+radial-gradient(circle at 10% 0,rgba(91,140,255,.12),transparent 28%),
+radial-gradient(circle at 90% 0,rgba(97,214,255,.08),transparent 25%),var(--bg);
+color:var(--fg);font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
+.wrap{max-width:1500px;margin:auto;padding:28px}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.008)),var(--panel);
+border:1px solid var(--line);border-radius:18px}
+.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:18px}
+.hero>div{padding:28px}
+.ey{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan);font-weight:800}
+h1{font-size:42px;line-height:1.04;margin:8px 0 14px}
+h2{font-size:25px;margin:0 0 13px}
+h3{font-size:15px;margin:0 0 6px}
+p{color:var(--muted);margin:0}
+.quote{margin-top:20px;padding:16px;border:1px solid #34415a;border-radius:14px;background:#0d1420;font-size:18px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.section{margin-top:22px}
+.head{display:flex;justify-content:space-between;gap:18px;align-items:end;margin-bottom:11px}
+.head p{max-width:720px}
+.item{padding:18px}
+.item ul{margin:10px 0 0;padding-left:17px;color:var(--muted);font-size:13px}
+.flow{display:grid;grid-template-columns:repeat(7,1fr);gap:9px;padding:16px}
+.node{padding:14px;border:1px solid var(--line);border-radius:13px;background:var(--panel2);min-height:108px;position:relative}
+.node:not(:last-child):after{content:"→";position:absolute;right:-14px;top:40%;color:#6f7e94;z-index:2;font-size:20px}
+.node b{display:block;margin:5px 0}.node small{color:var(--muted)}
+.blue{border-color:rgba(91,140,255,.55)}.green{border-color:rgba(111,214,154,.5)}
+.amber{border-color:rgba(241,197,111,.5)}.purple{border-color:rgba(184,154,255,.5)}.red{border-color:rgba(255,123,141,.5)}
+.arch{padding:18px;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;overflow:auto;background:#0b1018}
+.table{width:100%;border-collapse:collapse;font-size:13px}
+.table th,.table td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.table th{color:#cfd8e5}.table td{color:var(--muted)}
+.code{padding:14px;background:#0b1119;border:1px solid #233047;border-radius:12px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;color:#cbd6e5}
+.stack{display:flex;flex-direction:column;gap:8px;padding:16px}
+.step{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:11px;border:1px solid var(--line);border-radius:12px;background:#0d131d}
+.step span:last-child{color:var(--muted)}
+.road{display:grid;grid-template-columns:repeat(7,1fr);gap:9px;padding:16px}
+.phase{padding:13px;border:1px solid var(--line);border-radius:13px;background:#0d131d;min-height:170px}
+.phase .n{font-size:10px;letter-spacing:.12em;color:var(--cyan);font-weight:800}
+.phase ul{padding-left:15px;color:var(--muted);font-size:12px;margin:7px 0 0}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.pill{border:1px solid var(--line);border-radius:999px;padding:7px 9px;color:#cbd4e0;font-size:12px;background:#0d131d}
+.footer{margin:22px 0 4px;text-align:center;padding:18px;border:1px solid #34415a;border-radius:15px;background:rgba(91,140,255,.05)}
+@media(max-width:1050px){.hero,.grid4,.grid3,.grid2{grid-template-columns:1fr 1fr}.flow,.road{grid-template-columns:repeat(2,1fr)}.node:after{display:none}}
+@media(max-width:700px){.wrap{padding:14px}.hero,.grid4,.grid3,.grid2,.flow,.road{grid-template-columns:1fr}.step{grid-template-columns:1fr}h1{font-size:34px}}
+</style>
+</head>
+<body><div class="wrap">
+
+<section class="hero">
+<div class="card">
+<div class="ey">XTRM / Substrate / Harness</div>
+<h1>Native Memory System v0.2</h1>
+<p>Durable history remains in Git + Substrate. Semantic memory keeps only reusable meaning. Python becomes the stateful workbench used to investigate that memory without owning it.</p>
+<div class="quote"><b>Python remembers the investigation.</b><br><b>Substrate remembers the truth.</b></div>
+</div>
+<div class="card">
+<div class="ey">Core invariant</div>
+<h2>History ≠ Memory ≠ Context</h2>
+<div class="pills"><span class="pill">Git = change</span><span class="pill">Substrate = work/evidence</span><span class="pill">Memory = lesson</span><span class="pill">Context = selection</span></div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">01</div><h2>End-to-end memory architecture</h2></div><p>Nothing is copied blindly. Durable source → rebuildable index → semantic candidate → governed memory → bounded activation context.</p></div>
+<div class="card flow">
+<div class="node blue"><small>Truth</small><b>Git</b><small>SHA, diff, messages, chronology</small></div>
+<div class="node blue"><small>Truth</small><b>Substrate</b><small>Issues, journal, receipts, evidence</small></div>
+<div class="node amber"><small>Derived</small><b>History index</b><small>Exact refs + FTS5</small></div>
+<div class="node purple"><small>Proposal</small><b>MemoryCandidate</b><small>0..N per consolidation</small></div>
+<div class="node green"><small>Authority</small><b>MemoryRecord</b><small>Evidence-backed + temporal</small></div>
+<div class="node amber"><small>Query</small><b>Lenses</b><small>herd / workgroup / identity</small></div>
+<div class="node green"><small>Use</small><b>Context</b><small>Bounded, pull-based</small></div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">02</div><h2>Future harness boundary</h2></div><p>The kernel consumes capabilities. It never opens state.db and never becomes the memory runtime.</p></div>
+<div class="card arch">Future XTRM Harness
+       |
+ActivationRuntime
+       |
+ResolvedCapabilityGrant
+       |
+ +-----+----------------------+
+ |                            |
+AgentSessionRuntime     PythonExecutionSession
+ |                            |
+ |                      xtrm.history.*
+ |                      xtrm.memory.*
+ |                            |
+ +-------------+--------------+
+               |
+       HostCapabilityBridge
+               |
+       CapabilityGateway
+          |         |
+   HistoryQuery  MemoryQuery
+          |         |
+          +----+----+
+               |
+           StateClient
+               |
+           xt daemon
+               |
+           state.db</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">03</div><h2>Authority split</h2></div></div>
+<div class="grid2">
+<div class="card item green"><h3>PythonExecutionSession owns</h3><ul><li>progressive investigation</li><li>aggregation</li><li>comparison</li><li>retrieval drill-down</li><li>candidate drafting</li><li>intermediate result sets</li><li>evaluation workflows</li></ul></div>
+<div class="card item red"><h3>PythonExecutionSession does not own</h3><ul><li>MemoryRecord promotion</li><li>supersession/invalidation</li><li>lifecycle transitions</li><li>SQLite persistence</li><li>ACL/capability policy</li><li>canonical indexing daemon</li><li>durable namespace persistence</li></ul></div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">04</div><h2>Kernel identity and lifecycle</h2></div><p>The kernel follows XTRM execution identity, not merely Pi session identity.</p></div>
+<div class="card stack">
+<div class="step"><b>execution_id + generation</b><span>Canonical key for PythonExecutionSession.</span></div>
+<div class="step"><b>provider reconnect</b><span>May reuse the same kernel if the logical execution is unchanged.</span></div>
+<div class="step"><b>new attempt</b><span>May start a fresh kernel to avoid stale scratch state.</span></div>
+<div class="step"><b>new generation</b><span>Always receives a fresh kernel.</span></div>
+<div class="step"><b>terminal execution</b><span>Kernel is killed. Durable state stays in Substrate.</span></div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">05</div><h2>HostCapabilityBridge</h2></div><p>Python receives thin capability proxies over an explicit host-controlled transport.</p></div>
+<div class="grid2">
+<div class="card item">
+<h3>Conceptual transport</h3>
+<div class="code">fd0  cell requests
+fd1  cell responses
+fd2  diagnostics
+fd3  XTRM capability RPC</div>
+</div>
+<div class="card item">
+<h3>Authorization path</h3>
+<div class="code">Python proxy
+  -> HostCapabilityBridge
+  -> CapabilityGateway.authorize(...)
+  -> typed service
+  -> StateClient
+  -> xt daemon</div>
+</div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">06</div><h2>Provider-neutral API</h2></div></div>
+<div class="grid3">
+<div class="card item blue"><h3>History</h3><div class="code">history.search
+history.get</div></div>
+<div class="card item green"><h3>Memory read</h3><div class="code">memory.search
+memory.get
+memory.explain</div></div>
+<div class="card item purple"><h3>Governed proposal</h3><div class="code">memory.propose</div><p style="margin-top:8px">Proposal is not promotion.</p></div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">07</div><h2>Python client surface</h2></div><p>Thin clients + bounded result objects. No replicated Substrate domain model.</p></div>
+<div class="grid2">
+<div class="card item"><h3>HistoryClient</h3><div class="code">search(...)
+for_file(...)
+get(...)</div></div>
+<div class="card item"><h3>MemoryClient</h3><div class="code">search(...)
+get(...)
+explain(...)
+candidate(...)</div></div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">08</div><h2>Bounded result objects</h2></div><p>Large result sets stay in Python memory; the model sees only compact previews.</p></div>
+<div class="card arch">r = xtrm.history.search(..., limit=50)
+
+Python memory:
+  50 HistoryHit objects
+  stable refs
+  pagination
+  snapshot id
+
+Model context:
+  r.preview(5)
+  r.refs()
+  r.by_path()
+  r.failures()
+
+Rule:
+  __repr__ is always bounded.</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">09</div><h2>preflight() v2</h2></div><p>Preflight is composition, not authority.</p></div>
+<div class="card flow" style="grid-template-columns:repeat(5,1fr)">
+<div class="node blue"><small>Trigger</small><b>Edit intent</b><small>bugfix / high-impact / uncertainty</small></div>
+<div class="node amber"><small>History</small><b>for_file()</b><small>Git + Substrate provenance</small></div>
+<div class="node green"><small>Semantic</small><b>memory.search()</b><small>constraints / failures / decisions</small></div>
+<div class="node blue"><small>Workspace</small><b>diffstat()</b><small>current pending change</small></div>
+<div class="node purple"><small>Output</small><b>PreflightResult</b><small>bounded digest + refs</small></div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">10</div><h2>Semantic lifecycle</h2></div></div>
+<div class="card stack">
+<div class="step"><b>Gather</b><span>Collect authoritative evidence bundle.</span></div>
+<div class="step"><b>Propose</b><span>Produce zero or more MemoryCandidate objects.</span></div>
+<div class="step"><b>Validate</b><span>Verify refs, safety, and present-state correctness.</span></div>
+<div class="step"><b>Reconcile</b><span>duplicate / support / supersede / contradiction / invalid.</span></div>
+<div class="step"><b>Promote</b><span>Host-owned policy creates MemoryRecord.</span></div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">11</div><h2>Governed chain submission</h2></div></div>
+<div class="card arch">Agent / coordinator
+    |
+    |  xtrm.memory.candidate(...)
+    v
+ResultEnvelope
+    memory_candidates: [...]
+    |
+    v
+Host validation
+    |
+    v
+MemoryCandidate state
+    |
+    v
+Policy-controlled promotion</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">12</div><h2>Retrieval strategy</h2></div></div>
+<div class="grid2">
+<div class="card item green"><h3>v0</h3><div class="pills"><span class="pill">exact path/SHA/id</span><span class="pill">FTS5</span><span class="pill">deterministic rank</span><span class="pill">bounded output</span></div></div>
+<div class="card item purple"><h3>Eval-gated later</h3><div class="pills"><span class="pill">sqlite-vec exact KNN</span><span class="pill">RRF</span><span class="pill">rerank optional</span></div></div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">13</div><h2>MemoryIndexWorker is separate</h2></div><p>Using Python for both is fine. Sharing lifecycle and authority is not.</p></div>
+<div class="grid2">
+<div class="card item blue"><h3>Agent PythonExecutionSession</h3><p>Exploratory, ephemeral, execution-scoped.</p></div>
+<div class="card item amber"><h3>MemoryIndexWorker</h3><p>Deterministic, rebuildable infrastructure worker.</p></div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">14</div><h2>Roadmap</h2></div></div>
+<div class="card road">
+<div class="phase blue"><div class="n">MEM-0</div><b>History + FTS5</b><ul><li>source projection</li><li>history API</li><li>exact + lexical retrieval</li><li>telemetry</li></ul></div>
+<div class="phase blue"><div class="n">MEM-0B</div><b>Workbench</b><ul><li>HostCapabilityBridge</li><li>PythonExecutionSession</li><li>HistoryClient</li><li>preflight v2</li></ul></div>
+<div class="phase green"><div class="n">MEM-1</div><b>Semantic lifecycle</b><ul><li>MemoryCandidate</li><li>MemoryRecord</li><li>supersession</li><li>explain</li></ul></div>
+<div class="phase amber"><div class="n">MEM-2</div><b>Consolidation</b><ul><li>close trigger</li><li>failure trigger</li><li>ResultEnvelope</li><li>promotion policy</li></ul></div>
+<div class="phase purple"><div class="n">MEM-3</div><b>Provider parity</b><ul><li>Pi</li><li>Claude</li><li>Python</li><li>TUI/GUI</li></ul></div>
+<div class="phase blue"><div class="n">MEM-4/5</div><b>Bootstrap + eval</b><ul><li>historical analysis</li><li>temporal benchmark</li><li>dense gate</li></ul></div>
+<div class="phase purple"><div class="n">MEM-6</div><b>Advanced relations</b><ul><li>conditional only</li><li>causal/temporal</li><li>no default graph DB</li></ul></div>
+</div>
+</section>
+
+<section class="section">
+<div class="head"><div><div class="ey">15</div><h2>Acceptance boundary</h2></div></div>
+<div class="card">
+<table class="table">
+<tr><th>Must be true</th><th>Why</th></tr>
+<tr><td>Python can retrieve and hold large history sets without dumping them into context</td><td>Stateful workbench value</td></tr>
+<tr><td>Python cannot directly mutate canonical memory</td><td>One authority model</td></tr>
+<tr><td>preflight v2 works without Beads</td><td>Native cutover complete</td></tr>
+<tr><td>Superseded memories stay out of normal retrieval</td><td>Temporal correctness</td></tr>
+<tr><td>All adapters use the same capability contract</td><td>Provider neutrality</td></tr>
+<tr><td>state.db remains the single local authority</td><td>No second runtime</td></tr>
+<tr><td>Telemetry measures recall and pollution</td><td>Evidence-gated evolution</td></tr>
+</table>
+</div>
+</section>
+
+<div class="footer"><b>Python remembers the investigation. Substrate remembers the truth.</b><br><span style="color:var(--muted)">The kernel is a workbench. The daemon is the authority.</span></div>
+
+</div></body></html>
