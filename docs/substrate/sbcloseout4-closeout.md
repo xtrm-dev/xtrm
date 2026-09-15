@@ -7,8 +7,8 @@ Evidence only — no runtime implementation; failures would be filed as child is
 ## Verdict
 
 §103 is mechanically true on the mirror with an isolated HOME: **15/15 checks pass**
-(19/19 tests including the §85 second leg, the §102 invariant, the §103 record and the
-negative-control guard), full `npm test` **662/662 pass, 0 fail**, `npx tsc --noEmit`
+(20/20 tests including the §85 second leg, the §102 invariant, the §103 record and the
+negative-control guard), full `npm test` **664/664 pass, 0 fail**, `npx tsc --noEmit`
 **exit 0**. The negative control proves the suite fails when §85 is broken and passes again
 after restore. No child issues are filed by A1.
 
@@ -54,7 +54,7 @@ after restore. No child issues are filed by A1.
 | §98 no fabrication | bare note; minimal dispatch | note envelope null + IDs null; binding session/activation/attempt + envelope session/specialist null | N/A (absence is the evidence); known participant/workspace persist |
 | §102 invariant | init→create→attest→claim→note→dispatch→result→receipt/commit→validate→close→resume/trace | revision/hash stable; validate/close/resume/trace all succeed | rev N + contract hash, `bnd_…`, `jrn_…`, `rcp_…`, commit `c…c`, Closure `completed` |
 | §103 complete | one-command init; uninitialized-isolation; worktree/clone sharing; durable explain; resume; help/vocab/docs | all six bullets mechanically observed (see transcript) | cites the rows above; `JOURNAL_KINDS`/`CLOSURE_OUTCOMES` imports; six operator docs present |
-| Negative control | temporarily reintroduce `only.length===1` shortcut in `resolveProject` | §85 fails (`0 !== 1`), guard fails; after restore 19/19 + tsc 0 | transcript `sbcloseout4-negative-control-transcript.md` |
+| Negative control | temporarily reintroduce `only.length===1` shortcut in `resolveProject` | §85 fails (`0 !== 1`), live-source guard fails, variant guard passes; after restore 20/20 + tsc 0 | transcript `sbcloseout4-negative-control-transcript.md` |
 
 Synthetic IDs are used throughout (`sess-a1-*`, `act-a1-*`, `github:acme/…`, SHAs
 `a…a`/`b…b`/`c…c`): the durable linkage model is proven; live-provider wiring is
@@ -74,3 +74,42 @@ P1 stretch (§§61, 81) and §99 non-goals were explicitly not gated and are not
 Isolated HOME + temp store on every run; mirror CLI via node only; exact command/env/output
 recorded per check; unknown labelled UNVERIFIED; no commit/push/tag/branch; no writes
 outside the mirror; live worktree untouched; evidence only.
+
+## XTRM-252.18 hardening addendum (A1 P2 residuals)
+
+The A1 revision closed PASS with five non-blocking test-strengthening items. They are now
+applied in the same suite; the A1 verdict above is restated against the hardened suite
+(20/20 tests, 664/664 full suite, tsc exit 0).
+
+- §103 close help: the `issue close --help` output was discarded (`void closeHelp`), so
+  "help teaches one model" had no assertion behind it. The usage line inside the help text
+  is now asserted against the full `CLOSURE_OUTCOMES` vocabulary. Note the run goes through
+  `env.run`, which injects `--json`: the page arrives as the envelope's `text` field, and
+  reading the raw stdout would treat the whole JSON line (including the Methodology
+  paragraph) as the usage line and mask a usage-line regression.
+- §103 operator docs: the base was `new URL("../../docs/substrate/", import.meta.url)`,
+  which from `packages/substrate/tests/` resolves to `packages/docs/substrate` — a directory
+  that does not exist — and the URL was discarded. The path is now the repo root
+  (`../../../docs/substrate/`) and all six operator docs (`README`, `workflow`, `journal`,
+  `provenance`, `repository-identity`, `cli`) must exist and be non-empty.
+- §93 capsule: marker absence alone passed on an empty capsule. The test now asserts
+  `children.length === 2`, a durable `humanRef` and a non-null `checkpointRef` per child,
+  and the root's own `latestCheckpoint`.
+- §89 determinism: the old assertion was a disjunction (`!id.match(/_[0-9a-f]{4,}$/) ||
+  id.includes("org")`) that passed on either leg. Both ids are now checked for the absence
+  of a random suffix, both are re-checked for stability across a second `sb init`, and the
+  collision loser must be owner-qualified. Requiring the org leg on the *winner* would be
+  wrong: the first repository to bind keeps the basename candidate (`prj_a1svc`), so only
+  the loser carries the owner segment.
+- Negative-control guard: the literal `length === 1` substring match with two comment
+  prefixes missed `projects.length==1` and `rows.size == 1`, and treated a `/* … */`
+  comment as live code. The guard now normalizes whitespace and strips all comment styles,
+  and a second test pins the variants.
+
+Mutants run (each must fail at least one assertion, all observed failing then restored
+green): m1 drop one outcome from the `issue.close` usage line; m2 remove one of the six
+operator docs; m3 return `children: []` from the capsule; m4 reintroduce a live
+`projects.length === 1` shortcut; m5 reintroduce it in the whitespace-variant spelling.
+m1 required the usage-line fix above: the first two attempts passed under the mutant
+because the page-level `includes` and then the whole-JSON-line lookup both saw the
+vocabulary in the Methodology paragraph.
