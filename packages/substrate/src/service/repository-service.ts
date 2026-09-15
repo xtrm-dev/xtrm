@@ -21,6 +21,16 @@ import {
 } from "../domain/repository.ts";
 import { IssueService } from "./issue-service.ts";
 
+// XTRM-361: `sb init` must adopt the Project a durable checkout link already
+// names, and must never overwrite such a link. See `linkedProjectFor` and
+// `cacheCheckoutAlias`.
+const RELINK_REPAIR_ACTION =
+  "re-link this checkout deliberately with `sb project link --project <id>`, or bind the intended repository instead";
+
+function normalizeRoot(path: string): string {
+  return path.replace(/\/+$/, "") || "/";
+}
+
 /**
  * Contradictory durable evidence (ADR §15). Carries the three facts the ADR
  * requires the failure to report: repository identity, the conflicting Project,
@@ -211,7 +221,45 @@ export class RepositoryService {
       let created = false;
       let adopted = false;
 
-      for (const candidate of candidates) {
+      // An existing checkout link is durable, observed evidence of the intended
+      // Project (ADR §98). When the longest linked ancestor names a Project that
+      // exists and is unbound, adopt it instead of inventing a deterministic
+      // candidate: a repository that resolves to a Project must bind to that
+      // Project, never to a second, empty one (XTRM-361).
+      const linked = this.linkedProjectFor(commonRoot);
+      if (linked !== null) {
+        const linkedRow = this.projectRow(linked.projectId);
+        if (!linkedRow) {
+          throw new RepositoryBindingConflictError({
+            repositoryKey,
+            conflictingProjectId: linked.projectId,
+            detail: `the checkout link for ${linked.root} names a Project that does not exist`,
+            repairAction: RELINK_REPAIR_ACTION,
+          });
+        }
+        const boundElsewhere = this.bindingsForProject(linked.projectId)
+          .map((b) => b.repositoryKey)
+          .filter((k) => k !== repositoryKey);
+        if (boundElsewhere.length === 0) {
+          chosen = { id: linkedRow.id, prefix: linkedRow.prefix, name: linkedRow.name };
+          adopted = true;
+        } else if (linked.root !== normalizeRoot(commonRoot)) {
+          // An ancestor link belongs to a different checkout and contradicts
+          // the binding of the Project it names: contradictory durable evidence
+          // fails closed (ADR §15), naming key, conflict and repair.
+          throw new RepositoryBindingConflictError({
+            repositoryKey,
+            conflictingProjectId: linked.projectId,
+            detail: `the linked ancestor ${linked.root} names a Project already bound to another repository (${boundElsewhere.join(", ")})`,
+            repairAction: REPAIR_ACTION,
+          });
+        }
+        // Otherwise the link is this very checkout's root and the repository
+        // merely gained a canonical identity (ADR §9): fall through to the
+        // deterministic candidates and leave the stale alias untouched.
+      }
+
+      for (const candidate of chosen === null ? candidates : []) {
         const boundTo = this.bindingsForProject(candidate.id)
           .map((b) => b.repositoryKey)
           .filter((k) => k !== repositoryKey);
@@ -255,7 +303,7 @@ export class RepositoryService {
           "INSERT INTO repository_bindings (repository_key, project_id, base_branch, canonical_remote, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
         )
         .run(repositoryKey, chosen.id, baseBranch, identity.canonicalRemote, now, now);
-      this.cacheCheckoutAlias(commonRoot, chosen.id);
+      this.cacheCheckoutAlias(repositoryKey, commonRoot, chosen.id);
       const binding = this.getBinding(repositoryKey)!;
       return { binding, projectId: chosen.id, created, adopted, idempotent: false };
     });
@@ -287,7 +335,7 @@ export class RepositoryService {
         .prepare("UPDATE repository_bindings SET base_branch = ?, canonical_remote = ?, updated_at = ? WHERE repository_key = ?")
         .run(baseBranch ?? existing.baseBranch, nextRemote, now, existing.repositoryKey);
     }
-    this.cacheCheckoutAlias(commonRoot, existing.projectId);
+    this.cacheCheckoutAlias(existing.repositoryKey, commonRoot, existing.projectId);
     return {
       binding: this.getBinding(existing.repositoryKey)!,
       projectId: existing.projectId,
@@ -312,14 +360,45 @@ export class RepositoryService {
   }
 
   // checkout_links is the local cache alias, not the authority (ADR §13).
-  private cacheCheckoutAlias(commonRoot: string, projectId: string): void {
+  // XTRM-361: a link that already names a different Project is durable evidence
+  // this write must not silently destroy. Only a deliberate `sb project link`
+  // (or `sb project repair`) repoints a checkout; initialization leaves a
+  // contradicting alias untouched instead of overwriting it.
+  private cacheCheckoutAlias(repositoryKey: string, commonRoot: string, projectId: string): void {
     if (commonRoot === "") return;
+    const root = normalizeRoot(commonRoot);
+    const existing = this.issues.listLinks().find((link) => normalizeRoot(link.gitRoot) === root);
+    if (existing) {
+      if (existing.projectId === projectId) return; // already the right alias: no write
+      if (this.projectRow(existing.projectId)) return; // never overwrite evidence of another Project
+    }
     this.issues.linkCheckout(commonRoot, projectId);
   }
 
-  private projectRow(id: string): { id: string; prefix: string } | null {
-    const row = this.db.prepare("SELECT id, prefix FROM projects WHERE id = ?").get(id) as Row | undefined;
-    return row ? { id: row["id"] as string, prefix: row["prefix"] as string } : null;
+  // The longest linked ancestor of a checkout root, mirroring the resolution
+  // order in IssueService.resolveProject (ADR §5). Clones and worktrees of one
+  // repository inherit the link of their common root.
+  private linkedProjectFor(commonRoot: string): { projectId: string; root: string } | null {
+    if (commonRoot === "") return null;
+    const target = normalizeRoot(commonRoot);
+    let bestRoot = "";
+    let bestProject: string | null = null;
+    for (const link of this.issues.listLinks()) {
+      const root = normalizeRoot(link.gitRoot);
+      if (target !== root && !target.startsWith(root === "/" ? "/" : `${root}/`)) continue;
+      if (root.length > bestRoot.length) {
+        bestRoot = root;
+        bestProject = link.projectId;
+      }
+    }
+    return bestProject === null ? null : { projectId: bestProject, root: bestRoot };
+  }
+
+  private projectRow(id: string): { id: string; prefix: string; name: string } | null {
+    const row = this.db.prepare("SELECT id, prefix, name FROM projects WHERE id = ?").get(id) as Row | undefined;
+    return row
+      ? { id: row["id"] as string, prefix: row["prefix"] as string, name: row["name"] as string }
+      : null;
   }
 
   private projectIdByPrefix(prefix: string): string | null {

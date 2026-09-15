@@ -30,9 +30,11 @@ const NOW = 1788999550162;
 
 // The live store (§90) is a v7 database holding prj_xtrm with Issues,
 // revisions, aliases, locator history, edges, attestations, a claim, journal,
-// an execution binding and four checkout_links rows (xtrm, specialists, core,
-// mmd). The fixture below is that shape in miniature: migration 008 must add
-// the binding table without touching one existing row.
+// an execution binding and five checkout_links rows (xtrm, specialists, core,
+// mmd, platform). The fixture below is that shape in miniature: migration 008
+// must add the binding table without touching one existing row. The platform
+// link is the XTRM-361 shape: a link whose Project differs from the derived
+// basename candidate (`platform` vs `prj_plt`).
 function seedV7Store(path: string): void {
   const db = new DatabaseSync(path);
   db.exec("PRAGMA foreign_keys = ON");
@@ -53,11 +55,13 @@ function seedV7Store(path: string): void {
   project.run("prj_specialists", "SPECIALISTS", "specialists", NOW);
   project.run("prj_core", "CORE", "core", NOW);
   project.run("prj_mmd", "MMD", "mmd", NOW);
+  project.run("prj_plt", "PLT", "platform", NOW);
   const link = db.prepare("INSERT INTO checkout_links (git_root, project_id, linked_at) VALUES (?, ?, ?)");
   link.run("/home/dawid/dev/xtrm", "prj_xtrm", NOW);
   link.run("/home/dawid/dev/specialists", "prj_specialists", NOW);
   link.run("/home/dawid/dev/core", "prj_core", NOW);
   link.run("/home/dawid/projects/mercury/market-data", "prj_mmd", NOW);
+  link.run("/home/dawid/projects/mercury/platform", "prj_plt", NOW);
   const issue = db.prepare(
     `INSERT INTO issues (id, project_id, human_number, kind, title, lifecycle_state, priority, scrutiny,
       current_revision, current_contract_hash, defer_until, created_at, updated_at)
@@ -195,7 +199,7 @@ describe("migrations 008-009 on the live prj_xtrm store shape (§90)", () => {
     assert.equal(bindings.n, 0);
     // The Project surface is untouched: prj_xtrm is neither duplicated nor renumbered.
     const projects = db.prepare("SELECT id, prefix, name FROM projects ORDER BY id").all() as Array<{ id: string; prefix: string }>;
-    assert.deepEqual(projects.map((p) => p.id), ["prj_core", "prj_mmd", "prj_specialists", "prj_xtrm"]);
+    assert.deepEqual(projects.map((p) => p.id), ["prj_core", "prj_mmd", "prj_plt", "prj_specialists", "prj_xtrm"]);
     db.close();
 
     assert.deepEqual(
@@ -330,6 +334,112 @@ describe("binding, adoption and idempotency (§§13-14, §90)", () => {
     assert.equal(bound.adopted, false);
     assert.equal(repos.listBindings().length, 2);
     assert.equal(repos.getBinding(local.repositoryKey)?.projectId, "prj_xtrm");
+  });
+});
+
+describe("XTRM-361: a durable checkout link is evidence, never an overwrite target", () => {
+  it("adopts the Project the checkout link names instead of creating a second one", () => {
+    const { db, svc, repos } = setup();
+    svc.createProject({ id: "prj_plt", prefix: "PLT", name: "platform" });
+    svc.linkCheckout("/home/dawid/projects/mercury/platform", "prj_plt");
+    svc.createIssue({
+      projectId: "prj_plt",
+      title: "existing platform work",
+      kind: "task",
+      contract: { problem: "p", success: "s", scope: ["a"], nonGoals: ["b"], constraints: ["c"], validation: [{ check: "v" }], output: [{ artifact: "o" }] },
+    });
+    const linkBefore = svc.listLinks();
+
+    const result = repos.bindRepository({
+      identity: identityFor("git@github.com:mercuryintelligence/platform.git", "/home/dawid/projects/mercury/platform"),
+      commonRoot: "/home/dawid/projects/mercury/platform",
+      baseBranch: "main",
+      now: 7,
+    });
+
+    // The linked Project is adopted exactly; no prj_platform is invented.
+    assert.equal(result.projectId, "prj_plt");
+    assert.equal(result.created, false);
+    assert.equal(result.adopted, true);
+    assert.equal(result.idempotent, false);
+    assert.deepEqual(
+      svc.listIssues("prj_plt").map((i) => i.humanRef),
+      ["PLT-1"],
+      "the adopted board keeps its Issues",
+    );
+    const projects = db.prepare("SELECT id FROM projects ORDER BY id").all() as Array<{ id: string }>;
+    assert.deepEqual(projects.map((p) => p.id), ["prj_plt"], "no second Project is created");
+    assert.deepEqual(svc.listLinks(), linkBefore, "the checkout link row is untouched (byte-identical)");
+
+    // Idempotent on the second run, and resolution keeps binding precedence.
+    const again = repos.bindRepository({
+      identity: identityFor("git@github.com:mercuryintelligence/platform.git", "/home/dawid/projects/mercury/platform"),
+      commonRoot: "/home/dawid/projects/mercury/platform",
+      now: 8,
+    });
+    assert.equal(again.idempotent, true);
+    assert.equal(again.projectId, "prj_plt");
+    assert.deepEqual(
+      svc.resolveProject({
+        gitRoot: "/home/dawid/projects/mercury/platform",
+        repositoryKey: "github.com/mercuryintelligence/platform",
+      }),
+      { projectId: "prj_plt", source: "binding" },
+    );
+  });
+
+  it("fails closed, with zero writes, when a linked ancestor names a Project bound elsewhere", () => {
+    const { db, svc, repos } = setup();
+    svc.createProject({ id: "prj_plt", prefix: "PLT", name: "platform" });
+    // Another repository already owns prj_plt (bound through its own link).
+    svc.linkCheckout("/y", "prj_plt");
+    repos.bindRepository({
+      identity: identityForRemoteKey("github.com/mercuryintelligence/platform"),
+      commonRoot: "/y",
+      baseBranch: "main",
+    });
+    assert.equal(repos.getBinding("github.com/mercuryintelligence/platform")?.projectId, "prj_plt");
+    // A parent checkout links to that same Project; the child would derive
+    // prj_child and silently take the repository with it.
+    svc.linkCheckout("/x", "prj_plt");
+    const before = {
+      projects: db.prepare("SELECT id FROM projects ORDER BY id").all(),
+      bindings: db.prepare("SELECT repository_key, project_id FROM repository_bindings ORDER BY repository_key").all(),
+      links: svc.listLinks(),
+    };
+
+    assert.throws(
+      () => repos.bindRepository({ identity: identityForRemoteKey("github.com/acme/child"), commonRoot: "/x/child" }),
+      (err: unknown) => {
+        assert.ok(err instanceof RepositoryBindingConflictError);
+        assert.equal(err.repositoryKey, "github.com/acme/child");
+        assert.equal(err.conflictingProjectId, "prj_plt");
+        assert.match(err.message, /Repair:/);
+        return true;
+      },
+    );
+    assert.deepEqual(db.prepare("SELECT id FROM projects ORDER BY id").all(), before.projects, "no Project is created");
+    assert.deepEqual(
+      db.prepare("SELECT repository_key, project_id FROM repository_bindings ORDER BY repository_key").all(),
+      before.bindings,
+      "no binding is written",
+    );
+    assert.deepEqual(svc.listLinks(), before.links, "no link is written");
+  });
+
+  it("never overwrites a checkout link that a deliberate relink pointed elsewhere", () => {
+    const { svc, repos } = setup();
+    svc.createProject({ id: "prj_plt", prefix: "PLT", name: "platform" });
+    svc.createProject({ id: "prj_other", prefix: "OTHER", name: "other" });
+    const identity = identityForRemoteKey("github.com/acme/other");
+    repos.bindRepository({ identity, commonRoot: "/x/other", baseBranch: "main" });
+    // An operator deliberately repoints the checkout (the explicit surface).
+    svc.linkCheckout("/x/other", "prj_plt");
+
+    const again = repos.bindRepository({ identity, commonRoot: "/x/other", now: 99 });
+
+    assert.equal(again.projectId, "prj_other", "the binding still decides resolution");
+    assert.equal(svc.listLinks().find((l) => l.gitRoot === "/x/other")?.projectId, "prj_plt", "the deliberate alias survives");
   });
 });
 
