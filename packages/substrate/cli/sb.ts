@@ -323,9 +323,13 @@ created: false. No project metadata is needed.
 
 Methodology: one Git repository maps to exactly one Project; the derived
 repository identity (remote plus local fingerprint) is the authority, and
-the checkout alias is only a cache. Worktrees and clones of the same
-repository share the binding — never create a second Project for a
-worktree. An uninitialized checkout fails closed on every mutating verb:
+the checkout alias is only a cache. A checkout link that names an existing,
+unbound Project is adopted, so a repository resolves to the Project it
+already names instead of a second empty one; sb init never overwrites a link
+that names a different Project and fails closed when that link is an ancestor
+checkout whose Project another repository already owns. Worktrees and clones
+of the same repository share the binding — never create a second Project for
+a worktree. An uninitialized checkout fails closed on every mutating verb:
 run sb init once inside the repository to bind it.
 
 --json data: {repository: {repositoryKey, canonicalRemote, local, gitRoot},
