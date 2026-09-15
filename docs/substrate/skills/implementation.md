@@ -16,6 +16,15 @@ does not smuggle authority changes inside progress notes.
 
 ## Authority the implementer obeys (§§13–17)
 
+If Substrate reports this repository is uninitialized: run `sb init`.
+
+```text
+sb init
+```
+
+Never guess the only project, invent a project id, or manually create/link
+during normal work.
+
 The executable contract is a ready Issue revision: PROBLEM, SUCCESS, SCOPE,
 NON_GOALS, CONSTRAINTS, VALIDATION, OUTPUT, plus SCRUTINY, ownership, and context.
 Before touching code:
@@ -46,14 +55,48 @@ important architectural choice          → Journal decision
 external dependency preventing progress → Journal blocker
 meaningful completion boundary          → Journal milestone / checkpoint
 continuation for the next worker        → Journal handoff
+completed bounded run                   → Journal result
 ordinary human annotation               → Journal note
+```
+
+Canonical kind mapping (ADR §73):
+
+```text
+material fact
+→ finding
+
+architectural choice
+→ decision
+
+blocked condition
+→ blocker
+
+progress boundary
+→ milestone
+
+handoff
+→ handoff
+
+completed bounded run
+→ result
+
+ordinary useful annotation
+→ note
+
+ordinary annotation
+→ note
+
+authorized work changed
+→ STOP
+→ /planning
+→ new Issue revision
 ```
 
 Live verbs (append-only; notes never bump the revision):
 
 ```text
-sb issue note <ref> "text" --kind note|finding|decision|blocker|milestone|handoff
-sb journal append <ref> --kind finding|decision|blocker|milestone|handoff|checkpoint|compaction
+sb issue note <ref> "text" --kind note|finding|decision|blocker|milestone|handoff|result
+sb journal append <ref> --kind finding|decision|blocker|milestone|handoff|result|checkpoint|compaction|note
 sb journal checkpoint <ref>             # mechanical checkpoint at durable boundaries
 sb journal since <ref> <cursor>         # delta reads only
 sb journal show <ref> / sb journal render <ref>   # bounded history reads
@@ -116,9 +159,26 @@ authorization had not changed.
    from `sb issue resume`. Long transcripts do not belong in the Journal.
 4. Close via the lifecycle surface
    (`sb issue state <ref> done`, or the
-   `close|reopen|defer|cancel|archive` aliases; `sb issue close <ref>` performs the done
-   transition) after validation + provenance +
+   `close|reopen|defer|cancel|archive` aliases; `sb issue close <ref> --outcome
+   <o> --reason <r>` writes the structured Closure with result, receipt,
+   validation, artifact refs) after validation + provenance +
    checkpoint, then release the claim (`sb issue release <ref> --holder <who>`).
+
+Before closure: SUCCESS satisfied, VALIDATION complete, required OUTPUT exists,
+material result durable, important decisions/findings durable, provenance
+sufficient, and no incompatible blocker remains. Do not close solely because a
+commit exists. Contract changes use only `sb issue edit` and `sb plan apply`;
+progress uses the Journal.
+
+Ordinary workers journal high-signal durable facts only: a material finding, an
+important decision, an external blocker, a meaningful milestone, a handoff, a
+result, and a checkpoint. Do not journal every shell command, every tool call,
+chain-of-thought, transient speculation, or routine exploration.
+
+Coordinator workflows periodically inspect children, claims, pending asks, new
+results, blockers, provenance, and release gates, and journal only material
+root-level state. No giant rewritten root description. No child transcript
+duplication.
 
 No active Beads commands. Historical Beads references, where unavoidable, are
 explicitly marked as history ("retired", "formerly", "migration") and never as

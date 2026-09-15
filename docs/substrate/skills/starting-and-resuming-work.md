@@ -40,6 +40,16 @@ continue
 
 ## Cold start or takeover
 
+0. If Substrate reports this repository is uninitialized: run `sb init`.
+
+```text
+sb init
+```
+
+   Never guess the only project, invent a project id, or manually
+   create/link during normal work. Contract changes use only `sb issue edit`
+   and `sb plan apply`; progress uses the Journal.
+
 1. Identify the repository, worktree, and branch.
 2. `sb issue show <ref>` — read the exact Issue revision, its readiness
    (`sb issue validate <ref>`), and current claim state. A draft, stale, or
@@ -91,3 +101,67 @@ stop → revise → re-attest → resume). The full authority stack, worker loop
 journal kinds, and classification rules belong to `using-xtrm`. This skill
 owns one motion only: from nothing (or a failing context) to positioned,
 claimed, capsule-restored, delta-read continuation.
+
+## Journal kinds (ADR §73)
+
+Canonical guidance (full doctrine lives in using-xtrm; resumption uses the
+same mapping):
+
+```text
+material fact
+→ finding
+
+architectural choice
+→ decision
+
+blocked condition
+→ blocker
+
+progress boundary
+→ milestone
+
+handoff
+→ handoff
+
+completed bounded run
+→ result
+
+ordinary useful annotation
+→ note
+
+ordinary annotation
+→ note
+
+authorized work changed
+→ STOP
+→ /planning
+→ new Issue revision
+```
+
+Takeover and continuation use `sb issue note <ref> … --kind
+handoff|finding|decision|blocker|milestone|result|note`, `sb journal append`,
+`sb journal checkpoint <ref>`, `sb journal show <ref>`, and `sb journal since
+<ref> <cursor>`. If authorized work changed, execution pauses → `/planning` →
+new Issue revision → new readiness attestation → execution resumes.
+
+Normal continuation reconstructs from current Issue revision plus latest
+checkpoint plus Journal delta since checkpoint plus claim plus blockers plus
+child status plus pending asks plus provenance state. This produces the Resume
+Capsule. A worker should not need the previous chat transcript.
+
+## Coordinator and closeout references (ADR §§74–75)
+
+Coordinator workflows periodically inspect children, claims, pending asks, new
+results, blockers, provenance, and release gates, and journal only material
+root-level state. No giant rewritten root description. No child transcript
+duplication. Do not duplicate full child Journal bodies.
+
+Before closure: SUCCESS satisfied, VALIDATION complete, required OUTPUT exists,
+material result durable, important decisions/findings durable, provenance
+sufficient, and no incompatible blocker remains. Then write structured Closure
+(`sb issue close <ref> --outcome <o> --reason <r>` plus result, receipt,
+validation, artifact refs; then `sb issue release <ref> --holder <who>`). Do
+not close solely because a commit exists.
+
+Explicit boundaries: Journal != Issue. Journal != Memory. Messages !=
+authority. Provenance != progress notes.

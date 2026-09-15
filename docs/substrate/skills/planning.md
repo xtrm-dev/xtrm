@@ -118,3 +118,74 @@ and durable human ref.
 A reviewer finding that changes authorized requirements is a planning cycle,
 not a comment edit: the contract moves, readiness resets, execution resumes
 only after re-attestation.
+
+## Initialization (ADR §72)
+
+If Substrate reports this repository is uninitialized: run `sb init`.
+
+```text
+sb init
+```
+
+Never guess the only project, invent a project id, or manually create/link
+during normal work. Contract changes use only `sb issue edit` and
+`sb plan apply`; progress uses the Journal.
+
+## Journal kinds (ADR §73)
+
+Canonical guidance (full doctrine lives in using-xtrm; planning sessions use
+the same mapping):
+
+```text
+material fact
+→ finding
+
+architectural choice
+→ decision
+
+blocked condition
+→ blocker
+
+progress boundary
+→ milestone
+
+handoff
+→ handoff
+
+completed bounded run
+→ result
+
+ordinary useful annotation
+→ note
+
+ordinary annotation
+→ note
+
+authorized work changed
+→ STOP
+→ /planning
+→ new Issue revision
+```
+
+Planning continuity uses `sb issue note <ref> … --kind
+note|finding|decision|blocker|milestone|handoff|result`, `sb journal append`,
+`sb journal checkpoint <ref>`, `sb issue resume <ref>`, and `sb journal since
+<ref> <cursor>`. If authorized work changed, execution pauses → `/planning` →
+new Issue revision → new readiness attestation → execution resumes.
+
+## Coordinator and closeout references (ADR §§74–75)
+
+Coordinator workflows periodically inspect children, claims, pending asks, new
+results, blockers, provenance, and release gates, and journal only material
+root-level state. No giant rewritten root description. No child transcript
+duplication. Do not duplicate full child Journal bodies.
+
+Before closure: SUCCESS satisfied, VALIDATION complete, required OUTPUT exists,
+material result durable, important decisions/findings durable, provenance
+sufficient, and no incompatible blocker remains. Then write structured Closure
+(`sb issue close <ref> --outcome <o> --reason <r>` plus result, receipt,
+validation, artifact refs; then `sb issue release <ref> --holder <who>`). Do
+not close solely because a commit exists.
+
+Explicit boundaries: Journal != Issue. Journal != Memory. Messages !=
+authority. Provenance != progress notes.
