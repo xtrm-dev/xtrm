@@ -101,8 +101,8 @@ A finished plan hands off like any work: the created or revised Issues stay
 the executable authority; a bounded Journal handoff entry records the plan
 key, created refs, attestation state, blockers, and pending work; the next
 worker restarts from `sb issue resume`. When the planning Issue itself is
-done, validate, checkpoint, `sb issue close <ref>`, and `sb issue release
-<ref> --holder <who>`.
+done, validate, checkpoint, `sb issue close <ref> --outcome <o> --reason <r>`,
+and `sb issue release <ref> --holder <who>`.
 
 ## Edit classification (mechanical)
 
@@ -158,8 +158,6 @@ completed bounded run
 ordinary useful annotation
 → note
 
-ordinary annotation
-→ note
 
 authorized work changed
 → STOP

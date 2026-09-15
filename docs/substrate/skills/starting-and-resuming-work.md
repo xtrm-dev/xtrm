@@ -129,8 +129,6 @@ completed bounded run
 ordinary useful annotation
 → note
 
-ordinary annotation
-→ note
 
 authorized work changed
 → STOP

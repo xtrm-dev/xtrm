@@ -51,9 +51,12 @@ function registeredCommands(): Set<string> {
 }
 
 // Every `sb <group> [<verb>]` mention in a doc.
+// XTRM-252.17: a mention wrapped across lines (`sb issue\n  release`) is one
+// mention; without joining, the group looks bare and escapes the verb check.
 function sbMentions(text: string): Array<{ group: string; verb: string | null }> {
+  const joined = text.replace(/\bsb ([a-z-]+)[ \t]*\n[ \t]*/g, "sb $1 ");
   const out: Array<{ group: string; verb: string | null }> = [];
-  for (const m of text.matchAll(/\bsb ([a-z-]+)(?: ([a-z-]+))?/g)) {
+  for (const m of joined.matchAll(/\bsb ([a-z-]+)(?: ([a-z-]+))?/g)) {
     out.push({ group: m[1]!, verb: m[2] ?? null });
   }
   return out;
@@ -73,7 +76,12 @@ function unregisteredSbMentions(text: string, commands: Set<string>): string[] {
       bad.push(`unknown group: sb ${group}`);
       continue;
     }
-    if (verb === null || verb.startsWith("-")) continue;
+    if (verb === null || verb.startsWith("-")) {
+      // XTRM-252.17: a registered group with no verb is a command the reader
+      // cannot run. Name one, or state the shorthand explicitly.
+      bad.push(`bare group: sb ${group} (name a verb)`);
+      continue;
+    }
     if (verb === "list|ready") continue; // `sb issue list|ready` shorthand in planning
     if (!commands.has(`${group}.${verb}`)) {
       bad.push(`unregistered: sb ${group} ${verb}`);
@@ -86,14 +94,19 @@ function unregisteredSbMentions(text: string, commands: Set<string>): string[] {
 
 const BD_VERB = /(^|[^a-zA-Z])bd [a-z-]+|(^|[^a-zA-Z])bv [a-z-]+|@beads\/bd|Dolt-as-Beads/;
 const HISTORY = /retired|formerly|migration|old\s*(→|->)\s*new/i;
+// XTRM-252.17: proximity alone is not a mark. A history word inside unrelated
+// prose must not exempt an active bd/bv verb, so the exemption requires an
+// explicit label line (a heading, or a line ending in ':') in the window.
+const HISTORY_LABEL = /^(#{1,6}\s+.+|.+:)\s*$/;
 
 function activeBdLines(text: string): string[] {
   const lines = text.split("\n");
   const out: string[] = [];
   lines.forEach((line, i) => {
     if (!BD_VERB.test(line)) return;
-    const ctx = lines.slice(Math.max(0, i - 5), i + 1).join("\n");
-    if (HISTORY.test(ctx)) return;
+    const window = lines.slice(Math.max(0, i - 5), i + 1);
+    const marked = window.some((candidate) => HISTORY.test(candidate) && HISTORY_LABEL.test(candidate.trim()));
+    if (marked) return;
     out.push(`${i + 1}: ${line.trim()}`);
   });
   return out;
@@ -145,6 +158,16 @@ describe("d2 skill-command: every sb verb referenced is registered; no retired v
     }
     assert.deepEqual(bad, [], "retired bd/bv workflow verbs must stay retired");
   });
+
+  it("a history word in unrelated prose does not exempt an active bd verb", () => {
+    // XTRM-252.17: proximity is not a mark. The five-line window alone let an
+    // active verb survive next to an unrelated "retired" word, so the
+    // exemption now requires an explicit label line (heading or trailing ':').
+    const unlabeled = ["This section was retired unrelated prose.", "", "", "", "", "bd show", ""].join("\n");
+    assert.deepEqual(activeBdLines(unlabeled), ["6: bd show"]);
+    const labeled = ["Retired:", "", "```text", "bd prime → bd ready", "```", ""].join("\n");
+    assert.deepEqual(activeBdLines(labeled), []);
+  });
 });
 
 // --- Journal-methodology test (VALIDATION clause 3) ---------------------------
@@ -190,10 +213,17 @@ describe("d2 journal-methodology: skills teach the §73 kind mapping and the STO
   });
 
   it("no skill tells the agent to use issue edit for progress", () => {
+    // XTRM-252.17: the original two-pattern check only caught the exact phrases
+    // "issue edit … for progress" and "use edit for … journal", so paraphrases
+    // ("record progress via `sb issue edit`") survived. Match the instruction
+    // shapes, not the two sentences: this must not flag the correct guidance
+    // "contract changes use `sb issue edit`; progress uses the Journal".
+    const ROUTES_PROGRESS_THROUGH_EDIT =
+      /use (?:sb )?(?:issue )?edit\s+(?:for|to)\s+(?:record|track|log|note|journal)?[^\n]{0,20}progress|(?:record|track|log|note)\s+progress[^\n]{0,30}(?:issue edit|plan apply)|progress\s+(?:via|through|with|using|by)[^\n]{0,30}(?:issue edit|plan apply)/i;
     for (const name of SKILLS) {
       assert.doesNotMatch(
         readSkill(name),
-        /issue edit.*for progress|use edit for.*journal/i,
+        ROUTES_PROGRESS_THROUGH_EDIT,
         `${name} must not route progress through issue edit`,
       );
     }
@@ -341,6 +371,7 @@ function freshAnswerKind(skillText: string, input: string): string {
     [/progress boundary/i, "milestone"],
     [/completed bounded run/i, "result"],
     [/ordinary.*annotation/i, "note"],
+    [/handoff/i, "handoff"],
     [/authorized work changed/i, "STOP → /planning → new Issue revision"],
   ];
   for (const [re, kind] of table) {
@@ -349,7 +380,6 @@ function freshAnswerKind(skillText: string, input: string): string {
       return kind;
     }
   }
-  if (/handoff/i.test(input)) return "handoff";
   throw new Error(`unknown kind input: ${input}`);
 }
 
