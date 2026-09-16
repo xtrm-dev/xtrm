@@ -51,18 +51,35 @@ async function liveStatus(): Promise<GithubAuthStatus> {
   }
 }
 
-/** POST one of the mutating endpoints, then settle on a fresh status read. */
+/** POST one of the mutating endpoints, then settle on a fresh status read.
+ * A non-404 failure (e.g. 400 from device/start, 502 from GitHub) carries
+ * `{ error, message }`: merge it onto the fresh status as an error state so
+ * the operator sees it, instead of silently returning the plain status read.
+ * A 400 `not_configured` means no per-user login exists: return that status. */
 async function postAuth(path: "/auth/device/start" | "/auth/device/cancel" | "/auth/signout"): Promise<GithubAuthStatus> {
   try {
     const res = await fetch(`/api/github${path}`, { method: "POST" });
     if (res.status === 404) return liveStatus();
-    if (res.ok) {
+    if (!res.ok) {
+      let code = `http_${res.status}`;
+      let message = `GitHub backend ${path} returned ${res.status}`;
       try {
-        const body = (await res.json()) as unknown;
-        if (isAuthStatus(body)) return body;
+        const body = (await res.json()) as { error?: unknown; message?: unknown };
+        if (typeof body.error === "string" && body.error) code = body.error;
+        if (typeof body.message === "string" && body.message) message = body.message;
       } catch {
-        // Empty 2xx: fall through to the fresh status read.
+        // Non-JSON failure body: keep the http_* fallback.
       }
+      if (res.status === 400 && code === "not_configured") return NOT_CONFIGURED;
+      const fresh = await liveStatus();
+      return { ...fresh, state: "error", error: { code, message } };
+    }
+    // Success (200/202): a status object, or an empty body meaning "refetch".
+    try {
+      const body = (await res.json()) as unknown;
+      if (isAuthStatus(body)) return body;
+    } catch {
+      // Empty 2xx: fall through to the fresh status read.
     }
   } catch {
     // Network failure: the status read below reports it as an error state.
@@ -153,7 +170,8 @@ export function createFixtureGithubAuth(init: FixtureGithubAuthInit = {}): Githu
   const installations: GithubInstallations = init.installations ?? {
     installations: [
       {
-        account: { login: "xtrm-dev", avatar_url: null },
+        id: 1,
+        account: { login: "xtrm-dev", avatar_url: null, html_url: "https://github.com/xtrm-dev" },
         repository_selection: "selected",
         permissions: { pull_requests: "read", issues: "read", contents: "read", checks: "read", metadata: "read" },
         html_url: "https://github.com/organizations/xtrm-dev/settings/installations/1",

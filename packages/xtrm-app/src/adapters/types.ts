@@ -137,7 +137,8 @@ export interface GithubAuthStatus {
 }
 
 export interface GithubInstallation {
-  account: { login: string; avatar_url: string | null };
+  id: number;
+  account: { login: string; avatar_url: string | null; html_url?: string | null };
   repository_selection: string;
   permissions: Record<string, string>;
   html_url: string;

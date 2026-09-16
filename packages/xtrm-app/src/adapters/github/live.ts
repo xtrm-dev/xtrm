@@ -152,6 +152,8 @@ interface WireChecks {
   head_sha?: string | null;
   mergeable?: boolean | null;
   mergeable_state?: string | null;
+  /** Optional backend cache stamp (XTRM-404); informational, never rendered as freshness. */
+  cached_at?: string | null;
 }
 
 /** Single-PR and detail endpoints return their payload unwrapped (no `{ data }`). */

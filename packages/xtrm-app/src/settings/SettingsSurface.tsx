@@ -70,9 +70,14 @@ export function SettingsSurface() {
               </span>
             </div>
             {status.state === "error" && status.error && (
-              <p className="mt-2 text-sm text-danger" role="alert">
-                {status.error.message} ({status.error.code})
-              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <p className="text-sm text-danger" role="alert">
+                  {status.error.message} ({status.error.code})
+                </p>
+                <button type="button" onClick={() => start.mutate()} disabled={start.isPending} className={actionButton}>
+                  {start.isPending ? "Starting…" : "Try again"}
+                </button>
+              </div>
             )}
             {status.state === "not_configured" && (
               <p className="mt-2 text-sm text-ink-muted">
@@ -116,8 +121,15 @@ export function SettingsSurface() {
               <div className="flex flex-col gap-3">
                 {installs.data.installations.length === 0 && <p className="text-sm text-ink-muted">The app is not installed on any account you can access.</p>}
                 {installs.data.installations.map((inst) => (
-                  <div key={inst.html_url} className="rounded-md border border-border-muted px-3 py-2">
+                  <div key={inst.id} className="rounded-md border border-border-muted px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2">
+                      {inst.account.avatar_url ? (
+                        <img src={inst.account.avatar_url} alt="" className="size-5 rounded-full" />
+                      ) : (
+                        <span aria-hidden className="flex size-5 items-center justify-center rounded-full border border-border-muted bg-control text-[0.65rem] text-ink-muted">
+                          {inst.account.login.slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
                       <span className="text-sm font-medium text-ink">{inst.account.login}</span>
                       <span className="text-xs text-ink-faint">{inst.repository_selection}</span>
                       <span className="ml-auto flex items-center gap-2">

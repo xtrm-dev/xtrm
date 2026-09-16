@@ -232,6 +232,66 @@ describe("live adapter degradation", () => {
   });
 });
 
+describe("device start error surfacing", () => {
+  const PENDING_STATUS = {
+    state: "pending",
+    auth_source: "none",
+    device: { user_code: "WDJC-8F39", verification_uri: "https://github.com/login/device", expires_at: new Date(Date.now() + 900_000).toISOString(), interval: 5 },
+  };
+  const res = (status: number, body: unknown) => ({ status, ok: status >= 200 && status < 300, json: async () => body }) as Response;
+
+  it("returns the 202 status object on success", async () => {
+    const fetch = vi.fn().mockResolvedValue(res(202, PENDING_STATUS));
+    vi.stubGlobal("fetch", fetch);
+    const status = await liveGithubAuth.startDevice();
+    expect(status.state).toBe("pending");
+    expect(status.device?.user_code).toBe("WDJC-8F39");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns not_configured on a 400 not_configured failure", async () => {
+    const fetch = vi.fn().mockResolvedValue(res(400, { error: "not_configured", message: "GitHub App is not configured" }));
+    vi.stubGlobal("fetch", fetch);
+    expect(await liveGithubAuth.startDevice()).toEqual({ state: "not_configured", auth_source: "none" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("merges a 502 failure onto the fresh status as an error state", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(res(502, { error: "bad_gateway", message: "GitHub login is unavailable" }))
+      .mockResolvedValueOnce(res(200, { state: "signed_out", auth_source: "shared" }));
+    vi.stubGlobal("fetch", fetch);
+    const status = await liveGithubAuth.startDevice();
+    expect(status.state).toBe("error");
+    expect(status.auth_source).toBe("shared");
+    expect(status.error).toEqual({ code: "bad_gateway", message: "GitHub login is unavailable" });
+  });
+
+  it("falls back to an http_* code when the failure body is not JSON", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 502, ok: false, json: async () => { throw new Error("no json"); } } as Response)
+      .mockResolvedValueOnce(res(200, { state: "signed_out", auth_source: "none" }));
+    vi.stubGlobal("fetch", fetch);
+    const status = await liveGithubAuth.startDevice();
+    expect(status.state).toBe("error");
+    expect(status.error?.code).toBe("http_502");
+  });
+
+  it("renders the start error in Settings with a working Try again", async () => {
+    renderAt("/settings", {
+      state: "error",
+      auth_source: "none",
+      error: { code: "bad_gateway", message: "GitHub login is unavailable" },
+    });
+    const page = await screen.findByRole("region", { name: "Settings" });
+    expect(within(page).getByText(/GitHub login is unavailable/)).toBeTruthy();
+    fireEvent.click(within(page).getByRole("button", { name: "Try again" }));
+    expect(await within(page).findByText(/is waiting at github.com\/login\/device/)).toBeTruthy();
+  });
+});
+
 describe("no token handling in the browser", () => {
   it("keeps token-like strings out of storage and fixture sources after the fixture flow", async () => {
     const { githubAuth } = renderAt("/rep/xtrm-dev/xtrm/code/pulls", { state: "signed_out", auth_source: "none" });
