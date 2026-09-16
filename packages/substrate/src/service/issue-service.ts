@@ -299,6 +299,38 @@ export class IssueService {
 
   /** Pins the seven-field contract at write time as revision 1; identical retry under one idempotency key returns the first row. */
   createIssue(input: CreateIssueInput, opts?: { idempotencyKey?: string }): ResolvedIssue {
+    return this.createIssueAt(input, {}, opts);
+  }
+
+  /**
+   * Import-shaped creation (XTRM-406): pins SOURCE time on the issue row, its
+   * first revision, its creation event, its alias and its parent link, so an
+   * imported board reports the history it actually has instead of the import
+   * instant.
+   *
+   * Deliberately NOT a parameter on `createIssue`. A backdating primitive on
+   * the ordinary creation path would hand every caller the ability to forge
+   * history; the seam is named for its only legitimate caller, the Beads
+   * compatibility layer, and follows the `BeadsClosureInput.closedAt`
+   * precedent.
+   *
+   * `createdAt` absent means now. `updatedAt` is clamped up to the effective
+   * `createdAt` so a contradictory source record cannot store a row whose
+   * updated_at precedes its created_at.
+   */
+  createIssueFromImport(
+    input: CreateIssueInput,
+    source: { createdAt?: number | null; updatedAt?: number | null },
+    opts?: { idempotencyKey?: string },
+  ): ResolvedIssue {
+    return this.createIssueAt(input, source, opts);
+  }
+
+  private createIssueAt(
+    input: CreateIssueInput,
+    source: { createdAt?: number | null; updatedAt?: number | null },
+    opts?: { idempotencyKey?: string },
+  ): ResolvedIssue {
     assertContractShape(input.contract);
     if (!input.title.trim()) throw new Error("title must be non-empty");
     if (!(ISSUE_KINDS as readonly string[]).includes(input.kind)) throw new Error(`unknown kind: ${input.kind}`);
@@ -307,13 +339,21 @@ export class IssueService {
     const key = opts?.idempotencyKey;
     return withTransaction(this.db, () =>
       key
-        ? mutateOnce(this.db, "command", key, () => this.insertIssue(project, input))
-        : this.insertIssue(project, input),
+        ? mutateOnce(this.db, "command", key, () => this.insertIssue(project, input, source))
+        : this.insertIssue(project, input, source),
     );
   }
 
-  private insertIssue(project: Project, input: CreateIssueInput): ResolvedIssue {
+  private insertIssue(
+    project: Project,
+    input: CreateIssueInput,
+    source: { createdAt?: number | null; updatedAt?: number | null } = {},
+  ): ResolvedIssue {
     const now = Date.now();
+    // Source time when the caller supplies it (import path), wall-clock
+    // otherwise. updated_at never precedes created_at.
+    const createdAt = source.createdAt ?? now;
+    const updatedAt = Math.max(createdAt, source.updatedAt ?? createdAt);
     const id = newIssueId();
     const humanNumber = nextInNamespace(this.db, "human_ref", project.id);
     const contractHash = hashContract(input.contract);
@@ -327,7 +367,7 @@ export class IssueService {
           priority, scrutiny, current_revision, current_contract_hash, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, 'open', ?, ?, 1, ?, ?, ?)`,
       )
-      .run(id, project.id, humanNumber, input.kind, input.title, input.priority ?? 0, input.scrutiny ?? "", contractHash, now, now);
+      .run(id, project.id, humanNumber, input.kind, input.title, input.priority ?? 0, input.scrutiny ?? "", contractHash, createdAt, updatedAt);
     this.db
       .prepare(
         `INSERT INTO issue_revisions (issue_id, revision, contract_hash, contract_json,
@@ -341,11 +381,11 @@ export class IssueService {
         JSON.stringify(input.contextRefs ?? []),
         input.ownership == null ? null : JSON.stringify(input.ownership),
         input.authoredBy ?? "unknown",
-        now,
+        createdAt,
       );
-    this.appendEvent(id, "issue.created", { humanRef: formatHumanRef(project.prefix, humanNumber) });
-    for (const a of input.aliases ?? []) this.insertAlias(id, a.alias, a.kind, now);
-    if (input.parentId) this.linkParent(id, input.parentId, now);
+    this.appendEvent(id, "issue.created", { humanRef: formatHumanRef(project.prefix, humanNumber) }, createdAt);
+    for (const a of input.aliases ?? []) this.insertAlias(id, a.alias, a.kind, createdAt);
+    if (input.parentId) this.linkParent(id, input.parentId, createdAt);
     return this.view(id);
   }
 
@@ -742,10 +782,12 @@ export class IssueService {
 
   // Public so later phases and tests can record markers such as
   // `external.uncertain` (PRD §47: uncertain effects are recorded, never guessed).
-  appendEvent(issueId: string, type: string, payload: unknown): number {
+  appendEvent(issueId: string, type: string, payload: unknown, at?: number): number {
+    // `at` lets the import path cite source time; every other caller keeps
+    // wall-clock, so the ordinary event spine is unchanged (XTRM-406).
     const r = this.db
       .prepare("INSERT INTO issue_events (issue_id, type, payload_json, created_at) VALUES (?, ?, ?, ?) RETURNING id")
-      .get(issueId, type, JSON.stringify(payload ?? {}), Date.now()) as { id: number };
+      .get(issueId, type, JSON.stringify(payload ?? {}), at ?? Date.now()) as { id: number };
     return Number(r.id);
   }
 
@@ -1701,13 +1743,16 @@ export class IssueService {
   // Those arrive with their owning phases; this service never invents them.
   // Every transition emits a durable issue.lifecycle event (§26) carrying
   // the from/to pair so lineage is explicit for all five states.
-  setLifecycleState(issueId: string, state: LifecycleState): ResolvedIssue {
+  setLifecycleState(issueId: string, state: LifecycleState, at?: number): ResolvedIssue {
     if (!(LIFECYCLE_STATES as readonly string[]).includes(state)) throw new Error(`unknown lifecycle state: ${state}`);
     return withTransaction(this.db, () => {
       const before = this.requireIssue(issueId);
-      const now = Date.now();
+      // `at` lets the import path land a terminal transition on source time, so
+      // the lifecycle event agrees with the Closure row rather than
+      // contradicting it (XTRM-406). All other callers keep wall-clock.
+      const now = at ?? Date.now();
       this.db.prepare("UPDATE issues SET lifecycle_state = ?, updated_at = ? WHERE id = ?").run(state, now, issueId);
-      this.appendEvent(issueId, "issue.lifecycle", { from: before.lifecycleState, to: state });
+      this.appendEvent(issueId, "issue.lifecycle", { from: before.lifecycleState, to: state }, now);
       return this.view(issueId);
     });
   }

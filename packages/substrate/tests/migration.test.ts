@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
+import { ClosureService } from "../src/service/closure-service.ts";
 import { extractSectionsDetailed, importBeads } from "../src/compatibility/beads/import.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
 import { contract } from "./helpers.ts";
@@ -597,6 +598,161 @@ describe("XTRM-405: the real export structures and reconciles", () => {
       assert.ok(checked >= 100, `expected a substantial number of source sections, checked ${checked}`);
       // G46 still holds: nothing imported is dispatchable.
       assert.equal(svc.listIssues("prj_real").filter((i) => svc.getReadiness(i.id).dispatchable).length, 0);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+// -- XTRM-406: source timestamps survive import -------------------------------
+// `insertIssue` used to hardcode `Date.now()`, so every imported board reported
+// a single fabricated history: 66/66 issues landed at import wall-clock against
+// a source spanning months, and the existing `BeadsClosureInput.closedAt` seam
+// was never wired.
+
+describe("XTRM-406: source timestamps survive import", () => {
+  const T_CREATED = Date.parse("2026-06-10T08:30:00Z");
+  const T_UPDATED = Date.parse("2026-07-01T12:00:00Z");
+  const T_CLOSED = Date.parse("2026-07-02T09:15:00Z");
+
+  it("pins source created/updated/closed time on the row, the spine and the Closure", () => {
+    const dir = mkdtempSync(join(tmpdir(), "substrate-ts-"));
+    const db = openSubstrate(join(dir, "state.db"));
+    const svc = new IssueService(db);
+    const closures = new ClosureService(db, svc);
+    svc.createProject({ id: "prj_ts", prefix: "TS", name: "ts" });
+    try {
+      const result = importBeads(
+        svc,
+        "prj_ts",
+        [
+          { id: "ts-open", title: "Open", status: "open", issue_type: "task", created_at: "2026-06-10T08:30:00Z", updated_at: "2026-07-01T12:00:00Z" },
+          { id: "ts-closed", title: "Closed", status: "closed", issue_type: "bug", created_at: "2026-06-10T08:30:00Z", updated_at: "2026-07-01T12:00:00Z", closed_at: "2026-07-02T09:15:00Z", close_reason: "shipped" },
+        ],
+        [],
+        { closures },
+      );
+      const open = svc.resolveRef("ts-open");
+      const closed = svc.resolveRef("ts-closed");
+
+      // Issue row carries source time, not import time.
+      assert.equal(open.createdAt, T_CREATED);
+      assert.equal(open.updatedAt, T_UPDATED);
+      assert.equal(closed.createdAt, T_CREATED);
+
+      // Revision 1, the creation event and the alias share the source instant,
+      // so the record's own history has one coherent origin.
+      const rev = svc.getRevision(open.id, 1);
+      assert.equal(rev.createdAt, T_CREATED);
+      const createdEvent = svc.listEvents(open.id).find((e) => e.type === "issue.created");
+      assert.equal(createdEvent?.createdAt, T_CREATED);
+
+      // The terminal transition lands on source time, so it cannot contradict
+      // the Closure row (which `lastTerminalTransitionAt` reads events for).
+      const lifecycle = svc.listEvents(closed.id).find((e) => e.type === "issue.lifecycle");
+      assert.equal(lifecycle?.createdAt, T_CLOSED);
+      const closedEvent = svc.listEvents(closed.id).find((e) => e.type === "issue.closed");
+      assert.equal(closedEvent?.createdAt, T_CLOSED);
+      const closure = closures.getLatestClosure(closed.id);
+      assert.ok(closure);
+      assert.equal(closure.closedAt, T_CLOSED);
+      assert.equal(closure.source, "beads");
+      assert.equal(closure.reason, "shipped");
+
+      // Every terminal record reports provenance, and nothing fell back to
+      // wall-clock while the source carried a usable instant.
+      assert.deepEqual(
+        result.timestampProvenance.map((p) => [p.beadsId, p.createdAt, p.updatedAt, p.closedAt, p.terminalAtFrom]),
+        [
+          ["ts-open", "source", "source", "not-terminal", "not-terminal"],
+          ["ts-closed", "source", "source", "source", "closed_at"],
+        ],
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it("treats a missing or malformed timestamp as absent, never as import time", () => {
+    const dir = mkdtempSync(join(tmpdir(), "substrate-ts2-"));
+    const db = openSubstrate(join(dir, "state.db"));
+    const svc = new IssueService(db);
+    svc.createProject({ id: "prj_ts2", prefix: "T2", name: "t2" });
+    try {
+      const before = Date.now();
+      const result = importBeads(svc, "prj_ts2", [
+        { id: "t2-bad", title: "Malformed", status: "open", issue_type: "task", created_at: "not-a-date", updated_at: "" },
+        { id: "t2-none", title: "Absent", status: "open", issue_type: "task" },
+      ], []);
+      assert.deepEqual(result.timestampProvenance.map((p) => [p.beadsId, p.createdAt, p.updatedAt]), [
+        ["t2-bad", "absent", "absent"],
+        ["t2-none", "absent", "absent"],
+      ]);
+      // Absent source time falls back to creation wall-clock, which is the only
+      // honest choice, and it is recorded as absent rather than misreported.
+      for (const id of ["t2-bad", "t2-none"]) {
+        const issue = svc.resolveRef(id);
+        assert.ok(issue.createdAt >= before, `${id} should fall back to wall-clock`);
+        assert.equal(issue.updatedAt, issue.createdAt);
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+  it("normalises a contradictory source record and reports the correction", () => {
+    const dir = mkdtempSync(join(tmpdir(), "substrate-ts3-"));
+    const db = openSubstrate(join(dir, "state.db"));
+    const svc = new IssueService(db);
+    const closures = new ClosureService(db, svc);
+    svc.createProject({ id: "prj_ts3", prefix: "T3", name: "t3" });
+    try {
+      const created = Date.parse("2026-07-01T00:00:00Z");
+      const result = importBeads(
+        svc,
+        "prj_ts3",
+        [
+          // updated_at precedes created_at
+          { id: "t3-a", title: "A", status: "open", issue_type: "task", created_at: "2026-07-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+          // closed_at precedes created_at
+          { id: "t3-b", title: "B", status: "closed", issue_type: "task", created_at: "2026-07-01T00:00:00Z", updated_at: "2026-07-02T00:00:00Z", closed_at: "2026-06-15T00:00:00Z" },
+        ],
+        [],
+        { closures },
+      );
+      // Stored rows stay monotonic: a contradiction is normalised, not stored.
+      assert.equal(svc.resolveRef("t3-a").updatedAt, created);
+      const closureB = closures.getLatestClosure(svc.resolveRef("t3-b").id);
+      assert.ok(closureB);
+      assert.ok(closureB.closedAt >= svc.resolveRef("t3-b").createdAt);
+      // And the correction is reported rather than silent.
+      const normalised = result.timestampProvenance.filter((p) => p.normalized.length > 0);
+      assert.equal(normalised.length, 2);
+      assert.ok(normalised.every((p) => p.normalized[0]!.includes("clamped to created_at")));
+    } finally {
+      db.close();
+    }
+  });
+
+  it("does not expose backdating on the generic creation path", () => {
+    const dir = mkdtempSync(join(tmpdir(), "substrate-ts4-"));
+    const db = openSubstrate(join(dir, "state.db"));
+    const svc = new IssueService(db);
+    svc.createProject({ id: "prj_ts4", prefix: "T4", name: "t4" });
+    try {
+      const before = Date.now();
+      // A caller smuggling a timestamp into the ordinary creation input must be
+      // ignored: only the import-shaped seam can pin history.
+      const created = svc.createIssue({
+        projectId: "prj_ts4",
+        title: "Smuggler",
+        kind: "task",
+        contract: contract(),
+        createdAt: 0,
+        updatedAt: 0,
+      } as never);
+      assert.ok(created.createdAt >= before, "generic createIssue must not backdate");
+      assert.ok(svc.getRevision(created.id, 1).createdAt >= before);
     } finally {
       db.close();
     }
