@@ -429,13 +429,13 @@ describe("A1 §93 coordinator capsule without child-transcript duplication", () 
     const repo = env.gitRepo("a1prog", { remote: "git@github.com:acme/a1prog.git" });
     assert.equal(env.inCwd(repo, () => env.run(["init"])).code, 0);
     const c = contractFile(env, "epic.json", "programme", "programme done");
-    const epicRes = env.inCwd(repo, () => env.run(["issue", "create", "--title", "programme", "--kind", "epic", "--contract", c]));
+    const epicRes = env.inCwd(repo, () => env.run(["issue", "create", "--title", "programme", "--kind", "epic", "--contract", c, "--scrutiny", "LOW"]));
     assert.equal(epicRes.code, 0, epicRes.stderr || epicRes.stdout);
     const epic = (epicRes.data as { humanRef: string }).humanRef;
     const markers = ["A1-CHILD-BLUEBERRY-41", "A1-CHILD-BLUEBERRY-42"];
     for (let i = 0; i < 2; i++) {
       const cc = contractFile(env, `child${i}.json`, `child ${i}`, `child ${i} done`);
-      const childRes = env.inCwd(repo, () => env.run(["issue", "create", "--title", `child ${i}`, "--kind", "task", "--contract", cc, "--parent", epic]));
+      const childRes = env.inCwd(repo, () => env.run(["issue", "create", "--title", `child ${i}`, "--kind", "task", "--contract", cc, "--parent", epic, "--scrutiny", "LOW"]));
       assert.equal(childRes.code, 0, childRes.stderr || childRes.stdout);
       const childRef = (childRes.data as { humanRef: string }).humanRef;
       const sem = join(env.temp("sb-a1-93-"), `sem${i}.json`);

@@ -22,8 +22,8 @@ Global flags: `--db PATH` (else `$SUBSTRATE_DB`, else `~/.xtrm/state.db`),
 
 ## issue — 21 verbs
 
-- `issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json>` — create; pins the
-  seven-field contract at write time.
+- `issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--scrutiny <LOW|MEDIUM|HIGH|CRITICAL>]` — create; pins the
+  seven-field contract at write time. --scrutiny wins when present, otherwise the contract's own scrutiny applies; a missing or invalid value is refused at create naming the accepted levels.
 - `issue show <ref>` — header plus contract body (human) or full payload
   (`--json`).
 - `issue edit <ref> [--title/--priority | --contract/--ownership/--context-refs/--scrutiny]` —

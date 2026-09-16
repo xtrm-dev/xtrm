@@ -130,7 +130,7 @@ describe("project resolution (xtrm-7wc.5.6)", () => {
         // service write -> linked CLI read (freshness: no cached resolution)
         const cpath = join(repo, "c.json");
         writeFileSync(cpath, JSON.stringify({ ...contract(), problem: "P", success: "S" }));
-        const created = cli(["issue", "create", "--title", "T", "--kind", "task", "--contract", cpath]) as { humanRef: string };
+        const created = cli(["issue", "create", "--title", "T", "--kind", "task", "--contract", cpath, "--scrutiny", "LOW"]) as { humanRef: string };
         const listed = cli(["issue", "list"]) as Array<{ humanRef: string }>;
         assert.ok(listed.some((i) => i.humanRef === created.humanRef));
         const shown = cli(["issue", "show", created.humanRef]) as { humanRef: string };

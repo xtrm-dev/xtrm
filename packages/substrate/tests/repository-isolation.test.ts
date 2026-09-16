@@ -21,7 +21,7 @@ describe("multi-repository isolation (ADR §85)", () => {
   function createIssue(dir: string, title: string): string {
     const contractFile = join(env.temp("sb-iso-c-"), `${title}.json`);
     writeFileSync(contractFile, JSON.stringify(contract({ problem: title, success: title })));
-    const res = env.inCwd(dir, () => env.run(["issue", "create", "--title", title, "--kind", "task", "--contract", contractFile]));
+    const res = env.inCwd(dir, () => env.run(["issue", "create", "--title", title, "--kind", "task", "--contract", contractFile, "--scrutiny", "LOW"]));
     assert.equal(res.code, 0, res.stderr || res.stdout);
     return (res.data as { humanRef: string }).humanRef;
   }

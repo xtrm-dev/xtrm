@@ -75,7 +75,7 @@ describe("sb init: fresh repository acceptance (ADR §84)", () => {
     const contractFile = join(env.temp("sb-init-c-"), "c.json");
     writeFileSync(contractFile, JSON.stringify(contract({ problem: "init problem", success: "init success" })));
     const created = env.inCwd(repo, () =>
-      env.run(["issue", "create", "--title", "Initialized", "--kind", "task", "--contract", contractFile]),
+      env.run(["issue", "create", "--title", "Initialized", "--kind", "task", "--contract", contractFile, "--scrutiny", "LOW"]),
     );
     assert.equal(created.code, 0, created.stderr || created.stdout);
     assert.equal((created.data as { humanRef: string }).humanRef, "SERVICE-1");
@@ -171,7 +171,7 @@ describe("sb init: multi-clone and remote normalization (ADR §§87-88)", () => 
     // is shared identity rather than a leak into another Project.
     const contractFile = join(env.temp("sb-clone-c-"), "c.json");
     writeFileSync(contractFile, JSON.stringify(contract({ problem: "shared", success: "shared" })));
-    const created = env.inCwd(cloneA, () => env.run(["issue", "create", "--title", "shared work", "--kind", "task", "--contract", contractFile]));
+    const created = env.inCwd(cloneA, () => env.run(["issue", "create", "--title", "shared work", "--kind", "task", "--contract", contractFile, "--scrutiny", "LOW"]));
     assert.equal(created.code, 0, created.stderr || created.stdout);
     assert.equal((created.data as { humanRef: string }).humanRef, "SERVICE-1");
     const preInit = env.inCwd(cloneB, () => env.run(["issue", "list"]));

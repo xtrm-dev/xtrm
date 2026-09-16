@@ -178,7 +178,7 @@ describe("sb project administration (R3)", () => {
         // no-renumbering witness.
         const cpath = join(repo, "c.json");
         writeFileSync(cpath, JSON.stringify({ ...contract(), problem: "P", success: "S" }));
-        const created = cli(ctx.dbPath, ["issue", "create", "--title", "T", "--kind", "task", "--contract", cpath]) as {
+        const created = cli(ctx.dbPath, ["issue", "create", "--title", "T", "--kind", "task", "--contract", cpath, "--scrutiny", "LOW"]) as {
           humanRef: string;
         };
         assert.equal(created.humanRef, "REC-1");

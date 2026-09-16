@@ -98,7 +98,7 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     assert.equal(project.name, "fresh");
     // issues land in the CLI-created project with zero service calls
     const c = contractFile(dir, "c.json", { problem: "P", success: "S" });
-    const created = cli(dbPath, ["issue", "create", "--project", project.id, "--title", "T", "--kind", "task", "--contract", c]).data as {
+    const created = cli(dbPath, ["issue", "create", "--project", project.id, "--title", "T", "--kind", "task", "--contract", c, "--scrutiny", "LOW"]).data as {
       humanRef: string;
     };
     assert.equal(created.humanRef, "NEW-1");
@@ -112,7 +112,7 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     const parent = svc.createIssue({ projectId: "prj_demo", title: "Parent", kind: "epic", contract: contract() });
     db.close();
 
-    const child = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "Child", "--kind", "task", "--contract", c, "--parent", parent.humanRef]).data as {
+    const child = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "Child", "--kind", "task", "--contract", c, "--parent", parent.humanRef, "--scrutiny", "LOW"]).data as {
       locator: string; humanRef: string;
     };
     assert.match(child.locator, /^DEMO-1\.1$/);
@@ -164,7 +164,7 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
   it("show returns the current contract body (xtrm-7wc.5.9)", () => {
     const { dir, dbPath } = setupDb();
     const body = contract({ problem: "read me back", success: "visible", scope: ["s1"], nonGoals: [], constraints: [], validation: [], output: [] });
-    const created = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", contractFile(dir, "c.json", body as unknown as Record<string, unknown>)]).data as { humanRef: string };
+    const created = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", contractFile(dir, "c.json", body as unknown as Record<string, unknown>), "--scrutiny", "LOW"]).data as { humanRef: string };
     const shown = cli(dbPath, ["issue", "show", created.humanRef]).data as { contract: unknown };
     assert.deepEqual(shown.contract, body);
     const human = runCli(["--db", dbPath, "issue", "show", created.humanRef]);
@@ -194,14 +194,14 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     assert.match(env.error, /contract-bad\.json: file is not valid JSON/);
     assert.equal(/not valid JSON/.test(env.error) && env.error.includes('Unexpected token \'/\''), false, "the path must not be parsed as JSON");
     const good = contractFile(dir, "contract-good.json", { problem: "P", success: "S" });
-    const ok = runCli(["--db", dbPath, "--json", "issue", "create", "--project", "prj_demo", "--title", "Good", "--kind", "task", "--contract", good]);
+    const ok = runCli(["--db", dbPath, "--json", "issue", "create", "--project", "prj_demo", "--title", "Good", "--kind", "task", "--contract", good, "--scrutiny", "LOW"]);
     assert.equal(ok.code, 0, ok.stderr);
   });
 
   it("rejects unknown flags instead of silently dropping intent (xtrm-7wc.5.4)", () => {
     const { dir, dbPath } = setupDb();
     const c = contractFile(dir, "c.json", { problem: "P", success: "S" });
-    const created = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", c]).data as {
+    const created = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", c, "--scrutiny", "LOW"]).data as {
       humanRef: string;
     };
     // the E2E case: --summary does not exist; the entry must not store
@@ -220,10 +220,10 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
   it("renders children indented under parents in human tree output", () => {
     const { dir, dbPath } = setupDb();
     const c = contractFile(dir, "c.json", { problem: "P", success: "S" });
-    const parent = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "Parent", "--kind", "task", "--contract", c]).data as {
+    const parent = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "Parent", "--kind", "task", "--contract", c, "--scrutiny", "LOW"]).data as {
       humanRef: string;
     };
-    const child = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "Child", "--kind", "task", "--contract", c, "--parent", parent.humanRef]).data as {
+    const child = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "Child", "--kind", "task", "--contract", c, "--parent", parent.humanRef, "--scrutiny", "LOW"]).data as {
       humanRef: string;
     };
     // human forest view: child indented under its parent
@@ -247,7 +247,7 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
   it("journal show returns entry bodies; since stays compact (xtrm-7wc.6.2)", () => {
     const { dir, dbPath } = setupDb();
     const c = contractFile(dir, "c.json", { problem: "P", success: "S" });
-    const created = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", c]).data as {
+    const created = cli(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", c, "--scrutiny", "LOW"]).data as {
       humanRef: string;
     };
     mut(dbPath, [
