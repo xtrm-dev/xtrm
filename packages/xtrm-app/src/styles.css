@@ -131,6 +131,139 @@
   }
 }
 
+/* Rendered markdown and the rich editor share one prose style (Supernova-restrained). */
+@layer components {
+  .xtrm-prose {
+    color: var(--color-ink);
+    font-size: var(--text-sm);
+    line-height: 1.6rem;
+    overflow-wrap: anywhere;
+  }
+  .xtrm-prose > :first-child {
+    margin-top: 0;
+  }
+  .xtrm-prose > :last-child {
+    margin-bottom: 0;
+  }
+  .xtrm-prose p,
+  .xtrm-prose ul,
+  .xtrm-prose ol,
+  .xtrm-prose pre,
+  .xtrm-prose blockquote,
+  .xtrm-prose table {
+    margin: 0 0 0.7rem;
+  }
+  .xtrm-prose h1,
+  .xtrm-prose h2,
+  .xtrm-prose h3,
+  .xtrm-prose h4 {
+    margin: 1.1rem 0 0.4rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--color-ink);
+  }
+  .xtrm-prose h1 {
+    font-size: 1rem;
+  }
+  .xtrm-prose h2 {
+    font-size: 0.9rem;
+  }
+  .xtrm-prose h3,
+  .xtrm-prose h4 {
+    font-size: 0.8125rem;
+    color: var(--color-ink-muted);
+  }
+  .xtrm-prose ul,
+  .xtrm-prose ol {
+    padding-left: 1.25rem;
+  }
+  .xtrm-prose ul {
+    list-style: disc;
+  }
+  .xtrm-prose ol {
+    list-style: decimal;
+  }
+  .xtrm-prose li {
+    margin: 0.15rem 0;
+  }
+  .xtrm-prose li::marker {
+    color: var(--color-ink-faint);
+  }
+  .xtrm-prose a {
+    color: var(--color-accent-ink);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, var(--color-accent-ink) 35%, transparent);
+    text-underline-offset: 2px;
+  }
+  .xtrm-prose strong {
+    font-weight: 600;
+  }
+  .xtrm-prose code {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    padding: 0.05rem 0.3rem;
+    border-radius: 4px;
+    background: var(--color-control);
+    border: 1px solid var(--color-border-muted);
+  }
+  .xtrm-prose pre {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.15rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-md);
+    background: var(--color-deep);
+    border: 1px solid var(--color-border-muted);
+    overflow-x: auto;
+  }
+  .xtrm-prose pre code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .xtrm-prose blockquote {
+    padding-left: 0.75rem;
+    border-left: 2px solid var(--color-border-strong);
+    color: var(--color-ink-muted);
+  }
+  .xtrm-prose hr {
+    margin: 1rem 0;
+    border: 0;
+    border-top: 1px solid var(--color-border-muted);
+  }
+  .xtrm-prose table {
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    display: block;
+    overflow-x: auto;
+  }
+  .xtrm-prose th,
+  .xtrm-prose td {
+    border: 1px solid var(--color-border-muted);
+    padding: 0.3rem 0.5rem;
+    text-align: left;
+  }
+  .xtrm-prose th {
+    background: var(--color-control);
+    font-weight: 500;
+  }
+  .xtrm-prose input[type="checkbox"] {
+    margin-right: 0.35rem;
+    vertical-align: middle;
+  }
+  .xtrm-prose .ProseMirror {
+    outline: none;
+    min-height: 5rem;
+  }
+  .xtrm-prose .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--color-ink-faint);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+}
+
 @layer utilities {
   .no-scrollbar {
     scrollbar-width: none;

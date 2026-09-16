@@ -60,6 +60,9 @@ export interface SubstrateProject {
 }
 
 export type Readiness = "ready" | "not_ready" | "unknown";
+export type Lifecycle = "open" | "deferred" | "done" | "cancelled" | "archived";
+export type Scrutiny = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type EdgeKind = "parent_child" | "blocks" | "relates_to" | "discovered_from" | "supersedes" | "duplicates";
 
 export interface IssueSummary {
   id: string;
@@ -68,40 +71,111 @@ export interface IssueSummary {
   kind: string;
   lifecycle: string;
   revision: number;
+  /** 0 (highest) … 4 (lowest); null when the source does not expose it. */
+  priority: number | null;
+  scrutiny: string | null;
+  createdAt: number | null;
+  updatedAt: number | null;
+  parentRef: string | null;
+  childCount: number;
+  childrenDone: number;
+  /** Open issues that block this one. */
+  blockedBy: string[];
   /**
    * `ready` comes from the dispatchable set; anything else is `unknown` in lists
-   * because per-issue readiness is N+1 today (shell architecture §9.3 blocker).
+   * because per-issue readiness is N+1 today (XTRM-393).
    */
   readiness: Readiness;
 }
 
-export interface ContractItem {
+/** A contract list entry. `raw` keeps unknown keys (e.g. extra fields on a validation check) for lossless writes. */
+export interface ContractEntry {
   text: string;
+  raw: Record<string, unknown> | null;
+}
+
+export interface Contract {
+  problem: string;
+  success: string;
+  scope: string[];
+  nonGoals: string[];
+  constraints: string[];
+  validation: ContractEntry[];
+  output: ContractEntry[];
+  references: string[];
+  /** The contract exactly as read; writes patch known fields onto it so unknown keys survive. */
+  raw: Record<string, unknown>;
+}
+
+export interface IssueLink {
+  id: string;
+  ref: string;
+  title: string;
+  lifecycle: string;
+  kind?: string;
+}
+
+export interface JournalEntry {
+  id: string;
+  sequence: number;
+  kind: string;
+  revision: number;
+  createdAt: number;
+  summary: string;
+}
+
+export interface ProvenanceSummary {
+  attestation: { outcome: string; policy: string; attestedBy: string; createdAt: number } | null;
+  claims: number;
+  bindings: number;
+  receipts: number;
+  commits: string[];
+  prs: string[];
 }
 
 export interface IssueDetail extends IssueSummary {
+  projectId: string | null;
   readinessState: string;
   dispatchable: boolean;
   reasons: string[];
-  contract: {
-    problem: string;
-    success: string;
-    scope: string[];
-    nonGoals: string[];
-    constraints: string[];
-    validation: string[];
-    output: string[];
-  };
+  contract: Contract;
   claim: { holder: string; expiresAt: number | null } | null;
   closure: { closed: boolean; closedAt: number | null; reason: string | null };
-  provenance: { eventCount: number; lastEventType: string | null; lastEventAt: number | null };
+  parent: IssueLink | null;
+  children: IssueLink[];
+  blockers: IssueLink[];
+  release: { childrenDone: number; childrenTotal: number } | null;
+  journal: JournalEntry[];
+  provenance: ProvenanceSummary;
+}
+
+export interface IssueEdit {
+  title?: string;
+  priority?: number;
+  scrutiny?: Scrutiny;
+  contract?: Record<string, unknown>;
+}
+
+export interface IssueCreate {
+  title: string;
+  kind: string;
+  priority: number;
+  scrutiny: Scrutiny;
+  parent?: string;
+  contract: Record<string, unknown>;
 }
 
 export interface SubstrateAdapter {
   readonly source: DataSource;
+  /** Whether mutations are enabled for this source. */
+  canWrite(): Promise<boolean>;
   listProjects(): Promise<SubstrateProject[]>;
   listIssues(projectId: string): Promise<IssueSummary[]>;
-  getIssue(ref: string): Promise<IssueDetail>;
+  getIssue(ref: string, projectId?: string): Promise<IssueDetail>;
+  editIssue(projectId: string, ref: string, expectedRevision: number, edit: IssueEdit): Promise<void>;
+  setLifecycle(projectId: string, ref: string, state: Lifecycle): Promise<void>;
+  addNote(projectId: string, ref: string, text: string, kind: string): Promise<void>;
+  createIssue(projectId: string, input: IssueCreate): Promise<string>;
 }
 
 // --- program --------------------------------------------------------------

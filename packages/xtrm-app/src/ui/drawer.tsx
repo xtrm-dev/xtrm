@@ -49,15 +49,15 @@ export function Drawer({
       data-testid="inspector-drawer"
       data-variant={variant}
       className={cx(
-        "flex h-full min-w-0 flex-col bg-raised",
-        variant === "overlay" && "border-l border-border shadow-float",
-        variant === "column" && "rounded-lg border border-border-muted",
-        variant === "maximized" && "border-l border-border-muted",
+        "flex h-full min-w-0 flex-col overflow-hidden rounded-lg bg-raised",
+        variant === "overlay" && "border border-border shadow-float",
+        variant === "column" && "border border-border-muted",
+        variant === "maximized" && "border border-border shadow-float",
       )}
     >
       <div className="flex h-12 shrink-0 items-center gap-1 border-b border-border-muted px-2">{header}</div>
       <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
-        <div className={cx(variant === "maximized" && "mx-auto w-full max-w-3xl py-4")}>{children}</div>
+        <div className={cx(variant === "maximized" && "mx-auto w-full max-w-4xl py-4")}>{children}</div>
       </div>
     </aside>
   );

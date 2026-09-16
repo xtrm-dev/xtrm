@@ -1,6 +1,9 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Activity01Icon,
+  Add01Icon,
+  Tick02Icon,
+  ArrowExpand02Icon,
   AiChat02Icon,
   Alert02Icon,
   ArrowDown01Icon,
@@ -45,6 +48,9 @@ import {
 // Offline curated registry (Supernova pattern, HugeIcons glyphs): typed names, one size scale.
 const registry = {
   activity: Activity01Icon,
+  plus: Add01Icon,
+  check: Tick02Icon,
+  open: ArrowExpand02Icon,
   agent: AiChat02Icon,
   alert: Alert02Icon,
   chevronDown: ArrowDown01Icon,

@@ -707,3 +707,6 @@ Recorded from `packages/xtrm-app/package.json` on branch `xt/console-v2-shell`.
 | `seitu` + `arktype` | **not adopted** | five persisted layout fields are validated by hand (`src/shell/layout.ts`); revisit when persisted state grows |
 | `@tanstack/react-hotkeys` | **not adopted** | one keydown listener; revisit when bindings become user-configurable |
 | `sonner`, `class-variance-authority`, `cn`, `shadcn` preset, `tailwind-scrollbar` | **not adopted** | no toast or variant matrix needed yet; scrollbar utilities are three CSS rules |
+| `react-markdown` + `remark-gfm` | `^10.1.0` / `^4.0.1` | MIT — contract and journal Markdown rendering; raw HTML not rendered |
+| `@tiptap/react`, `@tiptap/core`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/markdown`, `@tiptap/extensions` | `^3.31.3` | MIT — Jira-style rich editor with Markdown persistence and a source tab; serializer escapes measured, unchanged fields persist their original string |
+| shadcn / Spectrum UI / LiveKit Agents UI registries | via `components.json` + MCP | registry sources are quarantined in `src/components/registry/` and adapted; see `ui-component-reference-registry.md` |

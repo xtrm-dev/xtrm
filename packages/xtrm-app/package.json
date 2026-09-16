@@ -23,11 +23,19 @@
     "@tanstack/react-query": "^5.103.1",
     "@tanstack/react-router": "^1.170.36",
     "@tanstack/react-virtual": "^3.14.13",
+    "@tiptap/core": "^3.31.3",
+    "@tiptap/extensions": "^3.31.3",
+    "@tiptap/markdown": "^3.31.3",
+    "@tiptap/pm": "^3.31.3",
+    "@tiptap/react": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
     "cmdk": "^1.1.1",
     "motion": "^13.4.0",
     "motion-panels": "0.5.2",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

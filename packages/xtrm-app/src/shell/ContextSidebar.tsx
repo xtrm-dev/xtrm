@@ -2,10 +2,10 @@ import { Popover } from "@base-ui/react/popover";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useAdapters } from "../adapters/index.tsx";
-import { REPO_SECTIONS, hrefFor, repoHref } from "../app/destinations.ts";
-import { projectForRepo, useIssues, useProjects, useRepoStats, useRepos } from "../app/queries.ts";
+import { MODES, REPO_SECTIONS, modeForPath, repoHref } from "../app/destinations.ts";
+import { projectForRepo, useIssues, useProgram, useProjects, useRepoStats, useRepos } from "../app/queries.ts";
 import { Icon } from "../ui/icon.tsx";
-import { IconButton, Kbd, Row, StatusDot, cx, relativeTime } from "../ui/primitives.tsx";
+import { IconButton, Row, StatusDot, relativeTime } from "../ui/primitives.tsx";
 import { SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
 import { useShell } from "./context.tsx";
 
@@ -36,14 +36,14 @@ function RepositorySelector() {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         aria-label={`Repository: ${repo.fullName}`}
-        className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left outline-none hover:bg-hover focus-visible:bg-hover data-[popup-open]:bg-hover"
+        className="flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left outline-none hover:bg-hover focus-visible:bg-hover data-[popup-open]:bg-hover"
       >
-        <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm bg-control text-[0.65rem] font-semibold text-ink-muted uppercase">{repo.name.slice(0, 1)}</span>
-        <span className="flex min-w-0 flex-col leading-tight">
+        <span className="text-[0.65rem] font-medium tracking-wide text-ink-faint uppercase">Repository</span>
+        <span className="flex w-full min-w-0 items-center gap-1.5">
           <span className="truncate text-sm font-medium text-ink">{repo.name}</span>
           <span className="truncate text-xs text-ink-faint">{repo.owner}</span>
+          <Icon name="chevronDown" size="xs" className="ml-auto shrink-0 text-ink-faint" />
         </span>
-        <Icon name="chevronDown" size="xs" className="ml-auto text-ink-faint" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner side="bottom" align="start" sideOffset={4} className="z-50">
@@ -83,6 +83,18 @@ function RepositorySelector() {
                 </Row>
               ))}
             </div>
+            <div className="border-t border-border-muted p-1">
+              <Row
+                density="sidebar"
+                onActivate={() => {
+                  setOpen(false);
+                  go("/repositories");
+                }}
+              >
+                <Icon name="repositories" size="xs" className="text-ink-faint" />
+                <span className="text-ink-muted">All repositories</span>
+              </Row>
+            </div>
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>
@@ -110,48 +122,31 @@ function SourceFooter() {
   );
 }
 
-export function ContextSidebar() {
-  const { repo, dispatch, openPalette } = useShell();
+function WorkSidebar({ pathname }: { pathname: string }) {
+  const { repo } = useShell();
   const go = useGo();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const projects = useProjects();
   const project = projectForRepo(projects.data, repo);
   const issues = useIssues(project?.id);
-  const openCount = issues.data?.filter((i) => !["done", "cancelled", "archived"].includes(i.lifecycle)).length;
-
+  const openCount = issues.data?.filter((i) => i.lifecycle === "open").length;
   return (
-    <nav aria-label="Repository navigation" data-testid="context-sidebar" className="flex h-full min-w-0 flex-col py-1.5 pl-1">
-      <div className="flex items-center gap-1 pr-1">
-        <div className="min-w-0 flex-1">
-          <RepositorySelector />
-        </div>
-        <IconButton icon="sidebar" label="Collapse sidebar" shortcut="Ctrl B" onClick={() => dispatch({ type: "sidebar/toggle" })} />
+    <>
+      <div className="px-1">
+        <RepositorySelector />
       </div>
-
-      <button
-        type="button"
-        onClick={() => openPalette("search")}
-        className="mx-1 mt-2 mb-3 flex h-8 items-center gap-2 rounded-md border border-border-muted bg-surface/60 px-2.5 text-left text-sm text-ink-faint outline-none hover:border-border hover:text-ink-muted focus-visible:border-border-strong"
-      >
-        <Icon name="search" size="xs" />
-        <span className="flex-1 truncate">Search {repo.name} and workspace</span>
-        <Kbd>Ctrl K</Kbd>
-      </button>
-
-      <div className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+      <div className="thin-scrollbar mt-3 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1">
         {REPO_SECTIONS.map((section) => (
           <SidebarSection key={section.label} label={section.label}>
             {section.items.map((item) => {
-              const href = hrefFor(item, repo);
-              const selected = pathname === href;
+              const href = repoHref(repo, item.repoPath);
               return (
                 <SidebarRow
                   key={item.id}
                   icon={item.icon}
                   label={item.label}
-                  selected={selected}
+                  selected={pathname === href || pathname.startsWith(`${href}/`)}
                   deferred={!!item.deferred}
-                  count={item.id === "issues" ? openCount ?? null : null}
+                  count={item.id === "issues" ? (openCount ?? null) : null}
                   onActivate={() => go(href)}
                 />
               );
@@ -159,9 +154,54 @@ export function ContextSidebar() {
           </SidebarSection>
         ))}
       </div>
+    </>
+  );
+}
 
-      <div className={cx("border-t border-border-muted pt-1")}>
-        <SourceFooter />
+function ProgramSidebar() {
+  const program = useProgram();
+  const counts = (kind: string) => program.data?.items.filter((i) => i.kind === kind).length ?? null;
+  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "smooth" });
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-1">
+      <div className="px-2 py-1.5">
+        <span className="text-[0.65rem] font-medium tracking-wide text-ink-faint uppercase">Program</span>
+        <p className="truncate text-sm font-medium text-ink">{program.data?.source.repository ?? "Governance"}</p>
+      </div>
+      <SidebarSection label="Sections">
+        <SidebarRow icon="target" label="Workstreams" count={counts("workstream")} onActivate={() => jump("program-workstream")} />
+        <SidebarRow icon="agents" label="Assignments" count={counts("assignment")} onActivate={() => jump("program-assignment")} />
+        <SidebarRow icon="done" label="Decisions" count={counts("decision")} onActivate={() => jump("program-decision")} />
+        <SidebarRow icon="commit" label="Recent changes" onActivate={() => jump("program-activity")} />
+      </SidebarSection>
+    </div>
+  );
+}
+
+function DeferredSidebar({ label, reason }: { label: string; reason: string }) {
+  return (
+    <div className="flex flex-col gap-2 px-3 py-1.5">
+      <span className="text-[0.65rem] font-medium tracking-wide text-ink-faint uppercase">{label}</span>
+      <p className="text-xs text-ink-faint">{reason}</p>
+    </div>
+  );
+}
+
+export function ContextSidebar() {
+  const { dispatch } = useShell();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const mode = MODES.find((m) => m.id === modeForPath(pathname))!;
+
+  return (
+    <nav aria-label={`${mode.label} navigation`} data-testid="context-sidebar" className="flex h-full min-w-0 flex-col rounded-lg border border-border-muted bg-sidebar py-1.5">
+      <div className="flex min-h-0 flex-1 flex-col">
+        {mode.id === "work" ? <WorkSidebar pathname={pathname} /> : mode.id === "program" ? <ProgramSidebar /> : <DeferredSidebar label={mode.label} reason={mode.deferred ?? ""} />}
+      </div>
+      <div className="mt-1 flex items-center border-t border-border-muted px-1 pt-1">
+        <div className="min-w-0 flex-1">
+          <SourceFooter />
+        </div>
+        <IconButton icon="sidebar" label="Collapse sidebar" shortcut="Ctrl B" onClick={() => dispatch({ type: "sidebar/toggle" })} className="self-start" />
       </div>
     </nav>
   );
@@ -171,8 +211,16 @@ export function ContextSidebar() {
 export function SidebarReopenRail() {
   const { dispatch } = useShell();
   return (
-    <div data-testid="sidebar-reopen-rail" className="my-1.5 mr-1 flex w-11 shrink-0 flex-col items-center rounded-lg border border-border-muted py-1.5">
-      <IconButton icon="sidebar" label="Open sidebar" shortcut="Ctrl B" tooltipSide="right" onClick={() => dispatch({ type: "sidebar/toggle" })} />
+    <div data-testid="sidebar-reopen-rail" className="mr-1.5 mb-1.5 flex w-11 shrink-0 flex-col items-center justify-center rounded-lg border border-border-muted">
+      <button
+        type="button"
+        aria-label="Open sidebar"
+        title="Open sidebar (Ctrl B)"
+        onClick={() => dispatch({ type: "sidebar/toggle" })}
+        className="flex h-12 w-5 items-center justify-center rounded-md border border-border-muted text-ink-faint outline-none hover:bg-hover hover:text-ink focus-visible:border-border-strong"
+      >
+        <Icon name="forward" size="xs" />
+      </button>
     </div>
   );
 }

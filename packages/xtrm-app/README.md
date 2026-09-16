@@ -54,7 +54,8 @@ src/ui/          shared primitives (Surface, Row, IconButton, StatusDot, Content
 src/shell/       AppShell, layout reducer (drawer states, restore rules, URL codec),
                  context sidebar, inspector, global search/commands
 src/adapters/    github | substrate | program — interface + live + typed fixture each
-src/surfaces/    Issues, Activity, Program, Repositories, deferred placeholders
+src/issues/      Jira-style Issues: list, issue page, shared IssueView, field editors, normalization, create dialog
+src/surfaces/    Activity, Program, Repositories, deferred placeholders
 src/app/         TanStack Router routes, one TanStack Query layer
 server/          dev-server bridge: read-only `sb … --json` allow-list
 ```
@@ -64,8 +65,10 @@ Data sources (select with `VITE_XTRM_GITHUB|SUBSTRATE|PROGRAM=live|fixture`):
 | surface | default | source |
 |---|---|---|
 | GitHub / repository Activity, repository list | live | Console v1 backend (`XTRM_CONSOLE_URL`, default `http://127.0.0.1:3030`) via Vite proxy |
-| Substrate Issues + issue drawer | live | installed `sb` CLI envelope `substrate-cli/v1`, read-only allow-list; never SQLite |
+| Substrate Issues list, issue page, issue drawer, Jira-style editing | live | installed `sb` CLI envelope `substrate-cli/v1` through an allow-listed bridge; reads plus writes via `sb issue edit/state/note/create` (`XTRM_SUBSTRATE_WRITES=0` for read-only, `XTRM_SB_DB=<path>` for a dev database); never SQLite |
 | Program | fixture | Console backend `/api/programme` is disabled by deployment policy (404); fixture uses the same `ProgrammeSnapshotResponse` mapper |
+
+UI references and MCP servers (shadcn, Spectrum UI, LiveKit docs): `docs/ui-component-reference-registry.md`.
 
 Known limits: list readiness is known only for dispatchable issues (XTRM-393);
 the Substrate bridge exists only in the Vite dev/preview server; Program has no

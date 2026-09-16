@@ -41,7 +41,7 @@ export function ProgramSurface({ repoScoped }: { repoScoped?: boolean }) {
           {SECTIONS.map(([kind, label]) => {
             const items = view.items.filter((i) => i.kind === kind);
             return (
-              <section key={kind} className="flex flex-col gap-1" aria-label={label}>
+              <section key={kind} id={`program-${kind}`} className="flex scroll-mt-4 flex-col gap-1" aria-label={label}>
                 <h2 className="px-3 text-xs font-medium text-ink-faint">
                   {label} <span className="tabular">{items.length}</span>
                 </h2>
@@ -55,7 +55,7 @@ export function ProgramSurface({ repoScoped }: { repoScoped?: boolean }) {
               </section>
             );
           })}
-          <section className="flex flex-col gap-1" aria-label="Program activity">
+          <section id="program-activity" className="flex scroll-mt-4 flex-col gap-1" aria-label="Program activity">
             <h2 className="px-3 text-xs font-medium text-ink-faint">Recent changes</h2>
             {view.activity.map((a) => (
               <Row key={a.sha} density="list" onActivate={() => void window.open(a.url, "_blank", "noreferrer")}>

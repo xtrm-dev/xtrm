@@ -66,11 +66,11 @@ export function useIssuesForProjects(projectIds: string[], enabled: boolean) {
   });
 }
 
-export function useIssue(ref: string, follow = false) {
+export function useIssue(ref: string, follow = false, projectId?: string | null) {
   const { substrate } = useAdapters();
   return useQuery({
     queryKey: ["substrate", "issue", ref],
-    queryFn: () => substrate.getIssue(ref),
+    queryFn: () => substrate.getIssue(ref, projectId ?? undefined),
     staleTime: 15_000,
     refetchInterval: follow ? LIVE_MS : false,
   });

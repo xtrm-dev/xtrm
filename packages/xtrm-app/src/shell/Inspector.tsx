@@ -1,48 +1,19 @@
+import { useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import type { IssueDetail, RepoEvent } from "../adapters/index.tsx";
+import type { RepoEvent } from "../adapters/index.tsx";
 import { useEvents, useIssue, useProgram } from "../app/queries.ts";
+import { useCanWrite } from "../issues/actions.ts";
+import { IssueView } from "../issues/IssueView.tsx";
 import { Drawer, Fields, InspectorSection } from "../ui/drawer.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { ContentPanel, EmptyState, ErrorState, IconButton, LoadingState, Row, StatusDot, relativeTime, type Tone } from "../ui/primitives.tsx";
+import { ContentPanel, EmptyState, ErrorState, IconButton, LoadingState, Row, ago } from "../ui/primitives.tsx";
 import { useShell } from "./context.tsx";
 import { formatRef, type DrawerRef } from "./layout.ts";
 
 const copy = (text: string) => void navigator.clipboard?.writeText(text).catch(() => {});
 
-export function lifecycleTone(lifecycle: string): Tone {
-  switch (lifecycle) {
-    case "in_progress":
-    case "in_review":
-      return "active";
-    case "done":
-      return "done";
-    case "cancelled":
-    case "archived":
-    case "deferred":
-      return "muted";
-    case "blocked":
-      return "danger";
-    default:
-      return "neutral";
-  }
-}
-
 const label = (s: string) => s.replace(/_/g, " ");
-
-function List({ items, empty = "None recorded" }: { items: string[]; empty?: string }) {
-  if (!items.length) return <p className="text-sm text-ink-faint">{empty}</p>;
-  return (
-    <ul className="flex flex-col gap-1 text-sm text-ink">
-      {items.map((item, i) => (
-        <li key={i} className="flex gap-2">
-          <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-ink-faint" />
-          <span className="min-w-0 break-words">{item}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 function Title({ eyebrow, children }: { eyebrow: ReactNode; children: ReactNode }) {
   return (
@@ -55,85 +26,13 @@ function Title({ eyebrow, children }: { eyebrow: ReactNode; children: ReactNode 
 
 // --- issue ------------------------------------------------------------------
 
-function IssueReadiness({ issue }: { issue: IssueDetail }) {
-  return (
-    <InspectorSection title="Readiness">
-      <div className="flex items-center gap-2 text-sm">
-        <StatusDot tone={issue.dispatchable ? "accent" : "neutral"} label={issue.readinessState} />
-        <span className="text-ink">{label(issue.readinessState)}</span>
-        <span className="text-ink-faint">{issue.dispatchable ? "· dispatchable" : "· not dispatchable"}</span>
-      </div>
-      {issue.reasons.length > 0 && <List items={issue.reasons} />}
-    </InspectorSection>
-  );
-}
-
-function IssuePanel({ ref: issueRef, follow }: { ref: string; follow: boolean }) {
+function IssuePanel({ issueRef, follow }: { issueRef: string; follow: boolean }) {
+  const { inspect } = useShell();
+  const canWrite = useCanWrite();
   const q = useIssue(issueRef, follow);
   if (q.isPending) return <LoadingState rows={6} label="Loading issue" />;
   if (q.isError) return <ErrorState title={`Could not read ${issueRef}`} error={q.error} />;
-  const issue = q.data;
-  const c = issue.contract;
-  return (
-    <>
-      <Title
-        eyebrow={
-          <>
-            <StatusDot tone={lifecycleTone(issue.lifecycle)} label={issue.lifecycle} />
-            <span className="font-mono">{issue.ref}</span>
-            <span>·</span>
-            <span>{label(issue.lifecycle)}</span>
-            <span>·</span>
-            <span>{issue.kind}</span>
-            <span className="ml-auto tabular">rev {issue.revision}</span>
-          </>
-        }
-      >
-        {issue.title}
-      </Title>
-      <IssueReadiness issue={issue} />
-      <InspectorSection title="Contract">
-        <div className="flex flex-col gap-4">
-          <Prose title="Problem" text={c.problem} />
-          <Prose title="Success" text={c.success} />
-          <ContractList title="Scope" items={c.scope} />
-          <ContractList title="Non-goals" items={c.nonGoals} />
-          <ContractList title="Constraints" items={c.constraints} />
-          <ContractList title="Validation" items={c.validation} />
-          <ContractList title="Output" items={c.output} />
-        </div>
-      </InspectorSection>
-      <InspectorSection title="Execution">
-        <Fields
-          rows={[
-            ["Claim", issue.claim ? `${issue.claim.holder} · expires in ${relativeTime(Date.now(), issue.claim.expiresAt ?? undefined)}` : <span className="text-ink-faint">unclaimed</span>],
-            ["Closure", issue.closure.closed ? `${issue.closure.reason ?? "closed"} · ${relativeTime(issue.closure.closedAt)} ago` : <span className="text-ink-faint">open</span>],
-            ["Provenance", `${issue.provenance.eventCount} events${issue.provenance.lastEventType ? ` · last ${issue.provenance.lastEventType}` : ""}`],
-          ]}
-        />
-      </InspectorSection>
-      <p className="px-5 pb-5 text-xs text-ink-faint">Read-only projection. Claims and lifecycle changes go through Substrate authority, not this prototype.</p>
-    </>
-  );
-}
-
-// Contract fields hold long prose: label above value keeps a readable measure.
-function Prose({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs text-ink-faint">{title}</span>
-      <p className="text-sm leading-6 text-pretty whitespace-pre-line text-ink">{text || <span className="text-ink-faint">—</span>}</p>
-    </div>
-  );
-}
-
-function ContractList({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs text-ink-faint">{title}</span>
-      <List items={items} empty="—" />
-    </div>
-  );
+  return <IssueView issue={q.data} canWrite={canWrite} variant="panel" nav={{ onOpenIssue: (ref) => inspect({ kind: "issue", ref }) }} />;
 }
 
 // --- program ----------------------------------------------------------------
@@ -165,7 +64,7 @@ function ProgramPanel({ id, follow }: { id: string; follow: boolean }) {
           rows={[
             ["Status", label(item.status)],
             ["Record", <span className="font-mono text-xs">{item.path}</span>],
-            ["Updated", item.updatedAt ? `${relativeTime(item.updatedAt)} ago` : "—"],
+            ["Updated", item.updatedAt ? ago(item.updatedAt) : "—"],
             ["Jira", item.jiraRefs.length ? item.jiraRefs.join(", ") : <span className="text-ink-faint">—</span>],
             ["Snapshot", `${q.data.source.repository}@${q.data.source.shortSha ?? "?"}`],
           ]}
@@ -231,7 +130,7 @@ function ActivityPanel({ refValue, follow }: { refValue: string; follow: boolean
                 <span>{e.action}</span>
               </>
             )}
-            <span className="ml-auto">{relativeTime(e.createdAt)} ago</span>
+            <span className="ml-auto">{ago(e.createdAt)}</span>
           </>
         }
       >
@@ -274,11 +173,8 @@ function ActivityPanel({ refValue, follow }: { refValue: string; follow: boolean
   );
 }
 
-// --- drawer host ------------------------------------------------------------
 
-function refTitle(ref: DrawerRef) {
-  return ref.kind === "activity" ? "Activity" : ref.ref;
-}
+// --- drawer host ------------------------------------------------------------
 
 export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; follow: boolean }) {
   if (!entity)
@@ -289,7 +185,7 @@ export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; fo
     );
   switch (entity.kind) {
     case "issue":
-      return <IssuePanel key={entity.ref} ref={entity.ref} follow={follow} />;
+      return <IssuePanel key={entity.ref} issueRef={entity.ref} follow={follow} />;
     case "program":
       return <ProgramPanel key={entity.ref} id={entity.ref} follow={follow} />;
     case "activity":
@@ -297,25 +193,34 @@ export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; fo
   }
 }
 
+const KIND_LABEL: Record<DrawerRef["kind"], string> = { issue: "Issue", program: "Program", activity: "Activity" };
+
 export function InspectorDrawer({ variant }: { variant: "overlay" | "column" | "maximized" }) {
-  const { layout, dispatch, inspected } = useShell();
+  const { layout, dispatch, inspected, repo } = useShell();
+  const navigate = useNavigate();
   const state = layout.inspector.state;
   const follow = layout.inspector.followLive;
-  const link = () => copy(window.location.href);
 
   const header = (
     <>
       <IconButton icon="back" label="Back" disabled={layout.cursor <= 0} onClick={() => dispatch({ type: "drawer/back" })} />
       <IconButton icon="forward" label="Forward" disabled={layout.cursor >= layout.stack.length - 1} onClick={() => dispatch({ type: "drawer/forward" })} />
-      <nav aria-label="Inspector trail" className="ml-1 flex min-w-0 items-center gap-1 text-sm">
-        {layout.stack.slice(Math.max(0, layout.cursor - 1), layout.cursor + 1).map((r, i, arr) => (
-          <span key={`${formatRef(r)}-${i}`} className="flex min-w-0 items-center gap-1">
-            {i > 0 && <span className="text-ink-faint">/</span>}
-            <span className={i === arr.length - 1 ? "truncate text-ink" : "truncate text-ink-faint"}>{refTitle(r)}</span>
-          </span>
-        ))}
-      </nav>
+      <span className="ml-1 truncate text-sm font-medium text-ink" title={inspected ? KIND_LABEL[inspected.kind] : undefined}>
+        Inspector
+      </span>
       <div className="ml-auto flex items-center gap-0.5">
+        {inspected?.kind === "issue" && (
+          <button
+            type="button"
+            onClick={() => {
+              void navigate({ to: `/rep/${repo.owner}/${repo.name}/work/issues/${inspected.ref}` } as never);
+              dispatch({ type: "drawer/close" });
+            }}
+            className="mr-1 flex h-7 items-center gap-1.5 rounded-md border border-border-muted px-2 text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:border-border-strong"
+          >
+            <Icon name="open" size="xs" /> Open
+          </button>
+        )}
         <IconButton icon="live" label={follow ? "Following live updates" : "Follow live updates"} active={follow} aria-pressed={follow} onClick={() => dispatch({ type: "drawer/followLive" })} />
         {state !== "MAXIMIZED" && (
           <IconButton
@@ -335,7 +240,7 @@ export function InspectorDrawer({ variant }: { variant: "overlay" | "column" | "
           header={inspected ? formatRef(inspected) : undefined}
           items={[
             { label: "Copy reference", icon: "copy", disabled: !inspected, onSelect: () => inspected && copy(`@${formatRef(inspected)}`) },
-            { label: "Copy link", icon: "link", onSelect: link },
+            { label: "Copy link", icon: "link", onSelect: () => copy(window.location.href) },
             ...(inspected?.kind === "issue" ? [{ label: "Copy sb command", icon: "command" as const, onSelect: () => copy(`sb issue show ${inspected.ref}`) }] : []),
           ]}
         />

@@ -514,3 +514,40 @@ Feature surfaces compose these primitives. A feature-local variant of a primitiv
 | `ResizablePanel` | the shell adapter surface over `motion-panels` (§2.1); the only `motion-panels` import site |
 | `EmptyState` | explicit empty and deferred-placeholder state |
 | `LoadingState` | skeleton rows and inline spinner; no full-screen spinners |
+
+---
+
+## 16. Revision after the first executable review (2026-09-16)
+
+Operator review of the first vertical against the v13/v15 mocks (`docs/mocks/` in PR #208) produced these accepted changes. Where §16 and earlier sections disagree, §16 wins.
+
+### 16.1 Navigation model
+
+- **Top bar** — full-width application header. The global search entry (§4.4) lives here, centred, not in the contextual sidebar. Command and theme affordances sit at its right edge.
+- **Rail = modes.** The rail selects a workspace mode: Work, Agent, Agents, Program, Observability. `Repositories` is no longer a rail destination; the repository selector lists all repositories and links to the directory.
+- **Sidebar = the active mode's context only.** Work mode shows the repository selector and `Work` / `Code` / `System` groups. Program mode shows Program sections. Deferred modes show a one-line deferral. No destination appears in both the rail and the sidebar.
+
+### 16.2 Inspector rail and drawer geometry (v15)
+
+- The inspector rail is a separate full-height rounded column to the right of the content card, with one vertically centred handle.
+- `CONTEXTUAL` and `MAXIMIZED` drawers are floating inset panels inside the primary region (rounded, bordered, floating shadow). This supersedes "attached to the rail with no gap" (PRD §7.2) for Console v2. The geometric containment guarantee (§7.2) is unchanged.
+- The drawer header carries: back/forward, `Inspector`, `Open` (promote an issue to its full page), follow live, pin, maximize, options, close.
+
+### 16.3 Substrate Issues are a Jira-style work surface
+
+- **List** — table with Key, Summary (parent and readiness chips), Status, Priority, Children progress, Updated; views Open / Ready / Blocked / Deferred / Done / All; sortable columns; `New issue`.
+- **Issue page** — `/rep/:owner/:repo/work/issues/:issueRef`. Main column: title, then one field per `WorkContract` field (Problem, Success, Scope, Non-goals, Constraints, Validation, Output, References), then Activity (journal), Lineage (parent, blockers, children), Provenance. Details panel: Status, Readiness with gaps, Priority, Scrutiny, Parent, Children progress, Blocked by, Claim, Created, Updated, Closure.
+- **Drawer** — the same view in a single column with a compact details grid.
+- **Editing** — click a field to edit; explicit Save / Cancel; `Ctrl+Enter` / `Esc`. Prose fields use a rich editor with a Markdown source tab. List fields are structured item editors. Status, Priority, and Scrutiny are menus that save on selection. The Console v1 inline mutation panel is rejected.
+- **Markdown** — all contract prose and journal entries render as GitHub-flavoured Markdown (`react-markdown` + `remark-gfm`), without raw HTML.
+- **Writes** — through the installed `sb` CLI verbs only (`issue edit`, `issue state`, `issue note`, `issue create`), allow-listed and validated in the dev-server bridge, with `--expected-revision` on contract edits and one field per write (`issue edit` applies metadata before the revision check). Same-origin only. `XTRM_SUBSTRATE_WRITES=0` makes the bridge read-only; `XTRM_SB_DB` targets a development database.
+- **Lossless contracts** — writes patch known fields onto the contract exactly as read, so unknown keys and extra fields on validation/output entries survive. The rich editor persists the original string when a field was not changed, because the Markdown serializer adds escapes (measured on real contracts).
+- **Imported-contract normalization** — Beads imports stored whole contracts as Markdown sections inside `problem`. The issue view detects them, previews the mapping into typed fields, and writes one new revision only after review. Sections move only into empty or placeholder fields.
+
+### 16.4 Read model for the list
+
+The list joins three typed reads without per-issue calls: `issue list` (hierarchical refs), `export project` (priority, scrutiny, timestamps, edges), `issue ready` (dispatchable set). Detail adds `issue show`, `issue resume`, `provenance trace`, `journal show`. The remaining read gaps are tracked in XTRM-393 (readiness for non-dispatchable issues, cursor, change feed; priority is absent from `show`/`list`/`resume` JSON).
+
+### 16.5 Drawer parity with Console v1
+
+Console v1's issue drawer tabs were Overview, Lineage, Activity, Evidence, GitHub, Memories, Followups. Console v2 now covers Overview (contract + details), Lineage (parent, blockers, children), Activity (journal), and Provenance (attestation, claims, bindings, receipts, commits, PRs). Not yet covered: specialist run activity/evidence, GitHub evidence references, project memories, and discovered-from/relates-to followups.

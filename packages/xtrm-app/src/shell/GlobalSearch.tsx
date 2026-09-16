@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { GLOBAL_DESTINATIONS, REPO_SECTIONS, hrefFor, repoHref } from "../app/destinations.ts";
+import { MODES, REPO_SECTIONS, modeHref, repoHref } from "../app/destinations.ts";
 import { projectForRepo, useIssues, useIssuesForProjects, useProgram, useProjects, useRepos } from "../app/queries.ts";
 import { CommandMenu, type CommandEntry, type CommandGroupData } from "../ui/command-menu.tsx";
 import { cx } from "../ui/primitives.tsx";
@@ -37,10 +37,9 @@ export function GlobalSearch() {
         { id: "theme", label: `Switch to ${shell.theme === "dark" ? "light" : "dark"} theme`, icon: shell.theme === "dark" ? "sun" : "moon", onSelect: shell.toggleTheme },
       ];
       const navigation: CommandEntry[] = [
-        ...GLOBAL_DESTINATIONS.map((d) => ({ id: `go-${d.id}`, label: `Go to ${d.label}`, icon: d.icon, hint: d.deferred ? "deferred" : undefined, onSelect: () => go(d.path) })),
-        ...REPO_SECTIONS.flatMap((s) =>
-          s.items.filter((i) => i.repoPath).map((i) => ({ id: `go-${i.id}`, label: `Go to ${i.label}`, hint: `${repo.name} · ${s.label}`, icon: i.icon, onSelect: () => go(hrefFor(i, repo)) })),
-        ),
+        ...MODES.map((m) => ({ id: `go-${m.id}`, label: `Go to ${m.label}`, icon: m.icon, hint: m.deferred ? "deferred" : undefined, onSelect: () => go(modeHref(m, repo)) })),
+        ...REPO_SECTIONS.flatMap((s) => s.items.map((i) => ({ id: `go-${i.id}`, label: `Go to ${i.label}`, hint: `${repo.name} · ${s.label}`, icon: i.icon, onSelect: () => go(repoHref(repo, i.repoPath)) }))),
+        { id: "go-repositories", label: "Go to All repositories", icon: "repositories" as const, onSelect: () => go("/repositories") },
       ];
       return [
         { heading: "Commands", entries: commands },
@@ -69,8 +68,8 @@ export function GlobalSearch() {
       .filter((r) => workspace || r.fullName === repo.fullName || r.owner === repo.owner)
       .map((r) => ({ id: r.fullName, label: r.fullName, icon: "repositories", onSelect: () => go(repoHref(r, "/work/issues")) }));
     const destinations: CommandEntry[] = [
-      ...REPO_SECTIONS.flatMap((s) => s.items.filter((i) => i.repoPath && !i.deferred).map((i) => ({ id: i.id, label: i.label, hint: repo.name, icon: i.icon, onSelect: () => go(hrefFor(i, repo)) }))),
-      ...GLOBAL_DESTINATIONS.filter((d) => !d.deferred).map((d) => ({ id: d.id, label: d.label, icon: d.icon, onSelect: () => go(d.path) })),
+      ...REPO_SECTIONS.flatMap((s) => s.items.filter((i) => !i.deferred).map((i) => ({ id: i.id, label: i.label, hint: repo.name, icon: i.icon, onSelect: () => go(repoHref(repo, i.repoPath)) }))),
+      ...MODES.filter((m) => !m.deferred).map((m) => ({ id: m.id, label: m.label, icon: m.icon, onSelect: () => go(modeHref(m, repo)) })),
     ];
 
     const cap = (entries: CommandEntry[]) => (palette.query ? entries : entries.slice(0, 6));

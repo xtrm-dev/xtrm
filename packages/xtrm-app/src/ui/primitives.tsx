@@ -205,6 +205,12 @@ export function SurfaceHeader({ title, meta, children }: { title: ReactNode; met
   );
 }
 
+/** "just now" / "4d ago"; absolute dates stay as-is. */
+export function ago(iso: string | number | null): string {
+  const r = relativeTime(iso);
+  return r === "—" ? r : r === "now" ? "just now" : /^\d+[mhd]$/.test(r) ? `${r} ago` : r;
+}
+
 export function relativeTime(iso: string | number | null, now = Date.now()): string {
   if (iso === null) return "—";
   const t = typeof iso === "number" ? iso : Date.parse(iso);
