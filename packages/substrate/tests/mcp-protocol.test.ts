@@ -307,7 +307,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
       const contractFile = join(env.temp("sb-mcp-c-"), "c.json");
       writeFileSync(contractFile, JSON.stringify(contract({ problem: "mcp repo", success: "mcp repo" })));
       assert.equal(
-        env.inCwd(repo, () => env.run(["issue", "create", "--title", "repo work", "--kind", "task", "--contract", contractFile])).code,
+        env.inCwd(repo, () => env.run(["issue", "create", "--title", "repo work", "--kind", "task", "--contract", contractFile, "--scrutiny", "LOW"])).code,
         0,
       );
 
@@ -349,13 +349,13 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
       const contractFile = join(env.temp("sb-mcp-wc-"), "c.json");
       writeFileSync(contractFile, JSON.stringify(contract({ problem: "mcp wa", success: "mcp wa" })));
       assert.equal(
-        env.inCwd(a, () => env.run(["issue", "create", "--title", "wa work", "--kind", "task", "--contract", contractFile])).code,
+        env.inCwd(a, () => env.run(["issue", "create", "--title", "wa work", "--kind", "task", "--contract", contractFile, "--scrutiny", "LOW"])).code,
         0,
       );
       const b = env.gitRepo("mcp-wb");
       assert.equal(env.inCwd(b, () => env.run(["init"])).code, 0, "init repo B");
       assert.equal(
-        env.inCwd(b, () => env.run(["issue", "create", "--title", "wb work", "--kind", "task", "--contract", contractFile])).code,
+        env.inCwd(b, () => env.run(["issue", "create", "--title", "wb work", "--kind", "task", "--contract", contractFile, "--scrutiny", "LOW"])).code,
         0,
       );
 

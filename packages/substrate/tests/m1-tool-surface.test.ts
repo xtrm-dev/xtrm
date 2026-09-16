@@ -188,7 +188,7 @@ function setupDb(): { dir: string; dbPath: string } {
 }
 
 function createArgs(dbPath: string, contractArg: string, extra: string[] = []): string[] {
-  return ["--db", dbPath, "--json", "issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", contractArg, ...extra];
+  return ["--db", dbPath, "--json", "issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", contractArg, "--scrutiny", "LOW", ...extra];
 }
 
 describe("m1 inlineCreate: inline JSON parity and refusal", () => {

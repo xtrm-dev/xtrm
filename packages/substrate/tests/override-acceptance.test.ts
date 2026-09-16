@@ -48,7 +48,7 @@ describe("override acceptance (ADR §91)", () => {
     assert.equal(initA.code, 0, initA.stderr || initA.stdout);
     const contractFile = join(env.temp("sb-ovr-c-"), "c.json");
     writeFileSync(contractFile, JSON.stringify(contract({ problem: "alpha", success: "alpha" })));
-    const created = env.inCwd(a, () => env.run(["issue", "create", "--title", "alpha work", "--kind", "task", "--contract", contractFile]));
+    const created = env.inCwd(a, () => env.run(["issue", "create", "--title", "alpha work", "--kind", "task", "--contract", contractFile, "--scrutiny", "LOW"]));
     assert.equal(created.code, 0, created.stderr || created.stdout);
 
     const b = env.gitRepo("beta");

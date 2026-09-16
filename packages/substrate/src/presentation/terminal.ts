@@ -368,6 +368,8 @@ export function feedbackForCommand(command: string, args: string[], data: Record
       return successFeedback("issue_updated", `Updated ${ref}`, data.revisionCreated ? "new revision created; readiness must be revalidated" : undefined);
     case "issue.note":
       return successFeedback("journal_written", `Added ${String(data.kind ?? "note")} to ${issueRefFromArgs(args) ?? ref}`, data.sequence ? `journal seq ${String(data.sequence)}` : undefined);
+    case "issue.attest":
+      return successFeedback("issue_attested", `Attested ${issueRefFromArgs(args) ?? ref} as ${String(data.outcome ?? "unknown")}`, data.policy ? `policy ${String(data.policy)}` : undefined);
     case "issue.claim":
       return successFeedback("issue_claimed", `Claimed ${issueRefFromArgs(args) ?? ref}`, data.holder ? `holder ${String(data.holder)}` : undefined);
     case "issue.release":

@@ -30,6 +30,7 @@ import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
+import { assertContractShape, isValidScrutiny, SCRUTINY_LEVELS } from "../src/domain/contract.ts";
 import { enrichExecutionContext } from "../src/domain/execution-context.ts";
 import type { JournalEntry, JournalKind, ResultPayload } from "../src/domain/journal.ts";
 import type { ResolvedIssue } from "../src/domain/issue.ts";
@@ -383,7 +384,7 @@ a ref from another Project unless that Project is selected deliberately; run \`s
 once inside the repository to bind it.`,
   "issue.create": `usage: sb issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--parent <ref>] [--priority <n>] [--scrutiny <s>]
 
-creates an issue; --contract takes a JSON file path or inline JSON.`,
+creates an issue; --contract takes a JSON file path or inline JSON. Scrutiny is required: --scrutiny wins when present, otherwise the contract file's own scrutiny applies; a missing or invalid value fails closed.`,
   "issue.show": `usage: sb issue show <ref>
 
 prints the issue header plus the contract body (human) or full payload (with --json), followed by a bounded operational context: the most recent journal entries (summaries truncated), the newest entry per kind, per-kind counts, the closure view and the provenance summary. The full journal is never dumped; use "sb journal show" for bodies.`,
@@ -1017,13 +1018,32 @@ function runIssue(
       const kind = flag(flags, "kind") ?? (() => { throw new Error("--kind is required"); })();
       const contractRaw = flag(flags, "contract") ?? (() => { throw new Error("--contract <file|json> is required"); })();
       const parent = flag(flags, "parent");
+      const parsedContract = readJsonArg(contractRaw) as unknown;
+      // SCRUTINY precedence (fail closed, never a silently-broken draft): an
+      // explicit --scrutiny wins; otherwise the contract file's own scrutiny
+      // applies as the default. Read the key before the shape assertion so a
+      // malformed contract still reports the contract error, not scrutiny.
+      const contractScrutiny =
+        typeof parsedContract === "object" && parsedContract !== null && !Array.isArray(parsedContract)
+          ? (parsedContract as Record<string, unknown>)["scrutiny"]
+          : undefined;
+      assertContractShape(parsedContract);
+      const flagScrutiny = flag(flags, "scrutiny");
+      const scrutiny = flagScrutiny ?? (contractScrutiny === undefined ? undefined : contractScrutiny);
+      if (!isValidScrutiny(scrutiny)) {
+        throw new Error(
+          scrutiny === undefined
+            ? `scrutiny is required: pass --scrutiny <level> or carry scrutiny in the contract; must be one of ${SCRUTINY_LEVELS.join(", ")}`
+            : `invalid scrutiny ${JSON.stringify(scrutiny)}: must be one of ${SCRUTINY_LEVELS.join(", ")}`,
+        );
+      }
       const issue = svc.createIssue({
         projectId: project,
         title,
         kind: kind as never,
-        contract: readJsonArg(contractRaw) as never,
+        contract: parsedContract,
         priority: flag(flags, "priority") !== undefined ? Number(flag(flags, "priority")) : undefined,
-        scrutiny: flag(flags, "scrutiny"),
+        scrutiny,
         parentId: parent ? svc.resolveRefInProject(parent, project).id : undefined,
         authoredBy: "sb-cli",
       });

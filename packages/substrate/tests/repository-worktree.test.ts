@@ -48,7 +48,7 @@ describe("worktree acceptance (ADR §86)", () => {
     // A write from one worktree is visible from the others.
     const contractFile = join(env.temp("sb-wt-c-"), "c.json");
     writeFileSync(contractFile, JSON.stringify(contract({ problem: "wt", success: "wt" })));
-    const created = env.inCwd(detached, () => env.run(["issue", "create", "--title", "wt work", "--kind", "task", "--contract", contractFile]));
+    const created = env.inCwd(detached, () => env.run(["issue", "create", "--title", "wt work", "--kind", "task", "--contract", contractFile, "--scrutiny", "LOW"]));
     assert.equal(created.code, 0, created.stderr || created.stdout);
     assert.equal((created.data as { humanRef: string }).humanRef, "WTREPO-1");
     const fromMain = env.inCwd(main, () => env.run(["issue", "list"]));
