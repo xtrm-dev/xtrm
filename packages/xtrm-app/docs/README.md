@@ -8,6 +8,7 @@ Portfolio tracker: Jira `ISSUE-140`. Repository-local executable work belongs in
 2. `console-v2-shell-architecture.md` — canonical shell contract: global rail, contextual sidebar, search/command/options, Inspector Drawer, routes, typed adapters, implementation waves, first executable vertical (§13.1), visual standard and shared primitives (§15).
 3. `console-v2-migration-plan.md` — migration principles, Console v1 preservation, sequencing, delivery phases (§14).
 4. `adoption-audit.md` — adoption policy and dispositions. §15 lists accepted decisions and still-open adoption items.
+5. `ui-component-reference-registry.md` — every external UI / agent-UI reference with URL, license, disposition, surfaces, and the MCP servers to query them.
 
 ## Pinned audit evidence
 

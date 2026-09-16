@@ -687,3 +687,26 @@ This section records operator-accepted decisions. It resolves the open `PROPOSAL
 | `@toolwind/corner-shape` (superellipse) adoption | A | optional polish; XTRM radius family (PRD §27) remains authoritative |
 | Tiptap composer | H | no composer ships in the base tranche |
 | Frame contract details: optional response body, provisional IDs, child-agent references, compaction-only units | H | inputs recorded in `console-v2-audit-supernova.md` §3.3–3.6; the accepted invariant in §15.1 is the only settled part |
+
+### 15.3 First executable vertical — adoption as built (2026-09-16)
+
+Recorded from `packages/xtrm-app/package.json` on branch `xt/console-v2-shell`.
+
+| item | as built | note |
+|---|---|---|
+| `motion-panels` | `0.5.2` exact pin; single import site `src/ui/resizable.tsx` | §12 audited `0.4.0`; the API used (`Group`, `Panel` size/min/max, `Separator`) is unchanged |
+| `motion` | `^13.4.0` | required peer of `motion-panels` |
+| `@base-ui/react` | `^1.8.0` | menu, popover, tooltip, dialog. The drawer is a shell-owned absolutely positioned panel inside the primary region (§12.3 fallback), so the Base UI Drawer portal question does not block |
+| `@tanstack/react-router` | `^1.170.36` | code-based route tree; drawer state in validated search params |
+| `@tanstack/react-query` | `^5.103.1` | **new** — the single query layer required by shell architecture §9.2 (Supernova uses the same library). MIT |
+| `@tanstack/react-virtual` | `^3.14.13` | Issues, Activity, Repositories lists |
+| `cmdk` | `^1.1.1` | rendered inside a Base UI dialog; `cmdk` still pulls `@radix-ui/react-dialog` transitively. No Radix primitive is imported by XTRM code |
+| `@hugeicons/react` + `@hugeicons/core-free-icons` | `^1.1.10` / `^4.3.3` | behind a typed registry (`src/ui/icon.tsx`) |
+| `@fontsource-variable/geist{,-mono}` | `^5.3.0` | OFL-1.1 |
+| `tailwindcss` + `@tailwindcss/vite` | `^4.3.3` | tokens in `src/styles.css` |
+| `seitu` + `arktype` | **not adopted** | five persisted layout fields are validated by hand (`src/shell/layout.ts`); revisit when persisted state grows |
+| `@tanstack/react-hotkeys` | **not adopted** | one keydown listener; revisit when bindings become user-configurable |
+| `sonner`, `class-variance-authority`, `cn`, `shadcn` preset, `tailwind-scrollbar` | **not adopted** | no toast or variant matrix needed yet; scrollbar utilities are three CSS rules |
+| `react-markdown` + `remark-gfm` | `^10.1.0` / `^4.0.1` | MIT — contract and journal Markdown rendering; raw HTML not rendered |
+| `@tiptap/react`, `@tiptap/core`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/markdown`, `@tiptap/extensions` | `^3.31.3` | MIT — Jira-style rich editor with Markdown persistence and a source tab; serializer escapes measured, unchanged fields persist their original string |
+| shadcn / Spectrum UI / LiveKit Agents UI registries | via `components.json` + MCP | registry sources are quarantined in `src/components/registry/` and adapted; see `ui-component-reference-registry.md` |

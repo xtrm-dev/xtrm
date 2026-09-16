@@ -21,6 +21,20 @@
     "specialists": {
       "command": "specialists",
       "args": []
+    },
+    "shadcn": {
+      "type": "stdio",
+      "command": "sh",
+      "args": ["-c", "cd packages/xtrm-app && exec npx -y shadcn@latest mcp"]
+    },
+    "spectrum-ui": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@spectrumui/mcp"]
+    },
+    "livekit-docs": {
+      "type": "http",
+      "url": "https://docs.livekit.io/mcp"
     }
   }
 }

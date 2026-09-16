@@ -1672,3 +1672,7 @@ A visible Agent destination does not authorize starting the Agent/Frames tranche
 | A10 Console v1 defect dispositions before cutover | adopted (`console-v2-audit-console-v1-preservation.md` §5–6b) |
 | A11 placement open | resolved (§34.1) |
 | A12 Agent scope unchanged after DeepSeek audit | adopted (§34.10) |
+
+### 34.12 Review revision (2026-09-16)
+
+After review of the first executable vertical: the rail selects modes and the sidebar shows only the active mode's context; global search moves to a full-width top bar; the inspector rail follows the v15 reference (separate column, floating inset drawer); Substrate Issues become a Jira-style surface with an issue page, in-place field editing, Markdown rendering, lossless contract writes through `sb` verbs, and reviewed normalization of imported contracts. Details: `console-v2-shell-architecture.md` §16.
