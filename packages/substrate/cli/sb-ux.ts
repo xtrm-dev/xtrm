@@ -17,11 +17,6 @@ import {
   type TerminalStyleOptions,
 } from "../src/presentation/terminal.ts";
 
-// sb.ts predates this wrapper and treats an argv path ending in `/sb` as a
-// direct invocation. npm bin links use exactly that shape. Hide that alias
-// only while importing the engine so it exports runCli without also executing
-// it; restore argv immediately so this wrapper can perform its own exact
-// realpath main check below.
 const originalArgv1 = process.argv[1];
 const importingThroughBinAlias = originalArgv1 === "sb" || originalArgv1?.endsWith("/sb") === true;
 if (importingThroughBinAlias) process.argv[1] = fileURLToPath(import.meta.url);
@@ -195,9 +190,9 @@ function collapsedVisible(rows: IssueTreeRow[], collapsed: Set<string>): IssueTr
 async function browse(parsed: WrapperArgs, style: TerminalStyleOptions, opts: UxOptions): Promise<CliResult> {
   const tty = opts.isTTY ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
   if (!tty || typeof process.stdin.setRawMode !== "function") return errorResult("issue.browse", "interactive browser requires a TTY; use `sb issue list` for non-interactive output", style);
-  const initial = filteredRows({ ...parsed, flat: false });
+  const initial = filteredRows({ ...parsed, all: true, flat: false, statuses: [], search: "" });
   if (initial.error) return errorResult("issue.browse", initial.error, style);
-  const sourceRows = initial.rows;
+  const sourceRows = enrichRows(initial.rows, parsed.base, parsed.statuses);
   let mode: "active" | "all" | "closed" = parsed.all ? "all" : "active";
   let query = parsed.search;
   let selectedIndex = 0;
