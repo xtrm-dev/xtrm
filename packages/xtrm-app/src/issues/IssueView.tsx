@@ -21,6 +21,7 @@ import {
   scrutinyOptions,
   IssueKey,
 } from "./meta.tsx";
+import { ReferenceActionsProvider, ReferenceChip } from "../refs/references.tsx";
 
 type Variant = "page" | "panel";
 
@@ -84,15 +85,22 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
     </div>
   );
 
-  if (variant === "panel") return <div className="px-5 pt-4 pb-8">{main}</div>;
+  const body =
+    variant === "panel" ? (
+      <div className="px-5 pt-4 pb-8">{main}</div>
+    ) : (
+      <div className="mx-auto grid w-full max-w-6xl gap-10 px-8 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        {main}
+        <aside aria-label="Details" className="lg:sticky lg:top-4 lg:self-start">
+          <DetailsGrid issue={issue} canWrite={canWrite} nav={nav} />
+        </aside>
+      </div>
+    );
 
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-10 px-8 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-      {main}
-      <aside aria-label="Details" className="lg:sticky lg:top-4 lg:self-start">
-        <DetailsGrid issue={issue} canWrite={canWrite} nav={nav} />
-      </aside>
-    </div>
+    <ReferenceActionsProvider open={(r) => nav.onOpenIssue(r.ref)}>
+      {body}
+    </ReferenceActionsProvider>
   );
 }
 
@@ -126,14 +134,8 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function IssueChip({ link, nav }: { link: IssueLink; nav: Nav }) {
-  return (
-    <button type="button" onClick={() => nav.onOpenIssue(link.ref)} className="-mx-1 flex max-w-full min-w-0 items-center gap-1.5 rounded-sm px-1 text-left outline-none hover:bg-hover focus-visible:bg-hover">
-      <StatusDot tone={lifecycleTone(link.lifecycle)} label={lifecycleLabel(link.lifecycle)} />
-      <IssueKey locator={link.locator} humanRef={link.ref} className="shrink-0" />
-      <span className="truncate text-ink">{link.title}</span>
-    </button>
-  );
+function IssueChip({ link }: { link: IssueLink }) {
+  return <ReferenceChip reference={{ kind: "issue", ref: link.ref }} showTitle fallback={`${link.locator ?? link.ref} ${link.title}`} className="-mx-1" />;
 }
 
 function DetailsGrid({ issue, canWrite, nav, compact }: { issue: IssueDetail; canWrite: boolean; nav: Nav; compact?: boolean }) {
@@ -169,7 +171,7 @@ function DetailsGrid({ issue, canWrite, nav, compact }: { issue: IssueDetail; ca
       <Detail label="Scrutiny">
         <SelectField label="Scrutiny" value={(issue.scrutiny as "LOW" | null) ?? ((issue.contract.raw.scrutiny as "LOW" | undefined) ?? null)} options={scrutinyOptions} canEdit={canWrite} onChange={actions.setScrutiny} />
       </Detail>
-      <Detail label="Parent">{issue.parent ? <IssueChip link={issue.parent} nav={nav} /> : <span className="text-ink-faint">None</span>}</Detail>
+      <Detail label="Parent">{issue.parent ? <IssueChip link={issue.parent} /> : <span className="text-ink-faint">None</span>}</Detail>
       {progress && (
         <Detail label="Children">
           <div className="flex items-center gap-2">
@@ -186,7 +188,7 @@ function DetailsGrid({ issue, canWrite, nav, compact }: { issue: IssueDetail; ca
         <Detail label="Blocked by">
           <div className="flex flex-col">
             {issue.blockers.map((b) => (
-              <IssueChip key={b.ref} link={b} nav={nav} />
+              <IssueChip key={b.ref} link={b} />
             ))}
           </div>
         </Detail>

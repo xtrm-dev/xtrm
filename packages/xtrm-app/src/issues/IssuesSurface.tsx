@@ -11,6 +11,7 @@ import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon, lifecycleLabel, lifecycleTone } from "./meta.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
+import { ReferenceChip } from "../refs/references.tsx";
 
 type View = "open" | "ready" | "blocked" | "deferred" | "done" | "all";
 type SortKey = "key" | "priority" | "updated" | "status";
@@ -211,7 +212,11 @@ function IssueRow({ issue, selected, onInspect, onOpen }: { issue: IssueSummary;
             blocked
           </span>
         )}
-        {issue.parentRef && <span className="hidden shrink-0 font-mono text-xs text-ink-faint xl:inline">↑ {issue.parentLocator ?? issue.parentRef}</span>}
+        {issue.parentRef && (
+          <span className="hidden shrink-0 items-center text-xs text-ink-faint xl:inline-flex">
+            ↑<ReferenceChip reference={{ kind: "issue", ref: issue.parentRef }} fallback={issue.parentLocator ?? issue.parentRef} />
+          </span>
+        )}
         <span className="ml-auto flex shrink-0 items-center opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100" onClick={(e) => e.stopPropagation()}>
           <IconButton icon="open" label={`Open ${issue.ref}`} onClick={onOpen} />
           <IconButton icon="copy" label={`Copy ${issue.ref}`} onClick={() => copy(issue.ref)} />

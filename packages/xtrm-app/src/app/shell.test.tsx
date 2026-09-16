@@ -198,6 +198,16 @@ describe("Jira-style issue editing", () => {
     await waitFor(async () => expect((await substrate.getIssue("XTRM-303")).journal[0]).toMatchObject({ kind: "finding", summary: "Found **the** root cause" }));
   });
 
+  it("renders issue keys in contract prose as reference chips that navigate, leaving look-alikes as text", async () => {
+    const { router } = renderAt(page("XTRM-301"));
+    // XTRM-305 is a child of XTRM-300, so the chip leads with its locator.
+    const chip = await screen.findByRole("button", { name: /^XTRM-300\.5 / });
+    expect(chip.getAttribute("data-reference")).toBe("@issue:XTRM-305");
+    expect(screen.getByText(/UTF-8 is not a reference/)).toBeTruthy();
+    fireEvent.click(chip);
+    await waitFor(() => expect(router.state.location.pathname).toBe(page("XTRM-305")));
+  });
+
   it("opens the full issue page from the drawer", async () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-304");
     const el = await screen.findByTestId("inspector-drawer");

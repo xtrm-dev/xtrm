@@ -5,6 +5,7 @@ import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { cx, relativeTime } from "../ui/primitives.tsx";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
+import { ReferenceChip } from "../refs/references.tsx";
 
 /**
  * Board columns. Blocked and Ready are derived from dependencies and the dispatchable set,
@@ -209,7 +210,11 @@ function BoardCard({
             {issue.childrenDone}/{issue.childCount} children
           </span>
         )}
-        {issue.parentRef && <span className="truncate font-mono">↑ {issue.parentLocator ?? issue.parentRef}</span>}
+        {issue.parentRef && (
+          <span className="flex min-w-0 items-center">
+            ↑<ReferenceChip reference={{ kind: "issue", ref: issue.parentRef }} fallback={issue.parentLocator ?? issue.parentRef} className="truncate" />
+          </span>
+        )}
         <span className="ml-auto shrink-0 tabular">{relativeTime(issue.updatedAt)}</span>
       </div>
     </div>

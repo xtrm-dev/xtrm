@@ -68,7 +68,7 @@ function seed(): Map<string, Record_> {
             output: [{ artifact: "TBD — imported from Beads; pending XTRM planning" }],
           }
         : {
-            problem: `**${title}.** The current shell cannot express this without a feature-local workaround.\n\nSee \`console-v2-shell-architecture.md\` for the contract.`,
+            problem: `**${title}.** The current shell cannot express this without a feature-local workaround.\n\nSee \`console-v2-shell-architecture.md\` for the contract.${i === 1 ? " Coordinate with XTRM-305; UTF-8 is not a reference." : ""}`,
             success: "Behaviour is covered by automated tests and visible in the executable shell.",
             scope: ["packages/xtrm-app shell and adapters"],
             nonGoals: ["Agent/Frames runtime"],
