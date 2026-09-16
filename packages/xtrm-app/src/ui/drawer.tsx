@@ -49,10 +49,8 @@ export function Drawer({
       data-testid="inspector-drawer"
       data-variant={variant}
       className={cx(
-        "flex h-full min-w-0 flex-col overflow-hidden rounded-lg bg-raised",
-        variant === "overlay" && "border border-border shadow-float",
-        variant === "column" && "border border-border-muted",
-        variant === "maximized" && "border border-border shadow-float",
+        // Border, radius and shadow belong to the inspector dock that hosts the drawer.
+        "flex h-full min-w-0 flex-col bg-raised",
       )}
     >
       <div className="flex h-12 shrink-0 items-center gap-1 border-b border-border-muted px-2">{header}</div>

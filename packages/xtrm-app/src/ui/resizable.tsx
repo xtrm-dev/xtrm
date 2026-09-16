@@ -17,10 +17,12 @@ export function ResizablePanel({
   minSize,
   maxSize,
   onSizeChange,
+  collapsed,
   children,
   className,
   ...rest
 }: {
+  collapsed?: boolean;
   size: number;
   minSize: number;
   maxSize: number;
@@ -30,7 +32,7 @@ export function ResizablePanel({
   "data-testid"?: string;
 }) {
   return (
-    <Panel size={size} minSize={minSize} maxSize={maxSize} onSizeChange={onSizeChange} className={cx("min-w-0", className)} {...rest}>
+    <Panel size={size} minSize={minSize} maxSize={maxSize} collapsed={collapsed} keepMounted onSizeChange={onSizeChange} className={cx("min-w-0", className)} {...rest}>
       {children}
     </Panel>
   );

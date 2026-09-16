@@ -1,15 +1,15 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { Outlet, useRouterState } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { MODES, modeForPath, modeHref } from "../app/destinations.ts";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Kbd, Tip, cx } from "../ui/primitives.tsx";
 import { FillPanel, ResizableGroup, ResizeHandle, ResizablePanel } from "../ui/resizable.tsx";
-import { ContextSidebar, SidebarReopenRail, useGo } from "./ContextSidebar.tsx";
+import { ContextSidebar, useGo } from "./ContextSidebar.tsx";
 import { GlobalSearch } from "./GlobalSearch.tsx";
-import { InspectorDrawer } from "./Inspector.tsx";
+import { InspectorDock, useElementWidth } from "./InspectorDock.tsx";
 import { ShellProvider, useShell } from "./context.tsx";
-import { INSPECTOR, SIDEBAR } from "./layout.ts";
+import { SIDEBAR } from "./layout.ts";
 
 /** Full-width top bar: brand, global search, command and theme (v13 reference). */
 function TopBar() {
@@ -84,81 +84,60 @@ function ModeRail() {
   );
 }
 
-/** v15 inspector rail: a separate rounded column with a centered handle; hidden while the drawer is pinned. */
-function InspectorRail() {
-  const { layout, dispatch } = useShell();
-  const open = layout.inspector.state !== "CLOSED";
+/** Collapsed sidebar affordance: a light edge beside the rail, not a floating box (Supernova-plain sidebar). */
+function SidebarEdge() {
+  const { dispatch } = useShell();
   return (
-    <div data-testid="inspector-rail" className="mb-1.5 ml-1.5 flex w-11 shrink-0 flex-col items-center justify-center gap-2 rounded-lg border border-border-muted">
-      {layout.inspector.followLive && <span className="size-1.5 rounded-full bg-accent" title="Following live updates" />}
-      <Tip label={open ? "Close inspector" : "Open inspector"} shortcut="Ctrl I" side="left">
-        <button
-          type="button"
-          aria-label={open ? "Close inspector" : "Open inspector"}
-          aria-pressed={open}
-          onClick={() => dispatch({ type: open ? "drawer/close" : "drawer/open" })}
-          className={cx(
-            "flex h-12 w-5 items-center justify-center rounded-md border outline-none transition-colors focus-visible:border-border-strong",
-            open ? "border-border bg-hover text-ink" : "border-border-muted text-ink-faint hover:bg-hover hover:text-ink",
-          )}
-        >
-          <Icon name={open ? "forward" : "back"} size="xs" />
-        </button>
-      </Tip>
-      {layout.stack.length > 1 && (
-        <span className="text-[0.65rem] text-ink-faint tabular" title="Inspector history depth">
-          {layout.cursor + 1}/{layout.stack.length}
-        </span>
-      )}
-    </div>
+    <button
+      type="button"
+      data-testid="sidebar-reopen-rail"
+      aria-label="Open sidebar"
+      title="Open sidebar (Ctrl B)"
+      onClick={() => dispatch({ type: "sidebar/toggle" })}
+      className="group/edge -ml-1 mb-1.5 flex w-4 shrink-0 items-center justify-center outline-none"
+    >
+      <span className="flex h-10 w-1 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 group-hover/edge:h-12 group-hover/edge:w-4 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-12 group-focus-visible/edge:w-4 group-focus-visible/edge:bg-hover">
+        <Icon name="forward" size="xs" className="shrink-0 opacity-0 transition-opacity group-hover/edge:opacity-100 group-focus-visible/edge:opacity-100" />
+      </span>
+    </button>
   );
 }
 
 function ShellLayout() {
   const { layout, dispatch } = useShell();
-  const { sidebar, inspector } = layout;
-  const pinned = inspector.state === "PINNED";
+  const { sidebar } = layout;
+  const card = useRef<HTMLDivElement>(null);
+  const cardWidth = useElementWidth(card);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-deep text-ink">
       <TopBar />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 pr-1.5 pb-1.5">
         <ModeRail />
-        {!sidebar.open && <SidebarReopenRail />}
-        <ResizableGroup className="pr-0 pb-1.5">
-          {sidebar.open && (
-            <ResizablePanel data-testid="sidebar-panel" size={sidebar.width} minSize={SIDEBAR.min} maxSize={SIDEBAR.max} onSizeChange={(width) => dispatch({ type: "sidebar/resize", width })}>
+        {!sidebar.open && <SidebarEdge />}
+        <ResizableGroup>
+          <ResizablePanel
+            data-testid="sidebar-panel"
+            size={sidebar.width}
+            minSize={SIDEBAR.min}
+            maxSize={SIDEBAR.max}
+            collapsed={!sidebar.open}
+            onSizeChange={(width) => dispatch({ type: "sidebar/resize", width })}
+          >
+            <div inert={!sidebar.open} data-state={sidebar.open ? "expanded" : "collapsed"} className="h-full">
               <ContextSidebar />
-            </ResizablePanel>
-          )}
+            </div>
+          </ResizablePanel>
           {sidebar.open && <ResizeHandle label="Resize sidebar" />}
           <FillPanel data-testid="main-panel" className="flex">
-            <div className="flex min-w-0 flex-1 overflow-hidden rounded-lg border border-border-muted bg-surface">
-              {/* The drawer renders inside this region, so it cannot cover the rails by construction (§7.2). */}
+            <div ref={card} className="flex min-w-0 flex-1 overflow-hidden rounded-lg border border-border-muted bg-surface">
               <main data-testid="primary-region" className="relative flex min-w-0 flex-1 flex-col">
                 <Outlet />
-                {inspector.state === "CONTEXTUAL" && (
-                  <div className="absolute top-2 right-2 bottom-2 z-20 max-w-[calc(100%-1rem)]" style={{ width: inspector.width }}>
-                    <InspectorDrawer variant="overlay" />
-                  </div>
-                )}
-                {inspector.state === "MAXIMIZED" && (
-                  <div className="absolute inset-2 z-20">
-                    <InspectorDrawer variant="maximized" />
-                  </div>
-                )}
               </main>
             </div>
           </FillPanel>
-          {pinned && <ResizeHandle label="Resize inspector" />}
-          {pinned && (
-            <ResizablePanel data-testid="inspector-panel" size={inspector.width} minSize={INSPECTOR.min} maxSize={INSPECTOR.max} onSizeChange={(width) => dispatch({ type: "drawer/resize", width })}>
-              <InspectorDrawer variant="column" />
-            </ResizablePanel>
-          )}
         </ResizableGroup>
-        {pinned ? <div className="w-1.5 shrink-0" /> : <InspectorRail />}
-        {!pinned && <div className="w-1.5 shrink-0" />}
+        <InspectorDock cardWidth={cardWidth} />
       </div>
       <GlobalSearch />
     </div>

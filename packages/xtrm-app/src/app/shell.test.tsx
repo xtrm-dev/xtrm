@@ -49,12 +49,16 @@ describe("Console v2 shell", () => {
     expect(await screen.findByText("Agents is not part of this vertical")).toBeTruthy();
   });
 
-  it("inspecting opens a CONTEXTUAL drawer contained in the primary region, never over the rails", async () => {
+  it("inspecting expands the rail into a CONTEXTUAL drawer whose left edge is the rail, never over the mode rail or sidebar", async () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
     fireEvent.click(await screen.findByText("XTRM-301"));
     const el = await screen.findByTestId("inspector-drawer");
     expect(el.dataset.variant).toBe("overlay");
-    expect(screen.getByTestId("primary-region").contains(el)).toBe(true);
+    const dock = screen.getByTestId("inspector-dock");
+    expect(dock.dataset.state).toBe("contextual");
+    expect(dock.contains(el)).toBe(true);
+    expect(dock.contains(screen.getByTestId("inspector-rail"))).toBe(true);
+    expect(screen.getByTestId("inspector-rail").getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByTestId("global-rail").contains(el)).toBe(false);
     expect(screen.getByTestId("context-sidebar").contains(el)).toBe(false);
     await waitFor(() => expect(search(router).inspect).toBe("issue:XTRM-301"));
@@ -68,11 +72,10 @@ describe("Console v2 shell", () => {
     fireEvent.click(within(el).getByRole("button", { name: "Maximize drawer" }));
     await waitFor(() => expect(drawer()?.dataset.variant).toBe("maximized"));
     expect(screen.getByTestId("sidebar-reopen-rail")).toBeTruthy();
-    expect(screen.queryByTestId("context-sidebar")).toBeNull();
-    expect(screen.getByTestId("primary-region").contains(drawer())).toBe(true);
+    expect(screen.getByTestId("context-sidebar").closest("[data-state]")?.getAttribute("data-state")).toBe("collapsed");
 
     fireEvent.click(within(drawer()!).getByRole("button", { name: "Restore drawer" }));
-    await waitFor(() => expect(screen.getByTestId("context-sidebar")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("context-sidebar").closest("[data-state]")?.getAttribute("data-state")).toBe("expanded"));
     expect(drawer()?.dataset.variant).toBe("overlay");
   });
 
@@ -80,7 +83,7 @@ describe("Console v2 shell", () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-302&drawer=pinned");
     const el = await screen.findByTestId("inspector-drawer");
     expect(el.dataset.variant).toBe("column");
-    expect(screen.queryByTestId("inspector-rail")).toBeNull();
+    expect(screen.getByTestId("inspector-dock").dataset.state).toBe("pinned");
     fireEvent.click(within(screen.getByTestId("context-sidebar")).getByText("Activity"));
     await waitFor(() => expect(router.state.location.pathname).toBe("/rep/xtrm-dev/xtrm/code/activity"));
     expect(drawer()?.dataset.variant).toBe("column");
@@ -104,10 +107,19 @@ describe("Console v2 shell", () => {
     await screen.findByTestId("inspector-drawer");
     act(() => void fireEvent.keyDown(window, { key: "b", ctrlKey: true }));
     expect(await screen.findByTestId("sidebar-reopen-rail")).toBeTruthy();
-    act(() => void fireEvent.keyDown(window, { key: "b", ctrlKey: true }));
-    expect(await screen.findByTestId("context-sidebar")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("sidebar-reopen-rail"));
+    await waitFor(() => expect(screen.queryByTestId("sidebar-reopen-rail")).toBeNull());
     act(() => void fireEvent.keyDown(window, { key: "Escape" }));
     await waitFor(() => expect(drawer()).toBeNull());
+  });
+
+  it("clicking the expanded rail edge folds the drawer back into the rail", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-301");
+    await screen.findByTestId("inspector-drawer");
+    fireEvent.click(screen.getByTestId("inspector-rail"));
+    await waitFor(() => expect(drawer()).toBeNull());
+    expect(screen.getByTestId("inspector-dock").dataset.state).toBe("closed");
+    expect(screen.getByTestId("inspector-rail").getAttribute("aria-expanded")).toBe("false");
   });
 
   it("opens global search from the top bar and inspects a result", async () => {

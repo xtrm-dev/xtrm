@@ -193,7 +193,7 @@ export function ContextSidebar() {
   const mode = MODES.find((m) => m.id === modeForPath(pathname))!;
 
   return (
-    <nav aria-label={`${mode.label} navigation`} data-testid="context-sidebar" className="flex h-full min-w-0 flex-col rounded-lg border border-border-muted bg-sidebar py-1.5">
+    <nav aria-label={`${mode.label} navigation`} data-testid="context-sidebar" className="flex h-full min-w-0 flex-col py-1.5">
       <div className="flex min-h-0 flex-1 flex-col">
         {mode.id === "work" ? <WorkSidebar pathname={pathname} /> : mode.id === "program" ? <ProgramSidebar /> : <DeferredSidebar label={mode.label} reason={mode.deferred ?? ""} />}
       </div>
@@ -204,23 +204,5 @@ export function ContextSidebar() {
         <IconButton icon="sidebar" label="Collapse sidebar" shortcut="Ctrl B" onClick={() => dispatch({ type: "sidebar/toggle" })} className="self-start" />
       </div>
     </nav>
-  );
-}
-
-/** Collapsed contextual sidebar: reserved 44px rounded rail with one reopen affordance (B1, §4.2). */
-export function SidebarReopenRail() {
-  const { dispatch } = useShell();
-  return (
-    <div data-testid="sidebar-reopen-rail" className="mr-1.5 mb-1.5 flex w-11 shrink-0 flex-col items-center justify-center rounded-lg border border-border-muted">
-      <button
-        type="button"
-        aria-label="Open sidebar"
-        title="Open sidebar (Ctrl B)"
-        onClick={() => dispatch({ type: "sidebar/toggle" })}
-        className="flex h-12 w-5 items-center justify-center rounded-md border border-border-muted text-ink-faint outline-none hover:bg-hover hover:text-ink focus-visible:border-border-strong"
-      >
-        <Icon name="forward" size="xs" />
-      </button>
-    </div>
   );
 }

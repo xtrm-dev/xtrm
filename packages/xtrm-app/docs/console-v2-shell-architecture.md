@@ -527,10 +527,12 @@ Operator review of the first vertical against the v13/v15 mocks (`docs/mocks/` i
 - **Rail = modes.** The rail selects a workspace mode: Work, Agent, Agents, Program, Observability. `Repositories` is no longer a rail destination; the repository selector lists all repositories and links to the directory.
 - **Sidebar = the active mode's context only.** Work mode shows the repository selector and `Work` / `Code` / `System` groups. Program mode shows Program sections. Deferred modes show a one-line deferral. No destination appears in both the rail and the sidebar.
 
-### 16.2 Inspector rail and drawer geometry (v15)
+### 16.2 Inspector rail, drawer, and sidebar geometry (v15 + Supernova)
 
-- The inspector rail is a separate full-height rounded column to the right of the content card, with one vertically centred handle.
-- `CONTEXTUAL` and `MAXIMIZED` drawers are floating inset panels inside the primary region (rounded, bordered, floating shadow). This supersedes "attached to the rail with no gap" (PRD §7.2) for Console v2. The geometric containment guarantee (§7.2) is unchanged.
+- **The rail is the drawer's left edge.** The inspector rail is a floating rounded column with a centred arrow handle. Opening the inspector animates the same element wider (250 ms width transition): the rail stays as the left edge column and the drawer content appears to its right. Clicking the edge folds it back into the rail. `CONTEXTUAL` and `MAXIMIZED` grow leftwards over the content card; `PINNED` grows inside the layout so the card reflows. A drag strip on the drawer's left side resizes it.
+- **Geometric bound.** The dock width is clamped to the measured content-card width (`dockWidth`, unit-tested): `CONTEXTUAL` leaves a 24 px margin, `MAXIMIZED` covers exactly the card. The dock can never reach the mode rail or the sidebar. This replaces the DOM-nesting guarantee in §7.2 for Console v2.
+- **Plain sidebar.** Following Supernova (`packages/web/src/features/sidebar/components/sidebar-layout.tsx` @ `d0fa686`), the contextual sidebar has no enclosing box: it sits directly on the application background, and only the content card is rounded. Collapse is the `motion-panels` collapse animation with content kept mounted and `inert`.
+- **Collapsed sidebar edge.** When collapsed, a very light edge sits immediately right of the mode rail: a thin pill that grows into an arrow handle on hover or focus. It replaces the 44 px reserved reopen rail (B1).
 - The drawer header carries: back/forward, `Inspector`, `Open` (promote an issue to its full page), follow live, pin, maximize, options, close.
 
 ### 16.3 Substrate Issues are a Jira-style work surface
