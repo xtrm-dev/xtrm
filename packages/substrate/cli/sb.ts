@@ -6,7 +6,7 @@
 // human projections (hierarchical locator + durable reference; the opaque
 // machine ID appears only in --json output).
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { BEADS_TBD_MARKER, expectedProblemHead, importBeads, unionEdges, type BeadsEdgeRecord, type BeadsIssueRecord } from "../src/compatibility/beads/import.ts";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -211,10 +211,21 @@ function flag(flags: Map<string, string | true>, name: string): string | undefin
 }
 
 function readJsonArg(value: string): unknown {
+  // Distinguish the two inputs the flag accepts. The single try/catch this
+  // replaced reported a malformed FILE as "<path> is not valid JSON": the
+  // parse error was swallowed and the path string was parsed instead.
+  if (existsSync(value)) {
+    const text = readFileSync(value, "utf8");
+    try {
+      return JSON.parse(text);
+    } catch (err) {
+      throw new Error(`${value}: file is not valid JSON (${err instanceof Error ? err.message : String(err)})`);
+    }
+  }
   try {
-    return JSON.parse(readFileSync(value, "utf8"));
-  } catch {
     return JSON.parse(value);
+  } catch (err) {
+    throw new Error(`${value.slice(0, 40)}: not a readable file and not valid inline JSON (${err instanceof Error ? err.message : String(err)})`);
   }
 }
 

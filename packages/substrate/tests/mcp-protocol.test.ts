@@ -157,6 +157,41 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     assert.deepEqual(titleOf(a), titleOf(b));
   });
 
+  it("mutation results carry the shared feedback envelope while reads stay unwrapped", async () => {
+    // The Claude surface shares OperationFeedback with the CLI and Pi. This
+    // pins the wiring in mcp-server.ts: reads must pass through untouched and
+    // a no-op mutation must not be reported as success.
+    const call = async (name: string, extra: Record<string, unknown>) => {
+      const res = await wire.send("tools/call", {
+        name,
+        arguments: { dbPath: s.dbPath, project: "prj_xtrm", ...extra },
+        _meta: meta(),
+      });
+      assert.ok(!res.error, `${name}: ${JSON.stringify(res.error)}`);
+      return JSON.parse(
+        ((res.result as { content: Array<{ text: string }> }).content[0] as { text: string }).text,
+      ) as Record<string, unknown>;
+    };
+
+    const read = await call("issue_get", { ref: s.humanRef });
+    assert.equal("feedback" in read, false, "a read payload must not grow a feedback key");
+
+    // issue_get does not return the contract; scratchDb seeded it with exactly this one.
+    const noop = await call("issue_update", {
+      ref: s.humanRef,
+      contract: contract({ problem: "MCP problem", success: "MCP success" }),
+    });
+    assert.equal(noop["revisionCreated"], false, "an identical contract must not create a revision");
+    const noopFeedback = noop["feedback"] as Record<string, unknown>;
+    assert.equal(noopFeedback["level"], "noop");
+    assert.equal(noopFeedback["code"], "issue_unchanged");
+
+    const appended = await call("journal_append", { ref: s.humanRef, kind: "finding", summary: "feedback wiring" });
+    const appendFeedback = appended["feedback"] as Record<string, unknown>;
+    assert.equal(appendFeedback["level"], "success");
+    assert.equal(appendFeedback["code"], "journal_written");
+  });
+
   it("unknown tool fails closed without touching the filesystem (xtrm-7wc.8.1 wire form)", async () => {
     const emptyHome = mkdtempSync(join(tmpdir(), "sb-mcp-nohome-"));
     const priorHome = process.env["HOME"];
