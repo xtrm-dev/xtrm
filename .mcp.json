@@ -24,8 +24,8 @@
     },
     "shadcn": {
       "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "shadcn@latest", "mcp", "--cwd", "packages/xtrm-app"]
+      "command": "sh",
+      "args": ["-c", "cd packages/xtrm-app && exec npx -y shadcn@latest mcp"]
     },
     "spectrum-ui": {
       "type": "stdio",
