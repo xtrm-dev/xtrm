@@ -39,6 +39,13 @@ const argv = process.argv.slice(2);
 const VERIFY = argv.includes("--verify") || argv.includes("--publish");
 const PUBLISH = argv.includes("--publish");
 const OUT = argv.includes("--out") ? argv[argv.indexOf("--out") + 1] : undefined;
+// A bare `--out` (or one followed by another flag) must fail closed: silently
+// treating it as absent would pack and verify an artifact the caller asked to
+// keep, then delete it with the staging directory.
+if (argv.includes("--out") && (OUT === undefined || OUT.startsWith("--"))) {
+  process.stderr.write("release: --out requires a directory value\n");
+  process.exit(2);
+}
 
 function run(cmd, args, opts = {}) {
   // An inherited stdout returns null rather than a string: only the piped
