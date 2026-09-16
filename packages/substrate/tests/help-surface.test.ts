@@ -141,4 +141,21 @@ describe("sb help/version/doctor (§28): side-effect-free surface", () => {
     assert.match(out2.trim(), /^sb \d+\.\d+\.\d+/);
     assert.equal(existsSync(emptyHome), false, "help/version must not create state under $HOME");
   });
+
+  // XTRM-409: the documented `issue show` contract must name every section the
+  // renderer emits, so the help text cannot drift from the rendered output again.
+  it("issue show help text documents the bounded journal view the renderer emits", () => {
+    const res = runCli(["help", "issue", "show"], { dbPath: join(mkdtempSync(join(tmpdir(), "sb-help-")), "x.db") });
+    assert.equal(res.code, 0, res.stderr);
+    for (const phrase of [
+      "most recent journal entries",
+      "newest entry per kind",
+      "per-kind counts",
+      "closure view",
+      "provenance summary",
+      "empty state",
+    ]) {
+      assert.match(res.stdout, new RegExp(phrase, "i"), `help text does not document: ${phrase}`);
+    }
+  });
 });

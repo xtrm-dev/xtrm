@@ -151,6 +151,50 @@ function renderContractValue(value: unknown, opts: TerminalStyleOptions): string
   return renderMarkdown(JSON.stringify(value, null, 2), opts);
 }
 
+// XTRM-409: legacy journal rows carry the semantic checkpoint double-encoded
+// as `{"summary":"…"}` inside `summary`. Unwrap it so the human journal view
+// prints prose, never a JSON object, without changing the `--json` payload.
+const JOURNAL_SUMMARY_MAX = 200;
+const JOURNAL_SUMMARY_ENVELOPE = /^\{\s*"summary"\s*:\s*"([\s\S]*)$/;
+
+// The producer's bounded truncation can cut the envelope mid-string, so the
+// JSON envelope is decoded by hand rather than with JSON.parse.
+function decodeJournalProse(body: string): string {
+  let out = "";
+  for (let i = 0; i < body.length; i += 1) {
+    const ch = body[i]!;
+    if (ch === '"') break;
+    if (ch !== "\\") {
+      out += ch;
+      continue;
+    }
+    const next = body[i + 1];
+    if (next === undefined) break;
+    i += 1;
+    if (next === "u") {
+      const hex = body.slice(i + 1, i + 5);
+      if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+        out += String.fromCharCode(parseInt(hex, 16));
+        i += 4;
+      }
+      continue;
+    }
+    out += next === "n" || next === "t" || next === "r" ? " " : next;
+  }
+  return out;
+}
+
+function journalSummaryText(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  let text = raw;
+  for (let depth = 0; depth < 3; depth += 1) {
+    const match = JOURNAL_SUMMARY_ENVELOPE.exec(text.trim());
+    if (!match || !match[1]) break;
+    text = decodeJournalProse(match[1]);
+  }
+  return text.replace(/\s+/g, " ").trim().slice(0, JOURNAL_SUMMARY_MAX);
+}
+
 function formatState(value: string, color: boolean): string {
   const state = value.toLowerCase();
   if (["done", "completed", "ready"].includes(state)) return green(value.toUpperCase(), color);
@@ -204,9 +248,33 @@ export function renderIssueShow(payload: Record<string, unknown>, opts: Terminal
   const summary: string[] = [];
   if (operational) {
     const total = Number(operational.total ?? 0);
+    const counts = (operational.countsByKind ?? {}) as Record<string, unknown>;
+    const countParts = Object.entries(counts)
+      .filter(([, n]) => Number(n) > 0)
+      .map(([k, n]) => `${k} ${Number(n)}`);
+    summary.push(`Journal ${total} entries${countParts.length > 0 ? ` · ${countParts.join(" · ")}` : ""}`);
     const recent = Array.isArray(operational.recent) ? operational.recent : [];
-    const latest = recent[recent.length - 1] as Record<string, unknown> | undefined;
-    summary.push(`Journal ${total} entries${latest ? ` · latest ${String(latest.kind)} seq${String(latest.sequence)}` : ""}`);
+    const latestByKind = Array.isArray(operational.latestByKind) ? operational.latestByKind : [];
+    if (total === 0 && recent.length === 0) {
+      summary.push("  no journal entries");
+    } else {
+      if (recent.length > 0) {
+        summary.push(`  recent (newest ${recent.length} of ${total}):`);
+        for (const raw of [...recent].reverse()) {
+          const e = raw as Record<string, unknown>;
+          const bit = journalSummaryText(e.summary);
+          summary.push(`    seq${String(e.sequence)} ${String(e.kind)}${bit ? ` · ${bit}` : ""}`);
+        }
+      }
+      if (latestByKind.length > 0) {
+        summary.push("  newest per kind:");
+        for (const raw of latestByKind) {
+          const e = raw as Record<string, unknown>;
+          const bit = journalSummaryText(e.summary);
+          summary.push(`    ${String(e.kind)} seq${String(e.sequence)}${bit ? ` · ${bit}` : ""}`);
+        }
+      }
+    }
   }
   if (provenance) summary.push(`Provenance ${String(provenance.eventCount ?? 0)} events${provenance.lastEventType ? ` · ${String(provenance.lastEventType)}` : ""}`);
   if (closure) summary.push(`Closure ${String(closure.outcome ?? closure.terminalState ?? "terminal")} · ${String(closure.reason ?? "")}`.trim());
