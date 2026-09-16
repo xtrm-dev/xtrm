@@ -13,8 +13,7 @@
 // `--home` defaults to the process HOME (the target HOME at `xt init` time).
 
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import {
   DefaultResourceLoader,
   SessionManager,
@@ -22,6 +21,7 @@ import {
   createAgentSession,
 } from "@earendil-works/pi-coding-agent";
 import { resolveSubstrateDir } from "./setup.ts";
+import { packageRoot } from "../src/package-root.ts";
 import { armPipeDrain } from "./write-and-exit.ts";
 
 export const EXPECTED_SUBSTRATE_TOOLS = [
@@ -88,7 +88,7 @@ export async function probePiLoad(pkgRoot: string, home: string): Promise<LoadPr
   }
 }
 
-const invokedAsMain = process.argv[1]?.endsWith("pi-load-check.ts") ?? false;
+const invokedAsMain = (process.argv[1]?.endsWith("pi-load-check.ts") || process.argv[1]?.endsWith("pi-load-check.js")) ?? false;
 if (invokedAsMain) {
   // XTRM-335: every exit below drains (exitCode + natural return). The usage
   // guards halt via else-branching, not forced exit.
@@ -118,8 +118,7 @@ async function piLoadCheckMain(): Promise<void> {
     process.exitCode = 2;
     return;
   }
-  const HERE = dirname(fileURLToPath(import.meta.url));
-  const dir = resolved.ok ? (resolved.dir as string) : join(HERE, "..");
+  const dir = resolved.ok ? (resolved.dir as string) : packageRoot();
   const home = homeRaw ?? homedir();
   const result = await probePiLoad(dir, home);
   if (json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

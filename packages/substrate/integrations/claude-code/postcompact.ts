@@ -74,7 +74,7 @@ function readStdin(): Promise<string> {
   });
 }
 
-const invokedAsMain = process.argv[1]?.endsWith("postcompact.ts") ?? false;
+const invokedAsMain = (process.argv[1]?.endsWith("postcompact.ts") || process.argv[1]?.endsWith("postcompact.js")) ?? false;
 if (invokedAsMain) {
   armPipeDrain(); // XTRM-335: every write path drains via exitCode; EPIPE guard only.
   const raw = await readStdin();

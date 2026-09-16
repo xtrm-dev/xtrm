@@ -99,3 +99,20 @@ Runtime support: the library imports in-process on Node ≥24 (`node:sqlite`)
 and on Bun ≥1.3 (`bun:sqlite`); `openSubstrate()` selects the driver at
 runtime with no static `node:sqlite` import. Bun acceptance:
 `TMPDIR=/var/tmp bun tests/bun-acceptance.ts`.
+
+Installed-layout note: the *published* package ships prebuilt JavaScript under
+`dist/` and runs on Node ≥24 and on Bun ≥1.3, so `npm install
+@jaggerxtrm/substrate` yields a working `sb` on either engine. This matters
+because Node strips TypeScript types only for files outside `node_modules`: a
+published copy whose entry points were TypeScript would install cleanly and then
+abort with `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`, which no flag lifts.
+From a *source checkout* the entry points stay TypeScript and run directly on
+both engines, so tests and `sb` need no build step.
+
+Release: `npm run release:verify` compiles the emit into a staging directory,
+writes a manifest whose `main`, `bin` and `pi.extensions` point at it, packs that
+directory, and then proves the tarball in a clean directory under both engines.
+`npm run release` publishes the verified tarball. The checked-in manifest keeps
+its TypeScript paths on purpose: the live tree is consumed by symlink (global
+`sb`, the specialists link, the Claude plugin), where a `dist/`-based manifest
+would demand a build that could go stale.

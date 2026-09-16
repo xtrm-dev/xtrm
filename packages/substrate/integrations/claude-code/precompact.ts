@@ -107,7 +107,7 @@ function readStdin(): Promise<string> {
   });
 }
 
-const invokedAsMain = process.argv[1]?.endsWith("precompact.ts") ?? false;
+const invokedAsMain = (process.argv[1]?.endsWith("precompact.ts") || process.argv[1]?.endsWith("precompact.js")) ?? false;
 if (invokedAsMain) {
   armPipeDrain(); // XTRM-335: every write path drains via exitCode; EPIPE guard only.
   const raw = await readStdin();

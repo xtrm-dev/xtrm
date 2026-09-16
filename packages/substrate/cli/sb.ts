@@ -9,9 +9,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { BEADS_TBD_MARKER, expectedProblemHead, importBeads, unionEdges, type BeadsEdgeRecord, type BeadsIssueRecord } from "../src/compatibility/beads/import.ts";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
+import { packageRoot } from "../src/package-root.ts";
 import { assertSchemaHealthy } from "../src/store/migrations/runner.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { RepositoryService } from "../src/service/repository-service.ts";
@@ -268,7 +268,7 @@ function cliVersion(): string {
   if (cachedVersion) return cachedVersion;
   try {
     const pkg = JSON.parse(
-      readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8"),
+      readFileSync(join(packageRoot(), "package.json"), "utf8"),
     ) as { version?: unknown };
     cachedVersion = typeof pkg.version === "string" ? pkg.version : "0.0.0-unknown";
   } catch {
@@ -2168,7 +2168,8 @@ function runExport(
 const invokedPath = process.argv[1] ?? "";
 // Direct node invocation (argv ends with sb.ts) and the npm-linked bin
 // (argv is the sb symlink) both enter main; anything else is a library import.
-const invokedAsMain = invokedPath.endsWith("sb.ts") || invokedPath.endsWith("/sb") || invokedPath === "sb";
+const invokedAsMain =
+  invokedPath.endsWith("sb.ts") || invokedPath.endsWith("sb.js") || invokedPath.endsWith("/sb") || invokedPath === "sb";
 if (invokedAsMain) {
   const result = runCli(process.argv.slice(2));
   // An early-closing reader (`sb ... | head`) makes stdout/stderr emit EPIPE.

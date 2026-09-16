@@ -18,6 +18,12 @@
 
 const REPO_RELATIVE = "../../../";
 
+// A package root holds either the TypeScript sources (a checkout, or
+// SUBSTRATE_HOME pointing at one) or the compiled emit (an installed copy,
+// where Node refuses to strip types under node_modules). Probe both layouts and
+// keep the winner, so the emitted module path is used only when it exists.
+const LAYOUTS = ["integrations/claude-code/runtime.ts", "dist/integrations/claude-code/runtime.js"];
+
 async function tryImport(specifier) {
   try {
     return await import(specifier);
@@ -33,26 +39,37 @@ function dirUrl(path) {
 // Resolved once and reused, so every module comes from the same installation.
 let root = null;
 
+async function probe(base, isPackage) {
+  for (const layout of LAYOUTS) {
+    const specifier = isPackage ? `@jaggerxtrm/substrate/${layout}` : new URL(layout, base).href;
+    if (await tryImport(specifier)) {
+      return { base, package: isPackage, dir: layout.replace(/runtime\.(ts|js)$/, "") };
+    }
+  }
+  return null;
+}
+
 async function resolveRoot() {
   if (root) return root;
 
   const home = process.env["SUBSTRATE_HOME"];
   if (home) {
-    const base = dirUrl(home);
-    if (await tryImport(new URL("integrations/claude-code/runtime.ts", base).href)) {
-      root = { base };
+    const hit = await probe(dirUrl(home), false);
+    if (hit) {
+      root = hit;
       return root;
     }
   }
 
-  if (await tryImport("@jaggerxtrm/substrate/integrations/claude-code/runtime.ts")) {
-    root = { base: "@jaggerxtrm/substrate/", package: true };
+  const installed = await probe(null, true);
+  if (installed) {
+    root = installed;
     return root;
   }
 
-  const local = new URL(REPO_RELATIVE, import.meta.url).href;
-  if (await tryImport(new URL("integrations/claude-code/runtime.ts", local).href)) {
-    root = { base: local };
+  const hit = await probe(new URL(REPO_RELATIVE, import.meta.url).href, false);
+  if (hit) {
+    root = hit;
     return root;
   }
 
@@ -68,8 +85,10 @@ async function resolveRoot() {
  */
 export async function resolveSubstrate(file) {
   const r = await resolveRoot();
-  const specifier = r.package ? `@jaggerxtrm/substrate/integrations/claude-code/${file}` : new URL(`integrations/claude-code/${file}`, r.base).href;
+  // Callers name source files; an installed copy answers with its emit.
+  const name = r.dir.startsWith("dist/") ? file.replace(/\.ts$/, ".js") : file;
+  const specifier = r.package ? `@jaggerxtrm/substrate/${r.dir}${name}` : new URL(`${r.dir}${name}`, r.base).href;
   const mod = await tryImport(specifier);
-  if (!mod) throw new Error(`substrate plugin: cannot resolve integrations/claude-code/${file}`);
+  if (!mod) throw new Error(`substrate plugin: cannot resolve ${r.dir}${name}`);
   return mod;
 }
