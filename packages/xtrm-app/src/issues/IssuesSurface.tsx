@@ -8,6 +8,7 @@ import { OptionsMenu } from "../ui/menu.tsx";
 import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, StatusDot, cx, relativeTime } from "../ui/primitives.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
+import { IssueBoard } from "./IssueBoard.tsx";
 import { TERMINAL, PriorityGlyph, kindIcon, lifecycleLabel, lifecycleTone } from "./meta.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
 
@@ -46,6 +47,7 @@ export function IssuesSurface() {
   const project = projectForRepo(projects.data, repo);
   const issues = useIssues(project?.id);
   const [view, setView] = useState<View>("open");
+  const [layout, setLayout] = useState<"list" | "board">("list");
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "updated", desc: true });
   const [creating, setCreating] = useState(false);
@@ -54,10 +56,14 @@ export function IssuesSurface() {
 
   const counts = useMemo(() => Object.fromEntries(VIEWS.map(([v, , pred]) => [v, (issues.data ?? []).filter(pred).length])) as Record<View, number>, [issues.data]);
 
-  const visible = useMemo(() => {
+  const matching = useMemo(() => {
     const q = filter.trim().toLowerCase();
+    return (issues.data ?? []).filter((i) => !q || i.title.toLowerCase().includes(q) || i.ref.toLowerCase().includes(q) || (i.parentRef ?? "").toLowerCase().includes(q));
+  }, [issues.data, filter]);
+
+  const visible = useMemo(() => {
     const pred = VIEWS.find(([v]) => v === view)![2];
-    const rows = (issues.data ?? []).filter((i) => pred(i) && (!q || i.title.toLowerCase().includes(q) || i.ref.toLowerCase().includes(q) || (i.parentRef ?? "").toLowerCase().includes(q)));
+    const rows = matching.filter(pred);
     const dir = sort.desc ? -1 : 1;
     const cmp: Record<SortKey, (a: IssueSummary, b: IssueSummary) => number> = {
       key: (a, b) => refOrder(a.ref, b.ref),
@@ -66,7 +72,7 @@ export function IssuesSurface() {
       status: (a, b) => a.lifecycle.localeCompare(b.lifecycle),
     };
     return [...rows].sort((a, b) => dir * cmp[sort.key](a, b));
-  }, [issues.data, view, filter, sort]);
+  }, [matching, view, sort]);
 
   const header = (key: SortKey | null, label: string, align?: "right") => (
     <button
@@ -90,6 +96,17 @@ export function IssuesSurface() {
       </EmptyState>
     );
   else if (issues.isError) body = <ErrorState title="Could not list issues" error={issues.error} />;
+  else if (layout === "board")
+    body = (
+      <IssueBoard
+        issues={matching}
+        projectId={project.id}
+        canWrite={canWrite}
+        inspectedRef={inspected?.kind === "issue" ? inspected.ref : null}
+        onInspect={(ref) => inspect({ kind: "issue", ref })}
+        onOpen={openPage}
+      />
+    );
   else if (!visible.length) body = <EmptyState icon="done" title={filter ? "No issues match this filter" : "Nothing in this view"} />;
   else
     body = (
@@ -134,6 +151,11 @@ export function IssuesSurface() {
               <Icon name="search" size="xs" className="text-ink-faint" />
               <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter issues" aria-label="Filter issues" className="w-40 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint" />
             </div>
+            <div role="radiogroup" aria-label="Layout" className="flex h-8 items-center rounded-md border border-border-muted p-0.5">
+              {(["list", "board"] as const).map((l) => (
+                <IconButton key={l} icon={l} label={l === "list" ? "List" : "Board"} role="radio" aria-checked={layout === l} active={layout === l} onClick={() => setLayout(l)} className="size-6" />
+              ))}
+            </div>
             <OptionsMenu
               label="Issue list options"
               items={[
@@ -152,7 +174,7 @@ export function IssuesSurface() {
             )}
           </div>
         </div>
-        <div role="tablist" aria-label="Issue views" className="mx-auto flex w-full max-w-6xl items-center gap-1 border-b border-border-muted pb-2">
+        <div role="tablist" aria-label="Issue views" hidden={layout === "board"} className="mx-auto flex w-full max-w-6xl items-center gap-1 border-b border-border-muted pb-2">
           {VIEWS.map(([v, label]) => (
             <button
               key={v}

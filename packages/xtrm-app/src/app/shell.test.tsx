@@ -201,3 +201,45 @@ describe("Jira-style issue editing", () => {
     expect(await screen.findByRole("complementary", { name: "Details" })).toBeTruthy();
   });
 });
+
+describe("Issues board", () => {
+  const openBoard = async () => {
+    fireEvent.click(await screen.findByRole("radio", { name: "Board" }));
+    return screen.findByTestId("issue-board");
+  };
+
+  it("moves a card to Deferred from its menu and writes the lifecycle through the adapter", async () => {
+    const { substrate } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
+    await openBoard();
+    const todo = await screen.findByTestId("board-column-todo");
+    const card = within(todo).getAllByTestId("board-card")[0]!;
+    const ref = card.getAttribute("aria-label")!.split(" ")[0]!;
+    fireEvent.click(within(card).getByRole("button", { name: `Move ${ref}` }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Deferred" }));
+    await waitFor(async () => expect((await substrate.getIssue(ref)).lifecycle).toBe("deferred"));
+    await waitFor(() => expect(within(screen.getByTestId("board-column-deferred")).getByRole("button", { name: new RegExp(`^${ref} `) })).toBeTruthy());
+  });
+
+  it("drops a dragged card on Done but refuses derived columns", async () => {
+    const { substrate } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
+    await openBoard();
+    const card = within(await screen.findByTestId("board-column-todo")).getAllByTestId("board-card")[0]!;
+    const ref = card.getAttribute("aria-label")!.split(" ")[0]!;
+    const dataTransfer = { setData() {}, effectAllowed: "" };
+    fireEvent.dragStart(card, { dataTransfer });
+    fireEvent.drop(screen.getByTestId("board-column-ready"), { dataTransfer });
+    expect((await substrate.getIssue(ref)).lifecycle).toBe("open");
+    fireEvent.dragStart(card, { dataTransfer });
+    fireEvent.drop(screen.getByTestId("board-column-done"), { dataTransfer });
+    await waitFor(async () => expect((await substrate.getIssue(ref)).lifecycle).toBe("done"));
+  });
+
+  it("clicking a card inspects it in the drawer", async () => {
+    const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
+    await openBoard();
+    const card = within(await screen.findByTestId("board-column-todo")).getAllByTestId("board-card")[0]!;
+    const ref = card.getAttribute("aria-label")!.split(" ")[0]!;
+    fireEvent.click(card);
+    await waitFor(() => expect(search(router).inspect).toBe(`issue:${ref}`));
+  });
+});
