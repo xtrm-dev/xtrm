@@ -1,14 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
-import { importBeads } from "../src/compatibility/beads/import.ts";
+import { extractSectionsDetailed, importBeads } from "../src/compatibility/beads/import.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
 import { contract } from "./helpers.ts";
 
@@ -335,6 +335,268 @@ describe("importer unit: section mapping without the CLI", () => {
       const rev = svc.getRevision(svc.resolveRef("b1").id, 1);
       assert.equal((rev.contract as { problem: string }).problem, "p1");
       assert.equal((rev.authoredBy), "human:a");
+    } finally {
+      db.close();
+    }
+  });
+});
+
+// -- XTRM-405: Beads import fidelity -----------------------------------------
+// The importer previously recognized labeled `KEY:` headers only, so on real
+// markdown exports zero sections were extracted and the whole description fell
+// through to `problem`; and every verifier check reconciled the parsed union
+// against lists derived from that same union, so a parse-blind export shrank
+// both sides equally and still reported PASS.
+
+type FullReceipt = {
+  verdict: string;
+  counts: {
+    created: number;
+    skipped: number;
+    censusEdges: number;
+    accountedEdges: number;
+    edgeRowsBefore: number;
+    edgeRowsAfter: number;
+    unrepresentableEdges: number;
+    downgradedEdges: number;
+    unresolvedEntries: number;
+  };
+  result: {
+    unrepresentableEdges: Array<{ type: string; from: string; to: string }>;
+    downgradedEdges: Array<{ type: string; kind: string }>;
+  };
+  verifier: { checks: Array<{ check: string; ok: boolean; expected: unknown; actual: unknown }> };
+};
+
+const REAL_EXPORT = join(here, "..", "..", "..", ".xtrm", "board-audit", "exports", "export-20260810T174008", "raw-beads.jsonl");
+
+describe("XTRM-405: section extraction handles the real markdown convention", () => {
+  it("recognizes ATX headings, prose bodies, hyphenated and combined section names", () => {
+    const ex = extractSectionsDetailed(
+      [
+        "Loose preamble that is not a section.",
+        "## PROBLEM",
+        "Real prose problem, not a bullet.",
+        "Second line of the same paragraph.",
+        "## SCOPE (agreed model)",
+        "- first boundary",
+        "- second boundary",
+        "## NON-GOALS",
+        "No speculative work.",
+        "## VALIDATION",
+        "`bun test` is green.",
+        "## OUTPUT",
+        "A commit.",
+        "## REFERENCES",
+        "unmapped body content",
+      ].join("\n"),
+    );
+    assert.deepEqual(ex.recognized, ["PROBLEM", "SCOPE", "NON_GOALS", "VALIDATION", "OUTPUT"]);
+    // Headings keep their qualifier text out of the section name.
+    assert.deepEqual(ex.sections.PROBLEM, ["Real prose problem, not a bullet.\nSecond line of the same paragraph."]);
+    assert.deepEqual(ex.sections.SCOPE, ["first boundary", "second boundary"]);
+    assert.deepEqual(ex.sections.NON_GOALS, ["No speculative work."]);
+    assert.deepEqual(ex.sections.VALIDATION, ["`bun test` is green."]);
+    assert.deepEqual(ex.sections.OUTPUT, ["A commit."]);
+    // An unmapped heading is reported, never silently absorbed or invented.
+    assert.deepEqual(ex.unmapped, [{ heading: "## REFERENCES", lines: 1 }]);
+  });
+
+  it("populates both fields for the combined NON_GOALS / CONSTRAINTS heading", () => {
+    const ex = extractSectionsDetailed("## NON_GOALS / CONSTRAINTS\n- one rule\n## PROBLEM\np");
+    assert.deepEqual(ex.sections.NON_GOALS, ["one rule"]);
+    assert.deepEqual(ex.sections.CONSTRAINTS, ["one rule"]);
+  });
+
+  it("treats an unrecognized colon label as prose, not as a section break", () => {
+    const ex = extractSectionsDetailed("## PROBLEM\nNote: this is prose inside the problem.\nmore text");
+    assert.deepEqual(ex.sections.PROBLEM, ["Note: this is prose inside the problem.\nmore text"]);
+  });
+});
+
+describe("XTRM-405: parse-blind dependency export fails the receipt", () => {
+  it("a rewritten depends_on_id key produces FAIL with named unreconciled entries", () => {
+    const dir = mkdtempSync(join(tmpdir(), "substrate-drift-"));
+    const dbPath = join(dir, "state.db");
+    const fixture = join(here, "fixtures", "beads-parse-blind-dependencies.jsonl");
+    const raw = readFileSync(fixture, "utf8");
+    // Precondition: the fixture really is the parse-blind shape.
+    assert.ok(!raw.includes("depends_on_id"), "fixture must not carry depends_on_id");
+    assert.ok(raw.includes("target_id"), "fixture must carry target_id");
+    const res = runCli([
+      "--db", dbPath, "--json",
+      "import", "beads", "--file", fixture, "--project", "prj_drift", "--create-project", "DRF:Drift",
+    ]);
+    assert.notEqual(res.code, 0, "a parse-blind import must not exit 0");
+    const env = JSON.parse(res.stdout) as { ok: boolean; data: FullReceipt };
+    assert.equal(env.ok, false);
+    assert.equal(env.data.verdict, "FAIL");
+    const failed = env.data.verifier.checks.filter((c) => !c.ok).map((c) => c.check);
+    assert.ok(failed.includes("0c-unreconciled-inline-entries"), `expected 0c to fail, got ${failed.join(",")}`);
+    const c0c = env.data.verifier.checks.find((c) => c.check === "0c-unreconciled-inline-entries");
+    const actual = c0c?.actual as { unresolved: number; sample: string[] };
+    assert.ok(actual.unresolved > 0, "unresolved entries must be counted");
+    assert.ok(
+      actual.sample.some((s) => s.includes("no resolvable target")),
+      "the failing check must name the unreconciled entries",
+    );
+    // The census still counted every entry while nothing was accounted for:
+    // this is exactly the loss the old receipt reported as PASS.
+    assert.ok(env.data.counts.censusEdges > 0);
+    assert.equal(env.data.counts.accountedEdges, 0);
+    assert.equal(env.data.counts.edgeRowsAfter, env.data.counts.edgeRowsBefore);
+  });
+});
+
+describe("XTRM-405: edge kinds are faithful and lossy mappings are declared", () => {
+  it("duplicates/related map; waits-for and conditional-blocks are named unrepresentable", () => {
+    const dir = mkdtempSync(join(tmpdir(), "substrate-ek-"));
+    const db = openSubstrate(join(dir, "state.db"));
+    const svc = new IssueService(db);
+    svc.createProject({ id: "prj_ek", prefix: "EK", name: "ek" });
+    try {
+      const mk = (id: string) => ({ id, title: id, status: "open", issue_type: "task" });
+      const result = importBeads(
+        svc,
+        "prj_ek",
+        [
+          {
+            ...mk("ek-a"),
+            dependencies: [
+              { issue_id: "ek-a", depends_on_id: "ek-b", type: "duplicates" },
+              { issue_id: "ek-a", depends_on_id: "ek-c", type: "related" },
+              { issue_id: "ek-a", depends_on_id: "ek-d", type: "waits-for" },
+              { issue_id: "ek-a", depends_on_id: "ek-e", type: "conditional-blocks" },
+            ],
+          },
+          mk("ek-b"), mk("ek-c"), mk("ek-d"), mk("ek-e"),
+        ],
+        [],
+      );
+      // 4 declared entries, 4 accounted for: 2 applied + 2 declared.
+      const aId = svc.resolveRef("ek-a").id;
+      const kinds = svc.listActiveEdges().filter((e) => e.fromIssue === aId).map((e) => e.kind).sort();
+      assert.deepEqual(kinds, ["duplicates", "relates_to"]);
+      assert.deepEqual(
+        result.unrepresentableEdges.map((e) => e.type).sort(),
+        ["conditional-blocks", "waits-for"],
+      );
+      for (const e of result.unrepresentableEdges) {
+        assert.ok(e.reason.includes(e.type), "the declaration must name the source type");
+      }
+      // Nothing was downgraded into `blocks`: that would be a strictly stronger
+      // constraint than either source semantic.
+      assert.ok(!svc.listActiveEdges().some((e) => e.kind === "blocks"));
+      assert.equal(result.edgesApplied.length + result.unrepresentableEdges.length, 4);
+      assert.deepEqual(result.depFailures, []);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe("XTRM-405: source fields are recoverable without leaking into planning input", () => {
+  it("labels/external_ref/assignee/started_at land in provenance, not contextRefs or ownership", () => {
+    const dir = mkdtempSync(join(tmpdir(), "substrate-sf-"));
+    const db = openSubstrate(join(dir, "state.db"));
+    const svc = new IssueService(db);
+    svc.createProject({ id: "prj_sf", prefix: "SF", name: "sf" });
+    try {
+      const result = importBeads(svc, "prj_sf", [
+        {
+          id: "sf-1",
+          title: "Carries source fields",
+          status: "open",
+          issue_type: "chore",
+          labels: ["contract:ready", "specialists"],
+          external_ref: "gh-xtrm-32",
+          assignee: "jaggerxtrm",
+          started_at: "2026-07-24T19:17:33Z",
+        },
+      ], []);
+      assert.deepEqual(result.sourceFields.labels, ["sf-1"]);
+      assert.deepEqual(result.sourceFields.externalRefs, ["sf-1"]);
+      assert.deepEqual(result.sourceFields.assignees, ["sf-1"]);
+      assert.deepEqual(result.sourceFields.startedAt, ["sf-1"]);
+      // `chore` has no Substrate kind; the remap is recorded, not silent.
+      assert.deepEqual(result.sourceFields.issueTypesRemapped, [{ beadsId: "sf-1", sourceType: "chore", kind: "task" }]);
+
+      const issue = svc.resolveRef("sf-1");
+      const event = svc.listEvents(issue.id).find((e) => e.type === "beads.imported");
+      assert.ok(event, "beads.imported provenance event must exist");
+      const payload = event.payload as Record<string, unknown>;
+      assert.deepEqual(payload.beadsLabels, ["contract:ready", "specialists"]);
+      assert.equal(payload.beadsExternalRef, "gh-xtrm-32");
+      assert.equal(payload.beadsAssignee, "jaggerjtrem".replace("jaggerjtrem", "jaggerxtrm"));
+      assert.equal(payload.beadsStartedAt, "2026-07-24T19:17:33Z");
+      assert.equal(payload.beadsIssueType, "chore");
+
+      // Provenance stays inert: no contextRefs, no ownership.
+      const rev = svc.getRevision(issue.id, issue.currentRevision);
+      assert.deepEqual(rev.contextRefs ?? [], []);
+      assert.ok(rev.ownership == null, "ownership must stay unset");
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe("XTRM-405: the real export structures and reconciles", () => {
+  it("every source section lands as a populated contract field and the census reconciles", (t) => {
+    if (!existsSync(REAL_EXPORT)) {
+      t.skip("committed board-audit export not present");
+      return;
+    }
+    const dir = mkdtempSync(join(tmpdir(), "substrate-real-"));
+    const dbPath = join(dir, "state.db");
+    const env = (() => {
+      const res = runCli([
+        "--db", dbPath, "--json",
+        "import", "beads", "--file", REAL_EXPORT, "--project", "prj_real", "--create-project", "REAL:Real",
+      ]);
+      assert.equal(res.code, 0, `real export import failed: ${res.stderr || res.stdout}`);
+      return JSON.parse(res.stdout) as { data: FullReceipt };
+    })();
+    const receipt = env.data;
+    assert.equal(receipt.verdict, "PASS");
+    assert.ok(receipt.verifier.checks.every((c) => c.ok));
+    // Census reconciliation: certified inputs equal certified outcomes.
+    assert.equal(receipt.counts.censusEdges, receipt.counts.accountedEdges);
+    assert.equal(receipt.counts.censusEdges, 78);
+    assert.equal(receipt.counts.unresolvedEntries, 0);
+    // 21 source `validates` edges are a declared downgrade, not a silent one.
+    assert.equal(receipt.counts.downgradedEdges, 21);
+    assert.equal(receipt.counts.unrepresentableEdges, 0);
+
+    // Every (issue, section) pair where the source carries the heading must be
+    // stored non-empty and free of the filler.
+    const MARKER = "TBD \u2014 imported from Beads; pending XTRM planning";
+    const records = readFileSync(REAL_EXPORT, "utf8")
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l) as { _type?: string; id: string; description?: string })
+      .filter((r) => r._type !== "memory");
+    const db = openSubstrate(dbPath);
+    const svc = new IssueService(db);
+    try {
+      let checked = 0;
+      for (const r of records) {
+        const recognized = new Set(extractSectionsDetailed(r.description ?? "").recognized);
+        const issueId = svc.issueIdForAlias(r.id);
+        if (issueId === null) continue;
+        const rev = svc.getRevision(issueId, svc.getIssue(issueId).currentRevision);
+        const c = rev.contract as unknown as Record<string, unknown>;
+        for (const [section, field] of [["SCOPE", "scope"], ["VALIDATION", "validation"], ["OUTPUT", "output"]] as const) {
+          if (!recognized.has(section)) continue;
+          checked += 1;
+          const value = c[field];
+          assert.ok(Array.isArray(value) && value.length > 0, `${r.id}: ${field} empty despite source heading`);
+          assert.ok(!JSON.stringify(value).includes(MARKER), `${r.id}: ${field} still holds the filler`);
+        }
+      }
+      assert.ok(checked >= 100, `expected a substantial number of source sections, checked ${checked}`);
+      // G46 still holds: nothing imported is dispatchable.
+      assert.equal(svc.listIssues("prj_real").filter((i) => svc.getReadiness(i.id).dispatchable).length, 0);
     } finally {
       db.close();
     }

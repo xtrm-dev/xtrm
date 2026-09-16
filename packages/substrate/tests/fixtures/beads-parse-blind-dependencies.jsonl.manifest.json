@@ -1,0 +1,28 @@
+{
+  "fixture": "beads-parse-blind-dependencies.jsonl",
+  "purpose": "Regression fixture for XTRM-405 success 4/5: reproduces the parse-blind zero-edge PASS that the hardened verifier must now reject.",
+  "derivedFrom": {
+    "path": ".xtrm/board-audit/exports/export-20260810T174008/raw-beads.jsonl",
+    "sha256": "c945dc946eeb266a3c587b3e38cbf1c4b1db90a19d7027f9062a956f789a1d09",
+    "bd": "1.1.0"
+  },
+  "derivation": [
+    "Select the 4 issue records carrying dependencies[] with the shortest descriptions, plus every endpoint id they reference.",
+    "Keep only fields the Beads importer reads, so the fixture stays bounded: the source records carry a ~109 KiB `notes` payload irrelevant to dependency parsing.",
+    "RENAME every dependencies[].depends_on_id to dependencies[].target_id. This is the parse-blind shape: the key is recognized by neither unionEdges branch, so the parsed union empties while the raw census still counts every entry.",
+    "No other value is altered."
+  ],
+  "expectedBehaviour": "sb import beads --file <this fixture> must exit non-zero with verdict FAIL, and checks 0b-inline-traceability, 0c-unreconciled-inline-entries and 2-edge-multiset must fail.",
+  "recordIds": [
+    "xtrm-2m3.17",
+    "xtrm-dli.1",
+    "xtrm-2m3.12",
+    "xtrm-2m3.18",
+    "xtrm-dli",
+    "xtrm-2m3.19",
+    "xtrm-2m3.10",
+    "xtrm-2m3"
+  ],
+  "inlineDependencyEntries": 10,
+  "dependsOnIdOccurrences": 0
+}

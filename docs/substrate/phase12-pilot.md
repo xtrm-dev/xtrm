@@ -73,3 +73,51 @@ xt-runtime flag migration.
 
 `tests/cutover.test.ts` asserts the migrated surfaces carry Substrate
 markers and no normative Beads-authority claim remains. Green in CI.
+
+## Correction (2026-09-17): the "never dropped silently" edge claim was false
+
+Item 2 above states that unmapped edge vocabulary degrades to `relates_to`
+and is "never dropped silently". Measured against the committed real export
+(`.xtrm/board-audit/exports/export-20260810T174008/raw-beads.jsonl`, bd
+1.1.0), that claim did not hold. Two independent losses were found:
+
+1. **A parse-blind export reported PASS.** Rewriting every
+   `dependencies[].depends_on_id` to `target_id` made the parser resolve zero
+   edges while the raw census still counted all 78. Checks
+   `0b-inline-traceability` and `2-edge-multiset` reconciled the parsed union
+   against verifier lists derived from that same union, so both sides shrank
+   together: the receipt reported `verdict: PASS` with zero failed checks and
+   `edgesApplied: 0`. The failure was in the verifier, not only the parser:
+   nothing reconciled the parsed result against the input census.
+2. **Contract text collapsed for every record.** `extractSections` matched
+   labeled `KEY:` headers on a trimmed line and collected bullets only, but
+   real descriptions are markdown (`## PROBLEM`, `## SCOPE (agreed model)`,
+   `# NON-GOALS`). Zero sections were recognized, so the entire description
+   fell through to `problem`: 66/66 imported revisions carried the
+   `BEADS_TBD_MARKER` filler in `success` and `validation`, with `scope` empty.
+   The synthetic test fixture used `PROBLEM: ...` colon headers, which is why
+   the defect never surfaced in CI.
+
+Corrected in XTRM-405:
+
+- Section extraction recognizes ATX headings (`#{1,6}`), the labeled form,
+  trailing parenthetical qualifiers, hyphenated names (`## NON-GOALS`) and the
+  combined `## NON_GOALS / CONSTRAINTS` heading; bodies keep arbitrary prose,
+  not just bullets. Unmapped headings are counted in the receipt.
+- The verifier is anchored to the **raw input census** rather than the parsed
+  union, so a parse-blind export now fails. An entry whose target cannot be
+  resolved is a named failure (`0c-unreconciled-inline-entries`), not a
+  silent skip.
+- `duplicates` and `related` map faithfully. `validates` still becomes
+  `relates_to` but is now **declared** as a downgrade. `waits-for` and
+  `conditional-blocks` have no faithful counterpart and are reported as
+  unrepresentable instead of being mapped onto `blocks`, which is a strictly
+  stronger constraint than either source semantic.
+- Committed regression fixture:
+  `packages/substrate/tests/fixtures/beads-parse-blind-dependencies.jsonl`
+  (plus a `.manifest.json` recording its derivation). The original code
+  returns `PASS` on it; the hardened code returns `FAIL` naming three checks.
+
+The live boards remain degraded — 2282 of 2560 imported revisions still carry
+the filler and the timeline is still flattened. Repairing rows already
+imported is XTRM-407; preserving source timestamps on import is XTRM-406.
