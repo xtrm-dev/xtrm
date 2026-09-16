@@ -441,3 +441,67 @@ or another already-approved reference provide this?
 If yes, evaluate adoption first.
 
 If custom code is still chosen, record the concrete reason: missing semantic capability, incompatible ownership, unacceptable dependency, license, performance, security, or product identity.
+
+## 10. Supernova audit — session-local UI/runtime reference (2026-09-16)
+
+Audited: `mattiacerutti/supernova` @ `d0fa6869a950788045d5e10f6d500a75fe46e229`, **MIT** (`Copyright (c) 2026 Mattia Cerutti`). Full evidence: `console-v2-audit-supernova.md`.
+
+Numbering note: PR #170 (closed unmerged) used §10–12 for Conar / DeepSeek / base-UI list. Those sections are not in this file. On rebase, renumber this §10–11 sequence against whatever lands first; dispositions here do not depend on section numbers.
+
+### 10.1 What Supernova is
+
+A Pi-native agent client (Electron + server + React) whose value is restraint: flat surfaces, hairline borders, hover-until-needed chrome, one accent, `max-w-3xl` reading column, collapsible `work` groups, one-line tool titles with lazy-mounted details. Server owns execution/settlement/identity; React owns projection/cache; contracts own serializable shape; desktop owns shell. This **strengthens** the P1 placement direction (§8.1 of the Supernova audit).
+
+### 10.2 Dispositions
+
+| primitive / concern | disposition | note |
+|---|---|---|
+| Seed→runtime theme resolver + flat surface scale | **ADAPT** (shape) / **REFERENCE** (values) | port resolver + surface ladder; XTRM keeps own palette/violet |
+| Superellipse rounding | **DEPEND** | `@toolwind/corner-shape@0.0.8-3` MIT (license VERIFIED via npm) |
+| Offline curated icon registry pattern + xs–lg size scale | **ADAPT** | copy registry pattern, re-pick glyph sets; does not overturn HugeIcons DEPEND |
+| Base-UI menu/dialog shells, message-scroller, scroll-fade utilities | **DEPEND** (license permitting) | converges with existing Base UI direction |
+| Sidebar layout + collapsible headers + compact session row state machine | **ADAPT** | highest-value sidebar idea: timestamp↔spinner↔dot swap, hover actions, prefetch, inline rename |
+| Timeline item model + turn→items builder + `max-w-3xl` frame + user bubble + markdown overrides + `ContentPanel` + hover-only actions | **ADAPT** | core timeline recipe; details in `console-v2-audit-supernova.md` §1.2 |
+| "Worked for Xs" activity group + tool one-liners + per-kind tool details | **ADAPT** | signature density pattern: cheap title always, expensive details lazy-mount |
+| Cached Shiki highlighting + Pierre diff rendering | **DEPEND** (NOTICE-acceptable) / **REFERENCE** | `@pierre/diffs` Apache-2.0 (license VERIFIED via npm); both Supernova + PiChamber converge on Pierre |
+| Virtualized timeline + expandable virtual list | **DEPEND** | `@tanstack/react-virtual` MIT; carry the `getVirtualDistanceFromEnd` patch rationale |
+| Streaming footer (loader + tail-fade + `aria-busy`) | **ADAPT** | port loader + window constants |
+| Tiptap composer chrome + atomic reference node + suggestion/model-picker/context-ring/undone-drawer recipes | **ADAPT** | `@tiptap/* ^3.23.4` MIT; no prior composer decision exists |
+| `virtua` (declared, unused in `src`) | **REJECT** | no evidenced use |
+| Supernova token values / accent / Inter font | **REJECT** | XTRM owns palette/violet/Geist (PRD §27) |
+| Supernova desktop shell as UI source | **REJECT** | OS shell only, no UI primitives |
+
+### 10.3 Frame semantics carried from Supernova
+
+Session-local single-ingress units with server-owned settlement (`waitForIdle`-equivalent + snapshot publish), synthetic-live ID quarantine, and one-active-unit-per-session are proven patterns — adopt as Frame requirements. `Turn.id = userMessage.id` is the fielded precedent for durable Frame identity. Child-agent linkage and cross-agent aggregation are greenfield (no Supernova evidence). Proposed Frame contract and wave-H deferral list: `console-v2-audit-supernova.md` §3.5–3.6.
+
+## 11. PiChamber audit — protocol/runtime engineering reference (2026-09-16)
+
+Audited: `RyderAsKing/PiChamber` @ `87fe511db5ebcee2a44f9f4ea08aebe0b219fde6`, **MIT** on disk with dual `OpenChamber (2025 Bohdan Triapitsyn)` + `PiChamber (2026 RyderAsKing)` copyright; GitHub `NOASSERTION` is metadata noise. Preserve both copyright lines + MIT text at redistribution root for any copied file. Full evidence: `console-v2-audit-pichamber.md`.
+
+### 11.1 Dispositions
+
+| primitive / concern | disposition | note |
+|---|---|---|
+| Private daemon + local-socket IPC + supervisor/lease/lock | **ADAPT** | best-in-class isolation pattern; XTRM runtime differs |
+| SSE lifecycle budgets + epoch replay + drain/terminate deadlines | **ADAPT** | copy budgets, not the file |
+| Send idempotency receipts (`operationId+streamEpoch`, 409/410) | **ADAPT** | exact semantics worth cloning |
+| Header-only JSONL list + tail paging + `before` cursor | **ADAPT** | paging contract, not the Pi JSONL parser |
+| Sanitized `Usage` projection | **ADAPT** | prevents NaN-token UI bugs |
+| Alias-resolved live message IDs | **ADAPT** | same quarantine doctrine as Supernova synthetic IDs |
+| Archive-as-sidecar | **ADAPT** | overlay metadata, never mutate agent log |
+| Bearer + Pairing v2 + 60s URL tokens; WebAuthn issuance libs | **ADAPT** model / **DEPEND** libs when auth is scoped | `@simplewebauthn/server 13.3.1`, `browser 13.3.0`, `jose ^6.1.3` |
+| E2EE relay design | **REFERENCE** | unwired at audited SHA; do not depend yet |
+| Electron packaging layout | **REFERENCE** | proven layout; not evidence against Tauri |
+| Sidebar interaction (flat recency + family color + virtualized archive) | **ADAPT** | interaction, not the 15-hook implementation |
+| Turn/tool rendering metadata + clock normalization | **ADAPT** | skip todo-coupled StatusRow |
+| Command palette wiring | **DEPEND** (`cmdk`) + **ADAPT** wiring | converges with existing `cmdk` direction |
+| Icon sprite + file-type ID centralization | **ADAPT** | pattern only; glyph set stays XTRM's |
+| File viewer IA | **ADAPT selectively** | viewer IA yes; triple-stack + beta diff no |
+| Dual primitive/virtual/markdown stacks | **REJECT dual** | DEPEND on one family each (Base UI; TanStack Virtual; one markdown lib) |
+| Mobile/Capacitor/PWA/push/STT/diagram extras | **REJECT** | matrix explosion unless mobile is committed |
+| 3k-line session store shape; unwired relay host as dependency | **REJECT** | tested but not restrained; design-doc only |
+
+### 11.2 Structural note
+
+PiChamber proves Pi-native protocol engineering (isolation, reconnect/send correctness, bounded-everywhere budgets) can coexist with an unrestrained UI (dual stacks, 15-hook sidebar, beta deps). Take the former; do not lift the latter. Supernova remains the structural reference for restraint.
