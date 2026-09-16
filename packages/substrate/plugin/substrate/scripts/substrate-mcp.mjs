@@ -1,7 +1,7 @@
 // MCP server entry for the packaged plugin (bead xtrm-iip.1, closeout E1).
 //
 // This is the path .mcp.json names, exactly as contracted:
-//   node ${CLAUDE_PLUGIN_ROOT}/scripts/substrate-mcp.ts
+//   node ${CLAUDE_PLUGIN_ROOT}/scripts/substrate-mcp.mjs
 //
 // Two lines by design: resolve the server module through the seam, then run
 // its serveMain(). The entry never imports @modelcontextprotocol/server
