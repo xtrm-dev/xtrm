@@ -1,20 +1,13 @@
-// Substrate Pi extension (Phase 6, bead xtrm-7wc.7). Consumes the typed
-// service directly — never execs sb, never parses terminal text (§6.1).
+// Substrate Pi extension. Consumes the typed service directly — never execs
+// sb and never parses terminal text. Pi owns the provider UI/session lifecycle;
+// Substrate owns durable work authority and persistence.
 //
-// Verified against installed Pi 0.84.x at build time (PRD-54 recheck):
+// Verified API assumptions:
 // - ExtensionAPI: pi.registerTool / pi.registerCommand / pi.on
-//   (docs/extensions.md "Quick Start"; examples/extensions/hello.ts)
-// - pi.on("session_before_compact") event {preparation, branchEntries,
-//   reason, willRetry, signal}, result {cancel} | {compaction: {summary,
-//   firstKeptEntryId, tokensBefore, usage?}} (docs/compaction.md
-//   "session_before_compact"; dist/core/extensions/types.d.ts
-//   SessionBeforeCompactEvent / SessionBeforeCompactResult)
-// - pi.on("session_start") {reason, previousSessionFile?} with a void
-//   result: Pi 0.84 exposes NO session-start injection channel, so resume
-//   delivery is notify + `substrate-resume` command, documented as such.
-// - ctx.sessionManager.getSessionId() supplies the session binding key.
-// - ctx.modelRegistry.find(provider, id) resolves the secondary model for
-//   the semantic checkpoint (custom-compaction.ts precedent).
+// - session_before_compact can supply a custom summary
+// - session_start has no start-time injection channel, so resume delivery is
+//   notify + `substrate-resume`, never a silent context edit
+// - ctx.sessionManager.getSessionId() supplies the provider session binding key
 
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -106,7 +99,7 @@ export default function (pi: ExtensionAPI): void {
     defineTool({
       name: "substrate_issue_claim",
       label: "Substrate issue claim",
-      description: "Claim a dispatchable Substrate issue for a holder. Binds the Pi session to the issue for checkpoints and resume. Successful mutation results include a structured feedback confirmation.",
+      description: "Claim a dispatchable Substrate issue for a holder. Binds the Pi session to the issue for checkpoints and resume. Successful mutations include structured feedback.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), holder: Type.String({ description: "Claim holder" }), activationId: Type.Optional(Type.String({ description: "Activation id" })), sessionId: Type.Optional(Type.String({ description: "Pi session id" })) }),
       async execute(
         _id: string,
@@ -177,7 +170,7 @@ export default function (pi: ExtensionAPI): void {
     defineTool({
       name: "substrate_issue_resume",
       label: "Substrate issue resume",
-      description: "Build the bounded resume capsule for an issue: contract, checkpoint, deltas, blockers, claim, provenance.",
+      description: "Build the bounded resume capsule for an issue: current contract, latest checkpoint, Journal delta, blockers, claim, and provenance.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }) }),
       async execute(_id: string, params: Record<string, unknown>) {
         const capsule = await withServices((svc) => toolIssueResume(svc, { ref: params.ref as string }));
@@ -187,7 +180,7 @@ export default function (pi: ExtensionAPI): void {
     defineTool({
       name: "substrate_provenance_trace",
       label: "Substrate provenance trace",
-      description: "Trace issue lineage: revision, attestation, claim, checkpoints, event spine. Receipt-backed trace lands in Phase 8.",
+      description: "Trace the full durable evidence spine for an issue: revision/hash, attestation, claims, execution bindings, WorkReceipts with artifacts, checkpoints, commits/PRs, external bindings, and closure revision.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }) }),
       async execute(_id: string, params: Record<string, unknown>) {
         return textResult(await withServices((svc) => toolProvenanceTrace(svc, { ref: params.ref as string })));
@@ -196,10 +189,9 @@ export default function (pi: ExtensionAPI): void {
   ];
   for (const t of tools) pi.registerTool(t);
 
-  // Edit/write authority (§§38-39, bead xtrm-6qu.6): the blocking tool_call
-  // gate. Unbound sessions edit freely; a session bound to an Issue may
-  // mutate only under its own live claim (holder + activation). Fail-open
-  // on unreadable state so a corrupt gate never bricks Pi.
+  // A session bound to an Issue may mutate only under its own live claim
+  // (holder + activation). Fail-open on unreadable state so a corrupt gate
+  // never bricks Pi.
   pi.on("tool_call", async (event, ctx) => {
     if (!isToolCallEventType("edit", event) && !isToolCallEventType("write", event)) return;
     try {
@@ -216,7 +208,10 @@ export default function (pi: ExtensionAPI): void {
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
       const sessionId = ctx?.sessionManager?.getSessionId?.();
       const capsule = await withServices((svc) => resumeForSession(svc, bindings, sessionId));
-      ctx.ui.notify(capsule ?? "No Substrate issue bound to this session (substrate_issue_claim or SUBSTRATE_ISSUE).", capsule ? "info" : "warning");
+      ctx.ui.notify(
+        capsule ?? "No Substrate issue bound to this session (claim one, or set SUBSTRATE_ISSUE_REF; SUBSTRATE_ISSUE is the legacy alias).",
+        capsule ? "info" : "warning",
+      );
     },
   });
 
@@ -231,10 +226,6 @@ export default function (pi: ExtensionAPI): void {
     const sessionId = ctx?.sessionManager?.getSessionId?.();
     const ref = bindings.boundRef(sessionId);
     if (!ref) return;
-    // Secondary-model semantic checkpoint (custom-compaction.ts precedent):
-    // serialize the compacting conversation, ask a cheap model for the
-    // bounded semantic shape, let the service validate it. Any failure
-    // degrades to the durable mechanical checkpoint (D23/D26).
     const conversationText = serializeConversation(
       convertToLlm([...event.preparation.messagesToSummarize, ...event.preparation.turnPrefixMessages]),
     );

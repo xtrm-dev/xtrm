@@ -1,49 +1,36 @@
 # xtrm-tui
 
-First-party terminal UI workspace for XTRM's Episode-based human ↔ agent interface.
+First-party terminal workspace for XTRM's human ↔ agent interface.
 
-This package is the canonical home for the TUI concept and implementation assets. It is intended to run directly over Pi's public SDK and `@earendil-works/pi-tui`, while reusing the XTRM UI language already proven by Core's `xtrm-ui` Pi extension.
+**Status:** product workspace / implementation in progress. The canonical design
+is `docs/xtrm-tui-prd.md`; older Episode terminology in prototypes is historical.
+The current interaction unit is **Frame** (`InteractionFrame`).
 
 ## Product boundary
 
 ```text
 Pi AgentSessionRuntime
   ↓
-Episode projection
+InteractionFrame / activity projection
   ↓
 xtrm-tui
-  ├─ thin Episode tab strip
-  ├─ selected-Episode viewport
+  ├─ thin Frame navigation
+  ├─ selected-Frame conversation viewport
   ├─ compressed / normal / expanded tool views
-  ├─ Episode overview overlay
-  └─ conversation branch/fork overlay
+  ├─ overview / branch overlays
+  └─ XTRM status and agent-system integration
 ```
 
-The TUI must not become another provider runtime or transcript store.
+The TUI must not become a second provider runtime or transcript store. It uses
+Pi's public runtime/session model and reuses XTRM UI semantics rather than
+terminal scraping.
 
 ## Current assets
 
-```text
-xtrm-tui/
-├── docs/
-│   ├── design.md
-│   └── local-worker-dispatch.md
-├── prototype/
-│   └── index.html
-└── src/
-    ├── tool-view.ts
-    └── agent-command-sketch.ts
-```
+The package contains canonical design docs, prototypes and implementation
+building blocks. Read [`docs/xtrm-tui-prd.md`](docs/xtrm-tui-prd.md) before
+coding; [`docs/local-worker-dispatch.md`](docs/local-worker-dispatch.md) records
+the local-worker execution direction.
 
-Open `prototype/index.html` in a browser to exercise the terminal-layout mock and its keyboard simulation.
-
-## Initial implementation direction
-
-- Direct Pi `AgentSessionRuntime`; no terminal scraping.
-- `@earendil-works/pi-tui` for rendering and overlays.
-- Default tool view: `compressed`.
-- Tool views: `compressed → normal → expanded`.
-- `agent_settled`, not `agent_end`, closes an Episode.
-- Preserve `xt pi` as the low-level provider/worktree launcher; this package may later back a higher-level `xt agent` entrypoint.
-
-See `docs/design.md` before implementation.
+The product direction preserves low-level `xt pi` while allowing a higher-level
+XTRM agent/TUI entry to evolve over the same runtime.

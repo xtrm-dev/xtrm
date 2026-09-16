@@ -24,6 +24,7 @@
     "integrations",
     "skills",
     "plugin",
+    "docs",
     ".claude-plugin/marketplace.json",
     "README.md"
   ],

@@ -1,15 +1,16 @@
-// Pi integration handlers (Phase 6, bead xtrm-7wc.7). Host-agnostic logic
-// over the typed service: no Pi imports here, so this module is unit
-// testable with fake compaction events. Pi wiring lives in extension.ts.
-// Library-first (§6.1): every handler calls IssueService / JournalService /
-// ResumeService directly. Host-owned checkpoint authority: handler output
-// never self-certifies execution (§5, §28.3 analogue) — entries record what
-// the host observed, and the service validates shapes fail-closed.
+// Pi integration handlers. Host-agnostic logic over the typed service: no Pi
+// imports here, so this module is unit testable with fake compaction events.
+// Pi wiring lives in extension.ts. Every handler calls the canonical typed
+// services directly — never execs sb and never parses terminal text.
+// Host-owned checkpoint authority: handler output never self-certifies
+// execution; entries record what the host observed, and the service validates
+// shapes fail-closed.
 
 import { openSubstrate } from "../../src/store/sqlite.ts";
 import { IssueService } from "../../src/service/issue-service.ts";
 import { JournalService, type Summarizer } from "../../src/service/journal-service.ts";
 import { ResumeService } from "../../src/service/resume-service.ts";
+import { ProvenanceService } from "../../src/service/provenance-service.ts";
 import { isJournalKind } from "../../src/domain/journal.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
 import { enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
@@ -20,6 +21,7 @@ export interface SubstrateServices {
   issues: IssueService;
   journal: JournalService;
   resume: ResumeService;
+  provenance: ProvenanceService;
   close(): void;
 }
 
@@ -28,13 +30,15 @@ export function openServices(dbPath: string): SubstrateServices {
   const issues = new IssueService(db);
   const journal = new JournalService(db, issues);
   const resume = new ResumeService(db, issues, journal);
-  return { db, issues, journal, resume, close: () => db.close() };
+  const provenance = new ProvenanceService(db, issues, journal);
+  return { db, issues, journal, resume, provenance, close: () => db.close() };
 }
 
 // -- session bindings ----------------------------------------------------------
-// In-session map (tool-recorded) with SUBSTRATE_ISSUE env fallback so a fresh
-// process can rebind. Values are issue refs; resolution happens at use, so a
-// stale binding fails loudly at the service instead of pointing nowhere.
+// In-session map (tool-recorded) with SUBSTRATE_ISSUE_REF env fallback so a
+// fresh process can rebind. SUBSTRATE_ISSUE remains a compatibility alias.
+// Values are issue refs; resolution happens at use, so a stale binding fails
+// loudly at the service instead of pointing nowhere.
 
 export interface SessionIdentity {
   ref: string;
@@ -65,7 +69,7 @@ export class SessionBindings {
 }
 
 function boundRefFromEnv(): string | null {
-  // Converged names (bead xtrm-iip.9): SUBSTRATE_ISSUE_REF wins everywhere;
+  // Converged names: SUBSTRATE_ISSUE_REF wins everywhere;
   // SUBSTRATE_ISSUE remains as a backcompat alias so existing operator
   // setups keep working.
   const ref = process.env["SUBSTRATE_ISSUE_REF"];
@@ -84,10 +88,10 @@ function envActivation(): string | null {
   return a && a.trim() ? a.trim() : null;
 }
 
-// Trusted Pi execution context (X1, ADR §§36-37, 97): host type + Pi
-// session id are host-known (sessionManager/binding), the XTRM session
-// id/name come from the exact R4 env contract only. An explicit trusted
-// envelope wins field-by-field; nothing is parsed from prose (§98).
+// Trusted Pi execution context: host type + Pi session id are host-known
+// (sessionManager/binding), the XTRM session id/name come from the exact Core
+// launcher env contract only. An explicit trusted envelope wins field-by-field;
+// nothing is parsed from prose.
 function piExecutionContext(opts: {
   sessionId?: string | null;
   holder?: string | null;
@@ -214,32 +218,18 @@ export function toolIssueResume(svc: SubstrateServices, params: { ref: string })
   return svc.resume.renderCapsule(svc.resume.buildCapsule(resolved.id));
 }
 
-// ProvenanceTrace surface before Phase 8 owns receipts: the event spine
-// (revision, attestation, claim, checkpoints, commits observed) with an
-// explicit note, never invented receipt authority.
-export function toolProvenanceTrace(svc: SubstrateServices, params: { ref: string }): Record<string, unknown> {
+/** Full canonical evidence spine; Pi and Claude consume the same ProvenanceService. */
+export function toolProvenanceTrace(svc: SubstrateServices, params: { ref: string }) {
   const resolved = svc.issues.resolveRef(params.ref);
-  const events = svc.issues.listEvents(resolved.id);
-  const checkpoints = svc.journal.listEntries(resolved.id, { kind: "checkpoint" });
-  return {
-    issueId: resolved.id,
-    humanRef: resolved.humanRef,
-    revision: resolved.currentRevision,
-    contractHash: resolved.currentContractHash,
-    attestation: svc.issues.latestAttestation(resolved.id),
-    claim: svc.issues.getActiveClaim(resolved.id),
-    checkpointRefs: checkpoints.map((c) => `${c.id}#${c.sequence}`),
-    eventTypes: events.map((e) => e.type),
-    note: "receipt-backed trace lands in Phase 8; this spine reconstructs revision/attestation/claim/checkpoint lineage only",
-  };
+  return svc.provenance.trace(resolved.id);
 }
 
-// -- compaction (PRD §23.1) ------------------------------------------------------
+// -- compaction ---------------------------------------------------------------
 // Mechanical checkpoint first via the service seam; the optional secondary
-// summarizer enriches it. Failure anywhere degrades to the host default —
-// the durable checkpoint is never lost because it committed before the
-// summarizer started (D22/D23). Returns the summary text for the host to
-// render into ITS compaction; returning null means "use host default" (D26).
+// summarizer enriches it. Failure anywhere degrades to the host default — the
+// durable checkpoint is never lost because it committed before the summarizer
+// started. Returns the summary text for the host to render into ITS compaction;
+// returning null means "use host default".
 
 export interface BeforeCompactInput {
   issueRef: string;
@@ -257,8 +247,6 @@ export interface BeforeCompactResult {
 }
 
 export async function runBeforeCompact(svc: SubstrateServices, input: BeforeCompactInput): Promise<BeforeCompactResult> {
-  // Any host-side failure (dead DB handle included) falls back to the host
-  // default — overflow-recovery compaction is never blocked (§§23.2/24.3).
   const fallback = { entryId: null, sequence: null, degraded: true, fallbackToDefault: true, summary: null };
   let resolved;
   try {
@@ -276,7 +264,6 @@ export async function runBeforeCompact(svc: SubstrateServices, input: BeforeComp
     return fallback;
   }
   if (checkpoint.fallbackToDefault) {
-    // Mechanical row is durable; the host default summary proceeds.
     return {
       entryId: checkpoint.entry.id,
       sequence: checkpoint.entry.sequence,
@@ -290,11 +277,10 @@ export async function runBeforeCompact(svc: SubstrateServices, input: BeforeComp
   return { entryId: checkpoint.entry.id, sequence: checkpoint.entry.sequence, degraded: false, fallbackToDefault: false, summary };
 }
 
-// -- gates ported from Beads (§§38-39, bead xtrm-6qu.6) -----------------------------
-// Host-agnostic evaluations over plain resolved state. Claude-side
-// enforcement lives in integrations/claude-code/{edit,commit,stop}-*; Pi
-// production enforcement is the tool_call handler in extension.ts, which
-// routes edit/write calls through decidePiEditCall below.
+// -- gates --------------------------------------------------------------------
+// Host-agnostic evaluations over plain resolved state. Claude-side enforcement
+// lives in integrations/claude-code/{edit,commit,stop}-*; Pi production
+// enforcement is the tool_call handler in extension.ts.
 
 export interface EditGateState {
   issueRef: string | null;
@@ -323,12 +309,6 @@ export function evaluateEditGate(state: EditGateState): { allow: boolean; reason
   return { allow: true };
 }
 
-// Production decision for the Pi tool_call gate (extension.ts): resolve the
-// session binding to its Issue plus claim identity, then apply the same
-// holder+activation authority as the Claude edit gate. Fail-closed on a
-// resolved live claim with missing/mismatched holder; fail-open on
-// unreadable state (unknown ref, dead DB handle) so a corrupt gate never
-// bricks the session.
 export function decidePiEditCall(
   svc: SubstrateServices,
   bindings: SessionBindings,
@@ -370,9 +350,6 @@ export function decidePiEditCall(
   }
 }
 
-// H1 §77 five-signal input. resultsSinceClaim / pendingAsks / closureReady
-// are additive: older callers that only know claim+checkpoint+blocker+
-// handoff keep working and read as "unfinished, continuity unknown".
 export interface StopContinuityState {
   issueRef: string | null;
   claimed: boolean;
@@ -411,10 +388,10 @@ export function evaluateStopContinuity(state: StopContinuityState): {
   return { needsCheckpoint, continuity: bits + next, action };
 }
 
-// -- session start ---------------------------------------------------------------
-// Pi 0.84 session_start carries no injection channel, so "resume injection"
-// is: bound issue → capsule text for the host to surface (notify + resume
-// command), never a silent context edit. Returns null when unbound.
+// -- session start ------------------------------------------------------------
+// Pi session_start carries no injection channel, so resume delivery is bound
+// issue → capsule text for the host to surface (notify + resume command), never
+// a silent context edit. Returns null when unbound.
 
 export function resumeForSession(svc: SubstrateServices, bindings: SessionBindings, sessionId: string | undefined): string | null {
   const ref = bindings.boundRef(sessionId);

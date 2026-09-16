@@ -58,8 +58,28 @@ describe("tool surface over the typed service", () => {
       const capsule = toolIssueResume(svc, { ref: "PI-1" });
       assert.match(capsule, /PI-1/);
       const trace = toolProvenanceTrace(svc, { ref: "PI-1" });
-      assert.equal(trace["revision"], 2);
-      assert.ok((trace["eventTypes"] as string[]).includes("issue.attested"));
+      assert.equal(trace.revision, 2);
+      assert.ok(Array.isArray(trace.bindings));
+      assert.ok(Array.isArray(trace.receipts));
+    } finally {
+      svc.close();
+    }
+  });
+
+  it("Pi provenance is the canonical receipt/artifact trace", () => {
+    const { dir, svc } = setup();
+    try {
+      const id = readyIssue(svc, "Receipt work");
+      svc.issues.claimIssue(id, "pi-holder");
+      const binding = svc.provenance.dispatch(id, { workspace: dir, participantId: "pi-holder" });
+      const receipt = svc.provenance.allocateReceipt(binding.id);
+      svc.provenance.bindCommit(receipt.id, "a".repeat(40));
+      const trace = toolProvenanceTrace(svc, { ref: "PI-1" });
+      assert.equal(trace.bindings.length, 1);
+      assert.equal(trace.receipts.length, 1);
+      assert.equal(trace.receipts[0]?.id, receipt.id);
+      assert.deepEqual(trace.commits, ["a".repeat(40)]);
+      assert.ok(trace.receipts[0]?.artifacts.some((a) => a.kind === "commit" && a.value === "a".repeat(40)));
     } finally {
       svc.close();
     }
@@ -77,10 +97,10 @@ describe("tool surface over the typed service", () => {
   });
 });
 
-// Converged env names (xtrm-iip.9): SUBSTRATE_ISSUE_REF wins on both
-// surfaces; SUBSTRATE_ISSUE is the backcompat alias. Three per surface.
+// Converged env names: SUBSTRATE_ISSUE_REF wins on both surfaces;
+// SUBSTRATE_ISSUE is the backcompat alias. Three per surface.
 
-describe("issue-ref env alias (xtrm-iip.9)", () => {
+describe("issue-ref env alias", () => {
   function withEnv(vars: Record<string, string | undefined>, fn: () => void): void {
     const prior: Record<string, string | undefined> = {};
     for (const k of Object.keys(vars)) prior[k] = process.env[k];
@@ -152,7 +172,6 @@ describe("D26: compaction failure falls back with the durable checkpoint intact"
       assert.equal(result.fallbackToDefault, true);
       assert.equal(result.summary, null);
       assert.ok(result.entryId);
-      // The durable checkpoint survives: resume restores contract + checkpoint.
       const capsule = svc.resume.buildCapsule(id);
       assert.ok(capsule.latestCheckpoint);
       assert.equal(capsule.latestCheckpoint.id, result.entryId);
@@ -197,7 +216,6 @@ describe("lifecycle: compact mid-execution, resume restores contract + checkpoin
       assert.equal(result.fallbackToDefault, false);
       assert.ok(result.summary?.includes("CHECKPOINT"));
       assert.ok(result.summary?.includes("halfway through lifecycle work"));
-      // A later session resumes from durable state, not the compacted chat.
       const bindings = new SessionBindings();
       bindings.bind("sess-10", id);
       const resumed = resumeForSession(svc, bindings, "sess-10");

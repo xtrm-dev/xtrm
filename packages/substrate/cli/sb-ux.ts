@@ -117,12 +117,37 @@ function uxHelp(base: CliResult, argv: string[]): CliResult {
   const suffix = [
     "", "human UX:",
     "  --plain / --no-color            disable terminal styling",
+    "  sb issue show <ref>              Markdown-aware terminal contract + bounded context",
     "  sb issue list [--status <s,...>] [--all] [--flat] [--search <q>]",
-    "  sb issue browse                 interactive tmux-style navigator (TTY only)",
+    "                                    defaults to the active hierarchical board",
+    "  sb issue browse [filters]        interactive tmux-style navigator (TTY only)",
     "", "status filters:",
     "  open | in_progress | ready | blocked | deferred | done | cancelled | archived | closed",
+    "  in_progress / ready / blocked are derived views, not stored lifecycle states",
+    "", "machine boundary:",
+    "  --status/--all/--flat/--search are human presentation filters;",
+    "  combining them with --json fails closed instead of returning falsely filtered JSON",
   ].join("\n");
   return { ...base, stdout: `${base.stdout.trimEnd()}\n${suffix}\n` };
+}
+
+function browseHelp(): CliResult {
+  const stdout = [
+    "usage: sb issue browse [--status <s,...>] [--all] [--search <q>] [--plain|--no-color]",
+    "",
+    "interactive read-first Issue navigator (TTY only). Starts on the active board unless --all is passed.",
+    "",
+    "keys:",
+    "  ↑↓ / j k     move",
+    "  Enter        expand/collapse preview",
+    "  /            search",
+    "  f            cycle active → all → closed",
+    "  - / +        collapse / expand children",
+    "  q / Ctrl-C   quit and restore terminal state",
+    "",
+    `status filters: ${KNOWN_STATUS_FILTERS.join(" | ")}`,
+  ].join("\n") + "\n";
+  return { code: 0, stdout, stderr: "" };
 }
 
 function listEngineArgs(base: string[]): string[] {
@@ -233,16 +258,11 @@ async function browse(parsed: WrapperArgs, style: TerminalStyleOptions, opts: Ux
   };
   process.stdin.setRawMode(true);
   process.stdin.resume();
-  // Attach the listener before the first paint: input arriving between
-  // resume() and on() is emitted to no listener and dropped silently, which
-  // is exactly the window the board load occupies (~1s on a populated board).
   const done = new Promise<void>((resolve) => {
     const quit = (): void => { process.stdin.off("data", onData); resolve(); };
     const onData = (chunk: Buffer): void => {
       let redraw = false;
       for (const key of tokenizeBrowseKeys(chunk.toString("utf8"))) {
-        // Ctrl-C outranks every mode: raw mode suppresses SIGINT, so this
-        // byte is the only chance to restore the screen.
         if (key === "quit") { quit(); return; }
         const rows = currentRows();
         if (searchMode) {
@@ -288,8 +308,6 @@ export async function runUxCli(argv: string[], opts: UxOptions = {}): Promise<Cl
   const style = styleOptions(parsed, opts);
   const command = commandOf(parsed.base);
   if (parsed.base.includes("--json")) {
-    // Fail closed instead of silently returning unfiltered data: the list
-    // filters are consumed by this wrapper, so the engine cannot apply them.
     const humanOnly = humanOnlyFilters(parsed);
     if (humanOnly.length > 0) {
       return errorResult(
@@ -308,7 +326,10 @@ export async function runUxCli(argv: string[], opts: UxOptions = {}): Promise<Cl
       style,
     );
   }
-  if (parsed.base.includes("--help") || parsed.base[0] === "help") return uxHelp(runCli(parsed.base), parsed.base);
+  if (parsed.base.includes("--help") || parsed.base[0] === "help") {
+    if (command === "issue.browse") return browseHelp();
+    return uxHelp(runCli(parsed.base), parsed.base);
+  }
   if (parsed.base[0] === "issue" && parsed.base[1] === "browse") return browse(parsed, style, opts);
   if (command === "issue.list") return renderList(parsed, style);
   if (command === "issue.show") return renderShow(parsed, style);
