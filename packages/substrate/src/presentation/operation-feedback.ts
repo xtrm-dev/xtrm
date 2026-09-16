@@ -63,7 +63,7 @@ export function withFeedback<T>(data: T, feedback: OperationFeedback): T & { fee
   if (data !== null && typeof data === "object" && !Array.isArray(data)) {
     return { ...(data as Record<string, unknown>), feedback } as T & { feedback: OperationFeedback };
   }
-  return { value: data, feedback } as T & { feedback: OperationFeedback };
+  return { value: data, feedback } as unknown as T & { feedback: OperationFeedback };
 }
 
 // Provider-neutral inference for mutation responses that already have a
