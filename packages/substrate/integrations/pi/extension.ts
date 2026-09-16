@@ -47,6 +47,13 @@ import {
   toolProvenanceTrace,
 } from "./handlers.ts";
 import type { SemanticCheckpoint } from "../../src/domain/journal.ts";
+import {
+  noopFeedback,
+  successFeedback,
+  warningFeedback,
+  withFeedback,
+  type OperationFeedback,
+} from "../../src/presentation/operation-feedback.ts";
 
 function dbPath(): string {
   return process.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db");
@@ -56,6 +63,9 @@ function textResult(data: unknown): { content: Array<{ type: "text"; text: strin
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], details: { ok: true } };
 }
 
+function feedbackResult(data: Record<string, unknown>, feedback: OperationFeedback) {
+  return textResult(withFeedback(data, feedback));
+}
 
 export default function (pi: ExtensionAPI): void {
   const bindings = new SessionBindings();
@@ -96,7 +106,7 @@ export default function (pi: ExtensionAPI): void {
     defineTool({
       name: "substrate_issue_claim",
       label: "Substrate issue claim",
-      description: "Claim a dispatchable Substrate issue for a holder. Binds the Pi session to the issue for checkpoints and resume.",
+      description: "Claim a dispatchable Substrate issue for a holder. Binds the Pi session to the issue for checkpoints and resume. Successful mutation results include a structured feedback confirmation.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), holder: Type.String({ description: "Claim holder" }), activationId: Type.Optional(Type.String({ description: "Activation id" })), sessionId: Type.Optional(Type.String({ description: "Pi session id" })) }),
       async execute(
         _id: string,
@@ -106,24 +116,29 @@ export default function (pi: ExtensionAPI): void {
         ctx: ExtensionContext,
       ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
-        return textResult(
-          await withServices((svc) => toolIssueClaim(svc, bindings, { ref: params.ref as string, holder: params.holder as string, activationId: params.activationId as string | undefined, sessionId })),
-        );
+        const result = await withServices((svc) => toolIssueClaim(svc, bindings, { ref: params.ref as string, holder: params.holder as string, activationId: params.activationId as string | undefined, sessionId }));
+        return feedbackResult(result, successFeedback("issue_claimed", `Claimed ${params.ref as string}`, `holder ${params.holder as string}`));
       },
     }),
     defineTool({
       name: "substrate_issue_update",
       label: "Substrate issue update",
-      description: "Revise a Substrate issue contract (revision-on-change; identical contracts are a no-op).",
+      description: "Revise a Substrate issue contract (revision-on-change; identical contracts are a no-op). Results include structured success/no-op feedback so agents can distinguish a persisted revision from an idempotent repeat.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), contract: Type.Unknown({ description: "Seven-field work contract" }) }),
       async execute(_id: string, params: Record<string, unknown>) {
-        return textResult(await withServices((svc) => toolIssueUpdate(svc, { ref: params.ref as string, contract: params.contract })));
+        const result = await withServices((svc) => toolIssueUpdate(svc, { ref: params.ref as string, contract: params.contract }));
+        return feedbackResult(
+          result,
+          result.revisionCreated
+            ? successFeedback("issue_updated", `Updated ${params.ref as string}`, "new revision created; readiness must be revalidated")
+            : noopFeedback("issue_unchanged", `${params.ref as string} already has this contract`, "no new revision created"),
+        );
       },
     }),
     defineTool({
       name: "substrate_journal_append",
       label: "Substrate journal append",
-      description: "Append a journal entry (checkpoint, handoff, milestone, decision, finding, blocker, compaction) to an issue.",
+      description: "Append a journal entry (note, finding, decision, blocker, milestone, handoff, result, checkpoint, compaction) to an issue. Results include a structured persistence confirmation.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), kind: Type.String({ description: "Entry kind" }), sessionId: Type.Optional(Type.String({ description: "Pi session id" })) }),
       async execute(
         _id: string,
@@ -133,13 +148,14 @@ export default function (pi: ExtensionAPI): void {
         ctx: ExtensionContext,
       ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
-        return textResult(await withServices((svc) => toolJournalAppend(svc, { ref: params.ref as string, kind: params.kind as string, sessionId })));
+        const result = await withServices((svc) => toolJournalAppend(svc, { ref: params.ref as string, kind: params.kind as string, sessionId }));
+        return feedbackResult(result, successFeedback("journal_appended", `Added ${params.kind as string} to ${params.ref as string}`, `journal seq ${String(result.sequence)}`));
       },
     }),
     defineTool({
       name: "substrate_journal_checkpoint",
       label: "Substrate journal checkpoint",
-      description: "Write a mechanical-first journal checkpoint for an issue.",
+      description: "Write a mechanical-first journal checkpoint for an issue. Results distinguish complete from degraded semantic enrichment while confirming the durable mechanical checkpoint.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), sessionId: Type.Optional(Type.String({ description: "Pi session id" })), headCommit: Type.Optional(Type.String({ description: "Head commit SHA" })) }),
       async execute(
         _id: string,
@@ -149,8 +165,12 @@ export default function (pi: ExtensionAPI): void {
         ctx: ExtensionContext,
       ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
-        return textResult(
-          await withServices((svc) => toolJournalCheckpoint(svc, { ref: params.ref as string, sessionId, headCommit: params.headCommit as string | undefined })),
+        const result = await withServices((svc) => toolJournalCheckpoint(svc, { ref: params.ref as string, sessionId, headCommit: params.headCommit as string | undefined }));
+        return feedbackResult(
+          result,
+          result.degraded
+            ? warningFeedback("checkpoint_degraded", `Checkpoint persisted for ${params.ref as string}`, "mechanical state is durable; semantic enrichment degraded")
+            : successFeedback("checkpoint_persisted", `Checkpoint persisted for ${params.ref as string}`, `journal seq ${String(result.sequence)}`),
         );
       },
     }),
@@ -230,9 +250,7 @@ export default function (pi: ExtensionAPI): void {
                   content: [
                     {
                       type: "text",
-                      text: `Summarize this conversation for a Substrate work-journal checkpoint. Reply with a single JSON object and nothing else, using exactly these keys: summary (string, required), completed (string[]), current (string), next (string[]), blocked (string[]), openQuestions (string[]), keyDecisions (string[]), materialFindings (string[]).
-
-<conversation>\n${conversationText.slice(0, 12000)}\n</conversation>`,
+                      text: `Summarize this conversation for a Substrate work-journal checkpoint. Reply with a single JSON object and nothing else, using exactly these keys: summary (string, required), completed (string[]), current (string), next (string[]), blocked (string[]), openQuestions (string[]), keyDecisions (string[]), materialFindings (string[]).\n\n<conversation>\n${conversationText.slice(0, 12000)}\n</conversation>`,
                     },
                   ],
                   timestamp: Date.now(),

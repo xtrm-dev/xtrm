@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./src/index.ts",
   "bin": {
-    "sb": "cli/sb.ts"
+    "sb": "cli/sb-ux.ts"
   },
   "keywords": [
     "pi-package",

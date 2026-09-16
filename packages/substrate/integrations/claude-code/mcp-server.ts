@@ -39,6 +39,7 @@ import type { JournalEntry } from "../../src/domain/journal.ts";
 import { ClosureService } from "../../src/service/closure-service.ts";
 import { ProvenanceService } from "../../src/service/provenance-service.ts";
 import { discoverRepository } from "../../src/domain/repository-discovery.ts";
+import { attachMutationFeedback } from "../../src/presentation/operation-feedback.ts";
 import { openHandles } from "./runtime.ts";
 
 export const SUBSTRATE_SERVER_NAME = "substrate";
@@ -75,7 +76,7 @@ const dbPathSchema = z.string().optional();
 // A mutation additionally refuses a ref from another Project (the read-only
 // tools may inspect across Projects by explicit ref, a write may not).
 function textPayload(value: unknown): { content: Array<{ type: "text"; text: string }> } {
-  return { content: [{ type: "text", text: JSON.stringify(value) }] };
+  return { content: [{ type: "text", text: JSON.stringify(attachMutationFeedback(value)) }] };
 }
 
 function resolveProjectId(svc: IssueService, explicit?: string): string {
