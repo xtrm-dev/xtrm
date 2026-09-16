@@ -2209,6 +2209,19 @@ function runImport(
     { unstructured: 0, sample: [] },
     { unstructured: unstructuredSections, sample: unstructuredSample },
   );
+  // (8) timestamp monotonicity (XTRM-406): source timelines are preserved, but
+  // a contradictory source record must never be stored as-is. Any stored issue
+  // whose updated_at precedes its created_at, or any Closure preceding its
+  // issue's creation, fails this check.
+  const badOrderIssues = (db.prepare("SELECT COUNT(*) AS n FROM issues WHERE updated_at < created_at").get() as { n: number }).n;
+  const badOrderClosures = (
+    db.prepare("SELECT COUNT(*) AS n FROM issue_closures c JOIN issues i ON i.id = c.issue_id WHERE c.closed_at < i.created_at").get() as { n: number }
+  ).n;
+  check(
+    "8-timestamp-monotonicity",
+    { issues: 0, closures: 0 },
+    { issues: badOrderIssues, closures: badOrderClosures },
+  );
   // (7) edge-row stability: no runaway growth (rerun delta must be 0 when
   // nothing was created; single-run delta bounded by applied rows).
   const rowDelta = edgeRowsAfter - edgeRowsBefore;
@@ -2245,6 +2258,23 @@ function runImport(
       assignees: result.sourceFields.assignees.length,
       startedAt: result.sourceFields.startedAt.length,
       issueTypesRemapped: result.sourceFields.issueTypesRemapped.length,
+    },
+    // XTRM-406 timestamp provenance. `createdAtFromSource` counts records whose
+    // stored created_at came from the export; `absent` counts records whose
+    // source carried no usable value (counted, never silently substituted).
+    timestampProvenance: {
+      createdAtFromSource: result.timestampProvenance.filter((p) => p.createdAt === "source").length,
+      createdAtAbsent: result.timestampProvenance.filter((p) => p.createdAt === "absent").length,
+      updatedAtFromSource: result.timestampProvenance.filter((p) => p.updatedAt === "source").length,
+      updatedAtAbsent: result.timestampProvenance.filter((p) => p.updatedAt === "absent").length,
+      closedAtFromSource: result.timestampProvenance.filter((p) => p.closedAt === "source").length,
+      closedAtAbsent: result.timestampProvenance.filter((p) => p.closedAt === "absent").length,
+      terminalFromClosedAt: result.timestampProvenance.filter((p) => p.terminalAtFrom === "closed_at").length,
+      terminalFromUpdatedAt: result.timestampProvenance.filter((p) => p.terminalAtFrom === "updated_at").length,
+      terminalFromCreatedAt: result.timestampProvenance.filter((p) => p.terminalAtFrom === "created_at").length,
+      terminalFromWallClock: result.timestampProvenance.filter((p) => p.terminalAtFrom === "wall-clock").length,
+      normalized: result.timestampProvenance.filter((p) => p.normalized.length > 0).length,
+      normalizedSample: result.timestampProvenance.filter((p) => p.normalized.length > 0).slice(0, 3),
     },
     edgeRowsBefore,
     edgeRowsAfter,

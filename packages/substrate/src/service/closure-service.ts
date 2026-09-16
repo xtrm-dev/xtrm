@@ -327,7 +327,7 @@ export class ClosureService {
         contractHash: closure.contractHash,
         source: "beads",
         legacyState: input.legacyState,
-      });
+      }, closedAt);
       this.insertAttempt(issueId, "close", "completed", closure.outcome, reason || null, null, closure.closureId, closedAt);
       return closure;
     });

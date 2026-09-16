@@ -108,6 +108,9 @@ export interface ImportResult {
     startedAt: string[];
     issueTypesRemapped: Array<{ beadsId: string; sourceType: string; kind: string }>;
   };
+  // XTRM-406: per-record timestamp provenance, so a flattened or contradictory
+  // source timeline is visible in the receipt rather than only in the data.
+  timestampProvenance: TimestampProvenance[];
 }
 
 const TBD = "TBD — imported from Beads; pending XTRM planning";
@@ -297,6 +300,35 @@ function mapStatus(status: unknown): "open" | "done" | "deferred" {
   return "open";
 }
 
+// RFC3339 (the shape `bd export` emits: 2026-07-24T19:17:33Z, fractional
+// seconds and numeric offsets tolerated). Anything else is ABSENT, never
+// silently replaced with import time: an unknown timestamp is reported in the
+// receipt, not invented (XTRM-406).
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/;
+
+export function parseSourceInstant(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (text === "" || !ISO_INSTANT.test(text)) return null;
+  const ms = Date.parse(text);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+// Per-record timestamp provenance. Bounded: exactly one entry per imported
+// record, so the receipt stays usable on a 2560-row board (XTRM-407).
+export interface TimestampProvenance {
+  beadsId: string;
+  createdAt: "source" | "absent";
+  updatedAt: "source" | "absent";
+  closedAt: "source" | "absent" | "not-terminal";
+  // Which source field supplied the terminal transition instant. `wall-clock`
+  // appears only when the source carries no usable timestamp at all.
+  terminalAtFrom: "closed_at" | "updated_at" | "created_at" | "wall-clock" | "not-terminal";
+  // Records whose source timestamps contradicted each other, with the
+  // normalisation applied so the stored row stays monotonic.
+  normalized: string[];
+}
+
 interface NormalizedEdge extends BeadsEdgeRecord {
   source: "inline" | "edges-file";
 }
@@ -431,7 +463,11 @@ export function importBeads(
     unrepresentableEdges: [],
     downgradedEdges: [],
     sourceFields: { labels: [], externalRefs: [], assignees: [], startedAt: [], issueTypesRemapped: [] },
+    timestampProvenance: [],
   };
+  // Timestamps survive creation only long enough for the lifecycle and closure
+  // passes (which run in later loops) to reuse them.
+  const terminalAt = new Map<string, number>();
   const beadToIssue = new Map<string, string>();
   const union = unionEdgesDetailed(records, edges);
   // A census-visible entry with no resolvable target is a parse-level failure,
@@ -478,7 +514,52 @@ export function importBeads(
     const authoredBy = str(r.created_by) ?? opts?.authoredBy ?? "beads-import";
     const closeReason = str(r.close_reason);
     const kind = mapKind(r.issue_type);
-    const created = svc.createIssue(
+    // -- XTRM-406: source timeline -------------------------------------------
+    const targetStatus = mapStatus(r.status);
+    const sourceCreatedAt = parseSourceInstant(r.created_at);
+    let sourceUpdatedAt = parseSourceInstant(r.updated_at);
+    let sourceClosedAt = parseSourceInstant(r.closed_at);
+    const normalized: string[] = [];
+    const iso = (n: number): string => new Date(n).toISOString();
+    // A contradictory source record is normalised and reported, not stored: an
+    // updated_at earlier than created_at, or a terminal transition earlier than
+    // the issue's own creation, is a defect rather than an acceptable quirk.
+    if (sourceCreatedAt !== null && sourceUpdatedAt !== null && sourceUpdatedAt < sourceCreatedAt) {
+      normalized.push(`updated_at ${iso(sourceUpdatedAt)} precedes created_at ${iso(sourceCreatedAt)}; clamped to created_at`);
+      sourceUpdatedAt = sourceCreatedAt;
+    }
+    if (sourceCreatedAt !== null && sourceClosedAt !== null && sourceClosedAt < sourceCreatedAt) {
+      normalized.push(`closed_at ${iso(sourceClosedAt)} precedes created_at ${iso(sourceCreatedAt)}; clamped to created_at`);
+      sourceClosedAt = sourceCreatedAt;
+    }
+    // The terminal instant must not fall back to import wall-clock while the
+    // source carries any usable time, or the Closure row and its lifecycle
+    // event would contradict the backdated issue row. Wall-clock is the last
+    // resort and is recorded as such.
+    let terminalAtFrom: TimestampProvenance["terminalAtFrom"] = targetStatus === "open" ? "not-terminal" : "wall-clock";
+    if (targetStatus !== "open") {
+      let terminalInstant: number | null = null;
+      if (sourceClosedAt !== null) {
+        terminalInstant = sourceClosedAt;
+        terminalAtFrom = "closed_at";
+      } else if (sourceUpdatedAt !== null) {
+        terminalInstant = sourceUpdatedAt;
+        terminalAtFrom = "updated_at";
+      } else if (sourceCreatedAt !== null) {
+        terminalInstant = sourceCreatedAt;
+        terminalAtFrom = "created_at";
+      }
+      if (terminalInstant !== null) terminalAt.set(beadsId, terminalInstant);
+    }
+    result.timestampProvenance.push({
+      beadsId,
+      createdAt: sourceCreatedAt === null ? "absent" : "source",
+      updatedAt: sourceUpdatedAt === null ? "absent" : "source",
+      closedAt: targetStatus === "open" ? "not-terminal" : sourceClosedAt === null ? "absent" : "source",
+      terminalAtFrom,
+      normalized,
+    });
+    const created = svc.createIssueFromImport(
       {
         projectId,
         title,
@@ -489,6 +570,7 @@ export function importBeads(
         authoredBy,
         aliases: [{ alias: beadsId, kind: "beads" }],
       },
+      { createdAt: sourceCreatedAt, updatedAt: sourceUpdatedAt },
       { idempotencyKey: `beads-import:${beadsId}` },
     );
     beadToIssue.set(beadsId, created.id);
@@ -521,6 +603,11 @@ export function importBeads(
       beadsAssignee: assignee,
       beadsStartedAt: startedAt,
       beadsIssueType: sourceType,
+      // XTRM-406 provenance: the source timeline as ingested, so the stored
+      // timestamps can be traced back to the export independently of the rows.
+      beadsCreatedAt: sourceCreatedAt === null ? null : new Date(sourceCreatedAt).toISOString(),
+      beadsUpdatedAt: sourceUpdatedAt === null ? null : new Date(sourceUpdatedAt).toISOString(),
+      beadsClosedAt: sourceClosedAt === null ? null : new Date(sourceClosedAt).toISOString(),
     });
     if (labels.length > 0) result.sourceFields.labels.push(beadsId);
     if (externalRef) result.sourceFields.externalRefs.push(beadsId);
@@ -640,7 +727,9 @@ export function importBeads(
     if (!createdThisRun.has(r.id)) {
       if (svc.getIssue(issueId).lifecycleState === target) continue;
     }
-    svc.setLifecycleState(issueId, target);
+    // Land the terminal transition on source time when the export carries it,
+    // so it agrees with the Closure row instead of contradicting it (XTRM-406).
+    svc.setLifecycleState(issueId, target, terminalAt.get(r.id));
   }
 
   // Edges second pass (both endpoints must exist). Verified live semantics:
@@ -769,6 +858,7 @@ export function importBeads(
         reason: str(r.close_reason) ?? "",
         actor: author,
         legacyState: str(r.status) ?? "closed",
+        closedAt: terminalAt.get(r.id),
       });
     }
   }
