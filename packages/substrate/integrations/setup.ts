@@ -424,15 +424,29 @@ function findOnPath(name: string, pathEnv = process.env["PATH"] ?? ""): string |
   return null;
 }
 
+function declaredSbBin(pkgRoot: string): string | null {
+  const pkg = readJson(join(pkgRoot, "package.json"));
+  const bin = (pkg.value as { bin?: unknown } | undefined)?.bin;
+  if (typeof bin === "string") return join(pkgRoot, bin);
+  const named = bin && typeof bin === "object" ? (bin as Record<string, unknown>)["sb"] : undefined;
+  return typeof named === "string" ? join(pkgRoot, named) : null;
+}
+
 export function checkSbEnrolled(pkgRoot: string = PKG_ROOT): Check {
   if (!existsSync(join(pkgRoot, "node_modules"))) {
     return { name: "sb-enrolled", ok: false, detail: "node_modules missing: run the `npm ci` plan step first" };
   }
   const found = findOnPath("sb");
   if (found === null) return { name: "sb-enrolled", ok: false, detail: "no `sb` on PATH: run the global-link plan step first" };
-  const expected = join(pkgRoot, "cli", "sb.ts");
+  // The expected target is the manifest-declared bin (package.json bin.sb),
+  // never a hardcoded path: the entry point moved to cli/sb-ux.ts and a
+  // hardcoded cli/sb.ts reported a correctly enrolled checkout as failure.
+  const expected = declaredSbBin(pkgRoot);
+  if (expected === null) {
+    return { name: "sb-enrolled", ok: false, detail: "package.json declares no bin.sb target" };
+  }
   if (!samePath(found, expected)) {
-    return { name: "sb-enrolled", ok: false, detail: "PATH `sb` resolves elsewhere, not to this checkout" };
+    return { name: "sb-enrolled", ok: false, detail: `PATH \`sb\` resolves elsewhere, not to this checkout (want ${expected})` };
   }
   const r = runCapture("sb", ["--version"]);
   return { name: "sb-enrolled", ok: r.ok, detail: r.ok ? r.out || "sb --version exits 0" : `sb --version failed: ${r.out}` };

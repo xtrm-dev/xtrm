@@ -10,9 +10,12 @@ import {
   feedbackForError,
   filterTreeWithAncestors,
   flattenIssueTree,
+  isKnownStatusFilter,
+  KNOWN_STATUS_FILTERS,
   renderFeedback,
   renderIssueList,
   renderIssueShow,
+  tokenizeBrowseKeys,
   type IssueTreeRow,
   type TerminalStyleOptions,
 } from "../src/presentation/terminal.ts";
@@ -86,6 +89,14 @@ function styleOptions(parsed: WrapperArgs, opts: UxOptions = {}): TerminalStyleO
   return { color: !disabled && (tty || force), width: Number.isFinite(widthValue) ? widthValue : 100 };
 }
 
+function humanOnlyFilters(parsed: WrapperArgs): string[] {
+  const used: string[] = [];
+  if (parsed.all) used.push("--all");
+  if (parsed.flat) used.push("--flat");
+  if (parsed.statuses.length > 0) used.push("--status");
+  if (parsed.search) used.push("--search");
+  return used;
+}
 function withJson(args: string[]): string[] { return args.includes("--json") ? args : ["--json", ...args]; }
 function parseEnvelope(result: CliResult): Envelope {
   const text = result.stdout.trim();
@@ -217,36 +228,48 @@ async function browse(parsed: WrapperArgs, style: TerminalStyleOptions, opts: Ux
     }
     const width = Math.min(style.width ?? 100, 120);
     const header = `Substrate · issues · ${mode}${query ? ` · /${query}` : ""}`;
-    const hint = searchMode ? `search: ${query}▌  Enter apply · Esc cancel` : "↑↓/jk move · Enter preview · +/- collapse/expand · / search · f filter · q quit";
+    const hint = searchMode ? `search: ${query}▌  Enter apply · Esc cancel` : "↑↓/jk move · Enter preview · +/- collapse/expand · / search · f filter · q/Ctrl-C quit";
     process.stdout.write(`${ESC}H${ESC}2J${header}\n${"─".repeat(width)}\n${list}\n\n${preview}\n${"─".repeat(width)}\n${hint}\n`);
   };
   process.stdin.setRawMode(true);
   process.stdin.resume();
-  process.stdout.write(`${ESC}?1049h${ESC}?25l`);
-  draw();
-  try {
-    await new Promise<void>((resolve) => {
-      const onData = (chunk: Buffer): void => {
-        const key = chunk.toString("utf8");
-        if (searchMode) {
-          if (key === "\r" || key === "\n" || key === "\u001b") searchMode = false;
-          else if (key === "\u007f") query = query.slice(0, -1);
-          else if (/^[\x20-\x7e]$/.test(key)) query += key;
-          selectedIndex = 0; draw(); return;
-        }
-        if (key === "q" || key === "\u001b" || key === "\u0003") { process.stdin.off("data", onData); resolve(); return; }
+  // Attach the listener before the first paint: input arriving between
+  // resume() and on() is emitted to no listener and dropped silently, which
+  // is exactly the window the board load occupies (~1s on a populated board).
+  const done = new Promise<void>((resolve) => {
+    const quit = (): void => { process.stdin.off("data", onData); resolve(); };
+    const onData = (chunk: Buffer): void => {
+      let redraw = false;
+      for (const key of tokenizeBrowseKeys(chunk.toString("utf8"))) {
+        // Ctrl-C outranks every mode: raw mode suppresses SIGINT, so this
+        // byte is the only chance to restore the screen.
+        if (key === "quit") { quit(); return; }
         const rows = currentRows();
-        if (key === "j" || key === "\u001b[B") selectedIndex = Math.min(Math.max(0, rows.length - 1), selectedIndex + 1);
-        else if (key === "k" || key === "\u001b[A") selectedIndex = Math.max(0, selectedIndex - 1);
-        else if (key === "\r" || key === "\n") expandedPreview = !expandedPreview;
+        if (searchMode) {
+          if (key === "enter" || key === "escape") searchMode = false;
+          else if (key === "backspace") query = query.slice(0, -1);
+          else if (/^[\x20-\x7e]$/.test(key)) query += key;
+          selectedIndex = 0; redraw = true; continue;
+        }
+        if (key === "escape" || key === "q") { quit(); return; }
+        if (key === "down" || key === "j") selectedIndex = Math.min(Math.max(0, rows.length - 1), selectedIndex + 1);
+        else if (key === "up" || key === "k") selectedIndex = Math.max(0, selectedIndex - 1);
+        else if (key === "enter") expandedPreview = !expandedPreview;
         else if (key === "/") { searchMode = true; query = ""; }
         else if (key === "f") { mode = mode === "active" ? "all" : mode === "all" ? "closed" : "active"; selectedIndex = 0; }
         else if (key === "-" && rows[selectedIndex]) collapsed.add(rows[selectedIndex]!.humanRef);
         else if (key === "+" && rows[selectedIndex]) collapsed.delete(rows[selectedIndex]!.humanRef);
-        draw();
-      };
-      process.stdin.on("data", onData);
-    });
+        else continue;
+        redraw = true;
+      }
+      if (redraw) draw();
+    };
+    process.stdin.on("data", onData);
+  });
+  process.stdout.write(`${ESC}?1049h${ESC}?25l`);
+  draw();
+  try {
+    await done;
   } finally {
     try { process.stdin.setRawMode(false); } catch { /* terminal already gone */ }
     process.stdin.pause();
@@ -264,7 +287,27 @@ export async function runUxCli(argv: string[], opts: UxOptions = {}): Promise<Cl
   }
   const style = styleOptions(parsed, opts);
   const command = commandOf(parsed.base);
-  if (parsed.base.includes("--json")) return runCli(parsed.base);
+  if (parsed.base.includes("--json")) {
+    // Fail closed instead of silently returning unfiltered data: the list
+    // filters are consumed by this wrapper, so the engine cannot apply them.
+    const humanOnly = humanOnlyFilters(parsed);
+    if (humanOnly.length > 0) {
+      return errorResult(
+        command || "issue.list",
+        `--json cannot apply ${humanOnly.join(", ")}: these are human-facing list filters (the JSON contract returns the unfiltered tree)`,
+        style,
+      );
+    }
+    return runCli(parsed.base);
+  }
+  const unknownStatus = parsed.statuses.find((s) => !isKnownStatusFilter(s));
+  if (unknownStatus !== undefined) {
+    return errorResult(
+      command || "issue.list",
+      `unknown --status value: ${unknownStatus} (want ${KNOWN_STATUS_FILTERS.join("|")})`,
+      style,
+    );
+  }
   if (parsed.base.includes("--help") || parsed.base[0] === "help") return uxHelp(runCli(parsed.base), parsed.base);
   if (parsed.base[0] === "issue" && parsed.base[1] === "browse") return browse(parsed, style, opts);
   if (command === "issue.list") return renderList(parsed, style);

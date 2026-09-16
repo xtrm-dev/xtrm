@@ -275,24 +275,83 @@ export function filterTreeWithAncestors(rows: IssueTreeRow[], requested: string[
   return rows.filter((_r, i) => keep.has(i)).map((r, i) => ({ ...r, contextOnly: !matches[rows.indexOf(r)] }));
 }
 
+function epicText(text: string, opts: TerminalStyleOptions): string {
+  return opts.color ? `${ESC}1;35m${text}${RESET}` : text;
+}
+
+function kindText(kind: string, opts: TerminalStyleOptions): string {
+  const upper = kind.toUpperCase();
+  if (!opts.color) return upper;
+  if (kind === "epic") return `${ESC}1;35m${upper}${RESET}`;
+  if (kind === "bug") return `${ESC}31m${upper}${RESET}`;
+  if (kind === "research" || kind === "decision") return `${ESC}36m${upper}${RESET}`;
+  return dim(upper, true);
+}
+
 export function renderIssueList(rows: IssueTreeRow[], opts: TerminalStyleOptions): string {
   if (rows.length === 0) return "(no issues)\n";
   const width = Math.max(48, opts.width ?? 100);
+  // One aligned column block: <indent><glyph> <locator>  <KIND>  <title>  <state>.
+  // The hierarchical locator is the row id: it carries parentage (XTRM-13.1),
+  // which a flat humanRef cannot, and it is a resolvable ref for every verb.
+  const idWidth = Math.max(8, ...rows.map((r) => r.locator.length));
+  const kindWidth = Math.max(4, ...rows.map((r) => r.kind.length));
   const lines = rows.map((row) => {
     const status = issueStatus(row);
-    const glyph = ["done", "archived"].includes(status) ? "✓" : status === "cancelled" ? "×" : status === "blocked" ? "!" : status === "in_progress" ? "●" : "○";
-    const indent = row.depth > 0 ? `${"  ".repeat(row.depth - 1)}↳ ` : "";
-    const left = `${indent}${glyph} ${row.humanRef}`;
+    const isEpic = row.kind === "epic";
+    const glyph = isEpic ? "◆"
+      : ["done", "archived"].includes(status) ? "✓"
+        : status === "cancelled" ? "×"
+          : status === "blocked" ? "!"
+            : status === "in_progress" ? "●" : "○";
+    const indent = "  ".repeat(row.depth);
+    const id = padRight(row.locator, idWidth);
     const state = row.contextOnly ? "context" : status;
-    const rightRaw = `${row.kind} · ${state}`;
-    const available = Math.max(8, width - stripAnsi(left).length - rightRaw.length - 4);
+    const kind = padRight(kindText(row.kind, opts), kindWidth);
+    const fixed = indent.length + 2 + idWidth + 2 + kindWidth + 2 + 2 + state.length;
+    const available = Math.max(8, width - fixed);
     const title = truncate(row.title, available);
-    let line = `${left}  ${title}${" ".repeat(Math.max(1, available - title.length + 1))}${formatState(state, opts.color)}`;
+    const head = `${indent}${glyph} ${isEpic ? epicText(id, opts) : id}`;
+    const titleCell = isEpic ? bold(title, opts.color) : title;
+    let line = `${head}  ${kind}  ${padRight(titleCell, available)}  ${formatState(state, opts.color)}`;
     if (row.contextOnly) line = dim(line, opts.color);
     if (row.selected) line = selected(padRight(stripAnsi(line), width), opts.color);
     return line;
   });
   return lines.join("\n") + "\n";
+}
+
+// Accepted --status values, mirroring statusMatches(): lifecycle states,
+// derived readiness/claim states, and the terminal aliases.
+export const KNOWN_STATUS_FILTERS = [
+  "open", "in_progress", "ready", "blocked", "deferred",
+  "done", "cancelled", "archived", "closed", "terminal", "all",
+] as const;
+
+export function isKnownStatusFilter(value: string): boolean {
+  return (KNOWN_STATUS_FILTERS as readonly string[]).includes(value.trim().toLowerCase());
+}
+
+// Split one stdin chunk into key events. The browser must apply every
+// keystroke in a chunk: fast typing, key repeat and paste deliver several
+// events per read, and comparing the whole chunk against one key silently
+// drops them. A lone ESC reports "escape"; an arrow sequence split across two
+// reads therefore reads as ESC, which is the behavior the browser had before
+// chunk tokenization.
+export function tokenizeBrowseKeys(chunk: string): string[] {
+  const keys: string[] = [];
+  for (let i = 0; i < chunk.length;) {
+    if (chunk.startsWith("\u001b[A", i)) { keys.push("up"); i += 3; continue; }
+    if (chunk.startsWith("\u001b[B", i)) { keys.push("down"); i += 3; continue; }
+    const ch = chunk[i]!;
+    if (ch === "\r" || ch === "\n") keys.push("enter");
+    else if (ch === "\u0003") keys.push("quit");
+    else if (ch === "\u007f") keys.push("backspace");
+    else if (ch === "\u001b") keys.push("escape");
+    else keys.push(ch);
+    i += 1;
+  }
+  return keys;
 }
 
 function issueRefFromArgs(args: string[]): string | null {
@@ -304,7 +363,7 @@ export function feedbackForCommand(command: string, args: string[], data: Record
   const ref = String(data.humanRef ?? data.locator ?? issueRefFromArgs(args) ?? data.issueId ?? "issue");
   switch (command) {
     case "issue.create":
-      return successFeedback("issue_created", `Created ${ref}${data.title ? ` · ${String(data.title)}` : ""}`);
+      return successFeedback("issue_created", `Created ${ref}${data.kind ? ` [${String(data.kind)}]` : ""}${data.title ? ` · ${String(data.title)}` : ""}`);
     case "issue.edit":
       return successFeedback("issue_updated", `Updated ${ref}`, data.revisionCreated ? "new revision created; readiness must be revalidated" : undefined);
     case "issue.note":
@@ -358,6 +417,10 @@ export function feedbackForError(command: string, message: string): OperationFee
   let hint: string | undefined;
   if (/not initialized|no repository binding|run ['`]?sb init/i.test(message)) hint = "sb init";
   else if (/unknown flag|usage:|required/i.test(message)) hint = `sb help ${command.replace(".", " ")}`;
+  else if (/unresolvable ref|unknown ref|no such issue/i.test(message)) hint = "sb issue list --all  (or --search <ref>)";
+  else if (/unknown issue verb|unknown group|unknown verb/i.test(message)) hint = "sb help";
+  else if (/unknown closure outcome/i.test(message)) hint = "sb help issue close";
+  else if (/must be an integer|must be a number/i.test(message)) hint = `sb help ${command.replace(".", " ")}`;
   else if (/claim|holder|activation/i.test(message) && command.startsWith("issue.")) hint = "sb issue show <ref>";
   return errorFeedback("operation_failed", `${command || "sb"} failed`, message, hint, false);
 }

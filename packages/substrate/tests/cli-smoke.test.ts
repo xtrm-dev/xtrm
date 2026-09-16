@@ -183,6 +183,21 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     assert.match(env.error, /unresolvable|unknown/i);
   });
 
+  it("a malformed --contract file names the file, not the path parsed as JSON", () => {
+    const { dir, dbPath } = setupDb();
+    const bad = join(dir, "contract-bad.json");
+    writeFileSync(bad, '{"problem": "P", "success": "\\x"}');
+    const res = runCli(["--db", dbPath, "--json", "issue", "create", "--project", "prj_demo", "--title", "Bad", "--kind", "task", "--contract", bad]);
+    assert.equal(res.code, 1);
+    const env = JSON.parse(res.stdout) as { ok: boolean; error: string };
+    assert.equal(env.ok, false);
+    assert.match(env.error, /contract-bad\.json: file is not valid JSON/);
+    assert.equal(/not valid JSON/.test(env.error) && env.error.includes('Unexpected token \'/\''), false, "the path must not be parsed as JSON");
+    const good = contractFile(dir, "contract-good.json", { problem: "P", success: "S" });
+    const ok = runCli(["--db", dbPath, "--json", "issue", "create", "--project", "prj_demo", "--title", "Good", "--kind", "task", "--contract", good]);
+    assert.equal(ok.code, 0, ok.stderr);
+  });
+
   it("rejects unknown flags instead of silently dropping intent (xtrm-7wc.5.4)", () => {
     const { dir, dbPath } = setupDb();
     const c = contractFile(dir, "c.json", { problem: "P", success: "S" });

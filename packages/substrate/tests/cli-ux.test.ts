@@ -6,12 +6,14 @@ import {
   feedbackForError,
   filterTreeWithAncestors,
   flattenIssueTree,
+  isKnownStatusFilter,
   renderFeedback,
   renderIssueList,
   renderIssueShow,
   renderMarkdown,
   statusMatches,
   stripAnsi,
+  tokenizeBrowseKeys,
 } from "../src/presentation/terminal.ts";
 
 const plain = { color: false, width: 88 };
@@ -80,11 +82,47 @@ test("derived status supports in_progress and blocked without changing lifecycle
   assert.equal(base.lifecycleState, "open");
 });
 
-test("plain issue list uses curved child indentation and no ANSI", () => {
+test("plain issue list shows the hierarchical locator, the kind, an epic marker and no ANSI", () => {
   const text = renderIssueList(filterTreeWithAncestors(flattenIssueTree(TREE), [], false), plain);
-  assert.match(text, /XTRM-10/);
-  assert.match(text, /↳ ○ XTRM-11/);
+  assert.match(text, /◆ XTRM-10/);
+  assert.match(text, /XTRM-10\.1/);
+  assert.match(text, /EPIC/);
+  assert.match(text, /TASK/);
+  assert.equal(text.includes("XTRM-11"), false, "the flat humanRef must not replace the hierarchical locator");
   assert.equal(text.includes("\u001b["), false);
+});
+
+test("browse key tokenizer applies every key of one chunk", () => {
+  assert.deepEqual(tokenizeBrowseKeys("jj"), ["j", "j"]);
+  assert.deepEqual(tokenizeBrowseKeys("\u001b[B\u001b[B"), ["down", "down"]);
+  assert.deepEqual(tokenizeBrowseKeys("\u001b[Bjq"), ["down", "j", "q"]);
+  assert.deepEqual(tokenizeBrowseKeys("\u001b[A"), ["up"]);
+  assert.deepEqual(tokenizeBrowseKeys("\u0003"), ["quit"]);
+  assert.deepEqual(tokenizeBrowseKeys("\u0003j"), ["quit", "j"]);
+  assert.deepEqual(tokenizeBrowseKeys("\r"), ["enter"]);
+  assert.deepEqual(tokenizeBrowseKeys("\u007f"), ["backspace"]);
+  assert.deepEqual(tokenizeBrowseKeys("\u001b"), ["escape"]);
+});
+
+test("status filters accept the documented set and reject a typo", () => {
+  for (const ok of ["open", "in_progress", "READY", "blocked", "deferred", "done", "cancelled", "archived", "closed", "terminal", "all"]) {
+    assert.equal(isKnownStatusFilter(ok), true, ok);
+  }
+  assert.equal(isKnownStatusFilter("nonsense"), false);
+});
+
+test("create confirmation names the ref, the kind and the title", () => {
+  const created = feedbackForCommand("issue.create", ["issue", "create"], { humanRef: "XTRM-99", kind: "task", title: "New work" });
+  assert.match(renderFeedback(created, plain), /^✓ Created XTRM-99 \[task\] · New work/);
+});
+
+test("unresolvable refs and unknown verbs carry a next action", () => {
+  const ref = renderFeedback(feedbackForError("issue.show", "unresolvable ref: NOPE-999"), plain);
+  assert.match(ref, /next: sb issue list --all/);
+  const verb = renderFeedback(feedbackForError("issue.frobnicate", "unknown issue verb: frobnicate"), plain);
+  assert.match(verb, /next: sb help/);
+  const outcome = renderFeedback(feedbackForError("issue.close", "unknown closure outcome: bogus"), plain);
+  assert.match(outcome, /next: sb help issue close/);
 });
 
 test("selected rich row uses tmux-style black-on-yellow mode style", () => {
@@ -142,4 +180,11 @@ test("errors state what failed and suggest a next action", () => {
   assert.match(text, /^✗ issue\.list failed/);
   assert.match(text, /repository is not initialized/);
   assert.match(text, /next: sb init/);
+});
+
+test("--json refuses human-only list filters instead of returning unfiltered data", async () => {
+  const { runUxCli } = await import("../cli/sb-ux.ts");
+  const res = await runUxCli(["--json", "issue", "list", "--status", "ready"]);
+  assert.equal(res.code, 1);
+  assert.match(res.stderr, /--json cannot apply --status/);
 });

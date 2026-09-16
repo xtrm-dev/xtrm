@@ -6,7 +6,7 @@
 import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   EXPECTED_PACKAGE_NAME,
@@ -201,16 +201,25 @@ describe("local install source (xtrm-6qu.13)", () => {
     assert.match(r.stderr, /--dir requires/);
   });
 
-  it("sb must be a PATH binary resolving to this checkout", () => {
+  it("sb must be a PATH binary resolving to the manifest-declared entry point", () => {
     const savedPath = process.env["PATH"] ?? "";
+    // Derived from the manifest so the expectation cannot drift from the
+    // declared bin again (the entry point moved cli/sb.ts -> cli/sb-ux.ts).
+    const manifest = JSON.parse(readFileSync(join(PKG_ROOT, "package.json"), "utf8")) as { bin: Record<string, string> };
+    const declared = join(PKG_ROOT, manifest.bin["sb"]!);
+    assert.equal(declared, join(PKG_ROOT, "cli", "sb-ux.ts"));
     const goodBin = scratch("sb-goodbin.");
-    symlinkSync(join(PKG_ROOT, "cli", "sb.ts"), join(goodBin, "sb"));
+    symlinkSync(declared, join(goodBin, "sb"));
+    const legacyBin = scratch("sb-legacybin.");
+    symlinkSync(join(PKG_ROOT, "cli", "sb.ts"), join(legacyBin, "sb"));
     const foreignBin = scratch("sb-foreignbin.");
     symlinkSync("/bin/true", join(foreignBin, "sb"));
     const emptyBin = scratch("sb-emptybin.");
     try {
       process.env["PATH"] = `${goodBin}:${savedPath}`;
-      assert.equal(checkSbEnrolled(PKG_ROOT).ok, true, "sb linked to the checkout must enroll");
+      assert.equal(checkSbEnrolled(PKG_ROOT).ok, true, "sb linked to the declared bin must enroll");
+      process.env["PATH"] = `${legacyBin}:${savedPath}`;
+      assert.equal(checkSbEnrolled(PKG_ROOT).ok, false, "the pre-redirect cli/sb.ts must not satisfy the declared bin");
       process.env["PATH"] = `${foreignBin}:${savedPath}`;
       const foreign = checkSbEnrolled(PKG_ROOT);
       assert.equal(foreign.ok, false, "sb resolving elsewhere must not enroll");
@@ -264,6 +273,32 @@ describe("local install source (xtrm-6qu.13)", () => {
     );
     const c = checkClaudePluginEnrolled(PKG_ROOT, home);
     assert.equal(c.ok, false, "substrate from another marketplace must not satisfy the exact spec");
+  });
+
+  it("sb-enrolled follows the manifest-declared bin target, not a hardcoded path", () => {
+    const root = scratch("sb-enrolled-bin.");
+    mkdirSync(join(root, "node_modules"), { recursive: true });
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: EXPECTED_PACKAGE_NAME, bin: { sb: "cli/sb-ux.ts" } }));
+    mkdirSync(join(root, "cli"), { recursive: true });
+    mkdirSync(join(root, "bin"), { recursive: true });
+    const ux = join(root, "cli", "sb-ux.ts");
+    const legacy = join(root, "cli", "sb.ts");
+    writeFileSync(ux, "#!/bin/sh\necho 0.0.0\n");
+    writeFileSync(legacy, "#!/bin/sh\necho 0.0.0\n");
+    chmodSync(ux, 0o755);
+    chmodSync(legacy, 0o755);
+    const link = join(root, "bin", "sb");
+    symlinkSync(ux, link);
+    const savedPath = process.env["PATH"];
+    process.env["PATH"] = join(root, "bin");
+    try {
+      assert.equal(checkSbEnrolled(root).ok, true, "the manifest-declared bin target must enroll");
+      rmSync(link);
+      symlinkSync(legacy, link);
+      assert.equal(checkSbEnrolled(root).ok, false, "a different PATH target must not enroll");
+    } finally {
+      process.env["PATH"] = savedPath;
+    }
   });
 
   it("Beads hook residue in settings fails the absence check", () => {
