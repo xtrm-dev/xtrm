@@ -1,6 +1,6 @@
 // One query layer for all adapters (§9.2): no module-singleton caches.
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { useAdapters, type Repo, type SubstrateProject } from "../adapters/index.tsx";
+import { useAdapters, type PullListState, type Repo, type SubstrateProject } from "../adapters/index.tsx";
 
 const LIVE_MS = 10_000;
 
@@ -19,6 +19,27 @@ export function useEvents(repo: string, follow = false) {
   return useQuery({
     queryKey: ["github", "events", repo],
     queryFn: () => github.events(repo, 200),
+    staleTime: 30_000,
+    refetchInterval: follow ? LIVE_MS : false,
+  });
+}
+
+export function usePulls(repo: string, state: PullListState = "open", follow = false) {
+  const { github } = useAdapters();
+  return useQuery({
+    queryKey: ["github", "pulls", repo, state],
+    queryFn: () => github.listPulls(repo, state),
+    staleTime: 30_000,
+    refetchInterval: follow ? LIVE_MS : false,
+  });
+}
+
+export function usePull(repo: string, number: number | null, follow = false) {
+  const { github } = useAdapters();
+  return useQuery({
+    queryKey: ["github", "pull", repo, number],
+    queryFn: () => github.getPull(repo, number!),
+    enabled: number !== null,
     staleTime: 30_000,
     refetchInterval: follow ? LIVE_MS : false,
   });

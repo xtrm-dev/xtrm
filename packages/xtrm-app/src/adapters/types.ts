@@ -42,11 +42,60 @@ export interface RepoEvent {
   createdAt: string;
 }
 
+export type PullState = "open" | "merged" | "closed";
+export type PullListState = "open" | "closed" | "all";
+export type CheckState = "passing" | "failing" | "pending" | "none";
+export type ReviewState = "approved" | "changes_requested" | "commented" | "pending" | "none";
+
+export interface PullRequestSummary {
+  number: number;
+  title: string;
+  author: string;
+  headBranch: string;
+  baseBranch: string;
+  state: PullState;
+  draft: boolean;
+  checks: CheckState;
+  review: ReviewState;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  comments: number;
+  updatedAt: string;
+  createdAt: string;
+  url: string;
+  body: string | null;
+}
+
+export interface PullRequestReview {
+  id: string;
+  author: string;
+  state: ReviewState;
+  submittedAt: string | null;
+}
+
+export interface PullFileSummary {
+  filename: string;
+  additions: number;
+  deletions: number;
+  status: string;
+}
+
+export interface PullRequestDetail extends PullRequestSummary {
+  mergeable: boolean | null;
+  mergeableState: string | null;
+  commits: number;
+  reviews: PullRequestReview[];
+  files: PullFileSummary[];
+}
+
 export interface GithubAdapter {
   readonly source: DataSource;
   listRepos(): Promise<Repo[]>;
   repoStats(): Promise<RepoStats[]>;
   events(repo: string, limit?: number): Promise<RepoEvent[]>;
+  listPulls(repo: string, state?: PullListState): Promise<PullRequestSummary[]>;
+  getPull(repo: string, number: number): Promise<PullRequestDetail>;
 }
 
 // --- substrate ------------------------------------------------------------

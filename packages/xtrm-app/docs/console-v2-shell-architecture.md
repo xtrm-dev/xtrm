@@ -557,3 +557,11 @@ The list joins three typed reads without per-issue calls: `issue list` (hierarch
 ### 16.5 Drawer parity with Console v1
 
 Console v1's issue drawer tabs were Overview, Lineage, Activity, Evidence, GitHub, Memories, Followups. Console v2 now covers Overview (contract + details), Lineage (parent, blockers, children), Activity (journal), and Provenance (attestation, claims, bindings, receipts, commits, PRs). Not yet covered: specialist run activity/evidence, GitHub evidence references, project memories, and discovered-from/relates-to followups.
+
+### 16.6 Pull requests surface and PR drawer (XTRM-396)
+
+- **Route** — `/rep/:owner/:repo/code/pulls` is live (`PullsSurface`); the `pulls` destination is no longer deferred in `destinations.ts`.
+- **Reads** — `GithubAdapter.listPulls` / `getPull` behind the Console v1 backend (XTRM-395 step 1: no auth changes, no direct `api.github.com` calls). List/detail ride the backend poller cache; checks, mergeability, and files are passthrough endpoints with the existing TTL shape (`GET /api/github/repos/:owner/:repo/pulls`, `…/pulls/:n`, `…/pulls/:n/checks`, `…/pulls/:n/files`). Detail degrades to checks `none` / empty files when the newer endpoints are absent.
+- **List** — Open / Merged / Closed views, text filter (title, author, branch, number), sort (updated, created, comments). Rows show author, branch, checks status, review state, updated time, and linked Substrate issue chips (keys mined from title/branch/body; `UTF-8` excluded).
+- **Drawer** — `DrawerRef` gains kind `pr` with ref `owner/repo#N`, URL-restorable as `?inspect=pr:owner/repo%23N`. `PullPanel` shows overview (author, branch, checks, review, mergeability, change totals), linked Substrate issues, description, reviews, files-changed summary (first 30 rows; full diff stays on GitHub per non-goals), and GitHub links. Drawer-first: no PR modal or split pane.
+- **References** — `ContextReference` gains `{ kind: "pr", ref: "owner/repo#N" }`, serialized `@pr:owner/repo#N`. The remark plugin links explicit `@pr:` refs (code spans and existing links untouched) and `ReferenceChip` renders PR chips that inspect the PR drawer. Substrate provenance PR strings (canonical refs, GitHub PR URLs, bare `#N`) resolve to the same chips, which the Provenance tab renders in place of the former comma-joined string.

@@ -7,6 +7,7 @@ import { AppShell } from "../shell/AppShell.tsx";
 import { DEFAULT_REPO } from "../shell/context.tsx";
 import { validateDrawerSearch } from "../shell/layout.ts";
 import { ActivitySurface } from "../surfaces/ActivitySurface.tsx";
+import { PullsSurface } from "../github/PullsSurface.tsx";
 import { ProgramSurface } from "../surfaces/ProgramSurface.tsx";
 import { DeferredSurface, RepositoriesSurface } from "../surfaces/other.tsx";
 import { MODES, REPO_SECTIONS } from "./destinations.ts";
@@ -58,6 +59,7 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     createRoute({ getParentRoute: () => repoRoute, path: "/work/issues", component: IssuesSurface }),
     createRoute({ getParentRoute: () => repoRoute, path: "/work/issues/$issueRef", component: IssuePage }),
     createRoute({ getParentRoute: () => repoRoute, path: "/code/activity", component: ActivitySurface }),
+    createRoute({ getParentRoute: () => repoRoute, path: "/code/pulls", component: PullsSurface }),
     createRoute({ getParentRoute: () => repoRoute, path: "/governance/program", component: () => <ProgramSurface repoScoped /> }),
     ...REPO_SECTIONS.flatMap((s) => s.items)
       .filter((i) => i.deferred)

@@ -127,7 +127,17 @@ export function createFixtureSubstrate(): SubstrateAdapter {
         blockers: s.blockedBy.map((b) => get(b).summary).map((b) => ({ id: b.id, ref: b.ref, locator: b.locator, title: b.title, lifecycle: b.lifecycle, kind: b.kind })),
         release: children.length ? { childrenDone: children.filter((c) => c.lifecycle === "done").length, childrenTotal: children.length } : null,
         journal: [...r.journal].sort((a, b) => b.sequence - a.sequence),
-        provenance: { attestation: null, claims: 0, bindings: 0, receipts: 0, commits: [], prs: [] },
+        provenance:
+          s.ref === "XTRM-301"
+            ? {
+                attestation: null,
+                claims: 1,
+                bindings: 1,
+                receipts: 1,
+                commits: ["abc1234567890def"],
+                prs: ["xtrm-dev/xtrm#212", "https://github.com/xtrm-dev/xtrm/pull/211"],
+              }
+            : { attestation: null, claims: 0, bindings: 0, receipts: 0, commits: [], prs: [] },
       };
       return structuredClone(detail);
     },

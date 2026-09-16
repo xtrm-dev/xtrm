@@ -21,13 +21,17 @@ import {
   scrutinyOptions,
   IssueKey,
 } from "./meta.tsx";
-import { ReferenceActionsProvider, ReferenceChip } from "../refs/references.tsx";
+import { ReferenceActionsProvider, ReferenceChip, type ContextReference } from "../refs/references.tsx";
+import { parseProvenancePr } from "../github/pr.ts";
+import { useShell } from "../shell/context.tsx";
 
 type Variant = "page" | "panel";
 
 interface Nav {
   /** Inspect a related issue (drawer traversal or page navigation, decided by the host). */
   onOpenIssue: (ref: string) => void;
+  /** Inspect a related pull request in the drawer (drawer-first: no PR page). */
+  onOpenPull: (ref: string) => void;
 }
 
 export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetail; canWrite: boolean; variant: Variant; nav: Nav }) {
@@ -98,7 +102,7 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
     );
 
   return (
-    <ReferenceActionsProvider open={(r) => nav.onOpenIssue(r.ref)}>
+    <ReferenceActionsProvider open={(r: ContextReference) => (r.kind === "pr" ? nav.onOpenPull(r.ref) : nav.onOpenIssue(r.ref))}>
       {body}
     </ReferenceActionsProvider>
   );
@@ -407,6 +411,8 @@ function LineageTab({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
 
 function ProvenanceTab({ issue }: { issue: IssueDetail }) {
   const p = issue.provenance;
+  const { repo } = useShell();
+  const prRefs = p.prs.map((raw) => ({ raw, ref: parseProvenancePr(raw, repo.fullName) }));
   return (
     <div className="flex flex-col gap-1">
       <Detail label="Attestation">{p.attestation ? `${p.attestation.outcome} · ${p.attestation.policy} · ${p.attestation.attestedBy}` : <span className="text-ink-faint">None</span>}</Detail>
@@ -414,7 +420,17 @@ function ProvenanceTab({ issue }: { issue: IssueDetail }) {
       <Detail label="Bindings">{p.bindings}</Detail>
       <Detail label="Receipts">{p.receipts}</Detail>
       <Detail label="Commits">{p.commits.length ? <span className="font-mono text-xs">{p.commits.map((s) => s.slice(0, 10)).join(", ")}</span> : <span className="text-ink-faint">None</span>}</Detail>
-      <Detail label="Pull requests">{p.prs.length ? p.prs.join(", ") : <span className="text-ink-faint">None</span>}</Detail>
+      <Detail label="Pull requests">
+        {prRefs.length ? (
+          <span className="flex flex-wrap items-center gap-0.5">
+            {prRefs.map(({ raw, ref }) =>
+              ref ? <ReferenceChip key={raw} reference={ref} /> : <span key={raw} className="font-mono text-xs text-ink-muted">{raw}</span>,
+            )}
+          </span>
+        ) : (
+          <span className="text-ink-faint">None</span>
+        )}
+      </Detail>
     </div>
   );
 }

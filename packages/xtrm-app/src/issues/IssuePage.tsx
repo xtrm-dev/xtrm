@@ -48,7 +48,7 @@ export function IssuePage() {
         ) : q.isError ? (
           <ErrorState title={`Could not read ${issueRef}`} error={q.error} />
         ) : (
-          <IssueView issue={q.data} canWrite={canWrite} variant="page" nav={{ onOpenIssue: (ref) => void navigate({ to: `${listHref}/${ref}` } as never) }} />
+          <IssueView issue={q.data} canWrite={canWrite} variant="page" nav={{ onOpenIssue: (ref) => void navigate({ to: `${listHref}/${ref}` } as never), onOpenPull: (ref) => inspect({ kind: "pr", ref }) }} />
         )}
       </div>
     </section>

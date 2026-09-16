@@ -10,6 +10,9 @@ describe("context references", () => {
     expect(formatReference({ kind: "issue", ref: "XTRM-3" })).toBe("@issue:XTRM-3");
     expect(parseReference("@issue:XTRM-252.13.1")).toEqual({ kind: "issue", ref: "XTRM-252.13.1" });
     expect(parseReference("XTRM-3")).toBeNull();
+    expect(formatReference({ kind: "pr", ref: "xtrm-dev/xtrm#206" })).toBe("@pr:xtrm-dev/xtrm#206");
+    expect(parseReference("@pr:xtrm-dev/xtrm#206")).toEqual({ kind: "pr", ref: "xtrm-dev/xtrm#206" });
+    expect(parseReference("@pr:not-a-pr")).toBeNull();
   });
 
   it("links explicit and bare issue keys inside text", () => {
@@ -18,6 +21,13 @@ describe("context references", () => {
     expect(para.map((n) => n.type)).toEqual(["text", "link", "text", "link", "text"]);
     expect(para[1]!.url).toBe("xtrm-ref:issue:XTRM-3");
     expect(para[3]!.url).toBe("xtrm-ref:issue:XTRM-252.13.1");
+  });
+
+  it("links explicit PR references inside text", () => {
+    const t = run(tree([{ type: "text", value: "See @pr:xtrm-dev/xtrm#206 for context." }]));
+    const para = t.children![0]!.children!;
+    expect(para.map((n) => n.type)).toEqual(["text", "link", "text"]);
+    expect(para[1]!.url).toBe("xtrm-ref:pr:xtrm-dev/xtrm#206");
   });
 
   it("leaves inline code and existing links alone", () => {
