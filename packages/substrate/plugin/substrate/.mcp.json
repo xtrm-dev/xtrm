@@ -3,7 +3,7 @@
   "mcpServers": {
     "substrate": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/substrate-mcp.ts"]
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/substrate-mcp.mjs"]
     }
   }
 }

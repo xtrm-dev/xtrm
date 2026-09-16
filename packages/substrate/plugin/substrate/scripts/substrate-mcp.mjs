@@ -8,10 +8,12 @@
 // itself — substrate's own ESM graph supplies the single SDK build, which
 // keeps the CJS/ESM dual-instance hazard (crashed modern requests) dead.
 //
-// .ts is safe here: the server module gates its own direct execution on an
-// exact URL match (import.meta.url === pathToFileURL(process.argv[1]).href),
-// not on a filename suffix, so mounting it from this file does not
-// double-serve.
+// Plain JavaScript, like every other entry script here: the file contains no
+// TypeScript, and a .ts entry could not run from an installed copy, where Node
+// refuses to strip types under node_modules. The server module gates its own
+// direct execution on an exact URL match (import.meta.url ===
+// pathToFileURL(process.argv[1]).href) rather than a filename suffix, so
+// mounting it from this file does not double-serve.
 
 import { resolveSubstrate } from "./resolve-substrate.mjs";
 

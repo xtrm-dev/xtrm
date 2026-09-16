@@ -14,7 +14,7 @@
 // of this seam resolved @modelcontextprotocol/server/stdio itself, hit the CJS
 // condition (dist/stdio.cjs) while mcp-server.ts imports dist/stdio.mjs, and
 // produced two instances whose cross-checks failed at runtime. See
-// scripts/substrate-mcp.ts.
+// scripts/substrate-mcp.mjs.
 
 const REPO_RELATIVE = "../../../";
 

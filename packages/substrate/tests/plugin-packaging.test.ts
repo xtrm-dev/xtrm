@@ -79,7 +79,7 @@ describe("packaged plugin (xtrm-iip.1)", () => {
     const server = mcp.mcpServers["substrate"];
     assert.ok(server, "an mcpServers.substrate entry is required");
     assert.equal(server.command, "node");
-    assert.deepEqual(server.args, ["${CLAUDE_PLUGIN_ROOT}/scripts/substrate-mcp.ts"]);
+    assert.deepEqual(server.args, ["${CLAUDE_PLUGIN_ROOT}/scripts/substrate-mcp.mjs"]);
   });
 
   it("ships no repo-local database default", () => {
