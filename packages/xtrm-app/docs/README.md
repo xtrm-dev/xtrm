@@ -21,6 +21,7 @@ Portfolio tracker: Jira `ISSUE-140`. Repository-local executable work belongs in
 | `console-v2-audit-console-v1-preservation.md` | `Jaggerxtrm/console` @ `4b0d9f5` — preservation matrix, defect register, cutover hazards |
 | `console-v2-audit-console-program-graph-drawer.md` | `Jaggerxtrm/console` @ `4b0d9f5` — Beads materializer, drawer shells, Program, Graph, Observability |
 | `console-v2-audit-substrate-issues-contract.md` | `xtrm-dev/xtrm` @ `9263f91` — Substrate typed-service seam and read-API gaps (re-verified @ `fdf2951` in shell architecture §9.3) |
+| `console-v2-audit-github-data-and-auth.md` | Console v1 GitHub poller + current GitHub docs (2026-09-16) — data-path/auth decision (proxy stays owner; device-flow login, then GraphQL views) |
 
 Audit evidence is historical at its pinned revision. When it conflicts with a canonical document, the canonical document wins.
 
