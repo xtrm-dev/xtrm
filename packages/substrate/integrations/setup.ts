@@ -61,7 +61,7 @@ const REQUIRED_SCRIPTS = [
   "scripts/postcompact.mjs",
   "scripts/session-start.mjs",
   "scripts/session-precondition.mjs",
-  "scripts/substrate-mcp.ts",
+  "scripts/substrate-mcp.mjs",
   "scripts/edit-gate.mjs",
   "scripts/commit-check.mjs",
   "scripts/stop-gate.mjs",
@@ -246,7 +246,15 @@ export function resolveSubstrateDir(explicit?: string, env: Record<string, strin
     return { ok: false, error: `package identity mismatch at ${dir}: expected name "${EXPECTED_PACKAGE_NAME}", got ${pkg.ok ? JSON.stringify(name) : `unreadable (${pkg.error})`}` };
   }
   const missing = REQUIRED_LAYOUT.filter((rel) => !existsSync(join(dir, rel)));
-  if (missing.length > 0) return { ok: false, error: `incomplete substrate checkout at ${dir}: missing ${missing.join(", ")}` };
+  if (missing.length > 0) {
+    // An installed npm copy ships dist/ and no source tree, so it can never
+    // satisfy this contract; say so instead of only listing absent files.
+    const installed = existsSync(join(dir, "dist", "src", "index.js")) || existsSync(join(dir, "dist", "cli", "sb.js"));
+    const hint = installed
+      ? " (this looks like an installed copy: it ships dist/ rather than sources, and only a source checkout is a valid XTRM_SUBSTRATE_DIR)"
+      : "";
+    return { ok: false, error: `incomplete substrate checkout at ${dir}: missing ${missing.join(", ")}${hint}` };
+  }
   return { ok: true, dir };
 }
 

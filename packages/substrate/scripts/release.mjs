@@ -29,7 +29,7 @@
  *   node scripts/release.mjs --publish    pack, verify, then npm publish the tarball
  */
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -96,73 +96,103 @@ try {
   // 4. Pack the staging directory.
   const packed = run("npm", ["pack", "--pack-destination", stage], { cwd: stage });
   const built = join(stage, packed.split("\n").pop());
-  // The staging directory is temporary; --out keeps the packed artifact for
-  // inspection, archiving or a later publish.
+
+  // 5. Prove the artifact where it will actually live: a clean directory, an
+  //    installed copy, under both engines, including the MCP entry that
+  //    .mcp.json spawns. This runs BEFORE anything is copied out, so a failed
+  //    verification cannot leave a publishable tarball in --out.
+  if (VERIFY) {
+    const consumer = mkdtempSync(join(tmpdir(), "substrate-consumer-"));
+    const home = mkdtempSync(join(tmpdir(), "substrate-home-"));
+    try {
+      mkdirSync(join(home, ".xtrm"), { recursive: true });
+      const env = { ...process.env, HOME: home, SUBSTRATE_DB: join(home, ".xtrm", "state.db") };
+      delete env.XTRM_SUBSTRATE_DIR;
+      delete env.XTRM_SB_BIN;
+      run("git", ["init", "-q"], { cwd: consumer, env }); // `sb init` requires a repository
+      run("npm", ["install", "--no-audit", "--no-fund", built], { cwd: consumer, env });
+      const installed = join(consumer, "node_modules", "@jaggerxtrm", "substrate");
+      const pluginDir = join(installed, "plugin", "substrate");
+      const bin = join(consumer, "node_modules", ".bin", "sb");
+
+      const checks = [
+        ["node bin --version", () => run(process.execPath, [bin, "--version"], { cwd: consumer, env })],
+        ["node bin init", () => run(process.execPath, [bin, "init", "--json"], { cwd: consumer, env })],
+        [
+          "node library import",
+          () =>
+            run(process.execPath, ["-e", 'import("@jaggerxtrm/substrate").then(m=>console.log("exports:",Object.keys(m).length))'], {
+              cwd: consumer,
+              env,
+            }),
+        ],
+        [
+          "plugin seam resolves",
+          () =>
+            run(
+              process.execPath,
+              [
+                "-e",
+                `const { resolveSubstrate } = await import(${JSON.stringify(join(pluginDir, "scripts", "resolve-substrate.mjs"))}); const m = await resolveSubstrate("runtime.ts"); console.log("runtime exports:", Object.keys(m).length);`,
+              ],
+              { cwd: consumer, env },
+            ),
+        ],
+        [
+          // The gap that let a TypeScript MCP entry ship unnoticed: the seam
+          // check above never touched the file .mcp.json actually spawns.
+          "mcp entry spawns as JavaScript",
+          () => {
+            const declared = JSON.parse(readFileSync(join(pluginDir, ".mcp.json"), "utf8"));
+            const arg = String(declared.mcpServers.substrate.args[0]).replace("${CLAUDE_PLUGIN_ROOT}", pluginDir);
+            if (!arg.endsWith(".mjs") && !arg.endsWith(".js")) throw new Error(`.mcp.json must spawn a loadable JS entry, got ${arg}`);
+            run(process.execPath, ["--check", arg], { cwd: consumer, env });
+            return `ok (${arg.slice(arg.lastIndexOf("/") + 1)})`;
+          },
+        ],
+        [
+          "no TypeScript entry remains in the shipped plugin",
+          () => {
+            const stray = readdirSync(join(pluginDir, "scripts")).filter((f) => f.endsWith(".ts"));
+            if (stray.length > 0) throw new Error(`shipped plugin scripts still include TypeScript: ${stray.join(", ")}`);
+            return "all plugin entry scripts are loadable";
+          },
+        ],
+        ["bun bin --version", () => run("bun", [bin, "--version"], { cwd: consumer, env })],
+        [
+          "bun library import",
+          () =>
+            run("bun", ["-e", 'const m = await import("@jaggerxtrm/substrate"); console.log("exports:", Object.keys(m).length)'], {
+              cwd: consumer,
+              env,
+            }),
+        ],
+      ];
+      for (const [label, fn] of checks) {
+        process.stdout.write(`  ${label}: ${fn()}\n`);
+      }
+    } finally {
+      rmSync(consumer, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  }
+
+  // 6. Keep the artifact: verified first, copied out second.
   let tarball = built;
   if (OUT) {
     mkdirSync(OUT, { recursive: true });
     tarball = join(OUT, built.split("/").pop());
     cpSync(built, tarball);
   }
-  process.stdout.write(`tarball: ${tarball}\n`);
+  process.stdout.write(
+    tarball === built && !PUBLISH
+      ? `tarball: ${built} (temporary: the staging directory is removed on exit; pass --out DIR to keep it)\n`
+      : `tarball: ${tarball}\n`,
+  );
 
-  // 5. Prove the artifact where it will actually live: a clean directory, an
-  //    installed copy, under both engines.
-  if (VERIFY) {
-    const consumer = mkdtempSync(join(tmpdir(), "substrate-consumer-"));
-    const home = mkdtempSync(join(tmpdir(), "substrate-home-"));
-    mkdirSync(join(home, ".xtrm"), { recursive: true });
-    const env = { ...process.env, HOME: home, SUBSTRATE_DB: join(home, ".xtrm", "state.db") };
-    delete env.XTRM_SUBSTRATE_DIR;
-    delete env.XTRM_SB_BIN;
-    run("git", ["init", "-q"], { cwd: consumer, env }); // `sb init` requires a repository
-    run("npm", ["install", "--no-audit", "--no-fund", tarball], { cwd: consumer, env });
-    const bin = join(consumer, "node_modules", ".bin", "sb");
-
-    const checks = [
-      ["node bin --version", () => run(process.execPath, [bin, "--version"], { cwd: consumer, env })],
-      ["node bin init", () => run(process.execPath, [bin, "init", "--json"], { cwd: consumer, env })],
-      [
-        "node library import",
-        () =>
-          run(process.execPath, ["-e", 'import("@jaggerxtrm/substrate").then(m=>console.log("exports:",Object.keys(m).length))'], {
-            cwd: consumer,
-            env,
-          }),
-      ],
-      [
-        "plugin seam resolves",
-        () =>
-          run(
-            process.execPath,
-            [
-              "-e",
-              `const { resolveSubstrate } = await import(${JSON.stringify(
-                join(consumer, "node_modules", "@jaggerxtrm", "substrate", "plugin", "substrate", "scripts", "resolve-substrate.mjs"),
-              )}); const m = await resolveSubstrate("runtime.ts"); console.log("runtime exports:", Object.keys(m).length);`,
-            ],
-            { cwd: consumer, env },
-          ),
-      ],
-      ["bun bin --version", () => run("bun", [bin, "--version"], { cwd: consumer, env })],
-      [
-        "bun library import",
-        () =>
-          run("bun", ["-e", 'const m = await import("@jaggerxtrm/substrate"); console.log("exports:", Object.keys(m).length)'], {
-            cwd: consumer,
-            env,
-          }),
-      ],
-    ];
-    for (const [label, fn] of checks) {
-      process.stdout.write(`  ${label}: ${fn()}\n`);
-    }
-    rmSync(consumer, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
-  }
-
-  // 6. Publish the verified tarball, not a directory: publishing the working
-  //    tree would ship the TypeScript manifest again.
+  // 7. Publish the verified tarball, not a directory: publishing the working
+  //    tree would ship the TypeScript manifest again (prepublishOnly refuses
+  //    that, and this path is the one that works).
   if (PUBLISH) {
     process.stdout.write(run("npm", ["publish", tarball, "--access", "public", "--tag", "latest"]) + "\n");
     keep = true; // the tarball is the record of what was published
@@ -170,3 +200,4 @@ try {
 } finally {
   if (!keep) rmSync(stage, { recursive: true, force: true });
 }
+

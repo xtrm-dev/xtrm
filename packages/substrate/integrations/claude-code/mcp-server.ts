@@ -15,7 +15,7 @@
 //
 // Scope: transport/protocol layer only. Tool handlers are thin calls into
 // the existing typed service; E1 mounts this module at the contracted
-// plugin entry (scripts/substrate-mcp.ts); buildServer() is the reuse seam.
+// plugin entry (scripts/substrate-mcp.mjs); buildServer() is the reuse seam.
 //
 // M1 (XTRM-252.10): this module owns the final MCP registration set and the
 // normative tool descriptions (ADR §§62-66). Every description states what

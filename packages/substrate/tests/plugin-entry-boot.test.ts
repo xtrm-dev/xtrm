@@ -9,7 +9,7 @@ import { IssueService } from "../src/service/issue-service.ts";
 import { contract } from "./helpers.ts";
 
 // Acceptance xtrm-iip.1 (closeout E1), third proof: the relocated plugin
-// entry (scripts/substrate-mcp.ts) boots a live modern-only server over
+// entry (scripts/substrate-mcp.mjs) boots a live modern-only server over
 // real stdio. The resolve-substrate.mjs seam is driven through SUBSTRATE_HOME
 // (the recorded outside-checkout path); the DB is a tmp database.
 
@@ -44,8 +44,10 @@ describe("packaged plugin entry boots (xtrm-iip.1)", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("substrate-mcp.ts serves discover + issue_get over stdio", async () => {
-    const child = spawn("node", [join(PLUGIN_ROOT, "scripts", "substrate-mcp.ts")], {
+  it("substrate-mcp.mjs serves discover + issue_get over stdio", async () => {
+    // The shipped entry, spawned exactly as .mcp.json does: a .ts here would
+    // fail from an installed copy (XTRM-372.7).
+    const child = spawn("node", [join(PLUGIN_ROOT, "scripts", "substrate-mcp.mjs")], {
       env: { ...process.env, SUBSTRATE_HOME, SUBSTRATE_DB: dbPath },
       stdio: ["pipe", "pipe", "pipe"],
     });
