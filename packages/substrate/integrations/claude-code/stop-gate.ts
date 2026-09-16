@@ -232,7 +232,7 @@ function readStdin(): Promise<string> {
   });
 }
 
-const invokedAsMain = process.argv[1]?.endsWith("stop-gate.ts") ?? false;
+const invokedAsMain = (process.argv[1]?.endsWith("stop-gate.ts") || process.argv[1]?.endsWith("stop-gate.js")) ?? false;
 if (invokedAsMain) {
   armPipeDrain(); // XTRM-335: quiet guards below may exit immediately (proven zero-byte); every write path drains via exitCode.
   const raw = await readStdin();

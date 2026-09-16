@@ -33,8 +33,8 @@
 import { execFileSync } from "node:child_process";
 import { accessSync, constants, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
+import { packageRoot } from "../src/package-root.ts";
 import { armPipeDrain } from "./write-and-exit.ts";
 
 export interface Check {
@@ -43,8 +43,7 @@ export interface Check {
   detail?: string;
 }
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const PKG_ROOT = join(HERE, "..");
+const PKG_ROOT = packageRoot();
 const PLUGIN_DIR = join(PKG_ROOT, "plugin", "substrate");
 
 function readJson(path: string): { ok: boolean; value?: unknown; error?: string } {
@@ -571,7 +570,7 @@ export function fullCheck(opts: { pluginDir?: string; pkgRoot?: string; home?: s
   return { ok, claude, pi, naming };
 }
 
-const invokedAsMain = process.argv[1]?.endsWith("setup.ts") ?? false;
+const invokedAsMain = process.argv[1]?.endsWith("setup.ts") || process.argv[1]?.endsWith("setup.js") || false;
 if (invokedAsMain) {
   // XTRM-335: every exit below drains (exitCode + natural return). The usage
   // guards halt via else-branching, not forced exit, so even their short
