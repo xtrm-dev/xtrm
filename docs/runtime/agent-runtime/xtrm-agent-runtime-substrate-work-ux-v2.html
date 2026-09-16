@@ -1,0 +1,113 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>XTRM Agent Runtime + Substrate Work UX v2</title><style>:root{--fg:#101828;--muted:#667085;--line:#d9dee7;--soft:#f7f8fa;--blue:#2f5bea;--green:#147a55;--amber:#9a6700;--yellow:#f7c948}*{box-sizing:border-box}body{margin:0;background:#fff;color:var(--fg);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.48}main{max-width:1160px;margin:auto;padding:44px 28px 80px}h1,h2,h3{margin:0;letter-spacing:-.02em}h1{font-size:38px;line-height:1.08}h2{font-size:24px;margin-top:44px;padding-top:10px;border-top:1px solid var(--line)}h3{font-size:17px;margin-top:22px}p{margin:10px 0 0}.lede{font-size:18px;color:var(--muted);max-width:930px}.k{color:var(--blue);font-size:12px;font-weight:750;text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}.chip{border:1px solid var(--line);border-radius:999px;padding:6px 10px;background:#fbfcfd;font-size:13px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}.card{border:1px solid var(--line);border-radius:12px;padding:18px}.soft{background:#fbfcfd}.diagram,.terminal{margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:18px;background:#fbfcfd;overflow:auto}.terminal{background:#fff}pre{margin:0;font:13px/1.52 "SFMono-Regular",Consolas,monospace;color:#0f172a;white-space:pre}.rule{margin-top:16px;padding:13px 15px;border-left:3px solid var(--blue);background:#f8faff;color:#344054}.warn{border-left-color:var(--amber);background:#fffaf2}table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}th,td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{background:#fbfcfd;color:#344054}.yes{color:var(--green);font-weight:700}.focus{display:inline-block;background:var(--yellow);color:#111;padding:0 3px}code{font-family:"SFMono-Regular",Consolas,monospace;background:#f2f4f7;padding:1px 4px;border-radius:4px}.footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}@media(max-width:820px){main{padding:28px 18px}.grid{grid-template-columns:1fr}h1{font-size:31px}}</style></head><body><main><div class="k">XTRM architecture · Substrate PR #188 aligned</div><h1>XTRM Agent Runtime + Substrate Work UX v2</h1><p class="lede">Unified design for XTRM-aware agents, first-party inter-agent communication, background execution, Substrate Issue authority, issue-local task planning, and a consistent terminal interaction language across <code>sb</code>, <code>xt pi</code>, <code>xt claude</code>, TUI and GUI.</p><div class="chips"><span class="chip">Issue = durable authority</span><span class="chip">Task Plan = execution decomposition</span><span class="chip">xtrm-intercom</span><span class="chip">xtrm-background</span><span class="chip">global XTRM awareness</span><span class="chip">tmux-like UX</span></div><h2>1. Runtime model</h2><div class="diagram"><pre>      sb CLI          xt pi          xt claude        xt agent / GUI
+        │               │                │                  │
+        └───────────────┴──────────────┬─┴──────────────────┘
+                                      ▼
+                           XTRM AGENT PROFILE
+                    automatic system awareness
+                                      │
+          ┌───────────────────────────┼───────────────────────────┐
+          ▼                           ▼                           ▼
+   Substrate work              Runtime capability          Provider/runtime
+   authority                   guidance                     adapters
+   ├─ Issue                    ├─ xtrm-intercom            ├─ Pi AgentSession
+   ├─ claim                    ├─ Issue Task Plan          ├─ Claude native
+   ├─ revision                 ├─ python-kernel            ├─ Specialists
+   ├─ Journal                  ├─ xtrm-background          └─ Channels
+   └─ provenance               └─ knowledge/tools
+</pre></div><div class="rule">XTRM agents know the system by default. Skills deepen behavior; they are not required to explain that XTRM exists.</div><h2>2. Terminal design language</h2><div class="grid"><div class="card"><h3>From PR #188</h3><p>Dense terminal-native presentation, minimal chrome, keyboard-first navigation, tree-aware hierarchy, explicit operation feedback, TTY/plain/JSON separation and black-on-yellow focused selection.</p></div><div class="card soft"><h3>Applied globally</h3><p>The same semantic tokens and interaction grammar are reused by Issue browsers, task management, intercom rosters, background-job views and the future XTRM TUI.</p></div></div><div class="diagram"><pre>text.primary
+text.muted
+accent.reference
+focus.selected      black on yellow / reverse-video fallback
+status.success
+status.warning
+status.error
+status.info
+separator
+activity.running
+</pre></div><h2>3. Claimed Issue → Issue Task Plan</h2><p>Substrate remains the durable work authority. The useful <code>pi-tasks</code> model becomes an Issue-bound execution plan instead of a second task database.</p><div class="diagram"><pre>sb issue claim XTRM-341
+        │
+        ▼
+claim accepted
+        ├─ bind exact Issue revision
+        ├─ create/resume IssueTaskPlan
+        └─ expose task tools + guidance
+                 │
+                 ▼
+        agent decomposes work
+        #1 inspect
+        #2 implement
+        #3 integrate
+        #4 validate
+                 │
+                 ▼
+        persistent task strip above composer
+</pre></div><table><thead><tr><th>Object</th><th>Meaning</th><th>Authority</th></tr></thead><tbody><tr><td>Substrate Issue</td><td>What work is authorized.</td><td class="yes">Durable work authority</td></tr><tr><td>Issue Task Plan</td><td>How current execution decomposes the Issue.</td><td>Planning only</td></tr><tr><td>Task</td><td>Small local step with dependencies/status.</td><td>No independent scope authority</td></tr><tr><td>Child Issue</td><td>Independent durable work discovered during execution.</td><td class="yes">Own revision/readiness/claim</td></tr></tbody></table><div class="rule warn">If a local task needs independent ownership, a separate claim, a different work contract, cross-session scheduling or durable scope beyond the current Issue, promote it to a real child Issue.</div><h2>4. What XTRM borrows from pi-tasks</h2><table><thead><tr><th>Behavior</th><th>XTRM decision</th></tr></thead><tbody><tr><td>TaskCreate / TaskList / TaskGet / TaskUpdate model</td><td>Adopt against Substrate-backed TaskPlanService.</td></tr><tr><td>Persistent widget above editor</td><td>Adopt as task strip above composer.</td></tr><tr><td>pending / in-progress / completed + blocks/blockedBy</td><td>Adopt for Issue-local task DAG.</td></tr><tr><td>activeForm, elapsed/activity metadata, active-first sorting, collapsed completed work</td><td>Adopt as presentation behavior.</td></tr><tr><td>system reminders</td><td>Adapt: bounded, only when plan is missing/stale/neglected.</td></tr><tr><td>independent .pi/tasks store for claimed XTRM work</td><td>Replace with Substrate canonical state.</td></tr><tr><td>TaskExecute as workflow/subagent authority</td><td>Do not adopt; Specialists/Chains own governed delegation.</td></tr></tbody></table><h2>5. Task strip above prompt submission</h2><div class="terminal"><pre>WORK  XTRM-341 · Add issue-local execution plans                 2 / 5 done
+  ✓ #1 Audit claim + Journal model
+  ✓ #2 Define IssueTaskPlan contract
+  ◐ #3 Wiring Pi task strip                         4m12s · active
+  ○ #4 Add Claude projection                        after #3
+  ○ #5 Acceptance tests + docs
+────────────────────────────────────────────────────────────────────────────
+FRAMES  ◀ 16 Audit │ 17 Model │ ◆ 18 Implement                          ▶
+› Message agent…                                              ◈ sol high
+⎇ xtrm:task-plan · ◉ 61% · ^K tasks · ^E frames · ^B tree
+</pre></div><h3>Focused task manager</h3><div class="terminal"><pre>Tasks · XTRM-341                               2 done · 1 active · 2 open
+
+  ✓ #1  Audit claim + Journal model
+  ✓ #2  Define IssueTaskPlan contract
+  <span class="focus">◐ #3  Wiring Pi task strip                          4m12s</span>
+  ○ #4  Add Claude projection                         blocked by #3
+  ○ #5  Acceptance tests + docs
+
+──────────────────────────────────────────────────────────────────
+#3 · Wiring Pi task strip
+in progress · Issue revision 4
+
+Expose the Substrate-backed task projection above the composer.
+Do not introduce a second persistence authority.
+
+↑↓/jk move   Enter inspect   n new   e edit   d done   p promote   q/Esc close
+</pre></div><h2>6. Resume / revision model</h2><div class="diagram"><pre>Issue XTRM-341 rev 4
+  └─ TaskPlan current=#3
+
+Issue edited → rev 5
+  └─ TaskPlan becomes stale
+
+Agent must:
+  compare contract delta
+  update/add/cancel local tasks
+  reconcile plan with rev 5
+</pre></div><p>Task Plan survives claim renewal and controlled handoff. Resume reconstructs Issue, claim, current task, dependencies and relevant Journal/provenance without conversation memory.</p><h2>7. xtrm-intercom</h2><p>Adopt the mature working behavior of <code>nicobailon/pi-intercom</code> and <code>alonw0/pi-claude-link</code> behind one first-party capability: presence/roster, aliases, scoped routing, send/ask/reply, pending asks, message IDs and dedupe, mailbox semantics, receipts, cancellation, superseding, attachments, safe active-session injection, Claude registry/socket interoperability and Pi↔Claude round trips.</p><div class="rule">Interactive direct messaging can use the transport directly. Governed Chain communication still enters Channels. Intercom is not workflow authority.</div><h2>8. xtrm-background</h2><p>Borrow only the mature background process subset from <code>pi-background-tasks</code>: start, status, bounded logs, full-output reference, stop, rerun, completion events and optional host wake. Do not adopt Fusion, delegated-agent workflow or provider overrides.</p><div class="diagram"><pre>Task lifecycle       pending → in_progress → completed
+Background lifecycle queued → running → exited | failed | stopped
+
+A task may reference a background job.
+A process exit does not complete the task.
+</pre></div><h2>9. Global XTRM prompt profile</h2><div class="diagram"><pre>1. XTRM kernel — always present
+2. surface profile — xt pi | xt claude | TUI | GUI
+3. active capability guidance
+   xtrm-intercom / Task Plan / python / background / knowledge
+4. project SYSTEM / APPEND_SYSTEM / AGENTS context
+5. skills — deeper procedures
+6. governed activation overlay
+   Specialist / Issue / claim / grants / ResultContract / Channels
+</pre></div><h2>10. Python kernel</h2><div class="diagram"><pre>The Python kernel is persistent for this session.
+Prefer it for iterative structured analysis and calculations.
+Reuse variables, imports and functions.
+Keep visible output bounded.
+Persist workflow-relevant results as durable evidence.
+Kernel state is not durable work state.
+The kernel is not a sandbox.
+</pre></div><h2>11. End-state invariants</h2><div class="diagram"><pre>Substrate Issue says WHAT work is authorized.
+Issue Task Plan says HOW the current Issue is executed.
+Journal says WHAT HAS HAPPENED.
+Provenance says WHAT execution durably produced.
+
+A local task is not a hidden Issue.
+A completed task is not a completed Issue.
+A background process is not a task.
+An intercom message is not user authority.
+A tool existing is not a capability grant.
+The TUI renders state; it does not own state.
+
+XTRM agents know these rules by default.
+</pre></div><h2>12. Credits / provenance</h2><p>The durable attribution ledger is <code>ADOPTION-CREDITS.md</code> in this directory. It credits and scopes adoption from pi-intercom, pi-claude-link, pi-background-tasks, pi-tasks, Pi, tmux, GitHub TUIKit, Command Line Interface Guidelines and CLI Spec. Implementation work must preserve those credits and record whether behavior is reimplemented, code is adapted/copied under license, or only protocol compatibility is maintained.</p><div class="footer">Canonical text: xtrm-agent-runtime-design.md · Attribution: ADOPTION-CREDITS.md · This HTML is the persisted visual implementation map.</div></main></body></html>
