@@ -7,7 +7,15 @@
 // machine ID appears only in --json output).
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { BEADS_TBD_MARKER, expectedProblemHead, importBeads, unionEdges, type BeadsEdgeRecord, type BeadsIssueRecord } from "../src/compatibility/beads/import.ts";
+import {
+  BEADS_TBD_MARKER,
+  expectedProblemHead,
+  extractSectionsDetailed,
+  importBeads,
+  unionEdgesDetailed,
+  type BeadsEdgeRecord,
+  type BeadsIssueRecord,
+} from "../src/compatibility/beads/import.ts";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
@@ -2049,36 +2057,60 @@ function runImport(
   // CORE-76), and resolveRef prefers the ref parse. The verifier must inspect
   // the record that was actually imported, so it resolves by exact alias first.
   const importedIssueId = (beadsId: string): string => svc.issueIdForAlias(beadsId) ?? svc.resolveRef(beadsId).id;
-  // (0b) inline traceability: every union edge attempted (applied or listed).
-  const union = unionEdges(records, fileEdgeList);
-  const attempted =
+  // (0b) inline traceability, census anchored (XTRM-405): the census is derived
+  // from the RAW export shape (an entry counts when it carries a string `type`),
+  // never from the parsed union. Before this, every check reconciled the parsed
+  // union against lists derived from that same union, so a parse-blind export
+  // shrank both sides equally and still reported PASS.
+  const union = unionEdgesDetailed(records, fileEdgeList);
+  const censusEdges = inputs.inlineEdges + inputs.fileEdges;
+  const errorCount = result.edgeErrors.length + result.hierarchyErrors.length;
+  const accountedEdges =
     result.edgesApplied.length +
     result.hierarchyApplied.length +
     result.hierarchySuperseded.length +
     result.hierarchyRefused.length +
     result.externalRefs.length +
-    result.edgeErrors.length +
-    result.hierarchyErrors.length;
-  check("0b-inline-traceability", union.length, attempted);
+    errorCount +
+    result.unrepresentableEdges.length +
+    union.collapsed;
+  // Every census-visible entry must reach an applied edge, a declared
+  // refusal/external, a declared unrepresentable kind, or a collapsed
+  // duplicate. Entries that resolved to nothing are deliberately NOT accounted
+  // here: they fail (0c) instead.
+  check("0b-inline-traceability", censusEdges, accountedEdges);
+  // (0c) resolution: a census-visible entry whose target cannot be resolved is
+  // a parse-level failure. The check carries samples so it names the offending
+  // entries rather than only counting them.
+  check(
+    "0c-unreconciled-inline-entries",
+    { unresolved: 0, sample: [] },
+    { unresolved: result.unresolvedEntries.length, sample: result.unresolvedEntries.slice(0, 5) },
+  );
   // (1) exact ID-set reconciliation vs the export.
   const exportIds = [...new Set(records.filter((r) => r && typeof r.id === "string").map((r) => r.id))].sort();
   const receiptIds = [...new Set([...result.created, ...result.skippedPresent])].sort();
   check("1-id-set-equality", exportIds, receiptIds);
-  // (2) edge multiset reconciliation by (from,to,type) over Beads IDs.
-  const unionKeys = union
+  // (2) edge multiset reconciliation by (from,to,type) over Beads IDs, on two
+  // axes: key identity plus the census total, so the identity can no longer
+  // hold trivially over an empty parse.
+  const unionKeys = union.edges
     .map((e) => `${e.issue_id} ${e.depends_on_id} ${e.type}`)
     .sort();
   const appliedKeys = [
     ...result.edgesApplied.map((e) => {
-      const orig = union.find((u) => u.issue_id === e.from && u.depends_on_id === e.to) ?? union.find((u) => u.issue_id === e.to && u.depends_on_id === e.from);
+      const orig = union.edges.find((u) => u.issue_id === e.from && u.depends_on_id === e.to) ?? union.edges.find((u) => u.issue_id === e.to && u.depends_on_id === e.from);
       return orig ? `${orig.issue_id} ${orig.depends_on_id} ${orig.type}` : `unmapped ${e.from} ${e.to} ${e.kind}`;
     }),
     ...result.hierarchyApplied.map((h) => `${h.child} ${h.parent} parent-child`),
     ...result.hierarchySuperseded.map((h) => `${h.child} ${h.parent} parent-child`),
     ...result.hierarchyRefused.map((h) => `${h.child} ${h.parent} parent-child`),
   ].sort();
-  const errorCount = result.edgeErrors.length + result.hierarchyErrors.length;
-  check("2-edge-multiset", unionKeys.length, appliedKeys.length + errorCount + result.externalRefs.length);
+  check(
+    "2-edge-multiset",
+    { census: censusEdges, keys: unionKeys.length },
+    { census: accountedEdges, keys: appliedKeys.length + errorCount + result.externalRefs.length + result.unrepresentableEdges.length },
+  );
   // (3) hierarchy resolves: every applied parent-child visible via children.
   let hierarchyUnresolved = 0;
   for (const h of result.hierarchyApplied) {
@@ -2126,12 +2158,57 @@ function runImport(
       const problem = String((rev.contract as { problem?: unknown } | null)?.problem ?? "");
       const expected = expectedProblemHead(rec.description);
       notesSampled += 1;
-      if (!(problem.includes(expected) || problem.includes(BEADS_TBD_MARKER))) notesUnpreserved += 1;
+      // The filler marker is a legitimate expectation ONLY when the source
+      // genuinely carries no recognizable section. For a source that does, the
+      // marker is a symptom of section collapse, so it must fail here
+      // (XTRM-405: this disjunct used to make a total collapse pass by
+      // construction).
+      const preserved = expected === BEADS_TBD_MARKER ? problem.trim() !== "" : problem.includes(expected);
+      if (!preserved) notesUnpreserved += 1;
     } catch {
       notesUnpreserved += 1;
     }
   }
   check("6-notes-preserved-sample", { sampled: notesSampled, unpreserved: 0 }, { sampled: notesSampled, unpreserved: notesUnpreserved });
+  // (6b) structurable coverage (XTRM-405 success 1): for every created record
+  // whose source description carries a given contract section heading, the
+  // stored revision must carry that section, non-empty and free of the filler.
+  // Counted per (record, section) pair so a source that simply lacks SCOPE is
+  // not penalised. This is the receipt-level form of the section-structuring
+  // requirement, and it is what a sample of 5 could otherwise miss.
+  let unstructuredSections = 0;
+  const unstructuredSample: string[] = [];
+  for (const beadsId of result.created) {
+    const rec = byId.get(beadsId);
+    if (!rec) continue;
+    const recognized = new Set(extractSectionsDetailed(typeof rec.description === "string" ? rec.description : "").recognized);
+    const wanted: Array<["SCOPE" | "VALIDATION" | "OUTPUT", keyof { scope: unknown; validation: unknown; output: unknown }]> = [
+      ["SCOPE", "scope"],
+      ["VALIDATION", "validation"],
+      ["OUTPUT", "output"],
+    ];
+    for (const [section, field] of wanted) {
+      if (!recognized.has(section)) continue;
+      let bad = false;
+      try {
+        const id = importedIssueId(beadsId);
+        const rev = svc.getRevision(id, svc.getIssue(id).currentRevision);
+        const value = (rev.contract as Record<string, unknown> | null)?.[field];
+        bad = !Array.isArray(value) || value.length === 0 || JSON.stringify(value).includes(BEADS_TBD_MARKER);
+      } catch {
+        bad = true;
+      }
+      if (bad) {
+        unstructuredSections += 1;
+        if (unstructuredSample.length < 5) unstructuredSample.push(`${beadsId}:${section}`);
+      }
+    }
+  }
+  check(
+    "6b-structured-contract-coverage",
+    { unstructured: 0, sample: [] },
+    { unstructured: unstructuredSections, sample: unstructuredSample },
+  );
   // (7) edge-row stability: no runaway growth (rerun delta must be 0 when
   // nothing was created; single-run delta bounded by applied rows).
   const rowDelta = edgeRowsAfter - edgeRowsBefore;
@@ -2152,6 +2229,23 @@ function runImport(
     notesApplied: result.notesApplied.length,
     commentsApplied: result.commentsApplied.length,
     closeReasonCarried: result.closeReasonCarried.length,
+    // XTRM-405 fidelity counts (additive). `censusEdges` is the raw export
+    // shape; `accountedEdges` is the reconciled outcome. On a board with no
+    // unrepresentable or collapsed entries these are equal.
+    censusEdges,
+    accountedEdges,
+    collapsedEdges: union.collapsed,
+    unrepresentableEdges: result.unrepresentableEdges.length,
+    downgradedEdges: result.downgradedEdges.length,
+    unresolvedEntries: result.unresolvedEntries.length,
+    unmappedSections: result.unmappedSections.length,
+    sourceFieldsCaptured: {
+      labels: result.sourceFields.labels.length,
+      externalRefs: result.sourceFields.externalRefs.length,
+      assignees: result.sourceFields.assignees.length,
+      startedAt: result.sourceFields.startedAt.length,
+      issueTypesRemapped: result.sourceFields.issueTypesRemapped.length,
+    },
     edgeRowsBefore,
     edgeRowsAfter,
   };
