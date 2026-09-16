@@ -39,6 +39,7 @@ import type { JournalEntry } from "../../src/domain/journal.ts";
 import { ClosureService } from "../../src/service/closure-service.ts";
 import { ProvenanceService } from "../../src/service/provenance-service.ts";
 import { discoverRepository } from "../../src/domain/repository-discovery.ts";
+import { attachMutationFeedback } from "../../src/presentation/operation-feedback.ts";
 import { openHandles } from "./runtime.ts";
 
 export const SUBSTRATE_SERVER_NAME = "substrate";
@@ -75,7 +76,7 @@ const dbPathSchema = z.string().optional();
 // A mutation additionally refuses a ref from another Project (the read-only
 // tools may inspect across Projects by explicit ref, a write may not).
 function textPayload(value: unknown): { content: Array<{ type: "text"; text: string }> } {
-  return { content: [{ type: "text", text: JSON.stringify(value) }] };
+  return { content: [{ type: "text", text: JSON.stringify(attachMutationFeedback(value)) }] };
 }
 
 function resolveProjectId(svc: IssueService, explicit?: string): string {
@@ -121,10 +122,6 @@ function entryJson(e: JournalEntry): Record<string, unknown> {
   };
 }
 
-// Shared identity enrichment for journal writes: flat session/participant/
-// activation/run ids ride the row columns; the shared versioned envelope
-// (X1) carries host + participant + run + specialist facet. Nothing is
-// invented: absent identity stores an absent envelope (§98).
 function journalIdentity(args: {
   sessionId?: string;
   participantId?: string;
@@ -151,8 +148,6 @@ function journalIdentity(args: {
   };
 }
 
-// Journal kind glossary (ADR §64) shared by the journal-facing tools so the
-// model picks the right kind without guessing.
 const KIND_GLOSSARY =
   "Journal kinds: note (generic useful annotation), finding (material discovered fact), " +
   "decision (chosen course plus rationale), blocker (unresolved condition preventing progress), " +
@@ -168,8 +163,6 @@ interface ToolDef {
   handler: (args: Record<string, unknown>) => Promise<{ content: Array<{ type: "text"; text: string }> }>;
 }
 
-// Final registration set (M1): stable order, served verbatim as tools/list
-// for client and prompt-cache stability. E6 wake/event tools are out of scope.
 const TOOL_DEFS: ToolDef[] = [
   {
     name: "issue_get",
@@ -311,14 +304,7 @@ const TOOL_DEFS: ToolDef[] = [
       dbPath: dbPathSchema,
     }),
     handler: async ({ ref, title, priority, contract, ownership, contextRefs, scrutiny, expectedRevision, project, dbPath }) => {
-      if (
-        title === undefined &&
-        priority === undefined &&
-        contract === undefined &&
-        ownership === undefined &&
-        contextRefs === undefined &&
-        scrutiny === undefined
-      ) {
+      if (title === undefined && priority === undefined && contract === undefined && ownership === undefined && contextRefs === undefined && scrutiny === undefined) {
         throw new Error("nothing to update: pass title, priority, contract, ownership, contextRefs, or scrutiny");
       }
       const handles = openHandles(dbPath as string | undefined);
@@ -330,10 +316,7 @@ const TOOL_DEFS: ToolDef[] = [
         if (title !== undefined) id = handles.svc.setTitle(id, title as string).id;
         if (priority !== undefined) id = handles.svc.setPriority(id, priority as number).id;
         if (contract !== undefined || ownership !== undefined || contextRefs !== undefined) {
-          const base =
-            contract !== undefined
-              ? (contract as never)
-              : (handles.svc.getRevision(id, handles.svc.getIssue(id).currentRevision).contract as never);
+          const base = contract !== undefined ? (contract as never) : (handles.svc.getRevision(id, handles.svc.getIssue(id).currentRevision).contract as never);
           const { issue, created } = handles.svc.updateContract(id, base, "mcp", {
             expectedRevision: (expectedRevision as number | undefined) ?? undefined,
             ownership: ownership !== undefined ? ownership : undefined,
@@ -372,88 +355,50 @@ const TOOL_DEFS: ToolDef[] = [
       "blocker (unresolved condition preventing progress), milestone (meaningful progress boundary), " +
       "handoff (bounded continuation state), result (bounded participant outcome with a versioned payload).",
     schema: z.object({
-      ref: z.string().min(1),
-      kind: z.enum(["note", "finding", "decision", "blocker", "milestone", "handoff", "result"]),
-      summary: z.string().min(1),
-      result: z.unknown().optional(),
-      sessionId: z.string().optional(),
-      participantId: z.string().optional(),
-      activationId: z.string().optional(),
-      runId: z.string().optional(),
-      project: z.string().optional(),
-      dbPath: dbPathSchema,
+      ref: z.string().min(1), kind: z.enum(["note", "finding", "decision", "blocker", "milestone", "handoff", "result"]),
+      summary: z.string().min(1), result: z.unknown().optional(), sessionId: z.string().optional(), participantId: z.string().optional(),
+      activationId: z.string().optional(), runId: z.string().optional(), project: z.string().optional(), dbPath: dbPathSchema,
     }),
     handler: async ({ ref, kind, summary, result, sessionId, participantId, activationId, runId, project, dbPath }) => {
       if (!isJournalKind(kind)) throw new Error(`unknown journal kind: ${kind}`);
-      if (kind === "result" && result === undefined) {
-        throw new Error('journal kind "result" requires a bounded result payload (§29)');
-      }
-      if (kind !== "result" && result !== undefined) {
-        throw new Error(`journal kind "${kind}" does not carry a result payload`);
-      }
+      if (kind === "result" && result === undefined) throw new Error('journal kind "result" requires a bounded result payload (§29)');
+      if (kind !== "result" && result !== undefined) throw new Error(`journal kind "${kind}" does not carry a result payload`);
       const handles = openHandles(dbPath as string | undefined);
       try {
         const projectId = resolveProjectId(handles.svc, project as string | undefined);
         const issue = handles.svc.resolveRefInProject(ref as string, projectId);
         const entry = handles.journal.appendEntry(issue.id, {
           kind: kind as "note",
-          ...(journalIdentity({
-            sessionId: sessionId as string | undefined,
-            participantId: participantId as string | undefined,
-            activationId: activationId as string | undefined,
-            runId: runId as string | undefined,
-          })),
+          ...journalIdentity({ sessionId: sessionId as string | undefined, participantId: participantId as string | undefined, activationId: activationId as string | undefined, runId: runId as string | undefined }),
           semantic: { summary: (summary as string).slice(0, 2000) },
           result: result !== undefined ? (result as never) : undefined,
         });
         return textPayload({ entryId: entry.id, sequence: entry.sequence });
-      } finally {
-        handles.db.close();
-      }
+      } finally { handles.db.close(); }
     },
   },
   {
     name: "issue_close",
     description:
-      "Changes: writes one immutable Closure row (outcome, reason, actor, revision, contract hash, refs) and rests the " +
-      "lifecycle on done (cancelled only for the cancelled outcome). " +
+      "Changes: writes one immutable Closure row (outcome, reason, actor, revision, contract hash, refs) and rests the lifecycle on done (cancelled only for the cancelled outcome). " +
       "Does not change: history — Closure rows are never edited; a mistaken close reopens, it never rewrites. " +
       "Revision: the Issue revision never changes; the Closure pins the current revision and contract hash as evidence. " +
       "Readiness: terminal — dispatchability ends at close; after reopen the Issue must re-validate and re-attest. " +
-      "Use the Journal instead: for the settlement evidence itself — a meaningful close cites journal result refs and " +
-      "validation/receipt refs; a progress note or a contract edit must not be used in place of a result; the bounded result payload is required. " +
-      "Automatic context: the Closure records actor, execution envelope (session, participant, run, workspace), " +
-      "closed-at timestamp and provenance refs automatically; outcome must be one of " +
-      "completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned, and reason is required (it lives in the row, never only in git log).",
+      "Use the Journal instead: for the settlement evidence itself — a meaningful close cites journal result refs and validation/receipt refs; a progress note or a contract edit must not be used in place of a result; the bounded result payload is required. " +
+      "Automatic context: the Closure records actor, execution envelope (session, participant, run, workspace), closed-at timestamp and provenance refs automatically; outcome must be one of completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned, and reason is required (it lives in the row, never only in git log).",
     schema: z.object({
-      ref: z.string().min(1),
-      outcome: z.enum(CLOSURE_OUTCOMES),
-      reason: z.string().min(1),
-      actor: z.string().min(1),
-      validationRefs: z.array(z.string()).optional(),
-      journalResultRefs: z.array(z.string()).optional(),
-      receiptRefs: z.array(z.string()).optional(),
-      artifactRefs: z.array(z.string()).optional(),
-      sessionId: z.string().optional(),
-      participantId: z.string().optional(),
-      activationId: z.string().optional(),
-      runId: z.string().optional(),
-      project: z.string().optional(),
-      dbPath: dbPathSchema,
+      ref: z.string().min(1), outcome: z.enum(CLOSURE_OUTCOMES), reason: z.string().min(1), actor: z.string().min(1),
+      validationRefs: z.array(z.string()).optional(), journalResultRefs: z.array(z.string()).optional(), receiptRefs: z.array(z.string()).optional(), artifactRefs: z.array(z.string()).optional(),
+      sessionId: z.string().optional(), participantId: z.string().optional(), activationId: z.string().optional(), runId: z.string().optional(), project: z.string().optional(), dbPath: dbPathSchema,
     }),
-    handler: async ({
-      ref, outcome, reason, actor, validationRefs, journalResultRefs, receiptRefs, artifactRefs,
-      sessionId, participantId, activationId, runId, project, dbPath,
-    }) => {
+    handler: async ({ ref, outcome, reason, actor, validationRefs, journalResultRefs, receiptRefs, artifactRefs, sessionId, participantId, activationId, runId, project, dbPath }) => {
       const handles = openHandles(dbPath as string | undefined);
       try {
         const projectId = resolveProjectId(handles.svc, project as string | undefined);
         const issue = handles.svc.resolveRefInProject(ref as string, projectId);
         const closures = new ClosureService(handles.db, handles.svc);
         const closure = closures.closeIssue(issue.id, {
-          outcome: outcome as (typeof CLOSURE_OUTCOMES)[number],
-          reason: reason as string,
-          actor: actor as string,
+          outcome: outcome as (typeof CLOSURE_OUTCOMES)[number], reason: reason as string, actor: actor as string,
           executionContext: enrichExecutionContext({
             host: (sessionId as string | undefined) ? { type: "claude", sessionId: sessionId as string } : null,
             participantId: (participantId as string | undefined) ?? null,
@@ -465,16 +410,8 @@ const TOOL_DEFS: ToolDef[] = [
           receiptRefs: (receiptRefs as string[] | undefined) ?? undefined,
           artifactRefs: (artifactRefs as string[] | undefined) ?? undefined,
         });
-        return textPayload({
-          closureId: closure.closureId,
-          issueId: closure.issueId,
-          outcome: closure.outcome,
-          terminalState: closure.terminalState,
-          issueRevision: closure.issueRevision,
-        });
-      } finally {
-        handles.db.close();
-      }
+        return textPayload({ closureId: closure.closureId, issueId: closure.issueId, outcome: closure.outcome, terminalState: closure.terminalState, issueRevision: closure.issueRevision });
+      } finally { handles.db.close(); }
     },
   },
   {
@@ -484,64 +421,30 @@ const TOOL_DEFS: ToolDef[] = [
       "Does not change: no Issue field, no contract, no claim, no provenance row, and never the lifecycle state. " +
       "Revision: the Issue revision never changes; the entry pins the current revision for correlation only. " +
       "Readiness: never goes stale; journal entries carry continuity, never execution authority — only a contract edit invalidates readiness. " +
-      "Use the Journal instead: this IS the Journal — use it (not issue_update) for progress, findings, decisions, blockers, " +
-      "milestones, handoffs, results and checkpoints. " +
-      "Automatic context: the entry records issue revision, sequence, timestamp and the shared versioned execution envelope " +
-      "(actor, participant, session, host, run, workspace) automatically; checkpoint and compaction kinds require a mechanical row, " +
-      "kind result requires a bounded versioned result payload (never a plain note), and other kinds reject a result payload. " +
-      KIND_GLOSSARY,
+      "Use the Journal instead: this IS the Journal — use it (not issue_update) for progress, findings, decisions, blockers, milestones, handoffs, results and checkpoints. " +
+      "Automatic context: the entry records issue revision, sequence, timestamp and the shared versioned execution envelope (actor, participant, session, host, run, workspace) automatically; checkpoint and compaction kinds require a mechanical row, kind result requires a bounded versioned result payload (never a plain note), and other kinds reject a result payload. " + KIND_GLOSSARY,
     schema: z.object({
-      ref: z.string().min(1),
-      kind: z.enum(JOURNAL_KINDS),
-      summary: z.string().min(1).optional(),
-      mechanical: z.unknown().optional(),
-      semantic: z.unknown().optional(),
-      result: z.unknown().optional(),
-      refs: z.array(z.unknown()).optional(),
-      sessionId: z.string().optional(),
-      participantId: z.string().optional(),
-      activationId: z.string().optional(),
-      runId: z.string().optional(),
-      project: z.string().optional(),
-      dbPath: dbPathSchema,
+      ref: z.string().min(1), kind: z.enum(JOURNAL_KINDS), summary: z.string().min(1).optional(), mechanical: z.unknown().optional(), semantic: z.unknown().optional(), result: z.unknown().optional(), refs: z.array(z.unknown()).optional(),
+      sessionId: z.string().optional(), participantId: z.string().optional(), activationId: z.string().optional(), runId: z.string().optional(), project: z.string().optional(), dbPath: dbPathSchema,
     }),
-    handler: async ({
-      ref, kind, summary, mechanical, semantic, result, refs,
-      sessionId, participantId, activationId, runId, project, dbPath,
-    }) => {
+    handler: async ({ ref, kind, summary, mechanical, semantic, result, refs, sessionId, participantId, activationId, runId, project, dbPath }) => {
       if (!isJournalKind(kind)) throw new Error(`unknown journal kind: ${kind}`);
-      if ((kind === "checkpoint" || kind === "compaction") && mechanical === undefined) {
-        throw new Error(`journal kind "${kind}" requires a mechanical checkpoint (§20.4) — use journal_checkpoint for the collected default`);
-      }
-      if (kind !== "checkpoint" && kind !== "compaction" && summary === undefined && semantic === undefined) {
-        throw new Error(`journal kind "${kind}" requires a summary (or an explicit semantic payload)`);
-      }
+      if ((kind === "checkpoint" || kind === "compaction") && mechanical === undefined) throw new Error(`journal kind "${kind}" requires a mechanical checkpoint (§20.4) — use journal_checkpoint for the collected default`);
+      if (kind !== "checkpoint" && kind !== "compaction" && summary === undefined && semantic === undefined) throw new Error(`journal kind "${kind}" requires a summary (or an explicit semantic payload)`);
       const handles = openHandles(dbPath as string | undefined);
       try {
         const projectId = resolveProjectId(handles.svc, project as string | undefined);
         const issue = handles.svc.resolveRefInProject(ref as string, projectId);
         const entry = handles.journal.appendEntry(issue.id, {
           kind: kind as "note",
-          ...(journalIdentity({
-            sessionId: sessionId as string | undefined,
-            participantId: participantId as string | undefined,
-            activationId: activationId as string | undefined,
-            runId: runId as string | undefined,
-          })),
+          ...journalIdentity({ sessionId: sessionId as string | undefined, participantId: participantId as string | undefined, activationId: activationId as string | undefined, runId: runId as string | undefined }),
           mechanical: mechanical !== undefined ? (mechanical as never) : undefined,
-          semantic:
-            semantic !== undefined
-              ? (semantic as never)
-              : summary !== undefined
-                ? ({ summary: (summary as string).slice(0, 2000) } as never)
-                : undefined,
+          semantic: semantic !== undefined ? (semantic as never) : summary !== undefined ? ({ summary: (summary as string).slice(0, 2000) } as never) : undefined,
           result: result !== undefined ? (result as never) : undefined,
           refs: refs !== undefined ? (refs as never) : undefined,
         });
         return textPayload({ entryId: entry.id, sequence: entry.sequence });
-      } finally {
-        handles.db.close();
-      }
+      } finally { handles.db.close(); }
     },
   },
   {
@@ -551,54 +454,23 @@ const TOOL_DEFS: ToolDef[] = [
       "Does not change: no Issue field, no contract, no claim, no provenance row, and never the lifecycle state. " +
       "Revision: the Issue revision never changes; the mechanical row pins revision and contract hash for correlation only. " +
       "Readiness: never goes stale; checkpoints carry resumability, never execution authority. " +
-      "Use the Journal instead: this IS the Journal checkpoint path — checkpoint now so a later session resumes from " +
-      "mechanical state, and record decisions, progress notes and outcomes as separate entries rather than editing the " +
-      "contract; a progress note or a contract edit must not be used in place of a result — record outcomes as kind " +
-      "result entries. " +
-      "Automatic context: the mechanical row is collected automatically (revision, contract hash, claim, workspace, branch, " +
-      "commits where available) and the shared versioned execution envelope is attached automatically; " +
-      "an optional semantic summary enriches the entry afterwards without risking the committed mechanical state. " +
-      KIND_GLOSSARY,
+      "Use the Journal instead: this IS the Journal checkpoint path — checkpoint now so a later session resumes from mechanical state, and record decisions, progress notes and outcomes as separate entries rather than editing the contract; a progress note or a contract edit must not be used in place of a result — record outcomes as kind result entries. " +
+      "Automatic context: the mechanical row is collected automatically (revision, contract hash, claim, workspace, branch, commits where available) and the shared versioned execution envelope is attached automatically; an optional semantic summary enriches the entry afterwards without risking the committed mechanical state. " + KIND_GLOSSARY,
     schema: z.object({
-      ref: z.string().min(1),
-      summary: z.string().min(1).optional(),
-      workspace: z.string().optional(),
-      branch: z.string().optional(),
-      baseCommit: z.string().optional(),
-      headCommit: z.string().optional(),
-      sessionId: z.string().optional(),
-      participantId: z.string().optional(),
-      activationId: z.string().optional(),
-      runId: z.string().optional(),
-      project: z.string().optional(),
-      dbPath: dbPathSchema,
+      ref: z.string().min(1), summary: z.string().min(1).optional(), workspace: z.string().optional(), branch: z.string().optional(), baseCommit: z.string().optional(), headCommit: z.string().optional(),
+      sessionId: z.string().optional(), participantId: z.string().optional(), activationId: z.string().optional(), runId: z.string().optional(), project: z.string().optional(), dbPath: dbPathSchema,
     }),
-    handler: async ({
-      ref, summary, workspace, branch, baseCommit, headCommit,
-      sessionId, participantId, activationId, runId, project, dbPath,
-    }) => {
+    handler: async ({ ref, summary, workspace, branch, baseCommit, headCommit, sessionId, participantId, activationId, runId, project, dbPath }) => {
       const handles = openHandles(dbPath as string | undefined);
       try {
         const projectId = resolveProjectId(handles.svc, project as string | undefined);
         const issue = handles.svc.resolveRefInProject(ref as string, projectId);
-        const identity = journalIdentity({
-          sessionId: sessionId as string | undefined,
-          participantId: participantId as string | undefined,
-          activationId: activationId as string | undefined,
-          runId: runId as string | undefined,
-        });
+        const identity = journalIdentity({ sessionId: sessionId as string | undefined, participantId: participantId as string | undefined, activationId: activationId as string | undefined, runId: runId as string | undefined });
         const mechanical = handles.journal.collectMechanical(issue.id, {
-          ...identity,
-          workspace: (workspace as string | undefined) ?? undefined,
-          branch: (branch as string | undefined) ?? undefined,
-          baseCommit: (baseCommit as string | undefined) ?? undefined,
-          headCommit: (headCommit as string | undefined) ?? undefined,
+          ...identity, workspace: (workspace as string | undefined) ?? undefined, branch: (branch as string | undefined) ?? undefined,
+          baseCommit: (baseCommit as string | undefined) ?? undefined, headCommit: (headCommit as string | undefined) ?? undefined,
         });
-        const entry = handles.journal.appendEntry(issue.id, {
-          kind: "checkpoint",
-          ...identity,
-          mechanical,
-        });
+        const entry = handles.journal.appendEntry(issue.id, { kind: "checkpoint", ...identity, mechanical });
         if (summary === undefined) return textPayload({ entryId: entry.id, sequence: entry.sequence, degraded: false });
         try {
           const enriched = handles.journal.enrichEntry(entry.id, { summary: (summary as string).slice(0, 2000) });
@@ -608,9 +480,7 @@ const TOOL_DEFS: ToolDef[] = [
           handles.svc.appendEvent(issue.id, "journal.checkpoint_degraded", { entry: entry.id, sequence: entry.sequence, reason });
           return textPayload({ entryId: entry.id, sequence: entry.sequence, degraded: true, reason });
         }
-      } finally {
-        handles.db.close();
-      }
+      } finally { handles.db.close(); }
     },
   },
   {
@@ -620,43 +490,27 @@ const TOOL_DEFS: ToolDef[] = [
       "Does not change: no Issue field, no Journal entry, no claim, no provenance row. " +
       "Revision: the Issue revision never changes. " +
       "Readiness: never stale; reads derive from current durable state. " +
-      "Use the Journal instead: reads never substitute for writing — record progress with journal_append, journal_checkpoint or issue_note, " +
-      "never by editing the contract; for bounded windows use journal_query (since, latest, timeline). " +
-      "Automatic context: none is added; entries arrive with the revision, sequence, timestamp and execution envelope stored at append time. " +
-      KIND_GLOSSARY,
+      "Use the Journal instead: reads never substitute for writing — record progress with journal_append, journal_checkpoint or issue_note, never by editing the contract; for bounded windows use journal_query (since, latest, timeline). " +
+      "Automatic context: none is added; entries arrive with the revision, sequence, timestamp and execution envelope stored at append time. " + KIND_GLOSSARY,
     schema: z.object({ ref: z.string().min(1), limit: z.number().int().positive().optional(), dbPath: dbPathSchema }),
     handler: async ({ ref, limit, dbPath }) => {
       const handles = openHandles(dbPath as string | undefined);
       try {
         const id = handles.svc.resolveRef(ref as string).id;
-        return textPayload(
-          handles.journal.listEntries(id, limit !== undefined ? { limit: limit as number } : undefined).map(entryJson),
-        );
-      } finally {
-        handles.db.close();
-      }
+        return textPayload(handles.journal.listEntries(id, limit !== undefined ? { limit: limit as number } : undefined).map(entryJson));
+      } finally { handles.db.close(); }
     },
   },
   {
     name: "journal_query",
     description:
-      "Changes: nothing; this is the op-discriminated bounded Journal read (op since returns the compact delta after a " +
-      "sequence cursor, op latest returns the newest entry optionally of one kind, op timeline returns the bounded recent window). " +
+      "Changes: nothing; this is the op-discriminated bounded Journal read (op since returns the compact delta after a sequence cursor, op latest returns the newest entry optionally of one kind, op timeline returns the bounded recent window). " +
       "Does not change: no Issue field, no Journal entry, no claim, no provenance row. " +
       "Revision: the Issue revision never changes. " +
       "Readiness: never stale; reads derive from current durable state. " +
-      "Use the Journal instead: reads never substitute for writing — record progress with journal_append, journal_checkpoint or issue_note, " +
-      "never by editing the contract; for full bodies use journal_show. " +
-      "Automatic context: none is added; entries arrive with the revision, sequence, timestamp and execution envelope stored at append time. " +
-      KIND_GLOSSARY,
-    schema: z.object({
-      op: z.enum(["since", "latest", "timeline"]),
-      ref: z.string().min(1),
-      kind: z.enum(JOURNAL_KINDS).optional(),
-      limit: z.number().int().positive().optional(),
-      cursor: z.number().int().min(0).optional(),
-      dbPath: dbPathSchema,
-    }),
+      "Use the Journal instead: reads never substitute for writing — record progress with journal_append, journal_checkpoint or issue_note, never by editing the contract; for full bodies use journal_show. " +
+      "Automatic context: none is added; entries arrive with the revision, sequence, timestamp and execution envelope stored at append time. " + KIND_GLOSSARY,
+    schema: z.object({ op: z.enum(["since", "latest", "timeline"]), ref: z.string().min(1), kind: z.enum(JOURNAL_KINDS).optional(), limit: z.number().int().positive().optional(), cursor: z.number().int().min(0).optional(), dbPath: dbPathSchema }),
     handler: async ({ op, ref, kind, limit, cursor, dbPath }) => {
       if (kind !== undefined && !isJournalKind(kind)) throw new Error(`unknown journal kind: ${kind}`);
       const handles = openHandles(dbPath as string | undefined);
@@ -671,17 +525,8 @@ const TOOL_DEFS: ToolDef[] = [
           if (!entry) throw new Error(`no journal entry${kind !== undefined ? ` (kind ${kind})` : ""} for this issue`);
           return textPayload(entryJson(entry));
         }
-        return textPayload(
-          handles.journal
-            .timeline(id, {
-              kind: (kind as "note" | undefined) ?? undefined,
-              limit: (limit as number | undefined) ?? undefined,
-            })
-            .map(entryJson),
-        );
-      } finally {
-        handles.db.close();
-      }
+        return textPayload(handles.journal.timeline(id, { kind: (kind as "note" | undefined) ?? undefined, limit: (limit as number | undefined) ?? undefined }).map(entryJson));
+      } finally { handles.db.close(); }
     },
   },
   {
@@ -691,8 +536,7 @@ const TOOL_DEFS: ToolDef[] = [
       "Does not change: no Issue field, no Journal entry, no binding, no receipt, no closure. " +
       "Revision: the Issue revision never changes; the trace reports the revision each link was bound to. " +
       "Readiness: never stale; the trace derives from current durable state. " +
-      "Use the Journal instead: for recording what happened — the trace only shows the evidence spine; progress and outcomes " +
-      "belong in Journal entries, and the contract must not be edited to narrate history. " +
+      "Use the Journal instead: for recording what happened — the trace only shows the evidence spine; progress and outcomes belong in Journal entries, and the contract must not be edited to narrate history. " +
       "Automatic context: none is added; each spine element carries the actor, session and execution envelope stored when it was written.",
     schema: z.object({ ref: z.string().min(1), dbPath: dbPathSchema }),
     handler: async ({ ref, dbPath }) => {
@@ -701,9 +545,7 @@ const TOOL_DEFS: ToolDef[] = [
         const id = handles.svc.resolveRef(ref as string).id;
         const provenance = new ProvenanceService(handles.db, handles.svc, handles.journal);
         return textPayload(provenance.trace(id));
-      } finally {
-        handles.db.close();
-      }
+      } finally { handles.db.close(); }
     },
   },
   {
@@ -721,9 +563,7 @@ const TOOL_DEFS: ToolDef[] = [
       try {
         const provenance = new ProvenanceService(handles.db, handles.svc, handles.journal);
         return textPayload(provenance.sessionDetail(sessionId as string));
-      } finally {
-        handles.db.close();
-      }
+      } finally { handles.db.close(); }
     },
   },
   {
@@ -741,22 +581,17 @@ const TOOL_DEFS: ToolDef[] = [
       try {
         const provenance = new ProvenanceService(handles.db, handles.svc, handles.journal);
         return textPayload(provenance.activationDetail(activationId as string));
-      } finally {
-        handles.db.close();
-      }
+      } finally { handles.db.close(); }
     },
   },
   {
     name: "resume_capsule",
     description:
-      "Changes: nothing; the capsule is derived live from the Issue, latest checkpoint, deltas, blockers, claim and provenance — " +
-      "never a stored source of truth. " +
+      "Changes: nothing; the capsule is derived live from the Issue, latest checkpoint, deltas, blockers, claim and provenance — never a stored source of truth. " +
       "Does not change: no Issue field, no Journal entry, no claim, no provenance row. " +
-      "Revision: the Issue revision never changes; the capsule reports the revision it was built from, and a newer revision " +
-      "renders a prior capsule stale — rebuild after every contract edit. " +
+      "Revision: the Issue revision never changes; the capsule reports the revision it was built from, and a newer revision renders a prior capsule stale — rebuild after every contract edit. " +
       "Readiness: never stale from the read, but the capsule carries the readiness computed at build time — re-validate before dispatch. " +
-      "Use the Journal instead: for recording continuation state — checkpoint and handoff entries are what the next capsule is built from; " +
-      "never edit the contract to leave a note to the next session. " +
+      "Use the Journal instead: for recording continuation state — checkpoint and handoff entries are what the next capsule is built from; never edit the contract to leave a note to the next session. " +
       "Automatic context: none is added; the capsule assembles the actor, session and execution context already stored on the underlying rows.",
     schema: z.object({ ref: z.string().min(1), dbPath: dbPathSchema }),
     handler: async ({ ref, dbPath }) => {
@@ -765,50 +600,29 @@ const TOOL_DEFS: ToolDef[] = [
         const id = handles.svc.resolveRef(ref as string).id;
         const capsule = handles.resume.buildCapsule(id);
         return textPayload({ capsule, rendered: handles.resume.renderCapsule(capsule) });
-      } finally {
-        handles.db.close();
-      }
+      } finally { handles.db.close(); }
     },
   },
 ];
 
-// Exported registration inventory (M1): the single source the docs-drift
-// gate and the inventory tests consume instead of a copied list.
 export const MCP_TOOL_NAMES: string[] = TOOL_DEFS.map((d) => d.name);
-export const MCP_TOOL_DESCRIPTIONS: Record<string, string> = Object.fromEntries(
-  TOOL_DEFS.map((d) => [d.name, d.description]),
-);
+export const MCP_TOOL_DESCRIPTIONS: Record<string, string> = Object.fromEntries(TOOL_DEFS.map((d) => [d.name, d.description]));
 
 export function buildServer(): McpServer {
   const server = new McpServer(
     { name: SUBSTRATE_SERVER_NAME, version: SUBSTRATE_SERVER_VERSION },
-    // Static tool list: listChanged stays false (brief K — do not advertise
-    // subscriptions that do not exist).
     { capabilities: { tools: { listChanged: false } } },
   );
-  // Deterministic registration order (stable tools/list for client and
-  // prompt-cache stability, brief P). E6 wake/event tools are out of scope.
   for (const def of TOOL_DEFS) {
-    server.registerTool(
-      def.name,
-      { description: def.description, inputSchema: def.schema },
-      async (args) => def.handler(args as Record<string, unknown>),
-    );
+    server.registerTool(def.name, { description: def.description, inputSchema: def.schema }, async (args) => def.handler(args as Record<string, unknown>));
   }
   return server;
 }
 
-// Direct execution (development, tests, and the pre-E1 plugin wiring):
-// serve the modern era on process stdio, rejecting legacy openings.
 const invokedAsMain =
   process.argv[1] !== undefined &&
   (() => {
-    try {
-      return import.meta.url === pathToFileURL(process.argv[1]).href;
-    } catch {
-      return false;
-    }
+    try { return import.meta.url === pathToFileURL(process.argv[1]).href; }
+    catch { return false; }
   })();
-if (invokedAsMain) {
-  serveMain();
-}
+if (invokedAsMain) serveMain();
