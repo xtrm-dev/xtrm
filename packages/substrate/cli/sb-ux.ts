@@ -4,7 +4,7 @@
 
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { runCli, type CliResult } from "./sb.ts";
+import type { CliResult } from "./sb.ts";
 import {
   feedbackForCommand,
   feedbackForError,
@@ -17,6 +17,17 @@ import {
   type TerminalStyleOptions,
 } from "../src/presentation/terminal.ts";
 
+// sb.ts predates this wrapper and treats an argv path ending in `/sb` as a
+// direct invocation. npm bin links use exactly that shape. Hide that alias
+// only while importing the engine so it exports runCli without also executing
+// it; restore argv immediately so this wrapper can perform its own exact
+// realpath main check below.
+const originalArgv1 = process.argv[1];
+const importingThroughBinAlias = originalArgv1 === "sb" || originalArgv1?.endsWith("/sb") === true;
+if (importingThroughBinAlias) process.argv[1] = fileURLToPath(import.meta.url);
+const { runCli } = await import("./sb.ts");
+if (importingThroughBinAlias) process.argv[1] = originalArgv1;
+
 const ESC = "\u001b[";
 const GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export", "doctor", "help", "version"]);
 const READ_ONLY = new Set([
@@ -25,29 +36,9 @@ const READ_ONLY = new Set([
   "journal.render", "provenance.trace", "provenance.commit", "provenance.receipt", "provenance.pr", "doctor", "help", "version",
 ]);
 
-interface UxOptions {
-  isTTY?: boolean;
-  width?: number;
-  env?: NodeJS.ProcessEnv;
-}
-
-interface WrapperArgs {
-  base: string[];
-  plain: boolean;
-  noColor: boolean;
-  all: boolean;
-  flat: boolean;
-  statuses: string[];
-  search: string;
-}
-
-interface Envelope {
-  schema?: string;
-  command?: string;
-  ok?: boolean;
-  data?: unknown;
-  error?: string;
-}
+interface UxOptions { isTTY?: boolean; width?: number; env?: NodeJS.ProcessEnv; }
+interface WrapperArgs { base: string[]; plain: boolean; noColor: boolean; all: boolean; flat: boolean; statuses: string[]; search: string; }
+interface Envelope { schema?: string; command?: string; ok?: boolean; data?: unknown; error?: string; }
 
 function commandOf(args: string[]): string {
   const index = args.findIndex((arg) => GROUPS.has(arg));
@@ -70,7 +61,6 @@ function parseWrapperArgs(argv: string[]): WrapperArgs {
   let search = "";
   const statuses: string[] = [];
   const listLike = argv.includes("issue") && (argv.includes("list") || argv.includes("browse"));
-
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]!;
     if (arg === "--plain") { plain = true; continue; }
@@ -85,10 +75,7 @@ function parseWrapperArgs(argv: string[]): WrapperArgs {
       else search = value;
       continue;
     }
-    if (listLike && arg.startsWith("--status=")) {
-      statuses.push(...arg.slice(9).split(",").map((s) => s.trim()).filter(Boolean));
-      continue;
-    }
+    if (listLike && arg.startsWith("--status=")) { statuses.push(...arg.slice(9).split(",").map((s) => s.trim()).filter(Boolean)); continue; }
     if (listLike && arg.startsWith("--search=")) { search = arg.slice(9); continue; }
     base.push(arg);
   }
@@ -104,22 +91,17 @@ function styleOptions(parsed: WrapperArgs, opts: UxOptions = {}): TerminalStyleO
   return { color: !disabled && (tty || force), width: Number.isFinite(widthValue) ? widthValue : 100 };
 }
 
-function withJson(args: string[]): string[] {
-  return args.includes("--json") ? args : ["--json", ...args];
-}
-
+function withJson(args: string[]): string[] { return args.includes("--json") ? args : ["--json", ...args]; }
 function parseEnvelope(result: CliResult): Envelope {
   const text = result.stdout.trim();
   if (!text) return { ok: result.code === 0, error: result.stderr.trim() || undefined };
   try { return JSON.parse(text) as Envelope; }
   catch { return { ok: result.code === 0, data: text, error: result.code === 0 ? undefined : (result.stderr.trim() || text) }; }
 }
-
 function jsonCall(args: string[]): { result: CliResult; envelope: Envelope } {
   const result = runCli(withJson(args));
   return { result, envelope: parseEnvelope(result) };
 }
-
 function errorResult(command: string, message: string, style: TerminalStyleOptions): CliResult {
   return { code: 1, stdout: "", stderr: renderFeedback(feedbackForError(command, message), style) };
 }
@@ -145,7 +127,6 @@ function listEngineArgs(base: string[]): string[] {
   else if (browseIndex >= 0) out[browseIndex] = "tree";
   return out;
 }
-
 function showEngineArgs(base: string[], ref: string): string[] {
   const prefix: string[] = [];
   for (let i = 0; i < base.length; i += 1) {
@@ -153,11 +134,9 @@ function showEngineArgs(base: string[], ref: string): string[] {
   }
   return [...prefix, "issue", "show", ref];
 }
-
 function derivedFilterRequested(statuses: string[]): boolean {
   return statuses.some((s) => ["in_progress", "ready", "blocked"].includes(s.toLowerCase()));
 }
-
 function enrichRows(rows: IssueTreeRow[], base: string[], statuses: string[]): IssueTreeRow[] {
   if (!derivedFilterRequested(statuses)) return rows;
   return rows.map((row) => {
@@ -172,25 +151,20 @@ function enrichRows(rows: IssueTreeRow[], base: string[], statuses: string[]): I
     };
   });
 }
-
 function filteredRows(parsed: WrapperArgs): { rows: IssueTreeRow[]; error?: string } {
   const call = jsonCall(listEngineArgs(parsed.base));
-  if (call.result.code !== 0 || call.envelope.ok === false) {
-    return { rows: [], error: call.envelope.error ?? (call.result.stderr.trim() || "list failed") };
-  }
+  if (call.result.code !== 0 || call.envelope.ok === false) return { rows: [], error: call.envelope.error ?? (call.result.stderr.trim() || "list failed") };
   let rows = flattenIssueTree(call.envelope.data);
   rows = enrichRows(rows, parsed.base, parsed.statuses);
   rows = filterTreeWithAncestors(rows, parsed.statuses, parsed.all, parsed.search);
   if (parsed.flat) rows = rows.filter((r) => !r.contextOnly).map((r) => ({ ...r, depth: 0 }));
   return { rows };
 }
-
 function renderList(parsed: WrapperArgs, style: TerminalStyleOptions): CliResult {
   const filtered = filteredRows(parsed);
   if (filtered.error) return errorResult("issue.list", filtered.error, style);
   return { code: 0, stdout: renderIssueList(filtered.rows, style), stderr: "" };
 }
-
 function renderShow(parsed: WrapperArgs, style: TerminalStyleOptions): CliResult {
   const call = jsonCall(parsed.base);
   if (call.result.code !== 0 || call.envelope.ok === false || !call.envelope.data || typeof call.envelope.data !== "object") {
@@ -198,19 +172,14 @@ function renderShow(parsed: WrapperArgs, style: TerminalStyleOptions): CliResult
   }
   return { code: 0, stdout: renderIssueShow(call.envelope.data as Record<string, unknown>, style), stderr: "" };
 }
-
 function mutationResult(parsed: WrapperArgs, style: TerminalStyleOptions): CliResult {
   const command = commandOf(parsed.base);
   const call = jsonCall(parsed.base);
-  if (call.result.code !== 0 || call.envelope.ok === false) {
-    return errorResult(command, call.envelope.error ?? (call.result.stderr.trim() || "operation failed"), style);
-  }
+  if (call.result.code !== 0 || call.envelope.ok === false) return errorResult(command, call.envelope.error ?? (call.result.stderr.trim() || "operation failed"), style);
   const data = call.envelope.data && typeof call.envelope.data === "object" && !Array.isArray(call.envelope.data)
-    ? call.envelope.data as Record<string, unknown>
-    : { value: call.envelope.data };
+    ? call.envelope.data as Record<string, unknown> : { value: call.envelope.data };
   return { code: 0, stdout: renderFeedback(feedbackForCommand(command, parsed.base, data), style), stderr: "" };
 }
-
 function collapsedVisible(rows: IssueTreeRow[], collapsed: Set<string>): IssueTreeRow[] {
   const out: IssueTreeRow[] = [];
   let hiddenBelow: number | null = null;
@@ -225,9 +194,7 @@ function collapsedVisible(rows: IssueTreeRow[], collapsed: Set<string>): IssueTr
 
 async function browse(parsed: WrapperArgs, style: TerminalStyleOptions, opts: UxOptions): Promise<CliResult> {
   const tty = opts.isTTY ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
-  if (!tty || typeof process.stdin.setRawMode !== "function") {
-    return errorResult("issue.browse", "interactive browser requires a TTY; use `sb issue list` for non-interactive output", style);
-  }
+  if (!tty || typeof process.stdin.setRawMode !== "function") return errorResult("issue.browse", "interactive browser requires a TTY; use `sb issue list` for non-interactive output", style);
   const initial = filteredRows({ ...parsed, flat: false });
   if (initial.error) return errorResult("issue.browse", initial.error, style);
   const sourceRows = initial.rows;
@@ -237,13 +204,10 @@ async function browse(parsed: WrapperArgs, style: TerminalStyleOptions, opts: Ux
   let searchMode = false;
   let expandedPreview = false;
   const collapsed = new Set<string>();
-
   const currentRows = (): IssueTreeRow[] => {
     const statuses = mode === "closed" ? ["closed"] : parsed.statuses;
-    const rows = filterTreeWithAncestors(sourceRows, statuses, mode === "all", query);
-    return collapsedVisible(rows, collapsed);
+    return collapsedVisible(filterTreeWithAncestors(sourceRows, statuses, mode === "all", query), collapsed);
   };
-
   const draw = (): void => {
     const rows = currentRows();
     selectedIndex = Math.min(selectedIndex, Math.max(0, rows.length - 1));
@@ -253,18 +217,14 @@ async function browse(parsed: WrapperArgs, style: TerminalStyleOptions, opts: Ux
     if (selectedRow) {
       const show = jsonCall(showEngineArgs(parsed.base, selectedRow.humanRef));
       if (show.envelope.data && typeof show.envelope.data === "object") {
-        preview = renderIssueShow(show.envelope.data as Record<string, unknown>, style)
-          .split("\n").slice(0, expandedPreview ? 24 : 9).join("\n");
+        preview = renderIssueShow(show.envelope.data as Record<string, unknown>, style).split("\n").slice(0, expandedPreview ? 24 : 9).join("\n");
       }
     }
     const width = Math.min(style.width ?? 100, 120);
     const header = `Substrate · issues · ${mode}${query ? ` · /${query}` : ""}`;
-    const hint = searchMode
-      ? `search: ${query}▌  Enter apply · Esc cancel`
-      : "↑↓/jk move · Enter preview · +/- collapse/expand · / search · f filter · q quit";
+    const hint = searchMode ? `search: ${query}▌  Enter apply · Esc cancel` : "↑↓/jk move · Enter preview · +/- collapse/expand · / search · f filter · q quit";
     process.stdout.write(`${ESC}H${ESC}2J${header}\n${"─".repeat(width)}\n${list}\n\n${preview}\n${"─".repeat(width)}\n${hint}\n`);
   };
-
   process.stdin.setRawMode(true);
   process.stdin.resume();
   process.stdout.write(`${ESC}?1049h${ESC}?25l`);
@@ -277,15 +237,9 @@ async function browse(parsed: WrapperArgs, style: TerminalStyleOptions, opts: Ux
           if (key === "\r" || key === "\n" || key === "\u001b") searchMode = false;
           else if (key === "\u007f") query = query.slice(0, -1);
           else if (/^[\x20-\x7e]$/.test(key)) query += key;
-          selectedIndex = 0;
-          draw();
-          return;
+          selectedIndex = 0; draw(); return;
         }
-        if (key === "q" || key === "\u001b" || key === "\u0003") {
-          process.stdin.off("data", onData);
-          resolve();
-          return;
-        }
+        if (key === "q" || key === "\u001b" || key === "\u0003") { process.stdin.off("data", onData); resolve(); return; }
         const rows = currentRows();
         if (key === "j" || key === "\u001b[B") selectedIndex = Math.min(Math.max(0, rows.length - 1), selectedIndex + 1);
         else if (key === "k" || key === "\u001b[A") selectedIndex = Math.max(0, selectedIndex - 1);
@@ -313,19 +267,14 @@ export async function runUxCli(argv: string[], opts: UxOptions = {}): Promise<Cl
     const style = styleOptions({ base: argv, plain: false, noColor: false, all: false, flat: false, statuses: [], search: "" }, opts);
     return errorResult("sb", err instanceof Error ? err.message : String(err), style);
   }
-
   const style = styleOptions(parsed, opts);
   const command = commandOf(parsed.base);
-  // Unadorned machine calls stay byte-compatible with sb.ts. Wrapper-only
-  // list filters are human UX flags; scripts needing filtered structured data
-  // can consume the stable full list/tree JSON and filter deterministically.
   if (parsed.base.includes("--json")) return runCli(parsed.base);
   if (parsed.base.includes("--help") || parsed.base[0] === "help") return uxHelp(runCli(parsed.base), parsed.base);
   if (parsed.base[0] === "issue" && parsed.base[1] === "browse") return browse(parsed, style, opts);
   if (command === "issue.list") return renderList(parsed, style);
   if (command === "issue.show") return renderShow(parsed, style);
   if (!READ_ONLY.has(command) && command !== "") return mutationResult(parsed, style);
-
   const result = runCli(parsed.base);
   if (result.code !== 0) return errorResult(command, result.stderr.trim() || result.stdout.trim() || "operation failed", style);
   return result;
@@ -335,12 +284,9 @@ const invokedAsMain = (() => {
   try { return realpathSync(process.argv[1] ?? "") === realpathSync(fileURLToPath(import.meta.url)); }
   catch { return false; }
 })();
-
 if (invokedAsMain) {
   const result = await runUxCli(process.argv.slice(2));
-  const ignoreBrokenPipe = (err: Error): void => {
-    if ((err as NodeJS.ErrnoException).code !== "EPIPE") throw err;
-  };
+  const ignoreBrokenPipe = (err: Error): void => { if ((err as NodeJS.ErrnoException).code !== "EPIPE") throw err; };
   process.stdout.on("error", ignoreBrokenPipe);
   process.stderr.on("error", ignoreBrokenPipe);
   if (result.stdout) process.stdout.write(result.stdout);
