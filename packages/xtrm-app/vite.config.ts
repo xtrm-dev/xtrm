@@ -1,0 +1,23 @@
+import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import { substrateCliApi } from "./server/substrate-cli.ts";
+
+// Console v1 backend that still owns GitHub fetch/cache (shell architecture §9.3).
+const consoleUrl = process.env.XTRM_CONSOLE_URL ?? "http://127.0.0.1:3030";
+
+export default defineConfig({
+  plugins: [react(), tailwindcss(), substrateCliApi()],
+  server: {
+    port: 5178,
+    proxy: {
+      "/api/github": { target: consoleUrl, changeOrigin: true },
+      "/api/programme": { target: consoleUrl, changeOrigin: true },
+    },
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "server/**/*.test.ts"],
+  },
+});

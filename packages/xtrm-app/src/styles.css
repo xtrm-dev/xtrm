@@ -1,0 +1,148 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * XTRM Console v2 tokens (PRD §27, shell architecture §15.1).
+ * Surface ladder: deep → sidebar → surface → raised → control.
+ * Depth comes from background shifts and hairlines; shadows only on floating layers.
+ * XTRM violet is an identity role: selection marker, focus, references, attention dots.
+ */
+
+:root {
+  color-scheme: light;
+  --x-deep: #f4f4f5;
+  --x-sidebar: #f4f4f5;
+  --x-surface: #ffffff;
+  --x-raised: #ffffff;
+  --x-control: #efeff1;
+  --x-hover: rgb(15 15 20 / 0.045);
+  --x-pressed: rgb(15 15 20 / 0.08);
+  --x-ink: #18181b;
+  --x-ink-muted: #5f5f68;
+  --x-ink-faint: #94949c;
+  --x-border-muted: rgb(15 15 20 / 0.07);
+  --x-border: rgb(15 15 20 / 0.11);
+  --x-border-strong: rgb(15 15 20 / 0.2);
+  --x-accent: #833cf0;
+  --x-accent-ink: #6d28d9;
+  --x-accent-soft: rgb(131 60 240 / 0.1);
+  --x-danger: #c42b2b;
+  --x-success: #1f8a4c;
+  --x-diff-add: #1f8a4c;
+  --x-diff-del: #c42b2b;
+  --x-shadow-float: 0 10px 30px -12px rgb(15 15 20 / 0.22), 0 0 0 1px rgb(15 15 20 / 0.06);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --x-deep: #0c0c0e;
+  --x-sidebar: #0c0c0e;
+  --x-surface: #131315;
+  --x-raised: #1a1a1d;
+  --x-control: #1f1f23;
+  --x-hover: rgb(255 255 255 / 0.04);
+  --x-pressed: rgb(255 255 255 / 0.07);
+  --x-ink: #ececef;
+  --x-ink-muted: #a0a0a8;
+  --x-ink-faint: #6a6a72;
+  --x-border-muted: rgb(255 255 255 / 0.06);
+  --x-border: rgb(255 255 255 / 0.09);
+  --x-border-strong: rgb(255 255 255 / 0.16);
+  /* dark surfaces use the accessible light violet role for small text/markers */
+  --x-accent: #a979ff;
+  --x-accent-ink: #bf9bff;
+  --x-accent-soft: rgb(169 121 255 / 0.12);
+  --x-danger: #f07171;
+  --x-success: #5ccb8a;
+  --x-diff-add: #5ccb8a;
+  --x-diff-del: #f07171;
+  --x-shadow-float: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.07);
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+
+  --color-deep: var(--x-deep);
+  --color-sidebar: var(--x-sidebar);
+  --color-surface: var(--x-surface);
+  --color-raised: var(--x-raised);
+  --color-control: var(--x-control);
+  --color-hover: var(--x-hover);
+  --color-pressed: var(--x-pressed);
+  --color-ink: var(--x-ink);
+  --color-ink-muted: var(--x-ink-muted);
+  --color-ink-faint: var(--x-ink-faint);
+  --color-border-muted: var(--x-border-muted);
+  --color-border: var(--x-border);
+  --color-border-strong: var(--x-border-strong);
+  --color-accent: var(--x-accent);
+  --color-accent-ink: var(--x-accent-ink);
+  --color-accent-soft: var(--x-accent-soft);
+  --color-danger: var(--x-danger);
+  --color-success: var(--x-success);
+  --color-diff-add: var(--x-diff-add);
+  --color-diff-del: var(--x-diff-del);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --shadow-float: var(--x-shadow-float);
+
+  --text-xs: 0.72rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-deep);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border-muted);
+  }
+  :focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--color-accent) 60%, transparent);
+    outline-offset: 1px;
+  }
+  ::selection {
+    background: var(--color-accent-soft);
+  }
+}
+
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

@@ -2,9 +2,45 @@
   "name": "@xtrm/xtrm-app",
   "version": "0.0.0",
   "private": true,
-  "description": "Linux desktop workspace for XTRM Episode-based agent interaction",
+  "description": "XTRM Console v2 and desktop agent workspace",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.8.0",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@hugeicons/core-free-icons": "^4.3.3",
+    "@hugeicons/react": "^1.1.10",
+    "@tanstack/react-query": "^5.103.1",
+    "@tanstack/react-router": "^1.170.36",
+    "@tanstack/react-virtual": "^3.14.13",
+    "cmdk": "^1.1.1",
+    "motion": "^13.4.0",
+    "motion-panels": "0.5.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^24.13.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.0.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   }
 }
