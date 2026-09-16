@@ -1,5 +1,7 @@
 # xtrm-app — implementation packet
 
+> **Historical (2026-09-16).** This brief predates the Console v2 baseline and uses the superseded `Episode` term (read as `Frame`). Do not dispatch work from it. Canonical documents: `docs/README.md`.
+
 ## 1. Product slice
 
 Build a Linux-first desktop app for ordinary human ↔ agent work before integrating

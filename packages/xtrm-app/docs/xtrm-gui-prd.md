@@ -1,11 +1,14 @@
 # XTRM Agentic Operating Environment PRD
 
-**Status:** Draft v0.2 — product-direction baseline  
+**Status:** Draft v0.3 — product-direction baseline + canonical Console v2 amendments (§34, 2026-09-16)  
 **Package:** `xtrm-dev/xtrm/packages/xtrm-app`  
 **Product surface:** XTRM Console / desktop agent harness  
 **Primary runtime:** Pi `AgentSessionRuntime`  
 **Primary interaction unit:** `Frame` (`InteractionFrame`)  
-**Primary planning unit:** executable work contract (Issue / Bead / step contract)
+**Primary planning unit:** executable work contract (Issue / Bead / step contract)  
+**Shell contract:** `console-v2-shell-architecture.md` (canonical) · **Adoption record:** `adoption-audit.md` §10–15
+
+> Section 34 records accepted Console v2 decisions. Where §34 and an earlier section disagree, §34 wins; the affected earlier sections carry an inline pointer.
 
 ## 1. Product objective
 
@@ -91,6 +94,8 @@ Frame
 ```
 
 User-facing terminology is `Frame`.
+
+**Accepted invariant (§34.8).** A Frame belongs to exactly one AgentSession. Other agents keep their own AgentSessions and Frames. Cross-agent aggregation belongs to Agents, ChainRun, Graph, and Observability; it is not Frame identity.
 
 Reserved terminology:
 
@@ -228,6 +233,8 @@ selected repository / working context
 selected view
 ```
 
+> **Amended by §34.3–34.4.** The single left "Console rail" below is replaced by a persistent global icon rail plus a contextual sidebar. The repository selector lives at the top of the contextual sidebar. The candidate surface list is refined by `console-v2-shell-architecture.md` §8.
+
 The left Console rail provides repository context and major product surfaces.
 
 Candidate top-level surfaces:
@@ -244,6 +251,8 @@ Explore
 ```
 
 The repository rail must be truly collapsible: collapsed mode reduces the rail itself, not only its labels. It should preserve recognizable repository and navigation affordances without crowding the workspace.
+
+Under §34.3 this requirement applies to the **contextual sidebar**: it collapses to a narrow rounded reopen rail. The global icon rail never collapses.
 
 The Agent surface must fit cleanly inside the global Console shell. It must not add another permanent conversation sidebar inside the main workspace.
 
@@ -298,7 +307,7 @@ MAXIMIZED
   deep inspection / execution-control mode
 ```
 
-A separate `FOLLOW LIVE` property may be active for live entities such as agents or chains.
+A separate `FOLLOW_LIVE` flag may be active for live entities such as agents or chains. It is orthogonal to the four states, not a fifth state (§34.5).
 
 ### 7.2 Inspector rail
 
@@ -318,8 +327,10 @@ Maximized drawer mode is for deep inspection, not a generic fullscreen modal.
 When maximized:
 
 ```text
-collapsed repository rail | expanded inspector rail + large drawer
+global rail | collapsed contextual reopen rail | expanded inspector rail + large drawer
 ```
+
+(§34.5: "repository rail" in this section means the contextual sidebar. The global rail is always visible and is never covered.)
 
 Requirements:
 
@@ -1334,7 +1345,7 @@ Design principles:
 - calm Jira-like collection rows;
 - continuous reading surfaces for agent response/source content;
 - graph only when relationships are the primary task;
-- comfortable default density, compact mode optional;
+- dense but readable default density (§34.9 supersedes the earlier "comfortable default, compact optional" rule);
 - narrow readable content column where appropriate;
 - minimal provider branding.
 
@@ -1362,6 +1373,10 @@ Adopt proven projection/virtualization/lazy-hydration patterns before inventing 
 
 The product vision is intentionally broader than the first deliverable. Do not attempt to ship the full operating environment in one implementation wave.
 
+### v0-base — Console v2 base shell (§34.10)
+
+Delivered first, before the Pi-native Agent vertical: canonical documentation baseline, then an executable React shell in `packages/xtrm-app` with Substrate Issues, Program, and GitHub/repository Activity as the first real surfaces. The Agent and Agents destinations exist as explicit placeholders.
+
 ### v0 — Pi-native Agent surface and Console substrate
 
 Prove:
@@ -1381,7 +1396,7 @@ resume / fork / reconstruction
 composer
 repository context
 shared inspector drawer shell
-true left-rail collapse
+true contextual-sidebar collapse (global rail persistent)
 right inspector rail
 normal / maximized drawer behavior
 ```
@@ -1476,11 +1491,11 @@ The first accepted Agent vertical must prove all of the following against real p
 16. Activity groups are collapsed by default and can be inspected.
 17. Individual tool activity can expose command/output detail lazily.
 18. Repository context persists while switching Console surfaces.
-19. The global repository rail truly collapses its physical width.
+19. The contextual sidebar truly collapses its physical width to the reopen rail; the global icon rail stays visible.
 20. The canonical right inspector rail remains visible in collapsed state without overlapping primary content.
 21. The drawer opens attached to the inspector rail with no gap.
-22. The drawer can maximize without covering the collapsed repository rail.
-23. Maximizing the drawer auto-collapses and correctly restores repository context according to the state rules in this PRD.
+22. The drawer can maximize without covering the global rail or the collapsed contextual reopen rail.
+23. Maximizing the drawer auto-collapses the contextual sidebar and restores it according to the state rules in this PRD and `console-v2-shell-architecture.md` §4.3.
 24. At least one first-class entity can be inspected in the drawer and promoted to a primary surface.
 25. `Open session` promotes an inspected Agent into the main Agent surface once the Agents projection exists.
 26. Background runtime activity remains alive when the visible Frame or surface changes.
@@ -1539,3 +1554,121 @@ XTRM forensic / AgentOps evidence
 ```
 
 The defining product behavior is not that XTRM has all of these features. It is that planning, execution, coordination, observation, and evidence remain connected as the same work moves through them.
+
+## 34. Console v2 canonical baseline — accepted amendments (2026-09-16)
+
+This section reconciles the PRD with the closed PR #170 audit pack (head `e1bc91236caf5fd95a4729da8ae8b6f5ee5eb35c`) and the Supernova/PiChamber audits (`xt/rq8w @ a13989f`). It amends the PRD. It does not replace it. The PR #170 rewrite of this file is intentionally **not** adopted, because it removed the Frame canon in §3–4.
+
+Evidence: `adoption-audit.md` §10–15 and the `console-v2-audit-*.md` files. Shell mechanics: `console-v2-shell-architecture.md` (canonical). Sequencing: `console-v2-migration-plan.md`.
+
+### 34.1 Implementation root
+
+Console v2 is implemented in `xtrm-dev/xtrm/packages/xtrm-app`. The current `Jaggerxtrm/console` host is a reusable backend during migration (repository discovery, GitHub fetch/cache, realtime). It is not the target UI architecture.
+
+### 34.2 Visual benchmark
+
+Supernova-level restraint and cleanliness is the visual benchmark (`console-v2-audit-supernova.md` §1). XTRM adopts mechanisms and discipline from it, not its identity: palette, accent, font, and product naming stay XTRM-owned (§27).
+
+### 34.3 Shell
+
+```text
+GLOBAL ICON RAIL          persistent, application-level, never collapses
+CONTEXTUAL SIDEBAR        repository / work navigation; collapses to a narrow rounded reopen rail
+PRIMARY SURFACE           current work
+INSPECTOR RAIL + DRAWER   canonical drawer (§7, §34.5)
+```
+
+- The global rail is XTRM-owned new work. Neither Conar nor Supernova provides a precedent.
+- The global rail never shows repository-specific state.
+- The contextual sidebar is grouped as `Work` / `Code` / `System` / `Governance`. `XTRM Issues` and `GitHub Issues` are distinct, differently labelled destinations.
+- The shell does not add a permanent conversation sidebar or a permanent split pane (§5, §12).
+
+### 34.4 Contextual sidebar, search, command, options
+
+These concepts were lost in later visual mocks and are restored as requirements:
+
+- **Expanded contextual sidebar** is a rich navigation and search surface: repository selector, full-width search field, grouped hierarchy with counts, status, and hover/focus row actions, footer actions.
+- **Collapsed contextual sidebar** is a narrow rounded reopen rail with one reopen affordance. It is not zero width and not a second icon menu.
+- **Repository selector** is persistent working context (§5).
+- **Global search** stays prominent. It searches across entity kinds with the selected repository as default scope and one control to widen to the workspace. It is reachable from the sidebar field and from a keyboard palette when the sidebar is collapsed.
+- **Command and options affordances** stay explicit: a command palette for navigation and actions, and `⋯` options menus on surface and drawer headers. Actions are authority-derived.
+- **Collapsed inspector rail** stays visible and mirrors the collapsed contextual rail (§7.2).
+
+### 34.5 Drawer
+
+```text
+CLOSED
+CONTEXTUAL
+PINNED
+MAXIMIZED
+FOLLOW_LIVE   orthogonal flag on any open state
+```
+
+- The drawer renders inside the primary region, so it cannot cover the global rail by construction.
+- `MAXIMIZED` auto-collapses the contextual sidebar to its reopen rail and restores it only if the maximize action caused the collapse.
+- One drawer primitive serves all entity kinds. The bottom dock, when built, is a docked mode of the same primitive.
+- Drawer navigation uses a typed reference stack that shares vocabulary with composer references (§10).
+- The inspected entity is URL-restorable.
+
+### 34.6 UI stack
+
+```text
+Base UI                 @base-ui/react — single primitive layer
+motion-panels           resizable shell panels, one XTRM adapter module, exact pin
+TanStack Router         @tanstack/react-router
+TanStack Virtual        @tanstack/react-virtual — only virtualization library
+cmdk                    search and command palette
+```
+
+Versions, licences, the full dependency list, and open adoption items: `adoption-audit.md` §12 and §15.
+
+### 34.7 Planning authority and data boundaries
+
+- Substrate Issues are executable-work authority, read through the Substrate typed service and projections.
+- The app never reads or writes `~/.xtrm/state.db` with SQL. No dual-write.
+- UI components never know data origin. Data arrives through typed adapters: `adapters/github`, `adapters/substrate`, `adapters/program` (`console-v2-shell-architecture.md` §9.3).
+- If the typed service lacks a required bounded or batched read, the UI is built against a typed fixture behind the adapter and the missing API is reported. The gap is never bypassed through SQLite.
+- Program remains a governance and reference projection. It never duplicates executable Issue state (§9).
+
+### 34.8 Frame
+
+- A Frame belongs to exactly one AgentSession.
+- Cross-agent aggregation is not Frame identity. It belongs to Agents, ChainRun, Graph, and Observability.
+- Frame projection is session-local UI state over provider-owned session history (§26).
+- Open contract details (optional response body, provisional IDs before settlement, child-agent references, compaction-only units) are inputs to the Agent/Frames tranche, recorded in `console-v2-audit-supernova.md` §3.3–3.6. They are not decided here.
+
+### 34.9 Visual standard
+
+```text
+quiet · flat · restrained · professional · dense but readable
+hairline borders · small number of surface levels · minimal shadows
+hover/focus-revealed secondary actions · restrained XTRM violet accent
+no card soup · no dashboard aesthetic · no cyberpunk/terminal styling
+```
+
+Concrete rules and the shared primitive list: `console-v2-shell-architecture.md` §15.
+
+### 34.10 Delivery order
+
+1. Canonical documentation baseline (this amendment). No product code.
+2. Executable Console v2 prototype in `packages/xtrm-app`: shared primitives first, then shell, then Substrate Issues, Program, and GitHub/repository Activity as real surfaces. Agent, Agents, Graph, and Observability are explicit placeholder routes. No further static HTML mocks.
+3. Agent/Frames runtime tranche, separately contracted, using Supernova and DeepSeek Harness as runtime/session references.
+
+A visible Agent destination does not authorize starting the Agent/Frames tranche.
+
+### 34.11 Disposition of PR #170 amendments A1–A12
+
+| amendment | disposition |
+|---|---|
+| A1 global rail is XTRM-owned | adopted (§34.3) |
+| A2 reserved collapsed contextual rail | adopted (§34.4; B1 mechanism) |
+| A3 geometric rail protection | adopted (§34.5) |
+| A4 dock is a drawer mode | adopted (§34.5) |
+| A5 deep-linkable repository surfaces, disambiguated Issues labels | adopted (§34.3, §34.5; route contract in shell architecture §9.1) |
+| A6 Base UI + motion-panels | adopted (§34.6) |
+| A7 Console v1 visual contract shell rules superseded ("no rounded corners", "one shell, one sidebar", "no nested topbars") | adopted; its typography, density, and row-anatomy guidance remains input |
+| A8 `Work` / `Code` / `System` / `Governance` groups | adopted (§34.3) |
+| A9 Substrate readiness gate before wave E | amended: the gate applies to live integration only; UI work proceeds against a typed fixture (§34.7) |
+| A10 Console v1 defect dispositions before cutover | adopted (`console-v2-audit-console-v1-preservation.md` §5–6b) |
+| A11 placement open | resolved (§34.1) |
+| A12 Agent scope unchanged after DeepSeek audit | adopted (§34.10) |

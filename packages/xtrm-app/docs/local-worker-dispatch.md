@@ -1,5 +1,7 @@
 # Local worker dispatch — xtrm-app v0
 
+> **Historical (2026-09-16).** This brief predates the Console v2 baseline and uses the superseded `Episode` term (read as `Frame`). Do not dispatch work from it. Canonical documents: `docs/README.md`.
+
 Build the first real Linux vertical in `xtrm-dev/xtrm/packages/xtrm-app`. Treat this package as the canonical implementation root for the Episode-based human↔agent desktop app.
 
 Read, in order:
