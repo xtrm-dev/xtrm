@@ -395,7 +395,7 @@ once inside the repository to bind it.`,
 creates an issue; --contract takes a JSON file path or inline JSON. Scrutiny is required: --scrutiny wins when present, otherwise the contract file's own scrutiny applies; a missing or invalid value fails closed.`,
   "issue.show": `usage: sb issue show <ref>
 
-prints the issue header plus the contract body (human) or full payload (with --json), followed by a bounded operational context: the most recent journal entries (summaries truncated), the newest entry per kind, per-kind counts, the closure view and the provenance summary. The full journal is never dumped; use "sb journal show" for bodies.`,
+prints the issue header plus the contract body (human) or full payload (with --json), followed by a bounded operational context: the most recent journal entries (summaries truncated), the newest entry per kind, per-kind counts, the closure view and the provenance summary. An issue with no journal entries prints an explicit empty state. The full journal is never dumped; use "sb journal show" for bodies.`,
   "issue.edit": `usage: sb issue edit <ref> [--project <id>] [--contract <file|json>] [--title <t>] [--priority <n>] [--scrutiny <s>] [--ownership <file|json>] [--context-refs <file|json>] [--expected-revision <n>]
 
 --title/--priority are metadata (no revision, readiness retained); --contract/--ownership/
