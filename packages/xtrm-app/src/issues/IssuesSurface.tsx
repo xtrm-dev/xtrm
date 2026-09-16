@@ -9,7 +9,7 @@ import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, Sta
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
-import { TERMINAL, PriorityGlyph, kindIcon, lifecycleLabel, lifecycleTone } from "./meta.tsx";
+import { TERMINAL, IssueKey, PriorityGlyph, kindIcon, lifecycleLabel, lifecycleTone } from "./meta.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
 
 type View = "open" | "ready" | "blocked" | "deferred" | "done" | "all";
@@ -36,7 +36,7 @@ function refOrder(a: string, b: string) {
   return 0;
 }
 
-const COLUMNS = "grid grid-cols-[1.25rem_7rem_minmax(0,1fr)_7rem_2.5rem_4rem_3.5rem] items-center gap-3";
+const COLUMNS = "grid grid-cols-[1.25rem_11rem_minmax(0,1fr)_7rem_2.5rem_4rem_3.5rem] items-center gap-3";
 
 export function IssuesSurface() {
   const { repo, inspect, inspected } = useShell();
@@ -58,7 +58,7 @@ export function IssuesSurface() {
 
   const matching = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    return (issues.data ?? []).filter((i) => !q || i.title.toLowerCase().includes(q) || i.ref.toLowerCase().includes(q) || (i.parentRef ?? "").toLowerCase().includes(q));
+    return (issues.data ?? []).filter((i) => !q || i.title.toLowerCase().includes(q) || i.ref.toLowerCase().includes(q) || i.locator.toLowerCase().includes(q) || (i.parentLocator ?? "").toLowerCase().includes(q));
   }, [issues.data, filter]);
 
   const visible = useMemo(() => {
@@ -66,8 +66,8 @@ export function IssuesSurface() {
     const rows = matching.filter(pred);
     const dir = sort.desc ? -1 : 1;
     const cmp: Record<SortKey, (a: IssueSummary, b: IssueSummary) => number> = {
-      key: (a, b) => refOrder(a.ref, b.ref),
-      priority: (a, b) => (a.priority ?? 9) - (b.priority ?? 9) || refOrder(a.ref, b.ref),
+      key: (a, b) => refOrder(a.locator, b.locator),
+      priority: (a, b) => (a.priority ?? 9) - (b.priority ?? 9) || refOrder(a.locator, b.locator),
       updated: (a, b) => (a.updatedAt ?? 0) - (b.updatedAt ?? 0),
       status: (a, b) => a.lifecycle.localeCompare(b.lifecycle),
     };
@@ -202,7 +202,7 @@ function IssueRow({ issue, selected, onInspect, onOpen }: { issue: IssueSummary;
     <Row selected={selected} onActivate={onInspect} onDoubleClick={onOpen} className="px-3">
       <div className={cx(COLUMNS, "w-full")}>
       <Icon name={kindIcon(issue.kind)} size="xs" className="text-ink-faint" />
-      <span className="truncate font-mono text-xs text-ink-muted">{issue.ref}</span>
+      <IssueKey locator={issue.locator} humanRef={issue.ref} className="truncate" />
       <span className="flex min-w-0 items-center gap-2">
         <span className={cx("truncate", terminal ? "text-ink-muted" : "text-ink")}>{issue.title}</span>
         {issue.readiness === "ready" && <span className="shrink-0 rounded-sm bg-accent-soft px-1.5 text-xs text-accent-ink">Ready</span>}
@@ -211,7 +211,7 @@ function IssueRow({ issue, selected, onInspect, onOpen }: { issue: IssueSummary;
             blocked
           </span>
         )}
-        {issue.parentRef && <span className="hidden shrink-0 font-mono text-xs text-ink-faint xl:inline">↑ {issue.parentRef}</span>}
+        {issue.parentRef && <span className="hidden shrink-0 font-mono text-xs text-ink-faint xl:inline">↑ {issue.parentLocator ?? issue.parentRef}</span>}
         <span className="ml-auto flex shrink-0 items-center opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100" onClick={(e) => e.stopPropagation()}>
           <IconButton icon="open" label={`Open ${issue.ref}`} onClick={onOpen} />
           <IconButton icon="copy" label={`Copy ${issue.ref}`} onClick={() => copy(issue.ref)} />

@@ -6,6 +6,7 @@ import { OptionsMenu } from "../ui/menu.tsx";
 import { ErrorState, LoadingState } from "../ui/primitives.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueView } from "./IssueView.tsx";
+import { IssueKey } from "./meta.tsx";
 
 const copy = (text: string) => void navigator.clipboard?.writeText(text).catch(() => {});
 
@@ -27,7 +28,7 @@ export function IssuePage() {
           <Icon name="back" size="xs" /> Issues
         </button>
         <span className="text-ink-faint">/</span>
-        <span className="font-mono text-xs text-ink-muted">{issueRef}</span>
+        <IssueKey locator={q.data?.locator} humanRef={issueRef} />
         <div className="ml-auto flex items-center gap-1">
           <OptionsMenu
             label="Issue options"

@@ -5,7 +5,7 @@ import { useAdapters } from "../adapters/index.tsx";
 import { MODES, REPO_SECTIONS, modeForPath, repoHref } from "../app/destinations.ts";
 import { projectForRepo, useIssues, useProgram, useProjects, useRepoStats, useRepos } from "../app/queries.ts";
 import { Icon } from "../ui/icon.tsx";
-import { IconButton, Row, StatusDot, relativeTime } from "../ui/primitives.tsx";
+import { Row, StatusDot, relativeTime } from "../ui/primitives.tsx";
 import { SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
 import { useShell } from "./context.tsx";
 
@@ -188,7 +188,6 @@ function DeferredSidebar({ label, reason }: { label: string; reason: string }) {
 }
 
 export function ContextSidebar() {
-  const { dispatch } = useShell();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const mode = MODES.find((m) => m.id === modeForPath(pathname))!;
 
@@ -197,11 +196,8 @@ export function ContextSidebar() {
       <div className="flex min-h-0 flex-1 flex-col">
         {mode.id === "work" ? <WorkSidebar pathname={pathname} /> : mode.id === "program" ? <ProgramSidebar /> : <DeferredSidebar label={mode.label} reason={mode.deferred ?? ""} />}
       </div>
-      <div className="mt-1 flex items-center border-t border-border-muted px-1 pt-1">
-        <div className="min-w-0 flex-1">
-          <SourceFooter />
-        </div>
-        <IconButton icon="sidebar" label="Collapse sidebar" shortcut="Ctrl B" onClick={() => dispatch({ type: "sidebar/toggle" })} className="self-start" />
+      <div className="mt-1 border-t border-border-muted px-1 pt-1">
+        <SourceFooter />
       </div>
     </nav>
   );

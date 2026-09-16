@@ -27,7 +27,9 @@ describe("Console v2 shell", () => {
     expect(screen.getByTestId("global-rail")).toBeTruthy();
     expect(screen.getByTestId("context-sidebar")).toBeTruthy();
     expect(screen.getByTestId("inspector-rail")).toBeTruthy();
-    expect(await screen.findByText("XTRM-301")).toBeTruthy();
+    // Hierarchical locator is the primary key; the flat ref follows dimmed.
+    expect(await screen.findByText("XTRM-300.1")).toBeTruthy();
+    expect(screen.getAllByText("/ XTRM-301").length).toBeGreaterThan(0);
   });
 
   it("rail selects modes; the sidebar only shows the active mode's context", async () => {
@@ -51,7 +53,7 @@ describe("Console v2 shell", () => {
 
   it("inspecting expands the rail into a CONTEXTUAL drawer whose left edge is the rail, never over the mode rail or sidebar", async () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
-    fireEvent.click(await screen.findByText("XTRM-301"));
+    fireEvent.click(await screen.findByText("XTRM-300.1"));
     const el = await screen.findByTestId("inspector-drawer");
     expect(el.dataset.variant).toBe("overlay");
     const dock = screen.getByTestId("inspector-dock");
@@ -109,6 +111,9 @@ describe("Console v2 shell", () => {
     expect(await screen.findByTestId("sidebar-reopen-rail")).toBeTruthy();
     fireEvent.click(screen.getByTestId("sidebar-reopen-rail"));
     await waitFor(() => expect(screen.queryByTestId("sidebar-reopen-rail")).toBeNull());
+    // The same light edge collapses the open sidebar.
+    fireEvent.click(screen.getByTestId("sidebar-collapse-edge"));
+    expect(await screen.findByTestId("sidebar-reopen-rail")).toBeTruthy();
     act(() => void fireEvent.keyDown(window, { key: "Escape" }));
     await waitFor(() => expect(drawer()).toBeNull());
   });

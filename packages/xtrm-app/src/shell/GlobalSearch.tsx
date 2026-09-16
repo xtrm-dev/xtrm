@@ -51,8 +51,8 @@ export function GlobalSearch() {
     const issues: CommandEntry[] = issueSource.slice(0, 2000).map((i) => ({
       id: i.id,
       label: i.title,
-      hint: `${i.ref} · ${i.lifecycle.replace(/_/g, " ")}`,
-      keywords: [i.ref],
+      hint: `${i.locator !== i.ref ? `${i.locator} / ${i.ref}` : i.ref} · ${i.lifecycle.replace(/_/g, " ")}`,
+      keywords: [i.ref, i.locator],
       icon: "issues",
       onSelect: () => shell.inspect({ kind: "issue", ref: i.ref }),
     }));

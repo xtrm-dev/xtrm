@@ -19,6 +19,7 @@ import {
   priorityOptions,
   readinessLabel,
   scrutinyOptions,
+  IssueKey,
 } from "./meta.tsx";
 
 type Variant = "page" | "panel";
@@ -102,13 +103,13 @@ function IssueBreadcrumb({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
         <>
           <button type="button" onClick={() => nav.onOpenIssue(issue.parent!.ref)} className="flex min-w-0 items-center gap-1 rounded-sm outline-none hover:text-ink-muted focus-visible:text-ink">
             <Icon name={kindIcon(issue.parent.kind ?? "epic")} size="xs" />
-            <span className="font-mono">{issue.parent.ref}</span>
+            <IssueKey locator={issue.parent.locator} humanRef={issue.parent.ref} />
           </button>
           <span>/</span>
         </>
       )}
       <Icon name={kindIcon(issue.kind)} size="xs" />
-      <span className="font-mono text-ink-muted">{issue.ref}</span>
+      <IssueKey locator={issue.locator} humanRef={issue.ref} />
       <span>·</span>
       <span>{issue.kind}</span>
       <span className="ml-auto tabular">rev {issue.revision}</span>
@@ -129,7 +130,7 @@ function IssueChip({ link, nav }: { link: IssueLink; nav: Nav }) {
   return (
     <button type="button" onClick={() => nav.onOpenIssue(link.ref)} className="-mx-1 flex max-w-full min-w-0 items-center gap-1.5 rounded-sm px-1 text-left outline-none hover:bg-hover focus-visible:bg-hover">
       <StatusDot tone={lifecycleTone(link.lifecycle)} label={lifecycleLabel(link.lifecycle)} />
-      <span className="shrink-0 font-mono text-xs text-ink-muted">{link.ref}</span>
+      <IssueKey locator={link.locator} humanRef={link.ref} className="shrink-0" />
       <span className="truncate text-ink">{link.title}</span>
     </button>
   );
@@ -390,7 +391,7 @@ function LineageTab({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
             {items.map((l) => (
               <Row key={l.ref} density="sidebar" onActivate={() => nav.onOpenIssue(l.ref)}>
                 <StatusDot tone={lifecycleTone(l.lifecycle)} label={lifecycleLabel(l.lifecycle)} />
-                <span className="w-24 shrink-0 font-mono text-xs text-ink-muted">{l.ref}</span>
+                <IssueKey locator={l.locator} humanRef={l.ref} className="shrink-0" />
                 <span className={cx("min-w-0 flex-1 truncate", TERMINAL.has(l.lifecycle) ? "text-ink-muted" : "text-ink")}>{l.title}</span>
                 <span className="text-xs text-ink-faint">{lifecycleLabel(l.lifecycle)}</span>
               </Row>

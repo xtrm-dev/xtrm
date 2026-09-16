@@ -59,3 +59,14 @@ export function formatDate(ms: number | null) {
   if (ms === null) return "—";
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
+
+/** Hierarchical locator first (shows epic lineage); the flat ref follows dimmed when it differs. */
+export function IssueKey({ locator, humanRef, className }: { locator?: string | null; humanRef: string; className?: string }) {
+  const primary = locator || humanRef;
+  return (
+    <span className={cx("font-mono text-xs whitespace-nowrap", className)}>
+      <span className="text-ink-muted">{primary}</span>
+      {primary !== humanRef && <span className="text-ink-faint opacity-70"> / {humanRef}</span>}
+    </span>
+  );
+}

@@ -41,6 +41,7 @@ function seed(): Map<string, Record_> {
       summary: {
         id: `iss_fixture-${n}`,
         ref,
+        locator: i > 0 && i < 8 ? `XTRM-300.${i}` : ref,
         title: i < TITLES.length ? title : `${title} (${Math.floor(i / TITLES.length) + 1})`,
         kind,
         lifecycle,
@@ -50,6 +51,7 @@ function seed(): Map<string, Record_> {
         createdAt: NOW - (60 - i) * DAY,
         updatedAt: NOW - (i % 9) * 3_600_000,
         parentRef: i > 0 && i < 8 ? "XTRM-300" : null,
+        parentLocator: i > 0 && i < 8 ? "XTRM-300" : null,
         childCount: i === 0 ? 7 : 0,
         childrenDone: i === 0 ? 1 : 0,
         blockedBy: i === 4 ? ["XTRM-305"] : [],
@@ -107,7 +109,7 @@ export function createFixtureSubstrate(): SubstrateAdapter {
     async getIssue(ref) {
       const r = get(ref);
       const s = r.summary;
-      const children = [...rows.values()].filter((x) => x.summary.parentRef === ref).map((x) => ({ id: x.summary.id, ref: x.summary.ref, title: x.summary.title, lifecycle: x.summary.lifecycle, kind: x.summary.kind }));
+      const children = [...rows.values()].filter((x) => x.summary.parentRef === ref).map((x) => ({ id: x.summary.id, ref: x.summary.ref, locator: x.summary.locator, title: x.summary.title, lifecycle: x.summary.lifecycle, kind: x.summary.kind }));
       const parent = s.parentRef ? get(s.parentRef).summary : null;
       const terminal = ["done", "cancelled", "archived"].includes(s.lifecycle);
       const detail: IssueDetail = {
@@ -120,9 +122,9 @@ export function createFixtureSubstrate(): SubstrateAdapter {
         contract: parseContract(r.contract),
         claim: null,
         closure: { closed: terminal, closedAt: terminal ? NOW - DAY : null, reason: terminal ? "done" : null },
-        parent: parent ? { id: parent.id, ref: parent.ref, title: parent.title, lifecycle: parent.lifecycle, kind: parent.kind } : null,
+        parent: parent ? { id: parent.id, ref: parent.ref, locator: parent.locator, title: parent.title, lifecycle: parent.lifecycle, kind: parent.kind } : null,
         children,
-        blockers: s.blockedBy.map((b) => get(b).summary).map((b) => ({ id: b.id, ref: b.ref, title: b.title, lifecycle: b.lifecycle, kind: b.kind })),
+        blockers: s.blockedBy.map((b) => get(b).summary).map((b) => ({ id: b.id, ref: b.ref, locator: b.locator, title: b.title, lifecycle: b.lifecycle, kind: b.kind })),
         release: children.length ? { childrenDone: children.filter((c) => c.lifecycle === "done").length, childrenTotal: children.length } : null,
         journal: [...r.journal].sort((a, b) => b.sequence - a.sequence),
         provenance: { attestation: null, claims: 0, bindings: 0, receipts: 0, commits: [], prs: [] },
@@ -158,6 +160,7 @@ export function createFixtureSubstrate(): SubstrateAdapter {
         summary: {
           id: `iss_fixture-${n}`,
           ref,
+          locator: ref,
           title: input.title,
           kind: input.kind,
           lifecycle: "open",
@@ -167,6 +170,7 @@ export function createFixtureSubstrate(): SubstrateAdapter {
           createdAt: Date.now(),
           updatedAt: Date.now(),
           parentRef: input.parent ?? null,
+          parentLocator: input.parent ? (rows.get(input.parent)?.summary.locator ?? input.parent) : null,
           childCount: 0,
           childrenDone: 0,
           blockedBy: [],

@@ -66,7 +66,10 @@ export type EdgeKind = "parent_child" | "blocks" | "relates_to" | "discovered_fr
 
 export interface IssueSummary {
   id: string;
+  /** Flat human ref (XTRM-58): stable identity for URLs and writes. */
   ref: string;
+  /** Hierarchical locator (XTRM-79.1): primary display key, shows epic/parent lineage. */
+  locator: string;
   title: string;
   kind: string;
   lifecycle: string;
@@ -77,6 +80,7 @@ export interface IssueSummary {
   createdAt: number | null;
   updatedAt: number | null;
   parentRef: string | null;
+  parentLocator: string | null;
   childCount: number;
   childrenDone: number;
   /** Open issues that block this one. */
@@ -110,6 +114,7 @@ export interface Contract {
 export interface IssueLink {
   id: string;
   ref: string;
+  locator?: string;
   title: string;
   lifecycle: string;
   kind?: string;

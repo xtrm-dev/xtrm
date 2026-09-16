@@ -53,7 +53,7 @@ export function Drawer({
         "flex h-full min-w-0 flex-col bg-raised",
       )}
     >
-      <div className="flex h-12 shrink-0 items-center gap-1 border-b border-border-muted px-2">{header}</div>
+      <div className="flex h-12 shrink-0 items-center gap-1 px-2">{header}</div>
       <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
         <div className={cx(variant === "maximized" && "mx-auto w-full max-w-4xl py-4")}>{children}</div>
       </div>

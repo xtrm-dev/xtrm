@@ -4,7 +4,7 @@ import { useAdapters, type IssueSummary, type Lifecycle } from "../adapters/inde
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { cx, relativeTime } from "../ui/primitives.tsx";
-import { TERMINAL, PriorityGlyph, kindIcon } from "./meta.tsx";
+import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
 
 /**
  * Board columns. Blocked and Ready are derived from dependencies and the dispatchable set,
@@ -189,7 +189,7 @@ function BoardCard({
     >
       <div className="flex items-center gap-1.5">
         <Icon name={kindIcon(issue.kind)} size="xs" className="text-ink-faint" />
-        <span className="font-mono text-xs text-ink-muted">{issue.ref}</span>
+        <IssueKey locator={issue.locator} humanRef={issue.ref} className="min-w-0 truncate" />
         <PriorityGlyph priority={issue.priority} />
         <span className="ml-auto opacity-0 transition-opacity group-hover/card:opacity-100 group-focus-within/card:opacity-100 has-[[data-popup-open]]:opacity-100" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           {canWrite && (
@@ -209,7 +209,7 @@ function BoardCard({
             {issue.childrenDone}/{issue.childCount} children
           </span>
         )}
-        {issue.parentRef && <span className="truncate font-mono">↑ {issue.parentRef}</span>}
+        {issue.parentRef && <span className="truncate font-mono">↑ {issue.parentLocator ?? issue.parentRef}</span>}
         <span className="ml-auto shrink-0 tabular">{relativeTime(issue.updatedAt)}</span>
       </div>
     </div>

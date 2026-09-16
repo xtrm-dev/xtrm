@@ -5,7 +5,7 @@ import { InspectorDrawer } from "./Inspector.tsx";
 import { useShell } from "./context.tsx";
 import { INSPECTOR } from "./layout.ts";
 
-export const RAIL = 44;
+export const RAIL = 22;
 const GAP = 24;
 
 /**
@@ -84,19 +84,14 @@ export function InspectorDock({ cardWidth }: { cardWidth: number }) {
             onClick={() => dispatch({ type: open ? "drawer/close" : "drawer/open" })}
             className={cx(
               "group/edge relative flex shrink-0 flex-col items-center justify-center gap-2 outline-none focus-visible:bg-hover",
-              open ? "border-r border-border-muted hover:bg-hover" : "hover:bg-hover/60",
+              open ? "hover:bg-hover" : "hover:bg-hover/60",
             )}
             style={{ width: RAIL - 2 }}
           >
             {followLive && <span className="size-1.5 rounded-full bg-accent" />}
-            <span className="flex h-12 w-5 items-center justify-center rounded-md border border-border-muted text-ink-faint transition-colors group-hover/edge:border-border group-hover/edge:text-ink">
+            <span className="flex h-10 w-3.5 items-center justify-center rounded-sm border border-border-muted text-ink-faint transition-colors group-hover/edge:border-border group-hover/edge:text-ink">
               <Icon name="back" size="xs" className={cx("transition-transform duration-250", open && "rotate-180")} />
             </span>
-            {layout.stack.length > 1 && (
-              <span className="text-[0.65rem] text-ink-faint tabular">
-                {layout.cursor + 1}/{layout.stack.length}
-              </span>
-            )}
           </button>
         </Tip>
         {open && (

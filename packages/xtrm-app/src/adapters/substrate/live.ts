@@ -30,6 +30,7 @@ interface WireLinks {
 export interface WireIssue {
   id: string;
   humanRef: string;
+  locator?: string;
   title: string;
   kind: string;
   lifecycleState: string;
@@ -52,7 +53,7 @@ export interface WireIssueDetail extends WireIssue {
   closure?: { closed: boolean; closedAt: number | null; reason: string | null };
 }
 interface WireResume {
-  children?: Array<{ issueId: string; humanRef: string; title: string; lifecycleState: string }>;
+  children?: Array<{ issueId: string; humanRef: string; locator?: string; title: string; lifecycleState: string }>;
   release?: { childrenDone: number; childrenTotal: number } | null;
 }
 interface WireTrace {
@@ -95,6 +96,7 @@ export function mapProjects(projects: WireProject[], links: WireLinks): Substrat
 /** Join list (human refs) + export (priority, dates, edges) + ready set into Jira-style rows. No per-issue reads. */
 export function mapBoard(list: WireIssue[], exported: WireExport | null, ready: WireIssue[]): IssueSummary[] {
   const refById = new Map(list.map((i) => [i.id, i.humanRef]));
+  const locatorById = new Map(list.map((i) => [i.id, i.locator ?? i.humanRef]));
   const lifecycleById = new Map(list.map((i) => [i.id, i.lifecycleState]));
   const meta = new Map(exported?.issues.map((r) => [r.issue.id, r.issue]));
   const readyIds = new Set(ready.filter((r) => r.dispatchable !== false).map((r) => r.id));
@@ -117,6 +119,7 @@ export function mapBoard(list: WireIssue[], exported: WireExport | null, ready: 
     return {
       id: i.id,
       ref: i.humanRef,
+      locator: i.locator ?? i.humanRef,
       title: i.title,
       kind: i.kind,
       lifecycle: i.lifecycleState,
@@ -126,6 +129,7 @@ export function mapBoard(list: WireIssue[], exported: WireExport | null, ready: 
       createdAt: m?.createdAt ?? null,
       updatedAt: m?.updatedAt ?? null,
       parentRef: parent ? (refById.get(parent) ?? null) : null,
+      parentLocator: parent ? (locatorById.get(parent) ?? null) : null,
       childCount: kids.length,
       childrenDone: kids.filter((k) => TERMINAL.has(lifecycleById.get(k) ?? "")).length,
       blockedBy: (blockers.get(i.id) ?? []).filter((b) => !TERMINAL.has(lifecycleById.get(b) ?? "")).map((b) => refById.get(b) ?? b),
@@ -134,7 +138,7 @@ export function mapBoard(list: WireIssue[], exported: WireExport | null, ready: 
   });
 }
 
-const link = (row: IssueSummary): IssueLink => ({ id: row.id, ref: row.ref, title: row.title, lifecycle: row.lifecycle, kind: row.kind });
+const link = (row: IssueSummary): IssueLink => ({ id: row.id, ref: row.ref, locator: row.locator, title: row.title, lifecycle: row.lifecycle, kind: row.kind });
 
 export function mapIssueDetail(
   d: WireIssueDetail,
@@ -142,9 +146,10 @@ export function mapIssueDetail(
 ): IssueDetail {
   const row = ctx.board.find((r) => r.id === d.id);
   const byRef = new Map(ctx.board.map((r) => [r.ref, r]));
+  const byId = new Map(ctx.board.map((r) => [r.id, r]));
   const parentRow = row?.parentRef ? byRef.get(row.parentRef) : undefined;
   const children: IssueLink[] = ctx.resume?.children?.length
-    ? ctx.resume.children.map((c) => ({ id: c.issueId, ref: c.humanRef, title: c.title, lifecycle: c.lifecycleState }))
+    ? ctx.resume.children.map((c) => ({ id: c.issueId, ref: c.humanRef, locator: c.locator ?? byId.get(c.issueId)?.locator, title: c.title, lifecycle: c.lifecycleState }))
     : ctx.board.filter((r) => r.parentRef === d.humanRef).map(link);
   const text = (x: unknown) => (typeof x === "string" ? x : x && typeof x === "object" ? String((x as Record<string, unknown>).sha ?? (x as Record<string, unknown>).ref ?? (x as Record<string, unknown>).url ?? (x as Record<string, unknown>).number ?? "") : "");
   const provenance: ProvenanceSummary = {
@@ -166,6 +171,7 @@ export function mapIssueDetail(
   return {
     id: d.id,
     ref: d.humanRef,
+    locator: d.locator ?? row?.locator ?? d.humanRef,
     title: d.title,
     kind: d.kind,
     lifecycle: d.lifecycleState,
@@ -175,6 +181,7 @@ export function mapIssueDetail(
     createdAt: row?.createdAt ?? null,
     updatedAt: row?.updatedAt ?? null,
     parentRef: row?.parentRef ?? null,
+    parentLocator: row?.parentLocator ?? null,
     childCount: children.length,
     childrenDone: children.filter((c) => TERMINAL.has(c.lifecycle)).length,
     blockedBy: row?.blockedBy ?? [],

@@ -84,20 +84,21 @@ function ModeRail() {
   );
 }
 
-/** Collapsed sidebar affordance: a light edge beside the rail, not a floating box (Supernova-plain sidebar). */
-function SidebarEdge() {
+/** Sidebar toggle: one light edge — beside the mode rail when collapsed, on the sidebar's right edge when open. */
+function SidebarEdge({ open }: { open: boolean }) {
   const { dispatch } = useShell();
+  const label = open ? "Collapse sidebar" : "Open sidebar";
   return (
     <button
       type="button"
-      data-testid="sidebar-reopen-rail"
-      aria-label="Open sidebar"
-      title="Open sidebar (Ctrl B)"
+      data-testid={open ? "sidebar-collapse-edge" : "sidebar-reopen-rail"}
+      aria-label={label}
+      title={`${label} (Ctrl B)`}
       onClick={() => dispatch({ type: "sidebar/toggle" })}
-      className="group/edge -ml-1 mb-1.5 flex w-4 shrink-0 items-center justify-center outline-none"
+      className={cx("group/edge flex w-4 shrink-0 items-center justify-center outline-none", open ? "absolute inset-y-0 right-0 z-20" : "-ml-1 mb-1.5")}
     >
       <span className="flex h-10 w-1 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 group-hover/edge:h-12 group-hover/edge:w-4 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-12 group-focus-visible/edge:w-4 group-focus-visible/edge:bg-hover">
-        <Icon name="forward" size="xs" className="shrink-0 opacity-0 transition-opacity group-hover/edge:opacity-100 group-focus-visible/edge:opacity-100" />
+        <Icon name={open ? "back" : "forward"} size="xs" className="shrink-0 opacity-0 transition-opacity group-hover/edge:opacity-100 group-focus-visible/edge:opacity-100" />
       </span>
     </button>
   );
@@ -114,7 +115,7 @@ function ShellLayout() {
       <TopBar />
       <div className="flex min-h-0 flex-1 pr-1.5 pb-1.5">
         <ModeRail />
-        {!sidebar.open && <SidebarEdge />}
+        {!sidebar.open && <SidebarEdge open={false} />}
         <ResizableGroup>
           <ResizablePanel
             data-testid="sidebar-panel"
@@ -124,8 +125,9 @@ function ShellLayout() {
             collapsed={!sidebar.open}
             onSizeChange={(width) => dispatch({ type: "sidebar/resize", width })}
           >
-            <div inert={!sidebar.open} data-state={sidebar.open ? "expanded" : "collapsed"} className="h-full">
+            <div inert={!sidebar.open} data-state={sidebar.open ? "expanded" : "collapsed"} className="relative h-full pr-3">
               <ContextSidebar />
+              <SidebarEdge open />
             </div>
           </ResizablePanel>
           {sidebar.open && <ResizeHandle label="Resize sidebar" />}
