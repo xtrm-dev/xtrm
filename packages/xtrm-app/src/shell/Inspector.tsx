@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { RepoEvent } from "../adapters/index.tsx";
 import { useEvents, useIssue, useProgram } from "../app/queries.ts";
 import { PullPanel } from "../github/PullPanel.tsx";
+import { DevicePanel } from "../github/auth.tsx";
 import { useCanWrite } from "../issues/actions.ts";
 import { IssueView } from "../issues/IssueView.tsx";
 import { Drawer, Fields, InspectorSection } from "../ui/drawer.tsx";
@@ -193,10 +194,12 @@ export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; fo
       return <ActivityPanel key={entity.ref} refValue={entity.ref} follow={follow} />;
     case "pr":
       return <PullPanel key={entity.ref} refValue={entity.ref} follow={follow} />;
+    case "github-auth":
+      return <DevicePanel key={entity.ref} />;
   }
 }
 
-const KIND_LABEL: Record<DrawerRef["kind"], string> = { issue: "Issue", program: "Program", activity: "Activity", pr: "Pull request" };
+const KIND_LABEL: Record<DrawerRef["kind"], string> = { issue: "Issue", program: "Program", activity: "Activity", pr: "Pull request", "github-auth": "GitHub sign-in" };
 
 export function InspectorDrawer({ variant }: { variant: "overlay" | "column" | "maximized" }) {
   const { layout, dispatch, inspected, repo } = useShell();

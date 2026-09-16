@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useAdapters } from "../adapters/index.tsx";
 import { repoHref } from "../app/destinations.ts";
 import { useRepoStats, useRepos } from "../app/queries.ts";
+import { GithubNotice } from "../github/auth.tsx";
 import { useGo } from "../shell/ContextSidebar.tsx";
 import type { IconName } from "../ui/icon.tsx";
 import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, SurfaceHeader, relativeTime } from "../ui/primitives.tsx";
@@ -35,6 +36,7 @@ export function RepositoriesSurface() {
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Repositories">
       <SurfaceHeader title="Repositories" meta={<><span className="tabular">{ordered.length}</span><SourceBadge source={github.source} /></>} />
+      <GithubNotice />
       {repos.isPending ? (
         <LoadingState label="Loading repositories" />
       ) : repos.isError ? (

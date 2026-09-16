@@ -1,7 +1,8 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { Outlet, useRouterState } from "@tanstack/react-router";
+import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { MODES, modeForPath, modeHref } from "../app/destinations.ts";
+import { AccountControl } from "../github/auth.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Kbd, Tip, cx } from "../ui/primitives.tsx";
 import { FillPanel, ResizableGroup, ResizeHandle, ResizablePanel } from "../ui/resizable.tsx";
@@ -14,6 +15,7 @@ import { SIDEBAR } from "./layout.ts";
 /** Full-width top bar: brand, global search, command and theme (v13 reference). */
 function TopBar() {
   const { theme, toggleTheme, openPalette, repo } = useShell();
+  const navigate = useNavigate();
   return (
     <header className="flex h-11 shrink-0 items-center gap-3 px-2" data-testid="top-bar">
       <div className="flex w-12 shrink-0 justify-center">
@@ -33,7 +35,8 @@ function TopBar() {
       <div className="flex shrink-0 items-center gap-0.5">
         <IconButton icon="command" label="Commands" shortcut="Ctrl Shift K" onClick={() => openPalette("commands")} />
         <IconButton icon={theme === "dark" ? "sun" : "moon"} label={theme === "dark" ? "Light theme" : "Dark theme"} aria-pressed={theme === "dark"} onClick={toggleTheme} />
-        <IconButton icon="settings" label="Settings" disabled />
+        <AccountControl />
+        <IconButton icon="settings" label="Settings" onClick={() => void navigate({ to: "/settings" } as never)} />
       </div>
     </header>
   );

@@ -1,6 +1,6 @@
 // One query layer for all adapters (§9.2): no module-singleton caches.
-import { useQueries, useQuery } from "@tanstack/react-query";
-import { useAdapters, type PullListState, type Repo, type SubstrateProject } from "../adapters/index.tsx";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAdapters, type GithubAuthStatus, type PullListState, type Repo, type SubstrateProject } from "../adapters/index.tsx";
 
 const LIVE_MS = 10_000;
 
@@ -43,6 +43,67 @@ export function usePull(repo: string, number: number | null, follow = false) {
     staleTime: 30_000,
     refetchInterval: follow ? LIVE_MS : false,
   });
+}
+
+// --- github auth (XTRM-400) ----------------------------------------------------
+// Reads resolve to served states, never tokens (§9.2: same query layer, same rules).
+
+export function useGithubAuthStatus(poll = false) {
+  const { githubAuth } = useAdapters();
+  return useQuery({
+    queryKey: ["github", "auth", "status"],
+    queryFn: () => githubAuth.status(),
+    staleTime: 15_000,
+    refetchInterval: poll ? 5_000 : false,
+    retry: false,
+  });
+}
+
+export function useGithubInstallations(enabled = true) {
+  const { githubAuth } = useAdapters();
+  return useQuery({
+    queryKey: ["github", "auth", "installations"],
+    queryFn: () => githubAuth.installations(),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useGithubCapabilities(repo: string, enabled = true) {
+  const { githubAuth } = useAdapters();
+  return useQuery({
+    queryKey: ["github", "capabilities", repo],
+    queryFn: () => githubAuth.capabilities(repo),
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+function useAuthMutation(action: "start" | "cancel" | "signout") {
+  const { githubAuth } = useAdapters();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (): Promise<GithubAuthStatus> =>
+      action === "start" ? githubAuth.startDevice() : action === "cancel" ? githubAuth.cancelDevice() : githubAuth.signOut(),
+    // The adapter settles on the fresh status; mirror it into the cache now and
+    // refetch observers (the polling device panel) right after.
+    onSuccess: (status) => {
+      client.setQueryData(["github", "auth", "status"], status);
+      void client.invalidateQueries({ queryKey: ["github", "auth", "status"] });
+    },
+  });
+}
+
+export function useStartDevice() {
+  return useAuthMutation("start");
+}
+export function useCancelDevice() {
+  return useAuthMutation("cancel");
+}
+export function useGithubSignOut() {
+  return useAuthMutation("signout");
 }
 
 export function useProjects() {

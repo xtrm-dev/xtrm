@@ -4,7 +4,7 @@
 
 export type DrawerState = "CLOSED" | "CONTEXTUAL" | "PINNED" | "MAXIMIZED";
 
-export type DrawerRefKind = "issue" | "program" | "activity" | "pr";
+export type DrawerRefKind = "issue" | "program" | "activity" | "pr" | "github-auth";
 
 /** Typed entity reference. Same vocabulary the composer will consume later (`@issue:XTRM-12`). */
 export interface DrawerRef {
@@ -132,7 +132,7 @@ export const currentRef = (s: LayoutState): DrawerRef | null => s.stack[s.cursor
 // ---------------------------------------------------------------------------
 // URL codec: ?inspect=<kind>:<ref>&drawer=contextual|pinned|maximized (§9.1)
 
-const KINDS: readonly DrawerRefKind[] = ["issue", "program", "activity", "pr"];
+const KINDS: readonly DrawerRefKind[] = ["issue", "program", "activity", "pr", "github-auth"];
 const URL_STATES = { contextual: "CONTEXTUAL", pinned: "PINNED", maximized: "MAXIMIZED" } as const;
 
 export interface DrawerSearch {

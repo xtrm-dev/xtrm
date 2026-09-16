@@ -98,6 +98,80 @@ export interface GithubAdapter {
   getPull(repo: string, number: number): Promise<PullRequestDetail>;
 }
 
+// --- github auth (XTRM-400; backend XTRM-404) ----------------------------------
+// Wire shapes are exactly the XTRM-404 SUCCESS contract (snake_case preserved).
+// The browser never receives or stores tokens; every read resolves to one of
+// the six served states plus per-repository installation capability.
+
+export type GithubAuthState = "not_configured" | "signed_out" | "pending" | "signed_in" | "expired" | "error";
+export type GithubAuthSource = "user" | "shared" | "none";
+/** Where the backend keeps the user token (XTRM-404 CONSTRAINTS); optional until the backend serves it. */
+export type GithubTokenStore = "keychain" | "file";
+
+export interface GithubAuthUser {
+  login: string;
+  name: string | null;
+  avatar_url: string | null;
+}
+
+export interface GithubDeviceChallenge {
+  user_code: string;
+  verification_uri: string;
+  expires_at: string;
+  /** Backend poll interval in seconds (GitHub requires >= 5). */
+  interval: number;
+}
+
+export interface GithubAuthError {
+  code: string;
+  message: string;
+}
+
+export interface GithubAuthStatus {
+  state: GithubAuthState;
+  auth_source: GithubAuthSource;
+  user?: GithubAuthUser;
+  device?: GithubDeviceChallenge;
+  store?: GithubTokenStore;
+  error?: GithubAuthError;
+}
+
+export interface GithubInstallation {
+  account: { login: string; avatar_url: string | null };
+  repository_selection: string;
+  permissions: Record<string, string>;
+  html_url: string;
+}
+
+export interface GithubInstallations {
+  installations: GithubInstallation[];
+  install_url: string;
+}
+
+export interface GithubCapabilities {
+  auth_source: GithubAuthSource;
+  installed: boolean;
+  permissions: Record<string, string>;
+  can: {
+    read_pulls: boolean;
+    read_checks: boolean;
+    read_contents: boolean;
+    read_issues: boolean;
+    read_actions: boolean;
+  };
+}
+
+export interface GithubAuthAdapter {
+  readonly source: DataSource;
+  status(): Promise<GithubAuthStatus>;
+  /** Opens a device flow; the UI then polls status() for pending -> signed_in/error. */
+  startDevice(): Promise<GithubAuthStatus>;
+  cancelDevice(): Promise<GithubAuthStatus>;
+  signOut(): Promise<GithubAuthStatus>;
+  installations(): Promise<GithubInstallations>;
+  capabilities(repo: string): Promise<GithubCapabilities>;
+}
+
 // --- substrate ------------------------------------------------------------
 
 export interface SubstrateProject {
@@ -267,6 +341,7 @@ export interface ProgramAdapter {
 
 export interface Adapters {
   github: GithubAdapter;
+  githubAuth: GithubAuthAdapter;
   substrate: SubstrateAdapter;
   program: ProgramAdapter;
 }

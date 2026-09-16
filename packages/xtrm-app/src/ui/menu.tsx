@@ -11,10 +11,10 @@ export interface OptionItem {
 }
 
 /** `⋯` options menu for surface and drawer headers (§4.4). A Base UI menu, not a toolbar. */
-export function OptionsMenu({ label = "Options", items, header }: { label?: string; items: OptionItem[]; header?: ReactNode }) {
+export function OptionsMenu({ label = "Options", items, header, trigger }: { label?: string; items: OptionItem[]; header?: ReactNode; trigger?: React.ReactElement }) {
   return (
     <Menu.Root>
-      <Menu.Trigger render={<IconButton icon="more" label={label} />} />
+      <Menu.Trigger render={trigger ?? <IconButton icon="more" label={label} />} />
       <Menu.Portal>
         <Menu.Positioner align="end" sideOffset={4} className="z-50">
           <Menu.Popup className="min-w-48 rounded-lg bg-raised p-1 text-sm shadow-float outline-none">

@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { fixtureGithub } from "./github/fixture.ts";
+import { fixtureGithubAuth, liveGithubAuth } from "./github/auth.ts";
 import { liveGithub } from "./github/live.ts";
 import { fixtureProgram } from "./program/fixture.ts";
 import { liveProgram } from "./program/live.ts";
@@ -16,14 +17,16 @@ export type * from "./types.ts";
  */
 export function adaptersFromEnv(env: Record<string, string | undefined> = import.meta.env): Adapters {
   const pick = (key: string, fallback: DataSource): DataSource => (env[key] === "live" || env[key] === "fixture" ? env[key] : fallback);
+  const githubLive = pick("VITE_XTRM_GITHUB", "live") === "live";
   return {
-    github: pick("VITE_XTRM_GITHUB", "live") === "live" ? liveGithub : fixtureGithub,
+    github: githubLive ? liveGithub : fixtureGithub,
+    githubAuth: githubLive ? liveGithubAuth : fixtureGithubAuth,
     substrate: pick("VITE_XTRM_SUBSTRATE", "live") === "live" ? liveSubstrate : fixtureSubstrate,
     program: pick("VITE_XTRM_PROGRAM", "fixture") === "live" ? liveProgram : fixtureProgram,
   };
 }
 
-export const fixtureAdapters: Adapters = { github: fixtureGithub, substrate: fixtureSubstrate, program: fixtureProgram };
+export const fixtureAdapters: Adapters = { github: fixtureGithub, githubAuth: fixtureGithubAuth, substrate: fixtureSubstrate, program: fixtureProgram };
 
 const AdaptersContext = createContext<Adapters | null>(null);
 

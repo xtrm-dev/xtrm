@@ -3,6 +3,7 @@ import type { PullRequestSummary } from "../adapters/index.tsx";
 import { usePulls } from "../app/queries.ts";
 import { extractIssueKeys, filterPulls, pullStateLabel, pullStateTone, checkLabel, checkTone, reviewLabel, sortPulls, type PullSort, type PullView } from "./pr.ts";
 import { ReferenceActionsProvider, ReferenceChip, useIssueIndex } from "../refs/references.tsx";
+import { GithubNotice } from "./auth.tsx";
 import { useShell } from "../shell/context.tsx";
 import { useAdapters } from "../adapters/index.tsx";
 import { Icon } from "../ui/icon.tsx";
@@ -193,6 +194,7 @@ export function PullsSurface() {
           </select>
         </label>
       </div>
+      <GithubNotice repo={repo.fullName} />
       {body}
     </section>
   );
