@@ -1743,6 +1743,41 @@ export class IssueService {
   // Those arrive with their owning phases; this service never invents them.
   // Every transition emits a durable issue.lifecycle event (§26) carrying
   // the from/to pair so lineage is explicit for all five states.
+  /**
+   * Repair-shaped source-time rewrite (XTRM-407). Rewrites the stored source
+   * timeline on a row that was ALREADY imported under the lossy importer.
+   * That is a different operation from pinning source time at creation
+   * (`createIssueFromImport`): this mutates existing history rather than
+   * establishing it, so it lives behind its own name and only the one-off
+   * repair entry point calls it.
+   *
+   * Append-only event rows are deliberately NOT rewritten. Existing
+   * `issue.created` / `issue.lifecycle` events keep their original stamps and
+   * the repair appends its own provenance event, because rewriting the spine
+   * would be history falsification rather than repair. Revision 1's
+   * `created_at` is kept consistent with the issue row, since that row is the
+   * record's stated origin.
+   */
+  applyImportedSourceTimes(
+    issueId: string,
+    source: { createdAt?: number | null; updatedAt?: number | null },
+  ): { changed: boolean; createdAt: number; updatedAt: number } {
+    return withTransaction(this.db, () => {
+      const issue = this.requireIssue(issueId);
+      // Monotonic by construction: a contradictory source record can never
+      // store updated_at earlier than created_at.
+      const createdAt = source.createdAt ?? issue.createdAt;
+      const updatedAt = Math.max(createdAt, source.updatedAt ?? issue.updatedAt);
+      const changed = createdAt !== issue.createdAt || updatedAt !== issue.updatedAt;
+      if (changed) {
+        this.db.prepare("UPDATE issues SET created_at = ?, updated_at = ? WHERE id = ?").run(createdAt, updatedAt, issueId);
+        this.db.prepare("UPDATE issue_revisions SET created_at = ? WHERE issue_id = ? AND revision = 1").run(createdAt, issueId);
+        this.db.prepare("UPDATE issue_aliases SET created_at = ? WHERE issue_id = ?").run(createdAt, issueId);
+      }
+      return { changed, createdAt, updatedAt };
+    });
+  }
+
   setLifecycleState(issueId: string, state: LifecycleState, at?: number): ResolvedIssue {
     if (!(LIFECYCLE_STATES as readonly string[]).includes(state)) throw new Error(`unknown lifecycle state: ${state}`);
     return withTransaction(this.db, () => {

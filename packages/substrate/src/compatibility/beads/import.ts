@@ -13,6 +13,7 @@ import type { ClosureService } from "../../service/closure-service.ts";
 import type { EdgeKind } from "../../domain/edge.ts";
 import type { IssueKind } from "../../domain/issue.ts";
 import { ISSUE_KINDS } from "../../domain/issue.ts";
+import type { WorkContract } from "../../domain/contract.ts";
 
 export interface BeadsIssueRecord {
   id: string;
@@ -215,6 +216,11 @@ export function extractSectionsDetailed(description: string): SectionExtraction 
   const out: SectionExtraction = { sections: {}, recognized: [], unmapped: [] };
   const bodies = new Map<SectionKey, string[]>();
   let current: SectionKey[] | null = null;
+  // Depth of the heading that opened the current section, so a DEEPER
+  // unrecognized heading stays part of the section body. Real exports nest
+  // `### 1. <work item>` under `## Scope`; treating every ATX heading as a
+  // boundary discarded the whole body and left the field empty.
+  let currentDepth = 0;
   let unmappedIdx: number | null = null;
   let sawHeading = false;
   for (const raw of description.split("\n")) {
@@ -226,20 +232,28 @@ export function extractSectionsDetailed(description: string): SectionExtraction 
       if (atx || labeled) {
         const label = (atx ? atx[1] : labeled![1])!;
         const rest = atx ? "" : labeled![2]!;
+        const depth = atx ? atx[0].length - atx[0].replace(/^#+/, "").length : 0;
         const keys = normalizeHeading(label);
         sawHeading = true;
         if (keys === null) {
           // A labeled form only counts as a heading when it names a contract
           // section; otherwise it is ordinary prose (`Note: ...`). An ATX
-          // heading is unambiguous, so it is reported as unmapped.
+          // heading is unambiguous, but a DEEPER one is a sub-heading of the
+          // section in progress and belongs to its body.
+          if (atx && current !== null && depth > currentDepth) {
+            for (const k of current) bodies.get(k)!.push(trimmed);
+            continue;
+          }
           if (atx) {
             current = null;
+            currentDepth = 0;
             out.unmapped.push({ heading: trimmed, lines: 0 });
             unmappedIdx = out.unmapped.length - 1;
             continue;
           }
         } else {
           current = keys;
+          currentDepth = depth;
           unmappedIdx = null;
           for (const k of keys) {
             if (!bodies.has(k)) bodies.set(k, []);
@@ -288,13 +302,33 @@ export function hasRecognizedSections(description: unknown): boolean {
   return extractSectionsDetailed(typeof description === "string" ? description : "").recognized.length > 0;
 }
 
+// The contract an imported record yields from its source description. Exported
+// so the one-off repair (XTRM-407) derives contracts by the identical rule the
+// importer uses: a repair with its own extraction would be a second lossy path.
+export function importedContract(description: string, title: string): WorkContract {
+  const sections = extractSectionsDetailed(description).sections as Record<string, string[]>;
+  const list = (k: string): string[] => sections[k] ?? [];
+  const contract = {
+    problem: str(sections["PROBLEM"]?.join("\n")) ?? (description || `${title}\n\n${TBD}`),
+    success: str(sections["SUCCESS"]?.join("\n")) ?? TBD,
+    scope: list("SCOPE"),
+    nonGoals: list("NON_GOALS"),
+    constraints: list("CONSTRAINTS"),
+    validation: list("VALIDATION").map((check) => ({ check })),
+    output: list("OUTPUT").map((artifact) => ({ artifact })),
+  };
+  if (contract.validation.length === 0) contract.validation = [{ check: TBD }];
+  if (contract.output.length === 0) contract.output = [{ artifact: TBD }];
+  return contract as WorkContract;
+}
+
 function mapKind(issueType: unknown): IssueKind {
   const k = typeof issueType === "string" ? issueType.toLowerCase() : "";
   if ((ISSUE_KINDS as readonly string[]).includes(k)) return k as IssueKind;
   return "task";
 }
 
-function mapStatus(status: unknown): "open" | "done" | "deferred" {
+export function mapStatus(status: unknown): "open" | "done" | "deferred" {
   if (status === "closed") return "done";
   if (status === "deferred") return "deferred";
   return "open";
@@ -495,19 +529,7 @@ export function importBeads(
     const title = str(r.title) ?? "(untitled beads import)";
     const description = str(r.description) ?? "";
     const extraction = extractSectionsDetailed(description);
-    const sections: Record<string, string[]> = extraction.sections as Record<string, string[]>;
-    const list = (k: string): string[] => sections[k] ?? [];
-    const contract = {
-      problem: str(sections["PROBLEM"]?.join("\n")) ?? (description || `${title}\n\n${TBD}`),
-      success: str(sections["SUCCESS"]?.join("\n")) ?? TBD,
-      scope: list("SCOPE"),
-      nonGoals: list("NON_GOALS"),
-      constraints: list("CONSTRAINTS"),
-      validation: list("VALIDATION").map((check) => ({ check })),
-      output: list("OUTPUT").map((artifact) => ({ artifact })),
-    };
-    if (contract.validation.length === 0) contract.validation = [{ check: TBD }];
-    if (contract.output.length === 0) contract.output = [{ artifact: TBD }];
+    const contract = importedContract(description, title);
     for (const u of extraction.unmapped) {
       result.unmappedSections.push({ beadsId, heading: u.heading, lines: u.lines });
     }

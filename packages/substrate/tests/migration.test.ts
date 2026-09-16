@@ -409,6 +409,32 @@ describe("XTRM-405: section extraction handles the real markdown convention", ()
     assert.deepEqual(ex.sections.CONSTRAINTS, ["one rule"]);
   });
 
+  it("keeps a DEEPER unrecognized sub-heading inside the section body", () => {
+    // Real exports nest `### 1. <work item>` under `## Scope`. Treating every
+    // ATX heading as a boundary discarded the whole body and left the field
+    // empty - found by the XTRM-407 repair dry run on a live row.
+    const ex = extractSectionsDetailed(
+      [
+        "## Scope",
+        "### 1. First work item",
+        "Report on both scopes.",
+        "### 2. Second work item",
+        "- a boundary",
+        "## Non-goals",
+        "No auto-cleanup.",
+      ].join("\n"),
+    );
+    assert.deepEqual(ex.recognized, ["SCOPE", "NON_GOALS"]);
+    assert.equal(ex.sections.SCOPE?.length, 2);
+    assert.ok(ex.sections.SCOPE?.[0]?.startsWith("### 1. First work item"));
+    assert.ok(ex.sections.SCOPE?.[0]?.includes("Report on both scopes."));
+    assert.deepEqual(ex.sections.NON_GOALS, ["No auto-cleanup."]);
+    // A SHALLOWER unrecognized heading still terminates the section.
+    const ex2 = extractSectionsDetailed("## Problem\nreal body\n## References\nstuff");
+    assert.deepEqual(ex2.sections.PROBLEM, ["real body"]);
+    assert.deepEqual(ex2.unmapped, [{ heading: "## References", lines: 1 }]);
+  });
+
   it("treats an unrecognized colon label as prose, not as a section break", () => {
     const ex = extractSectionsDetailed("## PROBLEM\nNote: this is prose inside the problem.\nmore text");
     assert.deepEqual(ex.sections.PROBLEM, ["Note: this is prose inside the problem.\nmore text"]);
