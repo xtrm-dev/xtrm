@@ -10,6 +10,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), substrateCliApi()],
   server: {
     port: 5178,
+    // Tailnet preview via MagicDNS (`vite --host <tailscale ip>`); not public.
+    allowedHosts: [".ts.net"],
     proxy: {
       "/api/github": { target: consoleUrl, changeOrigin: true },
       "/api/programme": { target: consoleUrl, changeOrigin: true },
