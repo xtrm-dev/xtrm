@@ -1,19 +1,16 @@
 ---
 name: using-substrate
-description: Substrate durable work doctrine for Claude Code — issue authority, the MCP tool surface, session binding, and the compaction contract. Use when work must be tracked, resumed after compaction, claimed, checkpointed, or handed off.
+description: Substrate durable work doctrine for Claude Code — Issue authority, the live MCP surface, session binding, Journal/Closure/provenance, and compaction continuity.
 ---
 
 # Using Substrate (Claude-facing)
 
-Substrate owns durable work. This skill is the Claude half of the shared
-`using-substrate` doctrine; the Pi half lives at
-`packages/substrate/skills/using-substrate/SKILL.md`. The Authority block below
-is the shared source and is byte-identical in both files —
-`packages/substrate/tests/plugin-packaging.test.ts` fails if they drift. Edit
-the Pi file, then mirror; never fork the doctrine.
+Substrate owns durable work. This is the Claude half of the shared
+`using-substrate` doctrine. The Authority block below is byte-identical to the
+Pi skill and is guarded by package tests. Provider tool names differ by design;
+provider semantics and authority must not.
 
-Invocation name: this ships as a plugin skill, so it is always namespaced —
-`/substrate:using-substrate`.
+Invocation: `/substrate:using-substrate`.
 
 ## Authority (non-negotiable)
 
@@ -37,70 +34,99 @@ Executor output never self-certifies provenance. Checkpoints record what the
 host observed; the service validates shapes fail-closed.
 ```
 
-## Tool surface
+## Live Claude MCP surface
 
-The MCP server calls the typed service in-process. It never execs `sb` and
-never parses CLI text.
+The MCP server calls the typed service in-process. It never shells out to `sb`
+and never parses terminal output. The stable registration set is:
 
 ```text
-issue_get <ref>          summary + readiness state
-issue_list [project]     project issues (explicit, SUBSTRATE_PROJECT, or single-project default)
-issue_ready [project]    dispatchable-ready issues
-journal_append <ref>     finding/decision/handoff/milestone/blocker (+ kind/summary/sessionId)
-journal_show <ref>       journal entries, full bodies (+ limit)
-provenance_trace <ref>   full trace: bindings, receipts with artifacts, attestation, claims
-resume_capsule <ref>     capsule + rendering
+issue_get            issue_list            issue_ready
+issue_claim          issue_update          issue_note          issue_close
+journal_append       journal_checkpoint    journal_show        journal_query
+provenance_trace     provenance_session    provenance_activation
+resume_capsule
 ```
 
-`tools/list` returns them in that order and it is stable — deterministic
-ordering is a protocol requirement, not a courtesy, because clients cache the
-list and prompt caches key on it.
+Important grouped semantics:
 
-`<ref>` accepts all five forms: machine ID (`iss_…`), durable reference
-(`XTRM-227`), current locator (`XTRM-184.2.3`), historical locator, alias.
+- `issue_claim` is op-discriminated (`claim|release`). A claim says who owns the
+  work; it does not create readiness or narrate progress.
+- `issue_update` changes authorized Issue fields. Revision-bearing changes stale
+  readiness; never use it for progress/findings/results.
+- `issue_note`, `journal_append`, and `journal_checkpoint` write continuity.
+  Journal `result` is the bounded participant outcome used by meaningful
+  settlement and closeout.
+- `issue_close` writes first-class immutable Closure with bounded outcome,
+  reason, evidence refs, actor/session context, and terminal lifecycle state.
+- `journal_query` is op-discriminated (`since|latest|timeline`).
+- `provenance_trace` returns the Issue evidence spine; `provenance_session` and
+  `provenance_activation` answer what a session or Specialist activation
+  produced.
+- `resume_capsule` derives continuation state from durable records; it is not a
+  second source of truth.
 
-Tool names differ from the Pi half by design: the Pi surface uses
-`substrate_`-prefixed names in its own namespace, and Claude reaches these
-through the MCP server. Read `tools/list` rather than assuming a name from the
-Pi doctrine.
+Read `tools/list` for machine schemas. Normative tool descriptions are generated
+from the same `TOOL_DEFS` registration table and explain changes, non-changes,
+revision/readiness effects, Journal boundaries, and automatic context.
+
+## Repository and Project resolution
+
+One global database may contain many Projects. That never makes one Project the
+implicit context for another repository.
+
+Project-scoped tools resolve:
+
+```text
+explicit project
+→ SUBSTRATE_PROJECT
+→ initialized repository binding / checkout alias
+→ fail closed with `sb init` guidance
+```
+
+There is no single-project-cardinality fallback. `sb init` establishes the Git
+repository → Project relationship; worktrees share that repository identity.
 
 ## Database authority
 
-One store, resolved as explicit override, else `SUBSTRATE_DB`, else
-`~/.xtrm/state.db`. The plugin ships **no** `SUBSTRATE_DB` default: a
-repo-local database would fork the canonical store and break row agreement
-between `sb`, Pi and Claude.
+One store: explicit `dbPath` where a tool exposes it, otherwise
+`SUBSTRATE_DB`, otherwise `~/.xtrm/state.db`. The plugin ships no repo-local
+`SUBSTRATE_DB` default because that would fork authority away from `sb` and Pi.
 
 ## Session binding and resume
 
-- Claiming with the session id binds the session to the issue. `SUBSTRATE_ISSUE_REF`
-  rebinds a fresh process to the same ref (the Pi half names this variable
-  differently; read the Authority block, not the name, as the contract).
-- `resume_capsule` prints the capsule for the bound issue. A later
-  session resumes from the capsule, never from compacted chat.
+`SUBSTRATE_ISSUE_REF` is the canonical process-level issue binding;
+`SUBSTRATE_ISSUE` is a compatibility alias. Host-known session/participant/run
+identity is enriched into durable execution context where the runtime knows it;
+unknown values stay absent rather than fabricated.
 
-## Compaction contract
+Resume from the derived Capsule, never from compacted chat.
 
-Claude exposes compaction as hook processes, so the lifecycle runs as three
-command hooks that the plugin registers:
+## Compaction lifecycle
 
-```text
-PreCompact              mechanical checkpoint FIRST (durable even if the rest
-                        fails), then the bounded semantic shape
-PostCompact             record that compaction happened
-SessionStart(compact)   surface the capsule head as additionalContext
-```
-
-Failure behaviour:
+Claude uses plugin hooks:
 
 ```text
-semantic model fails  → mechanical row stays durable, host default proceeds
-SQLite write fails    → never block compaction; reconcile later
-no bound issue        → handler returns; Claude's default compaction untouched
+PreCompact              mechanical checkpoint first, then semantic enrichment
+PostCompact             record compaction occurrence
+SessionStart(compact)   surface the Resume Capsule head as additionalContext
 ```
+
+A semantic summarizer failure cannot erase the mechanical checkpoint. A storage
+failure never blocks Claude's own context-overflow recovery.
+
+## Operation feedback
+
+Mutation results include shared structured feedback (`success`, `noop`,
+`warning`, or error at the call boundary). This is presentation metadata over
+the same durable service result, not a second authority model.
 
 ## Where this plugin lives
 
-Scripts resolve through `${CLAUDE_PLUGIN_ROOT}`, never
-`${CLAUDE_PROJECT_DIR}/packages/substrate/...`, so the plugin works from any
-install location. `${CLAUDE_PROJECT_DIR}` refers to user-project state only.
+Plugin scripts resolve through `${CLAUDE_PLUGIN_ROOT}`, never the consumer
+project path. `${CLAUDE_PROJECT_DIR}` is user-project state, not package code.
+
+## Where to read more
+
+- `packages/substrate/docs/claude.md` — exact provider lifecycle and tool map
+- `packages/substrate/docs/workflow.md` — end-to-end work lifecycle
+- `packages/substrate/docs/provenance-and-closure.md` — evidence and closeout
