@@ -149,7 +149,7 @@ export default function (pi: ExtensionAPI): void {
       ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
         const result = await withServices((svc) => toolJournalAppend(svc, { ref: params.ref as string, kind: params.kind as string, sessionId }));
-        return feedbackResult(result, successFeedback("journal_appended", `Added ${params.kind as string} to ${params.ref as string}`, `journal seq ${String(result.sequence)}`));
+        return feedbackResult(result, successFeedback("journal_written", `Added ${params.kind as string} to ${params.ref as string}`, `journal seq ${String(result.sequence)}`));
       },
     }),
     defineTool({
@@ -169,8 +169,8 @@ export default function (pi: ExtensionAPI): void {
         return feedbackResult(
           result,
           result.degraded
-            ? warningFeedback("checkpoint_degraded", `Checkpoint persisted for ${params.ref as string}`, "mechanical state is durable; semantic enrichment degraded")
-            : successFeedback("checkpoint_persisted", `Checkpoint persisted for ${params.ref as string}`, `journal seq ${String(result.sequence)}`),
+            ? warningFeedback("journal_degraded", `Checkpoint persisted for ${params.ref as string}`, "mechanical state is durable; semantic enrichment degraded")
+            : successFeedback("journal_written", `Checkpoint persisted for ${params.ref as string}`, `journal seq ${String(result.sequence)}`),
         );
       },
     }),
