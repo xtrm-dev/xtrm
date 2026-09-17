@@ -13,6 +13,7 @@ import json
 import re
 import secrets
 import string
+import time
 import traceback
 from pathlib import Path
 from typing import Any
@@ -26,8 +27,10 @@ from xtrm_research.guards import (
     GuardFailure,
     LabelExclusionRule,
     MaskAbortError,
+    RedactionAbortError,
     cache_key,
     check_mask,
+    check_redaction,
     deep_mask,
     guard_versions,
     guarded_send,
@@ -151,6 +154,14 @@ OVER_BROAD_KNOWN_IDS = frozenset(
     {"the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog", "near", "river"}
 )
 
+# H10: a dedicated corpus under MASK_MIN_WORD_COUNT_FOR_RATIO (20), so
+# the short-field path (not the ratio path OVER_BROAD_TEXT always takes)
+# is what a test using this fixture actually exercises.
+SUB_FLOOR_TEXT = "alpha beta gamma delta epsilon zeta eta theta iota kappa"
+SUB_FLOOR_KNOWN_IDS = frozenset(
+    {"alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota"}
+)
+
 
 def _contains_substring(obj: Any, needle: str) -> bool:
     if isinstance(obj, str):
@@ -180,13 +191,32 @@ _TRANSPORT_MODULES = {
     "boto3",
     "anthropic",
     "openai",
+    "os",
+    "urllib3",
+    "pycurl",
+    "websockets",
+    "grpc",
+    "smtplib",
+    "paramiko",
+    "litellm",
+    "ollama",
+    "cohere",
+    "google",
 }
-#: guards.py is the only module allowed to import a transport.
+#: guards.py is the only module allowed to import a transport. Matched on
+#: the path *relative to the package root* (H16): a hypothetical
+#: backends/guards.py must not inherit this allowlisting just because it
+#: shares a basename with the real, top-level guards.py.
 _TRANSPORT_IMPORT_ALLOWLIST = {"guards.py"}
 #: pre-existing, out-of-scope subprocess users (git plumbing, environment
-#: probing) — not a remote-send path, exempted by name rather than folded
-#: into the allowlist above.
+#: probing) — not a remote-send path, exempted by relative path rather
+#: than folded into the allowlist above.
 _SUBPROCESS_EXEMPT = {"code_state.py", "environment.py"}
+#: pre-existing, out-of-scope os users: runner.py/store.py use os.open,
+#: os.replace, os.close, os.unlink for the run-directory write path (out
+#: of scope for this issue to touch — see runner.py's own docstring on
+#: immutability/locking) — not a remote-send path.
+_OS_EXEMPT = {"runner.py", "store.py"}
 
 
 def _top_level_module(name: str | None) -> str:
@@ -197,13 +227,25 @@ def _is_callable_annotation(annotation: ast.expr | None) -> bool:
     return annotation is not None and "Callable" in ast.dump(annotation)
 
 
-def _scan_module(path: Path, source: str) -> tuple[list, list, list, list]:
+def _relative_identity(path: Path) -> str:
+    """The string a real file is matched against the allowlists with: its
+    path relative to the package root when it has one, or itself
+    unchanged for a synthetic (already relative-shaped) test path."""
+    try:
+        return str(path.relative_to(PACKAGE_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _scan_module(path: Path, source: str) -> tuple[list, list, list, list, list]:
     """Walk one module's AST for remote-seam violations. Shared by the
     structural test (real package files) and the bypass-detection tests
     below (synthetic snippets with a decoy path)."""
+    identity = _relative_identity(path)
     tree = ast.parse(source, filename=str(path))
     send_taking: list[tuple[str, str]] = []
     callable_params: list[tuple[str, str, str]] = []
+    unannotated_params: list[tuple[str, str, str]] = []
     transport_imports: list[tuple[str, str]] = []
     dynamic_imports: list[tuple[str, int]] = []
 
@@ -217,17 +259,21 @@ def _scan_module(path: Path, source: str) -> tuple[list, list, list, list]:
             for name in names:
                 if name not in _TRANSPORT_MODULES:
                     continue
-                if path.name in _TRANSPORT_IMPORT_ALLOWLIST:
+                if identity in _TRANSPORT_IMPORT_ALLOWLIST:
                     continue
-                if name == "subprocess" and path.name in _SUBPROCESS_EXEMPT:
+                if name == "subprocess" and identity in _SUBPROCESS_EXEMPT:
                     continue
-                transport_imports.append((str(path), name))
+                if name == "os" and identity in _OS_EXEMPT:
+                    continue
+                transport_imports.append((identity, name))
         if isinstance(node, ast.Call):
             func = node.func
-            if (isinstance(func, ast.Attribute) and func.attr == "import_module") or (
-                isinstance(func, ast.Name) and func.id == "import_module"
-            ):
-                dynamic_imports.append((str(path), node.lineno))
+            is_import_module = (
+                isinstance(func, ast.Attribute) and func.attr == "import_module"
+            ) or (isinstance(func, ast.Name) and func.id == "import_module")
+            is_dunder_import = isinstance(func, ast.Name) and func.id == "__import__"
+            if is_import_module or is_dunder_import:
+                dynamic_imports.append((identity, node.lineno))
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             positional_and_keyword = (
                 *node.args.posonlyargs,
@@ -236,47 +282,69 @@ def _scan_module(path: Path, source: str) -> tuple[list, list, list, list]:
             )
             arg_names = {a.arg for a in positional_and_keyword}
             if "send" in arg_names:
-                send_taking.append((str(path), node.name))
+                send_taking.append((identity, node.name))
                 continue
-            if node.name.startswith("_"):
-                continue
-            callable_args = list(positional_and_keyword)
+            variadic_args = list(positional_and_keyword)
             if node.args.vararg is not None:
-                callable_args.append(node.args.vararg)
+                variadic_args.append(node.args.vararg)
             if node.args.kwarg is not None:
-                callable_args.append(node.args.kwarg)
-            for a in callable_args:
+                variadic_args.append(node.args.kwarg)
+            # Callable-annotation check covers private helpers too (H9):
+            # a transport smuggled through a helper is just as much a
+            # bypass as one through a public function.
+            for a in variadic_args:
                 if _is_callable_annotation(a.annotation):
-                    callable_params.append((str(path), node.name, a.arg))
+                    callable_params.append((identity, node.name, a.arg))
+            # Unannotated-parameter check is scoped to public functions:
+            # an argument with no annotation at all could be smuggling a
+            # callable without even declaring it, evading the check
+            # above by omission rather than by a wrong annotation.
+            if not node.name.startswith("_"):
+                non_self = [
+                    a for a in positional_and_keyword if a.arg not in ("self", "cls")
+                ]
+                for a in non_self:
+                    if a.annotation is None:
+                        unannotated_params.append((identity, node.name, a.arg))
 
-    return send_taking, callable_params, transport_imports, dynamic_imports
+    return (
+        send_taking,
+        callable_params,
+        unannotated_params,
+        transport_imports,
+        dynamic_imports,
+    )
 
 
 def test_guarded_send_is_the_only_remote_seam():
     """No module other than guards.py performs or exposes a remote call:
     guarded_send/send_through_run are the only exported functions
-    anywhere in the package taking a ``send`` parameter, no public
-    function takes a Callable-annotated parameter under any other name,
-    no module imports a transport library, and nothing dynamically
-    imports one either."""
+    anywhere in the package taking a ``send`` parameter, no function
+    (public or private) takes a Callable-annotated parameter under any
+    other name, no public function takes an unannotated parameter, no
+    module imports a transport library, and nothing dynamically imports
+    one either (including a bare ``__import__`` call)."""
     send_taking: list = []
     callable_params: list = []
+    unannotated_params: list = []
     transport_imports: list = []
     dynamic_imports: list = []
 
     for path in sorted(PACKAGE_ROOT.rglob("*.py")):
-        s, c, t, d = _scan_module(path, path.read_text(encoding="utf-8"))
+        s, c, u, t, d = _scan_module(path, path.read_text(encoding="utf-8"))
         send_taking += s
         callable_params += c
+        unannotated_params += u
         transport_imports += t
         dynamic_imports += d
 
     assert transport_imports == []
     assert dynamic_imports == []
     assert callable_params == []
+    assert unannotated_params == []
     assert send_taking == [
-        (str(GUARDS_PATH), "guarded_send"),
-        (str(GUARDS_PATH), "send_through_run"),
+        ("guards.py", "guarded_send"),
+        ("guards.py", "send_through_run"),
     ]
 
 
@@ -288,10 +356,18 @@ def test_guarded_send_is_the_only_remote_seam():
     ],
 )
 def test_scan_detects_callable_annotated_parameter_regardless_of_name(source):
-    _send, callable_params, _t, _d = _scan_module(Path("decoy.py"), source)
+    _send, callable_params, _u, _t, _d = _scan_module(Path("decoy.py"), source)
     assert callable_params == [
         ("decoy.py", "push", "transport" if "transport" in source else "client")
     ]
+
+
+def test_scan_detects_callable_annotated_parameter_in_a_private_helper():
+    """H9: the Callable-annotation check covers private helpers too, not
+    just public functions."""
+    source = "def _push(transport: Callable) -> None:\n    pass\n"
+    _send, callable_params, *_ = _scan_module(Path("decoy.py"), source)
+    assert callable_params == [("decoy.py", "_push", "transport")]
 
 
 def test_scan_detects_positional_only_send_parameter():
@@ -308,6 +384,33 @@ def test_scan_detects_kwargs_callable_annotation():
     assert callable_params == [("decoy.py", "push", "kwargs")]
 
 
+def test_scan_detects_unannotated_parameter_in_a_public_function():
+    """H9: an argument with no annotation at all could smuggle a
+    callable by omission, evading the Callable-annotation check."""
+    _s, _c, unannotated, *_ = _scan_module(
+        Path("decoy.py"), "def push(payload, transport):\n    pass\n"
+    )
+    assert ("decoy.py", "push", "transport") in unannotated
+
+
+def test_scan_ignores_self_and_cls_for_unannotated_parameter_check():
+    _s, _c, unannotated, *_ = _scan_module(
+        Path("decoy.py"),
+        "class C:\n    def push(self, transport: Callable) -> None:\n        pass\n",
+    )
+    assert unannotated == []
+
+
+def test_scan_does_not_flag_unannotated_parameters_in_private_helpers():
+    """The unannotated-parameter check is scoped to public functions
+    (H9's own wording); private-helper coverage for a bypass attempt is
+    the Callable-annotation check above, which does cover them."""
+    _s, _c, unannotated, *_ = _scan_module(
+        Path("decoy.py"), "def _push(payload, transport):\n    pass\n"
+    )
+    assert unannotated == []
+
+
 @pytest.mark.parametrize(
     "source",
     [
@@ -322,31 +425,64 @@ def test_scan_detects_kwargs_callable_annotation():
         "import httpcore\n",
         "import aiohttp\n",
         "import socket\n",
+        "import os\n",
+        "import urllib3\n",
+        "import pycurl\n",
+        "import websockets\n",
+        "import grpc\n",
+        "import smtplib\n",
+        "import paramiko\n",
+        "import litellm\n",
+        "import ollama\n",
+        "import cohere\n",
+        "import google\n",
     ],
 )
 def test_scan_detects_transport_module_imports(source):
-    _s, _c, transport_imports, _d = _scan_module(Path("decoy.py"), source)
+    _s, _c, _u, transport_imports, _d = _scan_module(Path("decoy.py"), source)
     assert len(transport_imports) == 1
 
 
-def test_scan_detects_dynamic_import_module_call():
-    _s, _c, _t, dynamic_imports = _scan_module(
-        Path("decoy.py"), "import importlib\nimportlib.import_module('requests')\n"
-    )
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import importlib\nimportlib.import_module('requests')\n",
+        "__import__('requests')\n",
+    ],
+)
+def test_scan_detects_dynamic_import_calls(source):
+    _s, _c, _u, _t, dynamic_imports = _scan_module(Path("decoy.py"), source)
     assert len(dynamic_imports) == 1
 
 
 def test_scan_allows_guards_py_to_import_a_transport():
-    _s, _c, transport_imports, _d = _scan_module(Path("guards.py"), "import socket\n")
+    _s, _c, _u, transport_imports, _d = _scan_module(
+        Path("guards.py"), "import socket\n"
+    )
     assert transport_imports == []
 
 
 def test_scan_exempts_code_state_and_environment_subprocess_imports():
     for filename in ("code_state.py", "environment.py"):
-        _s, _c, transport_imports, _d = _scan_module(
+        _s, _c, _u, transport_imports, _d = _scan_module(
             Path(filename), "import subprocess\n"
         )
         assert transport_imports == [], filename
+
+
+def test_scan_exempts_runner_and_store_os_imports():
+    for filename in ("runner.py", "store.py"):
+        _s, _c, _u, transport_imports, _d = _scan_module(Path(filename), "import os\n")
+        assert transport_imports == [], filename
+
+
+def test_scan_allowlist_matches_relative_path_not_basename():
+    """H16: a *different* file that happens to share guards.py's
+    basename (e.g. a hypothetical backends/guards.py) must not inherit
+    the top-level guards.py's transport-import allowlisting."""
+    nested = Path("backends") / "guards.py"
+    _s, _c, _u, transport_imports, _d = _scan_module(nested, "import socket\n")
+    assert len(transport_imports) == 1
 
 
 # ---- redaction --------------------------------------------------------
@@ -416,6 +552,167 @@ def test_redact_masks_pem_block_markers_included():
         assert line not in redacted
 
 
+# ---- H8/H14: credential shapes the original patterns missed --------------
+
+
+def test_redact_catches_unrecognized_name_value_assignment():
+    """H8 regression (the MMD-585 shape): an opaque value assigned to a
+    name that matches none of the KEY/SECRET/TOKEN/... keywords is still
+    caught by the name-agnostic mixed-class heuristic."""
+    text = "R2_ACCOUNT=abc123def456"
+    redacted = redact(text)
+    assert "abc123def456" not in redacted
+    assert "<redacted>" in redacted
+
+
+def test_redact_catches_creds_abbreviation():
+    text = 'MY_CREDS="abcdefghijk"'
+    redacted = redact(text)
+    assert "abcdefghijk" not in redacted
+
+
+def test_redact_catches_short_password_under_old_eight_char_floor():
+    text = "password=hunter2"
+    redacted = redact(text)
+    assert "hunter2" not in redacted
+
+
+def test_redact_catches_unquoted_multi_word_password_value():
+    text = "password: hunter2 correct horse"
+    redacted = redact(text)
+    assert "hunter2 correct horse" not in redacted
+
+
+def test_redact_catches_redis_style_empty_username_url_credential():
+    """H14: the userinfo is optional (``*``, not ``+``) — Redis and
+    Sentry DSNs commonly omit the username entirely."""
+    password = secrets.token_hex(8)
+    text = f"redis://:{password}@cache:6379"
+    redacted = redact(text)
+    assert password not in redacted
+
+
+def test_redact_catches_bare_bearer_token_without_header_name():
+    token = "sk-" + secrets.token_hex(10)
+    text = f"the request used Bearer {token} for auth"
+    redacted = redact(text)
+    assert token not in redacted
+
+
+def test_redact_catches_authorization_token_scheme():
+    token = secrets.token_hex(10)
+    text = f"Authorization: Token {token}"
+    redacted = redact(text)
+    assert token not in redacted
+
+
+def test_redact_catches_xapp_prefixed_token():
+    token = "xapp-" + secrets.token_hex(12)
+    text = f"slack app token: {token}"
+    redacted = redact(text)
+    assert token not in redacted
+
+
+# ---- H8: false-positive guard — ordinary prose and pairs are untouched --
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "name=John and type=video",
+        "the password policy requires special characters",
+        "count=42",
+        "city=Springfield",
+        "please review this ticket before merging",
+    ],
+)
+def test_redact_does_not_touch_ordinary_prose_or_plain_pairs(text):
+    assert redact(text) == text
+
+
+# ---- H13: SECRET_URL_CRED must not catastrophically backtrack -----------
+
+
+def test_secret_url_cred_stays_fast_on_adversarial_input():
+    blob = base64.b64encode(secrets.token_bytes(15000)).decode()  # ~20KB
+    adversarial = "ab-" * 7000
+    for candidate in (blob, adversarial):
+        start = time.perf_counter()
+        redact(candidate)
+        elapsed = time.perf_counter() - start
+        assert elapsed < 0.1, (
+            f"redact took {elapsed:.3f}s on a {len(candidate)}-char input"
+        )
+
+
+# ---- H12: PEM narrowing, and the missing redaction-loss check -----------
+
+
+def test_pem_pattern_no_longer_matches_a_non_private_key_banner_pair():
+    """H12 probe: the old ``[^-]+`` banner pattern matched *any* pair of
+    banners, e.g. a CHANGELOG block, and destroyed the prose between
+    them. The narrowed pattern only matches PRIVATE KEY banners, so
+    ordinary release notes between a CHANGELOG banner pair are left
+    completely intact."""
+    prose = (
+        "This release improves startup latency, fixes a race in the "
+        "connection pool, and adds retry backoff for transient network "
+        "errors across the client."
+    ) * 3
+    text = f"-----BEGIN CHANGELOG-----\n{prose}\n-----END CHANGELOG-----"
+    assert redact(text) == text
+
+
+def test_redaction_loss_check_aborts_when_a_rule_eats_a_whole_field():
+    """H12 part 2: even with the narrowed PEM pattern, a genuine
+    PRIVATE KEY banner pair stuffed with ordinary prose (not a real key)
+    still gets redacted by design — and the missing half of the guard,
+    check_redaction, is what catches that this destroyed real content."""
+    prose = (
+        "This release improves startup latency, fixes a race in the "
+        "connection pool, and adds retry backoff for transient network "
+        "errors across the client, and updates the dependency graph "
+        "resolver to handle circular imports more gracefully."
+    ) * 3
+    text = f"-----BEGIN RSA PRIVATE KEY-----\n{prose}\n-----END RSA PRIVATE KEY-----"
+    backend = _RecordingBackend()
+    with pytest.raises(GuardFailure) as exc_info:
+        guarded_send({"notes": text}, backend)
+    assert exc_info.value.guard == "redaction"
+    assert backend.calls == []
+
+
+def test_a_real_pem_is_still_redacted_and_sent():
+    body = base64.b64encode(secrets.token_bytes(600)).decode()
+    lines = "\n".join(body[i : i + 64] for i in range(0, len(body), 64))
+    pem = f"-----BEGIN RSA PRIVATE KEY-----\n{lines}\n-----END RSA PRIVATE KEY-----"
+    backend = _RecordingBackend()
+    guarded_send({"key": pem}, backend)
+    assert backend.calls[0]["key"] == "<redacted>"
+    assert body not in json.dumps(backend.calls[0])
+
+
+def test_unterminated_private_key_marker_is_redacted_to_end_of_field():
+    body = base64.b64encode(secrets.token_bytes(300)).decode()
+    text = f"-----BEGIN RSA PRIVATE KEY-----\n{body}"  # no END marker
+    redacted = redact(text)
+    assert body not in redacted
+    assert "<redacted>" in redacted
+
+
+def test_check_redaction_does_not_abort_a_short_bare_credential_field():
+    """Unlike check_mask, a short field losing all of its (near-zero)
+    plain-word content to redaction never aborts by itself — that is
+    exactly what redaction legitimately does to a real credential."""
+    check_redaction("AKIA" + "ABCDEFGHIJKLMNOP", "<redacted>")  # does not raise
+
+
+def test_check_redaction_ratio_path_still_fires_on_a_large_prose_loss():
+    prose = " ".join(_distinct_alpha_words("realword", 100))
+    with pytest.raises(RedactionAbortError):
+        check_redaction(prose, "<redacted>")  # 100 real words all gone -> abort
+
+
 def test_deep_mask_operates_per_string_field_not_serialized_json():
     hex_secret = _fake_hex_secret()
     payload = {"contract": {"body": f'token="{hex_secret}"', "n": 3}, "tags": ["x"]}
@@ -455,6 +752,19 @@ def test_deep_mask_fails_closed_on_bytes():
     payload = {"blob": _fake_hex_secret().encode()}
     with pytest.raises(TypeError):
         deep_mask(payload, known_ids=frozenset())
+
+
+def test_type_policy_error_message_names_the_type_not_the_value():
+    """H10: the fail-closed TypeError's message must be safe to log —
+    it should name the offending type, and never contain the value that
+    tripped it (here, the secret bytes themselves)."""
+    secret_bytes = _fake_hex_secret().encode()
+    with pytest.raises(TypeError) as exc_info:
+        deep_mask({"blob": secret_bytes}, known_ids=frozenset())
+    message = str(exc_info.value)
+    assert "bytes" in message
+    assert secret_bytes.decode() not in message
+    assert repr(secret_bytes) not in message
 
 
 def test_deep_mask_fails_closed_on_arbitrary_object():
@@ -663,6 +973,42 @@ _H1_KNOWN_WORDS = [
     "tauword",
     "upsilon",
 ]
+
+
+def test_sub_floor_fixture_tolerates_partial_loss_at_guarded_send_level():
+    """H10: using SUB_FLOOR_TEXT (10 words, well under the 20-word
+    floor) end-to-end through guarded_send — 9 of 10 words masked, one
+    survives, so the short-field path (not the ratio path) applies and
+    tolerates the partial loss."""
+    backend = _RecordingBackend()
+    guarded_send({"a": SUB_FLOOR_TEXT}, backend, known_ids=SUB_FLOOR_KNOWN_IDS)
+    assert len(backend.calls) == 1
+
+
+def test_sub_floor_fixture_aborts_on_full_loss_at_guarded_send_level():
+    all_known = SUB_FLOOR_KNOWN_IDS | {"kappa"}
+    backend = _RecordingBackend()
+    with pytest.raises(GuardFailure) as exc_info:
+        guarded_send({"a": SUB_FLOOR_TEXT}, backend, known_ids=all_known)
+    assert exc_info.value.guard == "mask"
+    assert backend.calls == []
+
+
+def test_single_19_word_field_stays_under_the_per_leaf_floor():
+    """H10: a dedicated single-field, exactly-19-word fixture at the
+    floor boundary (MASK_MIN_WORD_COUNT_FOR_RATIO is 20) — 18 of 19
+    words masked, one field, per-leaf path only. This is the base case
+    the 10-field aggregate test below builds on; kept separate so the
+    floor boundary itself is tested in isolation."""
+    known_ids = frozenset(_H1_KNOWN_WORDS)
+    # a single-char key: doesn't itself match _PLAIN_WORD, so it can't
+    # push the aggregate word count up to the floor by accident.
+    payload = {"a": " ".join(_H1_KNOWN_WORDS + ["uniquewordx"])}
+    backend = _RecordingBackend()
+    guarded_send(
+        payload, backend, known_ids=known_ids
+    )  # under the floor: does not abort
+    assert len(backend.calls) == 1
 
 
 def test_aggregate_check_fires_when_many_short_fields_each_lose_just_under_the_floor():
@@ -957,7 +1303,7 @@ def test_send_through_run_records_guard_pass_on_success(registry, runs_root):
 # ---- H3: a send-phase failure is never mislabeled a guard failure -------
 
 
-def test_send_through_run_records_send_failure_not_guard_failure_on_backend_error(
+def test_send_through_run_records_send_error_not_guard_failure_on_backend_error(
     registry, runs_root
 ):
     manifest = make_manifest(registry)
@@ -973,7 +1319,7 @@ def test_send_through_run_records_send_failure_not_guard_failure_on_backend_erro
 
     events = list(read_lines(events_path(runs_root, manifest["run_id"])))
     assert len(events) == 1
-    assert events[0]["kind"] == "send_failure"
+    assert events[0]["kind"] == "send_error"
     assert events[0]["kind"] != "guard_failure"
     status = load_status(runs_root, manifest["run_id"])
     assert status["state"] == "error"  # not "invalid" — the guards did not reject this

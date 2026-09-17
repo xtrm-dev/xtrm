@@ -34,13 +34,29 @@ from xtrm_research.hashing import compute_content_hash
 # ---- credential redaction ----------------------------------------------
 
 #: ``KEY=value`` / ``"token": "value"`` style assignments (MMD-585 carried
-#: live R2/AWS credentials in exactly this shape). The value class also
-#: accepts a quoted value containing spaces.
+#: live R2/AWS credentials in exactly this shape) when the *name* is
+#: recognizable. The value class accepts a quoted value containing
+#: spaces, or an unquoted value that runs to the next comma/brace/line —
+#: a name match alone is a strong enough signal that a 4-character floor
+#: (down from 8) and multi-word values ("password: hunter2 correct
+#: horse") are still worth redacting (H8).
 SECRET_ASSIGN = re.compile(
-    r"(?i)\b([A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL)[A-Z0-9_]*)"
+    r"(?i)\b([A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|CRED)[A-Z0-9_]*)"
     r"(\\?[\"']?\s*[:=]\s*)"
-    r"(?:\"[^\"]{8,}\"|'[^']{8,}'|[^\s\"'\\,}]{8,})"
+    r"(?:\"[^\"]{4,}\"|'[^']{4,}'|[^\r\n,}]{4,})"
 )
+#: A value assigned to *any* identifier-shaped name (no keyword match
+#: required), redacted only when the value itself looks credential-
+#: shaped: at least 6 characters, no whitespace, and mixing letters with
+#: digits — one conservative heuristic instead of a longer regex zoo, so
+#: an account id or opaque token under an unrecognized name (H8's
+#: ``R2_ACCOUNT=...``, the MMD-585 shape) is still caught. A pure-digit
+#: value (``count=42``) or a pure-letter value (``name=John``) never
+#: matches, since both fail the "mixes classes" requirement.
+SECRET_ASSIGN_GENERIC = re.compile(
+    r"\b([A-Za-z][A-Za-z0-9_]*)(\s*[:=]\s*)([^\s\"'\\,}]{6,})"
+)
+_MIXED_CLASS_VALUE = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9+/_.-]+$")
 #: Bare credential-shaped tokens: hex digests, AWS access key ids,
 #: known provider token prefixes (GitHub, Slack, Stripe, Google, npm,
 #: GitLab), a JWT, and a long base64-ish blob. The base64 alternative uses
@@ -55,6 +71,7 @@ SECRET_BARE = re.compile(
     r"|\bgh[pousr]_[A-Za-z0-9]{20,}\b"
     r"|\bgithub_pat_[A-Za-z0-9_]{20,}\b"
     r"|\bxox[baprs]-[A-Za-z0-9-]{10,}\b"
+    r"|\bxapp-[A-Za-z0-9-]{10,}\b"
     r"|\bsk_(?:live|test)_[A-Za-z0-9]{10,}\b"
     r"|\bAIza[A-Za-z0-9_-]{30,}\b"
     r"|\bnpm_[A-Za-z0-9]{20,}\b"
@@ -63,29 +80,66 @@ SECRET_BARE = re.compile(
     r"|(?<![A-Za-z0-9/+])[A-Za-z0-9/+]{40,}={0,2}(?![A-Za-z0-9/+])"
     r")"
 )
-#: ``scheme://user:password@host`` — only the password (group 2) is
-#: redacted.
-SECRET_URL_CRED = re.compile(r"(?i)([a-z][a-z0-9+.-]*://[^\s:@/]+:)([^\s@/]+)(@)")
-#: ``Authorization: Bearer <token>`` / ``Authorization: Basic <token>``.
-SECRET_AUTH_HEADER = re.compile(r"(?i)(authorization)\s*:\s*(bearer|basic)\s+\S+")
-#: A PEM block, markers included — the whole match is replaced, not just
-#: the body between the markers.
-SECRET_PEM = re.compile(r"-----BEGIN [^-]+-----.*?-----END [^-]+-----", re.DOTALL)
+#: ``scheme://[user]:password@host`` — only the password (group 2) is
+#: redacted. The username is optional (``*``, not ``+``): Redis and
+#: Sentry DSNs commonly write ``redis://:password@host`` with no
+#: username at all (H14). The scheme is bounded to 16 characters and the
+#: match is anchored so it cannot start mid-token, closing the
+#: catastrophic-backtracking hole a long garbage line used to hit (H13).
+SECRET_URL_CRED = re.compile(
+    r"(?i)(?<![A-Za-z0-9+.-])([a-z][a-z0-9+.-]{0,15}://[^\s:@/]*:)([^\s@/]+)(@)"
+)
+#: ``Bearer <token>`` / ``Basic <token>`` / ``Token <token>``, with or
+#: without a preceding ``Authorization:`` — the historical pattern only
+#: matched with the header name present, missing a bare ``Bearer sk-...``
+#: line and an ``Authorization: Token ...`` scheme (H8, superseded by
+#: H14's exact shape).
+SECRET_AUTH_HEADER = re.compile(
+    r"(?i)(?:authorization\s*:\s*)?\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{12,}"
+)
+#: A private-key PEM block, markers included — narrowed to ``PRIVATE
+#: KEY`` banners specifically (not ``[^-]+``, which matched *any* banner
+#: pair, e.g. ``-----BEGIN CHANGELOG----- ... -----END CHANGELOG-----``,
+#: and destroyed whatever ordinary text sat between them — H12). Bounded
+#: to 8000 characters between markers rather than an unbounded ``.*?``.
+SECRET_PEM = re.compile(
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----.{0,8000}?-----END [A-Z ]*PRIVATE KEY-----",
+    re.DOTALL,
+)
+#: A BEGIN PRIVATE KEY marker with no matching END within reach: redact
+#: from the marker to the end of the field rather than leaving a
+#: truncated key sitting in the payload.
+SECRET_PEM_UNTERMINATED = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*", re.DOTALL)
 
 _REDACTED = "<redacted>"
+
+
+def _redact_generic_assignments(text: str) -> str:
+    def _sub(m: re.Match[str]) -> str:
+        name, sep, value = m.group(1), m.group(2), m.group(3)
+        if _MIXED_CLASS_VALUE.match(value):
+            return f"{name}{sep}{_REDACTED}"
+        return m.group(0)
+
+    return SECRET_ASSIGN_GENERIC.sub(_sub, text)
 
 
 def redact(text: str) -> str:
     """Replace credential-shaped substrings in one parsed string field
     with ``<redacted>``. Never call this on serialized JSON: redacting a
     JSON string's escaped payload can break its escape sequences (the
-    deep_mask fix in the original harness exists because of this)."""
+    deep_mask fix in the original harness exists because of this).
+
+    Redaction has its own loss check, symmetric to masking's
+    :func:`check_mask` — see :func:`check_redaction` — so an
+    over-broad redaction rule (the PEM defect this fixes, or any future
+    one) aborts the send instead of silently destroying a field."""
     text = SECRET_PEM.sub(_REDACTED, text)
-    text = SECRET_AUTH_HEADER.sub(
-        lambda m: f"{m.group(1)}: {m.group(2)} {_REDACTED}", text
-    )
+    text = SECRET_PEM_UNTERMINATED.sub(_REDACTED, text)
+    text = SECRET_AUTH_HEADER.sub(lambda m: f"{m.group(1)} {_REDACTED}", text)
     text = SECRET_URL_CRED.sub(lambda m: f"{m.group(1)}{_REDACTED}{m.group(3)}", text)
     text = SECRET_ASSIGN.sub(lambda m: f"{m.group(1)}{m.group(2)}{_REDACTED}", text)
+    text = _redact_generic_assignments(text)
     return SECRET_BARE.sub(_REDACTED, text)
 
 
@@ -116,6 +170,22 @@ class MaskAbortError(RuntimeError):
         self.total = total
         super().__init__(
             f"mask removed {removed}/{total} plain words "
+            f"(threshold: at least {min_surviving_fraction:.0%} must survive)"
+        )
+
+
+class RedactionAbortError(RuntimeError):
+    """Redaction removed more plain text than its (looser) allowed
+    fraction — an over-broad redaction rule (the historical PEM-block-
+    swallows-everything defect, XTRM-428 H12, or any future rule shaped
+    like it) destroying ordinary text instead of a real credential.
+    Carries counts only, never the text itself."""
+
+    def __init__(self, removed: int, total: int, min_surviving_fraction: float) -> None:
+        self.removed = removed
+        self.total = total
+        super().__init__(
+            f"redaction removed {removed}/{total} plain words "
             f"(threshold: at least {min_surviving_fraction:.0%} must survive)"
         )
 
@@ -157,6 +227,17 @@ def mask(text: str, known_ids: frozenset[str]) -> str:
 #: Below this many plain words, a survival *fraction* is meaningless (one
 #: lost word out of one is 100%, not a defect).
 MASK_MIN_WORD_COUNT_FOR_RATIO = 20
+#: Redaction is expected to remove more than masking does (a field can
+#: legitimately be nothing but a credential), so its floor for trusting a
+#: ratio at all is the same shape but its survival threshold is looser —
+#: see :data:`REDACTION_MIN_SURVIVING_FRACTION`.
+REDACTION_MIN_WORD_COUNT_FOR_RATIO = 20
+#: Looser than masking's 98%: redaction legitimately removes more text
+#: (a field can be nothing but a credential), so only a much larger loss
+#: — most of a field's ordinary words gone, the PEM-eats-a-changelog
+#: shape — is treated as an over-broad rule rather than working as
+#: intended.
+REDACTION_MIN_SURVIVING_FRACTION = 0.90
 
 
 def _strip_replacement_tokens(text: str) -> str:
@@ -165,20 +246,18 @@ def _strip_replacement_tokens(text: str) -> str:
     return text
 
 
-def check_mask(
+def _check_text_loss(
     original: str,
-    masked: str,
+    processed: str,
     *,
-    min_surviving_fraction: float = MASK_MIN_SURVIVING_WORD_FRACTION,
-    min_word_count: int = MASK_MIN_WORD_COUNT_FOR_RATIO,
+    min_surviving_fraction: float,
+    min_word_count: int,
+    error_cls: type[MaskAbortError] | type[RedactionAbortError],
+    abort_on_short_field_total_loss: bool,
 ) -> None:
-    """Abort if id-masking removed too much plain text.
-
-    ``original`` must already be the *redacted* baseline (never raw,
-    pre-redaction text) — :func:`_masked_leaf` calls this on
-    (``redact(text)``, ``_apply_id_mask(redact(text), known_ids)``), so
-    only masking loss is measured; redaction replacing a field's only
-    word is never mistaken for an over-broad mask.
+    """Shared shape behind :func:`check_mask` and :func:`check_redaction`:
+    abort if ``processed`` has fewer than ``min_surviving_fraction`` of
+    ``original``'s plain words.
 
     Whether the short-field or the ratio rule applies is decided from
     ``original`` *before* replacement tokens are stripped (``floor``
@@ -191,26 +270,90 @@ def check_mask(
     *or* original plain words there.
 
     Below ``min_word_count`` plain words (by the pre-strip floor) the
-    survival fraction is meaningless, so the ratio check is skipped; the
-    field only aborts if every one of its (post-strip) plain words
-    vanished *and* masking (not redaction) is what removed them — the
-    "field is nothing but a known id" case, which the G8 large-payload
-    regression needs caught regardless of the field's own size.
+    survival fraction is meaningless, so the ratio check is skipped. If
+    ``abort_on_short_field_total_loss`` is set, the field still aborts
+    when every one of its (post-strip) plain words vanished *and*
+    something actually changed — the "field is nothing but a known id"
+    case masking needs (the G8 large-payload regression), regardless of
+    the field's own size. Redaction does *not* set this: a short field
+    that is legitimately nothing but a credential is expected to lose
+    100% of its (often near-zero) plain-word content, and must not be
+    treated the same as masking substituting a whole known-id field.
     """
     floor = len(_PLAIN_WORD.findall(original))
     words = _PLAIN_WORD.findall(_strip_replacement_tokens(original))
     total = len(words)
     if total == 0:
         return
-    surviving = _PLAIN_WORD.findall(_strip_replacement_tokens(masked))
+    surviving = _PLAIN_WORD.findall(_strip_replacement_tokens(processed))
     removed = total - len(surviving)
-    masking_applied = masked != original
+    something_changed = processed != original
     if floor < min_word_count:
-        if removed == total and masking_applied:
-            raise MaskAbortError(removed, total, min_surviving_fraction)
+        if abort_on_short_field_total_loss and removed == total and something_changed:
+            raise error_cls(removed, total, min_surviving_fraction)
         return
     if len(surviving) < min_surviving_fraction * total:
-        raise MaskAbortError(removed, total, min_surviving_fraction)
+        raise error_cls(removed, total, min_surviving_fraction)
+
+
+def check_mask(
+    original: str,
+    masked: str,
+    *,
+    min_surviving_fraction: float = MASK_MIN_SURVIVING_WORD_FRACTION,
+    min_word_count: int = MASK_MIN_WORD_COUNT_FOR_RATIO,
+) -> None:
+    """Abort if id-masking removed too much plain text.
+
+    ``original`` must already be the *redacted* baseline (never raw,
+    pre-redaction text) — :func:`_masked_leaf_with_pair` calls this on
+    (``redact(text)``, ``_apply_id_mask(redact(text), known_ids)``), so
+    only masking loss is measured; redaction replacing a field's only
+    word is never mistaken for an over-broad mask (that is
+    :func:`check_redaction`'s job, run separately on the raw-vs-redacted
+    pair). See :func:`_check_text_loss` for the shared rule shape.
+    """
+    _check_text_loss(
+        original,
+        masked,
+        min_surviving_fraction=min_surviving_fraction,
+        min_word_count=min_word_count,
+        error_cls=MaskAbortError,
+        abort_on_short_field_total_loss=True,
+    )
+
+
+def check_redaction(
+    original: str,
+    redacted: str,
+    *,
+    min_surviving_fraction: float = REDACTION_MIN_SURVIVING_FRACTION,
+    min_word_count: int = REDACTION_MIN_WORD_COUNT_FOR_RATIO,
+) -> None:
+    """Abort if redaction removed too much plain text — the missing half
+    of the guard that let the PEM defect (H12) reintroduce historical
+    defect 1: a narrowed :data:`SECRET_PEM` pattern closes the specific
+    over-match, but nothing before this function watched redaction's own
+    loss the way :func:`check_mask` watches masking's. ``original`` must
+    be the *raw, pre-redaction* text. See :func:`_check_text_loss` for
+    the shared rule shape; the threshold here is deliberately looser
+    (:data:`REDACTION_MIN_SURVIVING_FRACTION`) since a field that is
+    legitimately nothing but a credential is expected to lose all of its
+    (usually near-zero) plain-word content to redaction. Unlike
+    :func:`check_mask`, a short field losing everything never aborts by
+    itself here (``abort_on_short_field_total_loss=False``): only the
+    ratio check, which requires a real-sized field, ever fires for
+    redaction — a bare credential field is exactly what redaction is
+    for.
+    """
+    _check_text_loss(
+        original,
+        redacted,
+        min_surviving_fraction=min_surviving_fraction,
+        min_word_count=min_word_count,
+        error_cls=RedactionAbortError,
+        abort_on_short_field_total_loss=False,
+    )
 
 
 #: Leaf types the guard stage accepts as-is (no traversal needed).
@@ -232,28 +375,31 @@ def _check_supported_type(value: Any) -> None:
     )
 
 
-#: (redacted baseline, masked result) pair for one string leaf — fed to
-#: the whole-payload aggregate check after traversal (see
-#: :func:`_check_aggregate_mask`).
-_MaskedPair = tuple[str, str]
+#: (raw, redacted, masked) text for one string leaf — fed to the
+#: whole-payload aggregate checks after traversal (see
+#: :func:`_check_aggregate`).
+_MaskedTriple = tuple[str, str, str]
 
 
 def _masked_leaf_with_pair(
     text: str, known_ids: frozenset[str]
-) -> tuple[str, _MaskedPair]:
+) -> tuple[str, _MaskedTriple]:
     redacted = redact(text)
+    check_redaction(
+        text, redacted
+    )  # per-leaf: catches an over-broad redaction rule (H12)
     masked_text = _apply_id_mask(redacted, known_ids)
     check_mask(redacted, masked_text)  # per-leaf check: catches the G8 short-field case
-    return masked_text, (redacted, masked_text)
+    return masked_text, (text, redacted, masked_text)
 
 
 def _mask_key_with_pairs(
     key: Any, known_ids: frozenset[str]
-) -> tuple[Any, list[_MaskedPair]]:
+) -> tuple[Any, list[_MaskedTriple]]:
     _check_supported_type(key)
     if isinstance(key, str):
-        masked_key, pair = _masked_leaf_with_pair(key, known_ids)
-        return masked_key, [pair]
+        masked_key, triple = _masked_leaf_with_pair(key, known_ids)
+        return masked_key, [triple]
     if isinstance(key, _CONTAINER_TYPES):
         raise TypeError("dict keys must be a leaf value, not a container")
     return key, []
@@ -267,14 +413,14 @@ def _mask_key_with_pairs(
 # masked value in memory at once.
 def _deep_mask_with_pairs(
     value: Any, known_ids: frozenset[str]
-) -> tuple[Any, list[_MaskedPair]]:
+) -> tuple[Any, list[_MaskedTriple]]:
     _check_supported_type(value)
     if isinstance(value, str):
-        masked_text, pair = _masked_leaf_with_pair(value, known_ids)
-        return masked_text, [pair]
+        masked_text, triple = _masked_leaf_with_pair(value, known_ids)
+        return masked_text, [triple]
     if isinstance(value, dict):
         out: dict[Any, Any] = {}
-        pairs: list[_MaskedPair] = []
+        pairs: list[_MaskedTriple] = []
         for k, v in value.items():
             masked_key, key_pairs = _mask_key_with_pairs(k, known_ids)
             masked_value, value_pairs = _deep_mask_with_pairs(v, known_ids)
@@ -294,20 +440,31 @@ def _deep_mask_with_pairs(
     return value, []
 
 
-def _check_aggregate_mask(pairs: list[_MaskedPair]) -> None:
-    """Whole-payload ratio check over every masked string field (and dict
-    key), concatenated. The per-leaf check in :func:`_masked_leaf_with_pair`
-    catches one small field replaced entirely by a known id (G8), but
-    cannot catch a payload built from many fields that each lose just
-    under the per-leaf floor while the payload as a whole loses almost
-    everything (H1) — this restores the original whole-corpus check
-    alongside the per-leaf one, not instead of it. ``min_word_count=0``
-    forces the ratio comparison regardless of the aggregate's own size."""
+def _check_aggregate(pairs: list[_MaskedTriple]) -> None:
+    """Whole-payload ratio checks — both redaction-loss and mask-loss —
+    over every string field (and dict key), concatenated. The per-leaf
+    checks in :func:`_masked_leaf_with_pair` catch one small field
+    replaced entirely (G8), but cannot catch a payload built from many
+    fields that each lose just under the per-leaf floor while the
+    payload as a whole loses almost everything (H1) — this restores the
+    original whole-corpus check alongside the per-leaf one, not instead
+    of it, for both redaction and masking.
+
+    Deliberately uses each check's own default ``min_word_count``, not a
+    forced 0: a payload with a single small field (e.g. one bare
+    credential) must stay exempt in aggregate exactly as it is per-leaf
+    — its aggregate word count *is* that field's word count. A payload
+    built from many fields naturally crosses the floor once concatenated
+    (H1's 10 x 19-word fields sum to 190), which is what lets the
+    aggregate check catch dilution without also catching the single-
+    small-field case the per-leaf floor already exists to protect."""
     if not pairs:
         return
-    baseline = "\n".join(p[0] for p in pairs)
-    masked = "\n".join(p[1] for p in pairs)
-    check_mask(baseline, masked, min_word_count=0)
+    raw = "\n".join(p[0] for p in pairs)
+    redacted = "\n".join(p[1] for p in pairs)
+    masked = "\n".join(p[2] for p in pairs)
+    check_redaction(raw, redacted)
+    check_mask(redacted, masked)
 
 
 def deep_mask(value: Any, known_ids: frozenset[str]) -> Any:
@@ -318,10 +475,10 @@ def deep_mask(value: Any, known_ids: frozenset[str]) -> Any:
     type, such as ``bytes`` or an arbitrary object — refused rather than
     decoded, since either could carry a secret past every other guard.
 
-    Runs both the per-field and the whole-payload aggregate mask checks
-    (see :func:`_check_aggregate_mask`)."""
+    Runs both the per-field and the whole-payload aggregate redaction-
+    loss and mask-loss checks (see :func:`_check_aggregate`)."""
     guarded, pairs = _deep_mask_with_pairs(value, known_ids)
-    _check_aggregate_mask(pairs)
+    _check_aggregate(pairs)
     return guarded
 
 
@@ -480,11 +637,21 @@ def redaction_version() -> str:
     return compute_content_hash(
         {
             "secret_assign": SECRET_ASSIGN.pattern,
+            "secret_assign_generic": SECRET_ASSIGN_GENERIC.pattern,
+            "mixed_class_value": _MIXED_CLASS_VALUE.pattern,
             "secret_bare": SECRET_BARE.pattern,
             "secret_url_cred": SECRET_URL_CRED.pattern,
             "secret_auth_header": SECRET_AUTH_HEADER.pattern,
             "secret_pem": SECRET_PEM.pattern,
+            "secret_pem_unterminated": SECRET_PEM_UNTERMINATED.pattern,
+            "redaction_min_surviving_fraction": REDACTION_MIN_SURVIVING_FRACTION,
+            "redaction_min_word_count_for_ratio": REDACTION_MIN_WORD_COUNT_FOR_RATIO,
             "redact_source": inspect.getsource(redact),
+            "redact_generic_assignments_source": inspect.getsource(
+                _redact_generic_assignments
+            ),
+            "check_redaction_source": inspect.getsource(check_redaction),
+            "check_text_loss_source": inspect.getsource(_check_text_loss),
         }
     )
 
@@ -506,9 +673,10 @@ def mask_version(label_rule: LabelExclusionRule | None = None) -> str:
             "apply_id_mask_source": inspect.getsource(_apply_id_mask),
             "masked_leaf_source": inspect.getsource(_masked_leaf_with_pair),
             "check_mask_source": inspect.getsource(check_mask),
+            "check_text_loss_source": inspect.getsource(_check_text_loss),
             "deep_mask_source": inspect.getsource(deep_mask),
             "deep_mask_with_pairs_source": inspect.getsource(_deep_mask_with_pairs),
-            "check_aggregate_mask_source": inspect.getsource(_check_aggregate_mask),
+            "check_aggregate_source": inspect.getsource(_check_aggregate),
             "strip_excluded_labels_source": inspect.getsource(strip_excluded_labels),
             "strip_label_value_source": inspect.getsource(_strip_label_value),
             "has_excluded_label_source": inspect.getsource(_has_excluded_label),
@@ -628,6 +796,10 @@ def _run_guards(
         failure = exc
     except MaskAbortError as exc:
         failure = GuardFailure("mask", str(exc), removed=exc.removed, total=exc.total)
+    except RedactionAbortError as exc:
+        failure = GuardFailure(
+            "redaction", str(exc), removed=exc.removed, total=exc.total
+        )
     except TypeError as exc:
         failure = GuardFailure("type", str(exc))
     if failure is not None:
@@ -721,7 +893,7 @@ def send_through_run(
         _settle(
             handle,
             seq,
-            "send_failure",
+            "send_error",
             {"note": "payload passed the guards and reached the backend", **versions},
             state="error",
         )
