@@ -3,7 +3,8 @@ import { usePull } from "../app/queries.ts";
 import { checkLabel, checkTone, extractIssueKeys, parsePullRef, pullStateLabel, pullStateTone, reviewLabel } from "./pr.ts";
 import { ReferenceActionsProvider, ReferenceChip, useIssueIndex } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
-import { ContentPanel, EmptyState, ErrorState, LoadingState, StatusDot, ago } from "../ui/primitives.tsx";
+import { Markdown } from "../ui/markdown.tsx";
+import { EmptyState, ErrorState, LoadingState, StatusDot, ago } from "../ui/primitives.tsx";
 import { Fields, InspectorSection } from "../ui/drawer.tsx";
 import { Icon } from "../ui/icon.tsx";
 
@@ -99,7 +100,9 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
 
       {p.body && (
         <InspectorSection title="Description">
-          <ContentPanel className="whitespace-pre-wrap">{p.body}</ContentPanel>
+          <div className="rounded-md border border-border-muted px-3 py-2">
+            <Markdown>{p.body}</Markdown>
+          </div>
         </InspectorSection>
       )}
 
