@@ -3,7 +3,7 @@ status: current
 owner: substrate
 source_of_truth_for:
   - Claude plugin and MCP integration reference
-last_verified_against: 4d83048bb86d5924b864278ff106640c6046e271
+last_verified_against: 3f3e3cbfbbd03de8fc0926599d6797f4b7eab79f
 ---
 
 # Claude integration
@@ -51,3 +51,12 @@ SessionStart(compact)   Resume Capsule head as additionalContext
 Other packaged gates protect edit/write authority, provenance commit binding and
 stop-time continuity. Provider feedback is presentation over the typed service
 result, not another state machine.
+
+
+Journal MCP writes fill unstated participant/activation from the ambient host
+contract; explicit arguments win. PreCompact and stop checkpoint envelopes also
+carry stated or ambient holder/activation. PostCompact intentionally remains a
+provider-session-only audit event. See [Integrations](integrations.md#identity-propagation).
+
+Edit/write fencing is per-Issue claim authority, not a Substrate workspace
+lease. Workspace exclusion is owned by the Specialists activation layer.

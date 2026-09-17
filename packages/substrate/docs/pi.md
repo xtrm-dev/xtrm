@@ -3,7 +3,7 @@ status: current
 owner: substrate
 source_of_truth_for:
   - Pi-facing Substrate integration reference
-last_verified_against: 4d83048bb86d5924b864278ff106640c6046e271
+last_verified_against: 3f3e3cbfbbd03de8fc0926599d6797f4b7eab79f
 ---
 
 # Pi integration
@@ -40,6 +40,24 @@ fresh-process binding; `SUBSTRATE_ISSUE` is the compatibility alias.
 through a secondary model; failure falls back to Pi's normal compaction while
 preserving any committed checkpoint.
 
-The `tool_call` edit/write gate applies live claim/workspace authority for bound
-sessions. Unknown/unreadable gate state fails open rather than bricking an
+The `tool_call` edit/write gate applies live per-Issue claim authority for bound
+sessions; it provides no cross-Issue workspace exclusion. Unknown/unreadable gate state fails open rather than bricking an
 operator session; known conflicting authority fails closed.
+
+
+## Compaction usage
+
+When the secondary summarizer reports token/cost usage, the integration returns
+it in Pi's compaction result. Usage is not stored inside the Journal semantic
+checkpoint schema. If a summarizer runs without reporting usage, a best-effort
+Journal note records the absence; no usage is estimated. Failure to write that
+note does not block compaction. Pi computes its own post-compaction token
+estimate. Mechanical-first durability and fallback to normal compaction remain
+unchanged.
+
+Journal and checkpoint adapters preserve trusted execution-envelope facets and
+fill unstated holder/activation from ambient identity. See
+[Integrations](integrations.md#identity-propagation).
+
+Sources: [`extension.ts`](../integrations/pi/extension.ts),
+[`handlers.ts`](../integrations/pi/handlers.ts).

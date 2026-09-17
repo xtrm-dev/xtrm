@@ -3,7 +3,7 @@ status: current
 owner: substrate
 source_of_truth_for:
   - human sb terminal behavior
-last_verified_against: 4d83048bb86d5924b864278ff106640c6046e271
+last_verified_against: 3f3e3cbfbbd03de8fc0926599d6797f4b7eab79f
 ---
 
 # `sb` CLI
@@ -96,3 +96,47 @@ sb provenance --help
 
 `edit` help teaches Issue-vs-Journal methodology; `close` names outcomes/reason
 and evidence refs; list/browser help teaches the human-only filtering model.
+
+## Session precedence
+
+Journal `append`/`checkpoint` and provenance `dispatch` accept `--session`.
+An explicit session wins over `XTRM_SESSION_ID`. On success, a canonical
+mismatch emits a warning on stderr in both human and JSON modes; JSON stdout
+remains unchanged. Equal IDs, including UUID case variants, produce no warning.
+Invalid identity still fails at the service boundary.
+
+```bash
+sb journal checkpoint XTRM-123 --session '$2'
+sb provenance dispatch XTRM-123 --participant coordinator --session '$2'
+```
+
+Quote tmux IDs so the shell does not expand `$2`. `provenance allocate` does
+not accept `--session`: it inherits the execution binding. Receipt allocation,
+checkpoint links and commit binding are documented in
+[Provenance and Closure](provenance-and-closure.md#allocate-and-link-a-receipt).
+
+## One-way Beads import
+
+```bash
+sb import beads --file export.jsonl --project prj_example --dry-run --json
+sb import beads --file export.jsonl --project prj_example --json
+```
+
+Review the dry-run report before import. The importer extracts recognized
+contract sections from the description, including supported heading variants;
+it reports unmapped headings rather than inventing contract meaning. Missing
+required content remains a readiness gap, not a fabricated executable contract.
+
+Usable source creation/update/closure timestamps are preserved. Contradictory
+times are normalized and reported. For terminal time, the fallback order is
+`closed_at` → `updated_at` → `created_at` → import time. Inspect
+`timestampProvenance` in the report to distinguish preserved, normalized and
+fallback values. The CLI also records imported Closure reasons and source
+provenance. This is one-way migration, not dual-write or a lossless archive of
+every Beads field; retain the source export.
+
+Re-import is not the repair path for previously imported rows. See
+[Troubleshooting](troubleshooting.md#previously-imported-beads-data).
+
+Sources: [`sb.ts`](../cli/sb.ts),
+[`Beads importer`](../src/compatibility/beads/import.ts).

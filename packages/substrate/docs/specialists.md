@@ -1,7 +1,7 @@
 ---
 status: current
 owner: substrate
-last_verified_against: 4d83048bb86d5924b864278ff106640c6046e271
+last_verified_against: 3f3e3cbfbbd03de8fc0926599d6797f4b7eab79f
 ---
 
 # Specialists integration
@@ -30,3 +30,12 @@ exists only as a compatibility alias at boundaries that still accept it.
 The older `sp` RPC/Supervisor/Beads job backend remains transitional until the
 separate CLI-convergence programme proves its replacement. Do not duplicate
 that legacy model into Substrate docs.
+
+
+## Workspace exclusion
+
+Substrate no longer exposes a workspace writer lease. Migration v12 removes
+`workspace_leases`; no replacement Substrate exclusion API is implied.
+Per-Issue claims continue to fence mutations. The Specialists activation layer
+owns workspace exclusion, so a Substrate claim alone does not guarantee that
+another Issue cannot write to the same worktree.

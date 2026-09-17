@@ -1,7 +1,7 @@
 ---
 status: current
 owner: substrate
-last_verified_against: 4d83048bb86d5924b864278ff106640c6046e271
+last_verified_against: 3f3e3cbfbbd03de8fc0926599d6797f4b7eab79f
 ---
 
 # Troubleshooting
@@ -60,3 +60,53 @@ not execute `sb` text commands.
 Current product docs live under `packages/substrate/docs`. Root
 `docs/substrate` contains architecture/history as well as mechanically retained
 reference mirrors; historical phase documents are not current runtime guidance.
+
+## Invalid or missing execution identity
+
+An identity-format rejection names the offending field and writes no partial
+row. Supply a canonical XTRM session UUID or quoted tmux ID (`'$2'`), not a job
+ID or display name. Provider session labels belong in `host.sessionId`.
+Do not rewrite historical rows merely to make a display look attributed.
+
+On CLI Journal append/checkpoint and provenance dispatch, a warning that
+`--session` overrides `XTRM_SESSION_ID` means the explicit session was accepted.
+Check that the override was intentional. JSON stdout remains machine-readable;
+the warning is on stderr.
+
+If attribution is absent, inspect explicit caller inputs and the process
+`SUBSTRATE_HOLDER` / `SUBSTRATE_ACTIVATION_ID` environment. A null field is not
+evidence of an inferred participant. See [Integrations](integrations.md#identity-propagation)
+for the adapter-specific limits.
+
+## No Substrate workspace lease
+
+Migration v12 removed `workspace_leases` and the Substrate lease API. Do not
+query that table or rely on a Substrate claim for cross-Issue workspace
+exclusion. Claims still protect Issue mutations; the Specialists activation
+layer owns workspace exclusion.
+
+If an older client reports `unknown migration version 12`, update that client
+to a compatible Substrate version. Do not delete migrations or downgrade the
+database to bypass fail-closed version checks.
+
+## Previously imported Beads data
+
+The forward importer does not automatically repair previously imported rows.
+The source-checkout repair script uses the original export to restore contract
+structure, source timestamps and missing Closure records through typed services.
+Without the source export, the affected project is unrepairable by this path.
+
+From `packages/substrate` in a source checkout, first run a dry-run against the
+intended database and Project:
+
+```bash
+node scripts/repair-beads-import.ts --db <state.db> --project <project-id> \
+  --source <export.jsonl> --json --report <report.json>
+```
+
+The script writes only when `--apply` is passed. Before applying, retain a
+consistent SQLite backup, review the report and confirm the database, Project
+and source export. Use `--alias-prefix from:to` only for a verified legacy alias
+prefix mapping. This is a one-off repair utility, not ongoing Beads sync.
+
+Source: [`repair-beads-import.ts`](../scripts/repair-beads-import.ts).
