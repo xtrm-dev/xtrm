@@ -924,8 +924,18 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
     if (group === "issue") return runIssue(db, svc, ctx, command, verb, flags, rest);
     if (group === "project") return runProject(db, svc, ctx, command, verb, flags);
     if (group === "plan") return runPlan(db, svc, ctx, command, verb, flags);
-    if (group === "journal") return runJournal(db, svc, ctx, command, verb, flags, rest);
-    if (group === "provenance") return runProvenance(db, svc, ctx, command, verb, flags, rest);
+    if (group === "journal" || group === "provenance") {
+      const result = group === "journal"
+        ? runJournal(db, svc, ctx, command, verb, flags, rest)
+        : runProvenance(db, svc, ctx, command, verb, flags, rest);
+      const explicit = flag(flags, "session")?.trim();
+      const ambient = process.env["XTRM_SESSION_ID"]?.trim();
+      // XTRM-450: report successful explicit overrides without changing JSON stdout.
+      if (result.code === 0 && explicit && ambient && explicit.toLowerCase() !== ambient.toLowerCase()) {
+        result.stderr += `warning: --session ${JSON.stringify(explicit)} overrides XTRM_SESSION_ID ${JSON.stringify(ambient)}\n`;
+      }
+      return result;
+    }
     if (group === "import") return runImport(db, svc, ctx, command, verb, flags);
     if (group === "export") return runExport(db, svc, ctx, command, verb, flags);
     throw new Error(`unknown group: ${group} (want issue|project|plan|journal|provenance|import|export)`);
@@ -1730,6 +1740,7 @@ function runProvenance(
         baseCommit: flag(flags, "base-commit"),
         claimId: claimRaw !== undefined ? Number(claimRaw) : undefined,
         executionContext: enrichExecutionContext({
+          xtrmSessionId: flag(flags, "session") ?? null,
           participantId: flag(flags, "participant") ?? null,
           specialist: flag(flags, "activation") || flag(flags, "attempt")
             ? { activationId: flag(flags, "activation") ?? null, attemptId: flag(flags, "attempt") ?? null }
