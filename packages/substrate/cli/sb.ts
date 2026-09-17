@@ -1458,7 +1458,9 @@ function journalSummary(e: JournalEntry): Record<string, unknown> {
 
 function journalLine(svc: IssueService, e: JournalEntry): string {
   const issue = svc.getIssue(e.issueId);
-  const actor = e.participantId ? ` · by ${e.participantId}` : "";
+  // XTRM-449: explicit absence, matching the journal-family convention in
+  // journalIdentity — never a blank that is indistinguishable from a capture gap.
+  const actor = e.participantId ? ` · by ${e.participantId}` : " · by (none recorded)";
   return `${issue.locator} · ${issue.humanRef} · seq${e.sequence} ${e.kind} rev${e.issueRevision}${e.semantic ? "" : " (mechanical-only)"}${actor}`;
 }
 
