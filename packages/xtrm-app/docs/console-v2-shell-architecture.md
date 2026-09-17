@@ -76,7 +76,7 @@ XTRM-owned. Conar supplies **no precedent** — `console-v2-audit-conar-ui.md` �
 | Hover / focus | Hover = surface elevation only; focus-visible = shared `focus-ring` utility (`ring-3` at 50% accent) |
 | Toggle buttons | `aria-pressed` (e.g. theme, dock) |
 | Accessibility | Every icon-only control carries an explicit `aria-label`; the rail is a `nav` with an accessible name |
-| Keyboard | Sequential tab order through destinations; `Mod+1…Mod+7` jump to destination N; `Mod+K` search palette, `Mod+Shift+K` command palette (§4.4) |
+| Keyboard | Sequential tab order through modes; `Mod+<n>` selects `MODES[n-1]` in the rail (`AppShell.tsx`) — six modes today (Work, Agent, Agents, Program, Research, Observability), so `Mod+1…Mod+6`; `Mod+K` search palette, `Mod+Shift+K` command palette (§4.4) |
 | Scope | Application-level only. The rail must never reflect repository-specific state; repository context lives in §4 |
 | z-index | Rail is shell chrome. It must not rely on z-index to stay visible — see §7.2 for the geometric guarantee |
 

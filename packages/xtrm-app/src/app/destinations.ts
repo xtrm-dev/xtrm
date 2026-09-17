@@ -3,7 +3,7 @@ import type { IconName } from "../ui/icon.tsx";
 // Navigation model (accepted 2026-09-16): the global rail selects a MODE; the contextual sidebar
 // shows only that mode's context. No destination appears in both places.
 
-export type ModeId = "work" | "agent" | "agents" | "program" | "observability";
+export type ModeId = "work" | "agent" | "agents" | "program" | "research" | "observability";
 
 export interface Mode {
   id: ModeId;
@@ -19,16 +19,38 @@ export const MODES: Mode[] = [
   { id: "agent", label: "Agent", icon: "agent", path: "/agent", deferred: "Agent/Frames tranche (wave H)" },
   { id: "agents", label: "Agents", icon: "agents", path: "/agents", deferred: "Fleet presence arrives with the Agent/Frames tranche (wave H)" },
   { id: "program", label: "Program", icon: "program", path: "/program" },
+  { id: "research", label: "Research", icon: "research", path: "/research" },
   { id: "observability", label: "Observability", icon: "observability", path: "/observability", deferred: "Fleet-level analysis (wave G)" },
 ];
 
 export function modeForPath(pathname: string): ModeId {
   if (pathname.startsWith("/program")) return "program";
+  if (pathname.startsWith("/research")) return "research";
   if (pathname.startsWith("/agents")) return "agents";
   if (pathname.startsWith("/agent")) return "agent";
   if (pathname.startsWith("/observability")) return "observability";
   return "work";
 }
+
+/**
+ * Research contextual-sidebar groups (XTRM-433 slice 2). Experiments and Recent Runs are
+ * backed by the research adapter's `listRuns()`; Saved Comparisons and Workloads have no
+ * adapter-level listing yet and follow the same deferred convention as `REPO_SECTIONS`.
+ */
+export interface ResearchSection {
+  id: string;
+  label: string;
+  icon: IconName;
+  path: string;
+  deferred?: string;
+}
+
+export const RESEARCH_SECTIONS: ResearchSection[] = [
+  { id: "experiments", label: "Experiments", icon: "research", path: "/research/experiments" },
+  { id: "runs", label: "Recent Runs", icon: "activity", path: "/research/runs" },
+  { id: "comparisons", label: "Saved Comparisons", icon: "link", path: "/research/comparisons", deferred: "Comparison view is a later XTRM-433 slice" },
+  { id: "workloads", label: "Workloads", icon: "repositories", path: "/research/workloads", deferred: "Workload browsing is a later XTRM-433 slice" },
+];
 
 export interface Destination {
   id: string;

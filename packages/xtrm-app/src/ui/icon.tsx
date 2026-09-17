@@ -44,6 +44,7 @@ import {
   Tag01Icon,
   Target02Icon,
   TaskDone01Icon,
+  TestTube01Icon,
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 
@@ -93,6 +94,7 @@ const registry = {
   release: Tag01Icon,
   target: Target02Icon,
   done: TaskDone01Icon,
+  research: TestTube01Icon,
   agents: UserGroupIcon,
 } as const;
 

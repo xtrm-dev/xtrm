@@ -162,3 +162,10 @@ export function useProgram(follow = false) {
   const { program } = useAdapters();
   return useQuery({ queryKey: ["program", "snapshot"], queryFn: () => program.snapshot(), staleTime: 60_000, refetchInterval: follow ? LIVE_MS : false, retry: false });
 }
+
+/** Backs both Research list views (XTRM-433 slice 2): the run list directly, the experiment
+ * list by deduping `experiment` across rows — there is no `listExperiments` read verb. */
+export function useResearchRuns() {
+  const { research } = useAdapters();
+  return useQuery({ queryKey: ["research", "runs"], queryFn: () => research.listRuns(), staleTime: 30_000, retry: false });
+}
