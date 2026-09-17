@@ -1,25 +1,41 @@
 """Loading and validating versioned, content-hashed definition objects.
 
 A definition object (WorkloadDefinition, Experiment, Variant, Dataset,
-Evaluator, QuestionSpec) lives as one JSON file. ``load_definition``
-validates it against its JSON Schema, verifies (or fills in) its
-``content_hash``, and — for workload/experiment — enforces legend
-completeness, a cross-field constraint JSON Schema cannot express on its
-own (see the ``legend`` field description in the schema files).
+Evaluator, QuestionSpec) lives as one JSON file and must carry its own
+``content_hash``: the loader verifies it and raises on any mismatch, it
+never computes and fills one in silently — a fixture with a stale hash is a
+bug, not something to paper over.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
-from xtrm_research.hashing import compute_content_hash, verify_content_hash
+from xtrm_research.hashing import verify_content_hash
 from xtrm_research.schemas import SchemaValidationError, validate
 
 DEFINITION_KINDS = (
-    "workload", "experiment", "variant", "dataset", "evaluator", "question_spec",
+    "workload",
+    "experiment",
+    "variant",
+    "dataset",
+    "evaluator",
+    "question_spec",
 )
+
+_LEADING_VERSION = re.compile(r"^v?(\d+(?:\.\d+)*)")
+
+
+def _version_sort_key(version: str) -> tuple[int, tuple[int, ...] | str]:
+    """Numeric versions ('v1', 'v2', '9', '10') sort numerically; anything
+    else falls back to sorting after all numeric versions, alphabetically."""
+    match = _LEADING_VERSION.match(version)
+    if match:
+        return (0, tuple(int(part) for part in match.group(1).split(".")))
+    return (1, version)
 
 
 def load_definition(kind: str, path: Path) -> dict[str, Any]:
@@ -27,39 +43,16 @@ def load_definition(kind: str, path: Path) -> dict[str, Any]:
     if kind not in DEFINITION_KINDS:
         raise SchemaValidationError(f"not a definition kind: {kind!r}")
     payload: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    if "content_hash" in payload:
-        if not verify_content_hash(payload):
-            raise SchemaValidationError(
-                f"{kind} {path}: content_hash does not match payload"
-            )
-    else:
-        payload["content_hash"] = compute_content_hash(payload)
-    validate(kind, payload)
-    if kind in ("workload", "experiment"):
-        _validate_legend_completeness(kind, payload)
-    return payload
-
-
-def _validate_legend_completeness(kind: str, payload: dict[str, Any]) -> None:
-    """Enforce that every metric, question id, variant id and status used
-    by a workload/experiment has a matching ``legend`` entry.
-
-    JSON Schema cannot express "every value in this array must be a key of
-    that object" without generating a schema per instance, so this runs as
-    an application-level check layered on top of the JSON Schema pass.
-    """
-    legend: dict[str, str] = payload.get("legend", {})
-    referenced: set[str] = set()
-    if kind == "workload":
-        referenced.update(payload.get("default_metrics", []))
-        referenced.update(q["id"] for q in payload.get("questions", []))
-    else:  # experiment
-        referenced.update(v["id"] for v in payload.get("variants", []))
-    missing = sorted(referenced - legend.keys())
-    if missing:
+    if "content_hash" not in payload:
         raise SchemaValidationError(
-            f"{kind} {payload.get('id')}: missing legend entries for {missing}"
+            f"{kind} {path}: missing content_hash — fixtures must carry their own hash"
         )
+    if not verify_content_hash(payload):
+        raise SchemaValidationError(
+            f"{kind} {path}: content_hash does not match payload"
+        )
+    validate(kind, payload)
+    return payload
 
 
 class DefinitionRegistry:
@@ -73,21 +66,33 @@ class DefinitionRegistry:
         self.root = Path(root)
         self._cache: dict[tuple[str, str, str], dict[str, Any]] = {}
         self._by_kind_id: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        self._loaded_kinds: set[str] = set()
 
     def _load_kind(self, kind: str) -> None:
+        if kind in self._loaded_kinds:
+            return
+        self._loaded_kinds.add(kind)
         kind_dir = self.root / kind
         if not kind_dir.is_dir():
             return
         for path in sorted(kind_dir.glob("*.json")):
             definition = load_definition(kind, path)
             key = (kind, definition["id"], definition["version"])
+            existing = self._cache.get(key)
+            if (
+                existing is not None
+                and existing["content_hash"] != definition["content_hash"]
+            ):
+                raise SchemaValidationError(
+                    f"duplicate {kind} {definition['id']} version {definition['version']} "
+                    f"with different content_hash across files"
+                )
             self._cache[key] = definition
             self._by_kind_id.setdefault((kind, definition["id"]), []).append(definition)
 
     def get(self, kind: str, definition_id: str, version: str) -> dict[str, Any]:
+        self._load_kind(kind)
         key = (kind, definition_id, version)
-        if key not in self._cache:
-            self._load_kind(kind)
         try:
             return self._cache[key]
         except KeyError as exc:
@@ -96,9 +101,11 @@ class DefinitionRegistry:
             ) from exc
 
     def latest(self, kind: str, definition_id: str) -> dict[str, Any]:
-        """Return the highest-``version``-sorted definition for ``definition_id``."""
+        """Return the numerically-highest-version definition for ``definition_id``."""
         self._load_kind(kind)
         candidates = self._by_kind_id.get((kind, definition_id), [])
         if not candidates:
-            raise SchemaValidationError(f"no {kind} definition {definition_id!r} under {self.root}")
-        return sorted(candidates, key=lambda d: d["version"])[-1]
+            raise SchemaValidationError(
+                f"no {kind} definition {definition_id!r} under {self.root}"
+            )
+        return sorted(candidates, key=lambda d: _version_sort_key(d["version"]))[-1]

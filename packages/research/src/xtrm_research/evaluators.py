@@ -12,6 +12,8 @@ def exact_match_evaluate(
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
     """Compare each sample's ``output`` to ``expected[sample_id]``.
 
+    Each assessment carries a Noul answer (``noul`` = 1.0 on match, else
+    0.0) — "did this match?" is naturally a yes/no judgment.
     Returns ``(assessments, metrics)`` shaped for
     :func:`xtrm_research.assessments.write_assessment_set`.
     """
@@ -20,8 +22,22 @@ def exact_match_evaluate(
     for sample in samples:
         is_match = sample.get("output") == expected.get(sample["sample_id"])
         correct += int(is_match)
-        assessments.append({"sample_id": sample["sample_id"], "answer": {"match": is_match}})
+        assessments.append(
+            {
+                "sample_id": sample["sample_id"],
+                "answer": {"noul": 1.0 if is_match else 0.0},
+            }
+        )
     n = len(samples)
     accuracy = correct / n if n else 0.0
-    metrics = {"accuracy": {"value": accuracy, "n": n, "method": "exact_match"}}
+    method = "exact_match" if n else "exact_match-no-samples"
+    metrics = {
+        "accuracy": {
+            "value": accuracy,
+            "se": None,
+            "ci95": None,
+            "n": n,
+            "method": method,
+        }
+    }
     return assessments, metrics

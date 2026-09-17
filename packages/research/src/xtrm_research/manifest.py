@@ -1,4 +1,9 @@
-"""Building a fully version-resolved RunManifest before any sample executes."""
+"""Building a fully version-resolved RunManifest before any sample executes.
+
+manifest.json is write-once: this module only ever produces one, complete,
+schema-valid manifest dict. Lifecycle state and heartbeat live in a
+separate, mutable status.json (see :mod:`xtrm_research.runner`), never here.
+"""
 
 from __future__ import annotations
 
@@ -6,8 +11,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from xtrm_research import __version__ as research_version
-from xtrm_research.aliases import ResolvedAlias, UnresolvedAlias
-from xtrm_research.schemas import SchemaValidationError, validate
+from xtrm_research.aliases import ResolvedAlias, UnresolvedAlias, is_probable_alias
+from xtrm_research.schemas import validate
 
 MANDATORY_INTENT_FIELDS = ("purpose", "trigger")
 
@@ -45,6 +50,26 @@ def build_intent(
     }
 
 
+def _resolve_backend_model_alias(
+    backend: dict[str, str], alias_resolver: dict[str, str]
+) -> tuple[dict[str, str], ResolvedAlias | None, UnresolvedAlias | None]:
+    """If ``backend.model`` looks like a mutable alias, resolve it against
+    ``alias_resolver`` and record the outcome; a pinned model id is
+    returned unchanged with no alias record."""
+    model = backend.get("model", "")
+    if not is_probable_alias(model):
+        return backend, None, None
+    if model in alias_resolver:
+        resolved_value = alias_resolver[model]
+        return (
+            {**backend, "model": resolved_value},
+            ResolvedAlias(model, resolved_value),
+            None,
+        )
+    reason = f"no resolver entry for alias {model!r}"
+    return backend, None, UnresolvedAlias(model, reason)
+
+
 def build_manifest(
     *,
     run_id: str,
@@ -62,8 +87,7 @@ def build_manifest(
     seed: int,
     intent: dict[str, Any],
     lineage: list[dict[str, str]] | None = None,
-    resolved_aliases: list[ResolvedAlias] | None = None,
-    unresolved_aliases: list[UnresolvedAlias] | None = None,
+    alias_resolver: dict[str, str] | None = None,
     pi_version: str | None = None,
     specialists_version: str | None = None,
     retried_sample_ids: list[str] | None = None,
@@ -73,6 +97,10 @@ def build_manifest(
     for field in MANDATORY_INTENT_FIELDS:
         if not intent.get(field):
             raise ValueError(f"run intent requires a non-empty {field!r}")
+
+    backend, resolved, unresolved = _resolve_backend_model_alias(
+        backend, alias_resolver or {}
+    )
 
     now = now or datetime.now(timezone.utc)
     now_iso = now.isoformat()
@@ -99,18 +127,14 @@ def build_manifest(
         "seed": seed,
         "intent": intent,
         "lineage": lineage or [],
-        "status": {"state": "started", "last_heartbeat": now_iso},
         "aliases": {
-            "resolved": [a._asdict() for a in (resolved_aliases or [])],
-            "unresolved": [a._asdict() for a in (unresolved_aliases or [])],
+            "resolved": [resolved._asdict()] if resolved else [],
+            "unresolved": [unresolved._asdict()] if unresolved else [],
         },
         "created_at": now_iso,
     }
     if retried_sample_ids is not None:
         manifest["retried_sample_ids"] = retried_sample_ids
 
-    try:
-        validate("manifest", manifest)
-    except SchemaValidationError:
-        raise
+    validate("manifest", manifest)
     return manifest

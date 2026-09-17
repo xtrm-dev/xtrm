@@ -20,6 +20,15 @@ class UnresolvedAlias(NamedTuple):
     reason: str
 
 
+_ALIAS_LIKE_NAMES = frozenset({"main", "latest"})
+
+
+def is_probable_alias(name: str) -> bool:
+    """Heuristic for "this string names a mutable pointer, not a pinned
+    version" — e.g. ``jev-latest``, ``main``, ``latest``."""
+    return name in _ALIAS_LIKE_NAMES or name.endswith("-latest")
+
+
 def resolve_aliases(
     requested: dict[str, str], resolver: dict[str, str]
 ) -> tuple[list[ResolvedAlias], list[UnresolvedAlias]]:
@@ -35,6 +44,8 @@ def resolve_aliases(
             resolved.append(ResolvedAlias(input=alias, resolved=resolver[alias]))
         else:
             unresolved.append(
-                UnresolvedAlias(input=alias, reason=f"no resolver entry for alias {alias!r}")
+                UnresolvedAlias(
+                    input=alias, reason=f"no resolver entry for alias {alias!r}"
+                )
             )
     return resolved, unresolved

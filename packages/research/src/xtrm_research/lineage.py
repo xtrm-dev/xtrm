@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from xtrm_research.store import list_run_ids, load_manifest
+from xtrm_research.store import list_run_ids, load_manifest, run_exists
 
 
 def lineage_tree(root: Path, run_id: str) -> dict[str, Any]:
@@ -13,8 +13,12 @@ def lineage_tree(root: Path, run_id: str) -> dict[str, Any]:
 
     A run's manifest records its own outgoing lineage relations (e.g. this
     run is ``retry_of`` its parent); the tree for a run is built by finding
-    every other run whose lineage points back at it.
+    every other run whose lineage points back at it. Raises if ``run_id``
+    itself doesn't exist.
     """
+    if not run_exists(root, run_id):
+        raise ValueError(f"no such run: {run_id!r}")
+
     manifests = {rid: load_manifest(root, rid) for rid in list_run_ids(root)}
     children_of: dict[str, list[dict[str, str]]] = {}
     for rid, manifest in manifests.items():
@@ -37,3 +41,13 @@ def lineage_tree(root: Path, run_id: str) -> dict[str, Any]:
         return node
 
     return build(run_id, frozenset({run_id}))
+
+
+def format_tree(tree: dict[str, Any], indent: int = 0) -> str:
+    """Human-readable indented rendering of :func:`lineage_tree`'s output."""
+    prefix = "  " * indent
+    relation = f"[{tree['relation']}] " if "relation" in tree else ""
+    lines = [f"{prefix}{relation}{tree['run_id']}"]
+    for child in tree["children"]:
+        lines.append(format_tree(child, indent + 1))
+    return "\n".join(lines)

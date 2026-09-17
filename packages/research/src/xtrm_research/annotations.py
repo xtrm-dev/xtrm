@@ -8,7 +8,7 @@ from typing import Any
 
 from xtrm_research.jsonl import append_line, read_lines
 from xtrm_research.schemas import validate
-from xtrm_research.store import annotations_path
+from xtrm_research.store import annotations_path, run_exists
 
 
 def append_annotation(
@@ -20,6 +20,8 @@ def append_annotation(
     evidence_status: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
+    if not run_exists(root, run_id):
+        raise FileNotFoundError(f"no such run: {run_id!r}")
     annotation: dict[str, Any] = {
         "schema_version": "xtrm-research-annotation/v1",
         "author": author,
@@ -39,10 +41,14 @@ def list_annotations(root: Path, run_id: str) -> list[dict[str, Any]]:
 
 
 def latest_conclusion(root: Path, run_id: str) -> str | None:
-    conclusions = [a for a in list_annotations(root, run_id) if a["kind"] == "conclusion"]
+    conclusions = [
+        a for a in list_annotations(root, run_id) if a["kind"] == "conclusion"
+    ]
     return conclusions[-1]["text"] if conclusions else None
 
 
 def latest_evidence_status(root: Path, run_id: str) -> str | None:
-    statuses = [a for a in list_annotations(root, run_id) if a["kind"] == "evidence_status"]
+    statuses = [
+        a for a in list_annotations(root, run_id) if a["kind"] == "evidence_status"
+    ]
     return statuses[-1]["evidence_status"] if statuses else None
