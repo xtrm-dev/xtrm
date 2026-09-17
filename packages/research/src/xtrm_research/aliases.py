@@ -20,32 +20,17 @@ class UnresolvedAlias(NamedTuple):
     reason: str
 
 
-_ALIAS_LIKE_NAMES = frozenset({"main", "latest"})
+_ALIAS_LIKE_NAMES = frozenset({"main", "latest", "HEAD"})
+_ALIAS_LIKE_SUFFIXES = ("-latest", ":latest", "@latest")
 
 
-def is_probable_alias(name: str) -> bool:
+def is_probable_alias(name: str, alias_resolver: dict[str, str] | None = None) -> bool:
     """Heuristic for "this string names a mutable pointer, not a pinned
-    version" — e.g. ``jev-latest``, ``main``, ``latest``."""
-    return name in _ALIAS_LIKE_NAMES or name.endswith("-latest")
-
-
-def resolve_aliases(
-    requested: dict[str, str], resolver: dict[str, str]
-) -> tuple[list[ResolvedAlias], list[UnresolvedAlias]]:
-    """Resolve each ``{name: alias}`` in ``requested`` against ``resolver``.
-
-    An alias missing from ``resolver`` is recorded unresolved rather than
-    raising, so the manifest can still be written and inspected.
+    version" — e.g. ``jev-latest``, ``jev@latest``, ``jev:latest``,
+    ``main``, ``HEAD``. A name present as a key in ``alias_resolver`` is
+    always treated as an alias, regardless of its shape — the resolver
+    itself is definitive evidence it's a mutable pointer.
     """
-    resolved: list[ResolvedAlias] = []
-    unresolved: list[UnresolvedAlias] = []
-    for _name, alias in requested.items():
-        if alias in resolver:
-            resolved.append(ResolvedAlias(input=alias, resolved=resolver[alias]))
-        else:
-            unresolved.append(
-                UnresolvedAlias(
-                    input=alias, reason=f"no resolver entry for alias {alias!r}"
-                )
-            )
-    return resolved, unresolved
+    if alias_resolver and name in alias_resolver:
+        return True
+    return name in _ALIAS_LIKE_NAMES or name.endswith(_ALIAS_LIKE_SUFFIXES)

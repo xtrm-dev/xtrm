@@ -50,24 +50,29 @@ def build_intent(
     }
 
 
-def _resolve_backend_model_alias(
+def _resolve_backend_aliases(
     backend: dict[str, str], alias_resolver: dict[str, str]
-) -> tuple[dict[str, str], ResolvedAlias | None, UnresolvedAlias | None]:
-    """If ``backend.model`` looks like a mutable alias, resolve it against
-    ``alias_resolver`` and record the outcome; a pinned model id is
-    returned unchanged with no alias record."""
-    model = backend.get("model", "")
-    if not is_probable_alias(model):
-        return backend, None, None
-    if model in alias_resolver:
-        resolved_value = alias_resolver[model]
-        return (
-            {**backend, "model": resolved_value},
-            ResolvedAlias(model, resolved_value),
-            None,
-        )
-    reason = f"no resolver entry for alias {model!r}"
-    return backend, None, UnresolvedAlias(model, reason)
+) -> tuple[dict[str, str], list[ResolvedAlias], list[UnresolvedAlias]]:
+    """Resolve ``backend.model`` and ``backend.model_version`` if either
+    looks like a mutable alias; a pinned id is left unchanged with no
+    alias record. Every alias-shaped value ends up recorded resolved or
+    unresolved — never silently accepted."""
+    resolved: list[ResolvedAlias] = []
+    unresolved: list[UnresolvedAlias] = []
+    backend = dict(backend)
+    for field in ("model", "model_version"):
+        value = backend.get(field, "")
+        if not is_probable_alias(value, alias_resolver):
+            continue
+        if value in alias_resolver:
+            resolved_value = alias_resolver[value]
+            backend[field] = resolved_value
+            resolved.append(ResolvedAlias(value, resolved_value))
+        else:
+            unresolved.append(
+                UnresolvedAlias(value, f"no resolver entry for alias {value!r}")
+            )
+    return backend, resolved, unresolved
 
 
 def build_manifest(
@@ -98,7 +103,7 @@ def build_manifest(
         if not intent.get(field):
             raise ValueError(f"run intent requires a non-empty {field!r}")
 
-    backend, resolved, unresolved = _resolve_backend_model_alias(
+    backend, resolved, unresolved = _resolve_backend_aliases(
         backend, alias_resolver or {}
     )
 
@@ -128,8 +133,8 @@ def build_manifest(
         "intent": intent,
         "lineage": lineage or [],
         "aliases": {
-            "resolved": [resolved._asdict()] if resolved else [],
-            "unresolved": [unresolved._asdict()] if unresolved else [],
+            "resolved": [a._asdict() for a in resolved],
+            "unresolved": [a._asdict() for a in unresolved],
         },
         "created_at": now_iso,
     }

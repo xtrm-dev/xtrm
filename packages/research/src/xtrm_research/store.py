@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +20,7 @@ DEFAULT_RUNS_ROOT = Path.home() / ".xtrm" / "research" / "runs"
 
 MANIFEST_FILE = "manifest.json"
 STATUS_FILE = "status.json"
+LOCK_FILE = ".lock"
 SAMPLES_FILE = "samples.jsonl"
 EVENTS_FILE = "events.jsonl"
 REFS_FILE = "refs.json"
@@ -25,21 +28,21 @@ ANNOTATIONS_FILE = "annotations.jsonl"
 ARTIFACTS_DIR = "artifacts"
 ASSESSMENTS_DIR = "assessments"
 
+#: run_id, assessment_set_id and every definition object id must match
+#: this allowlist: an alnum first character, then up to 127 more of
+#: alnum/dot/underscore/at/colon/hyphen. No separators, no leading dot, no
+#: unicode, no control characters, no unbounded length.
+SAFE_SEGMENT_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$"
+_SAFE_SEGMENT_RE = re.compile(SAFE_SEGMENT_PATTERN)
+
 
 def safe_segment(name: str, what: str = "path segment") -> str:
-    """Reject anything that isn't a single, relative, non-dot path segment.
+    """Reject anything that isn't a single, allowlisted path segment.
 
     Used for every operator-supplied identifier that becomes part of a
-    filesystem path (run_id, assessment_set_id): no "..", no separators,
-    no absolute paths.
+    filesystem path (run_id, assessment_set_id).
     """
-    if (
-        not name
-        or name in (".", "..")
-        or "/" in name
-        or os.sep in name
-        or os.path.isabs(name)
-    ):
+    if not _SAFE_SEGMENT_RE.match(name):
         raise ValueError(f"unsafe {what}: {name!r}")
     return name
 
@@ -48,18 +51,29 @@ def run_dir(root: Path, run_id: str) -> Path:
     return Path(root) / safe_segment(run_id, "run_id")
 
 
+def lock_path(root: Path, run_id: str) -> Path:
+    return run_dir(root, run_id) / LOCK_FILE
+
+
 def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     """Write ``payload`` as pretty, sorted-key JSON via a tmp-file rename.
 
-    The rename is atomic on POSIX, so a reader never observes a
-    partially-written file.
+    Uses a unique tmp filename (``tempfile.mkstemp`` in the same
+    directory), not a fixed ``<name>.tmp``, so two concurrent writers never
+    collide on the same tmp path. The rename is atomic on POSIX, so a
+    reader never observes a partially-written file.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
-        json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+    fd, tmp_name = tempfile.mkstemp(
+        dir=path.parent, prefix=path.name + ".", suffix=".tmp"
     )
-    tmp.replace(path)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(payload, sort_keys=True, indent=2) + "\n")
+        os.replace(tmp_name, path)
+    except BaseException:
+        os.unlink(tmp_name)
+        raise
 
 
 def read_json(path: Path) -> dict[str, Any]:
