@@ -1,18 +1,37 @@
 {
-  "id": "dup-detect",
-  "version": "v1",
+  "content_hash": "sha256:27f6cc386039d2f71fab401d06b59d52f26146c34c9912b4c4c5d5e28d9e8ecf",
+  "default_metrics": [
+    "accuracy"
+  ],
   "description": "Fixture workload for duplicate-pair detection.",
-  "sample_provider": "tests.fixtures.samples:synthetic_pairs",
-  "runner_kind": "system_one",
-  "required_capabilities": ["text_compare"],
-  "input_schema": {"type": "object"},
-  "output_schema": {"type": "object"},
-  "questions": [{"id": "dup-check", "version": "v1"}],
-  "observers": [],
-  "evaluators": [{"id": "exact-match", "version": "v1"}],
-  "default_metrics": ["accuracy"],
+  "evaluators": [
+    {
+      "id": "exact-match",
+      "version": "v1"
+    }
+  ],
+  "id": "dup-detect",
+  "input_schema": {
+    "type": "object"
+  },
   "legend": {
     "accuracy": "fraction of samples whose predicted duplicate flag matched the label",
     "dup-check": "does the System One model judge the pair a duplicate?"
-  }
+  },
+  "observers": [],
+  "output_schema": {
+    "type": "object"
+  },
+  "questions": [
+    {
+      "id": "dup-check",
+      "version": "v1"
+    }
+  ],
+  "required_capabilities": [
+    "text_compare"
+  ],
+  "runner_kind": "system_one",
+  "sample_provider": "tests.fixtures.samples:synthetic_pairs",
+  "version": "v1"
 }

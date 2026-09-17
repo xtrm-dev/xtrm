@@ -1,7 +1,10 @@
 {
+  "content_hash": "sha256:6ab540291c8806ec65ba4983c33dbe4ab7eff8c62f9443d15d9c58823f082821",
+  "criteria": {
+    "basis": "board text similarity"
+  },
   "id": "dup-check",
-  "version": "v1",
-  "type": "noul",
   "instructions": "Is this item a duplicate of the reference item?",
-  "criteria": {"basis": "board text similarity"}
+  "type": "noul",
+  "version": "v1"
 }

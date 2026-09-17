@@ -1,6 +1,9 @@
 {
-  "id": "baseline",
-  "version": "v1",
+  "config": {
+    "strategy": "always-no"
+  },
+  "content_hash": "sha256:1b12513a3e8c80d798ba9ca71f06b0e47a3c96936bdf6f31c7e9368e5835984c",
   "description": "Deterministic baseline variant.",
-  "config": {"strategy": "always-no"}
+  "id": "baseline",
+  "version": "v1"
 }
