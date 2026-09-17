@@ -12,13 +12,21 @@ standard runtime, Specialists runtime, Pi, or xtrm-app.
 
 ## Principles
 
-- **A settled run is immutable.** Re-running, retrying, re-evaluating or
-  annotating a run never mutates its execution evidence (`manifest.json`,
-  `samples.jsonl`, `events.jsonl`); each of those actions creates a new run,
-  a new assessment set, or a new annotation row.
+- **A settled run is immutable.** `manifest.json` is write-once and is
+  never rewritten after the run starts. Lifecycle state and heartbeat live
+  in a separate, mutable `status.json`; once its `state` reaches a terminal
+  value (`success`/`error`/`invalid`), every further write to
+  `manifest.json`, `status.json`, `samples.jsonl` or `events.jsonl` is
+  refused — including through a freshly-constructed `RunHandle`. Retrying,
+  re-evaluating or annotating a settled run never mutates that evidence;
+  each creates a new run, a new assessment set, or a new annotation row
+  instead. Every write re-validates `manifest.json` against the
+  `content_hash` recorded in `status.json` at start, so an out-of-band edit
+  to `manifest.json` is caught rather than silently trusted.
 - **Execution is separate from evaluation.** A run captures what happened;
   an assessment set captures what a given evaluator concluded about it —
-  new evaluators can assess old runs months later.
+  new evaluators can assess old runs months later. An assessment set is
+  itself write-once: writing an existing `assessment_set_id` raises.
 - **Views are derived, never authoritative.** `metrics`, `compare` and
   chart datasets are recomputed from samples, events and assessment sets on
   every call.
@@ -52,17 +60,38 @@ pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
 
 ```
 ~/.xtrm/research/runs/<run-id>/
-  manifest.json       # fully version-resolved before any sample executes
-  samples.jsonl        # one row per evaluated item
-  events.jsonl          # execution observations, monotonic seq
-  refs.json              # cheap run-identity/lineage index, derived from manifest.json
-  annotations.jsonl       # append-only conclusions/caveats/evidence status
-  artifacts/
-  assessments/<assessment_set_id>/assessment_set.json
+  manifest.json       # write-once; fully version-resolved before any sample executes
+  status.json           # the one mutable file: lifecycle state, heartbeat, manifest hash
+  samples.jsonl           # one row per evaluated item
+  events.jsonl              # execution observations, strictly monotonic seq
+  refs.json                   # cheap run-identity/lineage index, derived from manifest.json
+  annotations.jsonl             # append-only conclusions/caveats/evidence status
+  artifacts/                      # created lazily on first artifact write, not eagerly
+  assessments/<assessment_set_id>/assessment_set.json   # write-once per set
 ```
 
 The default root is `~/.xtrm/research/runs`; every API here takes the root
 explicitly, and tests always point it at a tmp directory.
+
+Every operator-supplied identifier that becomes part of a path (`run_id`,
+`assessment_set_id`) must be a single, safe path segment — no `..`, no `/`,
+no absolute paths (`xtrm_research.store.safe_segment`).
+
+Every `.jsonl` writer repairs a torn trailing fragment (from a writer
+killed mid-line) before appending: it truncates the fragment off and
+records the repair in a sibling `<file>.torn` log, rather than gluing new
+data onto it. Readers additionally tolerate a torn *trailing* line on
+their own; a corrupt line anywhere else in the file is a real error and
+raises.
+
+### `latency_ms` naming
+
+OpenTelemetry's GenAI semantic conventions define `gen_ai.usage.input_tokens`,
+`gen_ai.usage.output_tokens`, `gen_ai.request.model` and
+`gen_ai.response.model`, all used verbatim in `usage_record`
+(`schemas/common.schema.json`). There is no GenAI-standard name for
+call latency, so `latency_ms` is this package's own choice — documented
+here rather than invented a namespaced pseudo-OTel name.
 
 ## CLI
 
