@@ -35,17 +35,31 @@ from xtrm_research.hashing import compute_content_hash
 
 #: ``KEY=value`` / ``"token": "value"`` style assignments (MMD-585 carried
 #: live R2/AWS credentials in exactly this shape) when the *name* is
-#: recognizable. The value class accepts a quoted value containing
-#: spaces, or an unquoted value that runs to the next comma/brace/line —
-#: a name match alone is a strong enough signal that a 4-character floor
-#: (down from 8) and multi-word values ("password: hunter2 correct
-#: horse") are still worth redacting (H8). The name list covers the
-#: shapes seen so far (J1: ACCOUNT/ACCESS/AUTH/PRIVATE/SIGNATURE/
-#: SALT/PASSPHRASE/SESSION added for the MMD-585 R2_ACCOUNT shape,
-#: replacing the deleted name-agnostic rule below). The value is
-#: refused if it contains ``://`` — a URL is the URL rule's job, not
-#: this one's, and matching one here previously destroyed ordinary
-#: links (e.g. ``see https://github.com/...`` read "https" as a name).
+#: recognizable. Two keyword tiers, checked in :func:`_redact_assignment`
+#: rather than the regex alone, since they need different treatment:
+#:
+#: - **Strong** (``KEY``, ``SECRET``, ``TOKEN``, ``PASSWORD``,
+#:   ``PASSWD``, ``CRED``): matches standalone or compound
+#:   (``password``, ``AWS_SECRET_KEY``), and its value is redacted even
+#:   when it looks like a URL (K3 — a URL stored under a strongly named
+#:   field is still a credential; that trade is accepted).
+#: - **Weak** (``ACCOUNT``, ``ACCESS``, ``AUTH``, ``PRIVATE``,
+#:   ``SIGNATURE``, ``SALT``, ``PASSPHRASE``, ``SESSION`` — J1's
+#:   additions for the MMD-585 ``R2_ACCOUNT`` shape): matches only in a
+#:   *compound* name — one containing ``_`` or ``-`` — so ``R2_ACCOUNT``
+#:   and ``AWS_ACCESS_KEY`` match but a bare prose heading like
+#:   ``Access: the team needs access to staging`` does not (K1: the
+#:   unqualified weak-keyword list from J1 redacted exactly this kind of
+#:   ordinary sentence). A weak-keyword value is also refused if it
+#:   looks like a URL, same as before.
+#:
+#: The value class only accepts a quoted value containing spaces
+#: (``PASSWORD = "correct horse battery staple"``); an unquoted value
+#: may not contain whitespace (K1 withdraws H8's unquoted-multi-word
+#: acceptance — that is what let a rule with a matching name treat the
+#: rest of a prose sentence as its value). Known, accepted limitation:
+#: an unquoted multi-word secret assigned in prose (``key: my secret
+#: phrase``) is not caught by this rule.
 #:
 #: Known limitation, accepted rather than chased with a wider rule: a
 #: credential assigned to a name with no recognizable keyword here is
@@ -53,13 +67,44 @@ from xtrm_research.hashing import compute_content_hash
 #: :data:`SECRET_BARE`, and :func:`check_redaction`'s loss check, are
 #: the backstop — not another name-agnostic heuristic, which J1 found
 #: redacted ordinary URLs, model ids and version strings.
-SECRET_ASSIGN = re.compile(
-    r"(?i)\b([A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|CRED|ACCOUNT|ACCESS|AUTH"
-    r"|PRIVATE|SIGNATURE|SALT|PASSPHRASE|SESSION)[A-Z0-9_]*)"
-    r"(\\?[\"']?\s*[:=]\s*)"
-    r"(?!\S*://)"
-    r"(?:\"[^\"]{4,}\"|'[^']{4,}'|[^\r\n,}]{4,})"
+_STRONG_ASSIGN_KEYWORDS = ("KEY", "SECRET", "TOKEN", "PASSWORD", "PASSWD", "CRED")
+_WEAK_ASSIGN_KEYWORDS = (
+    "ACCOUNT",
+    "ACCESS",
+    "AUTH",
+    "PRIVATE",
+    "SIGNATURE",
+    "SALT",
+    "PASSPHRASE",
+    "SESSION",
 )
+_COMPOUND_NAME = re.compile(r"[_-]")
+#: The name's prefix/suffix character classes are bounded ({0,24}, not
+#: an unbounded ``*``) — adding ``-`` to the class for J1's compound-name
+#: rule reopened H13/K13-shaped catastrophic backtracking on adversarial
+#: hyphen-dense input (measured 15s on a 21KB "ab-" repeat before this
+#: bound; under 70ms after). 24 chars is generous for a real identifier
+#: prefix/suffix (e.g. "AWS_" / "_ACCESS_KEY_ID").
+SECRET_ASSIGN = re.compile(
+    r"(?i)\b([A-Z0-9_-]{0,24}(?:"
+    + "|".join(_STRONG_ASSIGN_KEYWORDS + _WEAK_ASSIGN_KEYWORDS)
+    + r")[A-Z0-9_-]{0,24})"
+    r"(\\?[\"']?\s*[:=]\s*)"
+    r"(\"[^\"]{4,}\"|'[^']{4,}'|[^\s\"'\\,}]{4,})"
+)
+
+
+def _redact_assignment(m: re.Match[str]) -> str:
+    name, sep, value = m.group(1), m.group(2), m.group(3)
+    is_strong = any(k in name.upper() for k in _STRONG_ASSIGN_KEYWORDS)
+    if not is_strong:
+        if not _COMPOUND_NAME.search(name):
+            return m.group(0)  # weak keyword, not compound: leave prose alone
+        if "://" in value:
+            return m.group(0)  # weak keyword, URL-shaped value: the URL rule's job
+    return f"{name}{sep}{_REDACTED}"
+
+
 #: Bare credential-shaped tokens: hex digests, AWS access key ids,
 #: known provider token prefixes (GitHub, Slack, Stripe, Google, npm,
 #: GitLab), a JWT, and a long base64-ish blob. The base64 alternative uses
@@ -150,9 +195,13 @@ def _redact_with_rules(text: str) -> tuple[str, frozenset[str]]:
         matched.add("url_credential")
     text = SECRET_URL_CRED.sub(lambda m: f"{m.group(1)}{_REDACTED}{m.group(3)}", text)
 
-    if SECRET_ASSIGN.search(text):
+    before_assign = text
+    text = SECRET_ASSIGN.sub(_redact_assignment, text)
+    if text != before_assign:
+        # _redact_assignment can leave a match unchanged (a weak keyword
+        # that isn't compound, or whose value looks like a URL) — a
+        # regex match alone isn't proof anything was actually redacted.
         matched.add("name_matched_assignment")
-    text = SECRET_ASSIGN.sub(lambda m: f"{m.group(1)}{m.group(2)}{_REDACTED}", text)
 
     if SECRET_BARE.search(text):
         matched.add("bare_credential_format")
@@ -500,6 +549,12 @@ def _deep_mask_with_pairs(
     return value, []
 
 
+def _is_single_token_leaf(text: str) -> bool:
+    """A leaf whose (post-strip) content is zero or one plain word — a
+    bare id, ref or credential, not a body of real text."""
+    return len(_PLAIN_WORD.findall(_strip_replacement_tokens(text))) <= 1
+
+
 def _check_aggregate(pairs: list[_MaskedQuad]) -> None:
     """Whole-payload ratio checks — both redaction-loss and mask-loss —
     over every string field (and dict key), concatenated. The per-leaf
@@ -509,6 +564,21 @@ def _check_aggregate(pairs: list[_MaskedQuad]) -> None:
     payload as a whole loses almost everything (H1) — this restores the
     original whole-corpus check alongside the per-leaf one, not instead
     of it, for both redaction and masking.
+
+    Each check first excludes single-token leaves (K2): a payload of
+    ``{"ref": "XTRM-428", "body": <ordinary text>}`` must not have its
+    one-word "ref" field's full substitution count against "body"'s
+    otherwise-clean ratio — a single id field diluting an otherwise
+    ordinary body is exactly the false abort J2 fixed at the per-leaf
+    level, and the aggregate needs the same protection. But a payload
+    built *entirely* of single-token leaves (many id-only fields, each
+    fully substituted) is real dilution and must still abort — so if
+    excluding single-token leaves would leave nothing to check, the
+    check falls back to the full, unfiltered set instead of one with
+    nothing in it. Each of the two checks (redaction, mask) filters on
+    its own relevant text (leaf 0 for redaction, leaf 1 for masking),
+    since a leaf can be single-token from one check's perspective and
+    not the other's.
 
     Deliberately uses each check's own default ``min_word_count``, not a
     forced 0: a payload with a single small field (e.g. one bare
@@ -520,12 +590,17 @@ def _check_aggregate(pairs: list[_MaskedQuad]) -> None:
     small-field case the per-leaf floor already exists to protect."""
     if not pairs:
         return
-    raw = "\n".join(p[0] for p in pairs)
-    redacted = "\n".join(p[1] for p in pairs)
-    masked = "\n".join(p[2] for p in pairs)
-    matched_rules: frozenset[str] = frozenset().union(*(p[3] for p in pairs))
-    check_redaction(raw, redacted, matched_rules=matched_rules)
-    check_mask(redacted, masked)
+
+    redaction_pairs = [p for p in pairs if not _is_single_token_leaf(p[0])] or pairs
+    raw = "\n".join(p[0] for p in redaction_pairs)
+    redacted_for_redaction = "\n".join(p[1] for p in redaction_pairs)
+    matched_rules: frozenset[str] = frozenset().union(*(p[3] for p in redaction_pairs))
+    check_redaction(raw, redacted_for_redaction, matched_rules=matched_rules)
+
+    mask_pairs = [p for p in pairs if not _is_single_token_leaf(p[1])] or pairs
+    redacted_for_mask = "\n".join(p[1] for p in mask_pairs)
+    masked = "\n".join(p[2] for p in mask_pairs)
+    check_mask(redacted_for_mask, masked)
 
 
 def deep_mask(value: Any, known_ids: frozenset[str]) -> Any:
@@ -707,6 +782,7 @@ def redaction_version() -> str:
             "redaction_min_word_count_for_ratio": REDACTION_MIN_WORD_COUNT_FOR_RATIO,
             "redact_source": inspect.getsource(redact),
             "redact_with_rules_source": inspect.getsource(_redact_with_rules),
+            "redact_assignment_source": inspect.getsource(_redact_assignment),
             "check_redaction_source": inspect.getsource(check_redaction),
             "check_text_loss_source": inspect.getsource(_check_text_loss),
         }
@@ -734,6 +810,7 @@ def mask_version(label_rule: LabelExclusionRule | None = None) -> str:
             "deep_mask_source": inspect.getsource(deep_mask),
             "deep_mask_with_pairs_source": inspect.getsource(_deep_mask_with_pairs),
             "check_aggregate_source": inspect.getsource(_check_aggregate),
+            "is_single_token_leaf_source": inspect.getsource(_is_single_token_leaf),
             "strip_excluded_labels_source": inspect.getsource(strip_excluded_labels),
             "strip_label_value_source": inspect.getsource(_strip_label_value),
             "has_excluded_label_source": inspect.getsource(_has_excluded_label),

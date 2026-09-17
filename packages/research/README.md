@@ -36,14 +36,26 @@ standard runtime, Specialists runtime, Pi, or xtrm-app.
   and `known_ids` — never the guarded/masked output — so a cache lookup
   can happen before the guard stage runs, and two requests that differ
   only in `known_ids` never collide even if they'd guard to identical
-  text today. Known limit: the assignment-redaction rule is
-  name-anchored (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `ACCOUNT`, ...) —
-  a credential assigned to a name carrying none of those keywords is
-  caught only if the value itself matches a known format (a prefixed
-  token, a hex digest, a PEM block, a URL credential). An earlier
-  name-agnostic rule covered that gap but redacted ordinary URLs, model
-  ids and version strings instead; it was deleted rather than tuned
-  further.
+  text today. Known limits, both accepted rather than chased with a
+  wider rule:
+  - The assignment-redaction rule is name-anchored, in two tiers. A
+    **strong** keyword (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`,
+    `CRED`) matches standalone or compound (`password`,
+    `AWS_SECRET_KEY`). A **weak** keyword (`ACCOUNT`, `ACCESS`, `AUTH`,
+    `PRIVATE`, `SIGNATURE`, `SALT`, `PASSPHRASE`, `SESSION`) matches
+    only in a compound name — `R2_ACCOUNT` and `AWS_ACCESS_KEY`, never
+    a bare heading like `Access: the team needs access to staging`,
+    which an unqualified weak-keyword list once redacted wholesale. A
+    credential assigned to a name carrying none of these keywords is
+    caught only if the value itself matches a known format (a prefixed
+    token, a hex digest, a PEM block, a URL credential). An earlier
+    name-agnostic rule covered that gap but redacted ordinary URLs,
+    model ids and version strings instead; it was deleted rather than
+    tuned further.
+  - An unquoted, multi-word secret assigned in prose (`key: my secret
+    phrase`) is not caught: only a quoted value may contain whitespace.
+    An earlier, unquoted acceptance let a matching field name treat the
+    rest of a prose sentence as its value.
 - **Execution is separate from evaluation.** A run captures what happened;
   an assessment set captures what a given evaluator concluded about it —
   new evaluators can assess old runs months later. An assessment set is

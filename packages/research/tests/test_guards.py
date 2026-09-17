@@ -75,6 +75,19 @@ ORDINARY_BOARD_CORPUS: dict[str, str] = {
     "version": "version=1.2.3-alpha.4",
     "commit": "commit sha: a3f9c21",
     "p99": "p99=250ms",
+    # K4: bare weak-keyword headings followed by ordinary prose — the
+    # exact shape Q1 found the unqualified J1 keyword list destroying.
+    "access_heading": "Access: the team needs access to staging before Friday",
+    "session_heading": "Session: users stay logged in for 30 minutes",
+    "account_heading": "Account: the team lead approved this request",
+    "private_heading": "Private: this channel is for the on-call rotation",
+    "signature_heading": "Signature: the release notes are signed off",
+    "salt_heading": "Salt: season the dataset before the next training run",
+    "auth_heading": "Auth: the login flow was refactored last sprint",
+    "key_heading": "Key: see the glossary for term definitions",
+    "token_heading": "Token: an economy game uses these as a scoring unit",
+    "accounts_count": "accounts=3",
+    "session_sentence": "the session ran for two hours without incident",
 }
 
 
@@ -787,10 +800,26 @@ def test_redact_catches_the_mmd_585_shape_by_extended_keyword():
     "keyword",
     ["ACCESS", "AUTH", "PRIVATE", "SIGNATURE", "SALT", "PASSPHRASE", "SESSION"],
 )
-def test_redact_catches_each_new_j1_keyword(keyword):
-    text = f"{keyword.lower()}=abcdefgh12345678"
+def test_redact_catches_each_new_j1_keyword_in_a_compound_name(keyword):
+    """K1: the weak keywords only count in a compound name (containing
+    ``_`` or ``-``) — a bare, single-word name is prose, not a
+    credential field name."""
+    text = f"x_{keyword.lower()}=abcdefgh12345678"
     redacted = redact(text)
     assert "abcdefgh12345678" not in redacted
+
+
+@pytest.mark.parametrize(
+    "keyword",
+    ["ACCESS", "AUTH", "PRIVATE", "SIGNATURE", "SALT", "PASSPHRASE", "SESSION"],
+)
+def test_redact_does_not_catch_a_bare_weak_keyword_heading(keyword):
+    """K1 regression: a bare (non-compound) weak-keyword heading
+    followed by ordinary prose must survive untouched."""
+    text = (
+        f"{keyword.title()}: the team needs {keyword.lower()} to staging before Friday"
+    )
+    assert redact(text) == text
 
 
 def test_redact_does_not_catch_a_credential_under_a_truly_unrecognized_name():
@@ -803,12 +832,25 @@ def test_redact_does_not_catch_a_credential_under_a_truly_unrecognized_name():
 
 
 def test_redact_assignment_rule_refuses_a_url_shaped_value():
-    """J1: an assignment-shaped rule must never swallow a URL — that's
-    SECRET_URL_CRED's job. A name that happens to match a keyword
-    (AUTH) with a URL value stays untouched by SECRET_ASSIGN; the URL
-    rule only fires when the URL itself carries credentials."""
+    """J1: a *weak*-keyword assignment must never swallow a URL —
+    that's SECRET_URL_CRED's job. A name that happens to match a weak
+    keyword (AUTH, compound) with a URL value stays untouched by
+    SECRET_ASSIGN; the URL rule only fires when the URL itself carries
+    credentials."""
     text = "auth_endpoint=https://example.com/oauth/token"
     assert redact(text) == text
+
+
+def test_redact_strong_keyword_assignment_redacts_a_url_shaped_value():
+    """K3: the "://" refusal applies only to weak keywords. A value
+    assigned to a strongly named field (KEY here) is redacted even
+    though it looks like a URL — accepted trade: this may redact a URL
+    stored under a strong name, which is the correct call for a field
+    that says "key"."""
+    text = "api_key=https://x.com/tok/abc123def456"
+    redacted = redact(text)
+    assert "abc123def456" not in redacted
+    assert "<redacted>" in redacted
 
 
 def test_redact_catches_creds_abbreviation():
@@ -823,10 +865,46 @@ def test_redact_catches_short_password_under_old_eight_char_floor():
     assert "hunter2" not in redacted
 
 
-def test_redact_catches_unquoted_multi_word_password_value():
-    text = "password: hunter2 correct horse"
+def test_redact_catches_quoted_multi_word_password_value():
+    text = 'PASSWORD = "correct horse battery staple"'
     redacted = redact(text)
-    assert "hunter2 correct horse" not in redacted
+    assert "correct horse battery staple" not in redacted
+
+
+def test_redact_withdraws_unquoted_multi_word_value_acceptance():
+    """K1 withdraws H8's unquoted-multi-word acceptance: an unquoted
+    value may not contain whitespace. Only the first word-shaped token
+    after the separator is ever eligible for the unquoted alternative,
+    and a short (<4 char) first word means no match at all."""
+    text = "key: my opaque secret phrase"
+    redacted = redact(text)
+    # "my" is under the 4-character floor, so the unquoted alternative
+    # never matches at all here — the whole line survives untouched.
+    assert redacted == text
+
+
+def test_k1_probe_strong_keyword_prose_with_short_first_word_survives():
+    """K1 item 3: "a line beginning Key: or Token: followed by prose
+    must survive." This one does: the first word after the separator
+    ("the") is under the 4-char floor, so nothing in the unquoted
+    alternative matches and the whole sentence is left alone."""
+    text = "Key: the team needs access to staging before Friday"
+    assert redact(text) == text
+    text = "Token: the team needs access to staging before Friday"
+    assert redact(text) == text
+
+
+def test_k1_probe_strong_keyword_prose_with_long_first_word_is_partly_redacted():
+    """K1 item 3, the other outcome: when the first word after the
+    separator is >= 4 characters, the unquoted alternative still
+    matches *that one word* — this is a residual, reported rather than
+    silently accepted: a strong-keyword prose line is not corrupted
+    wholesale (unlike the pre-K1 defect), but a single leading word can
+    still be swapped for <redacted> if it happens to be long enough."""
+    text = "Token: correct horse battery staple"
+    redacted = redact(text)
+    assert redacted == "Token: <redacted> horse battery staple"
+    assert redacted != text
 
 
 def test_redact_catches_redis_style_empty_username_url_credential():
@@ -1394,6 +1472,39 @@ def test_j2_ten_by_nineteen_field_dilution_case_still_aborts():
     backend = _RecordingBackend()
     with pytest.raises(GuardFailure) as exc_info:
         guarded_send(payload, backend, known_ids=known_ids)
+    assert exc_info.value.guard == "mask"
+    assert backend.calls == []
+
+
+# ---- K2: single-token leaves excluded from the aggregate corpus, ---------
+# ---- with a fallback so an all-single-token payload still aborts ---------
+
+
+def test_k2_id_field_next_to_an_ordinary_body_sends():
+    """K2 regression (team-lead's probe): a payload of one known-id
+    field plus one ordinary body must not abort — the id field's full
+    substitution must not count against the body's otherwise-clean
+    ratio in aggregate."""
+    body = " ".join(_distinct_alpha_words("word", 20))
+    payload = {"ref": "XTRM-428", "body": body}
+    backend = _RecordingBackend()
+    guarded_send(payload, backend, known_ids=frozenset({"xtrm-428"}))
+    assert len(backend.calls) == 1
+    assert backend.calls[0]["ref"] == "<issue>"
+    assert backend.calls[0]["body"] == body
+
+
+def test_k2_payload_of_only_single_token_id_fields_still_aborts():
+    """K2's fallback: a payload built *entirely* of single-token
+    fields, each fully substituted (the seconder's Q4 shape — 20 fields
+    each holding exactly one known id), must still abort in aggregate.
+    Excluding single-token leaves would otherwise leave nothing to
+    check against."""
+    known_ids = _distinct_alpha_words("known", 20)
+    payload = {f"field_{i}": known_ids[i] for i in range(20)}
+    backend = _RecordingBackend()
+    with pytest.raises(GuardFailure) as exc_info:
+        guarded_send(payload, backend, known_ids=frozenset(known_ids))
     assert exc_info.value.guard == "mask"
     assert backend.calls == []
 
