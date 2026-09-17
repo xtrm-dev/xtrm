@@ -152,6 +152,14 @@ describe("journal identity survives every read path (XTRM-410)", () => {
   });
 
   it("flat identity stored on the row is projected by getEntry/listEntries/since/timeline/latest", () => {
+    // The bare-row assertions require no ambient context: scrub the ephemeral
+    // identity env so a launcher-exported session cannot be derived here.
+    const savedEnv: Record<string, string | undefined> = {};
+    for (const key of ["XTRM_SESSION_ID", "XTRM_SESSION_NAME", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"] as const) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+    try {
     const { journal } = services(ctx);
     const issue = workIssue(ctx);
     const appended = journal.appendEntry(issue.id, {
@@ -180,6 +188,12 @@ describe("journal identity survives every read path (XTRM-410)", () => {
       assert.equal(e.activationId, null);
       assert.equal(e.sessionId, null);
       assert.equal(e.runId, null);
+    }
+    } finally {
+      for (const key of ["XTRM_SESSION_ID", "XTRM_SESSION_NAME", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"] as const) {
+        if (savedEnv[key] === undefined) delete process.env[key];
+        else process.env[key] = savedEnv[key];
+      }
     }
   });
 });
@@ -392,19 +406,21 @@ describe("XTRM-410 / XTRM-412 / XTRM-417: journal identity is captured and read 
     }
   });
 
-  it("refuses a shell token as --session with a named error and stores nothing", () => {
+  it("accepts a tmux session id as --session and stores the row", () => {
     const ctx = setup();
     const dbPath = join(ctx.dir, "state.db");
     try {
       const issue = workIssue(ctx, "gate work");
+      // $N is the launcher-surfaced tmux session id, a legitimate session form.
       const res = runCli([
         "--db", dbPath, "journal", "append", issue.humanRef,
         "--kind", "note", "--session", "$2", "--project", "prj_xtrm",
       ]);
-      assert.notEqual(res.code, 0, "the write is refused");
-      assert.match(res.stderr, /invalid sessionId "\$2"/);
+      assert.equal(res.code, 0, `the write is accepted: ${res.stderr}`);
       const journal = new JournalService(ctx.db, ctx.svc);
-      assert.equal(journal.listEntries(issue.id).length, 0, "nothing is stored");
+      const rows = journal.listEntries(issue.id);
+      assert.equal(rows.length, 1, "the row is stored");
+      assert.equal(rows[0]?.sessionId, "$2");
     } finally {
       ctx.db.close();
       rmSync(ctx.dir, { recursive: true, force: true });

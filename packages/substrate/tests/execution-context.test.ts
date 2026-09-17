@@ -715,19 +715,31 @@ describe("XTRM-412: canonical identity at the write seam", () => {
     }
   }
 
-  it("rejects a shell token in every identity field with a named error", () => {
-    rejects("executionContext.xtrmSessionId", () => ({ ...base, executionContext: { version: 1, xtrmSessionId: "$2" } }));
-    rejects("sessionId", () => ({ ...base, sessionId: "$2" }));
+  it("accepts the tmux session form and rejects genuine non-identifiers with a named error", () => {
+    // $N is the launcher-surfaced tmux session id (core session-identity.ts),
+    // a legitimate session form alongside UUIDs - never a shell token.
+    for (const field of ["executionContext.xtrmSessionId", "sessionId"] as const) {
+      const build =
+        field === "sessionId"
+          ? () => ({ ...base, sessionId: "$2" })
+          : () => ({ ...base, executionContext: { version: 1, xtrmSessionId: "$2" } });
+      const accepted = canonicalizeWriteIdentity(build() as never);
+      const got = field === "sessionId" ? accepted.sessionId : accepted.executionContext?.xtrmSessionId;
+      assert.equal(got, "$2", `${field} accepts the tmux form unchanged`);
+    }
     rejects("participantId", () => ({ ...base, participantId: "coord; rm -rf /" }));
     rejects("activationId", () => ({ ...base, activationId: "$2" }));
     rejects("attemptId", () => ({ ...base, attemptId: "att 1" }));
     rejects("runId", () => ({ ...base, runId: "job$(id)" }));
     rejects("executionContext.host.sessionId", () => ({ ...base, executionContext: { version: 1, host: { type: "pi", sessionId: "`whoami`" } } }));
+    // 122c14 has no known producer: rejected, but provisional, not proven junk.
+    rejects("sessionId", () => ({ ...base, sessionId: "122c14" }));
     try {
-      canonicalizeWriteIdentity({ ...base, sessionId: "$2" });
+      canonicalizeWriteIdentity({ ...base, sessionId: "not a session!!" });
+      assert.fail("non-identifier session must be refused");
     } catch (err) {
       assert.ok(err instanceof IdentityFormatError);
-      assert.match(err.message, /session identity must be a canonical lowercase UUID/);
+      assert.match(err.message, /session identity must be a canonical lowercase UUID or tmux session id/);
     }
   });
 
@@ -748,18 +760,22 @@ describe("XTRM-412: canonical identity at the write seam", () => {
     assert.equal(echo.sessionId, "pi-sess-9");
   });
 
-  it("rejects the token before any row is written and stores nothing", () => {
+  it("derives an ambient tmux session instead of failing, and still refuses junk", () => {
     const s = scratch();
+    const prev = process.env[XTRM_SESSION_ID_ENV];
     try {
       const { issue } = readyIssue(s.svc, "write gate");
       const journal = new JournalService(s.db, s.svc);
-      assert.throws(() => journal.appendEntry(issue.id, { kind: "note", sessionId: "$2" }), IdentityFormatError);
+      assert.throws(() => journal.appendEntry(issue.id, { kind: "note", sessionId: "not a session!!" }), IdentityFormatError);
       assert.equal(journal.listEntries(issue.id).length, 0, "nothing is stored on rejection");
-      // The same gate covers the XTRM session the runtime reports.
+      // The launcher-surfaced tmux session is derived, not refused.
       process.env[XTRM_SESSION_ID_ENV] = "$2";
-      assert.throws(() => journal.appendEntry(issue.id, { kind: "finding", semantic: { summary: "x" } }), IdentityFormatError);
-      assert.equal(journal.listEntries(issue.id).length, 0, "ambient junk stores nothing");
+      const derived = journal.appendEntry(issue.id, { kind: "finding", semantic: { summary: "x" } });
+      assert.equal(derived.sessionId, "$2", "ambient tmux session is derived");
+      assert.equal(journal.listEntries(issue.id).length, 1);
     } finally {
+      if (prev === undefined) delete process.env[XTRM_SESSION_ID_ENV];
+      else process.env[XTRM_SESSION_ID_ENV] = prev;
       try { s.db.close(); } catch { /* closed */ }
       rmSync(s.dir, { recursive: true, force: true });
     }
