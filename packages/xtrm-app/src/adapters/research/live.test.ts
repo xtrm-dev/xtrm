@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ResearchReadError, liveResearch, mapRunRow, mapTail, unwrap } from "./live.ts";
+import type { TailCursor } from "./types.ts";
 import fixture from "./__fixtures__/xtrm-research-fixture.json";
+
+// A `TailCursor` can only legitimately come from a prior `TailResult.nextOffset` (mapTail);
+// this cast is the test-only escape hatch for exercising the wire format at a chosen value.
+const cursorOf = (n: number) => n as unknown as TailCursor;
 
 describe("research envelope unwrap", () => {
   it("rejects a foreign schema", () => {
@@ -97,8 +102,8 @@ describe("liveResearch read path: non-envelope responses", () => {
       const command = isTail ? "tail" : "compare";
       return { status: 200, json: async () => ({ schema: "xtrm-research-cli/v1", command, ok: true, data }) } as unknown as Response;
     }));
-    // after: 0 must reach the wire; only `undefined` means "no offset".
-    await liveResearch.tail("run-a", 0);
+    // A cursor of 0 must reach the wire; only omitting `after` entirely means "no offset".
+    await liveResearch.tail("run-a", cursorOf(0));
     await liveResearch.tail("run-a");
     await liveResearch.compare(["run-a", "run-b"]);
     expect(calls).toEqual([
@@ -106,5 +111,16 @@ describe("liveResearch read path: non-envelope responses", () => {
       "/xtrm-api/research/tail?run=run-a",
       "/xtrm-api/research/compare?run=run-a&run=run-b",
     ]);
+  });
+
+  it("a fresh read omits `after` entirely rather than sending a cursor of 0", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      calls.push(url);
+      return { status: 200, json: async () => ({ schema: "xtrm-research-cli/v1", command: "tail", ok: true, data: { events: [], next_offset: 0 } }) } as unknown as Response;
+    }));
+    // No cursor argument at all — not a literal 0, which the TailCursor type would reject anyway.
+    await liveResearch.tail("run-a");
+    expect(calls).toEqual(["/xtrm-api/research/tail?run=run-a"]);
   });
 });

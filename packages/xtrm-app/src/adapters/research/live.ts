@@ -1,4 +1,4 @@
-import type { LineageChild, LineageNode, Metric, ResearchAdapter, RunListRow, RunShow, RunStatus, RunSummary, TailResult } from "./types.ts";
+import type { LineageChild, LineageNode, Metric, ResearchAdapter, RunListRow, RunShow, RunStatus, RunSummary, TailCursor, TailResult } from "./types.ts";
 
 // Wire shapes of the `xtrm-research-cli/v1` envelope (packages/research). Only the fields read here.
 interface Envelope<T> {
@@ -115,10 +115,11 @@ export function mapRunSummary(w: WireRunSummary): RunSummary {
   return { metrics, sampleCount: w.sample_count, eventCount: w.event_count };
 }
 
+// The one legitimate place a `TailCursor` is minted: straight from the wire's `next_offset`.
 export function mapTail(w: WireTail): TailResult {
   return {
     events: w.events.map((e) => ({ seq: e.seq, ts: e.ts, kind: e.kind, sampleId: e.sample_id ?? null, data: e.data })),
-    nextOffset: w.next_offset,
+    nextOffset: w.next_offset as TailCursor,
   };
 }
 
@@ -134,7 +135,7 @@ async function read<T>(path: string, command: string): Promise<T> {
   return unwrap(body, command);
 }
 
-const q = (params: Record<string, string | number | undefined>) => {
+const q = (params: Record<string, string | number | TailCursor | undefined>) => {
   const usp = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) if (value !== undefined) usp.set(key, String(value));
   const s = usp.toString();
@@ -160,9 +161,11 @@ export const liveResearch: ResearchAdapter = {
   },
   // Cursor trap: `after` is the last-seen event `seq`, not a count, and it is passed straight
   // through to the Python CLI's `--after` (default -1, meaning "everything"). The bridge cannot
-  // spell "from the beginning" as a number, so omit `after` for a fresh read — passing `after: 0`
-  // silently drops event seq 0, since the CLI filter is strict `seq > after`. Later slices (tail
-  // polling) must carry the previous call's `nextOffset` forward, never a client-side count.
+  // spell "from the beginning" as a number, so omit `after` for a fresh read — passing a cursor
+  // of `0` would silently drop event seq 0, since the CLI filter is strict `seq > after`. The
+  // `TailCursor` brand (types.ts) stops a raw numeric literal from being handed in by accident;
+  // a genuinely acquired cursor of 0 is still valid and still gets sent as `after=0`. Later
+  // slices (tail polling) must carry the previous call's `nextOffset` forward, never a count.
   async tail(runId, after) {
     return mapTail(await read<WireTail>(`/tail${q({ run: runId, after })}`, "tail"));
   },

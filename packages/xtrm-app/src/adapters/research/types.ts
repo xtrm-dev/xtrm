@@ -62,9 +62,19 @@ export interface TailEvent {
   data: unknown;
 }
 
+declare const TAIL_CURSOR: unique symbol;
+
+/**
+ * The last-seen event `seq` for one run's tail, not a count. Branded so a plain number
+ * literal (e.g. a cursor a caller initializes to `0`) can never type-check as one: the only
+ * way to produce a `TailCursor` is a prior `TailResult.nextOffset`. Passing no cursor at all
+ * means "from the beginning" — there is no numeric way to spell that (see `tail` below).
+ */
+export type TailCursor = number & { readonly [TAIL_CURSOR]: true };
+
 export interface TailResult {
   events: TailEvent[];
-  nextOffset: number;
+  nextOffset: TailCursor;
 }
 
 export interface RunSummary {
@@ -80,7 +90,7 @@ export interface ResearchAdapter {
   getRun(runId: string): Promise<RunShow>;
   getExperiment(id: string, version?: string): Promise<Record<string, unknown>>;
   getWorkload(id: string, version?: string): Promise<Record<string, unknown>>;
-  tail(runId: string, after?: number): Promise<TailResult>;
+  tail(runId: string, after?: TailCursor): Promise<TailResult>;
   getMetrics(runId: string): Promise<RunSummary>;
   compare(runIds: string[]): Promise<Record<string, RunSummary>>;
 }

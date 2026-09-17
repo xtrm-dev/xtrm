@@ -33,6 +33,8 @@ export const fixtureResearch: ResearchAdapter = {
   async getWorkload(id) {
     return get(WORKLOADS, id, "workload");
   },
+  // The captured tail fixture is a single fixed page; a `TailCursor` argument has nothing to
+  // resume from here (unlike liveResearch, which sends it on to the CLI's `--after`).
   async tail(runId) {
     if (runId !== "run-a") throw new Error(`unknown run: ${runId}`);
     return mapTail(fixture.tailA as WireTail);
