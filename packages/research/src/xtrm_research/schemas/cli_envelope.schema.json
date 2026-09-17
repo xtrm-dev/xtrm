@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xtrm-research/cli-envelope/v1",
+  "title": "xtrm-research CLI --json response envelope",
+  "type": "object",
+  "properties": {
+    "schema": { "const": "xtrm-research-cli/v1" },
+    "command": { "type": "string", "minLength": 1 },
+    "ok": { "type": "boolean" },
+    "data": {},
+    "error": { "type": ["string", "null"] }
+  },
+  "required": ["schema", "command", "ok", "data", "error"]
+}

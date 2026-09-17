@@ -1,0 +1,7 @@
+{
+  "id": "exact-match",
+  "version": "v1",
+  "kind": "deterministic",
+  "config": {},
+  "code_revision": "test-fixture-1"
+}

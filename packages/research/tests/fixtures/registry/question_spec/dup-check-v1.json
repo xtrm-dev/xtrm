@@ -1,0 +1,7 @@
+{
+  "id": "dup-check",
+  "version": "v1",
+  "type": "noul",
+  "instructions": "Is this item a duplicate of the reference item?",
+  "criteria": {"basis": "board text similarity"}
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xtrm-research/sample/v1",
+  "title": "Sample — one evaluated item row in samples.jsonl",
+  "type": "object",
+  "$defs": {
+    "telemetry_refs": {
+      "type": "object",
+      "properties": {
+        "specialists_job_id": { "type": ["string", "null"] },
+        "specialists_attempt_id": { "type": ["string", "null"] },
+        "specialists_activation_id": { "type": ["string", "null"] },
+        "pi_session_id": { "type": ["string", "null"] },
+        "event_seq": { "type": ["integer", "null"] }
+      }
+    }
+  },
+  "properties": {
+    "schema_version": { "const": "xtrm-research-sample/v1" },
+    "sample_id": { "type": "string", "minLength": 1 },
+    "index": { "type": "integer", "minimum": 0 },
+    "input": {},
+    "output": {},
+    "candidate": {},
+    "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+    "telemetry_refs": { "$ref": "#/$defs/telemetry_refs" },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["schema_version", "sample_id", "index", "input", "status", "created_at"]
+}

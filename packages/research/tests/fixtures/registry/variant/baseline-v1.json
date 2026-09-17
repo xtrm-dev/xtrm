@@ -1,0 +1,6 @@
+{
+  "id": "baseline",
+  "version": "v1",
+  "description": "Deterministic baseline variant.",
+  "config": {"strategy": "always-no"}
+}

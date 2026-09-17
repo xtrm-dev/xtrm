@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xtrm-research/workload/v1",
+  "title": "WorkloadDefinition — a versioned, workload-agnostic unit of work",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "minLength": 1 },
+    "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "description": { "type": "string", "minLength": 1 },
+    "sample_provider": { "type": "string", "minLength": 1 },
+    "runner_kind": { "type": "string", "minLength": 1 },
+    "required_capabilities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "input_schema": { "type": "object" },
+    "output_schema": { "type": "object" },
+    "state_builder": { "type": "string" },
+    "candidate_generator": { "type": "string" },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "version": { "type": "string" }
+        },
+        "required": ["id", "version"]
+      }
+    },
+    "observers": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "evaluators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "version": { "type": "string" }
+        },
+        "required": ["id", "version"]
+      }
+    },
+    "default_metrics": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "visualization_schema": { "type": "object" },
+    "legend": {
+      "type": "object",
+      "description": "Maps every metric name, question id and status value used by this workload to a human-readable label. Completeness is enforced by the registry loader, not by this schema alone.",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "required": [
+    "id", "version", "content_hash", "description", "sample_provider", "runner_kind",
+    "required_capabilities", "input_schema", "output_schema", "questions", "observers",
+    "evaluators", "default_metrics", "legend"
+  ]
+}

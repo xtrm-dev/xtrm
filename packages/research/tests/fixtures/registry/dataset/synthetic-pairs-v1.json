@@ -1,0 +1,6 @@
+{
+  "id": "synthetic-pairs",
+  "version": "v1",
+  "description": "Synthetic fixture pairs; never real board text.",
+  "source": "tests/fixtures/data/synthetic-pairs.jsonl"
+}

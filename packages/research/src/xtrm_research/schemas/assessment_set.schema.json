@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xtrm-research/assessment-set/v1",
+  "title": "AssessmentSet — one immutable evaluation pass over a run's execution evidence",
+  "type": "object",
+  "$defs": {
+    "metric": {
+      "type": "object",
+      "properties": {
+        "value": { "type": "number" },
+        "se": { "type": ["number", "null"] },
+        "ci95": {
+          "type": ["array", "null"],
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "n": { "type": "integer", "minimum": 0 },
+        "method": { "type": "string", "minLength": 1 }
+      },
+      "required": ["value", "n", "method"]
+    }
+  },
+  "properties": {
+    "schema_version": { "const": "xtrm-research-assessment-set/v1" },
+    "assessment_set_id": { "type": "string", "minLength": 1 },
+    "evaluator": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      },
+      "required": ["id", "version", "content_hash"]
+    },
+    "input_run_id": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "assessments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sample_id": { "type": "string", "minLength": 1 },
+          "answer": {}
+        },
+        "required": ["sample_id", "answer"]
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/metric" }
+    }
+  },
+  "required": [
+    "schema_version", "assessment_set_id", "evaluator", "input_run_id",
+    "timestamp", "assessments", "metrics"
+  ]
+}

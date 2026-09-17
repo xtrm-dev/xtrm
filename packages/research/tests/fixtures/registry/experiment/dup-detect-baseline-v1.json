@@ -1,0 +1,20 @@
+{
+  "id": "dup-detect-baseline",
+  "version": "v1",
+  "workload": {"id": "dup-detect", "version": "v1"},
+  "description": "Does a deterministic baseline beat chance on synthetic duplicate pairs?",
+  "hypothesis": "A trivial baseline scores near chance accuracy on synthetic pairs.",
+  "variants": [{"id": "baseline", "version": "v1"}],
+  "legend": {
+    "baseline": "always predicts 'not a duplicate'"
+  },
+  "chart_specs": [
+    {
+      "id": "accuracy-by-run",
+      "schema_version": "xtrm-research-chart-spec/v1",
+      "title": "Accuracy by run",
+      "description": "Accuracy metric for each run of this experiment.",
+      "datasets": ["accuracy"]
+    }
+  ]
+}
