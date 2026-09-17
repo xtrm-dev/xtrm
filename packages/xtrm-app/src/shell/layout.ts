@@ -31,6 +31,44 @@ export interface LayoutState {
 export const SIDEBAR = { default: 264, min: 220, max: 360 } as const;
 export const INSPECTOR = { default: 400, min: 320, max: 720 } as const;
 
+// --- shell motion ------------------------------------------------------------
+// One token shared by the sidebar, main column, and inspector so open/close
+// runs as a single synchronized motion (no staggered phases). Duration and
+// easing mirror motion-panels' default TRANSITION (0.25s, [0.32, 0.72, 0, 1]);
+// `.shell-motion` (styles.css) applies the same curve to plain width
+// transitions and disables it under prefers-reduced-motion. motion-panels
+// already collapses to INSTANT under reduced motion via its own guard.
+
+export const SHELL_MOTION = {
+  durationMs: 250,
+  easingCss: "cubic-bezier(0.32, 0.72, 0, 1)",
+  transition: { duration: 0.25, ease: [0.32, 0.72, 0, 1] as const },
+} as const;
+
+/** Tailwind classes applying SHELL_MOTION to plain width transitions; reduced motion disables it. */
+export const SHELL_MOTION_TW = "transition-[width,margin,transform] duration-[250ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none";
+
+/** Platform-aware Mod shortcut label rendered with the Kbd primitive. */
+export function modShortcut(key: string): string {
+  const nav = typeof navigator !== "undefined" ? navigator : null;
+  const platform = (nav?.platform ?? "") as string;
+  const ua = (nav as unknown as { userAgent?: string } | null)?.userAgent ?? "";
+  const mac = /mac|iphone|ipad/i.test(`${platform} ${ua}`);
+  return mac ? `⌘${key}` : `Ctrl ${key}`;
+}
+
+/** True when a shortcut must not fire: editable fields, dialogs, and menus. */
+export function isShortcutSuppressed(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  if (target.closest("[role=dialog],[role=menu],[role=listbox]")) return true;
+  const el = target instanceof HTMLElement ? target : target instanceof Element ? target.closest("*") : null;
+  if (!el) return false;
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return true;
+  if (el instanceof HTMLElement && el.isContentEditable) return true;
+  if (el.closest("input,textarea,select,[contenteditable=true]")) return true;
+  return false;
+}
+
 export const initialLayout: LayoutState = {
   sidebar: { open: true, width: SIDEBAR.default, lastExpandedWidth: SIDEBAR.default },
   inspector: { state: "CLOSED", width: INSPECTOR.default, restoreState: null, collapsedSidebarForMaximize: false, followLive: false },

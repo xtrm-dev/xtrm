@@ -3,7 +3,7 @@ import { Icon } from "../ui/icon.tsx";
 import { Tip, cx } from "../ui/primitives.tsx";
 import { InspectorDrawer } from "./Inspector.tsx";
 import { useShell } from "./context.tsx";
-import { INSPECTOR } from "./layout.ts";
+import { INSPECTOR, SHELL_MOTION_TW, modShortcut } from "./layout.ts";
 
 export const RAIL = 22;
 const GAP = 24;
@@ -62,20 +62,26 @@ export function InspectorDock({ cardWidth }: { cardWidth: number }) {
     window.addEventListener("pointerup", up);
   };
 
-  const ease = dragging ? "" : "transition-[width] duration-250 ease-in-out";
+  const ease = dragging ? "" : SHELL_MOTION_TW;
+
+  // Edge alignment: the dock shares the main card's rounded-lg border treatment.
+  // PINNED is a real column (muted border like the card, no shadow); overlay
+  // states float (stronger border + shadow). Top/bottom come from the flex
+  // row stretch (outer) + absolute inset (inner), so all three states align.
+  const frame = !open ? "border-border-muted bg-transparent" : state === "PINNED" ? "border-border-muted" : "border-border";
 
   return (
-    <div data-testid="inspector-dock" data-state={state.toLowerCase()} className={cx("relative ml-1.5 shrink-0", ease)} style={{ width: outer }}>
+    <div data-testid="inspector-dock" data-state={state.toLowerCase()} className={cx("relative ml-1.5 min-h-0 shrink-0 self-stretch", ease)} style={{ width: outer }}>
       <div
         className={cx(
           "absolute top-0 right-0 bottom-0 z-30 flex overflow-hidden rounded-lg border bg-raised",
-          open ? "border-border" : "border-border-muted bg-transparent",
+          frame,
           open && state !== "PINNED" && "shadow-float",
           ease,
         )}
         style={{ width: inner }}
       >
-        <Tip label={open ? "Close inspector" : "Open inspector"} shortcut="Ctrl I" side="left">
+        <Tip label={open ? "Close inspector" : "Open inspector"} shortcut={modShortcut("I")} side="left">
           <button
             type="button"
             data-testid="inspector-rail"
@@ -89,8 +95,8 @@ export function InspectorDock({ cardWidth }: { cardWidth: number }) {
             style={{ width: RAIL - 2 }}
           >
             {followLive && <span className="size-1.5 rounded-full bg-accent" />}
-            <span className="flex h-10 w-3.5 items-center justify-center rounded-sm border border-border-muted text-ink-faint transition-colors group-hover/edge:border-border group-hover/edge:text-ink">
-              <Icon name="back" size="xs" className={cx("transition-transform duration-250", open && "rotate-180")} />
+            <span className="flex h-10 w-3.5 items-center justify-center rounded-sm border border-border-muted text-ink-faint transition-colors motion-reduce:transition-none group-hover/edge:border-border group-hover/edge:text-ink">
+              <Icon name="back" size="xs" className={cx("transition-transform duration-[250ms] motion-reduce:transition-none", open && "rotate-180")} />
             </span>
           </button>
         </Tip>

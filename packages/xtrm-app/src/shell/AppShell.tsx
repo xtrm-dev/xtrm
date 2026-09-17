@@ -10,7 +10,7 @@ import { ContextSidebar, useGo } from "./ContextSidebar.tsx";
 import { GlobalSearch } from "./GlobalSearch.tsx";
 import { InspectorDock, useElementWidth } from "./InspectorDock.tsx";
 import { ShellProvider, useShell } from "./context.tsx";
-import { SIDEBAR } from "./layout.ts";
+import { SIDEBAR, isShortcutSuppressed, modShortcut } from "./layout.ts";
 
 /** Full-width top bar: brand, global search, command and theme (v13 reference). */
 function TopBar() {
@@ -44,13 +44,15 @@ function TopBar() {
 
 /** Mode rail: selects the workspace mode; never shows repository state (§3). */
 function ModeRail() {
-  const { repo } = useShell();
+  const { repo, layout, dispatch } = useShell();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const go = useGo();
   const active = modeForPath(pathname);
+  const inspectorOpen = layout.inspector.state !== "CLOSED";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isShortcutSuppressed(e.target)) return;
       const n = Number(e.key);
       if (!(e.metaKey || e.ctrlKey) || e.shiftKey || !Number.isInteger(n)) return;
       const mode = MODES[n - 1];
@@ -67,7 +69,7 @@ function ModeRail() {
       {MODES.map((m, i) => {
         const isActive = m.id === active;
         return (
-          <Tip key={m.id} label={m.deferred ? `${m.label} · deferred` : m.label} shortcut={`Ctrl ${i + 1}`} side="right">
+          <Tip key={m.id} label={m.deferred ? `${m.label} · deferred` : m.label} shortcut={modShortcut(String(i + 1))} side="right">
             <button
               type="button"
               aria-label={m.label}
@@ -83,6 +85,23 @@ function ModeRail() {
           </Tip>
         );
       })}
+      <div className="mt-auto flex flex-col items-center gap-1">
+        <Tip label={inspectorOpen ? "Close inspector" : "Open inspector"} shortcut={modShortcut("I")} side="right">
+          <button
+            type="button"
+            data-testid="rail-inspector-toggle"
+            aria-label={inspectorOpen ? "Close inspector" : "Open inspector"}
+            aria-pressed={inspectorOpen}
+            onClick={() => dispatch({ type: inspectorOpen ? "drawer/close" : "drawer/open" })}
+            className={cx(
+              "relative flex size-9 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
+              inspectorOpen ? "bg-accent-soft text-accent-ink" : "text-ink-faint hover:bg-hover hover:text-ink-muted",
+            )}
+          >
+            <Icon name="inspector" size="md" />
+          </button>
+        </Tip>
+      </div>
     </nav>
   );
 }
@@ -92,18 +111,19 @@ function SidebarEdge({ open }: { open: boolean }) {
   const { dispatch } = useShell();
   const label = open ? "Collapse sidebar" : "Open sidebar";
   return (
-    <button
-      type="button"
-      data-testid={open ? "sidebar-collapse-edge" : "sidebar-reopen-rail"}
-      aria-label={label}
-      title={`${label} (Ctrl B)`}
-      onClick={() => dispatch({ type: "sidebar/toggle" })}
-      className={cx("group/edge flex w-4 shrink-0 items-center justify-center outline-none", open ? "absolute inset-y-0 right-0 z-20" : "-ml-1 mb-1.5")}
-    >
-      <span className="flex h-10 w-1 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 group-hover/edge:h-12 group-hover/edge:w-4 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-12 group-focus-visible/edge:w-4 group-focus-visible/edge:bg-hover">
-        <Icon name={open ? "back" : "forward"} size="xs" className="shrink-0 opacity-0 transition-opacity group-hover/edge:opacity-100 group-focus-visible/edge:opacity-100" />
-      </span>
-    </button>
+    <Tip label={label} shortcut={modShortcut("B")} side="right">
+      <button
+        type="button"
+        data-testid={open ? "sidebar-collapse-edge" : "sidebar-reopen-rail"}
+        aria-label={label}
+        onClick={() => dispatch({ type: "sidebar/toggle" })}
+        className={cx("group/edge flex w-4 shrink-0 items-center justify-center outline-none", open ? "absolute inset-y-0 right-0 z-20" : "-ml-1 mb-1.5")}
+      >
+        <span className="flex h-10 w-1 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 motion-reduce:transition-none group-hover/edge:h-12 group-hover/edge:w-4 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-12 group-focus-visible/edge:w-4 group-focus-visible/edge:bg-hover">
+          <Icon name={open ? "back" : "forward"} size="xs" className="shrink-0 opacity-0 transition-opacity motion-reduce:transition-none group-hover/edge:opacity-100 group-focus-visible/edge:opacity-100" />
+        </span>
+      </button>
+    </Tip>
   );
 }
 

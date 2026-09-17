@@ -2,6 +2,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type Dispatch, type ReactNode } from "react";
 import {
   currentRef,
+  isShortcutSuppressed,
   layoutFromSearch,
   layoutReducer,
   persistLayout,
@@ -119,6 +120,14 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       const key = e.key.toLowerCase();
+      // Toggles never steal typing or dialog keys; the palette stays reachable everywhere.
+      if (isShortcutSuppressed(e.target)) {
+        if (mod && key === "k") {
+          e.preventDefault();
+          openPalette(e.shiftKey ? "commands" : "search");
+        }
+        return;
+      }
       if (mod && key === "k") {
         e.preventDefault();
         openPalette(e.shiftKey ? "commands" : "search");

@@ -72,6 +72,34 @@ export interface PullRequestReview {
   author: string;
   state: ReviewState;
   submittedAt: string | null;
+  /** Review summary body; null/empty when the review carries no text. */
+  body: string | null;
+  url: string | null;
+}
+
+export interface PullRequestComment {
+  id: string;
+  author: string;
+  body: string;
+  url: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface PullRequestReviewComment {
+  id: string;
+  author: string;
+  body: string;
+  path: string;
+  /** Current line; null for outdated comments that only carry `original_line`. */
+  line: number | null;
+  originalLine: number | null;
+  /** GitHub `in_reply_to_id`; null for thread roots and backends that omit it. */
+  inReplyToId: string | null;
+  diffHunk: string | null;
+  url: string | null;
+  createdAt: string;
+  updatedAt: string | null;
 }
 
 export interface PullFileSummary {
@@ -86,6 +114,10 @@ export interface PullRequestDetail extends PullRequestSummary {
   mergeableState: string | null;
   commits: number;
   reviews: PullRequestReview[];
+  /** Issue/PR conversation comments (chronological). Count stays on `comments`. */
+  conversationComments: PullRequestComment[];
+  /** Code-anchored review comments; grouped into threads by the UI. */
+  reviewComments: PullRequestReviewComment[];
   files: PullFileSummary[];
 }
 

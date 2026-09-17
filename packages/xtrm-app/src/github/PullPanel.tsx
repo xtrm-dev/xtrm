@@ -7,6 +7,7 @@ import { Markdown } from "../ui/markdown.tsx";
 import { EmptyState, ErrorState, LoadingState, StatusDot, ago } from "../ui/primitives.tsx";
 import { Fields, InspectorSection } from "../ui/drawer.tsx";
 import { Icon } from "../ui/icon.tsx";
+import { PullConversation } from "./PullConversation.tsx";
 
 function LinkedIssues({ title, branch, body }: { title: string; branch: string; body: string | null }) {
   const index = useIssueIndex();
@@ -32,7 +33,7 @@ function LinkedIssues({ title, branch, body }: { title: string; branch: string; 
   );
 }
 
-/** PR drawer panel: overview, checks, reviews, files-changed summary, linked Substrate issues. */
+/** PR drawer panel: overview, checks, reviews, conversation, files-changed summary, linked Substrate issues. */
 export function PullPanel({ refValue, follow }: { refValue: string; follow: boolean }) {
   const { inspect } = useShell();
   const parsed = parsePullRef(refValue);
@@ -125,6 +126,10 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
         ) : (
           <p className="text-sm text-ink-faint">No reviews yet.</p>
         )}
+      </InspectorSection>
+
+      <InspectorSection title="Conversation">
+        <PullConversation comments={p.conversationComments} reviews={p.reviews} reviewComments={p.reviewComments} />
       </InspectorSection>
 
       <InspectorSection title={`Files changed${p.files.length ? ` · ${p.files.length}` : ""}`} aside={<span className="text-xs text-ink-faint tabular">summary only</span>}>

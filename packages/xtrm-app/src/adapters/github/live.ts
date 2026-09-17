@@ -139,9 +139,43 @@ interface WirePr {
 }
 
 /** Detail payload sections used here (route-runtime.ts PrDetailPayload). */
+interface WireComment {
+  id: number;
+  author: string;
+  body: string | null;
+  url?: string | null;
+  html_url?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+interface WireReview {
+  id: number;
+  author: string;
+  state: string;
+  body?: string | null;
+  url?: string | null;
+  html_url?: string | null;
+  submitted_at: string | null;
+}
+interface WireReviewComment {
+  id: number;
+  author: string;
+  body: string | null;
+  path: string;
+  line?: number | null;
+  original_line?: number | null;
+  in_reply_to_id?: number | null;
+  diff_hunk?: string | null;
+  url?: string | null;
+  html_url?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
 interface WireDetail {
   pr: WirePr;
-  reviews: Array<{ id: number; author: string; state: string; submitted_at: string | null }>;
+  comments?: WireComment[];
+  reviews: WireReview[];
+  review_comments?: WireReviewComment[];
   commits: Array<{ sha: string }>;
   files: Array<{ filename: string; status: string; additions: number; deletions: number }>;
 }
@@ -244,9 +278,43 @@ export function mapPull(repo: string, raw: WirePr): PullRequestSummary {
 
 /** Latest review decides the drawer summary; empty review lists stay `none`. */
 function summarizeReviews(reviews: WireDetail["reviews"]): { review: ReviewState; rows: PullRequestDetail["reviews"] } {
-  const rows = reviews.map((r) => ({ id: String(r.id), author: r.author ?? "—", state: asReviewState(r.state), submittedAt: r.submitted_at }));
+  const rows = reviews.map((r) => ({
+    id: String(r.id),
+    author: r.author ?? "—",
+    state: asReviewState(r.state),
+    submittedAt: r.submitted_at,
+    body: r.body ?? null,
+    url: r.url ?? r.html_url ?? null,
+  }));
   const last = rows.filter((r) => r.state !== "none").at(-1);
   return { review: last?.state ?? "none", rows };
+}
+
+export function mapPullComments(raw: WireDetail["comments"]): PullRequestDetail["conversationComments"] {
+  return (raw ?? []).map((c) => ({
+    id: String(c.id),
+    author: c.author ?? "—",
+    body: c.body ?? "",
+    url: c.url ?? c.html_url ?? null,
+    createdAt: c.created_at,
+    updatedAt: c.updated_at ?? null,
+  }));
+}
+
+export function mapPullReviewComments(raw: WireDetail["review_comments"]): PullRequestDetail["reviewComments"] {
+  return (raw ?? []).map((c) => ({
+    id: String(c.id),
+    author: c.author ?? "—",
+    body: c.body ?? "",
+    path: c.path ?? "—",
+    line: c.line ?? null,
+    originalLine: c.original_line ?? null,
+    inReplyToId: c.in_reply_to_id != null ? String(c.in_reply_to_id) : null,
+    diffHunk: c.diff_hunk ?? null,
+    url: c.url ?? c.html_url ?? null,
+    createdAt: c.created_at,
+    updatedAt: c.updated_at ?? null,
+  }));
 }
 
 export function mapPullDetail(repo: string, row: WirePr, detail: WireDetail, checks: WireChecks | null): PullRequestDetail {
@@ -267,6 +335,8 @@ export function mapPullDetail(repo: string, row: WirePr, detail: WireDetail, che
     comments: row.comment_count ?? base.comments,
     review,
     reviews: rows,
+    conversationComments: mapPullComments(detail.comments),
+    reviewComments: mapPullReviewComments(detail.review_comments),
     files,
     commits: detail.commits?.length ?? 0,
     mergeable: checks?.mergeable ?? null,
