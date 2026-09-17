@@ -4,9 +4,11 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
@@ -18,6 +20,8 @@ import { contract } from "./helpers.ts";
 const SHA_A = "a".repeat(40);
 const SHA_B = "b".repeat(40);
 const SHA_C = "c".repeat(40);
+
+const POST_COMMIT_HOOK = fileURLToPath(new URL("../hooks/post-commit.ts", import.meta.url));
 
 function scratch() {
   const dir = mkdtempSync(join(tmpdir(), "substrate-prov-"));
@@ -116,6 +120,25 @@ describe("E31-E33: trailers, SHA binding, rewrite reconciliation", () => {
     assert.equal(prov.findByCommit(SHA_B)[0]!.receipt.id, receipt.id);
     assert.equal(prov.listArtifacts(receipt.id, { liveOnly: false }).length, 2);
     assert.equal(prov.reconcileRewrite(SHA_A, SHA_B).reconciled, 0, "second pass finds no live rows");
+  });
+
+  it("XTRM-415: the attach is a true no-op on retry and never silently re-points", () => {
+    const { issue } = readyIssue(s.svc);
+    const prov = new ProvenanceService(s.db, s.svc);
+    const receipt = prov.allocateReceipt(prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1" }).id);
+    const first = prov.bindCommit(receipt.id, SHA_A);
+    const boundEvents = (): number => s.svc.listEvents(issue.id).filter((e) => e.type === "provenance.receipt_bound").length;
+    assert.equal(boundEvents(), 1);
+
+    const retry = prov.bindCommit(receipt.id, SHA_A);
+    assert.equal(retry.commitSha, SHA_A);
+    assert.equal(retry.finalizedAt, first.finalizedAt, "retry leaves finalized_at untouched");
+    assert.equal(prov.listArtifacts(receipt.id).length, 1, "retry adds no second artifact row");
+    assert.equal(boundEvents(), 1, "retry appends no second event");
+
+    assert.throws(() => prov.bindCommit(receipt.id, SHA_B), /already bound to .*reconcileRewrite/s);
+    assert.equal(prov.getReceipt(receipt.id).commitSha, SHA_A, "the refused re-point changed nothing");
+    assert.deepEqual(prov.findByCommit(SHA_B), []);
   });
 });
 
@@ -266,5 +289,76 @@ describe("sb provenance verbs", () => {
     const b = cli(s.dbPath, ["provenance", "bundle", humanRef, "--repo-root", s.dir, "--project", "prj_xtrm"]) as { bundleId: string; contractHash: string };
     assert.match(b.bundleId, /^bnd_/);
     assert.equal(b.contractHash, s.svc.getIssue(issue.id).currentContractHash);
+  });
+});
+
+// XTRM-415: the receipt-to-commit link the service could always write and no
+// path ever populated.
+describe("XTRM-415: the receipt commit link", () => {
+  let s: ReturnType<typeof scratch>;
+  beforeEach(() => { s = scratch(); });
+  afterEach(() => { try { s.db.close(); } catch { /* closed */ } rmSync(s.dir, { recursive: true, force: true }); });
+
+  it("bind round-trips to trace, the backwards query, and an idempotent re-run", () => {
+    const { issue } = readyIssue(s.svc);
+    const humanRef = issue.humanRef;
+    cli(s.dbPath, ["provenance", "dispatch", humanRef, "--workspace", s.dir, "--participant", "holder-1", "--project", "prj_xtrm"]);
+    const prov = new ProvenanceService(s.db, s.svc, new JournalService(s.db, s.svc));
+    const receipt = prov.allocateReceipt(prov.listBindings(issue.id)[0]!.id);
+    assert.equal(receipt.commitSha, null, "the commit does not exist yet (§28.3)");
+
+    const bound = cli(s.dbPath, ["provenance", "bind", receipt.id, SHA_A]) as { receipt: { commitSha: string } };
+    assert.equal(bound.receipt.commitSha, SHA_A);
+
+    const trace = cli(s.dbPath, ["provenance", "trace", humanRef]) as { commits: string[] };
+    assert.deepEqual(trace.commits, [SHA_A], "the trace reports the commit");
+
+    const back = cli(s.dbPath, ["provenance", "commit", SHA_A]) as Array<{ receipt: string; issueId: string }>;
+    assert.equal(back.length, 1);
+    assert.equal(back[0]!.receipt, receipt.id);
+    assert.equal(back[0]!.issueId, issue.id, "the backwards query reaches the Issue");
+
+    const reread = cli(s.dbPath, ["provenance", "bind", receipt.id, SHA_A]) as { receipt: { commitSha: string } };
+    assert.equal(reread.receipt.commitSha, SHA_A);
+    assert.equal(s.svc.listEvents(issue.id).filter((e) => e.type === "provenance.receipt_bound").length, 1, "re-run is idempotent");
+  });
+
+  it("recovers the open receipt from state when the hook has no XTRM_RECEIPT_ID", () => {
+    const { issue } = readyIssue(s.svc);
+    const prov = new ProvenanceService(s.db, s.svc);
+    const binding = prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1" });
+    const receipt = prov.allocateReceipt(binding.id);
+    const res = spawnSync(process.execPath, [POST_COMMIT_HOOK], {
+      encoding: "utf8",
+      env: { ...process.env, SUBSTRATE_DB: s.dbPath, SUBSTRATE_ISSUE_REF: issue.humanRef, XTRM_COMMIT_SHA: SHA_C, XTRM_REPO_ROOT: s.dir },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.equal(res.stdout, "", "the hook never narrates provenance on stdout");
+    assert.equal(prov.getReceipt(receipt.id).commitSha, SHA_C);
+  });
+
+  it("stays a quiet no-op when the checkout has no single open receipt to bind", () => {
+    const { issue } = readyIssue(s.svc);
+    const prov = new ProvenanceService(s.db, s.svc);
+    const binding = prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1" });
+    prov.allocateReceipt(binding.id);
+    prov.allocateReceipt(binding.id);
+    const env: Record<string, string> = { ...process.env } as Record<string, string>;
+    delete env["XTRM_RECEIPT_ID"];
+    env["SUBSTRATE_DB"] = s.dbPath;
+    env["SUBSTRATE_ISSUE_REF"] = issue.humanRef;
+    env["XTRM_COMMIT_SHA"] = SHA_C;
+    env["XTRM_REPO_ROOT"] = s.dir;
+    const ambiguous = spawnSync(process.execPath, [POST_COMMIT_HOOK], { encoding: "utf8", env });
+    assert.equal(ambiguous.status, 0);
+    assert.equal(ambiguous.stdout, "");
+    assert.equal(ambiguous.stderr, "");
+    assert.deepEqual(prov.findByCommit(SHA_C), [], "two open receipts stay unlinked rather than guessed");
+
+    delete env["SUBSTRATE_ISSUE_REF"];
+    const untracked = spawnSync(process.execPath, [POST_COMMIT_HOOK], { encoding: "utf8", env });
+    assert.equal(untracked.status, 0);
+    assert.equal(untracked.stdout, "");
+    assert.equal(untracked.stderr, "");
   });
 });

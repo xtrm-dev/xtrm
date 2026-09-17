@@ -312,7 +312,7 @@ groups:
   project     create|link|unlink|list|show|links|repair
   plan        check|apply
   journal     append|checkpoint|show|since|latest|timeline|render
-  provenance  dispatch|trace|commit|receipt|pr|session|activation|bundle
+  provenance  dispatch|bind|trace|commit|receipt|pr|session|activation|bundle
   import      beads
   export      project
 
@@ -592,13 +592,16 @@ renders the latest (or selected) checkpoint as text.`,
   provenance: `usage: sb provenance <verb>
 
   dispatch <ref> [--workspace/--participant/--activation/--attempt/--session/--base-commit/--claim-id <v>]
+  bind <receipt-id> <40-char-sha>
   trace <ref> | commit <sha> | receipt <id> | pr <ref>
   session <session-id> | activation <activation-id>
   bundle <ref> [--repo-root <dir>]
 
 Methodology: provenance is the evidence spine, not narration. Dispatch
 binds an execution to the Issue revision BEFORE work starts, so a later
-contract edit binds anew instead of silently re-authorizing. Trace reads
+contract edit binds anew instead of silently re-authorizing. bind links a
+receipt to the commit carrying its work, idempotently and never re-pointing.
+Trace reads
 the spine (bindings, receipts with artifacts, attestation, claims,
 closure); commit/receipt/pr walk it backwards from an external id; session
 and activation answer what one session touched or one activation produced.
@@ -614,6 +617,13 @@ moves. Methodology: trace to verify before dispatch and to audit after
 close; the spine shows evidence, the Journal tells the story.`,
   "provenance.commit": `usage: sb provenance commit <40-char-sha>`,
   "provenance.receipt": `usage: sb provenance receipt <id>`,
+  "provenance.bind": `usage: sb provenance bind <receipt-id> <40-char-sha>
+
+links the receipt to the commit carrying its work. Idempotent: re-running
+with the same SHA is a no-op, and a receipt already bound to another SHA
+fails closed instead of silently re-pointing (a deliberate move is
+reconcileRewrite, driven by the post-rewrite adapter). The SHA comes from
+the caller because only the caller has it; absence is never invented.`,
   "provenance.pr": `usage: sb provenance pr <provider-ref>`,
   "provenance.session": `usage: sb provenance session <session-id>
 
@@ -848,6 +858,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "journal.timeline": ["kind", "limit"],
   "journal.render": ["sequence"],
   "provenance.dispatch": ["project", "claim-id", "workspace", "participant", "activation", "attempt", "session", "base-commit"],
+  "provenance.bind": [],
   "provenance.trace": [],
   "provenance.commit": [],
   "provenance.receipt": [],
@@ -1649,9 +1660,9 @@ function runJournal(
 // -- provenance verbs (Phase 8, bead xtrm-7wc.9) --------------------------------
 // Thin over ProvenanceService: dispatch freezes the exact revision/hash,
 // trace/commit/receipt/pr reconstruct lineage from host-owned rows.
-// Receipt allocation and commit binding stay host-driven (hooks/service);
-// the CLI exposes dispatch (host operator), bundle finalization, and the
-// four PRD §30 read queries.
+// Receipt commit binding is a host act (XTRM-415): the CLI performs it on
+// the operator's behalf — bind takes the SHA the caller has — and the
+// hooks/service stay the automatic path. The revision never moves.
 
 function bindingSummary(b: { id: string; issueId: string; issueRevision: number; contractHash: string }): Record<string, unknown> {
   return { bindingId: b.id, issueId: b.issueId, revision: b.issueRevision, contractHash: b.contractHash };
@@ -1688,6 +1699,12 @@ function runProvenance(
         }),
       });
       return emit(ctx, command, bindingSummary(binding));
+    }
+    case "bind": {
+      const id = rest[0] ?? (() => { throw new Error("a receipt id is required"); })();
+      const sha = rest[1] ?? (() => { throw new Error("a 40-char commit SHA is required (bind never guesses one)"); })();
+      const receipt = provenance.bindCommit(id, sha);
+      return emit(ctx, command, { receipt });
     }
     case "trace": {
       const ref = needRef(rest);
@@ -1764,7 +1781,7 @@ function runProvenance(
       return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
     }
     default:
-      throw new Error(`unknown provenance verb: ${verb} (want dispatch|trace|commit|receipt|pr|session|activation|bundle)`);
+      throw new Error(`unknown provenance verb: ${verb} (want dispatch|bind|trace|commit|receipt|pr|session|activation|bundle)`);
   }
 }
 

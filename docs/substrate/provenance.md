@@ -63,6 +63,7 @@ changing the model.
 
 ```bash
 sb provenance dispatch <ref> [--workspace/--participant/--activation/--attempt/--session/--base-commit/--claim-id <v>]
+sb provenance bind <receipt-id> <40-char-sha>
 sb provenance trace <ref>
 sb provenance commit <40-char-sha>
 sb provenance receipt <id>
@@ -70,14 +71,23 @@ sb provenance pr <provider-ref>
 sb provenance bundle <ref> [--repo-root <dir>]
 ```
 
+`bind` is the host-side write of the receipt-to-commit link: re-running it
+for the same SHA is a no-op, and a receipt already bound to another SHA fails
+closed — a deliberate move goes through `reconcileRewrite`, driven by the
+post-rewrite adapter. Absence is never guessed: a receipt without a
+recoverable commit is reported as unlinked, not linked to a nearby SHA.
+
 `bundle` assembles the portable evidence set for an Issue. Full flag
 reference: [`cli.md`](./cli.md).
 
 ## Git relationship
 
 Commits bind to receipts post-hoc: the commit check nudges (never blocks)
-when Issue/revision/contract-hash/claim/binding context is missing, and
-the post-commit SHA bind recovers a receipt-less commit. A commit alone
+when Issue/revision/contract-hash/claim/binding context is missing. The
+automatic path is the post-commit hook, which binds the receipt it is given
+(`XTRM_RECEIPT_ID`) or resolves the single open receipt for this checkout
+from Substrate state; `sb provenance bind` is the explicit path for a commit
+whose receipt is already known. A commit alone
 never closes an Issue — closure needs the reasoned terminal state plus
 sufficient provenance.
 
