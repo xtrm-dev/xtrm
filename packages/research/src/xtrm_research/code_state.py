@@ -23,7 +23,9 @@ def capture_code_state(repo_path: Path) -> dict[str, Any]:
         dirty_patch_hash = None
         if dirty:
             diff = _git(repo_path, "diff", "HEAD")
-            dirty_patch_hash = f"sha256:{hashlib.sha256(diff.encode('utf-8')).hexdigest()}"
+            dirty_patch_hash = (
+                f"sha256:{hashlib.sha256(diff.encode('utf-8')).hexdigest()}"
+            )
         return {
             "repo": str(repo_path),
             "commit": commit.strip(),
@@ -31,7 +33,12 @@ def capture_code_state(repo_path: Path) -> dict[str, Any]:
             "dirty_patch_hash": dirty_patch_hash,
         }
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return {"repo": str(repo_path), "commit": "unknown", "dirty": True, "dirty_patch_hash": None}
+        return {
+            "repo": str(repo_path),
+            "commit": "unknown",
+            "dirty": True,
+            "dirty_patch_hash": None,
+        }
 
 
 def _git(repo_path: Path, *args: str) -> str:

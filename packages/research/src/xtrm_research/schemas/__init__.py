@@ -87,7 +87,9 @@ def _check_date_time(value: Any) -> bool:
     if not isinstance(value, str):
         return True
     if not _RFC3339_DATE_TIME.match(value):
-        raise ValueError(f"date-time {value!r} is not a strict, timezone-aware RFC 3339 date-time")
+        raise ValueError(
+            f"date-time {value!r} is not a strict, timezone-aware RFC 3339 date-time"
+        )
     normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
     datetime.fromisoformat(normalized)  # raises ValueError on an invalid calendar date
     return True
@@ -108,7 +110,9 @@ def validate(kind: str, payload: dict[str, Any]) -> None:
     """
     schema = load_schema(kind)
     validator_cls = jsonschema.validators.validator_for(schema)
-    validator = validator_cls(schema, registry=_registry(), format_checker=_format_checker())
+    validator = validator_cls(
+        schema, registry=_registry(), format_checker=_format_checker()
+    )
     try:
         validator.validate(payload)
     except jsonschema.exceptions.ValidationError as exc:
@@ -130,7 +134,8 @@ def _check_workload_rules(payload: dict[str, Any]) -> None:
     legend: dict[str, str] = payload.get("legend", {})
     referenced = _referenced_vocabulary(
         payload,
-        set(payload.get("default_metrics", [])) | {q["id"] for q in payload.get("questions", [])},
+        set(payload.get("default_metrics", []))
+        | {q["id"] for q in payload.get("questions", [])},
     )
     missing = sorted(referenced - legend.keys())
     if missing:

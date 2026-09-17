@@ -10,8 +10,12 @@ from __future__ import annotations
 from typing import Any
 
 USAGE_SOURCES = (
-    "pi_message_usage", "pi_session_stats", "provider_api",
-    "specialists_snapshot", "estimate", "unknown",
+    "pi_message_usage",
+    "pi_session_stats",
+    "provider_api",
+    "specialists_snapshot",
+    "estimate",
+    "unknown",
 )
 
 
