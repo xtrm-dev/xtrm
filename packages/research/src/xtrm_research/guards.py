@@ -105,14 +105,21 @@ SECRET_AUTH_HEADER = re.compile(
 #: pair, e.g. ``-----BEGIN CHANGELOG----- ... -----END CHANGELOG-----``,
 #: and destroyed whatever ordinary text sat between them — H12). Bounded
 #: to 8000 characters between markers rather than an unbounded ``.*?``.
+#: Case-insensitive and a 4+ dash banner (``-{4,}``, not a fixed 5): a
+#: lowercase or mixed-case banner, or one with four dashes, is still a
+#: PRIVATE KEY banner (J6). Safe to relax without reopening H12: the
+#: match stays anchored to the literal words PRIVATE KEY either way, so
+#: it can never again match an arbitrary banner pair.
 SECRET_PEM = re.compile(
-    r"-----BEGIN [A-Z ]*PRIVATE KEY-----.{0,8000}?-----END [A-Z ]*PRIVATE KEY-----",
+    r"(?i)-{4,}BEGIN [A-Z ]*PRIVATE KEY-{4,}.{0,8000}?-{4,}END [A-Z ]*PRIVATE KEY-{4,}",
     re.DOTALL,
 )
 #: A BEGIN PRIVATE KEY marker with no matching END within reach: redact
 #: from the marker to the end of the field rather than leaving a
 #: truncated key sitting in the payload.
-SECRET_PEM_UNTERMINATED = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*", re.DOTALL)
+SECRET_PEM_UNTERMINATED = re.compile(
+    r"(?i)-{4,}BEGIN [A-Z ]*PRIVATE KEY-{4,}.*", re.DOTALL
+)
 
 _REDACTED = "<redacted>"
 

@@ -313,7 +313,42 @@ def _relative_identity(path: Path) -> str:
         return str(path)
 
 
-def _scan_module(path: Path, source: str) -> tuple[list, list, list, list, list]:
+#: J7: the import-level exemptions for code_state.py/environment.py
+#: (subprocess) and runner.py/store.py (os) only cover *importing* the
+#: module — they say nothing about what an already-imported os or
+#: subprocess is then used for. A dangerous os.system/popen/exec*/
+#: spawn* call is flagged regardless of the os import exemption,
+#: everywhere except guards.py — runner.py/store.py use only os.open/
+#: os.replace/os.close/os.unlink today, none of them dangerous, so this
+#: has no effect on the current tree and a future os.popen("curl ...")
+#: added to either file still fails the scan, exactly per J7's example.
+#:
+#: subprocess.* is narrower: code_state.py and environment.py each
+#: already call ``subprocess.run(...)`` (git plumbing for the code
+#: state's commit/dirty hash; ``node --version`` detection) — pre-
+#: existing, reviewed, argument-list (never ``shell=True``) calls, out
+#: of scope for this issue to touch. Flagging subprocess.* unexempted
+#: there would fail on today's tree, not just a future bypass, so those
+#: two files keep the same call-site exemption as their import
+#: exemption. Every other file, including one that newly imports
+#: subprocess through neither exemption, is unexempted.
+_OS_DANGEROUS_ATTRS = frozenset({"system", "popen"})
+_OS_DANGEROUS_PREFIXES = ("exec", "spawn")
+
+
+def _is_dangerous_os_or_subprocess_call(func: ast.expr, identity: str) -> bool:
+    if not isinstance(func, ast.Attribute) or not isinstance(func.value, ast.Name):
+        return False
+    if func.value.id == "subprocess":
+        return identity not in _SUBPROCESS_EXEMPT
+    if func.value.id == "os":
+        return func.attr in _OS_DANGEROUS_ATTRS or func.attr.startswith(
+            _OS_DANGEROUS_PREFIXES
+        )
+    return False
+
+
+def _scan_module(path: Path, source: str) -> tuple[list, list, list, list, list, list]:
     """Walk one module's AST for remote-seam violations. Shared by the
     structural test (real package files) and the bypass-detection tests
     below (synthetic snippets with a decoy path)."""
@@ -324,6 +359,7 @@ def _scan_module(path: Path, source: str) -> tuple[list, list, list, list, list]
     unannotated_params: list[tuple[str, str, str]] = []
     transport_imports: list[tuple[str, str]] = []
     dynamic_imports: list[tuple[str, int]] = []
+    dangerous_calls: list[tuple[str, int]] = []
 
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -350,6 +386,11 @@ def _scan_module(path: Path, source: str) -> tuple[list, list, list, list, list]
             is_dunder_import = isinstance(func, ast.Name) and func.id == "__import__"
             if is_import_module or is_dunder_import:
                 dynamic_imports.append((identity, node.lineno))
+            if (
+                identity not in _TRANSPORT_IMPORT_ALLOWLIST
+                and _is_dangerous_os_or_subprocess_call(func, identity)
+            ):
+                dangerous_calls.append((identity, node.lineno))
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             positional_and_keyword = (
                 *node.args.posonlyargs,
@@ -389,6 +430,7 @@ def _scan_module(path: Path, source: str) -> tuple[list, list, list, list, list]
         unannotated_params,
         transport_imports,
         dynamic_imports,
+        dangerous_calls,
     )
 
 
@@ -398,26 +440,31 @@ def test_guarded_send_is_the_only_remote_seam():
     anywhere in the package taking a ``send`` parameter, no function
     (public or private) takes a Callable-annotated parameter under any
     other name, no public function takes an unannotated parameter, no
-    module imports a transport library, and nothing dynamically imports
-    one either (including a bare ``__import__`` call)."""
+    module imports a transport library, nothing dynamically imports one
+    (including a bare ``__import__`` call), and no os/subprocess
+    dangerous-call site (system/popen/exec*/spawn*/subprocess.*) exists
+    outside guards.py, regardless of the import-level exemptions (J7)."""
     send_taking: list = []
     callable_params: list = []
     unannotated_params: list = []
     transport_imports: list = []
     dynamic_imports: list = []
+    dangerous_calls: list = []
 
     for path in sorted(PACKAGE_ROOT.rglob("*.py")):
-        s, c, u, t, d = _scan_module(path, path.read_text(encoding="utf-8"))
+        s, c, u, t, d, x = _scan_module(path, path.read_text(encoding="utf-8"))
         send_taking += s
         callable_params += c
         unannotated_params += u
         transport_imports += t
         dynamic_imports += d
+        dangerous_calls += x
 
     assert transport_imports == []
     assert dynamic_imports == []
     assert callable_params == []
     assert unannotated_params == []
+    assert dangerous_calls == []
     assert send_taking == [
         ("guards.py", "guarded_send"),
         ("guards.py", "send_through_run"),
@@ -432,7 +479,7 @@ def test_guarded_send_is_the_only_remote_seam():
     ],
 )
 def test_scan_detects_callable_annotated_parameter_regardless_of_name(source):
-    _send, callable_params, _u, _t, _d = _scan_module(Path("decoy.py"), source)
+    _send, callable_params, _u, _t, _d, _x = _scan_module(Path("decoy.py"), source)
     assert callable_params == [
         ("decoy.py", "push", "transport" if "transport" in source else "client")
     ]
@@ -515,7 +562,7 @@ def test_scan_does_not_flag_unannotated_parameters_in_private_helpers():
     ],
 )
 def test_scan_detects_transport_module_imports(source):
-    _s, _c, _u, transport_imports, _d = _scan_module(Path("decoy.py"), source)
+    _s, _c, _u, transport_imports, _d, _x = _scan_module(Path("decoy.py"), source)
     assert len(transport_imports) == 1
 
 
@@ -527,12 +574,12 @@ def test_scan_detects_transport_module_imports(source):
     ],
 )
 def test_scan_detects_dynamic_import_calls(source):
-    _s, _c, _u, _t, dynamic_imports = _scan_module(Path("decoy.py"), source)
+    _s, _c, _u, _t, dynamic_imports, _x = _scan_module(Path("decoy.py"), source)
     assert len(dynamic_imports) == 1
 
 
 def test_scan_allows_guards_py_to_import_a_transport():
-    _s, _c, _u, transport_imports, _d = _scan_module(
+    _s, _c, _u, transport_imports, _d, _x = _scan_module(
         Path("guards.py"), "import socket\n"
     )
     assert transport_imports == []
@@ -540,7 +587,7 @@ def test_scan_allows_guards_py_to_import_a_transport():
 
 def test_scan_exempts_code_state_and_environment_subprocess_imports():
     for filename in ("code_state.py", "environment.py"):
-        _s, _c, _u, transport_imports, _d = _scan_module(
+        _s, _c, _u, transport_imports, _d, _x = _scan_module(
             Path(filename), "import subprocess\n"
         )
         assert transport_imports == [], filename
@@ -548,7 +595,9 @@ def test_scan_exempts_code_state_and_environment_subprocess_imports():
 
 def test_scan_exempts_runner_and_store_os_imports():
     for filename in ("runner.py", "store.py"):
-        _s, _c, _u, transport_imports, _d = _scan_module(Path(filename), "import os\n")
+        _s, _c, _u, transport_imports, _d, _x = _scan_module(
+            Path(filename), "import os\n"
+        )
         assert transport_imports == [], filename
 
 
@@ -557,8 +606,70 @@ def test_scan_allowlist_matches_relative_path_not_basename():
     basename (e.g. a hypothetical backends/guards.py) must not inherit
     the top-level guards.py's transport-import allowlisting."""
     nested = Path("backends") / "guards.py"
-    _s, _c, _u, transport_imports, _d = _scan_module(nested, "import socket\n")
+    _s, _c, _u, transport_imports, _d, _x = _scan_module(nested, "import socket\n")
     assert len(transport_imports) == 1
+
+
+# ---- J7: a dangerous os/subprocess call is flagged regardless of the ----
+# ---- import-level exemption ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "os.system('curl http://example.com')\n",
+        "os.popen('curl http://example.com')\n",
+        "os.execv('/bin/sh', ['/bin/sh'])\n",
+        "os.execvpe('sh', ['sh'], {})\n",
+        "os.spawnv(0, '/bin/sh', ['/bin/sh'])\n",
+        "os.spawnlp(0, 'sh', 'sh')\n",
+        "subprocess.run(['curl', 'http://example.com'])\n",
+        "subprocess.Popen(['curl'])\n",
+        "subprocess.call(['curl'])\n",
+        "subprocess.check_output(['curl'])\n",
+    ],
+)
+def test_scan_detects_dangerous_os_or_subprocess_call(source):
+    _s, _c, _u, _t, _d, dangerous_calls = _scan_module(Path("decoy.py"), source)
+    assert len(dangerous_calls) == 1
+
+
+def test_scan_allows_guards_py_a_dangerous_call():
+    _s, _c, _u, _t, _d, dangerous_calls = _scan_module(
+        Path("guards.py"), "os.system('x')\n"
+    )
+    assert dangerous_calls == []
+
+
+def test_scan_flags_os_popen_in_runner_despite_the_os_import_exemption():
+    """J7's own example: runner.py is exempted from the *import*-level
+    os check (it needs os.open/os.replace/...), but a dangerous call
+    there must still fail the scan."""
+    _s, _c, _u, _t, _d, dangerous_calls = _scan_module(
+        Path("runner.py"), "os.popen('curl http://example.com')\n"
+    )
+    assert len(dangerous_calls) == 1
+
+
+def test_scan_exempts_the_existing_subprocess_run_calls_in_code_state_and_environment():
+    """code_state.py and environment.py each already call
+    subprocess.run(...) for git plumbing and node --version detection —
+    pre-existing, reviewed, non-shell calls out of scope for this issue.
+    Flagging them unexempted would fail on today's tree, not just a
+    future bypass, so these two keep the same exemption as their import
+    check (unlike the os check above, which has no such carve-out)."""
+    for filename in ("code_state.py", "environment.py"):
+        _s, _c, _u, _t, _d, dangerous_calls = _scan_module(
+            Path(filename), "subprocess.run(['git', 'status'])\n"
+        )
+        assert dangerous_calls == [], filename
+
+
+def test_scan_does_not_exempt_a_new_subprocess_call_in_an_unrelated_file():
+    _s, _c, _u, _t, _d, dangerous_calls = _scan_module(
+        Path("definitions.py"), "subprocess.run(['curl'])\n"
+    )
+    assert len(dangerous_calls) == 1
 
 
 # ---- redaction --------------------------------------------------------
@@ -625,6 +736,29 @@ def test_redact_masks_pem_block_markers_included():
     assert "BEGIN" not in redacted
     assert "END" not in redacted
     for line in pem.splitlines()[1:-1]:
+        assert line not in redacted
+
+
+# ---- J6: PEM banner is case-insensitive and tolerates 4+ dashes ---------
+
+
+def test_redact_masks_a_lowercase_pem_banner():
+    body = "\n".join(secrets.token_hex(30) for _ in range(3))
+    pem = f"-----begin private key-----\n{body}\n-----end private key-----"
+    redacted = redact(pem)
+    assert "begin" not in redacted
+    assert "end" not in redacted
+    for line in body.splitlines():
+        assert line not in redacted
+
+
+def test_redact_masks_a_four_dash_pem_banner():
+    body = "\n".join(secrets.token_hex(30) for _ in range(3))
+    pem = f"----BEGIN PRIVATE KEY----\n{body}\n----END PRIVATE KEY----"
+    redacted = redact(pem)
+    assert "BEGIN" not in redacted
+    assert "END" not in redacted
+    for line in body.splitlines():
         assert line not in redacted
 
 
