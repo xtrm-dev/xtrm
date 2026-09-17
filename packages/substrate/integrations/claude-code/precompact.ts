@@ -22,12 +22,14 @@ export interface PreCompactInput {
   dbPath?: string;
   // H1 (§76): the checkpoint carries actor + session identity. Actor is
   // caller-supplied typed input (never parsed from prose, §98); the
-  // participant falls back to the trusted SUBSTRATE_HOLDER env; the XTRM
+  // participant falls back to the trusted SUBSTRATE_HOLDER env; the
+  // activation falls back to SUBSTRATE_ACTIVATION_ID (XTRM-435); the XTRM
   // session id/name enrich automatically from the exact R4 env contract
   // inside enrichExecutionContext. Unknown stays absent.
   actor?: { type: ActorType; id?: string; name?: string } | null;
   participantId?: string | null;
   holder?: string | null;
+  activationId?: string | null;
 }
 
 export interface PreCompactResult {
@@ -67,6 +69,11 @@ export async function handlePreCompact(input: PreCompactInput = {}): Promise<Pre
       executionContext: enrichExecutionContext({
         actor: input.actor ?? null,
         participantId: input.participantId ?? input.holder ?? process.env["SUBSTRATE_HOLDER"] ?? null,
+        specialist: input.activationId
+          ? { activationId: input.activationId }
+          : process.env["SUBSTRATE_ACTIVATION_ID"]
+            ? { activationId: process.env["SUBSTRATE_ACTIVATION_ID"] }
+            : null,
         host: input.session_id ? { type: "claude", sessionId: input.session_id } : null,
       }),
     });

@@ -13,7 +13,7 @@ import { ResumeService } from "../../src/service/resume-service.ts";
 import { ProvenanceService } from "../../src/service/provenance-service.ts";
 import { isJournalKind, type SemanticCheckpoint } from "../../src/domain/journal.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
-import { enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
+import { currentExecutionContext, enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
 import type { ResolvedIssue } from "../../src/domain/issue.ts";
 // Type-only: erased at compile time, so this module stays free of runtime Pi imports.
 import type { Usage } from "@earendil-works/pi-ai";
@@ -101,15 +101,20 @@ function piExecutionContext(opts: {
   executionContext?: ExecutionContext | null;
 }): ExecutionContext | null {
   const base = opts.executionContext ?? undefined;
+  // A host-only envelope suppresses the service fallback. Fill unstated
+  // identity from the same ambient contract, preserving trusted facets.
+  const ambient = currentExecutionContext();
+  const activationId = base?.specialist?.activationId ?? opts.activationId ?? ambient?.specialist?.activationId;
   return enrichExecutionContext({
     actor: base?.actor ?? null,
-    participantId: base?.participantId ?? opts.holder ?? null,
+    participantId: base?.participantId ?? opts.holder ?? ambient?.participantId ?? null,
     xtrmSessionId: base?.xtrmSessionId ?? null,
     xtrmSessionName: base?.xtrmSessionName ?? null,
     host: base?.host ?? (opts.sessionId ? { type: "pi", sessionId: opts.sessionId } : null),
     runId: base?.runId ?? null,
     chainRunId: base?.chainRunId ?? null,
-    specialist: base?.specialist ?? (opts.activationId ? { activationId: opts.activationId } : null),
+    coordinator: base?.coordinator ?? null,
+    specialist: activationId != null ? { ...base?.specialist, activationId } : base?.specialist ?? null,
     workspace: base?.workspace ?? null,
   });
 }

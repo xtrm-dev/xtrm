@@ -18,6 +18,7 @@ import {
   toolIssueSearch,
   toolIssueUpdate,
   toolJournalAppend,
+  toolJournalCheckpoint,
   toolProvenanceTrace,
   toPiCompaction,
 } from "../integrations/pi/handlers.ts";
@@ -39,6 +40,71 @@ function readyIssue(svc: ReturnType<typeof openServices>, title = "Pi work"): st
 }
 
 describe("tool surface over the typed service", () => {
+  it("session-only journal paths preserve ambient identity and explicit absence (XTRM-435)", async () => {
+    const { svc } = setup();
+    const keys = ["XTRM_SESSION_ID", "XTRM_SESSION_NAME", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"];
+    const prior = keys.map((key) => process.env[key]);
+    try {
+      const id = readyIssue(svc);
+      for (const key of keys) delete process.env[key];
+      for (const present of [true, false]) {
+        if (present) {
+          process.env["SUBSTRATE_HOLDER"] = "specialist::probe";
+          process.env["SUBSTRATE_ACTIVATION_ID"] = "act:23b2212a-c44";
+        } else {
+          delete process.env["SUBSTRATE_HOLDER"];
+          delete process.env["SUBSTRATE_ACTIVATION_ID"];
+        }
+        const append = toolJournalAppend(svc, { ref: id, kind: "finding", sessionId: "pi-session" });
+        const checkpoint = await toolJournalCheckpoint(svc, { ref: id, sessionId: "pi-session" });
+        for (const entryId of [append.entryId, checkpoint.entryId]) {
+          const row = svc.db.prepare("SELECT participant_id, activation_id, execution_context_json FROM issue_journal WHERE id = ?").get(entryId as string) as {
+            participant_id: string | null; activation_id: string | null; execution_context_json: string;
+          };
+          assert.equal(row.participant_id, present ? "specialist::probe" : null);
+          assert.equal(row.activation_id, present ? "act:23b2212a-c44" : null);
+          assert.deepEqual(JSON.parse(row.execution_context_json).host, { type: "pi", sessionId: "pi-session" });
+        }
+      }
+    } finally {
+      keys.forEach((key, i) => { if (prior[i] === undefined) delete process.env[key]; else process.env[key] = prior[i]; });
+      svc.close();
+    }
+  });
+
+  for (const facet of ["specialist", "coordinator"] as const) {
+    it(`preserves trusted ${facet} while filling unstated activation (XTRM-435)`, () => {
+      const { svc } = setup();
+      const keys = ["XTRM_SESSION_ID", "XTRM_SESSION_NAME", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"];
+      const prior = keys.map((key) => process.env[key]);
+      try {
+        const id = readyIssue(svc);
+        for (const key of keys) delete process.env[key];
+        process.env["SUBSTRATE_ACTIVATION_ID"] = "act:23b2212a-c44";
+        const base = facet === "specialist"
+          ? { specialist: { name: "probe" } }
+          : { coordinator: { participantId: "parent" } };
+        for (const activationId of [undefined, "act:abcdef12-345"]) {
+          const appended = toolJournalAppend(svc, { ref: id, kind: "finding", sessionId: "pi-session", activationId, executionContext: base });
+          const raw = svc.db.prepare("SELECT activation_id, execution_context_json FROM issue_journal WHERE id = ?").get(appended.entryId as string) as { activation_id: string; execution_context_json: string };
+          const ctx = JSON.parse(raw.execution_context_json);
+          assert.equal(raw.activation_id, activationId ?? "act:23b2212a-c44");
+          if (facet === "specialist") assert.equal(ctx.specialist.name, "probe");
+          else assert.deepEqual(ctx.coordinator, { participantId: "parent" });
+        }
+        const before = svc.journal.listEntries(id).length;
+        assert.throws(() => toolJournalAppend(svc, {
+          ref: id, kind: "finding", sessionId: "pi-session", activationId: "act:abcdef12-345",
+          executionContext: { specialist: { activationId: "act:23b2212a-c44" } },
+        }));
+        assert.equal(svc.journal.listEntries(id).length, before, "conflict must write nothing");
+      } finally {
+        keys.forEach((key, i) => { if (prior[i] === undefined) delete process.env[key]; else process.env[key] = prior[i]; });
+        svc.close();
+      }
+    });
+  }
+
   it("get/search/claim/update/append/resume/trace round-trip without SQL in the caller", () => {
     const { svc } = setup();
     try {

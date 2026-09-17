@@ -33,7 +33,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { isJournalKind, JOURNAL_KINDS } from "../../src/domain/journal.ts";
 import { CLOSURE_OUTCOMES } from "../../src/domain/closure.ts";
-import { enrichExecutionContext } from "../../src/domain/execution-context.ts";
+import { currentExecutionContext, enrichExecutionContext } from "../../src/domain/execution-context.ts";
 import type { IssueService } from "../../src/service/issue-service.ts";
 import type { JournalEntry } from "../../src/domain/journal.ts";
 import { ClosureService } from "../../src/service/closure-service.ts";
@@ -138,6 +138,12 @@ function journalIdentity(args: {
   runId?: string;
   executionContext: ReturnType<typeof enrichExecutionContext>;
 } {
+  // Unstated participant/activation fill from the process ambient (XTRM-435):
+  // the same env contract the service's ambientIdentityFallback uses, stated
+  // wins, nothing invented when ambient is empty. Without this the
+  // session-only envelope suppresses the service fallback and drops
+  // holder/activation for hosts that hold them ambiently.
+  const ambient = currentExecutionContext();
   return {
     sessionId: args.sessionId ?? undefined,
     participantId: args.participantId ?? undefined,
@@ -145,9 +151,9 @@ function journalIdentity(args: {
     runId: args.runId ?? undefined,
     executionContext: enrichExecutionContext({
       host: args.sessionId ? { type: "claude", sessionId: args.sessionId } : null,
-      participantId: args.participantId ?? null,
+      participantId: args.participantId ?? ambient?.participantId ?? null,
       runId: args.runId ?? null,
-      specialist: args.activationId ? { activationId: args.activationId } : null,
+      specialist: args.activationId ? { activationId: args.activationId } : (ambient?.specialist ?? null),
     }),
   };
 }
