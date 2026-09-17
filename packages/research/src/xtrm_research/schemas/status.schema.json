@@ -4,9 +4,10 @@
   "title": "status.json — the one mutable file in a run directory",
   "description": "manifest.json is write-once. Lifecycle state, heartbeat, and the manifest content_hash the gate checks against on every write live here instead, so a settled run's execution evidence never changes a byte.",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "schema_version": { "const": "xtrm-research-status/v1" },
-    "run_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$" },
     "state": { "type": "string", "enum": ["started", "success", "error", "invalid"] },
     "last_heartbeat": { "type": "string", "format": "date-time" },
     "manifest_content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }

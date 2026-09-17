@@ -1,39 +1,90 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "question_spec.schema.json",
-  "title": "QuestionSpec — a System One judgment definition",
+  "title": "QuestionSpec \u2014 a System One judgment definition",
   "type": "object",
   "properties": {
-    "id": { "type": "string", "minLength": 1 },
-    "version": { "type": "string", "minLength": 1 },
-    "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "type": { "type": "string", "enum": ["choice", "score", "noul"] },
-    "instructions": { "type": "string", "minLength": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "choice",
+        "score",
+        "noul"
+      ]
+    },
+    "instructions": {
+      "type": "string",
+      "minLength": 1
+    },
     "criteria": {
-      "description": "Structured JSON allowed. Required for choice/score. Optional for noul — a noul question may carry no more than a true/false framing."
+      "description": "Structured JSON allowed. Required for choice/score. Optional for noul \u2014 a noul question may carry no more than a true/false framing."
     },
     "options": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "minItems": 1,
       "description": "Required for type=choice; the option values a Choice answer may take."
     },
     "legend": {
       "type": "object",
       "description": "Required for type=score; maps level numbers to a human-readable label.",
-      "additionalProperties": { "type": "string" },
+      "additionalProperties": {
+        "type": "string"
+      },
       "minProperties": 1
     }
   },
-  "required": ["id", "version", "content_hash", "type", "instructions"],
+  "required": [
+    "id",
+    "version",
+    "content_hash",
+    "type",
+    "instructions"
+  ],
   "allOf": [
     {
-      "if": { "properties": { "type": { "const": "choice" } } },
-      "then": { "required": ["criteria", "options"] }
+      "if": {
+        "properties": {
+          "type": {
+            "const": "choice"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "criteria",
+          "options"
+        ]
+      }
     },
     {
-      "if": { "properties": { "type": { "const": "score" } } },
-      "then": { "required": ["criteria", "legend"] }
+      "if": {
+        "properties": {
+          "type": {
+            "const": "score"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "criteria",
+          "legend"
+        ]
+      }
     }
   ]
 }

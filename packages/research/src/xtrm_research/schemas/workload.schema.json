@@ -6,7 +6,7 @@
   "properties": {
     "id": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$"
     },
     "version": {
       "type": "string",
@@ -103,6 +103,20 @@
       "additionalProperties": {
         "type": "string"
       }
+    },
+    "statuses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Domain-specific status vocabulary this object uses, if any. Each value must have a legend entry."
+    },
+    "label_values": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Domain-specific label vocabulary this object uses, if any (e.g. choice-question option values). Each value must have a legend entry."
     }
   },
   "required": [

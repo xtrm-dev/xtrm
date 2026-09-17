@@ -72,14 +72,24 @@ def _registry() -> Registry:
     return Registry().with_resources(resources)
 
 
+#: Strict RFC 3339 date-time: dashes and colons required, an explicit
+#: offset (Z or +hh:mm/-hh:mm) required. Deliberately narrower than
+#: datetime.fromisoformat, which since 3.11 also accepts non-RFC-3339 ISO
+#: 8601 variants (e.g. basic format without separators).
+_RFC3339_DATE_TIME = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$"
+)
+
+
 def _check_date_time(value: Any) -> bool:
-    """Reject naive datetimes: every timestamp in this contract must be
-    timezone-aware, per the run-immutability and heartbeat-staleness rules."""
+    """Reject anything that isn't a strict, timezone-aware RFC 3339
+    date-time, per the run-immutability and heartbeat-staleness rules."""
     if not isinstance(value, str):
         return True
-    dt = datetime.fromisoformat(value)
-    if dt.tzinfo is None:
-        raise ValueError(f"date-time {value!r} is naive; timestamps must be timezone-aware")
+    if not _RFC3339_DATE_TIME.match(value):
+        raise ValueError(f"date-time {value!r} is not a strict, timezone-aware RFC 3339 date-time")
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    datetime.fromisoformat(normalized)  # raises ValueError on an invalid calendar date
     return True
 
 
@@ -109,10 +119,19 @@ def validate(kind: str, payload: dict[str, Any]) -> None:
         _check_experiment_rules(payload)
 
 
+def _referenced_vocabulary(payload: dict[str, Any], extra: set[str]) -> set[str]:
+    referenced = set(extra)
+    referenced.update(payload.get("statuses", []))
+    referenced.update(payload.get("label_values", []))
+    return referenced
+
+
 def _check_workload_rules(payload: dict[str, Any]) -> None:
     legend: dict[str, str] = payload.get("legend", {})
-    referenced: set[str] = set(payload.get("default_metrics", []))
-    referenced.update(q["id"] for q in payload.get("questions", []))
+    referenced = _referenced_vocabulary(
+        payload,
+        set(payload.get("default_metrics", [])) | {q["id"] for q in payload.get("questions", [])},
+    )
     missing = sorted(referenced - legend.keys())
     if missing:
         raise SchemaValidationError(
@@ -120,33 +139,53 @@ def _check_workload_rules(payload: dict[str, Any]) -> None:
         )
 
 
-_URL_LIKE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://|^//|^data:")
+#: Scope of the URL check: dataset *names* only (an explicit chart_spec
+#: field meant to hold a bare name, not a location) — never title,
+#: description or other free text, which may legitimately mention a URL.
+#: Matches any RFC 3986 scheme prefix ("https:", "data:", "file:", with or
+#: without "//"), or a protocol-relative "//".
+_URL_LIKE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:|^//")
+#: A "url" or "src" key is a forbidden data-source position wherever it
+#: appears in a chart_spec, regardless of its value (even a relative path)
+#: — chart specs may only reference named datasets, never a location.
+_FORBIDDEN_KEYS = frozenset({"url", "src"})
 
 
-def _scan_for_urls(node: Any, path: str) -> None:
-    if isinstance(node, str):
-        if _URL_LIKE.match(node):
-            raise SchemaValidationError(f"experiment: url-bearing value at {path}: {node!r}")
-    elif isinstance(node, dict):
+def _scan_for_forbidden_keys(node: Any, path: str) -> None:
+    if isinstance(node, dict):
         for key, value in node.items():
-            _scan_for_urls(value, f"{path}.{key}")
+            if key in _FORBIDDEN_KEYS:
+                raise SchemaValidationError(
+                    f"experiment: forbidden key {key!r} at {path}.{key} — "
+                    f"chart specs may not embed a data-source location"
+                )
+            _scan_for_forbidden_keys(value, f"{path}.{key}")
     elif isinstance(node, list):
         for i, value in enumerate(node):
-            _scan_for_urls(value, f"{path}[{i}]")
+            _scan_for_forbidden_keys(value, f"{path}[{i}]")
 
 
 def _check_experiment_rules(payload: dict[str, Any]) -> None:
     legend: dict[str, str] = payload.get("legend", {})
     named_datasets: set[str] = set(payload.get("named_datasets", []))
-    referenced: set[str] = {v["id"] for v in payload.get("variants", [])} | named_datasets
+    referenced = _referenced_vocabulary(
+        payload, {v["id"] for v in payload.get("variants", [])} | named_datasets
+    )
     missing = sorted(referenced - legend.keys())
     if missing:
         raise SchemaValidationError(
             f"experiment {payload.get('id')}: missing legend entries for {missing}"
         )
     for spec in payload.get("chart_specs", []):
-        _scan_for_urls(spec, path=f"chart_specs[{spec.get('id')}]")
-        undeclared = sorted(set(spec.get("datasets", [])) - named_datasets)
+        _scan_for_forbidden_keys(spec, path=f"chart_specs[{spec.get('id')}]")
+        datasets = spec.get("datasets", [])
+        for i, ds in enumerate(datasets):
+            if _URL_LIKE.match(ds.strip()):
+                raise SchemaValidationError(
+                    f"experiment: url-bearing dataset name at "
+                    f"chart_specs[{spec.get('id')}].datasets[{i}]: {ds!r}"
+                )
+        undeclared = sorted(set(datasets) - named_datasets)
         if undeclared:
             raise SchemaValidationError(
                 f"experiment {payload.get('id')}: chart_spec {spec.get('id')} "

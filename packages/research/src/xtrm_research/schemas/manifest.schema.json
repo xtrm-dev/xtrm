@@ -3,6 +3,7 @@
   "$id": "manifest.schema.json",
   "title": "RunManifest \u2014 fully version-resolved before any sample executes",
   "type": "object",
+  "additionalProperties": false,
   "$defs": {
     "version_ref": {
       "type": "object",
@@ -91,7 +92,7 @@
     },
     "run_id": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$"
     },
     "experiment": {
       "$ref": "#/$defs/version_ref"

@@ -34,26 +34,27 @@
         "null_reason": { "type": ["string", "null"] }
       },
       "required": ["source"],
+      "$comment": "Each 'then' both requires null_reason AND overrides its type to a non-empty string in this branch, so a null field can't be paired with a null or empty null_reason.",
       "allOf": [
         {
           "if": { "required": ["gen_ai.usage.input_tokens"], "properties": { "gen_ai.usage.input_tokens": { "const": null } } },
-          "then": { "required": ["null_reason"] }
+          "then": { "required": ["null_reason"], "properties": { "null_reason": { "type": "string", "minLength": 1 } } }
         },
         {
           "if": { "required": ["gen_ai.usage.output_tokens"], "properties": { "gen_ai.usage.output_tokens": { "const": null } } },
-          "then": { "required": ["null_reason"] }
+          "then": { "required": ["null_reason"], "properties": { "null_reason": { "type": "string", "minLength": 1 } } }
         },
         {
           "if": { "required": ["gen_ai.request.model"], "properties": { "gen_ai.request.model": { "const": null } } },
-          "then": { "required": ["null_reason"] }
+          "then": { "required": ["null_reason"], "properties": { "null_reason": { "type": "string", "minLength": 1 } } }
         },
         {
           "if": { "required": ["gen_ai.response.model"], "properties": { "gen_ai.response.model": { "const": null } } },
-          "then": { "required": ["null_reason"] }
+          "then": { "required": ["null_reason"], "properties": { "null_reason": { "type": "string", "minLength": 1 } } }
         },
         {
           "if": { "required": ["latency_ms"], "properties": { "latency_ms": { "const": null } } },
-          "then": { "required": ["null_reason"] }
+          "then": { "required": ["null_reason"], "properties": { "null_reason": { "type": "string", "minLength": 1 } } }
         }
       ]
     },
