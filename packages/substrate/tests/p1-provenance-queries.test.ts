@@ -56,23 +56,23 @@ function seedMatrix(s: ReturnType<typeof scratch>) {
   const closures = new ClosureService(s.db, s.svc);
   const b1 = prov.dispatch(issue.id, {
     workspace: s.dir, participantId: "holder-1",
-    activationId: "act-1", sessionId: "sess-1",
+    activationId: "act-1", sessionId: "01a0ac95-8370-74c5-9081-4490653e7e91",
   });
   journal.appendEntry(issue.id, {
-    kind: "finding", sessionId: "sess-1", activationId: "act-1",
+    kind: "finding", sessionId: "01a0ac95-8370-74c5-9081-4490653e7e91", activationId: "act-1",
     semantic: { summary: "material fact" },
   });
   journal.appendEntry(issue.id, {
-    kind: "decision", sessionId: "sess-1",
+    kind: "decision", sessionId: "01a0ac95-8370-74c5-9081-4490653e7e91",
     semantic: { summary: "chose X because Y" },
   });
   const blockerEntry = journal.appendEntry(issue.id, {
-    kind: "blocker", sessionId: "sess-1",
+    kind: "blocker", sessionId: "01a0ac95-8370-74c5-9081-4490653e7e91",
     semantic: { summary: "waiting on review" },
   });
   void blockerEntry;
   const result = journal.appendEntry(issue.id, {
-    kind: "result", sessionId: "sess-1", activationId: "act-1",
+    kind: "result", sessionId: "01a0ac95-8370-74c5-9081-4490653e7e91", activationId: "act-1",
     result: { summary: "bounded outcome", outcome: "completed" },
     refs: [{ kind: "evidence", key: "log", value: "tests green" }],
   });
@@ -82,7 +82,7 @@ function seedMatrix(s: ReturnType<typeof scratch>) {
   // Second session touches the same issue through a new binding (same
   // live claim, so the activation pin is carried too).
   prov.dispatch(issue.id, {
-    workspace: s.dir, participantId: "holder-1", activationId: "act-1", sessionId: "sess-2",
+    workspace: s.dir, participantId: "holder-1", activationId: "act-1", sessionId: "01a0ac95-8370-74c5-9081-4490653e7e92",
   });
   const closure = closures.closeIssue(issue.id, {
     outcome: "completed", reason: "matrix done", actor: "holder-1",
@@ -115,9 +115,9 @@ describe("P1 §80 query matrix against seeded data", () => {
     assert.deepEqual(blockers.blockers, [], "no unsatisfied edges seeded");
     assert.equal(blockers.entries.length, 1, "journal blocker entry is visible");
 
-    assert.deepEqual(prov.sessionsForIssue(issue.id), ["sess-1", "sess-2"]);
-    assert.deepEqual(prov.issuesForSession("sess-1"), [issue.id]);
-    assert.deepEqual(prov.issuesForSession("sess-2"), [issue.id]);
+    assert.deepEqual(prov.sessionsForIssue(issue.id), ["01a0ac95-8370-74c5-9081-4490653e7e91", "01a0ac95-8370-74c5-9081-4490653e7e92"]);
+    assert.deepEqual(prov.issuesForSession("01a0ac95-8370-74c5-9081-4490653e7e91"), [issue.id]);
+    assert.deepEqual(prov.issuesForSession("01a0ac95-8370-74c5-9081-4490653e7e92"), [issue.id]);
     assert.deepEqual(prov.issuesForSession("no-such-session"), []);
     assert.deepEqual(prov.activationsForIssue(issue.id), ["act-1"]);
 
@@ -173,8 +173,8 @@ describe("P1 §81 session and activation queries", () => {
 
   it("sessionDetail and activationDetail return the expected issues and artifacts", () => {
     const { issue, prov, receipt } = seedMatrix(s);
-    const sess = prov.sessionDetail("sess-1");
-    assert.equal(sess.sessionId, "sess-1");
+    const sess = prov.sessionDetail("01a0ac95-8370-74c5-9081-4490653e7e91");
+    assert.equal(sess.sessionId, "01a0ac95-8370-74c5-9081-4490653e7e91");
     assert.deepEqual(sess.issueIds, [issue.id]);
     assert.equal(sess.bindingIds.length, 1);
     assert.deepEqual(sess.receiptIds, [receipt.id]);
@@ -194,7 +194,7 @@ describe("P1 §81 session and activation queries", () => {
 
   it("sb provenance session/activation over the CLI return the same rows", () => {
     seedMatrix(s);
-    const sess = cli(s.dbPath, ["provenance", "session", "sess-1"]) as {
+    const sess = cli(s.dbPath, ["provenance", "session", "01a0ac95-8370-74c5-9081-4490653e7e91"]) as {
       issueIds: string[]; receiptIds: string[]; resultCount: number;
       artifacts: Array<{ kind: string; value: string }>;
     };

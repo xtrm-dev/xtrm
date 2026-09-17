@@ -15,6 +15,8 @@ import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import {
+  canonicalizeWriteIdentity,
+  IdentityFormatError,
   enrichExecutionContext,
   executionContextFromLegacy,
   normalizeExecutionContext,
@@ -29,7 +31,7 @@ import { openServices, toolJournalAppend, toolJournalCheckpoint, runBeforeCompac
 import { handlePreCompact } from "../integrations/claude-code/precompact.ts";
 import { contract } from "./helpers.ts";
 
-const ENV_ID = "xtrm-sess-r4-001";
+const ENV_ID = "01a0ac95-8370-74c5-9081-4490653e7e92";
 const ENV_NAME = "x1-r4-session";
 
 function scratch() {
@@ -679,12 +681,101 @@ describe("X1 joint §98 with R1: unavailable identity stays absent/null", () => 
       const { issue } = readyIssue(s.svc, "flat session work", "coord-holder");
       const journal = new JournalService(s.db, s.svc);
       // Legacy manual flag with no envelope and no provider knowledge.
-      const e = journal.appendEntry(issue.id, { kind: "note", sessionId: "legacy-sess" });
-      assert.equal(e.sessionId, "legacy-sess", "flat session column stays queryable");
+      const e = journal.appendEntry(issue.id, { kind: "note", sessionId: "01a0ac95-8370-74c5-9081-4490653e7e94" });
+      assert.equal(e.sessionId, "01a0ac95-8370-74c5-9081-4490653e7e94", "flat session column stays queryable");
       const reread = journal.getEntry(e.id);
-      assert.equal(reread.sessionId, "legacy-sess");
+      assert.equal(reread.sessionId, "01a0ac95-8370-74c5-9081-4490653e7e94");
       assert.equal(reread.executionContext?.host ?? null, null, "no host.type invented for the unknown provider");
       assert.equal(reread.executionContext?.xtrmSessionId ?? null, null);
+    } finally {
+      try { s.db.close(); } catch { /* closed */ }
+      rmSync(s.dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("XTRM-412: canonical identity at the write seam", () => {
+  const SESSION = "01a0ac95-8370-74c5-9081-4490653e7e95";
+  const base = {
+    executionContext: null,
+    participantId: null,
+    activationId: null,
+    attemptId: null,
+    sessionId: null,
+    runId: null,
+  };
+
+  function rejects(field: string, build: () => Record<string, unknown>): void {
+    try {
+      canonicalizeWriteIdentity(build() as never);
+      assert.fail(`${field} must reject its value`);
+    } catch (err) {
+      assert.ok(err instanceof IdentityFormatError, `${field} raises IdentityFormatError`);
+      assert.equal(err.field, field);
+    }
+  }
+
+  it("rejects a shell token in every identity field with a named error", () => {
+    rejects("executionContext.xtrmSessionId", () => ({ ...base, executionContext: { version: 1, xtrmSessionId: "$2" } }));
+    rejects("sessionId", () => ({ ...base, sessionId: "$2" }));
+    rejects("participantId", () => ({ ...base, participantId: "coord; rm -rf /" }));
+    rejects("activationId", () => ({ ...base, activationId: "$2" }));
+    rejects("attemptId", () => ({ ...base, attemptId: "att 1" }));
+    rejects("runId", () => ({ ...base, runId: "job$(id)" }));
+    rejects("executionContext.host.sessionId", () => ({ ...base, executionContext: { version: 1, host: { type: "pi", sessionId: "`whoami`" } } }));
+    try {
+      canonicalizeWriteIdentity({ ...base, sessionId: "$2" });
+    } catch (err) {
+      assert.ok(err instanceof IdentityFormatError);
+      assert.match(err.message, /session identity must be a canonical lowercase UUID/);
+    }
+  });
+
+  it("canonicalises a recoverable uppercase UUID and is idempotent", () => {
+    const upper = "01A0AC95-8370-74C5-9081-4490653E7E95";
+    const first = canonicalizeWriteIdentity({ ...base, sessionId: upper });
+    assert.equal(first.sessionId, SESSION, "uppercase session identity canonicalises to lowercase");
+    const second = canonicalizeWriteIdentity({ ...base, sessionId: first.sessionId });
+    assert.equal(second.sessionId, first.sessionId, "re-running canonicalisation changes nothing");
+    const withEnv = canonicalizeWriteIdentity({ ...base, executionContext: { version: 1, xtrmSessionId: upper } });
+    assert.equal(withEnv.executionContext?.xtrmSessionId, SESSION);
+    // A manual scalar equal to the host provider label is a provider echo.
+    const echo = canonicalizeWriteIdentity({
+      ...base,
+      sessionId: "pi-sess-9",
+      executionContext: { version: 1, host: { type: "pi", sessionId: "pi-sess-9" } },
+    });
+    assert.equal(echo.sessionId, "pi-sess-9");
+  });
+
+  it("rejects the token before any row is written and stores nothing", () => {
+    const s = scratch();
+    try {
+      const { issue } = readyIssue(s.svc, "write gate");
+      const journal = new JournalService(s.db, s.svc);
+      assert.throws(() => journal.appendEntry(issue.id, { kind: "note", sessionId: "$2" }), IdentityFormatError);
+      assert.equal(journal.listEntries(issue.id).length, 0, "nothing is stored on rejection");
+      // The same gate covers the XTRM session the runtime reports.
+      process.env[XTRM_SESSION_ID_ENV] = "$2";
+      assert.throws(() => journal.appendEntry(issue.id, { kind: "finding", semantic: { summary: "x" } }), IdentityFormatError);
+      assert.equal(journal.listEntries(issue.id).length, 0, "ambient junk stores nothing");
+    } finally {
+      try { s.db.close(); } catch { /* closed */ }
+      rmSync(s.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a non-canonical legacy session shape on the dispatch path too", () => {
+    const s = scratch();
+    try {
+      const { issue } = readyIssue(s.svc, "dispatch gate");
+      const journal = new JournalService(s.db, s.svc);
+      const prov = new ProvenanceService(s.db, s.svc, journal);
+      assert.throws(
+        () => prov.dispatch(issue.id, { workspace: s.dir, participantId: "coord-holder", sessionId: "122c14" }),
+        IdentityFormatError,
+      );
+      assert.equal(prov.listBindings(issue.id).length, 0, "no binding is written on rejection");
     } finally {
       try { s.db.close(); } catch { /* closed */ }
       rmSync(s.dir, { recursive: true, force: true });

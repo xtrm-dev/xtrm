@@ -93,6 +93,13 @@ export interface ExecutionContext {
 export const XTRM_SESSION_ID_ENV = "XTRM_SESSION_ID";
 export const XTRM_SESSION_NAME_ENV = "XTRM_SESSION_NAME";
 
+// Host-adapter identity variables (XTRM-417): the activation a Specialist
+// runs under and the claim holder it runs as. These are host-known runtime
+// values, not model prose; the journal append path reads them once, at the
+// append boundary, so a caller never has to restate identity.
+export const SUBSTRATE_ACTIVATION_ID_ENV = "SUBSTRATE_ACTIVATION_ID";
+export const SUBSTRATE_HOLDER_ENV = "SUBSTRATE_HOLDER";
+
 const TOP_LEVEL_FIELDS = [
   "version",
   "actor",
@@ -483,4 +490,186 @@ export function projectFlatIdentity(
     workspace: workspaceCompat,
     baseCommit: compat(ctx?.workspace?.baseCommit ?? undefined, legacy?.baseCommit, "baseCommit"),
   };
+}
+
+// ── Canonical identity forms (XTRM-412) ──────────────────────────────────────
+// ONE canonical form per identity field, enforced at the WRITE seam only.
+// Read projections (toEntry / toBinding / executionContextFromLegacy) never
+// run these rules, so historical rows stay readable and are reported rather
+// than silently rewritten (XTRM-412 disposition).
+//
+//   xtrmSessionId / sessionId   lowercase UUID — the XTRM session identity
+//   activationId                act:<8hex>-<3hex>  (documented canonical shape)
+//   attemptId                   att:<8hex>-<3hex>:<n> (documented canonical shape)
+//   participantId / runId       bounded free-form label
+//   host.sessionId              bounded free-form label (ADR §34 provider session)
+//
+// Only the session identity is format-locked. The remaining fields are
+// deliberately free-form (specialist names, job ids and provider session
+// labels have no stable grammar), so they are bounded to a shell-safe
+// identifier instead: no whitespace, no shell metacharacter, no control
+// character, and a finite length. That consequence is stated here so no
+// caller expects a stricter rule.
+//
+// A manual `sessionId` scalar is session identity EXCEPT when the envelope
+// already carries the same value as a provider `host.sessionId` (the Pi and
+// Claude adapters forward their provider session both ways). Then it is the
+// provider label, and only the identifier rule applies.
+export const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const ACTIVATION_ID_PATTERN = /^act:[0-9a-f]{8}-[0-9a-f]{3}$/;
+export const ATTEMPT_ID_PATTERN = /^att:[0-9a-f]{8}-[0-9a-f]{3}:[0-9]+$/;
+// Shell-safe identifier: a leading alphanumeric then label characters only.
+const IDENTITY_LABEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]*$/;
+export const IDENTITY_LABEL_MAX_LENGTH = 128;
+
+/** A write-seam identity rejection. The name is stable so callers can branch on it. */
+export class IdentityFormatError extends Error {
+  readonly field: string;
+  readonly value: string;
+  constructor(field: string, value: string, detail: string) {
+    super(`invalid ${field} ${JSON.stringify(value)}: ${detail}`);
+    this.name = "IdentityFormatError";
+    this.field = field;
+    this.value = value;
+  }
+}
+
+function canonicalSession(value: string, field: string): string {
+  const v = value.trim().toLowerCase();
+  if (!SESSION_ID_PATTERN.test(v)) {
+    throw new IdentityFormatError(field, value, "session identity must be a canonical lowercase UUID");
+  }
+  return v;
+}
+
+function canonicalLabel(value: string, field: string): string {
+  const v = value.trim();
+  if (v.length > IDENTITY_LABEL_MAX_LENGTH || !IDENTITY_LABEL_PATTERN.test(v)) {
+    throw new IdentityFormatError(
+      field,
+      value,
+      `identity label must be a shell-safe identifier of at most ${IDENTITY_LABEL_MAX_LENGTH} characters`,
+    );
+  }
+  return v;
+}
+
+// Activation/attempt ids have a documented canonical shape, but the shape is
+// not format-locked: legacy hosts emit opaque labels (for example `act-1`). A
+// value that already matches the canonical grammar is normalised (lowercased);
+// anything else must still be a shell-safe identifier.
+function canonicalActivation(value: string, field: string): string {
+  const v = value.trim().toLowerCase();
+  return ACTIVATION_ID_PATTERN.test(v) ? v : canonicalLabel(value, field);
+}
+
+function canonicalAttempt(value: string, field: string): string {
+  const v = value.trim().toLowerCase();
+  return ATTEMPT_ID_PATTERN.test(v) ? v : canonicalLabel(value, field);
+}
+
+export interface WriteIdentityInput {
+  executionContext: ExecutionContext | null;
+  participantId: string | null;
+  activationId: string | null;
+  attemptId: string | null;
+  sessionId: string | null;
+  runId: string | null;
+}
+
+export interface WriteIdentity {
+  executionContext: ExecutionContext | null;
+  participantId: string | null;
+  activationId: string | null;
+  attemptId: string | null;
+  sessionId: string | null;
+  runId: string | null;
+}
+
+// Canonicalise + validate the identity a write is about to persist. Fail
+// closed: the first offending value throws IdentityFormatError before any
+// row is written, so nothing partial is stored and the caller learns which
+// field was rejected. Idempotent: an already-canonical value is unchanged.
+export function canonicalizeWriteIdentity(input: WriteIdentityInput): WriteIdentity {
+  const raw = input.executionContext;
+  let ctx: ExecutionContext | null = raw;
+  if (raw) {
+    ctx = { ...raw };
+    if (raw.xtrmSessionId != null) ctx.xtrmSessionId = canonicalSession(raw.xtrmSessionId, "executionContext.xtrmSessionId");
+    if (raw.participantId != null) ctx.participantId = canonicalLabel(raw.participantId, "executionContext.participantId");
+    if (raw.runId != null) ctx.runId = canonicalLabel(raw.runId, "executionContext.runId");
+    if (raw.host?.sessionId != null) {
+      ctx.host = { ...raw.host, sessionId: canonicalLabel(raw.host.sessionId, "executionContext.host.sessionId") };
+    }
+    if (raw.specialist) {
+      const specialist = { ...raw.specialist };
+      if (raw.specialist.activationId != null) specialist.activationId = canonicalActivation(raw.specialist.activationId, "executionContext.specialist.activationId");
+      if (raw.specialist.attemptId != null) specialist.attemptId = canonicalAttempt(raw.specialist.attemptId, "executionContext.specialist.attemptId");
+      if (raw.specialist.name != null) specialist.name = canonicalLabel(raw.specialist.name, "executionContext.specialist.name");
+      ctx.specialist = specialist;
+    }
+  }
+  // A manual scalar equal to the provider session label the host itself
+  // reported is a provider echo, not session identity (§98 flat-only rule).
+  const providerEcho =
+    input.sessionId != null && ctx?.host?.sessionId != null && input.sessionId === ctx.host.sessionId;
+  return {
+    executionContext: ctx,
+    participantId: input.participantId != null ? canonicalLabel(input.participantId, "participantId") : null,
+    activationId: input.activationId != null ? canonicalActivation(input.activationId, "activationId") : null,
+    attemptId: input.attemptId != null ? canonicalAttempt(input.attemptId, "attemptId") : null,
+    sessionId:
+      input.sessionId != null
+        ? providerEcho
+          ? canonicalLabel(input.sessionId, "sessionId")
+          : canonicalSession(input.sessionId, "sessionId")
+        : null,
+    runId: input.runId != null ? canonicalLabel(input.runId, "runId") : null,
+  };
+}
+
+// The execution context the current process runs inside, derived only from
+// the runtime env contract (R4 session + host-adapter holder/activation).
+// Returns null when nothing is known: absence is a first-class state, never
+// fabricated and never inherited from a previous entry.
+export function currentExecutionContext(
+  env: Record<string, string | undefined> = process.env,
+): ExecutionContext | null {
+  const activationId = cleanStr(env[SUBSTRATE_ACTIVATION_ID_ENV]);
+  return enrichExecutionContext(
+    {
+      participantId: cleanStr(env[SUBSTRATE_HOLDER_ENV]) ?? null,
+      specialist: activationId !== undefined ? { activationId } : null,
+    },
+    env,
+  );
+}
+
+export interface IdentityScalarInput {
+  participantId?: string | null;
+  activationId?: string | null;
+  sessionId?: string | null;
+  runId?: string | null;
+}
+
+// Ambient identity fallback for a write that supplied no execution context:
+// the current process context fills ONLY the fields the caller left unstated,
+// so an explicit caller scalar always wins and can never conflict with the
+// ambient value. Absent ambient identity returns null (explicit absence).
+export function ambientIdentityFallback(
+  input: IdentityScalarInput,
+  env: Record<string, string | undefined> = process.env,
+): ExecutionContext | null {
+  const ambient = currentExecutionContext(env);
+  if (!ambient) return null;
+  const ctx: ExecutionContext = { ...ambient };
+  if (cleanStr(input.participantId) !== undefined) delete ctx.participantId;
+  if (cleanStr(input.runId) !== undefined) delete ctx.runId;
+  if (cleanStr(input.sessionId) !== undefined) delete ctx.xtrmSessionId;
+  if (cleanStr(input.activationId) !== undefined && ctx.specialist) {
+    const specialist = { ...ctx.specialist };
+    delete specialist.activationId;
+    ctx.specialist = Object.keys(specialist).length > 0 ? specialist : undefined;
+  }
+  return ctx;
 }

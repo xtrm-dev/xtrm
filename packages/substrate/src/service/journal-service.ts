@@ -28,6 +28,8 @@ import {
   type SemanticCheckpoint,
 } from "../domain/journal.ts";
 import {
+  ambientIdentityFallback,
+  canonicalizeWriteIdentity,
   executionContextFromLegacy,
   normalizeExecutionContext,
   projectFlatIdentity,
@@ -207,12 +209,38 @@ export class JournalService {
     // flat columns through the central projection: agreement is enforced
     // (conflicts throw fail-closed), with the documented flat-only
     // exception for provider-unknown legacy sessions.
-    const ctx = normalizeExecutionContext(input.executionContext ?? null);
-    const flat = projectFlatIdentity(ctx, {
+    //
+    // Identity resolution (XTRM-417): when the caller supplied no execution
+    // context, derive it ONCE here from the current process context, so an
+    // entry written inside a session carries participant/session/activation
+    // without the caller restating them. No context means explicit absence:
+    // nothing is inherited from a previous append and nothing is fabricated.
+    // Identity values are canonicalised and validated at this write seam
+    // (XTRM-412) before any row is written; a rejection throws and stores
+    // nothing.
+    const supplied = normalizeExecutionContext(
+      input.executionContext ??
+        ambientIdentityFallback({
+          participantId: input.participantId ?? null,
+          activationId: input.activationId ?? null,
+          sessionId: input.sessionId ?? null,
+          runId: input.runId ?? null,
+        }),
+    );
+    const identity = canonicalizeWriteIdentity({
+      executionContext: supplied,
       participantId: input.participantId ?? null,
       activationId: input.activationId ?? null,
+      attemptId: null,
       sessionId: input.sessionId ?? null,
       runId: input.runId ?? null,
+    });
+    const ctx = identity.executionContext;
+    const flat = projectFlatIdentity(ctx, {
+      participantId: identity.participantId,
+      activationId: identity.activationId,
+      sessionId: identity.sessionId,
+      runId: identity.runId,
     });
     return withTransaction(this.db, () => {
       const issue = this.issues.getIssue(issueId);
