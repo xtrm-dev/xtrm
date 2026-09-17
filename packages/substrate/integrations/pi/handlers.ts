@@ -11,10 +11,12 @@ import { IssueService } from "../../src/service/issue-service.ts";
 import { JournalService, type Summarizer } from "../../src/service/journal-service.ts";
 import { ResumeService } from "../../src/service/resume-service.ts";
 import { ProvenanceService } from "../../src/service/provenance-service.ts";
-import { isJournalKind } from "../../src/domain/journal.ts";
+import { isJournalKind, type SemanticCheckpoint } from "../../src/domain/journal.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
 import { enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
 import type { ResolvedIssue } from "../../src/domain/issue.ts";
+// Type-only: erased at compile time, so this module stays free of runtime Pi imports.
+import type { Usage } from "@earendil-works/pi-ai";
 
 export interface SubstrateServices {
   db: ReturnType<typeof openSubstrate>;
@@ -231,10 +233,18 @@ export function toolProvenanceTrace(svc: SubstrateServices, params: { ref: strin
 // started. Returns the summary text for the host to render into ITS compaction;
 // returning null means "use host default".
 
+// A Pi summarizer may report the LLM usage it spent producing the checkpoint.
+// Usage rides alongside the checkpoint but must never reach the journal's
+// semantic-checkpoint schema, so it is stripped before the summarizer result
+// is handed to the journal service (see runBeforeCompact below).
+export type CompactSummarizer = (
+  ...args: Parameters<Summarizer>
+) => (SemanticCheckpoint & { usage?: Usage }) | Promise<SemanticCheckpoint & { usage?: Usage }>;
+
 export interface BeforeCompactInput {
   issueRef: string;
   sessionId?: string;
-  summarizer?: Summarizer;
+  summarizer?: CompactSummarizer;
   executionContext?: ExecutionContext | null;
 }
 
@@ -244,20 +254,31 @@ export interface BeforeCompactResult {
   degraded: boolean;
   fallbackToDefault: boolean;
   summary: string | null;
+  usage: Usage | null;
 }
 
 export async function runBeforeCompact(svc: SubstrateServices, input: BeforeCompactInput): Promise<BeforeCompactResult> {
-  const fallback = { entryId: null, sequence: null, degraded: true, fallbackToDefault: true, summary: null };
+  const fallback = { entryId: null, sequence: null, degraded: true, fallbackToDefault: true, summary: null, usage: null };
   let resolved;
   try {
     resolved = svc.issues.resolveRef(input.issueRef);
   } catch {
     return fallback;
   }
+  // Captured as a side effect of the wrapped summarizer, since the journal
+  // service only ever sees the stripped-down SemanticCheckpoint.
+  let usage: Usage | null = null;
+  const summarizer: Summarizer | undefined = input.summarizer
+    ? async (...args: Parameters<Summarizer>) => {
+        const { usage: reported, ...checkpoint } = await input.summarizer!(...args);
+        usage = reported ?? null;
+        return checkpoint;
+      }
+    : undefined;
   const checkpoint = await svc.journal.compactionCheckpoint(resolved.id, {
     kind: "compaction",
     sessionId: input.sessionId,
-    summarizer: input.summarizer,
+    summarizer,
     executionContext: piExecutionContext({ sessionId: input.sessionId ?? null, executionContext: input.executionContext ?? null }),
   });
   if (!checkpoint.entry) {
@@ -270,11 +291,51 @@ export async function runBeforeCompact(svc: SubstrateServices, input: BeforeComp
       degraded: true,
       fallbackToDefault: true,
       summary: null,
+      usage: null,
     };
   }
   const capsule = svc.resume.buildCapsule(resolved.id);
   const summary = `${svc.journal.renderCheckpoint(checkpoint.entry)}\n\n${svc.resume.renderCapsule(capsule)}`;
-  return { entryId: checkpoint.entry.id, sequence: checkpoint.entry.sequence, degraded: false, fallbackToDefault: false, summary };
+  // Recorded after the summary is built: the absence note must never leak
+  // into this compaction's summary content (non-goal: changing summary content).
+  if (input.summarizer && usage === null) {
+    recordMissingUsage(svc, resolved.id, input, checkpoint.entry.id);
+  }
+  return { entryId: checkpoint.entry.id, sequence: checkpoint.entry.sequence, degraded: false, fallbackToDefault: false, summary, usage };
+}
+
+// Best-effort note: a missing usage report must never block compaction, so a
+// failure here is swallowed (mirrors the degraded-checkpoint pattern above).
+function recordMissingUsage(svc: SubstrateServices, issueId: string, input: BeforeCompactInput, checkpointEntryId: string): void {
+  try {
+    svc.journal.appendEntry(issueId, {
+      kind: "note",
+      sessionId: input.sessionId,
+      semantic: {
+        summary: `compaction summarizer reported no usage; CompactionResult.usage omitted (checkpoint ${checkpointEntryId}, session ${input.sessionId ?? "unknown"})`,
+      },
+      executionContext: piExecutionContext({ sessionId: input.sessionId ?? null, executionContext: input.executionContext ?? null }),
+    });
+  } catch {
+    // Absence-of-usage is informational; never lose the checkpoint over it.
+  }
+}
+
+// Renders the host-facing Pi compaction payload from a Substrate result;
+// undefined means "use host default" (fallback or no summary).
+export function toPiCompaction(
+  preparation: { firstKeptEntryId: string; tokensBefore: number },
+  result: BeforeCompactResult,
+): { compaction: { summary: string; firstKeptEntryId: string; tokensBefore: number; usage?: Usage } } | undefined {
+  if (result.fallbackToDefault || !result.summary) return undefined;
+  return {
+    compaction: {
+      summary: result.summary,
+      firstKeptEntryId: preparation.firstKeptEntryId,
+      tokensBefore: preparation.tokensBefore,
+      ...(result.usage ? { usage: result.usage } : {}),
+    },
+  };
 }
 
 // -- gates --------------------------------------------------------------------
