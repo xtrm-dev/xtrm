@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "refs.schema.json",
+  "title": "refs.json \u2014 lightweight run-identity and lineage pointer, derived from manifest.json",
+  "description": "Cheap-to-read index of a run's identity and lineage so listing/lineage commands don't need to parse every manifest.json in the run root. Always derivable from manifest.json; never authoritative.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "xtrm-research-refs/v1"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$"
+    },
+    "experiment_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "variant_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lineage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "relation": {
+            "type": "string",
+            "enum": [
+              "baseline_of",
+              "retry_of",
+              "forked_from",
+              "replay_of",
+              "supersedes",
+              "regression_of"
+            ]
+          },
+          "run_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "relation",
+          "run_id"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "experiment_id",
+    "variant_id",
+    "lineage"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "content_hash": "sha256:28ffb74412a8183b1372c1dcabefe2cfe78030d0b84d4d63373e0947789d01bd",
+  "description": "Synthetic fixture pairs; never real board text.",
+  "id": "synthetic-pairs",
+  "source": "tests/fixtures/data/synthetic-pairs.jsonl",
+  "version": "v1"
+}
