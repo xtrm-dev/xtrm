@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import multiprocessing
-from datetime import datetime, timezone
 
 import pytest
 
@@ -118,79 +117,67 @@ def test_retry_rejects_sample_id_missing_from_parent(registry, runs_root):
 # --- cross-process settle lock ----------------------------------------------
 
 
-def _writer_proc(root, run_id, ready, result):
-    """Heartbeat + append in a loop until the run is settled underneath us."""
+def _paused_heartbeat_proc(root, run_id, in_window, finish_returned, result):
+    """Heartbeat, but pause inside the locked window between the status
+    re-read and the status write. The pause ends early only if a concurrent
+    finish() completes meanwhile, which the run lock must make impossible."""
+    import xtrm_research.runner as runner
+
+    real_write = runner.write_json_atomic
+
+    def paused_write(path, payload):
+        in_window.set()
+        result.put(("finish_returned_inside_window", finish_returned.wait(1.0)))
+        real_write(path, payload)  # stale "started" status from the re-read
+
+    runner.write_json_atomic = paused_write
     handle = RunHandle(root, run_id)
-    i = 0
-    deadline = datetime.now(timezone.utc).timestamp() + 10
+    handle.heartbeat()
+    runner.write_json_atomic = real_write
+    # the blocked finisher gets the lock now; don't race it for the next write
+    finish_returned.wait(10)
     try:
-        while datetime.now(timezone.utc).timestamp() < deadline:
-            now = datetime.now(timezone.utc)
-            handle.heartbeat(now=now)
-            handle.write_event(_event(i, now))
-            handle.write_sample(_sample(i, now))
-            i += 1
-            if i == 5:
-                ready.set()
-        result.put(("timeout", i))
+        handle.write_sample(_sample(0))
+        result.put(("post_settle_write", "accepted"))
     except RunSettledError:
-        result.put(("settled", i))
-    except Exception as exc:  # noqa: BLE001 - reported to the parent
-        result.put((f"{type(exc).__name__}: {exc}", i))
+        result.put(("post_settle_write", "rejected"))
 
 
-def _finisher_proc(root, run_id, ready, result):
-    if not ready.wait(timeout=10):
-        result.put(("no-ready", None))
+def _finisher_proc(root, run_id, in_window, finish_returned, result):
+    if not in_window.wait(timeout=10):
+        result.put(("finish", "writer never entered the window"))
         return
     RunHandle(root, run_id).finish("success")
-    # snapshot taken right after settle; the writer is still looping
-    d = run_dir(root, run_id)
-    result.put(
-        (
-            "finished",
-            {n: (d / n).read_bytes() for n in ("samples.jsonl", "events.jsonl")},
-        )
-    )
+    finish_returned.set()
+    result.put(("finish", "ok"))
 
 
-def test_cross_process_finish_settles_against_looping_heartbeat(registry, runs_root):
+def test_cross_process_finish_cannot_land_inside_locked_write_window(
+    registry, runs_root
+):
     start_run(runs_root, "run-mp", make_manifest(registry, run_id="run-mp"))
     ctx = multiprocessing.get_context("spawn")  # fresh interpreters, no shared locks
-    ready, writer_q, finisher_q = ctx.Event(), ctx.Queue(), ctx.Queue()
-    writer = ctx.Process(
-        target=_writer_proc, args=(str(runs_root), "run-mp", ready, writer_q)
-    )
-    finisher = ctx.Process(
-        target=_finisher_proc, args=(str(runs_root), "run-mp", ready, finisher_q)
-    )
+    in_window, finish_returned = ctx.Event(), ctx.Event()
+    writer_q, finisher_q = ctx.Queue(), ctx.Queue()
+    args = (str(runs_root), "run-mp", in_window, finish_returned)
+    writer = ctx.Process(target=_paused_heartbeat_proc, args=(*args, writer_q))
+    finisher = ctx.Process(target=_finisher_proc, args=(*args, finisher_q))
     writer.start()
     finisher.start()
-    writer_outcome, writes = writer_q.get(timeout=15)
-    finisher_outcome, snapshot = finisher_q.get(timeout=15)
+    writer_results = dict(writer_q.get(timeout=15) for _ in range(2))
+    finisher_result = dict([finisher_q.get(timeout=15)])
     writer.join(timeout=5)
     finisher.join(timeout=5)
 
     assert (writer.exitcode, finisher.exitcode) == (0, 0)
-    assert finisher_outcome == "finished"
-    assert writer_outcome == "settled"
-    assert writes >= 5
-
-    status = load_status(runs_root, "run-mp")
-    assert status["state"] == "success"
-    settled_at = datetime.fromisoformat(status["last_heartbeat"])
-
-    # nothing landed after finish() returned ...
-    d = run_dir(runs_root, "run-mp")
-    assert (d / "samples.jsonl").read_bytes() == snapshot["samples.jsonl"]
-    assert (d / "events.jsonl").read_bytes() == snapshot["events.jsonl"]
-    # ... and nothing on disk is stamped after the settle timestamp
-    events = list(read_lines(events_path(runs_root, "run-mp")))
-    samples = list(read_lines(samples_path(runs_root, "run-mp")))
-    assert all(datetime.fromisoformat(e["ts"]) <= settled_at for e in events)
-    assert all(datetime.fromisoformat(s["created_at"]) <= settled_at for s in samples)
-    # the writer's partial iteration may have landed an event without its sample
-    assert len(samples) <= len(events) <= len(samples) + 1
+    assert finisher_result == {"finish": "ok"}
+    # finish() blocked on the writer's lock for the whole pause ...
+    assert writer_results["finish_returned_inside_window"] is False
+    # ... so the stale heartbeat write never re-opened the settled run ...
+    assert load_status(runs_root, "run-mp")["state"] == "success"
+    # ... and nothing was appended after settle
+    assert writer_results["post_settle_write"] == "rejected"
+    assert not samples_path(runs_root, "run-mp").exists()
 
 
 # --- VALIDATION gaps: end-to-end through start_run + CLI --------------------
