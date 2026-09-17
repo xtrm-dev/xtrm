@@ -37,13 +37,46 @@ describe("drawer states", () => {
     expect(currentRef(s)).toEqual({ kind: "issue", ref: "XTRM-2" });
   });
 
-  it("maximize auto-collapses the sidebar and restore reopens it", () => {
+  it("opening pushes the sidebar and closing restores it", () => {
+    const opened = run(issue("XTRM-1"));
+    expect(opened.inspector.state).toBe("CONTEXTUAL");
+    expect(opened.sidebar.open).toBe(false);
+    expect(opened.inspector.collapsedSidebarForInspector).toBe(true);
+    const closed = layoutReducer(opened, { type: "drawer/close" });
+    expect(closed.inspector.state).toBe("CLOSED");
+    expect(closed.sidebar.open).toBe(true);
+    expect(closed.inspector.collapsedSidebarForInspector).toBe(false);
+  });
+
+  it("a sidebar collapsed by the user before open stays collapsed after close", () => {
+    const s = run({ type: "sidebar/toggle" }, issue("XTRM-1"), { type: "drawer/close" });
+    expect(s.sidebar.open).toBe(false);
+  });
+
+  it("manual sidebar reopen while open transfers ownership to the user", () => {
+    const s = run(issue("XTRM-1"), { type: "sidebar/toggle" }, { type: "drawer/close" });
+    expect(s.sidebar.open).toBe(true);
+    expect(s.inspector.collapsedSidebarForInspector).toBe(false);
+  });
+
+  it("maximize from a pushed open keeps the push; restore stays collapsed and close reopens", () => {
     const max = run(issue("XTRM-1"), { type: "drawer/maximize" });
     expect(max.inspector.state).toBe("MAXIMIZED");
     expect(max.sidebar.open).toBe(false);
-    expect(max.inspector.collapsedSidebarForMaximize).toBe(true);
+    expect(max.inspector.collapsedSidebarForInspector).toBe(true);
+    expect(max.inspector.collapsedSidebarForMaximize).toBe(false);
     const restored = layoutReducer(max, { type: "drawer/restore" });
     expect(restored.inspector.state).toBe("CONTEXTUAL");
+    expect(restored.sidebar.open).toBe(false);
+    const closed = layoutReducer(restored, { type: "drawer/close" });
+    expect(closed.sidebar.open).toBe(true);
+  });
+
+  it("maximize collapses a manually reopened sidebar and restore reopens it", () => {
+    const max = run(issue("XTRM-1"), { type: "sidebar/toggle" }, { type: "drawer/maximize" });
+    expect(max.sidebar.open).toBe(false);
+    expect(max.inspector.collapsedSidebarForMaximize).toBe(true);
+    const restored = layoutReducer(max, { type: "drawer/restore" });
     expect(restored.sidebar.open).toBe(true);
   });
 

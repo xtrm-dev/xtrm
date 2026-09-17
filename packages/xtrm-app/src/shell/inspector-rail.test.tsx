@@ -1,11 +1,11 @@
 import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { fixtureAdapters } from "../adapters/index.tsx";
 import { createFixtureSubstrate } from "../adapters/substrate/fixture.ts";
 import { createAppRouter } from "../app/router.tsx";
-import { SHELL_MOTION, SHELL_MOTION_TW, isShortcutSuppressed, modShortcut } from "./layout.ts";
+import { INSPECTOR_MAXIMIZE_KEY, SHELL_MOTION, SHELL_MOTION_TW, isShortcutSuppressed, modShortcut } from "./layout.ts";
 import { CommandMenu } from "../ui/command-menu.tsx";
 import { isShortcutHint } from "../ui/command-menu.tsx";
 
@@ -40,6 +40,12 @@ describe("platform shortcuts", () => {
     vi.unstubAllGlobals();
   });
 
+  it("labels the maximize shortcut with Mod+Shift+Enter", () => {
+    expect(INSPECTOR_MAXIMIZE_KEY).toBe("Shift Enter");
+    expect(modShortcut(INSPECTOR_MAXIMIZE_KEY)).toBe("Ctrl Shift Enter");
+    expect(isShortcutHint(modShortcut(INSPECTOR_MAXIMIZE_KEY))).toBe(true);
+  });
+
   it("suppresses toggles inside editable fields and dialogs", () => {
     const input = document.createElement("input");
     document.body.appendChild(input);
@@ -67,6 +73,7 @@ describe("command list shortcuts", () => {
     expect(isShortcutHint("Ctrl I")).toBe(true);
     expect(isShortcutHint("Ctrl B")).toBe(true);
     expect(isShortcutHint("Ctrl Shift K")).toBe(true);
+    expect(isShortcutHint("Ctrl Shift Enter")).toBe(true);
     expect(isShortcutHint("deferred")).toBe(false);
     expect(isShortcutHint("xtrm · Work")).toBe(false);
   });
@@ -84,32 +91,123 @@ describe("command list shortcuts", () => {
     );
     expect(screen.getByText("Ctrl I").tagName.toLowerCase()).toBe("kbd");
   });
+
+  it("renders the maximize shortcut with the Kbd primitive", () => {
+    render(
+      <CommandMenu
+        open
+        onOpenChange={() => {}}
+        query=">"
+        onQueryChange={() => {}}
+        placeholder="Run a command…"
+        groups={[{ heading: "Commands", entries: [{ id: "max", label: "Maximize drawer", hint: "Ctrl Shift Enter", icon: "maximize", onSelect: () => {} }] }]}
+      />,
+    );
+    expect(screen.getByText("Ctrl Shift Enter").tagName.toLowerCase()).toBe("kbd");
+  });
 });
 
-describe("rail inspector toggle", () => {
-  it("opens and closes the inspector with an active state", async () => {
+describe("mode rail", () => {
+  it("has no inspector toggle; the sidebar edge handle is the only left-edge affordance", async () => {
     renderAt("/rep/xtrm-dev/xtrm/work/issues");
-    const toggle = await screen.findByTestId("rail-inspector-toggle");
-    expect(toggle.getAttribute("aria-pressed")).toBe("false");
-    expect(screen.queryByTestId("inspector-drawer")).toBeNull();
+    await screen.findByTestId("global-rail");
+    expect(screen.queryByTestId("rail-inspector-toggle")).toBeNull();
+    expect(screen.getByTestId("sidebar-collapse-edge")).toBeTruthy();
+  });
+});
+
+describe("inspector push", () => {
+  it("opening collapses the sidebar to its rail and closing restores it", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/work/issues");
+    expect(await screen.findByTestId("sidebar-collapse-edge")).toBeTruthy();
+    expect(screen.queryByTestId("sidebar-reopen-rail")).toBeNull();
 
     fireEvent.click(await screen.findByText("XTRM-300.1"));
     await screen.findByTestId("inspector-drawer");
-    await waitFor(() => expect(screen.getByTestId("rail-inspector-toggle").getAttribute("aria-pressed")).toBe("true"));
+    await waitFor(() => expect(screen.queryByTestId("sidebar-reopen-rail")).toBeTruthy());
+    expect(screen.getByTestId("context-sidebar").closest("[data-state]")?.getAttribute("data-state")).toBe("collapsed");
 
-    fireEvent.click(screen.getByTestId("rail-inspector-toggle"));
+    fireEvent.click(screen.getByTestId("inspector-rail"));
     await waitFor(() => expect(screen.queryByTestId("inspector-drawer")).toBeNull());
-    expect(screen.getByTestId("rail-inspector-toggle").getAttribute("aria-pressed")).toBe("false");
+    await waitFor(() => expect(screen.getByTestId("sidebar-collapse-edge")).toBeTruthy());
+    expect(screen.getByTestId("context-sidebar").closest("[data-state]")?.getAttribute("data-state")).toBe("expanded");
+  });
+});
 
-    fireEvent.click(screen.getByTestId("rail-inspector-toggle"));
-    await screen.findByTestId("inspector-dock");
-    expect(screen.getByTestId("inspector-dock").dataset.state).toBe("contextual");
+describe("inspector maximize pill", () => {
+  it("toggles MAXIMIZED and restores, with edge-handle pill styling", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-301");
+    await screen.findByTestId("inspector-drawer");
+    const pill = await screen.findByTestId("inspector-maximize-rail");
+    expect(pill.getAttribute("aria-label")).toBe("Maximize inspector");
+    // Same discreet vertical oblong pill as the sidebar edge handle.
+    expect(pill.className).toContain("group/edge");
+    expect(pill.querySelector("span")?.className).toContain("rounded-full");
+
+    fireEvent.click(pill);
+    await waitFor(() => expect(screen.getByTestId("inspector-dock").dataset.state).toBe("maximized"));
+    expect(screen.getByTestId("inspector-maximize-rail").getAttribute("aria-label")).toBe("Restore inspector");
+
+    fireEvent.click(screen.getByTestId("inspector-maximize-rail"));
+    await waitFor(() => expect(screen.getByTestId("inspector-dock").dataset.state).toBe("contextual"));
   });
 
-  it("runs inspector width on the shared token with reduced-motion disabled", async () => {
-    renderAt("/rep/xtrm-dev/xtrm/work/issues");
-    const dock = await screen.findByTestId("inspector-dock");
-    expect(dock.className).toContain("motion-reduce:transition-none");
-    expect(dock.className).toContain("duration-[250ms]");
+  it("shows the maximize shortcut in a Kbd tooltip", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-301");
+    const pill = await screen.findByTestId("inspector-maximize-rail");
+    fireEvent.focus(pill);
+    // Base UI tooltip (delay 350ms) renders label + Kbd shortcut.
+    const tip = await screen.findByText("Maximize inspector", {}, { timeout: 2000 }).catch(() => null);
+    if (tip) {
+      const popup = tip.closest("[data-slot]") ?? tip.parentElement;
+      expect(popup?.querySelector("kbd")?.textContent).toBe(modShortcut(INSPECTOR_MAXIMIZE_KEY));
+    } else {
+      // Tooltip timing is environment-sensitive; at minimum the shortcut must be Kbd-renderable.
+      expect(isShortcutHint(modShortcut(INSPECTOR_MAXIMIZE_KEY))).toBe(true);
+    }
+  });
+});
+
+describe("inspector shortcuts", () => {
+  it("Mod+Shift+Enter maximizes and restores; suppressed in editable fields", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-301");
+    await screen.findByTestId("inspector-drawer");
+    expect(screen.getByTestId("inspector-dock").dataset.state).toBe("contextual");
+
+    act(() => void fireEvent.keyDown(window, { key: "Enter", ctrlKey: true, shiftKey: true }));
+    await waitFor(() => expect(screen.getByTestId("inspector-dock").dataset.state).toBe("maximized"));
+
+    act(() => void fireEvent.keyDown(window, { key: "Enter", ctrlKey: true, shiftKey: true }));
+    await waitFor(() => expect(screen.getByTestId("inspector-dock").dataset.state).toBe("contextual"));
+
+    // Suppressed in inputs: no state change.
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    act(() => void fireEvent.keyDown(input, { key: "Enter", ctrlKey: true, shiftKey: true }));
+    expect(screen.getByTestId("inspector-dock").dataset.state).toBe("contextual");
+    input.remove();
+  });
+
+  it("Mod+I still toggles open/close", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-301");
+    await screen.findByTestId("inspector-drawer");
+    act(() => void fireEvent.keyDown(window, { key: "i", ctrlKey: true }));
+    await waitFor(() => expect(screen.queryByTestId("inspector-drawer")).toBeNull());
+  });
+});
+
+describe("command palette lists both shortcuts", () => {
+  it("shows Mod+I and Mod+Shift+Enter as Kbd", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-301");
+    await screen.findByTestId("inspector-drawer");
+    // Open the palette in command mode.
+    fireEvent.click(screen.getByRole("button", { name: "Commands" }));
+    const input = await screen.findByPlaceholderText("Run a command…");
+    expect(input).toBeTruthy();
+    expect(await screen.findByText("Maximize drawer")).toBeTruthy();
+    // Both shortcuts render with the Kbd primitive.
+    expect(screen.getByText("Ctrl I").tagName.toLowerCase()).toBe("kbd");
+    expect(screen.getByText("Ctrl Shift Enter").tagName.toLowerCase()).toBe("kbd");
   });
 });

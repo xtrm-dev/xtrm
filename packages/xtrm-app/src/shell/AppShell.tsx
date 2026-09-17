@@ -1,6 +1,6 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { MODES, modeForPath, modeHref } from "../app/destinations.ts";
 import { AccountControl } from "../github/auth.tsx";
 import { Icon } from "../ui/icon.tsx";
@@ -8,7 +8,7 @@ import { IconButton, Kbd, Tip, cx } from "../ui/primitives.tsx";
 import { FillPanel, ResizableGroup, ResizeHandle, ResizablePanel } from "../ui/resizable.tsx";
 import { ContextSidebar, useGo } from "./ContextSidebar.tsx";
 import { GlobalSearch } from "./GlobalSearch.tsx";
-import { InspectorDock, useElementWidth } from "./InspectorDock.tsx";
+import { InspectorDock } from "./InspectorDock.tsx";
 import { ShellProvider, useShell } from "./context.tsx";
 import { SIDEBAR, isShortcutSuppressed, modShortcut } from "./layout.ts";
 
@@ -44,11 +44,10 @@ function TopBar() {
 
 /** Mode rail: selects the workspace mode; never shows repository state (§3). */
 function ModeRail() {
-  const { repo, layout, dispatch } = useShell();
+  const { repo } = useShell();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const go = useGo();
   const active = modeForPath(pathname);
-  const inspectorOpen = layout.inspector.state !== "CLOSED";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -85,23 +84,6 @@ function ModeRail() {
           </Tip>
         );
       })}
-      <div className="mt-auto flex flex-col items-center gap-1">
-        <Tip label={inspectorOpen ? "Close inspector" : "Open inspector"} shortcut={modShortcut("I")} side="right">
-          <button
-            type="button"
-            data-testid="rail-inspector-toggle"
-            aria-label={inspectorOpen ? "Close inspector" : "Open inspector"}
-            aria-pressed={inspectorOpen}
-            onClick={() => dispatch({ type: inspectorOpen ? "drawer/close" : "drawer/open" })}
-            className={cx(
-              "relative flex size-9 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
-              inspectorOpen ? "bg-accent-soft text-accent-ink" : "text-ink-faint hover:bg-hover hover:text-ink-muted",
-            )}
-          >
-            <Icon name="inspector" size="md" />
-          </button>
-        </Tip>
-      </div>
     </nav>
   );
 }
@@ -130,8 +112,6 @@ function SidebarEdge({ open }: { open: boolean }) {
 function ShellLayout() {
   const { layout, dispatch } = useShell();
   const { sidebar } = layout;
-  const card = useRef<HTMLDivElement>(null);
-  const cardWidth = useElementWidth(card);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-deep text-ink">
@@ -139,6 +119,7 @@ function ShellLayout() {
       <div className="flex min-h-0 flex-1 pr-1.5 pb-1.5">
         <ModeRail />
         {!sidebar.open && <SidebarEdge open={false} />}
+        {/* Single motion-panels driver for sidebar, main, and inspector: one Group using the default TRANSITION, which SHELL_MOTION mirrors (250ms, cubic-bezier(0.32,0.72,0,1)). No CSS width transitions on layout regions. */}
         <ResizableGroup>
           <ResizablePanel
             data-testid="sidebar-panel"
@@ -155,14 +136,14 @@ function ShellLayout() {
           </ResizablePanel>
           {sidebar.open && <ResizeHandle label="Resize sidebar" />}
           <FillPanel data-testid="main-panel" className="flex">
-            <div ref={card} className="flex min-w-0 flex-1 overflow-hidden rounded-lg border border-border-muted bg-surface">
+            <div className="flex min-w-0 flex-1 overflow-hidden rounded-lg border border-border-muted bg-surface">
               <main data-testid="primary-region" className="relative flex min-w-0 flex-1 flex-col">
                 <Outlet />
               </main>
             </div>
           </FillPanel>
+          <InspectorDock />
         </ResizableGroup>
-        <InspectorDock cardWidth={cardWidth} />
       </div>
       <GlobalSearch />
     </div>

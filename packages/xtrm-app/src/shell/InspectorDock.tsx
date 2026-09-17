@@ -1,60 +1,46 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../ui/icon.tsx";
 import { Tip, cx } from "../ui/primitives.tsx";
+import { ResizablePanel } from "../ui/resizable.tsx";
 import { InspectorDrawer } from "./Inspector.tsx";
 import { useShell } from "./context.tsx";
-import { INSPECTOR, SHELL_MOTION_TW, modShortcut } from "./layout.ts";
+import { INSPECTOR, INSPECTOR_MAXIMIZE_KEY, modShortcut } from "./layout.ts";
 
 export const RAIL = 22;
-const GAP = 24;
 
 /**
- * Width of the expanding dock, clamped so it can never reach past the content card.
- * CLOSED → rail only; CONTEXTUAL/PINNED → rail + drawer; MAXIMIZED → the whole card.
+ * In-flow inspector width: the rail is always reserved so open/close/maximize
+ * animate as one motion-panels motion with the sidebar and main fill.
+ * CLOSED → rail only; CONTEXTUAL/PINNED → rail + drawer; MAXIMIZED → fill the group (covers the card area, main squeezes to 0).
  */
-export function dockWidth(state: string, drawerWidth: number, cardWidth: number): number {
+export function dockWidth(state: string, drawerWidth: number): number | `${number}%` {
   if (state === "CLOSED") return RAIL;
-  if (state === "MAXIMIZED") return RAIL + cardWidth;
-  if (state === "PINNED") return RAIL + drawerWidth;
-  return RAIL + Math.max(0, Math.min(drawerWidth, cardWidth - GAP));
-}
-
-export function useElementWidth(ref: RefObject<HTMLElement | null>) {
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const update = () => setWidth(el.getBoundingClientRect().width || el.offsetWidth);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return width;
+  if (state === "MAXIMIZED") return "100%";
+  return RAIL + drawerWidth;
 }
 
 /**
- * v15 inspector: the floating rail IS the drawer's left edge. Opening grows the dock leftwards
- * over the content card (CONTEXTUAL/MAXIMIZED) or into the layout (PINNED); clicking the edge folds it back.
+ * v16 inspector: a real layout column in the same ResizableGroup as the sidebar
+ * and main fill — one motion-panels driver, one SHELL_MOTION.transition.
+ * CONTEXTUAL and PINNED both push (no overlay, no clipping); MAXIMIZED fills
+ * the group so it covers the card area. The rail carries two edge-handle pills
+ * (open/close + maximize/restore) sharing the sidebar edge visual language.
  */
-export function InspectorDock({ cardWidth }: { cardWidth: number }) {
+export function InspectorDock() {
   const { layout, dispatch } = useShell();
-  const { state, width, followLive } = layout.inspector;
+  const { state, width } = layout.inspector;
   const open = state !== "CLOSED";
-  const [dragging, setDragging] = useState(false);
-  const drag = useRef<{ x: number; w: number } | null>(null);
-  const outer = state === "PINNED" ? dockWidth(state, width, cardWidth) : RAIL;
-  const inner = dockWidth(state, width, cardWidth);
-  const variant = state === "MAXIMIZED" ? "maximized" : state === "PINNED" ? "column" : "overlay";
+  const maximized = state === "MAXIMIZED";
+
+  const size = open ? (maximized ? ("100%" as const) : RAIL + width) : RAIL;
+  const variant = maximized ? "maximized" : "column";
 
   const startResize = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.preventDefault();
-    drag.current = { x: e.clientX, w: width };
-    setDragging(true);
-    const move = (ev: PointerEvent) => drag.current && dispatch({ type: "drawer/resize", width: drag.current.w + drag.current.x - ev.clientX });
+    const startX = e.clientX;
+    const startW = width;
+    const move = (ev: PointerEvent) => dispatch({ type: "drawer/resize", width: startW + startX - ev.clientX });
     const up = () => {
-      drag.current = null;
-      setDragging(false);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
@@ -62,47 +48,57 @@ export function InspectorDock({ cardWidth }: { cardWidth: number }) {
     window.addEventListener("pointerup", up);
   };
 
-  const ease = dragging ? "" : SHELL_MOTION_TW;
-
-  // Edge alignment: the dock shares the main card's rounded-lg border treatment.
-  // PINNED is a real column (muted border like the card, no shadow); overlay
-  // states float (stronger border + shadow). Top/bottom come from the flex
-  // row stretch (outer) + absolute inset (inner), so all three states align.
-  const frame = !open ? "border-border-muted bg-transparent" : state === "PINNED" ? "border-border-muted" : "border-border";
-
   return (
-    <div data-testid="inspector-dock" data-state={state.toLowerCase()} className={cx("relative ml-1.5 min-h-0 shrink-0 self-stretch", ease)} style={{ width: outer }}>
+    <ResizablePanel
+      data-testid="inspector-dock"
+      data-state={state.toLowerCase()}
+      size={size}
+      minSize={RAIL}
+      maxSize={5000}
+      className="ml-1.5 self-stretch"
+    >
       <div
         className={cx(
-          "absolute top-0 right-0 bottom-0 z-30 flex overflow-hidden rounded-lg border bg-raised",
-          frame,
-          open && state !== "PINNED" && "shadow-float",
-          ease,
+          "flex h-full min-h-0 overflow-hidden rounded-lg border bg-raised",
+          // In-flow columns use the muted card border with no shadow (no floating overlay).
+          !open ? "border-border-muted bg-transparent" : "border-border-muted",
         )}
-        style={{ width: inner }}
       >
-        <Tip label={open ? "Close inspector" : "Open inspector"} shortcut={modShortcut("I")} side="left">
-          <button
-            type="button"
-            data-testid="inspector-rail"
-            aria-label={open ? "Close inspector" : "Open inspector"}
-            aria-expanded={open}
-            onClick={() => dispatch({ type: open ? "drawer/close" : "drawer/open" })}
-            className={cx(
-              "group/edge relative flex shrink-0 flex-col items-center justify-center gap-2 outline-none focus-visible:bg-hover",
-              open ? "hover:bg-hover" : "hover:bg-hover/60",
-            )}
-            style={{ width: RAIL - 2 }}
-          >
-            {followLive && <span className="size-1.5 rounded-full bg-accent" />}
-            <span className="flex h-10 w-3.5 items-center justify-center rounded-sm border border-border-muted text-ink-faint transition-colors motion-reduce:transition-none group-hover/edge:border-border group-hover/edge:text-ink">
-              <Icon name="back" size="xs" className={cx("transition-transform duration-[250ms] motion-reduce:transition-none", open && "rotate-180")} />
-            </span>
-          </button>
-        </Tip>
+        <div className="flex shrink-0 flex-col items-center justify-center gap-1.5 py-2" style={{ width: RAIL }}>
+          <Tip label={open ? "Close inspector" : "Open inspector"} shortcut={modShortcut("I")} side="left">
+            <button
+              type="button"
+              data-testid="inspector-rail"
+              aria-label={open ? "Close inspector" : "Open inspector"}
+              aria-expanded={open}
+              onClick={() => dispatch({ type: open ? "drawer/close" : "drawer/open" })}
+              className="group/edge flex w-4 shrink-0 items-center justify-center outline-none"
+            >
+              <span className="flex h-10 w-1 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 motion-reduce:transition-none group-hover/edge:h-12 group-hover/edge:w-4 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-12 group-focus-visible/edge:w-4 group-focus-visible/edge:bg-hover">
+                <Icon name="back" size="xs" className={cx("shrink-0 opacity-0 transition-opacity motion-reduce:transition-none group-hover/edge:opacity-100 group-focus-visible/edge:opacity-100", open && "rotate-180")} />
+              </span>
+            </button>
+          </Tip>
+          {open && (
+            <Tip label={maximized ? "Restore inspector" : "Maximize inspector"} shortcut={modShortcut(INSPECTOR_MAXIMIZE_KEY)} side="left">
+              <button
+                type="button"
+                data-testid="inspector-maximize-rail"
+                aria-label={maximized ? "Restore inspector" : "Maximize inspector"}
+                aria-pressed={maximized}
+                onClick={() => dispatch({ type: maximized ? "drawer/restore" : "drawer/maximize" })}
+                className="group/edge flex w-4 shrink-0 items-center justify-center outline-none"
+              >
+                <span className="flex h-10 w-1 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 motion-reduce:transition-none group-hover/edge:h-12 group-hover/edge:w-4 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-12 group-focus-visible/edge:w-4 group-focus-visible/edge:bg-hover">
+                  <Icon name={maximized ? "restore" : "maximize"} size="xs" className="shrink-0 opacity-0 transition-opacity motion-reduce:transition-none group-hover/edge:opacity-100 group-focus-visible/edge:opacity-100" />
+                </span>
+              </button>
+            </Tip>
+          )}
+        </div>
         {open && (
           <div className="relative min-w-0 flex-1">
-            {state !== "MAXIMIZED" && (
+            {!maximized && (
               <div
                 role="separator"
                 aria-orientation="vertical"
@@ -118,6 +114,6 @@ export function InspectorDock({ cardWidth }: { cardWidth: number }) {
           </div>
         )}
       </div>
-    </div>
+    </ResizablePanel>
   );
 }

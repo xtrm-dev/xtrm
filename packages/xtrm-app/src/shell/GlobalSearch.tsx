@@ -32,8 +32,8 @@ export function GlobalSearch() {
         { id: "inspector", label: d === "CLOSED" ? "Open inspector" : "Close inspector", hint: "Ctrl I", icon: "inspector", onSelect: () => dispatch({ type: d === "CLOSED" ? "drawer/open" : "drawer/close" }) },
         ...(d === "CONTEXTUAL" ? [{ id: "pin", label: "Pin drawer", icon: "pin" as const, onSelect: () => dispatch({ type: "drawer/pin" }) }] : []),
         ...(d === "PINNED" ? [{ id: "unpin", label: "Unpin drawer", icon: "unpin" as const, onSelect: () => dispatch({ type: "drawer/unpin" }) }] : []),
-        ...(d === "CONTEXTUAL" || d === "PINNED" ? [{ id: "max", label: "Maximize drawer", icon: "maximize" as const, onSelect: () => dispatch({ type: "drawer/maximize" }) }] : []),
-        ...(d === "MAXIMIZED" ? [{ id: "restore", label: "Restore drawer", icon: "restore" as const, onSelect: () => dispatch({ type: "drawer/restore" }) }] : []),
+        ...(d === "CONTEXTUAL" || d === "PINNED" ? [{ id: "max", label: "Maximize drawer", hint: "Ctrl Shift Enter", icon: "maximize" as const, onSelect: () => dispatch({ type: "drawer/maximize" }) }] : []),
+        ...(d === "MAXIMIZED" ? [{ id: "restore", label: "Restore drawer", hint: "Ctrl Shift Enter", icon: "restore" as const, onSelect: () => dispatch({ type: "drawer/restore" }) }] : []),
         { id: "theme", label: `Switch to ${shell.theme === "dark" ? "light" : "dark"} theme`, icon: shell.theme === "dark" ? "sun" : "moon", onSelect: shell.toggleTheme },
       ];
       const navigation: CommandEntry[] = [

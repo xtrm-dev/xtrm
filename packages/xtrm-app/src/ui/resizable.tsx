@@ -12,7 +12,7 @@ export function ResizableGroup({ children, className }: { children: ReactNode; c
   );
 }
 
-export function ResizablePanel({
+export function ResizablePanel<S extends number | `${number}%`>({
   size,
   minSize,
   maxSize,
@@ -23,10 +23,10 @@ export function ResizablePanel({
   ...rest
 }: {
   collapsed?: boolean;
-  size: number;
-  minSize: number;
-  maxSize: number;
-  onSizeChange: (size: number) => void;
+  size: S;
+  minSize: number | `${number}%`;
+  maxSize: number | `${number}%`;
+  onSizeChange?: (size: S) => void;
   children: ReactNode;
   className?: string;
   "data-testid"?: string;
