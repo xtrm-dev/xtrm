@@ -1,3 +1,7 @@
 .venv/
 *.egg-info/
 .pytest_cache/
+# ponytail: CI installs via `pip install -e .[dev]`, not `uv sync` — no
+# lock file is consumed anywhere, so uv.lock is a local dev-environment
+# artifact, not a dependency pin this package relies on.
+uv.lock

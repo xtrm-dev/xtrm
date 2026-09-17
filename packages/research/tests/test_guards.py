@@ -138,6 +138,20 @@ class _RecordingBackend:
         return {"ok": True}
 
 
+# A corpus long enough (36 plain words) that check_mask's ratio path
+# applies (>= MASK_MIN_WORD_COUNT_FOR_RATIO), with a known-id set that
+# removes 19/36 words (53%) — an over-aggressive match, well past the 2%
+# budget, reproducing the historical defect at a realistic field size.
+OVER_BROAD_TEXT = (
+    "the quick brown fox jumps over the lazy dog near the river while "
+    "the quiet town watches the slow tide turn and the old bridge creaks "
+    "under the weight of the morning traffic crossing the river banks"
+)
+OVER_BROAD_KNOWN_IDS = frozenset(
+    {"the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog", "near", "river"}
+)
+
+
 def _contains_substring(obj: Any, needle: str) -> bool:
     if isinstance(obj, str):
         return needle in obj
@@ -495,20 +509,6 @@ def test_guarded_send_masks_secret_in_set():
     assert not _contains_substring(backend.calls[0], hex_secret)
 
 
-def test_collect_strings_covers_keys_tuples_and_sets():
-    from xtrm_research.guards import _collect_strings
-
-    value = {"k": ("a", {"b"})}
-    assert set(_collect_strings(value)) == {"k", "a", "b"}
-
-
-def test_collect_strings_fails_closed_on_bytes():
-    from xtrm_research.guards import _collect_strings
-
-    with pytest.raises(TypeError):
-        _collect_strings({"blob": b"raw"})
-
-
 # ---- historical defect 1: over-broad id regex ---------------------------
 
 
@@ -559,11 +559,8 @@ def test_mask_matches_known_ids_case_insensitively_without_lowercasing_input():
 
 
 def test_plain_word_check_fires_on_uppercase_corpus():
-    original = "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG NEAR THE RIVER"
-    over_broad_known_ids = frozenset(
-        {"THE", "QUICK", "BROWN", "FOX", "JUMPS", "OVER", "LAZY", "DOG", "NEAR"}
-    )
-    masked = mask(original, over_broad_known_ids)
+    original = OVER_BROAD_TEXT.upper()  # not lowercased by the test
+    masked = mask(original, OVER_BROAD_KNOWN_IDS)
     with pytest.raises(MaskAbortError):
         check_mask(original, masked)
 
@@ -601,12 +598,42 @@ def test_check_mask_fires_on_one_fully_replaced_field_in_a_large_payload():
 
 
 def test_check_mask_does_not_count_replacement_tokens_as_survivors():
-    original = "alpha beta gamma"
-    masked = "<issue> <redacted> gamma"
+    # 36-word corpus (>= the ratio-path threshold) with exactly 2 words
+    # replaced by the literal tokens: if the tokens themselves counted as
+    # surviving plain words, this would under-report the loss.
+    original = OVER_BROAD_TEXT
+    masked = original.replace("the ", "<issue> ", 1).replace("quick", "<redacted>", 1)
     with pytest.raises(MaskAbortError) as exc_info:
         check_mask(original, masked)
     assert exc_info.value.removed == 2
+    assert exc_info.value.total == 36
+
+
+def test_check_mask_short_field_tolerates_partial_loss():
+    """Below the ratio-path word count, losing *some* but not all plain
+    words is tolerated — only a fully replaced short field aborts (see
+    test_check_mask_short_field_aborts_only_on_full_loss)."""
+    original = "alpha beta gamma"
+    masked = "<issue> <redacted> gamma"
+    check_mask(original, masked)  # does not raise
+
+
+def test_check_mask_short_field_aborts_only_on_full_loss():
+    original = "alpha beta gamma"
+    masked = "<issue> <issue> <issue>"
+    with pytest.raises(MaskAbortError) as exc_info:
+        check_mask(original, masked)
+    assert exc_info.value.removed == 3
     assert exc_info.value.total == 3
+
+
+def test_check_mask_short_field_full_loss_from_redaction_alone_does_not_abort():
+    """A field that is *entirely* redacted (no known id involved) must
+    not abort: original vs masked are identical once the replacement
+    token is stripped, so masking_applied is False. This is the G14
+    regression: a credential-shaped field used to abort the whole send."""
+    redacted_baseline = "<redacted>"
+    check_mask(redacted_baseline, redacted_baseline)  # does not raise
 
 
 # ---- credential-shaped contract reaches the backend double redacted ------
@@ -678,17 +705,34 @@ def test_strip_excluded_labels_is_recursive():
 def test_guard_failure_reaches_backend_zero_calls():
     """An over-aggressive known-id set (matching ordinary words) trips the
     mask abort check before any send happens."""
-    payload = {
-        "title": "the quick brown fox jumps over the lazy dog near the river",
-    }
-    over_broad_known_ids = frozenset(
-        {"the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog", "near"}
-    )
+    payload = {"title": OVER_BROAD_TEXT}
     backend = _RecordingBackend()
     with pytest.raises(GuardFailure) as exc_info:
-        guarded_send(payload, backend, known_ids=over_broad_known_ids)
+        guarded_send(payload, backend, known_ids=OVER_BROAD_KNOWN_IDS)
     assert exc_info.value.guard == "mask"
     assert backend.calls == []
+
+
+def test_guarded_send_sends_a_field_that_is_exactly_a_secret_redacted():
+    """G14 regression: a field whose entire value is a credential (no
+    surrounding prose, no known id involved) must send successfully with
+    the value redacted, not abort the run."""
+    secret = "AKIA" + "ABCDEFGHIJKLMNOP"  # deterministic, letters-only suffix
+    backend = _RecordingBackend()
+    guarded_send({"a": secret}, backend)
+    assert len(backend.calls) == 1
+    assert secret not in json.dumps(backend.calls[0])
+    assert backend.calls[0]["a"] == "<redacted>"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["ok", "a short five word field"],
+)
+def test_guarded_send_sends_short_ordinary_fields(text):
+    backend = _RecordingBackend()
+    guarded_send({"a": text}, backend)
+    assert backend.calls[0]["a"] == text
 
 
 def test_guard_stage_fails_closed_on_unexpected_exception(monkeypatch):
@@ -711,13 +755,10 @@ def test_send_through_run_marks_run_invalid_on_guard_failure(registry, runs_root
     manifest = make_manifest(registry)
     handle = start_run(runs_root, manifest["run_id"], manifest)
     backend = _RecordingBackend()
-    over_broad_known_ids = frozenset(
-        {"the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog", "near"}
-    )
-    payload = {"title": "the quick brown fox jumps over the lazy dog near the river"}
+    payload = {"title": OVER_BROAD_TEXT}
 
     with pytest.raises(GuardFailure):
-        send_through_run(handle, 0, payload, backend, known_ids=over_broad_known_ids)
+        send_through_run(handle, 0, payload, backend, known_ids=OVER_BROAD_KNOWN_IDS)
 
     assert backend.calls == []
     events = list(read_lines(events_path(runs_root, manifest["run_id"])))
@@ -776,10 +817,7 @@ def test_send_through_run_settles_invalid_even_when_write_event_raises(
     manifest = make_manifest(registry)
     handle = start_run(runs_root, manifest["run_id"], manifest)
     backend = _RecordingBackend()
-    over_broad_known_ids = frozenset(
-        {"the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog", "near"}
-    )
-    payload = {"title": "the quick brown fox jumps over the lazy dog near the river"}
+    payload = {"title": OVER_BROAD_TEXT}
 
     original_write_event = handle.write_event
     calls = {"n": 0}
@@ -790,7 +828,7 @@ def test_send_through_run_settles_invalid_even_when_write_event_raises(
 
     monkeypatch.setattr(handle, "write_event", _flaky_write_event)
     with pytest.raises(RuntimeError, match="disk full"):
-        send_through_run(handle, 0, payload, backend, known_ids=over_broad_known_ids)
+        send_through_run(handle, 0, payload, backend, known_ids=OVER_BROAD_KNOWN_IDS)
 
     assert backend.calls == []
     assert calls["n"] == 1

@@ -135,16 +135,34 @@ def remember(ids: Iterable[str]) -> frozenset[str]:
     return frozenset(known)
 
 
+def _apply_id_mask(text: str, known_ids: frozenset[str]) -> str:
+    """The id-substitution half of :func:`mask`, isolated so
+    :func:`_masked_leaf` can run :func:`check_mask` on a redacted-vs-
+    redacted-then-masked pair — measuring masking loss only, never
+    redaction loss."""
+    known_lower = {k.lower() for k in known_ids}
+    return ID_TOKEN.sub(
+        lambda m: "<issue>" if m.group(0).lower() in known_lower else m.group(0),
+        text,
+    )
+
+
 def mask(text: str, known_ids: frozenset[str]) -> str:
     """Redact credentials, then replace any token that is a
     case-insensitive member of ``known_ids`` with ``<issue>``. An
     id-shaped token not in ``known_ids`` is left as-is."""
-    redacted = redact(text)
-    known_lower = {k.lower() for k in known_ids}
-    return ID_TOKEN.sub(
-        lambda m: "<issue>" if m.group(0).lower() in known_lower else m.group(0),
-        redacted,
-    )
+    return _apply_id_mask(redact(text), known_ids)
+
+
+#: Below this many plain words, a survival *fraction* is meaningless (one
+#: lost word out of one is 100%, not a defect).
+MASK_MIN_WORD_COUNT_FOR_RATIO = 20
+
+
+def _strip_replacement_tokens(text: str) -> str:
+    for token in ("<issue>", _REDACTED):
+        text = text.replace(token, " ")
+    return text
 
 
 def check_mask(
@@ -152,24 +170,39 @@ def check_mask(
     masked: str,
     *,
     min_surviving_fraction: float = MASK_MIN_SURVIVING_WORD_FRACTION,
+    min_word_count: int = MASK_MIN_WORD_COUNT_FOR_RATIO,
 ) -> None:
-    """Abort if ``masked`` has fewer than ``min_surviving_fraction`` of
-    ``original``'s plain words. Independent of how ``masked`` was
-    produced, so a test can reproduce the historical over-broad regex
-    directly and assert this catches it. The literal replacement tokens
-    (``<issue>``, ``<redacted>``) are stripped before counting survivors
-    — they must never count as surviving plain words themselves."""
-    words = _PLAIN_WORD.findall(original)
-    if not words:
+    """Abort if id-masking removed too much plain text.
+
+    ``original`` must already be the *redacted* baseline (never raw,
+    pre-redaction text) — :func:`_masked_leaf` calls this on
+    (``redact(text)``, ``_apply_id_mask(redact(text), known_ids)``), so
+    only masking loss is measured; redaction replacing a field's only
+    word is never mistaken for an over-broad mask. The literal
+    replacement tokens (``<issue>``, ``<redacted>``) are stripped from
+    both sides before counting — they must never count as surviving
+    *or* original plain words.
+
+    Below ``min_word_count`` plain words the survival fraction is
+    meaningless, so the ratio check is skipped; the field only aborts if
+    every one of its plain words vanished *and* masking (not redaction)
+    is what removed them — the "field is nothing but a known id" case,
+    which the G8 large-payload regression needs caught regardless of the
+    field's own size.
+    """
+    words = _PLAIN_WORD.findall(_strip_replacement_tokens(original))
+    total = len(words)
+    if total == 0:
         return
-    cleaned = masked
-    for token in ("<issue>", _REDACTED):
-        cleaned = cleaned.replace(token, " ")
-    surviving = _PLAIN_WORD.findall(cleaned)
-    if len(surviving) < min_surviving_fraction * len(words):
-        raise MaskAbortError(
-            len(words) - len(surviving), len(words), min_surviving_fraction
-        )
+    surviving = _PLAIN_WORD.findall(_strip_replacement_tokens(masked))
+    removed = total - len(surviving)
+    masking_applied = masked != original
+    if total < min_word_count:
+        if removed == total and masking_applied:
+            raise MaskAbortError(removed, total, min_surviving_fraction)
+        return
+    if len(surviving) < min_surviving_fraction * total:
+        raise MaskAbortError(removed, total, min_surviving_fraction)
 
 
 #: Leaf types the guard stage accepts as-is (no traversal needed).
@@ -192,8 +225,9 @@ def _check_supported_type(value: Any) -> None:
 
 
 def _masked_leaf(text: str, known_ids: frozenset[str]) -> str:
-    masked_text = mask(text, known_ids)
-    check_mask(text, masked_text)
+    redacted = redact(text)
+    masked_text = _apply_id_mask(redacted, known_ids)
+    check_mask(redacted, masked_text)
     return masked_text
 
 
@@ -233,25 +267,6 @@ def deep_mask(value: Any, known_ids: frozenset[str]) -> Any:
     if isinstance(value, (set, frozenset)):
         return {deep_mask(v, known_ids) for v in value}
     return value
-
-
-def _collect_strings(value: Any) -> list[str]:
-    """Every string in a parsed JSON-like value, including dict keys and
-    values nested in tuples and sets. Shares :func:`_check_supported_type`
-    with :func:`deep_mask` so it has no type blind spots of its own."""
-    _check_supported_type(value)
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, dict):
-        collected: list[str] = []
-        for k, v in value.items():
-            if isinstance(k, str):
-                collected.append(k)
-            collected.extend(_collect_strings(v))
-        return collected
-    if isinstance(value, (list, tuple, set, frozenset)):
-        return [s for item in value for s in _collect_strings(item)]
-    return []
 
 
 # ---- label-leak exclusion ------------------------------------------------
@@ -384,10 +399,13 @@ def mask_version(label_rule: LabelExclusionRule | None = None) -> str:
         {
             "id_token": ID_TOKEN.pattern,
             "min_surviving_word_fraction": MASK_MIN_SURVIVING_WORD_FRACTION,
+            "min_word_count_for_ratio": MASK_MIN_WORD_COUNT_FOR_RATIO,
             "label_fields": list(rule.fields),
             "label_excluded_prefixes": list(rule.excluded_prefixes),
             "label_mode": rule.mode,
             "mask_source": inspect.getsource(mask),
+            "apply_id_mask_source": inspect.getsource(_apply_id_mask),
+            "masked_leaf_source": inspect.getsource(_masked_leaf),
             "check_mask_source": inspect.getsource(check_mask),
             "deep_mask_source": inspect.getsource(deep_mask),
             "strip_excluded_labels_source": inspect.getsource(strip_excluded_labels),
