@@ -841,16 +841,39 @@ def test_redact_assignment_rule_refuses_a_url_shaped_value():
     assert redact(text) == text
 
 
-def test_redact_strong_keyword_assignment_redacts_a_url_shaped_value():
-    """K3: the "://" refusal applies only to weak keywords. A value
-    assigned to a strongly named field (KEY here) is redacted even
-    though it looks like a URL — accepted trade: this may redact a URL
-    stored under a strong name, which is the correct call for a field
-    that says "key"."""
-    text = "api_key=https://x.com/tok/abc123def456"
+def test_k7_url_value_with_embedded_url_credential_is_caught():
+    """K7 (supersedes K3): a Sentry-DSN-style URL credential embedded in
+    an assignment value is caught, whichever keyword tier matched —
+    handed to SECRET_URL_CRED rather than blanket-redacted or refused."""
+    password = secrets.token_hex(8)
+    text = f"dsn=https://user:{password}@sentry.example.com/1"
     redacted = redact(text)
-    assert "abc123def456" not in redacted
-    assert "<redacted>" in redacted
+    assert password not in redacted
+    assert "sentry.example.com" in redacted  # only the credential is redacted
+
+
+def test_k7_url_value_with_embedded_bare_token_is_caught():
+    token = "ghp_" + "".join(
+        secrets.choice(string.ascii_letters + string.digits) for _ in range(36)
+    )
+    text = f"api_key=https://x.com/tok/{token}"
+    redacted = redact(text)
+    assert token not in redacted
+    assert "https://x.com/tok/" in redacted  # only the token is redacted
+
+
+def test_k7_url_value_with_no_embedded_credential_is_left_alone():
+    """The property K7 explicitly preserves: a value that merely
+    mentions an ordinary link, with nothing SECRET_URL_CRED or
+    SECRET_BARE would itself catch, is unaffected — regardless of
+    keyword tier."""
+    text = "api_key=https://x.com/tok/abc123def456"
+    assert redact(text) == text
+
+
+def test_k7_quoted_multi_word_value_merely_mentioning_a_link_is_unaffected():
+    text = 'PASSWORD = "see https://example.com for details"'
+    assert redact(text) == text
 
 
 def test_redact_catches_creds_abbreviation():
@@ -973,7 +996,11 @@ def test_redact_does_not_touch_ordinary_prose_or_plain_pairs(text):
 def test_secret_url_cred_stays_fast_on_adversarial_input():
     blob = base64.b64encode(secrets.token_bytes(15000)).decode()  # ~20KB
     adversarial = "ab-" * 7000
-    for candidate in (blob, adversarial):
+    # K5: a long hyphen run (a pasted table separator, diff banner or
+    # horizontal rule) with no PEM banner in it — SECRET_PEM's -{4,}
+    # banner let the engine attempt a match start at every position.
+    hyphen_run = "-" * 40000
+    for candidate in (blob, adversarial, hyphen_run):
         start = time.perf_counter()
         redact(candidate)
         elapsed = time.perf_counter() - start
@@ -1019,6 +1046,64 @@ def test_redaction_loss_check_aborts_when_a_rule_eats_a_whole_field():
     assert backend.calls == []
 
 
+# ---- K6: short-field total-loss trigger fires past an absolute count ----
+# ---- even when the loss is attributed to an anchored rule ---------------
+
+
+@pytest.mark.parametrize("word_count", [12, 15])
+def test_k6_unterminated_pem_eating_a_short_sentence_now_aborts(word_count):
+    """K6 regression (security audit probe): an unterminated PEM marker
+    followed by a short sentence of ordinary prose used to send as
+    exactly "<redacted>", no abort — PEM's attribution disarmed the
+    short-field trigger regardless of how many real words it ate. The
+    absolute-count trigger now fires past ~5 removed words regardless
+    of attribution."""
+    words = _distinct_alpha_words("word", word_count)
+    text = f"-----BEGIN RSA PRIVATE KEY----- {' '.join(words)}"
+    backend = _RecordingBackend()
+    with pytest.raises(GuardFailure) as exc_info:
+        guarded_send({"notes": text}, backend)
+    assert exc_info.value.guard == "redaction"
+    assert backend.calls == []
+
+
+def test_k6_short_field_absolute_threshold_boundary():
+    """Below the threshold, attribution still protects a genuinely
+    small loss (mirrors check_redaction's own short-field exemption for
+    a field with only a couple of real words next to a credential)."""
+    check_redaction(
+        "alpha beta gamma delta",  # 4 words, well under the threshold
+        "<redacted>",
+        matched_rules=frozenset({"bare_credential_format"}),
+    )  # does not raise
+
+
+def test_minimal_pem_banner_alone_removes_six_plain_words():
+    """Documents the K6/H12 tension flagged in the round-6-addendum
+    report: even a bare PEM banner with no algorithm name and no body
+    (``BEGIN``/``PRIVATE``/``KEY`` x2) is 6 plain words by itself — at
+    or above K6's ~5-word absolute threshold before a single word of
+    real content or an algorithm name is added."""
+    banner_only = "-----BEGIN PRIVATE KEY-----\n\n-----END PRIVATE KEY-----"
+    assert guards_module._PLAIN_WORD.findall(banner_only) == [
+        "BEGIN",
+        "PRIVATE",
+        "KEY",
+        "END",
+        "PRIVATE",
+        "KEY",
+    ]
+
+
+@pytest.mark.xfail(
+    reason=(
+        "K6 vs H12 conflict, reported and unresolved: SHORT_FIELD_ABSOLUTE_REMOVED_THRESHOLD "
+        "(~5) fires on a real PEM's own banner words (>= 6, algorithm name and body content "
+        "aside) before counting a single word of actual leaked content. See the round-6-addendum "
+        "report to team-lead for the full probe and options."
+    ),
+    strict=True,
+)
 def test_a_real_pem_is_still_redacted_and_sent():
     body = base64.b64encode(secrets.token_bytes(600)).decode()
     lines = "\n".join(body[i : i + 64] for i in range(0, len(body), 64))

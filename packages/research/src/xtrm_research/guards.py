@@ -40,9 +40,7 @@ from xtrm_research.hashing import compute_content_hash
 #:
 #: - **Strong** (``KEY``, ``SECRET``, ``TOKEN``, ``PASSWORD``,
 #:   ``PASSWD``, ``CRED``): matches standalone or compound
-#:   (``password``, ``AWS_SECRET_KEY``), and its value is redacted even
-#:   when it looks like a URL (K3 — a URL stored under a strongly named
-#:   field is still a credential; that trade is accepted).
+#:   (``password``, ``AWS_SECRET_KEY``).
 #: - **Weak** (``ACCOUNT``, ``ACCESS``, ``AUTH``, ``PRIVATE``,
 #:   ``SIGNATURE``, ``SALT``, ``PASSPHRASE``, ``SESSION`` — J1's
 #:   additions for the MMD-585 ``R2_ACCOUNT`` shape): matches only in a
@@ -50,8 +48,15 @@ from xtrm_research.hashing import compute_content_hash
 #:   and ``AWS_ACCESS_KEY`` match but a bare prose heading like
 #:   ``Access: the team needs access to staging`` does not (K1: the
 #:   unqualified weak-keyword list from J1 redacted exactly this kind of
-#:   ordinary sentence). A weak-keyword value is also refused if it
-#:   looks like a URL, same as before.
+#:   ordinary sentence).
+#:
+#: Either tier's value is handed to :data:`SECRET_URL_CRED` and
+#: :data:`SECRET_BARE` instead of being blanket-redacted when it looks
+#: like a URL (K7, superseding an earlier, cruder K3 blanket-redact and
+#: an even earlier outright refusal): a credential embedded in the URL
+#: (a Sentry-DSN-style ``user:pass@``, or an opaque prefixed/hex/base64
+#: token in the path or query) is still caught, while a value that
+#: merely mentions an ordinary link is left alone.
 #:
 #: The value class only accepts a quoted value containing spaces
 #: (``PASSWORD = "correct horse battery staple"``); an unquoted value
@@ -97,11 +102,20 @@ SECRET_ASSIGN = re.compile(
 def _redact_assignment(m: re.Match[str]) -> str:
     name, sep, value = m.group(1), m.group(2), m.group(3)
     is_strong = any(k in name.upper() for k in _STRONG_ASSIGN_KEYWORDS)
-    if not is_strong:
-        if not _COMPOUND_NAME.search(name):
-            return m.group(0)  # weak keyword, not compound: leave prose alone
-        if "://" in value:
-            return m.group(0)  # weak keyword, URL-shaped value: the URL rule's job
+    if not is_strong and not _COMPOUND_NAME.search(name):
+        return m.group(0)  # weak keyword, not compound: leave prose alone
+    if "://" in value:
+        # K7 (supersedes K3): don't blanket-redact a URL-shaped value —
+        # hand it to the URL-credential and bare-format rules instead,
+        # so a credential embedded in the URL (a Sentry-DSN-style
+        # user:pass@, or an opaque prefixed/hex/base64 token in the
+        # path or query) is still caught, while a value that merely
+        # mentions an ordinary link is left alone.
+        redacted_value = SECRET_URL_CRED.sub(
+            lambda um: f"{um.group(1)}{_REDACTED}{um.group(3)}", value
+        )
+        redacted_value = SECRET_BARE.sub(_REDACTED, redacted_value)
+        return f"{name}{sep}{redacted_value}"
     return f"{name}{sep}{_REDACTED}"
 
 
@@ -155,15 +169,23 @@ SECRET_AUTH_HEADER = re.compile(
 #: PRIVATE KEY banner (J6). Safe to relax without reopening H12: the
 #: match stays anchored to the literal words PRIVATE KEY either way, so
 #: it can never again match an arbitrary banner pair.
+#:
+#: The leading ``(?<!-)`` (K5) matters: without it, ``-{4,}`` alone lets
+#: the engine attempt a match starting at *every* position of a long
+#: hyphen run (a pasted table separator, diff banner or horizontal
+#: rule), each attempt scanning forward before failing — catastrophic
+#: backtracking (measured 17s on 40000 hyphens). The lookbehind forces
+#: a match to start only at the first hyphen of a run, cutting the
+#: attempt count from O(n) to O(1) for a run with no banner in it.
 SECRET_PEM = re.compile(
-    r"(?i)-{4,}BEGIN [A-Z ]*PRIVATE KEY-{4,}.{0,8000}?-{4,}END [A-Z ]*PRIVATE KEY-{4,}",
+    r"(?i)(?<!-)-{4,}BEGIN [A-Z ]*PRIVATE KEY-{4,}.{0,8000}?-{4,}END [A-Z ]*PRIVATE KEY-{4,}",
     re.DOTALL,
 )
 #: A BEGIN PRIVATE KEY marker with no matching END within reach: redact
 #: from the marker to the end of the field rather than leaving a
 #: truncated key sitting in the payload.
 SECRET_PEM_UNTERMINATED = re.compile(
-    r"(?i)-{4,}BEGIN [A-Z ]*PRIVATE KEY-{4,}.*", re.DOTALL
+    r"(?i)(?<!-)-{4,}BEGIN [A-Z ]*PRIVATE KEY-{4,}.*", re.DOTALL
 )
 
 _REDACTED = "<redacted>"
@@ -318,6 +340,13 @@ REDACTION_MIN_WORD_COUNT_FOR_RATIO = 20
 #: shape — is treated as an over-broad rule rather than working as
 #: intended.
 REDACTION_MIN_SURVIVING_FRACTION = 0.90
+#: K6: a short field's total-loss trigger fires once ``removed`` exceeds
+#: this many plain words, regardless of rule attribution — a bare
+#: credential (1-2 words at most) never crosses it, but an anchored
+#: rule's match swallowing a dozen words of real prose alongside it
+#: does. Applies to both masking and redaction (see
+#: :func:`_check_text_loss`).
+SHORT_FIELD_ABSOLUTE_REMOVED_THRESHOLD = 5
 
 
 def _strip_replacement_tokens(text: str) -> str:
@@ -366,6 +395,17 @@ def _check_text_loss(
     dilution case the trigger exists for (many small fields, each
     losing a fraction of *several* words) is instead caught by the
     whole-payload aggregate check this function is also used for.
+
+    K6: attribution (``abort_on_short_field_total_loss=False``) excuses
+    a field with roughly no real content, not one with a dozen words
+    that happened to sit next to a credential-shaped rule's match — a
+    PEM banner immediately followed by a sentence of ordinary prose
+    still gets fully redacted as one PEM match, and attribution alone
+    would excuse that as "legitimately nothing but a credential" when
+    it plainly isn't. The trigger fires whenever ``removed`` exceeds
+    :data:`SHORT_FIELD_ABSOLUTE_REMOVED_THRESHOLD`, regardless of
+    attribution — only a field small enough to stay under that count is
+    ever presumed a bare credential.
     """
     floor = len(_PLAIN_WORD.findall(original))
     words = _PLAIN_WORD.findall(_strip_replacement_tokens(original))
@@ -376,20 +416,23 @@ def _check_text_loss(
     removed = total - len(surviving)
     something_changed = processed != original
     if floor < min_word_count:
-        # For redaction (J3), this only ever fires today if a future
-        # rule redacts text without being one of the named, anchored
-        # ones in _redact_with_rules — every current rule is anchored,
-        # so this branch is presently unreachable through the real
-        # pipeline. Keep it: it is the backstop for exactly that future
-        # case, not dead code (see check_redaction's own docstring and
+        # For redaction (J3), the attribution-only half of this
+        # condition only ever fires today if a future rule redacts text
+        # without being one of the named, anchored ones in
+        # _redact_with_rules — every current rule is anchored, so that
+        # half is presently unreachable through the real pipeline. Keep
+        # it: it is the backstop for exactly that future case, not dead
+        # code (see check_redaction's own docstring and
         # test_check_redaction_short_field_total_loss_aborts_when_not_attributable).
-        if (
-            abort_on_short_field_total_loss
-            and total > 1
-            and removed == total
-            and something_changed
-        ):
-            raise error_cls(removed, total, min_surviving_fraction)
+        # The absolute-threshold half (K6) is reachable today: it is
+        # what catches a PEM (or any anchored rule) match that swallows
+        # more than a few real words alongside a genuine credential.
+        if total > 1 and removed == total and something_changed:
+            if (
+                abort_on_short_field_total_loss
+                or removed > SHORT_FIELD_ABSOLUTE_REMOVED_THRESHOLD
+            ):
+                raise error_cls(removed, total, min_surviving_fraction)
         return
     if len(surviving) < min_surviving_fraction * total:
         raise error_cls(removed, total, min_surviving_fraction)
@@ -780,6 +823,7 @@ def redaction_version() -> str:
             "secret_pem_unterminated": SECRET_PEM_UNTERMINATED.pattern,
             "redaction_min_surviving_fraction": REDACTION_MIN_SURVIVING_FRACTION,
             "redaction_min_word_count_for_ratio": REDACTION_MIN_WORD_COUNT_FOR_RATIO,
+            "short_field_absolute_removed_threshold": SHORT_FIELD_ABSOLUTE_REMOVED_THRESHOLD,
             "redact_source": inspect.getsource(redact),
             "redact_with_rules_source": inspect.getsource(_redact_with_rules),
             "redact_assignment_source": inspect.getsource(_redact_assignment),
@@ -799,6 +843,7 @@ def mask_version(label_rule: LabelExclusionRule | None = None) -> str:
             "id_token": ID_TOKEN.pattern,
             "min_surviving_word_fraction": MASK_MIN_SURVIVING_WORD_FRACTION,
             "min_word_count_for_ratio": MASK_MIN_WORD_COUNT_FOR_RATIO,
+            "short_field_absolute_removed_threshold": SHORT_FIELD_ABSOLUTE_REMOVED_THRESHOLD,
             "label_fields": list(rule.fields),
             "label_excluded_prefixes": list(rule.excluded_prefixes),
             "label_mode": rule.mode,
