@@ -32,7 +32,7 @@ import {
   type ResolvedContext,
 } from "../domain/readiness.ts";
 import { EDGE_KINDS, wouldCreateCycle, type EdgeKind } from "../domain/edge.ts";
-import { DEFAULT_CLAIM_TTL_MS, isLiveClaim, sameHolder, type IssueClaim, type WorkspaceIdentity ,
+import { DEFAULT_CLAIM_TTL_MS, isLiveClaim, sameHolder, type IssueClaim,
 } from "../domain/claim.ts";
 import { mutateOnce, nextInNamespace, withTransaction } from "../store/transactions.ts";
 
