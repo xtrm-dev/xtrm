@@ -2,6 +2,34 @@
 
 All notable changes to the `xtrm-research` package.
 
+## [0.4.0] - 2026-09-17
+
+### Added — mandatory pre-send guard stage (XTRM-428)
+- `guards.py`: the package's only remote-send seam, `guarded_send`,
+  enforced by a structural test that scans every module in the package
+  for a function taking a `send` parameter or importing a network client
+  library. Nothing else in `xtrm_research` may perform or expose a remote
+  call.
+- Guards: credential redaction on parsed string fields (`redact`,
+  `deep_mask` — reproduces the MMD-585 defect fix: redaction never runs on
+  serialized JSON, which previously broke escape sequences); known-id
+  masking with an abort check (`mask`, `check_mask`) that reproduces and
+  catches the 2026-09-17 over-broad-regex defect (an id-shaped regex that
+  matched ordinary hyphenated words); configurable label-leak exclusion
+  (`LabelExclusionRule`, strip or reject).
+- The guard stage fails closed: any exception raised inside it — expected
+  or not — aborts the send and is reraised as `GuardFailure`, carrying
+  only the failing guard's name and non-secret counts.
+- `send_through_run`: runner integration that records a `guard_pass` or
+  `guard_failure` event and marks the run `invalid` on failure, through
+  the existing `RunHandle` API (no new write path around its lock).
+- `guard_versions`: guard versions are content hashes of the active rule
+  sets (never hand-set strings), for `manifest.guards` and every guarded
+  execution event.
+- `cache_key`: folds guard rule versions into a request's cache key, so a
+  changed redaction or mask rule can never be served from a
+  differently-guarded cached entry. Consumed by XTRM-432.
+
 ## [0.3.0] - 2026-09-17
 
 ### Changed — review fixes: settle race, torn-tail correctness, schema hardening (XTRM-426)

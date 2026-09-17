@@ -23,6 +23,45 @@ standard runtime, Specialists runtime, Pi, or xtrm-app.
   instead. Every write re-validates `manifest.json` against the
   `content_hash` recorded in `status.json` at start, so an out-of-band edit
   to `manifest.json` is caught rather than silently trusted.
+- **No state reaches a remote model unguarded.** `guards.guarded_send` is
+  the package's only remote-send seam; a structural test enforces that no
+  other module performs or exposes a network call. Every payload is
+  redacted, masked and label-stripped on parsed values before it is
+  handed to the injected `send` callable; a guard failure raises before
+  `send` is ever called. Guard rule versions are content hashes of the
+  active rule sets, recorded in `manifest.guards` and on every
+  `guard_pass`/`guard_failure` event, and folded into `guards.cache_key`
+  so a changed rule can never be served from a stale cache entry.
+  `cache_key` hashes the **pre-guard** payload plus the guard versions
+  and `known_ids` — never the guarded/masked output — so a cache lookup
+  can happen before the guard stage runs, and two requests that differ
+  only in `known_ids` never collide even if they'd guard to identical
+  text today. Known limits, both accepted rather than chased with a
+  wider rule:
+  - The assignment-redaction rule is name-anchored, in two tiers. A
+    **strong** keyword (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`,
+    `CRED`) matches a name that is all-lowercase, all-uppercase, or
+    compound (`password`, `TOKEN`, `AWS_SECRET_KEY`) — never sentence
+    case (`Password`, `Token:`), since a configuration key is written
+    in one of the first three shapes and a prose heading is sentence
+    case. A **weak** keyword (`ACCOUNT`, `ACCESS`, `AUTH`, `PRIVATE`,
+    `SIGNATURE`, `SALT`, `PASSPHRASE`, `SESSION`) matches only in a
+    compound name — `R2_ACCOUNT` and `AWS_ACCESS_KEY`, never a bare
+    heading like `Access: the team needs access to staging`, which an
+    unqualified weak-keyword list once redacted wholesale. Accepted
+    cost of the capitalization rule: a secret assigned to a
+    sentence-case name in prose (`Password: hunter2`) is caught only if
+    its value itself matches a known format — the same trade as a
+    credential assigned to a name carrying none of these keywords at
+    all, which is also caught only if the value itself matches a known
+    format (a prefixed token, a hex digest, a PEM block, a URL
+    credential). An earlier name-agnostic rule covered that second gap
+    but redacted ordinary URLs, model ids and version strings instead;
+    it was deleted rather than tuned further.
+  - An unquoted, multi-word secret assigned in prose (`key: my secret
+    phrase`) is not caught: only a quoted value may contain whitespace.
+    An earlier, unquoted acceptance let a matching field name treat the
+    rest of a prose sentence as its value.
 - **Execution is separate from evaluation.** A run captures what happened;
   an assessment set captures what a given evaluator concluded about it —
   new evaluators can assess old runs months later. An assessment set is
@@ -54,6 +93,10 @@ pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
 - `src/xtrm_research/assessments.py`, `annotations.py`, `lineage.py`,
   `views.py` — assessment sets, append-only annotations, lineage
   traversal, and derived metrics/compare views.
+- `src/xtrm_research/guards.py` — the mandatory pre-send guard stage:
+  credential redaction, known-identifier masking with an abort check,
+  label-leak exclusion, and the package's one remote-send seam,
+  `guarded_send`.
 - `src/xtrm_research/cli/` — the `xtrm-research` CLI.
 
 ## Run directory

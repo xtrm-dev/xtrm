@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from xtrm_research.guards import guard_versions
 from xtrm_research.manifest import build_intent, build_manifest
 
 FIXED_NOW = datetime(2026, 9, 17, 12, 0, 0, tzinfo=timezone.utc)
@@ -40,7 +41,7 @@ def make_manifest(
             "model_version": "v1",
         },
         code={"repo": "xtrm", "commit": "deadbeef", "dirty": False},
-        guards={"mask_version": "v1", "redaction_version": "v1"},
+        guards=guard_versions(),
         accounting={
             "price_table_version": "v1",
             "telemetry_schema_version": "v1",
