@@ -498,7 +498,12 @@ export function projectFlatIdentity(
 // run these rules, so historical rows stay readable and are reported rather
 // than silently rewritten (XTRM-412 disposition).
 //
-//   xtrmSessionId / sessionId   lowercase UUID — the XTRM session identity
+//   xtrmSessionId / sessionId   lowercase UUID or tmux session id ($N) —
+//                               the XTRM session identity. Both forms are
+//                               system-minted: older rows carry UUIDs, the
+//                               launcher surfaces the tmux #{session_id}
+//                               (core/cli/src/core/session-identity.ts).
+//                               Anything else is refused, never repaired.
 //   activationId                act:<8hex>-<3hex>  (documented canonical shape)
 //   attemptId                   att:<8hex>-<3hex>:<n> (documented canonical shape)
 //   participantId / runId       bounded free-form label
@@ -515,7 +520,7 @@ export function projectFlatIdentity(
 // already carries the same value as a provider `host.sessionId` (the Pi and
 // Claude adapters forward their provider session both ways). Then it is the
 // provider label, and only the identifier rule applies.
-export const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const SESSION_ID_PATTERN = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\$\d+)$/;
 export const ACTIVATION_ID_PATTERN = /^act:[0-9a-f]{8}-[0-9a-f]{3}$/;
 export const ATTEMPT_ID_PATTERN = /^att:[0-9a-f]{8}-[0-9a-f]{3}:[0-9]+$/;
 // Shell-safe identifier: a leading alphanumeric then label characters only.
@@ -537,7 +542,7 @@ export class IdentityFormatError extends Error {
 function canonicalSession(value: string, field: string): string {
   const v = value.trim().toLowerCase();
   if (!SESSION_ID_PATTERN.test(v)) {
-    throw new IdentityFormatError(field, value, "session identity must be a canonical lowercase UUID");
+    throw new IdentityFormatError(field, value, "session identity must be a canonical lowercase UUID or tmux session id ($N)");
   }
   return v;
 }
