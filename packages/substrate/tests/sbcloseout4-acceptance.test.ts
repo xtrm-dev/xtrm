@@ -56,6 +56,27 @@ function attestInRepo(env: RepoEnv, repo: string, ref: string): void {
   assert.equal(r.code, 0, `attest ${ref}: ${r.stderr || r.stdout}`);
 }
 
+// XTRM-448: this suite asserts hermetic counts, so ambient identity env exported
+// by the operator shell must not leak in (XTRM_SESSION_NAME made it fail 741/1;
+// scrubbed it passes). Same save/delete/restore pattern as tests/journal.test.ts.
+const EPHEMERAL_IDENTITY_ENV = [
+  "XTRM_SESSION_ID",
+  "XTRM_SESSION_NAME",
+  "SUBSTRATE_HOLDER",
+  "SUBSTRATE_ACTIVATION_ID",
+] as const;
+const savedIdentityEnv = new Map<string, string | undefined>();
+for (const key of EPHEMERAL_IDENTITY_ENV) {
+  savedIdentityEnv.set(key, process.env[key]);
+  delete process.env[key];
+}
+after(() => {
+  for (const [key, value] of savedIdentityEnv) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // §§84-91: repository authority (each block owns its env for hermetic counts)
 // ---------------------------------------------------------------------------
