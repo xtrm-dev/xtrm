@@ -11,6 +11,7 @@ from xtrm_research.hashing import compute_content_hash
 from xtrm_research.schemas import SchemaValidationError, validate
 
 from .conftest import REGISTRY_ROOT
+from .helpers import make_manifest
 
 
 def test_registry_fixtures_load_and_hash(registry):
@@ -35,27 +36,60 @@ def test_valid_definition_fixtures(kind, filename):
     load_definition(kind, REGISTRY_ROOT / kind / filename)
 
 
-def test_workload_missing_legend_entry_rejected(raw_definition):
+def test_workload_missing_legend_entry_rejected_via_public_validate(raw_definition):
     workload = raw_definition("workload", "dup-detect-v1.json")
     del workload["legend"]["accuracy"]
     workload["content_hash"] = compute_content_hash(workload)
     with pytest.raises(SchemaValidationError, match="legend"):
-        validate_and_check_legend(workload)
+        validate("workload", workload)
 
 
-def test_experiment_missing_legend_entry_rejected(raw_definition):
+def test_experiment_missing_legend_entry_rejected_via_public_validate(raw_definition):
     experiment = raw_definition("experiment", "dup-detect-baseline-v1.json")
     del experiment["legend"]["baseline"]
     experiment["content_hash"] = compute_content_hash(experiment)
     with pytest.raises(SchemaValidationError, match="legend"):
-        validate_and_check_legend(experiment, kind="experiment")
+        validate("experiment", experiment)
 
 
-def test_experiment_chart_spec_url_dataset_rejected(raw_definition):
+def test_experiment_schema_only_empty_legend_still_rejected(raw_definition):
+    # load_definition AND the bare validate() path must both enforce this.
     experiment = raw_definition("experiment", "dup-detect-baseline-v1.json")
-    experiment["chart_specs"][0]["datasets"] = ["https://example.com/data.csv"]
+    experiment["legend"] = {}
     experiment["content_hash"] = compute_content_hash(experiment)
     with pytest.raises(SchemaValidationError):
+        validate("experiment", experiment)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda e: e["chart_specs"][0].update(data={"url": "https://evil/x.csv"}),
+        lambda e: e["chart_specs"][0].update(
+            spec={"data": {"url": "https://evil/x.csv"}}
+        ),
+        lambda e: e["chart_specs"][0].__setitem__("datasets", ["//evil.com/x.csv"]),
+        lambda e: e["chart_specs"][0].__setitem__("datasets", ["data:text/csv,a,b"]),
+        lambda e: e["chart_specs"][0].__setitem__("datasets", ["https://x/y"]),
+    ],
+)
+def test_experiment_chart_spec_url_anywhere_rejected(raw_definition, mutate):
+    experiment = copy.deepcopy(
+        raw_definition("experiment", "dup-detect-baseline-v1.json")
+    )
+    mutate(experiment)
+    experiment["content_hash"] = compute_content_hash(experiment)
+    with pytest.raises(SchemaValidationError):
+        validate("experiment", experiment)
+
+
+def test_experiment_chart_spec_undeclared_dataset_rejected(raw_definition):
+    experiment = copy.deepcopy(
+        raw_definition("experiment", "dup-detect-baseline-v1.json")
+    )
+    experiment["chart_specs"][0]["datasets"] = ["not-a-named-dataset"]
+    experiment["content_hash"] = compute_content_hash(experiment)
+    with pytest.raises(SchemaValidationError, match="named_datasets"):
         validate("experiment", experiment)
 
 
@@ -89,7 +123,7 @@ def test_question_spec_choice_requires_options():
         "id": "q",
         "version": "v1",
         "type": "choice",
-        "instructions": "pick one",
+        "instructions": "pick",
         "criteria": {},
     }
     payload["content_hash"] = compute_content_hash(payload)
@@ -97,24 +131,52 @@ def test_question_spec_choice_requires_options():
         validate("question_spec", payload)
 
 
-def validate_and_check_legend(payload, kind="workload"):
-    # Reuses the private legend-completeness check exercised by load_definition.
-    from xtrm_research.definitions import _validate_legend_completeness
+def test_question_spec_choice_requires_at_least_one_option():
+    payload = {
+        "id": "q",
+        "version": "1",
+        "type": "choice",
+        "instructions": "pick",
+        "criteria": {},
+        "options": [],
+    }
+    payload["content_hash"] = compute_content_hash(payload)
+    with pytest.raises(SchemaValidationError):
+        validate("question_spec", payload)
 
-    validate(kind, payload)
-    _validate_legend_completeness(kind, payload)
+
+def test_question_spec_score_requires_nonempty_legend():
+    payload = {
+        "id": "q",
+        "version": "1",
+        "type": "score",
+        "instructions": "rate",
+        "criteria": {},
+        "legend": {},
+    }
+    payload["content_hash"] = compute_content_hash(payload)
+    with pytest.raises(SchemaValidationError):
+        validate("question_spec", payload)
+
+
+def test_question_spec_noul_criteria_optional():
+    payload = {"id": "q", "version": "1", "type": "noul", "instructions": "yes?"}
+    payload["content_hash"] = compute_content_hash(payload)
+    validate("question_spec", payload)  # must not raise
 
 
 def test_manifest_valid_fixture_passes(registry):
-    from .helpers import make_manifest
-
     manifest = make_manifest(registry)
     validate("manifest", manifest)
 
 
-def test_manifest_missing_run_id_rejected(registry):
-    from .helpers import make_manifest
+def test_manifest_has_no_status_field(registry):
+    # status/last_heartbeat moved to the separate, mutable status.json (R1).
+    manifest = make_manifest(registry)
+    assert "status" not in manifest
 
+
+def test_manifest_missing_run_id_rejected(registry):
     manifest = make_manifest(registry)
     del manifest["run_id"]
     with pytest.raises(SchemaValidationError):
@@ -122,12 +184,38 @@ def test_manifest_missing_run_id_rejected(registry):
 
 
 def test_manifest_bad_trigger_rejected(registry):
-    from .helpers import make_manifest
-
     manifest = make_manifest(registry)
     manifest["intent"]["trigger"] = "not-a-trigger"
     with pytest.raises(SchemaValidationError):
         validate("manifest", manifest)
+
+
+def test_manifest_naive_timestamp_rejected(registry):
+    manifest = make_manifest(registry)
+    manifest["created_at"] = "2026-09-17T12:00:00"  # no tz offset
+    with pytest.raises(SchemaValidationError):
+        validate("manifest", manifest)
+
+
+def test_manifest_garbage_timestamp_rejected(registry):
+    manifest = make_manifest(registry)
+    manifest["created_at"] = "not a date"
+    with pytest.raises(SchemaValidationError):
+        validate("manifest", manifest)
+
+
+def test_status_valid_and_naive_heartbeat_rejected():
+    valid = {
+        "schema_version": "xtrm-research-status/v1",
+        "run_id": "run-0001",
+        "state": "started",
+        "last_heartbeat": "2026-09-17T12:00:00+00:00",
+        "manifest_content_hash": "sha256:" + "0" * 64,
+    }
+    validate("status", valid)
+    naive = {**valid, "last_heartbeat": "2026-09-17T12:00:00"}
+    with pytest.raises(SchemaValidationError):
+        validate("status", naive)
 
 
 def test_sample_valid_and_invalid():
@@ -146,6 +234,20 @@ def test_sample_valid_and_invalid():
         validate("sample", invalid)
 
 
+def test_sample_usage_bad_source_rejected():
+    payload = {
+        "schema_version": "xtrm-research-sample/v1",
+        "sample_id": "s-1",
+        "index": 0,
+        "input": {},
+        "status": "ok",
+        "created_at": "2026-09-17T12:00:00+00:00",
+        "usage": {"source": "nope"},
+    }
+    with pytest.raises(SchemaValidationError):
+        validate("sample", payload)
+
+
 def test_event_valid_and_invalid():
     valid = {
         "schema_version": "xtrm-research-event/v1",
@@ -160,8 +262,49 @@ def test_event_valid_and_invalid():
         validate("event", invalid)
 
 
-def test_assessment_set_valid_and_invalid():
-    valid = {
+def _event(usage):
+    return {
+        "schema_version": "xtrm-research-event/v1",
+        "seq": 0,
+        "ts": "2026-09-17T12:00:00+00:00",
+        "kind": "x",
+        "usage": usage,
+    }
+
+
+def test_usage_null_value_requires_null_reason():
+    with pytest.raises(SchemaValidationError):
+        validate(
+            "event",
+            _event({"source": "provider_api", "gen_ai.usage.input_tokens": None}),
+        )
+    validate(
+        "event",
+        _event(
+            {
+                "source": "provider_api",
+                "gen_ai.usage.input_tokens": None,
+                "null_reason": "provider omitted usage on this response",
+            }
+        ),
+    )
+
+
+def test_usage_requires_source():
+    with pytest.raises(SchemaValidationError):
+        validate("event", _event({"gen_ai.usage.input_tokens": 3}))
+
+
+def test_usage_rejects_unknown_field_names():
+    with pytest.raises(SchemaValidationError):
+        validate("event", _event({"source": "unknown", "input_tokens": "lots"}))
+
+
+def _assessment_set(answer, metric_extra=None):
+    metric = {"value": 1.0, "se": None, "ci95": None, "n": 1, "method": "exact_match"}
+    if metric_extra:
+        metric.update(metric_extra)
+    return {
         "schema_version": "xtrm-research-assessment-set/v1",
         "assessment_set_id": "as-1",
         "evaluator": {
@@ -171,12 +314,51 @@ def test_assessment_set_valid_and_invalid():
         },
         "input_run_id": "run-0001",
         "timestamp": "2026-09-17T12:00:00+00:00",
-        "assessments": [{"sample_id": "s-1", "answer": {"match": True}}],
-        "metrics": {"accuracy": {"value": 1.0, "n": 1, "method": "exact_match"}},
+        "assessments": [{"sample_id": "s-1", "answer": answer}],
+        "metrics": {"accuracy": metric},
     }
-    validate("assessment_set", valid)
-    invalid = dict(valid)
-    invalid["metrics"] = {"accuracy": {"value": 1.0}}  # missing n, method
+
+
+def test_assessment_set_noul_answer_valid():
+    validate("assessment_set", _assessment_set({"noul": 0.9}))
+
+
+def test_assessment_set_choice_answer_valid():
+    validate(
+        "assessment_set",
+        _assessment_set(
+            {"choice": "a", "probabilities": {"a": 0.9, "b": 0.1}, "confidence": 0.8}
+        ),
+    )
+
+
+def test_assessment_set_score_answer_valid():
+    validate(
+        "assessment_set",
+        _assessment_set(
+            {
+                "score": 2.5,
+                "legend": {"1": "low", "2": "mid"},
+                "probabilities": {"2": 0.6},
+                "confidence": 0.7,
+            }
+        ),
+    )
+
+
+def test_assessment_set_noul_with_confidence_rejected():
+    with pytest.raises(SchemaValidationError):
+        validate("assessment_set", _assessment_set({"noul": 0.9, "confidence": 0.5}))
+
+
+def test_assessment_set_nonsystem_one_answer_rejected():
+    with pytest.raises(SchemaValidationError):
+        validate("assessment_set", _assessment_set({"match": True}))
+
+
+def test_assessment_set_metric_requires_se_and_ci95_fields():
+    invalid = _assessment_set({"noul": 1.0})
+    del invalid["metrics"]["accuracy"]["se"]
     with pytest.raises(SchemaValidationError):
         validate("assessment_set", invalid)
 

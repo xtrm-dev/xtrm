@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from xtrm_research.lineage import lineage_tree
 from xtrm_research.runner import start_run
 
@@ -27,3 +29,8 @@ def test_lineage_tree_has_retry_and_fork_children(registry, runs_root):
     tree = lineage_tree(runs_root, "run-baseline")
     child_relations = {(c["relation"], c["run_id"]) for c in tree["children"]}
     assert child_relations == {("retry_of", "run-retry"), ("forked_from", "run-fork")}
+
+
+def test_lineage_tree_unknown_run_raises(runs_root):
+    with pytest.raises(ValueError, match="no such run"):
+        lineage_tree(runs_root, "nope")

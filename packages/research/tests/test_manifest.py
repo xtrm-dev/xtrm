@@ -17,25 +17,6 @@ def test_intent_requires_trigger():
         build_intent(purpose="check", trigger="")
 
 
-def test_manifest_records_resolved_and_unresolved_aliases(registry):
-    manifest = make_manifest(registry)
-    resolved = manifest["aliases"]["resolved"]
-    unresolved = manifest["aliases"]["unresolved"]
-    assert resolved == [{"input": "jev-latest", "resolved": "jev-2026-09-01"}]
-    assert unresolved == [
-        {"input": "main", "reason": "no resolver entry for alias 'main'"}
-    ]
-
-
-def test_manifest_is_fully_version_resolved(registry):
-    manifest = make_manifest(registry)
-    for ref_name in ("experiment", "workload", "dataset", "variant"):
-        ref = manifest[ref_name]
-        assert ref["version"] and ref["content_hash"].startswith("sha256:")
-    for evaluator_ref in manifest["evaluators"]:
-        assert evaluator_ref["content_hash"].startswith("sha256:")
-
-
 def test_build_manifest_refuses_intent_missing_purpose(registry):
     with pytest.raises(ValueError, match="purpose"):
         make_manifest(
@@ -62,3 +43,51 @@ def test_build_manifest_refuses_intent_missing_trigger(registry):
                 "tags": [],
             },
         )
+
+
+def test_manifest_is_fully_version_resolved(registry):
+    manifest = make_manifest(registry)
+    for ref_name in ("experiment", "workload", "dataset", "variant"):
+        ref = manifest[ref_name]
+        assert ref["version"] and ref["content_hash"].startswith("sha256:")
+    for evaluator_ref in manifest["evaluators"]:
+        assert evaluator_ref["content_hash"].startswith("sha256:")
+
+
+def test_backend_model_alias_resolved_and_recorded(registry):
+    manifest = make_manifest(
+        registry,
+        backend={
+            "provider": "typesafe",
+            "model": "jev-latest",
+            "model_version": "latest",
+        },
+        alias_resolver={"jev-latest": "jev-2026-09-01"},
+    )
+    assert manifest["backend"]["model"] == "jev-2026-09-01"
+    assert manifest["aliases"]["resolved"] == [
+        {"input": "jev-latest", "resolved": "jev-2026-09-01"}
+    ]
+    assert manifest["aliases"]["unresolved"] == []
+
+
+def test_backend_model_alias_unresolved_recorded_with_reason(registry):
+    manifest = make_manifest(
+        registry,
+        backend={"provider": "typesafe", "model": "main", "model_version": "latest"},
+        alias_resolver={},
+    )
+    assert manifest["backend"]["model"] == "main"
+    assert manifest["aliases"]["resolved"] == []
+    unresolved = manifest["aliases"]["unresolved"]
+    assert unresolved == [
+        {"input": "main", "reason": "no resolver entry for alias 'main'"}
+    ]
+
+
+def test_backend_model_pinned_id_leaves_no_alias_record(registry):
+    manifest = make_manifest(
+        registry
+    )  # default backend.model="always-no-1", not alias-shaped
+    assert manifest["aliases"]["resolved"] == []
+    assert manifest["aliases"]["unresolved"] == []

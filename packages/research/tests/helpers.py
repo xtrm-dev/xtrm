@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from xtrm_research.aliases import ResolvedAlias, UnresolvedAlias
 from xtrm_research.manifest import build_intent, build_manifest
 
 FIXED_NOW = datetime(2026, 9, 17, 12, 0, 0, tzinfo=timezone.utc)
@@ -37,7 +36,7 @@ def make_manifest(
         question_specs=[question_spec],
         backend={
             "provider": "deterministic",
-            "model": "always-no",
+            "model": "always-no-1",
             "model_version": "v1",
         },
         code={"repo": "xtrm", "commit": "deadbeef", "dirty": False},
@@ -50,10 +49,6 @@ def make_manifest(
         environment={"platform": "test"},
         seed=1,
         intent=intent,
-        resolved_aliases=[ResolvedAlias(input="jev-latest", resolved="jev-2026-09-01")],
-        unresolved_aliases=[
-            UnresolvedAlias(input="main", reason="no resolver entry for alias 'main'")
-        ],
         now=FIXED_NOW,
     )
     kwargs.update(overrides)
