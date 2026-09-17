@@ -55,8 +55,8 @@ describe("Console v2 shell", () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
     fireEvent.click(await screen.findByText("XTRM-300.1"));
     const el = await screen.findByTestId("inspector-drawer");
-    // In-flow column (push, no overlay) so main content is never clipped under the inspector.
-    expect(el.dataset.variant).toBe("column");
+    // Default open state floats over the main column; only PINNED is an in-flow column.
+    expect(el.dataset.variant).toBe("overlay");
     const dock = screen.getByTestId("inspector-dock");
     expect(dock.dataset.state).toBe("contextual");
     expect(dock.contains(el)).toBe(true);
@@ -80,7 +80,7 @@ describe("Console v2 shell", () => {
     expect(screen.getByTestId("sidebar-reopen-rail")).toBeTruthy();
 
     fireEvent.click(within(drawer()!).getByRole("button", { name: "Restore drawer" }));
-    await waitFor(() => expect(drawer()?.dataset.variant).toBe("column"));
+    await waitFor(() => expect(drawer()?.dataset.variant).toBe("overlay"));
     // Restore keeps the push (inspector still open); only close brings the sidebar back.
     expect(screen.getByTestId("sidebar-reopen-rail")).toBeTruthy();
 
