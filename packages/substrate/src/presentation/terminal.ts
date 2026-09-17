@@ -494,3 +494,79 @@ export function feedbackForError(command: string, message: string): OperationFee
   else if (/claim|holder|activation/i.test(message) && command.startsWith("issue.")) hint = "sb issue show <ref>";
   return errorFeedback("operation_failed", `${command || "sb"} failed`, message, hint, false);
 }
+
+// ── Execution identity in human reads (XTRM-410, XTRM-411) ────────────────────
+// Identity is projected verbatim when the row carries it, and rendered as an
+// explicit absence when the row carries none: never an empty string that a
+// reader could mistake for a capture gap. Styling is presentation only, so
+// `--plain` / `--no-color` change paint, never content.
+
+export const IDENTITY_ABSENT = "(unattributed)";
+
+export interface ExecutionIdentityView {
+  participantId?: string | null;
+  activationId?: string | null;
+  sessionId?: string | null;
+  runId?: string | null;
+  attemptId?: string | null;
+}
+
+export function renderExecutionIdentity(identity: ExecutionIdentityView, opts: TerminalStyleOptions): string {
+  const parts: string[] = [];
+  if (identity.participantId) parts.push(identity.participantId);
+  if (identity.activationId) parts.push(identity.activationId);
+  if (identity.attemptId) parts.push(identity.attemptId);
+  if (identity.sessionId) parts.push(`sess ${identity.sessionId}`);
+  if (identity.runId) parts.push(`run ${identity.runId}`);
+  return parts.length > 0 ? dim(parts.join(" · "), opts.color) : dim(IDENTITY_ABSENT, opts.color);
+}
+
+// Bounded human provenance trace (XTRM-411): each binding/receipt/checkpoint
+// names its identifying fields instead of a bare count, an empty spine renders
+// an explicit none state, and a long spine is truncated so the block stays
+// bounded. `--json` is the unbounded machine surface and is untouched.
+export const TRACE_MAX_ITEMS = 10;
+
+export interface ProvenanceTraceView {
+  humanRef: string;
+  revision: number;
+  contractHash: string;
+  lifecycleState: string;
+  bindings: ExecutionIdentityView[];
+  receipts: Array<{ id?: string; commitSha?: string | null; executionBindingId?: string | null }>;
+  checkpoints: Array<{ entryId?: string; sequence?: number; kind?: string }>;
+  commits: string[];
+  prs: Array<{ value: string }>;
+}
+
+function traceSection<T>(label: string, items: T[], renderItem: (item: T) => string, opts: TerminalStyleOptions): string[] {
+  if (items.length === 0) return [`${label}: ${dim("(none)", opts.color)}`];
+  const lines = [`${label}: ${items.length}`];
+  for (const item of items.slice(0, TRACE_MAX_ITEMS)) lines.push(`  ${renderItem(item)}`);
+  if (items.length > TRACE_MAX_ITEMS) lines.push(dim(`  …(${items.length - TRACE_MAX_ITEMS} more)`, opts.color));
+  return lines;
+}
+
+export function renderProvenanceTrace(trace: ProvenanceTraceView, opts: TerminalStyleOptions): string {
+  const lines = [`${trace.humanRef} rev${trace.revision} ${trace.contractHash.slice(0, 12)} [${trace.lifecycleState}]`];
+  lines.push(...traceSection("bindings", trace.bindings, (b) => renderExecutionIdentity(b, opts), opts));
+  lines.push(
+    ...traceSection(
+      "receipts",
+      trace.receipts,
+      (r) => [r.id, r.commitSha ? `commit ${r.commitSha.slice(0, 12)}` : null, r.executionBindingId ? `binding ${r.executionBindingId}` : null].filter(Boolean).join(" · "),
+      opts,
+    ),
+  );
+  lines.push(
+    ...traceSection(
+      "checkpoints",
+      trace.checkpoints,
+      (c) => `${c.kind ?? "checkpoint"} ${c.entryId ?? "?"}${c.sequence !== undefined ? ` seq${c.sequence}` : ""}`,
+      opts,
+    ),
+  );
+  lines.push(...traceSection("commits", trace.commits, (c) => c, opts));
+  lines.push(...traceSection("prs", trace.prs, (p) => p.value, opts));
+  return lines.join("\n") + "\n";
+}

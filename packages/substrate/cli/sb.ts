@@ -38,6 +38,7 @@ import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
+import { renderProvenanceTrace } from "../src/presentation/terminal.ts";
 import { assertContractShape, isValidScrutiny, SCRUTINY_LEVELS } from "../src/domain/contract.ts";
 import { enrichExecutionContext } from "../src/domain/execution-context.ts";
 import type { JournalEntry, JournalKind, ResultPayload } from "../src/domain/journal.ts";
@@ -614,9 +615,11 @@ the contract to narrate history.`,
 
 reads the full lineage spine: execution bindings with their pinned
 revisions, receipts with artifacts, attestation currency, claims and the
-closure view. Read-model only: nothing is created, and the revision never
-moves. Methodology: trace to verify before dispatch and to audit after
-close; the spine shows evidence, the Journal tells the story.`,
+closure view. Human output names each binding's participant, activation and
+session and truncates a long spine; --json carries the untruncated spine.
+Read-model only: nothing is created, and the revision never moves.
+Methodology: trace to verify before dispatch and to audit after close; the
+spine shows evidence, the Journal tells the story.`,
   "provenance.commit": `usage: sb provenance commit <40-char-sha>`,
   "provenance.receipt": `usage: sb provenance receipt <id>`,
   "provenance.allocate": `usage: sb provenance allocate <binding-id|ref> [--checkpoint <entry-id>] [--project <id>]
@@ -1772,13 +1775,7 @@ function runProvenance(
       const resolved = svc.resolveRef(ref);
       const t = provenance.trace(resolved.id);
       if (ctx.json) return emit(ctx, command, t);
-      const lines = [
-        `${t.humanRef} rev${t.revision} ${t.contractHash.slice(0, 12)} [${t.lifecycleState}]`,
-        `bindings: ${t.bindings.length} receipts: ${t.receipts.length} checkpoints: ${t.checkpoints.length}`,
-        `commits: ${t.commits.length > 0 ? t.commits.join(",") : "(none)"}`,
-        `prs: ${t.prs.length > 0 ? t.prs.map((p) => p.value).join(",") : "(none)"}`,
-      ];
-      return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
+      return { code: 0, stdout: renderProvenanceTrace(t, { color: false }), stderr: "" };
     }
     case "commit": {
       const sha = rest[0] ?? (() => { throw new Error("a 40-char commit SHA is required"); })();

@@ -410,3 +410,69 @@ describe("XTRM-415/416: receipt commit and checkpoint links", () => {
     assert.equal(untracked.stderr, "");
   });
 });
+
+describe("XTRM-411: provenance trace human view names the bound actors", () => {
+  const SESSION = "01a0ac95-8370-74c5-9081-4490653e7e92";
+  const ACTOR = { participantId: "specialist::explorer", activationId: "act:2d62e798-81d" };
+
+  // Ready and attested, optionally held by the actor the binding names.
+  function tracedIssue(s: ReturnType<typeof scratch>, claimAs?: { holder: string; activationId: string }) {
+    const issue = s.svc.createIssue({
+      projectId: "prj_xtrm", title: "traced", kind: "task",
+      contract: contract({ problem: "traced problem", success: "traced success" }),
+      scrutiny: "LOW", authoredBy: "tester",
+    });
+    s.svc.attestReadiness(issue.id, { outcome: "ready", policy: "default", attestedBy: "tester" });
+    if (claimAs) s.svc.claimIssue(issue.id, claimAs.holder, { activationId: claimAs.activationId });
+    return issue;
+  }
+
+  it("names participant/activation/session per binding and keeps --json unchanged", () => {
+    const s = scratch();
+    try {
+      const issue = tracedIssue(s, { holder: ACTOR.participantId, activationId: ACTOR.activationId });
+      const prov = new ProvenanceService(s.db, s.svc);
+      prov.dispatch(issue.id, {
+        workspace: s.dir,
+        participantId: ACTOR.participantId,
+        activationId: ACTOR.activationId,
+        sessionId: SESSION,
+      });
+      const human = runCli(["--db", s.dbPath, "provenance", "trace", issue.humanRef]);
+      assert.equal(human.code, 0, human.stderr);
+      assert.match(human.stdout, /specialist::explorer/);
+      assert.match(human.stdout, /act:2d62e798-81d/);
+      assert.match(human.stdout, new RegExp(SESSION));
+      assert.match(human.stdout, /receipts: \(none\)/);
+      assert.match(human.stdout, /checkpoints: \(none\)/);
+
+      const json = cli(s.dbPath, ["provenance", "trace", issue.humanRef]) as { bindings: Array<{ participantId: string }> };
+      assert.equal(json.bindings[0]!.participantId, "specialist::explorer", "--json still carries the actors");
+    } finally {
+      try { s.db.close(); } catch { /* closed */ }
+      rmSync(s.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("renders an explicit empty spine and bounds a long one", () => {
+    const s = scratch();
+    try {
+      const issue = tracedIssue(s);
+      const human = runCli(["--db", s.dbPath, "provenance", "trace", issue.humanRef]);
+      assert.equal(human.code, 0, human.stderr);
+      assert.match(human.stdout, /bindings: \(none\)/);
+
+      const prov = new ProvenanceService(s.db, s.svc);
+      for (let i = 0; i < 12; i += 1) {
+        prov.dispatch(issue.id, { workspace: s.dir, participantId: `specialist::worker-${i}` });
+      }
+      const bounded = runCli(["--db", s.dbPath, "provenance", "trace", issue.humanRef]);
+      assert.match(bounded.stdout, /bindings: 12/);
+      assert.match(bounded.stdout, /more\)/, "a long spine is truncated");
+      assert.ok(bounded.stdout.split("\n").length < 20, "the human block stays bounded");
+    } finally {
+      try { s.db.close(); } catch { /* closed */ }
+      rmSync(s.dir, { recursive: true, force: true });
+    }
+  });
+});
