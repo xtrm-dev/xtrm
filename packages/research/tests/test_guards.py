@@ -53,6 +53,82 @@ PACKAGE_ROOT = Path(xtrm_research.__file__).parent
 TESTS_ROOT = Path(__file__).parent
 GUARDS_PATH = PACKAGE_ROOT / "guards.py"
 
+# ---- J4: the contract's real acceptance check — kept first in the file ---
+#
+# Five rounds of adding redaction rules produced two failure modes: rules
+# that corrupt ordinary state, and a per-field loss check that aborts on
+# ordinary state. Every earlier test in this file targeted one narrow
+# shape; neither of these two did, which is why they're first, not one
+# more case among many.
+
+#: A realistic board-text-shaped payload: ordinary URLs, ids and metrics
+#: this package (or a workload built on it) writes into its own state.
+#: None of it is credential-shaped by any rule in guards.py.
+ORDINARY_BOARD_CORPUS: dict[str, str] = {
+    "pr_link": "see https://github.com/jaggerxtrm/xtrm/pull/216",
+    "jira_link": "see https://mercuryintel.atlassian.net/browse/XTRM-99",
+    "model": "model: claude-opus-5-20260101",
+    "otel_semconv_ref": "otel_semconv_ref=gen_ai/v1.28",
+    "run_id": "run_id=jev-dupes-2026-09-17",
+    "ref": "ref=XTRM-428-guard-stage",
+    "path": "path=/home/user/file2.txt",
+    "version": "version=1.2.3-alpha.4",
+    "commit": "commit sha: a3f9c21",
+    "p99": "p99=250ms",
+}
+
+
+def test_ordinary_board_corpus_sends_byte_identical():
+    """J4: guarded_send must return this corpus unchanged, field for
+    field — the contract's real acceptance check for "does not corrupt
+    ordinary state", not a single narrow probe."""
+    backend = _RecordingBackend()
+    guarded_send(dict(ORDINARY_BOARD_CORPUS), backend)
+    assert backend.calls[0] == ORDINARY_BOARD_CORPUS
+
+
+def _credential_shape_corpus() -> dict[str, str]:
+    """The mirror of ORDINARY_BOARD_CORPUS: one field per recognized
+    credential shape, generated at call time so nothing here is a
+    hardcoded literal. Built lazily (a function, not a module-level
+    dict) since it depends on the fixture helpers defined below."""
+    return {
+        "akia": _fake_akia_key(),
+        "hex": _fake_hex_secret(),
+        "ghp": _fake_ghp_token(),
+        "github_pat": _fake_github_pat(),
+        "slack": _fake_slack_token(),
+        "stripe": _fake_stripe_key(),
+        "google": _fake_google_api_key(),
+        "npm": _fake_npm_token(),
+        "gitlab": _fake_gitlab_pat(),
+        "jwt": _fake_jwt(),
+        "url_cred": _fake_url_credential()[0],
+        "auth_header": _fake_auth_header(),
+        "pem": _fake_pem(),
+        "name_matched_assignment": f"password={secrets.token_hex(8)}",
+    }
+
+
+def test_credential_shape_corpus_is_fully_redacted():
+    """J4's mirror: every recognized credential shape, each embedded in
+    a short realistic sentence (the way a credential actually turns up
+    in board text — not fourteen bare secrets with nothing else, which
+    would itself look like an over-redacted payload to the aggregate
+    loss check), is redacted — the contract's real acceptance check for
+    "does catch every credential shape this package claims to catch"."""
+    corpus = _credential_shape_corpus()
+    payload = {
+        field: f"the deploy log recorded this value during rollout: {value}"
+        for field, value in corpus.items()
+    }
+    backend = _RecordingBackend()
+    guarded_send(payload, backend)
+    sent = json.dumps(backend.calls[0])
+    for field, value in corpus.items():
+        assert value not in sent, f"{field} leaked unredacted"
+
+
 # ---- synthetic credential fixtures (generated at run time, never hardcoded) --
 
 
@@ -552,17 +628,46 @@ def test_redact_masks_pem_block_markers_included():
         assert line not in redacted
 
 
-# ---- H8/H14: credential shapes the original patterns missed --------------
+# ---- H8/H14/J1: credential shapes the original patterns missed -----------
 
 
-def test_redact_catches_unrecognized_name_value_assignment():
-    """H8 regression (the MMD-585 shape): an opaque value assigned to a
-    name that matches none of the KEY/SECRET/TOKEN/... keywords is still
-    caught by the name-agnostic mixed-class heuristic."""
+def test_redact_catches_the_mmd_585_shape_by_extended_keyword():
+    """J1: the MMD-585 shape (R2_ACCOUNT=...) is caught because ACCOUNT
+    is now one of SECRET_ASSIGN's recognized keywords — not by a
+    name-agnostic heuristic, which J1 deleted after it redacted ordinary
+    URLs, model ids and version strings (round 5 probes)."""
     text = "R2_ACCOUNT=abc123def456"
     redacted = redact(text)
     assert "abc123def456" not in redacted
     assert "<redacted>" in redacted
+
+
+@pytest.mark.parametrize(
+    "keyword",
+    ["ACCESS", "AUTH", "PRIVATE", "SIGNATURE", "SALT", "PASSPHRASE", "SESSION"],
+)
+def test_redact_catches_each_new_j1_keyword(keyword):
+    text = f"{keyword.lower()}=abcdefgh12345678"
+    redacted = redact(text)
+    assert "abcdefgh12345678" not in redacted
+
+
+def test_redact_does_not_catch_a_credential_under_a_truly_unrecognized_name():
+    """J1's accepted residual gap, stated in SECRET_ASSIGN's own
+    docstring: a credential assigned to a name with no recognizable
+    keyword is not caught by the assignment rules. This is the
+    deliberate trade for not reintroducing a name-agnostic rule."""
+    text = "R2_INSTANCE=abc123def456opaque"
+    assert redact(text) == text
+
+
+def test_redact_assignment_rule_refuses_a_url_shaped_value():
+    """J1: an assignment-shaped rule must never swallow a URL — that's
+    SECRET_URL_CRED's job. A name that happens to match a keyword
+    (AUTH) with a URL value stays untouched by SECRET_ASSIGN; the URL
+    rule only fires when the URL itself carries credentials."""
+    text = "auth_endpoint=https://example.com/oauth/token"
+    assert redact(text) == text
 
 
 def test_redact_catches_creds_abbreviation():
@@ -624,9 +729,9 @@ def test_redact_catches_xapp_prefixed_token():
         "count=42",
         "city=Springfield",
         "please review this ticket before merging",
-        # H17: a realistic false-positive sweep (deploy notes) — none of
-        # these should be redacted once the generic-assignment floor is
-        # 12 characters.
+        # H17/J1: a realistic false-positive sweep (deploy notes) — none
+        # of these has a SECRET_ASSIGN keyword in its name, so none is
+        # touched now that the name-agnostic rule is gone.
         "version=v2.3.1",
         "build=4821",
         "p99=250ms",
@@ -634,20 +739,13 @@ def test_redact_catches_xapp_prefixed_token():
         "host=web-02",
         "python3.13",
         "commit=a3f9c21",
+        # J4-adjacent: this package's own manifest-shaped fields.
+        "otel_semconv_ref=gen_ai/v1.28",
+        "run_id=jev-dupes-2026-09-17",
     ],
 )
 def test_redact_does_not_touch_ordinary_prose_or_plain_pairs(text):
     assert redact(text) == text
-
-
-def test_redact_catches_a_12_character_mixed_class_generic_value():
-    """H17: the floor is 12, not lower — pins the boundary so a future
-    change can't silently drop it back down. abc123def456 is exactly 12
-    characters, letters mixed with digits."""
-    text = "R2_ACCOUNT=abc123def456"
-    redacted = redact(text)
-    assert "abc123def456" not in redacted
-    assert "<redacted>" in redacted
 
 
 # ---- H13: SECRET_URL_CRED must not catastrophically backtrack -----------
@@ -731,6 +829,38 @@ def test_check_redaction_ratio_path_still_fires_on_a_large_prose_loss():
     prose = " ".join(_distinct_alpha_words("realword", 100))
     with pytest.raises(RedactionAbortError):
         check_redaction(prose, "<redacted>")  # 100 real words all gone -> abort
+
+
+# ---- J3: short-field redaction loss is exempt only when attributable ----
+
+
+def test_check_redaction_short_field_total_loss_exempt_when_attributable():
+    """A short field (several words, not one token) that empties because
+    an anchored rule matched is presumed a legitimate credential and
+    does not abort."""
+    original = "alpha beta gamma"  # 3 words: not a single-token exemption case
+    check_redaction(
+        original, "<issue>", matched_rules=frozenset({"bare_credential_format"})
+    )  # does not raise
+
+
+def test_check_redaction_short_field_total_loss_aborts_when_not_attributable():
+    """The same total loss, with no rule attribution on record, aborts —
+    text vanished without a recognized credential shape causing it."""
+    original = "alpha beta gamma"
+    with pytest.raises(RedactionAbortError):
+        check_redaction(original, "", matched_rules=frozenset())
+
+
+def test_redact_with_rules_reports_the_matched_rule_names():
+    _text, matched = guards_module._redact_with_rules(_fake_pem())
+    assert "pem" in matched
+
+    _text, matched = guards_module._redact_with_rules(_fake_hex_secret())
+    assert "bare_credential_format" in matched
+
+    _text, matched = guards_module._redact_with_rules("ordinary prose, nothing here")
+    assert matched == frozenset()
 
 
 def test_deep_mask_operates_per_string_field_not_serialized_json():
@@ -1059,6 +1189,72 @@ def test_aggregate_check_does_not_fire_on_a_single_bare_credential_field():
     backend = _RecordingBackend()
     guarded_send({"a": secret}, backend)
     assert backend.calls[0]["a"] == "<redacted>"
+
+
+# ---- J2: a single-token field never trips the per-leaf total-loss rule --
+
+
+def test_j2_ref_field_that_is_exactly_a_known_id_sends():
+    """J2 regression: {"ref": "XTRM-428", ...} — a field whose entire
+    value is one known id — used to abort, because the per-leaf
+    total-loss trigger didn't distinguish "one token" from "several
+    known words filling the whole field" (G8)."""
+    # body is large enough that losing the one "ref" word stays inside
+    # the 2% mask-loss budget, so only the per-leaf single-token
+    # exemption (not the aggregate ratio) is what's under test here.
+    payload = {"ref": "XTRM-428", "body": " ".join(_distinct_alpha_words("word", 100))}
+    backend = _RecordingBackend()
+    guarded_send(payload, backend, known_ids=frozenset({"xtrm-428"}))
+    assert len(backend.calls) == 1
+    assert backend.calls[0]["ref"] == "<issue>"
+
+
+def test_j2_dict_keyed_by_a_known_id_sends():
+    """J2 regression: {"mmd-585": {...}} — the reference harness's own
+    ``{r["id"]: r for r in rows}`` payload shape — used to abort because
+    the dict key is itself a single known-id token."""
+    payload = {
+        "mmd-585": {"title": "an ordinary ticket title with several words in it"}
+    }
+    backend = _RecordingBackend()
+    guarded_send(payload, backend, known_ids=frozenset({"mmd-585"}))
+    assert len(backend.calls) == 1
+    assert "<issue>" in backend.calls[0]
+
+
+def test_j2_g8_one_big_field_case_still_aborts():
+    """J2 must not weaken G8: a field that is *several* known words
+    (not one token) still trips the per-leaf trigger."""
+    filler = " ".join(f"filler{i} plain text content" for i in range(200))
+    payload = {
+        "background": filler,
+        "critical_field": "alpha beta gamma delta epsilon zeta eta theta",
+    }
+    known_ids = frozenset(
+        {"alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"}
+    )
+    backend = _RecordingBackend()
+    with pytest.raises(GuardFailure) as exc_info:
+        guarded_send(payload, backend, known_ids=known_ids)
+    assert exc_info.value.guard == "mask"
+    assert backend.calls == []
+
+
+def test_j2_ten_by_nineteen_field_dilution_case_still_aborts():
+    """J2 must not weaken H1: the aggregate check still catches many
+    single-token (or few-token) fields collectively diluting the whole
+    payload."""
+    known_ids = frozenset(_H1_KNOWN_WORDS)
+    letters = "abcdefghij"
+    payload = {
+        f"field_{n}": " ".join(_H1_KNOWN_WORDS + [f"uniqueword{letters[n]}"])
+        for n in range(10)
+    }
+    backend = _RecordingBackend()
+    with pytest.raises(GuardFailure) as exc_info:
+        guarded_send(payload, backend, known_ids=known_ids)
+    assert exc_info.value.guard == "mask"
+    assert backend.calls == []
 
 
 def test_aggregate_check_still_lets_g8_one_big_field_case_abort():

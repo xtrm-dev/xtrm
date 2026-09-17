@@ -39,27 +39,27 @@ from xtrm_research.hashing import compute_content_hash
 #: spaces, or an unquoted value that runs to the next comma/brace/line —
 #: a name match alone is a strong enough signal that a 4-character floor
 #: (down from 8) and multi-word values ("password: hunter2 correct
-#: horse") are still worth redacting (H8).
+#: horse") are still worth redacting (H8). The name list covers the
+#: shapes seen so far (J1: ACCOUNT/ACCESS/AUTH/PRIVATE/SIGNATURE/
+#: SALT/PASSPHRASE/SESSION added for the MMD-585 R2_ACCOUNT shape,
+#: replacing the deleted name-agnostic rule below). The value is
+#: refused if it contains ``://`` — a URL is the URL rule's job, not
+#: this one's, and matching one here previously destroyed ordinary
+#: links (e.g. ``see https://github.com/...`` read "https" as a name).
+#:
+#: Known limitation, accepted rather than chased with a wider rule: a
+#: credential assigned to a name with no recognizable keyword here is
+#: not caught by this rule. The prefixed-format, hex and AKIA rules in
+#: :data:`SECRET_BARE`, and :func:`check_redaction`'s loss check, are
+#: the backstop — not another name-agnostic heuristic, which J1 found
+#: redacted ordinary URLs, model ids and version strings.
 SECRET_ASSIGN = re.compile(
-    r"(?i)\b([A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|CRED)[A-Z0-9_]*)"
+    r"(?i)\b([A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|CRED|ACCOUNT|ACCESS|AUTH"
+    r"|PRIVATE|SIGNATURE|SALT|PASSPHRASE|SESSION)[A-Z0-9_]*)"
     r"(\\?[\"']?\s*[:=]\s*)"
+    r"(?!\S*://)"
     r"(?:\"[^\"]{4,}\"|'[^']{4,}'|[^\r\n,}]{4,})"
 )
-#: A value assigned to *any* identifier-shaped name (no keyword match
-#: required), redacted only when the value itself looks credential-
-#: shaped: at least 12 characters, no whitespace, and mixing letters
-#: with digits — one conservative heuristic instead of a longer regex
-#: zoo, so an account id or opaque token under an unrecognized name
-#: (H8's ``R2_ACCOUNT=...``, the MMD-585 shape) is still caught. A
-#: pure-digit value (``count=42``), a pure-letter value (``name=John``)
-#: and a short mixed value (``version=v2.3.1``, H17) never match — this
-#: is a name-agnostic rule and trades some false positives for catching
-#: the unrecognized-name case; :func:`check_redaction`'s loss check is
-#: the backstop for when it still fires too widely.
-SECRET_ASSIGN_GENERIC = re.compile(
-    r"\b([A-Za-z][A-Za-z0-9_]*)(\s*[:=]\s*)([^\s\"'\\,}]{12,})"
-)
-_MIXED_CLASS_VALUE = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9+/_.-]{12,}$")
 #: Bare credential-shaped tokens: hex digests, AWS access key ids,
 #: known provider token prefixes (GitHub, Slack, Stripe, Google, npm,
 #: GitLab), a JWT, and a long base64-ish blob. The base64 alternative uses
@@ -117,14 +117,41 @@ SECRET_PEM_UNTERMINATED = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*", re
 _REDACTED = "<redacted>"
 
 
-def _redact_generic_assignments(text: str) -> str:
-    def _sub(m: re.Match[str]) -> str:
-        name, sep, value = m.group(1), m.group(2), m.group(3)
-        if _MIXED_CLASS_VALUE.match(value):
-            return f"{name}{sep}{_REDACTED}"
-        return m.group(0)
+def _redact_with_rules(text: str) -> tuple[str, frozenset[str]]:
+    """Redact ``text`` and report which named, anchored rule(s) actually
+    matched — never a name-agnostic one, since J1 deleted the only one
+    of those. :func:`check_redaction` uses this to tell "this field is
+    legitimately nothing but a credential" (J3) from an over-broad rule
+    destroying unrelated content: a short field that loses everything is
+    only exempt from the loss-abort when the loss is attributable to one
+    of these anchored rules."""
+    matched: set[str] = set()
 
-    return SECRET_ASSIGN_GENERIC.sub(_sub, text)
+    if SECRET_PEM.search(text):
+        matched.add("pem")
+    text = SECRET_PEM.sub(_REDACTED, text)
+
+    if SECRET_PEM_UNTERMINATED.search(text):
+        matched.add("pem")
+    text = SECRET_PEM_UNTERMINATED.sub(_REDACTED, text)
+
+    if SECRET_AUTH_HEADER.search(text):
+        matched.add("auth_header")
+    text = SECRET_AUTH_HEADER.sub(lambda m: f"{m.group(1)} {_REDACTED}", text)
+
+    if SECRET_URL_CRED.search(text):
+        matched.add("url_credential")
+    text = SECRET_URL_CRED.sub(lambda m: f"{m.group(1)}{_REDACTED}{m.group(3)}", text)
+
+    if SECRET_ASSIGN.search(text):
+        matched.add("name_matched_assignment")
+    text = SECRET_ASSIGN.sub(lambda m: f"{m.group(1)}{m.group(2)}{_REDACTED}", text)
+
+    if SECRET_BARE.search(text):
+        matched.add("bare_credential_format")
+    text = SECRET_BARE.sub(_REDACTED, text)
+
+    return text, frozenset(matched)
 
 
 def redact(text: str) -> str:
@@ -137,13 +164,7 @@ def redact(text: str) -> str:
     :func:`check_mask` — see :func:`check_redaction` — so an
     over-broad redaction rule (the PEM defect this fixes, or any future
     one) aborts the send instead of silently destroying a field."""
-    text = SECRET_PEM.sub(_REDACTED, text)
-    text = SECRET_PEM_UNTERMINATED.sub(_REDACTED, text)
-    text = SECRET_AUTH_HEADER.sub(lambda m: f"{m.group(1)} {_REDACTED}", text)
-    text = SECRET_URL_CRED.sub(lambda m: f"{m.group(1)}{_REDACTED}{m.group(3)}", text)
-    text = SECRET_ASSIGN.sub(lambda m: f"{m.group(1)}{m.group(2)}{_REDACTED}", text)
-    text = _redact_generic_assignments(text)
-    return SECRET_BARE.sub(_REDACTED, text)
+    return _redact_with_rules(text)[0]
 
 
 # ---- known-identifier masking -------------------------------------------
@@ -278,10 +299,17 @@ def _check_text_loss(
     when every one of its (post-strip) plain words vanished *and*
     something actually changed — the "field is nothing but a known id"
     case masking needs (the G8 large-payload regression), regardless of
-    the field's own size. Redaction does *not* set this: a short field
-    that is legitimately nothing but a credential is expected to lose
-    100% of its (often near-zero) plain-word content, and must not be
-    treated the same as masking substituting a whole known-id field.
+    the field's own size. Redaction does *not* set this unconditionally
+    (see :func:`check_redaction`).
+
+    A field whose entire (post-strip) content is a single token (J2) is
+    always exempt from this trigger, even when the flag is set: a field
+    that *is* one known id, one ref, one bare credential — the common
+    board-text shape ``{"ref": "XTRM-428", ...}`` or
+    ``{"mmd-585": {...}}`` — legitimately empties to one word. The
+    dilution case the trigger exists for (many small fields, each
+    losing a fraction of *several* words) is instead caught by the
+    whole-payload aggregate check this function is also used for.
     """
     floor = len(_PLAIN_WORD.findall(original))
     words = _PLAIN_WORD.findall(_strip_replacement_tokens(original))
@@ -292,7 +320,12 @@ def _check_text_loss(
     removed = total - len(surviving)
     something_changed = processed != original
     if floor < min_word_count:
-        if abort_on_short_field_total_loss and removed == total and something_changed:
+        if (
+            abort_on_short_field_total_loss
+            and total > 1
+            and removed == total
+            and something_changed
+        ):
             raise error_cls(removed, total, min_surviving_fraction)
         return
     if len(surviving) < min_surviving_fraction * total:
@@ -332,6 +365,7 @@ def check_redaction(
     *,
     min_surviving_fraction: float = REDACTION_MIN_SURVIVING_FRACTION,
     min_word_count: int = REDACTION_MIN_WORD_COUNT_FOR_RATIO,
+    matched_rules: frozenset[str] = frozenset(),
 ) -> None:
     """Abort if redaction removed too much plain text — the missing half
     of the guard that let the PEM defect (H12) reintroduce historical
@@ -342,12 +376,20 @@ def check_redaction(
     the shared rule shape; the threshold here is deliberately looser
     (:data:`REDACTION_MIN_SURVIVING_FRACTION`) since a field that is
     legitimately nothing but a credential is expected to lose all of its
-    (usually near-zero) plain-word content to redaction. Unlike
-    :func:`check_mask`, a short field losing everything never aborts by
-    itself here (``abort_on_short_field_total_loss=False``): only the
-    ratio check, which requires a real-sized field, ever fires for
-    redaction — a bare credential field is exactly what redaction is
-    for.
+    (usually near-zero) plain-word content to redaction.
+
+    ``matched_rules`` (from :func:`_redact_with_rules`, J3) decides
+    whether a short field's *total* loss ever aborts by itself: when the
+    loss is attributable to a recognized, anchored rule (a prefixed
+    format, hex, AKIA, PEM, a URL credential, an auth header, or a
+    name-matched assignment), the field is presumed a legitimate
+    credential and the short-field trigger stays off, exactly as before.
+    When redaction changed the text but *no* anchored rule is on record
+    for it, the short-field trigger is armed — a short field emptied by
+    something other than a recognized credential shape is treated as a
+    bug, the same way masking treats one emptied by a wrong id match.
+    Only the ratio check (a real-sized field) is otherwise unaffected by
+    this distinction.
     """
     _check_text_loss(
         original,
@@ -355,7 +397,7 @@ def check_redaction(
         min_surviving_fraction=min_surviving_fraction,
         min_word_count=min_word_count,
         error_cls=RedactionAbortError,
-        abort_on_short_field_total_loss=False,
+        abort_on_short_field_total_loss=not matched_rules,
     )
 
 
@@ -378,31 +420,32 @@ def _check_supported_type(value: Any) -> None:
     )
 
 
-#: (raw, redacted, masked) text for one string leaf — fed to the
-#: whole-payload aggregate checks after traversal (see
-#: :func:`_check_aggregate`).
-_MaskedTriple = tuple[str, str, str]
+#: (raw, redacted, masked, matched redaction rules) for one string
+#: leaf — fed to the whole-payload aggregate checks after traversal
+#: (see :func:`_check_aggregate`).
+_MaskedQuad = tuple[str, str, str, frozenset[str]]
 
 
 def _masked_leaf_with_pair(
     text: str, known_ids: frozenset[str]
-) -> tuple[str, _MaskedTriple]:
-    redacted = redact(text)
-    check_redaction(
-        text, redacted
-    )  # per-leaf: catches an over-broad redaction rule (H12)
+) -> tuple[str, _MaskedQuad]:
+    redacted, matched_rules = _redact_with_rules(text)
+    # per-leaf: catches an over-broad redaction rule (H12); matched_rules
+    # tells it whether this leaf's loss is attributable to a recognized
+    # credential shape (J3).
+    check_redaction(text, redacted, matched_rules=matched_rules)
     masked_text = _apply_id_mask(redacted, known_ids)
     check_mask(redacted, masked_text)  # per-leaf check: catches the G8 short-field case
-    return masked_text, (text, redacted, masked_text)
+    return masked_text, (text, redacted, masked_text, matched_rules)
 
 
 def _mask_key_with_pairs(
     key: Any, known_ids: frozenset[str]
-) -> tuple[Any, list[_MaskedTriple]]:
+) -> tuple[Any, list[_MaskedQuad]]:
     _check_supported_type(key)
     if isinstance(key, str):
-        masked_key, triple = _masked_leaf_with_pair(key, known_ids)
-        return masked_key, [triple]
+        masked_key, quad = _masked_leaf_with_pair(key, known_ids)
+        return masked_key, [quad]
     if isinstance(key, _CONTAINER_TYPES):
         raise TypeError("dict keys must be a leaf value, not a container")
     return key, []
@@ -416,14 +459,14 @@ def _mask_key_with_pairs(
 # masked value in memory at once.
 def _deep_mask_with_pairs(
     value: Any, known_ids: frozenset[str]
-) -> tuple[Any, list[_MaskedTriple]]:
+) -> tuple[Any, list[_MaskedQuad]]:
     _check_supported_type(value)
     if isinstance(value, str):
-        masked_text, triple = _masked_leaf_with_pair(value, known_ids)
-        return masked_text, [triple]
+        masked_text, quad = _masked_leaf_with_pair(value, known_ids)
+        return masked_text, [quad]
     if isinstance(value, dict):
         out: dict[Any, Any] = {}
-        pairs: list[_MaskedTriple] = []
+        pairs: list[_MaskedQuad] = []
         for k, v in value.items():
             masked_key, key_pairs = _mask_key_with_pairs(k, known_ids)
             masked_value, value_pairs = _deep_mask_with_pairs(v, known_ids)
@@ -443,7 +486,7 @@ def _deep_mask_with_pairs(
     return value, []
 
 
-def _check_aggregate(pairs: list[_MaskedTriple]) -> None:
+def _check_aggregate(pairs: list[_MaskedQuad]) -> None:
     """Whole-payload ratio checks — both redaction-loss and mask-loss —
     over every string field (and dict key), concatenated. The per-leaf
     checks in :func:`_masked_leaf_with_pair` catch one small field
@@ -466,7 +509,8 @@ def _check_aggregate(pairs: list[_MaskedTriple]) -> None:
     raw = "\n".join(p[0] for p in pairs)
     redacted = "\n".join(p[1] for p in pairs)
     masked = "\n".join(p[2] for p in pairs)
-    check_redaction(raw, redacted)
+    matched_rules: frozenset[str] = frozenset().union(*(p[3] for p in pairs))
+    check_redaction(raw, redacted, matched_rules=matched_rules)
     check_mask(redacted, masked)
 
 
@@ -640,8 +684,6 @@ def redaction_version() -> str:
     return compute_content_hash(
         {
             "secret_assign": SECRET_ASSIGN.pattern,
-            "secret_assign_generic": SECRET_ASSIGN_GENERIC.pattern,
-            "mixed_class_value": _MIXED_CLASS_VALUE.pattern,
             "secret_bare": SECRET_BARE.pattern,
             "secret_url_cred": SECRET_URL_CRED.pattern,
             "secret_auth_header": SECRET_AUTH_HEADER.pattern,
@@ -650,9 +692,7 @@ def redaction_version() -> str:
             "redaction_min_surviving_fraction": REDACTION_MIN_SURVIVING_FRACTION,
             "redaction_min_word_count_for_ratio": REDACTION_MIN_WORD_COUNT_FOR_RATIO,
             "redact_source": inspect.getsource(redact),
-            "redact_generic_assignments_source": inspect.getsource(
-                _redact_generic_assignments
-            ),
+            "redact_with_rules_source": inspect.getsource(_redact_with_rules),
             "check_redaction_source": inspect.getsource(check_redaction),
             "check_text_loss_source": inspect.getsource(_check_text_loss),
         }

@@ -36,7 +36,14 @@ standard runtime, Specialists runtime, Pi, or xtrm-app.
   and `known_ids` — never the guarded/masked output — so a cache lookup
   can happen before the guard stage runs, and two requests that differ
   only in `known_ids` never collide even if they'd guard to identical
-  text today.
+  text today. Known limit: the assignment-redaction rule is
+  name-anchored (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `ACCOUNT`, ...) —
+  a credential assigned to a name carrying none of those keywords is
+  caught only if the value itself matches a known format (a prefixed
+  token, a hex digest, a PEM block, a URL credential). An earlier
+  name-agnostic rule covered that gap but redacted ordinary URLs, model
+  ids and version strings instead; it was deleted rather than tuned
+  further.
 - **Execution is separate from evaluation.** A run captures what happened;
   an assessment set captures what a given evaluator concluded about it —
   new evaluators can assess old runs months later. An assessment set is
