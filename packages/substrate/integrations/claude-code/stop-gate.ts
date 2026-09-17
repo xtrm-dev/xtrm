@@ -10,9 +10,9 @@
 // result → validation/provenance → closure path. Fake completion is never
 // required and never performed: the gate never closes an issue.
 //
-// NOTE: this gate reads the issue claim only; it does not enforce the
-// workspace writer lease (§18) — lease enforcement lives in the tool_call /
-// dispatch authority path (A6/A7). The gate never blocks exit.
+// NOTE: this gate reads the issue claim only. Substrate provides no
+// workspace-exclusion guarantee (XTRM-414; formerly §18) — per-issue claim
+// fencing is the only authority here. The gate never blocks exit.
 //
 // ADR §76: the gate appends no generic Journal entry per invocation. The
 // ONLY write is a mechanical checkpoint (J1 kind, not a generic note), and
