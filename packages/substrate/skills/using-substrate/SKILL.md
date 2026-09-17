@@ -98,8 +98,10 @@ not from the compacted chat transcript.
 
 ## Mutation authority
 
-A Pi session bound to an Issue may edit/write only under its own live claim and
-compatible workspace writer lease. Unbound sessions are not implicitly bound to
+A Pi session bound to an Issue may edit/write only under its own live claim.
+Substrate provides no workspace-exclusion guarantee (XTRM-414): per-issue claim
+fencing is the only mutation authority here; workspace exclusion is owned by
+the specialists activation layer. Unbound sessions are not implicitly bound to
 a random Project or Issue. Repository/project initialization is `sb init`; global
 database cardinality is never project context.
 
