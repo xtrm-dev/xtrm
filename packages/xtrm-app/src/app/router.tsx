@@ -10,10 +10,11 @@ import { validateDrawerSearch } from "../shell/layout.ts";
 import { ActivitySurface } from "../surfaces/ActivitySurface.tsx";
 import { PullsSurface } from "../github/PullsSurface.tsx";
 import { ProgramSurface } from "../surfaces/ProgramSurface.tsx";
-import { ExperimentListSurface, RunListSurface } from "../surfaces/ResearchSurface.tsx";
+import { ExperimentListSurface, RunAnalysisSurface, RunComparisonSurface, RunListSurface } from "../surfaces/ResearchSurface.tsx";
 import { DeferredSurface, RepositoriesSurface } from "../surfaces/other.tsx";
 import { SettingsSurface } from "../settings/SettingsSurface.tsx";
 import { MODES, REPO_SECTIONS, RESEARCH_SECTIONS } from "./destinations.ts";
+import { validateCompareSearch } from "./research-compare-search.ts";
 
 // URL contract: docs/console-v2-shell-architecture.md §9.1.
 
@@ -77,6 +78,17 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
       component: s.deferred || !Surface ? () => <DeferredSurface title={s.label} icon={s.icon} reason={s.deferred ?? "Not implemented"} /> : () => <Surface />,
     });
   });
+  // Run analysis (rev 10 slice 3): reached from a run row, URL-addressable on its own.
+  const researchRunRoute = createRoute({ getParentRoute: () => rootRoute, path: "/research/runs/$runId", component: RunAnalysisSurface });
+  // Comparison surface: its own search validator composed with the drawer's, so `?inspect=`
+  // still restores alongside `?baseline=&candidate=` (rootRoute's validateSearch only covers
+  // the drawer keys; each route's own validateSearch is additive, not replacing).
+  const researchCompareRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/research/compare",
+    validateSearch: (search: Record<string, unknown>) => ({ ...validateDrawerSearch(search), ...validateCompareSearch(search) }),
+    component: RunComparisonSurface,
+  });
 
   const repoRoute = createRoute({ getParentRoute: () => rootRoute, path: "/rep/$owner/$repo", component: Outlet });
   const repoChildren = [
@@ -102,6 +114,8 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     programRoute,
     researchIndexRoute,
     ...researchRoutes,
+    researchRunRoute,
+    researchCompareRoute,
     settingsRoute,
     ...deferredModes,
     repoRoute.addChildren(repoChildren),

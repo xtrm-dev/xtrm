@@ -54,12 +54,25 @@ export interface RunShow {
   annotations: Array<Record<string, unknown>>;
 }
 
+/** `common.schema.json#/$defs/usage_record`. Every value field is nullable, and the schema
+ * guarantees a null value is always paired with a non-empty `nullReason`. */
+export interface UsageRecord {
+  source: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  requestModel: string | null;
+  responseModel: string | null;
+  latencyMs: number | null;
+  nullReason: string | null;
+}
+
 export interface TailEvent {
   seq: number;
   ts: string;
   kind: string;
   sampleId: string | null;
   data: unknown;
+  usage: UsageRecord | null;
 }
 
 declare const TAIL_CURSOR: unique symbol;

@@ -169,3 +169,30 @@ export function useResearchRuns() {
   const { research } = useAdapters();
   return useQuery({ queryKey: ["research", "runs"], queryFn: () => research.listRuns(), staleTime: 30_000, retry: false });
 }
+
+// --- Research: run analysis and comparison (XTRM-433 slice 3) --------------
+// Derived views (metrics, compare, tail) are recomputed on every read on the research side
+// (map-433.md §B7 "derived views are never cached"), so polling is always safe; these hooks
+// stay one-shot (no refetchInterval) until a later slice adds live follow.
+
+export function useResearchRun(runId: string) {
+  const { research } = useAdapters();
+  return useQuery({ queryKey: ["research", "run", runId], queryFn: () => research.getRun(runId), staleTime: 15_000, retry: false });
+}
+
+export function useResearchMetrics(runId: string) {
+  const { research } = useAdapters();
+  return useQuery({ queryKey: ["research", "metrics", runId], queryFn: () => research.getMetrics(runId), staleTime: 15_000, retry: false });
+}
+
+/** Full log, no cursor: the run analysis sample table reads every event once, unlike a live
+ * tail follow which would carry a `TailCursor` forward (not built in this slice). */
+export function useResearchTail(runId: string) {
+  const { research } = useAdapters();
+  return useQuery({ queryKey: ["research", "tail", runId], queryFn: () => research.tail(runId), staleTime: 15_000, retry: false });
+}
+
+export function useResearchCompare(runIds: string[]) {
+  const { research } = useAdapters();
+  return useQuery({ queryKey: ["research", "compare", runIds], queryFn: () => research.compare(runIds), enabled: runIds.length >= 2, staleTime: 15_000, retry: false });
+}

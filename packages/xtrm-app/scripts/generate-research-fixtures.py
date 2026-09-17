@@ -65,14 +65,28 @@ def _sample(i: int) -> dict:
     return {"schema_version": "xtrm-research-sample/v1", "sample_id": f"s-{i}", "index": i, "input": {"pair": [f"a-{i}", f"b-{i}"]}, "status": "ok", "created_at": FIXED_NOW.isoformat()}
 
 
-def _event(seq: int, kind: str) -> dict:
-    return {"schema_version": "xtrm-research-event/v1", "seq": seq, "ts": FIXED_NOW.isoformat(), "kind": kind}
+def _event(seq: int, kind: str, sample_id: str | None = None, usage: dict | None = None) -> dict:
+    event = {"schema_version": "xtrm-research-event/v1", "seq": seq, "ts": FIXED_NOW.isoformat(), "kind": kind}
+    if sample_id is not None:
+        event["sample_id"] = sample_id
+    if usage is not None:
+        event["usage"] = usage
+    return event
+
+
+def _cli_envelope(root: Path, *argv: str) -> dict:
+    """Raw envelope, `ok` either way — `compare` against a broken run fails as a whole
+    (packages/research views.compare_runs has no per-run tolerance) and that failing
+    envelope is itself a fixture shape the comparison surface must render."""
+    # `check=False`: a CLI-level failure still exits 1 (main.py) but prints its ok:false
+    # envelope on stdout, which is exactly the shape this helper exists to capture.
+    cmd = [sys.executable, "-m", "xtrm_research.cli.main", "--root", str(root), "--json", *argv]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    return json.loads(result.stdout)
 
 
 def _cli(root: Path, *argv: str) -> dict:
-    cmd = [sys.executable, "-m", "xtrm_research.cli.main", "--root", str(root), "--json", *argv]
-    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    envelope = json.loads(result.stdout)
+    envelope = _cli_envelope(root, *argv)
     assert envelope["ok"], envelope
     return envelope["data"]
 
@@ -81,8 +95,15 @@ def build(root: Path) -> dict:
     registry = DefinitionRegistry(REGISTRY_ROOT)
 
     baseline = start_run(root, "run-a", _manifest(registry, "run-a", "baseline"))
+    # s-0's completion event carries real usage; s-1's carries a null value paired with its
+    # required null_reason — the run analysis sample table (built from `tail`, the only verb
+    # exposing per-sample rows; see map-433.md §B7 "no CLI verb exposes samples.jsonl")
+    # needs both to render the "usage recorded but unavailable" state honestly.
+    usage_ok = {"source": "provider_api", "gen_ai.usage.input_tokens": 42, "gen_ai.usage.output_tokens": 7, "gen_ai.request.model": "always-no-1", "gen_ai.response.model": "always-no-1", "latency_ms": 118.5, "null_reason": None}
+    usage_unavailable = {"source": "unknown", "gen_ai.usage.input_tokens": None, "gen_ai.usage.output_tokens": None, "gen_ai.request.model": None, "gen_ai.response.model": None, "latency_ms": None, "null_reason": "usage telemetry unavailable for this backend"}
     baseline.write_event(_event(0, "started"))
-    baseline.write_event(_event(1, "progress"))
+    baseline.write_event(_event(1, "sample_completed", sample_id="s-0", usage=usage_ok))
+    baseline.write_event(_event(2, "sample_completed", sample_id="s-1", usage=usage_unavailable))
     baseline.write_sample(_sample(0))
     baseline.write_sample(_sample(1))
     write_assessment_set(
@@ -91,7 +112,12 @@ def build(root: Path) -> dict:
         "eval-1",
         registry.latest("evaluator", "exact-match"),
         [{"sample_id": "s-0", "answer": {"noul": 0.1}}, {"sample_id": "s-1", "answer": {"noul": 0.9}}],
-        {"accuracy": {"value": 0.5, "se": 0.5, "ci95": [0.0, 1.0], "n": 2, "method": "binomial-proportion"}},
+        {
+            "accuracy": {"value": 0.5, "se": 0.5, "ci95": [0.0, 1.0], "n": 2, "method": "binomial-proportion"},
+            # A metric with no variance to estimate: se/ci95 are null and method states why,
+            # covering "metrics render value/se/ci95/n/method together, method explains a null".
+            "latency_ms": {"value": 118.5, "se": None, "ci95": None, "n": 1, "method": "single-sample-no-variance"},
+        },
         now=FIXED_NOW,
     )
     baseline.finish("success", now=FIXED_NOW)
@@ -122,6 +148,11 @@ def build(root: Path) -> dict:
     (root / "run-c").mkdir(parents=True)
     (root / "run-c" / "manifest.json").write_text("{not json", encoding="utf-8")
     fixture["runs"] = _cli(root, "runs")
+    # `compare` has no per-run tolerance: `run_summary` only checks a run directory exists
+    # (unlike `runs`, it never parses the manifest), so a run whose id is entirely absent —
+    # not merely unreadable — is what actually fails the whole call as one `ok:false`
+    # envelope. Captured verbatim for the comparison surface's failure state.
+    fixture["compareInvalidEnvelope"] = _cli_envelope(root, "compare", "run-a", "run-missing")
     return fixture
 
 

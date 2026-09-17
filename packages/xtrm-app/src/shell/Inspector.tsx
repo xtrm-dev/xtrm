@@ -1,7 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import type { RepoEvent } from "../adapters/index.tsx";
-import { useEvents, useIssue, useProgram } from "../app/queries.ts";
+import { readAccounting, readVersionRef } from "../adapters/research/manifest.ts";
+import { useEvents, useIssue, useProgram, useResearchMetrics, useResearchRun, useResearchTail } from "../app/queries.ts";
 import { PullPanel } from "../github/PullPanel.tsx";
 import { DevicePanel } from "../github/auth.tsx";
 import { useCanWrite } from "../issues/actions.ts";
@@ -10,8 +11,16 @@ import { Drawer, Fields, InspectorSection } from "../ui/drawer.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { ContentPanel, EmptyState, ErrorState, IconButton, LoadingState, Row, ago } from "../ui/primitives.tsx";
+import { MetricFields, UsageFields } from "../surfaces/research-format.tsx";
 import { useShell } from "./context.tsx";
 import { formatRef, type DrawerRef } from "./layout.ts";
+
+/** `research-*` refs are `<runId>|<detail>`: `|` never occurs in a run/sample id
+ * (SAFE_SEGMENT_PATTERN in packages/research allows only `[A-Za-z0-9._@:-]`). */
+function splitResearchRef(ref: string): [string, string] {
+  const i = ref.indexOf("|");
+  return i === -1 ? [ref, ""] : [ref.slice(0, i), ref.slice(i + 1)];
+}
 
 const copy = (text: string) => void navigator.clipboard?.writeText(text).catch(() => {});
 
@@ -175,6 +184,110 @@ function ActivityPanel({ refValue, follow }: { refValue: string; follow: boolean
   );
 }
 
+// --- research: run provenance, metric, sample, annotation -------------------
+// No inspector of its own (rev 10 item 5): these panels are the canonical drawer's only
+// research-specific content, reached from the run analysis and comparison surfaces.
+
+function RunProvenancePanel({ runId }: { runId: string }) {
+  const navigate = useNavigate();
+  const { dispatch } = useShell();
+  const q = useResearchRun(runId);
+  if (q.isPending) return <LoadingState rows={5} label="Loading run" />;
+  if (q.isError) return <ErrorState title={`Run manifest unreadable: ${runId}`} error={q.error} />;
+  const manifest = q.data.manifest;
+  const experiment = readVersionRef(manifest.experiment);
+  const variant = readVersionRef(manifest.variant);
+  const accounting = readAccounting(manifest.accounting);
+  return (
+    <>
+      <Title eyebrow={<span className="font-mono">{runId}</span>}>Run provenance</Title>
+      <InspectorSection title="Versions">
+        <Fields
+          rows={[
+            ["Experiment", experiment ? `${experiment.id}@${experiment.version}` : <span className="text-ink-faint">unresolved</span>],
+            ["Variant", variant ? `${variant.id}@${variant.version}` : <span className="text-ink-faint">unresolved</span>],
+            ["Status", label(q.data.status)],
+          ]}
+        />
+      </InspectorSection>
+      <InspectorSection title="Accounting provenance">
+        {accounting ? (
+          <Fields rows={[["Price table", accounting.priceTableVersion], ["Telemetry schema", accounting.telemetrySchemaVersion], ["OTel semconv", accounting.otelSemconvRef]]} />
+        ) : (
+          <p className="text-sm text-ink-faint">Accounting provenance unavailable — the manifest carries no readable accounting block.</p>
+        )}
+      </InspectorSection>
+      <button
+        type="button"
+        onClick={() => {
+          void navigate({ to: `/research/runs/${runId}` } as never);
+          dispatch({ type: "drawer/close" });
+        }}
+        className="mx-5 mb-4 flex h-8 w-fit items-center gap-1.5 rounded-md border border-border-muted px-2.5 text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink"
+      >
+        <Icon name="open" size="xs" /> Open run analysis
+      </button>
+    </>
+  );
+}
+
+function MetricPanel({ runId, metricKey }: { runId: string; metricKey: string }) {
+  const q = useResearchMetrics(runId);
+  if (q.isPending) return <LoadingState rows={4} label="Loading metric" />;
+  if (q.isError) return <ErrorState title={`Metrics unavailable for ${runId}`} error={q.error} />;
+  const metric = q.data.metrics[metricKey];
+  if (!metric) return <EmptyState icon="observability" title={`${metricKey} is not reported for ${runId}`} />;
+  return (
+    <>
+      <Title eyebrow={<span className="font-mono">{runId}</span>}>{metricKey}</Title>
+      <InspectorSection title="Metric">
+        <MetricFields metric={metric} />
+      </InspectorSection>
+    </>
+  );
+}
+
+function SamplePanel({ runId, sampleId }: { runId: string; sampleId: string }) {
+  const q = useResearchTail(runId);
+  if (q.isPending) return <LoadingState rows={4} label="Loading sample" />;
+  if (q.isError) return <ErrorState title={`Sample log unavailable for ${runId}`} error={q.error} />;
+  const events = q.data.events.filter((e) => e.sampleId === sampleId);
+  if (events.length === 0) return <EmptyState icon="observability" title={`${sampleId} has no recorded events`} />;
+  return (
+    <>
+      <Title eyebrow={<span className="font-mono">{runId}</span>}>{sampleId}</Title>
+      {events.map((e) => (
+        <InspectorSection key={e.seq} title={e.kind}>
+          <Fields rows={[["At", new Date(e.ts).toLocaleString()]]} />
+          {e.usage && <UsageFields usage={e.usage} />}
+        </InspectorSection>
+      ))}
+    </>
+  );
+}
+
+function AnnotationPanel({ runId, index }: { runId: string; index: number }) {
+  const q = useResearchRun(runId);
+  if (q.isPending) return <LoadingState rows={3} label="Loading annotation" />;
+  if (q.isError) return <ErrorState title={`Run manifest unreadable: ${runId}`} error={q.error} />;
+  const annotation = q.data.annotations[index] as Record<string, unknown> | undefined;
+  if (!annotation) return <EmptyState icon="observability" title="Annotation is outside the loaded log" />;
+  return (
+    <>
+      <Title eyebrow={<span className="font-mono">{runId}</span>}>{String(annotation.kind ?? "Annotation")}</Title>
+      <InspectorSection title="Annotation">
+        <Fields
+          rows={[
+            ["Author", String(annotation.author ?? "—")],
+            ["At", typeof annotation.timestamp === "string" ? new Date(annotation.timestamp).toLocaleString() : "—"],
+            ["Evidence status", typeof annotation.evidence_status === "string" ? annotation.evidence_status : <span className="text-ink-faint">—</span>],
+          ]}
+        />
+        <ContentPanel className="mt-2 whitespace-pre-wrap">{String(annotation.text ?? "")}</ContentPanel>
+      </InspectorSection>
+    </>
+  );
+}
 
 // --- drawer host ------------------------------------------------------------
 
@@ -196,10 +309,34 @@ export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; fo
       return <PullPanel key={entity.ref} refValue={entity.ref} follow={follow} />;
     case "github-auth":
       return <DevicePanel key={entity.ref} />;
+    case "research-run":
+      return <RunProvenancePanel key={entity.ref} runId={entity.ref} />;
+    case "research-metric": {
+      const [runId, metricKey] = splitResearchRef(entity.ref);
+      return <MetricPanel key={entity.ref} runId={runId} metricKey={metricKey} />;
+    }
+    case "research-sample": {
+      const [runId, sampleId] = splitResearchRef(entity.ref);
+      return <SamplePanel key={entity.ref} runId={runId} sampleId={sampleId} />;
+    }
+    case "research-annotation": {
+      const [runId, indexStr] = splitResearchRef(entity.ref);
+      return <AnnotationPanel key={entity.ref} runId={runId} index={Number(indexStr)} />;
+    }
   }
 }
 
-const KIND_LABEL: Record<DrawerRef["kind"], string> = { issue: "Issue", program: "Program", activity: "Activity", pr: "Pull request", "github-auth": "GitHub sign-in" };
+const KIND_LABEL: Record<DrawerRef["kind"], string> = {
+  issue: "Issue",
+  program: "Program",
+  activity: "Activity",
+  pr: "Pull request",
+  "github-auth": "GitHub sign-in",
+  "research-run": "Run provenance",
+  "research-metric": "Metric",
+  "research-sample": "Sample",
+  "research-annotation": "Annotation",
+};
 
 export function InspectorDrawer({ variant }: { variant: "overlay" | "column" | "maximized" }) {
   const { layout, dispatch, inspected, repo } = useShell();

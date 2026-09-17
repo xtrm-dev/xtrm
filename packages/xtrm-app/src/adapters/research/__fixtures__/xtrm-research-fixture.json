@@ -1,7 +1,7 @@
 {
   "compareAB": {
     "run-a": {
-      "event_count": 2,
+      "event_count": 3,
       "metrics": {
         "exact-match::accuracy": {
           "ci95": [
@@ -12,6 +12,13 @@
           "n": 2,
           "se": 0.5,
           "value": 0.5
+        },
+        "exact-match::latency_ms": {
+          "ci95": null,
+          "method": "single-sample-no-variance",
+          "n": 1,
+          "se": null,
+          "value": 118.5
         }
       },
       "sample_count": 2
@@ -21,6 +28,13 @@
       "metrics": {},
       "sample_count": 0
     }
+  },
+  "compareInvalidEnvelope": {
+    "command": "compare",
+    "data": null,
+    "error": "FileNotFoundError: no such run: 'run-missing'",
+    "ok": false,
+    "schema": "xtrm-research-cli/v1"
   },
   "experimentShow": {
     "chart_specs": [
@@ -58,7 +72,7 @@
     }
   },
   "metricsA": {
-    "event_count": 2,
+    "event_count": 3,
     "metrics": {
       "exact-match::accuracy": {
         "ci95": [
@@ -69,6 +83,13 @@
         "n": 2,
         "se": 0.5,
         "value": 0.5
+      },
+      "exact-match::latency_ms": {
+        "ci95": null,
+        "method": "single-sample-no-variance",
+        "n": 1,
+        "se": null,
+        "value": 118.5
       }
     },
     "sample_count": 2
@@ -316,13 +337,39 @@
         "ts": "2026-09-17T12:00:00+00:00"
       },
       {
-        "kind": "progress",
+        "kind": "sample_completed",
+        "sample_id": "s-0",
         "schema_version": "xtrm-research-event/v1",
         "seq": 1,
-        "ts": "2026-09-17T12:00:00+00:00"
+        "ts": "2026-09-17T12:00:00+00:00",
+        "usage": {
+          "gen_ai.request.model": "always-no-1",
+          "gen_ai.response.model": "always-no-1",
+          "gen_ai.usage.input_tokens": 42,
+          "gen_ai.usage.output_tokens": 7,
+          "latency_ms": 118.5,
+          "null_reason": null,
+          "source": "provider_api"
+        }
+      },
+      {
+        "kind": "sample_completed",
+        "sample_id": "s-1",
+        "schema_version": "xtrm-research-event/v1",
+        "seq": 2,
+        "ts": "2026-09-17T12:00:00+00:00",
+        "usage": {
+          "gen_ai.request.model": null,
+          "gen_ai.response.model": null,
+          "gen_ai.usage.input_tokens": null,
+          "gen_ai.usage.output_tokens": null,
+          "latency_ms": null,
+          "null_reason": "usage telemetry unavailable for this backend",
+          "source": "unknown"
+        }
       }
     ],
-    "next_offset": 1
+    "next_offset": 2
   },
   "workloadShow": {
     "content_hash": "sha256:27f6cc386039d2f71fab401d06b59d52f26146c34c9912b4c4c5d5e28d9e8ecf",

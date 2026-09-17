@@ -38,16 +38,31 @@ describe("mapRunRow: invalid_manifest surfaces as an error row", () => {
 describe("tail payload round-trip", () => {
   it("maps events and next_offset from the captured tail output", () => {
     const result = mapTail(fixture.tailA);
-    expect(result.nextOffset).toBe(1);
+    expect(result.nextOffset).toBe(2);
     expect(result.events).toEqual([
-      { seq: 0, ts: "2026-09-17T12:00:00+00:00", kind: "started", sampleId: null, data: undefined },
-      { seq: 1, ts: "2026-09-17T12:00:00+00:00", kind: "progress", sampleId: null, data: undefined },
+      { seq: 0, ts: "2026-09-17T12:00:00+00:00", kind: "started", sampleId: null, data: undefined, usage: null },
+      {
+        seq: 1,
+        ts: "2026-09-17T12:00:00+00:00",
+        kind: "sample_completed",
+        sampleId: "s-0",
+        data: undefined,
+        usage: { source: "provider_api", inputTokens: 42, outputTokens: 7, requestModel: "always-no-1", responseModel: "always-no-1", latencyMs: 118.5, nullReason: null },
+      },
+      {
+        seq: 2,
+        ts: "2026-09-17T12:00:00+00:00",
+        kind: "sample_completed",
+        sampleId: "s-1",
+        data: undefined,
+        usage: { source: "unknown", inputTokens: null, outputTokens: null, requestModel: null, responseModel: null, latencyMs: null, nullReason: "usage telemetry unavailable for this backend" },
+      },
     ]);
   });
 
   it("preserves a null sample_id and passes data through untouched", () => {
     const result = mapTail({ events: [{ seq: 5, ts: "2026-01-01T00:00:00Z", kind: "sample", sample_id: "s-1", data: { ok: true } }], next_offset: 5 });
-    expect(result.events[0]).toEqual({ seq: 5, ts: "2026-01-01T00:00:00Z", kind: "sample", sampleId: "s-1", data: { ok: true } });
+    expect(result.events[0]).toEqual({ seq: 5, ts: "2026-01-01T00:00:00Z", kind: "sample", sampleId: "s-1", data: { ok: true }, usage: null });
   });
 });
 

@@ -1,4 +1,4 @@
-import type { LineageChild, LineageNode, Metric, ResearchAdapter, RunListRow, RunShow, RunStatus, RunSummary, TailCursor, TailResult } from "./types.ts";
+import type { LineageChild, LineageNode, Metric, ResearchAdapter, RunListRow, RunShow, RunStatus, RunSummary, TailCursor, TailResult, UsageRecord } from "./types.ts";
 
 // Wire shapes of the `xtrm-research-cli/v1` envelope (packages/research). Only the fields read here.
 interface Envelope<T> {
@@ -48,12 +48,23 @@ export interface WireRunShow {
   status: string;
   annotations: Array<Record<string, unknown>>;
 }
+/** `common.schema.json#/$defs/usage_record`, quoted keys because GenAI semconv names carry dots. */
+export interface WireUsageRecord {
+  source: string;
+  "gen_ai.usage.input_tokens": number | null;
+  "gen_ai.usage.output_tokens": number | null;
+  "gen_ai.request.model": string | null;
+  "gen_ai.response.model": string | null;
+  latency_ms: number | null;
+  null_reason: string | null;
+}
 export interface WireEvent {
   seq: number;
   ts: string;
   kind: string;
   sample_id?: string | null;
   data?: unknown;
+  usage?: WireUsageRecord | null;
 }
 export interface WireTail {
   events: WireEvent[];
@@ -115,10 +126,22 @@ export function mapRunSummary(w: WireRunSummary): RunSummary {
   return { metrics, sampleCount: w.sample_count, eventCount: w.event_count };
 }
 
+export function mapUsage(w: WireUsageRecord): UsageRecord {
+  return {
+    source: w.source,
+    inputTokens: w["gen_ai.usage.input_tokens"],
+    outputTokens: w["gen_ai.usage.output_tokens"],
+    requestModel: w["gen_ai.request.model"],
+    responseModel: w["gen_ai.response.model"],
+    latencyMs: w.latency_ms,
+    nullReason: w.null_reason,
+  };
+}
+
 // The one legitimate place a `TailCursor` is minted: straight from the wire's `next_offset`.
 export function mapTail(w: WireTail): TailResult {
   return {
-    events: w.events.map((e) => ({ seq: e.seq, ts: e.ts, kind: e.kind, sampleId: e.sample_id ?? null, data: e.data })),
+    events: w.events.map((e) => ({ seq: e.seq, ts: e.ts, kind: e.kind, sampleId: e.sample_id ?? null, data: e.data, usage: e.usage ? mapUsage(e.usage) : null })),
     nextOffset: w.next_offset as TailCursor,
   };
 }
