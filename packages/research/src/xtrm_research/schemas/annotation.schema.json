@@ -1,23 +1,63 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "xtrm-research/annotation/v1",
-  "title": "Annotation — one append-only row in annotations.jsonl",
+  "$id": "annotation.schema.json",
+  "title": "Annotation \u2014 one append-only row in annotations.jsonl",
   "type": "object",
   "properties": {
-    "schema_version": { "const": "xtrm-research-annotation/v1" },
-    "author": { "type": "string", "minLength": 1 },
-    "timestamp": { "type": "string", "format": "date-time" },
+    "schema_version": {
+      "const": "xtrm-research-annotation/v1"
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
     "kind": {
       "type": "string",
-      "enum": ["conclusion", "caveat", "superseded_by", "invalid_reason", "evidence_status"]
+      "enum": [
+        "conclusion",
+        "caveat",
+        "superseded_by",
+        "invalid_reason",
+        "evidence_status"
+      ]
     },
-    "text": { "type": "string", "minLength": 1 },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
     "evidence_status": {
       "type": "string",
-      "enum": ["exploratory", "reproducible", "validated", "regression", "superseded", "invalid"]
+      "enum": [
+        "exploratory",
+        "reproducible",
+        "validated",
+        "regression",
+        "superseded",
+        "invalid"
+      ]
     }
   },
-  "required": ["schema_version", "author", "timestamp", "kind", "text"],
-  "if": { "properties": { "kind": { "const": "evidence_status" } } },
-  "then": { "required": ["evidence_status"] }
+  "required": [
+    "schema_version",
+    "author",
+    "timestamp",
+    "kind",
+    "text"
+  ],
+  "if": {
+    "properties": {
+      "kind": {
+        "const": "evidence_status"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "evidence_status"
+    ]
+  }
 }

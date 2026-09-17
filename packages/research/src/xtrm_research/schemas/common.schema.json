@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "title": "Shared $defs referenced by other schemas via a local $ref registry",
+  "$defs": {
+    "telemetry_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "specialists_job_id": { "type": ["string", "null"] },
+        "specialists_attempt_id": { "type": ["string", "null"] },
+        "specialists_activation_id": { "type": ["string", "null"] },
+        "pi_session_id": { "type": ["string", "null"] },
+        "event_seq": { "type": ["integer", "null"] }
+      }
+    },
+    "usage_record": {
+      "type": "object",
+      "description": "Nullable token/latency usage fields, named per OpenTelemetry GenAI semantic conventions where one exists. 'latency_ms' has no GenAI-standard name; it is this package's own choice, documented in README.md.",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "pi_message_usage", "pi_session_stats", "provider_api",
+            "specialists_snapshot", "estimate", "unknown"
+          ]
+        },
+        "gen_ai.usage.input_tokens": { "type": ["integer", "null"] },
+        "gen_ai.usage.output_tokens": { "type": ["integer", "null"] },
+        "gen_ai.request.model": { "type": ["string", "null"] },
+        "gen_ai.response.model": { "type": ["string", "null"] },
+        "latency_ms": { "type": ["number", "null"] },
+        "null_reason": { "type": ["string", "null"] }
+      },
+      "required": ["source"],
+      "allOf": [
+        {
+          "if": { "required": ["gen_ai.usage.input_tokens"], "properties": { "gen_ai.usage.input_tokens": { "const": null } } },
+          "then": { "required": ["null_reason"] }
+        },
+        {
+          "if": { "required": ["gen_ai.usage.output_tokens"], "properties": { "gen_ai.usage.output_tokens": { "const": null } } },
+          "then": { "required": ["null_reason"] }
+        },
+        {
+          "if": { "required": ["gen_ai.request.model"], "properties": { "gen_ai.request.model": { "const": null } } },
+          "then": { "required": ["null_reason"] }
+        },
+        {
+          "if": { "required": ["gen_ai.response.model"], "properties": { "gen_ai.response.model": { "const": null } } },
+          "then": { "required": ["null_reason"] }
+        },
+        {
+          "if": { "required": ["latency_ms"], "properties": { "latency_ms": { "const": null } } },
+          "then": { "required": ["null_reason"] }
+        }
+      ]
+    },
+    "choice_answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "choice": { "type": "string", "minLength": 1 },
+        "probabilities": { "type": "object", "additionalProperties": { "type": "number" } },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "required": ["choice", "probabilities", "confidence"]
+    },
+    "score_answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "score": { "type": "number" },
+        "legend": { "type": "object", "additionalProperties": { "type": "string" } },
+        "probabilities": { "type": "object", "additionalProperties": { "type": "number" } },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "required": ["score", "legend", "probabilities", "confidence"]
+    },
+    "noul_answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "noul = P(yes). No confidence field: confidence is only a Choice/Score statistic.",
+      "properties": {
+        "noul": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "required": ["noul"]
+    }
+  }
+}

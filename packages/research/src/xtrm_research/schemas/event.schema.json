@@ -1,40 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "xtrm-research/event/v1",
+  "$id": "event.schema.json",
   "title": "Event — one monotonic execution observation row in events.jsonl",
   "type": "object",
-  "$defs": {
-    "telemetry_refs": {
-      "type": "object",
-      "properties": {
-        "specialists_job_id": { "type": ["string", "null"] },
-        "specialists_attempt_id": { "type": ["string", "null"] },
-        "specialists_activation_id": { "type": ["string", "null"] },
-        "pi_session_id": { "type": ["string", "null"] },
-        "event_seq": { "type": ["integer", "null"] }
-      }
-    },
-    "usage_record": {
-      "type": "object",
-      "description": "Nullable token/latency usage fields, named per OpenTelemetry GenAI semantic conventions.",
-      "properties": {
-        "source": {
-          "type": "string",
-          "enum": [
-            "pi_message_usage", "pi_session_stats", "provider_api",
-            "specialists_snapshot", "estimate", "unknown"
-          ]
-        },
-        "gen_ai.usage.input_tokens": { "type": ["integer", "null"] },
-        "gen_ai.usage.output_tokens": { "type": ["integer", "null"] },
-        "gen_ai.request.model": { "type": ["string", "null"] },
-        "gen_ai.response.model": { "type": ["string", "null"] },
-        "latency_ms": { "type": ["number", "null"] },
-        "null_reason": { "type": ["string", "null"] }
-      },
-      "required": ["source"]
-    }
-  },
   "properties": {
     "schema_version": { "const": "xtrm-research-event/v1" },
     "seq": { "type": "integer", "minimum": 0 },
@@ -42,11 +10,11 @@
     "kind": { "type": "string", "minLength": 1 },
     "sample_id": { "type": ["string", "null"] },
     "data": {},
-    "telemetry_refs": { "$ref": "#/$defs/telemetry_refs" },
+    "telemetry_refs": { "$ref": "common.schema.json#/$defs/telemetry_refs" },
     "telemetry_snapshot": {
       "description": "A closed snapshot copied from Specialists/Pi telemetry at event time. Never a live reference into their stores."
     },
-    "usage": { "$ref": "#/$defs/usage_record" }
+    "usage": { "$ref": "common.schema.json#/$defs/usage_record" }
   },
   "required": ["schema_version", "seq", "ts", "kind"]
 }

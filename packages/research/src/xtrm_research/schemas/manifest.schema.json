@@ -1,149 +1,361 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "xtrm-research/manifest/v1",
-  "title": "RunManifest — fully version-resolved before any sample executes",
+  "$id": "manifest.schema.json",
+  "title": "RunManifest \u2014 fully version-resolved before any sample executes",
   "type": "object",
   "$defs": {
     "version_ref": {
       "type": "object",
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "version": { "type": "string", "minLength": 1 },
-        "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       },
-      "required": ["id", "version", "content_hash"]
+      "required": [
+        "id",
+        "version",
+        "content_hash"
+      ]
     },
     "lineage_relation": {
       "type": "object",
       "properties": {
         "relation": {
           "type": "string",
-          "enum": ["baseline_of", "retry_of", "forked_from", "replay_of", "supersedes", "regression_of"]
+          "enum": [
+            "baseline_of",
+            "retry_of",
+            "forked_from",
+            "replay_of",
+            "supersedes",
+            "regression_of"
+          ]
         },
-        "run_id": { "type": "string", "minLength": 1 }
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        }
       },
-      "required": ["relation", "run_id"]
+      "required": [
+        "relation",
+        "run_id"
+      ]
     },
     "alias_resolved": {
       "type": "object",
       "properties": {
-        "input": { "type": "string", "minLength": 1 },
-        "resolved": { "type": "string", "minLength": 1 }
+        "input": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolved": {
+          "type": "string",
+          "minLength": 1
+        }
       },
-      "required": ["input", "resolved"]
+      "required": [
+        "input",
+        "resolved"
+      ]
     },
     "alias_unresolved": {
       "type": "object",
       "properties": {
-        "input": { "type": "string", "minLength": 1 },
-        "reason": { "type": "string", "minLength": 1 }
+        "input": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
       },
-      "required": ["input", "reason"]
+      "required": [
+        "input",
+        "reason"
+      ]
     }
   },
   "properties": {
-    "schema_version": { "const": "xtrm-research-manifest/v1" },
-    "run_id": { "type": "string", "minLength": 1 },
-    "experiment": { "$ref": "#/$defs/version_ref" },
-    "workload": { "$ref": "#/$defs/version_ref" },
-    "dataset": { "$ref": "#/$defs/version_ref" },
-    "variant": { "$ref": "#/$defs/version_ref" },
-    "evaluators": { "type": "array", "items": { "$ref": "#/$defs/version_ref" } },
-    "question_specs": { "type": "array", "items": { "$ref": "#/$defs/version_ref" } },
+    "schema_version": {
+      "const": "xtrm-research-manifest/v1"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "experiment": {
+      "$ref": "#/$defs/version_ref"
+    },
+    "workload": {
+      "$ref": "#/$defs/version_ref"
+    },
+    "dataset": {
+      "$ref": "#/$defs/version_ref"
+    },
+    "variant": {
+      "$ref": "#/$defs/version_ref"
+    },
+    "evaluators": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/version_ref"
+      }
+    },
+    "question_specs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/version_ref"
+      }
+    },
     "runtime": {
       "type": "object",
       "properties": {
-        "research_version": { "type": "string", "minLength": 1 },
-        "pi_version": { "type": ["string", "null"] },
-        "specialists_version": { "type": ["string", "null"] }
+        "research_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pi_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "specialists_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
-      "required": ["research_version"]
+      "required": [
+        "research_version"
+      ]
     },
     "backend": {
       "type": "object",
       "properties": {
-        "provider": { "type": "string", "minLength": 1 },
-        "model": { "type": "string", "minLength": 1 },
-        "model_version": { "type": "string", "minLength": 1 }
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_version": {
+          "type": "string",
+          "minLength": 1
+        }
       },
-      "required": ["provider", "model", "model_version"]
+      "required": [
+        "provider",
+        "model",
+        "model_version"
+      ]
     },
     "code": {
       "type": "object",
       "properties": {
-        "repo": { "type": "string", "minLength": 1 },
-        "commit": { "type": "string", "minLength": 1 },
-        "dirty": { "type": "boolean" },
-        "dirty_patch_hash": { "type": ["string", "null"] }
+        "repo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "dirty_patch_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
-      "required": ["repo", "commit", "dirty"]
+      "required": [
+        "repo",
+        "commit",
+        "dirty"
+      ]
     },
     "guards": {
       "type": "object",
       "properties": {
-        "mask_version": { "type": "string", "minLength": 1 },
-        "redaction_version": { "type": "string", "minLength": 1 }
+        "mask_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "redaction_version": {
+          "type": "string",
+          "minLength": 1
+        }
       },
-      "required": ["mask_version", "redaction_version"]
+      "required": [
+        "mask_version",
+        "redaction_version"
+      ]
     },
     "accounting": {
       "type": "object",
       "properties": {
-        "price_table_version": { "type": "string", "minLength": 1 },
-        "telemetry_schema_version": { "type": "string", "minLength": 1 },
-        "otel_semconv_ref": { "type": "string", "minLength": 1 }
+        "price_table_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "telemetry_schema_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "otel_semconv_ref": {
+          "type": "string",
+          "minLength": 1
+        }
       },
-      "required": ["price_table_version", "telemetry_schema_version", "otel_semconv_ref"]
+      "required": [
+        "price_table_version",
+        "telemetry_schema_version",
+        "otel_semconv_ref"
+      ]
     },
     "environment": {
       "type": "object",
       "properties": {
-        "platform": { "type": "string", "minLength": 1 },
-        "python_version": { "type": "string" },
-        "node_version": { "type": ["string", "null"] },
-        "flags": { "type": "object" }
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "python_version": {
+          "type": "string"
+        },
+        "node_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "flags": {
+          "type": "object"
+        }
       },
-      "required": ["platform"]
+      "required": [
+        "platform"
+      ]
     },
-    "seed": { "type": "integer" },
+    "seed": {
+      "type": "integer"
+    },
     "intent": {
       "type": "object",
       "properties": {
-        "purpose": { "type": "string", "minLength": 1 },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
         "trigger": {
           "type": "string",
-          "enum": ["baseline", "change_test", "regression_check", "replay", "retry", "exploration"]
+          "enum": [
+            "baseline",
+            "change_test",
+            "regression_check",
+            "replay",
+            "retry",
+            "exploration"
+          ]
         },
-        "refs": { "type": "array", "items": { "type": "string" } },
-        "requested_by": { "type": "string", "minLength": 1 },
-        "tags": { "type": "array", "items": { "type": "string" } }
+        "refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requested_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       },
-      "required": ["purpose", "trigger", "refs", "requested_by", "tags"]
+      "required": [
+        "purpose",
+        "trigger",
+        "refs",
+        "requested_by",
+        "tags"
+      ]
     },
-    "lineage": { "type": "array", "items": { "$ref": "#/$defs/lineage_relation" } },
-    "retried_sample_ids": { "type": "array", "items": { "type": "string" } },
-    "status": {
-      "type": "object",
-      "properties": {
-        "state": { "type": "string", "enum": ["started", "success", "error", "invalid"] },
-        "last_heartbeat": { "type": "string", "format": "date-time" }
-      },
-      "required": ["state", "last_heartbeat"]
+    "lineage": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/lineage_relation"
+      }
+    },
+    "retried_sample_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "aliases": {
       "type": "object",
       "properties": {
-        "resolved": { "type": "array", "items": { "$ref": "#/$defs/alias_resolved" } },
-        "unresolved": { "type": "array", "items": { "$ref": "#/$defs/alias_unresolved" } }
+        "resolved": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/alias_resolved"
+          }
+        },
+        "unresolved": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/alias_unresolved"
+          }
+        }
       },
-      "required": ["resolved", "unresolved"]
+      "required": [
+        "resolved",
+        "unresolved"
+      ]
     },
-    "created_at": { "type": "string", "format": "date-time" }
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
   },
   "required": [
-    "schema_version", "run_id", "experiment", "workload", "dataset", "variant",
-    "evaluators", "question_specs", "runtime", "backend", "code", "guards",
-    "accounting", "environment", "seed", "intent", "lineage", "status", "aliases",
+    "schema_version",
+    "run_id",
+    "experiment",
+    "workload",
+    "dataset",
+    "variant",
+    "evaluators",
+    "question_specs",
+    "runtime",
+    "backend",
+    "code",
+    "guards",
+    "accounting",
+    "environment",
+    "seed",
+    "intent",
+    "lineage",
+    "aliases",
     "created_at"
   ]
 }

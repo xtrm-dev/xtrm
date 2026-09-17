@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "xtrm-research/question-spec/v1",
+  "$id": "question_spec.schema.json",
   "title": "QuestionSpec — a System One judgment definition",
   "type": "object",
   "properties": {
@@ -9,27 +9,31 @@
     "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "type": { "type": "string", "enum": ["choice", "score", "noul"] },
     "instructions": { "type": "string", "minLength": 1 },
-    "criteria": {},
+    "criteria": {
+      "description": "Structured JSON allowed. Required for choice/score. Optional for noul — a noul question may carry no more than a true/false framing."
+    },
     "options": {
       "type": "array",
       "items": { "type": "string" },
+      "minItems": 1,
       "description": "Required for type=choice; the option values a Choice answer may take."
     },
     "legend": {
       "type": "object",
       "description": "Required for type=score; maps level numbers to a human-readable label.",
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": { "type": "string" },
+      "minProperties": 1
     }
   },
-  "required": ["id", "version", "content_hash", "type", "instructions", "criteria"],
+  "required": ["id", "version", "content_hash", "type", "instructions"],
   "allOf": [
     {
       "if": { "properties": { "type": { "const": "choice" } } },
-      "then": { "required": ["options"] }
+      "then": { "required": ["criteria", "options"] }
     },
     {
       "if": { "properties": { "type": { "const": "score" } } },
-      "then": { "required": ["legend"] }
+      "then": { "required": ["criteria", "legend"] }
     }
   ]
 }

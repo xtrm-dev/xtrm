@@ -1,17 +1,34 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "xtrm-research/dataset/v1",
+  "$id": "dataset.schema.json",
   "title": "Dataset definition",
   "type": "object",
   "properties": {
-    "id": { "type": "string", "minLength": 1 },
-    "version": { "type": "string", "minLength": 1 },
-    "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "description": { "type": "string" },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "description": {
+      "type": "string"
+    },
     "source": {
       "type": "string",
       "description": "Path or locator for the raw data this dataset draws from. Never a live external URL."
     }
   },
-  "required": ["id", "version", "content_hash", "description", "source"]
+  "required": [
+    "id",
+    "version",
+    "content_hash",
+    "description",
+    "source"
+  ]
 }

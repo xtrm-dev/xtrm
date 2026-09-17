@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "xtrm-research/assessment-set/v1",
+  "$id": "assessment_set.schema.json",
   "title": "AssessmentSet — one immutable evaluation pass over a run's execution evidence",
   "type": "object",
   "$defs": {
@@ -16,9 +16,13 @@
           "maxItems": 2
         },
         "n": { "type": "integer", "minimum": 0 },
-        "method": { "type": "string", "minLength": 1 }
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Always a real, non-null string — states how value was computed, and why se/ci95 are null when they are (e.g. 'single-sample-no-variance')."
+        }
       },
-      "required": ["value", "n", "method"]
+      "required": ["value", "se", "ci95", "n", "method"]
     }
   },
   "properties": {
@@ -41,7 +45,13 @@
         "type": "object",
         "properties": {
           "sample_id": { "type": "string", "minLength": 1 },
-          "answer": {}
+          "answer": {
+            "oneOf": [
+              { "$ref": "common.schema.json#/$defs/choice_answer" },
+              { "$ref": "common.schema.json#/$defs/score_answer" },
+              { "$ref": "common.schema.json#/$defs/noul_answer" }
+            ]
+          }
         },
         "required": ["sample_id", "answer"]
       }

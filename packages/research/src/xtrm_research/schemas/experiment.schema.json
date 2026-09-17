@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "xtrm-research/experiment/v1",
+  "$id": "experiment.schema.json",
   "title": "Experiment — one research question over one workload version with N variants",
   "type": "object",
   "$defs": {
@@ -13,19 +13,11 @@
         "description": { "type": "string", "minLength": 1 },
         "datasets": {
           "type": "array",
-          "description": "Named datasets this chart references. Never a URL data source.",
+          "description": "Named datasets this chart references. Each must be one of the experiment's own named_datasets — never a URL data source.",
           "items": { "type": "string", "minLength": 1 }
         }
       },
-      "required": ["id", "schema_version", "title", "description", "datasets"],
-      "not": {
-        "properties": {
-          "datasets": {
-            "contains": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9+.-]*://" }
-          }
-        },
-        "required": ["datasets"]
-      }
+      "required": ["id", "schema_version", "title", "description", "datasets"]
     }
   },
   "properties": {
@@ -54,9 +46,14 @@
         "required": ["id", "version"]
       }
     },
+    "named_datasets": {
+      "type": "array",
+      "description": "The complete set of named (non-URL) datasets this experiment's chart_specs may reference — usually metric names.",
+      "items": { "type": "string", "minLength": 1 }
+    },
     "legend": {
       "type": "object",
-      "description": "Maps every metric name, variant id, label value and status used by this experiment to a human-readable label. Completeness is enforced by the registry loader, not by this schema alone.",
+      "description": "Maps every named dataset and variant id used by this experiment to a human-readable label. Completeness is enforced by validate(), not by this schema alone.",
       "additionalProperties": { "type": "string" }
     },
     "chart_specs": {
@@ -66,6 +63,6 @@
   },
   "required": [
     "id", "version", "content_hash", "workload", "description", "hypothesis",
-    "variants", "legend", "chart_specs"
+    "variants", "named_datasets", "legend", "chart_specs"
   ]
 }
