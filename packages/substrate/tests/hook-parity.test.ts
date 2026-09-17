@@ -47,7 +47,7 @@ describe("§54 hook parity", () => {
     rmSync(s.dir, { recursive: true, force: true });
   });
 
-  it("beads-edit-gate → substrate-edit-gate (claim + writer lease)", () => {
+  it("beads-edit-gate → substrate-edit-gate (live claim only)", () => {
     assert.equal(handleEditGate({ cwd: s.dir, dbPath: s.dbPath }).allow, true, "unbound session edits freely");
     assert.equal(handleEditGate({ cwd: s.dir, issueRef: s.humanRef, dbPath: s.dbPath }).allow, false, "bound issue without claim blocks");
     const db = openSubstrate(s.dbPath);
