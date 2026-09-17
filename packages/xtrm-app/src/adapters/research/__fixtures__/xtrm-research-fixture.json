@@ -1,0 +1,364 @@
+{
+  "compareAB": {
+    "run-a": {
+      "event_count": 2,
+      "metrics": {
+        "exact-match::accuracy": {
+          "ci95": [
+            0.0,
+            1.0
+          ],
+          "method": "binomial-proportion",
+          "n": 2,
+          "se": 0.5,
+          "value": 0.5
+        }
+      },
+      "sample_count": 2
+    },
+    "run-b": {
+      "event_count": 1,
+      "metrics": {},
+      "sample_count": 0
+    }
+  },
+  "experimentShow": {
+    "chart_specs": [
+      {
+        "datasets": [
+          "accuracy"
+        ],
+        "description": "Accuracy metric for each run of this experiment.",
+        "id": "accuracy-by-run",
+        "schema_version": "xtrm-research-chart-spec/v1",
+        "title": "Accuracy by run"
+      }
+    ],
+    "content_hash": "sha256:7450e29c729a8f145e6dc07df0be0f5f915620381e94f8b2dd4ab881764c4b2d",
+    "description": "Does a deterministic baseline beat chance on synthetic duplicate pairs?",
+    "hypothesis": "A trivial baseline scores near chance accuracy on synthetic pairs.",
+    "id": "dup-detect-baseline",
+    "legend": {
+      "accuracy": "fraction of samples whose predicted duplicate flag matched the label",
+      "baseline": "always predicts 'not a duplicate'"
+    },
+    "named_datasets": [
+      "accuracy"
+    ],
+    "variants": [
+      {
+        "id": "baseline",
+        "version": "v1"
+      }
+    ],
+    "version": "v1",
+    "workload": {
+      "id": "dup-detect",
+      "version": "v1"
+    }
+  },
+  "metricsA": {
+    "event_count": 2,
+    "metrics": {
+      "exact-match::accuracy": {
+        "ci95": [
+          0.0,
+          1.0
+        ],
+        "method": "binomial-proportion",
+        "n": 2,
+        "se": 0.5,
+        "value": 0.5
+      }
+    },
+    "sample_count": 2
+  },
+  "runShowA": {
+    "annotations": [
+      {
+        "author": "xtrm-app fixture generator",
+        "evidence_status": "reproducible",
+        "kind": "conclusion",
+        "schema_version": "xtrm-research-annotation/v1",
+        "text": "Baseline lands at chance accuracy, as hypothesised.",
+        "timestamp": "2026-09-17T12:00:00+00:00"
+      }
+    ],
+    "manifest": {
+      "accounting": {
+        "otel_semconv_ref": "gen_ai/v1.28",
+        "price_table_version": "v1",
+        "telemetry_schema_version": "v1"
+      },
+      "aliases": {
+        "resolved": [],
+        "unresolved": []
+      },
+      "backend": {
+        "model": "always-no-1",
+        "model_version": "v1",
+        "provider": "deterministic"
+      },
+      "code": {
+        "commit": "deadbeef",
+        "dirty": false,
+        "repo": "xtrm"
+      },
+      "created_at": "2026-09-17T12:00:00+00:00",
+      "dataset": {
+        "content_hash": "sha256:28ffb74412a8183b1372c1dcabefe2cfe78030d0b84d4d63373e0947789d01bd",
+        "id": "synthetic-pairs",
+        "version": "v1"
+      },
+      "environment": {
+        "platform": "fixture"
+      },
+      "evaluators": [
+        {
+          "content_hash": "sha256:109b8b7abf9fc173a47b1692c17d2c318f397735ba012aeb4139c8ebd584bfde",
+          "id": "exact-match",
+          "version": "v1"
+        }
+      ],
+      "experiment": {
+        "content_hash": "sha256:7450e29c729a8f145e6dc07df0be0f5f915620381e94f8b2dd4ab881764c4b2d",
+        "id": "dup-detect-baseline",
+        "version": "v1"
+      },
+      "guards": {
+        "mask_version": "v1",
+        "redaction_version": "v1"
+      },
+      "intent": {
+        "purpose": "illustrate the xtrm-app research bridge",
+        "refs": [],
+        "requested_by": "xtrm-app fixture generator",
+        "tags": [],
+        "trigger": "baseline"
+      },
+      "lineage": [],
+      "question_specs": [
+        {
+          "content_hash": "sha256:6ab540291c8806ec65ba4983c33dbe4ab7eff8c62f9443d15d9c58823f082821",
+          "id": "dup-check",
+          "version": "v1"
+        }
+      ],
+      "run_id": "run-a",
+      "runtime": {
+        "pi_version": null,
+        "research_version": "0.3.0",
+        "specialists_version": null
+      },
+      "schema_version": "xtrm-research-manifest/v1",
+      "seed": 1,
+      "variant": {
+        "content_hash": "sha256:1b12513a3e8c80d798ba9ca71f06b0e47a3c96936bdf6f31c7e9368e5835984c",
+        "id": "baseline",
+        "version": "v1"
+      },
+      "workload": {
+        "content_hash": "sha256:27f6cc386039d2f71fab401d06b59d52f26146c34c9912b4c4c5d5e28d9e8ecf",
+        "id": "dup-detect",
+        "version": "v1"
+      }
+    },
+    "status": "success"
+  },
+  "runShowB": {
+    "annotations": [
+      {
+        "author": "xtrm-app fixture generator",
+        "kind": "invalid_reason",
+        "schema_version": "xtrm-research-annotation/v1",
+        "text": "Retried sample raised in the deterministic backend.",
+        "timestamp": "2026-09-17T12:00:00+00:00"
+      }
+    ],
+    "manifest": {
+      "accounting": {
+        "otel_semconv_ref": "gen_ai/v1.28",
+        "price_table_version": "v1",
+        "telemetry_schema_version": "v1"
+      },
+      "aliases": {
+        "resolved": [],
+        "unresolved": []
+      },
+      "backend": {
+        "model": "always-no-1",
+        "model_version": "v1",
+        "provider": "deterministic"
+      },
+      "code": {
+        "commit": "deadbeef",
+        "dirty": false,
+        "repo": "xtrm"
+      },
+      "created_at": "2026-09-17T12:00:00+00:00",
+      "dataset": {
+        "content_hash": "sha256:28ffb74412a8183b1372c1dcabefe2cfe78030d0b84d4d63373e0947789d01bd",
+        "id": "synthetic-pairs",
+        "version": "v1"
+      },
+      "environment": {
+        "platform": "fixture"
+      },
+      "evaluators": [
+        {
+          "content_hash": "sha256:109b8b7abf9fc173a47b1692c17d2c318f397735ba012aeb4139c8ebd584bfde",
+          "id": "exact-match",
+          "version": "v1"
+        }
+      ],
+      "experiment": {
+        "content_hash": "sha256:7450e29c729a8f145e6dc07df0be0f5f915620381e94f8b2dd4ab881764c4b2d",
+        "id": "dup-detect-baseline",
+        "version": "v1"
+      },
+      "guards": {
+        "mask_version": "v1",
+        "redaction_version": "v1"
+      },
+      "intent": {
+        "purpose": "illustrate the xtrm-app research bridge",
+        "refs": [],
+        "requested_by": "xtrm-app fixture generator",
+        "tags": [],
+        "trigger": "retry"
+      },
+      "lineage": [
+        {
+          "relation": "retry_of",
+          "run_id": "run-a"
+        }
+      ],
+      "question_specs": [
+        {
+          "content_hash": "sha256:6ab540291c8806ec65ba4983c33dbe4ab7eff8c62f9443d15d9c58823f082821",
+          "id": "dup-check",
+          "version": "v1"
+        }
+      ],
+      "retried_sample_ids": [
+        "s-0"
+      ],
+      "run_id": "run-b",
+      "runtime": {
+        "pi_version": null,
+        "research_version": "0.3.0",
+        "specialists_version": null
+      },
+      "schema_version": "xtrm-research-manifest/v1",
+      "seed": 1,
+      "variant": {
+        "content_hash": "sha256:1b12513a3e8c80d798ba9ca71f06b0e47a3c96936bdf6f31c7e9368e5835984c",
+        "id": "baseline",
+        "version": "v1"
+      },
+      "workload": {
+        "content_hash": "sha256:27f6cc386039d2f71fab401d06b59d52f26146c34c9912b4c4c5d5e28d9e8ecf",
+        "id": "dup-detect",
+        "version": "v1"
+      }
+    },
+    "status": "error"
+  },
+  "runs": [
+    {
+      "evidence_status": null,
+      "experiment": "dup-detect-baseline",
+      "id": "run-a",
+      "latest_conclusion": "Baseline lands at chance accuracy, as hypothesised.",
+      "purpose": "illustrate the xtrm-app research bridge",
+      "status": "success",
+      "trigger": "baseline",
+      "variant": "baseline"
+    },
+    {
+      "evidence_status": null,
+      "experiment": "dup-detect-baseline",
+      "id": "run-b",
+      "latest_conclusion": null,
+      "purpose": "illustrate the xtrm-app research bridge",
+      "status": "error",
+      "trigger": "retry",
+      "variant": "baseline"
+    },
+    {
+      "error": "JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
+      "evidence_status": null,
+      "experiment": null,
+      "id": "run-c",
+      "latest_conclusion": null,
+      "purpose": null,
+      "status": "invalid_manifest",
+      "trigger": null,
+      "variant": null
+    }
+  ],
+  "runsLineage": {
+    "children": [
+      {
+        "children": [],
+        "relation": "retry_of",
+        "run_id": "run-b"
+      }
+    ],
+    "run_id": "run-a"
+  },
+  "tailA": {
+    "events": [
+      {
+        "kind": "started",
+        "schema_version": "xtrm-research-event/v1",
+        "seq": 0,
+        "ts": "2026-09-17T12:00:00+00:00"
+      },
+      {
+        "kind": "progress",
+        "schema_version": "xtrm-research-event/v1",
+        "seq": 1,
+        "ts": "2026-09-17T12:00:00+00:00"
+      }
+    ],
+    "next_offset": 1
+  },
+  "workloadShow": {
+    "content_hash": "sha256:27f6cc386039d2f71fab401d06b59d52f26146c34c9912b4c4c5d5e28d9e8ecf",
+    "default_metrics": [
+      "accuracy"
+    ],
+    "description": "Fixture workload for duplicate-pair detection.",
+    "evaluators": [
+      {
+        "id": "exact-match",
+        "version": "v1"
+      }
+    ],
+    "id": "dup-detect",
+    "input_schema": {
+      "type": "object"
+    },
+    "legend": {
+      "accuracy": "fraction of samples whose predicted duplicate flag matched the label",
+      "dup-check": "does the System One model judge the pair a duplicate?"
+    },
+    "observers": [],
+    "output_schema": {
+      "type": "object"
+    },
+    "questions": [
+      {
+        "id": "dup-check",
+        "version": "v1"
+      }
+    ],
+    "required_capabilities": [
+      "text_compare"
+    ],
+    "runner_kind": "system_one",
+    "sample_provider": "tests.fixtures.samples:synthetic_pairs",
+    "version": "v1"
+  }
+}

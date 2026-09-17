@@ -1,0 +1,86 @@
+import type { DataSource } from "../types.ts";
+
+// Typed view models for the xtrm-research bridge (server/research-cli.ts).
+// UI components depend on these, never on the wire shapes in live.ts.
+
+export type RunStatus = "started" | "success" | "error" | "invalid" | "interrupted";
+
+export interface Metric {
+  value: number;
+  se: number | null;
+  ci95: [number, number] | null;
+  n: number;
+  method: string;
+}
+
+export interface RunRow {
+  id: string;
+  status: RunStatus;
+  experiment: string;
+  variant: string;
+  trigger: string;
+  purpose: string;
+  latestConclusion: string | null;
+  evidenceStatus: string | null;
+}
+
+/** A `runs` row whose manifest.json failed to load; every other field is null. */
+export interface InvalidManifestRow {
+  id: string;
+  status: "invalid_manifest";
+  error: string;
+}
+
+export type RunListRow = RunRow | InvalidManifestRow;
+
+export function isInvalidManifestRow(row: RunListRow): row is InvalidManifestRow {
+  return row.status === "invalid_manifest";
+}
+
+export interface LineageChild {
+  relation: string;
+  runId: string;
+  children: LineageChild[];
+}
+
+export interface LineageNode {
+  runId: string;
+  children: LineageChild[];
+}
+
+export interface RunShow {
+  manifest: Record<string, unknown>;
+  status: RunStatus;
+  annotations: Array<Record<string, unknown>>;
+}
+
+export interface TailEvent {
+  seq: number;
+  ts: string;
+  kind: string;
+  sampleId: string | null;
+  data: unknown;
+}
+
+export interface TailResult {
+  events: TailEvent[];
+  nextOffset: number;
+}
+
+export interface RunSummary {
+  metrics: Record<string, Metric>;
+  sampleCount: number;
+  eventCount: number;
+}
+
+export interface ResearchAdapter {
+  readonly source: DataSource;
+  listRuns(): Promise<RunListRow[]>;
+  getLineage(runId: string): Promise<LineageNode>;
+  getRun(runId: string): Promise<RunShow>;
+  getExperiment(id: string, version?: string): Promise<Record<string, unknown>>;
+  getWorkload(id: string, version?: string): Promise<Record<string, unknown>>;
+  tail(runId: string, after?: number): Promise<TailResult>;
+  getMetrics(runId: string): Promise<RunSummary>;
+  compare(runIds: string[]): Promise<Record<string, RunSummary>>;
+}
