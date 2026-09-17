@@ -2,6 +2,8 @@ import { useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import type { RepoEvent } from "../adapters/index.tsx";
 import { useEvents, useIssue, useProgram } from "../app/queries.ts";
+import { PullPanel } from "../github/PullPanel.tsx";
+import { DevicePanel } from "../github/auth.tsx";
 import { useCanWrite } from "../issues/actions.ts";
 import { IssueView } from "../issues/IssueView.tsx";
 import { Drawer, Fields, InspectorSection } from "../ui/drawer.tsx";
@@ -32,7 +34,7 @@ function IssuePanel({ issueRef, follow }: { issueRef: string; follow: boolean })
   const q = useIssue(issueRef, follow);
   if (q.isPending) return <LoadingState rows={6} label="Loading issue" />;
   if (q.isError) return <ErrorState title={`Could not read ${issueRef}`} error={q.error} />;
-  return <IssueView issue={q.data} canWrite={canWrite} variant="panel" nav={{ onOpenIssue: (ref) => inspect({ kind: "issue", ref }) }} />;
+  return <IssueView issue={q.data} canWrite={canWrite} variant="panel" nav={{ onOpenIssue: (ref) => inspect({ kind: "issue", ref }), onOpenPull: (ref) => inspect({ kind: "pr", ref }) }} />;
 }
 
 // --- program ----------------------------------------------------------------
@@ -180,7 +182,7 @@ export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; fo
   if (!entity)
     return (
       <EmptyState icon="inspector" title="Nothing inspected">
-        Select an issue, Program item, or activity event to inspect it here without leaving the current surface.
+        Select an issue, Program item, activity event, or pull request to inspect it here without leaving the current surface.
       </EmptyState>
     );
   switch (entity.kind) {
@@ -190,10 +192,14 @@ export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; fo
       return <ProgramPanel key={entity.ref} id={entity.ref} follow={follow} />;
     case "activity":
       return <ActivityPanel key={entity.ref} refValue={entity.ref} follow={follow} />;
+    case "pr":
+      return <PullPanel key={entity.ref} refValue={entity.ref} follow={follow} />;
+    case "github-auth":
+      return <DevicePanel key={entity.ref} />;
   }
 }
 
-const KIND_LABEL: Record<DrawerRef["kind"], string> = { issue: "Issue", program: "Program", activity: "Activity" };
+const KIND_LABEL: Record<DrawerRef["kind"], string> = { issue: "Issue", program: "Program", activity: "Activity", pr: "Pull request", "github-auth": "GitHub sign-in" };
 
 export function InspectorDrawer({ variant }: { variant: "overlay" | "column" | "maximized" }) {
   const { layout, dispatch, inspected, repo } = useShell();

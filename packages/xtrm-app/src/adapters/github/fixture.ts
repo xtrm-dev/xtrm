@@ -1,4 +1,4 @@
-import type { GithubAdapter, Repo, RepoEvent } from "../types.ts";
+import type { GithubAdapter, PullListState, PullRequestDetail, PullRequestSummary, Repo, RepoEvent } from "../types.ts";
 
 // Development fixture. Shapes follow the Console v1 GitHub DTOs; content is illustrative.
 
@@ -25,6 +25,143 @@ const seed: Array<Omit<RepoEvent, "id" | "repo" | "createdAt">> = [
 export const fixtureEvents = (repo: string): RepoEvent[] =>
   Array.from({ length: 90 }, (_, i) => ({ ...seed[i % seed.length]!, id: `fx-${repo}-${i}`, repo, createdAt: ago(i * 37 + 4) }));
 
+// --- pull requests ----------------------------------------------------------
+// Fixture PRs carry Substrate issue keys in title/branch/body so the linkage
+// (PR -> issue chips) is exercisable without live data. Numbers, authors, and
+// check/review states vary across the Open / Merged / Closed views.
+
+interface FixturePull extends PullRequestSummary {
+  mergeable: boolean | null;
+  mergeableState: string | null;
+  commits: number;
+  reviews: PullRequestDetail["reviews"];
+  conversationComments: PullRequestDetail["conversationComments"];
+  reviewComments: PullRequestDetail["reviewComments"];
+  files: PullRequestDetail["files"];
+}
+
+const pullSeed: Array<Omit<FixturePull, "url" | "createdAt" | "updatedAt"> & { ageMin: number }> = [
+  {
+    number: 212, title: "feat(XTRM-301): rail keyboard model v2", author: "Jaggerxtrm", headBranch: "xt/o8h2", baseBranch: "main",
+    state: "open", draft: false, checks: "passing", review: "approved", additions: 412, deletions: 88, changedFiles: 3, comments: 4,
+    body: "Implements XTRM-301. Follow-up to XTRM-300.1.", mergeable: true, mergeableState: "clean", commits: 3,
+    reviews: [{ id: "r212-1", author: "reviewer-xtrm", state: "approved", submittedAt: ago(120), body: "Looks good — rail toggle reads well.", url: null }],
+    conversationComments: [
+      { id: "c212-1", author: "Jaggerxtrm", body: "Heads up: this needs the Mod+I tooltip before merge.", url: null, createdAt: ago(140), updatedAt: null },
+    ],
+    reviewComments: [],
+    files: [
+      { filename: "packages/xtrm-app/src/shell/context.tsx", additions: 210, deletions: 40, status: "modified" },
+      { filename: "packages/xtrm-app/src/shell/layout.ts", additions: 120, deletions: 30, status: "modified" },
+      { filename: "packages/xtrm-app/src/github/PullsSurface.tsx", additions: 82, deletions: 18, status: "added" },
+    ],
+    ageMin: 45,
+  },
+  {
+    number: 211, title: "fix(XTRM-305): silence virtual-bead spam", author: "Jaggerxtrm", headBranch: "fix/XTRM-305-bead-spam", baseBranch: "main",
+    state: "open", draft: false, checks: "pending", review: "pending", additions: 96, deletions: 12, changedFiles: 4, comments: 1,
+    body: "Fixes XTRM-305. See also XTRM-94.", mergeable: null, mergeableState: "unknown", commits: 1,
+    reviews: [],
+    conversationComments: [],
+    reviewComments: [],
+    files: [{ filename: "packages/agentsession-sre/src/feed.ts", additions: 96, deletions: 12, status: "modified" }],
+    ageMin: 180,
+  },
+  {
+    number: 210, title: "docs: canonical Console v2 baseline", author: "Jaggerxtrm", headBranch: "docs/baseline", baseBranch: "main",
+    state: "open", draft: true, checks: "none", review: "none", additions: 3578, deletions: 13, changedFiles: 15, comments: 0,
+    body: null, mergeable: true, mergeableState: "clean", commits: 2,
+    reviews: [],
+    conversationComments: [],
+    reviewComments: [],
+    files: [{ filename: "packages/xtrm-app/docs/console-v2-shell-architecture.md", additions: 900, deletions: 5, status: "modified" }],
+    ageMin: 300,
+  },
+  {
+    number: 209, title: "feat(XTRM-302): collapsed sidebar reopen rail", author: "contrib-xtrm", headBranch: "xt/il2a", baseBranch: "main",
+    state: "open", draft: false, checks: "failing", review: "changes_requested", additions: 240, deletions: 60, changedFiles: 6, comments: 7,
+    body: "Implements XTRM-302. UTF-8 is not a reference.", mergeable: false, mergeableState: "dirty", commits: 4,
+    reviews: [{ id: "r209-1", author: "Jaggerxtrm", state: "changes_requested", submittedAt: ago(400), body: "**[test · Console v2]** Review summary to preview review rendering.", url: null }],
+    conversationComments: [
+      { id: "c209-1", author: "Jaggerxtrm", body: "**[test · Console v2]** Conversation comment to preview PR thread rendering in the XTRM Console drawer. Safe to ignore.", url: null, createdAt: ago(410), updatedAt: null },
+    ],
+    reviewComments: [
+      { id: "rc209-1", author: "Jaggerxtrm", body: "Inline test comment: does the drawer show code-anchored threads?", path: "packages/xtrm-app/docs/README.md", line: 24, originalLine: null, inReplyToId: null, diffHunk: null, url: null, createdAt: ago(405), updatedAt: null },
+      { id: "rc209-2", author: "Jaggerxtrm", body: "Reply in the same thread (test).", path: "packages/xtrm-app/docs/README.md", line: 24, originalLine: null, inReplyToId: "rc209-1", diffHunk: null, url: null, createdAt: ago(404), updatedAt: null },
+    ],
+    files: [{ filename: "packages/xtrm-app/src/shell/AppShell.tsx", additions: 240, deletions: 60, status: "modified" }],
+    ageMin: 500,
+  },
+  {
+    number: 208, title: "feat(XTRM-94): Substrate Documentation vNext", author: "Jaggerxtrm", headBranch: "feat/XTRM-94-docs-vnext", baseBranch: "main",
+    state: "merged", draft: false, checks: "passing", review: "approved", additions: 902, deletions: 188, changedFiles: 23, comments: 12,
+    body: "Closes XTRM-94.", mergeable: null, mergeableState: null, commits: 6,
+    reviews: [{ id: "r208-1", author: "reviewer-xtrm", state: "approved", submittedAt: ago(2900), body: null, url: null }],
+    conversationComments: [],
+    reviewComments: [],
+    files: [{ filename: "docs/substrate/README.md", additions: 902, deletions: 188, status: "modified" }],
+    ageMin: 2900,
+  },
+  {
+    number: 207, title: "feat(XTRM-300): Console v2 executable shell", author: "Jaggerxtrm", headBranch: "xt/rq8w", baseBranch: "main",
+    state: "merged", draft: false, checks: "passing", review: "commented", additions: 1250, deletions: 40, changedFiles: 11, comments: 5,
+    body: "Epic XTRM-300 vertical slice.", mergeable: null, mergeableState: null, commits: 5,
+    reviews: [{ id: "r207-1", author: "reviewer-xtrm", state: "commented", submittedAt: ago(4300), body: "Nice slice.", url: null }],
+    conversationComments: [],
+    reviewComments: [],
+    files: [{ filename: "packages/xtrm-app/src/surfaces/ActivitySurface.tsx", additions: 300, deletions: 10, status: "modified" }],
+    ageMin: 4300,
+  },
+  {
+    number: 206, title: "docs(xtrm-app): canonical Console v2 baseline", author: "Jaggerxtrm", headBranch: "docs/v2-baseline", baseBranch: "main",
+    state: "merged", draft: false, checks: "passing", review: "approved", additions: 3578, deletions: 13, changedFiles: 15, comments: 3,
+    body: null, mergeable: null, mergeableState: null, commits: 2,
+    reviews: [],
+    conversationComments: [],
+    reviewComments: [],
+    files: [],
+    ageMin: 5600,
+  },
+  {
+    number: 205, title: "chore: drop dead RightSidebar mount", author: "contrib-xtrm", headBranch: "chore/drop-right-sidebar", baseBranch: "main",
+    state: "closed", draft: false, checks: "failing", review: "changes_requested", additions: 12, deletions: 210, changedFiles: 3, comments: 2,
+    body: "Superseded by the Inspector Drawer.", mergeable: null, mergeableState: null, commits: 1,
+    reviews: [{ id: "r205-1", author: "Jaggerxtrm", state: "changes_requested", submittedAt: ago(8000), body: null, url: null }],
+    conversationComments: [],
+    reviewComments: [],
+    files: [],
+    ageMin: 8000,
+  },
+  {
+    number: 204, title: "feat(XTRM-303): root-export readiness types", author: "Jaggerxtrm", headBranch: "feat/XTRM-303-readiness", baseBranch: "main",
+    state: "closed", draft: false, checks: "none", review: "none", additions: 44, deletions: 9, changedFiles: 2, comments: 0,
+    body: "Withdrawn; landed as part of XTRM-303.", mergeable: null, mergeableState: null, commits: 1,
+    reviews: [],
+    conversationComments: [],
+    reviewComments: [],
+    files: [],
+    ageMin: 9900,
+  },
+];
+
+export const fixturePulls = (repo: string): PullRequestSummary[] => {
+  const [owner = "xtrm-dev", name = repo] = repo.includes("/") ? repo.split("/") : ["xtrm-dev", repo];
+  return pullSeed.map((p) => ({
+    ...p,
+    title: p.title,
+    url: `https://github.com/${owner}/${name}/pull/${p.number}`,
+    createdAt: ago(p.ageMin + 60),
+    updatedAt: ago(p.ageMin),
+  }));
+};
+
+export const fixturePullDetail = (repo: string, number: number): PullRequestDetail | null => {
+  const base = fixturePulls(repo).find((p) => p.number === number);
+  if (!base) return null;
+  const seedRow = pullSeed.find((p) => p.number === number)!;
+  return { ...base, mergeable: seedRow.mergeable, mergeableState: seedRow.mergeableState, commits: seedRow.commits, reviews: seedRow.reviews, conversationComments: seedRow.conversationComments, reviewComments: seedRow.reviewComments, files: seedRow.files };
+};
+
 export const fixtureGithub: GithubAdapter = {
   source: "fixture",
   async listRepos() {
@@ -35,5 +172,16 @@ export const fixtureGithub: GithubAdapter = {
   },
   async events(repo, limit = 200) {
     return fixtureEvents(repo).slice(0, limit);
+  },
+  async listPulls(repo, state: PullListState = "open") {
+    const rows = fixturePulls(repo);
+    if (state === "all") return rows;
+    if (state === "closed") return rows.filter((p) => p.state !== "open");
+    return rows.filter((p) => p.state === "open");
+  },
+  async getPull(repo, number: number) {
+    const detail = fixturePullDetail(repo, number);
+    if (!detail) throw new Error(`unknown pull ${repo}#${number}`);
+    return detail;
   },
 };

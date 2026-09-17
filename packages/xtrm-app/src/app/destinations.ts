@@ -54,7 +54,7 @@ export const REPO_SECTIONS: RepoSection[] = [
     label: "Code",
     items: [
       { id: "activity", label: "Activity", icon: "activity", repoPath: "/code/activity" },
-      { id: "pulls", label: "Pull requests", icon: "pull", repoPath: "/code/pulls", deferred: "Wave C follow-up; Console v1 keeps serving pull requests" },
+      { id: "pulls", label: "Pull requests", icon: "pull", repoPath: "/code/pulls" },
       { id: "github-issues", label: "GitHub Issues", icon: "comment", repoPath: "/code/issues", deferred: "Wave C follow-up; distinct from XTRM Issues" },
       { id: "releases", label: "Releases", icon: "release", repoPath: "/code/releases", deferred: "Wave C follow-up" },
       { id: "content", label: "Repository content", icon: "file", repoPath: "/code/content", deferred: "README / CHANGELOG / reports — wave C follow-up" },

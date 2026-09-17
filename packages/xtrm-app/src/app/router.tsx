@@ -7,8 +7,10 @@ import { AppShell } from "../shell/AppShell.tsx";
 import { DEFAULT_REPO } from "../shell/context.tsx";
 import { validateDrawerSearch } from "../shell/layout.ts";
 import { ActivitySurface } from "../surfaces/ActivitySurface.tsx";
+import { PullsSurface } from "../github/PullsSurface.tsx";
 import { ProgramSurface } from "../surfaces/ProgramSurface.tsx";
 import { DeferredSurface, RepositoriesSurface } from "../surfaces/other.tsx";
+import { SettingsSurface } from "../settings/SettingsSurface.tsx";
 import { MODES, REPO_SECTIONS } from "./destinations.ts";
 
 // URL contract: docs/console-v2-shell-architecture.md §9.1.
@@ -52,12 +54,14 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
   });
   const repositoriesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/repositories", component: RepositoriesSurface });
   const programRoute = createRoute({ getParentRoute: () => rootRoute, path: "/program", component: () => <ProgramSurface /> });
+  const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsSurface });
 
   const repoRoute = createRoute({ getParentRoute: () => rootRoute, path: "/rep/$owner/$repo", component: Outlet });
   const repoChildren = [
     createRoute({ getParentRoute: () => repoRoute, path: "/work/issues", component: IssuesSurface }),
     createRoute({ getParentRoute: () => repoRoute, path: "/work/issues/$issueRef", component: IssuePage }),
     createRoute({ getParentRoute: () => repoRoute, path: "/code/activity", component: ActivitySurface }),
+    createRoute({ getParentRoute: () => repoRoute, path: "/code/pulls", component: PullsSurface }),
     createRoute({ getParentRoute: () => repoRoute, path: "/governance/program", component: () => <ProgramSurface repoScoped /> }),
     ...REPO_SECTIONS.flatMap((s) => s.items)
       .filter((i) => i.deferred)
@@ -69,6 +73,6 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     }),
   ];
 
-  const routeTree = rootRoute.addChildren([indexRoute, workRoute, repositoriesRoute, programRoute, ...deferredModes, repoRoute.addChildren(repoChildren)]);
+  const routeTree = rootRoute.addChildren([indexRoute, workRoute, repositoriesRoute, programRoute, settingsRoute, ...deferredModes, repoRoute.addChildren(repoChildren)]);
   return createRouter({ routeTree, history, defaultPreload: false });
 }

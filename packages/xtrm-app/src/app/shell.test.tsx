@@ -55,6 +55,7 @@ describe("Console v2 shell", () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
     fireEvent.click(await screen.findByText("XTRM-300.1"));
     const el = await screen.findByTestId("inspector-drawer");
+    // Default open state floats over the main column; only PINNED is an in-flow column.
     expect(el.dataset.variant).toBe("overlay");
     const dock = screen.getByTestId("inspector-dock");
     expect(dock.dataset.state).toBe("contextual");
@@ -68,17 +69,24 @@ describe("Console v2 shell", () => {
     expect(within(el).getByText("Readiness")).toBeTruthy();
   });
 
-  it("maximize collapses the sidebar to the reopen rail; restore brings it back", async () => {
+  it("opening pushes the sidebar; maximize keeps the push and close restores it", async () => {
     renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-301");
     const el = await screen.findByTestId("inspector-drawer");
+    // Deep-link open already pushed the sidebar to its rail in the same motion.
+    expect(screen.getByTestId("sidebar-reopen-rail")).toBeTruthy();
+
     fireEvent.click(within(el).getByRole("button", { name: "Maximize drawer" }));
     await waitFor(() => expect(drawer()?.dataset.variant).toBe("maximized"));
     expect(screen.getByTestId("sidebar-reopen-rail")).toBeTruthy();
-    expect(screen.getByTestId("context-sidebar").closest("[data-state]")?.getAttribute("data-state")).toBe("collapsed");
 
     fireEvent.click(within(drawer()!).getByRole("button", { name: "Restore drawer" }));
-    await waitFor(() => expect(screen.getByTestId("context-sidebar").closest("[data-state]")?.getAttribute("data-state")).toBe("expanded"));
-    expect(drawer()?.dataset.variant).toBe("overlay");
+    await waitFor(() => expect(drawer()?.dataset.variant).toBe("overlay"));
+    // Restore keeps the push (inspector still open); only close brings the sidebar back.
+    expect(screen.getByTestId("sidebar-reopen-rail")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("inspector-rail"));
+    await waitFor(() => expect(drawer()).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("sidebar-collapse-edge")).toBeTruthy());
   });
 
   it("restores a pinned drawer from a deep link and keeps it across navigation", async () => {
@@ -86,7 +94,9 @@ describe("Console v2 shell", () => {
     const el = await screen.findByTestId("inspector-drawer");
     expect(el.dataset.variant).toBe("column");
     expect(screen.getByTestId("inspector-dock").dataset.state).toBe("pinned");
-    fireEvent.click(within(screen.getByTestId("context-sidebar")).getByText("Activity"));
+    // Push collapsed the sidebar; reopen it to navigate (user owns it now).
+    fireEvent.click(screen.getByTestId("sidebar-reopen-rail"));
+    fireEvent.click(within(await screen.findByTestId("context-sidebar")).getByText("Activity"));
     await waitFor(() => expect(router.state.location.pathname).toBe("/rep/xtrm-dev/xtrm/code/activity"));
     expect(drawer()?.dataset.variant).toBe("column");
     await waitFor(() => expect(search(router)).toMatchObject({ inspect: "issue:XTRM-302", drawer: "pinned" }));
@@ -107,10 +117,10 @@ describe("Console v2 shell", () => {
   it("Ctrl+B toggles the contextual sidebar and Escape closes the drawer", async () => {
     renderAt("/rep/xtrm-dev/xtrm/code/activity?inspect=issue:XTRM-300");
     await screen.findByTestId("inspector-drawer");
+    // Deep-link push starts collapsed; Ctrl+B reopens (user owns it now).
+    expect(screen.getByTestId("sidebar-reopen-rail")).toBeTruthy();
     act(() => void fireEvent.keyDown(window, { key: "b", ctrlKey: true }));
-    expect(await screen.findByTestId("sidebar-reopen-rail")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("sidebar-reopen-rail"));
-    await waitFor(() => expect(screen.queryByTestId("sidebar-reopen-rail")).toBeNull());
+    expect(await screen.findByTestId("sidebar-collapse-edge")).toBeTruthy();
     // The same light edge collapses the open sidebar.
     fireEvent.click(screen.getByTestId("sidebar-collapse-edge"));
     expect(await screen.findByTestId("sidebar-reopen-rail")).toBeTruthy();

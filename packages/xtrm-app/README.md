@@ -70,6 +70,41 @@ Data sources (select with `VITE_XTRM_GITHUB|SUBSTRATE|PROGRAM=live|fixture`):
 
 UI references and MCP servers (shadcn, Spectrum UI, LiveKit docs): `docs/ui-component-reference-registry.md`.
 
+## GitHub App sign-in (operators)
+
+Attributed GitHub actions need a per-user login, not the shared workspace
+credential. Console v2 signs in through the **xtrm-console GitHub App**
+(owner: the `xtrm-dev` org, installable on any account) using the OAuth device
+flow against the App's `client_id`: the app shows a code, the operator enters
+it at `github.com/login/device`, and the backend polls GitHub itself until the
+flow completes. The browser never receives or stores tokens and xtrm-app never
+calls `api.github.com` directly.
+
+1. **Install the app.** Open Settings → GitHub in Console v2 (or go to
+   `https://github.com/apps/xtrm-console/installations/new`) and install
+   xtrm-console on the accounts whose repositories you work in. Per-installation
+   repository access and fine-grained permissions (Pull requests, Issues,
+   Contents, Checks, Actions, Metadata read) keep the grant least-privilege;
+   user tokens expire (default 8 h) and the backend refreshes them.
+2. **Configure the backend (XTRM-404).** The Console backend holds the App's
+   `client_id`, authenticates the device flow, and keeps user tokens in the
+host OS keychain (or a file store where no keychain exists). See the backend
+   issue (XTRM-404) for the exact environment variables and secret handling —
+   never paste App secrets or user tokens into xtrm-app source, `.env` files
+   checked into git, or chat logs.
+3. **Sign in.** Top bar → Sign in with GitHub, or Settings → GitHub →
+   Sign in. Until the backend lands, the live adapter degrades to
+   `not_configured`; reads fall back to the shared `GITHUB_TOKEN` /
+   `gh auth token` credential (read-only) or fail closed with an inline
+   notice that links Settings.
+
+Auth states surfaced inline (top bar, Settings → GitHub, Pull requests and
+repo views): `not_configured`, `signed_out` (read-only via shared token, or
+sign-in required), `pending` (device code), `signed_in`, `expired`, `error`,
+plus a per-repository Install callout when the app is missing there.
+For local UI work without a backend, `VITE_XTRM_GITHUB=fixture` serves a
+controllable fixture covering every state (`createFixtureGithubAuth`).
+
 Known limits: list readiness is known only for dispatchable issues (XTRM-393);
 the Substrate bridge exists only in the Vite dev/preview server; Program has no
 typed reference to Substrate issues in snapshot v3 (the fixture's

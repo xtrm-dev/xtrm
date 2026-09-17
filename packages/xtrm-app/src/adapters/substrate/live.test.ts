@@ -63,3 +63,73 @@ describe("substrate envelope mapping", () => {
     expect(d.provenance).toMatchObject({ commits: ["abc123"], prs: ["#206"] });
   });
 });
+
+// Captured from `sb --json` (sb 0.2.0, 2026-09-17); long result summaries truncated, no secrets.
+import sb404 from "./__fixtures__/sb-XTRM-404.json";
+import sb421 from "./__fixtures__/sb-XTRM-421.json";
+import { mapClosure, mapJournalEntry, mapTrace, type WireJournalEntry, type WireTrace } from "./live.ts";
+
+describe("full Substrate journal, provenance, and closure mapping", () => {
+  it("maps closure, attestation, and claims of a closed issue (XTRM-404)", () => {
+    const closure = mapClosure(sb404.show.closure);
+    expect(closure).toEqual({
+      closed: true,
+      closedAt: sb404.show.closure.closedAt,
+      reason: sb404.show.closure.reason,
+      closureId: sb404.show.closure.closureId,
+      outcome: "completed",
+      actor: "claude-code::xtrm-xt-claude-o8h2",
+      session: null,
+      revision: 1,
+      contractHash: sb404.show.closure.contractHash,
+    });
+    const journal = (sb404.journal as WireJournalEntry[]).map(mapJournalEntry);
+    const trace = mapTrace(sb404.trace as WireTrace, journal);
+    expect(trace.attestation).toMatchObject({ outcome: "ready", policy: "default", attestedBy: "claude-code::xtrm-xt-claude-o8h2", revision: 1, evidenceRefs: [], blockingGaps: [] });
+    expect(trace.attestation?.contractHash).toBe(sb404.trace.contractHash);
+    expect(trace.claims).toEqual([{ holder: "pi/xtrm-404", activationId: null, acquiredAt: 1789594701718, expiresAt: 1789595601718, releasedAt: null, generation: 1, revision: 1 }]);
+    expect(trace).toMatchObject({ bindings: [], receipts: [], checkpoints: [], commits: [], prs: [], externalBindings: [] });
+    expect(journal).toHaveLength(sb404.journal.length);
+  });
+
+  it("maps journal identity, result, and execution context verbatim (XTRM-421)", () => {
+    const journal = (sb421.journal as WireJournalEntry[]).map(mapJournalEntry);
+    const result = journal.find((j) => j.kind === "result")!;
+    expect(result.identity).toEqual({ participantId: "specialist::executor", activationId: "act:e305f40b-220", sessionId: "01a0af77-fb2e-719a-816a-22cb768f5ced", runId: null });
+    expect(result.summary.length).toBeGreaterThan(0);
+    expect(result.result).toMatchObject({ resultVersion: 1 });
+    expect(result.executionContext).toMatchObject({ participantId: "specialist::executor" });
+    const note = journal.find((j) => j.kind === "note")!;
+    expect(note.result).toBeNull();
+    expect(note.mechanical).toBeNull();
+  });
+
+  it("maps bindings with named actors and receipts with artifacts (XTRM-421)", () => {
+    const trace = mapTrace(sb421.trace as WireTrace, []);
+    expect(trace.bindings).toHaveLength(3);
+    expect(trace.bindings[0]).toMatchObject({ participantId: "specialist::executor", activationId: "act:e305f40b-220", attemptId: "att:e305f40b-220:1", sessionId: "01a0af77-fb2e-719a-816a-22cb768f5ced" });
+    expect(trace.receipts[0]).toMatchObject({ bindingId: trace.bindings[0]!.id, commitSha: null, checkpointId: null, checkpointSequence: null });
+    expect(trace.receipts[0]!.artifacts[0]).toEqual({ kind: "artifact", value: "act:e305f40b-220/att:e305f40b-220:1.json", provider: null, superseded: false });
+  });
+
+  it("links a receipt to its commit and settling checkpoint, and keeps PR values (XTRM-415/416 shape)", () => {
+    const journal = [mapJournalEntry({ id: "jrn_cp", sequence: 7, kind: "checkpoint", issueRevision: 2, createdAt: 1, semantic: { summary: "settled", next: ["merge"] } })];
+    const trace = mapTrace(
+      {
+        receipts: [{ id: "rcp_1", executionBindingId: "exb_1", issueRevision: 2, commitSha: "0123456789abcdef", journalCheckpointId: "jrn_cp", validationRefs: [{ kind: "validation", value: "npm test", provider: null }], artifacts: [], createdAt: 1, finalizedAt: 2 }],
+        prs: [{ value: "xtrm-dev/xtrm#211", provider: "github" }],
+        externalBindings: [{ provider: "github", scope: "xtrm-dev/xtrm", remoteId: "211", url: null }],
+      },
+      journal,
+    );
+    expect(trace.receipts[0]).toMatchObject({ commitSha: "0123456789abcdef", checkpointId: "jrn_cp", checkpointSequence: 7 });
+    expect(trace.prs).toEqual(["xtrm-dev/xtrm#211"]);
+    expect(trace.externalBindings).toEqual([{ provider: "github", scope: "xtrm-dev/xtrm", remoteId: "211", url: null }]);
+    expect(journal[0]).toMatchObject({ summary: "settled", semantic: { next: ["merge"] } });
+  });
+
+  it("maps missing trace, closure, and attestation to explicit empty values", () => {
+    expect(mapTrace(null, [])).toEqual({ attestation: null, claims: [], bindings: [], receipts: [], checkpoints: [], commits: [], prs: [], externalBindings: [] });
+    expect(mapClosure({ closed: true, closedAt: 5, reason: null })).toMatchObject({ closed: true, outcome: null, actor: null, revision: null, contractHash: null });
+  });
+});

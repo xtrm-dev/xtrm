@@ -8,9 +8,16 @@ export interface CommandEntry {
   id: string;
   label: string;
   hint?: string;
+  /** Keyboard shortcut rendered with the Kbd primitive (e.g. Mod+I). Falls back to shortcut-like hints. */
+  shortcut?: string;
   icon: IconName;
   keywords?: string[];
   onSelect: () => void;
+}
+
+/** Hints that are really shortcuts (Ctrl B, ⌘I, …) render as Kbd; context hints stay plain text. */
+export function isShortcutHint(hint: string): boolean {
+  return /^(ctrl|\u2318|cmd|mod|shift|alt|esc|enter|\u21b5)\b/i.test(hint.trim());
 }
 
 /** Token match over label + keywords; a leading `>` only selects command mode. */
@@ -73,7 +80,7 @@ export function CommandMenu({
                       <Command.Item
                         key={e.id}
                         value={`${g.heading}:${e.id}`}
-                        keywords={[e.label, ...(e.hint ? [e.hint] : []), ...(e.keywords ?? [])]}
+                        keywords={[e.label, ...(e.hint ? [e.hint] : []), ...(e.shortcut ? [e.shortcut] : []), ...(e.keywords ?? [])]}
                         onSelect={() => {
                           e.onSelect();
                           onOpenChange(false);
@@ -82,7 +89,13 @@ export function CommandMenu({
                       >
                         <Icon name={e.icon} size="xs" className="text-ink-faint" />
                         <span className="truncate">{e.label}</span>
-                        {e.hint && <span className="ml-auto truncate pl-4 text-xs text-ink-faint">{e.hint}</span>}
+                        {(e.shortcut ?? (e.hint && isShortcutHint(e.hint) ? e.hint : null)) ? (
+                          <span className="ml-auto shrink-0 pl-4">
+                            <Kbd>{e.shortcut ?? e.hint}</Kbd>
+                          </span>
+                        ) : (
+                          e.hint && <span className="ml-auto truncate pl-4 text-xs text-ink-faint">{e.hint}</span>
+                        )}
                       </Command.Item>
                     ))}
                   </Command.Group>

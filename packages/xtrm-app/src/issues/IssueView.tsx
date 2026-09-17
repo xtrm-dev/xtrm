@@ -5,8 +5,10 @@ import { planNormalization, type NormalizationPlan } from "../adapters/substrate
 import { FieldLabel, InlineTitle, ListField, ProseField, SelectField } from "../ui/fields.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { Markdown } from "../ui/markdown.tsx";
-import { EditActions, MarkdownEditor } from "../ui/markdown-editor.tsx";
+import { EditActions } from "../ui/markdown-editor.tsx";
 import { Row, StatusDot, ago, cx } from "../ui/primitives.tsx";
+import { JournalTab } from "./IssueJournal.tsx";
+import { ClosureCard, ProvenanceTab } from "./IssueProvenance.tsx";
 import { useIssueActions } from "./actions.ts";
 import {
   LIFECYCLES,
@@ -21,18 +23,21 @@ import {
   scrutinyOptions,
   IssueKey,
 } from "./meta.tsx";
-import { ReferenceActionsProvider, ReferenceChip } from "../refs/references.tsx";
+import { ReferenceActionsProvider, ReferenceChip, type ContextReference } from "../refs/references.tsx";
 
 type Variant = "page" | "panel";
 
 interface Nav {
   /** Inspect a related issue (drawer traversal or page navigation, decided by the host). */
   onOpenIssue: (ref: string) => void;
+  /** Inspect a related pull request in the drawer (drawer-first: no PR page). */
+  onOpenPull: (ref: string) => void;
 }
 
 export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetail; canWrite: boolean; variant: Variant; nav: Nav }) {
   const actions = useIssueActions(issue);
-  const [tab, setTab] = useState<"activity" | "lineage" | "provenance">("activity");
+  const [tab, setTab] = useState<"journal" | "lineage" | "provenance">("journal");
+  const [focusSequence, setFocusSequence] = useState<number | null>(null);
   const plan = useMemo(() => planNormalization(issue.contract), [issue.contract]);
   const c = issue.contract;
 
@@ -56,13 +61,15 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
       <ListField label="Output" items={c.output.map((o) => o.text)} canEdit={canWrite} placeholder="Add an expected artifact" onSave={(output) => actions.patchContract({ output })} />
       <ListField label="References" items={c.references} canEdit={canWrite} placeholder="Add a reference" onSave={(references) => actions.patchContract({ references })} />
 
+      <ClosureCard closure={issue.closure} issue={issue} />
+
       <section className="flex flex-col gap-3 border-t border-border-muted pt-4">
         <div role="tablist" aria-label="Issue activity" className="flex items-center gap-1">
           {(
             [
-              ["activity", "Activity", issue.journal.length],
+              ["journal", "Journal", issue.journalTotal],
               ["lineage", "Lineage", issue.children.length + issue.blockers.length + (issue.parent ? 1 : 0)],
-              ["provenance", "Provenance", issue.provenance.commits.length + issue.provenance.prs.length + issue.provenance.receipts],
+              ["provenance", "Provenance", issue.provenance.claims.length + issue.provenance.bindings.length + issue.provenance.receipts.length + issue.provenance.commits.length + issue.provenance.prs.length],
             ] as const
           ).map(([id, label, count]) => (
             <button
@@ -70,7 +77,10 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
               type="button"
               role="tab"
               aria-selected={tab === id}
-              onClick={() => setTab(id)}
+              onClick={() => {
+                setTab(id);
+                setFocusSequence(null);
+              }}
               className={cx("flex h-7 items-center gap-1.5 rounded-md px-2 text-sm outline-none focus-visible:bg-hover", tab === id ? "bg-hover text-ink" : "text-ink-faint hover:text-ink-muted")}
             >
               {label}
@@ -78,9 +88,17 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
             </button>
           ))}
         </div>
-        {tab === "activity" && <ActivityTab issue={issue} canWrite={canWrite} onAdd={actions.addNote} />}
+        {tab === "journal" && <JournalTab issue={issue} canWrite={canWrite} onAdd={actions.addNote} focusSequence={focusSequence} />}
         {tab === "lineage" && <LineageTab issue={issue} nav={nav} />}
-        {tab === "provenance" && <ProvenanceTab issue={issue} />}
+        {tab === "provenance" && (
+          <ProvenanceTab
+            issue={issue}
+            onJumpToJournal={(sequence) => {
+              setFocusSequence(sequence);
+              setTab("journal");
+            }}
+          />
+        )}
       </section>
     </div>
   );
@@ -98,7 +116,7 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
     );
 
   return (
-    <ReferenceActionsProvider open={(r) => nav.onOpenIssue(r.ref)}>
+    <ReferenceActionsProvider open={(r: ContextReference) => (r.kind === "pr" ? nav.onOpenPull(r.ref) : nav.onOpenIssue(r.ref))}>
       {body}
     </ReferenceActionsProvider>
   );
@@ -198,7 +216,7 @@ function DetailsGrid({ issue, canWrite, nav, compact }: { issue: IssueDetail; ca
         <>
           <Detail label="Created">{formatDate(issue.createdAt)}</Detail>
           <Detail label="Updated">{issue.updatedAt ? ago(issue.updatedAt) : "—"}</Detail>
-          {issue.closure.closed && <Detail label="Closure">{issue.closure.reason ?? "closed"}</Detail>}
+          {issue.closure.closed && <Detail label="Closed">{issue.closure.closedAt ? ago(issue.closure.closedAt) : (issue.closure.outcome ?? "closed")}</Detail>}
         </>
       )}
       {!canWrite && <p className="mt-2 text-xs text-ink-faint">Read-only: Substrate writes are disabled for this source.</p>}
@@ -283,98 +301,6 @@ function PreviewBlock({ title, markdown }: { title: string; markdown: string }) 
   );
 }
 
-const NOTE_KINDS = ["note", "finding", "decision", "blocker", "milestone", "handoff", "result"] as const;
-
-function ActivityTab({ issue, canWrite, onAdd }: { issue: IssueDetail; canWrite: boolean; onAdd: (text: string, kind: string) => Promise<void> }) {
-  const [composing, setComposing] = useState(false);
-  const [kind, setKind] = useState<(typeof NOTE_KINDS)[number]>("note");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <div className="flex flex-col gap-4">
-      {canWrite &&
-        (composing ? (
-          <div className="flex flex-col gap-2">
-            <div role="radiogroup" aria-label="Journal entry kind" className="flex flex-wrap items-center gap-1">
-              {NOTE_KINDS.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  role="radio"
-                  aria-checked={kind === k}
-                  onClick={() => setKind(k)}
-                  className={cx("h-6 rounded-sm px-2 text-xs outline-none", kind === k ? "bg-hover text-ink" : "text-ink-faint hover:text-ink-muted")}
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
-            <MarkdownEditor
-              value=""
-              placeholder="Add a journal entry…"
-              saving={saving}
-              error={error}
-              onCancel={() => setComposing(false)}
-              onSave={(text) => {
-                if (!text.trim()) return setComposing(false);
-                setSaving(true);
-                setError(null);
-                onAdd(text, kind)
-                  .then(() => setComposing(false))
-                  .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-                  .finally(() => setSaving(false));
-              }}
-            />
-          </div>
-        ) : (
-          <button type="button" onClick={() => setComposing(true)} className="flex h-9 items-center rounded-md border border-border-muted px-3 text-left text-sm text-ink-faint outline-none hover:border-border hover:text-ink-muted focus-visible:border-border-strong">
-            Add a journal entry…
-          </button>
-        ))}
-      {issue.journal.length === 0 ? (
-        <p className="text-sm text-ink-faint">No journal entries yet.</p>
-      ) : (
-        <ol className="flex flex-col">
-          {issue.journal.map((j) => (
-            <li key={j.id} className="relative flex gap-3 pb-5 last:pb-0">
-              <span aria-hidden className="absolute top-5 bottom-0 left-[5px] w-px bg-border-muted" />
-              <span className="mt-1.5 size-[11px] shrink-0 rounded-full border border-border-strong bg-surface" />
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <div className="flex items-center gap-2 text-xs text-ink-faint">
-                  <span className="rounded-sm bg-control px-1.5 py-px text-ink-muted">{j.kind}</span>
-                  <span>#{j.sequence}</span>
-                  <span>rev {j.revision}</span>
-                  <span className="ml-auto" title={new Date(j.createdAt).toLocaleString()}>
-                    {ago(j.createdAt)}
-                  </span>
-                </div>
-                {j.summary ? <JournalBody text={j.summary} /> : <span className="text-sm text-ink-faint">No summary</span>}
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
-  );
-}
-
-function JournalBody({ text }: { text: string }) {
-  const long = text.length > 700;
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="flex flex-col items-start gap-1">
-      <div className={cx("relative w-full", long && !open && "max-h-40 overflow-hidden [mask-image:linear-gradient(to_bottom,black_60%,transparent)]")}>
-        <Markdown>{text}</Markdown>
-      </div>
-      {long && (
-        <button type="button" onClick={() => setOpen((v) => !v)} className="rounded-sm text-xs text-ink-muted outline-none hover:text-ink focus-visible:text-ink">
-          {open ? "Show less" : "Show more"}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function LineageTab({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
   const groups: Array<[string, IssueLink[]]> = [
     ["Parent", issue.parent ? [issue.parent] : []],
@@ -401,20 +327,6 @@ function LineageTab({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
           </div>
         ) : null,
       )}
-    </div>
-  );
-}
-
-function ProvenanceTab({ issue }: { issue: IssueDetail }) {
-  const p = issue.provenance;
-  return (
-    <div className="flex flex-col gap-1">
-      <Detail label="Attestation">{p.attestation ? `${p.attestation.outcome} · ${p.attestation.policy} · ${p.attestation.attestedBy}` : <span className="text-ink-faint">None</span>}</Detail>
-      <Detail label="Claims">{p.claims}</Detail>
-      <Detail label="Bindings">{p.bindings}</Detail>
-      <Detail label="Receipts">{p.receipts}</Detail>
-      <Detail label="Commits">{p.commits.length ? <span className="font-mono text-xs">{p.commits.map((s) => s.slice(0, 10)).join(", ")}</span> : <span className="text-ink-faint">None</span>}</Detail>
-      <Detail label="Pull requests">{p.prs.length ? p.prs.join(", ") : <span className="text-ink-faint">None</span>}</Detail>
     </div>
   );
 }

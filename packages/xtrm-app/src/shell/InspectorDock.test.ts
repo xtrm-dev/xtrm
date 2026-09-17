@@ -1,19 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { RAIL, dockWidth } from "./InspectorDock.tsx";
+import { RAIL, dockWidth, frameMinWidth } from "./InspectorDock.tsx";
 
-describe("inspector dock width", () => {
-  it("is only the rail when closed", () => {
-    expect(dockWidth("CLOSED", 400, 900)).toBe(RAIL);
+describe("inspector dock width (in flow)", () => {
+  it("reserves only the rail when closed or floating", () => {
+    expect(dockWidth("CLOSED", 400)).toBe(RAIL);
+    expect(dockWidth("CONTEXTUAL", 400)).toBe(RAIL);
   });
 
-  it("grows by the drawer width but never past the content card", () => {
-    expect(dockWidth("CONTEXTUAL", 400, 900)).toBe(RAIL + 400);
-    expect(dockWidth("CONTEXTUAL", 700, 500)).toBe(RAIL + 500 - 24);
-    expect(dockWidth("CONTEXTUAL", 400, 0)).toBe(RAIL);
+  it("is a real column when pinned and fills the group when maximized", () => {
+    expect(dockWidth("PINNED", 400)).toBe(RAIL + 400);
+    expect(dockWidth("MAXIMIZED", 400)).toBe("100%");
+  });
+});
+
+describe("inspector frame min width (visible)", () => {
+  it("is the rail when closed and rail plus drawer when open", () => {
+    expect(frameMinWidth("CLOSED", 400)).toBe(RAIL);
+    for (const state of ["CONTEXTUAL", "PINNED", "MAXIMIZED"]) expect(frameMinWidth(state, 400)).toBe(RAIL + 400);
   });
 
-  it("covers exactly the card when maximized and reserves layout width when pinned", () => {
-    expect(dockWidth("MAXIMIZED", 400, 900)).toBe(RAIL + 900);
-    expect(dockWidth("PINNED", 400, 900)).toBe(RAIL + 400);
+  it("overhangs the dock only when floating", () => {
+    expect(frameMinWidth("CONTEXTUAL", 400)).toBeGreaterThan(dockWidth("CONTEXTUAL", 400) as number);
+    expect(frameMinWidth("PINNED", 400)).toBe(dockWidth("PINNED", 400));
   });
 });

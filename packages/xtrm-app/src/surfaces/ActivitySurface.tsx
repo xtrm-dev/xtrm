@@ -1,5 +1,6 @@
 import { useAdapters, type RepoEvent } from "../adapters/index.tsx";
 import { useEvents } from "../app/queries.ts";
+import { GithubNotice } from "../github/auth.tsx";
 import { activityRef, eventTitle } from "../shell/Inspector.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
@@ -80,6 +81,7 @@ export function ActivitySurface() {
           ]}
         />
       </SurfaceHeader>
+      <GithubNotice repo={repo.fullName} />
       {body}
     </section>
   );

@@ -4,7 +4,7 @@
 
 export type DrawerState = "CLOSED" | "CONTEXTUAL" | "PINNED" | "MAXIMIZED";
 
-export type DrawerRefKind = "issue" | "program" | "activity";
+export type DrawerRefKind = "issue" | "program" | "activity" | "pr" | "github-auth";
 
 /** Typed entity reference. Same vocabulary the composer will consume later (`@issue:XTRM-12`). */
 export interface DrawerRef {
@@ -21,6 +21,8 @@ export interface LayoutState {
     restoreState: Exclude<DrawerState, "MAXIMIZED" | "CLOSED"> | null;
     /** True only when the maximize action (not the user) collapsed the sidebar. */
     collapsedSidebarForMaximize: boolean;
+    /** True only when opening the inspector (not the user) collapsed the sidebar for push. */
+    collapsedSidebarForInspector: boolean;
     followLive: boolean;
   };
   /** Drawer navigation stack; `cursor` points at the inspected entity. */
@@ -31,9 +33,51 @@ export interface LayoutState {
 export const SIDEBAR = { default: 264, min: 220, max: 360 } as const;
 export const INSPECTOR = { default: 400, min: 320, max: 720 } as const;
 
+// --- shell motion ------------------------------------------------------------
+// One driver for all three regions: motion-panels (JS) with SHELL_MOTION.transition.
+// The sidebar, main fill, and inspector live in one ResizableGroup so open,
+// close, maximize, and restore start and settle on the same frame — no CSS
+// width transitions on layout regions (they would drift a frame behind the
+// JS-timed panels). Duration/easing mirror motion-panels' default TRANSITION
+// (0.25s, [0.32, 0.72, 0, 1]); motion-panels collapses to INSTANT under
+// prefers-reduced-motion via its own guard.
+
+export const SHELL_MOTION = {
+  durationMs: 250,
+  easingCss: "cubic-bezier(0.32, 0.72, 0, 1)",
+  transition: { duration: 0.25, ease: [0.32, 0.72, 0, 1] as const },
+} as const;
+
+/** Tailwind classes applying SHELL_MOTION to plain width transitions; reduced motion disables it. */
+export const SHELL_MOTION_TW = "transition-[width,margin,transform] duration-[250ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none";
+
+/** Platform-aware Mod shortcut label rendered with the Kbd primitive. */
+export function modShortcut(key: string): string {
+  const nav = typeof navigator !== "undefined" ? navigator : null;
+  const platform = (nav?.platform ?? "") as string;
+  const ua = (nav as unknown as { userAgent?: string } | null)?.userAgent ?? "";
+  const mac = /mac|iphone|ipad/i.test(`${platform} ${ua}`);
+  return mac ? `⌘${key}` : `Ctrl ${key}`;
+}
+
+/** True when a shortcut must not fire: editable fields, dialogs, and menus. */
+export function isShortcutSuppressed(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  if (target.closest("[role=dialog],[role=menu],[role=listbox]")) return true;
+  const el = target instanceof HTMLElement ? target : target instanceof Element ? target.closest("*") : null;
+  if (!el) return false;
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return true;
+  if (el instanceof HTMLElement && el.isContentEditable) return true;
+  if (el.closest("input,textarea,select,[contenteditable=true]")) return true;
+  return false;
+}
+
+/** Key fragment for the maximize/restore shortcut: Mod+Shift+Enter. Rendered via modShortcut. */
+export const INSPECTOR_MAXIMIZE_KEY = "Shift Enter";
+
 export const initialLayout: LayoutState = {
   sidebar: { open: true, width: SIDEBAR.default, lastExpandedWidth: SIDEBAR.default },
-  inspector: { state: "CLOSED", width: INSPECTOR.default, restoreState: null, collapsedSidebarForMaximize: false, followLive: false },
+  inspector: { state: "CLOSED", width: INSPECTOR.default, restoreState: null, collapsedSidebarForMaximize: false, collapsedSidebarForInspector: false, followLive: false },
   stack: [],
   cursor: -1,
 };
@@ -64,6 +108,26 @@ function unmaximize(s: LayoutState, to: DrawerState): LayoutState {
   };
 }
 
+/** Opening the inspector pushes the sidebar: collapse to its rail in the same motion. */
+function openInspector(s: LayoutState, to: Exclude<DrawerState, "MAXIMIZED" | "CLOSED">): LayoutState {
+  const collapse = s.sidebar.open;
+  return {
+    ...s,
+    sidebar: collapse ? { ...s.sidebar, open: false, lastExpandedWidth: s.sidebar.width } : s.sidebar,
+    inspector: { ...s.inspector, state: to, collapsedSidebarForInspector: collapse ? true : s.inspector.collapsedSidebarForInspector },
+  };
+}
+
+/** Closing restores a sidebar that was pushed by open (unless the user now owns it). */
+function restorePushedSidebar(s: LayoutState): LayoutState {
+  const reopen = s.inspector.collapsedSidebarForInspector && !s.sidebar.open;
+  return {
+    ...s,
+    sidebar: reopen ? { ...s.sidebar, open: true, width: s.sidebar.lastExpandedWidth } : s.sidebar,
+    inspector: { ...s.inspector, collapsedSidebarForInspector: false },
+  };
+}
+
 export function layoutReducer(s: LayoutState, a: LayoutAction): LayoutState {
   const d = s.inspector;
   switch (a.type) {
@@ -71,11 +135,11 @@ export function layoutReducer(s: LayoutState, a: LayoutAction): LayoutState {
       if (s.sidebar.open) {
         return { ...s, sidebar: { ...s.sidebar, open: false, lastExpandedWidth: s.sidebar.width } };
       }
-      // A manual reopen while maximized means the user now owns the sidebar state.
+      // A manual reopen transfers sidebar ownership to the user (maximize and push must not restore it later).
       return {
         ...s,
         sidebar: { ...s.sidebar, open: true, width: s.sidebar.lastExpandedWidth },
-        inspector: { ...d, collapsedSidebarForMaximize: false },
+        inspector: { ...d, collapsedSidebarForMaximize: false, collapsedSidebarForInspector: false },
       };
     }
     case "sidebar/resize": {
@@ -85,18 +149,16 @@ export function layoutReducer(s: LayoutState, a: LayoutAction): LayoutState {
     case "drawer/inspect": {
       const current = s.stack[s.cursor];
       if (current && current.kind === a.ref.kind && current.ref === a.ref.ref) {
-        return d.state === "CLOSED" ? { ...s, inspector: { ...d, state: "CONTEXTUAL" } } : s;
+        if (d.state !== "CLOSED") return s;
+        const reopened = openInspector(s, "CONTEXTUAL");
+        return { ...reopened };
       }
       const stack = [...s.stack.slice(0, s.cursor + 1), a.ref];
-      return {
-        ...s,
-        stack,
-        cursor: stack.length - 1,
-        inspector: d.state === "CLOSED" ? { ...d, state: "CONTEXTUAL" } : d,
-      };
+      const base = { ...s, stack, cursor: stack.length - 1 };
+      return d.state === "CLOSED" ? openInspector(base, "CONTEXTUAL") : base;
     }
     case "drawer/open":
-      return d.state === "CLOSED" ? { ...s, inspector: { ...d, state: "CONTEXTUAL" } } : s;
+      return d.state === "CLOSED" ? openInspector(s, "CONTEXTUAL") : s;
     case "drawer/pin":
       return d.state === "CONTEXTUAL" ? { ...s, inspector: { ...d, state: "PINNED" } } : s;
     case "drawer/unpin":
@@ -113,8 +175,9 @@ export function layoutReducer(s: LayoutState, a: LayoutAction): LayoutState {
     case "drawer/restore":
       return d.state === "MAXIMIZED" ? unmaximize(s, d.restoreState ?? "CONTEXTUAL") : s;
     case "drawer/close": {
-      const closed = d.state === "MAXIMIZED" ? unmaximize(s, "CLOSED") : { ...s, inspector: { ...d, state: "CLOSED" as const } };
-      return { ...closed, stack: [], cursor: -1, inspector: { ...closed.inspector, followLive: false } };
+      const afterMax = d.state === "MAXIMIZED" ? unmaximize(s, "CLOSED") : { ...s, inspector: { ...d, state: "CLOSED" as const } };
+      const restored = restorePushedSidebar(afterMax);
+      return { ...restored, stack: [], cursor: -1, inspector: { ...restored.inspector, followLive: false } };
     }
     case "drawer/back":
       return s.cursor > 0 ? { ...s, cursor: s.cursor - 1 } : s;
@@ -132,7 +195,7 @@ export const currentRef = (s: LayoutState): DrawerRef | null => s.stack[s.cursor
 // ---------------------------------------------------------------------------
 // URL codec: ?inspect=<kind>:<ref>&drawer=contextual|pinned|maximized (§9.1)
 
-const KINDS: readonly DrawerRefKind[] = ["issue", "program", "activity"];
+const KINDS: readonly DrawerRefKind[] = ["issue", "program", "activity", "pr", "github-auth"];
 const URL_STATES = { contextual: "CONTEXTUAL", pinned: "PINNED", maximized: "MAXIMIZED" } as const;
 
 export interface DrawerSearch {
@@ -190,7 +253,7 @@ interface PersistedLayout {
 
 export function persistLayout(s: LayoutState, storage: Pick<Storage, "setItem"> = localStorage) {
   const data: PersistedLayout = {
-    sidebarOpen: s.inspector.collapsedSidebarForMaximize ? true : s.sidebar.open,
+    sidebarOpen: s.inspector.collapsedSidebarForMaximize || s.inspector.collapsedSidebarForInspector ? true : s.sidebar.open,
     sidebarWidth: s.sidebar.lastExpandedWidth,
     inspectorWidth: s.inspector.width,
   };

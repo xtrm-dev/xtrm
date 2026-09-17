@@ -2,6 +2,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type Dispatch, type ReactNode } from "react";
 import {
   currentRef,
+  isShortcutSuppressed,
   layoutFromSearch,
   layoutReducer,
   persistLayout,
@@ -119,15 +120,30 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       const key = e.key.toLowerCase();
+      // Toggles never steal typing or dialog keys; the palette stays reachable everywhere.
+      if (isShortcutSuppressed(e.target)) {
+        if (mod && key === "k") {
+          e.preventDefault();
+          openPalette(e.shiftKey ? "commands" : "search");
+        }
+        return;
+      }
       if (mod && key === "k") {
         e.preventDefault();
         openPalette(e.shiftKey ? "commands" : "search");
-      } else if (mod && key === "b") {
+      } else if (mod && key === "b" && !e.shiftKey) {
         e.preventDefault();
         dispatch({ type: "sidebar/toggle" });
-      } else if (mod && key === "i") {
+      } else if (mod && key === "i" && !e.shiftKey) {
         e.preventDefault();
         dispatch({ type: layoutRef.current.inspector.state === "CLOSED" ? "drawer/open" : "drawer/close" });
+      } else if (mod && e.shiftKey && e.key === "Enter") {
+        // Maximize/restore never steals typing or dialog keys (guarded above); no browser or app collision.
+        const st = layoutRef.current.inspector.state;
+        if (st === "CONTEXTUAL" || st === "PINNED" || st === "MAXIMIZED") {
+          e.preventDefault();
+          dispatch({ type: st === "MAXIMIZED" ? "drawer/restore" : "drawer/maximize" });
+        }
       } else if (key === "escape" && !e.defaultPrevented && layoutRef.current.inspector.state !== "CLOSED") {
         if (e.target instanceof Element && e.target.closest("[role=dialog],[role=menu]")) return;
         dispatch({ type: layoutRef.current.inspector.state === "MAXIMIZED" ? "drawer/restore" : "drawer/close" });

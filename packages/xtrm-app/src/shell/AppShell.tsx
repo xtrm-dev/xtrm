@@ -1,19 +1,21 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { Outlet, useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { MODES, modeForPath, modeHref } from "../app/destinations.ts";
+import { AccountControl } from "../github/auth.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Kbd, Tip, cx } from "../ui/primitives.tsx";
 import { FillPanel, ResizableGroup, ResizeHandle, ResizablePanel } from "../ui/resizable.tsx";
 import { ContextSidebar, useGo } from "./ContextSidebar.tsx";
 import { GlobalSearch } from "./GlobalSearch.tsx";
-import { InspectorDock, useElementWidth } from "./InspectorDock.tsx";
+import { InspectorDock } from "./InspectorDock.tsx";
 import { ShellProvider, useShell } from "./context.tsx";
-import { SIDEBAR } from "./layout.ts";
+import { SIDEBAR, isShortcutSuppressed, modShortcut } from "./layout.ts";
 
 /** Full-width top bar: brand, global search, command and theme (v13 reference). */
 function TopBar() {
   const { theme, toggleTheme, openPalette, repo } = useShell();
+  const navigate = useNavigate();
   return (
     <header className="flex h-11 shrink-0 items-center gap-3 px-2" data-testid="top-bar">
       <div className="flex w-12 shrink-0 justify-center">
@@ -33,7 +35,8 @@ function TopBar() {
       <div className="flex shrink-0 items-center gap-0.5">
         <IconButton icon="command" label="Commands" shortcut="Ctrl Shift K" onClick={() => openPalette("commands")} />
         <IconButton icon={theme === "dark" ? "sun" : "moon"} label={theme === "dark" ? "Light theme" : "Dark theme"} aria-pressed={theme === "dark"} onClick={toggleTheme} />
-        <IconButton icon="settings" label="Settings" disabled />
+        <AccountControl />
+        <IconButton icon="settings" label="Settings" onClick={() => void navigate({ to: "/settings" } as never)} />
       </div>
     </header>
   );
@@ -48,6 +51,7 @@ function ModeRail() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isShortcutSuppressed(e.target)) return;
       const n = Number(e.key);
       if (!(e.metaKey || e.ctrlKey) || e.shiftKey || !Number.isInteger(n)) return;
       const mode = MODES[n - 1];
@@ -64,7 +68,7 @@ function ModeRail() {
       {MODES.map((m, i) => {
         const isActive = m.id === active;
         return (
-          <Tip key={m.id} label={m.deferred ? `${m.label} · deferred` : m.label} shortcut={`Ctrl ${i + 1}`} side="right">
+          <Tip key={m.id} label={m.deferred ? `${m.label} · deferred` : m.label} shortcut={modShortcut(String(i + 1))} side="right">
             <button
               type="button"
               aria-label={m.label}
@@ -89,26 +93,25 @@ function SidebarEdge({ open }: { open: boolean }) {
   const { dispatch } = useShell();
   const label = open ? "Collapse sidebar" : "Open sidebar";
   return (
-    <button
-      type="button"
-      data-testid={open ? "sidebar-collapse-edge" : "sidebar-reopen-rail"}
-      aria-label={label}
-      title={`${label} (Ctrl B)`}
-      onClick={() => dispatch({ type: "sidebar/toggle" })}
-      className={cx("group/edge flex w-4 shrink-0 items-center justify-center outline-none", open ? "absolute inset-y-0 right-0 z-20" : "-ml-1 mb-1.5")}
-    >
-      <span className="flex h-10 w-1 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 group-hover/edge:h-12 group-hover/edge:w-4 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-12 group-focus-visible/edge:w-4 group-focus-visible/edge:bg-hover">
-        <Icon name={open ? "back" : "forward"} size="xs" className="shrink-0 opacity-0 transition-opacity group-hover/edge:opacity-100 group-focus-visible/edge:opacity-100" />
-      </span>
-    </button>
+    <Tip label={label} shortcut={modShortcut("B")} side="right">
+      <button
+        type="button"
+        data-testid={open ? "sidebar-collapse-edge" : "sidebar-reopen-rail"}
+        aria-label={label}
+        onClick={() => dispatch({ type: "sidebar/toggle" })}
+        className={cx("group/edge flex w-4 shrink-0 items-center justify-center outline-none", open ? "absolute inset-y-0 right-0 z-20" : "-ml-1 mb-1.5")}
+      >
+        <span className="flex h-10 w-1 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 motion-reduce:transition-none group-hover/edge:h-12 group-hover/edge:w-4 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-12 group-focus-visible/edge:w-4 group-focus-visible/edge:bg-hover">
+          <Icon name={open ? "back" : "forward"} size="xs" className="shrink-0 opacity-0 transition-opacity motion-reduce:transition-none group-hover/edge:opacity-100 group-focus-visible/edge:opacity-100" />
+        </span>
+      </button>
+    </Tip>
   );
 }
 
 function ShellLayout() {
   const { layout, dispatch } = useShell();
   const { sidebar } = layout;
-  const card = useRef<HTMLDivElement>(null);
-  const cardWidth = useElementWidth(card);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-deep text-ink">
@@ -116,6 +119,7 @@ function ShellLayout() {
       <div className="flex min-h-0 flex-1 pr-1.5 pb-1.5">
         <ModeRail />
         {!sidebar.open && <SidebarEdge open={false} />}
+        {/* Single motion-panels driver for sidebar, main, and inspector: one Group using the default TRANSITION, which SHELL_MOTION mirrors (250ms, cubic-bezier(0.32,0.72,0,1)). No CSS width transitions on layout regions. */}
         <ResizableGroup>
           <ResizablePanel
             data-testid="sidebar-panel"
@@ -130,16 +134,16 @@ function ShellLayout() {
               <SidebarEdge open />
             </div>
           </ResizablePanel>
-          {sidebar.open && <ResizeHandle label="Resize sidebar" />}
+          <ResizeHandle label="Resize sidebar" hidden={!sidebar.open} />
           <FillPanel data-testid="main-panel" className="flex">
-            <div ref={card} className="flex min-w-0 flex-1 overflow-hidden rounded-lg border border-border-muted bg-surface">
+            <div className="flex min-w-0 flex-1 overflow-hidden rounded-lg border border-border-muted bg-surface">
               <main data-testid="primary-region" className="relative flex min-w-0 flex-1 flex-col">
                 <Outlet />
               </main>
             </div>
           </FillPanel>
+          <InspectorDock />
         </ResizableGroup>
-        <InspectorDock cardWidth={cardWidth} />
       </div>
       <GlobalSearch />
     </div>

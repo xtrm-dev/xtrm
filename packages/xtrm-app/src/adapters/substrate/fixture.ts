@@ -1,5 +1,6 @@
 import type { IssueDetail, IssueSummary, JournalEntry, SubstrateAdapter } from "../types.ts";
 import { parseContract } from "./contract.ts";
+import { mapClosure, mapJournalEntry, mapTrace } from "./live.ts";
 
 // Development fixture with in-memory mutations. Shapes follow `substrate-cli/v1`; content is illustrative.
 
@@ -78,8 +79,14 @@ function seed(): Map<string, Record_> {
             references: ["packages/xtrm-app/docs/console-v2-shell-architecture.md"],
           },
       journal: [
-        { id: `jrn-${n}-1`, sequence: 1, kind: "decision", revision: 1, createdAt: NOW - 3 * DAY, summary: "Scope agreed: **shell first**, runtime later." },
-        { id: `jrn-${n}-2`, sequence: 2, kind: "note", revision: 1, createdAt: NOW - DAY, summary: "Fixture review note with `code` and a list:\n\n- one\n- two" },
+        mapJournalEntry({ id: `jrn-${n}-1`, sequence: 1, kind: "decision", issueRevision: 1, createdAt: NOW - 3 * DAY, participantId: "claude-code::xtrm-xt-claude-o8h2", sessionId: "$12", semantic: { summary: "Scope agreed: **shell first**, runtime later." } }),
+        mapJournalEntry({ id: `jrn-${n}-2`, sequence: 2, kind: "note", issueRevision: 1, createdAt: NOW - 2 * DAY, semantic: { summary: "Fixture review note with `code` and a list:\n\n- one\n- two" } }),
+        ...(i === 1
+          ? [
+              mapJournalEntry({ id: `jrn-${n}-3`, sequence: 3, kind: "result", issueRevision: 1, createdAt: NOW - DAY, participantId: "specialist::executor", activationId: "act:e305f40b-220", sessionId: "01a0af77-fb2e-719a-816a-22cb768f5ced", result: { resultVersion: 1, summary: "Implemented the rail and **keyboard model**.", outcome: "completed", completed: ["rail", "Mod+B"], validation: ["npm test"] } }),
+              mapJournalEntry({ id: `jrn-${n}-4`, sequence: 4, kind: "checkpoint", issueRevision: 1, createdAt: NOW - DAY / 2, participantId: "specialist::executor", activationId: "act:e305f40b-220", semantic: { summary: "Settled after review.", next: ["merge"] }, mechanical: { issueId: `iss-${n}`, issueRevision: 1, contractHash: "3b8d12f7", collectedAt: NOW - DAY / 2, branch: "xt/o8h2", headCommit: "abc1234567890def" } }),
+            ]
+          : []),
       ],
     });
   }
@@ -121,13 +128,31 @@ export function createFixtureSubstrate(): SubstrateAdapter {
         reasons: s.readiness === "ready" || terminal ? [] : ["constraints: constraints must be a non-empty array of non-empty strings"],
         contract: parseContract(r.contract),
         claim: null,
-        closure: { closed: terminal, closedAt: terminal ? NOW - DAY : null, reason: terminal ? "done" : null },
+        closure: mapClosure(terminal ? { closed: true, closedAt: NOW - DAY, reason: "Shipped with tests", outcome: "completed", actor: "claude-code::xtrm-xt-claude-o8h2", session: null, revision: 1, contractHash: "04e5cf01f4e67301db6b58b00a6831f2ac8a5477", closureId: `clo-${s.ref}` } : null),
         parent: parent ? { id: parent.id, ref: parent.ref, locator: parent.locator, title: parent.title, lifecycle: parent.lifecycle, kind: parent.kind } : null,
         children,
         blockers: s.blockedBy.map((b) => get(b).summary).map((b) => ({ id: b.id, ref: b.ref, locator: b.locator, title: b.title, lifecycle: b.lifecycle, kind: b.kind })),
         release: children.length ? { childrenDone: children.filter((c) => c.lifecycle === "done").length, childrenTotal: children.length } : null,
         journal: [...r.journal].sort((a, b) => b.sequence - a.sequence),
-        provenance: { attestation: null, claims: 0, bindings: 0, receipts: 0, commits: [], prs: [] },
+        journalTotal: r.journal.length,
+        provenance: mapTrace(
+          s.ref === "XTRM-301"
+            ? {
+                attestation: { outcome: "ready", policy: "default", attestedBy: "claude-code::xtrm-xt-claude-o8h2", createdAt: NOW - 4 * DAY, issueRevision: 1, contractHash: "3b8d12f7a45e66a2", evidenceRefs: [], blockingGaps: [] },
+                claims: [{ holder: "specialist::executor", activationId: "act:e305f40b-220", acquiredAt: NOW - 2 * DAY, expiresAt: NOW - DAY, releasedAt: NOW - DAY, generation: 1, issueRevision: 1 }],
+                bindings: [{ id: "exb-301", participantId: "specialist::executor", activationId: "act:e305f40b-220", attemptId: "att:e305f40b-220:1", sessionId: "01a0af77-fb2e-719a-816a-22cb768f5ced", workspace: "/home/dev/xtrm", baseCommit: null, issueRevision: 1, createdAt: NOW - 2 * DAY }],
+                receipts: [
+                  { id: "rcp-301-a", executionBindingId: "exb-301", issueRevision: 1, commitSha: "abc1234567890def", journalCheckpointId: "jrn-301-4", validationRefs: [{ kind: "validation", value: "npm test" }], artifacts: [{ kind: "commit", value: "abc1234567890def", provider: "git", supersededAt: null }], createdAt: NOW - DAY, finalizedAt: NOW - DAY },
+                  { id: "rcp-301-b", executionBindingId: "exb-301", issueRevision: 1, commitSha: null, journalCheckpointId: null, validationRefs: [], artifacts: [], createdAt: NOW - DAY / 2, finalizedAt: null },
+                ],
+                checkpoints: [{ entryId: "jrn-301-4", sequence: 4, kind: "checkpoint", issueRevision: 1, summary: "Settled after review." }],
+                commits: ["abc1234567890def"],
+                prs: [{ value: "xtrm-dev/xtrm#212", provider: "github" }, "https://github.com/xtrm-dev/xtrm/pull/211"],
+                externalBindings: [{ provider: "github", scope: "xtrm-dev/xtrm", remoteId: "212", url: "https://github.com/xtrm-dev/xtrm/pull/212" }],
+              }
+            : null,
+          r.journal,
+        ),
       };
       return structuredClone(detail);
     },
@@ -151,7 +176,7 @@ export function createFixtureSubstrate(): SubstrateAdapter {
     async addNote(_project, ref, text, kind) {
       const r = get(ref);
       const sequence = r.journal.length + 1;
-      r.journal.push({ id: `jrn-${ref}-${sequence}`, sequence, kind, revision: r.summary.revision, createdAt: Date.now(), summary: text });
+      r.journal.push(mapJournalEntry({ id: `jrn-${ref}-${sequence}`, sequence, kind, issueRevision: r.summary.revision, createdAt: Date.now(), semantic: { summary: text } }));
     },
     async createIssue(_project, input) {
       const n = 300 + rows.size;
