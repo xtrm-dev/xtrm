@@ -1527,14 +1527,13 @@ function runJournal(
     activationId: flag(flags, "activation"),
     sessionId: flag(flags, "session"),
   };
-  // Automatic enrichment (X1, ADR §57): manual flags stay for recovery and
-  // testing, while the R4 env session attaches automatically. The CLI does
-  // not invent a host provider for --session (unknown stays unknown, §98).
-  const contextEnvelope = enrichExecutionContext({
-    participantId: contextFlags.participantId ?? null,
-    runId: contextFlags.runId ?? null,
-    specialist: contextFlags.activationId ? { activationId: contextFlags.activationId } : null,
-  });
+  // Identity (XTRM-417): the CLI passes NO execution envelope here on
+  // purpose. JournalService.appendEntry derives identity ONCE from the
+  // caller scalars above plus the ambient process context, so an entry
+  // written inside a session carries participant/session/activation
+  // without restating them. A pre-built envelope would be non-null
+  // whenever XTRM_SESSION_ID is set and would shadow the fallback,
+  // deriving the session while dropping participant and activation.
   switch (verb) {
     case "append": {
       const ref = needRef(rest);
@@ -1552,7 +1551,7 @@ function runJournal(
         semantic: semRaw !== undefined ? (readJsonArg(semRaw) as never) : undefined,
         result: resRaw !== undefined ? (readJsonArg(resRaw) as ResultPayload) : undefined,
         refs: refsRaw !== undefined ? (readJsonArg(refsRaw) as never) : undefined,
-        executionContext: contextEnvelope,
+        executionContext: undefined,
       });
       if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), result: entry.result });
       return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
@@ -1581,7 +1580,7 @@ function runJournal(
         ...contextFlags,
         mechanical: hostMechanical,
         refs: refsRaw !== undefined ? (readJsonArg(refsRaw) as never) : undefined,
-        executionContext: contextEnvelope,
+        executionContext: undefined,
       });
       if (semRaw === undefined) {
         if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), degraded: false });

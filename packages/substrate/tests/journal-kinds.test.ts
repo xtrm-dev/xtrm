@@ -17,7 +17,7 @@ import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { JournalService, DEFAULT_CONTEXT_LIMIT } from "../src/service/journal-service.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { JOURNAL_KINDS, validateResultPayload } from "../src/domain/journal.ts";
-import { XTRM_SESSION_ID_ENV, XTRM_SESSION_NAME_ENV } from "../src/domain/execution-context.ts";
+import { XTRM_SESSION_ID_ENV, XTRM_SESSION_NAME_ENV, SUBSTRATE_HOLDER_ENV, SUBSTRATE_ACTIVATION_ID_ENV } from "../src/domain/execution-context.ts";
 import { runCli } from "../cli/sb.ts";
 import { contract, setup } from "./helpers.ts";
 
@@ -192,16 +192,28 @@ describe("Journal identity projection to reads (XTRM-410)", () => {
   };
 
   function scrubSessionEnv(): () => void {
-    // Hermetic identity: ambient session env must not rewrite --session.
-    const savedId = process.env[XTRM_SESSION_ID_ENV];
-    const savedName = process.env[XTRM_SESSION_NAME_ENV];
+    // Hermetic identity: ambient identity env must not rewrite the asserted
+    // rows. Covers the full ephemeral set (session + holder + activation)
+    // since the service fallback derives all three when unstated.
+    const saved = {
+      id: process.env[XTRM_SESSION_ID_ENV],
+      name: process.env[XTRM_SESSION_NAME_ENV],
+      holder: process.env[SUBSTRATE_HOLDER_ENV],
+      activation: process.env[SUBSTRATE_ACTIVATION_ID_ENV],
+    };
     delete process.env[XTRM_SESSION_ID_ENV];
     delete process.env[XTRM_SESSION_NAME_ENV];
+    delete process.env[SUBSTRATE_HOLDER_ENV];
+    delete process.env[SUBSTRATE_ACTIVATION_ID_ENV];
     return () => {
-      if (savedId === undefined) delete process.env[XTRM_SESSION_ID_ENV];
-      else process.env[XTRM_SESSION_ID_ENV] = savedId;
-      if (savedName === undefined) delete process.env[XTRM_SESSION_NAME_ENV];
-      else process.env[XTRM_SESSION_NAME_ENV] = savedName;
+      if (saved.id === undefined) delete process.env[XTRM_SESSION_ID_ENV];
+      else process.env[XTRM_SESSION_ID_ENV] = saved.id;
+      if (saved.name === undefined) delete process.env[XTRM_SESSION_NAME_ENV];
+      else process.env[XTRM_SESSION_NAME_ENV] = saved.name;
+      if (saved.holder === undefined) delete process.env[SUBSTRATE_HOLDER_ENV];
+      else process.env[SUBSTRATE_HOLDER_ENV] = saved.holder;
+      if (saved.activation === undefined) delete process.env[SUBSTRATE_ACTIVATION_ID_ENV];
+      else process.env[SUBSTRATE_ACTIVATION_ID_ENV] = saved.activation;
     };
   }
 
@@ -296,6 +308,57 @@ describe("Journal identity projection to reads (XTRM-410)", () => {
       assert.equal(same?.sessionId, "01a0ac95-8370-74c5-9081-4490653e7410");
     } finally {
       restoreEnv();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("journal append and issue note store the same ambient identity (XTRM-417)", () => {
+    // Divergence regression: the note path always derived ambient identity
+    // via the service fallback, while journal append shadowed it with a
+    // session-only CLI envelope. Both paths must store the same row.
+    // Asserts on the RAW ROW, never the read projection (XTRM-410).
+    const { dir, dbPath, cli } = seedDb();
+    const saved = {
+      session: process.env[XTRM_SESSION_ID_ENV],
+      holder: process.env[SUBSTRATE_HOLDER_ENV],
+      activation: process.env[SUBSTRATE_ACTIVATION_ID_ENV],
+    };
+    process.env[XTRM_SESSION_ID_ENV] = "$7";
+    process.env[SUBSTRATE_HOLDER_ENV] = "specialist::probe";
+    process.env[SUBSTRATE_ACTIVATION_ID_ENV] = "act:23b2212a-c44";
+    try {
+      const ref = createIssue(cli, dir);
+      cli(["issue", "note", ref, "note text", "--project", "prj_xtrm"]);
+      cli(["journal", "append", ref, "--kind", "finding", "--project", "prj_xtrm", "--semantic", JSON.stringify({ summary: "append text" })]);
+      const db = openSubstrate(dbPath);
+      try {
+        const rows = db
+          .prepare("SELECT kind, participant_id AS p, session_id AS s, activation_id AS a, execution_context_json AS j FROM issue_journal ORDER BY sequence")
+          .all() as Array<{ kind: string; p: string | null; s: string | null; a: string | null; j: string | null }>;
+        assert.equal(rows.length, 2);
+        for (const r of rows) {
+          assert.equal(r.p, "specialist::probe", `${r.kind} row carries the ambient participant`);
+          assert.equal(r.s, "$7", `${r.kind} row carries the ambient tmux session`);
+          assert.equal(r.a, "act:23b2212a-c44", `${r.kind} row carries the ambient activation`);
+          const envelope = JSON.parse(r.j ?? "null") as {
+            participantId?: string | null;
+            xtrmSessionId?: string | null;
+            specialist?: { activationId?: string | null } | null;
+          };
+          assert.equal(envelope.participantId, "specialist::probe");
+          assert.equal(envelope.xtrmSessionId, "$7");
+          assert.equal(envelope.specialist?.activationId, "act:23b2212a-c44");
+        }
+      } finally {
+        db.close();
+      }
+    } finally {
+      if (saved.session === undefined) delete process.env[XTRM_SESSION_ID_ENV];
+      else process.env[XTRM_SESSION_ID_ENV] = saved.session;
+      if (saved.holder === undefined) delete process.env[SUBSTRATE_HOLDER_ENV];
+      else process.env[SUBSTRATE_HOLDER_ENV] = saved.holder;
+      if (saved.activation === undefined) delete process.env[SUBSTRATE_ACTIVATION_ID_ENV];
+      else process.env[SUBSTRATE_ACTIVATION_ID_ENV] = saved.activation;
       rmSync(dir, { recursive: true, force: true });
     }
   });
