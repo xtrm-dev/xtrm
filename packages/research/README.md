@@ -40,18 +40,24 @@ standard runtime, Specialists runtime, Pi, or xtrm-app.
   wider rule:
   - The assignment-redaction rule is name-anchored, in two tiers. A
     **strong** keyword (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`,
-    `CRED`) matches standalone or compound (`password`,
-    `AWS_SECRET_KEY`). A **weak** keyword (`ACCOUNT`, `ACCESS`, `AUTH`,
-    `PRIVATE`, `SIGNATURE`, `SALT`, `PASSPHRASE`, `SESSION`) matches
-    only in a compound name — `R2_ACCOUNT` and `AWS_ACCESS_KEY`, never
-    a bare heading like `Access: the team needs access to staging`,
-    which an unqualified weak-keyword list once redacted wholesale. A
-    credential assigned to a name carrying none of these keywords is
-    caught only if the value itself matches a known format (a prefixed
-    token, a hex digest, a PEM block, a URL credential). An earlier
-    name-agnostic rule covered that gap but redacted ordinary URLs,
-    model ids and version strings instead; it was deleted rather than
-    tuned further.
+    `CRED`) matches a name that is all-lowercase, all-uppercase, or
+    compound (`password`, `TOKEN`, `AWS_SECRET_KEY`) — never sentence
+    case (`Password`, `Token:`), since a configuration key is written
+    in one of the first three shapes and a prose heading is sentence
+    case. A **weak** keyword (`ACCOUNT`, `ACCESS`, `AUTH`, `PRIVATE`,
+    `SIGNATURE`, `SALT`, `PASSPHRASE`, `SESSION`) matches only in a
+    compound name — `R2_ACCOUNT` and `AWS_ACCESS_KEY`, never a bare
+    heading like `Access: the team needs access to staging`, which an
+    unqualified weak-keyword list once redacted wholesale. Accepted
+    cost of the capitalization rule: a secret assigned to a
+    sentence-case name in prose (`Password: hunter2`) is caught only if
+    its value itself matches a known format — the same trade as a
+    credential assigned to a name carrying none of these keywords at
+    all, which is also caught only if the value itself matches a known
+    format (a prefixed token, a hex digest, a PEM block, a URL
+    credential). An earlier name-agnostic rule covered that second gap
+    but redacted ordinary URLs, model ids and version strings instead;
+    it was deleted rather than tuned further.
   - An unquoted, multi-word secret assigned in prose (`key: my secret
     phrase`) is not caught: only a quoted value may contain whitespace.
     An earlier, unquoted acceptance let a matching field name treat the

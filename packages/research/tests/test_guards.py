@@ -84,8 +84,11 @@ ORDINARY_BOARD_CORPUS: dict[str, str] = {
     "signature_heading": "Signature: the release notes are signed off",
     "salt_heading": "Salt: season the dataset before the next training run",
     "auth_heading": "Auth: the login flow was refactored last sprint",
-    "key_heading": "Key: see the glossary for term definitions",
-    "token_heading": "Token: an economy game uses these as a scoring unit",
+    # K8: real first words, not shortened to stay under the old 4-char
+    # floor — the corpus should prove the capitalization fix, not avoid
+    # exercising it.
+    "key_heading": "Key: correct usage is documented in the glossary",
+    "token_heading": "Token: economy games use these as a scoring unit",
     "accounts_count": "accounts=3",
     "session_sentence": "the session ran for two hours without incident",
 }
@@ -917,17 +920,32 @@ def test_k1_probe_strong_keyword_prose_with_short_first_word_survives():
     assert redact(text) == text
 
 
-def test_k1_probe_strong_keyword_prose_with_long_first_word_is_partly_redacted():
-    """K1 item 3, the other outcome: when the first word after the
-    separator is >= 4 characters, the unquoted alternative still
-    matches *that one word* — this is a residual, reported rather than
-    silently accepted: a strong-keyword prose line is not corrupted
-    wholesale (unlike the pre-K1 defect), but a single leading word can
-    still be swapped for <redacted> if it happens to be long enough."""
+def test_k8_strong_keyword_sentence_case_prose_survives_even_with_a_long_first_word():
+    """K8 closes the K1-item-3 residual: a sentence-case heading
+    ("Token:", not "token:"/"TOKEN:"/a compound name) is never treated
+    as a configuration key, regardless of the first word's length. This
+    used to redact just "correct" ("Token: <redacted> horse battery
+    staple") before K8's capitalization discriminator."""
     text = "Token: correct horse battery staple"
+    assert redact(text) == text
+
+
+@pytest.mark.parametrize(
+    "text,expect_redacted",
+    [
+        ("Token: correct horse battery staple", False),
+        ("Key: the main insight", False),
+        ("token: abc123def456", True),
+        ("TOKEN=abc123def456", True),
+        ("password=hunter2", True),
+        ("Password=hunter2", False),  # accepted cost: sentence case, not compound
+    ],
+)
+def test_k8_strong_keyword_capitalization_discriminator(text, expect_redacted):
+    """K8's exact required outcomes: a configuration key is lowercase,
+    uppercase or compound; a prose heading is sentence case."""
     redacted = redact(text)
-    assert redacted == "Token: <redacted> horse battery staple"
-    assert redacted != text
+    assert (redacted != text) == expect_redacted, redacted
 
 
 def test_redact_catches_redis_style_empty_username_url_credential():

@@ -39,8 +39,17 @@ from xtrm_research.hashing import compute_content_hash
 #: rather than the regex alone, since they need different treatment:
 #:
 #: - **Strong** (``KEY``, ``SECRET``, ``TOKEN``, ``PASSWORD``,
-#:   ``PASSWD``, ``CRED``): matches standalone or compound
-#:   (``password``, ``AWS_SECRET_KEY``).
+#:   ``PASSWD``, ``CRED``): matches a name that is all-lowercase, all-
+#:   uppercase, or compound (``password``, ``TOKEN``, ``AWS_SECRET_KEY``)
+#:   — never sentence case (``Password``, ``Token:``). A configuration
+#:   key is written in one of the first three shapes; a prose heading
+#:   is sentence case (K8: without this, "Token: correct horse battery
+#:   staple" redacted just the word "correct" as if it were the value —
+#:   a quieter version of the same over-redaction K1 fixed for the
+#:   wholesale case). Known, accepted cost: a secret assigned to a
+#:   sentence-case name in prose (``Password: hunter2``) is caught only
+#:   if its value itself matches a known format — the same trade as an
+#:   unrecognized keyword below.
 #: - **Weak** (``ACCOUNT``, ``ACCESS``, ``AUTH``, ``PRIVATE``,
 #:   ``SIGNATURE``, ``SALT``, ``PASSPHRASE``, ``SESSION`` — J1's
 #:   additions for the MMD-585 ``R2_ACCOUNT`` shape): matches only in a
@@ -102,7 +111,17 @@ SECRET_ASSIGN = re.compile(
 def _redact_assignment(m: re.Match[str]) -> str:
     name, sep, value = m.group(1), m.group(2), m.group(3)
     is_strong = any(k in name.upper() for k in _STRONG_ASSIGN_KEYWORDS)
-    if not is_strong and not _COMPOUND_NAME.search(name):
+    is_compound = bool(_COMPOUND_NAME.search(name))
+    if is_strong:
+        # K8: a configuration key is lowercase, uppercase or compound;
+        # a prose heading is sentence case ("Token:", "Key:"). Reject
+        # sentence case even for a strong keyword — the discriminator is
+        # capitalization, not a value-length heuristic, which is what
+        # let "Token: correct horse battery staple" redact one prose
+        # word before this rule existed.
+        if not is_compound and not name.isupper() and not name.islower():
+            return m.group(0)
+    elif not is_compound:
         return m.group(0)  # weak keyword, not compound: leave prose alone
     if "://" in value:
         # K7 (supersedes K3): don't blanket-redact a URL-shaped value —
