@@ -96,7 +96,7 @@ function contractFile(dir: string): string {
 describe("C1 §96 close-reason matrix", () => {
   it("completed, superseded, duplicate and cancelled closings persist reason/actor/session/revision/hash/refs with immutable history", () => {
     const { db, svc, closures } = scratch();
-    process.env["XTRM_SESSION_ID"] = "sess-matrix-001";
+    process.env["XTRM_SESSION_ID"] = "01a0ac95-0000-4000-8000-000000000001";
     const cases = [
       { outcome: "completed", reason: "shipped the work" },
       { outcome: "superseded", reason: "replaced by C1-9" },
@@ -114,7 +114,7 @@ describe("C1 §96 close-reason matrix", () => {
         executionContext: {
           version: 1,
           participantId: "holder-matrix",
-          xtrmSessionId: "sess-matrix-001",
+          xtrmSessionId: "01a0ac95-0000-4000-8000-000000000001",
           timestamp: Date.now(),
         },
         validationRefs: [`val-${i}`],
@@ -125,7 +125,7 @@ describe("C1 §96 close-reason matrix", () => {
       assert.equal(closure.outcome, c.outcome);
       assert.equal(closure.reason, c.reason);
       assert.equal(closure.actor, `actor-${c.outcome}`);
-      assert.equal(closure.executionContext?.xtrmSessionId, "sess-matrix-001");
+      assert.equal(closure.executionContext?.xtrmSessionId, "01a0ac95-0000-4000-8000-000000000001");
       assert.equal(closure.issueRevision, before.currentRevision);
       assert.equal(closure.contractHash, before.currentContractHash);
       assert.deepEqual(closure.validationRefs, [`val-${i}`]);
@@ -150,7 +150,7 @@ describe("C1 §96 close-reason matrix", () => {
 
   it("canonical CLI close binds session automatically and persists refs", () => {
     const { dbPath, dir } = scratch();
-    process.env["XTRM_SESSION_ID"] = "sess-cli-007";
+    process.env["XTRM_SESSION_ID"] = "01a0ac95-0000-4000-8000-0000000000c7";
     const c = contractFile(dir);
     cli(dbPath, ["project", "create", "--prefix", "EV", "--name", "e"]);
     const created = cli(dbPath, ["issue", "create", "--project", "prj_c1", "--title", "cli close", "--kind", "task", "--contract", c, "--scrutiny", "LOW"]) as { humanRef: string };
@@ -165,7 +165,7 @@ describe("C1 §96 close-reason matrix", () => {
     assert.equal(closure["outcome"], "completed");
     assert.equal(closure["reason"], "done via cli");
     assert.equal(closure["actor"], "cli-actor");
-    assert.equal((closure["executionContext"] as { xtrmSessionId?: string }).xtrmSessionId, "sess-cli-007");
+    assert.equal((closure["executionContext"] as { xtrmSessionId?: string }).xtrmSessionId, "01a0ac95-0000-4000-8000-0000000000c7");
     assert.deepEqual(closure["journalResultRefs"], ["jr1", "jr2"]);
     assert.deepEqual(closure["receiptRefs"], ["rc1"]);
     // issue show surfaces the durable closure, never an invented reason.
@@ -372,5 +372,58 @@ describe("C1 legacy preservation", () => {
       const env = JSON.parse(res.stdout) as { data: { text: string } };
       assert.match(env.data.text, /--reason/, `${verb} help must document --reason`);
     }
+  });
+});
+
+// XTRM-447: the closure write seam enforces the same identity rule as the
+// journal seam (XTRM-412) - canonicalise what is recoverable, refuse what is
+// not, store nothing on refusal. Historical rows are never rewritten.
+describe("C1 §96 closure identity canonical write seam (XTRM-447)", () => {
+  it("refuses a non-canonical session id at close and stores nothing", () => {
+    const { db, svc, closures } = scratch();
+    const issue = seedIssue(svc, "seam refuses junk");
+    assert.throws(
+      () =>
+        closures.closeIssue(issue.id, {
+          outcome: "completed",
+          reason: "should never persist",
+          actor: "actor-junk",
+          executionContext: {
+            version: 1,
+            participantId: "holder-junk",
+            xtrmSessionId: "sess-junk-999",
+            timestamp: Date.now(),
+          },
+        }),
+      /invalid executionContext\.xtrmSessionId/,
+    );
+    assert.equal(
+      db.prepare("SELECT COUNT(*) AS n FROM issue_closures WHERE issue_id = ?").get(issue.id)!.n,
+      0,
+      "a refused closure stores zero rows",
+    );
+    assert.notEqual(
+      svc.getIssue(issue.id).lifecycleState,
+      "done",
+      "lifecycle is untouched by a refused close",
+    );
+  });
+
+  it("canonicalises an uppercase UUID at close and stores it lowercase", () => {
+    const { db, svc, closures } = scratch();
+    const issue = seedIssue(svc, "seam canonicalises uuid");
+    const upper = "01A0AC95-0000-4000-8000-0000000000AB";
+    const closure = closures.closeIssue(issue.id, {
+      outcome: "completed",
+      reason: "canonicalisation at the closure seam",
+      actor: "actor-canonical",
+      executionContext: { version: 1, participantId: "holder-upper", xtrmSessionId: upper, timestamp: Date.now() },
+    });
+    assert.equal(closure.executionContext?.xtrmSessionId, upper.toLowerCase(), "stored canonicalised");
+    const storedRaw = db
+      .prepare("SELECT execution_context_json FROM issue_closures WHERE closure_id = ?")
+      .get(closure.closureId)!.execution_context_json as string;
+    assert.ok(storedRaw.includes(upper.toLowerCase()), "the persisted envelope carries the canonical form");
+    assert.ok(!storedRaw.includes(upper), "the uppercase spelling is not persisted");
   });
 });
