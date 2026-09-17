@@ -134,7 +134,7 @@ function ShellLayout() {
               <SidebarEdge open />
             </div>
           </ResizablePanel>
-          {sidebar.open && <ResizeHandle label="Resize sidebar" />}
+          <ResizeHandle label="Resize sidebar" hidden={!sidebar.open} />
           <FillPanel data-testid="main-panel" className="flex">
             <div className="flex min-w-0 flex-1 overflow-hidden rounded-lg border border-border-muted bg-surface">
               <main data-testid="primary-region" className="relative flex min-w-0 flex-1 flex-col">
