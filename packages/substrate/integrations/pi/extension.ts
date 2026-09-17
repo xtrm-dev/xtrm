@@ -11,7 +11,7 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Type } from "@earendil-works/pi-ai";
+import { Type, type Usage } from "@earendil-works/pi-ai";
 import {
   convertToLlm,
   defineTool,
@@ -38,6 +38,7 @@ import {
   toolJournalAppend,
   toolJournalCheckpoint,
   toolProvenanceTrace,
+  toPiCompaction,
 } from "./handlers.ts";
 import type { SemanticCheckpoint } from "../../src/domain/journal.ts";
 import {
@@ -231,7 +232,7 @@ export default function (pi: ExtensionAPI): void {
     );
     const model = ctx.modelRegistry?.find?.("google", "gemini-2.5-flash") ?? ctx.model;
     const summarizer = model
-      ? async (): Promise<SemanticCheckpoint> => {
+      ? async (): Promise<SemanticCheckpoint & { usage?: Usage }> => {
           const response = await ctx.modelRegistry.complete(
             model,
             {
@@ -257,17 +258,12 @@ export default function (pi: ExtensionAPI): void {
           const start = text.indexOf("{");
           const end = text.lastIndexOf("}");
           if (start < 0 || end <= start) throw new Error("secondary model returned no JSON object");
-          return JSON.parse(text.slice(start, end + 1)) as SemanticCheckpoint;
+          const checkpoint = JSON.parse(text.slice(start, end + 1)) as SemanticCheckpoint;
+          return response.usage ? { ...checkpoint, usage: response.usage } : checkpoint;
         }
       : undefined;
     const result = await withServices((svc) => runBeforeCompact(svc, { issueRef: ref, sessionId, summarizer })).catch(() => null);
-    if (!result || result.fallbackToDefault || !result.summary) return;
-    return {
-      compaction: {
-        summary: result.summary,
-        firstKeptEntryId: event.preparation.firstKeptEntryId,
-        tokensBefore: event.preparation.tokensBefore,
-      },
-    };
+    if (!result) return;
+    return toPiCompaction(event.preparation, result);
   });
 }
