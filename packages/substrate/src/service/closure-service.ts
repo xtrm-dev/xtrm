@@ -21,6 +21,7 @@ import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
 import { withTransaction } from "../store/transactions.ts";
 import {
   normalizeExecutionContext,
+  canonicalizeWriteIdentity,
   type ExecutionContext,
 } from "../domain/execution-context.ts";
 import {
@@ -166,7 +167,22 @@ export class ClosureService {
     if ((TERMINAL_STATES as readonly string[]).includes(issue.lifecycleState)) {
       throw new Error(`already terminal: ${issueId} is ${issue.lifecycleState}; reopen before closing again (history is immutable)`);
     }
-    const ctx = normalizeExecutionContext(input.executionContext ?? null);
+    // XTRM-447: closure identity passes through the SAME canonical write seam
+    // as the journal (XTRM-412) — canonicalise, then fail closed before any row
+    // is written, so an invalid session id can no longer be stored silently and
+    // the caller learns which field was rejected. Scalars come from the envelope
+    // itself (CloseIssueInput carries no separate scalar fields); historical rows
+    // are never rewritten.
+    const normalizedCtx = normalizeExecutionContext(input.executionContext ?? null);
+    const canonical = canonicalizeWriteIdentity({
+      executionContext: normalizedCtx,
+      participantId: normalizedCtx?.participantId ?? null,
+      activationId: normalizedCtx?.specialist?.activationId ?? null,
+      attemptId: normalizedCtx?.specialist?.attemptId ?? null,
+      sessionId: normalizedCtx?.xtrmSessionId ?? null,
+      runId: normalizedCtx?.runId ?? null,
+    });
+    const ctx = canonical.executionContext;
     const now = input.now ?? Date.now();
     const closureId = newClosureId();
     const terminalState = terminalStateForOutcome(input.outcome);
@@ -234,7 +250,18 @@ export class ClosureService {
       throw new Error("actor must be a non-empty string when provided");
     }
     const actor = typeof input.actor === "string" ? input.actor.trim() : null;
-    const reopenContext = normalizeExecutionContext(input.executionContext ?? null);
+    // XTRM-447: same canonical write seam as close — reopen stores an
+    // execution envelope too, so it gets the same rule (canonicalise, fail
+    // closed before anything is written).
+    const reopened = canonicalizeWriteIdentity({
+      executionContext: normalizeExecutionContext(input.executionContext ?? null),
+      participantId: null,
+      activationId: null,
+      attemptId: null,
+      sessionId: null,
+      runId: null,
+    });
+    const reopenContext = reopened.executionContext;
     const prior = this.listClosures(issueId).map((c) => c.closureId);
     const now = input.now ?? Date.now();
     this.db.prepare("UPDATE issues SET lifecycle_state = 'open', updated_at = ? WHERE id = ?").run(now, issueId);

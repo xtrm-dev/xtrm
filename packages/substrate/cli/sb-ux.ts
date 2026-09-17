@@ -209,7 +209,7 @@ function mutationResult(parsed: WrapperArgs, style: TerminalStyleOptions): CliRe
   if (call.result.code !== 0 || call.envelope.ok === false) return errorResult(command, call.envelope.error ?? (call.result.stderr.trim() || "operation failed"), style);
   const data = call.envelope.data && typeof call.envelope.data === "object" && !Array.isArray(call.envelope.data)
     ? call.envelope.data as Record<string, unknown> : { value: call.envelope.data };
-  return { code: 0, stdout: renderFeedback(feedbackForCommand(command, parsed.base, data), style), stderr: "" };
+  return { code: 0, stdout: renderFeedback(feedbackForCommand(command, parsed.base, data), style), stderr: call.result.stderr };
 }
 function collapsedVisible(rows: IssueTreeRow[], collapsed: Set<string>): IssueTreeRow[] {
   const out: IssueTreeRow[] = [];
