@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ComponentType } from "react";
 import { Outlet, createRootRoute, createRoute, createRouter, redirect, type RouterHistory } from "@tanstack/react-router";
 import { AdaptersProvider, type Adapters } from "../adapters/index.tsx";
 import { IssuePage } from "../issues/IssuePage.tsx";
@@ -9,9 +10,10 @@ import { validateDrawerSearch } from "../shell/layout.ts";
 import { ActivitySurface } from "../surfaces/ActivitySurface.tsx";
 import { PullsSurface } from "../github/PullsSurface.tsx";
 import { ProgramSurface } from "../surfaces/ProgramSurface.tsx";
+import { ExperimentListSurface, RunListSurface } from "../surfaces/ResearchSurface.tsx";
 import { DeferredSurface, RepositoriesSurface } from "../surfaces/other.tsx";
 import { SettingsSurface } from "../settings/SettingsSurface.tsx";
-import { MODES, REPO_SECTIONS } from "./destinations.ts";
+import { MODES, REPO_SECTIONS, RESEARCH_SECTIONS } from "./destinations.ts";
 
 // URL contract: docs/console-v2-shell-architecture.md §9.1.
 
@@ -56,6 +58,26 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
   const programRoute = createRoute({ getParentRoute: () => rootRoute, path: "/program", component: () => <ProgramSurface /> });
   const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsSurface });
 
+  // Research (XTRM-433 slice 2): `/research` redirects to its first section, mirroring the
+  // app-root index redirect above. Each section is a real route; a `deferred` one renders the
+  // same placeholder as REPO_SECTIONS, never invented UI.
+  const researchIndexRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/research",
+    beforeLoad: () => {
+      throw redirect({ to: RESEARCH_SECTIONS[0]!.path } as never);
+    },
+  });
+  const RESEARCH_SURFACES: Record<string, ComponentType> = { experiments: ExperimentListSurface, runs: RunListSurface };
+  const researchRoutes = RESEARCH_SECTIONS.map((s) => {
+    const Surface = RESEARCH_SURFACES[s.id];
+    return createRoute({
+      getParentRoute: () => rootRoute,
+      path: s.path,
+      component: s.deferred || !Surface ? () => <DeferredSurface title={s.label} icon={s.icon} reason={s.deferred ?? "Not implemented"} /> : () => <Surface />,
+    });
+  });
+
   const repoRoute = createRoute({ getParentRoute: () => rootRoute, path: "/rep/$owner/$repo", component: Outlet });
   const repoChildren = [
     createRoute({ getParentRoute: () => repoRoute, path: "/work/issues", component: IssuesSurface }),
@@ -73,6 +95,16 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     }),
   ];
 
-  const routeTree = rootRoute.addChildren([indexRoute, workRoute, repositoriesRoute, programRoute, settingsRoute, ...deferredModes, repoRoute.addChildren(repoChildren)]);
+  const routeTree = rootRoute.addChildren([
+    indexRoute,
+    workRoute,
+    repositoriesRoute,
+    programRoute,
+    researchIndexRoute,
+    ...researchRoutes,
+    settingsRoute,
+    ...deferredModes,
+    repoRoute.addChildren(repoChildren),
+  ]);
   return createRouter({ routeTree, history, defaultPreload: false });
 }

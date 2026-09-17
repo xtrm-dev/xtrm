@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "event.schema.json",
+  "title": "Event — one monotonic execution observation row in events.jsonl",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": "xtrm-research-event/v1" },
+    "seq": { "type": "integer", "minimum": 0 },
+    "ts": { "type": "string", "format": "date-time" },
+    "kind": { "type": "string", "minLength": 1 },
+    "sample_id": { "type": ["string", "null"] },
+    "data": {},
+    "telemetry_refs": { "$ref": "common.schema.json#/$defs/telemetry_refs" },
+    "telemetry_snapshot": {
+      "description": "A closed snapshot copied from Specialists/Pi telemetry at event time. Never a live reference into their stores."
+    },
+    "usage": { "$ref": "common.schema.json#/$defs/usage_record" }
+  },
+  "required": ["schema_version", "seq", "ts", "kind"]
+}

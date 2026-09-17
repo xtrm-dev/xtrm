@@ -19,6 +19,7 @@ import {
   toolIssueUpdate,
   toolJournalAppend,
   toolProvenanceTrace,
+  toPiCompaction,
 } from "../integrations/pi/handlers.ts";
 import { discoverIssueRef } from "../integrations/claude-code/runtime.ts";
 import { contract } from "./helpers.ts";
@@ -171,11 +172,14 @@ describe("D26: compaction failure falls back with the durable checkpoint intact"
       assert.equal(result.degraded, true);
       assert.equal(result.fallbackToDefault, true);
       assert.equal(result.summary, null);
+      assert.equal(result.usage, null);
+      assert.equal(toPiCompaction({ firstKeptEntryId: "e1", tokensBefore: 100 }, result), undefined);
       assert.ok(result.entryId);
       const capsule = svc.resume.buildCapsule(id);
       assert.ok(capsule.latestCheckpoint);
       assert.equal(capsule.latestCheckpoint.id, result.entryId);
       assert.equal((capsule.contract as { problem: string }).problem, "P");
+      assert.equal(svc.journal.listEntries(id, { kind: "note" }).length, 0);
     } finally {
       svc.close();
     }
@@ -189,6 +193,165 @@ describe("D26: compaction failure falls back with the durable checkpoint intact"
     assert.equal(result.entryId, null);
     assert.equal(result.fallbackToDefault, true);
     assert.equal(result.summary, null);
+    assert.equal(result.usage, null);
+    assert.equal(toPiCompaction({ firstKeptEntryId: "e1", tokensBefore: 100 }, result), undefined);
+  });
+});
+
+describe("XTRM-440: compaction usage rides alongside the checkpoint, never inside it", () => {
+  const usage = { input: 100, output: 20, cacheRead: 0, cacheWrite: 0, totalTokens: 120, cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 } };
+
+  it("summarizer reporting usage: result carries it, host payload includes it, persisted checkpoint omits it", async () => {
+    const { svc } = setup();
+    try {
+      const id = readyIssue(svc);
+      svc.issues.claimIssue(id, "pi-holder");
+      const result = await runBeforeCompact(svc, {
+        issueRef: id,
+        sessionId: "sess-usage",
+        summarizer: async () => ({ summary: "did work", usage }),
+      });
+      assert.equal(result.fallbackToDefault, false);
+      assert.deepEqual(result.usage, usage);
+      const payload = toPiCompaction({ firstKeptEntryId: "e1", tokensBefore: 500 }, result);
+      assert.deepEqual(payload?.compaction.usage, usage);
+      const persisted = svc.journal.listEntries(id, { kind: "compaction" }).at(-1);
+      assert.ok(persisted?.semantic);
+      assert.equal((persisted?.semantic as unknown as Record<string, unknown>)["usage"], undefined);
+      assert.equal(svc.journal.listEntries(id, { kind: "note" }).length, 0);
+    } finally {
+      svc.close();
+    }
+  });
+
+  it("summarizer without usage: result.usage is null, host payload omits usage, one absence note is recorded", async () => {
+    const { svc } = setup();
+    try {
+      const id = readyIssue(svc);
+      svc.issues.claimIssue(id, "pi-holder");
+      const result = await runBeforeCompact(svc, {
+        issueRef: id,
+        sessionId: "sess-no-usage",
+        summarizer: async () => ({ summary: "did some unrelated work" }),
+      });
+      assert.equal(result.fallbackToDefault, false);
+      assert.equal(result.usage, null);
+      assert.ok(!result.summary?.includes("reported no usage"));
+      const payload = toPiCompaction({ firstKeptEntryId: "e1", tokensBefore: 500 }, result);
+      assert.ok(payload);
+      assert.equal("usage" in payload.compaction, false);
+      const notes = svc.journal.listEntries(id, { kind: "note" });
+      assert.equal(notes.length, 1);
+      assert.match(notes[0]!.semantic!.summary, /no usage/);
+      assert.match(notes[0]!.semantic!.summary, new RegExp(result.entryId as string));
+    } finally {
+      svc.close();
+    }
+  });
+
+  it("fallback (summarizer throws): usage null, toPiCompaction is undefined, no absence note", async () => {
+    const { svc } = setup();
+    try {
+      const id = readyIssue(svc);
+      svc.issues.claimIssue(id, "pi-holder");
+      const result = await runBeforeCompact(svc, {
+        issueRef: id,
+        sessionId: "sess-throws",
+        summarizer: async () => {
+          throw new Error("secondary model down");
+        },
+      });
+      assert.equal(result.fallbackToDefault, true);
+      assert.equal(result.usage, null);
+      assert.equal(toPiCompaction({ firstKeptEntryId: "e1", tokensBefore: 500 }, result), undefined);
+      assert.equal(svc.journal.listEntries(id, { kind: "note" }).length, 0);
+    } finally {
+      svc.close();
+    }
+  });
+
+  it("no summarizer: mechanical-only summary, usage null, host payload omits usage, no absence note", async () => {
+    const { svc } = setup();
+    try {
+      const id = readyIssue(svc);
+      svc.issues.claimIssue(id, "pi-holder");
+      const result = await runBeforeCompact(svc, { issueRef: id, sessionId: "sess-none" });
+      assert.equal(result.fallbackToDefault, false);
+      assert.ok(result.summary);
+      assert.equal(result.usage, null);
+      const payload = toPiCompaction({ firstKeptEntryId: "e1", tokensBefore: 500 }, result);
+      assert.ok(payload);
+      assert.equal("usage" in payload.compaction, false);
+      assert.equal(svc.journal.listEntries(id, { kind: "note" }).length, 0);
+    } finally {
+      svc.close();
+    }
+  });
+
+  it("checkpoint commits before a usage-reporting summarizer runs", async () => {
+    const { svc } = setup();
+    try {
+      const id = readyIssue(svc);
+      svc.issues.claimIssue(id, "pi-holder");
+      let observed: string | null = null;
+      const result = await runBeforeCompact(svc, {
+        issueRef: id,
+        sessionId: "sess-order",
+        summarizer: async (persisted) => {
+          const rows = svc.journal.listEntries(id, { kind: "compaction" });
+          assert.equal(rows.at(-1)?.id, persisted.id, "compaction row must be readable inside the summarizer");
+          observed = persisted.id;
+          return { summary: "ordered", usage };
+        },
+      });
+      assert.equal(observed, result.entryId);
+      assert.deepEqual(result.usage, usage);
+    } finally {
+      svc.close();
+    }
+  });
+
+  it("absence-note append failure never breaks compaction", async () => {
+    const { svc } = setup();
+    try {
+      const id = readyIssue(svc);
+      svc.issues.claimIssue(id, "pi-holder");
+      const original = svc.journal.appendEntry.bind(svc.journal);
+      svc.journal.appendEntry = (issueId, input) => {
+        if (input.kind === "note") throw new Error("disk full");
+        return original(issueId, input);
+      };
+      const result = await runBeforeCompact(svc, {
+        issueRef: id,
+        sessionId: "sess-note-fails",
+        summarizer: async () => ({ summary: "did work" }),
+      });
+      assert.equal(result.fallbackToDefault, false);
+      assert.ok(result.summary);
+      assert.equal(result.usage, null);
+      assert.ok(toPiCompaction({ firstKeptEntryId: "e1", tokensBefore: 500 }, result));
+    } finally {
+      svc.close();
+    }
+  });
+
+  it("synchronous summarizer reporting usage works", async () => {
+    const { svc } = setup();
+    try {
+      const id = readyIssue(svc);
+      svc.issues.claimIssue(id, "pi-holder");
+      const result = await runBeforeCompact(svc, {
+        issueRef: id,
+        sessionId: "sess-sync",
+        summarizer: () => ({ summary: "sync work", usage }),
+      });
+      assert.equal(result.fallbackToDefault, false);
+      assert.deepEqual(result.usage, usage);
+      assert.deepEqual(toPiCompaction({ firstKeptEntryId: "e1", tokensBefore: 500 }, result)?.compaction.usage, usage);
+      assert.equal(svc.journal.listEntries(id, { kind: "note" }).length, 0);
+    } finally {
+      svc.close();
+    }
   });
 });
 

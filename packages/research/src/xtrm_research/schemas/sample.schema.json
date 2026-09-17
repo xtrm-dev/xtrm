@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sample.schema.json",
+  "title": "Sample — one evaluated item row in samples.jsonl",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": "xtrm-research-sample/v1" },
+    "sample_id": { "type": "string", "minLength": 1 },
+    "index": { "type": "integer", "minimum": 0 },
+    "input": {},
+    "output": {},
+    "candidate": {},
+    "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+    "telemetry_refs": { "$ref": "common.schema.json#/$defs/telemetry_refs" },
+    "usage": { "$ref": "common.schema.json#/$defs/usage_record" },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["schema_version", "sample_id", "index", "input", "status", "created_at"]
+}

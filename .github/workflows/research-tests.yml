@@ -1,0 +1,41 @@
+name: research tests
+
+on:
+  push:
+    paths:
+      - "packages/research/**"
+      - ".github/workflows/research-tests.yml"
+  pull_request:
+    paths:
+      - "packages/research/**"
+      - ".github/workflows/research-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/research
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: python -m pip install -e '.[dev]' ruff==0.15.4
+
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Tests
+        run: python -m pytest -q

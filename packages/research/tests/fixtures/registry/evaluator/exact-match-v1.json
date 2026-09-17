@@ -1,0 +1,8 @@
+{
+  "code_revision": "test-fixture-1",
+  "config": {},
+  "content_hash": "sha256:109b8b7abf9fc173a47b1692c17d2c318f397735ba012aeb4139c8ebd584bfde",
+  "id": "exact-match",
+  "kind": "deterministic",
+  "version": "v1"
+}
