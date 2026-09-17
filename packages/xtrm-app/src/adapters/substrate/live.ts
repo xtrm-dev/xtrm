@@ -1,4 +1,6 @@
 import type {
+  ArtifactRecord,
+  Closure,
   IssueDetail,
   IssueLink,
   IssueSummary,
@@ -50,29 +52,27 @@ export interface WireIssueDetail extends WireIssue {
   reasons?: string[];
   contract?: unknown;
   claim?: { holder: string; expiresAt: number } | null;
-  closure?: { closed: boolean; closedAt: number | null; reason: string | null };
+  closure?: Record<string, unknown> | null;
+  operationalContext?: { total?: number } | null;
 }
 interface WireResume {
   children?: Array<{ issueId: string; humanRef: string; locator?: string; title: string; lifecycleState: string }>;
   release?: { childrenDone: number; childrenTotal: number } | null;
 }
-interface WireTrace {
-  attestation?: { outcome: string; policy: string; attestedBy: string; createdAt: number } | null;
-  claims?: unknown[];
-  bindings?: unknown[];
-  receipts?: unknown[];
-  commits?: Array<{ sha?: string } | string>;
-  prs?: Array<{ ref?: string; number?: number; url?: string } | string>;
+// Trace and journal rows are read field by field (below), so older `sb` builds that omit
+// newer fields map to explicit nulls instead of failing.
+type Obj = Record<string, unknown>;
+export interface WireTrace {
+  attestation?: Obj | null;
+  claims?: Obj[];
+  bindings?: Obj[];
+  receipts?: Obj[];
+  checkpoints?: Obj[];
+  commits?: Array<Obj | string>;
+  prs?: Array<Obj | string>;
+  externalBindings?: Obj[];
 }
-interface WireJournalEntry {
-  id: string;
-  sequence: number;
-  kind: string;
-  issueRevision: number;
-  createdAt: number;
-  semantic?: { summary?: string } | null;
-  mechanical?: unknown;
-}
+export type WireJournalEntry = Obj & { id: string; sequence: number; kind: string; issueRevision: number; createdAt: number };
 
 export class SubstrateReadError extends Error {}
 
@@ -140,6 +140,116 @@ export function mapBoard(list: WireIssue[], exported: WireExport | null, ready: 
 
 const link = (row: IssueSummary): IssueLink => ({ id: row.id, ref: row.ref, locator: row.locator, title: row.title, lifecycle: row.lifecycle, kind: row.kind });
 
+const obj = (v: unknown): Obj | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : null);
+const strOrNull = (v: unknown) => (typeof v === "string" && v ? v : null);
+const numOrNull = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const list = (v: unknown): Obj[] => (Array.isArray(v) ? v.map(obj).filter((x): x is Obj => !!x) : []);
+const refText = (v: unknown): string => {
+  if (typeof v === "string") return v;
+  const o = obj(v);
+  if (!o) return v == null ? "" : String(v);
+  return String(o.value ?? o.key ?? o.sha ?? o.ref ?? o.url ?? o.number ?? JSON.stringify(o));
+};
+const artifact = (o: Obj): ArtifactRecord => ({ kind: String(o.kind ?? "artifact"), value: refText(o.value), provider: strOrNull(o.provider), superseded: o.supersededAt != null });
+
+export function mapJournalEntry(j: WireJournalEntry): JournalEntry {
+  const semantic = obj(j.semantic);
+  const result = obj(j.result);
+  const { summary: semanticSummary, ...semanticRest } = semantic ?? {};
+  return {
+    id: j.id,
+    sequence: j.sequence,
+    kind: j.kind,
+    revision: j.issueRevision,
+    createdAt: j.createdAt,
+    summary: strOrNull(semanticSummary) ?? strOrNull(result?.summary) ?? "",
+    identity: { participantId: strOrNull(j.participantId), sessionId: strOrNull(j.sessionId), activationId: strOrNull(j.activationId), runId: strOrNull(j.runId) },
+    semantic: semantic && Object.keys(semanticRest).length ? semanticRest : null,
+    result,
+    mechanical: obj(j.mechanical),
+    executionContext: obj(j.executionContext),
+  };
+}
+
+export function mapTrace(t: WireTrace | null, journal: JournalEntry[]): ProvenanceSummary {
+  const att = obj(t?.attestation);
+  const checkpoints = list(t?.checkpoints).map((c) => ({
+    entryId: String(c.entryId ?? ""),
+    sequence: numOrNull(c.sequence) ?? 0,
+    kind: String(c.kind ?? "checkpoint"),
+    revision: numOrNull(c.issueRevision),
+    summary: strOrNull(c.summary),
+  }));
+  const seqOf = new Map<string, number>([...journal.map((e) => [e.id, e.sequence] as const), ...checkpoints.map((c) => [c.entryId, c.sequence] as const)]);
+  return {
+    attestation: att
+      ? {
+          outcome: String(att.outcome ?? ""),
+          policy: String(att.policy ?? ""),
+          attestedBy: String(att.attestedBy ?? ""),
+          createdAt: numOrNull(att.createdAt) ?? 0,
+          revision: numOrNull(att.issueRevision),
+          contractHash: strOrNull(att.contractHash),
+          evidenceRefs: (Array.isArray(att.evidenceRefs) ? att.evidenceRefs : []).map(refText).filter(Boolean),
+          blockingGaps: (Array.isArray(att.blockingGaps) ? att.blockingGaps : []).map(refText).filter(Boolean),
+        }
+      : null,
+    claims: list(t?.claims).map((c) => ({
+      holder: String(c.holder ?? ""),
+      activationId: strOrNull(c.activationId),
+      acquiredAt: numOrNull(c.acquiredAt),
+      expiresAt: numOrNull(c.expiresAt),
+      releasedAt: numOrNull(c.releasedAt),
+      generation: numOrNull(c.generation),
+      revision: numOrNull(c.issueRevision),
+    })),
+    bindings: list(t?.bindings).map((b) => ({
+      id: String(b.id ?? ""),
+      participantId: strOrNull(b.participantId),
+      activationId: strOrNull(b.activationId),
+      attemptId: strOrNull(b.attemptId),
+      sessionId: strOrNull(b.sessionId),
+      workspace: strOrNull(b.workspace),
+      baseCommit: strOrNull(b.baseCommit),
+      revision: numOrNull(b.issueRevision),
+      createdAt: numOrNull(b.createdAt),
+    })),
+    receipts: list(t?.receipts).map((r) => {
+      const checkpointId = strOrNull(r.journalCheckpointId);
+      return {
+        id: String(r.id ?? ""),
+        bindingId: strOrNull(r.executionBindingId),
+        revision: numOrNull(r.issueRevision),
+        commitSha: strOrNull(r.commitSha),
+        checkpointId,
+        checkpointSequence: checkpointId ? (seqOf.get(checkpointId) ?? null) : null,
+        validationRefs: list(r.validationRefs).map(artifact),
+        artifacts: list(r.artifacts).map(artifact),
+        createdAt: numOrNull(r.createdAt),
+        finalizedAt: numOrNull(r.finalizedAt),
+      };
+    }),
+    checkpoints,
+    commits: (t?.commits ?? []).map(refText).filter(Boolean),
+    prs: (t?.prs ?? []).map(refText).filter(Boolean),
+    externalBindings: list(t?.externalBindings).map((e) => ({ provider: String(e.provider ?? ""), scope: String(e.scope ?? ""), remoteId: String(e.remoteId ?? ""), url: strOrNull(e.url) })),
+  };
+}
+
+export function mapClosure(c: Obj | null | undefined): Closure {
+  return {
+    closed: c?.closed === true,
+    closedAt: numOrNull(c?.closedAt),
+    reason: strOrNull(c?.reason),
+    closureId: strOrNull(c?.closureId),
+    outcome: strOrNull(c?.outcome),
+    actor: strOrNull(c?.actor),
+    session: strOrNull(c?.session),
+    revision: numOrNull(c?.revision),
+    contractHash: strOrNull(c?.contractHash),
+  };
+}
+
 export function mapIssueDetail(
   d: WireIssueDetail,
   ctx: { projectId: string | null; board: IssueSummary[]; resume: WireResume | null; trace: WireTrace | null; journal: WireJournalEntry[] },
@@ -151,23 +261,7 @@ export function mapIssueDetail(
   const children: IssueLink[] = ctx.resume?.children?.length
     ? ctx.resume.children.map((c) => ({ id: c.issueId, ref: c.humanRef, locator: c.locator ?? byId.get(c.issueId)?.locator, title: c.title, lifecycle: c.lifecycleState }))
     : ctx.board.filter((r) => r.parentRef === d.humanRef).map(link);
-  const text = (x: unknown) => (typeof x === "string" ? x : x && typeof x === "object" ? String((x as Record<string, unknown>).sha ?? (x as Record<string, unknown>).ref ?? (x as Record<string, unknown>).url ?? (x as Record<string, unknown>).number ?? "") : "");
-  const provenance: ProvenanceSummary = {
-    attestation: ctx.trace?.attestation ?? null,
-    claims: ctx.trace?.claims?.length ?? 0,
-    bindings: ctx.trace?.bindings?.length ?? 0,
-    receipts: ctx.trace?.receipts?.length ?? 0,
-    commits: (ctx.trace?.commits ?? []).map(text).filter(Boolean),
-    prs: (ctx.trace?.prs ?? []).map(text).filter(Boolean),
-  };
-  const journal: JournalEntry[] = ctx.journal.map((j) => ({
-    id: j.id,
-    sequence: j.sequence,
-    kind: j.kind,
-    revision: j.issueRevision,
-    createdAt: j.createdAt,
-    summary: j.semantic?.summary ?? (j.mechanical ? "Mechanical entry" : ""),
-  }));
+  const journal = ctx.journal.map(mapJournalEntry).sort((a, b) => b.sequence - a.sequence);
   return {
     id: d.id,
     ref: d.humanRef,
@@ -192,13 +286,14 @@ export function mapIssueDetail(
     reasons: d.reasons ?? [],
     contract: parseContract(d.contract),
     claim: d.claim ? { holder: d.claim.holder, expiresAt: d.claim.expiresAt } : null,
-    closure: d.closure ?? { closed: false, closedAt: null, reason: null },
+    closure: mapClosure(d.closure),
     parent: parentRow ? link(parentRow) : null,
     children,
     blockers: (row?.blockedBy ?? []).map((ref) => byRef.get(ref)).filter((r): r is IssueSummary => !!r).map(link),
     release: ctx.resume?.release ? { childrenDone: ctx.resume.release.childrenDone, childrenTotal: ctx.resume.release.childrenTotal } : null,
-    journal: journal.sort((a, b) => b.sequence - a.sequence),
-    provenance,
+    journal,
+    journalTotal: Math.max(journal.length, d.operationalContext?.total ?? 0),
+    provenance: mapTrace(ctx.trace, journal),
   };
 }
 
@@ -221,6 +316,9 @@ async function write(path: string, body: Record<string, unknown>): Promise<unkno
   if ("schema" in json) return unwrap(json);
   throw new SubstrateReadError(json.error);
 }
+
+// ponytail: one bounded read of full bodies; `sb journal show` has no offset. Page server-side if journals outgrow it.
+export const JOURNAL_READ_LIMIT = 2000;
 
 const projectOf = (ref: string) => ref.split("-")[0]?.toUpperCase();
 
@@ -250,7 +348,7 @@ export const liveSubstrate: SubstrateAdapter = {
       read<WireIssueDetail>(`/issue${r}`),
       read<WireResume>(`/resume${r}`).catch(() => null),
       read<WireTrace>(`/trace${r}`).catch(() => null),
-      read<WireJournalEntry[]>(`/journal${r}&limit=100`).catch(() => []),
+      read<WireJournalEntry[]>(`/journal${r}&limit=${JOURNAL_READ_LIMIT}`).catch(() => []),
       resolvedProject ? this.listIssues(resolvedProject).catch(() => []) : Promise.resolve([]),
     ]);
     return mapIssueDetail(detail, { projectId: resolvedProject, board, resume, trace, journal });

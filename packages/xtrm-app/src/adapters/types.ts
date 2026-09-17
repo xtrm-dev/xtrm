@@ -276,22 +276,122 @@ export interface IssueLink {
   kind?: string;
 }
 
+/** Stored execution identity, verbatim (tmux `$N`, UUID, `specialist::name`). Never guessed. */
+export interface JournalIdentity {
+  participantId: string | null;
+  sessionId: string | null;
+  activationId: string | null;
+  runId: string | null;
+}
+
 export interface JournalEntry {
   id: string;
   sequence: number;
   kind: string;
   revision: number;
   createdAt: number;
+  /** Semantic summary, else the result summary; empty when the entry has neither. */
   summary: string;
+  identity: JournalIdentity;
+  /** Semantic checkpoint fields other than the summary (completed, next, keyDecisions, …). */
+  semantic: Record<string, unknown> | null;
+  result: Record<string, unknown> | null;
+  mechanical: Record<string, unknown> | null;
+  executionContext: Record<string, unknown> | null;
+}
+
+export interface Attestation {
+  outcome: string;
+  policy: string;
+  attestedBy: string;
+  createdAt: number;
+  revision: number | null;
+  contractHash: string | null;
+  evidenceRefs: string[];
+  blockingGaps: string[];
+}
+
+export interface ClaimRecord {
+  holder: string;
+  activationId: string | null;
+  acquiredAt: number | null;
+  expiresAt: number | null;
+  releasedAt: number | null;
+  generation: number | null;
+  revision: number | null;
+}
+
+export interface BindingRecord {
+  id: string;
+  participantId: string | null;
+  activationId: string | null;
+  attemptId: string | null;
+  sessionId: string | null;
+  workspace: string | null;
+  baseCommit: string | null;
+  revision: number | null;
+  createdAt: number | null;
+}
+
+export interface ArtifactRecord {
+  kind: string;
+  value: string;
+  provider: string | null;
+  superseded: boolean;
+}
+
+export interface ReceiptRecord {
+  id: string;
+  bindingId: string | null;
+  revision: number | null;
+  commitSha: string | null;
+  /** Settling journal checkpoint (XTRM-416); null when not linked. */
+  checkpointId: string | null;
+  /** Journal sequence of the checkpoint when it resolves; null when unknown. */
+  checkpointSequence: number | null;
+  validationRefs: ArtifactRecord[];
+  artifacts: ArtifactRecord[];
+  createdAt: number | null;
+  finalizedAt: number | null;
+}
+
+export interface CheckpointRecord {
+  entryId: string;
+  sequence: number;
+  kind: string;
+  revision: number | null;
+  summary: string | null;
+}
+
+export interface ExternalBindingRecord {
+  provider: string;
+  scope: string;
+  remoteId: string;
+  url: string | null;
 }
 
 export interface ProvenanceSummary {
-  attestation: { outcome: string; policy: string; attestedBy: string; createdAt: number } | null;
-  claims: number;
-  bindings: number;
-  receipts: number;
+  attestation: Attestation | null;
+  claims: ClaimRecord[];
+  bindings: BindingRecord[];
+  receipts: ReceiptRecord[];
+  checkpoints: CheckpointRecord[];
   commits: string[];
   prs: string[];
+  externalBindings: ExternalBindingRecord[];
+}
+
+export interface Closure {
+  closed: boolean;
+  closedAt: number | null;
+  reason: string | null;
+  closureId: string | null;
+  outcome: string | null;
+  actor: string | null;
+  session: string | null;
+  /** Contract revision the closure was made against; null when not recorded. */
+  revision: number | null;
+  contractHash: string | null;
 }
 
 export interface IssueDetail extends IssueSummary {
@@ -301,12 +401,14 @@ export interface IssueDetail extends IssueSummary {
   reasons: string[];
   contract: Contract;
   claim: { holder: string; expiresAt: number | null } | null;
-  closure: { closed: boolean; closedAt: number | null; reason: string | null };
+  closure: Closure;
   parent: IssueLink | null;
   children: IssueLink[];
   blockers: IssueLink[];
   release: { childrenDone: number; childrenTotal: number } | null;
   journal: JournalEntry[];
+  /** Entries Substrate holds; greater than `journal.length` when the read was capped. */
+  journalTotal: number;
   provenance: ProvenanceSummary;
 }
 

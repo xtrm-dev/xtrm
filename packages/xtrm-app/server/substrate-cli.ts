@@ -55,7 +55,7 @@ export function readArgv(pathname: string, params: URLSearchParams): string[] | 
       return r ? ["provenance", "trace", r] : null;
     case "/journal": {
       const limit = Number(params.get("limit") ?? "50");
-      return r && Number.isInteger(limit) && limit > 0 && limit <= 500 ? ["journal", "show", r, "--limit", String(limit)] : null;
+      return r && Number.isInteger(limit) && limit > 0 && limit <= 2000 ? ["journal", "show", r, "--limit", String(limit)] : null;
     }
     default:
       return null;
