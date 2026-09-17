@@ -284,9 +284,16 @@ _TRANSPORT_MODULES = {
 #: backends/guards.py must not inherit this allowlisting just because it
 #: shares a basename with the real, top-level guards.py.
 _TRANSPORT_IMPORT_ALLOWLIST = {"guards.py"}
-#: pre-existing, out-of-scope subprocess users (git plumbing, environment
-#: probing) — not a remote-send path, exempted by relative path rather
-#: than folded into the allowlist above.
+#: Exact relative paths only — never a directory prefix or a glob — so
+#: a new file cannot join this list by accident (e.g. a XTRM-427
+#: backend module living elsewhere in the package). Each entry:
+#:   code_state.py  — git plumbing (subprocess.run(["git", ...])) for
+#:                     the code state's commit/dirty hash.
+#:   environment.py — subprocess.run([node, "--version"]) for Node
+#:                     version detection.
+#: Both are pre-existing, reviewed, argument-list (never shell=True)
+#: calls, out of scope for this issue to touch. A new entry needs the
+#: same review before being added — this list does not grow quietly.
 _SUBPROCESS_EXEMPT = {"code_state.py", "environment.py"}
 #: pre-existing, out-of-scope os users: runner.py/store.py use os.open,
 #: os.replace, os.close, os.unlink for the run-directory write path (out
