@@ -624,10 +624,30 @@ def test_redact_catches_xapp_prefixed_token():
         "count=42",
         "city=Springfield",
         "please review this ticket before merging",
+        # H17: a realistic false-positive sweep (deploy notes) — none of
+        # these should be redacted once the generic-assignment floor is
+        # 12 characters.
+        "version=v2.3.1",
+        "build=4821",
+        "p99=250ms",
+        "status=degraded",
+        "host=web-02",
+        "python3.13",
+        "commit=a3f9c21",
     ],
 )
 def test_redact_does_not_touch_ordinary_prose_or_plain_pairs(text):
     assert redact(text) == text
+
+
+def test_redact_catches_a_12_character_mixed_class_generic_value():
+    """H17: the floor is 12, not lower — pins the boundary so a future
+    change can't silently drop it back down. abc123def456 is exactly 12
+    characters, letters mixed with digits."""
+    text = "R2_ACCOUNT=abc123def456"
+    redacted = redact(text)
+    assert "abc123def456" not in redacted
+    assert "<redacted>" in redacted
 
 
 # ---- H13: SECRET_URL_CRED must not catastrophically backtrack -----------

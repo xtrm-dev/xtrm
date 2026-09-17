@@ -47,16 +47,19 @@ SECRET_ASSIGN = re.compile(
 )
 #: A value assigned to *any* identifier-shaped name (no keyword match
 #: required), redacted only when the value itself looks credential-
-#: shaped: at least 6 characters, no whitespace, and mixing letters with
-#: digits — one conservative heuristic instead of a longer regex zoo, so
-#: an account id or opaque token under an unrecognized name (H8's
-#: ``R2_ACCOUNT=...``, the MMD-585 shape) is still caught. A pure-digit
-#: value (``count=42``) or a pure-letter value (``name=John``) never
-#: matches, since both fail the "mixes classes" requirement.
+#: shaped: at least 12 characters, no whitespace, and mixing letters
+#: with digits — one conservative heuristic instead of a longer regex
+#: zoo, so an account id or opaque token under an unrecognized name
+#: (H8's ``R2_ACCOUNT=...``, the MMD-585 shape) is still caught. A
+#: pure-digit value (``count=42``), a pure-letter value (``name=John``)
+#: and a short mixed value (``version=v2.3.1``, H17) never match — this
+#: is a name-agnostic rule and trades some false positives for catching
+#: the unrecognized-name case; :func:`check_redaction`'s loss check is
+#: the backstop for when it still fires too widely.
 SECRET_ASSIGN_GENERIC = re.compile(
-    r"\b([A-Za-z][A-Za-z0-9_]*)(\s*[:=]\s*)([^\s\"'\\,}]{6,})"
+    r"\b([A-Za-z][A-Za-z0-9_]*)(\s*[:=]\s*)([^\s\"'\\,}]{12,})"
 )
-_MIXED_CLASS_VALUE = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9+/_.-]+$")
+_MIXED_CLASS_VALUE = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9+/_.-]{12,}$")
 #: Bare credential-shaped tokens: hex digests, AWS access key ids,
 #: known provider token prefixes (GitHub, Slack, Stripe, Google, npm,
 #: GitLab), a JWT, and a long base64-ish blob. The base64 alternative uses
