@@ -17,6 +17,7 @@ import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { JournalService, DEFAULT_CONTEXT_LIMIT } from "../src/service/journal-service.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { JOURNAL_KINDS, validateResultPayload } from "../src/domain/journal.ts";
+import { XTRM_SESSION_ID_ENV, XTRM_SESSION_NAME_ENV } from "../src/domain/execution-context.ts";
 import { runCli } from "../cli/sb.ts";
 import { contract, setup } from "./helpers.ts";
 
@@ -163,6 +164,140 @@ describe("Journal identity and ordering (ADR §32)", () => {
     assert.equal(raw.kind, "future_kind", "no CHECK constraint on kind");
     // ...but a reader that does not know the kind fails closed.
     assert.throws(() => journal.listEntries(issue.id), /fail-closed: corrupt journal kind/);
+  });
+});
+
+// ---- XTRM-410: reads project the stored execution identity -----------------
+// `issue_journal` stores participant/session/activation/run identity on
+// every row it can; every read path must project it instead of dropping it.
+// The --json payload is extended additively: existing keys keep working.
+
+describe("Journal identity projection to reads (XTRM-410)", () => {
+  type Shown = {
+    id: string;
+    sequence: number;
+    kind: string;
+    issueRevision: number;
+    hasMechanical: boolean;
+    hasSemantic: boolean;
+    createdAt: number;
+    participantId: string | null;
+    activationId: string | null;
+    sessionId: string | null;
+    runId: string | null;
+    executionContext: { participantId?: string | null } | null;
+    semantic: { summary: string } | null;
+    mechanical: unknown;
+    result: unknown;
+  };
+
+  function scrubSessionEnv(): () => void {
+    // Hermetic identity: ambient session env must not rewrite --session.
+    const savedId = process.env[XTRM_SESSION_ID_ENV];
+    const savedName = process.env[XTRM_SESSION_NAME_ENV];
+    delete process.env[XTRM_SESSION_ID_ENV];
+    delete process.env[XTRM_SESSION_NAME_ENV];
+    return () => {
+      if (savedId === undefined) delete process.env[XTRM_SESSION_ID_ENV];
+      else process.env[XTRM_SESSION_ID_ENV] = savedId;
+      if (savedName === undefined) delete process.env[XTRM_SESSION_NAME_ENV];
+      else process.env[XTRM_SESSION_NAME_ENV] = savedName;
+    };
+  }
+
+  function seedDb(): { dir: string; dbPath: string; cli: (argv: string[]) => unknown } {
+    const dir = mkdtempSync(join(tmpdir(), "sb-j410-"));
+    const dbPath = join(dir, "state.db");
+    const seed = openSubstrate(dbPath);
+    new IssueService(seed).createProject({ id: "prj_xtrm", prefix: "XTRM", name: "t" });
+    seed.close();
+    const cli = (argv: string[]): unknown => {
+      const res = runCli(["--db", dbPath, "--json", ...argv]);
+      assert.equal(res.code, 0, `sb ${argv.join(" ")} failed: ${res.stderr || res.stdout}`);
+      return (JSON.parse(res.stdout) as { data: unknown }).data;
+    };
+    return { dir, dbPath, cli };
+  }
+
+  function createIssue(cli: (argv: string[]) => unknown, dir: string): string {
+    const c = join(dir, "c.json");
+    writeFileSync(c, JSON.stringify(contract()));
+    const created = cli(["issue", "create", "--project", "prj_xtrm", "--title", "I", "--kind", "task", "--contract", c, "--scrutiny", "LOW"]) as {
+      humanRef: string;
+    };
+    return created.humanRef;
+  }
+
+  it("show/latest/timeline JSON carry the stored identity; human show names the actor or says none", () => {
+    const { dir, dbPath, cli } = seedDb();
+    const restoreEnv = scrubSessionEnv();
+    try {
+      const ref = createIssue(cli, dir);
+      cli([
+        "journal", "append", ref, "--kind", "finding", "--project", "prj_xtrm",
+        "--participant", "specialist::executor", "--activation", "act:410", "--session", "sess-410", "--run", "run-410",
+        "--semantic", JSON.stringify({ summary: "identity-bearing finding" }),
+      ]);
+      // Identity-less row: `issue note` carries no identity flags.
+      cli(["issue", "note", ref, "plain note", "--project", "prj_xtrm"]);
+
+      const shown = cli(["journal", "show", ref]) as Shown[];
+      assert.equal(shown.length, 2);
+      const bearing = shown.find((e) => e.sequence === 1);
+      assert.equal(bearing?.participantId, "specialist::executor");
+      assert.equal(bearing?.activationId, "act:410");
+      assert.equal(bearing?.sessionId, "sess-410");
+      assert.equal(bearing?.runId, "run-410");
+      assert.equal(bearing?.executionContext?.participantId, "specialist::executor");
+      // Compatibility surface: existing fields keep working.
+      assert.equal(bearing?.kind, "finding");
+      assert.equal(bearing?.semantic?.summary, "identity-bearing finding");
+      assert.equal(typeof bearing?.createdAt, "number");
+      const bare = shown.find((e) => e.sequence === 2);
+      assert.equal(bare?.participantId, null);
+      assert.equal(bare?.activationId, null);
+      assert.equal(bare?.sessionId, null);
+      assert.equal(bare?.runId, null);
+      assert.equal(bare?.executionContext, null);
+
+      // latest/timeline share the summary projection.
+      const latest = cli(["journal", "latest", ref]) as Shown;
+      assert.equal(latest.participantId, null, "latest reads the bare note");
+      const timeline = cli(["journal", "timeline", ref]) as { count: number; entries: Shown[] };
+      assert.equal(timeline.entries[0]?.participantId, "specialist::executor");
+
+      // Human show names the actor, and marks the absent one explicitly.
+      const human = runCli(["--db", dbPath, "journal", "show", ref]);
+      assert.equal(human.code, 0, human.stderr);
+      assert.ok(human.stdout.includes("· by specialist::executor"), "header names the actor");
+      assert.ok(human.stdout.includes("session sess-410"), "body exposes the session");
+      assert.ok(human.stdout.includes("activation act:410"), "body exposes the activation");
+      assert.ok(human.stdout.includes("actor: (none recorded)"), "identity-less row is explicitly absent");
+    } finally {
+      restoreEnv();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("the projected identity agrees with provenance trace for the same row", () => {
+    const { dir, cli } = seedDb();
+    const restoreEnv = scrubSessionEnv();
+    try {
+      const ref = createIssue(cli, dir);
+      cli(["journal", "checkpoint", ref, "--project", "prj_xtrm", "--participant", "specialist::executor", "--session", "sess-410"]);
+      const trace = cli(["provenance", "trace", ref]) as {
+        checkpoints: Array<{ entryId: string; sequence: number }>;
+      };
+      assert.equal(trace.checkpoints.length, 1);
+      const shown = cli(["journal", "show", ref]) as Shown[];
+      const same = shown.find((e) => e.sequence === trace.checkpoints[0]?.sequence);
+      assert.equal(same?.id, trace.checkpoints[0]?.entryId, "same row in both reads");
+      assert.equal(same?.participantId, "specialist::executor");
+      assert.equal(same?.sessionId, "sess-410");
+    } finally {
+      restoreEnv();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

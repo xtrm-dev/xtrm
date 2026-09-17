@@ -141,6 +141,49 @@ describe("journal checkpoints (D22, D23 + recovery)", () => {
   });
 });
 
+describe("journal identity survives every read path (XTRM-410)", () => {
+  let ctx: ReturnType<typeof setup>;
+  beforeEach(() => {
+    ctx = setup();
+  });
+  afterEach(() => {
+    ctx.db.close();
+    rmSync(ctx.dir, { recursive: true, force: true });
+  });
+
+  it("flat identity stored on the row is projected by getEntry/listEntries/since/timeline/latest", () => {
+    const { journal } = services(ctx);
+    const issue = workIssue(ctx);
+    const appended = journal.appendEntry(issue.id, {
+      kind: "finding",
+      participantId: "specialist::executor",
+      activationId: "act:410",
+      sessionId: "sess-410",
+      runId: "run-410",
+      semantic: { ...SEMANTIC },
+    });
+    const bare = journal.appendEntry(issue.id, { kind: "note", semantic: { summary: "plain" } });
+    for (const e of [
+      journal.getEntry(appended.id),
+      journal.listEntries(issue.id)[0]!,
+      journal.since(issue.id, 0).entries[0]!,
+      journal.timeline(issue.id)[0]!,
+      journal.latest(issue.id, { kind: "finding" })!,
+    ]) {
+      assert.equal(e.participantId, "specialist::executor");
+      assert.equal(e.activationId, "act:410");
+      assert.equal(e.sessionId, "sess-410");
+      assert.equal(e.runId, "run-410");
+    }
+    for (const e of [journal.getEntry(bare.id), journal.latest(issue.id)!]) {
+      assert.equal(e.participantId, null);
+      assert.equal(e.activationId, null);
+      assert.equal(e.sessionId, null);
+      assert.equal(e.runId, null);
+    }
+  });
+});
+
 describe("journal cursors (D24)", () => {
   let ctx: ReturnType<typeof setup>;
   beforeEach(() => {
