@@ -1421,19 +1421,41 @@ function journalSummary(e: JournalEntry): Record<string, unknown> {
     hasMechanical: e.mechanical !== null,
     hasSemantic: e.semantic !== null,
     createdAt: e.createdAt,
+    // Stored execution identity, projected additively (XTRM-410): the
+    // journal is continuity, so reads must not drop who produced the row.
+    // Null means none was recorded, never an empty string or an invention.
+    participantId: e.participantId,
+    activationId: e.activationId,
+    sessionId: e.sessionId,
+    runId: e.runId,
+    executionContext: e.executionContext,
   };
 }
 
 function journalLine(svc: IssueService, e: JournalEntry): string {
   const issue = svc.getIssue(e.issueId);
-  return `${issue.locator} · ${issue.humanRef} · seq${e.sequence} ${e.kind} rev${e.issueRevision}${e.semantic ? "" : " (mechanical-only)"}`;
+  const actor = e.participantId ? ` · by ${e.participantId}` : "";
+  return `${issue.locator} · ${issue.humanRef} · seq${e.sequence} ${e.kind} rev${e.issueRevision}${e.semantic ? "" : " (mechanical-only)"}${actor}`;
+}
+
+// Stored execution identity for `journal show` (XTRM-410): names the actor
+// for a row that carries one, and says so explicitly for a row that does
+// not — never a blank that is indistinguishable from a capture gap, and
+// never an invented actor.
+function journalIdentity(e: JournalEntry): string {
+  const facets: string[] = [];
+  if (e.participantId) facets.push(e.participantId);
+  if (e.sessionId) facets.push(`session ${e.sessionId}`);
+  if (e.activationId) facets.push(`activation ${e.activationId}`);
+  if (e.runId) facets.push(`run ${e.runId}`);
+  return facets.length > 0 ? `  actor: ${facets.join(" · ")}` : "  actor: (none recorded)";
 }
 
 // Full-body human rendering for `journal show` (xtrm-7wc.6.2): the header
 // line plus the entry-scoped semantic text. `since` stays compact by
 // contract; mechanical payloads ride JSON only, presence-only here.
 function journalBody(e: JournalEntry): string[] {
-  const lines: string[] = [];
+  const lines: string[] = [journalIdentity(e)];
   const sem = e.semantic;
   if (!sem) return lines;
   lines.push(`  summary: ${sem.summary}`);
