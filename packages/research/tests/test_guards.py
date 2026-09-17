@@ -789,7 +789,7 @@ def test_send_through_run_settles_invalid_even_when_write_event_raises(
         raise RuntimeError("disk full")
 
     monkeypatch.setattr(handle, "write_event", _flaky_write_event)
-    with pytest.raises(Exception):
+    with pytest.raises(RuntimeError, match="disk full"):
         send_through_run(handle, 0, payload, backend, known_ids=over_broad_known_ids)
 
     assert backend.calls == []
