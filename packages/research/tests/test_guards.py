@@ -1045,11 +1045,17 @@ def test_pem_pattern_no_longer_matches_a_non_private_key_banner_pair():
     assert redact(text) == text
 
 
-def test_redaction_loss_check_aborts_when_a_rule_eats_a_whole_field():
-    """H12 part 2: even with the narrowed PEM pattern, a genuine
-    PRIVATE KEY banner pair stuffed with ordinary prose (not a real key)
-    still gets redacted by design — and the missing half of the guard,
-    check_redaction, is what catches that this destroyed real content."""
+def test_k6_terminated_pem_banner_stuffed_with_prose_now_sends():
+    """K6 changes this from H12 part 2's original behavior, deliberately:
+    a *terminated* PRIVATE KEY banner pair (BEGIN and END both present)
+    is trusted as key material by construction — team-lead's decision is
+    that a match this well-formed is, by definition, the key, and its
+    span is exempt from the word count entirely, regardless of what is
+    actually inside it. Prose stuffed inside a genuine banner pair (not
+    a real key) is the accepted cost of that trust: it now sends,
+    redacted to "<redacted>", rather than aborting. The unbounded
+    variant right below (an *unterminated* banner) is not exempt and
+    still catches exactly this shape."""
     prose = (
         "This release improves startup latency, fixes a race in the "
         "connection pool, and adds retry backoff for transient network "
@@ -1058,10 +1064,8 @@ def test_redaction_loss_check_aborts_when_a_rule_eats_a_whole_field():
     ) * 3
     text = f"-----BEGIN RSA PRIVATE KEY-----\n{prose}\n-----END RSA PRIVATE KEY-----"
     backend = _RecordingBackend()
-    with pytest.raises(GuardFailure) as exc_info:
-        guarded_send({"notes": text}, backend)
-    assert exc_info.value.guard == "redaction"
-    assert backend.calls == []
+    guarded_send({"notes": text}, backend)
+    assert backend.calls[0]["notes"] == "<redacted>"
 
 
 # ---- K6: short-field total-loss trigger fires past an absolute count ----
@@ -1097,11 +1101,16 @@ def test_k6_short_field_absolute_threshold_boundary():
 
 
 def test_minimal_pem_banner_alone_removes_six_plain_words():
-    """Documents the K6/H12 tension flagged in the round-6-addendum
-    report: even a bare PEM banner with no algorithm name and no body
+    """Why SECRET_PEM's matched span is exempt from the word count
+    entirely (K6), rather than merely raising the absolute threshold:
+    even a bare banner with no algorithm name and no body
     (``BEGIN``/``PRIVATE``/``KEY`` x2) is 6 plain words by itself — at
-    or above K6's ~5-word absolute threshold before a single word of
-    real content or an algorithm name is added."""
+    or above the ~5-word threshold before a single word of real key
+    content or an algorithm name is added. No fixed threshold above 5
+    could both stay tight enough to catch the K6 probe (an unterminated
+    banner eating a short sentence) and stay loose enough to tolerate
+    every real key's banner overhead plus its body's incidental
+    letter-only runs — hence exempting the bounded span outright."""
     banner_only = "-----BEGIN PRIVATE KEY-----\n\n-----END PRIVATE KEY-----"
     assert guards_module._PLAIN_WORD.findall(banner_only) == [
         "BEGIN",
@@ -1113,16 +1122,10 @@ def test_minimal_pem_banner_alone_removes_six_plain_words():
     ]
 
 
-@pytest.mark.xfail(
-    reason=(
-        "K6 vs H12 conflict, reported and unresolved: SHORT_FIELD_ABSOLUTE_REMOVED_THRESHOLD "
-        "(~5) fires on a real PEM's own banner words (>= 6, algorithm name and body content "
-        "aside) before counting a single word of actual leaked content. See the round-6-addendum "
-        "report to team-lead for the full probe and options."
-    ),
-    strict=True,
-)
 def test_a_real_pem_is_still_redacted_and_sent():
+    """K6: resolved by exempting a *terminated* SECRET_PEM match's own
+    span from the word count entirely — the banner and body are, by
+    construction, exactly the key, never counted as lost prose."""
     body = base64.b64encode(secrets.token_bytes(600)).decode()
     lines = "\n".join(body[i : i + 64] for i in range(0, len(body), 64))
     pem = f"-----BEGIN RSA PRIVATE KEY-----\n{lines}\n-----END RSA PRIVATE KEY-----"
@@ -1175,14 +1178,33 @@ def test_check_redaction_short_field_total_loss_aborts_when_not_attributable():
 
 
 def test_redact_with_rules_reports_the_matched_rule_names():
-    _text, matched = guards_module._redact_with_rules(_fake_pem())
+    _text, matched, _baseline = guards_module._redact_with_rules(_fake_pem())
     assert "pem" in matched
 
-    _text, matched = guards_module._redact_with_rules(_fake_hex_secret())
+    _text, matched, _baseline = guards_module._redact_with_rules(_fake_hex_secret())
     assert "bare_credential_format" in matched
 
-    _text, matched = guards_module._redact_with_rules("ordinary prose, nothing here")
+    _text, matched, _baseline = guards_module._redact_with_rules(
+        "ordinary prose, nothing here"
+    )
     assert matched == frozenset()
+
+
+def test_redact_with_rules_counting_baseline_exempts_a_terminated_pem_span():
+    """K6: the counting baseline has a bounded SECRET_PEM match's own
+    span removed entirely, so a real key's length is never counted as
+    lost prose."""
+    pem = _fake_pem()
+    _text, _matched, baseline = guards_module._redact_with_rules(pem)
+    assert baseline == ""
+
+
+def test_redact_with_rules_counting_baseline_keeps_an_unterminated_pem_span():
+    """The unbounded rule's span is left in the counting baseline —
+    its words still count toward the removed total (K6)."""
+    text = "-----BEGIN RSA PRIVATE KEY----- some words here"
+    _text, _matched, baseline = guards_module._redact_with_rules(text)
+    assert baseline == text
 
 
 def test_deep_mask_operates_per_string_field_not_serialized_json():

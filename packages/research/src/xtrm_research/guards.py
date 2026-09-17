@@ -210,20 +210,51 @@ SECRET_PEM_UNTERMINATED = re.compile(
 _REDACTED = "<redacted>"
 
 
-def _redact_with_rules(text: str) -> tuple[str, frozenset[str]]:
-    """Redact ``text`` and report which named, anchored rule(s) actually
-    matched — never a name-agnostic one, since J1 deleted the only one
-    of those. :func:`check_redaction` uses this to tell "this field is
-    legitimately nothing but a credential" (J3) from an over-broad rule
-    destroying unrelated content: a short field that loses everything is
-    only exempt from the loss-abort when the loss is attributable to one
-    of these anchored rules."""
+def _redact_with_rules(text: str) -> tuple[str, frozenset[str], str]:
+    """Redact ``text``; report which named, anchored rule(s) actually
+    matched, and a *counting baseline* for :func:`check_redaction` to
+    treat as "original" instead of ``text`` itself.
+
+    Bounded vs. unbounded, checked for every anchored rule (K6 — this
+    distinction is load-bearing, not just for PEM):
+
+    - **SECRET_PEM** (a terminated key: BEGIN and END both present) is
+      bounded on both sides by its own markers. A match is, by
+      construction, exactly the key material between them and nothing
+      else, so its words are exempt from the redaction-loss word count
+      entirely — counting them would otherwise treat a real key's own
+      length as if it were lost prose (the ``test_a_real_pem_...``
+      regression this closes).
+    - **SECRET_PEM_UNTERMINATED** is the one unbounded rule: no closing
+      anchor, it redacts from a BEGIN marker to the end of the field, so
+      it can (and, per the K6 probe, does) consume real prose sitting
+      after a truncated banner. Its words are *not* exempt.
+    - **SECRET_AUTH_HEADER**, **SECRET_URL_CRED**, **SECRET_ASSIGN** and
+      **SECRET_BARE** are all bounded too — each value class stops at a
+      quote, a delimiter, a fixed length, or a charset boundary, so none
+      of them can consume neighboring prose the way an unbounded rule
+      could. Their own redacted span is typically 0-1 words already
+      (only the value changes; a name like ``api_key`` survives in both
+      original and redacted text), so they were never a source of the
+      banner-word-inflation problem PEM's exemption exists for, and are
+      left uncounted-for here rather than given the same explicit
+      exemption machinery — doing so would require re-deriving each
+      rule's match span against a second, independently-mutated copy of
+      the text, which risks the two copies drifting out of sync with
+      what actually got redacted.
+    """
     matched: set[str] = set()
+    # The counting baseline starts as `text` with SECRET_PEM's own
+    # matched span (only) removed entirely, computed against the same
+    # input `text` is about to be redacted from, so the spans line up
+    # with what SECRET_PEM actually matched.
+    counting_baseline = SECRET_PEM.sub("", text)
 
     if SECRET_PEM.search(text):
         matched.add("pem")
     text = SECRET_PEM.sub(_REDACTED, text)
 
+    # Unbounded: not exempt from the count (K6) — left in counting_baseline.
     if SECRET_PEM_UNTERMINATED.search(text):
         matched.add("pem")
     text = SECRET_PEM_UNTERMINATED.sub(_REDACTED, text)
@@ -248,7 +279,7 @@ def _redact_with_rules(text: str) -> tuple[str, frozenset[str]]:
         matched.add("bare_credential_format")
     text = SECRET_BARE.sub(_REDACTED, text)
 
-    return text, frozenset(matched)
+    return text, frozenset(matched), counting_baseline
 
 
 def redact(text: str) -> str:
@@ -554,14 +585,16 @@ _MaskedQuad = tuple[str, str, str, frozenset[str]]
 def _masked_leaf_with_pair(
     text: str, known_ids: frozenset[str]
 ) -> tuple[str, _MaskedQuad]:
-    redacted, matched_rules = _redact_with_rules(text)
+    redacted, matched_rules, counting_baseline = _redact_with_rules(text)
     # per-leaf: catches an over-broad redaction rule (H12); matched_rules
     # tells it whether this leaf's loss is attributable to a recognized
-    # credential shape (J3).
-    check_redaction(text, redacted, matched_rules=matched_rules)
+    # credential shape (J3). counting_baseline is `text` with a bounded
+    # SECRET_PEM match's own span exempted (K6) — the "original" a real
+    # key's own length is never counted against.
+    check_redaction(counting_baseline, redacted, matched_rules=matched_rules)
     masked_text = _apply_id_mask(redacted, known_ids)
     check_mask(redacted, masked_text)  # per-leaf check: catches the G8 short-field case
-    return masked_text, (text, redacted, masked_text, matched_rules)
+    return masked_text, (counting_baseline, redacted, masked_text, matched_rules)
 
 
 def _mask_key_with_pairs(
