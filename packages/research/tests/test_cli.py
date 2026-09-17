@@ -244,3 +244,103 @@ def test_cli_never_prints_a_traceback_on_error(seeded_root, capsys):
     assert exit_code != 0
     assert "Traceback" not in captured.out
     assert "Traceback" not in captured.err
+
+
+def test_argparse_usage_error_returns_envelope_when_json_present(seeded_root, capsys):
+    code, envelope = _run_cli(
+        ["--root", str(seeded_root), "--json", "runs", "--bogus"], capsys
+    )
+    assert code == 2
+    assert envelope["ok"] is False
+    assert "bogus" in envelope["error"]
+
+
+def test_argparse_usage_error_without_json_is_plain_text(seeded_root, capsys):
+    exit_code = main(["--root", str(seeded_root), "runs", "--bogus"])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "bogus" in captured.err
+
+
+@pytest.fixture
+def lineage_root(seeded_root, registry):
+    from xtrm_research.runner import retry_run
+
+    retry_run(
+        seeded_root,
+        "run-cli",
+        "run-cli-retry",
+        make_manifest(registry, run_id="run-cli-retry"),
+        [],
+    )
+    fork = make_manifest(
+        registry,
+        run_id="run-cli-fork",
+        lineage=[{"relation": "forked_from", "run_id": "run-cli"}],
+    )
+    start_run(seeded_root, "run-cli-fork", fork)
+    return seeded_root
+
+
+def test_cli_lineage_json_shows_retry_and_fork_children(lineage_root, capsys):
+    code, envelope = _run_cli(
+        ["--root", str(lineage_root), "--json", "runs", "--lineage", "run-cli"], capsys
+    )
+    assert code == 0
+    children = {(c["relation"], c["run_id"]) for c in envelope["data"]["children"]}
+    assert children == {("retry_of", "run-cli-retry"), ("forked_from", "run-cli-fork")}
+
+
+def test_cli_lineage_human_shows_retry_and_fork_children(lineage_root, capsys):
+    exit_code = main(["--root", str(lineage_root), "runs", "--lineage", "run-cli"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "run-cli-retry" in out
+    assert "run-cli-fork" in out
+
+
+def test_killed_writer_reports_interrupted_end_to_end(registry, runs_root, capsys):
+    from xtrm_research.store import events_path
+
+    manifest = make_manifest(registry, run_id="run-killed")
+    handle = start_run(runs_root, "run-killed", manifest)
+    handle.write_event(
+        {
+            "schema_version": "xtrm-research-event/v1",
+            "seq": 0,
+            "ts": FIXED_NOW.isoformat(),
+            "kind": "x",
+        }
+    )
+    with events_path(runs_root, "run-killed").open("a", encoding="utf-8") as f:
+        f.write(
+            '{"seq": 1, "ki'
+        )  # writer killed mid-line, heartbeat never updated again
+
+    code, envelope = _run_cli(
+        ["--root", str(runs_root), "--json", "run", "show", "run-killed"], capsys
+    )
+    assert code == 0
+    assert (
+        envelope["data"]["status"] == "started"
+    )  # freshly started, real heartbeat just set
+
+    # simulate a writer that died: push the heartbeat far enough into the
+    # past (relative to FIXED_NOW, not to whenever this test happens to
+    # run) that it's stale under any real wall clock from FIXED_NOW onward.
+    from datetime import timedelta
+
+    from xtrm_research.store import load_status, status_path, write_json_atomic
+
+    status = load_status(runs_root, "run-killed")
+    status["last_heartbeat"] = (FIXED_NOW - timedelta(days=3650)).isoformat()
+    write_json_atomic(status_path(runs_root, "run-killed"), status)
+
+    code, envelope = _run_cli(
+        ["--root", str(runs_root), "--json", "run", "show", "run-killed"], capsys
+    )
+    assert code == 0
+    assert envelope["data"]["status"] == "interrupted"
+    # the torn tail is still readable up to its last complete line
+    assert envelope["data"]["manifest"]["run_id"] == "run-killed"

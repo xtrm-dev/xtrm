@@ -52,6 +52,25 @@ def test_experiment_missing_legend_entry_rejected_via_public_validate(raw_defini
         validate("experiment", experiment)
 
 
+def test_workload_legend_covers_declared_statuses_and_label_values(raw_definition):
+    workload = dict(raw_definition("workload", "dup-detect-v1.json"))
+    workload["statuses"] = ["flagged"]
+    workload["content_hash"] = compute_content_hash(workload)
+    with pytest.raises(SchemaValidationError, match="legend"):
+        validate("workload", workload)
+    workload["legend"] = {**workload["legend"], "flagged": "marked for manual review"}
+    workload["content_hash"] = compute_content_hash(workload)
+    validate("workload", workload)  # now covered, must not raise
+
+
+def test_experiment_legend_covers_declared_label_values(raw_definition):
+    experiment = dict(raw_definition("experiment", "dup-detect-baseline-v1.json"))
+    experiment["label_values"] = ["duplicate", "not-a-duplicate"]
+    experiment["content_hash"] = compute_content_hash(experiment)
+    with pytest.raises(SchemaValidationError, match="legend"):
+        validate("experiment", experiment)
+
+
 def test_experiment_schema_only_empty_legend_still_rejected(raw_definition):
     # load_definition AND the bare validate() path must both enforce this.
     experiment = raw_definition("experiment", "dup-detect-baseline-v1.json")
@@ -71,6 +90,16 @@ def test_experiment_schema_only_empty_legend_still_rejected(raw_definition):
         lambda e: e["chart_specs"][0].__setitem__("datasets", ["//evil.com/x.csv"]),
         lambda e: e["chart_specs"][0].__setitem__("datasets", ["data:text/csv,a,b"]),
         lambda e: e["chart_specs"][0].__setitem__("datasets", ["https://x/y"]),
+        lambda e: e["chart_specs"][0].__setitem__("datasets", ["file:/etc/passwd"]),
+        lambda e: e["chart_specs"][0].__setitem__(
+            "datasets", [" https://x/y"]
+        ),  # leading-space evasion
+        lambda e: e["chart_specs"][0].update(
+            data={"url": "data/x.csv"}
+        ),  # relative path, key alone is forbidden
+        lambda e: e["chart_specs"][0].update(
+            data={"values": [{"url": "x"}], "name": "accuracy", "src": "/etc/passwd"}
+        ),
     ],
 )
 def test_experiment_chart_spec_url_anywhere_rejected(raw_definition, mutate):
@@ -81,6 +110,16 @@ def test_experiment_chart_spec_url_anywhere_rejected(raw_definition, mutate):
     experiment["content_hash"] = compute_content_hash(experiment)
     with pytest.raises(SchemaValidationError):
         validate("experiment", experiment)
+
+
+def test_experiment_chart_spec_title_and_description_may_mention_urls(raw_definition):
+    experiment = copy.deepcopy(
+        raw_definition("experiment", "dup-detect-baseline-v1.json")
+    )
+    experiment["chart_specs"][0]["title"] = "see https://docs.example.com"
+    experiment["chart_specs"][0]["description"] = "docs at https://docs.example.com/x"
+    experiment["content_hash"] = compute_content_hash(experiment)
+    validate("experiment", experiment)  # must not raise: not a data-source position
 
 
 def test_experiment_chart_spec_undeclared_dataset_rejected(raw_definition):
@@ -204,6 +243,28 @@ def test_manifest_garbage_timestamp_rejected(registry):
         validate("manifest", manifest)
 
 
+def test_manifest_non_rfc3339_basic_format_rejected(registry):
+    # datetime.fromisoformat accepts this since 3.11; strict RFC 3339 must not.
+    manifest = make_manifest(registry)
+    manifest["created_at"] = "20260917T120000+0000"
+    with pytest.raises(SchemaValidationError):
+        validate("manifest", manifest)
+
+
+def test_manifest_rejects_unknown_top_level_key(registry):
+    manifest = make_manifest(registry)
+    manifest["junk"] = 1
+    with pytest.raises(SchemaValidationError):
+        validate("manifest", manifest)
+
+
+def test_manifest_run_id_pattern_rejects_unsafe_ids(registry):
+    manifest = make_manifest(registry)
+    manifest["run_id"] = "../escape"
+    with pytest.raises(SchemaValidationError):
+        validate("manifest", manifest)
+
+
 def test_status_valid_and_naive_heartbeat_rejected():
     valid = {
         "schema_version": "xtrm-research-status/v1",
@@ -216,6 +277,28 @@ def test_status_valid_and_naive_heartbeat_rejected():
     naive = {**valid, "last_heartbeat": "2026-09-17T12:00:00"}
     with pytest.raises(SchemaValidationError):
         validate("status", naive)
+
+
+def test_status_rejects_unknown_top_level_key():
+    valid = {
+        "schema_version": "xtrm-research-status/v1",
+        "run_id": "run-0001",
+        "state": "started",
+        "last_heartbeat": "2026-09-17T12:00:00+00:00",
+        "manifest_content_hash": "sha256:" + "0" * 64,
+    }
+    with pytest.raises(SchemaValidationError):
+        validate("status", {**valid, "junk": 1})
+
+
+@pytest.mark.parametrize("bad_id", ["../escape", "a b", ".hidden", "a\x00b"])
+def test_definition_id_pattern_rejects_unsafe_ids(bad_id):
+    from xtrm_research.hashing import compute_content_hash as _hash
+
+    payload = {"id": bad_id, "version": "v1", "description": "d", "config": {}}
+    payload["content_hash"] = _hash(payload)
+    with pytest.raises(SchemaValidationError):
+        validate("variant", payload)
 
 
 def test_sample_valid_and_invalid():
@@ -290,6 +373,31 @@ def test_usage_null_value_requires_null_reason():
     )
 
 
+def test_usage_null_reason_must_be_a_nonempty_string():
+    with pytest.raises(SchemaValidationError):
+        validate(
+            "event",
+            _event(
+                {
+                    "source": "provider_api",
+                    "gen_ai.usage.input_tokens": None,
+                    "null_reason": None,
+                }
+            ),
+        )
+    with pytest.raises(SchemaValidationError):
+        validate(
+            "event",
+            _event(
+                {
+                    "source": "provider_api",
+                    "gen_ai.usage.input_tokens": None,
+                    "null_reason": "",
+                }
+            ),
+        )
+
+
 def test_usage_requires_source():
     with pytest.raises(SchemaValidationError):
         validate("event", _event({"gen_ai.usage.input_tokens": 3}))
@@ -298,6 +406,10 @@ def test_usage_requires_source():
 def test_usage_rejects_unknown_field_names():
     with pytest.raises(SchemaValidationError):
         validate("event", _event({"source": "unknown", "input_tokens": "lots"}))
+
+
+def test_usage_source_only_is_valid():
+    validate("event", _event({"source": "unknown"}))
 
 
 def _assessment_set(answer, metric_extra=None):

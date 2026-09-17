@@ -57,11 +57,7 @@ def test_manifest_is_fully_version_resolved(registry):
 def test_backend_model_alias_resolved_and_recorded(registry):
     manifest = make_manifest(
         registry,
-        backend={
-            "provider": "typesafe",
-            "model": "jev-latest",
-            "model_version": "latest",
-        },
+        backend={"provider": "typesafe", "model": "jev-latest", "model_version": "v1"},
         alias_resolver={"jev-latest": "jev-2026-09-01"},
     )
     assert manifest["backend"]["model"] == "jev-2026-09-01"
@@ -74,7 +70,7 @@ def test_backend_model_alias_resolved_and_recorded(registry):
 def test_backend_model_alias_unresolved_recorded_with_reason(registry):
     manifest = make_manifest(
         registry,
-        backend={"provider": "typesafe", "model": "main", "model_version": "latest"},
+        backend={"provider": "typesafe", "model": "main", "model_version": "v1"},
         alias_resolver={},
     )
     assert manifest["backend"]["model"] == "main"
@@ -82,6 +78,48 @@ def test_backend_model_alias_unresolved_recorded_with_reason(registry):
     unresolved = manifest["aliases"]["unresolved"]
     assert unresolved == [
         {"input": "main", "reason": "no resolver entry for alias 'main'"}
+    ]
+
+
+def test_backend_model_version_alias_resolved_and_recorded(registry):
+    manifest = make_manifest(
+        registry,
+        backend={
+            "provider": "typesafe",
+            "model": "jev-2026",
+            "model_version": "latest",
+        },
+        alias_resolver={"latest": "2026-09-01"},
+    )
+    assert manifest["backend"]["model_version"] == "2026-09-01"
+    assert manifest["aliases"]["resolved"] == [
+        {"input": "latest", "resolved": "2026-09-01"}
+    ]
+
+
+def test_backend_alias_resolver_key_treated_as_alias_regardless_of_shape(registry):
+    # "jev-stable" doesn't match the shape heuristic, but it IS a key in
+    # alias_resolver, which is definitive evidence it's a mutable pointer.
+    manifest = make_manifest(
+        registry,
+        backend={"provider": "typesafe", "model": "jev-stable", "model_version": "v1"},
+        alias_resolver={"jev-stable": "jev-2026-08-15"},
+    )
+    assert manifest["backend"]["model"] == "jev-2026-08-15"
+    assert manifest["aliases"]["resolved"] == [
+        {"input": "jev-stable", "resolved": "jev-2026-08-15"}
+    ]
+
+
+@pytest.mark.parametrize("alias", ["HEAD", "jev@latest", "jev:latest", "jev-latest"])
+def test_backend_model_alias_heuristic_shapes(registry, alias):
+    manifest = make_manifest(
+        registry,
+        backend={"provider": "typesafe", "model": alias, "model_version": "v1"},
+        alias_resolver={},
+    )
+    assert manifest["aliases"]["unresolved"] == [
+        {"input": alias, "reason": f"no resolver entry for alias {alias!r}"}
     ]
 
 

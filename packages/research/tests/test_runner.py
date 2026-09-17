@@ -239,3 +239,67 @@ def test_status_manifest_content_hash_matches_manifest(registry, runs_root):
     start_run(runs_root, "run-hash", manifest)
     status = load_status(runs_root, "run-hash")
     assert status["manifest_content_hash"] == compute_content_hash(manifest)
+
+
+# --- S1: real thread-interleaved settle race ---------------------------
+
+
+def test_concurrent_finish_and_heartbeat_finish_wins(registry, runs_root):
+    import threading
+
+    manifest = make_manifest(registry, run_id="run-thread-race")
+    handle = start_run(runs_root, "run-thread-race", manifest)
+
+    start_barrier = threading.Barrier(2)
+    results: dict[str, Exception | None] = {}
+
+    def do_heartbeat():
+        start_barrier.wait()
+        try:
+            handle.heartbeat()
+            results["heartbeat"] = None
+        except Exception as exc:  # noqa: BLE001 - captured for assertion
+            results["heartbeat"] = exc
+
+    def do_finish():
+        start_barrier.wait()
+        try:
+            RunHandle(runs_root, "run-thread-race").finish("success")
+            results["finish"] = None
+        except Exception as exc:  # noqa: BLE001 - captured for assertion
+            results["finish"] = exc
+
+    t1 = threading.Thread(target=do_heartbeat)
+    t2 = threading.Thread(target=do_finish)
+    t1.start()
+    t2.start()
+    t1.join(timeout=5)
+    t2.join(timeout=5)
+
+    assert not t1.is_alive() and not t2.is_alive()  # no deadlock
+    # exactly one of the two operations settles the run; the other either
+    # succeeds harmlessly (heartbeat landed first, run still "started") or
+    # is rejected as settled — never both "succeed" against a settled run.
+    final_state = load_status(runs_root, "run-thread-race")["state"]
+    assert final_state in ("started", "success")
+    if final_state == "success":
+        assert results["finish"] is None
+
+
+# --- D2: start_run defense against a hand-built manifest bypassing build_manifest ---
+
+
+def test_start_run_rejects_unrecorded_alias_in_backend_model(registry, runs_root):
+    manifest = make_manifest(registry, run_id="run-alias-bypass")
+    manifest["backend"] = {**manifest["backend"], "model": "jev-latest"}
+    # aliases block untouched: doesn't mention "jev-latest" at all
+    with pytest.raises(ValueError, match="alias"):
+        start_run(runs_root, "run-alias-bypass", manifest)
+    assert not (runs_root / "run-alias-bypass").exists()
+
+
+def test_start_run_rejects_unrecorded_alias_in_model_version(registry, runs_root):
+    manifest = make_manifest(registry, run_id="run-alias-bypass-2")
+    manifest["backend"] = {**manifest["backend"], "model_version": "latest"}
+    with pytest.raises(ValueError, match="alias"):
+        start_run(runs_root, "run-alias-bypass-2", manifest)

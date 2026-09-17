@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 
 from xtrm_research.assessments import list_assessment_sets, write_assessment_set
@@ -54,7 +56,13 @@ def test_second_evaluation_adds_set_execution_files_untouched(registry, runs_roo
         samples, expected={"s-1": "duplicate"}
     )
     write_assessment_set(
-        runs_root, "run-eval", "as-2", evaluator, assessments2, metrics2, now=FIXED_NOW
+        runs_root,
+        "run-eval",
+        "as-2",
+        evaluator,
+        assessments2,
+        metrics2,
+        now=FIXED_NOW + timedelta(hours=1),
     )
 
     assert _snapshot(runs_root, "run-eval") == before
@@ -65,7 +73,38 @@ def test_second_evaluation_adds_set_execution_files_untouched(registry, runs_roo
     metrics = run_metrics(runs_root, "run-eval")
     assert (
         metrics["exact-match::accuracy"]["value"] == 0.0
-    )  # as-2 (later in the merge) wins
+    )  # as-2, the later timestamp, wins
+
+
+def test_metric_merge_orders_by_timestamp_not_directory_name(registry, runs_root):
+    # "a-set" sorts before "b-set" by directory name, but carries the
+    # LATER timestamp: if the merge used directory-name order it would
+    # apply b-set second and get 1.0; timestamp order applies a-set
+    # second (it's later) and must get 0.0.
+    _manifest, samples = _seed_run(registry, runs_root)
+    evaluator = registry.latest("evaluator", "exact-match")
+
+    _, metrics_early = exact_match_evaluate(
+        samples, expected={"s-1": "not-a-duplicate"}
+    )
+    write_assessment_set(
+        runs_root, "run-eval", "b-set", evaluator, [], metrics_early, now=FIXED_NOW
+    )
+    _, metrics_late = exact_match_evaluate(samples, expected={"s-1": "duplicate"})
+    write_assessment_set(
+        runs_root,
+        "run-eval",
+        "a-set",
+        evaluator,
+        [],
+        metrics_late,
+        now=FIXED_NOW + timedelta(hours=1),
+    )
+
+    merged = run_metrics(runs_root, "run-eval")
+    assert (
+        merged["exact-match::accuracy"]["value"] == 0.0
+    )  # a-set (later) wins, not b-set
 
 
 def test_assessment_set_is_write_once(registry, runs_root):

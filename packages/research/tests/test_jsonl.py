@@ -55,3 +55,31 @@ def test_writer_repairs_torn_tail_before_two_appends(tmp_path: Path):
 
 def test_reader_returns_empty_for_missing_file(tmp_path: Path):
     assert list(read_lines(tmp_path / "missing.jsonl")) == []
+
+
+def test_single_complete_unterminated_line_kept_not_truncated(tmp_path: Path):
+    # A complete record missing only its trailing newline (writer died
+    # right after the record, right before the \n flushed) must be KEPT,
+    # not treated as torn.
+    path = tmp_path / "single.jsonl"
+    path.write_text('{"seq": 0}')
+    append_line(path, {"seq": 1})
+
+    rows = list(read_lines(path))
+    assert [r["seq"] for r in rows] == [0, 1]
+    assert not path.with_name(path.name + ".torn").exists()
+
+
+def test_complete_line_plus_torn_fragment_keeps_complete_line(tmp_path: Path):
+    path = tmp_path / "mixed.jsonl"
+    path.write_text('{"seq": 0}\n{"seq": 1}')  # complete, unterminated last line
+    append_line(path, {"seq": 2})
+    rows = list(read_lines(path))
+    assert [r["seq"] for r in rows] == [0, 1, 2]
+
+    # now make the trailing record genuinely torn (not just unterminated)
+    with path.open("a", encoding="utf-8") as f:
+        f.write('\n{"seq": 3, "kind": "tor')
+    append_line(path, {"seq": 4})
+    rows = list(read_lines(path))
+    assert [r["seq"] for r in rows] == [0, 1, 2, 4]  # the complete lines survive
