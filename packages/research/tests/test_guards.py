@@ -636,6 +636,133 @@ def test_check_mask_short_field_full_loss_from_redaction_alone_does_not_abort():
     check_mask(redacted_baseline, redacted_baseline)  # does not raise
 
 
+# ---- H1: whole-payload aggregate check, alongside the per-field one -----
+
+#: 18 plain words a known-id set will mask, none of which is by itself
+#: >= MASK_MIN_WORD_COUNT_FOR_RATIO, so a single field never trips the
+#: per-leaf rule (18 != 19 total once the field's own unique word is
+#: added) — only the aggregate check across many such fields can catch
+#: this (H1).
+_H1_KNOWN_WORDS = [
+    "alpha",
+    "beta",
+    "gamma",
+    "delta",
+    "epsilon",
+    "zeta",
+    "eta",
+    "theta",
+    "iota",
+    "kappa",
+    "lambda",
+    "muword",
+    "nuword",
+    "xiword",
+    "omega",
+    "sigma",
+    "tauword",
+    "upsilon",
+]
+
+
+def test_aggregate_check_fires_when_many_short_fields_each_lose_just_under_the_floor():
+    """H1 regression: 10 fields of 19 words each, 18 of 19 masked per
+    field (180/190 payload words vanish). Each field alone stays under
+    the per-leaf floor and survives its own check (1 word out of 19
+    isn't "every word gone"), but the payload as a whole loses almost
+    everything — exactly what the pre-G8 whole-corpus check existed to
+    catch, and what SUCCESS 5 requires stays caught."""
+    known_ids = frozenset(_H1_KNOWN_WORDS)
+    letters = "abcdefghij"
+    payload = {
+        f"field_{n}": " ".join(_H1_KNOWN_WORDS + [f"uniqueword{letters[n]}"])
+        for n in range(10)
+    }
+    backend = _RecordingBackend()
+    with pytest.raises(GuardFailure) as exc_info:
+        guarded_send(payload, backend, known_ids=known_ids)
+    assert exc_info.value.guard == "mask"
+    assert backend.calls == []
+
+
+def test_aggregate_check_does_not_fire_on_a_single_bare_credential_field():
+    """A single field that is nothing but a credential must still send
+    (the G14 case), even with the aggregate check re-added: an
+    all-redacted field contributes zero real words to the aggregate."""
+    secret = "AKIA" + "QRSTUVWXYZABCDEF"  # deterministic, letters-only suffix
+    backend = _RecordingBackend()
+    guarded_send({"a": secret}, backend)
+    assert backend.calls[0]["a"] == "<redacted>"
+
+
+def test_aggregate_check_still_lets_g8_one_big_field_case_abort():
+    filler = " ".join(f"filler{i} plain text content" for i in range(200))
+    payload = {
+        "background": filler,
+        "critical_field": "alpha beta gamma delta epsilon zeta eta theta",
+    }
+    known_ids = frozenset(
+        {"alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"}
+    )
+    backend = _RecordingBackend()
+    with pytest.raises(GuardFailure) as exc_info:
+        guarded_send(payload, backend, known_ids=known_ids)
+    assert exc_info.value.guard == "mask"
+    assert backend.calls == []
+
+
+def test_historical_over_broad_regex_case_still_aborts_end_to_end():
+    payload = {"title": OVER_BROAD_TEXT}
+    backend = _RecordingBackend()
+    with pytest.raises(GuardFailure) as exc_info:
+        guarded_send(payload, backend, known_ids=OVER_BROAD_KNOWN_IDS)
+    assert exc_info.value.guard == "mask"
+    assert backend.calls == []
+
+
+# ---- H2: the word-count floor must be computed before token-stripping ---
+
+
+def test_floor_is_computed_before_stripping_literal_replacement_tokens():
+    """H2 regression: a field containing 40 literal ``<issue>`` tokens
+    (copy-pasted example text, not tokens we injected) plus 15 real
+    words, 14 of which get masked. Stripping tokens before computing the
+    floor would undercount this as a 15-word (short) field and exempt it
+    from the ratio check, letting 14/15 real words vanish silently."""
+    real_words = [f"realword{chr(97 + i)}suffix" for i in range(15)]
+    text = " ".join(["<issue>"] * 40 + real_words)
+    known_ids = frozenset(real_words[:14])
+    backend = _RecordingBackend()
+    with pytest.raises(GuardFailure) as exc_info:
+        guarded_send({"a": text}, backend, known_ids=known_ids)
+    assert exc_info.value.guard == "mask"
+    assert backend.calls == []
+
+
+def _distinct_alpha_words(prefix: str, count: int) -> list[str]:
+    """``count`` distinct all-alphabetic tokens (no digits, so they stay
+    inside one _PLAIN_WORD-matchable run)."""
+    alphabet = "abcdefghijklmnopqrstuvwxyz"
+    words = []
+    for i in range(count):
+        suffix = alphabet[i // len(alphabet)] + alphabet[i % len(alphabet)]
+        words.append(f"{prefix}{suffix}")
+    return words
+
+
+def test_floor_check_on_literal_tokens_still_allows_a_lightly_masked_large_field():
+    """The same literal-``<issue>``-tokens field, but with 100 real words
+    and only 1 masked (99% of the real content survives, within the 2%
+    budget) — the floor correctly treats this as a large field, and the
+    ratio itself is within budget, so it must still send."""
+    real_words = _distinct_alpha_words("realword", 100)
+    text = " ".join(["<issue>"] * 40 + real_words)
+    known_ids = frozenset(real_words[:1])
+    backend = _RecordingBackend()
+    guarded_send({"a": text}, backend, known_ids=known_ids)
+    assert len(backend.calls) == 1
+
+
 # ---- credential-shaped contract reaches the backend double redacted ------
 
 
@@ -673,6 +800,13 @@ def _label_payload_shapes() -> list[tuple[str, dict]]:
         ),
         ("different_case_field", {"Labels": ["contract:ready"]}),
         ("label_in_free_text", {"labels": ["a note mentioning contract:ready inline"]}),
+        # H4: deep_mask traverses tuples and sets; label traversal must too.
+        ("tuple_of_labels", {"labels": ("contract:ready", "area:research")}),
+        ("set_of_labels", {"labels": {"contract:ready", "area:research"}}),
+        (
+            "tuple_of_dicts",
+            {"labels": ({"name": "contract:ready"}, {"name": "area:research"})},
+        ),
     ]
 
 
@@ -697,6 +831,37 @@ def test_strip_excluded_labels_is_recursive():
     nested = {"items": [{"labels": ["contract:ready", "keep"]}]}
     stripped = strip_excluded_labels(nested, rule)
     assert stripped["items"][0]["labels"] == ["keep"]
+
+
+def test_label_functions_fail_closed_on_unsupported_type():
+    rule = LabelExclusionRule()
+    payload = {"labels": [{"blob": _fake_hex_secret().encode()}]}
+    with pytest.raises(TypeError):
+        strip_excluded_labels(payload, rule)
+    with pytest.raises(TypeError):
+        guards_module._has_excluded_label(payload, rule)
+
+
+# ---- H5: a label field holding prose is never comma-joined --------------
+
+
+def test_strip_label_string_preserves_prose_when_nothing_is_removed():
+    prose = "a completely ordinary sentence with no excluded label in it"
+    assert strip_excluded_labels({"labels": prose}, LabelExclusionRule()) == {
+        "labels": prose
+    }
+
+
+def test_strip_label_string_preserves_prose_structure_around_a_removed_label():
+    prose = "please review this before contract:ready is set on the ticket"
+    stripped = strip_excluded_labels({"labels": prose}, LabelExclusionRule())
+    result = stripped["labels"]
+    assert "contract:ready" not in result
+    # H5: not comma-joined ("please, review, this, ...") — ordinary
+    # spacing is preserved around the removed token.
+    assert "," not in result
+    assert "please review this before" in result
+    assert "is set on the ticket" in result
 
 
 # ---- fail closed: guard failure reaches zero calls, run marked invalid --
@@ -787,6 +952,56 @@ def test_send_through_run_records_guard_pass_on_success(registry, runs_root):
     events = list(read_lines(events_path(runs_root, manifest["run_id"])))
     assert events[0]["kind"] == "guard_pass"
     assert events[0]["data"] == guard_versions()
+
+
+# ---- H3: a send-phase failure is never mislabeled a guard failure -------
+
+
+def test_send_through_run_records_send_failure_not_guard_failure_on_backend_error(
+    registry, runs_root
+):
+    manifest = make_manifest(registry)
+    handle = start_run(runs_root, manifest["run_id"], manifest)
+
+    class _FailingBackend:
+        def __call__(self, payload):
+            raise ConnectionError("upstream refused the connection")
+
+    backend = _FailingBackend()
+    with pytest.raises(ConnectionError, match="upstream refused"):
+        send_through_run(handle, 0, {"title": "ordinary text"}, backend)
+
+    events = list(read_lines(events_path(runs_root, manifest["run_id"])))
+    assert len(events) == 1
+    assert events[0]["kind"] == "send_failure"
+    assert events[0]["kind"] != "guard_failure"
+    status = load_status(runs_root, manifest["run_id"])
+    assert status["state"] == "error"  # not "invalid" — the guards did not reject this
+
+
+def test_send_through_run_still_records_guard_failure_with_zero_backend_calls(
+    registry, runs_root
+):
+    """Unaffected by the H3 split: a real guard rejection is still a
+    guard_failure with the backend never called."""
+    manifest = make_manifest(registry)
+    handle = start_run(runs_root, manifest["run_id"], manifest)
+    backend = _RecordingBackend()
+
+    with pytest.raises(GuardFailure):
+        send_through_run(
+            handle,
+            0,
+            {"title": OVER_BROAD_TEXT},
+            backend,
+            known_ids=OVER_BROAD_KNOWN_IDS,
+        )
+
+    assert backend.calls == []
+    events = list(read_lines(events_path(runs_root, manifest["run_id"])))
+    assert events[0]["kind"] == "guard_failure"
+    status = load_status(runs_root, manifest["run_id"])
+    assert status["state"] == "invalid"
 
 
 # ---- G9: fail-closed holes in send_through_run ---------------------------
@@ -970,6 +1185,33 @@ def test_cache_key_stable_for_identical_request_and_guards():
     payload = {"title": "same request"}
     guards = {"mask_version": "v1", "redaction_version": "v1"}
     assert cache_key(payload, guards) == cache_key(payload, guards)
+
+
+# ---- H6: cache_key must include known_ids -----------------------------
+
+
+def test_cache_key_changes_with_known_ids():
+    payload = {"title": "same request"}
+    guards = {"mask_version": "v1", "redaction_version": "v1"}
+    key_a = cache_key(payload, guards, known_ids=frozenset({"xtrm-428"}))
+    key_b = cache_key(payload, guards, known_ids=frozenset({"xtrm-432"}))
+    assert key_a != key_b
+
+
+def test_cache_key_known_ids_independent_of_set_ordering():
+    payload = {"title": "same request"}
+    guards = {"mask_version": "v1", "redaction_version": "v1"}
+    key_a = cache_key(payload, guards, known_ids=frozenset({"a", "b", "c"}))
+    key_b = cache_key(payload, guards, known_ids=frozenset({"c", "b", "a"}))
+    assert key_a == key_b
+
+
+def test_cache_key_defaults_known_ids_to_empty():
+    payload = {"title": "same request"}
+    guards = {"mask_version": "v1", "redaction_version": "v1"}
+    assert cache_key(payload, guards) == cache_key(
+        payload, guards, known_ids=frozenset()
+    )
 
 
 # ---- D4: guard_versions() threaded through build_manifest ----------------

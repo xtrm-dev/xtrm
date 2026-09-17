@@ -32,6 +32,11 @@ standard runtime, Specialists runtime, Pi, or xtrm-app.
   active rule sets, recorded in `manifest.guards` and on every
   `guard_pass`/`guard_failure` event, and folded into `guards.cache_key`
   so a changed rule can never be served from a stale cache entry.
+  `cache_key` hashes the **pre-guard** payload plus the guard versions
+  and `known_ids` — never the guarded/masked output — so a cache lookup
+  can happen before the guard stage runs, and two requests that differ
+  only in `known_ids` never collide even if they'd guard to identical
+  text today.
 - **Execution is separate from evaluation.** A run captures what happened;
   an assessment set captures what a given evaluator concluded about it —
   new evaluators can assess old runs months later. An assessment set is
