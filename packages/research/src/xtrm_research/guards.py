@@ -327,6 +327,13 @@ def _check_text_loss(
     removed = total - len(surviving)
     something_changed = processed != original
     if floor < min_word_count:
+        # For redaction (J3), this only ever fires today if a future
+        # rule redacts text without being one of the named, anchored
+        # ones in _redact_with_rules — every current rule is anchored,
+        # so this branch is presently unreachable through the real
+        # pipeline. Keep it: it is the backstop for exactly that future
+        # case, not dead code (see check_redaction's own docstring and
+        # test_check_redaction_short_field_total_loss_aborts_when_not_attributable).
         if (
             abort_on_short_field_total_loss
             and total > 1
