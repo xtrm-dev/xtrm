@@ -50,6 +50,36 @@ def _emit_error(command: str, error: str, as_json: bool) -> None:
         print(f"error: {error}", file=sys.stderr)
 
 
+def _runs_row(root: Path, run_id: str) -> dict[str, Any]:
+    """One `runs` row. A run whose manifest.json fails to load or
+    validate is reported as an `invalid_manifest` row with the reason,
+    rather than failing the whole listing."""
+    try:
+        manifest = load_manifest(root, run_id)
+        return {
+            "id": run_id,
+            "experiment": manifest["experiment"]["id"],
+            "variant": manifest["variant"]["id"],
+            "trigger": manifest["intent"]["trigger"],
+            "status": _run_status(root, run_id),
+            "purpose": manifest["intent"]["purpose"],
+            "latest_conclusion": latest_conclusion(root, run_id),
+            "evidence_status": latest_evidence_status(root, run_id),
+        }
+    except Exception as exc:
+        return {
+            "id": run_id,
+            "experiment": None,
+            "variant": None,
+            "trigger": None,
+            "status": "invalid_manifest",
+            "purpose": None,
+            "latest_conclusion": None,
+            "evidence_status": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
 def _cmd_runs(args: argparse.Namespace) -> None:
     root = Path(args.root)
     if args.lineage:
@@ -59,21 +89,7 @@ def _cmd_runs(args: argparse.Namespace) -> None:
         else:
             print(format_tree(tree))
         return
-    rows = []
-    for run_id in list_run_ids(root):
-        manifest = load_manifest(root, run_id)
-        rows.append(
-            {
-                "id": run_id,
-                "experiment": manifest["experiment"]["id"],
-                "variant": manifest["variant"]["id"],
-                "trigger": manifest["intent"]["trigger"],
-                "status": _run_status(root, run_id),
-                "purpose": manifest["intent"]["purpose"],
-                "latest_conclusion": latest_conclusion(root, run_id),
-                "evidence_status": latest_evidence_status(root, run_id),
-            }
-        )
+    rows = [_runs_row(root, run_id) for run_id in list_run_ids(root)]
     _emit("runs", rows, args.json)
 
 
@@ -165,8 +181,21 @@ def _add_common(p: argparse.ArgumentParser, *, top_level: bool = False) -> None:
         p.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
 
 
+class _ArgparseUsageError(Exception):
+    """Raised instead of argparse's default sys.exit(2), so a usage error
+    (bad/missing/unknown argument) can become a CLI envelope like every
+    other failure, when --json was requested."""
+
+
+class _EnvelopeArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:  # type: ignore[override]
+        raise _ArgparseUsageError(message)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="xtrm-research")
+    # add_subparsers defaults parser_class to type(self), so every
+    # subparser below is a _EnvelopeArgumentParser too.
+    parser = _EnvelopeArgumentParser(prog="xtrm-research")
     _add_common(parser, top_level=True)
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -257,8 +286,22 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    raw_argv = list(argv if argv is not None else sys.argv[1:])
     parser = build_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(raw_argv)
+    except _ArgparseUsageError as exc:
+        # argparse's own default (usage text to stderr, exit 2) still
+        # applies when --json wasn't requested; only wrap it in an
+        # envelope when the caller asked for one, since we can't rely on
+        # a parsed --json here — parsing itself is what failed.
+        if "--json" in raw_argv:
+            _emit_error("cli", str(exc), True)
+        else:
+            parser.print_usage(sys.stderr)
+            print(f"{parser.prog}: error: {exc}", file=sys.stderr)
+        return 2
+
     command = " ".join(
         part
         for part in (args.command, getattr(args, f"{args.command}_command", None))
