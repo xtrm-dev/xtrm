@@ -362,6 +362,59 @@ describe("Journal identity projection to reads (XTRM-410)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("flagless journal append outside any context stores explicit absence (XTRM-417)", () => {
+    // Companion to the divergence test: with the ambient scrubbed, a
+    // context-less append must record nulls even after an attributed row,
+    // proving absence is explicit and never inherited.
+    const { dir, dbPath, cli } = seedDb();
+    const saved = {
+      session: process.env[XTRM_SESSION_ID_ENV],
+      name: process.env[XTRM_SESSION_NAME_ENV],
+      holder: process.env[SUBSTRATE_HOLDER_ENV],
+      activation: process.env[SUBSTRATE_ACTIVATION_ID_ENV],
+    };
+    delete process.env[XTRM_SESSION_ID_ENV];
+    delete process.env[XTRM_SESSION_NAME_ENV];
+    delete process.env[SUBSTRATE_HOLDER_ENV];
+    delete process.env[SUBSTRATE_ACTIVATION_ID_ENV];
+    try {
+      const ref = createIssue(cli, dir);
+      process.env[XTRM_SESSION_ID_ENV] = "$7";
+      process.env[SUBSTRATE_HOLDER_ENV] = "specialist::probe";
+      process.env[SUBSTRATE_ACTIVATION_ID_ENV] = "act:23b2212a-c44";
+      cli(["journal", "append", ref, "--kind", "finding", "--project", "prj_xtrm", "--semantic", JSON.stringify({ summary: "inside" })]);
+      delete process.env[XTRM_SESSION_ID_ENV];
+      delete process.env[SUBSTRATE_HOLDER_ENV];
+      delete process.env[SUBSTRATE_ACTIVATION_ID_ENV];
+      cli(["journal", "append", ref, "--kind", "note", "--project", "prj_xtrm", "--semantic", JSON.stringify({ summary: "outside" })]);
+      const db = openSubstrate(dbPath);
+      try {
+        const rows = db
+          .prepare("SELECT sequence, participant_id AS p, session_id AS s, activation_id AS a FROM issue_journal ORDER BY sequence")
+          .all() as Array<{ sequence: number; p: string | null; s: string | null; a: string | null }>;
+        assert.equal(rows.length, 2);
+        assert.equal(rows[0]?.p, "specialist::probe");
+        assert.equal(rows[0]?.s, "$7");
+        assert.equal(rows[0]?.a, "act:23b2212a-c44");
+        assert.equal(rows[1]?.p, null, "no participant inherited from the prior row");
+        assert.equal(rows[1]?.s, null, "no session inherited from the prior row");
+        assert.equal(rows[1]?.a, null, "no activation inherited from the prior row");
+      } finally {
+        db.close();
+      }
+    } finally {
+      if (saved.session === undefined) delete process.env[XTRM_SESSION_ID_ENV];
+      else process.env[XTRM_SESSION_ID_ENV] = saved.session;
+      if (saved.name === undefined) delete process.env[XTRM_SESSION_NAME_ENV];
+      else process.env[XTRM_SESSION_NAME_ENV] = saved.name;
+      if (saved.holder === undefined) delete process.env[SUBSTRATE_HOLDER_ENV];
+      else process.env[SUBSTRATE_HOLDER_ENV] = saved.holder;
+      if (saved.activation === undefined) delete process.env[SUBSTRATE_ACTIVATION_ID_ENV];
+      else process.env[SUBSTRATE_ACTIVATION_ID_ENV] = saved.activation;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ---- VALIDATION c: note stdin and file ------------------------------------
