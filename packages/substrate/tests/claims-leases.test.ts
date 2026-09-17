@@ -8,9 +8,11 @@ import { contract, setup } from "./helpers.ts";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 
-// Acceptance C15-C21 (claims + workspace leases, PRD §§17-18) plus the
-// crash-restart lease-uncertainty check (§47). `now` is injected everywhere
-// so expiry never depends on wall-clock guessing.
+// Acceptance C15-C18 (claims, PRD §17) plus the crash-restart
+// claim-uncertainty check (§47). `now` is injected everywhere so expiry
+// never depends on wall-clock guessing. Workspace writer leases (PRD §18)
+// were withdrawn under XTRM-414: substrate provides no workspace-exclusion
+// guarantee; per-issue claim fencing is the only authority.
 
 const T0 = 1_786_000_000_000;
 
@@ -26,7 +28,7 @@ function readyIssue(ctx: ReturnType<typeof setup>) {
   return ctx.svc.getIssue(issue.id);
 }
 
-describe("claims + workspace leases (C15-C21, §47)", () => {
+describe("claims (C15-C18, §47)", () => {
   let ctx: ReturnType<typeof setup>;
   beforeEach(() => {
     ctx = setup();
@@ -126,52 +128,9 @@ describe("claims + workspace leases (C15-C21, §47)", () => {
     assert.equal(ctx.svc.getReadiness(issue.id, { now: T0 }).state, "claimed");
   });
 
-  it("C19: two writers cannot hold the same workspace lease", () => {
-    const ws = join(ctx.dir, "wt");
-    const a = ctx.svc.acquireWriterLease(ws, "child", { activationId: "a1", now: T0 });
-    assert.equal(a.generation, 1);
-    assert.throws(() => ctx.svc.acquireWriterLease(ws, "coordinator", { now: T0 + 1 }), /lease-held/);
-    // Same holder retry is idempotent; trailing-slash form is the same key.
-    const retry = ctx.svc.acquireWriterLease(`${ws}/`, "child", { activationId: "a1", now: T0 + 2 });
-    assert.equal(retry.id, a.id);
-    assert.equal(ctx.svc.listWorkspaceLeases(ws).length, 1);
-  });
-
-  it("C20: readers coexist with the writer; C21: coordinator is fenced", () => {
-    const ws = join(ctx.dir, "wt");
-    ctx.svc.acquireWriterLease(ws, "child", { activationId: "a1", now: T0 });
-    assert.equal(ctx.svc.canReadWorkspace(), true);
-    assert.equal(ctx.svc.holdsWriterLease(ws, "child", { activationId: "a1", now: T0 }), true);
-    assert.equal(ctx.svc.holdsWriterLease(ws, "coordinator", { now: T0 }), false);
-    ctx.svc.assertCanWrite(ws, "child", { activationId: "a1", now: T0 });
-    assert.throws(() => ctx.svc.assertCanWrite(ws, "coordinator", { now: T0 }), /lease-fenced/);
-
-    ctx.svc.releaseWriterLease(ws, "child", { activationId: "a1", now: T0 + 1 });
-    assert.throws(() => ctx.svc.assertCanWrite(ws, "child", { now: T0 + 2 }), /lease-fenced/);
-    ctx.svc.acquireWriterLease(ws, "coordinator", { now: T0 + 3 });
-    ctx.svc.assertCanWrite(ws, "coordinator", { now: T0 + 4 });
-  });
-
-  it("writer lease renew/release/expiry mirror the claim policy", () => {
-    const ws = join(ctx.dir, "wt");
-    ctx.svc.acquireWriterLease(ws, "child", { now: T0, ttlMs: 1000 });
-    assert.throws(() => ctx.svc.renewWriterLease(ws, "coordinator", { now: T0 + 1 }), /lease-held/);
-    const renewed = ctx.svc.renewWriterLease(ws, "child", { now: T0 + 500, ttlMs: 2000 });
-    assert.equal(renewed.expiresAt, T0 + 2500);
-    assert.throws(() => ctx.svc.renewWriterLease(ws, "child", { now: T0 + 3000 }), /lease-expired/);
-    const next = ctx.svc.acquireWriterLease(ws, "coordinator", { now: T0 + 3000 });
-    assert.equal(next.generation, 2);
-    assert.throws(() => ctx.svc.releaseWriterLease(ws, "child", { now: T0 + 3100 }), /lease-held/);
-    const released = ctx.svc.releaseWriterLease(ws, "coordinator", { now: T0 + 3100 });
-    assert.equal(released?.generation, 2);
-    assert.equal(ctx.svc.releaseWriterLease(ws, "coordinator", { now: T0 + 3200 }), null);
-  });
-
-  it("§47: crash restart honors live leases; uncertainty is never guessed", () => {
+  it("§47: crash restart honors live claims; uncertainty is never guessed", () => {
     const issue = readyIssue(ctx);
-    const ws = join(ctx.dir, "wt");
     ctx.svc.claimIssue(issue.id, "w0", { activationId: "a1", now: T0, ttlMs: 60_000 });
-    ctx.svc.acquireWriterLease(ws, "child", { activationId: "a1", now: T0, ttlMs: 60_000 });
     const dbPath = join(ctx.dir, "state.db");
     ctx.db.close();
 
@@ -180,14 +139,11 @@ describe("claims + workspace leases (C15-C21, §47)", () => {
       const svc2 = new IssueService(db2);
       // Live rows survive restart and stay enforced — no guessing.
       assert.throws(() => svc2.claimIssue(issue.id, "w1", { now: T0 + 1000 }), /claim-held/);
-      assert.throws(() => svc2.assertCanWrite(ws, "coordinator", { now: T0 + 1000 }), /lease-fenced/);
       // The holder can still renew after restart.
       svc2.renewClaim(issue.id, "w0", { activationId: "a1", now: T0 + 1000, ttlMs: 60_000 });
       // Past expiry, anyone may reclaim — including after restart.
       const reclaimed = svc2.claimIssue(issue.id, "w1", { now: T0 + 120_000 });
       assert.equal(reclaimed.generation, 2);
-      const lease2 = svc2.acquireWriterLease(ws, "coordinator", { now: T0 + 120_000 });
-      assert.equal(lease2.generation, 2);
     } finally {
       db2.close();
     }

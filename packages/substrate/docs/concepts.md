@@ -38,7 +38,9 @@ attestation currency and blockers. A title plus description is not enough.
 ## Claim
 
 A claim records who owns the current work. It is not progress and does not make
-a draft executable. Workspace writer leases are a separate mutation fence.
+a draft executable. Substrate provides no workspace-exclusion guarantee: per-issue
+claim fencing is the only mutation authority here. Workspace exclusion is owned
+by the specialists activation layer.
 
 ## Journal
 

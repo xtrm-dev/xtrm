@@ -74,7 +74,6 @@ describe("§54 hook parity", () => {
         claimed: true,
         holder: "op",
         activationId: "act-2",
-        leaseHeldByOther: false,
       }).allow,
       false,
       "same holder under a different activation may not inherit the claim",
@@ -86,15 +85,14 @@ describe("§54 hook parity", () => {
         claimed: true,
         holder: "op",
         activationId: "act-1",
-        leaseHeldByOther: false,
       }).allow,
       true,
       "same holder + activation allows",
     );
     assert.equal(
-      evaluateEditState({ issueRef: s.humanRef, claim: { holder: "op", activationId: null }, claimed: true, holder: "op", leaseHeldByOther: true, leaseHolder: "other" }).allow,
+      evaluateEditState({ issueRef: s.humanRef, claim: { holder: "other", activationId: null }, claimed: true, holder: "op" }).allow,
       false,
-      "foreign writer lease blocks despite claim",
+      "foreign claim blocks despite presented holder",
     );
   });
 
@@ -187,12 +185,12 @@ describe("§54 hook parity", () => {
   });
 
   it("Pi extension carries the ported gates (§39)", () => {
-    assert.equal(piEditGate({ issueRef: null, leaseHeldByOther: false }).allow, true);
-    assert.equal(piEditGate({ issueRef: s.humanRef, claimed: false, leaseHeldByOther: false }).allow, false);
-    assert.equal(piEditGate({ issueRef: s.humanRef, claim: { holder: "op", activationId: null }, claimed: true, holder: "op", leaseHeldByOther: false }).allow, true);
-    assert.equal(piEditGate({ issueRef: s.humanRef, claim: { holder: "a", activationId: null }, claimed: true, holder: "b", leaseHeldByOther: false }).allow, false, "Pi gate: holder B blocked on A's claim");
+    assert.equal(piEditGate({ issueRef: null }).allow, true);
+    assert.equal(piEditGate({ issueRef: s.humanRef, claimed: false }).allow, false);
+    assert.equal(piEditGate({ issueRef: s.humanRef, claim: { holder: "op", activationId: null }, claimed: true, holder: "op" }).allow, true);
+    assert.equal(piEditGate({ issueRef: s.humanRef, claim: { holder: "a", activationId: null }, claimed: true, holder: "b" }).allow, false, "Pi gate: holder B blocked on A's claim");
     assert.equal(
-      piEditGate({ issueRef: s.humanRef, claim: { holder: "op", activationId: "act-1" }, claimed: true, holder: "op", activationId: "act-2", leaseHeldByOther: false }).allow,
+      piEditGate({ issueRef: s.humanRef, claim: { holder: "op", activationId: "act-1" }, claimed: true, holder: "op", activationId: "act-2" }).allow,
       false,
       "Pi gate: same holder different activation blocked",
     );

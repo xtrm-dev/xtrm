@@ -42,33 +42,10 @@ export interface WorkspaceIdentity {
   branch?: string;
 }
 
-export interface WorkspaceLease {
-  id: number;
-  workspace: string;
-  repositoryRoot: string | null;
-  branch: string | null;
-  holder: string;
-  activationId: string | null;
-  acquiredAt: number;
-  expiresAt: number;
-  releasedAt: number | null;
-  generation: number;
-}
-
 export const DEFAULT_CLAIM_TTL_MS = 15 * 60 * 1000;
-export const DEFAULT_LEASE_TTL_MS = 15 * 60 * 1000;
 
 export function isLiveClaim(c: Pick<IssueClaim, "expiresAt" | "releasedAt">, now: number): boolean {
   return c.releasedAt === null && c.expiresAt > now;
-}
-
-export function isLiveLease(l: Pick<WorkspaceLease, "expiresAt" | "releasedAt">, now: number): boolean {
-  return l.releasedAt === null && l.expiresAt > now;
-}
-
-// Expired but unclosed: reclaimable by anyone, renewable by no one.
-export function isExpiredLease(row: { expiresAt: number; releasedAt: number | null }, now: number): boolean {
-  return row.releasedAt === null && row.expiresAt <= now;
 }
 
 // Canonical exclusivity key: one live writer per normalized worktree path.

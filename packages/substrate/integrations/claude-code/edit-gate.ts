@@ -1,8 +1,10 @@
 // Substrate edit gate (§38, bead xtrm-6qu.6). Replaces beads-edit-gate.mjs.
 //
-// Decision inputs (§38): resolved current Issue, live claim, workspace
-// writer lease (protected workspace state). Beads blocked edits when the
-// session held no claim; this gate asks the typed service instead of bd kv.
+// Decision inputs (§38): resolved current Issue and live claim. Beads
+// blocked edits when the session held no claim; this gate asks the typed
+// service instead of bd kv. Substrate provides no workspace-exclusion
+// guarantee (XTRM-414): per-issue claim fencing is the only authority here;
+// workspace exclusion is owned by the specialists activation layer.
 // Library-first: handleEditGate calls IssueService in-process, never execs
 // `sb`, never parses CLI text. Fail-open on unreadable state (a corrupt DB
 // must not brick the session); fail-closed when a resolved Issue lacks the
@@ -11,7 +13,6 @@
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
 import { armPipeDrain } from "../write-and-exit.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
-import type { IssueService } from "../../src/service/issue-service.ts";
 
 export interface EditGateInput {
   tool_name?: string;
@@ -21,7 +22,6 @@ export interface EditGateInput {
   issueRef?: string;
   holder?: string;
   activationId?: string;
-  workspace?: string;
   dbPath?: string;
 }
 
@@ -44,17 +44,8 @@ export function evaluateEditState(state: {
   claimed?: boolean;
   holder?: string | null;
   activationId?: string | null;
-  leaseHeldByOther: boolean;
-  leaseHolder?: string | null;
 }): EditGateResult {
   if (!state.issueRef) return { allow: true, issueRef: null, reason: "no bound issue; nothing to gate" };
-  if (state.leaseHeldByOther) {
-    return {
-      allow: false,
-      issueRef: state.issueRef,
-      reason: `workspace writer lease held by ${state.leaseHolder ?? "another holder"}; edits are protected until the lease releases`,
-    };
-  }
   const claim = state.claim ?? null;
   const claimed = claim !== null || state.claimed === true;
   if (!claimed) {
@@ -83,19 +74,6 @@ export function evaluateEditState(state: {
   return { allow: true, issueRef: state.issueRef };
 }
 
-function leaseHeldByOther(svc: IssueService, workspace: string | undefined, holder: string | undefined, activationId: string | undefined): { held: boolean; holder?: string | null } {
-  if (!workspace) return { held: false };
-  let lease: ReturnType<IssueService["getWriterLease"]>;
-  try {
-    lease = svc.getWriterLease(workspace);
-  } catch {
-    return { held: false };
-  }
-  if (!lease) return { held: false };
-  if (holder && sameHolder(lease, holder, activationId ?? null)) return { held: false };
-  return { held: true, holder: lease.holder };
-}
-
 export function handleEditGate(input: EditGateInput = {}): EditGateResult {
   const cwd = input.cwd ?? process.cwd();
   const issueRef = input.issueRef ?? discoverIssueRef(cwd);
@@ -105,15 +83,12 @@ export function handleEditGate(input: EditGateInput = {}): EditGateResult {
     handles = openHandles(input.dbPath);
     const issueId = resolveIssueId(handles.svc, issueRef);
     const claim = handles.svc.getActiveClaim(issueId);
-    const lease = leaseHeldByOther(handles.svc, input.workspace, input.holder, input.activationId);
     return evaluateEditState({
       issueRef,
       claim: claim ? { holder: claim.holder, activationId: claim.activationId } : null,
       claimed: claim !== null,
       holder: input.holder ?? null,
       activationId: input.activationId ?? null,
-      leaseHeldByOther: lease.held,
-      leaseHolder: lease.holder,
     });
   } catch (err) {
     return { allow: true, issueRef, degraded: true, reason: err instanceof Error ? err.message : String(err) };
@@ -163,7 +138,6 @@ if (invokedAsMain) {
     issueRef: process.env["SUBSTRATE_ISSUE_REF"],
     holder: process.env["SUBSTRATE_HOLDER"],
     activationId: process.env["SUBSTRATE_ACTIVATION_ID"],
-    workspace: (hook["cwd"] as string | undefined) ?? process.cwd(),
   });
   // PreToolUse contract: exit 0 always; a block is JSON on stdout.
   // XTRM-335: the allow exit is a proven zero-byte quiet path; only the

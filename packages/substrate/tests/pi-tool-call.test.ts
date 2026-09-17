@@ -1,6 +1,6 @@
 // Pi tool_call production wiring (§§38-39, bead xtrm-6qu.6): the handler
 // registered by the extension blocks/allows built-in edit+write calls
-// against live claim + lease authority — exercised here through the real
+// against live claim authority — exercised here through the real
 // registered handler, not the pure decision function alone.
 
 import { describe, it, beforeEach, afterEach } from "node:test";
@@ -101,15 +101,6 @@ describe("Pi tool_call edit/write gate (live wired handler)", () => {
     }
   }
 
-  function lease(workspace: string, holder: string, activationId?: string): void {
-    const db = openSubstrate(dbPath);
-    try {
-      new IssueService(db).acquireWriterLease(workspace, holder, { activationId });
-    } finally {
-      db.close();
-    }
-  }
-
   function boundAs(holder: string, activationId?: string): void {
     process.env["SUBSTRATE_ISSUE_REF"] = humanRef;
     process.env["SUBSTRATE_HOLDER"] = holder;
@@ -160,33 +151,6 @@ describe("Pi tool_call edit/write gate (live wired handler)", () => {
     // while an unknown session is fail-closed on the same live claim.
     assert.equal(await toolCall(editEvent(), fakeCtx("sess-1")), undefined);
     assert.equal((await toolCall(editEvent(), fakeCtx("sess-2")))?.block, true);
-  });
-
-  it("foreign writer lease in ctx.cwd blocks the claim holder; matching lease allows", async () => {
-    claim("op", "act-1");
-    boundAs("op", "act-1");
-    const foreign = join(dir, "ws-foreign");
-    const mine = join(dir, "ws-mine");
-    lease(foreign, "intruder");
-    lease(mine, "op", "act-1");
-    assert.equal((await toolCall(editEvent(), fakeCtx("sess-1", foreign)))?.block, true);
-    assert.equal(await toolCall(editEvent(), fakeCtx("sess-1", mine)), undefined);
-  });
-
-  it("lease lookup uses ctx.cwd, not process.cwd", async () => {
-    claim("op", "act-1");
-    boundAs("op", "act-1");
-    // Lease where the pre-fix lookup looked must not fence an unrelated ctx.cwd.
-    lease(process.cwd(), "intruder");
-    assert.equal(await toolCall(editEvent(), fakeCtx("sess-1", join(dir, "ws-other"))), undefined);
-  });
-
-  it("same holder under a different activation does not inherit the lease", async () => {
-    claim("op", "act-1");
-    boundAs("op", "act-1");
-    const ws = join(dir, "ws-lease");
-    lease(ws, "op", "act-2");
-    assert.equal((await toolCall(editEvent(), fakeCtx("sess-1", ws)))?.block, true);
   });
 
   it("unreadable database fails open so Pi is never bricked", async () => {

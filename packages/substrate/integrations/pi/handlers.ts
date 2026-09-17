@@ -288,15 +288,10 @@ export interface EditGateState {
   claimed?: boolean;
   holder?: string | null;
   activationId?: string | null;
-  leaseHeldByOther: boolean;
-  leaseHolder?: string | null;
 }
 
 export function evaluateEditGate(state: EditGateState): { allow: boolean; reason?: string } {
   if (!state.issueRef) return { allow: true };
-  if (state.leaseHeldByOther) {
-    return { allow: false, reason: `workspace writer lease held by ${state.leaseHolder ?? "another holder"}` };
-  }
   const claim = state.claim ?? null;
   const claimed = claim !== null || state.claimed === true;
   if (!claimed) return { allow: false, reason: `no live claim on ${state.issueRef}; claim first` };
@@ -324,25 +319,12 @@ export function decidePiEditCall(
       return { allow: true, issueRef: identity.ref };
     }
     const claim = svc.issues.getActiveClaim(issueId);
-    let leaseHeldByOther = false;
-    let leaseHolder: string | null | undefined;
-    try {
-      const lease = svc.issues.getWriterLease(opts.workspace ?? process.cwd());
-      if (lease && !(identity.holder && sameHolder(lease, identity.holder, identity.activationId))) {
-        leaseHeldByOther = true;
-        leaseHolder = lease.holder;
-      }
-    } catch {
-      // lease unreadable: the claim decision below still enforces authority.
-    }
     const decision = evaluateEditGate({
       issueRef: identity.ref,
       claim: claim ? { holder: claim.holder, activationId: claim.activationId } : null,
       claimed: claim !== null,
       holder: identity.holder,
       activationId: identity.activationId,
-      leaseHeldByOther,
-      leaseHolder,
     });
     return { ...decision, issueRef: identity.ref };
   } catch {
