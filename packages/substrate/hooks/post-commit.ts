@@ -1,15 +1,22 @@
 #!/usr/bin/env node
 // post-commit adapter (PRD §28.2): finalizes the open receipt to the exact
-// SHA git just created (self-reference §28.3). No-op without an active
-// receipt; fails closed on corrupt state. XTRM_COMMIT_SHA overrides
+// SHA git just created (self-reference §28.3). The active receipt is the
+// host-set XTRM_RECEIPT_ID when present, else it is resolved from Substrate
+// state (§28.2: "the active execution/claim is resolved from Substrate
+// state") — the host-owned Issue ref plus the single open receipt whose
+// binding workspace is this checkout (XTRM-415). No receipt, or an ambiguous
+// one, is a quiet no-op: a missing link is reported, never guessed.
+// Fails closed on corrupt state. XTRM_COMMIT_SHA overrides
 // `git rev-parse HEAD` (tests, bound-hook determinism).
 
 import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
+import { normalizeWorkspace } from "../src/domain/claim.ts";
 import { armPipeDrain } from "../integrations/write-and-exit.ts";
 
 function dbPath(): string {
@@ -24,23 +31,71 @@ function headSha(cwd: string): string | null {
   }
 }
 
-// XTRM-335: the quiet no-receipt exit below is the only immediate exit left
-// (proven zero-byte: no stream write precedes it). Every path that writes
-// drains via exitCode + natural return, halted by else-branching.
+// Host-owned Issue ref for this checkout: env first (the hook env an agent
+// exports), then the durable `.substrate-issue` marker. Never inferred from
+// branch names or commit text.
+function discoverIssueRef(repoRoot: string): string | null {
+  const env = process.env["SUBSTRATE_ISSUE_REF"]?.trim() || process.env["SUBSTRATE_ISSUE"]?.trim();
+  if (env) return env;
+  const file = join(repoRoot, ".substrate-issue");
+  if (!existsSync(file)) return null;
+  try {
+    return readFileSync(file, "utf8").trim().split("\n")[0]?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+// The open receipt this checkout is executing: unfinalized, unbound to any
+// SHA, and pinned to a binding whose workspace is this repo root. Exactly one
+// resolves; zero or many stays null, because binding the wrong receipt is
+// worse than reporting no link.
+function openReceiptId(issues: IssueService, provenance: ProvenanceService, repoRoot: string): string | null {
+  const ref = discoverIssueRef(repoRoot);
+  if (!ref) return null;
+  let issueId: string;
+  try {
+    issueId = issues.resolveRef(ref).id;
+  } catch {
+    return null;
+  }
+  const workspace = normalizeWorkspace(repoRoot);
+  const open = provenance
+    .listReceipts(issueId)
+    .filter((r) => r.commitSha === null && r.finalizedAt === null)
+    .filter((r) => normalizeWorkspace(provenance.getBinding(r.executionBindingId).workspace) === workspace);
+  return open.length === 1 ? open[0]!.id : null;
+}
+
+// XTRM-335: every quiet exit below happens before any stream write (proven
+// zero-byte). Paths that write drain via exitCode + natural return.
 // armPipeDrain() keeps a closed reader from surfacing as an EPIPE crash.
 armPipeDrain();
-const receiptId = process.env["XTRM_RECEIPT_ID"];
-if (!receiptId) process.exit(0);
-const sha = process.env["XTRM_COMMIT_SHA"] ?? headSha(process.env["XTRM_REPO_ROOT"] ?? process.cwd());
-if (!sha) {
-  process.stderr.write("xtrm post-commit: cannot resolve HEAD SHA\n");
-  process.exitCode = 1;
-} else {
+const repoRoot = process.env["XTRM_REPO_ROOT"] ?? process.cwd();
+
+// An absent XTRM_RECEIPT_ID is not "nothing to do" (XTRM-415), but recovery
+// must stay side-effect free for the untracked-commit path: it only runs when
+// this checkout carries a host-owned Issue ref and the store already exists.
+const envReceiptId = process.env["XTRM_RECEIPT_ID"] || null;
+if (envReceiptId === null && !(discoverIssueRef(repoRoot) !== null && existsSync(dbPath()))) process.exit(0);
+
 let db: ReturnType<typeof openSubstrate> | null = null;
 try {
   db = openSubstrate(dbPath());
-  const svc = new ProvenanceService(db, new IssueService(db));
-  svc.bindCommit(receiptId, sha);
+  const svc = new IssueService(db);
+  const provenance = new ProvenanceService(db, svc);
+  const receiptId = envReceiptId ?? openReceiptId(svc, provenance, repoRoot);
+  // No open receipt for this checkout is a quiet no-op, not an error: a
+  // guessed bind would be worse than a reported absence.
+  if (receiptId !== null) {
+    const sha = process.env["XTRM_COMMIT_SHA"] ?? headSha(repoRoot);
+    if (!sha) {
+      process.stderr.write("xtrm post-commit: cannot resolve HEAD SHA\n");
+      process.exitCode = 1;
+    } else {
+      provenance.bindCommit(receiptId, sha);
+    }
+  }
 } catch (err) {
   process.stderr.write(`xtrm post-commit: ${err instanceof Error ? err.message : String(err)}\n`);
   process.exitCode = 1;
@@ -50,5 +105,4 @@ try {
   } catch {
     /* close must not mask the result */
   }
-}
 }

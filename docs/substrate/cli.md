@@ -104,6 +104,9 @@ Kind doctrine and examples: [`journal.md`](./journal.md).
 ## provenance
 
 - `provenance dispatch <ref>` — bind an execution to the Issue revision.
+- `provenance bind <receipt-id> <40-char-sha>` — link the receipt to the commit
+  carrying its work. Idempotent for the same SHA; a receipt already bound to
+  another SHA fails closed instead of silently re-pointing.
 - `provenance trace <ref>` — full lineage spine.
 - `provenance commit <40-char-sha>` / `provenance receipt <id>` /
   `provenance pr <provider-ref>` — reverse lookups.

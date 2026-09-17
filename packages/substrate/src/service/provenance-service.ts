@@ -299,12 +299,23 @@ export class ProvenanceService {
   }
 
   // post-commit finalization: binds the open receipt to the exact SHA git
-  // just created. Idempotent on (receipt, sha) so hook retries are safe.
+  // just created. Idempotent on (receipt, sha): a retry for the SHA the
+  // receipt already carries is a true no-op — no second artifact row, no
+  // second event, no finalized_at churn — so hook retries are safe.
+  // Re-pointing is NOT a side effect of this call: a receipt already carrying
+  // a different SHA fails closed and must move through reconcileRewrite.
   bindCommit(receiptId: string, sha: string, opts?: { now?: number }): WorkReceipt {
     if (!isValidSha(sha)) throw new Error(`invalid commit SHA: ${String(sha)}`);
     const now = opts?.now ?? Date.now();
     return withTransaction(this.db, () => {
       const receipt = this.requireReceipt(receiptId);
+      if (receipt.commitSha === sha) return receipt;
+      if (receipt.commitSha !== null) {
+        throw new Error(
+          `receipt ${receipt.id} is already bound to ${receipt.commitSha}; re-pointing to ${sha} is deliberate ` +
+            "— use reconcileRewrite(oldSha, newSha)",
+        );
+      }
       this.db
         .prepare(
           "INSERT OR IGNORE INTO artifact_bindings (receipt_id, kind, value, provider, created_at, superseded_at) VALUES (?, 'commit', ?, NULL, ?, NULL)",
