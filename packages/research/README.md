@@ -113,8 +113,30 @@ xtrm-research metrics <run-id>
 xtrm-research compare <run-id> [<run-id> ...]
 ```
 
+## Known limits
+
+- **content_hash canonicalization.** `content_hash` is computed over
+  `json.dumps(payload, sort_keys=True, separators=(",", ":"))`. This is
+  stable under key reordering and Unicode escaping, but it is a JSON
+  literal hash, not a semantic one: `{"a": 1.0}` and `{"a": 1}` hash
+  differently even though the two numbers are equal, because `1.0` and `1`
+  are different JSON literals. Definition authors should pick one literal
+  form per field and keep it consistent across versions.
+- **status.json is advisory, not tamper-proof.** The settle gate compares
+  `status.json`'s `manifest_content_hash` against a freshly-computed hash
+  of `manifest.json` on every write, which catches an out-of-band edit to
+  `manifest.json`. It does **not** protect `status.json` itself: an
+  operator who hand-edits `status.json` (e.g. resets `state` back to
+  `"started"`) can make a settled run writable again. There is no
+  cryptographic seal on either file — this is a cooperative-process
+  safety net (catches bugs and races), not a security boundary.
+
 ## Non-goals of this package (see XTRM-426 / XTRM-424)
 
 Backends, guards, cache/prices, porting the original experiments, and Pi
 capture are separate follow-up issues. This package ships the data contract
-and a read/write skeleton, not a full research harness.
+and a read/write skeleton, not a full research harness. Performance is not
+optimized: the JSONL torn-tail repair rereads the whole file on every
+append (see the `ponytail:` comment in `jsonl.py`), and every write path
+takes a per-run lock, serializing writes within a run — fine at this
+package's scale.

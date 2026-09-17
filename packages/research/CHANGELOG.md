@@ -2,6 +2,52 @@
 
 All notable changes to the `xtrm-research` package.
 
+## [0.3.0] - 2026-09-17
+
+### Changed — review fixes: settle race, torn-tail correctness, schema hardening (XTRM-426)
+- **Settle race (breaking, blocker):** `heartbeat`, `finish`, `write_sample`
+  and `write_event` now hold a per-run lock (an fcntl.flock on `.lock`,
+  wrapped in a same-thread-reentrant `RLock` so nested calls don't
+  deadlock) across the gate check, a fresh re-read of `status.json`, and
+  the write itself. A concurrent finisher can no longer land between
+  another writer's read and its write. `write_json_atomic` now uses a
+  unique tmp filename (`tempfile.mkstemp`) instead of a fixed `.tmp`
+  suffix, so concurrent writers never collide on the same tmp path.
+- **Torn-line repair (breaking fix):** a trailing fragment that already
+  parses as JSON (just missing its `\n`) is now kept — a newline is
+  appended, nothing is lost. Only a fragment that genuinely fails to parse
+  is truncated (never glued onto new data), and the raw dropped bytes are
+  now copied into `<file>.torn`, not just their length.
+- `retry_run` now forces `intent.trigger = "retry"` and requires every id
+  in `retried_sample_ids` to exist among the parent's samples.
+- `start_run` rejects an alias-shaped `backend.model`/`model_version`
+  unless it's recorded in `manifest.aliases` — defense in depth against a
+  hand-built manifest that bypassed `build_manifest`'s own resolution.
+  `build_manifest` itself now resolves `model_version` too (not just
+  `model`), and any key present in the caller's `alias_resolver` is
+  treated as an alias regardless of its shape; the shape heuristic also
+  covers `HEAD`, `:latest` and `@latest`.
+- `manifest.schema.json` and `status.schema.json` are now
+  `additionalProperties: false`, and `run_id`/`assessment_set_id`/every
+  definition object `id` must match the allowlist
+  `^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$` (breaking — narrower than the
+  previous no-`..`/no-separators check).
+- `null_reason` is now `{type: string, minLength: 1}` inside the null
+  branch (null/empty no longer satisfies it, just presence used to).
+  Chart specs reject any `url`/`src` key at any depth regardless of value
+  (including a relative path); the URL-shape check on `datasets` entries
+  now also catches bare `scheme:` prefixes (e.g. `file:/etc/passwd`) and
+  leading-whitespace evasion, and is scoped to `datasets` only — `title`/
+  `description` may mention a URL in prose. Legend completeness now also
+  covers optional `statuses`/`label_values` declarations on
+  workload/experiment. `date-time` is validated against a strict RFC 3339
+  pattern, not `datetime.fromisoformat`'s more permissive ISO 8601.
+- `runs` now reports a run whose `manifest.json` fails to load/validate as
+  one row with `status: "invalid_manifest"` and an `error` field, instead
+  of failing the whole command; every other row still lists. An argparse
+  usage error (unknown/missing argument) now returns an `ok: false`
+  envelope with a non-zero exit when `--json` appears anywhere in argv.
+
 ## [0.2.0] - 2026-09-17
 
 ### Changed — review fixes: immutability, path safety, System One shapes (XTRM-426)
