@@ -496,8 +496,8 @@ describe("A1 §94 Specialist provenance chain", () => {
         executionContext: {
           version: 1,
           participantId: "coord-1",
-          xtrmSessionId: "sess-a1-94",
-          coordinator: { participantId: "coord-1", sessionId: "sess-a1-94" },
+          xtrmSessionId: "01a0a194-8370-74c5-9081-4490653e7e94",
+          coordinator: { participantId: "coord-1", sessionId: "01a0a194-8370-74c5-9081-4490653e7e94" },
           specialist: { name: "builder", activationId: "act-a1-94", attemptId: "att-1", agentSessionId: "ags-a1-94-1" },
           workspace: { repositoryKey, repoPath: repo },
         },
@@ -571,7 +571,7 @@ describe("A1 §96 close-reason matrix and immutability", () => {
     const repo = env.gitRepo("a1close", { remote: "git@github.com:acme/a1close.git" });
     assert.equal(env.inCwd(repo, () => env.run(["init"])).code, 0);
     const savedSession = process.env["XTRM_SESSION_ID"];
-    process.env["XTRM_SESSION_ID"] = "sess-a1-96";
+    process.env["XTRM_SESSION_ID"] = "01a0a196-8370-74c5-9081-4490653e7e96";
     try {
       const cases = [
         { outcome: "completed", reason: "shipped" },
@@ -620,7 +620,7 @@ describe("A1 §97 automatic identity propagation and retry lineage", () => {
   it("xt session propagates; coordinator lineage preserved; retry keeps both attempts", () => {
     const savedId = process.env["XTRM_SESSION_ID"];
     const savedName = process.env["XTRM_SESSION_NAME"];
-    process.env["XTRM_SESSION_ID"] = "sess-a1-97";
+    process.env["XTRM_SESSION_ID"] = "01a0a197-8370-74c5-9081-4490653e7e97";
     process.env["XTRM_SESSION_NAME"] = "a1-97-session";
     try {
       const db = openSubstrate(env.dbPath);
@@ -634,11 +634,11 @@ describe("A1 §97 automatic identity propagation and retry lineage", () => {
         const prov = new ProvenanceService(db, svc);
         const first = prov.dispatch(issue.id, {
           workspace: env.temp("sb-a1-97-"), participantId: "coord-holder", activationId: "act-a1-97", attemptId: "att-1",
-          executionContext: { version: 1, xtrmSessionId: "sess-a1-97", xtrmSessionName: "a1-97-session", specialist: { name: "builder", activationId: "act-a1-97", attemptId: "att-1" } },
+          executionContext: { version: 1, xtrmSessionId: "01a0a197-8370-74c5-9081-4490653e7e97", xtrmSessionName: "a1-97-session", specialist: { name: "builder", activationId: "act-a1-97", attemptId: "att-1" } },
         });
         const second = prov.dispatch(issue.id, {
           workspace: env.temp("sb-a1-97-"), participantId: "coord-holder", activationId: "act-a1-97", attemptId: "att-2",
-          executionContext: { version: 1, xtrmSessionId: "sess-a1-97", xtrmSessionName: "a1-97-session", specialist: { name: "builder", activationId: "act-a1-97", attemptId: "att-2" } },
+          executionContext: { version: 1, xtrmSessionId: "01a0a197-8370-74c5-9081-4490653e7e97", xtrmSessionName: "a1-97-session", specialist: { name: "builder", activationId: "act-a1-97", attemptId: "att-2" } },
         });
         assert.notEqual(first.id, second.id);
         const attempts = prov.listBindings(issue.id).filter((b) => b.activationId === "act-a1-97");
@@ -646,9 +646,9 @@ describe("A1 §97 automatic identity propagation and retry lineage", () => {
         assert.deepEqual(attempts.map((b) => b.attemptId).sort(), ["att-1", "att-2"]);
         const entry = journal.appendEntry(issue.id, {
           kind: "finding", semantic: { summary: "auto-identity finding" },
-          executionContext: { version: 1, xtrmSessionId: "sess-a1-97", xtrmSessionName: "a1-97-session" },
+          executionContext: { version: 1, xtrmSessionId: "01a0a197-8370-74c5-9081-4490653e7e97", xtrmSessionName: "a1-97-session" },
         });
-        assert.equal(entry.executionContext?.xtrmSessionId, "sess-a1-97");
+        assert.equal(entry.executionContext?.xtrmSessionId, "01a0a197-8370-74c5-9081-4490653e7e97");
         assert.equal(entry.executionContext?.xtrmSessionName, "a1-97-session");
       } finally {
         db.close();
@@ -705,7 +705,7 @@ describe("A1 §102 final architectural invariant end to end", () => {
 
   it("Git repo -> init -> rev/hash -> readiness -> claim -> session -> activation/attempt -> journal -> receipt -> artifact -> validation -> closure -> reconstruct", () => {
     const savedId = process.env["XTRM_SESSION_ID"];
-    process.env["XTRM_SESSION_ID"] = "sess-a1-102";
+    process.env["XTRM_SESSION_ID"] = "01a0a102-8370-74c5-9081-4490653e7102";
     try {
       const repo = env.gitRepo("a1inv", { remote: "git@github.com:acme/a1inv.git" });
       const init = env.inCwd(repo, () => env.run(["init"]));

@@ -18,6 +18,7 @@ import {
   type ExecutionBinding,
 } from "../domain/execution-binding.ts";
 import {
+  canonicalizeWriteIdentity,
   executionContextFromLegacy,
   normalizeExecutionContext,
   projectFlatIdentity,
@@ -198,13 +199,23 @@ export class ProvenanceService {
       // Identity is read through the central projection: the envelope and
       // the legacy flat fields must agree exactly where both represent a
       // value (conflicts throw fail-closed); the provider-unknown legacy
-      // session stays flat-only per §98.
+      // session stays flat-only per §98. Identity values are canonicalised
+      // and validated at this write seam (XTRM-412) before any row is
+      // written; a rejection throws and stores no binding.
       const dispatchContext = normalizeExecutionContext(input.executionContext ?? null);
-      const dispatchFlat = projectFlatIdentity(dispatchContext, {
+      const identity = canonicalizeWriteIdentity({
+        executionContext: dispatchContext,
         participantId: input.participantId ?? null,
         activationId: input.activationId ?? null,
         attemptId: input.attemptId ?? null,
         sessionId: input.sessionId ?? null,
+        runId: null,
+      });
+      const dispatchFlat = projectFlatIdentity(identity.executionContext, {
+        participantId: identity.participantId,
+        activationId: identity.activationId,
+        attemptId: identity.attemptId,
+        sessionId: identity.sessionId,
         workspace,
         baseCommit: input.baseCommit ?? null,
       });
@@ -230,7 +241,7 @@ export class ProvenanceService {
           id, issueId, report.revision, report.contractHash, resolved.hash,
           active?.id ?? null, dispatchFlat.participantId, dispatchFlat.activationId,
           dispatchFlat.attemptId, dispatchFlat.sessionId, dispatchFlat.workspace, dispatchFlat.baseCommit,
-          dispatchContext ? JSON.stringify(dispatchContext) : null, now,
+          identity.executionContext ? JSON.stringify(identity.executionContext) : null, now,
         );
       this.issues.appendEvent(issueId, "provenance.dispatched", {
         binding: id, revision: report.revision, contractHash: report.contractHash, claim: active?.id ?? null,

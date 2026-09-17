@@ -345,3 +345,69 @@ describe("sb journal verbs + issue resume", () => {
     }
   });
 });
+
+describe("XTRM-410 / XTRM-412 / XTRM-417: journal identity is captured and read back", () => {
+  const SESSION = "01a0ac95-8370-74c5-9081-4490653e7e92";
+  const EPHEMERAL_ENV = ["XTRM_SESSION_ID", "XTRM_SESSION_NAME", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"] as const;
+  let savedEnv: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    savedEnv = {};
+    for (const key of EPHEMERAL_ENV) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
+  afterEach(() => {
+    for (const key of EPHEMERAL_ENV) {
+      if (savedEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = savedEnv[key];
+    }
+  });
+
+  it("derives identity from the current execution context, and never inherits it", () => {
+    const ctx = setup();
+    try {
+      const issue = workIssue(ctx);
+      const { journal } = services(ctx);
+      process.env["XTRM_SESSION_ID"] = SESSION;
+      process.env["SUBSTRATE_HOLDER"] = "specialist::executor";
+      process.env["SUBSTRATE_ACTIVATION_ID"] = "act:23b2212a-c44";
+      const attributed = journal.appendEntry(issue.id, { kind: "finding", semantic: { summary: "inside a session" } });
+      assert.equal(attributed.participantId, "specialist::executor");
+      assert.equal(attributed.sessionId, SESSION);
+      assert.equal(attributed.activationId, "act:23b2212a-c44");
+      delete process.env["XTRM_SESSION_ID"];
+      delete process.env["SUBSTRATE_HOLDER"];
+      delete process.env["SUBSTRATE_ACTIVATION_ID"];
+      const bare = journal.appendEntry(issue.id, { kind: "decision", semantic: { summary: "outside any session" } });
+      assert.equal(bare.participantId, null);
+      assert.equal(bare.sessionId, null);
+      assert.equal(bare.activationId, null);
+      assert.equal(journal.getEntry(bare.id).participantId, null, "a previous entry's identity is never inherited");
+      assert.equal(journal.getEntry(bare.id).sessionId, null);
+    } finally {
+      ctx.db.close();
+      rmSync(ctx.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a shell token as --session with a named error and stores nothing", () => {
+    const ctx = setup();
+    const dbPath = join(ctx.dir, "state.db");
+    try {
+      const issue = workIssue(ctx, "gate work");
+      const res = runCli([
+        "--db", dbPath, "journal", "append", issue.humanRef,
+        "--kind", "note", "--session", "$2", "--project", "prj_xtrm",
+      ]);
+      assert.notEqual(res.code, 0, "the write is refused");
+      assert.match(res.stderr, /invalid sessionId "\$2"/);
+      const journal = new JournalService(ctx.db, ctx.svc);
+      assert.equal(journal.listEntries(issue.id).length, 0, "nothing is stored");
+    } finally {
+      ctx.db.close();
+      rmSync(ctx.dir, { recursive: true, force: true });
+    }
+  });
+});

@@ -387,14 +387,14 @@ describe("ADR §92 three-session acceptance", () => {
         workspace: "/tmp/specialist-ws",
         participantId: "specialist-1",
         activationId: "act-1",
-        sessionId: "session-b",
+        sessionId: "01a0ac95-8370-74c5-9081-4490653e7e93",
       });
       // Automatic result publication: bounded, zero commits.
       journalB.appendEntry(issue.id, {
         kind: "result",
         participantId: "specialist-1",
         activationId: "act-1",
-        sessionId: "session-b",
+        sessionId: "01a0ac95-8370-74c5-9081-4490653e7e93",
         result: {
           summary: "reviewed the adapter; one note",
           outcome: "PASS_WITH_NOTES",
@@ -442,7 +442,7 @@ describe("ADR §92 three-session acceptance", () => {
       assert.equal(capsuleC.results[0]?.summary, "reviewed the adapter; one note");
       assert.equal(capsuleC.criticalDecisions[0]?.summary, "use the official SDK", "capsule recovers critical decisions");
       const entry = journalC.latest(issue.id, { kind: "result" });
-      assert.equal(entry?.sessionId, "session-b", "execution lineage survives");
+      assert.equal(entry?.sessionId, "01a0ac95-8370-74c5-9081-4490653e7e93", "execution lineage survives");
       assert.equal(entry?.participantId, "specialist-1");
       assert.equal(entry?.activationId, "act-1");
       assert.ok(receipt.id.startsWith("rcp_"), "receipt allocated");
