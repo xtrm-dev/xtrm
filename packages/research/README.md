@@ -23,6 +23,15 @@ standard runtime, Specialists runtime, Pi, or xtrm-app.
   instead. Every write re-validates `manifest.json` against the
   `content_hash` recorded in `status.json` at start, so an out-of-band edit
   to `manifest.json` is caught rather than silently trusted.
+- **No state reaches a remote model unguarded.** `guards.guarded_send` is
+  the package's only remote-send seam; a structural test enforces that no
+  other module performs or exposes a network call. Every payload is
+  redacted, masked and label-stripped on parsed values before it is
+  handed to the injected `send` callable; a guard failure raises before
+  `send` is ever called. Guard rule versions are content hashes of the
+  active rule sets, recorded in `manifest.guards` and on every
+  `guard_pass`/`guard_failure` event, and folded into `guards.cache_key`
+  so a changed rule can never be served from a stale cache entry.
 - **Execution is separate from evaluation.** A run captures what happened;
   an assessment set captures what a given evaluator concluded about it —
   new evaluators can assess old runs months later. An assessment set is
@@ -54,6 +63,10 @@ pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
 - `src/xtrm_research/assessments.py`, `annotations.py`, `lineage.py`,
   `views.py` — assessment sets, append-only annotations, lineage
   traversal, and derived metrics/compare views.
+- `src/xtrm_research/guards.py` — the mandatory pre-send guard stage:
+  credential redaction, known-identifier masking with an abort check,
+  label-leak exclusion, and the package's one remote-send seam,
+  `guarded_send`.
 - `src/xtrm_research/cli/` — the `xtrm-research` CLI.
 
 ## Run directory
