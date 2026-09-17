@@ -1,6 +1,8 @@
 // Typed adapter contracts (shell architecture §9.3).
 // UI components depend on these view models only, never on a source.
 
+import type { ResearchAdapter } from "./research/types.ts";
+
 export type DataSource = "live" | "fixture";
 
 // --- github ---------------------------------------------------------------
@@ -479,4 +481,5 @@ export interface Adapters {
   githubAuth: GithubAuthAdapter;
   substrate: SubstrateAdapter;
   program: ProgramAdapter;
+  research: ResearchAdapter;
 }

@@ -2,8 +2,9 @@ import { Popover } from "@base-ui/react/popover";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useAdapters } from "../adapters/index.tsx";
-import { MODES, REPO_SECTIONS, modeForPath, repoHref } from "../app/destinations.ts";
-import { projectForRepo, useIssues, useProgram, useProjects, useRepoStats, useRepos } from "../app/queries.ts";
+import { MODES, REPO_SECTIONS, RESEARCH_SECTIONS, modeForPath, repoHref } from "../app/destinations.ts";
+import { isInvalidManifestRow } from "../adapters/research/types.ts";
+import { projectForRepo, useIssues, useProgram, useProjects, useRepoStats, useRepos, useResearchRuns } from "../app/queries.ts";
 import { Icon } from "../ui/icon.tsx";
 import { Row, StatusDot, relativeTime } from "../ui/primitives.tsx";
 import { SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
@@ -108,6 +109,7 @@ function SourceFooter() {
     ["GitHub", adapters.github.source],
     ["Substrate", adapters.substrate.source],
     ["Program", adapters.program.source],
+    ["Research", adapters.research.source],
   ] as const;
   return (
     <div className="flex flex-col gap-0.5 px-2 py-2 text-xs text-ink-faint" aria-label="Data sources">
@@ -178,6 +180,33 @@ function ProgramSidebar() {
   );
 }
 
+/** Research contextual sidebar (XTRM-433 slice 2): Experiments/Recent Runs are counted from
+ * `listRuns()`; Saved Comparisons and Workloads have no listing source yet and render deferred,
+ * same convention as `REPO_SECTIONS`. Research owns no sidebar of its own beyond this list. */
+function ResearchSidebar({ pathname }: { pathname: string }) {
+  const go = useGo();
+  const runs = useResearchRuns();
+  const experimentCount = runs.data ? new Set(runs.data.filter((r) => !isInvalidManifestRow(r)).map((r) => r.experiment)).size : null;
+  const countFor = (id: string) => (id === "experiments" ? experimentCount : id === "runs" ? (runs.data?.length ?? null) : null);
+  return (
+    <div className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1">
+      <SidebarSection label="Research">
+        {RESEARCH_SECTIONS.map((section) => (
+          <SidebarRow
+            key={section.id}
+            icon={section.icon}
+            label={section.label}
+            selected={pathname === section.path}
+            deferred={!!section.deferred}
+            count={countFor(section.id)}
+            onActivate={() => go(section.path)}
+          />
+        ))}
+      </SidebarSection>
+    </div>
+  );
+}
+
 function DeferredSidebar({ label, reason }: { label: string; reason: string }) {
   return (
     <div className="flex flex-col gap-2 px-3 py-1.5">
@@ -194,7 +223,15 @@ export function ContextSidebar() {
   return (
     <nav aria-label={`${mode.label} navigation`} data-testid="context-sidebar" className="flex h-full min-w-0 flex-col py-1.5">
       <div className="flex min-h-0 flex-1 flex-col">
-        {mode.id === "work" ? <WorkSidebar pathname={pathname} /> : mode.id === "program" ? <ProgramSidebar /> : <DeferredSidebar label={mode.label} reason={mode.deferred ?? ""} />}
+        {mode.id === "work" ? (
+          <WorkSidebar pathname={pathname} />
+        ) : mode.id === "program" ? (
+          <ProgramSidebar />
+        ) : mode.id === "research" ? (
+          <ResearchSidebar pathname={pathname} />
+        ) : (
+          <DeferredSidebar label={mode.label} reason={mode.deferred ?? ""} />
+        )}
       </div>
       <div className="mt-1 border-t border-border-muted px-1 pt-1">
         <SourceFooter />
