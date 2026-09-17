@@ -312,7 +312,7 @@ groups:
   project     create|link|unlink|list|show|links|repair
   plan        check|apply
   journal     append|checkpoint|show|since|latest|timeline|render
-  provenance  dispatch|bind|trace|commit|receipt|pr|session|activation|bundle
+  provenance  dispatch|allocate|bind|trace|commit|receipt|pr|session|activation|bundle
   import      beads
   export      project
 
@@ -592,6 +592,7 @@ renders the latest (or selected) checkpoint as text.`,
   provenance: `usage: sb provenance <verb>
 
   dispatch <ref> [--workspace/--participant/--activation/--attempt/--session/--base-commit/--claim-id <v>]
+  allocate <binding-id|ref> [--checkpoint <entry-id>]
   bind <receipt-id> <40-char-sha>
   trace <ref> | commit <sha> | receipt <id> | pr <ref>
   session <session-id> | activation <activation-id>
@@ -599,9 +600,10 @@ renders the latest (or selected) checkpoint as text.`,
 
 Methodology: provenance is the evidence spine, not narration. Dispatch
 binds an execution to the Issue revision BEFORE work starts, so a later
-contract edit binds anew instead of silently re-authorizing. bind links a
-receipt to the commit carrying its work, idempotently and never re-pointing.
-Trace reads
+contract edit binds anew instead of silently re-authorizing. allocate
+creates the host-owned receipt for that binding (optionally pinned to the
+journal checkpoint that settles it); bind links it to the commit carrying
+the work, idempotently and never re-pointing. Trace reads
 the spine (bindings, receipts with artifacts, attestation, claims,
 closure); commit/receipt/pr walk it backwards from an external id; session
 and activation answer what one session touched or one activation produced.
@@ -617,6 +619,13 @@ moves. Methodology: trace to verify before dispatch and to audit after
 close; the spine shows evidence, the Journal tells the story.`,
   "provenance.commit": `usage: sb provenance commit <40-char-sha>`,
   "provenance.receipt": `usage: sb provenance receipt <id>`,
+  "provenance.allocate": `usage: sb provenance allocate <binding-id|ref> [--checkpoint <entry-id>] [--project <id>]
+
+creates the host-owned receipt for an execution binding: revision and
+contract hash are copied from the binding row, never from caller input.
+--checkpoint links the Journal checkpoint that settles this execution;
+omitting it records an explicit null. A ref resolves to that Issue's
+latest binding.`,
   "provenance.bind": `usage: sb provenance bind <receipt-id> <40-char-sha>
 
 links the receipt to the commit carrying its work. Idempotent: re-running
@@ -858,6 +867,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "journal.timeline": ["kind", "limit"],
   "journal.render": ["sequence"],
   "provenance.dispatch": ["project", "claim-id", "workspace", "participant", "activation", "attempt", "session", "base-commit"],
+  "provenance.allocate": ["project", "checkpoint"],
   "provenance.bind": [],
   "provenance.trace": [],
   "provenance.commit": [],
@@ -1660,9 +1670,10 @@ function runJournal(
 // -- provenance verbs (Phase 8, bead xtrm-7wc.9) --------------------------------
 // Thin over ProvenanceService: dispatch freezes the exact revision/hash,
 // trace/commit/receipt/pr reconstruct lineage from host-owned rows.
-// Receipt commit binding is a host act (XTRM-415): the CLI performs it on
-// the operator's behalf — bind takes the SHA the caller has — and the
-// hooks/service stay the automatic path. The revision never moves.
+// Receipt allocation and commit binding are host acts (XTRM-415/416): the
+// CLI performs them on the operator's behalf — allocate copies revision and
+// contract hash from the binding row, bind takes the SHA the caller has —
+// and the hooks/service stay the automatic path. The revision never moves.
 
 function bindingSummary(b: { id: string; issueId: string; issueRevision: number; contractHash: string }): Record<string, unknown> {
   return { bindingId: b.id, issueId: b.issueId, revision: b.issueRevision, contractHash: b.contractHash };
@@ -1677,7 +1688,8 @@ function runProvenance(
   flags: Map<string, string | true>,
   rest: string[],
 ): CliResult {
-  const provenance = new ProvenanceService(db, svc, new JournalService(db, svc));
+  const journal = new JournalService(db, svc);
+  const provenance = new ProvenanceService(db, svc, journal);
   switch (verb) {
     case "dispatch": {
       const ref = needRef(rest);
@@ -1699,6 +1711,33 @@ function runProvenance(
         }),
       });
       return emit(ctx, command, bindingSummary(binding));
+    }
+    case "allocate": {
+      const target = rest[0] ?? (() => { throw new Error("a binding id (exb_…) or issue ref is required"); })();
+      const checkpointId = flag(flags, "checkpoint");
+      if (checkpointId !== undefined) {
+        let kind: JournalKind;
+        try {
+          kind = journal.getEntry(checkpointId).kind;
+        } catch {
+          throw new Error(`unknown journal checkpoint: ${checkpointId}`);
+        }
+        if (kind !== "checkpoint" && kind !== "compaction") {
+          throw new Error(`journal entry ${checkpointId} is a ${kind}, not a checkpoint`);
+        }
+      }
+      const binding = target.startsWith("exb_")
+        ? provenance.getBinding(target)
+        : (() => {
+            const resolved = refInContext(svc, flags, target);
+            const bindings = provenance.listBindings(resolved.id);
+            if (bindings.length === 0) {
+              throw new Error(`no execution binding for ${resolved.humanRef}: run \`sb provenance dispatch ${resolved.humanRef}\` first`);
+            }
+            return bindings[bindings.length - 1]!;
+          })();
+      const receipt = provenance.allocateReceipt(binding.id, { journalCheckpointId: checkpointId });
+      return emit(ctx, command, { receipt });
     }
     case "bind": {
       const id = rest[0] ?? (() => { throw new Error("a receipt id is required"); })();
@@ -1781,7 +1820,7 @@ function runProvenance(
       return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
     }
     default:
-      throw new Error(`unknown provenance verb: ${verb} (want dispatch|bind|trace|commit|receipt|pr|session|activation|bundle)`);
+      throw new Error(`unknown provenance verb: ${verb} (want dispatch|allocate|bind|trace|commit|receipt|pr|session|activation|bundle)`);
   }
 }
 

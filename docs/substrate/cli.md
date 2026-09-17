@@ -104,6 +104,10 @@ Kind doctrine and examples: [`journal.md`](./journal.md).
 ## provenance
 
 - `provenance dispatch <ref>` — bind an execution to the Issue revision.
+- `provenance allocate <binding-id|ref> [--checkpoint <entry-id>]` — create the
+  host-owned receipt for that binding; `--checkpoint` links the Journal
+  checkpoint that settles the execution, and omitting it records an explicit
+  null.
 - `provenance bind <receipt-id> <40-char-sha>` — link the receipt to the commit
   carrying its work. Idempotent for the same SHA; a receipt already bound to
   another SHA fails closed instead of silently re-pointing.

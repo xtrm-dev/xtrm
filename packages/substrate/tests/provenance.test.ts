@@ -292,35 +292,83 @@ describe("sb provenance verbs", () => {
   });
 });
 
-// XTRM-415: the receipt-to-commit link the service could always write and no
-// path ever populated.
-describe("XTRM-415: the receipt commit link", () => {
+// XTRM-415/416: the two receipt links the service could always write and no
+// path ever populated — the commit carrying the work, and the Journal
+// checkpoint that settled it. Both are host acts with an explicit absence.
+describe("XTRM-415/416: receipt commit and checkpoint links", () => {
   let s: ReturnType<typeof scratch>;
   beforeEach(() => { s = scratch(); });
   afterEach(() => { try { s.db.close(); } catch { /* closed */ } rmSync(s.dir, { recursive: true, force: true }); });
 
-  it("bind round-trips to trace, the backwards query, and an idempotent re-run", () => {
+  it("allocate + bind round-trip to trace, the backwards query, and an idempotent re-run", () => {
     const { issue } = readyIssue(s.svc);
+    const journal = new JournalService(s.db, s.svc);
+    const checkpoint = journal.appendEntry(issue.id, { kind: "checkpoint", mechanical: journal.collectMechanical(issue.id) });
     const humanRef = issue.humanRef;
     cli(s.dbPath, ["provenance", "dispatch", humanRef, "--workspace", s.dir, "--participant", "holder-1", "--project", "prj_xtrm"]);
-    const prov = new ProvenanceService(s.db, s.svc, new JournalService(s.db, s.svc));
-    const receipt = prov.allocateReceipt(prov.listBindings(issue.id)[0]!.id);
-    assert.equal(receipt.commitSha, null, "the commit does not exist yet (§28.3)");
 
-    const bound = cli(s.dbPath, ["provenance", "bind", receipt.id, SHA_A]) as { receipt: { commitSha: string } };
+    const alloc = cli(s.dbPath, ["provenance", "allocate", humanRef, "--checkpoint", checkpoint.id, "--project", "prj_xtrm"]) as {
+      receipt: { id: string; journalCheckpointId: string | null; commitSha: string | null };
+    };
+    assert.equal(alloc.receipt.journalCheckpointId, checkpoint.id, "the checkpoint link is recorded at creation");
+    assert.equal(alloc.receipt.commitSha, null, "the commit does not exist yet (§28.3)");
+
+    const bound = cli(s.dbPath, ["provenance", "bind", alloc.receipt.id, SHA_A]) as { receipt: { commitSha: string } };
     assert.equal(bound.receipt.commitSha, SHA_A);
 
-    const trace = cli(s.dbPath, ["provenance", "trace", humanRef]) as { commits: string[] };
+    const trace = cli(s.dbPath, ["provenance", "trace", humanRef]) as {
+      commits: string[];
+      receipts: Array<{ id: string; journalCheckpointId: string | null }>;
+    };
     assert.deepEqual(trace.commits, [SHA_A], "the trace reports the commit");
+    assert.equal(trace.receipts.find((r) => r.id === alloc.receipt.id)?.journalCheckpointId, checkpoint.id, "the trace reports the checkpoint link");
 
     const back = cli(s.dbPath, ["provenance", "commit", SHA_A]) as Array<{ receipt: string; issueId: string }>;
     assert.equal(back.length, 1);
-    assert.equal(back[0]!.receipt, receipt.id);
+    assert.equal(back[0]!.receipt, alloc.receipt.id);
     assert.equal(back[0]!.issueId, issue.id, "the backwards query reaches the Issue");
 
-    const reread = cli(s.dbPath, ["provenance", "bind", receipt.id, SHA_A]) as { receipt: { commitSha: string } };
+    const reread = cli(s.dbPath, ["provenance", "bind", alloc.receipt.id, SHA_A]) as { receipt: { commitSha: string } };
     assert.equal(reread.receipt.commitSha, SHA_A);
     assert.equal(s.svc.listEvents(issue.id).filter((e) => e.type === "provenance.receipt_bound").length, 1, "re-run is idempotent");
+  });
+
+  it("the checkpoint link and the commit survive a cold read; no checkpoint is an explicit null", () => {
+    const { issue } = readyIssue(s.svc);
+    const journal = new JournalService(s.db, s.svc);
+    const checkpoint = journal.appendEntry(issue.id, { kind: "checkpoint", mechanical: journal.collectMechanical(issue.id) });
+    const humanRef = issue.humanRef;
+    cli(s.dbPath, ["provenance", "dispatch", humanRef, "--workspace", s.dir, "--participant", "holder-1", "--project", "prj_xtrm"]);
+    const linked = cli(s.dbPath, ["provenance", "allocate", humanRef, "--checkpoint", checkpoint.id, "--project", "prj_xtrm"]) as { receipt: { id: string } };
+    const unlinked = cli(s.dbPath, ["provenance", "allocate", humanRef, "--project", "prj_xtrm"]) as { receipt: { id: string; journalCheckpointId: string | null } };
+    assert.equal(unlinked.receipt.journalCheckpointId, null, "absence is an explicit null, not an empty string");
+    cli(s.dbPath, ["provenance", "bind", linked.receipt.id, SHA_B]);
+
+    // Cold read: fresh handles over the same file.
+    s.db.close();
+    s.db = openSubstrate(s.dbPath);
+    s.svc = new IssueService(s.db);
+    const prov = new ProvenanceService(s.db, s.svc, new JournalService(s.db, s.svc));
+    assert.equal(prov.getReceipt(linked.receipt.id).journalCheckpointId, checkpoint.id);
+    assert.equal(prov.getReceipt(linked.receipt.id).commitSha, SHA_B);
+    assert.equal(prov.getReceipt(unlinked.receipt.id).journalCheckpointId, null);
+  });
+
+  it("normalizes a blank checkpoint option to an explicit null", () => {
+    const { issue } = readyIssue(s.svc);
+    const prov = new ProvenanceService(s.db, s.svc, new JournalService(s.db, s.svc));
+    const binding = prov.dispatch(issue.id, { workspace: s.dir, participantId: "holder-1" });
+    assert.equal(prov.allocateReceipt(binding.id, { journalCheckpointId: "   " }).journalCheckpointId, null);
+  });
+
+  it("refuses a checkpoint id that is not a checkpoint", () => {
+    const { issue } = readyIssue(s.svc);
+    const journal = new JournalService(s.db, s.svc);
+    const note = journal.appendEntry(issue.id, { kind: "note", semantic: { summary: "not a checkpoint" } });
+    cli(s.dbPath, ["provenance", "dispatch", issue.humanRef, "--workspace", s.dir, "--participant", "holder-1", "--project", "prj_xtrm"]);
+    const res = runCli(["--db", s.dbPath, "--json", "provenance", "allocate", issue.humanRef, "--checkpoint", note.id, "--project", "prj_xtrm"]);
+    assert.equal(res.code, 1);
+    assert.match(res.stdout, /not a checkpoint/);
   });
 
   it("recovers the open receipt from state when the hook has no XTRM_RECEIPT_ID", () => {

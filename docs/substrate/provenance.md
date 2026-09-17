@@ -63,6 +63,7 @@ changing the model.
 
 ```bash
 sb provenance dispatch <ref> [--workspace/--participant/--activation/--attempt/--session/--base-commit/--claim-id <v>]
+sb provenance allocate <binding-id|ref> [--checkpoint <entry-id>]
 sb provenance bind <receipt-id> <40-char-sha>
 sb provenance trace <ref>
 sb provenance commit <40-char-sha>
@@ -71,11 +72,15 @@ sb provenance pr <provider-ref>
 sb provenance bundle <ref> [--repo-root <dir>]
 ```
 
-`bind` is the host-side write of the receipt-to-commit link: re-running it
-for the same SHA is a no-op, and a receipt already bound to another SHA fails
-closed — a deliberate move goes through `reconcileRewrite`, driven by the
-post-rewrite adapter. Absence is never guessed: a receipt without a
-recoverable commit is reported as unlinked, not linked to a nearby SHA.
+`allocate` and `bind` are the two host-side writes of the receipt spine.
+`allocate` copies revision and contract hash from the binding row (never from
+caller input) and can pin the Journal checkpoint that settles the execution;
+an absent checkpoint is stored and read back as an explicit null. `bind`
+links the receipt to the commit carrying its work: re-running it for the same
+SHA is a no-op, and a receipt already bound to another SHA fails closed — a
+deliberate move goes through `reconcileRewrite`, driven by the post-rewrite
+adapter. Absence is never guessed: a receipt without a recoverable commit is
+reported as unlinked, not linked to a nearby SHA.
 
 `bundle` assembles the portable evidence set for an Issue. Full flag
 reference: [`cli.md`](./cli.md).
