@@ -86,6 +86,66 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     rmSync(s.dir, { recursive: true, force: true });
   });
 
+  it("journal_append fills unstated participant/activation from the process ambient (XTRM-435)", async () => {
+    // A Claude host holding ambient identity must not lose it because the
+    // model-supplied args state only a session id: the stated-wins ambient
+    // fill in journalIdentity mirrors the service fallback (XTRM-417).
+    const prior = {
+      session: process.env["XTRM_SESSION_ID"],
+      holder: process.env["SUBSTRATE_HOLDER"],
+      activation: process.env["SUBSTRATE_ACTIVATION_ID"],
+    };
+    delete process.env["XTRM_SESSION_ID"];
+    process.env["SUBSTRATE_HOLDER"] = "specialist::probe";
+    process.env["SUBSTRATE_ACTIVATION_ID"] = "act:23b2212a-c44";
+    try {
+      const res = await wire.send("tools/call", {
+        name: "journal_append",
+        arguments: { dbPath: s.dbPath, project: "prj_xtrm", ref: s.humanRef, kind: "finding", sessionId: "claude-session", summary: "ambient carry" },
+        _meta: meta(),
+      });
+      assert.ok(!res.error, JSON.stringify(res.error));
+      const db = openSubstrate(s.dbPath);
+      try {
+        const raw = db
+          .prepare("SELECT participant_id AS p, session_id AS sess, activation_id AS a FROM issue_journal ORDER BY sequence")
+          .all() as Array<{ p: string | null; sess: string | null; a: string | null }>;
+        const row = raw.at(-1);
+        assert.equal(row?.p, "specialist::probe", "ambient holder carried on the raw row");
+        assert.equal(row?.a, "act:23b2212a-c44", "ambient activation carried on the raw row");
+      } finally {
+        db.close();
+      }
+      // Absence leg: with the ambient scrubbed, the same call records nulls.
+      delete process.env["SUBSTRATE_HOLDER"];
+      delete process.env["SUBSTRATE_ACTIVATION_ID"];
+      const res2 = await wire.send("tools/call", {
+        name: "journal_append",
+        arguments: { dbPath: s.dbPath, project: "prj_xtrm", ref: s.humanRef, kind: "finding", sessionId: "claude-session", summary: "ambient absent" },
+        _meta: meta(),
+      });
+      assert.ok(!res2.error, JSON.stringify(res2.error));
+      const db2 = openSubstrate(s.dbPath);
+      try {
+        const rows = db2
+          .prepare("SELECT participant_id AS p, activation_id AS a FROM issue_journal ORDER BY sequence")
+          .all() as Array<{ p: string | null; a: string | null }>;
+        const last = rows.at(-1);
+        assert.equal(last?.p, null, "scrubbed ambient leaves participant explicitly absent");
+        assert.equal(last?.a, null, "scrubbed ambient leaves activation explicitly absent");
+      } finally {
+        db2.close();
+      }
+    } finally {
+      if (prior.session === undefined) delete process.env["XTRM_SESSION_ID"];
+      else process.env["XTRM_SESSION_ID"] = prior.session;
+      if (prior.holder === undefined) delete process.env["SUBSTRATE_HOLDER"];
+      else process.env["SUBSTRATE_HOLDER"] = prior.holder;
+      if (prior.activation === undefined) delete process.env["SUBSTRATE_ACTIVATION_ID"];
+      else process.env["SUBSTRATE_ACTIVATION_ID"] = prior.activation;
+    }
+  });
+
   it("server/discover advertises exactly 2026-07-28 plus the tools capability", async () => {
     const res = await wire.send("server/discover", { _meta: meta() });
     assert.ok(!res.error, JSON.stringify(res.error));

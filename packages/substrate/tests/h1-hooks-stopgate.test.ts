@@ -69,6 +69,38 @@ function claim(s: ReturnType<typeof scratch>, holder = "op") {
   }
 }
 
+it("compact and stop checkpoints retain ambient activation (XTRM-435)", async () => {
+  const s = scratch();
+  const keys = ["XTRM_SESSION_ID", "XTRM_SESSION_NAME", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"];
+  const prior = keys.map((key) => process.env[key]);
+  try {
+    for (const key of keys) delete process.env[key];
+    process.env["SUBSTRATE_HOLDER"] = "op";
+    process.env["SUBSTRATE_ACTIVATION_ID"] = "act:23b2212a-c44";
+    claim(s);
+    const input = { cwd: s.dir, session_id: "claude-session", issueRef: s.humanRef, dbPath: s.dbPath };
+    const stop = await handleStopGate(input);
+    assert.equal(stop.checkpointed, true);
+    const compact = await handlePreCompact(input);
+    assert.ok(compact.entryId, compact.reason);
+    const db = openSubstrate(s.dbPath);
+    try {
+      const rows = db.prepare("SELECT participant_id, activation_id, execution_context_json FROM issue_journal WHERE issue_id = ? AND kind IN ('checkpoint', 'compaction')").all(s.issueId) as Array<{
+        participant_id: string | null; activation_id: string | null; execution_context_json: string;
+      }>;
+      assert.equal(rows.length, 2);
+      for (const row of rows) {
+        assert.equal(row.participant_id, "op");
+        assert.equal(row.activation_id, "act:23b2212a-c44");
+        assert.deepEqual(JSON.parse(row.execution_context_json).host, { type: "claude", sessionId: "claude-session" });
+      }
+    } finally { db.close(); }
+  } finally {
+    keys.forEach((key, i) => { if (prior[i] === undefined) delete process.env[key]; else process.env[key] = prior[i]; });
+    rmSync(s.dir, { recursive: true, force: true });
+  }
+});
+
 // ---- VALIDATION 1: noise ----------------------------------------------------
 
 describe("H1 noise: repeated hook invocations append no Journal entries", () => {

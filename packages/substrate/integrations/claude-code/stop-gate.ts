@@ -137,8 +137,16 @@ export async function handleStopGate(input: StopGateInput = {}): Promise<StopGat
       try {
         await handles.journal.checkpoint(issueId, {
           sessionId: input.session_id,
+          // Unstated identity fills from the process ambient (XTRM-435),
+          // stated wins; nothing invented when ambient is empty.
           executionContext: enrichExecutionContext({
             host: input.session_id ? { type: "claude", sessionId: input.session_id } : null,
+            participantId: input.holder ?? process.env["SUBSTRATE_HOLDER"] ?? null,
+            specialist: input.activationId
+              ? { activationId: input.activationId }
+              : process.env["SUBSTRATE_ACTIVATION_ID"]
+                ? { activationId: process.env["SUBSTRATE_ACTIVATION_ID"] }
+                : null,
           }),
         });
         checkpointed = true;
