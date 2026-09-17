@@ -235,7 +235,7 @@ describe("Journal identity projection to reads (XTRM-410)", () => {
       const ref = createIssue(cli, dir);
       cli([
         "journal", "append", ref, "--kind", "finding", "--project", "prj_xtrm",
-        "--participant", "specialist::executor", "--activation", "act:410", "--session", "sess-410", "--run", "run-410",
+        "--participant", "specialist::executor", "--activation", "act:410", "--session", "01a0ac95-8370-74c5-9081-4490653e7410", "--run", "run-410",
         "--semantic", JSON.stringify({ summary: "identity-bearing finding" }),
       ]);
       // Identity-less row: `issue note` carries no identity flags.
@@ -246,7 +246,7 @@ describe("Journal identity projection to reads (XTRM-410)", () => {
       const bearing = shown.find((e) => e.sequence === 1);
       assert.equal(bearing?.participantId, "specialist::executor");
       assert.equal(bearing?.activationId, "act:410");
-      assert.equal(bearing?.sessionId, "sess-410");
+      assert.equal(bearing?.sessionId, "01a0ac95-8370-74c5-9081-4490653e7410");
       assert.equal(bearing?.runId, "run-410");
       assert.equal(bearing?.executionContext?.participantId, "specialist::executor");
       // Compatibility surface: existing fields keep working.
@@ -270,7 +270,7 @@ describe("Journal identity projection to reads (XTRM-410)", () => {
       const human = runCli(["--db", dbPath, "journal", "show", ref]);
       assert.equal(human.code, 0, human.stderr);
       assert.ok(human.stdout.includes("· by specialist::executor"), "header names the actor");
-      assert.ok(human.stdout.includes("session sess-410"), "body exposes the session");
+      assert.ok(human.stdout.includes("session 01a0ac95-8370-74c5-9081-4490653e7410"), "body exposes the session");
       assert.ok(human.stdout.includes("activation act:410"), "body exposes the activation");
       assert.ok(human.stdout.includes("actor: (none recorded)"), "identity-less row is explicitly absent");
     } finally {
@@ -284,7 +284,7 @@ describe("Journal identity projection to reads (XTRM-410)", () => {
     const restoreEnv = scrubSessionEnv();
     try {
       const ref = createIssue(cli, dir);
-      cli(["journal", "checkpoint", ref, "--project", "prj_xtrm", "--participant", "specialist::executor", "--session", "sess-410"]);
+      cli(["journal", "checkpoint", ref, "--project", "prj_xtrm", "--participant", "specialist::executor", "--session", "01a0ac95-8370-74c5-9081-4490653e7410"]);
       const trace = cli(["provenance", "trace", ref]) as {
         checkpoints: Array<{ entryId: string; sequence: number }>;
       };
@@ -293,7 +293,7 @@ describe("Journal identity projection to reads (XTRM-410)", () => {
       const same = shown.find((e) => e.sequence === trace.checkpoints[0]?.sequence);
       assert.equal(same?.id, trace.checkpoints[0]?.entryId, "same row in both reads");
       assert.equal(same?.participantId, "specialist::executor");
-      assert.equal(same?.sessionId, "sess-410");
+      assert.equal(same?.sessionId, "01a0ac95-8370-74c5-9081-4490653e7410");
     } finally {
       restoreEnv();
       rmSync(dir, { recursive: true, force: true });
