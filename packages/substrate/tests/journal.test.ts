@@ -158,7 +158,7 @@ describe("journal identity survives every read path (XTRM-410)", () => {
       kind: "finding",
       participantId: "specialist::executor",
       activationId: "act:410",
-      sessionId: "sess-410",
+      sessionId: "01a0ac95-8370-74c5-9081-4490653e7410",
       runId: "run-410",
       semantic: { ...SEMANTIC },
     });
@@ -172,7 +172,7 @@ describe("journal identity survives every read path (XTRM-410)", () => {
     ]) {
       assert.equal(e.participantId, "specialist::executor");
       assert.equal(e.activationId, "act:410");
-      assert.equal(e.sessionId, "sess-410");
+      assert.equal(e.sessionId, "01a0ac95-8370-74c5-9081-4490653e7410");
       assert.equal(e.runId, "run-410");
     }
     for (const e of [journal.getEntry(bare.id), journal.latest(issue.id)!]) {
