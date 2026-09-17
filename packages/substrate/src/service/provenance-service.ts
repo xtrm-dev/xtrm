@@ -67,6 +67,15 @@ function trunc(s: string, max = 500): string {
   return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
+// A checkpoint link is optional continuity (XTRM-416). Absence is explicit:
+// a missing, blank or whitespace-only option stores NULL, never an empty
+// string that a reader would have to interpret.
+function normalizeCheckpointId(value: string | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
 export interface ProvenanceTrace {
   issueId: string;
   locator: string;
@@ -269,7 +278,7 @@ export class ProvenanceService {
         )
         .run(
           id, bindingId, binding.issueId, binding.issueRevision, binding.contractHash,
-          opts?.journalCheckpointId ?? null, JSON.stringify(opts?.validationRefs ?? []), now,
+          normalizeCheckpointId(opts?.journalCheckpointId), JSON.stringify(opts?.validationRefs ?? []), now,
         );
       this.issues.appendEvent(binding.issueId, "provenance.receipt_allocated", {
         receipt: id, binding: bindingId, revision: binding.issueRevision,
