@@ -1,0 +1,19 @@
+{
+  "config": {
+    "backend": "system_one",
+    "model": "jev-latest"
+  },
+  "content_hash": "sha256:0a89dfbbd55d7c19a4a9153ce16ce9eabb133baeb215a49942c015ff280b89e6",
+  "description": "System One judgments from the jev-latest model, requested through TypeSafeClient.system_one over the workload's questions.",
+  "id": "jev-latest",
+  "provenance": {
+    "commit": "a6e55215",
+    "detail": "TypeSafeClient(model='jev-latest') at dupes.py line 154 and sb_quality3.py line 112",
+    "files": [
+      "experiments/jev-dupes/dupes.py",
+      "experiments/jev-dupes/sb_quality3.py"
+    ],
+    "repo": "specialists"
+  },
+  "version": "v1"
+}

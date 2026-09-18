@@ -1,0 +1,18 @@
+{
+  "content_hash": "sha256:d8c4b722b81d7688e771262ee1ebd5c8956a1293a1c10667c672740e0aa9ca35",
+  "id": "contract-quality.self_blocked",
+  "instructions": "`ticket` states that work cannot start until an external decision, ruling, or another ticket completes.",
+  "provenance": {
+    "commit": "a6e55215",
+    "file": "experiments/jev-dupes/sb_quality3.py",
+    "function": "questions()",
+    "instructions_lines": [
+      97,
+      97
+    ],
+    "question_key": "self_blocked",
+    "repo": "specialists"
+  },
+  "type": "noul",
+  "version": "v1"
+}

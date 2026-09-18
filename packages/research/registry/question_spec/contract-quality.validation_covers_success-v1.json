@@ -1,0 +1,18 @@
+{
+  "content_hash": "sha256:3bcfae14a09542553ee8ea30cf69f82677d68ba27f55d4e8eb9287752d098dc3",
+  "id": "contract-quality.validation_covers_success",
+  "instructions": "`ticket.contract.validation` includes a check that directly demonstrates the main condition stated in `ticket.contract.success`, not only supporting or local checks.",
+  "provenance": {
+    "commit": "a6e55215",
+    "file": "experiments/jev-dupes/sb_quality3.py",
+    "function": "questions()",
+    "instructions_lines": [
+      94,
+      95
+    ],
+    "question_key": "validation_covers_success",
+    "repo": "specialists"
+  },
+  "type": "noul",
+  "version": "v1"
+}

@@ -84,6 +84,7 @@ pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
   check.
 - `src/xtrm_research/definitions.py` — loading and content-hashing
   WorkloadDefinition, Experiment, Variant, Dataset, Evaluator, QuestionSpec.
+- `registry/` — the definitions this package ships (see below).
 - `src/xtrm_research/manifest.py`, `runner.py` — building a fully
   version-resolved manifest and refusing to execute samples before it is
   written.
@@ -101,6 +102,58 @@ pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
   contract (`system_one(state, questions) -> answers`) and the deterministic
   duplicate-pair baseline backend.
 - `src/xtrm_research/cli/` — the `xtrm-research` CLI.
+
+## Shipped registry
+
+`registry/` holds the real (non-fixture) definitions, one subdirectory per
+kind exactly as `definitions.DEFINITION_KINDS` names it. The definitions
+shipped today cover the two experiments named by XTRM-424:
+
+| kind | ids |
+| --- | --- |
+| `workload` | `board-duplicates` v1, `contract-quality` v1 |
+| `experiment` | `board-duplicates-v1` v1, `contract-quality-v3` v1 |
+| `variant` | `baseline` v1, `jev-latest` v1 |
+| `question_spec` | the seven judgments the source scripts ask (below) |
+
+`dataset` and `evaluator` definitions are deliberately absent: the importer
+that turns existing output files into Runs and every evaluator/metric live
+in later slices (see the package non-goals), so there is nothing real to
+ship for those kinds yet. A definition file carries its own
+`sha256:`-prefixed `content_hash` (via `hashing.compute_content_hash`);
+`DefinitionRegistry` verifies it and raises on mismatch, so hand-editing a
+file without recomputing its hash is caught rather than trusted.
+
+Each shipped experiment's `legend` covers every `named_datasets` entry,
+every variant id, and every declared `statuses`/`label_values` value — a
+completeness rule `schemas.validate()` enforces beyond JSON Schema, and
+`tests/test_shipped_registry.py` locks by walking the directory (a new file
+is covered automatically).
+
+### Question wording provenance
+
+The question wording is the experiment, not a paraphrase: each
+`question_spec.instructions` and `criteria` string is reproduced verbatim
+from the original research at `specialists` commit `a6e55215`
+(`experiments/jev-dupes/`), including the assembled text of Python implicit
+string concatenation. Every definition also carries a `provenance` object
+naming the commit, file and line range.
+
+| question_spec id | source file | line range |
+| --- | --- | --- |
+| `board-duplicates.redundant` | `dupes.py` | instructions 132-134 |
+| `board-duplicates.relation` | `dupes.py` | instructions 136; criteria 138-141 |
+| `contract-quality.executable` | `sb_quality3.py` | instructions 82-84 |
+| `contract-quality.execution_mode` | `sb_quality3.py` | instructions 86; criteria 87-89 |
+| `contract-quality.open_decision` | `sb_quality3.py` | instructions 91-92 |
+| `contract-quality.validation_covers_success` | `sb_quality3.py` | instructions 94-95 |
+| `contract-quality.self_blocked` | `sb_quality3.py` | instructions 97 |
+
+Several instructions name state keys the original scripts supplied at
+runtime — `issue_a`/`issue_b` (`dupes.py:158`), `standard`
+(`sb_quality3.py:125-126, 17-27`) and `ticket` (`sb_quality3.py:125-126`).
+Those keys are part of the question's wording and are not renamed here;
+their providers arrive with the importer/backend slices.
 
 ## Run directory
 
@@ -208,6 +261,7 @@ xtrm-research run show <run-id> --json
 xtrm-research run annotate <run-id> --author me --kind conclusion --text "..."
 xtrm-research experiment show <id> --registry-root <dir>
 xtrm-research workload show <id> --registry-root <dir>
+# e.g. xtrm-research --json experiment show board-duplicates-v1 --registry-root registry
 xtrm-research tail <run-id> --after <offset>
 xtrm-research metrics <run-id>
 xtrm-research compare <run-id> [<run-id> ...]

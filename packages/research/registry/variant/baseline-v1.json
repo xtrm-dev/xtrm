@@ -1,0 +1,27 @@
+{
+  "config": {
+    "description_chars": 800,
+    "description_token_jaccard_weight": 0.5,
+    "strategy": "lexical_similarity",
+    "title_sequence_matcher_weight": 0.5,
+    "token_min_length": 3
+  },
+  "content_hash": "sha256:8d2546144b2ab122ba28d7b0112b2ae3f059c75cb7ce1a99cf20713dad3f9aba",
+  "description": "Deterministic duplicate baseline: the mean of the title difflib SequenceMatcher ratio and the description-token Jaccard similarity over the pair.",
+  "id": "baseline",
+  "provenance": {
+    "commit": "a6e55215",
+    "detail": "dupes.py words() lines 74-75, sim() lines 78-82",
+    "file": "experiments/jev-dupes/dupes.py",
+    "functions": [
+      "words()",
+      "sim()"
+    ],
+    "lines": [
+      74,
+      82
+    ],
+    "repo": "specialists"
+  },
+  "version": "v1"
+}

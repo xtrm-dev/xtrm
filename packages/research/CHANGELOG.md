@@ -28,6 +28,25 @@ All notable changes to the `xtrm-research` package.
   `null_reason` `not_exposed_by_provider` for the provider-less
   deterministic backend.
 
+### Added — shipped definitions and question specs (XTRM-476)
+- `registry/` ships the real, non-fixture definitions for the two
+  experiments named by XTRM-424: `board-duplicates-v1` and
+  `contract-quality-v3`. `workload`, `experiment`, `variant` and
+  `question_spec` files are all hash-verified and schema-validated by
+  `DefinitionRegistry`; `dataset` and `evaluator` definitions arrive with
+  the importer and evaluator slices.
+- Seven `question_spec` definitions reproduce the wording of the original
+  research scripts verbatim from `specialists` commit `a6e55215`
+  (`experiments/jev-dupes/dupes.py` and `sb_quality3.py`). Each file
+  records its provenance (commit, file, line range) and the wording is not
+  tidied.
+- `tests/test_shipped_registry.py` walks `registry/` and asserts every
+  file loads through `DefinitionRegistry` and validates, every stored
+  `content_hash` matches `hashing.compute_content_hash`, and every
+  experiment's legend covers its named datasets, variant ids and declared
+  status/label vocabularies — dropping any referenced legend entry is
+  rejected.
+
 ### Added — chart-data, experiments and samples read verbs (XTRM-474)
 - `chart-data <run...> --metric <key>` over `views.chart_dataset_rows`:
   one row per run carrying the metric, or an explicit

@@ -1,0 +1,73 @@
+{
+  "content_hash": "sha256:7e0ee6831ad274e52843588638efb7d876abfdb10024076dfc315248ee806e96",
+  "default_metrics": [
+    "auc",
+    "brier",
+    "ece",
+    "precision",
+    "recall"
+  ],
+  "description": "Pairwise duplicate detection over tickets from one software project tracker: judge whether completing one ticket makes the other unnecessary, and classify the relationship between them.",
+  "evaluators": [],
+  "id": "board-duplicates",
+  "input_schema": {
+    "properties": {
+      "issue_a": {
+        "type": "object"
+      },
+      "issue_b": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "issue_a",
+      "issue_b"
+    ],
+    "type": "object"
+  },
+  "legend": {
+    "auc": "area under the ROC curve of P(redundant) against the pair label",
+    "board-duplicates.redundant": "P(completing one ticket makes the other unnecessary)",
+    "board-duplicates.relation": "relationship between the two tickets' work",
+    "brier": "mean squared error of P(redundant) against the pair label",
+    "ece": "expected calibration error of P(redundant) in ten equal-width bins",
+    "precision": "precision of P(redundant) at a 0.5 threshold",
+    "recall": "recall of P(redundant) at a 0.5 threshold"
+  },
+  "observers": [],
+  "output_schema": {
+    "properties": {
+      "redundant": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+      },
+      "relation": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "provenance": {
+    "commit": "a6e55215",
+    "detail": "questions() lines 128-143; report() AUC/Brier/ECE/precision/recall lines 174-189; view() state lines 122-125",
+    "file": "experiments/jev-dupes/dupes.py",
+    "repo": "specialists"
+  },
+  "questions": [
+    {
+      "id": "board-duplicates.redundant",
+      "version": "v1"
+    },
+    {
+      "id": "board-duplicates.relation",
+      "version": "v1"
+    }
+  ],
+  "required_capabilities": [
+    "text_compare"
+  ],
+  "runner_kind": "system_one",
+  "sample_provider": "legacy-script:dupes.build",
+  "version": "v1"
+}

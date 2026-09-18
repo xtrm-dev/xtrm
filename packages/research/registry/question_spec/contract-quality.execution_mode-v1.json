@@ -1,0 +1,32 @@
+{
+  "content_hash": "sha256:b9dc4708d05b7c41ff9e296ca1eea3b5544cb657113ba63847c775e8b5d6808e",
+  "criteria": {
+    "live_environment": "Access to running production or staging systems, hosts, or cloud accounts.",
+    "operator_or_other_team": "A human operator, another team, or another repository must act or decide.",
+    "repo_only": "Changes and checks inside the repository: code, tests, docs, CI."
+  },
+  "id": "contract-quality.execution_mode",
+  "instructions": "What does a worker need in order to complete `ticket`?",
+  "options": [
+    "repo_only",
+    "live_environment",
+    "operator_or_other_team"
+  ],
+  "provenance": {
+    "commit": "a6e55215",
+    "criteria_lines": [
+      87,
+      89
+    ],
+    "file": "experiments/jev-dupes/sb_quality3.py",
+    "function": "questions()",
+    "instructions_lines": [
+      86,
+      86
+    ],
+    "question_key": "execution_mode",
+    "repo": "specialists"
+  },
+  "type": "choice",
+  "version": "v1"
+}

@@ -1,0 +1,18 @@
+{
+  "content_hash": "sha256:5ae48e0ed99823524f8941d186b46406772fa413cf5cdd1b461f1d5370cb59c0",
+  "id": "contract-quality.open_decision",
+  "instructions": "`ticket` leaves a design choice, threshold, precondition, or delete-versus-fix decision unresolved, and does not name who decides or how the worker should decide.",
+  "provenance": {
+    "commit": "a6e55215",
+    "file": "experiments/jev-dupes/sb_quality3.py",
+    "function": "questions()",
+    "instructions_lines": [
+      91,
+      92
+    ],
+    "question_key": "open_decision",
+    "repo": "specialists"
+  },
+  "type": "noul",
+  "version": "v1"
+}
