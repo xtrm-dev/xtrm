@@ -138,6 +138,7 @@ def emit_system_one_call(
     latency_ms: float,
     *,
     usage: dict[str, Any],
+    extra_data: Mapping[str, Any] | None = None,
 ) -> None:
     """Write the one ``system_one_call`` event for a completed backend call.
 
@@ -145,6 +146,8 @@ def emit_system_one_call(
     and ``answer_type``, the state hash and the latency; ``usage`` is the
     caller-built :func:`~xtrm_research.telemetry.usage_record` (real token
     and cost fields for a provider backend, canonical nulls otherwise).
+    ``extra_data`` adds provider-specific provenance (the Jev backend records
+    its SDK version there) without changing the baseline event shape.
     """
     handle.write_event(
         {
@@ -164,6 +167,7 @@ def emit_system_one_call(
                     }
                     for question in questions
                 ],
+                **dict(extra_data or {}),
             },
             "usage": usage,
         }

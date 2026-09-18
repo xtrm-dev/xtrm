@@ -30,6 +30,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+# Optional: the Jev backend talks to TypeSafe through this SDK. The package
+# and its full test suite import and pass without it.
+jev = ["typesafe-sdk>=0.6.0"]
 
 [project.scripts]
 xtrm-research = "xtrm_research.cli.main:main"

@@ -294,12 +294,15 @@ _TRANSPORT_MODULES = {
     "ollama",
     "cohere",
     "google",
+    "typesafe_sdk",
 }
-#: guards.py is the only module allowed to import a transport. Matched on
-#: the path *relative to the package root* (H16): a hypothetical
-#: backends/guards.py must not inherit this allowlisting just because it
-#: shares a basename with the real, top-level guards.py.
-_TRANSPORT_IMPORT_ALLOWLIST = {"guards.py"}
+#: guards.py and transports.py are the only modules allowed to import a
+#: transport: guards.py is the send seam, transports.py holds the concrete
+#: provider SDK call. Matched on the path *relative to the package root*
+#: (H16): a hypothetical backends/guards.py must not inherit this
+#: allowlisting just because it shares a basename with the real, top-level
+#: guards.py.
+_TRANSPORT_IMPORT_ALLOWLIST = {"guards.py", "transports.py"}
 #: Exact relative paths only — never a directory prefix or a glob — so
 #: a new file cannot join this list by accident (e.g. a XTRM-427
 #: backend module living elsewhere in the package). Each entry:
