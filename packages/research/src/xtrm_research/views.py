@@ -76,8 +76,7 @@ def list_experiments(registry_root: Path) -> list[dict[str, Any]]:
             f"no experiment registry under {Path(registry_root)}"
         )
     definitions = [
-        load_definition("experiment", path)
-        for path in sorted(kind_dir.glob("*.json"))
+        load_definition("experiment", path) for path in sorted(kind_dir.glob("*.json"))
     ]
     definitions.sort(key=lambda d: (d["id"], d["version"]))
     return [{"id": d["id"], "version": d["version"]} for d in definitions]

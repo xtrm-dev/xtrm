@@ -45,9 +45,7 @@ def _seed_chart_run(registry, runs_root, run_id="run-chart"):
 # --- samples ---------------------------------------------------------------
 
 
-def test_samples_returns_records_from_samples_jsonl(
-    registry, runs_root, capsys
-):
+def test_samples_returns_records_from_samples_jsonl(registry, runs_root, capsys):
     _seed_chart_run(registry, runs_root)
     code, envelope = _run_cli(
         ["--root", str(runs_root), "--json", "samples", "run-chart"], capsys
@@ -61,9 +59,7 @@ def test_samples_returns_records_from_samples_jsonl(
     assert envelope["data"][0]["output"] == "not-a-duplicate"
 
 
-def test_samples_unknown_run_returns_error_envelope(
-    registry, runs_root, capsys
-):
+def test_samples_unknown_run_returns_error_envelope(registry, runs_root, capsys):
     _seed_chart_run(registry, runs_root)
     code, envelope = _run_cli(
         ["--root", str(runs_root), "--json", "samples", "nope"], capsys
@@ -74,9 +70,7 @@ def test_samples_unknown_run_returns_error_envelope(
     assert "nope" in envelope["error"]
 
 
-def test_samples_missing_file_returns_error_envelope(
-    registry, runs_root, capsys
-):
+def test_samples_missing_file_returns_error_envelope(registry, runs_root, capsys):
     manifest = make_manifest(registry, run_id="run-nosamp")
     start_run(runs_root, "run-nosamp", manifest)
     code, envelope = _run_cli(

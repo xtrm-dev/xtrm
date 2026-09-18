@@ -53,5 +53,3 @@ def test_experiments_flags_work_in_either_position(capsys):
     assert code == 0
     assert envelope["ok"] is True
     assert {"id": "dup-detect-baseline", "version": "v1"} in envelope["data"]
-
-

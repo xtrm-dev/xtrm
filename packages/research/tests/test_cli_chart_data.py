@@ -10,7 +10,6 @@ from xtrm_research.cli.main import main
 from xtrm_research.evaluators import exact_match_evaluate
 from xtrm_research.runner import start_run
 
-from .conftest import REGISTRY_ROOT
 from .helpers import FIXED_NOW, make_manifest
 
 
@@ -105,9 +104,7 @@ def test_chart_data_run_without_metric_is_explicit_no_metric_state(
     ]
 
 
-def test_chart_data_unknown_run_returns_error_envelope(
-    registry, runs_root, capsys
-):
+def test_chart_data_unknown_run_returns_error_envelope(registry, runs_root, capsys):
     _seed_chart_run(registry, runs_root)
     code, envelope = _run_cli(
         [
@@ -169,5 +166,3 @@ def test_chart_data_flags_work_in_either_position(registry, runs_root, capsys):
     assert code == 0
     assert envelope["ok"] is True
     assert envelope["data"][0]["run_id"] == "run-chart"
-
-
