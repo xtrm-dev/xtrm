@@ -227,12 +227,17 @@ campaign runs on, and none of the confidential data it reads:
   `krippendorff_alpha` and `dispatchable_rate`. It validates against
   `experiment.schema.json` and loads through `DefinitionRegistry`, and it
   carries no board text.
-- `registry/labeler-brief-v1.json` — the one fixed brief every labeler gets.
-  It asks for exactly `dispatchable` (yes/no), `main_gap` and
+- `registry/labeler-brief-v1.json` — the first fixed brief every labeler
+  gets. It asks for exactly `dispatchable` (yes/no), `main_gap` and
   `execution_mode`, and its `content_hash` is
   `hashing.compute_content_hash` of its own content. The experiment records
   that hash under `labeling.brief.content_hash`, so a run can always state
-  which brief it used.
+  which brief it used. v1 is frozen: it is hashed, runs reference it by
+  hash, and it is never edited or regenerated.
+- `registry/labeler-brief-v2.json` — the corrected brief (XTRM-485), shipped
+  alongside v1 rather than replacing it. It asks for the same three fields
+  but matches Jev's `executable` question; see
+  "labeler-brief-v2: matching Jev's executable question" below.
 - `sampling.stratified_sample(population, target_size, seed)` — draws a
   sample spread across the population's score quartiles and strata, and
   returns the seed alongside the sample. Selection is a hash keyed on
@@ -269,6 +274,52 @@ length-incentivizing phrases (`thorough`, `detailed`, `in detail`,
 `comprehensive`, `as much`, `word count`, `verbose`, `explain your`) and
 asserts none appear, and asserts the `main_gap` cap — "at most 15 words" —
 is present.
+
+### labeler-brief-v2: matching Jev's `executable` question (XTRM-485)
+
+v1 asked a materially different, directionally biased question from the Jev
+`executable` question it is compared against. v1 asked whether a worker
+could complete the work "from the item text alone", so any fact a competent
+worker could find in the repository counted as a gap. Jev asks whether a
+worker **with repository access** could execute the ticket, and its second
+sentence decouples *needing another party* from *being executable*. v2 keeps
+the three-field shape and the same `id`, and changes the wording field by
+field. v1 stays byte-identical; the stored v1 hash is unchanged and a test
+pins it.
+
+| field | v1 | v2 | why |
+| --- | --- | --- | --- |
+| `dispatchable` (predicate) | `"yes"` if a fresh worker could complete the work from the item text alone, without asking a question or waiting on another decision | `"yes"` if a fresh, competent worker **with repository access** could execute the item correctly without any chat history; `"no"` if not; `"abstain"` only when the item states too little to decide | repository access stops a repo-discoverable fact counting as a gap; removing "waiting on another decision" stops `dispatchable` from being coupled to `execution_mode` by construction |
+| `dispatchable` (softener) | absent | Jev's still-counts clause, byte-identical to `sb_quality3.py` at `a6e55215`: "Work that needs live systems or an operator still counts when the ticket states exactly what to do, in what order, and how to prove it." | decouples needing an operator or live systems from being executable |
+| `main_gap` | a gap only when `dispatchable` is `"no"` | adds an `abstain` branch: the fact the item leaves unstated that blocks a decision | an instrument with no abstain option converts uncertainty into a confident label |
+| `execution_mode` | the three bare option names | the three option names each carrying Jev's criteria text verbatim, plus a structured `criteria.execution_mode` block | a bare name gives the labeler no criteria; the criteria are the instrument |
+| `criteria` | absent | `{"execution_mode": {"repo_only": ..., "live_environment": ..., "operator_or_other_team": ...}}`, parsed out of `sb_quality3.py` by `ast` | gives the test a machine-checkable copy of the exact Jev strings |
+| output format | "Return exactly three fields." | the full JSON instruction, inside the brief: `{"dispatchable": "yes" \| "no" \| "abstain", "main_gap": ..., "execution_mode": ...}` | the JSON instruction used to live in the campaign's prompt builder, so the hash did not cover the part that decides whether an answer counts |
+| `abstain` outcome | absent | a third `dispatchable` value, distinct from `"yes"` and `"no"`, with a stated condition | lets the instrument decline to guess |
+
+The softener is pinned **byte-for-byte** to the a6e55215 source, and the
+decision predicate is scanned separately for `operator`, `another team` and
+`waiting on a decision`, so the independence check does not depend on
+paraphrase. `tests/test_labeler_brief_v2.py` parses `questions()` out of
+`sb_quality3.py` with `ast` and literal-evaluates the executable wording and
+the execution_mode criteria dict; it never reads a transcription.
+
+v2 is not wired into `reference-labeling-v1`: that experiment records v1's
+hash, and changing it would split an existing sample. A future campaign
+would point a new experiment at v2's `content_hash`; whether to re-label is
+a separate decision with its own cost.
+
+#### Contract defect found during execution
+
+The bead's original VALIDATION 3 asked for a whole-text token scan asserting
+that v2's `dispatchable` text "mentions neither an operator nor another team
+nor waiting on a decision", while SUCCESS 2 required the same text to carry
+Jev's softener verbatim — and Jev's softener contains the word `operator`.
+The two could not both hold. The resolution (coordinator, XTRM-485) keeps
+Jev's wording verbatim and scopes the independence scan to the decision
+predicate, with the softener pinned byte-for-byte to the source instead.
+This is the sixth contract in the epic that named or demanded something that
+could not hold.
 
 ## Run directory
 
