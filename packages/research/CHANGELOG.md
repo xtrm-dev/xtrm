@@ -2,6 +2,36 @@
 
 All notable changes to the `xtrm-research` package.
 
+## [Unreleased]
+
+### Added — chart-data, experiments and samples read verbs (XTRM-474)
+- `chart-data <run...> --metric <key>` over `views.chart_dataset_rows`:
+  one row per run carrying the metric, or an explicit
+  `{run_id, state: "no_metric", reason}` entry when the run lacks it.
+  Unknown runs and unreadable manifests are `ok: false`, never an empty
+  success.
+- `experiments --registry-root <dir>` returns `[{id, version}]` read
+  straight from the registry directory, so an experiment with zero runs
+  is visible; an unreadable registry is `ok: false`.
+- `samples <run>` returns the run's `samples.jsonl` records; an unknown
+  run or a missing samples file is `ok: false`.
+
+### Added — usage_record cost fields and canonical null_reason vocabulary (XTRM-471)
+- `usage_record` gains `cost` (named `cost`, never `cost_usd`) plus
+  `cost_currency`, keeping `additionalProperties: false`. A null `cost`
+  or `cost_currency` carries a non-empty `null_reason`, like every other
+  nullable measurement field.
+- `usage_record` gains `cached_input_tokens`, documented in the schema as
+  a subset of the `gen_ai.usage.input_tokens` total that is never added
+  to it.
+- `null_reason` is now a canonical snake_case enum (`no_price_entry` for
+  a missing price, `not_exposed_by_provider` for values the provider
+  never exposed). The one prose `null_reason` fixture value migrated to
+  a canonical value plus `null_detail`, the new optional human-sentence
+  string.
+- `telemetry.usage_record()` mirrors the new fields; `NULL_REASONS` is
+  pinned against the schema enum by `tests/test_enum_parity.py`.
+
 ## [0.4.0] - 2026-09-17
 
 ### Added — mandatory pre-send guard stage (XTRM-428)

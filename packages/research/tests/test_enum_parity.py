@@ -10,7 +10,7 @@ from xtrm_research import schemas as schemas_module
 from xtrm_research.cli.main import build_parser
 from xtrm_research.schemas import load_schema
 from xtrm_research.status import TERMINAL_STATES
-from xtrm_research.telemetry import USAGE_SOURCES
+from xtrm_research.telemetry import NULL_REASONS, USAGE_SOURCES
 
 _SCHEMA_DIR = (
     schemas_module._SCHEMA_DIR
@@ -35,6 +35,14 @@ def test_usage_source_enum_matches_common_schema():
     common = json.loads((_SCHEMA_DIR / "common.schema.json").read_text())
     usage_enum = set(common["$defs"]["usage_record"]["properties"]["source"]["enum"])
     assert set(USAGE_SOURCES) == usage_enum
+
+
+def test_null_reason_enum_matches_telemetry_vocabulary():
+    common = json.loads((_SCHEMA_DIR / "common.schema.json").read_text())
+    schema_enum = set(
+        common["$defs"]["usage_record"]["properties"]["null_reason"]["enum"]
+    ) - {None}
+    assert set(NULL_REASONS) == schema_enum
 
 
 def test_annotation_kind_enum_matches_cli_choices():

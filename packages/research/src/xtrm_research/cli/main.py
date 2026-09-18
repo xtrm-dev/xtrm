@@ -33,7 +33,13 @@ from xtrm_research.store import (
     load_manifest,
     manifest_path,
 )
-from xtrm_research.views import compare_runs, run_summary
+from xtrm_research.views import (
+    chart_dataset_rows,
+    compare_runs,
+    list_experiments,
+    run_samples,
+    run_summary,
+)
 
 
 def _emit(command: str, data: Any, as_json: bool) -> None:
@@ -154,6 +160,35 @@ def _cmd_tail(args: argparse.Namespace) -> None:
     ]
     next_offset = max((e["seq"] for e in events), default=args.after)
     _emit("tail", {"events": events, "next_offset": next_offset}, args.json)
+
+
+def _cmd_chart_data(args: argparse.Namespace) -> None:
+    root = Path(args.root)
+    for run_id in args.run_ids:
+        # Fail the whole verb (never an empty success): an unknown run
+        # or an unreadable manifest is an explicit ok:false, not a gap.
+        load_manifest(root, run_id)
+    rows = chart_dataset_rows(root, args.run_ids, args.metric)
+    present = {row["run_id"] for row in rows}
+    out = list(rows)
+    for run_id in args.run_ids:
+        if run_id not in present:
+            out.append(
+                {
+                    "run_id": run_id,
+                    "state": "no_metric",
+                    "reason": f"run {run_id!r} has no metric {args.metric!r}",
+                }
+            )
+    _emit("chart-data", out, args.json)
+
+
+def _cmd_experiments(args: argparse.Namespace) -> None:
+    _emit("experiments", list_experiments(Path(args.registry_root)), args.json)
+
+
+def _cmd_samples(args: argparse.Namespace) -> None:
+    _emit("samples", run_samples(Path(args.root), args.run_id), args.json)
 
 
 def _cmd_metrics(args: argparse.Namespace) -> None:
@@ -281,6 +316,22 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p_compare)
     p_compare.add_argument("run_ids", nargs="+")
     p_compare.set_defaults(func=_cmd_compare)
+
+    p_chart = sub.add_parser("chart-data")
+    _add_common(p_chart)
+    p_chart.add_argument("run_ids", nargs="+", metavar="RUN_ID")
+    p_chart.add_argument("--metric", required=True)
+    p_chart.set_defaults(func=_cmd_chart_data)
+
+    p_experiments = sub.add_parser("experiments")
+    _add_common(p_experiments)
+    p_experiments.add_argument("--registry-root", required=True)
+    p_experiments.set_defaults(func=_cmd_experiments)
+
+    p_samples = sub.add_parser("samples")
+    _add_common(p_samples)
+    p_samples.add_argument("run_id")
+    p_samples.set_defaults(func=_cmd_samples)
 
     return parser
 

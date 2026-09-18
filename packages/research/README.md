@@ -136,6 +136,24 @@ OpenTelemetry's GenAI semantic conventions define `gen_ai.usage.input_tokens`,
 call latency, so `latency_ms` is this package's own choice — documented
 here rather than invented a namespaced pseudo-OTel name.
 
+### `usage_record` cost and null vocabulary
+
+`usage_record` carries an optional `cost` plus `cost_currency` (the field
+is named `cost`, never `cost_usd`: the price table carries its own
+currency). Money is never computed from token counts here — the price
+table is a separate concern.
+
+`cached_input_tokens` is the cached portion of the input token total: a
+subset of `gen_ai.usage.input_tokens`, never added to it.
+
+Any nullable measurement field left null must carry a canonical
+snake_case `null_reason` (`no_price_entry` for a missing price — the
+agreed value; `not_exposed_by_provider` for values the provider response
+never exposed). The human sentence that used to live in `null_reason`
+now belongs in the optional `null_detail` string. The Python
+`NULL_REASONS` vocabulary in `telemetry.py` is pinned against the schema
+enum by `tests/test_enum_parity.py`.
+
 ## CLI
 
 Every `--json` command returns:
@@ -154,7 +172,19 @@ xtrm-research workload show <id> --registry-root <dir>
 xtrm-research tail <run-id> --after <offset>
 xtrm-research metrics <run-id>
 xtrm-research compare <run-id> [<run-id> ...]
+xtrm-research chart-data <run-id> [<run-id> ...] --metric <evaluator-id::metric>
+xtrm-research experiments --registry-root <dir>
+xtrm-research samples <run-id>
 ```
+
+- `chart-data` returns chart dataset rows (`{run_id, value, se, ci95, n,
+  method}` per run carrying the metric); a run that exists but lacks the
+  metric renders as `{run_id, state: "no_metric", reason}`. An unknown
+  run or unreadable manifest is `ok: false`, never an empty success.
+- `experiments` returns `[{id, version}]` read straight from the
+  registry directory, so an experiment with zero runs is visible.
+- `samples` returns the run's `samples.jsonl` records; an unknown run or
+  a missing samples file is `ok: false`.
 
 ## Known limits
 
