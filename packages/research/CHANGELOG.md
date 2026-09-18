@@ -4,6 +4,24 @@ All notable changes to the `xtrm-research` package.
 
 ## [Unreleased]
 
+### Added — labeler-brief-v2 matching Jev's `executable` question (XTRM-485)
+- `registry/labeler-brief-v2.json` ships alongside the frozen
+  `labeler-brief-v1.json` (v1 is unchanged, byte-identical, and still
+  referenced by `reference-labeling-v1`). v2 keeps the three-field shape but
+  asks Jev's question instead of v1's: the `dispatchable` predicate grants
+  **repository access** and drops "waiting on another decision", Jev's
+  still-counts softener is carried **byte-identical** to `sb_quality3.py` at
+  `a6e55215` on its own instruction line, an explicit `abstain` outcome is
+  added with a stated condition, the three `execution_mode` criteria are
+  quoted verbatim (plus a structured `criteria.execution_mode` block), and
+  the JSON output-format instruction now lives inside the hashed brief so
+  the hash covers it.
+- `tests/test_labeler_brief_v2.py` parses `questions()` out of
+  `sb_quality3.py` with `ast` and literal-evaluates the executable wording
+  and the execution_mode criteria dict; it asserts both softeners, exact
+  criteria equality, predicate independence from who-must-act tokens, the
+  abstain outcome and the in-hash output format, and pins v1's stored hash.
+
 ### Added — Jev backend behind an allow-listed transports module (XTRM-483)
 - `transports.py` is the only module that imports a provider SDK and the
   only home of a concrete send function. Its TypeSafe transport,
