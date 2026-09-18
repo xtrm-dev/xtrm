@@ -1011,19 +1011,46 @@ def test_redact_does_not_touch_ordinary_prose_or_plain_pairs(text):
 # ---- H13: SECRET_URL_CRED must not catastrophically backtrack -----------
 
 
+def _redact_seconds(text: str) -> float:
+    start = time.perf_counter()
+    redact(text)
+    return time.perf_counter() - start
+
+
 def test_secret_url_cred_stays_fast_on_adversarial_input():
+    """Every rule stays near-linear on adversarial input.
+
+    XTRM-482: this used to assert an absolute wall-clock bound
+    (``elapsed < 0.1``). That is calibrated to ~10ms while the defect it
+    guards — the J6 ``-{4,}`` banner without K5's ``(?<!-)`` anchor —
+    took about 17 SECONDS on the hyphen run. The bound was therefore
+    three orders of magnitude tighter than the signature it detects, and
+    on a shared CI runner it flaked: the same commit (607a5e6) passed one
+    run and failed the next at 0.111s.
+
+    So compare each adversarial input against a benign string of the
+    SAME length, measured in the same process on the same run. A busy
+    runner slows both and the ratio holds; catastrophic backtracking
+    blows the ratio out by orders of magnitude. RATIO_CEILING of 50x
+    leaves a wide margin over the ~1x a linear scan costs, and still
+    fails the pre-K5 regex by a factor of thousands.
+    """
     blob = base64.b64encode(secrets.token_bytes(15000)).decode()  # ~20KB
     adversarial = "ab-" * 7000
     # K5: a long hyphen run (a pasted table separator, diff banner or
     # horizontal rule) with no PEM banner in it — SECRET_PEM's -{4,}
     # banner let the engine attempt a match start at every position.
     hyphen_run = "-" * 40000
+    ratio_ceiling = 50.0
     for candidate in (blob, adversarial, hyphen_run):
-        start = time.perf_counter()
-        redact(candidate)
-        elapsed = time.perf_counter() - start
-        assert elapsed < 0.1, (
-            f"redact took {elapsed:.3f}s on a {len(candidate)}-char input"
+        # A same-length benign twin: the cost of scanning this many
+        # characters with no rule matching and no backtracking.
+        baseline = max(_redact_seconds("x" * len(candidate)), 1e-6)
+        elapsed = _redact_seconds(candidate)
+        assert elapsed < ratio_ceiling * baseline, (
+            f"redact took {elapsed:.3f}s on a {len(candidate)}-char input, "
+            f"{elapsed / baseline:.1f}x its {baseline:.6f}s benign baseline "
+            f"(ceiling {ratio_ceiling:.0f}x)"
         )
 
 
