@@ -37,6 +37,7 @@ from xtrm_research.views import (
     chart_dataset_rows,
     compare_runs,
     list_experiments,
+    run_samples,
     run_summary,
 )
 
@@ -186,6 +187,10 @@ def _cmd_experiments(args: argparse.Namespace) -> None:
     _emit("experiments", list_experiments(Path(args.registry_root)), args.json)
 
 
+def _cmd_samples(args: argparse.Namespace) -> None:
+    _emit("samples", run_samples(Path(args.root), args.run_id), args.json)
+
+
 def _cmd_metrics(args: argparse.Namespace) -> None:
     root = Path(args.root)
     _emit("metrics", run_summary(root, args.run_id), args.json)
@@ -322,6 +327,11 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p_experiments)
     p_experiments.add_argument("--registry-root", required=True)
     p_experiments.set_defaults(func=_cmd_experiments)
+
+    p_samples = sub.add_parser("samples")
+    _add_common(p_samples)
+    p_samples.add_argument("run_id")
+    p_samples.set_defaults(func=_cmd_samples)
 
     return parser
 

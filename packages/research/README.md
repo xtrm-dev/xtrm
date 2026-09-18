@@ -172,7 +172,19 @@ xtrm-research workload show <id> --registry-root <dir>
 xtrm-research tail <run-id> --after <offset>
 xtrm-research metrics <run-id>
 xtrm-research compare <run-id> [<run-id> ...]
+xtrm-research chart-data <run-id> [<run-id> ...] --metric <evaluator-id::metric>
+xtrm-research experiments --registry-root <dir>
+xtrm-research samples <run-id>
 ```
+
+- `chart-data` returns chart dataset rows (`{run_id, value, se, ci95, n,
+  method}` per run carrying the metric); a run that exists but lacks the
+  metric renders as `{run_id, state: "no_metric", reason}`. An unknown
+  run or unreadable manifest is `ok: false`, never an empty success.
+- `experiments` returns `[{id, version}]` read straight from the
+  registry directory, so an experiment with zero runs is visible.
+- `samples` returns the run's `samples.jsonl` records; an unknown run or
+  a missing samples file is `ok: false`.
 
 ## Known limits
 

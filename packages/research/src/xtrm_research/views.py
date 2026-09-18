@@ -67,7 +67,7 @@ def list_experiments(registry_root: Path) -> list[dict[str, Any]]:
     Read straight from the registry directory (not derived from run rows),
     so an experiment with zero runs is still visible. Raises
     :class:`SchemaValidationError` for an unreadable registry or manifest."""
-    from xtrm_research.definitions import DefinitionRegistry
+    from xtrm_research.definitions import load_definition
     from xtrm_research.schemas import SchemaValidationError
 
     kind_dir = Path(registry_root) / "experiment"
@@ -75,10 +75,24 @@ def list_experiments(registry_root: Path) -> list[dict[str, Any]]:
         raise SchemaValidationError(
             f"no experiment registry under {Path(registry_root)}"
         )
-    registry = DefinitionRegistry(Path(registry_root))
-    registry._load_kind("experiment")
-    flat = sorted(
-        (d for ds in registry._by_kind_id.values() for d in ds),
-        key=lambda d: (d["id"], d["version"]),
-    )
-    return [{"id": d["id"], "version": d["version"]} for d in flat]
+    definitions = [
+        load_definition("experiment", path)
+        for path in sorted(kind_dir.glob("*.json"))
+    ]
+    definitions.sort(key=lambda d: (d["id"], d["version"]))
+    return [{"id": d["id"], "version": d["version"]} for d in definitions]
+
+
+def run_samples(root: Path, run_id: str) -> list[dict[str, Any]]:
+    """Sample records for a run, read from samples.jsonl.
+
+    Raises :class:`FileNotFoundError` for an unknown run or a missing
+    samples file — never an empty success."""
+    from xtrm_research.store import run_exists, samples_path
+
+    if not run_exists(root, run_id):
+        raise FileNotFoundError(f"no such run: {run_id!r}")
+    path = samples_path(root, run_id)
+    if not path.exists():
+        raise FileNotFoundError(f"run {run_id!r} has no samples.jsonl")
+    return list(read_lines(path))
