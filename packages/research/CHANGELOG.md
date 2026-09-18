@@ -51,6 +51,29 @@ All notable changes to the `xtrm-research` package.
   id or shared delta block is added beside it, so the app consumer's
   `Object.entries(wire)` mapping keeps working unchanged.
 
+### Added — parity evaluators reproducing the a6e55215 metric formulas (XTRM-481)
+- `evaluators.py` gains `board_duplicates_evaluate` and
+  `contract_quality_evaluate` (plus the `policy` and `jev_choice` score
+  helpers and a `PARITY_EVALUATORS` map). They reproduce the metric formulas
+  of `specialists` @ `a6e55215` (`experiments/jev-dupes/dupes.py`,
+  `sb_quality3.py`) exactly — half credit for tied AUC pairs, ten
+  fixed-width ECE bins capped at `min(int(p * 10), 9)`, the
+  `max(1, tp + fp)` precision guard, and index-based p10/median/p90 — and
+  write full-precision point estimates into assessment sets through the
+  existing `write_assessment_set` path.
+- Every metric states in `method` how it was computed and why `se`/`ci95`
+  are null. `board-duplicates-v1` excludes `status != "ok"` Samples (the
+  importer's `skipped` pairs, which `dupes.py report()` never reads);
+  `contract-quality-v3` reproduces `sb_quality3.py`'s asymmetric
+  `execution_mode` agreement denominator and returns `nan` for an
+  empty-class AUC, while the duplicate evaluator divides by zero exactly as
+  the original does.
+- `tests/test_parity_evaluators.py` pins each formula against a
+  hand-computed or brute-force expected value and fails on the textbook
+  variant; `tests/test_parity_ast.py` parses the relevant source functions
+  at `a6e55215` and literal-evals their constants against the
+  implementation.
+
 ### Added — import recorded Jev outputs as immutable Runs (XTRM-480)
 - `importers.py` plus the `import` CLI verb. `import board-duplicates`
   converts a `board-duplicates-v1` `answers.jsonl` (joined to its
