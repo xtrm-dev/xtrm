@@ -14,7 +14,7 @@ import { NewIssueDialog } from "./NewIssueDialog.tsx";
 import { ReferenceChip } from "../refs/references.tsx";
 
 type View = "open" | "ready" | "blocked" | "deferred" | "done" | "all";
-type SortKey = "key" | "priority" | "updated" | "status";
+type SortKey = "key" | "priority" | "created" | "updated" | "status";
 
 const VIEWS: Array<[View, string, (i: IssueSummary) => boolean]> = [
   ["open", "Open", (i) => i.lifecycle === "open"],
@@ -37,7 +37,7 @@ function refOrder(a: string, b: string) {
   return 0;
 }
 
-const COLUMNS = "grid grid-cols-[1.25rem_11rem_minmax(0,1fr)_7rem_2.5rem_4rem_3.5rem] items-center gap-3";
+const COLUMNS = "grid grid-cols-[1.25rem_11rem_minmax(0,1fr)_7rem_2.5rem_4rem_5rem_5rem] items-center gap-3";
 
 export function IssuesSurface() {
   const { repo, inspect, inspected } = useShell();
@@ -70,6 +70,7 @@ export function IssuesSurface() {
       key: (a, b) => refOrder(a.locator, b.locator),
       priority: (a, b) => (a.priority ?? 9) - (b.priority ?? 9) || refOrder(a.locator, b.locator),
       updated: (a, b) => (a.updatedAt ?? 0) - (b.updatedAt ?? 0),
+      created: (a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0),
       status: (a, b) => a.lifecycle.localeCompare(b.lifecycle),
     };
     return [...rows].sort((a, b) => dir * cmp[sort.key](a, b));
@@ -115,17 +116,18 @@ export function IssuesSurface() {
         label="Issues"
         items={visible}
         rowHeight={36}
-        widthClass="max-w-6xl"
+        widthClass="max-w-[90%]"
         getKey={(i) => i.id}
         header={
           <div className="sticky top-0 z-10 border-b border-border-muted bg-surface">
-          <div className={cx(COLUMNS, "mx-auto h-8 max-w-6xl px-5")}>
+          <div className={cx(COLUMNS, "mx-auto h-8 max-w-[90%] px-5")}>
             <span />
             {header("key", "Key")}
             <span className="text-xs text-ink-faint">Summary</span>
             {header("status", "Status")}
             {header("priority", "P")}
             <span className="text-right text-xs text-ink-faint">Children</span>
+            {header("created", "Created", "right")}
             {header("updated", "Updated", "right")}
           </div>
           </div>
@@ -139,7 +141,7 @@ export function IssuesSurface() {
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="XTRM Issues">
       <div className="flex shrink-0 flex-col gap-4 px-8 pt-6 pb-3">
-        <div className="mx-auto flex w-full max-w-6xl items-end gap-3">
+        <div className="mx-auto flex w-full max-w-[90%] items-end gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             <h1 className="text-xl font-semibold text-ink">Issues</h1>
             <p className="flex items-center gap-2 text-sm text-ink-faint">
@@ -175,7 +177,7 @@ export function IssuesSurface() {
             )}
           </div>
         </div>
-        <div role="tablist" aria-label="Issue views" hidden={layout === "board"} className="mx-auto flex w-full max-w-6xl items-center gap-1 border-b border-border-muted pb-2">
+        <div role="tablist" aria-label="Issue views" hidden={layout === "board"} className="mx-auto flex w-full max-w-[90%] items-center gap-1 border-b border-border-muted pb-2">
           {VIEWS.map(([v, label]) => (
             <button
               key={v}
@@ -228,6 +230,7 @@ function IssueRow({ issue, selected, onInspect, onOpen }: { issue: IssueSummary;
       </span>
       <PriorityGlyph priority={issue.priority} />
       <span className="text-right text-xs text-ink-faint tabular">{issue.childCount ? `${issue.childrenDone}/${issue.childCount}` : ""}</span>
+      <span className="text-right text-xs text-ink-faint tabular">{relativeTime(issue.createdAt)}</span>
       <span className="text-right text-xs text-ink-faint tabular">{relativeTime(issue.updatedAt)}</span>
       </div>
     </Row>
