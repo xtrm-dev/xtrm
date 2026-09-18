@@ -77,6 +77,13 @@ cd packages/research
 pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
 ```
 
+To use the CLI from anywhere rather than only inside the venv:
+
+```bash
+ln -sf "$PWD/.venv/bin/xtrm-research" ~/.local/bin/xtrm-research
+xtrm-research runs --json          # reads ~/.xtrm/research/runs by default
+```
+
 The Jev backend talks to TypeSafe through the optional `typesafe-sdk`
 (`pip install -e '.[jev]'`). The package and its full test suite import
 and pass without it — CI never installs it.
@@ -622,6 +629,49 @@ its `status.json` state is `invalid`, so it is never merged with a valid Run
 and a metric read must not include it. Importing onto an existing `run_id` is
 refused by `start_run` and never merges into the existing Run.
 
+## Status — what shipped, and what the first study found
+
+Epic XTRM-424 closed with all seven success criteria backed by evidence.
+This package is no longer a skeleton: it has run a real study end to end.
+
+**Shipped.** The run format and CLI; a mandatory pre-send guard stage with
+a single, structurally-enforced remote-send seam; two System One backends
+(a deterministic baseline and Jev through TypeSafe) comparable by one
+`compare` command; both original experiments ported; and the reference
+labeling machinery.
+
+**Replay parity is exact.** Both experiments replay offline against the
+original scripts at `a6e55215` with **62 metrics compared and a maximum
+delta of 0.0** — not "within tolerance", identical. The reference is
+recomputed from the persisted files rather than read off the scripts'
+stdout, which prints at 3 and 2 decimals and cannot support the 0.0005
+requirement.
+
+**The first study's result, stated with its limits.** A reference label
+set (40 contracts, two blind labels each, 8 adjudicated) gives
+inter-labeler agreement of Krippendorff α **+0.6010**, 95% CI
+[+0.3239, +0.8440], raw agreement 0.800. That result stands.
+
+> **Read this before quoting any Jev-versus-label number.** Four findings
+> were first published on Jira XTRM-99 and **three were retracted** once
+> intervals were computed. At n=40 the Jev `executable` AUC of 0.6400 has
+> a 95% CI of [0.4520, 0.8095], which contains both chance and the 0.7770
+> it was said to have fallen from; the original-label agreement of 25/40
+> has a Wilson CI containing 0.50 outright. Those comparisons are **not
+> established**. n=40 was fixed by the issue contract before any data
+> existed and gives roughly ±0.15 resolution — wider than every effect
+> anyone hoped to detect. Treat the existing set as a pilot that sized the
+> effect, and run a larger sample against `labeler-brief-v2` before
+> quoting a number. Full detail: Substrate XTRM-430 journal seq 11.
+
+**Two known defects in the platform's own reporting**, both filed:
+
+- Every metric ships as a point estimate with `se` and `ci95` written as
+  `null`, although the schema has required both from the start. That gap
+  is exactly what let the retracted findings be published (XTRM-488).
+- The campaign pipeline that produced the published numbers is not in this
+  repository, so that result is **not currently reproducible** (XTRM-490).
+
 ## Known limits
 
 - **content_hash canonicalization.** `content_hash` is computed over
@@ -642,11 +692,14 @@ refused by `start_run` and never merges into the existing Run.
 
 ## Non-goals of this package (see XTRM-426 / XTRM-424)
 
-Backends beyond the deterministic duplicate baseline, guards, cache/prices,
-porting the original experiments, and Pi capture are separate follow-up
-issues. This package ships the data contract, a read/write skeleton and the
-System One backend seam — not a full research harness. Performance is not
-optimized: the JSONL torn-tail repair rereads the whole file on every
+Epic XTRM-424 is closed, so this list is much shorter than it was. What
+remains outside this package: the response cache and the versioned price
+table (XTRM-432), Pi agent-run capture and the context-lifecycle-v1
+showcase (XTRM-437, owned with Jira XTRM-89), and the xtrm-app Research
+surface (XTRM-433, slices 1-3 merged, 4-6 open). Guards, the Jev backend
+and both ported experiments all shipped — see **Status** above.
+
+Performance is not optimized: the JSONL torn-tail repair rereads the whole file on every
 append (see the `ponytail:` comment in `jsonl.py`), and every write path
 takes a per-run lock, serializing writes within a run — fine at this
 package's scale.
