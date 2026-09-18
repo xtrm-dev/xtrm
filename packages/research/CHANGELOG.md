@@ -4,6 +4,30 @@ All notable changes to the `xtrm-research` package.
 
 ## [Unreleased]
 
+### Added — System One backend protocol and deterministic baseline (XTRM-475)
+- `system_one.py`: the provider-independent contract
+  `system_one(state, questions) -> answers`. A backend declares
+  `supported_types` and raises `UnsupportedQuestionTypeError` naming the
+  type it cannot answer, rather than degrading to a plausible answer; it is
+  a `Protocol` class, never a `Callable` parameter, so the package's
+  remote-seam guard is untouched.
+- Answers validate against `common.schema.json`'s `$defs.choice_answer` /
+  `$defs.score_answer` / `$defs.noul_answer`. A Noul answer carries no
+  `confidence` field at any point. `score_answer` builds a Score answer
+  whose `score` is the probability-weighted mean of the level numbers
+  (fractional allowed).
+- `DeterministicDupeBackend`: the duplicate-pair baseline ported from the
+  original research scripts (commit `a6e55215`), supporting `noul` and a
+  two-option `choice` and refusing `score`. Its score is the original
+  `sim`: `0.5 * title difflib ratio + 0.5 * token Jaccard` over
+  `title + description[:800]`.
+- Every completed backend call writes one `system_one_call` event through
+  the run's `RunHandle`: `data` carries the backend identifier, each
+  question's `content_hash` and `answer_type`, the state hash and
+  `latency_ms`; token/cost fields live in the event's `usage` record, with
+  `null_reason` `not_exposed_by_provider` for the provider-less
+  deterministic backend.
+
 ### Added — chart-data, experiments and samples read verbs (XTRM-474)
 - `chart-data <run...> --metric <key>` over `views.chart_dataset_rows`:
   one row per run carrying the metric, or an explicit
