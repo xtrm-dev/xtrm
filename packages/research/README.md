@@ -268,6 +268,8 @@ xtrm-research compare <run-id> [<run-id> ...]
 xtrm-research chart-data <run-id> [<run-id> ...] --metric <evaluator-id::metric>
 xtrm-research experiments --registry-root <dir>
 xtrm-research samples <run-id>
+xtrm-research import board-duplicates --pairs <pairs.jsonl> --answers <answers.jsonl> --run-id <id>
+xtrm-research import contract-quality --quality <sb-quality-v3.jsonl> [--labels-dir <dir>] --run-id <id>
 ```
 
 - `chart-data` returns chart dataset rows (`{run_id, value, se, ci95, n,
@@ -278,6 +280,84 @@ xtrm-research samples <run-id>
   registry directory, so an experiment with zero runs is visible.
 - `samples` returns the run's `samples.jsonl` records; an unknown run or
   a missing samples file is `ok: false`.
+- `import board-duplicates` and `import contract-quality` convert the
+  recorded outputs of the original Jev experiments into immutable Runs
+  (see _Importing recorded Jev outputs_ below). Both are `ok: false` with
+  a named error for any source record that cannot become a Sample.
+
+### Importing recorded Jev outputs
+
+`importers.py` turns the recorded outputs of the original Jev experiments
+(`~/dev/specialists`, commit `a6e55215`) into ordinary immutable Runs — one
+Sample per recorded row — through the same `start_run`/`write_sample` path
+every other Run uses. Nothing is re-run and nothing is scored; this slice
+produces Runs only. Both importers:
+
+- record `manifest.backend = {provider: "jev", model: "jev-latest", ...}`
+  (the alias is recorded unresolved, never claimed pinned) and
+  `manifest.code = {repo: "specialists", commit: "a6e55215", ...}` — the
+  Run names the scripts that produced the answers, not the platform;
+- record `manifest.code.source_hashes`, a `{path: sha256:...}` map over
+  every source file read, so the import is reproducible and auditable
+  without the data;
+- refuse, naming the record, when a record cannot be represented, and
+  create no Run directory in that case.
+
+`board-duplicates-v1` (`import board-duplicates`): one Sample per row of
+`pairs.jsonl`, in file order, joined to its `answers.jsonl` row for the
+recorded Jev answer. A pair with no recorded answer imports as an explicit
+`"status": "skipped"` Sample (with no `output`), never a silent drop. A
+pair whose ground truth disagrees with the answer row, a repeated `(a, b)`,
+or an answer with no pair is refused. Sample shape:
+
+```json
+{
+  "schema_version": "xtrm-research-sample/v1",
+  "sample_id": "dupe-alpha-1--alpha-2",
+  "index": 0,
+  "input": {"a": "alpha-1", "b": "alpha-2", "label": 1,
+            "kind": "superseded", "baseline": 0.8123},
+  "output": {"noul": 0.93, "choice": "same_work",
+             "probs": {"same_work": 0.9, "one_covers_other": 0.05,
+                       "related_distinct": 0.03, "unrelated": 0.02},
+             "conf": 0.91},
+  "status": "ok",
+  "created_at": "2026-09-17T12:00:00+00:00"
+}
+```
+
+`contract-quality-v3` (`import contract-quality`): one Sample per row of
+`sb-quality-v3.jsonl`, joined to its blind label through the sibling
+`blind-*.labels.json` / `blind-*.key.json` pair on `(board, key[id])`. A row
+with no label imports with `"label": null` (unlabelled, never guessed). A
+label file with no sibling key file is an explicit error naming the missing
+file. Sample shape:
+
+```json
+{
+  "schema_version": "xtrm-research-sample/v1",
+  "sample_id": "contract-core--CORE-101",
+  "index": 0,
+  "input": {"board": "core", "ref": "CORE-101",
+            "evidence": {"problem_symbols": 2,
+                         "problem_symbols_missing": ["fake_widget"],
+                         "paths_not_in_repo": []},
+            "label": {"id": "C-001", "dispatchable": "yes",
+                      "validation_proves_success": "yes",
+                      "execution_mode": "repo_only", "main_gap": ""}},
+  "output": {"executable": 0.82, "open_decision": 0.1,
+             "validation_covers_success": 0.74, "self_blocked": 0.02,
+             "execution_mode": "repo_only"},
+  "status": "ok",
+  "created_at": "2026-09-17T12:00:00+00:00"
+}
+```
+
+A source file whose name ends `.bad-mask` (the mask check that aborted a Jev
+run) imports as an **invalid** Run: its samples are preserved as evidence but
+its `status.json` state is `invalid`, so it is never merged with a valid Run
+and a metric read must not include it. Importing onto an existing `run_id` is
+refused by `start_run` and never merges into the existing Run.
 
 ## Known limits
 

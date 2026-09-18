@@ -23,6 +23,10 @@ from xtrm_research.annotations import (
 )
 from xtrm_research.cli.envelope import error_envelope, ok_envelope
 from xtrm_research.definitions import DefinitionRegistry
+from xtrm_research.importers import (
+    import_board_duplicates,
+    import_contract_quality,
+)
 from xtrm_research.jsonl import read_lines
 from xtrm_research.lineage import format_tree, lineage_tree
 from xtrm_research.status import effective_status
@@ -191,6 +195,26 @@ def _cmd_samples(args: argparse.Namespace) -> None:
     _emit("samples", run_samples(Path(args.root), args.run_id), args.json)
 
 
+def _cmd_import_board_duplicates(args: argparse.Namespace) -> None:
+    run_id = import_board_duplicates(
+        Path(args.root),
+        run_id=args.run_id,
+        pairs_path=Path(args.pairs),
+        answers_path=Path(args.answers),
+    )
+    _emit("import board-duplicates", {"run_id": run_id}, args.json)
+
+
+def _cmd_import_contract_quality(args: argparse.Namespace) -> None:
+    run_id = import_contract_quality(
+        Path(args.root),
+        run_id=args.run_id,
+        quality_path=Path(args.quality),
+        labels_dir=Path(args.labels_dir) if args.labels_dir else None,
+    )
+    _emit("import contract-quality", {"run_id": run_id}, args.json)
+
+
 def _cmd_metrics(args: argparse.Namespace) -> None:
     root = Path(args.root)
     _emit("metrics", run_summary(root, args.run_id), args.json)
@@ -332,6 +356,24 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p_samples)
     p_samples.add_argument("run_id")
     p_samples.set_defaults(func=_cmd_samples)
+
+    p_import = sub.add_parser("import")
+    _add_common(p_import)
+    import_sub = p_import.add_subparsers(dest="import_command", required=True)
+
+    p_import_dupes = import_sub.add_parser("board-duplicates")
+    _add_common(p_import_dupes)
+    p_import_dupes.add_argument("--pairs", required=True)
+    p_import_dupes.add_argument("--answers", required=True)
+    p_import_dupes.add_argument("--run-id", dest="run_id", required=True)
+    p_import_dupes.set_defaults(func=_cmd_import_board_duplicates)
+
+    p_import_quality = import_sub.add_parser("contract-quality")
+    _add_common(p_import_quality)
+    p_import_quality.add_argument("--quality", required=True)
+    p_import_quality.add_argument("--labels-dir", dest="labels_dir", default=None)
+    p_import_quality.add_argument("--run-id", dest="run_id", required=True)
+    p_import_quality.set_defaults(func=_cmd_import_contract_quality)
 
     return parser
 

@@ -1,0 +1,4 @@
+{"a": "alpha-1", "b": "alpha-2", "label": 1, "kind": "superseded", "baseline": 0.8123, "noul": 0.93, "choice": "same_work", "probs": {"same_work": 0.9, "one_covers_other": 0.05, "related_distinct": 0.03, "unrelated": 0.02}, "conf": 0.91}
+{"a": "alpha-3", "b": "alpha-4", "label": 0, "kind": "relates-to", "baseline": 0.221, "noul": 0.11, "choice": "related_distinct", "probs": {"same_work": 0.05, "one_covers_other": 0.04, "related_distinct": 0.8, "unrelated": 0.11}, "conf": 0.8}
+{"a": "beta-1", "b": "beta-2", "label": 0, "kind": "sibling", "baseline": 0.4567, "noul": 0.35, "choice": "related_distinct", "probs": {"same_work": 0.1, "one_covers_other": 0.05, "related_distinct": 0.7, "unrelated": 0.15}, "conf": 0.62}
+{"a": "beta-3", "b": "gamma-1", "label": 1, "kind": "supersedes-dep", "baseline": 0.7334, "noul": 0.77, "choice": "one_covers_other", "probs": {"same_work": 0.2, "one_covers_other": 0.7, "related_distinct": 0.06, "unrelated": 0.04}, "conf": 0.74}

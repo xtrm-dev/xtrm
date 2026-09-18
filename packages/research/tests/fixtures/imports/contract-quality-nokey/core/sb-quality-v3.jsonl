@@ -1,0 +1,1 @@
+{"board": "core", "ref": "CORE-201", "execution_mode": "repo_only", "executable": 0.6, "open_decision": 0.2, "validation_covers_success": 0.5, "self_blocked": 0.0, "evidence": {"problem_symbols": 1, "problem_symbols_missing": [], "paths_not_in_repo": []}}
