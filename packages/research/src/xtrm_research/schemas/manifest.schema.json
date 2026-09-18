@@ -257,6 +257,11 @@
     "seed": {
       "type": "integer"
     },
+    "tolerance": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Optional non-negative absolute tolerance for this run's metric deltas in views.compare_runs: a delta whose magnitude is within it is flagged within_tolerance. Absent means the run declares no tolerance (within_tolerance is null, distinct from false)."
+    },
     "intent": {
       "type": "object",
       "properties": {

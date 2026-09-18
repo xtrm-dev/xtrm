@@ -222,7 +222,11 @@ def _cmd_metrics(args: argparse.Namespace) -> None:
 
 def _cmd_compare(args: argparse.Namespace) -> None:
     root = Path(args.root)
-    _emit("compare", compare_runs(root, args.run_ids), args.json)
+    # The app's comparison surface already puts the baseline first
+    # (research-compare-search.ts), and its bridge invokes `compare <ids>`
+    # with no --baseline, so an omitted --baseline means the first run id.
+    baseline = args.baseline or args.run_ids[0]
+    _emit("compare", compare_runs(root, args.run_ids, baseline), args.json)
 
 
 def _add_common(p: argparse.ArgumentParser, *, top_level: bool = False) -> None:
@@ -339,6 +343,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_compare = sub.add_parser("compare")
     _add_common(p_compare)
     p_compare.add_argument("run_ids", nargs="+")
+    p_compare.add_argument(
+        "--baseline",
+        default=None,
+        metavar="RUN_ID",
+        help="run every other run is compared against (default: the first run id)",
+    )
     p_compare.set_defaults(func=_cmd_compare)
 
     p_chart = sub.add_parser("chart-data")
