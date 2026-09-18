@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,7 @@ class ResponseCache:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
         self._entries: dict[str, dict[str, Any]] = {}
+        self._lock = threading.Lock()
         if self.path.is_file():
             for line in self.path.read_text(encoding="utf-8").splitlines():
                 if line.strip():
@@ -63,10 +65,13 @@ class ResponseCache:
         self, body: dict[str, Any], response: dict[str, Any], latency_ms: float
     ) -> None:
         row = {"key": _key(body), "response": response, "latency_ms": latency_ms}
-        self._entries.setdefault(row["key"], row)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        with self._lock:
+            if row["key"] in self._entries:
+                return
+            self._entries[row["key"]] = row
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def jev_cost(

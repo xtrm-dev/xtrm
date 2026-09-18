@@ -1,0 +1,12 @@
+{
+  "config": {
+    "backend": "typesafe",
+    "battery_hash": "sha256:c3831df4697d157321e4567f50b6ed54cc25b3df25856ffb9c5cc3ae3e315780",
+    "escalation_model": "commandcode/deepseek/deepseek-v4.1-flash (replayed)",
+    "model": "jev-1.13.0"
+  },
+  "content_hash": "sha256:da7a06499fc8d8158a5c0f5fa84d933fd314957fc382b9c8e7bffe4bcb3c7a86",
+  "description": "battery-learned plus a pre-registered band (reject below the 0.98-recall floor, retain at or above the 0.95-precision ceiling, fitted per training fold); the band escalates to the recorded DeepSeek answer.",
+  "id": "evidence-gate-cascade",
+  "version": "v1"
+}

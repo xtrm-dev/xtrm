@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:9c47e048ece3bae78732e6aa3e4be6a2bca5c75d3f495a71662412a25ec7683c",
+  "id": "evidence-gate-battery.is_headings_only",
+  "instructions": "The passage is only headings, titles or a list of names, without statements about them.",
+  "polarity": "-",
+  "type": "noul",
+  "version": "v1"
+}

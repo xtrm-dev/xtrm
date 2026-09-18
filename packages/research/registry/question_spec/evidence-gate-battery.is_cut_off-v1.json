@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:868c7af28713a444467fb68fbe4b608c2d7ae7d3d19c40d9936627cc7fe4c4d0",
+  "id": "evidence-gate-battery.is_cut_off",
+  "instructions": "The passage is truncated so that the content it introduces is missing.",
+  "polarity": "-",
+  "type": "noul",
+  "version": "v1"
+}

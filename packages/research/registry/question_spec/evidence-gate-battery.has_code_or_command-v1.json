@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:729f24aeccbbdd6781c1779b12a856a4074affccd766da1e66748c67cf278a62",
+  "id": "evidence-gate-battery.has_code_or_command",
+  "instructions": "The passage contains code, a shell command, a configuration snippet or an exact error message.",
+  "polarity": "+",
+  "type": "noul",
+  "version": "v1"
+}

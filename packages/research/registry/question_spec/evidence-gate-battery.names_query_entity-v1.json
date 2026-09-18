@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:61c577353e38bbfd78ef129aa576a751d47811087dbd2a72ef483dd122ed4805",
+  "id": "evidence-gate-battery.names_query_entity",
+  "instructions": "The passage mentions at least one specific name that also appears in the query: an identifier, file, command, package, service, error string or version.",
+  "polarity": "+",
+  "type": "noul",
+  "version": "v1"
+}

@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:5a5ed787d3427a9d363aaab9b036d5020aad535dc62db97631fc15b9fc487162",
+  "id": "evidence-gate-battery.answers_part_of_query",
+  "instructions": "Some sentence of the passage directly answers, or supplies a missing piece of, what the query asks.",
+  "polarity": "+",
+  "type": "noul",
+  "version": "v1"
+}
