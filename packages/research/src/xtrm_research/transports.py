@@ -96,3 +96,27 @@ def _answer_fields(answer: Any) -> dict[str, Any]:
             "confidence": answer.confidence,
         }
     raise ValueError(f"unrecognized TypeSafe answer type {type(answer).__name__!r}")
+
+
+def ddgs_text(payload: dict[str, Any]) -> dict[str, Any]:
+    """Run one guarded web query through DDGS text metasearch (XTRM-493).
+
+    The same tool Specialists researcher jobs used (``ddgs text``); the
+    Evidence Gate dataset replays their queries once at freeze time.
+    ``payload`` is ``{"query", "max_results"}``; returns ``{"results":
+    [{"title", "href", "body"}], "ddgs_version"}``.
+    """
+    from importlib.metadata import version
+
+    from ddgs import DDGS
+    from ddgs.exceptions import DDGSException
+
+    try:
+        results = DDGS().text(payload["query"], max_results=payload["max_results"])
+    except DDGSException as exc:
+        # An empty result set is an outcome, not a failure; anything else
+        # still raises.
+        if "No results found" not in str(exc):
+            raise
+        results = []
+    return {"results": list(results or []), "ddgs_version": version("ddgs")}
