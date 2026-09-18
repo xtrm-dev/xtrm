@@ -17,7 +17,23 @@ platform run with a write-once manifest, and `xtrm-research tail` and
 frozen dataset v2. It makes no new model call: the recorded answers carry
 TypeSafe's own request ids.
 
-Every item yields three events that share `request_id` and `sample_id`.
+That run used stub experiment, workload and variant definitions and wrote
+no samples or metrics, so the research app could not show it. It is
+annotated `superseded_by` `evidence-gate-v2-jev` (XTRM-510).
+
+The same record separation is now produced by the System One workflow
+runner (`src/xtrm_research/workflow.py`, XTRM-509) in app-visible runs:
+
+| Run | Records per episode |
+|---|---|
+| `evidence-gate-v2-cascade` | `system_one_call` -> `policy_action` -> `escalation` (136 of 222 items) -> `outcome` |
+| `code-locator-v1-jev-beam` | one `system_one_call` + `policy_action` pair per beam step, then one `outcome` (git truth) |
+
+The escalation is its own record, with its own `usage`, so a reader can
+cost the LLM share of a cascade without touching the System One answer.
+
+Every item of the original run yields three events that share `request_id`
+and `sample_id`.
 
 | Event `kind` | Carries | Never carries |
 |---|---|---|

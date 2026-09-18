@@ -346,10 +346,12 @@ class CascadeEvaluation:
         )
 
     def gate(self, arm: str, idx: list[int]) -> dict[str, float | None]:
+        # escalation_rate here means "share of candidates sent to a generative
+        # LLM": every item for DeepSeek and Claude, none for Jev or no-filter.
         if arm in ("no-filter", *MODEL_ARMS):
             out = self.ev.gate(arm, idx)
             return {k: out[k] for k in GATE_KEYS if k in out} | {
-                "escalation_rate": 1.0 if arm == "llm" else 0.0
+                "escalation_rate": 1.0 if arm in ("llm", "frontier") else 0.0
             }
         dec, y, tok = self.decision[arm], self.y, self.ev.tokens
         retained = [n for n in idx if dec[n]]

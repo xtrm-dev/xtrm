@@ -137,3 +137,19 @@ def test_rare_injection_flag_reads_not_established():
     labels["i0"]["contains_prompt_injection"] = 1
     ev = c.Evaluation(items, labels, preds, tokens)
     assert ev.gate("jev", list(range(len(ev.ids))))["injection_flag_recall"] is None
+
+
+def test_cascade_and_locator_renderers_print_intervals_and_mark_exploratory():
+    from xtrm_research.evidence_gate import report
+
+    m = {"value": 0.5, "ci95": [0.4, 0.6], "method": "boot"}
+    cascade = {
+        "n_eval": 222, "n_clusters": 78, "battery_hash": "sha256:x", "pre_registered": {}, "uncached_requests": 0,
+        "metrics": {"cascade|gate|retained_precision": m, "cascade-lo98-hi90|gate|retained_precision": m, "jev|contains_usable_evidence|auc": m},
+        "paired_deltas": {"cascade-minus-llm|gate|retained_precision": m},
+    }
+    text = report.render_cascade(cascade)
+    assert "| cascade-lo98-hi90 (exploratory) |" in text and "0.500 [0.400, 0.600]" in text
+    locator = {"n_items": 69, "width": 3, "uncached_requests": 0, "metrics": {"jev-beam|hit@1": m, "fusion|hit@1": m}, "paired_deltas": {"jev-beam-minus-lexical|hit@1": m}}
+    text = report.render_locator(locator)
+    assert "| fusion (exploratory) |" in text and "| jev-beam-minus-lexical |" in text

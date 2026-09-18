@@ -694,6 +694,26 @@ inter-labeler agreement of Krippendorff α **+0.6010**, 95% CI
 - The campaign pipeline that produced the published numbers is not in this
   repository, so that result is **not currently reproducible** (XTRM-490).
 
+## XTRM-99 research closure (XTRM-492)
+
+The Jira XTRM-99 research criteria are answered in `docs/xtrm-99/`. The
+entry points are:
+
+| Document | Answers |
+|---|---|
+| `evidence-gate-results.md` | the six-arm holistic comparison and the System One cascade on the frozen Evidence Gate v2 set |
+| `code-locator.md` | the multi-step beam-routing showcase |
+| `jev-verdict.md` | quality, latency and cost, stated separately |
+| `value-decision.md` | criteria 10 and 11 |
+
+Every result there is an app-visible run under `~/.xtrm/research/runs` and
+carries an interval.
+
+The follow-up research is epic XTRM-513: System One control loops on agent
+control, PR review, context lifecycle, service-knowledge routing and SRE,
+plus a cascade replication. It must use the budget policy, the `Workflow`
+runner and `publish` described above.
+
 ## Known limits
 
 - **content_hash canonicalization.** `content_hash` is computed over

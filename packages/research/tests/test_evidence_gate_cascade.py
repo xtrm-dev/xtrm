@@ -205,3 +205,13 @@ def test_published_metrics_mark_the_sweep_exploratory_and_map_deltas():
     assert set(out) == {"gate.retained_precision", "sweep.lo98-hi90.retained_precision", "gate.retained_precision.minus_no_filter"}
     assert out["sweep.lo98-hi90.retained_precision"]["method"].endswith("exploratory sweep cell")
     assert set(pc._metrics(result, "battery-rule")) == {"contains_usable_evidence.auc.minus_jev"}
+
+
+def test_reference_llm_arms_escalate_every_candidate():
+    ev = _fake_ev()
+    ev.gate = lambda arm, idx: {"retained_precision": 0.5}
+    ce = cs.CascadeEvaluation.__new__(cs.CascadeEvaluation)
+    ce.ev = ev
+    assert ce.gate("frontier", [0])["escalation_rate"] == 1.0
+    assert ce.gate("llm", [0])["escalation_rate"] == 1.0
+    assert ce.gate("jev", [0])["escalation_rate"] == 0.0

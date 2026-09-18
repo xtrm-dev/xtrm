@@ -172,3 +172,14 @@ Reasons for rejecting Substrate and Specialists as owners (facts):
   This is recorded as a gap and not added: the only research consumer that
   needs it is the telemetry demonstration, and a runtime schema would own
   the field (§4).
+- A generative-model budget policy now sits at the transport seam
+  (XTRM-508). A frontier or LLM call needs a declared reason, a budget
+  scope and room under the scope's caps; otherwise `BudgetError` is raised
+  before any process starts. A future runtime inherits this rule; it does
+  not re-derive it.
+- `Workflow` (`src/xtrm_research/workflow.py`, XTRM-509) is the research
+  form of the control loop: state -> one System One request carrying a
+  question battery -> `on(answers)` in code -> optional budget-gated
+  escalation -> next state. Its records are the §1.3 minimum telemetry
+  plus a separate `escalation` record. A runtime package would host the
+  same loop without the run store.
