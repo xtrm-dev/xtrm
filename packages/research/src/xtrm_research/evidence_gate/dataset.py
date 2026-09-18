@@ -260,7 +260,8 @@ def apply_filters(
 ) -> tuple[list[Group], FilterCounts]:
     """Deterministic pre-System-One filters.
 
-    Every passage and query is frozen *after* ``guards.redact``: the text
+    Every passage, query and passage source header is frozen *after*
+    ``guards.redact``: the text
     at rest is exactly what the send seam would forward, so no
     credential-shaped string is stored and every arm and labeler reads the
     same text. Redaction runs before truncation, so a cut can never split
@@ -291,15 +292,16 @@ def apply_filters(
                 continue
             seen_passages.add(text)
             query = redact(candidate.query)
+            header = redact(candidate.passage_header)
             clean = redact(text)
-            if clean != text or query != candidate.query:
+            if clean != text or query != candidate.query or header != candidate.passage_header:
                 counts.redacted += 1
                 text = clean
             if len(text) > PASSAGE_CHAR_LIMIT:
                 counts.truncated += 1
                 text = text[:PASSAGE_CHAR_LIMIT]
             candidates.append(
-                Candidate(query, text, candidate.passage_header, candidate.rank)
+                Candidate(query, text, header, candidate.rank)
             )
         candidates = candidates[: cap.get(group.stratum, len(candidates))]
         if not candidates:
@@ -363,7 +365,10 @@ def items_of(groups: Iterable[Group]) -> list[dict[str, Any]]:
 
 
 def freeze(
-    items: list[dict[str, Any]], out_dir: Path, manifest_fields: Mapping[str, Any]
+    items: list[dict[str, Any]],
+    out_dir: Path,
+    manifest_fields: Mapping[str, Any],
+    version: int = DATASET_VERSION,
 ) -> dict[str, Any]:
     """Write ``items.jsonl`` and a write-once ``manifest.json`` whose
     ``items_sha256`` is the hash of the exact bytes written."""
@@ -380,7 +385,7 @@ def freeze(
     items_path.chmod(0o600)
     manifest = {
         "dataset_id": DATASET_ID,
-        "version": DATASET_VERSION,
+        "version": version,
         "items_file": items_path.name,
         "items_sha256": "sha256:" + _digest(body),
         "n_items": len(items),
@@ -419,3 +424,27 @@ def _count(items: list[dict[str, Any]], key: str) -> dict[str, int]:
 
 def filter_counts_dict(counts: FilterCounts) -> dict[str, int]:
     return asdict(counts)
+
+
+def derive_redacted_sources(src: Path, out: Path) -> dict[str, Any]:
+    """Freeze a new version from a frozen one with ``passage_source``
+    passed through ``guards.redact`` (evidence-gate v1 froze that header
+    unredacted; v2 is this derivation). Items, order and item ids are
+    unchanged; the new manifest records what it was derived from."""
+    items = load_items(src)
+    source_manifest = json.loads((src / "manifest.json").read_text(encoding="utf-8"))
+    changed = 0
+    for item in items:
+        clean = redact(item["state"]["passage_source"])
+        changed += clean != item["state"]["passage_source"]
+        item["state"]["passage_source"] = clean
+    fields = {k: v for k, v in source_manifest.items() if k not in _FREEZE_OWNED}
+    fields.update(
+        derived_from={"items_sha256": source_manifest["items_sha256"], "version": source_manifest["version"]},
+        derivation=f"passage_source redacted with guards.redact ({changed} items changed); all other fields byte-identical",
+    )
+    return freeze(items, out, fields, version=source_manifest["version"] + 1)
+
+
+#: Manifest keys :func:`freeze` computes itself.
+_FREEZE_OWNED = {"dataset_id", "version", "items_file", "items_sha256", "n_items", "n_groups", "by_stratum", "by_source_kind"}

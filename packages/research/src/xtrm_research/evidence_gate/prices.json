@@ -1,0 +1,20 @@
+{
+  "version": "2026-09-18.1",
+  "note": "Versioned price entries used by the Evidence Gate comparison (XTRM-499). A model with no entry gets cost null with null_reason no_price_entry; the claude CLI arm is costed from the CLI's own per-model costUSD (costBasis list), not from this table.",
+  "entries": {
+    "jev-1.13.0": {
+      "provider": "typesafe",
+      "currency": "USD",
+      "input_per_mtok": 0.042,
+      "output_per_mtok": 0.0,
+      "cached_input_per_mtok": null,
+      "source_url": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+      "corroborated_by": [
+        "https://openrouter.ai/typesafe/jev-1.13",
+        "https://vercel.com/ai-gateway/models/jev"
+      ],
+      "retrieved_at": "2026-09-18",
+      "caveat": "Launch pricing; TypeSafe states it cannot prove the price is not subsidised."
+    }
+  }
+}

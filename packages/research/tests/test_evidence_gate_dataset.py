@@ -136,3 +136,22 @@ def test_frozen_dataset_detects_tampering_and_refuses_rewrite(tmp_path):
     assert not d.verify(tmp_path / "ds")
     with pytest.raises(ValueError):
         d.load_items(tmp_path / "ds")
+
+
+def test_source_headers_are_redacted_and_v2_derivation_is_recorded(tmp_path):
+    secret = "ghp_" + "b" * 36
+    group = _group("three word query", ["plain passage"])
+    group.candidates = [d.Candidate(group.query, "plain passage", f"src {secret}", 0)]
+    kept, counts = d.apply_filters([group], {"L": 8})
+    assert secret not in kept[0].candidates[0].passage_header and counts.redacted == 1
+    # a v1-style set that froze the header raw derives into a clean v2
+    raw = _group("three word query", ["p1"])
+    raw.candidates = [d.Candidate(raw.query, "p1", f"src {secret}", 0)]
+    d.freeze(d.items_of([raw]), tmp_path / "v1", {"note": "x"})
+    manifest = d.derive_redacted_sources(tmp_path / "v1", tmp_path / "v2")
+    items = d.load_items(tmp_path / "v2")
+    assert manifest["version"] == 2 and manifest["note"] == "x"
+    assert manifest["derived_from"]["items_sha256"] != manifest["items_sha256"]
+    assert "1 items changed" in manifest["derivation"]
+    assert secret not in items[0]["state"]["passage_source"]
+    assert items[0]["item_id"] == d.load_items(tmp_path / "v1")[0]["item_id"]
