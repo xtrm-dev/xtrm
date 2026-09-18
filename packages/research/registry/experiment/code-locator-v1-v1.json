@@ -1,0 +1,55 @@
+{
+  "chart_specs": [
+    {
+      "datasets": [
+        "hit@1",
+        "hit@5",
+        "hit@10"
+      ],
+      "description": "hit@1, hit@5, hit@10 per arm with 95% bootstrap CI over tasks.",
+      "id": "code-locator-hits",
+      "schema_version": "xtrm-research-chart-spec/v1",
+      "title": "Changed file found in the top k"
+    }
+  ],
+  "content_hash": "sha256:5735aaee3fca2ee784f9fbc77861f4c02da4c299932eb8d6463ba1610d871458",
+  "description": "Multi-step System One showcase (XTRM-512): beam routing over the repository tree vs deterministic baselines, graded by git.",
+  "hypothesis": "A System One beam over the tree, given only the task text, ranks the changed files above deterministic baselines at a cost of cents per hundred tasks.",
+  "id": "code-locator-v1",
+  "legend": {
+    "code-locator-hot-files": "Deterministic: files ranked by how often they were modified before the base commit.",
+    "code-locator-jev-beam": "System One beam routing: one Jev request per step carrying one Choice per beam node (width 3); code keeps the best directories by geometric-mean path probability over answered steps; files become ranked leaves.",
+    "code-locator-lexical": "Deterministic: idf-weighted overlap of task words and path words over every file at the base commit.",
+    "hit@1": "hit@1",
+    "hit@10": "hit@10",
+    "hit@5": "hit@5",
+    "mrr": "mean reciprocal rank",
+    "recall@10": "recall@10"
+  },
+  "named_datasets": [
+    "hit@1",
+    "hit@5",
+    "hit@10",
+    "recall@10",
+    "mrr"
+  ],
+  "variants": [
+    {
+      "id": "code-locator-jev-beam",
+      "version": "v1"
+    },
+    {
+      "id": "code-locator-lexical",
+      "version": "v1"
+    },
+    {
+      "id": "code-locator-hot-files",
+      "version": "v1"
+    }
+  ],
+  "version": "v1",
+  "workload": {
+    "id": "code-locator",
+    "version": "v1"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "builder": "xtrm_research.evidence_gate.build (seed 20260918)",
+  "by_source_kind": {
+    "claude-ctx_search": 86,
+    "pi-ctx_search": 88,
+    "specialists-researcher-ddgs": 91
+  },
+  "by_stratum": {
+    "L": 174,
+    "W": 91
+  },
+  "content_hash": "sha256:152b3d523d57aecb02913d59ad7954ae6112b508969632f0475072f5224b6573",
+  "created_at": "2026-09-18T10:53:44.366595+00:00",
+  "description": "Evidence Gate v1 (Jira XTRM-99 Experiment A, Substrate XTRM-493): 265 (query, passage) candidates in 104 query groups from real XTRM search runs. Stratum L: 174 ctx_search passages exactly as returned (Pi + Claude Code transcripts); stratum W: 91 ddgs results from replaying Specialists researcher queries once at freeze time. Frozen outside git because passages come from private session logs.",
+  "excluded_questions": {
+    "adds_novel_information": "novelty is defined against accepted_evidence, which v1 holds empty",
+    "contradicts_accepted_evidence": "needs a sequential accepted_evidence state; v1 is single-pass with accepted_evidence=[]"
+  },
+  "filters": {
+    "L": {
+      "duplicate": 1,
+      "duplicate_query_groups": 268,
+      "empty": 0,
+      "no_candidate_groups": 41,
+      "redacted": 169,
+      "short_query_groups": 10,
+      "truncated": 0
+    },
+    "W": {
+      "duplicate": 0,
+      "duplicate_query_groups": 0,
+      "empty": 0,
+      "no_candidate_groups": 10,
+      "redacted": 0,
+      "short_query_groups": 0,
+      "truncated": 2
+    },
+    "rules": "drop empty and within-group duplicate passages; drop queries with <3 word tokens and duplicate queries; guards.redact applied before truncation to passage_char_limit; L capped at LOCAL_PASSAGES_PER_GROUP in retrieval order"
+  },
+  "id": "evidence-gate",
+  "items_sha256": "sha256:fea4406a8aa4f07475184f1b8764f4f1ccdd23be1df3bf07993d77e9822003e6",
+  "n_groups": 104,
+  "n_items": 265,
+  "population": {
+    "local_eligible_by_kind": {
+      "claude-ctx_search": 189,
+      "pi-ctx_search": 751
+    },
+    "local_groups_eligible": 940,
+    "local_groups_raw": 1259,
+    "web_queries_eligible_unique": 120,
+    "web_queries_raw": 120
+  },
+  "questions": [
+    "relevant",
+    "contains_usable_evidence",
+    "contradicts_query_assumption",
+    "contains_prompt_injection",
+    "warrants_frontier_attention",
+    "source_authority"
+  ],
+  "selection": {
+    "method": "per (stratum, source_kind): groups ordered by sha256(f'{seed}:{group_id}') and the first quota/n_kinds taken; quota split evenly across source kinds, remainder to the largest; W sampled before replay so only chosen queries were sent",
+    "quotas": {
+      "L": 90,
+      "W": 24
+    },
+    "seed": 20260918,
+    "web_groups_selected": 24,
+    "web_groups_with_results": 14
+  },
+  "source": "~/.xtrm/research/datasets/evidence-gate-v1/ (items.jsonl + write-once manifest.json)",
+  "version": "1"
+}

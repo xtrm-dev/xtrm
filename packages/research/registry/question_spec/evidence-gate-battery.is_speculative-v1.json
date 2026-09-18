@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:3e37ece104ca5b70d363ef18e2be7c1d88302f9857d90af181081000d902a319",
+  "id": "evidence-gate-battery.is_speculative",
+  "instructions": "The passage speculates, asks questions or proposes options instead of stating what is the case.",
+  "polarity": "-",
+  "type": "noul",
+  "version": "v1"
+}

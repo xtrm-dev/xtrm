@@ -1,0 +1,10 @@
+{
+  "content_hash": "sha256:0b52b6ae0d2ffa68036288f463b118c92050e25ccb281afdf34e76f3c34f8ee8",
+  "id": "evidence-gate.relevant",
+  "instructions": "relevant (0/1): 1 if the passage is about the subject of the query, even if it does not answer it. 0 if it is about something else.",
+  "provenance": {
+    "module": "xtrm_research.evidence_gate.frontier.jev_questions"
+  },
+  "type": "noul",
+  "version": "v1"
+}

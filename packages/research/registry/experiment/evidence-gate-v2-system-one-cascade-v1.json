@@ -1,0 +1,60 @@
+{
+  "chart_specs": [
+    {
+      "datasets": [
+        "gate.useful_evidence_recall",
+        "gate.retained_precision",
+        "gate.escalation_rate",
+        "gate.cost_usd_per_1000_candidates"
+      ],
+      "description": "Recall, precision, escalation rate and cost per 1000 candidates, 95% cluster-bootstrap CI.",
+      "id": "cascade-economics",
+      "schema_version": "xtrm-research-chart-spec/v1",
+      "title": "Cascade: quality kept vs LLM calls avoided"
+    }
+  ],
+  "content_hash": "sha256:2f30b7715feaac228794cef55e4e7186d3485bf5582b46bd7fd7b83a334f1537",
+  "description": "The System One pattern on the frozen Evidence Gate v2 set: a battery of atomic Jev questions per candidate, composed by code, with selective escalation of the uncertain band to an LLM. Compared on the same resamples with holistic Jev, DeepSeek on every item and Claude.",
+  "hypothesis": "Decomposing the gate question into atomic System One judgments composed by code matches the LLM gate's recall and precision while calling the LLM on a minority of candidates.",
+  "id": "evidence-gate-v2-system-one-cascade",
+  "legend": {
+    "contains_usable_evidence.auc": "usable-evidence AUC of the composed score",
+    "evidence-gate-battery-learned": "The same 12-question battery composed by L2 logistic regression, out-of-fold; no escalation.",
+    "evidence-gate-battery-rule": "One Jev request per candidate carrying 12 atomic noul questions; a fixed soft-logic rule composes them (pre-registered), Platt-calibrated out-of-fold; no escalation.",
+    "evidence-gate-cascade": "battery-learned plus a pre-registered band (reject below the 0.98-recall floor, retain at or above the 0.95-precision ceiling, fitted per training fold); the band escalates to the recorded DeepSeek answer.",
+    "gate.cost_usd_per_1000_candidates": "USD per 1000 candidates",
+    "gate.escalation_rate": "escalation rate",
+    "gate.frontier_input_token_reduction": "token reduction",
+    "gate.latency_p50_ms": "latency p50 ms",
+    "gate.retained_precision": "retained precision",
+    "gate.useful_evidence_recall": "useful-evidence recall"
+  },
+  "named_datasets": [
+    "gate.useful_evidence_recall",
+    "gate.retained_precision",
+    "gate.frontier_input_token_reduction",
+    "gate.escalation_rate",
+    "gate.latency_p50_ms",
+    "gate.cost_usd_per_1000_candidates",
+    "contains_usable_evidence.auc"
+  ],
+  "variants": [
+    {
+      "id": "evidence-gate-battery-rule",
+      "version": "v1"
+    },
+    {
+      "id": "evidence-gate-battery-learned",
+      "version": "v1"
+    },
+    {
+      "id": "evidence-gate-cascade",
+      "version": "v1"
+    }
+  ],
+  "version": "v1",
+  "workload": {
+    "id": "evidence-gate",
+    "version": "v1"
+  }
+}

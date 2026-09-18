@@ -1,0 +1,11 @@
+{
+  "config": {
+    "backend": "typesafe",
+    "battery_hash": "sha256:c3831df4697d157321e4567f50b6ed54cc25b3df25856ffb9c5cc3ae3e315780",
+    "model": "jev-1.13.0"
+  },
+  "content_hash": "sha256:ba9af705d501c58a1d48ee1e0a7ad3f23df2b286e7b1a9c56d9d265a1da6d1cc",
+  "description": "The same 12-question battery composed by L2 logistic regression, out-of-fold; no escalation.",
+  "id": "evidence-gate-battery-learned",
+  "version": "v1"
+}

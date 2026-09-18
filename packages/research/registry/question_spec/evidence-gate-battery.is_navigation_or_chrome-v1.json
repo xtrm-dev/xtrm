@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:4d8077da2fab5c0f060436b529064bf62de2c3c0e0f7f17ff5698b99f6636391",
+  "id": "evidence-gate-battery.is_navigation_or_chrome",
+  "instructions": "The passage is mostly navigation, a table of contents, an index, a list of links, a license, a cookie or login notice, or other page chrome.",
+  "polarity": "-",
+  "type": "noul",
+  "version": "v1"
+}

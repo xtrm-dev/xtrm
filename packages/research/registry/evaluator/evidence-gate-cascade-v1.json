@@ -1,0 +1,56 @@
+{
+  "code_revision": "xtrm_research.evidence_gate.cascade",
+  "config": {
+    "battery_hash": "sha256:c3831df4697d157321e4567f50b6ed54cc25b3df25856ffb9c5cc3ae3e315780",
+    "bootstrap": "cluster percentile, 2000 resamples, seed 20260918 (same resamples as evidence-gate-compare)",
+    "pre_registered": {
+      "hi_precision": 0.95,
+      "lo_recall": 0.98,
+      "min_retained": 5,
+      "ridge": 1.0
+    },
+    "rule": "same_subject * max(answers_part_of_query, could_verify_a_claim) * max(has_concrete_value, has_code_or_command, states_fact_or_decision) * (1 - max(is_navigation_or_chrome, is_headings_only))",
+    "sweep": [
+      [
+        0.95,
+        0.9
+      ],
+      [
+        0.95,
+        0.95
+      ],
+      [
+        0.95,
+        0.98
+      ],
+      [
+        0.98,
+        0.9
+      ],
+      [
+        0.98,
+        0.95
+      ],
+      [
+        0.98,
+        0.98
+      ],
+      [
+        0.99,
+        0.9
+      ],
+      [
+        0.99,
+        0.95
+      ],
+      [
+        0.99,
+        0.98
+      ]
+    ]
+  },
+  "content_hash": "sha256:15344c1e17c549001083cb53ed69b4514df3236f1bc874d01cc068bfdab54936",
+  "id": "evidence-gate-cascade",
+  "kind": "statistical",
+  "version": "v1"
+}

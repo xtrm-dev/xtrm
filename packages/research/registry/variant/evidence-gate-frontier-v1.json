@@ -1,0 +1,12 @@
+{
+  "config": {
+    "answer_kind": "stated_probability",
+    "backend": "claude_cli",
+    "effort": "low",
+    "model": "claude-sonnet-5"
+  },
+  "content_hash": "sha256:d0848ef7f8575029fb12da7b80cf2b5a2a5712c21d57c5246a4c4e2011a2b724",
+  "description": "Claude Sonnet 5 (effort low) structured classification through the claude CLI, stated probabilities.",
+  "id": "evidence-gate-frontier",
+  "version": "v1"
+}

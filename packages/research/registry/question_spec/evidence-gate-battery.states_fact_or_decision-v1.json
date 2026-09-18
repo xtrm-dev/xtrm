@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:a1d24ae9bd5bcc3caac9d4b6d0f4ce7243c7f91910c84fd46862d817171d9614",
+  "id": "evidence-gate-battery.states_fact_or_decision",
+  "instructions": "The passage states a definite fact, decision or conclusion as true, not a question, a plan or a guess.",
+  "polarity": "+",
+  "type": "noul",
+  "version": "v1"
+}

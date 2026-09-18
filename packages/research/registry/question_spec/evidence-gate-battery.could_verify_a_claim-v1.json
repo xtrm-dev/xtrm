@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:d598d53953d6fe8bb2fe5304b3c8668f386d06aa2add74528211dfaccf816553",
+  "id": "evidence-gate-battery.could_verify_a_claim",
+  "instructions": "The passage could be cited to confirm or refute a specific claim that the query implies.",
+  "polarity": "+",
+  "type": "noul",
+  "version": "v1"
+}

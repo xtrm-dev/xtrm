@@ -1,0 +1,76 @@
+{
+  "chart_specs": [
+    {
+      "datasets": [
+        "contains_usable_evidence.auc"
+      ],
+      "description": "AUC of each arm's usable-evidence score against the reference label, 95% cluster-bootstrap CI.",
+      "id": "evidence-gate-quality",
+      "schema_version": "xtrm-research-chart-spec/v1",
+      "title": "Usable-evidence ranking quality"
+    },
+    {
+      "datasets": [
+        "gate.retained_precision",
+        "gate.frontier_input_token_reduction",
+        "gate.cost_usd_per_1000_candidates"
+      ],
+      "description": "At the 0.95 recall target: retained precision, frontier input-token reduction, and USD per 1000 candidates.",
+      "id": "evidence-gate-economics",
+      "schema_version": "xtrm-research-chart-spec/v1",
+      "title": "Gate precision, reduction and cost"
+    }
+  ],
+  "content_hash": "sha256:67916862601549ce2d2382171704370d02776a61a4bfecee2b1f2a65ea84e09a",
+  "description": "Five model arms as holistic per-candidate Evidence Gate classifiers on frozen dataset v2, against context-isolated reference labels, with paired cluster-bootstrap deltas.",
+  "hypothesis": "A local/open model or Jev reaches frontier-level useful-evidence recall and precision at lower latency and cost.",
+  "id": "evidence-gate-v2-classifiers",
+  "legend": {
+    "contains_usable_evidence.auc": "usable-evidence AUC",
+    "evidence-gate-embedding": "Cosine similarity of query and passage, bge-small-en-v1.5 on CPU; relevant and usable only.",
+    "evidence-gate-frontier": "Claude Sonnet 5 (effort low) structured classification through the claude CLI, stated probabilities.",
+    "evidence-gate-jev": "TypeSafe Jev System One: one request per candidate carrying the six holistic questions as nouls plus a Score.",
+    "evidence-gate-llm": "DeepSeek-v4.1-flash through pi (context-isolated), stated probabilities, strict JSON.",
+    "evidence-gate-qwen": "Qwen3-Reranker-0.6B raw P(yes) on CPU, one question per call; calibrated before any threshold.",
+    "gate.cost_usd_per_1000_candidates": "USD per 1000 candidates",
+    "gate.frontier_input_token_reduction": "token reduction",
+    "gate.latency_p50_ms": "latency p50 ms (wall clock)",
+    "gate.retained_precision": "gate precision at the 0.95 recall target",
+    "gate.useful_evidence_recall": "gate recall"
+  },
+  "named_datasets": [
+    "contains_usable_evidence.auc",
+    "gate.retained_precision",
+    "gate.useful_evidence_recall",
+    "gate.frontier_input_token_reduction",
+    "gate.latency_p50_ms",
+    "gate.cost_usd_per_1000_candidates"
+  ],
+  "variants": [
+    {
+      "id": "evidence-gate-embedding",
+      "version": "v1"
+    },
+    {
+      "id": "evidence-gate-qwen",
+      "version": "v1"
+    },
+    {
+      "id": "evidence-gate-jev",
+      "version": "v1"
+    },
+    {
+      "id": "evidence-gate-frontier",
+      "version": "v1"
+    },
+    {
+      "id": "evidence-gate-llm",
+      "version": "v1"
+    }
+  ],
+  "version": "v1",
+  "workload": {
+    "id": "evidence-gate",
+    "version": "v1"
+  }
+}

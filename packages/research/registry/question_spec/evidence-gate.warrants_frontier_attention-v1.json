@@ -1,0 +1,10 @@
+{
+  "content_hash": "sha256:803b24033c7c761f507da22ba5fde62b8dcb6cf0946b1bc326d2258218e52749",
+  "id": "evidence-gate.warrants_frontier_attention",
+  "instructions": "warrants_frontier_attention (0/1): 1 if the agent answering the query should read this passage in full: it holds usable evidence, a contradiction, or a risk the agent must see. 0 if the agent loses nothing by never reading it.",
+  "provenance": {
+    "module": "xtrm_research.evidence_gate.frontier.jev_questions"
+  },
+  "type": "noul",
+  "version": "v1"
+}

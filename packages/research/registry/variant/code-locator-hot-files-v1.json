@@ -1,0 +1,10 @@
+{
+  "config": {
+    "backend": "deterministic",
+    "model": "none"
+  },
+  "content_hash": "sha256:bb4de8880ddf12fceeff7aa7474b1d3fb7eb5a52181a7ef8a3b9c010e26b156a",
+  "description": "Deterministic: files ranked by how often they were modified before the base commit.",
+  "id": "code-locator-hot-files",
+  "version": "v1"
+}

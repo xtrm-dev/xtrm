@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:4a8f0c30cb5e5de272675e5c3b76275f9e5ec8447d1dba81dc2efc6e184f8bbd",
+  "id": "evidence-gate-battery.has_concrete_value",
+  "instructions": "The passage states at least one concrete value: a number, version, path, setting, date, identifier or exact name.",
+  "polarity": "+",
+  "type": "noul",
+  "version": "v1"
+}

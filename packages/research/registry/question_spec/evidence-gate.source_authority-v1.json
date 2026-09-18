@@ -1,0 +1,22 @@
+{
+  "content_hash": "sha256:ca88c501ad27dc74fbea1d36d8fd96b83dbf904ede61f85fb1042dee059b6fa7",
+  "criteria": [
+    "1 = unreliable or unknown (spam, SEO page, unsourced claim)",
+    "2 = informal or secondary (blog, Q&A answer, chat or agent session log, speculation)",
+    "3 = credible secondary or project-internal working record (reputable publication, issue or ticket contract, review, commit message)",
+    "4 = primary or authoritative (official documentation, specification, source code, the system's own output)."
+  ],
+  "id": "evidence-gate.source_authority",
+  "instructions": "source_authority (1-4): how authoritative the passage's source is for the query's subject. 1 = unreliable or unknown (spam, SEO page, unsourced claim). 2 = informal or secondary (blog, Q&A answer, chat or agent session log, speculation). 3 = credible secondary or project-internal working record (reputable publication, issue or ticket contract, review, commit message). 4 = primary or authoritative (official documentation, specification, source code, the system's own output)..",
+  "legend": {
+    "0": "1 = unreliable or unknown (spam, SEO page, unsourced claim)",
+    "1": "2 = informal or secondary (blog, Q&A answer, chat or agent session log, speculation)",
+    "2": "3 = credible secondary or project-internal working record (reputable publication, issue or ticket contract, review, commit message)",
+    "3": "4 = primary or authoritative (official documentation, specification, source code, the system's own output)."
+  },
+  "provenance": {
+    "module": "xtrm_research.evidence_gate.frontier.jev_questions"
+  },
+  "type": "score",
+  "version": "v1"
+}

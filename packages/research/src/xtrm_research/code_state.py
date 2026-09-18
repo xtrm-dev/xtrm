@@ -49,3 +49,17 @@ def _git(repo_path: Path, *args: str) -> str:
         check=True,
     )
     return result.stdout
+
+
+#: Read-only git plumbing a study may use to reconstruct history (XTRM-512).
+#: Anything that writes (commit, checkout, reset, push ...) is refused.
+READ_ONLY_GIT_VERBS = frozenset(
+    {"log", "ls-tree", "diff-tree", "rev-parse", "rev-list", "cat-file", "show"}
+)
+
+
+def git_read(repo_path: Path, verb: str, *args: str) -> str:
+    """Run one read-only git command in ``repo_path`` and return stdout."""
+    if verb not in READ_ONLY_GIT_VERBS:
+        raise ValueError(f"git {verb!r} is not a read-only verb")
+    return _git(Path(repo_path), verb, *args)

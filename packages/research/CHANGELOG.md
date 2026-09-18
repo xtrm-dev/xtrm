@@ -4,6 +4,28 @@ All notable changes to the `xtrm-research` package.
 
 ## [Unreleased]
 
+### Added — XTRM-99 research closure (XTRM-492, XTRM-508..512)
+- Evidence Gate dataset v2, reference labels, five model arms, calibration
+  and the six-arm comparison (`evidence_gate/`), published as app-visible
+  runs `evidence-gate-v2-{embedding,qwen,jev,frontier,llm}` (XTRM-510).
+- Generative-model budget policy at the transport seam: a declared reason,
+  a budget scope, and call and cost caps (default 20 calls, USD 1.00) from
+  the environment or `~/.xtrm/research/.env`; `BudgetError` is raised before
+  any process starts, and an unpriced call exhausts the scope (XTRM-508).
+- `workflow.Workflow`: the System One control-loop runner (question
+  battery, policy code, budget-gated escalation, next state) with separate
+  answer/decision/escalation/outcome records and a replay cache; `publish`:
+  registry definitions plus a complete run (manifest, samples, events,
+  assessment set, annotations) that the research app reads (XTRM-509).
+- `evidence_gate/cascade.py`: a 12-question atomic Jev battery, rule and
+  learned composition, a pre-registered escalation band, and a sensitivity
+  sweep (XTRM-511).
+- `code_locator.py`: the multi-step beam-routing showcase, graded by git,
+  with lexical and hot-files baselines (XTRM-512).
+- `code_state.git_read`: read-only, verb-allowlisted git plumbing.
+- Docs: `docs/xtrm-99/` evidence-gate-results, code-locator, jev-verdict,
+  value-decision; telemetry and contract-map updated.
+
 ### Added — labeler-brief-v2 matching Jev's `executable` question (XTRM-485)
 - `registry/labeler-brief-v2.json` ships alongside the frozen
   `labeler-brief-v1.json` (v1 is unchanged, byte-identical, and still

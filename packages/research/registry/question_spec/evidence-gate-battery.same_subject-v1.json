@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:feb46ac4f9b7a8d645c2b91438237cd235f831c4d55f9dde2a4a242258ef202e",
+  "id": "evidence-gate-battery.same_subject",
+  "instructions": "The passage is about the same system, tool, project or topic that the query asks about.",
+  "polarity": "+",
+  "type": "noul",
+  "version": "v1"
+}

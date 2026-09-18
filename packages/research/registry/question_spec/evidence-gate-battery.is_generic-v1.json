@@ -1,0 +1,8 @@
+{
+  "content_hash": "sha256:ff0c22e05ec7d14ff01dbe19c9f61d18c348e506ec088eba282f8d67aa5922b0",
+  "id": "evidence-gate-battery.is_generic",
+  "instructions": "The passage gives only general advice that would apply to many systems, not to the specific one in the query.",
+  "polarity": "-",
+  "type": "noul",
+  "version": "v1"
+}

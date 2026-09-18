@@ -1,0 +1,10 @@
+{
+  "config": {
+    "backend": "deterministic",
+    "model": "none"
+  },
+  "content_hash": "sha256:81251a90fcc9b74b893cf7f5bef250e27a22c957b2f893fa99f23a00416d3323",
+  "description": "Deterministic: idf-weighted overlap of task words and path words over every file at the base commit.",
+  "id": "code-locator-lexical",
+  "version": "v1"
+}
