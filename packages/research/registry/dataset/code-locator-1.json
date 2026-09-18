@@ -1,0 +1,7 @@
+{
+  "content_hash": "sha256:5dacd41b639ec290713798f26070bc26cb814ad1476ba1b32158907e474865ff",
+  "description": "every issue ref cited in a non-merge commit subject on the repo's main branch whose Substrate contract has a first revision and whose commits modified at least one pre-existing non-bookkeeping file. Task: first-revision PROBLEM + SUCCESS, inline SCOPE tail cut, path-like tokens replaced by [path]. Truth: files with status M in the ref's commits that exist at the base commit (parent of the first commit), minus bookkeeping.",
+  "id": "code-locator",
+  "source": "/home/dawid/.xtrm/research/datasets/code-locator-v1 (items.jsonl sha256:cc6a83cc28ea8fc44d8310995c2e1d2651d9e03ebf02df729b6042640bcd160c)",
+  "version": "1"
+}

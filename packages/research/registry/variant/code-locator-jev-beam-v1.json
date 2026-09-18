@@ -1,0 +1,10 @@
+{
+  "config": {
+    "backend": "typesafe",
+    "model": "jev-1.13.0"
+  },
+  "content_hash": "sha256:bb81dd0ac9fbfd0654fa963b1c7109eff235099afe2bf633438f6a2feed9ca00",
+  "description": "System One beam routing: one Jev request per step carrying one Choice per beam node (width 3); code keeps the best directories by geometric-mean path probability over answered steps; files become ranked leaves.",
+  "id": "code-locator-jev-beam",
+  "version": "v1"
+}

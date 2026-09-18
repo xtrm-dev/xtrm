@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:9671c06f4610d6ae4b1607a626fb8d9f81df7ecf8358b688d23dbcf8594c9fa1",
+  "criteria": "the directory's immediate entries at the base commit, name -> 'file' | 'directory' (dynamic per step)",
+  "id": "code-locator.entry-choice",
+  "instructions": "A developer must carry out `task`. Which entry of <directory> contains the files that this work changes? Choose the most likely entry.",
+  "options": [
+    "<entry of the current directory>"
+  ],
+  "type": "choice",
+  "version": "v1"
+}

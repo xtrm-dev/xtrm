@@ -1,0 +1,48 @@
+{
+  "content_hash": "sha256:13c6464bcd555d167f59f58942459038861b2c0b21a48153994817640c19ca7f",
+  "default_metrics": [
+    "hit@1",
+    "hit@5",
+    "hit@10",
+    "recall@10",
+    "mrr"
+  ],
+  "description": "Locate the files a task changes by walking the repository tree at the task's base commit.",
+  "evaluators": [
+    {
+      "id": "code-locator-hits",
+      "version": "v1"
+    }
+  ],
+  "id": "code-locator",
+  "input_schema": {
+    "required": [
+      "task"
+    ],
+    "type": "object"
+  },
+  "legend": {
+    "code-locator.entry-choice": "A developer must carry out `task`. Which entry of <directory> contains the files that this work changes? Choose the most likely entry.",
+    "hit@1": "hit@1",
+    "hit@10": "hit@10",
+    "hit@5": "hit@5",
+    "mrr": "mean reciprocal rank",
+    "recall@10": "recall@10"
+  },
+  "observers": [],
+  "output_schema": {
+    "type": "object"
+  },
+  "questions": [
+    {
+      "id": "code-locator.entry-choice",
+      "version": "v1"
+    }
+  ],
+  "required_capabilities": [
+    "repository_read"
+  ],
+  "runner_kind": "system_one_workflow",
+  "sample_provider": "code_locator.build (Substrate first-revision contracts x git history)",
+  "version": "v1"
+}

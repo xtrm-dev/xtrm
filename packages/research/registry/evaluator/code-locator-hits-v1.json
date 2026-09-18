@@ -1,0 +1,17 @@
+{
+  "code_revision": "xtrm_research.code_locator",
+  "config": {
+    "bootstrap": "percentile over tasks, 2000 resamples, seed 20260918",
+    "k": [
+      1,
+      5,
+      10
+    ],
+    "max_depth": 10,
+    "width": 3
+  },
+  "content_hash": "sha256:c9591755e897bc9b0b7196a8646e01449e55093c9ab5e433f515d37df6cbb20b",
+  "id": "code-locator-hits",
+  "kind": "outcome",
+  "version": "v1"
+}
