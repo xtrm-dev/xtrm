@@ -4,7 +4,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { describe, expect, it, vi } from "vitest";
 import { fixtureAdapters } from "../adapters/index.tsx";
 import { fixtureResearch } from "../adapters/research/fixture.ts";
-import { isInvalidManifestRow, type ResearchAdapter, type RunListRow } from "../adapters/research/types.ts";
+import fixture from "../adapters/research/__fixtures__/xtrm-research-fixture.json";
+import { isInvalidManifestRow, type Metric, type ResearchAdapter, type RunListRow, type RunSummary, type TailCursor, type TailEvent } from "../adapters/research/types.ts";
 import { MODES, modeForPath } from "./destinations.ts";
 import { createAppRouter } from "./router.tsx";
 
@@ -199,5 +200,321 @@ describe("Research list states come from the adapter", () => {
     expect(await screen.findByText(url.endsWith("runs") ? "Latest conclusion" : "dup-detect-baseline")).toBeTruthy();
     expect(getRun).not.toHaveBeenCalled();
     expect(getMetrics).not.toHaveBeenCalled();
+  });
+});
+
+describe("Run analysis surface (XTRM-433 slice 3)", () => {
+  it("opens from a run row and renders manifest/versions, lineage, metrics with a null-interval method, and annotations", async () => {
+    const { router } = renderAt("/research/runs");
+    fireEvent.click(await screen.findByLabelText("run-a"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/research/runs/run-a"));
+
+    const main = await screen.findByRole("region", { name: "Run run-a" });
+    expect(within(main).getByText("dup-detect-baseline@v1")).toBeTruthy();
+    expect(within(main).getByText(/v1 · v1 · gen_ai\/v1\.28/)).toBeTruthy();
+
+    // exact-match::latency_ms has null se/ci95: the method stands in for the missing interval.
+    expect(within(main).getByText("no interval — single-sample-no-variance")).toBeTruthy();
+    expect(within(main).getByText("Baseline lands at chance accuracy, as hypothesised.")).toBeTruthy();
+  });
+
+  it("renders the sample table from tail(), including the usage-unavailable state with its null_reason", async () => {
+    renderAt("/research/runs/run-a");
+    const main = await screen.findByRole("region", { name: "Run run-a" });
+    expect(await within(main).findByLabelText("s-0")).toBeTruthy();
+    expect(within(within(main).getByLabelText("s-0")).getByText("42 in / 7 out")).toBeTruthy();
+    expect(within(within(main).getByLabelText("s-1")).getByText("usage unavailable — usage telemetry unavailable for this backend")).toBeTruthy();
+  });
+
+  it("renders an explicit error naming the run when its manifest is unreadable, never a crash", async () => {
+    const failure = new Error("unknown run: run-ghost");
+    renderWithResearch("/research/runs/run-ghost", {
+      getRun: async () => {
+        throw failure;
+      },
+    });
+    expect(await screen.findByText("Run manifest unreadable: run-ghost")).toBeTruthy();
+    expect(screen.getByText(failure.message)).toBeTruthy();
+  });
+
+  it("renders an explicit 'Accounting provenance unavailable' state instead of a blank when the manifest carries no readable accounting block", async () => {
+    const runShow = { ...fixture.runShowA, manifest: { ...fixture.runShowA.manifest, accounting: undefined } };
+    renderWithResearch("/research/runs/run-a", { getRun: async () => ({ manifest: runShow.manifest as never, status: "success", annotations: [] }) });
+    expect(await screen.findByText("Accounting provenance unavailable")).toBeTruthy();
+  });
+
+  it("opens the canonical inspector for a metric, a sample and an annotation, never a Research-owned panel", async () => {
+    renderAt("/research/runs/run-a");
+    const main = await screen.findByRole("region", { name: "Run run-a" });
+    fireEvent.click(await within(main).findByLabelText("exact-match::latency_ms"));
+    let drawer = await screen.findByTestId("inspector-drawer");
+    expect(within(drawer).getByText("no interval — single-sample-no-variance")).toBeTruthy();
+
+    fireEvent.click(within(main).getByLabelText("s-1"));
+    drawer = await screen.findByTestId("inspector-drawer");
+    expect((await within(drawer).findAllByText("usage telemetry unavailable for this backend", { exact: false })).length).toBeGreaterThan(0);
+
+    fireEvent.click(within(main).getByLabelText("conclusion"));
+    drawer = await screen.findByTestId("inspector-drawer");
+    expect(await within(drawer).findByText("Baseline lands at chance accuracy, as hypothesised.")).toBeTruthy();
+  });
+
+  it("opens run provenance from a lineage reference, with an Open action back to the full page", async () => {
+    renderAt("/research/runs/run-b");
+    const main = await screen.findByRole("region", { name: "Run run-b" });
+    fireEvent.click(await within(main).findByText("retry_of → run-a"));
+    const drawer = await screen.findByTestId("inspector-drawer");
+    expect(await within(drawer).findByText("Open run analysis")).toBeTruthy();
+  });
+});
+
+describe("Comparison surface (XTRM-433 slice 3)", () => {
+  it("prompts for a baseline and a candidate when neither is selected", async () => {
+    renderAt("/research/compare");
+    expect(await screen.findByText("Select a baseline and at least one candidate run to compare")).toBeTruthy();
+  });
+
+  it("renders baseline vs candidate metric deltas over the shared sample set", async () => {
+    renderAt("/research/compare?baseline=run-a&candidate=run-b");
+    expect(await screen.findByText("run-a (baseline)")).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "run-b" })).toBeTruthy();
+    // run-b has no metrics in the fixture: an absent metric renders "not reported", not blank.
+    expect(screen.getAllByText("not reported").length).toBeGreaterThan(0);
+  });
+
+  it("renders an explicit failure naming the comparison and the reason, never an empty table, when compare() fails as a whole", async () => {
+    const reason = (fixture.compareInvalidEnvelope as { error: string }).error;
+    renderWithResearch("/research/compare?baseline=run-a&candidate=run-missing", {
+      compare: async () => {
+        throw new Error(reason);
+      },
+    });
+    expect(await screen.findByText("Comparison failed: run-a vs run-missing")).toBeTruthy();
+    expect(screen.getByText(reason)).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("is reachable by selecting two or more runs from Recent Runs and choosing Compare", async () => {
+    const { router } = renderAt("/research/runs");
+    fireEvent.click(await screen.findByLabelText("Select run-a for comparison"));
+    fireEvent.click(screen.getByLabelText("Select run-b for comparison"));
+    fireEvent.click(await screen.findByText("Compare 2 runs"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/research/compare"));
+    expect(router.state.location.search).toMatchObject({ baseline: "run-a", candidate: ["run-b"] });
+  });
+});
+
+// --- slice 3 edge cases -----------------------------------------------------
+// Every state below is driven through an adapter override, never through the captured
+// fixture: the fixture is regenerated from the real Python package (scripts/
+// generate-research-fixtures.py) and must keep recording one honest run, not a catalogue of
+// pathological shapes.
+
+const summary = (metrics: Record<string, Metric>): RunSummary => ({ metrics, sampleCount: 1, eventCount: 1 });
+
+/** se is null, ci95 is present. */
+const CI_ONLY: Metric = { value: 0.5, se: null, ci95: [0.1, 0.9], n: 4, method: "bootstrap-percentile" };
+/** The reverse: se is present, ci95 is null. */
+const SE_ONLY: Metric = { value: 2, se: 0.25, ci95: null, n: 4, method: "normal-approx-no-interval" };
+
+async function openDrawer(el: HTMLElement) {
+  await waitFor(() => expect(el.textContent!.length).toBeGreaterThan("Inspector".length + 3));
+}
+
+describe("A metric renders value, interval and method together, whichever half is null", () => {
+  const getMetrics = async () => summary({ "m::ci-only": CI_ONLY, "m::se-only": SE_ONLY });
+
+  it("shows the interval when only se is null, and the method in place of the interval when only ci95 is null — never a value on its own", async () => {
+    renderWithResearch("/research/runs/run-a", { getMetrics });
+    const ciOnly = await screen.findByLabelText("m::ci-only");
+    expect(within(ciOnly).getByText("95% CI [0.1, 0.9]")).toBeTruthy();
+    expect(within(ciOnly).getByText("bootstrap-percentile")).toBeTruthy();
+
+    const seOnly = screen.getByLabelText("m::se-only");
+    expect(within(seOnly).getByText("no interval — normal-approx-no-interval")).toBeTruthy();
+    // Both rows name their method, so the value never stands alone with nothing qualifying it.
+    for (const row of [ciOnly, seOnly]) expect(row.textContent).toMatch(/bootstrap-percentile|normal-approx-no-interval/);
+  });
+
+  it("puts the method in the SE field of the drawer when se is null but the interval is present", async () => {
+    renderWithResearch("/research/runs/run-a?inspect=research-metric%3Arun-a%7Cm%3A%3Aci-only", { getMetrics });
+    const drawer = await screen.findByTestId("inspector-drawer");
+    await openDrawer(drawer);
+    expect(within(drawer).getByText("[0.100, 0.900]")).toBeTruthy();
+    // The SE row's value cell, asserted exactly. `drawer.textContent` can never end in "SE" (the
+    // last row is always Method), so a blank, a 0 or a literal `null` in the SE row passed that
+    // suffix check; the exact text fails all three.
+    const seCell = within(drawer).getByText("SE").parentElement!.querySelector("dd")!;
+    expect(seCell.textContent).toBe("n/a — bootstrap-percentile");
+  });
+
+  it("puts the method in the interval field of the drawer when ci95 is null but se is present", async () => {
+    renderWithResearch("/research/runs/run-a?inspect=research-metric%3Arun-a%7Cm%3A%3Ase-only", { getMetrics });
+    const drawer = await screen.findByTestId("inspector-drawer");
+    await openDrawer(drawer);
+    expect(within(drawer).getByText("no interval — normal-approx-no-interval")).toBeTruthy();
+    expect(within(drawer).getByText("0.250")).toBeTruthy();
+  });
+
+  it("renders se and n alongside the interval in the run analysis table, never a value on its own", async () => {
+    renderWithResearch("/research/runs/run-a", { getMetrics });
+    const ciOnly = await screen.findByLabelText("m::ci-only");
+    expect(within(ciOnly).getByText("95% CI [0.1, 0.9]")).toBeTruthy();
+    expect(within(ciOnly).getByText("se n/a — bootstrap-percentile")).toBeTruthy();
+    expect(within(ciOnly).getByText("n=4")).toBeTruthy();
+
+    const seOnly = screen.getByLabelText("m::se-only");
+    expect(within(seOnly).getByText("se=0.25")).toBeTruthy();
+    expect(within(seOnly).getByText("n=4")).toBeTruthy();
+    expect(within(seOnly).getByText("normal-approx-no-interval")).toBeTruthy();
+  });
+
+  it("renders se, n and method alongside the interval in a comparison cell", async () => {
+    const compare = async () => ({ "run-a": summary({ "m::ci-only": CI_ONLY, "m::se-only": SE_ONLY }), "run-b": summary({ "m::ci-only": SE_ONLY, "m::se-only": CI_ONLY }) });
+    renderWithResearch("/research/compare?baseline=run-a&candidate=run-b", { compare });
+    const table = await screen.findByRole("table");
+    // One row per metric key (sorted): m::ci-only, then m::se-only. Cell 1 of each row is the
+    // baseline's; the shared widget must carry the whole tuple there, not just value + interval.
+    const rows = within(table).getAllByRole("row").slice(1);
+    const baselineCell = (row: HTMLElement) => within(row).getAllByRole("cell")[1]!;
+
+    const ciOnly = baselineCell(rows[0]!);
+    expect(within(ciOnly).getByText("0.5")).toBeTruthy();
+    expect(within(ciOnly).getByText("95% CI [0.1, 0.9]")).toBeTruthy();
+    expect(within(ciOnly).getByText("se n/a — bootstrap-percentile")).toBeTruthy();
+    expect(within(ciOnly).getByText("n=4")).toBeTruthy();
+    expect(within(ciOnly).getByText("bootstrap-percentile")).toBeTruthy();
+
+    const seOnly = baselineCell(rows[1]!);
+    expect(within(seOnly).getByText("2")).toBeTruthy();
+    expect(within(seOnly).getByText("no interval — normal-approx-no-interval")).toBeTruthy();
+    expect(within(seOnly).getByText("se=0.25")).toBeTruthy();
+    expect(within(seOnly).getByText("n=4")).toBeTruthy();
+  });
+});
+
+describe("Usage with some fields null and some present under one null_reason", () => {
+  const MIXED: TailEvent = {
+    seq: 1,
+    ts: "2026-09-17T12:00:00+00:00",
+    kind: "sample_completed",
+    sampleId: "s-mixed",
+    data: null,
+    // One null_reason covers every null field; the present fields are real readings.
+    usage: { source: "provider_api", inputTokens: 42, outputTokens: null, requestModel: "always-no-1", responseModel: null, latencyMs: 118.5, nullReason: "provider omitted completion tokens" },
+  };
+  const tail = async () => ({ events: [MIXED], nextOffset: 1 as TailCursor });
+
+  it("renders the present values and the reason for the null ones in the drawer, never a zero", async () => {
+    renderWithResearch("/research/runs/run-a?inspect=research-sample%3Arun-a%7Cs-mixed", { tail });
+    const drawer = await screen.findByTestId("inspector-drawer");
+    await openDrawer(drawer);
+    expect(within(drawer).getByText("42")).toBeTruthy();
+    expect(within(drawer).getByText("always-no-1")).toBeTruthy();
+    expect(within(drawer).getByText("118.5 ms")).toBeTruthy();
+    // Output tokens and response model are null: both show the one reason, neither shows 0.
+    expect(within(drawer).getAllByText("unavailable — provider omitted completion tokens")).toHaveLength(2);
+    expect(within(drawer).queryByText("0")).toBeNull();
+  });
+
+  it("names the reason for a null token count in the sample row, rather than printing `null`", async () => {
+    renderWithResearch("/research/runs/run-a", { tail });
+    const row = await screen.findByLabelText("s-mixed");
+    expect(row.textContent).not.toMatch(/\bnull\b/);
+    expect(row.textContent).toContain("provider omitted completion tokens");
+  });
+});
+
+describe("Comparison with nothing in common", () => {
+  it("marks every cell of a metric the run does not report as 'not reported' and its delta as absent, never 0", async () => {
+    // Two runs, disjoint metric keys: the union has two rows and each has exactly one real value.
+    // Declared so that insertion order (z::only first, from the baseline) differs from sorted
+    // order: removing the sort in RunComparisonSurface changes the rendered row order and fails
+    // the assertion below, which pins sorted order.
+    const compare = async () => ({
+      "run-a": summary({ "z::only": { value: 1, se: null, ci95: null, n: 1, method: "m1" } }),
+      "run-b": summary({ "a::only": { value: 2, se: null, ci95: null, n: 1, method: "m2" } }),
+    });
+    renderWithResearch("/research/compare?baseline=run-a&candidate=run-b", { compare });
+    const table = await screen.findByRole("table");
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.map((r) => within(r).getAllByRole("cell")[0]!.textContent)).toEqual(["a::only", "z::only"]);
+    for (const row of rows) {
+      expect(within(row).getAllByText("not reported")).toHaveLength(1);
+      // The delta cell is the last one: absent, not a zero that would read as "no change".
+      const cells = within(row).getAllByRole("cell");
+      expect(cells[cells.length - 1]!.textContent).toBe("—");
+    }
+    expect(within(table).queryByText("0")).toBeNull();
+  });
+
+  it("keeps the baseline's metrics visible when a candidate reports none at all", async () => {
+    // compareAB already models this (run-b carries `metrics: {}`); asserted here on the delta
+    // column, which the slice-2 test does not reach.
+    renderAt("/research/compare?baseline=run-a&candidate=run-b");
+    const table = await screen.findByRole("table");
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      const cells = within(row).getAllByRole("cell");
+      expect(within(row).getAllByText("not reported")).toHaveLength(1);
+      expect(cells[cells.length - 1]!.textContent).toBe("—");
+    }
+  });
+});
+
+describe("Research drawers open from the URL alone, and name what is missing", () => {
+  // `?inspect=<kind>:<ref>` is the canonical deep link (shell/layout.ts §9.1). Research refs are
+  // `<runId>|<detail>`, so the `|` is percent-encoded in the URL.
+  it.each([
+    { kind: "research-run", ref: "run-a", expect: "Run provenance" },
+    { kind: "research-metric", ref: "run-a|exact-match::accuracy", expect: "exact-match::accuracy" },
+    { kind: "research-sample", ref: "run-a|s-1", expect: "s-1" },
+    { kind: "research-annotation", ref: "run-a|0", expect: "conclusion" },
+  ])("opens the $kind drawer with no prior interaction", async ({ kind, ref, expect: text }) => {
+    renderAt(`/research/runs?inspect=${encodeURIComponent(`${kind}:${ref}`)}`);
+    const drawer = await screen.findByTestId("inspector-drawer");
+    await openDrawer(drawer);
+    expect(await within(drawer).findByText(text)).toBeTruthy();
+    // The shared dock owns the only drawer in the document, and the work surface renders none of
+    // the drawer's content: moving research detail into a Research-owned panel adds a second
+    // drawer, or the same content, outside the dock and fails here.
+    const dock = screen.getByTestId("inspector-dock");
+    expect(screen.getAllByTestId("inspector-drawer")).toEqual([drawer]);
+    expect(dock.contains(drawer)).toBe(true);
+    expect(within(screen.getByTestId("primary-region")).queryByText(text)).toBeNull();
+  });
+
+  it.each([
+    { what: "a run that does not exist", ref: "research-run:run-ghost", expect: "Run manifest unreadable: run-ghost" },
+    { what: "a metric the run does not report", ref: "research-metric:run-a|nope::missing", expect: "nope::missing is not reported for run-a" },
+    { what: "a sample with no events", ref: "research-sample:run-a|s-404", expect: "s-404 has no recorded events" },
+    { what: "an annotation index past the end", ref: "research-annotation:run-a|99", expect: "Annotation is outside the loaded log" },
+    { what: "a sample of a run with no log", ref: "research-sample:run-ghost|s-0", expect: "Sample log unavailable for run-ghost" },
+  ])("renders a named not-found state, not a blank drawer, for $what", async ({ ref, expect: text }) => {
+    renderAt(`/research/runs?inspect=${encodeURIComponent(ref)}`);
+    const drawer = await screen.findByTestId("inspector-drawer");
+    expect(await within(drawer).findByText(text, { exact: false })).toBeTruthy();
+  });
+});
+
+describe("No Research surface renders a money figure", () => {
+  // Rev 10: cost does not exist in packages/research. manifest.accounting records what a run was
+  // accounted against, never what it cost, so a currency symbol anywhere is an invented number.
+  const MONEY = /[$€£¥₹]|\b(?:USD|EUR|GBP|dollars?|cents?)\b|\bcost\b/i;
+
+  it.each(["/research/experiments", "/research/runs", "/research/runs/run-a", "/research/compare?baseline=run-a&candidate=run-b"])("renders no currency at %s", async (url) => {
+    renderAt(url);
+    const main = await screen.findByTestId("primary-region");
+    // Wait for the settled surface: an empty skeleton trivially contains no currency.
+    await waitFor(() => expect(main.textContent!.length).toBeGreaterThan(80));
+    expect(main.textContent).not.toMatch(MONEY);
+  });
+
+  it.each(["research-run:run-a", "research-metric:run-a|exact-match::accuracy", "research-sample:run-a|s-0", "research-annotation:run-a|0"])("renders no currency in the %s drawer either", async (ref) => {
+    renderAt(`/research/runs?inspect=${encodeURIComponent(ref)}`);
+    const drawer = await screen.findByTestId("inspector-drawer");
+    await openDrawer(drawer);
+    expect(drawer.textContent).not.toMatch(MONEY);
   });
 });

@@ -42,15 +42,16 @@ describe("fixtureResearch serves the declared adapter shapes", () => {
 
   it("returns a tail payload with a next offset and camelCased sample ids", async () => {
     const tail = await fixtureResearch.tail("run-a");
-    expect(tail.nextOffset).toBe(1);
-    expect(tail.events.map((e) => e.seq)).toEqual([0, 1]);
-    for (const event of tail.events) expect(Object.keys(event).sort()).toEqual(["data", "kind", "sampleId", "seq", "ts"]);
+    expect(tail.nextOffset).toBe(2);
+    expect(tail.events.map((e) => e.seq)).toEqual([0, 1, 2]);
+    for (const event of tail.events) expect(Object.keys(event).sort()).toEqual(["data", "kind", "sampleId", "seq", "ts", "usage"]);
   });
 
   it("returns metrics and a comparison keyed by run id", async () => {
     const summary = await fixtureResearch.getMetrics("run-a");
-    expect(summary).toMatchObject({ sampleCount: 2, eventCount: 2 });
+    expect(summary).toMatchObject({ sampleCount: 2, eventCount: 3 });
     expect(summary.metrics["exact-match::accuracy"]).toEqual({ value: 0.5, se: 0.5, ci95: [0, 1], n: 2, method: "binomial-proportion" });
+    expect(summary.metrics["exact-match::latency_ms"]).toEqual({ value: 118.5, se: null, ci95: null, n: 1, method: "single-sample-no-variance" });
     const compared = await fixtureResearch.compare(["run-a", "run-b"]);
     expect(Object.keys(compared)).toEqual(["run-a", "run-b"]);
     expect(compared["run-b"]?.metrics).toEqual({});
@@ -99,7 +100,7 @@ describe("tail resume contract over the captured fixture", () => {
   });
 
   it("drops exactly the acknowledged prefix when resuming mid-stream", () => {
-    expect(page(0).events.map((e) => e.seq)).toEqual([1]);
-    expect(page(-1).events.map((e) => e.seq)).toEqual([0, 1]);
+    expect(page(0).events.map((e) => e.seq)).toEqual([1, 2]);
+    expect(page(-1).events.map((e) => e.seq)).toEqual([0, 1, 2]);
   });
 });
