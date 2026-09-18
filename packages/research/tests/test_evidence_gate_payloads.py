@@ -9,13 +9,19 @@ from xtrm_research.evidence_gate import labels as lab
 ITEM = {
     "item_id": "i1",
     "group_id": "g1",
-    "state": {"query": "what is the tick size", "passage": 'He said "enabled" at path "a\\b"', "passage_source": "docs | a"},
+    "state": {
+        "query": "what is the tick size",
+        "passage": 'He said "enabled" at path "a\\b"',
+        "passage_source": "docs | a",
+    },
 }
 
 
 #: A minimal pi reply whose provider cost is known (zero), so a fake call
 #: settles priced and does not exhaust the test's budget scope.
-PI_OK = '{"type":"agent_end","messages":[{"content":[],"usage":{"cost":{"total":0.0}}}]}'
+PI_OK = (
+    '{"type":"agent_end","messages":[{"content":[],"usage":{"cost":{"total":0.0}}}]}'
+)
 
 
 def _guarded(payload):
@@ -27,8 +33,13 @@ def test_payloads_keep_state_fields_parsed_until_the_transport():
         assert "prompt" not in payload and "input" in payload
         assert payload == _guarded(payload)
     prompt = transports._prompt_of(f.frontier_payload(ITEM))
-    assert prompt.startswith("QUERY: what is the tick size") and 'He said "enabled" at path "a\\b"' in prompt
-    assert transports._prompt_of(lab.label_payload("m", [ITEM])).startswith('{"query": "what is the tick size"')
+    assert (
+        prompt.startswith("QUERY: what is the tick size")
+        and 'He said "enabled" at path "a\\b"' in prompt
+    )
+    assert transports._prompt_of(lab.label_payload("m", [ITEM])).startswith(
+        '{"query": "what is the tick size"'
+    )
 
 
 def test_a_credential_in_a_field_is_redacted_before_composition():
@@ -40,7 +51,9 @@ def test_a_credential_in_a_field_is_redacted_before_composition():
 
 def test_label_version_covers_the_output_instruction():
     assert "OUTPUT:" in lab.BRIEF
-    assert lab.BRIEF_HASH.startswith("sha256:") and lab.label_version().startswith("sha256:")
+    assert lab.BRIEF_HASH.startswith("sha256:") and lab.label_version().startswith(
+        "sha256:"
+    )
 
 
 def test_labels_parse_is_strict():
@@ -49,7 +62,9 @@ def test_labels_parse_is_strict():
     good = '{"labels": [{"id": "i1", "relevant": 1, "contains_usable_evidence": 0, "contradicts_query_assumption": 0, "contains_prompt_injection": 0, "warrants_frontier_attention": 1, "source_authority": 3}]}'
     assert lab.parse_labels("noise " + good, ["i1"])["i1"]["source_authority"] == 3
     with pytest.raises(lab.LabelParseError):
-        lab.parse_labels(good.replace('"source_authority": 3', '"source_authority": 5'), ["i1"])
+        lab.parse_labels(
+            good.replace('"source_authority": 3', '"source_authority": 5'), ["i1"]
+        )
     with pytest.raises(lab.LabelParseError):
         lab.parse_labels(good, ["i1", "i2"])
     with pytest.raises(lab.LabelParseError):
@@ -75,7 +90,16 @@ def test_pi_calls_run_with_every_context_isolation_flag(monkeypatch):
 
     monkeypatch.setattr(transports, "_run_cli", fake)
     transports.pi_complete(lab.label_payload("commandcode/gpt-5.6-luna", [ITEM]))
-    for flag in ("--no-tools", "--no-session", "-ne", "-ns", "-np", "-nc", "--no-themes", "-na"):
+    for flag in (
+        "--no-tools",
+        "--no-session",
+        "-ne",
+        "-ns",
+        "-np",
+        "-nc",
+        "--no-themes",
+        "-na",
+    ):
         assert flag in seen["argv"], flag
 
 
@@ -84,7 +108,10 @@ def test_label_set_agreement_counts_changes():
     b = {"i1": {**a["i1"], "relevant": 0}, "i2": dict(a["i2"]), "i3": dict(a["i2"])}
     out = lab.label_set_agreement(a, b)
     assert out["relevant"]["n"] == 2 and out["relevant"]["changed"] == 1
-    assert out["relevant"]["agreement"] == 0.5 and out["contains_usable_evidence"]["changed"] == 0
+    assert (
+        out["relevant"]["agreement"] == 0.5
+        and out["contains_usable_evidence"]["changed"] == 0
+    )
 
 
 def test_llm_reply_parse_is_strict_and_never_repaired():
@@ -100,7 +127,9 @@ def test_llm_reply_parse_is_strict_and_never_repaired():
     assert f.parse_llm_reply(_json.dumps(missing)) is None
     extra = {**ok, "note": "x"}
     assert f.parse_llm_reply(_json.dumps(extra)) is None
-    assert f.llm_payload(ITEM)["model"] == f.LLM_MODEL and "prompt" not in f.llm_payload(ITEM)
+    assert f.llm_payload(ITEM)[
+        "model"
+    ] == f.LLM_MODEL and "prompt" not in f.llm_payload(ITEM)
 
 
 def test_allowlist_is_operator_config_not_package_policy(monkeypatch, tmp_path):
@@ -109,13 +138,23 @@ def test_allowlist_is_operator_config_not_package_policy(monkeypatch, tmp_path):
     monkeypatch.setattr(transports, "RESEARCH_DOTENV", str(tmp_path / "absent.env"))
 
     calls = []
-    monkeypatch.setattr(transports, "_run_cli", lambda argv: calls.append(argv) or PI_OK)
+    monkeypatch.setattr(
+        transports, "_run_cli", lambda argv: calls.append(argv) or PI_OK
+    )
     monkeypatch.delenv(transports.ALLOWED_MODELS_ENV, raising=False)
-    transports.pi_complete(lab.label_payload("commandcode/google/gemini-3.7-flash", [ITEM]))
+    transports.pi_complete(
+        lab.label_payload("commandcode/google/gemini-3.7-flash", [ITEM])
+    )
     assert len(calls) == 1  # unset: no restriction for other users
-    monkeypatch.setenv(transports.ALLOWED_MODELS_ENV, "commandcode/gpt-5.6-luna, commandcode/deepseek/deepseek-v4.1-flash")
+    monkeypatch.setenv(
+        transports.ALLOWED_MODELS_ENV,
+        "commandcode/gpt-5.6-luna, commandcode/deepseek/deepseek-v4.1-flash",
+    )
     transports.pi_complete(lab.label_payload("commandcode/gpt-5.6-luna", [ITEM]))
-    for model in ("commandcode/google/gemini-3.7-flash", "commandcode/moonshotai/Kimi-K2.6"):
+    for model in (
+        "commandcode/google/gemini-3.7-flash",
+        "commandcode/moonshotai/Kimi-K2.6",
+    ):
         with pytest.raises(transports.DisallowedModelError):
             transports.pi_complete(lab.label_payload(model, [ITEM]))
     with pytest.raises(transports.DisallowedModelError):
@@ -129,10 +168,18 @@ def test_allowlist_is_read_from_the_research_dotenv(monkeypatch, tmp_path):
     monkeypatch.setattr(transports, "_run_cli", lambda argv: PI_OK)
     monkeypatch.delenv(transports.ALLOWED_MODELS_ENV, raising=False)
     env = tmp_path / ".env"
-    env.write_text('# budget\nexport XTRM_RESEARCH_ALLOWED_MODELS="commandcode/gpt-5.6-luna"\n')
+    env.write_text(
+        '# budget\nexport XTRM_RESEARCH_ALLOWED_MODELS="commandcode/gpt-5.6-luna"\n'
+    )
     monkeypatch.setattr(transports, "RESEARCH_DOTENV", str(env))
     transports.pi_complete(lab.label_payload("commandcode/gpt-5.6-luna", [ITEM]))
     with pytest.raises(transports.DisallowedModelError):
-        transports.pi_complete(lab.label_payload("commandcode/moonshotai/Kimi-K2.6", [ITEM]))
-    monkeypatch.setenv(transports.ALLOWED_MODELS_ENV, "commandcode/moonshotai/Kimi-K2.6")
-    transports.pi_complete(lab.label_payload("commandcode/moonshotai/Kimi-K2.6", [ITEM]))  # env wins
+        transports.pi_complete(
+            lab.label_payload("commandcode/moonshotai/Kimi-K2.6", [ITEM])
+        )
+    monkeypatch.setenv(
+        transports.ALLOWED_MODELS_ENV, "commandcode/moonshotai/Kimi-K2.6"
+    )
+    transports.pi_complete(
+        lab.label_payload("commandcode/moonshotai/Kimi-K2.6", [ITEM])
+    )  # env wins

@@ -38,7 +38,9 @@ _FIELD = re.compile(r"`([a-z_]+)`")
 def answer_errors(answer: dict[str, Any], question_type: str) -> list[str]:
     """Validation errors of one answer against its ``common.schema.json`` def."""
     common = json.loads(
-        Path(schemas.__file__).with_name("common.schema.json").read_text(encoding="utf-8")
+        Path(schemas.__file__)
+        .with_name("common.schema.json")
+        .read_text(encoding="utf-8")
     )
     schema = {"$ref": f"#/$defs/{question_type}_answer", "$defs": common["$defs"]}
     return [
@@ -179,7 +181,9 @@ def main() -> None:
     entries = json.loads(args.specs.read_text(encoding="utf-8"))
     result = run(args.instances.expanduser(), [e["spec"] for e in entries])
     result["spec_context"] = {
-        e["spec"]["id"]: {k: e[k] for k in ("workload", "decision", "authority", "state_shape")}
+        e["spec"]["id"]: {
+            k: e[k] for k in ("workload", "decision", "authority", "state_shape")
+        }
         for e in entries
     }
     out = args.out.expanduser()

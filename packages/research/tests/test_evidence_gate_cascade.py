@@ -198,13 +198,28 @@ def test_published_metrics_mark_the_sweep_exploratory_and_map_deltas():
     m = {"value": 0.5, "ci95": [0.4, 0.6], "method": "boot"}
     result = {
         "n_eval": 222,
-        "metrics": {"cascade|gate|retained_precision": m, "cascade-lo98-hi90|gate|retained_precision": m, "jev|gate|retained_precision": m},
-        "paired_deltas": {"cascade-minus-no-filter|gate|retained_precision": m, "battery-rule-minus-jev|contains_usable_evidence|auc": m},
+        "metrics": {
+            "cascade|gate|retained_precision": m,
+            "cascade-lo98-hi90|gate|retained_precision": m,
+            "jev|gate|retained_precision": m,
+        },
+        "paired_deltas": {
+            "cascade-minus-no-filter|gate|retained_precision": m,
+            "battery-rule-minus-jev|contains_usable_evidence|auc": m,
+        },
     }
     out = pc._metrics(result, "cascade")
-    assert set(out) == {"gate.retained_precision", "sweep.lo98-hi90.retained_precision", "gate.retained_precision.minus_no_filter"}
-    assert out["sweep.lo98-hi90.retained_precision"]["method"].endswith("exploratory sweep cell")
-    assert set(pc._metrics(result, "battery-rule")) == {"contains_usable_evidence.auc.minus_jev"}
+    assert set(out) == {
+        "gate.retained_precision",
+        "sweep.lo98-hi90.retained_precision",
+        "gate.retained_precision.minus_no_filter",
+    }
+    assert out["sweep.lo98-hi90.retained_precision"]["method"].endswith(
+        "exploratory sweep cell"
+    )
+    assert set(pc._metrics(result, "battery-rule")) == {
+        "contains_usable_evidence.auc.minus_jev"
+    }
 
 
 def test_reference_llm_arms_escalate_every_candidate():

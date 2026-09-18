@@ -186,12 +186,35 @@ def test_over_255_entries_are_truncated_by_lexical_rank_and_counted(jev, tmp_pat
 
 def test_a_forced_single_entry_step_does_not_inflate_the_path_score(jev, tmp_path):
     tree = ["apps/.gitkeep", "packages/a.ts", "packages/b.ts", "README.md"]
-    wf = cl.BeamWorkflow(ResponseCache(tmp_path / "c.jsonl"), {"t": tree}, {"t": ["packages/a.ts"]}, 3)
-    root = {"item_id": "t", "task": "x", "beam": [{"path": "", "logp": 0.0, "asked": 0}], "depth": 0}
+    wf = cl.BeamWorkflow(
+        ResponseCache(tmp_path / "c.jsonl"), {"t": tree}, {"t": ["packages/a.ts"]}, 3
+    )
+    root = {
+        "item_id": "t",
+        "task": "x",
+        "beam": [{"path": "", "logp": 0.0, "asked": 0}],
+        "depth": 0,
+    }
     probs = {"apps/": 0.3, "packages/": 0.6, "README.md": 0.1}
     wf.policy(root, {"step_0": {"probabilities": probs}})
-    wf.policy({**root, "beam": [{"path": "apps/", "logp": __import__("math").log(0.3), "asked": 1}]}, {})
-    wf.policy({**root, "beam": [{"path": "packages/", "logp": __import__("math").log(0.6), "asked": 1}]}, {"step_0": {"probabilities": {"a.ts": 0.9, "b.ts": 0.1}}})
+    wf.policy(
+        {
+            **root,
+            "beam": [
+                {"path": "apps/", "logp": __import__("math").log(0.3), "asked": 1}
+            ],
+        },
+        {},
+    )
+    wf.policy(
+        {
+            **root,
+            "beam": [
+                {"path": "packages/", "logp": __import__("math").log(0.6), "asked": 1}
+            ],
+        },
+        {"step_0": {"probabilities": {"a.ts": 0.9, "b.ts": 0.1}}},
+    )
     ranked = wf.ranking("t")
     assert ranked.index("packages/a.ts") < ranked.index("apps/.gitkeep")
     assert wf.leaves["t"]["apps/.gitkeep"] == pytest.approx(__import__("math").log(0.3))
@@ -203,17 +226,37 @@ def test_published_metrics_keep_exploratory_separate():
     m = {"value": 0.2, "ci95": [0.1, 0.3], "method": "boot"}
     result = {
         "n_items": 69,
-        "metrics": {"jev-beam|hit@1": m, "fusion|hit@1": m, "lexical|hit@1": m, "jev-beam|cost_usd": {"value": 0.00026, "ci95": [0.00024, 0.00028], "method": "boot"}},
-        "paired_deltas": {"jev-beam-minus-hot-files|hit@1": m, "fusion-minus-hot-files|hit@1": m},
+        "metrics": {
+            "jev-beam|hit@1": m,
+            "fusion|hit@1": m,
+            "lexical|hit@1": m,
+            "jev-beam|cost_usd": {
+                "value": 0.00026,
+                "ci95": [0.00024, 0.00028],
+                "method": "boot",
+            },
+        },
+        "paired_deltas": {
+            "jev-beam-minus-hot-files|hit@1": m,
+            "fusion-minus-hot-files|hit@1": m,
+        },
     }
     out = pl._metrics(result, "jev-beam")
-    assert set(out) == {"hit@1", "cost_usd", "exploratory.fusion.hit@1", "hit@1.minus_hot_files", "exploratory.fusion.hit@1.minus_hot_files"}
+    assert set(out) == {
+        "hit@1",
+        "cost_usd",
+        "exploratory.fusion.hit@1",
+        "hit@1.minus_hot_files",
+        "exploratory.fusion.hit@1.minus_hot_files",
+    }
     assert out["exploratory.fusion.hit@1"]["method"].endswith("exploratory")
     assert set(pl._metrics(result, "lexical")) == {"hit@1"}
     assert "0.000260 [0.000240, 0.000280]" in pl._fmt(out["cost_usd"])
 
 
-@pytest.mark.parametrize("verb", ["commit", "checkout", "reset", "push", "stash", "config"])
+@pytest.mark.parametrize(
+    "verb", ["commit", "checkout", "reset", "push", "stash", "config"]
+)
 def test_git_read_refuses_every_writing_verb(verb):
     from xtrm_research.code_state import git_read
 

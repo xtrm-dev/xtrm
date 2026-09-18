@@ -76,7 +76,9 @@ FRONTIER_SCHEMA: dict[str, Any] = {
 
 
 #: Composed by ``transports.claude_classify`` after the guard stage.
-FRONTIER_PROMPT_TEMPLATE = "QUERY: {query}\n\nCANDIDATE (source: {passage_source}):\n{passage}"
+FRONTIER_PROMPT_TEMPLATE = (
+    "QUERY: {query}\n\nCANDIDATE (source: {passage_source}):\n{passage}"
+)
 
 
 def frontier_payload(item: dict[str, Any]) -> dict[str, Any]:
@@ -173,9 +175,13 @@ def jev_predict(item: dict[str, Any]) -> dict[str, Any]:
     # its legend; the authority level is read from that criterion's own
     # "N = " prefix, never from the position.
     legend = answers[ORDINAL]["legend"]
-    level_of = {str(k): re.match(r"^(\d) = ", text).group(1) for k, text in legend.items()}
+    level_of = {
+        str(k): re.match(r"^(\d) = ", text).group(1) for k, text in legend.items()
+    }
     row["score_probabilities"] = {
-        ORDINAL: {level_of[str(k)]: v for k, v in answers[ORDINAL]["probabilities"].items()}
+        ORDINAL: {
+            level_of[str(k)]: v for k, v in answers[ORDINAL]["probabilities"].items()
+        }
     }
     row["score_legend"] = legend
     row["model"] = response["model"]
@@ -198,12 +204,13 @@ LLM_MODEL = "commandcode/deepseek/deepseek-v4.1-flash"
 LLM_SYSTEM = (
     FRONTIER_SYSTEM
     + "\n\nReply with ONLY a JSON object, no prose, no code fence, matching this JSON"
-    " Schema: "
-    + json.dumps(FRONTIER_SCHEMA)
+    " Schema: " + json.dumps(FRONTIER_SCHEMA)
 )
 
 
-def llm_payload(item: dict[str, Any], reason: str = "operator_approval") -> dict[str, Any]:
+def llm_payload(
+    item: dict[str, Any], reason: str = "operator_approval"
+) -> dict[str, Any]:
     """``reason``: the budget-policy reason (transports.BUDGET_REASONS). The
     full-set DeepSeek arm ran under operator approval; a cascade escalation
     passes ``uncertainty_band``."""
@@ -253,7 +260,11 @@ def llm_predict(item: dict[str, Any]) -> dict[str, Any]:
     row["model"] = response.get("model")
     out = parse_llm_reply(response.get("text"))
     if out is None:
-        return {**row, "status": "no_output", "detail": response.get("error") or "reply failed FRONTIER_SCHEMA"}
+        return {
+            **row,
+            "status": "no_output",
+            "detail": response.get("error") or "reply failed FRONTIER_SCHEMA",
+        }
     dist = out[ORDINAL]
     total = sum(dist.values())
     row["raw"] = {q: float(out[q]) for q in BINARY}

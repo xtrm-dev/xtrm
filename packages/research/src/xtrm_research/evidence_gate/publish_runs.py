@@ -102,7 +102,12 @@ def definitions(registry_root: Path) -> dict[str, Any]:
             reg,
             "question_spec",
             publish.question_spec(
-                f"evidence-gate.{name}", "v1", body, provenance={"module": "xtrm_research.evidence_gate.frontier.jev_questions"}
+                f"evidence-gate.{name}",
+                "v1",
+                body,
+                provenance={
+                    "module": "xtrm_research.evidence_gate.frontier.jev_questions"
+                },
             ),
         )
         for name, body in frontier.jev_questions().items()
@@ -274,11 +279,19 @@ def _usage(arm: str, row: dict[str, Any]) -> dict[str, Any]:
     bill, which neither schema null reason describes)."""
     u = row.get("usage") or {}
     if arm in ("embedding", "qwen"):
-        record = usage_record("unknown", latency_ms=row.get("latency_ms"), request_model=row.get("model_revision"))
+        record = usage_record(
+            "unknown",
+            latency_ms=row.get("latency_ms"),
+            request_model=row.get("model_revision"),
+        )
     else:
         cost = u.get("cost_usd")
         record = usage_record(
-            {"jev": "provider_api", "frontier": "provider_api", "llm": "pi_message_usage"}[arm],
+            {
+                "jev": "provider_api",
+                "frontier": "provider_api",
+                "llm": "pi_message_usage",
+            }[arm],
             input_tokens=u.get("input_tokens"),
             output_tokens=u.get("output_tokens"),
             cached_input_tokens=u.get("cached_input_tokens"),

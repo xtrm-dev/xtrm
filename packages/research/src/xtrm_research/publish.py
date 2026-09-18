@@ -52,7 +52,9 @@ def define(kind: str, body: dict[str, Any]) -> dict[str, Any]:
     return definition
 
 
-def question_spec(spec_id: str, version: str, body: dict[str, Any], **extra: Any) -> dict[str, Any]:
+def question_spec(
+    spec_id: str, version: str, body: dict[str, Any], **extra: Any
+) -> dict[str, Any]:
     """A question_spec definition body from a System One question body:
     a Choice gets ``options`` (its criteria labels), a Score gets
     ``legend`` (level number -> criterion text, from 0 as Jev numbers

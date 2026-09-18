@@ -53,7 +53,9 @@ def _git(repo_path: Path, *args: str) -> str:
 
 #: Read-only git plumbing a study may use to reconstruct history (XTRM-512).
 #: Anything that writes (commit, checkout, reset, push ...) is refused.
-READ_ONLY_GIT_VERBS = frozenset({"log", "ls-tree", "diff-tree", "rev-parse", "rev-list", "cat-file", "show"})
+READ_ONLY_GIT_VERBS = frozenset(
+    {"log", "ls-tree", "diff-tree", "rev-parse", "rev-list", "cat-file", "show"}
+)
 
 
 def git_read(repo_path: Path, verb: str, *args: str) -> str:

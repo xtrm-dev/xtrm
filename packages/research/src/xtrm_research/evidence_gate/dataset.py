@@ -294,15 +294,17 @@ def apply_filters(
             query = redact(candidate.query)
             header = redact(candidate.passage_header)
             clean = redact(text)
-            if clean != text or query != candidate.query or header != candidate.passage_header:
+            if (
+                clean != text
+                or query != candidate.query
+                or header != candidate.passage_header
+            ):
                 counts.redacted += 1
                 text = clean
             if len(text) > PASSAGE_CHAR_LIMIT:
                 counts.truncated += 1
                 text = text[:PASSAGE_CHAR_LIMIT]
-            candidates.append(
-                Candidate(query, text, header, candidate.rank)
-            )
+            candidates.append(Candidate(query, text, header, candidate.rank))
         candidates = candidates[: cap.get(group.stratum, len(candidates))]
         if not candidates:
             counts.no_candidate_groups += 1
@@ -440,11 +442,23 @@ def derive_redacted_sources(src: Path, out: Path) -> dict[str, Any]:
         item["state"]["passage_source"] = clean
     fields = {k: v for k, v in source_manifest.items() if k not in _FREEZE_OWNED}
     fields.update(
-        derived_from={"items_sha256": source_manifest["items_sha256"], "version": source_manifest["version"]},
+        derived_from={
+            "items_sha256": source_manifest["items_sha256"],
+            "version": source_manifest["version"],
+        },
         derivation=f"passage_source redacted with guards.redact ({changed} items changed); all other fields byte-identical",
     )
     return freeze(items, out, fields, version=source_manifest["version"] + 1)
 
 
 #: Manifest keys :func:`freeze` computes itself.
-_FREEZE_OWNED = {"dataset_id", "version", "items_file", "items_sha256", "n_items", "n_groups", "by_stratum", "by_source_kind"}
+_FREEZE_OWNED = {
+    "dataset_id",
+    "version",
+    "items_file",
+    "items_sha256",
+    "n_items",
+    "n_groups",
+    "by_stratum",
+    "by_source_kind",
+}

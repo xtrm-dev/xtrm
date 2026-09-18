@@ -333,9 +333,12 @@ class BeamWorkflow(Workflow):
             leaves = self.leaves.setdefault(item, {})
             for logp, depth, path in expansions:
                 if not path.endswith("/"):
-                    leaves[path] = max(leaves.get(path, -math.inf), logp / max(depth, 1))
+                    leaves[path] = max(
+                        leaves.get(path, -math.inf), logp / max(depth, 1)
+                    )
         dirs = sorted(
-            (e for e in expansions if e[2].endswith("/")), key=lambda e: -e[0] / max(e[1], 1)
+            (e for e in expansions if e[2].endswith("/")),
+            key=lambda e: -e[0] / max(e[1], 1),
         )[: self.width]
         return {
             "action": "expand",
@@ -465,14 +468,22 @@ def fuse(a: list[str], b: list[str], k: int = RRF_K) -> list[str]:
     return sorted(score, key=lambda f: (-score[f], f))
 
 
-def exploratory(items: list[dict[str, Any]], wf: BeamWorkflow, table: dict[str, dict[str, dict[str, float]]]) -> None:
+def exploratory(
+    items: list[dict[str, Any]],
+    wf: BeamWorkflow,
+    table: dict[str, dict[str, dict[str, float]]],
+) -> None:
     for arm in EXPLORATORY_ARMS:
         table[arm] = {}
     for item in items:
         iid = item["item_id"]
         repo = Path(REPOS[item["repo"]]["path"]).expanduser()
         files = wf.trees[iid]
-        beam, hot, lex = wf.ranking(iid), hot_rank(repo, item["base"], files), lexical_rank(item["task"], files)
+        beam, hot, lex = (
+            wf.ranking(iid),
+            hot_rank(repo, item["base"], files),
+            lexical_rank(item["task"], files),
+        )
         table["fusion"][iid] = hits(fuse(beam, hot), item["truth"])
         code = [f for f in item["truth"] if not f.endswith(".md")]
         if code:
@@ -490,7 +501,9 @@ def evaluate(
     resamples = stats.resample_indices(len(ids), n_resamples, SEED)
 
     def mean(arm: str, name: str, idx: list[int]) -> float | None:
-        vals = [table[arm][ids[n]][name] for n in idx if name in table[arm].get(ids[n], {})]
+        vals = [
+            table[arm][ids[n]][name] for n in idx if name in table[arm].get(ids[n], {})
+        ]
         return sum(vals) / len(vals) if vals else None
 
     metrics: dict[str, Any] = {}
@@ -507,10 +520,19 @@ def evaluate(
     for arm in EXPLORATORY_ARMS:
         if arm in table:
             for name in METRICS:
-                metrics[f"{arm}|{name}"] = stats.interval(mean(arm, name, everything), [mean(arm, name, r) for r in resamples], len(ids))
+                metrics[f"{arm}|{name}"] = stats.interval(
+                    mean(arm, name, everything),
+                    [mean(arm, name, r) for r in resamples],
+                    len(ids),
+                )
     pairs = [("jev-beam", "lexical"), ("jev-beam", "hot-files")]
     if "fusion" in table:
-        pairs += [("fusion", "hot-files"), ("fusion", "jev-beam"), ("jev-beam-code", "hot-files-code"), ("jev-beam-code", "lexical-code")]
+        pairs += [
+            ("fusion", "hot-files"),
+            ("fusion", "jev-beam"),
+            ("jev-beam-code", "hot-files-code"),
+            ("jev-beam-code", "lexical-code"),
+        ]
     for arm, ref in pairs:
         for name in METRICS:
 

@@ -126,12 +126,17 @@ def render(result: dict[str, Any]) -> str:
         "",
         f"### `{ORDINAL}` (Score; arms that answer it)",
         "",
-        "| metric | " + " | ".join(score_arms) + " | jev minus frontier | llm minus frontier |",
+        "| metric | "
+        + " | ".join(score_arms)
+        + " | jev minus frontier | llm minus frontier |",
         "|---|" + "---|" * (len(score_arms) + 2),
     ]
     for name in ("multiclass_brier", "expected_level_mae"):
         cells = [fmt(metrics.get(f"{a}|{ORDINAL}|{name}")) for a in score_arms]
-        cells += [fmt(deltas.get(f"{a}-minus-frontier|{ORDINAL}|{name}")) for a in ("jev", "llm")]
+        cells += [
+            fmt(deltas.get(f"{a}-minus-frontier|{ORDINAL}|{name}"))
+            for a in ("jev", "llm")
+        ]
         lines.append(f"| {name} | " + " | ".join(cells) + " |")
     lines += ["", "### Not established", ""]
     lines += [f"- `{k}`: {v}" for k, v in result.get("not_established", {}).items()]
@@ -139,15 +144,32 @@ def render(result: dict[str, Any]) -> str:
 
 
 def _row(name: str, cells: list[dict[str, Any] | None], latency: bool = False) -> str:
-    return f"| {name} | " + " | ".join(fmt(c, 0 if latency else 3) for c in cells) + " |"
+    return (
+        f"| {name} | " + " | ".join(fmt(c, 0 if latency else 3) for c in cells) + " |"
+    )
 
 
 def render_cascade(result: dict[str, Any]) -> str:
     """Tables for the System One cascade result (XTRM-511)."""
     m, d = result["metrics"], result["paired_deltas"]
-    arms = ["no-filter", "jev", "llm", "frontier", "battery-rule", "battery-learned", "cascade"]
+    arms = [
+        "no-filter",
+        "jev",
+        "llm",
+        "frontier",
+        "battery-rule",
+        "battery-learned",
+        "cascade",
+    ]
     sweep = sorted(a for a in {k.split("|")[0] for k in m} if a.startswith("cascade-"))
-    names = ["useful_evidence_recall", "retained_precision", "frontier_input_token_reduction", "escalation_rate", "latency_p50_ms", "cost_usd_per_1000_candidates"]
+    names = [
+        "useful_evidence_recall",
+        "retained_precision",
+        "frontier_input_token_reduction",
+        "escalation_rate",
+        "latency_p50_ms",
+        "cost_usd_per_1000_candidates",
+    ]
     lines = [
         f"n_eval = {result['n_eval']} items in {result['n_clusters']} clusters; battery `{result['battery_hash']}`; pre-registered band {json.dumps(result['pre_registered'])}; uncached requests at evaluation {result['uncached_requests']}.",
         "",
@@ -157,15 +179,50 @@ def render_cascade(result: dict[str, Any]) -> str:
         "|---|---|---|---|---|---|",
     ]
     for arm in ("battery-rule", "battery-learned", "jev", "llm", "frontier"):
-        cells = [m.get(f"{arm}|contains_usable_evidence|auc"), m.get(f"{arm}|contains_usable_evidence|brier_calibrated")]
-        cells += [d.get(f"{arm}-minus-{ref}|contains_usable_evidence|auc") for ref in ("jev", "llm", "frontier")]
+        cells = [
+            m.get(f"{arm}|contains_usable_evidence|auc"),
+            m.get(f"{arm}|contains_usable_evidence|brier_calibrated"),
+        ]
+        cells += [
+            d.get(f"{arm}-minus-{ref}|contains_usable_evidence|auc")
+            for ref in ("jev", "llm", "frontier")
+        ]
         lines.append(_row(arm, cells))
-    lines += ["", "### Gate (value [95% CI])", "", "| arm | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]
+    lines += [
+        "",
+        "### Gate (value [95% CI])",
+        "",
+        "| arm | " + " | ".join(names) + " |",
+        "|---|" + "---|" * len(names),
+    ]
     for arm in arms + sweep:
-        lines.append(f"| {arm}{' (exploratory)' if arm in sweep else ''} | " + " | ".join(fmt(m.get(f"{arm}|gate|{n}"), 0 if n.startswith("latency") else 3) for n in names) + " |")
-    lines += ["", "### Cascade paired deltas (cascade minus reference, same resamples)", "", "| reference | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]
+        lines.append(
+            f"| {arm}{' (exploratory)' if arm in sweep else ''} | "
+            + " | ".join(
+                fmt(m.get(f"{arm}|gate|{n}"), 0 if n.startswith("latency") else 3)
+                for n in names
+            )
+            + " |"
+        )
+    lines += [
+        "",
+        "### Cascade paired deltas (cascade minus reference, same resamples)",
+        "",
+        "| reference | " + " | ".join(names) + " |",
+        "|---|" + "---|" * len(names),
+    ]
     for ref in ("jev", "llm", "frontier", "no-filter"):
-        lines.append(f"| {ref} | " + " | ".join(fmt(d.get(f"cascade-minus-{ref}|gate|{n}"), 0 if n.startswith("latency") else 3) for n in names) + " |")
+        lines.append(
+            f"| {ref} | "
+            + " | ".join(
+                fmt(
+                    d.get(f"cascade-minus-{ref}|gate|{n}"),
+                    0 if n.startswith("latency") else 3,
+                )
+                for n in names
+            )
+            + " |"
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -181,17 +238,41 @@ def render_locator(result: dict[str, Any]) -> str:
         "| arm | " + " | ".join(names) + " |",
         "|---|" + "---|" * len(names),
     ]
-    for arm in ("jev-beam", "lexical", "hot-files", "fusion", "jev-beam-code", "lexical-code", "hot-files-code"):
+    for arm in (
+        "jev-beam",
+        "lexical",
+        "hot-files",
+        "fusion",
+        "jev-beam-code",
+        "lexical-code",
+        "hot-files-code",
+    ):
         if any(f"{arm}|{n}" in m for n in names):
-            tag = "" if arm in ("jev-beam", "lexical", "hot-files") else " (exploratory)"
+            tag = (
+                "" if arm in ("jev-beam", "lexical", "hot-files") else " (exploratory)"
+            )
             lines.append(_row(arm + tag, [m.get(f"{arm}|{n}") for n in names]))
-    lines += ["", "### Paired deltas", "", "| comparison | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]
+    lines += [
+        "",
+        "### Paired deltas",
+        "",
+        "| comparison | " + " | ".join(names) + " |",
+        "|---|" + "---|" * len(names),
+    ]
     for key in sorted({k.split("|")[0] for k in d}):
         lines.append(_row(key, [d.get(f"{key}|{n}") for n in names]))
-    lines += ["", "### System One cost per task (jev-beam)", "", "| requests | questions | input tokens | USD | latency ms |", "|---|---|---|---|---|"]
+    lines += [
+        "",
+        "### System One cost per task (jev-beam)",
+        "",
+        "| requests | questions | input tokens | USD | latency ms |",
+        "|---|---|---|---|---|",
+    ]
     cost = m.get("jev-beam|cost_usd")
     lines.append(
-        "| " + " | ".join(fmt(m.get(f"jev-beam|{n}"), 1) for n in ("requests", "questions")) + f" | {fmt(m.get('jev-beam|input_tokens'), 0)} | {fmt(cost, 6)} | {fmt(m.get('jev-beam|latency_ms'), 0)} |"
+        "| "
+        + " | ".join(fmt(m.get(f"jev-beam|{n}"), 1) for n in ("requests", "questions"))
+        + f" | {fmt(m.get('jev-beam|input_tokens'), 0)} | {fmt(cost, 6)} | {fmt(m.get('jev-beam|latency_ms'), 0)} |"
     )
     return "\n".join(lines) + "\n"
 
@@ -200,7 +281,9 @@ def main() -> None:
     """``report.py RESULT.json [--cascade | --locator]``."""
     result = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     kind = sys.argv[2] if len(sys.argv) > 2 else ""
-    renderer = {"--cascade": render_cascade, "--locator": render_locator}.get(kind, render)
+    renderer = {"--cascade": render_cascade, "--locator": render_locator}.get(
+        kind, render
+    )
     sys.stdout.write(renderer(result))
 
 

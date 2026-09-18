@@ -97,6 +97,7 @@ def test_a_second_run_replays_from_the_cache_without_a_send(jev, tmp_path):
     first = Countdown(ResponseCache(tmp_path / "c.jsonl")).run_episode("ep1", {"n": 1})
     again = Countdown(ResponseCache(tmp_path / "c.jsonl")).run_episode("ep1", {"n": 1})
     assert len(jev) == 2  # only the first run sent
+
     def ids(rs):
         return [r["data"]["request_id"] for r in rs if r["kind"] == "system_one_call"]
 
@@ -167,7 +168,10 @@ def _defs(reg):
             "observers": [],
             "evaluators": [{"id": "toy-eval", "version": "v1"}],
             "default_metrics": ["steps"],
-            "legend": {"steps": "System One calls per episode", "toy.is_positive": "n > 0"},
+            "legend": {
+                "steps": "System One calls per episode",
+                "toy.is_positive": "n > 0",
+            },
         },
     )
     variant = publish.register(

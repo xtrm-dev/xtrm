@@ -171,7 +171,9 @@ def test_a_reservation_waits_for_the_ledger_lock(started, monkeypatch, tmp_path)
     done = threading.Event()
     with ledger.open("a") as held:
         fcntl.flock(held, fcntl.LOCK_EX)
-        worker = threading.Thread(target=lambda: (transports.pi_complete(_payload()), done.set()))
+        worker = threading.Thread(
+            target=lambda: (transports.pi_complete(_payload()), done.set())
+        )
         worker.start()
         assert not done.wait(0.3), "reservation proceeded while the ledger was locked"
         assert calls == []

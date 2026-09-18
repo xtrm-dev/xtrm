@@ -384,7 +384,11 @@ def guard_alterations(items: list[dict[str, Any]]) -> dict[str, int]:
     for item in items:
         groups.setdefault(item["group_id"], []).append(item)
     return {
-        "labeler": sum(altered(lab.label_payload(m, g)) for g in groups.values() for m in lab.LABELERS),
+        "labeler": sum(
+            altered(lab.label_payload(m, g))
+            for g in groups.values()
+            for m in lab.LABELERS
+        ),
         "frontier": sum(altered(fr.frontier_payload(i)) for i in items),
         "jev": sum(altered(fr.jev_payload(i)) for i in items),
         "llm": sum(altered(fr.llm_payload(i)) for i in items),
@@ -444,8 +448,11 @@ def main() -> None:
         min_positives=MIN_POSITIVES,
         established_questions=ev.established,
         policy_paths={
-            "retain_evidence": "enabled" if ev.established["contains_usable_evidence"] else "disabled",
-            "retain_contradiction": "enabled" if ev.established["contradicts_query_assumption"]
+            "retain_evidence": "enabled"
+            if ev.established["contains_usable_evidence"]
+            else "disabled",
+            "retain_contradiction": "enabled"
+            if ev.established["contradicts_query_assumption"]
             else f"disabled: {sum(ev.y['contradicts_query_assumption'])} positive(s) < {MIN_POSITIVES}",
         },
         class_balance_eval={

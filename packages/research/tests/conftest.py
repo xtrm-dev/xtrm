@@ -35,8 +35,18 @@ def research_budget(tmp_path_factory, monkeypatch):
     XTRM-508 budget policy is exercised, never the operator's real ledger."""
     from xtrm_research import transports
 
-    monkeypatch.setattr(transports, "BUDGET_DIR", str(tmp_path_factory.mktemp("budget")))
-    monkeypatch.setattr(transports, "RESEARCH_DOTENV", str(tmp_path_factory.mktemp("env") / "absent.env"))
+    monkeypatch.setattr(
+        transports, "BUDGET_DIR", str(tmp_path_factory.mktemp("budget"))
+    )
+    monkeypatch.setattr(
+        transports,
+        "RESEARCH_DOTENV",
+        str(tmp_path_factory.mktemp("env") / "absent.env"),
+    )
     monkeypatch.setenv(transports.BUDGET_SCOPE_ENV, "test")
-    for key in (transports.BUDGET_MAX_CALLS_ENV, transports.BUDGET_MAX_COST_ENV, transports.ALLOWED_MODELS_ENV):
+    for key in (
+        transports.BUDGET_MAX_CALLS_ENV,
+        transports.BUDGET_MAX_COST_ENV,
+        transports.ALLOWED_MODELS_ENV,
+    ):
         monkeypatch.delenv(key, raising=False)

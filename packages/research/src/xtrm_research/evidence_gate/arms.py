@@ -89,10 +89,16 @@ def run(
     else:
         from xtrm_research.evidence_gate import frontier
 
-        predict = {"jev": frontier.jev_predict, "frontier": frontier.frontier_predict,
-                   "llm": frontier.llm_predict}[arm]
-        meta["model"] = {"jev": frontier.JEV_MODEL, "frontier": frontier.FRONTIER_MODEL,
-                         "llm": frontier.LLM_MODEL}[arm]
+        predict = {
+            "jev": frontier.jev_predict,
+            "frontier": frontier.frontier_predict,
+            "llm": frontier.llm_predict,
+        }[arm]
+        meta["model"] = {
+            "jev": frontier.JEV_MODEL,
+            "frontier": frontier.FRONTIER_MODEL,
+            "llm": frontier.LLM_MODEL,
+        }[arm]
         if arm == "frontier":
             meta["effort"] = frontier.FRONTIER_EFFORT
         with (
@@ -133,7 +139,9 @@ def main() -> None:
     #: Under host contention fewer torch threads is faster (XTRM-496: 3.1 s
     #: per pass at 2 threads vs ~30 s at 12 with load ~70).
     parser.add_argument("--threads", type=int, default=2)
-    parser.add_argument("--shard", default="0/1", help="i/n: this process scores items i, i+n, ...")
+    parser.add_argument(
+        "--shard", default="0/1", help="i/n: this process scores items i, i+n, ..."
+    )
     args = parser.parse_args()
     meta = run(
         args.arm,
