@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable
 
+from xtrm_research import transports as _transports
 from xtrm_research.hashing import compute_content_hash
 
 # ---- credential redaction ----------------------------------------------
@@ -973,9 +974,22 @@ class GuardFailure(RuntimeError):
 # ---- the one remote-send seam ----------------------------------------------
 
 
+def _resolve_transport(transport: Any) -> Callable[[dict[str, Any]], Any]:
+    """Resolve a transport *name* to the concrete send function defined in
+    :mod:`xtrm_research.transports` — the only module that imports a
+    provider SDK. A backend names the transport it wants and never imports
+    one; the seam resolves the name here. A callable is returned unchanged,
+    so a caller may still inject a concrete function (as the guard tests
+    do).
+    """
+    if isinstance(transport, str):
+        return getattr(_transports, transport)
+    return transport
+
+
 def guarded_send(
     payload: dict[str, Any],
-    send: Callable[[dict[str, Any]], Any],
+    send: Callable[[dict[str, Any]], Any] | str,
     *,
     known_ids: frozenset[str] = frozenset(),
     label_rule: LabelExclusionRule | None = None,
@@ -984,11 +998,14 @@ def guarded_send(
     """Run every guard against ``payload``; only on success, call
     ``send(payload)`` with the guarded payload and return its result.
 
-    This is the package's only remote-send seam. Fails closed: a guard
-    rejection or any unexpected exception inside the guard stage raises
-    :class:`GuardFailure` and ``send`` is never called.
+    This is the package's only remote-send seam. ``send`` is either a
+    concrete function or the *name* of one in
+    :mod:`xtrm_research.transports`, which the seam resolves itself. Fails
+    closed: a guard rejection or any unexpected exception inside the guard
+    stage raises :class:`GuardFailure` and the transport is never called.
     """
     rule = label_rule or LabelExclusionRule()
+    resolved = _resolve_transport(send)
     guard_failure: GuardFailure | None = None
     guarded: dict[str, Any] | None = None
     try:
@@ -1002,7 +1019,7 @@ def guarded_send(
     if guard_failure is not None:
         raise guard_failure from None
     assert guarded is not None
-    return send(guarded)
+    return resolved(guarded)
 
 
 def _run_guards(
@@ -1066,7 +1083,7 @@ def send_through_run(
     handle: Any,
     seq: int,
     payload: dict[str, Any],
-    send: Callable[[dict[str, Any]], Any],
+    send: Callable[[dict[str, Any]], Any] | str,
     *,
     known_ids: frozenset[str] = frozenset(),
     label_rule: LabelExclusionRule | None = None,
@@ -1092,8 +1109,13 @@ def send_through_run(
     :class:`~xtrm_research.runner.RunHandle` API, no new write path
     around its lock, and ``finish()`` always runs even if writing the
     event itself raises.
+
+    ``send`` is either a concrete function or the *name* of one in
+    :mod:`xtrm_research.transports`, which the seam resolves itself
+    (see :func:`guarded_send`).
     """
     rule = label_rule or LabelExclusionRule()
+    resolved = _resolve_transport(send)
     guard_failure: GuardFailure | None = None
     versions: dict[str, str] = {}
     guarded: dict[str, Any] | None = None
@@ -1117,7 +1139,7 @@ def send_through_run(
 
     assert guarded is not None
     try:
-        result = send(guarded)
+        result = resolved(guarded)
     except Exception:
         # the payload passed every guard and reached the backend: this is
         # never a guard failure, and must never be recorded as one (H3).

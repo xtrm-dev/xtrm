@@ -77,6 +77,10 @@ cd packages/research
 pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
 ```
 
+The Jev backend talks to TypeSafe through the optional `typesafe-sdk`
+(`pip install -e '.[jev]'`). The package and its full test suite import
+and pass without it — CI never installs it.
+
 ## Layout
 
 - `src/xtrm_research/schemas/` — the JSON Schemas that are the contract.
@@ -101,6 +105,12 @@ pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
 - `src/xtrm_research/system_one.py` — the provider-independent System One
   contract (`system_one(state, questions) -> answers`) and the deterministic
   duplicate-pair baseline backend.
+- `src/xtrm_research/jev.py` — the Jev/TypeSafe System One backend. It
+  *names* the transport it wants and never imports the SDK.
+- `src/xtrm_research/transports.py` — the only module that imports a
+  provider SDK, and the only home of a concrete send function; `guards`
+  resolves a transport name here. Imported by `guards.py` alone.
+
 - `src/xtrm_research/sampling.py` — the seeded, reproducible stratified
   sampler for the reference labeling campaign.
 - `src/xtrm_research/agreement.py` — percent agreement, Cohen's kappa and
@@ -350,6 +360,80 @@ run's `RunHandle`. `data` carries the backend identifier, each question's
 cost fields live in the event's `usage` record. The deterministic backend
 has no provider, so its `usage` nulls carry `null_reason`
 `not_exposed_by_provider`.
+
+### Jev / TypeSafe backend
+
+`JevBackend` (in `jev.py`, `backend_id` `jev-typesafe-v1`) answers all three
+question types — **noul**, **choice** and **score** — through
+`TypeSafeClient.system_one`. It maps the SDK response onto the same
+`common.schema.json` answer shapes: a Noul answer carries only `noul` and
+**never** a `confidence` (the SDK exposes none, and the abstraction does
+not fabricate one); a Choice answer's label is taken *by name* from the
+response, never by position in the option list. All three answers are
+recorded in the same `system_one_call` event, with `data.sdk_version`
+added and `usage` built from the provider response.
+
+**The transport seam.** `JevBackend` names its transport
+(`"typesafe_system_one"`) and never imports it. `guarded_send` /
+`send_through_run` resolve the name in `transports.py` — the only module
+that imports a provider SDK (lazily, inside the function body) and the
+only module other than `guards.py` added to the transport-import
+allowlist. `guarded_send`/`send_through_run` remain the package's only
+send seam, and the AST rule that exactly those two take a `send` argument
+is unchanged. A test asserts no module other than `guards.py` imports
+`transports.py`; a stray `import typesafe_sdk` anywhere else fails the
+seam test.
+
+**What the SDK exposes for tokens and cost.** The TypeSafe response is
+`SystemOneResponse`, whose `usage` is a `Usage` struct with exactly two
+fields: `input_tokens` and `output_tokens`, each `int | None` — the API may
+omit either. It exposes **no cost, no currency and no cached-input-token
+count**. (The upstream OpenAPI `usage` schema still requires a
+`billing_units` field the API does not return; the SDK does not surface
+it.) `latency_ms` is measured client-side around the call. So the usage
+record copies the two token counts verbatim and never invents one: `cost`
+is always null here with `null_reason` `no_price_entry` until a versioned
+price entry exists (XTRM-432 owns the price table), and a token count the
+response did not expose is null with `null_reason`
+`not_exposed_by_provider` — never `0` and never omitted.
+
+**Live smoke call (local, not a test).** One real, non-board call to
+confirm the SDK surface still matches this adapter. It reads the key from
+the environment only — the command never echoes it, and no code path logs
+or serialises `TYPESAFE_API_KEY` or the key file's contents. Run from
+`packages/research`:
+
+```bash
+TYPESAFE_API_KEY="$(cat ~/.secrets/typesafe_api_key.txt)" \
+  uv run --extra jev python - <<'PY'
+from xtrm_research.guards import guarded_send
+
+payload = {
+    "model": "jev-latest",
+    "state": {
+        "issue_a": {"title": "Fix the settle lock race", "description": "the runner run lock"},
+        "issue_b": {"title": "Fix the settle lock race", "description": "the runner run lock"},
+    },
+    "questions": {
+        "redundant": {
+            "type": "noul",
+            "instructions": "Are these two tickets asking for the same work?",
+        },
+        "relation": {
+            "type": "choice",
+            "instructions": "What is the relationship between the two tickets?",
+            "criteria": {"same_work": "same change", "unrelated": "different areas"},
+        },
+    },
+}
+response = guarded_send(payload, "typesafe_system_one")
+print(response["model"], response["sdk_version"], response["usage"])
+print(response["answers"])
+PY
+```
+
+The payload is synthetic and carries no board data; it passes the guard
+stage unchanged and reaches TypeSafe through the one send seam.
 
 ## CLI
 

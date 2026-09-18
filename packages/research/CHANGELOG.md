@@ -4,6 +4,41 @@ All notable changes to the `xtrm-research` package.
 
 ## [Unreleased]
 
+### Added — Jev backend behind an allow-listed transports module (XTRM-483)
+- `transports.py` is the only module that imports a provider SDK and the
+  only home of a concrete send function. Its TypeSafe transport,
+  `typesafe_system_one(payload) -> dict`, is a plain module-level function
+  with a concrete annotated signature and no `Callable` parameter. The SDK
+  is imported lazily inside the function body, so the package and its full
+  suite import and pass without it — `typesafe-sdk` is an optional `jev`
+  extra and CI never installs it.
+- `guards.guarded_send` / `guards.send_through_run` stay the package's
+  only send seam. Their `send` argument now also accepts the *name* of a
+  transport in `transports.py`, which the seam resolves via
+  `_resolve_transport`; the AST rule that exactly those two functions take
+  a `send` argument is unchanged. The transport-import allowlist grows from
+  `{guards.py}` to `{guards.py, transports.py}` and `_TRANSPORT_MODULES`
+  gains `typesafe_sdk`, so a stray SDK import elsewhere fails the seam test.
+  A new test asserts, by AST scan, that no module other than `guards.py`
+  imports `transports.py`.
+- `jev.py` adds `JevBackend` (`backend_id` `jev-typesafe-v1`), implementing
+  the `SystemOneBackend` protocol for **noul**, **choice** and **score**. It
+  names the transport `"typesafe_system_one"` and never imports the SDK.
+  Answers map onto `common.schema.json`'s `$defs` shapes; a Noul answer
+  never carries a `confidence`, and a Choice label is read by name, never
+  by position. A provider answer of the wrong type is refused.
+- Every Jev call emits the same `system_one_call` event, now with an
+  optional `extra_data` block carrying the SDK version. `usage` comes from
+  the provider response: `input_tokens`/`output_tokens` are copied verbatim
+  or left null, `cost` is null with `null_reason` `no_price_entry` until a
+  versioned price entry exists (XTRM-432), and a token count the provider
+  did not expose is null with `null_reason` `not_exposed_by_provider` —
+  never `0` and never omitted. The SDK exposes no cost, currency or
+  cached-token field at all.
+- Unit tests call no network: they drive the backend through a
+  recorded-response double. The single live smoke call is a documented
+  local command (README), not a test.
+
 ### Added — reference labeling machinery: brief, sampler and agreement statistics (XTRM-478)
 - `agreement.py`: `percent_agreement`, `cohens_kappa` (two-labeler) and
   `krippendorff_alpha_nominal` over an items × labelers nominal label matrix.
