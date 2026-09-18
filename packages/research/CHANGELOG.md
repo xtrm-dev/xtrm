@@ -4,6 +4,29 @@ All notable changes to the `xtrm-research` package.
 
 ## [Unreleased]
 
+### Added — reference labeling machinery: brief, sampler and agreement statistics (XTRM-478)
+- `agreement.py`: `percent_agreement`, `cohens_kappa` (two-labeler) and
+  `krippendorff_alpha_nominal` over an items × labelers nominal label matrix.
+  Missing labels go through Krippendorff's coincidence matrix — an item rated
+  by two of three labelers still contributes, and a test pins that
+  "drop incomplete items" gives a different alpha. Plain Python; no
+  numpy/scipy/pandas. `dispatchable_rate_by_length_quartile` reports the
+  dispatchable rate per length quartile so verbosity bias is visible.
+- `sampling.py`: `stratified_sample(population, target_size, seed)` returns a
+  sample spread across score quartiles and strata together with the seed.
+  Selection is a hash keyed on `(seed, item_id)`, so the sample is
+  reproducible from the seed alone; every non-empty `(stratum, quartile)`
+  cell is represented when the target allows.
+- `registry/experiment/reference-labeling-v1.json` and the fixed
+  `registry/labeler-brief-v1.json`. The brief asks for exactly `dispatchable`,
+  `main_gap` and `execution_mode`, its `content_hash` is
+  `hashing.compute_content_hash` of its own content, and the experiment
+  records that hash so a run states which brief it used.
+- Agreement statistics are checked against quoted published worked examples
+  (percent agreement 0.70 and Cohen's kappa 0.40 from the standard 50-item
+  two-rater example; nominal Krippendorff's alpha 0.743 from Krippendorff's
+  2011 12-unit/4-coder example), not against this implementation's output.
+
 ### Added — compare metric deltas with per-run tolerance (XTRM-477)
 - `views.compare_runs(root, run_ids, baseline_run_id)` now computes real
   per-metric deltas instead of returning runs side by side. Each run's

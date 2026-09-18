@@ -101,6 +101,11 @@ pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
 - `src/xtrm_research/system_one.py` — the provider-independent System One
   contract (`system_one(state, questions) -> answers`) and the deterministic
   duplicate-pair baseline backend.
+- `src/xtrm_research/sampling.py` — the seeded, reproducible stratified
+  sampler for the reference labeling campaign.
+- `src/xtrm_research/agreement.py` — percent agreement, Cohen's kappa and
+  nominal Krippendorff's alpha over an items × labelers matrix, plus the
+  dispatchable-rate-by-length-quartile report.
 - `src/xtrm_research/cli/` — the `xtrm-research` CLI.
 
 ## Shipped registry
@@ -154,6 +159,64 @@ runtime — `issue_a`/`issue_b` (`dupes.py:158`), `standard`
 (`sb_quality3.py:125-126, 17-27`) and `ticket` (`sb_quality3.py:125-126`).
 Those keys are part of the question's wording and are not renamed here;
 their providers arrive with the importer/backend slices.
+
+## Reference labeling machinery (XTRM-478)
+
+The v3 labels behind `contract-quality-v3` came from one labeler whose
+strictness drifted between batches, so the reported AUCs measure agreement
+with that labeler, not correctness. The independent-labeler campaign of
+XTRM-430 needs a reference label set with a measured agreement number.
+This package ships the offline half of that campaign — everything the
+campaign runs on, and none of the confidential data it reads:
+
+- `registry/experiment/reference-labeling-v1.json` — the labeling
+  experiment: three independent labeler variants over the `contract-quality`
+  workload, reporting `percent_agreement`, `cohens_kappa`,
+  `krippendorff_alpha` and `dispatchable_rate`. It validates against
+  `experiment.schema.json` and loads through `DefinitionRegistry`, and it
+  carries no board text.
+- `registry/labeler-brief-v1.json` — the one fixed brief every labeler gets.
+  It asks for exactly `dispatchable` (yes/no), `main_gap` and
+  `execution_mode`, and its `content_hash` is
+  `hashing.compute_content_hash` of its own content. The experiment records
+  that hash under `labeling.brief.content_hash`, so a run can always state
+  which brief it used.
+- `sampling.stratified_sample(population, target_size, seed)` — draws a
+  sample spread across the population's score quartiles and strata, and
+  returns the seed alongside the sample. Selection is a hash keyed on
+  `(seed, item_id)` with no RNG state, so the sample is reproducible from the
+  seed alone; `assign_quartiles` is the rank-based quartile split it uses.
+- `agreement.percent_agreement`, `agreement.cohens_kappa` and
+  `agreement.krippendorff_alpha_nominal` — nominal agreement over an
+  items × labelers matrix. Missing labels are handled by Krippendorff's
+  coincidence matrix: an item rated by two of three labelers still
+  contributes, and dropping incomplete items gives a different alpha (a test
+  pins that difference). Plain Python; no numpy/scipy/pandas.
+- `agreement.dispatchable_rate_by_length_quartile(labels, lengths)` — the
+  dispatchable rate per length quartile, so a labeling run's verbosity bias
+  is reported rather than assumed absent.
+
+### Published worked examples the statistics are checked against
+
+Every expected value below is quoted from the source in the test; no
+statistic is checked against this implementation's own output.
+
+| statistic | source | expected value |
+| --- | --- | --- |
+| percent agreement | Wikipedia, "Cohen's kappa" worked example (50 items, 2 raters, table `[[20, 5], [10, 15]]`) | 0.70 |
+| Cohen's kappa | the same example; Cohen, J. (1960), *A coefficient of agreement for nominal scales* | 0.40 |
+| Krippendorff's alpha (nominal) | Krippendorff, K. (2011), *Computing Krippendorff's Alpha-Reliability*, 12-unit/4-coder example | 0.743 |
+
+Perfect agreement is asserted to give alpha 1.0, and two labelers drawing
+independently from the same distribution are asserted to land within 0.05
+of 0.
+
+The brief must not reward length. That was checked mechanically, not by
+reading: `tests/test_labeling_registry.py` scans the brief text for
+length-incentivizing phrases (`thorough`, `detailed`, `in detail`,
+`comprehensive`, `as much`, `word count`, `verbose`, `explain your`) and
+asserts none appear, and asserts the `main_gap` cap — "at most 15 words" —
+is present.
 
 ## Run directory
 
