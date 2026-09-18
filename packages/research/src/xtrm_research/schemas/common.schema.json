@@ -16,7 +16,7 @@
     },
     "usage_record": {
       "type": "object",
-      "description": "Nullable token/latency usage fields, named per OpenTelemetry GenAI semantic conventions where one exists. 'latency_ms' has no GenAI-standard name; it is this package's own choice, documented in README.md.",
+      "description": "Nullable token/latency/cost usage fields, named per OpenTelemetry GenAI semantic conventions where one exists. 'latency_ms' has no GenAI-standard name; it is this package's own choice, documented in README.md. 'cost' is always paired with 'cost_currency' (never 'cost_usd') and is never computed from token counts here. 'cached_input_tokens' is a subset of the 'gen_ai.usage.input_tokens' total, never added to it.",
       "additionalProperties": false,
       "properties": {
         "source": {
@@ -28,13 +28,33 @@
         },
         "gen_ai.usage.input_tokens": { "type": ["integer", "null"] },
         "gen_ai.usage.output_tokens": { "type": ["integer", "null"] },
+        "cached_input_tokens": {
+          "type": ["integer", "null"],
+          "description": "Cached portion of the input token total: a subset of 'gen_ai.usage.input_tokens', never added to it."
+        },
         "gen_ai.request.model": { "type": ["string", "null"] },
         "gen_ai.response.model": { "type": ["string", "null"] },
         "latency_ms": { "type": ["number", "null"] },
-        "null_reason": { "type": ["string", "null"] }
+        "cost": {
+          "type": ["number", "null"],
+          "description": "Monetary cost in 'cost_currency' units. Named 'cost', never 'cost_usd': the price table carries its own currency. Never computed from token counts here."
+        },
+        "cost_currency": {
+          "type": ["string", "null"],
+          "description": "Currency code for 'cost' (e.g. USD)."
+        },
+        "null_reason": {
+          "type": ["string", "null"],
+          "enum": ["no_price_entry", "not_exposed_by_provider", null],
+          "description": "Canonical snake_case reason a nullable measurement field is null. 'no_price_entry' is the agreed value for a missing price; 'not_exposed_by_provider' covers values the provider response never exposed. The human sentence that used to live here now belongs in 'null_detail'."
+        },
+        "null_detail": {
+          "type": ["string", "null"],
+          "description": "Optional human sentence detailing a null field; the prose that used to live in 'null_reason'."
+        }
       },
       "required": ["source"],
-      "$comment": "Each 'then' both requires null_reason AND overrides its type to a non-empty string in this branch, so a null field can't be paired with a null or empty null_reason.",
+      "$comment": "Each 'then' both requires null_reason AND overrides its type to a non-empty string in this branch, so a null measurement field can't be paired with a null or empty null_reason. Branches cover every nullable measurement field (tokens, models, latency, cached tokens, cost, cost_currency) but not null_reason/null_detail themselves.",
       "allOf": [
         {
           "if": { "required": ["gen_ai.usage.input_tokens"], "properties": { "gen_ai.usage.input_tokens": { "const": null } } },
@@ -54,6 +74,18 @@
         },
         {
           "if": { "required": ["latency_ms"], "properties": { "latency_ms": { "const": null } } },
+          "then": { "required": ["null_reason"], "properties": { "null_reason": { "type": "string", "minLength": 1 } } }
+        },
+        {
+          "if": { "required": ["cached_input_tokens"], "properties": { "cached_input_tokens": { "const": null } } },
+          "then": { "required": ["null_reason"], "properties": { "null_reason": { "type": "string", "minLength": 1 } } }
+        },
+        {
+          "if": { "required": ["cost"], "properties": { "cost": { "const": null } } },
+          "then": { "required": ["null_reason"], "properties": { "null_reason": { "type": "string", "minLength": 1 } } }
+        },
+        {
+          "if": { "required": ["cost_currency"], "properties": { "cost_currency": { "const": null } } },
           "then": { "required": ["null_reason"], "properties": { "null_reason": { "type": "string", "minLength": 1 } } }
         }
       ]

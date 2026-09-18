@@ -367,7 +367,8 @@ def test_usage_null_value_requires_null_reason():
             {
                 "source": "provider_api",
                 "gen_ai.usage.input_tokens": None,
-                "null_reason": "provider omitted usage on this response",
+                "null_reason": "not_exposed_by_provider",
+                "null_detail": "provider omitted usage on this response",
             }
         ),
     )
@@ -395,6 +396,63 @@ def test_usage_null_reason_must_be_a_nonempty_string():
                     "null_reason": "",
                 }
             ),
+        )
+    with pytest.raises(SchemaValidationError):
+        validate(
+            "event",
+            _event(
+                {
+                    "source": "provider_api",
+                    "gen_ai.usage.input_tokens": None,
+                    "null_reason": "a prose sentence, not a canonical value",
+                }
+            ),
+        )
+
+
+def test_usage_null_cost_requires_canonical_null_reason():
+    with pytest.raises(SchemaValidationError):
+        validate(
+            "event",
+            _event({"source": "provider_api", "cost": None}),
+        )
+    validate(
+        "event",
+        _event(
+            {
+                "source": "provider_api",
+                "cost": None,
+                "null_reason": "no_price_entry",
+            }
+        ),
+    )
+    validate(
+        "event",
+        _event(
+            {
+                "source": "provider_api",
+                "cost": 0.0012,
+                "cost_currency": "USD",
+            }
+        ),
+    )
+
+
+def test_usage_cached_input_tokens_is_valid():
+    validate(
+        "event",
+        _event(
+            {
+                "source": "provider_api",
+                "gen_ai.usage.input_tokens": 100,
+                "cached_input_tokens": 40,
+            }
+        ),
+    )
+    with pytest.raises(SchemaValidationError):
+        validate(
+            "event",
+            _event({"source": "provider_api", "cached_input_tokens": None}),
         )
 
 
