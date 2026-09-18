@@ -350,3 +350,34 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def label_set_agreement(
+    a: dict[str, dict[str, Any]], b: dict[str, dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Per-question agreement between two final label sets on the items both
+    label: percent agreement with a Wilson 95% interval, and Cohen's kappa.
+    Used to measure how much an instrument change moved the reference
+    (XTRM-494: labels with vs without pi context isolation)."""
+    from xtrm_research.agreement import cohens_kappa
+
+    out: dict[str, dict[str, Any]] = {}
+    for q in QUESTIONS:
+        pairs = [
+            (a[i][q], b[i][q])
+            for i in a.keys() & b.keys()
+            if a[i].get(q) is not None and b[i].get(q) is not None
+        ]
+        same = sum(1 for x, y in pairs if x == y)
+        try:
+            kappa = cohens_kappa([[x, y] for x, y in pairs])
+        except (ZeroDivisionError, ValueError):
+            kappa = None
+        out[q] = {
+            "n": len(pairs),
+            "agreement": same / len(pairs) if pairs else None,
+            "agreement_ci95": stats.wilson(same, len(pairs)),
+            "cohens_kappa": kappa,
+            "changed": len(pairs) - same,
+        }
+    return out

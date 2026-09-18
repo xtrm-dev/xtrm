@@ -14,9 +14,12 @@ Every call goes through ``guards.guarded_send``.
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from typing import Any
+
+import jsonschema
 
 from xtrm_research.evidence_gate.labels import BINARY, BRIEF, ORDINAL, QUESTIONS
 from xtrm_research.guards import GuardFailure, guarded_send
@@ -183,6 +186,74 @@ def jev_predict(item: dict[str, Any]) -> dict[str, Any]:
         "cost_usd": None,
         "null_reason": "priced_in_comparison",
         "null_detail": "cost is computed from the versioned price table at comparison time",
+    }
+    row["status"] = "answered"
+    return row
+
+
+#: Sixth arm (operator decision 2026-09-18): a cheap non-Anthropic LLM
+#: baseline through pi. Not one of the reference-label models.
+LLM_MODEL = "commandcode/deepseek/deepseek-v4.1-flash"
+LLM_SYSTEM = (
+    FRONTIER_SYSTEM
+    + "\n\nReply with ONLY a JSON object, no prose, no code fence, matching this JSON"
+    " Schema: "
+    + json.dumps(FRONTIER_SCHEMA)
+)
+
+
+def llm_payload(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "model": LLM_MODEL,
+        "system": LLM_SYSTEM,
+        "prompt_template": FRONTIER_PROMPT_TEMPLATE,
+        "input": {k: item["state"][k] for k in ("query", "passage_source", "passage")},
+    }
+
+
+def parse_llm_reply(text: str | None) -> dict[str, Any] | None:
+    """The reply's JSON object if it validates against FRONTIER_SCHEMA,
+    else None — a malformed reply is a failure, never repaired."""
+    if not text:
+        return None
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        return None
+    try:
+        out = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return None
+    if list(jsonschema.Draft202012Validator(FRONTIER_SCHEMA).iter_errors(out)):
+        return None
+    return out
+
+
+def llm_predict(item: dict[str, Any]) -> dict[str, Any]:
+    started = time.perf_counter()
+    row: dict[str, Any] = {
+        "item_id": item["item_id"],
+        "arm": "llm-deepseek-v4.1-flash",
+        "answer_kind": "stated_probability",
+    }
+    try:
+        response = guarded_send(llm_payload(item), "pi_complete")
+    except GuardFailure as exc:
+        return {**row, "status": "guard_failure", "detail": exc.guard}
+    row["latency_ms"] = (time.perf_counter() - started) * 1000.0
+    usage = response.get("usage") or {}
+    row["usage"] = {
+        **usage,
+        "cost_source": "pi-reported provider cost (commandcode) for this call",
+    }
+    row["model"] = response.get("model")
+    out = parse_llm_reply(response.get("text"))
+    if out is None:
+        return {**row, "status": "no_output", "detail": response.get("error") or "reply failed FRONTIER_SCHEMA"}
+    dist = out[ORDINAL]
+    total = sum(dist.values())
+    row["raw"] = {q: float(out[q]) for q in BINARY}
+    row["score_probabilities"] = {
+        ORDINAL: {lv: dist[lv] / total for lv in LEVELS} if total > 0 else None
     }
     row["status"] = "answered"
     return row

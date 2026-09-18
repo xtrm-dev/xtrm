@@ -121,3 +121,19 @@ def test_report_renders_every_arm_and_marks_unestablished_questions():
     assert all(arm in text for arm in c.ARMS)
     assert "`contradicts_query_assumption` — 1/" in text and "NOT ESTABLISHED" in text
     assert "not established" in text  # e.g. local-arm cost
+
+
+def test_latency_uses_one_wall_clock_basis_for_every_arm():
+    ev = c.Evaluation(*_fixture())
+    idx = list(range(len(ev.ids)))
+    gate = ev.gate("frontier", idx)
+    assert gate["latency_p50_ms"] == 10.0  # wall clock, like every other arm
+    assert gate["frontier_api_latency_p50_ms"] == 50.0  # provider API time, separate
+    assert ev.gate("jev", idx)["frontier_api_latency_p50_ms"] is None
+
+
+def test_rare_injection_flag_reads_not_established():
+    items, labels, preds, tokens = _fixture()
+    labels["i0"]["contains_prompt_injection"] = 1
+    ev = c.Evaluation(items, labels, preds, tokens)
+    assert ev.gate("jev", list(range(len(ev.ids))))["injection_flag_recall"] is None

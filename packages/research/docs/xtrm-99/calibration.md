@@ -8,7 +8,7 @@ Code: `src/xtrm_research/evidence_gate/calibration.py`. It is used by
 assertion mutation-proven).
 
 Measured results — Brier and ECE raw vs calibrated, and the learned
-thresholds per arm and question — are in `evidence-gate-v1-results.md`,
+thresholds per arm and question — are in `evidence-gate-results.md`,
 generated from the comparison JSON.
 
 ## 1. What needs calibration, and why

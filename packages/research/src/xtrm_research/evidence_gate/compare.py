@@ -32,12 +32,12 @@ from xtrm_research.evidence_gate import dataset as d
 from xtrm_research.evidence_gate import stats
 from xtrm_research.evidence_gate.labels import BINARY, ORDINAL
 
-MODEL_ARMS = ("embedding", "qwen", "jev", "frontier")
+MODEL_ARMS = ("embedding", "qwen", "jev", "frontier", "llm")
 ARMS = ("no-filter", *MODEL_ARMS)
-REFERENCE_ARMS = ("frontier", "no-filter")
+REFERENCE_ARMS = ("frontier", "llm", "no-filter")
 #: Arms whose raw answer is already a probability (Brier/ECE on raw is
 #: meaningful); a cosine similarity is not.
-PROBABILITY_ARMS = ("qwen", "jev", "frontier")
+PROBABILITY_ARMS = ("qwen", "jev", "frontier", "llm")
 EVIDENCE = "contains_usable_evidence"
 CONTRADICTION = "contradicts_query_assumption"
 INJECTION = "contains_prompt_injection"
@@ -50,6 +50,7 @@ GATE_METRICS = (
     "frontier_input_token_reduction",
     "latency_p50_ms",
     "latency_p95_ms",
+    "frontier_api_latency_p50_ms",
     "cost_usd_per_1000_candidates",
 )
 LEVELS = ("1", "2", "3", "4")
@@ -86,7 +87,7 @@ def load_prices() -> dict[str, Any]:
 def item_cost(arm: str, row: dict[str, Any], prices: dict[str, Any]) -> float | None:
     if arm == "no-filter":
         return 0.0
-    if arm == "frontier":
+    if arm in ("frontier", "llm"):
         return row["usage"].get("cost_usd")
     if arm == "jev":
         entry = prices["entries"].get(row.get("model"))
@@ -100,11 +101,24 @@ def item_cost(arm: str, row: dict[str, Any], prices: dict[str, Any]) -> float | 
     return None  # local arms: CPU on the operator machine, not metered
 
 
+#: One basis for every model arm: wall-clock time around the whole guarded
+#: call (guard stage + transport + provider). Local arms: CPU time on the
+#: operator host at 2 torch threads. The frontier arm's provider-reported
+#: API time is reported separately (``frontier_api_latency_p50_ms``), never
+#: mixed into the cross-arm latency comparison (XTRM-506 review finding).
+LATENCY_BASIS = {
+    "no-filter": "none (no call)",
+    "embedding": "wall clock, local CPU, 2 torch threads, shared host",
+    "qwen": "wall clock, local CPU, 2 torch threads, shared host",
+    "jev": "wall clock around guarded_send: guard + HTTPS round trip to TypeSafe",
+    "frontier": "wall clock around guarded_send: guard + claude CLI process start + API",
+    "llm": "wall clock around guarded_send: guard + pi CLI process start + API",
+}
+
+
 def item_latency(arm: str, row: dict[str, Any]) -> float:
     if arm == "no-filter":
         return 0.0
-    if arm == "frontier":
-        return float(row["usage"]["duration_api_ms"])
     return float(row["latency_ms"])
 
 
@@ -171,7 +185,7 @@ class Evaluation:
             rows = [preds[arm][i] for i in self.ids]
             self.latency[arm] = [item_latency(arm, r) for r in rows]
             self.cost[arm] = [item_cost(arm, r, self.prices) for r in rows]
-            if arm in ("jev", "frontier"):
+            if arm in ("jev", "frontier", "llm"):
                 self.authority_probs[arm] = [
                     (r.get("score_probabilities") or {}).get(ORDINAL) for r in rows
                 ]
@@ -193,6 +207,9 @@ class Evaluation:
                 self.decision[arm][q], self.thresholds[arm][q] = dec, thr
                 self.fits[arm][q] = {"platt": fit, "isotonic": fit_iso}
         self.established = {q: sum(self.y[q]) >= MIN_POSITIVES for q in BINARY}
+        self.frontier_api_ms = [
+            float(preds["frontier"][i]["usage"]["duration_api_ms"]) for i in self.ids
+        ]
         self.latency["no-filter"] = [0.0] * len(self.ids)
         self.cost["no-filter"] = [0.0] * len(self.ids)
 
@@ -211,7 +228,11 @@ class Evaluation:
         contra = [n for n in idx if self.y[CONTRADICTION][n]]
         inj = [n for n in idx if self.y[INJECTION][n]]
         kept = set(retained)
-        answers_injection = arm != "no-filter" and INJECTION in self.decision[arm]
+        answers_injection = (
+            arm != "no-filter"
+            and INJECTION in self.decision[arm]
+            and self.established[INJECTION]
+        )
         costs = [self.cost[arm][n] for n in idx]
         lat = [self.latency[arm][n] for n in idx]
         total_tokens = sum(self.tokens[n] for n in idx)
@@ -242,6 +263,11 @@ class Evaluation:
             else None,
             "latency_p50_ms": percentile(lat, 0.5),
             "latency_p95_ms": percentile(lat, 0.95),
+            "frontier_api_latency_p50_ms": percentile(
+                [self.frontier_api_ms[n] for n in idx], 0.5
+            )
+            if arm == "frontier"
+            else None,
             "cost_usd_per_1000_candidates": None
             if any(c is None for c in costs) or not costs
             else 1000 * sum(costs) / len(costs),
@@ -361,6 +387,7 @@ def guard_alterations(items: list[dict[str, Any]]) -> dict[str, int]:
         "labeler": sum(altered(lab.label_payload(m, g)) for g in groups.values() for m in lab.LABELERS),
         "frontier": sum(altered(fr.frontier_payload(i)) for i in items),
         "jev": sum(altered(fr.jev_payload(i)) for i in items),
+        "llm": sum(altered(fr.llm_payload(i)) for i in items),
     }
 
 
@@ -396,6 +423,10 @@ def main() -> None:
     )
     preds = {arm: latest_answers(runs / f"{arm}.jsonl") for arm in MODEL_ARMS}
     tokens, tokenizer = count_tokens(items)
+    alterations = guard_alterations(items)
+    if any(alterations.values()):
+        # every model must have seen exactly the frozen text (XTRM-506)
+        raise SystemExit(f"guard would alter payloads: {alterations}")
     ev = Evaluation(items, labels, preds, tokens)
     result = compare(ev, args.resamples)
     manifest = json.loads((dataset_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -404,7 +435,8 @@ def main() -> None:
         label_version=label_manifest["label_version"],
         labels_sha256=label_manifest["labels_sha256"],
         prices_version=ev.prices["version"],
-        guard_alterations=guard_alterations(items),
+        guard_alterations=alterations,
+        latency_basis=LATENCY_BASIS,
         tokenizer=tokenizer,
         n_eval=len(ev.ids),
         n_clusters=len(ev.clusters),

@@ -153,6 +153,62 @@ def _prompt_of(payload: dict[str, Any]) -> str:
     return json.dumps(payload["input"], ensure_ascii=False)
 
 
+#: Everything pi would otherwise add to a call: tools, session file,
+#: extensions (they inject system-prompt text), skills, prompt templates,
+#: AGENTS.md/CLAUDE.md context files, themes, project-local files. Measured
+#: 2026-09-18: a ~20-token prompt cost 3478 input tokens without these and
+#: 1809 with them (the rest is pi/provider scaffolding no flag removes).
+PI_ISOLATION_FLAGS = ("--no-tools", "--no-session", "-ne", "-ns", "-np", "-nc", "--no-themes", "-na")
+
+
+#: Environment variable naming the models a research batch may call,
+#: comma-separated. Unset means no restriction. It is operator policy, not
+#: package policy: an operator on a tight budget sets it (e.g. to
+#: "commandcode/meta/muse-spark-1.3-contributor,commandcode/deepseek/deepseek-v4.1-flash,commandcode/gpt-5.6-luna");
+#: the claude transport counts as the model id it is asked for.
+ALLOWED_MODELS_ENV = "XTRM_RESEARCH_ALLOWED_MODELS"
+
+
+#: Per-user .env the allowlist is also read from (the process environment
+#: wins over it). Lives beside the research runs, never in the repository.
+RESEARCH_DOTENV = "~/.xtrm/research/.env"
+
+
+def _dotenv_value(key: str) -> str | None:
+    """``KEY=value`` from :data:`RESEARCH_DOTENV`; ``#`` comments, blank
+    lines, an optional ``export`` prefix and surrounding quotes allowed."""
+    from pathlib import Path
+
+    path = Path(RESEARCH_DOTENV).expanduser()
+    if not path.is_file():
+        return None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip().removeprefix("export ").strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        if name.strip() == key:
+            return value.strip().strip("'\"")
+    return None
+
+
+def _check_allowed(model: str) -> None:
+    import os
+
+    raw = os.environ.get(ALLOWED_MODELS_ENV)
+    if raw is None:
+        raw = _dotenv_value(ALLOWED_MODELS_ENV)
+    if raw is None:
+        return
+    allowed = {m.strip() for m in raw.split(",") if m.strip()}
+    if model not in allowed:
+        raise DisallowedModelError(f"{model!r} is not in ${ALLOWED_MODELS_ENV}")
+
+
+class DisallowedModelError(RuntimeError):
+    """A transport was asked for a model the operator has not allowed."""
+
+
 def pi_complete(payload: dict[str, Any]) -> dict[str, Any]:
     """One tool-less, session-less completion through the ``pi`` CLI
     (XTRM-494 reference labelers). ``payload``: ``model`` (provider/id),
@@ -160,8 +216,9 @@ def pi_complete(payload: dict[str, Any]) -> dict[str, Any]:
     usage and cost as pi reports them, and any provider error verbatim."""
     import json
 
+    _check_allowed(payload["model"])
     out = _run_cli(
-        ["pi", "-p", "--no-tools", "--no-session", "--model", payload["model"],
+        ["pi", "-p", *PI_ISOLATION_FLAGS, "--model", payload["model"],
          "--system-prompt", payload["system"], "--mode", "json", _prompt_of(payload)]
     )
     end = None
@@ -197,6 +254,7 @@ def claude_classify(payload: dict[str, Any]) -> dict[str, Any]:
     the pinned model's own usage entry (the CLI also bills an internal
     auxiliary model, reported separately), the CLI's list-basis cost and
     its timings."""
+    _check_allowed(payload["model"])
     import json
 
     out = _run_cli(

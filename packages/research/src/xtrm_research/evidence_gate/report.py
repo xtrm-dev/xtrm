@@ -53,6 +53,10 @@ def render(result: dict[str, Any]) -> str:
         "",
         "Intervals: " + next(iter(metrics.values()))["method"] + ".",
         "",
+        "Latency basis per arm: "
+        + "; ".join(f"{k}: {v}" for k, v in result.get("latency_basis", {}).items())
+        + ".",
+        "",
         "### Gate metrics per arm (value [95% CI])",
         "",
         "| metric | " + " | ".join(ARMS) + " |",
@@ -68,17 +72,18 @@ def render(result: dict[str, Any]) -> str:
         "",
     ]
     lines += [
-        "| metric | arm | minus frontier | minus no-filter |",
-        "|---|---|---|---|",
+        "| metric | arm | minus frontier | minus llm | minus no-filter |",
+        "|---|---|---|---|---|",
     ]
     for name in GATE_METRICS:
         for arm in ARMS:
             a = deltas.get(f"{arm}-minus-frontier|gate|{name}")
+            m = deltas.get(f"{arm}-minus-llm|gate|{name}")
             b = deltas.get(f"{arm}-minus-no-filter|gate|{name}")
-            if a or b:
+            if a or m or b:
                 digits = 1 if name.startswith("latency") else 3
                 lines.append(
-                    f"| {name} | {arm} | {fmt(a, digits)} | {fmt(b, digits)} |"
+                    f"| {name} | {arm} | {fmt(a, digits)} | {fmt(m, digits)} | {fmt(b, digits)} |"
                 )
     for q in BINARY:
         established = result.get("established_questions", {}).get(q, True)
@@ -103,29 +108,31 @@ def render(result: dict[str, Any]) -> str:
             )
         lines += [
             "",
-            "| paired delta vs frontier | " + " | ".join(arms) + " |",
+            "| paired delta vs frontier (vs llm) | " + " | ".join(arms) + " |",
             "|---|" + "---|" * len(arms),
         ]
         for name in ("auc", "brier_calibrated", "ece_calibrated"):
             lines.append(
                 f"| {name} | "
                 + " | ".join(
-                    fmt(deltas.get(f"{a}-minus-frontier|{q}|{name}")) for a in arms
+                    f"{fmt(deltas.get(f'{a}-minus-frontier|{q}|{name}'))} "
+                    f"({fmt(deltas.get(f'{a}-minus-llm|{q}|{name}'))})"
+                    for a in arms
                 )
                 + " |"
             )
+    score_arms = ("jev", "frontier", "llm")
     lines += [
         "",
         f"### `{ORDINAL}` (Score; arms that answer it)",
         "",
-        "| metric | jev | frontier | jev minus frontier |",
-        "|---|---|---|---|",
+        "| metric | " + " | ".join(score_arms) + " | jev minus frontier | llm minus frontier |",
+        "|---|" + "---|" * (len(score_arms) + 2),
     ]
     for name in ("multiclass_brier", "expected_level_mae"):
-        lines.append(
-            f"| {name} | {fmt(metrics.get(f'jev|{ORDINAL}|{name}'))} | {fmt(metrics.get(f'frontier|{ORDINAL}|{name}'))} | "
-            f"{fmt(deltas.get(f'jev-minus-frontier|{ORDINAL}|{name}'))} |"
-        )
+        cells = [fmt(metrics.get(f"{a}|{ORDINAL}|{name}")) for a in score_arms]
+        cells += [fmt(deltas.get(f"{a}-minus-frontier|{ORDINAL}|{name}")) for a in ("jev", "llm")]
+        lines.append(f"| {name} | " + " | ".join(cells) + " |")
     lines += ["", "### Not established", ""]
     lines += [f"- `{k}`: {v}" for k, v in result.get("not_established", {}).items()]
     return "\n".join(lines) + "\n"

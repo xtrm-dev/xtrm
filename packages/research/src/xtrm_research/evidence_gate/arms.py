@@ -21,7 +21,7 @@ from xtrm_research.code_state import capture_code_state
 from xtrm_research.evidence_gate import dataset as d
 from xtrm_research.evidence_gate.labels import QUESTIONS
 
-ARMS = ("embedding", "qwen", "jev", "frontier")
+ARMS = ("embedding", "qwen", "jev", "frontier", "llm")
 
 
 def _done(path: Path) -> set[str]:
@@ -89,8 +89,10 @@ def run(
     else:
         from xtrm_research.evidence_gate import frontier
 
-        predict = frontier.jev_predict if arm == "jev" else frontier.frontier_predict
-        meta["model"] = frontier.JEV_MODEL if arm == "jev" else frontier.FRONTIER_MODEL
+        predict = {"jev": frontier.jev_predict, "frontier": frontier.frontier_predict,
+                   "llm": frontier.llm_predict}[arm]
+        meta["model"] = {"jev": frontier.JEV_MODEL, "frontier": frontier.FRONTIER_MODEL,
+                         "llm": frontier.LLM_MODEL}[arm]
         if arm == "frontier":
             meta["effort"] = frontier.FRONTIER_EFFORT
         with (
