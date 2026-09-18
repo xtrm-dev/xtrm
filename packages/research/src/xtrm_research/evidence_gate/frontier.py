@@ -82,6 +82,7 @@ FRONTIER_PROMPT_TEMPLATE = "QUERY: {query}\n\nCANDIDATE (source: {passage_source
 def frontier_payload(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "model": FRONTIER_MODEL,
+        "reason": "operator_approval",
         "effort": FRONTIER_EFFORT,
         "system": FRONTIER_SYSTEM,
         "prompt_template": FRONTIER_PROMPT_TEMPLATE,
@@ -202,9 +203,13 @@ LLM_SYSTEM = (
 )
 
 
-def llm_payload(item: dict[str, Any]) -> dict[str, Any]:
+def llm_payload(item: dict[str, Any], reason: str = "operator_approval") -> dict[str, Any]:
+    """``reason``: the budget-policy reason (transports.BUDGET_REASONS). The
+    full-set DeepSeek arm ran under operator approval; a cascade escalation
+    passes ``uncertainty_band``."""
     return {
         "model": LLM_MODEL,
+        "reason": reason,
         "system": LLM_SYSTEM,
         "prompt_template": FRONTIER_PROMPT_TEMPLATE,
         "input": {k: item["state"][k] for k in ("query", "passage_source", "passage")},

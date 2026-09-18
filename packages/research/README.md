@@ -442,6 +442,28 @@ is unchanged. A test asserts no module other than `guards.py` imports
 `transports.py`; a stray `import typesafe_sdk` anywhere else fails the
 seam test.
 
+**Generative-model budget policy (XTRM-508).** System One (Jev) is the
+default path. A generative model (`pi_complete`, `claude_classify`) is an
+exception, and the transport refuses the call **before any process
+starts** unless all of these hold:
+
+- the payload's `reason` is one of `uncertainty_band`, `adjudication`,
+  `generative_output`, `operator_approval`;
+- `XTRM_RESEARCH_BUDGET_SCOPE` names a ledger (unset means no generative
+  call at all);
+- the scope's ledger (`~/.xtrm/research/budget/<scope>.jsonl`) is under
+  `XTRM_RESEARCH_BUDGET_MAX_CALLS` (default 20) and
+  `XTRM_RESEARCH_BUDGET_MAX_COST_USD` (default 1.00);
+- no earlier call in the scope settled without a reported cost (an unpriced
+  or failed call exhausts the scope: fail closed).
+
+Settings are read from the process environment, then from
+`~/.xtrm/research/.env`, like `XTRM_RESEARCH_ALLOWED_MODELS`. Raising a
+cap is the operator's explicit approval. The call cap is exact under
+concurrent workers (one file lock covers read-count-then-reserve); the
+cost cap is checked against settled calls, so in-flight calls can
+overshoot it by at most one call per worker. Refusal raises `BudgetError`.
+
 **What the SDK exposes for tokens and cost.** The TypeSafe response is
 `SystemOneResponse`, whose `usage` is a `Usage` struct with exactly two
 fields: `input_tokens` and `output_tokens`, each `int | None` — the API may

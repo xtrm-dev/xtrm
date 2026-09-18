@@ -90,6 +90,7 @@ def label_payload(model: str, items: list[dict[str, Any]]) -> dict[str, Any]:
     prompt only after the guard stage."""
     return {
         "model": model,
+        "reason": "adjudication",
         "system": BRIEF,
         "input": {
             "query": items[0]["state"]["query"],

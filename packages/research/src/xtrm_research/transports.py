@@ -135,7 +135,12 @@ def _run_cli(argv: list[str]) -> str:
 
     with tempfile.TemporaryDirectory() as cwd:
         done = subprocess.run(
-            argv, cwd=cwd, capture_output=True, text=True, timeout=_CLI_TIMEOUT_S, check=False
+            argv,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=_CLI_TIMEOUT_S,
+            check=False,
         )
     return done.stdout
 
@@ -158,7 +163,16 @@ def _prompt_of(payload: dict[str, Any]) -> str:
 #: AGENTS.md/CLAUDE.md context files, themes, project-local files. Measured
 #: 2026-09-18: a ~20-token prompt cost 3478 input tokens without these and
 #: 1809 with them (the rest is pi/provider scaffolding no flag removes).
-PI_ISOLATION_FLAGS = ("--no-tools", "--no-session", "-ne", "-ns", "-np", "-nc", "--no-themes", "-na")
+PI_ISOLATION_FLAGS = (
+    "--no-tools",
+    "--no-session",
+    "-ne",
+    "-ns",
+    "-np",
+    "-nc",
+    "--no-themes",
+    "-na",
+)
 
 
 #: Environment variable naming the models a research batch may call,
@@ -209,6 +223,117 @@ class DisallowedModelError(RuntimeError):
     """A transport was asked for a model the operator has not allowed."""
 
 
+#: Why a generative (non-System-One) model may be called at all (XTRM-508).
+#: A payload without one of these in ``reason`` never starts a process.
+BUDGET_REASONS = frozenset(
+    {"uncertainty_band", "adjudication", "generative_output", "operator_approval"}
+)
+
+#: Budget settings, read like the allowlist (process env wins over
+#: :data:`RESEARCH_DOTENV`). The scope names one ledger; unset means no
+#: generative call is allowed at all, so every paid batch is an explicit
+#: operator act. Raising the caps above the defaults IS operator approval.
+BUDGET_SCOPE_ENV = "XTRM_RESEARCH_BUDGET_SCOPE"
+BUDGET_MAX_CALLS_ENV = "XTRM_RESEARCH_BUDGET_MAX_CALLS"
+BUDGET_MAX_COST_ENV = "XTRM_RESEARCH_BUDGET_MAX_COST_USD"
+BUDGET_DEFAULT_MAX_CALLS = 20
+BUDGET_DEFAULT_MAX_COST_USD = 1.00
+BUDGET_DIR = "~/.xtrm/research/budget"
+
+
+class BudgetError(RuntimeError):
+    """A generative call was refused by the budget policy (hard failure)."""
+
+
+def _setting(key: str) -> str | None:
+    import os
+
+    value = os.environ.get(key)
+    return value if value is not None else _dotenv_value(key)
+
+
+def _reserve(payload: dict[str, Any]) -> tuple[str, str]:
+    """Check the reason and the scope's ledger, then append a reservation,
+    all under one file lock; raise :class:`BudgetError` before any process
+    starts. Returns (ledger path, reservation id) for :func:`_settle`.
+
+    ponytail: the cost cap is checked against settled calls only, so
+    concurrent in-flight calls can overshoot it by at most (workers - 1)
+    calls; the call cap is exact because reservations count."""
+    import fcntl
+    import json
+    import uuid
+    from pathlib import Path
+
+    reason = payload.get("reason")
+    if reason not in BUDGET_REASONS:
+        raise BudgetError(f"reason {reason!r} is not one of {sorted(BUDGET_REASONS)}")
+    scope = _setting(BUDGET_SCOPE_ENV)
+    if (
+        not scope
+        or not scope.replace("-", "").replace("_", "").replace(".", "").isalnum()
+    ):
+        raise BudgetError(
+            f"${BUDGET_SCOPE_ENV} is unset or not a plain name; no generative call is allowed"
+        )
+    max_calls = int(_setting(BUDGET_MAX_CALLS_ENV) or BUDGET_DEFAULT_MAX_CALLS)
+    max_cost = float(_setting(BUDGET_MAX_COST_ENV) or BUDGET_DEFAULT_MAX_COST_USD)
+    path = Path(BUDGET_DIR).expanduser() / f"{scope}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rid = uuid.uuid4().hex
+    with path.open("a+", encoding="utf-8") as ledger:
+        fcntl.flock(ledger, fcntl.LOCK_EX)
+        ledger.seek(0)
+        rows = [json.loads(line) for line in ledger if line.strip()]
+        calls = sum(1 for r in rows if r["kind"] == "reserve")
+        costs = [r["cost_usd"] for r in rows if r["kind"] == "settle"]
+        if calls >= max_calls:
+            raise BudgetError(
+                f"scope {scope!r}: {calls} calls reached max_calls={max_calls}"
+            )
+        if any(c is None for c in costs):
+            raise BudgetError(
+                f"scope {scope!r}: an earlier call reported no cost; budget is exhausted (fail closed)"
+            )
+        if sum(costs) >= max_cost:
+            raise BudgetError(
+                f"scope {scope!r}: spent ${sum(costs):.4f} reached max_cost_usd={max_cost}"
+            )
+        ledger.write(
+            json.dumps(
+                {
+                    "kind": "reserve",
+                    "id": rid,
+                    "model": payload["model"],
+                    "reason": reason,
+                }
+            )
+            + "\n"
+        )
+    return str(path), rid
+
+
+def _run_paid(argv: list[str], ledger: str, rid: str) -> str:
+    """:func:`_run_cli` for a reserved call; a call that dies (timeout, OS
+    error) settles as unpriced, which exhausts the scope (fail closed)."""
+    try:
+        return _run_cli(argv)
+    except BaseException:
+        _settle(ledger, rid, None)
+        raise
+
+
+def _settle(ledger_path: str, rid: str, cost_usd: float | None) -> None:
+    import fcntl
+    import json
+
+    with open(ledger_path, "a", encoding="utf-8") as ledger:
+        fcntl.flock(ledger, fcntl.LOCK_EX)
+        ledger.write(
+            json.dumps({"kind": "settle", "id": rid, "cost_usd": cost_usd}) + "\n"
+        )
+
+
 def pi_complete(payload: dict[str, Any]) -> dict[str, Any]:
     """One tool-less, session-less completion through the ``pi`` CLI
     (XTRM-494 reference labelers). ``payload``: ``model`` (provider/id),
@@ -217,21 +342,38 @@ def pi_complete(payload: dict[str, Any]) -> dict[str, Any]:
     import json
 
     _check_allowed(payload["model"])
-    out = _run_cli(
-        ["pi", "-p", *PI_ISOLATION_FLAGS, "--model", payload["model"],
-         "--system-prompt", payload["system"], "--mode", "json", _prompt_of(payload)]
+    ledger, rid = _reserve(payload)
+    out = _run_paid(
+        [
+            "pi",
+            "-p",
+            *PI_ISOLATION_FLAGS,
+            "--model",
+            payload["model"],
+            "--system-prompt",
+            payload["system"],
+            "--mode",
+            "json",
+            _prompt_of(payload),
+        ],
+        ledger,
+        rid,
     )
     end = None
     for line in out.splitlines():
         if line.startswith('{"type":"agent_end"'):
             end = json.loads(line)
     if end is None:
+        _settle(ledger, rid, None)
         return {"text": None, "error": "no agent_end event in pi output", "usage": None}
     message = end["messages"][-1]
     usage = message.get("usage") or {}
+    _settle(ledger, rid, (usage.get("cost") or {}).get("total"))
     return {
         "text": "".join(
-            block.get("text", "") for block in message.get("content", []) if block.get("type") == "text"
+            block.get("text", "")
+            for block in message.get("content", [])
+            if block.get("type") == "text"
         ),
         "provider": message.get("provider"),
         "model": message.get("model"),
@@ -257,23 +399,47 @@ def claude_classify(payload: dict[str, Any]) -> dict[str, Any]:
     _check_allowed(payload["model"])
     import json
 
-    out = _run_cli(
-        ["claude", "-p", "--model", payload["model"], "--effort", payload["effort"], "--setting-sources", "",
-         "--strict-mcp-config", "--tools", "", "--disable-slash-commands",
-         "--system-prompt", payload["system"], "--output-format", "json",
-         "--json-schema", json.dumps(payload["json_schema"]), _prompt_of(payload)]
+    ledger, rid = _reserve(payload)
+    out = _run_paid(
+        [
+            "claude",
+            "-p",
+            "--model",
+            payload["model"],
+            "--effort",
+            payload["effort"],
+            "--setting-sources",
+            "",
+            "--strict-mcp-config",
+            "--tools",
+            "",
+            "--disable-slash-commands",
+            "--system-prompt",
+            payload["system"],
+            "--output-format",
+            "json",
+            "--json-schema",
+            json.dumps(payload["json_schema"]),
+            _prompt_of(payload),
+        ],
+        ledger,
+        rid,
     )
     try:
         result = json.loads(out)
     except json.JSONDecodeError:
+        _settle(ledger, rid, None)
         return {"structured_output": None, "error": "claude CLI output was not JSON"}
+    _settle(ledger, rid, result.get("total_cost_usd"))
     model_usage = result.get("modelUsage") or {}
     pinned = model_usage.get(payload["model"]) or {}
     return {
         "structured_output": result.get("structured_output"),
         "error": result.get("result") if result.get("is_error") else None,
         "model_usage": pinned,
-        "auxiliary_usage": {k: v for k, v in model_usage.items() if k != payload["model"]},
+        "auxiliary_usage": {
+            k: v for k, v in model_usage.items() if k != payload["model"]
+        },
         "total_cost_usd": result.get("total_cost_usd"),
         "duration_ms": result.get("duration_ms"),
         "duration_api_ms": result.get("duration_api_ms"),

@@ -13,6 +13,11 @@ ITEM = {
 }
 
 
+#: A minimal pi reply whose provider cost is known (zero), so a fake call
+#: settles priced and does not exhaust the test's budget scope.
+PI_OK = '{"type":"agent_end","messages":[{"content":[],"usage":{"cost":{"total":0.0}}}]}'
+
+
 def _guarded(payload):
     return guards._run_guards(payload, frozenset(), guards.LabelExclusionRule(), None)
 
@@ -104,7 +109,7 @@ def test_allowlist_is_operator_config_not_package_policy(monkeypatch, tmp_path):
     monkeypatch.setattr(transports, "RESEARCH_DOTENV", str(tmp_path / "absent.env"))
 
     calls = []
-    monkeypatch.setattr(transports, "_run_cli", lambda argv: calls.append(argv) or "")
+    monkeypatch.setattr(transports, "_run_cli", lambda argv: calls.append(argv) or PI_OK)
     monkeypatch.delenv(transports.ALLOWED_MODELS_ENV, raising=False)
     transports.pi_complete(lab.label_payload("commandcode/google/gemini-3.7-flash", [ITEM]))
     assert len(calls) == 1  # unset: no restriction for other users
@@ -121,7 +126,7 @@ def test_allowlist_is_operator_config_not_package_policy(monkeypatch, tmp_path):
 def test_allowlist_is_read_from_the_research_dotenv(monkeypatch, tmp_path):
     import pytest
 
-    monkeypatch.setattr(transports, "_run_cli", lambda argv: "")
+    monkeypatch.setattr(transports, "_run_cli", lambda argv: PI_OK)
     monkeypatch.delenv(transports.ALLOWED_MODELS_ENV, raising=False)
     env = tmp_path / ".env"
     env.write_text('# budget\nexport XTRM_RESEARCH_ALLOWED_MODELS="commandcode/gpt-5.6-luna"\n')
