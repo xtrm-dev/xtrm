@@ -404,7 +404,9 @@ or serialises `TYPESAFE_API_KEY` or the key file's contents. Run from
 `packages/research`:
 
 ```bash
-TYPESAFE_API_KEY="$(cat ~/.secrets/typesafe_api_key.txt)" \
+# The key file holds a NAME=value line, so pass the VALUE, not the whole line:
+# `cat` alone sets the variable to `TYPESAFE_API_KEY=apik...` and the server answers 401.
+TYPESAFE_API_KEY="$(cut -d= -f2- ~/.secrets/typesafe_api_key.txt | tr -d '\n')" \
   uv run --extra jev python - <<'PY'
 from xtrm_research.guards import guarded_send
 
