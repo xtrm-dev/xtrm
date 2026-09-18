@@ -153,7 +153,9 @@ aliases; `sb issue close <ref> --outcome <o> --reason <r>` writes the structured
 Closure with result, receipt, validation, artifact refs) after validation + provenance + checkpoint, with the claim released
 (`sb issue claim <ref> --holder <who>` to acquire, `sb issue release <ref> --holder <who>`
 to release). A claim is an atomic lease, not an assignee label, and review-lane
-mutation requires the writer lease.
+mutation requires a live claim on the Issue. Substrate provides no
+workspace-exclusion guarantee: the Specialists activation layer owns workspace
+exclusion.
 
 Before closure: SUCCESS satisfied, VALIDATION complete, required OUTPUT exists,
 material result durable, important decisions/findings durable, provenance

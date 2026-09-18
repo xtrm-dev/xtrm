@@ -64,8 +64,9 @@ Issue → claim → resume → execute → journal → validate → provenance �
    A draft, incomplete, or contradicted Issue is not executable.
 2. **Claim.** `sb issue claim <ref> --holder <who>` before editing or
    dispatching; `sb issue release <ref> --holder <who>` when done. A claim is
-   an atomic lease, not an assignee label, and mutation requires the writer
-   lease.
+   an atomic lease, not an assignee label, and mutation requires a live claim on
+   the Issue. Substrate provides no workspace-exclusion guarantee: the
+   Specialists activation layer owns workspace exclusion.
 3. **Resume.** `sb issue resume <ref>` renders the Resume Capsule: current
    revision, latest checkpoint, journal delta, claim, blockers, child status,
    pending asks, provenance state. Read only the delta

@@ -47,7 +47,9 @@ Readiness is re-validated after any execution-relevant change. `sb issue edit
 … --ownership … --context-refs … --scrutiny …` is execution-bearing (new
 revision, readiness invalidated). Graph moves (`sb issue relate / unrelate
 --from <a> --to <b> --kind …`) never touch the contract. A claim is an atomic
-lease, not an assignee label, and mutation requires the writer lease.
+lease, not an assignee label, and mutation requires a live claim on the Issue.
+Substrate provides no workspace-exclusion guarantee: the Specialists activation
+layer owns workspace exclusion.
 
 ## Coordinator methodology (ADR §§51, 74)
 

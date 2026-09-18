@@ -1,7 +1,7 @@
 ---
 status: current
 owner: substrate
-last_verified_against: 4d83048bb86d5924b864278ff106640c6046e271
+last_verified_against: 3f3e3cbfbbd03de8fc0926599d6797f4b7eab79f
 ---
 
 # Integrations
@@ -34,3 +34,20 @@ Do not force name/count parity between Pi and Claude. Instead require:
 Specialists consumes Substrate; it does not own another durable work model.
 Core/`xt` enrolls repositories and propagates session identity; it does not
 derive Project identity independently.
+
+## Identity propagation
+
+Pi Journal/checkpoint adapters and Claude MCP Journal adapters fill unstated
+participant/activation identity from `SUBSTRATE_HOLDER` and
+`SUBSTRATE_ACTIVATION_ID`. Explicit adapter input takes precedence; Pi also
+preserves trusted envelope facets, including coordinator identity. Empty ambient
+state produces no fabricated identity. The service still rejects conflicting
+stated envelope/scalar values.
+
+Claude PreCompact and stop checkpoints use the same ambient holder/activation
+contract. PostCompact remains a provider-session-only audit event; do not infer
+that every integration event carries all identity facets.
+
+See [Journal and Resume](journal-and-resume.md#identity-on-writes) for the
+service fallback boundary and [Provenance and Closure](provenance-and-closure.md#execution-identity)
+for canonical XTRM session rules.

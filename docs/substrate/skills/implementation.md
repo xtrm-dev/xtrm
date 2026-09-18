@@ -141,8 +141,10 @@ authorization had not changed.
 - **Provenance != progress notes.** Executor output is a claim; record what
   execution produced via `sb provenance dispatch <ref>` / `sb provenance trace
   <ref>`, separate from journal progress.
-- Mutation requires the writer lease (`sb issue claim` / `sb issue release`);
-  a claim is not an assignee label.
+- Mutation requires a live claim on the Issue (`sb issue claim` / `sb issue
+  release`); a claim is not an assignee label. Substrate provides no
+  workspace-exclusion guarantee: the Specialists activation layer owns workspace
+  exclusion.
 
 ## Validate, checkpoint, hand off or close (§§17, 19–20)
 
