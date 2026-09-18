@@ -1,7 +1,8 @@
 import { createContext, useContext, useMemo, type MouseEvent, type ReactNode } from "react";
 import type { IssueSummary } from "../adapters/index.tsx";
-import { projectForRepo, useIssues, useProjects, usePull } from "../app/queries.ts";
+import { projectForRepo, useGithubIssue, useIssues, useProjects, usePull } from "../app/queries.ts";
 import { pullStateLabel, pullStateTone, parsePullRef } from "../github/pr.ts";
+import { issueStateLabel, issueStateTone, parseGithubIssueRef } from "../github/issues.ts";
 import { IssueKey, lifecycleLabel, lifecycleTone } from "../issues/meta.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
@@ -12,7 +13,7 @@ import { StatusDot, Tip, cx } from "../ui/primitives.tsx";
  * and — when the Agent surface lands — composer `@` mentions.
  * `issue` resolves against the Substrate index; `pr` is `owner/repo#N` and opens the PR drawer.
  */
-export type ContextReference = { kind: "issue"; ref: string } | { kind: "pr"; ref: string };
+export type ContextReference = { kind: "issue"; ref: string } | { kind: "pr"; ref: string } | { kind: "gh-issue"; ref: string };
 
 /** `@issue:XTRM-3` / `@pr:owner/repo#N` — the serialized form a composer mention will emit. */
 export const formatReference = (r: ContextReference) => `@${r.kind}:${r.ref}`;
@@ -25,6 +26,8 @@ export const REFERENCE_PATTERN = new RegExp(`@issue:(${ISSUE_REF})|\\b(${ISSUE_R
 
 export function parseReference(text: string): ContextReference | null {
   const clean = text.trim();
+  const gh = /^@gh-issue:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+)$/.exec(clean);
+  if (gh) return { kind: "gh-issue", ref: gh[1]! };
   let m = /^@issue:([A-Za-z][A-Za-z0-9]*-\d+(?:\.\d+)*)$/.exec(clean);
   if (m) return { kind: "issue", ref: m[1]! };
   m = /^@pr:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+)$/.exec(clean);
@@ -112,8 +115,50 @@ export function ReferenceChip({
   unresolved?: ReactNode;
   className?: string;
 }) {
+  if (reference.kind === "gh-issue") return <GithubIssueReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} className={className} />;
   if (reference.kind === "pr") return <PullReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} className={className} />;
   return <IssueReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} unresolved={unresolved} className={className} />;
+}
+
+
+/**
+ * GitHub issue chip (`owner/repo#N`). Deliberately carries the GitHub mark: a
+ * repository tracker item is never an XTRM work contract (PRD §34.3).
+ */
+function GithubIssueReferenceChip({ reference, showTitle, fallback, className }: { reference: { kind: "gh-issue"; ref: string }; showTitle?: boolean; fallback?: string; className?: string }) {
+  const shell = useShell();
+  const hostOpen = useContext(OpenReference);
+  const parsed = parseGithubIssueRef(reference.ref);
+  const issue = useGithubIssue(parsed?.fullName ?? "", parsed?.number ?? null);
+  if (!parsed) return <span className={cx("font-mono text-xs text-ink-muted", className)}>{fallback ?? reference.ref}</span>;
+
+  const target: ContextReference = { kind: "gh-issue", ref: `${parsed.fullName}#${parsed.number}` };
+  const title = issue.data?.title;
+  const chip = (
+    <button
+      type="button"
+      data-reference={formatReference(target)}
+      aria-label={`GitHub issue ${parsed.fullName}#${parsed.number}${title ? ` ${title}` : ""}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (hostOpen) hostOpen(target);
+        else shell.inspect(target);
+      }}
+      onDoubleClick={(e) => e.stopPropagation()}
+      className={cx(
+        "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm px-1 align-baseline leading-5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/40",
+        className,
+      )}
+    >
+      {issue.data ? <StatusDot tone={issueStateTone(issue.data.state)} label={issueStateLabel(issue.data.state)} /> : <Icon name="comment" size="xs" className="shrink-0 text-ink-faint" />}
+      <span className="truncate font-mono text-xs text-accent-ink">
+        #{parsed.number}
+        <span className="text-ink-faint"> {parsed.fullName}</span>
+      </span>
+      {showTitle && title && <span className="truncate text-sm text-ink">{title}</span>}
+    </button>
+  );
+  return !showTitle && title ? <Tip label={title}>{chip}</Tip> : chip;
 }
 
 function PullReferenceChip({ reference, showTitle, fallback, className }: { reference: { kind: "pr"; ref: string }; showTitle?: boolean; fallback?: string; className?: string }) {

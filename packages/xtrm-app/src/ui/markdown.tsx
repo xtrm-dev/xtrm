@@ -13,6 +13,12 @@ export const Markdown = memo(function Markdown({ children, className, inline }: 
         remarkPlugins={[remarkGfm, remarkReferences]}
         urlTransform={(url) => (referenceFromHref(url) ? url : defaultUrlTransform(url))}
         components={{
+          // A wide table scrolls inside its own box instead of squeezing every column (XTRM-397).
+          table: ({ node: _node, children, ...props }) => (
+            <div className="thin-scrollbar my-2.5 max-w-full overflow-x-auto">
+              <table {...props}>{children}</table>
+            </div>
+          ),
           a: ({ node: _node, href, children, ...props }) => {
             const reference = referenceFromHref(href);
             if (reference) {

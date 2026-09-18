@@ -123,6 +123,49 @@ export interface PullRequestDetail extends PullRequestSummary {
   files: PullFileSummary[];
 }
 
+export type GithubIssueState = "open" | "closed";
+
+export interface GithubIssueSummary {
+  number: number;
+  title: string;
+  /** Issue body; the list rows carry it too (the backend row is one table). */
+  body: string | null;
+  state: GithubIssueState;
+  author: string;
+  labels: string[];
+  comments: number;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+}
+
+export interface Release {
+  id: string;
+  tag: string;
+  /** Release title; falls back to the tag when GitHub carries none. */
+  name: string;
+  notes: string | null;
+  author: string | null;
+  publishedAt: string | null;
+  url: string;
+}
+
+/** README / CHANGELOG / a report file, as served by the Console v1 backend. */
+export interface RepoDocument {
+  path: string;
+  content: string | null;
+  sha: string | null;
+  lastModified: string | null;
+}
+
+export interface RepoReportSummary {
+  name: string;
+  path: string;
+  sha: string;
+  size: number;
+}
+
 export interface GithubAdapter {
   readonly source: DataSource;
   listRepos(): Promise<Repo[]>;
@@ -130,6 +173,13 @@ export interface GithubAdapter {
   events(repo: string, limit?: number): Promise<RepoEvent[]>;
   listPulls(repo: string, state?: PullListState): Promise<PullRequestSummary[]>;
   getPull(repo: string, number: number): Promise<PullRequestDetail>;
+  listIssues(repo: string): Promise<GithubIssueSummary[]>;
+  getIssue(repo: string, number: number): Promise<GithubIssueSummary>;
+  listReleases(repo: string): Promise<Release[]>;
+  /** `README.md` and `CHANGELOG.md` only; the backend rejects any other path. */
+  getDocument(repo: string, path: string): Promise<RepoDocument>;
+  listReports(repo: string): Promise<RepoReportSummary[]>;
+  getReport(repo: string, filename: string): Promise<RepoDocument>;
 }
 
 // --- github auth (XTRM-400; backend XTRM-404) ----------------------------------

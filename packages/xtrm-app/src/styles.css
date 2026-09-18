@@ -234,8 +234,13 @@
   .xtrm-prose table {
     border-collapse: collapse;
     font-size: 0.75rem;
-    display: block;
-    overflow-x: auto;
+    /* The Markdown renderer wraps tables in a scrolling box, so the table itself
+       sizes to its content instead of wrapping every header word (XTRM-397). */
+    width: max-content;
+    max-width: none;
+  }
+  .xtrm-prose th {
+    white-space: nowrap;
   }
   .xtrm-prose th,
   .xtrm-prose td {

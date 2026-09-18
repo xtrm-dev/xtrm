@@ -77,9 +77,9 @@ export const REPO_SECTIONS: RepoSection[] = [
     items: [
       { id: "activity", label: "Activity", icon: "activity", repoPath: "/code/activity" },
       { id: "pulls", label: "Pull requests", icon: "pull", repoPath: "/code/pulls" },
-      { id: "github-issues", label: "GitHub Issues", icon: "comment", repoPath: "/code/issues", deferred: "Wave C follow-up; distinct from XTRM Issues" },
-      { id: "releases", label: "Releases", icon: "release", repoPath: "/code/releases", deferred: "Wave C follow-up" },
-      { id: "content", label: "Repository content", icon: "file", repoPath: "/code/content", deferred: "README / CHANGELOG / reports — wave C follow-up" },
+      { id: "github-issues", label: "GitHub Issues", icon: "comment", repoPath: "/code/issues" },
+      { id: "releases", label: "Releases", icon: "release", repoPath: "/code/releases" },
+      { id: "content", label: "Repository content", icon: "file", repoPath: "/code/content" },
     ],
   },
   {

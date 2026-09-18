@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { RepoEvent } from "../adapters/index.tsx";
 import { readAccounting, readVersionRef } from "../adapters/research/manifest.ts";
 import { useEvents, useIssue, useProgram, useResearchMetrics, useResearchRun, useResearchTail } from "../app/queries.ts";
+import { GithubIssuePanel } from "../github/GithubIssuePanel.tsx";
 import { PullPanel } from "../github/PullPanel.tsx";
 import { DevicePanel } from "../github/auth.tsx";
 import { useCanWrite } from "../issues/actions.ts";
@@ -295,7 +296,7 @@ export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; fo
   if (!entity)
     return (
       <EmptyState icon="inspector" title="Nothing inspected">
-        Select an issue, Program item, activity event, or pull request to inspect it here without leaving the current surface.
+        Select an issue, Program item, activity event, pull request, or GitHub issue to inspect it here without leaving the current surface.
       </EmptyState>
     );
   switch (entity.kind) {
@@ -307,6 +308,8 @@ export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; fo
       return <ActivityPanel key={entity.ref} refValue={entity.ref} follow={follow} />;
     case "pr":
       return <PullPanel key={entity.ref} refValue={entity.ref} follow={follow} />;
+    case "gh-issue":
+      return <GithubIssuePanel key={entity.ref} refValue={entity.ref} follow={follow} />;
     case "github-auth":
       return <DevicePanel key={entity.ref} />;
     case "research-run":
@@ -331,6 +334,7 @@ const KIND_LABEL: Record<DrawerRef["kind"], string> = {
   program: "Program",
   activity: "Activity",
   pr: "Pull request",
+  "gh-issue": "GitHub issue",
   "github-auth": "GitHub sign-in",
   "research-run": "Run provenance",
   "research-metric": "Metric",

@@ -1,6 +1,10 @@
 import type {
   CheckState,
   GithubAdapter,
+  GithubIssueSummary,
+  Release,
+  RepoDocument,
+  RepoReportSummary,
   PullListState,
   PullRequestDetail,
   PullRequestSummary,
@@ -345,6 +349,101 @@ export function mapPullDetail(repo: string, row: WirePr, detail: WireDetail, che
   };
 }
 
+
+// --- issues, releases, repository content -----------------------------------
+// Backend paths (`Jaggerxtrm/console` routes/github.ts):
+//   GET /api/github/issues?repo=&state=&limit&offset -> { data: GithubIssue[] }
+//       (`state` is an exact column match, so both states come from one unfiltered read)
+//   GET /api/github/issues/:owner/:repo/:number       -> GithubIssue row (unwrapped)
+//   GET /api/github/releases?repo=&limit&offset       -> { releases: GithubRelease[] }
+//   GET /api/github/repo/:owner/:name/markdown?path=  -> { content, sha, last_modified }
+//       (README.md and CHANGELOG.md only; anything else is a 400)
+//   GET /api/github/repo/:owner/:name/reports         -> { data: GithubReportSummary[] }
+//   GET /api/github/repo/:owner/:name/reports/:file   -> { content, sha, last_modified }
+
+/** Poller-cache issue row (store.ts GithubIssue). `label_names` is a JSON array string. */
+interface WireIssue {
+  repo: string;
+  number: number;
+  title: string;
+  body: string | null;
+  state: string;
+  author: string;
+  url: string;
+  comment_count: number | null;
+  label_names: string | null;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+}
+
+interface WireRelease {
+  id: number | string;
+  repo_full_name: string;
+  tag_name: string;
+  name: string | null;
+  body: string | null;
+  author_login: string | null;
+  published_at: string | null;
+  html_url: string | null;
+}
+
+interface WireFile {
+  content: string | null;
+  sha: string | null;
+  last_modified: string | null;
+}
+
+interface WireReport {
+  name: string;
+  path: string;
+  sha: string;
+  size: number;
+}
+
+/** Labels arrive as a JSON array string; a malformed value degrades to no labels, never to a crash. */
+export function parseLabels(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((l): l is string => typeof l === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function mapIssue(row: WireIssue): GithubIssueSummary {
+  return {
+    number: row.number,
+    title: row.title,
+    body: row.body,
+    state: row.state === "closed" ? "closed" : "open",
+    author: row.author,
+    labels: parseLabels(row.label_names),
+    comments: row.comment_count ?? 0,
+    url: row.url,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    closedAt: row.closed_at,
+  };
+}
+
+export function mapRelease(row: WireRelease): Release {
+  return {
+    id: String(row.id),
+    tag: row.tag_name,
+    name: row.name?.trim() || row.tag_name,
+    notes: row.body,
+    author: row.author_login,
+    publishedAt: row.published_at,
+    url: row.html_url ?? `https://github.com/${row.repo_full_name}/releases/tag/${row.tag_name}`,
+  };
+}
+
+export function mapDocument(path: string, file: WireFile): RepoDocument {
+  return { path, content: file.content, sha: file.sha, lastModified: file.last_modified };
+}
+
 export const liveGithub: GithubAdapter = {
   source: "live",
   async listRepos() {
@@ -386,5 +485,31 @@ export const liveGithub: GithubAdapter = {
         ? (checksRaw as WireChecks)
         : ((checksRaw as { data?: WireChecks } | null)?.data ?? null);
     return mapPullDetail(repo, row, detail, checks);
+  },
+  async listIssues(repo) {
+    const q = new URLSearchParams({ repo, limit: "200" });
+    return (await getData<WireIssue[]>(`/issues?${q}`)).map(mapIssue).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  },
+  async getIssue(repo, number: number) {
+    const [owner, name] = repo.split("/");
+    return mapIssue(await getRaw<WireIssue>(`/issues/${owner}/${name}/${number}`));
+  },
+  async listReleases(repo) {
+    const q = new URLSearchParams({ repo, limit: "100" });
+    const { releases } = await getRaw<{ releases: WireRelease[] }>(`/releases?${q}`);
+    return releases.map(mapRelease).sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
+  },
+  async getDocument(repo, path: string) {
+    const [owner, name] = repo.split("/");
+    const q = new URLSearchParams({ path });
+    return mapDocument(path, await getRaw<WireFile>(`/repo/${owner}/${name}/markdown?${q}`));
+  },
+  async listReports(repo) {
+    const [owner, name] = repo.split("/");
+    return await getData<WireReport[]>(`/repo/${owner}/${name}/reports`);
+  },
+  async getReport(repo, filename: string) {
+    const [owner, name] = repo.split("/");
+    return mapDocument(filename, await getRaw<WireFile>(`/repo/${owner}/${name}/reports/${encodeURIComponent(filename)}`));
   },
 };
