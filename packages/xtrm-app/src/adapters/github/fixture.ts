@@ -1,4 +1,4 @@
-import type { GithubAdapter, PullListState, PullRequestDetail, PullRequestSummary, Repo, RepoEvent } from "../types.ts";
+import type { GithubAdapter, GithubIssueSummary, PullListState, PullRequestDetail, PullRequestSummary, Release, Repo, RepoEvent } from "../types.ts";
 
 // Development fixture. Shapes follow the Console v1 GitHub DTOs; content is illustrative.
 
@@ -162,6 +162,58 @@ export const fixturePullDetail = (repo: string, number: number): PullRequestDeta
   return { ...base, mergeable: seedRow.mergeable, mergeableState: seedRow.mergeableState, commits: seedRow.commits, reviews: seedRow.reviews, conversationComments: seedRow.conversationComments, reviewComments: seedRow.reviewComments, files: seedRow.files };
 };
 
+const issueSeed: Array<{ number: number; title: string; state: "open" | "closed"; author: string; labels: string[]; comments: number; ageMin: number; body: string | null }> = [
+  { number: 41, title: "Drawer keyboard trap when maximized", state: "open", author: "octocat", labels: ["bug", "ui"], comments: 3, ageMin: 90, body: "Steps to reproduce:\n\n1. Maximize the inspector\n2. Press Tab\n\nRelated to XTRM-303." },
+  { number: 38, title: "Document the release checklist", state: "open", author: "hubot", labels: ["docs"], comments: 0, ageMin: 1500, body: "The checklist lives only in chat." },
+  { number: 30, title: "Flaky release smoke on slow disks", state: "closed", author: "octocat", labels: ["bug"], comments: 7, ageMin: 6000, body: null },
+];
+
+const releaseSeed: Array<{ tag: string; name: string; ageMin: number; notes: string | null }> = [
+  { tag: "v0.4.0", name: "0.4.0 — inspector motion", ageMin: 240, notes: "### Added\n\n- Synchronized inspector motion (XTRM-301)\n- PR conversation threads\n\n### Fixed\n\n- Description no longer scrolls inside the drawer" },
+  { tag: "v0.3.0", name: "0.3.0 — GitHub login", ageMin: 4300, notes: "Device-flow sign in, Settings › GitHub, and per-repository capability checks." },
+  { tag: "v0.2.0", name: "", ageMin: 20000, notes: null },
+];
+
+export const fixtureIssues = (repo: string): GithubIssueSummary[] => {
+  const [owner = "xtrm-dev", name = "xtrm"] = repo.split("/");
+  return issueSeed.map((i) => ({
+    number: i.number,
+    title: i.title,
+    body: i.body,
+    state: i.state,
+    author: i.author,
+    labels: i.labels,
+    comments: i.comments,
+    url: `https://github.com/${owner}/${name}/issues/${i.number}`,
+    createdAt: ago(i.ageMin + 2000),
+    updatedAt: ago(i.ageMin),
+    closedAt: i.state === "closed" ? ago(i.ageMin) : null,
+  }));
+};
+
+export const fixtureReleases = (repo: string): Release[] => {
+  const [owner = "xtrm-dev", name = "xtrm"] = repo.split("/");
+  return releaseSeed.map((r, i) => ({
+    id: `rel-${i}`,
+    tag: r.tag,
+    name: r.name || r.tag,
+    notes: r.notes,
+    author: "octocat",
+    publishedAt: ago(r.ageMin),
+    url: `https://github.com/${owner}/${name}/releases/tag/${r.tag}`,
+  }));
+};
+
+const DOCS: Record<string, string> = {
+  "README.md": "# xtrm\n\nAgent-first operating environment.\n\n- Substrate owns executable work (XTRM-301)\n- Console v2 lives in `packages/xtrm-app`\n",
+  "CHANGELOG.md": "## [Unreleased]\n\n### Added\n\n- GitHub Issues, Releases and Repository content surfaces (XTRM-397)\n",
+};
+
+const REPORTS = [
+  { name: "2026-09-17-4890f38.md", path: ".xtrm/reports/2026-09-17-4890f38.md", sha: "a1b2c3d4", size: 4210 },
+  { name: "2026-09-16-6a61da2.md", path: ".xtrm/reports/2026-09-16-6a61da2.md", sha: "e5f6a7b8", size: 3180 },
+];
+
 export const fixtureGithub: GithubAdapter = {
   source: "fixture",
   async listRepos() {
@@ -183,5 +235,25 @@ export const fixtureGithub: GithubAdapter = {
     const detail = fixturePullDetail(repo, number);
     if (!detail) throw new Error(`unknown pull ${repo}#${number}`);
     return detail;
+  },
+  async listIssues(repo) {
+    return fixtureIssues(repo);
+  },
+  async getIssue(repo, number: number) {
+    const issue = fixtureIssues(repo).find((i) => i.number === number);
+    if (!issue) throw new Error(`unknown issue ${repo}#${number}`);
+    return issue;
+  },
+  async listReleases(repo) {
+    return fixtureReleases(repo);
+  },
+  async getDocument(_repo, path: string) {
+    return { path, content: DOCS[path] ?? null, sha: DOCS[path] ? "fixture-sha" : null, lastModified: ago(120) };
+  },
+  async listReports() {
+    return REPORTS;
+  },
+  async getReport(_repo, filename: string) {
+    return { path: filename, content: `# Session report ${filename}\n\nClosed XTRM-397 with tests and screenshots.\n`, sha: "fixture-sha", lastModified: ago(60) };
   },
 };

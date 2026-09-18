@@ -8,6 +8,9 @@ import { AppShell } from "../shell/AppShell.tsx";
 import { DEFAULT_REPO } from "../shell/context.tsx";
 import { validateDrawerSearch } from "../shell/layout.ts";
 import { ActivitySurface } from "../surfaces/ActivitySurface.tsx";
+import { ContentSurface } from "../github/ContentSurface.tsx";
+import { GithubIssuesSurface } from "../github/IssuesSurface.tsx";
+import { ReleasesSurface } from "../github/ReleasesSurface.tsx";
 import { PullsSurface } from "../github/PullsSurface.tsx";
 import { ProgramSurface } from "../surfaces/ProgramSurface.tsx";
 import { ExperimentListSurface, RunAnalysisSurface, RunComparisonSurface, RunListSurface } from "../surfaces/ResearchSurface.tsx";
@@ -96,6 +99,9 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     createRoute({ getParentRoute: () => repoRoute, path: "/work/issues/$issueRef", component: IssuePage }),
     createRoute({ getParentRoute: () => repoRoute, path: "/code/activity", component: ActivitySurface }),
     createRoute({ getParentRoute: () => repoRoute, path: "/code/pulls", component: PullsSurface }),
+    createRoute({ getParentRoute: () => repoRoute, path: "/code/issues", component: GithubIssuesSurface }),
+    createRoute({ getParentRoute: () => repoRoute, path: "/code/releases", component: ReleasesSurface }),
+    createRoute({ getParentRoute: () => repoRoute, path: "/code/content", component: ContentSurface }),
     createRoute({ getParentRoute: () => repoRoute, path: "/governance/program", component: () => <ProgramSurface repoScoped /> }),
     ...REPO_SECTIONS.flatMap((s) => s.items)
       .filter((i) => i.deferred)

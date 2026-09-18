@@ -45,6 +45,63 @@ export function usePull(repo: string, number: number | null, follow = false) {
   });
 }
 
+
+export function useGithubIssues(repo: string, follow = false) {
+  const { github } = useAdapters();
+  return useQuery({
+    queryKey: ["github", "issues", repo],
+    queryFn: () => github.listIssues(repo),
+    staleTime: 30_000,
+    refetchInterval: follow ? LIVE_MS : false,
+  });
+}
+
+export function useGithubIssue(repo: string, number: number | null, follow = false) {
+  const { github } = useAdapters();
+  return useQuery({
+    queryKey: ["github", "issue", repo, number],
+    queryFn: () => github.getIssue(repo, number!),
+    enabled: number !== null,
+    staleTime: 30_000,
+    refetchInterval: follow ? LIVE_MS : false,
+  });
+}
+
+export function useReleases(repo: string, follow = false) {
+  const { github } = useAdapters();
+  return useQuery({
+    queryKey: ["github", "releases", repo],
+    queryFn: () => github.listReleases(repo),
+    staleTime: 60_000,
+    refetchInterval: follow ? LIVE_MS : false,
+  });
+}
+
+export function useRepoDocument(repo: string, path: string | null) {
+  const { github } = useAdapters();
+  return useQuery({
+    queryKey: ["github", "document", repo, path],
+    queryFn: () => github.getDocument(repo, path!),
+    enabled: !!path,
+    staleTime: 60_000,
+  });
+}
+
+export function useRepoReports(repo: string) {
+  const { github } = useAdapters();
+  return useQuery({ queryKey: ["github", "reports", repo], queryFn: () => github.listReports(repo), staleTime: 60_000 });
+}
+
+export function useRepoReport(repo: string, filename: string | null) {
+  const { github } = useAdapters();
+  return useQuery({
+    queryKey: ["github", "report", repo, filename],
+    queryFn: () => github.getReport(repo, filename!),
+    enabled: !!filename,
+    staleTime: 60_000,
+  });
+}
+
 // --- github auth (XTRM-400) ----------------------------------------------------
 // Reads resolve to served states, never tokens (§9.2: same query layer, same rules).
 
