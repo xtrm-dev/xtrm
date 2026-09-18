@@ -97,6 +97,9 @@ pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
   credential redaction, known-identifier masking with an abort check,
   label-leak exclusion, and the package's one remote-send seam,
   `guarded_send`.
+- `src/xtrm_research/system_one.py` — the provider-independent System One
+  contract (`system_one(state, questions) -> answers`) and the deterministic
+  duplicate-pair baseline backend.
 - `src/xtrm_research/cli/` — the `xtrm-research` CLI.
 
 ## Run directory
@@ -154,6 +157,42 @@ now belongs in the optional `null_detail` string. The Python
 `NULL_REASONS` vocabulary in `telemetry.py` is pinned against the schema
 enum by `tests/test_enum_parity.py`.
 
+## System One backends
+
+`system_one.py` defines the provider-independent contract: a backend is a
+class whose `system_one(state, questions)` returns answers keyed by
+question id. Each question is a QuestionSpec
+(`question_spec.schema.json`); each answer validates against
+`common.schema.json`'s `$defs.choice_answer` / `$defs.score_answer` /
+`$defs.noul_answer`. A **Noul** answer carries `noul` = P(yes) and no
+`confidence` field at all — 0.5 means yes and no are equally likely, not
+medium intensity; `confidence` is a statistic of the distribution shape and
+exists only for choice/score. A backend declares `supported_types` and
+raises `UnsupportedQuestionTypeError` naming the type it cannot answer — it
+never fabricates a plausible answer for an unsupported type. `score_answer`
+builds the one Score shape: `score` is the probability-weighted mean of the
+level numbers and may be fractional.
+
+`DeterministicDupeBackend` (`backend_id` `deterministic-dupe-v1`) is the
+no-model baseline for the duplicate-pair judgment, ported from the original
+research scripts (commit `a6e55215`,
+`experiments/jev-dupes/dupes.py`). It supports **noul** — `noul` is the
+similarity, read directly as P(duplicate) — and **choice** only when the
+option set is exactly two (the first option is read as the affirmative
+outcome). It refuses **score**: it has no distribution over levels, and
+inventing one would be a fabricated answer. The similarity is the original
+`sim`: `0.5 * difflib.SequenceMatcher(None, title_a, title_b).ratio() +
+0.5 * Jaccard(token_sets)` over each item's lowercased
+`title + description[:800]`, tokens being `[a-z0-9]{3,}` runs.
+
+Every completed call writes exactly one `system_one_call` event through the
+run's `RunHandle`. `data` carries the backend identifier, each question's
+`content_hash` and `answer_type`, the state hash
+(`hashing.compute_content_hash` over the state) and `latency_ms`; token and
+cost fields live in the event's `usage` record. The deterministic backend
+has no provider, so its `usage` nulls carry `null_reason`
+`not_exposed_by_provider`.
+
 ## CLI
 
 Every `--json` command returns:
@@ -206,9 +245,10 @@ xtrm-research samples <run-id>
 
 ## Non-goals of this package (see XTRM-426 / XTRM-424)
 
-Backends, guards, cache/prices, porting the original experiments, and Pi
-capture are separate follow-up issues. This package ships the data contract
-and a read/write skeleton, not a full research harness. Performance is not
+Backends beyond the deterministic duplicate baseline, guards, cache/prices,
+porting the original experiments, and Pi capture are separate follow-up
+issues. This package ships the data contract, a read/write skeleton and the
+System One backend seam — not a full research harness. Performance is not
 optimized: the JSONL torn-tail repair rereads the whole file on every
 append (see the `ponytail:` comment in `jsonl.py`), and every write path
 takes a per-run lock, serializing writes within a run — fine at this
