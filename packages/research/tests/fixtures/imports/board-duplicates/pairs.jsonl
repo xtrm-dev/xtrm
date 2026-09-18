@@ -1,0 +1,4 @@
+{"a": "alpha-1", "b": "alpha-2", "label": 1, "kind": "superseded", "baseline": 0.8123}
+{"a": "alpha-3", "b": "alpha-4", "label": 0, "kind": "relates-to", "baseline": 0.221}
+{"a": "beta-1", "b": "beta-2", "label": 0, "kind": "sibling", "baseline": 0.4567}
+{"a": "beta-3", "b": "gamma-1", "label": 1, "kind": "supersedes-dep", "baseline": 0.7334}

@@ -1,0 +1,4 @@
+[
+  {"id": "C-001", "dispatchable": "yes", "validation_proves_success": "yes", "execution_mode": "repo_only", "main_gap": ""},
+  {"id": "C-002", "dispatchable": "no", "validation_proves_success": "no", "execution_mode": "operator_or_other_team", "main_gap": "waits on an external ruling"}
+]

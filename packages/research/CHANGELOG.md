@@ -4,6 +4,23 @@ All notable changes to the `xtrm-research` package.
 
 ## [Unreleased]
 
+### Added — import recorded Jev outputs as immutable Runs (XTRM-480)
+- `importers.py` plus the `import` CLI verb. `import board-duplicates`
+  converts a `board-duplicates-v1` `answers.jsonl` (joined to its
+  `pairs.jsonl` for the ground truth) into one Sample per answer row;
+  `import contract-quality` converts a `contract-quality-v3`
+  `sb-quality-v3.jsonl` into one Sample per contract row, joined to its
+  blind label through the sibling `blind-*.labels.json`/`.key.json` pair
+  and left `label: null` when there is none.
+- Every imported Run records `manifest.backend` as the Jev backend,
+  `manifest.code` as the original scripts (`specialists` @ `a6e55215`),
+  and `manifest.code.source_hashes` — a `sha256:` content hash of every
+  source file read, so the import is auditable without the data.
+- A record that cannot be represented is refused by name and leaves no
+  Run directory; a `blind-*.labels.json` with no sibling key file is an
+  explicit error naming the missing file; a `.bad-mask` source imports as
+  an invalid Run that never merges with a valid one.
+
 ### Added — System One backend protocol and deterministic baseline (XTRM-475)
 - `system_one.py`: the provider-independent contract
   `system_one(state, questions) -> answers`. A backend declares
