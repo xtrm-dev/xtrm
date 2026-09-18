@@ -1,0 +1,55 @@
+{
+  "chart_specs": [
+    {
+      "datasets": [
+        "auc",
+        "execution_mode_agreement"
+      ],
+      "description": "AUC of each quality score against the dispatchable label, and execution_mode agreement with the blind labels.",
+      "id": "contract-quality-agreement",
+      "schema_version": "xtrm-research-chart-spec/v1",
+      "title": "Contract quality agreement with blind labels"
+    }
+  ],
+  "content_hash": "sha256:ef30e2963b908b115fecda5b5c0a98335f89d052c929d03bbceb4017a7e64768",
+  "description": "Does System One contract quality agree with blind labels on which open Substrate tickets are dispatchable, and can its judgments be combined into a dispatch policy?",
+  "hypothesis": "System One executable, open_decision, validation_covers_success and self_blocked judgments separate dispatchable from non-dispatchable tickets, and execution_mode agrees with the blind execution_mode labels.",
+  "id": "contract-quality-v3",
+  "label_values": [
+    "repo_only",
+    "live_environment",
+    "operator_or_other_team"
+  ],
+  "legend": {
+    "auc": "area under the ROC curve of a quality score against the dispatchable label",
+    "execution_mode_agreement": "fraction of tickets whose predicted execution_mode matches the blind label",
+    "jev-latest": "System One contract-quality judgments from the jev-latest model",
+    "live_environment": "Access to running production or staging systems, hosts, or cloud accounts.",
+    "operator_or_other_team": "A human operator, another team, or another repository must act or decide.",
+    "repo_only": "Changes and checks inside the repository: code, tests, docs, CI."
+  },
+  "named_datasets": [
+    "auc",
+    "execution_mode_agreement"
+  ],
+  "provenance": {
+    "commit": "a6e55215",
+    "detail": "sb_quality3.py questions() lines 78-98, candidates() line 31, report() lines 153-189; sb_prep.py BOARDS/candidate export lines 12-45",
+    "files": [
+      "experiments/jev-dupes/sb_quality3.py",
+      "experiments/jev-dupes/sb_prep.py"
+    ],
+    "repo": "specialists"
+  },
+  "variants": [
+    {
+      "id": "jev-latest",
+      "version": "v1"
+    }
+  ],
+  "version": "v1",
+  "workload": {
+    "id": "contract-quality",
+    "version": "v1"
+  }
+}

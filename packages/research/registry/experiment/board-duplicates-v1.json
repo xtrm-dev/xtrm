@@ -1,0 +1,71 @@
+{
+  "chart_specs": [
+    {
+      "datasets": [
+        "auc",
+        "brier",
+        "ece",
+        "precision",
+        "recall"
+      ],
+      "description": "AUC, Brier, ECE, precision and recall of each variant against the pair labels.",
+      "id": "duplicate-detection-performance",
+      "schema_version": "xtrm-research-chart-spec/v1",
+      "title": "Duplicate detection performance by variant"
+    }
+  ],
+  "content_hash": "sha256:7849092868827e034d028fc40a8734b4b914a1acab1602f08b512162f32a09b7",
+  "description": "Do System One duplicate judgments beat a deterministic lexical baseline on pairs drawn from a software project tracker?",
+  "hypothesis": "System One P(redundant) separates labeled duplicate pairs from labeled non-duplicate pairs better than the deterministic lexical-similarity baseline.",
+  "id": "board-duplicates-v1",
+  "label_values": [
+    "same_work",
+    "one_covers_other",
+    "related_distinct",
+    "unrelated"
+  ],
+  "legend": {
+    "auc": "area under the ROC curve against the pair label",
+    "baseline": "deterministic lexical-similarity baseline (dupes.sim)",
+    "brier": "mean squared error of P(redundant) against the pair label",
+    "ece": "expected calibration error of P(redundant) in ten equal-width bins",
+    "jev-latest": "System One duplicate judgments from the jev-latest model",
+    "one_covers_other": "One is a broader or later version that fully includes the other's work.",
+    "precision": "precision of P(redundant) at a 0.5 threshold",
+    "recall": "recall of P(redundant) at a 0.5 threshold",
+    "related_distinct": "Same area or feature, but each requires separate work.",
+    "same_work": "Both ask for essentially the same change or investigation.",
+    "unrelated": "Different areas; doing one says nothing about the other."
+  },
+  "named_datasets": [
+    "auc",
+    "brier",
+    "ece",
+    "precision",
+    "recall"
+  ],
+  "provenance": {
+    "commit": "a6e55215",
+    "detail": "dupes.py build() labels lines 85-119, run() lines 146-166, report() lines 174-195; scan.py reuses dupes.questions() at line 130",
+    "files": [
+      "experiments/jev-dupes/dupes.py",
+      "experiments/jev-dupes/scan.py"
+    ],
+    "repo": "specialists"
+  },
+  "variants": [
+    {
+      "id": "baseline",
+      "version": "v1"
+    },
+    {
+      "id": "jev-latest",
+      "version": "v1"
+    }
+  ],
+  "version": "v1",
+  "workload": {
+    "id": "board-duplicates",
+    "version": "v1"
+  }
+}

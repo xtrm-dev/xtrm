@@ -1,0 +1,34 @@
+{
+  "content_hash": "sha256:88abf2dfec918a35b8340bf81280cd6df80e17543cba1fda7f5d87b98fce1f38",
+  "criteria": {
+    "one_covers_other": "One is a broader or later version that fully includes the other's work.",
+    "related_distinct": "Same area or feature, but each requires separate work.",
+    "same_work": "Both ask for essentially the same change or investigation.",
+    "unrelated": "Different areas; doing one says nothing about the other."
+  },
+  "id": "board-duplicates.relation",
+  "instructions": "What is the relationship between the work described in `issue_a` and `issue_b`?",
+  "options": [
+    "same_work",
+    "one_covers_other",
+    "related_distinct",
+    "unrelated"
+  ],
+  "provenance": {
+    "commit": "a6e55215",
+    "criteria_lines": [
+      138,
+      141
+    ],
+    "file": "experiments/jev-dupes/dupes.py",
+    "function": "questions()",
+    "instructions_lines": [
+      136,
+      136
+    ],
+    "question_key": "relation",
+    "repo": "specialists"
+  },
+  "type": "choice",
+  "version": "v1"
+}

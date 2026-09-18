@@ -1,0 +1,18 @@
+{
+  "content_hash": "sha256:8bc63e200e3a3bc6ff3e88b84565765c03059170172d9b38cc857bca0bae583d",
+  "id": "board-duplicates.redundant",
+  "instructions": "`issue_a` and `issue_b` are two tickets from the same software project tracker. Completing one of them would make the other unnecessary: they ask for the same work, or one fully covers or replaces the other.",
+  "provenance": {
+    "commit": "a6e55215",
+    "file": "experiments/jev-dupes/dupes.py",
+    "function": "questions()",
+    "instructions_lines": [
+      132,
+      134
+    ],
+    "question_key": "redundant",
+    "repo": "specialists"
+  },
+  "type": "noul",
+  "version": "v1"
+}

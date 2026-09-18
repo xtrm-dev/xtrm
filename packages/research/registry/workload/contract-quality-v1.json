@@ -1,0 +1,98 @@
+{
+  "content_hash": "sha256:d6532d182c7f4a11b6ed670befb2cf45b6c9910f87d00006ccd7304b5c151f92",
+  "default_metrics": [
+    "auc",
+    "execution_mode_agreement"
+  ],
+  "description": "Contract quality of open Substrate tickets: whether a ticket is executable from its text alone, what execution requires, and whether it leaves decisions unresolved, blocks itself, or carries validation that does not demonstrate success.",
+  "evaluators": [],
+  "id": "contract-quality",
+  "input_schema": {
+    "properties": {
+      "standard": {
+        "type": "object"
+      },
+      "ticket": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "standard",
+      "ticket"
+    ],
+    "type": "object"
+  },
+  "legend": {
+    "auc": "area under the ROC curve of a quality score against the dispatchable label",
+    "contract-quality.executable": "P(a fresh worker could execute the ticket from its text alone)",
+    "contract-quality.execution_mode": "what a worker needs in order to complete the ticket",
+    "contract-quality.open_decision": "P(the ticket leaves a decision unresolved without naming who decides)",
+    "contract-quality.self_blocked": "P(the ticket is blocked on an external decision or another ticket)",
+    "contract-quality.validation_covers_success": "P(the ticket's validation directly demonstrates its success condition)",
+    "execution_mode_agreement": "fraction of tickets whose predicted execution_mode matches the blind label"
+  },
+  "observers": [],
+  "output_schema": {
+    "properties": {
+      "executable": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+      },
+      "execution_mode": {
+        "type": "string"
+      },
+      "open_decision": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+      },
+      "self_blocked": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+      },
+      "validation_covers_success": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+      }
+    },
+    "type": "object"
+  },
+  "provenance": {
+    "commit": "a6e55215",
+    "detail": "questions() lines 78-98; STANDARD contract sections lines 17-27; evidence() deterministic checks lines 34-73; report() lines 153-189",
+    "file": "experiments/jev-dupes/sb_quality3.py",
+    "repo": "specialists"
+  },
+  "questions": [
+    {
+      "id": "contract-quality.executable",
+      "version": "v1"
+    },
+    {
+      "id": "contract-quality.execution_mode",
+      "version": "v1"
+    },
+    {
+      "id": "contract-quality.open_decision",
+      "version": "v1"
+    },
+    {
+      "id": "contract-quality.validation_covers_success",
+      "version": "v1"
+    },
+    {
+      "id": "contract-quality.self_blocked",
+      "version": "v1"
+    }
+  ],
+  "required_capabilities": [
+    "text_compare",
+    "repository_read"
+  ],
+  "runner_kind": "system_one",
+  "sample_provider": "legacy-script:sb_quality3.candidates",
+  "version": "v1"
+}

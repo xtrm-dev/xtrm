@@ -1,0 +1,18 @@
+{
+  "content_hash": "sha256:64fc140b8a3e7860c6ad887f0dd47a9a5d9e1f084d64b04682c0eb1a16229c0c",
+  "id": "contract-quality.executable",
+  "instructions": "Per `standard.purpose`: a fresh, competent worker with repository access could execute `ticket` correctly without any chat history. Work that needs live systems or an operator still counts when the ticket states exactly what to do, in what order, and how to prove it.",
+  "provenance": {
+    "commit": "a6e55215",
+    "file": "experiments/jev-dupes/sb_quality3.py",
+    "function": "questions()",
+    "instructions_lines": [
+      82,
+      84
+    ],
+    "question_key": "executable",
+    "repo": "specialists"
+  },
+  "type": "noul",
+  "version": "v1"
+}
