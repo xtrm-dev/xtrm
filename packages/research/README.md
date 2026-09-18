@@ -116,10 +116,11 @@ shipped today cover the two experiments named by XTRM-424:
 | `variant` | `baseline` v1, `jev-latest` v1 |
 | `question_spec` | the seven judgments the source scripts ask (below) |
 
-`dataset` and `evaluator` definitions are deliberately absent: the importer
-that turns existing output files into Runs and every evaluator/metric live
-in later slices (see the package non-goals), so there is nothing real to
-ship for those kinds yet. A definition file carries its own
+`dataset` and `evaluator` definitions are still absent from the shipped
+registry: the `evaluator` callables ship in `evaluators.py` (see
+_Evaluators_ below) but their versioned definition files are a later slice,
+and the importer owns the dataset side, so there is nothing registry-shaped
+to ship for those kinds yet. A definition file carries its own
 `sha256:`-prefixed `content_hash` (via `hashing.compute_content_hash`);
 `DefinitionRegistry` verifies it and raises on mismatch, so hand-editing a
 file without recomputing its hash is caught rather than trusted.
@@ -129,6 +130,47 @@ every variant id, and every declared `statuses`/`label_values` value — a
 completeness rule `schemas.validate()` enforces beyond JSON Schema, and
 `tests/test_shipped_registry.py` locks by walking the directory (a new file
 is covered automatically).
+
+## Evaluators
+
+`evaluators.py` ships the evaluator callables. `exact_match_evaluate` is
+the trivial deterministic evaluator that exercises the assessment-set
+path. Two parity evaluators reproduce the metric formulas of the original
+Jev scripts at `specialists` commit `a6e55215`, so an offline replay can
+reproduce the reference numbers to within 0.0005:
+
+- `board_duplicates_evaluate` reproduces `experiments/jev-dupes/dupes.py`
+  `report()`: `auc.baseline`, `auc.jev_noul`, `auc.jev_choice`,
+  `brier.{jev_noul,jev_choice}`, `ece.{...}`, `precision.{...}`,
+  `recall.{...}` and `mean_p_redundant.<kind>`.
+- `contract_quality_evaluate` reproduces `sb_quality3.py` `report()`:
+  `p10|median|p90.<field>`, the five `auc.*` scores against the blind
+  `dispatchable` label, `auc.validation_covers_success`, and
+  `execution_mode_agreement`.
+
+Both are aggregate metric evaluators: they return `([], metrics)` and the
+caller writes the result through `assessments.write_assessment_set`, so the
+metrics land in assessment sets and are visible to `views.run_metrics` and
+`xtrm-research metrics`. `PARITY_EVALUATORS` maps the experiment id to its
+callable.
+
+The formulas keep the source's deliberate choices, not the textbook ones:
+half credit for tied AUC pairs, ten fixed-width ECE bins indexed by
+`min(int(p * 10), 9)` and divided by the whole sample count, the
+`max(1, tp + fp)` precision guard, and `sorted(values)[len // 10]`,
+`[len // 2]`, `[9 * len // 10]` order statistics with no interpolation.
+Nothing rounds; the originals round only at print time. Every metric
+reports `se`/`ci95` as `null` because the originals compute a point estimate
+only, and each `method` string says so.
+
+Two source details are carried over verbatim. A `board-duplicates` Sample
+with `status != "ok"` (the importer's `skipped` pair) is excluded from
+every metric, because `dupes.py` reads `answers.jsonl` and never sees such
+a pair at all. And `execution_mode_agreement` counts matches over every
+joined row in its numerator but divides by the number of labels that carry
+an `execution_mode`. An empty-class AUC is `nan` in
+`contract_quality_evaluate` (matching `sb_quality3.py`) and a division by
+zero in `board_duplicates_evaluate` (matching the unguarded `dupes.py`).
 
 ### Question wording provenance
 
