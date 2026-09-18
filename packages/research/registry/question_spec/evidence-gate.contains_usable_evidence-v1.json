@@ -1,0 +1,10 @@
+{
+  "content_hash": "sha256:2c0549c07e707ad320146c52cad6c2ebb1afd5bd234753fed4def436d7878e7f",
+  "id": "evidence-gate.contains_usable_evidence",
+  "instructions": "contains_usable_evidence (0/1): 1 if the passage contains specific information (facts, values, code, commands, statements, decisions) that an agent answering the query would use or cite to answer or verify it. Topical mentions without usable specifics are 0.",
+  "provenance": {
+    "module": "xtrm_research.evidence_gate.frontier.jev_questions"
+  },
+  "type": "noul",
+  "version": "v1"
+}

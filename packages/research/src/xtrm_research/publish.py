@@ -52,6 +52,19 @@ def define(kind: str, body: dict[str, Any]) -> dict[str, Any]:
     return definition
 
 
+def question_spec(spec_id: str, version: str, body: dict[str, Any], **extra: Any) -> dict[str, Any]:
+    """A question_spec definition body from a System One question body:
+    a Choice gets ``options`` (its criteria labels), a Score gets
+    ``legend`` (level number -> criterion text, from 0 as Jev numbers
+    them)."""
+    spec: dict[str, Any] = {"id": spec_id, "version": version, **body, **extra}
+    if body["type"] == "choice":
+        spec["options"] = list(body["criteria"])
+    if body["type"] == "score":
+        spec["legend"] = {str(i): str(c) for i, c in enumerate(body["criteria"])}
+    return spec
+
+
 def register(registry_root: Path, kind: str, body: dict[str, Any]) -> dict[str, Any]:
     """Write a definition to ``<root>/<kind>/<id>-<version>.json`` once.
     Re-registering identical content is a no-op; different content under

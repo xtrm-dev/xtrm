@@ -1,0 +1,11 @@
+{
+  "config": {
+    "answer_kind": "noul",
+    "backend": "typesafe",
+    "model": "jev-1.13.0"
+  },
+  "content_hash": "sha256:0381419a4d2c200df86c8f2e5764117c043a5309e4eee246b2c3159450deb476",
+  "description": "TypeSafe Jev System One: one request per candidate carrying the six holistic questions as nouls plus a Score.",
+  "id": "evidence-gate-jev",
+  "version": "v1"
+}

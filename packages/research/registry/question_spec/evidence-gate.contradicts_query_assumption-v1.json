@@ -1,0 +1,10 @@
+{
+  "content_hash": "sha256:bb19019a24547d3bbf908fe91837254283b382f56e8eb1705a356db9416c54a0",
+  "id": "evidence-gate.contradicts_query_assumption",
+  "instructions": "contradicts_query_assumption (0/1): 1 if the passage states something that conflicts with an assumption, premise or expectation built into the query (the query assumes X exists, works a certain way, or has a certain value, and the passage says otherwise). 0 if the query carries no checkable assumption or the passage does not conflict with it.",
+  "provenance": {
+    "module": "xtrm_research.evidence_gate.frontier.jev_questions"
+  },
+  "type": "noul",
+  "version": "v1"
+}

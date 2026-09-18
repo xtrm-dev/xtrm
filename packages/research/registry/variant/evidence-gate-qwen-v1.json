@@ -1,0 +1,11 @@
+{
+  "config": {
+    "answer_kind": "raw_probability",
+    "backend": "local",
+    "model": "Qwen/Qwen3-Reranker-0.6B"
+  },
+  "content_hash": "sha256:44f7fd489760329b5f227d4363848b2ea5f80c6883d011fc2d5b75886a153e33",
+  "description": "Qwen3-Reranker-0.6B raw P(yes) on CPU, one question per call; calibrated before any threshold.",
+  "id": "evidence-gate-qwen",
+  "version": "v1"
+}

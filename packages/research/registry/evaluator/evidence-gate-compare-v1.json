@@ -1,0 +1,13 @@
+{
+  "code_revision": "xtrm_research.evidence_gate.compare",
+  "config": {
+    "bootstrap": "cluster percentile, 2000 resamples, seed 20260918",
+    "calibration": "grouped 5-fold out-of-fold Platt, isotonic sensitivity",
+    "min_positives": 10,
+    "recall_target": 0.95
+  },
+  "content_hash": "sha256:a5bb77301695867b79bc4588336e537ecc6b39cb434a81bf1168f850b96b84bf",
+  "id": "evidence-gate-compare",
+  "kind": "statistical",
+  "version": "v1"
+}

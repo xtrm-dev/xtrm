@@ -1,0 +1,11 @@
+{
+  "config": {
+    "answer_kind": "stated_probability",
+    "backend": "pi",
+    "model": "commandcode/deepseek/deepseek-v4.1-flash"
+  },
+  "content_hash": "sha256:40833020b88094967537e3f81f06c19a0a3d22baf12f56ed705ce6bbd40683bb",
+  "description": "DeepSeek-v4.1-flash through pi (context-isolated), stated probabilities, strict JSON.",
+  "id": "evidence-gate-llm",
+  "version": "v1"
+}
