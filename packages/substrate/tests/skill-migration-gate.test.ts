@@ -380,7 +380,7 @@ const SPEC_CHECKS: Check[] = [
 const IMPL_CHECKS: Check[] = [
   { id: "G1", patterns: [/PROBLEM/, /SUCCESS/, /SCOPE/, /NON_GOALS/, /CONSTRAINTS/, /VALIDATION/, /OUTPUT/, /SCRUTINY/, /executable contract/, /exact revision/] },
   { id: "G2", patterns: [/sb issue validate/, /sb issue attest/, /--outcome ready/, /re-validated/] },
-  { id: "G3", patterns: [/sb issue claim/, /--holder/, /sb issue release/, /writer lease/, /not an assignee/] },
+  { id: "G3", patterns: [/sb issue claim/, /--holder/, /sb issue release/, /mutation requires a live claim on the Issue/i, /not an assignee/] },
   { id: "G4", patterns: [/sb issue\s+note/, /sb journal append/, /sb journal checkpoint/, /sb journal since/, /sb journal show/, /sb journal render/] },
   { id: "G5", patterns: [/→ Journal finding/, /→ Journal decision/, /→ Journal blocker/, /→ Journal milestone/, /→ Journal handoff/, /→ Journal note/, /Do not journal every shell command/] },
   { id: "G6", patterns: [/sb journal checkpoint/, /mechanical checkpoint/, /mechanical state first/] },

@@ -95,9 +95,11 @@ One store: explicit `dbPath` where a tool exposes it, otherwise
 ## Session binding and resume
 
 `SUBSTRATE_ISSUE_REF` is the canonical process-level issue binding;
-`SUBSTRATE_ISSUE` is a compatibility alias. Host-known session/participant/run
-identity is enriched into durable execution context where the runtime knows it;
-unknown values stay absent rather than fabricated.
+`SUBSTRATE_ISSUE` is a compatibility alias. Host-known session, participant, run
+and activation identity is enriched into durable execution context where the
+runtime knows it. Journal and checkpoint writes fill unstated participant and
+activation from `SUBSTRATE_HOLDER` and `SUBSTRATE_ACTIVATION_ID`; explicit
+arguments win; unknown values stay absent rather than fabricated.
 
 Resume from the derived Capsule, never from compacted chat.
 

@@ -49,8 +49,9 @@ sb provenance trace <ref>           # what execution produced
 `--contract … --ownership … --context-refs … --scrutiny …` is
 execution-bearing (new revision, readiness invalidated). Graph moves
 (`sb issue relate / unrelate --from <a> --to <b> --kind …`) never touch the
-contract. Mutation requires the writer lease (`sb issue claim` /
-`sb issue release`).
+contract. Mutation requires a live claim on the Issue (`sb issue claim` /
+`sb issue release`). Substrate provides no workspace-exclusion guarantee: the
+Specialists activation layer owns workspace exclusion.
 
 ## Journal kinds (ADR §73)
 

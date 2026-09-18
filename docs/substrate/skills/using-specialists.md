@@ -63,7 +63,9 @@ contract, and it must already be usable before dispatch:
    readiness before execution, re-validated after any execution-relevant change.
 3. `sb issue claim <ref> --holder <who>` before dispatching work that mutates;
    `sb issue release <ref> --holder <who>` when done. A claim is an atomic lease,
-   not an assignee label, and mutation requires the writer lease.
+   not an assignee label, and mutation requires a live claim on the Issue.
+   Substrate provides no workspace-exclusion guarantee: the Specialists
+   activation layer owns workspace exclusion.
 
 If the contract is insufficient, repair it through `/planning` (new revision plus
 new readiness attestation). Never patch missing scope into a dispatch prompt, a
