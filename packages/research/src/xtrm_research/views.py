@@ -12,7 +12,12 @@ from typing import Any
 
 from xtrm_research.assessments import list_assessment_sets
 from xtrm_research.jsonl import read_lines
-from xtrm_research.store import events_path, run_exists, samples_path
+from xtrm_research.store import (
+    events_path,
+    load_manifest,
+    run_exists,
+    samples_path,
+)
 
 
 def run_metrics(root: Path, run_id: str) -> dict[str, dict[str, Any]]:
@@ -44,8 +49,78 @@ def run_summary(root: Path, run_id: str) -> dict[str, Any]:
     }
 
 
-def compare_runs(root: Path, run_ids: list[str]) -> dict[str, dict[str, Any]]:
-    return {run_id: run_summary(root, run_id) for run_id in run_ids}
+def compare_runs(
+    root: Path, run_ids: list[str], baseline_run_id: str
+) -> dict[str, dict[str, Any]]:
+    """Summaries for ``run_ids``, each carrying metric deltas against
+    ``baseline_run_id``.
+
+    The return value is still a mapping from run id to that run's existing
+    summary — the top level is never anything else, because the app consumer
+    (``packages/xtrm-app/src/adapters/research/live.ts``) maps *every* top-
+    level key through :func:`run_summary`'s shape. The delta data is additive
+    inside each summary:
+
+    - ``deltas[key]`` for every metric key the run and the baseline share:
+      ``value_delta`` (run minus baseline), the two ``n`` values it was
+      computed from, and ``within_tolerance``. A delta says nothing about
+      direction of merit: the data does not state whether higher is better.
+    - ``unpaired_metrics`` lists ``{metric, missing_side}`` for every metric
+      key present on only one side, so a missing metric is reported, never
+      zero-filled or silently dropped.
+
+    ``within_tolerance`` uses the *run's own* declared ``tolerance`` (a
+    non-negative number on the run manifest): ``True``/``False`` inside or
+    outside it, ``None`` — distinct from ``False`` — when the run declares
+    none. The baseline's own entry is present with zero deltas for every
+    shared metric.
+
+    Raises ``ValueError`` if ``baseline_run_id`` is not one of ``run_ids``,
+    or if the runs do not all belong to the baseline's experiment (their
+    metric namespaces would not be comparable).
+    """
+    if baseline_run_id not in run_ids:
+        raise ValueError(
+            f"baseline run {baseline_run_id!r} is not among the compared runs: "
+            f"{run_ids}"
+        )
+    manifests = {run_id: load_manifest(root, run_id) for run_id in run_ids}
+    summaries = {run_id: run_summary(root, run_id) for run_id in run_ids}
+
+    baseline_experiment = manifests[baseline_run_id]["experiment"]["id"]
+    for run_id in run_ids:
+        experiment = manifests[run_id]["experiment"]["id"]
+        if experiment != baseline_experiment:
+            raise ValueError(
+                "refusing to compare runs from different experiments: baseline "
+                f"{baseline_run_id!r} is in experiment {baseline_experiment!r}, "
+                f"but {run_id!r} is in experiment {experiment!r}"
+            )
+
+    baseline_metrics = summaries[baseline_run_id]["metrics"]
+    for run_id, summary in summaries.items():
+        metrics = summary["metrics"]
+        tolerance = manifests[run_id].get("tolerance")
+        deltas: dict[str, dict[str, Any]] = {}
+        unpaired: list[dict[str, str]] = []
+        for key in sorted(set(metrics) | set(baseline_metrics)):
+            if key not in baseline_metrics:
+                unpaired.append({"metric": key, "missing_side": "baseline"})
+            elif key not in metrics:
+                unpaired.append({"metric": key, "missing_side": "run"})
+            else:
+                value_delta = metrics[key]["value"] - baseline_metrics[key]["value"]
+                deltas[key] = {
+                    "value_delta": value_delta,
+                    "baseline_n": baseline_metrics[key]["n"],
+                    "run_n": metrics[key]["n"],
+                    "within_tolerance": (
+                        None if tolerance is None else abs(value_delta) <= tolerance
+                    ),
+                }
+        summary["deltas"] = deltas
+        summary["unpaired_metrics"] = unpaired
+    return summaries
 
 
 def chart_dataset_rows(

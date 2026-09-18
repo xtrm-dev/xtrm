@@ -4,6 +4,30 @@ All notable changes to the `xtrm-research` package.
 
 ## [Unreleased]
 
+### Added — compare metric deltas with per-run tolerance (XTRM-477)
+- `views.compare_runs(root, run_ids, baseline_run_id)` now computes real
+  per-metric deltas instead of returning runs side by side. Each run's
+  summary keeps its existing `metrics`, `sample_count` and `event_count`
+  keys unchanged and gains two additive blocks: `deltas` (shared metric
+  keys only — `value_delta` = run minus baseline, `baseline_n`, `run_n`,
+  `within_tolerance`) and `unpaired_metrics` (`{metric, missing_side}` for
+  keys present on only one side, never zero-filled).
+- Deltas state no direction of merit: no `improved`/`regression`, no sign
+  interpretation — the data does not say whether higher is better.
+- Per-run tolerance is read from an optional, non-negative top-level
+  `tolerance` on `manifest.json` (`manifest.schema.json` now permits it;
+  optional, so every existing run stays valid). `within_tolerance` is
+  `true`/`false` against the run's own tolerance, `null` when it declares
+  none.
+- `compare` refuses runs from different experiments with `ok: false`,
+  naming both experiment ids, rather than comparing incomparable metric
+  namespaces.
+- `compare` gains `--baseline <run-id>`, defaulting to the first listed
+  run id so the existing bridge invocation (`compare <ids>`) is unchanged.
+  The top level remains a mapping of run id to run summary — no baseline
+  id or shared delta block is added beside it, so the app consumer's
+  `Object.entries(wire)` mapping keeps working unchanged.
+
 ### Added — import recorded Jev outputs as immutable Runs (XTRM-480)
 - `importers.py` plus the `import` CLI verb. `import board-duplicates`
   converts a `board-duplicates-v1` `answers.jsonl` (joined to its

@@ -264,7 +264,7 @@ xtrm-research workload show <id> --registry-root <dir>
 # e.g. xtrm-research --json experiment show board-duplicates-v1 --registry-root registry
 xtrm-research tail <run-id> --after <offset>
 xtrm-research metrics <run-id>
-xtrm-research compare <run-id> [<run-id> ...]
+xtrm-research compare <run-id> [<run-id> ...] [--baseline <run-id>]
 xtrm-research chart-data <run-id> [<run-id> ...] --metric <evaluator-id::metric>
 xtrm-research experiments --registry-root <dir>
 xtrm-research samples <run-id>
@@ -280,6 +280,27 @@ xtrm-research import contract-quality --quality <sb-quality-v3.jsonl> [--labels-
   registry directory, so an experiment with zero runs is visible.
 - `samples` returns the run's `samples.jsonl` records; an unknown run or
   a missing samples file is `ok: false`.
+- `compare` returns a mapping from run id to that run's summary
+  (`metrics`, `sample_count`, `event_count`) with delta data added
+  *inside* each summary — never beside it, because the app consumer maps
+  every top-level key as a run summary. Each run gets `deltas` for every
+  metric key it shares with the baseline (`value_delta` = run minus
+  baseline, `baseline_n`, `run_n`, `within_tolerance`) and
+  `unpaired_metrics` listing `{metric, missing_side}` for keys present on
+  only one side. A delta states no direction of merit: whether higher is
+  better is not in the data. Comparing runs of different experiments is
+  `ok: false` naming both experiment ids.
+
+### `compare` tolerance
+
+A run may declare an optional, non-negative `tolerance` on its
+`manifest.json` (top-level; see `manifest.schema.json`). A delta whose
+magnitude is within the *run's own* tolerance is flagged
+`within_tolerance: true`, one outside it `false`, and a run that declares
+none gets `within_tolerance: null` — distinct from `false`. `--baseline`
+defaults to the first listed run id, matching the app's baseline-first
+convention.
+
 - `import board-duplicates` and `import contract-quality` convert the
   recorded outputs of the original Jev experiments into immutable Runs
   (see _Importing recorded Jev outputs_ below). Both are `ok: false` with
