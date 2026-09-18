@@ -33,7 +33,12 @@ from xtrm_research.store import (
     load_manifest,
     manifest_path,
 )
-from xtrm_research.views import chart_dataset_rows, compare_runs, run_summary
+from xtrm_research.views import (
+    chart_dataset_rows,
+    compare_runs,
+    list_experiments,
+    run_summary,
+)
 
 
 def _emit(command: str, data: Any, as_json: bool) -> None:
@@ -177,6 +182,10 @@ def _cmd_chart_data(args: argparse.Namespace) -> None:
     _emit("chart-data", out, args.json)
 
 
+def _cmd_experiments(args: argparse.Namespace) -> None:
+    _emit("experiments", list_experiments(Path(args.registry_root)), args.json)
+
+
 def _cmd_metrics(args: argparse.Namespace) -> None:
     root = Path(args.root)
     _emit("metrics", run_summary(root, args.run_id), args.json)
@@ -308,6 +317,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_chart.add_argument("run_ids", nargs="+", metavar="RUN_ID")
     p_chart.add_argument("--metric", required=True)
     p_chart.set_defaults(func=_cmd_chart_data)
+
+    p_experiments = sub.add_parser("experiments")
+    _add_common(p_experiments)
+    p_experiments.add_argument("--registry-root", required=True)
+    p_experiments.set_defaults(func=_cmd_experiments)
 
     return parser
 

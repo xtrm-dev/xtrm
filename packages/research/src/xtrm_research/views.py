@@ -59,3 +59,26 @@ def chart_dataset_rows(
         if metric is not None:
             rows.append({"run_id": run_id, **metric})
     return rows
+
+
+def list_experiments(registry_root: Path) -> list[dict[str, Any]]:
+    """Every experiment definition in the registry, sorted by (id, version).
+
+    Read straight from the registry directory (not derived from run rows),
+    so an experiment with zero runs is still visible. Raises
+    :class:`SchemaValidationError` for an unreadable registry or manifest."""
+    from xtrm_research.definitions import DefinitionRegistry
+    from xtrm_research.schemas import SchemaValidationError
+
+    kind_dir = Path(registry_root) / "experiment"
+    if not kind_dir.is_dir():
+        raise SchemaValidationError(
+            f"no experiment registry under {Path(registry_root)}"
+        )
+    registry = DefinitionRegistry(Path(registry_root))
+    registry._load_kind("experiment")
+    flat = sorted(
+        (d for ds in registry._by_kind_id.values() for d in ds),
+        key=lambda d: (d["id"], d["version"]),
+    )
+    return [{"id": d["id"], "version": d["version"]} for d in flat]
