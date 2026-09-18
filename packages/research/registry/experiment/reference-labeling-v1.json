@@ -1,0 +1,73 @@
+{
+  "chart_specs": [
+    {
+      "datasets": [
+        "krippendorff_alpha",
+        "cohens_kappa",
+        "percent_agreement",
+        "dispatchable_rate"
+      ],
+      "description": "Agreement statistics across independent labeler runs on the same stratified sample.",
+      "id": "labeler-agreement",
+      "schema_version": "xtrm-research-chart-spec/v1",
+      "title": "Inter-labeler agreement on the reference label set"
+    }
+  ],
+  "content_hash": "sha256:8b99b94f630035a3c64314ce5cb0e10d13ea19a10fa3769dc7040e154e5601b3",
+  "description": "Label a stratified sample of work items with independent labelers to build a reference label set, and report inter-labeler agreement on it.",
+  "hypothesis": "Independent labeler runs on the same sampled items agree well enough (nominal Krippendorff's alpha above chance) that the adjudicated labels are a reference the v3 quality scores can be evaluated against.",
+  "id": "reference-labeling-v1",
+  "label_values": [
+    "yes",
+    "no",
+    "repo_only",
+    "live_environment",
+    "operator_or_other_team"
+  ],
+  "labeling": {
+    "brief": {
+      "content_hash": "sha256:4b7f1487dd07c04673f08d8e5c397c40d0222e73d7b846ca5b116e58de9989e5",
+      "id": "labeler-brief",
+      "version": "v1"
+    }
+  },
+  "legend": {
+    "cohens_kappa": "chance-corrected agreement between a pair of labelers",
+    "dispatchable_rate": "fraction of labelled items whose dispatchable label is yes",
+    "krippendorff_alpha": "nominal Krippendorff's alpha over the label matrix, missing labels included",
+    "labeler-a": "first independent labeler run on the sampled items",
+    "labeler-b": "second independent labeler run on the sampled items",
+    "labeler-c": "third independent labeler run on the sampled items",
+    "live_environment": "access to a running system, host, or cloud account",
+    "no": "the item needs a decision or an external action before work can start",
+    "operator_or_other_team": "a human operator, another team, or another repository must act or decide",
+    "percent_agreement": "fraction of items on which every labeler who answered gave the same label",
+    "repo_only": "changes and checks inside the repository: code, tests, docs, CI",
+    "yes": "a fresh worker could complete the item from its text alone"
+  },
+  "named_datasets": [
+    "percent_agreement",
+    "cohens_kappa",
+    "krippendorff_alpha",
+    "dispatchable_rate"
+  ],
+  "variants": [
+    {
+      "id": "labeler-a",
+      "version": "v1"
+    },
+    {
+      "id": "labeler-b",
+      "version": "v1"
+    },
+    {
+      "id": "labeler-c",
+      "version": "v1"
+    }
+  ],
+  "version": "v1",
+  "workload": {
+    "id": "contract-quality",
+    "version": "v1"
+  }
+}

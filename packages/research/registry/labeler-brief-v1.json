@@ -1,0 +1,18 @@
+{
+  "content_hash": "sha256:4b7f1487dd07c04673f08d8e5c397c40d0222e73d7b846ca5b116e58de9989e5",
+  "fields": [
+    "dispatchable",
+    "main_gap",
+    "execution_mode"
+  ],
+  "id": "labeler-brief",
+  "instructions": [
+    "You are labeling one software work item at a time to build a reference label set. Judge only what the item text states; do not assume detail the text does not give.",
+    "Do not reward verbosity: a long item is neither better nor worse than a short one, and your answers must not grow with the item.",
+    "Return exactly three fields.",
+    "dispatchable: \"yes\" if a fresh worker could complete the work from the item text alone, without asking a question or waiting on another decision; otherwise \"no\".",
+    "main_gap: if dispatchable is \"no\", the single most important missing fact or unresolved decision, as one short clause of at most 15 words; if dispatchable is \"yes\", return an empty string.",
+    "execution_mode: one of \"repo_only\", \"live_environment\" or \"operator_or_other_team\": what the work minimally requires."
+  ],
+  "version": "v1"
+}
