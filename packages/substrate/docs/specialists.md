@@ -24,6 +24,11 @@ artifact provenance. Publication is runtime-owned and hardened for cross-process
 exactly-once behavior; the Specialist does not have to remember to write its own
 result note.
 
+Publication passes the child Pi session id as the session scalar, and the
+service validates it like any other write: a non-canonical value is refused
+rather than stored. A host job identifier belongs in `runId`, never in the
+session field.
+
 `issue_ref` is the primary Specialist work vocabulary. Historical `bead_id`
 exists only as a compatibility alias at boundaries that still accept it.
 
