@@ -1631,6 +1631,48 @@ def test_j2_ten_by_nineteen_field_dilution_case_still_aborts():
     assert backend.calls == []
 
 
+# ---- XTRM-462: one real word among many opaque short tokens ------------
+
+
+def _opaque_short_tokens(count: int) -> str:
+    """``count`` whitespace-separated tokens each too short to match
+    :data:`_PLAIN_WORD` (no 3+ letter run), so a field built from them
+    contributes no plain words of its own."""
+    return " ".join(f"q{i}" for i in range(count))
+
+
+def test_xtrm_462_lone_real_word_among_opaque_tokens_aborts_on_mask_loss():
+    """XTRM-462 regression: a field of many opaque short tokens plus one
+    real English word is *not* a single-token field, so losing that word
+    to an over-broad known-id match must trip the per-leaf trigger. Before
+    the fix the plain-word count was 1 and the trigger's ``total > 1``
+    guard exempted the field, silently destroying its only real word."""
+    text = f"{_opaque_short_tokens(200)} realword"
+    known_ids = frozenset({"realword"})
+    with pytest.raises(MaskAbortError):
+        check_mask(redact(text), guards_module._apply_id_mask(redact(text), known_ids))
+
+
+def test_xtrm_462_lone_real_word_loss_aborts_end_to_end():
+    """The same blind spot through the real send seam: no payload reaches
+    the backend when its only real word is masked out of a multi-token
+    field."""
+    text = f"{_opaque_short_tokens(200)} realword"
+    backend = _RecordingBackend()
+    with pytest.raises(GuardFailure) as exc_info:
+        guarded_send({"note": text}, backend, known_ids=frozenset({"realword"}))
+    assert exc_info.value.guard == "mask"
+    assert backend.calls == []
+
+
+def test_xtrm_462_genuine_single_token_field_still_exempt():
+    """The narrow fix must not widen into the J2/G8 regressions: a field
+    whose entire content *is* one id token is still exempt, and a
+    multi-token field that keeps its one real word still sends."""
+    check_mask("XTRM-428", "<issue>")  # single token: exempt
+    check_mask("q0 realword", "<issue> realword")  # word survives: no loss
+
+
 # ---- K2: single-token leaves excluded from the aggregate corpus, ---------
 # ---- with a fallback so an all-single-token payload still aborts ---------
 

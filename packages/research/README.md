@@ -689,6 +689,20 @@ inter-labeler agreement of Krippendorff α **+0.6010**, 95% CI
   `"started"`) can make a settled run writable again. There is no
   cryptographic seal on either file — this is a cooperative-process
   safety net (catches bugs and races), not a security boundary.
+- **The guard stage's credential residuals are accepted costs
+  (XTRM-462).** The assignment-redaction rule is name-anchored: a secret
+  assigned to a name carrying none of its strong/weak keywords, or to a
+  sentence-case strong keyword (`Password: hunter2`), is caught only when
+  the value itself matches a known format (a prefixed token, a hex
+  digest, a PEM block, a URL credential). That value-only backstop is
+  deliberate — the name-agnostic alternative (XTRM-428 J1) redacted
+  ordinary URLs, model ids and version strings, and a sentence-case value
+  heuristic would re-redact ordinary prose (`Password: required`).
+  XTRM-462 re-reviewed both against the merged XTRM-428 code and kept
+  them as the final answer. Separately, XTRM-462 narrowed the short-field
+  masking-loss trigger to a field whose entire content is one token: a
+  field of many opaque tokens holding one real word is no longer exempt,
+  so losing that word aborts.
 
 ## Non-goals of this package (see XTRM-426 / XTRM-424)
 

@@ -82,6 +82,15 @@ from xtrm_research.hashing import compute_content_hash
 #: :data:`SECRET_BARE`, and :func:`check_redaction`'s loss check, are
 #: the backstop — not another name-agnostic heuristic, which J1 found
 #: redacted ordinary URLs, model ids and version strings.
+#:
+#: XTRM-462 re-reviewed both residuals above (this unrecognized-keyword
+#: gap and the sentence-case strong-keyword ``Password:`` cost) against
+#: the merged XTRM-428 code and kept them as accepted costs, not
+#: documentation drift. No narrower, non-regressive rule was found: a
+#: sentence-case value shape heuristic would re-redact ordinary prose
+#: (``Password: required``, ``Token: expired``), and a name-agnostic
+#: value rule is the J1 defect this file's history already withdrew. This
+#: block stands as the final answer.
 _STRONG_ASSIGN_KEYWORDS = ("KEY", "SECRET", "TOKEN", "PASSWORD", "PASSWD", "CRED")
 _WEAK_ASSIGN_KEYWORDS = (
     "ACCOUNT",
@@ -442,10 +451,14 @@ def _check_text_loss(
     always exempt from this trigger, even when the flag is set: a field
     that *is* one known id, one ref, one bare credential — the common
     board-text shape ``{"ref": "XTRM-428", ...}`` or
-    ``{"mmd-585": {...}}`` — legitimately empties to one word. The
-    dilution case the trigger exists for (many small fields, each
-    losing a fraction of *several* words) is instead caught by the
-    whole-payload aggregate check this function is also used for.
+    ``{"mmd-585": {...}}`` — legitimately empties to one word. XTRM-462:
+    "single token" is measured in whitespace-delimited content, not
+    plain words — a field of many opaque short tokens holding exactly
+    one real word is *not* a bare id/ref/credential, so losing that word
+    trips the trigger even though ``total`` is 1. The dilution case the
+    trigger exists for (many small fields, each losing a fraction of
+    *several* words) is instead caught by the whole-payload aggregate
+    check this function is also used for.
 
     K6: attribution (``abort_on_short_field_total_loss=False``) excuses
     a field with roughly no real content, not one with a dozen words
@@ -459,8 +472,8 @@ def _check_text_loss(
     ever presumed a bare credential.
     """
     floor = len(_PLAIN_WORD.findall(original))
-    words = _PLAIN_WORD.findall(_strip_replacement_tokens(original))
-    total = len(words)
+    stripped_original = _strip_replacement_tokens(original)
+    total = len(_PLAIN_WORD.findall(stripped_original))
     if total == 0:
         return
     surviving = _PLAIN_WORD.findall(_strip_replacement_tokens(processed))
@@ -478,7 +491,16 @@ def _check_text_loss(
         # The absolute-threshold half (K6) is reachable today: it is
         # what catches a PEM (or any anchored rule) match that swallows
         # more than a few real words alongside a genuine credential.
-        if total > 1 and removed == total and something_changed:
+        # XTRM-462: exempt only a genuine single-token field (a bare
+        # id/ref/credential). Content-token count, not plain-word count —
+        # the latter hides a lone real word sitting among many opaque
+        # tokens, whose loss is exactly the over-broad-mask defect this
+        # trigger exists to catch.
+        if (
+            len(stripped_original.split()) > 1
+            and removed == total
+            and something_changed
+        ):
             if (
                 abort_on_short_field_total_loss
                 or removed > SHORT_FIELD_ABSOLUTE_REMOVED_THRESHOLD
