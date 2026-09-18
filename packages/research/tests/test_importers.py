@@ -99,6 +99,34 @@ def test_board_duplicates_import_has_one_sample_per_answer_row(runs_root):
     assert first["output"]["probs"]["same_work"] == 0.9
 
 
+# --- one Sample per pair, including a pair with no recorded answer --------
+
+
+def test_board_duplicates_unanswered_pair_is_an_explicit_skipped_sample(
+    runs_root, tmp_path
+):
+    pairs = tmp_path / "pairs.jsonl"
+    pairs.write_text(
+        DUPES_PAIRS.read_text(encoding="utf-8")
+        + '{"a": "delta-1", "b": "delta-2", "label": 0, '
+        '"kind": "random", "baseline": 0.1}\n',
+        encoding="utf-8",
+    )
+    run_id = _import_dupes(runs_root, "imp-partial", answers=DUPES_ANSWERS, pairs=pairs)
+    samples = _samples(runs_root, run_id)
+
+    assert len(samples) == _count_lines(pairs)
+    assert len(samples) == _count_lines(DUPES_ANSWERS) + 1
+    by_pair = {(s["input"]["a"], s["input"]["b"]): s for s in samples}
+    assert by_pair[("delta-1", "delta-2")]["status"] == "skipped"
+    assert "output" not in by_pair[("delta-1", "delta-2")]
+    assert all(
+        s["status"] == "ok"
+        for key, s in by_pair.items()
+        if key != ("delta-1", "delta-2")
+    )
+
+
 # --- SUCCESS 2: blind label join, unlabelled rows stay unlabelled -----------
 
 

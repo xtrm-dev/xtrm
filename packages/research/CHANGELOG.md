@@ -7,7 +7,8 @@ All notable changes to the `xtrm-research` package.
 ### Added — import recorded Jev outputs as immutable Runs (XTRM-480)
 - `importers.py` plus the `import` CLI verb. `import board-duplicates`
   converts a `board-duplicates-v1` `answers.jsonl` (joined to its
-  `pairs.jsonl` for the ground truth) into one Sample per answer row;
+  `pairs.jsonl` for the ground truth) into one Sample per pairs row — an
+  unanswered pair is an explicit `skipped` Sample, never a silent drop;
   `import contract-quality` converts a `contract-quality-v3`
   `sb-quality-v3.jsonl` into one Sample per contract row, joined to its
   blind label through the sibling `blind-*.labels.json`/`.key.json` pair

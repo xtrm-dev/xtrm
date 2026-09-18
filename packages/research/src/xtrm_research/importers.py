@@ -234,6 +234,7 @@ def _build_duplicate_samples(
     created_at: str,
 ) -> list[dict[str, Any]]:
     truth: dict[tuple[str, str], dict[str, Any]] = {}
+    order: list[tuple[str, str]] = []
     for i, row in enumerate(pair_rows):
         a = _require(row, "a", source=pairs_path, index=i)
         b = _require(row, "b", source=pairs_path, index=i)
@@ -245,20 +246,24 @@ def _build_duplicate_samples(
                 f"{pairs_path}: record {i} has a non-binary label: {label!r}"
             )
         _require_number(baseline, "baseline", source=pairs_path, index=i)
-        truth[(a, b)] = {"label": label, "kind": kind, "baseline": baseline}
+        key = (a, b)
+        if key in truth:
+            raise UnrepresentableRecordError(
+                f"{pairs_path}: record {i} repeats the pair {key}"
+            )
+        truth[key] = {"label": label, "kind": kind, "baseline": baseline}
+        order.append(key)
 
-    samples: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
+    outputs: dict[tuple[str, str], dict[str, Any]] = {}
     for i, row in enumerate(answer_rows):
         a = _require(row, "a", source=answers_path, index=i)
         b = _require(row, "b", source=answers_path, index=i)
         key = (a, b)
-        if key in seen:
+        if key in outputs:
             raise UnrepresentableRecordError(
                 f"{answers_path}: record {i} repeats the pair {key}; "
                 f"answers.jsonl must be deduplicated on (a, b)"
             )
-        seen.add(key)
         if key not in truth:
             raise UnrepresentableRecordError(
                 f"{answers_path}: record {i} pair {key} has no row in {pairs_path}"
@@ -284,28 +289,36 @@ def _build_duplicate_samples(
             raise UnrepresentableRecordError(
                 f"{answers_path}: record {i} field 'probs' is not an object: {probs!r}"
             )
-        samples.append(
-            {
-                "schema_version": _SAMPLE_SCHEMA_VERSION,
-                "sample_id": f"dupe-{a}--{b}",
-                "index": len(samples),
-                "input": {
-                    "a": a,
-                    "b": b,
-                    "label": expected["label"],
-                    "kind": expected["kind"],
-                    "baseline": expected["baseline"],
-                },
-                "output": {
-                    "noul": noul,
-                    "choice": choice,
-                    "probs": probs,
-                    "conf": conf,
-                },
-                "status": "ok",
-                "created_at": created_at,
-            }
-        )
+        outputs[key] = {
+            "noul": noul,
+            "choice": choice,
+            "probs": probs,
+            "conf": conf,
+        }
+
+    # One Sample per pairs.jsonl row, in file order. A pair with no recorded
+    # answer is an explicit ``skipped`` Sample, never a silent drop.
+    samples: list[dict[str, Any]] = []
+    for a, b in order:
+        expected = truth[(a, b)]
+        answer = outputs.get((a, b))
+        sample: dict[str, Any] = {
+            "schema_version": _SAMPLE_SCHEMA_VERSION,
+            "sample_id": f"dupe-{a}--{b}",
+            "index": len(samples),
+            "input": {
+                "a": a,
+                "b": b,
+                "label": expected["label"],
+                "kind": expected["kind"],
+                "baseline": expected["baseline"],
+            },
+            "status": "ok" if answer is not None else "skipped",
+            "created_at": created_at,
+        }
+        if answer is not None:
+            sample["output"] = answer
+        samples.append(sample)
     return samples
 
 

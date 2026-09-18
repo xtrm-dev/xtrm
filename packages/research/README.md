@@ -250,7 +250,9 @@ produces Runs only. Both importers:
   create no Run directory in that case.
 
 `board-duplicates-v1` (`import board-duplicates`): one Sample per row of
-`answers.jsonl`, joined to its `pairs.jsonl` row for the ground truth. A
+`pairs.jsonl`, in file order, joined to its `answers.jsonl` row for the
+recorded Jev answer. A pair with no recorded answer imports as an explicit
+`"status": "skipped"` Sample (with no `output`), never a silent drop. A
 pair whose ground truth disagrees with the answer row, a repeated `(a, b)`,
 or an answer with no pair is refused. Sample shape:
 
