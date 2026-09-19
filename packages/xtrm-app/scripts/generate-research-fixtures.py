@@ -140,6 +140,7 @@ def build(root: Path) -> dict:
         "tailA": _cli(root, "tail", "run-a"),
         "metricsA": _cli(root, "metrics", "run-a"),
         "compareAB": _cli(root, "compare", "run-a", "run-b"),
+        "chartAccuracyAB": _cli(root, "chart-data", "run-a", "run-b", "--metric", "accuracy"),
     }
 
     # A run whose manifest.json cannot be parsed: exercises the `invalid_manifest`
