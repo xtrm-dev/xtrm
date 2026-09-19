@@ -1,5 +1,5 @@
 import type { ResearchAdapter } from "./types.ts";
-import { mapLineage, mapRunRow, mapRunShow, mapRunSummary, mapTail, type WireCompare, type WireLineageTree, type WireRunRow, type WireRunShow, type WireTail } from "./live.ts";
+import { mapChartDataRow, mapLineage, mapRunRow, mapRunShow, mapRunSummary, mapTail, type WireChartDataRow, type WireCompare, type WireLineageTree, type WireRunRow, type WireRunShow, type WireTail } from "./live.ts";
 
 // Captured from a real `xtrm-research --json` run (see scripts/generate-research-fixtures.py);
 // content is illustrative but every shape is genuine CLI output, never hand-authored.
@@ -42,6 +42,12 @@ export const fixtureResearch: ResearchAdapter = {
   async getMetrics(runId) {
     if (runId !== "run-a") throw new Error(`unknown run: ${runId}`);
     return mapRunSummary(fixture.metricsA);
+  },
+  async getChartData(runIds, metric) {
+    if (metric !== "accuracy") throw new Error(`unknown chart dataset: ${metric}`);
+    for (const runId of runIds) get(RUN_SHOW, runId, "run");
+    const wanted = new Set(runIds);
+    return (fixture.chartAccuracyAB as WireChartDataRow[]).filter((row) => wanted.has(row.run_id)).map(mapChartDataRow);
   },
   async compare(runIds) {
     const wire = fixture.compareAB as WireCompare;
