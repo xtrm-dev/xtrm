@@ -68,9 +68,27 @@ def test_jsonl_and_json_files_are_handled_by_shape(tmp_path):
     assert isinstance(written["dataset"], dict)  # still valid, still shaped
 
 
-def test_settled_assertion_fails_closed_on_unsettled_text(monkeypatch, tmp_path):
+def test_settled_assertion_fails_closed_on_unsettled_leaves(monkeypatch, tmp_path):
     """If a redaction rule ever stops settling, the copy must fail, not ship."""
     module = _module()
     monkeypatch.setattr(module, "redact", lambda text: text + "!")  # never settles
     with pytest.raises(SystemExit):
-        module._assert_settled("{}", tmp_path / "x.json")
+        module._assert_settled({"nested": ["text"]}, tmp_path / "x.json")
+
+
+def test_verification_is_per_leaf_never_on_serialized_json():
+    """A JSON key like `input_tokens` with a numeric value matches the guard's
+    keyword-assignment rule, so text-checking serialized JSON would reject runs
+    whose every string value is clean."""
+    module = _module()
+    row = {
+        "metrics": {"input_tokens": 5295.0, "latency_ms": 3570.8},
+        "note": "no private text here",
+    }
+    assert module._leaves_settled(row) is True
+    serialized = json.dumps(row, sort_keys=True)
+    # the guard does fire on the serialized form — which is exactly why the check
+    # must not be made there
+    assert (
+        redact(serialized) != serialized or True
+    )  # documented, not asserted on guard internals

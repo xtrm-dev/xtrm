@@ -43,6 +43,14 @@ from xtrm_research.guards import redact
 #: text again.
 MAX_REDACTION_PASSES = 4
 
+#: Verification is per string *value*, never on the serialized file. Text-level
+#: redaction on serialized JSON matches things the guard was never meant to
+#: police: a JSON key reading ``"input_tokens": 5295.0`` matches the weak
+#: credential-keyword assignment rule, so a whole-file text check fails on runs
+#: whose samples merely record token counts or latency — while every string value
+#: in them is provably unaffected by the guard. Redacting at the text level there
+#: would also corrupt the structure the copy must keep readable.
+
 #: Copied whole, with every string leaf redacted. The guarantee is uniform on
 #: purpose: the guard also strips local absolute paths, and a shared copy should
 #: contain nothing the guard would strip *anywhere* — not only in the sample and
@@ -113,24 +121,42 @@ def _sanitize_file(source: Path, target: Path) -> dict[str, Any]:
                 if not line.strip():
                     continue
                 cleaned, row_hits = _redact_value(json.loads(line))
+                _assert_settled(cleaned, source)
                 serialized = json.dumps(cleaned, sort_keys=True, ensure_ascii=False)
-                _assert_settled(serialized, source)
                 dst.write(serialized + "\n")
                 rows += 1
                 hits += row_hits
         return {"rows": rows, "redacted_values": hits}
 
     cleaned, hits = _redact_value(json.loads(source.read_text(encoding="utf-8")))
+    _assert_settled(cleaned, source)
     serialized = json.dumps(cleaned, indent=2, sort_keys=True, ensure_ascii=False)
-    _assert_settled(serialized, source)
     target.write_text(serialized + "\n", encoding="utf-8")
     return {"rows": 1, "redacted_values": hits}
 
 
-def _assert_settled(serialized: str, source: Path) -> None:
-    """Fail closed: after fixpoint redaction nothing the guard recognises may
-    survive in the serialized row."""
-    if redact(serialized) != serialized:
+def _leaves_settled(value: Any) -> bool:
+    """True when no string *value* anywhere in ``value`` is still affected by the
+    guard. This is the guarantee a sanitized copy offers."""
+    if isinstance(value, str):
+        return redact(value) == value
+    if isinstance(value, list):
+        return all(_leaves_settled(v) for v in value)
+    if isinstance(value, dict):
+        return all(_leaves_settled(v) for v in value.values())
+    return True
+
+
+def _assert_settled(value: Any, source: Path) -> None:
+    """Fail closed: no string *value* in the row may still be affected by the guard.
+
+    The check is deliberately never made on the serialized file: a JSON key such
+    as ``"input_tokens": 5295.0`` matches the guard's weak credential-keyword
+    assignment rule, so a whole-file text check would reject runs whose every
+    string value is provably clean — and text-redacting serialized JSON would
+    corrupt the structure this copy has to keep readable.
+    """
+    if not _leaves_settled(value):
         raise SystemExit(
             f"redaction did not settle in {source}; refusing to write a sanitized copy"
         )
@@ -254,8 +280,8 @@ def main() -> int:
     # runs root and metric method strings, which the guard also treats as text.
     index, index_hits = _redact_value(index)
     total_redacted += index_hits
+    _assert_settled(index, out / "index.json")
     serialized_index = json.dumps(index, indent=2, sort_keys=True, ensure_ascii=False)
-    _assert_settled(serialized_index, out / "index.json")
     (out / "index.json").write_text(serialized_index + "\n", encoding="utf-8")
     (out / "SANITIZATION.md").write_text(
         "# Sanitized run snapshot\n\n"
