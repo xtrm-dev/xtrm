@@ -218,7 +218,7 @@ describe("Run analysis surface (XTRM-433 slice 3)", () => {
     expect(within(main).getByText("Baseline lands at chance accuracy, as hypothesised.")).toBeTruthy();
     expect(await within(main).findByRole("region", { name: "Charts" })).toBeTruthy();
     expect(within(main).getByRole("article", { name: "Accuracy by run" })).toBeTruthy();
-    expect(within(main).getByLabelText("accuracy chart").textContent).toContain("baseline");
+    expect((await within(main).findByLabelText("accuracy chart")).textContent).toContain("baseline");
   });
 
   it("renders the sample table from tail(), including the usage-unavailable state with its null_reason", async () => {
@@ -433,7 +433,7 @@ describe("Experiment-defined comparison charts", () => {
     renderAt("/research/compare?baseline=run-a&candidate=run-b");
     const charts = await screen.findByRole("region", { name: "Charts" });
     expect(within(charts).getByRole("article", { name: "Accuracy by run" })).toBeTruthy();
-    expect(within(charts).getByLabelText("accuracy chart").textContent).toContain("not reported");
+    expect((await within(charts).findByLabelText("accuracy chart")).textContent).toContain("not reported");
   });
 });
 
