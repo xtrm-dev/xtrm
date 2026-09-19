@@ -137,7 +137,9 @@ def publish_run(
     """Write one complete, app-visible run. ``samples``: ``{"sample_id",
     "input", "output"?, "status"?}``. ``records``: the workflow runner's
     ``{"kind", "sample_id", "data", "usage"?}`` in order. ``annotations``:
-    ``{"kind", "text", "evidence_status"?}``. A None metric is dropped."""
+    ``{"kind", "text", "evidence_status"?, "result_summary"?}``; a
+    ``result_summary`` annotation carries the structured companion (supported
+    / unsupported claims, caveats, decision). A None metric is dropped."""
     now = datetime.now(timezone.utc)
     rows = [
         {
@@ -205,6 +207,7 @@ def publish_run(
                 note["text"],
                 note.get("evidence_status"),
                 now=now,
+                result_summary=note.get("result_summary"),
             )
         handle.finish("success")
     except BaseException:

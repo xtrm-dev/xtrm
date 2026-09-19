@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:5d5560e472020c229cb27bfa01beed14f496419e6f772268318abd287d3e7b3f",
+  "criteria": {
+    "false": "SUCCESS restates the goal or the problem, states a feeling or intention, or names something nobody could observe to decide completion.",
+    "true": "SUCCESS names conditions an operator can observe to decide the work is complete: a check, artifact, or observable behaviour that would differ from now once the work is done."
+  },
+  "id": "planning-ready.success_observable",
+  "instructions": "SUCCESS names conditions an operator can observe to decide the work is complete: a check, artifact, or observable behaviour that would differ from now once the work is done.",
+  "type": "noul",
+  "version": "v1"
+}

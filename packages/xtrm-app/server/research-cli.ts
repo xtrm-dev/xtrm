@@ -34,13 +34,16 @@ const offset = (params: URLSearchParams, key: string): number | null | undefined
 // the query string, so it cannot be used to make the Python CLI read an arbitrary path.
 const registryRoot = () => process.env.XTRM_RESEARCH_REGISTRY_ROOT || null;
 
-function registryShowArgv(kind: "experiment" | "workload", params: URLSearchParams): string[] | null {
+function registryShowArgv(kind: "experiment" | "workload" | "question-spec", params: URLSearchParams): string[] | null {
   const definitionId = id(params, "id");
   const root = registryRoot();
   if (!definitionId || !root) return null;
   const version = params.get("version");
   if (version !== null && !ID_RE.test(version)) return null;
-  const argv = [kind, "show", definitionId, "--registry-root", root];
+  // The CLI subcommand for question specs hyphenates the kind; experiment and
+  // workload use the bare noun.
+  const verb = kind === "question-spec" ? "question-spec" : kind;
+  const argv = [verb, "show", definitionId, "--registry-root", root];
   if (version !== null) argv.push("--version", version);
   return argv;
 }
@@ -61,6 +64,8 @@ export function readArgv(pathname: string, params: URLSearchParams): string[] | 
       return registryShowArgv("experiment", params);
     case "/workload":
       return registryShowArgv("workload", params);
+    case "/question-spec":
+      return registryShowArgv("question-spec", params);
     case "/tail": {
       const runId = id(params, "run");
       if (!runId) return null;

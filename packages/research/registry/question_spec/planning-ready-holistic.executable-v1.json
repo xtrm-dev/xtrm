@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:fa1c634ff6f0fd755688c7821beefcc3d182542aae653beebfaf5d6e9ba49b80",
+  "criteria": {
+    "false": "The contract as written is not executable without further information, decisions, or access.",
+    "true": "A fresh, competent worker with repository access could execute this contract from its text alone and produce the stated OUTPUT."
+  },
+  "id": "planning-ready-holistic.executable",
+  "instructions": "A fresh, competent worker with repository access could execute this contract from its text alone and produce the stated OUTPUT.",
+  "type": "noul",
+  "version": "v1"
+}

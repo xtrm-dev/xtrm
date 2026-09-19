@@ -1,0 +1,9 @@
+{
+  "config": {
+    "arm": "deterministic-only"
+  },
+  "content_hash": "sha256:d54f393f9ceba4ff1704b63dde8975c7be4e24abc6c9d737a3b4ac8858d2417b",
+  "description": "Structure checks only, no semantic judgment: the incumbent's deterministic channel.",
+  "id": "planning-ready-deterministic-only",
+  "version": "v1"
+}

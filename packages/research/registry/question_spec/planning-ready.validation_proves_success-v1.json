@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:02ec23033b434d8b2b1d5c6eeb91910daf6c5463319c91c9dab8fda9a8e034f5",
+  "criteria": {
+    "false": "VALIDATION does not demonstrate SUCCESS: for example only static checks (lint, typecheck, build) for a behavioural change, or checks unrelated to the success condition.",
+    "true": "VALIDATION demonstrates the claimed SUCCESS: the named checks would fail if the success condition were not achieved, including integrated behaviour where the change crosses a boundary."
+  },
+  "id": "planning-ready.validation_proves_success",
+  "instructions": "VALIDATION demonstrates the claimed SUCCESS: the named checks would fail if the success condition were not achieved, including integrated behaviour where the change crosses a boundary.",
+  "type": "noul",
+  "version": "v1"
+}

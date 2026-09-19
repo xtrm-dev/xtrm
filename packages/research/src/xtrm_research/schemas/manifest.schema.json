@@ -295,6 +295,11 @@
           "items": {
             "type": "string"
           }
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this concrete run happened now: relation to a prior run, a migration, or a changed methodology. Scientific meaning lives in the Experiment definition, not here."
         }
       },
       "required": [

@@ -181,6 +181,20 @@ def _check_experiment_rules(payload: dict[str, Any]) -> None:
         raise SchemaValidationError(
             f"experiment {payload.get('id')}: missing legend entries for {missing}"
         )
+    primary = payload.get("primary_outcomes") or []
+    undeclared = sorted(set(primary) - named_datasets)
+    if undeclared:
+        raise SchemaValidationError(
+            f"experiment {payload.get('id')}: primary_outcomes not in "
+            f"named_datasets: {undeclared}"
+        )
+    glossary = payload.get("metric_glossary") or {}
+    unexplained = sorted(set(primary) - glossary.keys())
+    if unexplained:
+        raise SchemaValidationError(
+            f"experiment {payload.get('id')}: primary_outcomes without a "
+            f"metric_glossary entry: {unexplained}"
+        )
     for spec in payload.get("chart_specs", []):
         _scan_for_forbidden_keys(spec, path=f"chart_specs[{spec.get('id')}]")
         datasets = spec.get("datasets", [])

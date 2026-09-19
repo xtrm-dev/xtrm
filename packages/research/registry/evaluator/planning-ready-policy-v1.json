@@ -1,0 +1,14 @@
+{
+  "code_revision": "xtrm_research.planning_ready.policy",
+  "config": {
+    "bootstrap": "cluster percentile, 2000 resamples, seed 20260919",
+    "cluster_unit": "work item (issue lineage)",
+    "population": "structurally valid units with an independent label",
+    "proportion_intervals": "Wilson 95%",
+    "thresholds_fitted_on": "train partition only"
+  },
+  "content_hash": "sha256:48d553aa958f62a427b09157ec55e2a3ca58834bd163af2c4c8eb4dc539c56c8",
+  "id": "planning-ready-policy",
+  "kind": "statistical",
+  "version": "v1"
+}

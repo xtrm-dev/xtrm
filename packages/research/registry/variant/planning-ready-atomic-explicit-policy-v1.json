@@ -1,0 +1,9 @@
+{
+  "config": {
+    "arm": "atomic-explicit-policy"
+  },
+  "content_hash": "sha256:edb06b05d7d2390f8c8b7e6de38cb584196af906a36e32840210142aa30cf9ab",
+  "description": "Eleven atomic Noul judgments plus one Choice, composed by the frozen non-compensatory policy.",
+  "id": "planning-ready-atomic-explicit-policy",
+  "version": "v1"
+}

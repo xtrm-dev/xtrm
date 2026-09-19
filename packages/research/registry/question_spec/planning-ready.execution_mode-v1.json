@@ -1,0 +1,17 @@
+{
+  "content_hash": "sha256:6d5dc7396057d93772fde0524f84f154b55a463356d590c8409de3aa9be06912",
+  "criteria": {
+    "live_environment": "The work needs access to a running system, host, cluster, or cloud account.",
+    "operator_or_other_team": "A human operator, another team, or another repository must act or decide.",
+    "repo_only": "Changes and checks are possible inside the repository: code, tests, docs, CI."
+  },
+  "id": "planning-ready.execution_mode",
+  "instructions": "What does completing this contract require?",
+  "options": [
+    "repo_only",
+    "live_environment",
+    "operator_or_other_team"
+  ],
+  "type": "choice",
+  "version": "v1"
+}

@@ -226,7 +226,7 @@ describe("Run analysis surface (XTRM-433 slice 3)", () => {
     const main = await screen.findByRole("region", { name: "Run run-a" });
     expect(await within(main).findByLabelText("s-0")).toBeTruthy();
     expect(within(within(main).getByLabelText("s-0")).getByText("42 in / 7 out")).toBeTruthy();
-    expect(within(within(main).getByLabelText("s-1")).getByText("usage unavailable — usage telemetry unavailable for this backend")).toBeTruthy();
+    expect(within(within(main).getByLabelText("s-1")).getByText("usage unavailable — not_exposed_by_provider")).toBeTruthy();
   });
 
   it("renders an explicit error naming the run when its manifest is unreadable, never a crash", async () => {
@@ -255,7 +255,7 @@ describe("Run analysis surface (XTRM-433 slice 3)", () => {
 
     fireEvent.click(within(main).getByLabelText("s-1"));
     drawer = await screen.findByTestId("inspector-drawer");
-    expect((await within(drawer).findAllByText("usage telemetry unavailable for this backend", { exact: false })).length).toBeGreaterThan(0);
+    expect((await within(drawer).findAllByText("not_exposed_by_provider", { exact: false })).length).toBeGreaterThan(0);
 
     fireEvent.click(within(main).getByLabelText("conclusion"));
     drawer = await screen.findByTestId("inspector-drawer");
@@ -528,5 +528,109 @@ describe("No Research surface renders a money figure", () => {
     const drawer = await screen.findByTestId("inspector-drawer");
     await openDrawer(drawer);
     expect(drawer.textContent).not.toMatch(MONEY);
+  });
+});
+
+describe("Run analysis resolves the versioned Experiment/Workload/QuestionSpec behind a run", () => {
+  // The run page must render scientific meaning from the *definitions the manifest references*,
+  // never from prose copied into the manifest (Jira XTRM-99 c.13438). Each adapter call below is
+  // the only source of one part of the page, so a regression that re-inlines semantics into the
+  // manifest — or drops the definition fetch — fails here.
+  const v2 = {
+    manifest: {
+      ...fixture.runShowA.manifest,
+      experiment: { id: "planning-ready-v2", version: "v1", content_hash: "sha256:" + "a".repeat(64) },
+      workload: { id: "planning-ready", version: "v1", content_hash: "sha256:" + "b".repeat(64) },
+    },
+    status: "success",
+    annotations: [
+      {
+        kind: "result_summary",
+        evidence_status: "exploratory",
+        result_summary: {
+          plain_language: "Atomic System One checks recovered most ready contracts and escalated the uncertain ones.",
+          supported_claims: ["P(success_observable) carries signal"],
+          unsupported_claims: ["production adoption"],
+          caveats: ["labels are adjudicated"],
+          decision: "keep the incumbent readiness logic until outcome labels exist",
+        },
+      },
+    ],
+  };
+  const experiment = {
+    id: "planning-ready-v2",
+    version: "v1",
+    description: "Does an atomic System One policy decide Planning contract readiness?",
+    hypothesis: "Atomic checks separate ready from draft contracts better than one holistic judgment.",
+    research_question: "Can atomic System One checks decide whether a Planning contract is ready?",
+    primary_outcomes: ["test.false_ready_rate"],
+    success_criteria: ["false-READY rate below the holistic arm's"],
+    falsification_criteria: ["no separation from the holistic arm"],
+    non_claims: ["no production adoption"],
+    metric_glossary: {
+      // ids mirror the persisted metric leaves ("test." partition prefix): a bare
+      // name resolves to nothing and renders an empty chart
+      "test.false_ready_rate": {
+        label: "False READY rate",
+        description: "Share of non-ready contracts the policy marked READY.",
+        direction: "lower_better",
+        interpretation: "0 means no non-ready contract was accepted.",
+      },
+    },
+    terminology: { Noul: "P(yes) for a yes/no question, with no separate confidence field." },
+    named_datasets: ["test.false_ready_rate"],
+    legend: { "test.false_ready_rate": "false READY rate", "jev-latest": "System One answers from the resolved Jev model" },
+  };
+  const workload = { id: "planning-ready", version: "v1", questions: [{ id: "planning-ready.success_observable", version: "v1" }] };
+  const questionSpec = {
+    id: "planning-ready.success_observable",
+    version: "v1",
+    type: "noul",
+    instructions: "Judge whether SUCCESS names an observable outcome.",
+    criteria: { true: "an operator can run or see the result", false: "success is a feeling or an intention" },
+  };
+
+  const adapters = {
+    getRun: async () => v2 as never,
+    getExperiment: async () => experiment,
+    getWorkload: async () => workload,
+    getQuestionSpec: async () => questionSpec,
+  };
+
+  it("shows why, what would count, the structured result, and the primitive types", async () => {
+    renderWithResearch("/research/runs/run-a", adapters);
+    const main = await screen.findByRole("region", { name: "Run run-a" });
+
+    // WHY — question and hypothesis stay distinct, and the run's own rationale is present.
+    expect(await within(main).findByText(experiment.research_question)).toBeTruthy();
+    expect(within(main).getByText(experiment.hypothesis)).toBeTruthy();
+    // Canonical System One terminology comes from the versioned Experiment definition.
+    expect(within(main).getByText(/no separate confidence field/)).toBeTruthy();
+
+    // WHAT WOULD COUNT.
+    expect(within(main).getByText("Supports the hypothesis if")).toBeTruthy();
+    expect(within(main).getByText("Falsifies the hypothesis if")).toBeTruthy();
+    expect(within(main).getByText("no production adoption")).toBeTruthy();
+
+    // WHAT IT MEANS — plain language, claims, caveats and decision.
+    const result = within(main).getByRole("region", { name: "Result" });
+    expect(within(result).getByText(/recovered most ready contracts/)).toBeTruthy();
+    expect(within(result).getByText("P(success_observable) carries signal")).toBeTruthy();
+    expect(within(result).getByText(/keep the incumbent readiness logic/)).toBeTruthy();
+
+    // METHOD — the System One question with its actual primitive type and criteria.
+    expect(await within(main).findByText("noul")).toBeTruthy();
+    expect(within(main).getByText(questionSpec.instructions)).toBeTruthy();
+    expect(within(main).getByText("an operator can run or see the result")).toBeTruthy();
+  });
+
+  it("renders each metric with its glossary meaning and direction, not a bare identifier", async () => {
+    const getMetrics = async () => summary({ "planning-eval::test.false_ready_rate": { value: 0.07, se: null, ci95: [0.02, 0.12], n: 40, method: "cluster-bootstrap" } });
+    renderWithResearch("/research/runs/run-a", { ...adapters, getMetrics });
+    const main = await screen.findByRole("region", { name: "Run run-a" });
+    expect(await within(main).findByText("False READY rate")).toBeTruthy();
+    expect(within(main).getByText(/Share of non-ready contracts/)).toBeTruthy();
+    expect(within(main).getByText(/↓ lower is better/)).toBeTruthy();
+    expect(await within(main).findByText(questionSpec.instructions)).toBeTruthy();
   });
 });

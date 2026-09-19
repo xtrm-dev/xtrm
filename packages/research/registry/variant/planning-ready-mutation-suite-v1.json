@@ -1,0 +1,9 @@
+{
+  "config": {
+    "arm": "mutation-suite"
+  },
+  "content_hash": "sha256:9985ff6aee6a5f9daca29120afbecd9fceabbddd70ca957a9cafc15049212687",
+  "description": "Controlled single-invariant mutations of strong contracts, with expectations declared before the calls.",
+  "id": "planning-ready-mutation-suite",
+  "version": "v1"
+}

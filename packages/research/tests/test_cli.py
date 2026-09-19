@@ -161,6 +161,38 @@ def test_experiment_and_workload_show(capsys):
     assert envelope["data"]["id"] == "dup-detect"
 
 
+def test_question_spec_show(capsys):
+    code, envelope = _run_cli(
+        [
+            "--json",
+            "question-spec",
+            "show",
+            "dup-check",
+            "--registry-root",
+            str(REGISTRY_ROOT),
+        ],
+        capsys,
+    )
+    assert code == 0
+    assert envelope["command"] == "question-spec show"
+    assert envelope["data"]["id"] == "dup-check"
+    assert envelope["data"]["type"] in {"choice", "score", "noul"}
+
+    code, envelope = _run_cli(
+        [
+            "--json",
+            "question-spec",
+            "show",
+            "missing-spec",
+            "--registry-root",
+            str(REGISTRY_ROOT),
+        ],
+        capsys,
+    )
+    assert code != 0
+    assert envelope["ok"] is False
+
+
 def test_experiment_show_bad_registry_root_returns_error_envelope(capsys):
     code, envelope = _run_cli(
         ["--json", "experiment", "show", "zz", "--registry-root", "/nonexistent"],

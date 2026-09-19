@@ -4,6 +4,42 @@
   "title": "Experiment \u2014 one research question over one workload version with N variants",
   "type": "object",
   "$defs": {
+    "metric_glossary_entry": {
+      "type": "object",
+      "description": "Human-readable meaning of one metric this experiment reports. Direction is never assumed for an unknown metric: an entry must state it.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "higher_better",
+            "lower_better",
+            "unspecified"
+          ]
+        },
+        "interpretation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How to read a value in context (e.g. what 0.5 or 1.0 means for a ranking metric)."
+        }
+      },
+      "required": [
+        "label",
+        "description",
+        "direction"
+      ]
+    },
     "chart_spec": {
       "type": "object",
       "properties": {
@@ -76,6 +112,61 @@
     "hypothesis": {
       "type": "string",
       "minLength": 1
+    },
+    "research_question": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The question this experiment exists to answer, distinct from hypothesis (the proposed answer). Immutable scientific meaning, owned here rather than in any run manifest."
+    },
+    "primary_outcomes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Pre-registered metric names the experiment is judged on. Each must be a named_dataset and must have a metric_glossary entry (enforced by validate())."
+    },
+    "success_criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "What result would support the hypothesis, stated before execution."
+    },
+    "falsification_criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "What result would falsify the hypothesis, stated before execution."
+    },
+    "non_claims": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "What this experiment explicitly does not establish."
+    },
+    "metric_glossary": {
+      "type": "object",
+      "description": "Metric name (a named_datasets value) to its human-readable meaning, direction and unit.",
+      "additionalProperties": {
+        "$ref": "#/$defs/metric_glossary_entry"
+      }
+    },
+    "terminology": {
+      "type": "object",
+      "description": "Canonical vocabulary this experiment uses (e.g. System One, Jev, Noul, Choice, Score), term to definition. Durable evidence uses TypeSafe terminology; this map is what the UI shows.",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "variants": {
       "type": "array",

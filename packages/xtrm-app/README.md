@@ -46,6 +46,61 @@ npm run typecheck
 npm run build
 ```
 
+### Research runs: seeing published runs locally
+
+The Research surfaces read published runs through the `xtrm-research` CLI, not
+through the repository. Three paths decide what you see, and the bridge has no
+sensible defaults for them:
+
+| variable | what it points at |
+|---|---|
+| `XTRM_RESEARCH_BIN` | the `xtrm-research` CLI to run |
+| `XTRM_RESEARCH_ROOT` | the published runs root |
+| `XTRM_RESEARCH_REGISTRY_ROOT` | the versioned registry definitions |
+
+Run them resolved for *this* checkout instead of exporting by hand:
+
+```bash
+npm run research:dev                     # resolve all three, then start Vite
+npm run research:dev -- --port 5180      # other flags go to Vite
+npm run research:dev -- --runs DIR       # a different runs root
+npm run research:fixture                 # UI only, no runs root needed
+```
+
+`research:dev` prints what it resolved, and warns you when `xtrm-research` on
+`PATH` is a *different* one (usually another worktree's virtualenv). That trap is
+the reason the script exists: without `XTRM_RESEARCH_BIN`, the bridge silently
+reads whichever CLI is on `PATH`. The registry root matters just as much —
+without it the run page cannot resolve a run's Experiment / Workload /
+QuestionSpec definitions, and the semantic sections come back empty.
+
+Then open `/research/runs` and pick a run. The run page resolves the exact
+versioned definitions the run's manifest references and shows why the run
+exists, what would have counted, the structured result, the method (each System
+One question with its actual primitive type — `noul` / `choice` / `score` — and
+its `criteria.true|false`), and every metric with its glossary meaning and
+direction.
+
+**Runs and datasets are not in git, by design.** They hold private board text
+(every sample's input carries the contract it was run on) and a multi-hundred-
+MB snapshot; they live under `~/.xtrm/research/` (mode 700) and the original run
+directory is the evidence of record. To hand a run to someone else, make a
+sanitized reading copy instead of exporting raw:
+
+```bash
+npm run research:snapshot -- --out ~/.xtrm/research/shared/board-v2 \
+  --run planning-ready-v2-atomic-explicit --run planning-ready-v2-holistic
+npm run research:dev -- --runs ~/.xtrm/research/shared/board-v2
+```
+
+`research:snapshot` redacts every string value in every copied file with
+`xtrm_research.guards.redact` — the same rule that decides what may be sent to a
+model — keeps structure, keys and numbers intact so the copy is still readable
+by the CLI and by the app, writes an `index.json` with headline metrics and file
+hashes, and fails closed if any text would still be redacted. Definitions and
+reports are the parts that belong in review: they live in
+git (`packages/research/registry`, `packages/research/docs`).
+
 Layout:
 
 ```text
@@ -53,19 +108,21 @@ src/ui/          shared primitives (Surface, Row, IconButton, StatusDot, Content
                  SidebarSection/Row, Drawer, InspectorSection, CommandMenu, ResizablePanel, …)
 src/shell/       AppShell, layout reducer (drawer states, restore rules, URL codec),
                  context sidebar, inspector, global search/commands
-src/adapters/    github | substrate | program — interface + live + typed fixture each
+src/adapters/    github | substrate | program | research — interface + live + typed fixture each
 src/issues/      Jira-style Issues: list, issue page, shared IssueView, field editors, normalization, create dialog
-src/surfaces/    Activity, Program, Repositories, deferred placeholders
+src/surfaces/    Activity, Program, Repositories, Research (runs, comparison, run analysis + semantic sections), deferred placeholders
 src/app/         TanStack Router routes, one TanStack Query layer
-server/          dev-server bridge: read-only `sb … --json` allow-list
+server/          dev-server bridge: read-only `sb … --json` allow-list, read-only `xtrm-research --json` allow-list
+scripts/         research-dev.mjs (resolve the research read surface + start Vite), screenshot capture
 ```
 
-Data sources (select with `VITE_XTRM_GITHUB|SUBSTRATE|PROGRAM=live|fixture`):
+Data sources (select with `VITE_XTRM_GITHUB|SUBSTRATE|PROGRAM|RESEARCH=live|fixture`):
 
 | surface | default | source |
 |---|---|---|
 | GitHub / repository Activity, repository list | live | Console v1 backend (`XTRM_CONSOLE_URL`, default `http://127.0.0.1:3030`) via Vite proxy |
 | Substrate Issues list, issue page, issue drawer, Jira-style editing | live | installed `sb` CLI envelope `substrate-cli/v1` through an allow-listed bridge; reads plus writes via `sb issue edit/state/note/create` (`XTRM_SUBSTRATE_WRITES=0` for read-only, `XTRM_SB_DB=<path>` for a dev database); never SQLite |
+| Research runs, experiments, metrics, comparison | live | `xtrm-research --json` read verbs (`xtrm-research-cli/v1`) through an allow-listed bridge, pointed by `XTRM_RESEARCH_BIN`, `XTRM_RESEARCH_ROOT`, `XTRM_RESEARCH_REGISTRY_ROOT`; start it with `npm run research:dev` (below) or `npm run research:fixture` for the UI alone |
 | Program | fixture | Console backend `/api/programme` is disabled by deployment policy (404); fixture uses the same `ProgrammeSnapshotResponse` mapper |
 
 UI references and MCP servers (shadcn, Spectrum UI, LiveKit docs): `docs/ui-component-reference-registry.md`.

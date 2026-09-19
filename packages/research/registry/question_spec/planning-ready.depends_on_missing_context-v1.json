@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:4856bef1cf138cd972faa91fee14d49fc94c6adb627f6fcbbcb5c0f7bb4b59f0",
+  "criteria": {
+    "false": "The contract together with repository access is sufficient: a fresh worker would not have to ask or guess what the work requires.",
+    "true": "Completing this contract requires information that exists only outside it: a chat thread, a private dispatch prompt, or unstated convention."
+  },
+  "id": "planning-ready.depends_on_missing_context",
+  "instructions": "Completing this contract requires information that exists only outside it: a chat thread, a private dispatch prompt, or unstated convention.",
+  "type": "noul",
+  "version": "v1"
+}

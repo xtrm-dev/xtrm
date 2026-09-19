@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:4ac7d6d8dd8688a0b433bea309b56b46d56f6e70b72ad6af9c59670f475b3746",
+  "criteria": {
+    "false": "SCOPE is generic (for example 'the relevant code'), permits unbounded expansion, or omits what is owned.",
+    "true": "SCOPE names the owned files, systems, or behaviours specifically enough to prevent accidental expansion: a worker can tell what is inside the work and what is not."
+  },
+  "id": "planning-ready.scope_bounded",
+  "instructions": "SCOPE names the owned files, systems, or behaviours specifically enough to prevent accidental expansion: a worker can tell what is inside the work and what is not.",
+  "type": "noul",
+  "version": "v1"
+}

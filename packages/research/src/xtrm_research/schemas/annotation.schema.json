@@ -22,12 +22,55 @@
         "caveat",
         "superseded_by",
         "invalid_reason",
-        "evidence_status"
+        "evidence_status",
+        "result_summary"
       ]
     },
     "text": {
       "type": "string",
       "minLength": 1
+    },
+    "result_summary": {
+      "type": "object",
+      "description": "Structured post-evidence result (kind=result_summary only). The prose `text` is optional for this kind because plain_language is the headline; every other semantic output is structured here.",
+      "properties": {
+        "plain_language": {
+          "type": "string",
+          "minLength": 1
+        },
+        "supported_claims": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "unsupported_claims": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "caveats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "decision": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "plain_language",
+        "supported_claims",
+        "unsupported_claims",
+        "caveats",
+        "decision"
+      ]
     },
     "evidence_status": {
       "type": "string",
@@ -45,19 +88,56 @@
     "schema_version",
     "author",
     "timestamp",
-    "kind",
-    "text"
+    "kind"
   ],
-  "if": {
-    "properties": {
-      "kind": {
-        "const": "evidence_status"
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "not": {
+              "const": "result_summary"
+            }
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "evidence_status"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "evidence_status"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "result_summary"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "result_summary",
+          "evidence_status"
+        ]
       }
     }
-  },
-  "then": {
-    "required": [
-      "evidence_status"
-    ]
-  }
+  ]
 }

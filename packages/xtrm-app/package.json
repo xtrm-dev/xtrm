@@ -9,6 +9,9 @@
   },
   "scripts": {
     "dev": "vite",
+    "research:dev": "node scripts/research-dev.mjs",
+    "research:fixture": "node scripts/research-dev.mjs --fixture",
+    "research:snapshot": "cd ../research && ./.venv/bin/python scripts/sanitize_runs.py",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",

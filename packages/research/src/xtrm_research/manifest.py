@@ -31,23 +31,30 @@ def build_intent(
     refs: list[str] | None = None,
     requested_by: str = "",
     tags: list[str] | None = None,
+    rationale: str = "",
 ) -> dict[str, Any]:
     """Validate and assemble the mandatory ``intent`` block.
 
     Raises ``ValueError`` if ``purpose`` or ``trigger`` is missing — the
-    runner must refuse to start a run without them.
+    runner must refuse to start a run without them. ``rationale`` (why
+    this run happened now, relative to a prior run or a changed
+    methodology) is optional: scientific meaning belongs to the
+    Experiment definition, not here.
     """
     if not purpose:
         raise ValueError("run intent requires a non-empty purpose")
     if not trigger:
         raise ValueError("run intent requires a non-empty trigger")
-    return {
+    intent: dict[str, Any] = {
         "purpose": purpose,
         "trigger": trigger,
         "refs": refs or [],
         "requested_by": requested_by,
         "tags": tags or [],
     }
+    if rationale:
+        intent["rationale"] = rationale
+    return intent
 
 
 def _resolve_backend_aliases(

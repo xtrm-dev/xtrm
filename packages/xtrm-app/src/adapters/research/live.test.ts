@@ -55,7 +55,7 @@ describe("tail payload round-trip", () => {
         kind: "sample_completed",
         sampleId: "s-1",
         data: undefined,
-        usage: { source: "unknown", inputTokens: null, outputTokens: null, requestModel: null, responseModel: null, latencyMs: null, nullReason: "usage telemetry unavailable for this backend" },
+        usage: { source: "unknown", inputTokens: null, outputTokens: null, requestModel: null, responseModel: null, latencyMs: null, nullReason: "not_exposed_by_provider" },
       },
     ]);
   });

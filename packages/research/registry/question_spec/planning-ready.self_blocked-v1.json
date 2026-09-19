@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:143d7691f650eb7cb23b4c11772d58a2c1782c10a7b111a173447375ecd9a2a7",
+  "criteria": {
+    "false": "The work can start now from the contract alone, without waiting on a decision or another item.",
+    "true": "The work is blocked on an external decision or another work item that has not happened yet."
+  },
+  "id": "planning-ready.self_blocked",
+  "instructions": "The work is blocked on an external decision or another work item that has not happened yet.",
+  "type": "noul",
+  "version": "v1"
+}

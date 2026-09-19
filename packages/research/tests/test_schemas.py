@@ -575,3 +575,73 @@ def test_cli_envelope_valid_and_invalid():
     invalid["schema"] = "wrong/v1"
     with pytest.raises(SchemaValidationError):
         validate("cli_envelope", invalid)
+
+
+# --- v2 semantic additions (board rerun, Jira XTRM-99 c.13438) ------------
+
+
+def _experiment_with_semantics(raw_definition, **overrides):
+    experiment = dict(raw_definition("experiment", "dup-detect-baseline-v1.json"))
+    experiment["named_datasets"] = [*experiment["named_datasets"], "auc", "brier"]
+    experiment["legend"] = {
+        **experiment["legend"],
+        "auc": "area under the ROC curve",
+        "brier": "mean squared error of the probability forecast",
+    }
+    body = {
+        "research_question": "Can the tracker's own judgments separate duplicate pairs?",
+        "primary_outcomes": ["auc"],
+        "success_criteria": [
+            "System One AUC exceeds the lexical baseline with a CI95 lower bound above 0."
+        ],
+        "falsification_criteria": [
+            "AUC interval overlaps the baseline's or is below it."
+        ],
+        "non_claims": ["No claim about runtime cost."],
+        "metric_glossary": {
+            "auc": {
+                "label": "ROC AUC",
+                "description": "Discrimination / ranking performance: probability a random positive ranks above a random negative.",
+                "unit": "probability scale",
+                "direction": "higher_better",
+                "interpretation": "0.5 is random ranking; 1.0 is perfect ranking.",
+            }
+        },
+        "terminology": {
+            "Noul": "P(yes) for a yes/no question; 0.5 means yes and no are similarly likely, not 'medium'. No separate confidence.",
+        },
+    }
+    body.update(overrides)
+    experiment.update(body)
+    experiment["content_hash"] = compute_content_hash(experiment)
+    return experiment
+
+
+def test_experiment_semantic_fields_validate(raw_definition):
+    validate("experiment", _experiment_with_semantics(raw_definition))
+
+
+def test_experiment_primary_outcome_must_be_named_dataset(raw_definition):
+    experiment = _experiment_with_semantics(
+        raw_definition, primary_outcomes=["not_a_dataset"]
+    )
+    with pytest.raises(SchemaValidationError, match="primary_outcomes not in"):
+        validate("experiment", experiment)
+
+
+def test_experiment_primary_outcome_requires_glossary_entry(raw_definition):
+    experiment = _experiment_with_semantics(
+        raw_definition, primary_outcomes=["auc", "brier"]
+    )
+    with pytest.raises(SchemaValidationError, match="metric_glossary entry"):
+        validate("experiment", experiment)
+
+
+def test_experiment_glossary_entry_requires_direction(raw_definition):
+    experiment = _experiment_with_semantics(raw_definition)
+    entry = dict(experiment["metric_glossary"]["auc"])
+    del entry["direction"]
+    experiment["metric_glossary"]["auc"] = entry
+    experiment["content_hash"] = compute_content_hash(experiment)
+    with pytest.raises(SchemaValidationError, match="direction"):
+        validate("experiment", experiment)

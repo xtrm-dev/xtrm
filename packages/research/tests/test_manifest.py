@@ -129,3 +129,12 @@ def test_backend_model_pinned_id_leaves_no_alias_record(registry):
     )  # default backend.model="always-no-1", not alias-shaped
     assert manifest["aliases"]["resolved"] == []
     assert manifest["aliases"]["unresolved"] == []
+
+
+def test_intent_rationale_optional_and_recorded():
+    plain = build_intent(purpose="p", trigger="baseline")
+    assert "rationale" not in plain
+    with_rationale = build_intent(
+        purpose="p", trigger="change_test", rationale="first rerun after migration"
+    )
+    assert with_rationale["rationale"] == "first rerun after migration"

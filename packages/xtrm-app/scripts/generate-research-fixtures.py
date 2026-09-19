@@ -100,7 +100,7 @@ def build(root: Path) -> dict:
     # exposing per-sample rows; see map-433.md §B7 "no CLI verb exposes samples.jsonl")
     # needs both to render the "usage recorded but unavailable" state honestly.
     usage_ok = {"source": "provider_api", "gen_ai.usage.input_tokens": 42, "gen_ai.usage.output_tokens": 7, "gen_ai.request.model": "always-no-1", "gen_ai.response.model": "always-no-1", "latency_ms": 118.5, "null_reason": None}
-    usage_unavailable = {"source": "unknown", "gen_ai.usage.input_tokens": None, "gen_ai.usage.output_tokens": None, "gen_ai.request.model": None, "gen_ai.response.model": None, "latency_ms": None, "null_reason": "usage telemetry unavailable for this backend"}
+    usage_unavailable = {"source": "unknown", "gen_ai.usage.input_tokens": None, "gen_ai.usage.output_tokens": None, "gen_ai.request.model": None, "gen_ai.response.model": None, "latency_ms": None, "null_reason": "not_exposed_by_provider", "null_detail": "usage telemetry unavailable for this backend"}
     baseline.write_event(_event(0, "started"))
     baseline.write_event(_event(1, "sample_completed", sample_id="s-0", usage=usage_ok))
     baseline.write_event(_event(2, "sample_completed", sample_id="s-1", usage=usage_unavailable))
@@ -137,6 +137,7 @@ def build(root: Path) -> dict:
         "runShowB": _cli(root, "run", "show", "run-b"),
         "experimentShow": _cli(root, "experiment", "show", "dup-detect-baseline", "--registry-root", str(REGISTRY_ROOT)),
         "workloadShow": _cli(root, "workload", "show", "dup-detect", "--registry-root", str(REGISTRY_ROOT)),
+        "questionSpecShow": _cli(root, "question-spec", "show", "dup-check", "--registry-root", str(REGISTRY_ROOT)),
         "tailA": _cli(root, "tail", "run-a"),
         "metricsA": _cli(root, "metrics", "run-a"),
         "compareAB": _cli(root, "compare", "run-a", "run-b"),
