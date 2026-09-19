@@ -31,7 +31,17 @@ export interface LayoutState {
 }
 
 export const SIDEBAR = { default: 264, min: 220, max: 360 } as const;
-export const INSPECTOR = { default: 400, min: 320, max: 720 } as const;
+export const INSPECTOR = { default: 576, min: 320, max: 1200 } as const;
+
+/**
+ * Fresh-open width: ~45% of the total viewport, clamped to the resize budget.
+ * `INSPECTOR.default` is the 1280px-viewport reference (1280 * 0.45 = 576);
+ * the runtime default resolves against the live viewport instead of a fixed px.
+ */
+export function defaultInspectorWidth(viewport?: number): number {
+  const vw = typeof viewport === "number" ? viewport : typeof window !== "undefined" ? window.innerWidth : 1280;
+  return Math.min(INSPECTOR.max, Math.max(INSPECTOR.min, Math.round(vw * 0.45)));
+}
 
 // --- shell motion ------------------------------------------------------------
 // One driver for all three regions: motion-panels (JS) with SHELL_MOTION.transition.
@@ -77,7 +87,7 @@ export const INSPECTOR_MAXIMIZE_KEY = "Shift Enter";
 
 export const initialLayout: LayoutState = {
   sidebar: { open: true, width: SIDEBAR.default, lastExpandedWidth: SIDEBAR.default },
-  inspector: { state: "CLOSED", width: INSPECTOR.default, restoreState: null, collapsedSidebarForMaximize: false, collapsedSidebarForInspector: false, followLive: false },
+  inspector: { state: "CLOSED", width: defaultInspectorWidth(), restoreState: null, collapsedSidebarForMaximize: false, collapsedSidebarForInspector: false, followLive: false },
   stack: [],
   cursor: -1,
 };
@@ -279,6 +289,6 @@ export function restoreLayout(storage: Pick<Storage, "getItem"> = localStorage):
   return {
     ...initialLayout,
     sidebar: { open: typeof p.sidebarOpen === "boolean" ? p.sidebarOpen : true, width, lastExpandedWidth: width },
-    inspector: { ...initialLayout.inspector, width: num(p.inspectorWidth, INSPECTOR.min, INSPECTOR.max, INSPECTOR.default) },
+    inspector: { ...initialLayout.inspector, width: num(p.inspectorWidth, INSPECTOR.min, INSPECTOR.max, defaultInspectorWidth()) },
   };
 }

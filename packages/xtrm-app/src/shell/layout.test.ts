@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  INSPECTOR,
   LAYOUT_STORAGE_KEY,
   currentRef,
+  defaultInspectorWidth,
   initialLayout,
   layoutFromSearch,
   layoutReducer,
@@ -106,6 +108,30 @@ describe("drawer states", () => {
     const s = run(issue("XTRM-1"), { type: "drawer/followLive" }, { type: "drawer/pin" });
     expect(s.inspector).toMatchObject({ state: "PINNED", followLive: true });
     expect(layoutReducer(s, { type: "drawer/close" }).inspector.followLive).toBe(false);
+  });
+});
+
+describe("inspector default width", () => {
+  it("opens at ~45% of the viewport", () => {
+    expect(defaultInspectorWidth(1280)).toBe(576);
+    expect(defaultInspectorWidth(1000)).toBe(450);
+  });
+
+  it("clamps the 45% default to the resize budget", () => {
+    expect(defaultInspectorWidth(400)).toBe(INSPECTOR.min);
+    expect(defaultInspectorWidth(4000)).toBe(INSPECTOR.max);
+  });
+
+  it("uses the live viewport when no width is stored", () => {
+    const prev = window.innerWidth;
+    try {
+      window.innerWidth = 1280;
+      expect(defaultInspectorWidth()).toBe(INSPECTOR.default);
+      window.innerWidth = 1000;
+      expect(defaultInspectorWidth()).toBe(450);
+    } finally {
+      window.innerWidth = prev;
+    }
   });
 });
 
