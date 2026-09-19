@@ -77,6 +77,12 @@ export function readArgv(pathname: string, params: URLSearchParams): string[] | 
       if (runIds.length === 0 || runIds.length > MAX_COMPARE_RUNS || !runIds.every((r) => ID_RE.test(r))) return null;
       return ["compare", ...runIds];
     }
+    case "/chart-data": {
+      const runIds = params.getAll("run");
+      const metric = id(params, "metric");
+      if (!metric || runIds.length === 0 || runIds.length > MAX_COMPARE_RUNS || !runIds.every((r) => ID_RE.test(r))) return null;
+      return ["chart-data", ...runIds, "--metric", metric];
+    }
     default:
       return null;
   }
