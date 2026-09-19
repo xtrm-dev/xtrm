@@ -8,9 +8,19 @@ describe("substrate CLI bridge reads", () => {
   it("maps supported reads to fixed argv", () => {
     expect(readArgv("/projects", q(""))).toEqual(["project", "list"]);
     expect(readArgv("/issues", q("project=prj_xtrm"))).toEqual(["issue", "list", "--project", "prj_xtrm"]);
-    expect(readArgv("/export", q("project=prj_xtrm"))).toEqual(["export", "project", "--project", "prj_xtrm"]);
+    expect(readArgv("/query", q("project=prj_xtrm"))).toEqual(["issue", "query", "--project", "prj_xtrm", "--limit", "500"]);
+    expect(readArgv("/query", q("project=prj_xtrm&limit=200&cursor=abc123"))).toEqual(["issue", "query", "--project", "prj_xtrm", "--limit", "200", "--cursor", "abc123"]);
     expect(readArgv("/issue", q("ref=XTRM-94.2"))).toEqual(["issue", "show", "XTRM-94.2"]);
     expect(readArgv("/journal", q("ref=XTRM-1&limit=20"))).toEqual(["journal", "show", "XTRM-1", "--limit", "20"]);
+  });
+
+  it("refuses an out-of-range limit and a malformed cursor on /query", () => {
+    expect(readArgv("/query", q("project=prj_xtrm&limit=0"))).toBeNull();
+    expect(readArgv("/query", q("project=prj_xtrm&limit=501"))).toBeNull();
+    expect(readArgv("/query", q("project=prj_xtrm&limit=abc"))).toBeNull();
+    expect(readArgv("/query", q("project=prj_xtrm&cursor=--help"))).toBeNull();
+    expect(readArgv("/query", q("project=prj_x --all"))).toBeNull();
+    expect(readArgv("/query", q(""))).toBeNull();
   });
 
   it("rejects unknown paths and injection-shaped input", () => {

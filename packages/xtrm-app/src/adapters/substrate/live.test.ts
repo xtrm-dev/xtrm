@@ -1,8 +1,28 @@
-import { describe, expect, it } from "vitest";
-import { SubstrateReadError, mapBoard, mapIssueDetail, mapProjects, unwrap, type WireExport, type WireIssue } from "./live.ts";
+import { describe, expect, it, vi } from "vitest";
+import { SubstrateReadError, liveSubstrate, mapBoard, mapIssueDetail, mapProjects, unwrap, type WireProjectionRow } from "./live.ts";
 
-const wire = (id: string, extra: Partial<WireIssue> = {}): WireIssue => ({ id, humanRef: id.toUpperCase(), title: id, kind: "task", lifecycleState: "open", revision: 1, ...extra });
-const meta = (id: string, priority: number) => ({ issue: { id, kind: "task", title: id, lifecycleState: "open", priority, scrutiny: "LOW", currentRevision: 1, createdAt: 1, updatedAt: 2 } });
+const row = (id: string, extra: Partial<WireProjectionRow> = {}): WireProjectionRow => ({
+  id,
+  humanRef: id.toUpperCase(),
+  locator: id.toUpperCase(),
+  title: id,
+  kind: "task",
+  lifecycleState: "open",
+  priority: 1,
+  scrutiny: "LOW",
+  revision: 1,
+  readinessState: "draft",
+  dispatchable: false,
+  claimState: "none",
+  parentRef: null,
+  parentLocator: null,
+  childCount: 0,
+  childrenTerminal: 0,
+  blockedBy: [],
+  createdAt: 1,
+  updatedAt: 2,
+  ...extra,
+});
 
 describe("substrate envelope mapping", () => {
   it("rejects failed or foreign envelopes", () => {
@@ -15,35 +35,55 @@ describe("substrate envelope mapping", () => {
     expect(p?.gitRoots).toEqual(["/r/xtrm"]);
   });
 
-  it("builds Jira rows from list + export + ready without per-issue reads", () => {
-    const list = [wire("epic"), wire("a"), wire("b", { lifecycleState: "done" }), wire("c")];
-    const exported: WireExport = {
-      issues: [meta("epic", 1), meta("a", 0), meta("b", 2), meta("c", 3)],
-      edges: [
-        { fromIssue: "epic", toIssue: "a", kind: "parent_child", active: true },
-        { fromIssue: "epic", toIssue: "b", kind: "parent_child", active: true },
-        { fromIssue: "a", toIssue: "c", kind: "blocks", active: true },
-        { fromIssue: "b", toIssue: "c", kind: "blocks", active: true },
-        { fromIssue: "epic", toIssue: "c", kind: "blocks", active: false },
-      ],
-    };
-    const rows = mapBoard(list, exported, [wire("a", { dispatchable: true })]);
+  it("maps projection rows to Jira rows, reading readiness from the row", () => {
+    const rows = mapBoard([
+      row("epic", { priority: 1, childCount: 2, childrenTerminal: 1 }),
+      row("a", { priority: 0, readinessState: "ready", dispatchable: true, parentRef: "EPIC", parentLocator: "EPIC" }),
+      row("b", { lifecycleState: "done", readinessState: "terminal", priority: 2 }),
+      row("c", { priority: 3, blockedBy: ["A"] }),
+    ]);
     const byRef = Object.fromEntries(rows.map((r) => [r.ref, r]));
     expect(byRef.EPIC).toMatchObject({ childCount: 2, childrenDone: 1, priority: 1 });
     expect(byRef.A).toMatchObject({ parentRef: "EPIC", readiness: "ready", priority: 0 });
-    // b is done, so only a still blocks c; inactive edges are ignored
+    // b is done, so only a still blocks c; the projection's blockedBy is authoritative
     expect(byRef.C?.blockedBy).toEqual(["A"]);
+    expect(byRef.B?.readiness).toBe("terminal");
   });
 
-  it("degrades to list-only rows when export is unavailable", () => {
-    const [row] = mapBoard([wire("a")], null, []);
-    expect(row).toMatchObject({ priority: null, childCount: 0, readiness: "unknown" });
+  it("performs exactly one substrate read kind per project (no /export, no /ready)", async () => {
+    const calls: string[] = [];
+    const pages = [
+      { rows: [row("a", { readinessState: "ready", dispatchable: true })], nextCursor: "c1", hasMore: true, scanned: 1, truncated: false },
+      { rows: [row("b", { readinessState: "blocked", blockedBy: ["A"] })], nextCursor: null, hasMore: false, scanned: 1, truncated: false },
+    ];
+    let n = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      calls.push(url);
+      const page = pages[n++] ?? pages[pages.length - 1]!;
+      return { status: 200, json: async () => ({ schema: "substrate-cli/v1", command: "issue.query", ok: true, data: page }) } as unknown as Response;
+    }));
+    try {
+      const rows = await liveSubstrate.listIssues("prj_xtrm");
+      expect(calls).toHaveLength(2);
+      expect(calls.every((u) => u.startsWith("/xtrm-api/substrate/query?"))).toBe(true);
+      expect(calls.some((u) => u.includes("/export") || u.includes("/ready") || u.includes("/issues?"))).toBe(false);
+      expect(calls[1]).toContain("cursor=c1");
+      const byRef = Object.fromEntries(rows.map((r) => [r.ref, r]));
+      expect(rows).toHaveLength(2);
+      expect(byRef.A?.readiness).toBe("ready");
+      expect(byRef.B?.readiness).toBe("blocked");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("maps detail with lineage, journal order, and lossless contract", () => {
-    const board = mapBoard([wire("epic"), wire("a")], { issues: [meta("epic", 1), meta("a", 2)], edges: [{ fromIssue: "epic", toIssue: "a", kind: "parent_child", active: true }] }, []);
+    const board = mapBoard([
+      row("epic", { priority: 1 }),
+      row("a", { priority: 2, parentRef: "EPIC", parentLocator: "EPIC" }),
+    ]);
     const d = mapIssueDetail(
-      { ...wire("a"), readinessState: "draft", dispatchable: false, reasons: ["scope: empty"], contract: { problem: "p", success: "s", scope: [], nonGoals: [], constraints: [], validation: [{ check: "c1", extra: true }], output: [], scrutiny: "LOW" } },
+      { ...row("a"), readinessState: "draft", dispatchable: false, reasons: ["scope: empty"], contract: { problem: "p", success: "s", scope: [], nonGoals: [], constraints: [], validation: [{ check: "c1", extra: true }], output: [], scrutiny: "LOW" } },
       {
         projectId: "prj_x",
         board,

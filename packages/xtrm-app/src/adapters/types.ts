@@ -267,7 +267,7 @@ export interface SubstrateProject {
   gitRoots: string[];
 }
 
-export type Readiness = "ready" | "not_ready" | "unknown";
+export type Readiness = "terminal" | "deferred" | "draft" | "blocked" | "claimed" | "ready" | "not_ready";
 export type Lifecycle = "open" | "deferred" | "done" | "cancelled" | "archived";
 export type Scrutiny = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type EdgeKind = "parent_child" | "blocks" | "relates_to" | "discovered_from" | "supersedes" | "duplicates";
@@ -294,8 +294,9 @@ export interface IssueSummary {
   /** Open issues that block this one. */
   blockedBy: string[];
   /**
-   * `ready` comes from the dispatchable set; anything else is `unknown` in lists
-   * because per-issue readiness is N+1 today (XTRM-393).
+   * Real derived readiness from the board projection (PRD §13):
+   * `terminal|deferred|draft|blocked|claimed|ready`. Detail rows report
+   * `ready` when dispatchable and `not_ready` otherwise.
    */
   readiness: Readiness;
 }

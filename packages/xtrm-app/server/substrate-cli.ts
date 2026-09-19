@@ -43,10 +43,22 @@ export function readArgv(pathname: string, params: URLSearchParams): string[] | 
       return ["project", "links"];
     case "/issues":
       return prj ? ["issue", "list", "--project", prj] : null;
-    case "/ready":
-      return prj ? ["issue", "ready", "--project", prj] : null;
-    case "/export":
-      return prj ? ["export", "project", "--project", prj] : null;
+    case "/query": {
+      // Board projection (`sb issue query`, XTRM-393). Limit is an integer 1..500
+      // (MAX_PAGE_LIMIT); the cursor is opaque base64url validated by str().
+      if (!prj) return null;
+      const rawLimit = params.get("limit");
+      const limit = rawLimit === null ? 500 : Number(rawLimit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 500) return null;
+      const argv = ["issue", "query", "--project", prj, "--limit", String(limit)];
+      const rawCursor = params.get("cursor");
+      if (rawCursor !== null) {
+        const cursor = str(rawCursor);
+        if (!cursor) return null;
+        argv.push("--cursor", cursor);
+      }
+      return argv;
+    }
     case "/issue":
       return r ? ["issue", "show", r] : null;
     case "/resume":
