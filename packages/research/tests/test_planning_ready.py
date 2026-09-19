@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -11,6 +13,7 @@ from xtrm_research.planning_ready import (
     contracts,
     mutations,
     policy,
+    publish_runs,
     questions,
 )
 
@@ -777,3 +780,69 @@ def test_published_samples_never_carry_text_the_send_guard_would_strip():
     )
     assert samples[0]["status"] == "ok"
     assert samples[0]["input"]["contract"] == unsafe_contract
+
+
+def test_experiment_datasets_resolve_against_emitted_metric_ids() -> None:
+    """Every named dataset and chart dataset must be an id the evaluator emits.
+
+    ``views._chart_metric`` resolves a dataset only by exact key or by a ``"::"``
+    suffix, while the evaluator persists arm metrics as ``"{partition}.{name}"``
+    and primitive metrics as ``"{primitive}_{stat}"``. A bare ``"false_ready_rate"``
+    or ``"primitive_auc"`` therefore resolves to nothing: the chart renders empty
+    while every schema check still passes. That defect shipped once; this test is
+    the guard, and it builds its vocabulary from the emitter, not from the record.
+    """
+    from xtrm_research import views
+
+    def labelled(value: str, unit_id: str) -> dict[str, Any]:
+        unit = _dataset_unit(unit_id=unit_id)
+        unit["split"] = {"partition": "test"}
+        unit["research_label"] = {
+            "value": value,
+            "source": "outcome_anchored",
+            "method": "test",
+            "confidence": "high",
+        }
+        return unit
+
+    # Both classes must be present, otherwise the emitter reports a null statistic
+    # and the key would be missing rather than merely unresolved.
+    units = [labelled("ready", "XTRM-9@r2"), labelled("not_ready", "XTRM-10@r1")]
+    vocabulary: dict[str, dict[str, Any]] = {
+        f"{campaign.PARTITION_LABEL}.{name}": {"value": 1.0}
+        for name in campaign.DECISION_METRICS
+    }
+    vocabulary[campaign.DELTA_LEAF] = {"value": 0.0}
+    for leaf in campaign.UNPARTITIONED_METRIC_LEAVES:
+        vocabulary[leaf] = {"value": 0.5}
+    # primitive leaves come from the emitter itself, so a rename there fails here
+    vocabulary.update(
+        publish_runs.primitive_metrics_for_run(units, {}, partition="pooled")
+    )
+
+    experiment = campaign.EXPERIMENT
+    datasets = list(experiment["named_datasets"]) + [
+        dataset for spec in experiment["chart_specs"] for dataset in spec["datasets"]
+    ]
+    absent = [d for d in datasets if d not in vocabulary]
+    assert absent == [], f"chart datasets no run can emit: {absent}"
+    unresolved = [d for d in datasets if views._chart_metric(vocabulary, d) is None]
+    assert unresolved == [], f"chart datasets that resolve to nothing: {unresolved}"
+
+
+def test_committed_experiment_definition_matches_the_generator() -> None:
+    """The registry record is generated: a stale file is a defect, not a variant.
+
+    Chart specs and named datasets live in both places, so a generator change
+    without a regenerated file silently leaves the app reading the old ids.
+    """
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "registry"
+        / "experiment"
+        / "planning-ready-v2-v1.json"
+    )
+    committed = json.loads(path.read_text())
+    assert committed["named_datasets"] == campaign.EXPERIMENT["named_datasets"]
+    assert committed["chart_specs"] == campaign.EXPERIMENT["chart_specs"]
+    assert committed["primary_outcomes"] == campaign.EXPERIMENT["primary_outcomes"]

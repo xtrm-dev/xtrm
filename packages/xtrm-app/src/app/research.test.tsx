@@ -563,12 +563,14 @@ describe("Run analysis resolves the versioned Experiment/Workload/QuestionSpec b
     description: "Does an atomic System One policy decide Planning contract readiness?",
     hypothesis: "Atomic checks separate ready from draft contracts better than one holistic judgment.",
     research_question: "Can atomic System One checks decide whether a Planning contract is ready?",
-    primary_outcomes: ["false_ready_rate"],
+    primary_outcomes: ["test.false_ready_rate"],
     success_criteria: ["false-READY rate below the holistic arm's"],
     falsification_criteria: ["no separation from the holistic arm"],
     non_claims: ["no production adoption"],
     metric_glossary: {
-      false_ready_rate: {
+      // ids mirror the persisted metric leaves ("test." partition prefix): a bare
+      // name resolves to nothing and renders an empty chart
+      "test.false_ready_rate": {
         label: "False READY rate",
         description: "Share of non-ready contracts the policy marked READY.",
         direction: "lower_better",
@@ -576,8 +578,8 @@ describe("Run analysis resolves the versioned Experiment/Workload/QuestionSpec b
       },
     },
     terminology: { Noul: "P(yes) for a yes/no question, with no separate confidence field." },
-    named_datasets: ["false_ready_rate"],
-    legend: { false_ready_rate: "false READY rate", "jev-latest": "System One answers from the resolved Jev model" },
+    named_datasets: ["test.false_ready_rate"],
+    legend: { "test.false_ready_rate": "false READY rate", "jev-latest": "System One answers from the resolved Jev model" },
   };
   const workload = { id: "planning-ready", version: "v1", questions: [{ id: "planning-ready.success_observable", version: "v1" }] };
   const questionSpec = {
@@ -623,7 +625,7 @@ describe("Run analysis resolves the versioned Experiment/Workload/QuestionSpec b
   });
 
   it("renders each metric with its glossary meaning and direction, not a bare identifier", async () => {
-    const getMetrics = async () => summary({ "planning-eval::false_ready_rate": { value: 0.07, se: null, ci95: [0.02, 0.12], n: 40, method: "cluster-bootstrap" } });
+    const getMetrics = async () => summary({ "planning-eval::test.false_ready_rate": { value: 0.07, se: null, ci95: [0.02, 0.12], n: 40, method: "cluster-bootstrap" } });
     renderWithResearch("/research/runs/run-a", { ...adapters, getMetrics });
     const main = await screen.findByRole("region", { name: "Run run-a" });
     expect(await within(main).findByText("False READY rate")).toBeTruthy();

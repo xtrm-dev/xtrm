@@ -16,6 +16,7 @@ from typing import Any, Iterable, Sequence
 
 from xtrm_research import publish
 from xtrm_research.planning_ready import campaign
+from xtrm_research.planning_ready.campaign import DECISION_METRICS
 from xtrm_research.planning_ready import policy as policy_module
 from xtrm_research.planning_ready import questions as questions_module
 from xtrm_research.telemetry import usage_record
@@ -237,15 +238,7 @@ def arm_metrics_for_run(
         if not population:
             continue
         metrics = campaign.arm_metrics(population, arm, decisions)
-        for name in (
-            "false_ready_rate",
-            "false_draft_rate",
-            "precision",
-            "recall",
-            "accuracy",
-            "balanced_accuracy",
-            "coverage",
-        ):
+        for name in DECISION_METRICS:
             out[f"{label}.{name}"] = _metric_row(name, metrics.get(name), metrics["n"])
         out[f"{label}.n"] = publish.metric(
             float(metrics["n"]), None, metrics["n"], "unit count on this population"

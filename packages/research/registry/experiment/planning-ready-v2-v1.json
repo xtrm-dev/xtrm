@@ -2,7 +2,7 @@
   "chart_specs": [
     {
       "datasets": [
-        "false_ready_rate"
+        "test.false_ready_rate"
       ],
       "description": "The headline safety metric across the compared arms, with its interval.",
       "id": "arm-false-ready",
@@ -11,8 +11,8 @@
     },
     {
       "datasets": [
-        "balanced_accuracy",
-        "coverage"
+        "test.balanced_accuracy",
+        "test.coverage"
       ],
       "description": "Decision quality against the share of units each arm resolves without escalation.",
       "id": "arm-balance",
@@ -21,17 +21,44 @@
     },
     {
       "datasets": [
-        "primitive_auc",
-        "primitive_brier",
-        "primitive_ece"
+        "problem_actionable_auc",
+        "success_observable_auc",
+        "scope_bounded_auc",
+        "non_goals_effective_auc",
+        "constraints_actionable_auc",
+        "validation_proves_success_auc",
+        "output_unambiguous_auc",
+        "open_decision_auc",
+        "depends_on_missing_context_auc",
+        "micromanages_implementation_auc",
+        "self_blocked_auc"
       ],
-      "description": "Per-primitive AUC, Brier and ECE against the ready label.",
-      "id": "primitive-signal",
+      "description": "Ranking AUC of each primitive's P(yes) against the ready label. Calibration is the next chart; Brier is in the run metrics.",
+      "id": "primitive-discrimination",
       "schema_version": "xtrm-research-chart-spec/v1",
-      "title": "Primitive discrimination and calibration"
+      "title": "Primitive discrimination by arm"
+    },
+    {
+      "datasets": [
+        "problem_actionable_ece",
+        "success_observable_ece",
+        "scope_bounded_ece",
+        "non_goals_effective_ece",
+        "constraints_actionable_ece",
+        "validation_proves_success_ece",
+        "output_unambiguous_ece",
+        "open_decision_ece",
+        "depends_on_missing_context_ece",
+        "micromanages_implementation_ece",
+        "self_blocked_ece"
+      ],
+      "description": "Expected calibration error of each primitive's P(yes) in ten equal-width bins.",
+      "id": "primitive-calibration",
+      "schema_version": "xtrm-research-chart-spec/v1",
+      "title": "Primitive calibration by arm"
     }
   ],
-  "content_hash": "sha256:b907839111ec7f595dd42a2a336e3e72dfe98dd5c72b47b2fbb9171c0bb5a2f3",
+  "content_hash": "sha256:c8ced3836cf5886b1f0628eded850227ca2b7da766ab0e8f9a8c9084871f49d0",
   "description": "Does an atomic System One battery composed by explicit, non-compensatory code decide whether a Planning contract is ready for dispatch, compared with the historical holistic judgment and with the incumbent deterministic readiness state?",
   "falsification_criteria": [
     "The explicit atomic policy is no better than the holistic arm on the test partition: the paired false-READY difference's 95% interval contains zero.",
@@ -40,21 +67,33 @@
   "hypothesis": "Atomic System One judgments composed by an explicit non-compensatory policy separate genuinely ready contracts from not-ready ones with a lower false-READY rate than the historical holistic judgment, and each primitive moves in the expected direction under a controlled mutation of the invariant it names.",
   "id": "planning-ready-v2",
   "legend": {
-    "accuracy": "share of units whose READY/not-READY decision matched the label",
     "atomic-explicit-policy": "the atomic battery composed by the frozen non-compensatory policy",
     "atomic-learned-composition": "the same primitive answers composed by a calibrated learned classifier",
     "atomic-policy-escalation": "the explicit policy, with genuine uncertainty escalated to a reasoning model",
-    "balanced_accuracy": "mean of sensitivity and specificity for the READY decision",
-    "coverage": "share of units a policy resolves without escalating to a reasoning model",
+    "constraints_actionable_auc": "Constraints actionable: ranking quality against the ready label",
+    "constraints_actionable_brier": "Constraints actionable: probability forecast error against the ready label",
+    "constraints_actionable_ece": "Constraints actionable: calibration against the ready label",
+    "depends_on_missing_context_auc": "Depends on missing context: ranking quality against the ready label",
+    "depends_on_missing_context_brier": "Depends on missing context: probability forecast error against the ready label",
+    "depends_on_missing_context_ece": "Depends on missing context: calibration against the ready label",
     "deterministic-only": "structure checks only: no semantic judgment at all",
     "escalation_rate": "share of units escalated to the reasoning model",
-    "false_draft_rate": "share of genuinely ready contracts the policy did not mark READY",
-    "false_ready_rate": "share of genuinely not-ready contracts the policy marked READY",
-    "false_ready_rate_delta_vs_holistic": "paired false-READY rate difference against the holistic arm",
     "holistic": "the historical single 'executable' System One judgment",
     "jev-battery": "the System One battery answers themselves, one request per contract",
+    "micromanages_implementation_auc": "Micromanages implementation: ranking quality against the ready label",
+    "micromanages_implementation_brier": "Micromanages implementation: probability forecast error against the ready label",
+    "micromanages_implementation_ece": "Micromanages implementation: calibration against the ready label",
     "mutation-suite": "controlled mutations of strong contracts with pre-declared expectations",
     "mutation_intended_direction_ok": "share of mutation classes whose declared primitive moved in the declared direction",
+    "non_goals_effective_auc": "Non goals effective: ranking quality against the ready label",
+    "non_goals_effective_brier": "Non goals effective: probability forecast error against the ready label",
+    "non_goals_effective_ece": "Non goals effective: calibration against the ready label",
+    "open_decision_auc": "Open decision: ranking quality against the ready label",
+    "open_decision_brier": "Open decision: probability forecast error against the ready label",
+    "open_decision_ece": "Open decision: calibration against the ready label",
+    "output_unambiguous_auc": "Output unambiguous: ranking quality against the ready label",
+    "output_unambiguous_brier": "Output unambiguous: probability forecast error against the ready label",
+    "output_unambiguous_ece": "Output unambiguous: calibration against the ready label",
     "partition::calibration": "units used to calibrate the learned composition",
     "partition::repo_holdout": "a whole repository held out for the cross-repo stability report",
     "partition::test": "the pre-registered held-out partition",
@@ -66,33 +105,72 @@
     "planning-ready-holistic": "One holistic System One judgment: could a fresh worker execute this contract from its text alone?",
     "planning-ready-jev-battery": "The System One battery answers themselves: one request per contract revision carrying the whole battery.",
     "planning-ready-mutation-suite": "Controlled single-invariant mutations of strong contracts, with expectations declared before the calls.",
-    "precision": "among contracts called READY, the share genuinely ready",
-    "primitive_auc": "discrimination of one primitive's probability against the ready label",
-    "primitive_brier": "mean squared error of one primitive's probability against the ready label",
-    "primitive_ece": "expected calibration error of one primitive's probability in ten equal-width bins",
-    "recall": "among genuinely ready contracts, the share called READY"
+    "problem_actionable_auc": "Problem actionable: ranking quality against the ready label",
+    "problem_actionable_brier": "Problem actionable: probability forecast error against the ready label",
+    "problem_actionable_ece": "Problem actionable: calibration against the ready label",
+    "scope_bounded_auc": "Scope bounded: ranking quality against the ready label",
+    "scope_bounded_brier": "Scope bounded: probability forecast error against the ready label",
+    "scope_bounded_ece": "Scope bounded: calibration against the ready label",
+    "self_blocked_auc": "Self blocked: ranking quality against the ready label",
+    "self_blocked_brier": "Self blocked: probability forecast error against the ready label",
+    "self_blocked_ece": "Self blocked: calibration against the ready label",
+    "success_observable_auc": "Success observable: ranking quality against the ready label",
+    "success_observable_brier": "Success observable: probability forecast error against the ready label",
+    "success_observable_ece": "Success observable: calibration against the ready label",
+    "test.accuracy": "share of units whose READY/not-READY decision matched the label",
+    "test.balanced_accuracy": "mean of sensitivity and specificity for the READY decision",
+    "test.coverage": "share of units a policy resolves without escalating to a reasoning model",
+    "test.false_draft_rate": "share of genuinely ready contracts the policy did not mark READY",
+    "test.false_ready_rate": "share of genuinely not-ready contracts the policy marked READY",
+    "test.false_ready_rate_delta_vs_holistic": "paired false-READY rate difference against the holistic arm",
+    "test.precision": "among contracts called READY, the share genuinely ready",
+    "test.recall": "among genuinely ready contracts, the share called READY",
+    "validation_proves_success_auc": "Validation proves success: ranking quality against the ready label",
+    "validation_proves_success_brier": "Validation proves success: probability forecast error against the ready label",
+    "validation_proves_success_ece": "Validation proves success: calibration against the ready label"
   },
   "metric_glossary": {
-    "accuracy": {
-      "description": "Share of units whose READY / not-READY decision matched the label.",
+    "constraints_actionable_auc": {
+      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
       "direction": "higher_better",
-      "interpretation": "Reported beside balanced accuracy; it is not the headline because the classes are not balanced.",
-      "label": "Accuracy",
-      "unit": "share"
+      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+      "label": "Constraints actionable AUC",
+      "unit": "probability scale"
     },
-    "balanced_accuracy": {
-      "description": "Mean of sensitivity and specificity for the READY decision.",
-      "direction": "higher_better",
-      "interpretation": "0.5 is chance; 1.0 is perfect. Insensitive to class imbalance.",
-      "label": "Balanced accuracy",
-      "unit": "share"
+    "constraints_actionable_brier": {
+      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
+      "direction": "lower_better",
+      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+      "label": "Constraints actionable Brier",
+      "unit": "squared probability"
     },
-    "coverage": {
-      "description": "Share of units a policy resolves on its own, without escalating to a reasoning model.",
+    "constraints_actionable_ece": {
+      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
+      "direction": "lower_better",
+      "interpretation": "0 means predicted probabilities matched observed frequencies.",
+      "label": "Constraints actionable ECE",
+      "unit": "probability"
+    },
+    "depends_on_missing_context_auc": {
+      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
       "direction": "higher_better",
-      "interpretation": "Cost driver: escalation is the exceptional path.",
-      "label": "Coverage",
-      "unit": "share"
+      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+      "label": "Depends on missing context AUC",
+      "unit": "probability scale"
+    },
+    "depends_on_missing_context_brier": {
+      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
+      "direction": "lower_better",
+      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+      "label": "Depends on missing context Brier",
+      "unit": "squared probability"
+    },
+    "depends_on_missing_context_ece": {
+      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
+      "direction": "lower_better",
+      "interpretation": "0 means predicted probabilities matched observed frequencies.",
+      "label": "Depends on missing context ECE",
+      "unit": "probability"
     },
     "escalation_rate": {
       "description": "Share of units escalated to the reasoning model in the escalation arm.",
@@ -101,26 +179,26 @@
       "label": "Escalation rate",
       "unit": "share"
     },
-    "false_draft_rate": {
-      "description": "Among genuinely ready contracts, the share the policy did not mark READY.",
-      "direction": "lower_better",
-      "interpretation": "0 means every ready contract was dispatched; 1 means none was.",
-      "label": "False DRAFT rate",
-      "unit": "share"
+    "micromanages_implementation_auc": {
+      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
+      "direction": "higher_better",
+      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+      "label": "Micromanages implementation AUC",
+      "unit": "probability scale"
     },
-    "false_ready_rate": {
-      "description": "Among contracts that are genuinely not ready, the share the policy marked READY.",
+    "micromanages_implementation_brier": {
+      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
       "direction": "lower_better",
-      "interpretation": "0 means no not-ready contract was dispatched; 1 means every one was.",
-      "label": "False READY rate",
-      "unit": "share"
+      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+      "label": "Micromanages implementation Brier",
+      "unit": "squared probability"
     },
-    "false_ready_rate_delta_vs_holistic": {
-      "description": "Paired difference in false-READY rate against the holistic arm on the same units.",
+    "micromanages_implementation_ece": {
+      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
       "direction": "lower_better",
-      "interpretation": "Negative favours the atomic policy; the interval must exclude 0 to be decisive.",
-      "label": "False READY delta vs holistic",
-      "unit": "share difference"
+      "interpretation": "0 means predicted probabilities matched observed frequencies.",
+      "label": "Micromanages implementation ECE",
+      "unit": "probability"
     },
     "mutation_intended_direction_ok": {
       "description": "Share of mutation classes whose declared primitive moved in the declared direction with the interval excluding zero.",
@@ -129,56 +207,275 @@
       "label": "Mutation acceptance",
       "unit": "share"
     },
-    "precision": {
+    "non_goals_effective_auc": {
+      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
+      "direction": "higher_better",
+      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+      "label": "Non goals effective AUC",
+      "unit": "probability scale"
+    },
+    "non_goals_effective_brier": {
+      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
+      "direction": "lower_better",
+      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+      "label": "Non goals effective Brier",
+      "unit": "squared probability"
+    },
+    "non_goals_effective_ece": {
+      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
+      "direction": "lower_better",
+      "interpretation": "0 means predicted probabilities matched observed frequencies.",
+      "label": "Non goals effective ECE",
+      "unit": "probability"
+    },
+    "open_decision_auc": {
+      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
+      "direction": "higher_better",
+      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+      "label": "Open decision AUC",
+      "unit": "probability scale"
+    },
+    "open_decision_brier": {
+      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
+      "direction": "lower_better",
+      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+      "label": "Open decision Brier",
+      "unit": "squared probability"
+    },
+    "open_decision_ece": {
+      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
+      "direction": "lower_better",
+      "interpretation": "0 means predicted probabilities matched observed frequencies.",
+      "label": "Open decision ECE",
+      "unit": "probability"
+    },
+    "output_unambiguous_auc": {
+      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
+      "direction": "higher_better",
+      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+      "label": "Output unambiguous AUC",
+      "unit": "probability scale"
+    },
+    "output_unambiguous_brier": {
+      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
+      "direction": "lower_better",
+      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+      "label": "Output unambiguous Brier",
+      "unit": "squared probability"
+    },
+    "output_unambiguous_ece": {
+      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
+      "direction": "lower_better",
+      "interpretation": "0 means predicted probabilities matched observed frequencies.",
+      "label": "Output unambiguous ECE",
+      "unit": "probability"
+    },
+    "problem_actionable_auc": {
+      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
+      "direction": "higher_better",
+      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+      "label": "Problem actionable AUC",
+      "unit": "probability scale"
+    },
+    "problem_actionable_brier": {
+      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
+      "direction": "lower_better",
+      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+      "label": "Problem actionable Brier",
+      "unit": "squared probability"
+    },
+    "problem_actionable_ece": {
+      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
+      "direction": "lower_better",
+      "interpretation": "0 means predicted probabilities matched observed frequencies.",
+      "label": "Problem actionable ECE",
+      "unit": "probability"
+    },
+    "scope_bounded_auc": {
+      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
+      "direction": "higher_better",
+      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+      "label": "Scope bounded AUC",
+      "unit": "probability scale"
+    },
+    "scope_bounded_brier": {
+      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
+      "direction": "lower_better",
+      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+      "label": "Scope bounded Brier",
+      "unit": "squared probability"
+    },
+    "scope_bounded_ece": {
+      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
+      "direction": "lower_better",
+      "interpretation": "0 means predicted probabilities matched observed frequencies.",
+      "label": "Scope bounded ECE",
+      "unit": "probability"
+    },
+    "self_blocked_auc": {
+      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
+      "direction": "higher_better",
+      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+      "label": "Self blocked AUC",
+      "unit": "probability scale"
+    },
+    "self_blocked_brier": {
+      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
+      "direction": "lower_better",
+      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+      "label": "Self blocked Brier",
+      "unit": "squared probability"
+    },
+    "self_blocked_ece": {
+      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
+      "direction": "lower_better",
+      "interpretation": "0 means predicted probabilities matched observed frequencies.",
+      "label": "Self blocked ECE",
+      "unit": "probability"
+    },
+    "success_observable_auc": {
+      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
+      "direction": "higher_better",
+      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+      "label": "Success observable AUC",
+      "unit": "probability scale"
+    },
+    "success_observable_brier": {
+      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
+      "direction": "lower_better",
+      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+      "label": "Success observable Brier",
+      "unit": "squared probability"
+    },
+    "success_observable_ece": {
+      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
+      "direction": "lower_better",
+      "interpretation": "0 means predicted probabilities matched observed frequencies.",
+      "label": "Success observable ECE",
+      "unit": "probability"
+    },
+    "test.accuracy": {
+      "description": "Share of units whose READY / not-READY decision matched the label.",
+      "direction": "higher_better",
+      "interpretation": "Reported beside balanced accuracy; it is not the headline because the classes are not balanced.",
+      "label": "Accuracy",
+      "unit": "share"
+    },
+    "test.balanced_accuracy": {
+      "description": "Mean of sensitivity and specificity for the READY decision.",
+      "direction": "higher_better",
+      "interpretation": "0.5 is chance; 1.0 is perfect. Insensitive to class imbalance.",
+      "label": "Balanced accuracy",
+      "unit": "share"
+    },
+    "test.coverage": {
+      "description": "Share of units a policy resolves on its own, without escalating to a reasoning model.",
+      "direction": "higher_better",
+      "interpretation": "Cost driver: escalation is the exceptional path.",
+      "label": "Coverage",
+      "unit": "share"
+    },
+    "test.false_draft_rate": {
+      "description": "Among genuinely ready contracts, the share the policy did not mark READY.",
+      "direction": "lower_better",
+      "interpretation": "0 means every ready contract was dispatched; 1 means none was.",
+      "label": "False DRAFT rate",
+      "unit": "share"
+    },
+    "test.false_ready_rate": {
+      "description": "Among contracts that are genuinely not ready, the share the policy marked READY.",
+      "direction": "lower_better",
+      "interpretation": "0 means no not-ready contract was dispatched; 1 means every one was.",
+      "label": "False READY rate",
+      "unit": "share"
+    },
+    "test.false_ready_rate_delta_vs_holistic": {
+      "description": "Paired difference in false-READY rate against the holistic arm on the same units.",
+      "direction": "lower_better",
+      "interpretation": "Negative favours the atomic policy; the interval must exclude 0 to be decisive.",
+      "label": "False READY delta vs holistic",
+      "unit": "share difference"
+    },
+    "test.precision": {
       "description": "Among contracts the policy called READY, the share genuinely ready.",
       "direction": "higher_better",
       "interpretation": "The dispatch-safety view of the decision.",
       "label": "Precision",
       "unit": "share"
     },
-    "primitive_auc": {
-      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
-      "direction": "higher_better",
-      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
-      "label": "Primitive AUC",
-      "unit": "probability scale"
-    },
-    "primitive_brier": {
-      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
-      "direction": "lower_better",
-      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
-      "label": "Primitive Brier",
-      "unit": "squared probability"
-    },
-    "primitive_ece": {
-      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
-      "direction": "lower_better",
-      "interpretation": "0 means predicted probabilities matched observed frequencies.",
-      "label": "Primitive ECE",
-      "unit": "probability"
-    },
-    "recall": {
+    "test.recall": {
       "description": "Among genuinely ready contracts, the share the policy called READY.",
       "direction": "higher_better",
       "interpretation": "The throughput view of the decision.",
       "label": "Recall",
       "unit": "share"
+    },
+    "validation_proves_success_auc": {
+      "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
+      "direction": "higher_better",
+      "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+      "label": "Validation proves success AUC",
+      "unit": "probability scale"
+    },
+    "validation_proves_success_brier": {
+      "description": "Mean squared error of one primitive's probability forecast against the ready label.",
+      "direction": "lower_better",
+      "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+      "label": "Validation proves success Brier",
+      "unit": "squared probability"
+    },
+    "validation_proves_success_ece": {
+      "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
+      "direction": "lower_better",
+      "interpretation": "0 means predicted probabilities matched observed frequencies.",
+      "label": "Validation proves success ECE",
+      "unit": "probability"
     }
   },
   "named_datasets": [
-    "false_ready_rate",
-    "false_draft_rate",
-    "balanced_accuracy",
-    "accuracy",
-    "precision",
-    "recall",
-    "coverage",
+    "test.false_ready_rate",
+    "test.false_draft_rate",
+    "test.precision",
+    "test.recall",
+    "test.accuracy",
+    "test.balanced_accuracy",
+    "test.coverage",
+    "test.false_ready_rate_delta_vs_holistic",
     "escalation_rate",
-    "false_ready_rate_delta_vs_holistic",
     "mutation_intended_direction_ok",
-    "primitive_auc",
-    "primitive_brier",
-    "primitive_ece"
+    "problem_actionable_auc",
+    "problem_actionable_brier",
+    "problem_actionable_ece",
+    "success_observable_auc",
+    "success_observable_brier",
+    "success_observable_ece",
+    "scope_bounded_auc",
+    "scope_bounded_brier",
+    "scope_bounded_ece",
+    "non_goals_effective_auc",
+    "non_goals_effective_brier",
+    "non_goals_effective_ece",
+    "constraints_actionable_auc",
+    "constraints_actionable_brier",
+    "constraints_actionable_ece",
+    "validation_proves_success_auc",
+    "validation_proves_success_brier",
+    "validation_proves_success_ece",
+    "output_unambiguous_auc",
+    "output_unambiguous_brier",
+    "output_unambiguous_ece",
+    "open_decision_auc",
+    "open_decision_brier",
+    "open_decision_ece",
+    "depends_on_missing_context_auc",
+    "depends_on_missing_context_brier",
+    "depends_on_missing_context_ece",
+    "micromanages_implementation_auc",
+    "micromanages_implementation_brier",
+    "micromanages_implementation_ece",
+    "self_blocked_auc",
+    "self_blocked_brier",
+    "self_blocked_ece"
   ],
   "non_claims": [
     "No production or runtime adoption of System One readiness is claimed: Substrate readiness stays deterministic plus attestation until a benchmark supports more.",
@@ -187,9 +484,9 @@
     "No claim about downstream dispatch outcomes beyond the closure/supersession evidence available on the frozen board snapshot."
   ],
   "primary_outcomes": [
-    "false_ready_rate",
-    "false_draft_rate",
-    "balanced_accuracy",
+    "test.false_ready_rate",
+    "test.false_draft_rate",
+    "test.balanced_accuracy",
     "mutation_intended_direction_ok"
   ],
   "research_question": "Can atomic System One judgments over a Planning work contract, composed by explicit code, decide READY / DRAFT / NEEDS_DECISION / BLOCKED / REVIEW as well as or better than the historical single holistic 'executable' judgment, and what does each primitive actually measure?",

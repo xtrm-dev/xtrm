@@ -57,6 +57,81 @@ ANSWERS_DIR = DATASET_DIR / "answers"
 
 #: Immutable scientific meaning for this experiment: it lives here, in the
 #: versioned registry definition, not in any run manifest.
+#: Fully qualified persisted metric ids.
+#:
+#: The evaluator writes arm metrics as ``"{partition}.{name}"`` and primitive
+#: metrics as ``"{primitive}_{stat}"``, and the app resolves a chart dataset
+#: only by exact key or by a ``"::"`` suffix match. A bare ``"false_ready_rate"``
+#: or ``"primitive_auc"`` therefore matches nothing: the chart renders empty
+#: while every schema check still passes. The experiment record builds its ids
+#: from these constants instead of spelling them out, so record and emitter
+#: cannot drift apart. ``test_planning_ready.py`` asserts the resolution.
+PARTITION_LABEL = "test"
+DECISION_METRICS = (
+    "false_ready_rate",
+    "false_draft_rate",
+    "precision",
+    "recall",
+    "accuracy",
+    "balanced_accuracy",
+    "coverage",
+)
+DECISION_METRIC_LEAVES = tuple(f"{PARTITION_LABEL}.{name}" for name in DECISION_METRICS)
+DELTA_LEAF = f"{PARTITION_LABEL}.false_ready_rate_delta_vs_holistic"
+UNPARTITIONED_METRIC_LEAVES = ("escalation_rate", "mutation_intended_direction_ok")
+
+#: One legend line and one glossary entry per primitive and statistic, generated
+#: from the primitive list the policy itself scores.
+PRIMITIVE_STAT_TEXT: dict[str, dict[str, str]] = {
+    "auc": {
+        "legend": "ranking quality against the ready label",
+        "label": "AUC",
+        "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
+        "unit": "probability scale",
+        "direction": "higher_better",
+        "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
+    },
+    "brier": {
+        "legend": "probability forecast error against the ready label",
+        "label": "Brier",
+        "description": "Mean squared error of one primitive's probability forecast against the ready label.",
+        "unit": "squared probability",
+        "direction": "lower_better",
+        "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
+    },
+    "ece": {
+        "legend": "calibration against the ready label",
+        "label": "ECE",
+        "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
+        "unit": "probability",
+        "direction": "lower_better",
+        "interpretation": "0 means predicted probabilities matched observed frequencies.",
+    },
+}
+PRIMITIVE_STATS = tuple(PRIMITIVE_STAT_TEXT)
+PRIMITIVE_LABELS = {
+    name: name.replace("_", " ").capitalize() for name in policy_module.NOUL_FEATURES
+}
+PRIMITIVE_METRIC_LEAVES = tuple(
+    f"{name}_{stat}" for name in policy_module.NOUL_FEATURES for stat in PRIMITIVE_STATS
+)
+PER_PRIMITIVE_LEGEND = {
+    f"{name}_{stat}": f"{PRIMITIVE_LABELS[name]}: {text['legend']}"
+    for name in policy_module.NOUL_FEATURES
+    for stat, text in PRIMITIVE_STAT_TEXT.items()
+}
+PER_PRIMITIVE_GLOSSARY = {
+    f"{name}_{stat}": {
+        "label": f"{PRIMITIVE_LABELS[name]} {text['label']}",
+        "description": text["description"],
+        "unit": text["unit"],
+        "direction": text["direction"],
+        "interpretation": text["interpretation"],
+    }
+    for name in policy_module.NOUL_FEATURES
+    for stat, text in PRIMITIVE_STAT_TEXT.items()
+}
+
 EXPERIMENT = {
     "id": "planning-ready-v2",
     "version": "v1",
@@ -78,9 +153,9 @@ EXPERIMENT = {
         "invariant it names."
     ),
     "primary_outcomes": [
-        "false_ready_rate",
-        "false_draft_rate",
-        "balanced_accuracy",
+        "test.false_ready_rate",
+        "test.false_draft_rate",
+        "test.balanced_accuracy",
         "mutation_intended_direction_ok",
     ],
     "success_criteria": [
@@ -124,34 +199,23 @@ EXPERIMENT = {
         {"id": "mutation-suite", "version": "v1"},
     ],
     "named_datasets": [
-        "false_ready_rate",
-        "false_draft_rate",
-        "balanced_accuracy",
-        "accuracy",
-        "precision",
-        "recall",
-        "coverage",
-        "escalation_rate",
-        "false_ready_rate_delta_vs_holistic",
-        "mutation_intended_direction_ok",
-        "primitive_auc",
-        "primitive_brier",
-        "primitive_ece",
+        *DECISION_METRIC_LEAVES,
+        DELTA_LEAF,
+        *UNPARTITIONED_METRIC_LEAVES,
+        *PRIMITIVE_METRIC_LEAVES,
     ],
     "legend": {
-        "false_ready_rate": "share of genuinely not-ready contracts the policy marked READY",
-        "false_draft_rate": "share of genuinely ready contracts the policy did not mark READY",
-        "balanced_accuracy": "mean of sensitivity and specificity for the READY decision",
-        "accuracy": "share of units whose READY/not-READY decision matched the label",
-        "precision": "among contracts called READY, the share genuinely ready",
-        "recall": "among genuinely ready contracts, the share called READY",
-        "coverage": "share of units a policy resolves without escalating to a reasoning model",
+        "test.false_ready_rate": "share of genuinely not-ready contracts the policy marked READY",
+        "test.false_draft_rate": "share of genuinely ready contracts the policy did not mark READY",
+        "test.balanced_accuracy": "mean of sensitivity and specificity for the READY decision",
+        "test.accuracy": "share of units whose READY/not-READY decision matched the label",
+        "test.precision": "among contracts called READY, the share genuinely ready",
+        "test.recall": "among genuinely ready contracts, the share called READY",
+        "test.coverage": "share of units a policy resolves without escalating to a reasoning model",
         "escalation_rate": "share of units escalated to the reasoning model",
-        "false_ready_rate_delta_vs_holistic": "paired false-READY rate difference against the holistic arm",
+        "test.false_ready_rate_delta_vs_holistic": "paired false-READY rate difference against the holistic arm",
         "mutation_intended_direction_ok": "share of mutation classes whose declared primitive moved in the declared direction",
-        "primitive_auc": "discrimination of one primitive's probability against the ready label",
-        "primitive_brier": "mean squared error of one primitive's probability against the ready label",
-        "primitive_ece": "expected calibration error of one primitive's probability in ten equal-width bins",
+        **PER_PRIMITIVE_LEGEND,
         "holistic": "the historical single 'executable' System One judgment",
         "deterministic-only": "structure checks only: no semantic judgment at all",
         "atomic-explicit-policy": "the atomic battery composed by the frozen non-compensatory policy",
@@ -165,49 +229,49 @@ EXPERIMENT = {
         "partition::repo_holdout": "a whole repository held out for the cross-repo stability report",
     },
     "metric_glossary": {
-        "false_ready_rate": {
+        "test.false_ready_rate": {
             "label": "False READY rate",
             "description": "Among contracts that are genuinely not ready, the share the policy marked READY.",
             "unit": "share",
             "direction": "lower_better",
             "interpretation": "0 means no not-ready contract was dispatched; 1 means every one was.",
         },
-        "false_draft_rate": {
+        "test.false_draft_rate": {
             "label": "False DRAFT rate",
             "description": "Among genuinely ready contracts, the share the policy did not mark READY.",
             "unit": "share",
             "direction": "lower_better",
             "interpretation": "0 means every ready contract was dispatched; 1 means none was.",
         },
-        "balanced_accuracy": {
+        "test.balanced_accuracy": {
             "label": "Balanced accuracy",
             "description": "Mean of sensitivity and specificity for the READY decision.",
             "unit": "share",
             "direction": "higher_better",
             "interpretation": "0.5 is chance; 1.0 is perfect. Insensitive to class imbalance.",
         },
-        "accuracy": {
+        "test.accuracy": {
             "label": "Accuracy",
             "description": "Share of units whose READY / not-READY decision matched the label.",
             "unit": "share",
             "direction": "higher_better",
             "interpretation": "Reported beside balanced accuracy; it is not the headline because the classes are not balanced.",
         },
-        "precision": {
+        "test.precision": {
             "label": "Precision",
             "description": "Among contracts the policy called READY, the share genuinely ready.",
             "unit": "share",
             "direction": "higher_better",
             "interpretation": "The dispatch-safety view of the decision.",
         },
-        "recall": {
+        "test.recall": {
             "label": "Recall",
             "description": "Among genuinely ready contracts, the share the policy called READY.",
             "unit": "share",
             "direction": "higher_better",
             "interpretation": "The throughput view of the decision.",
         },
-        "coverage": {
+        "test.coverage": {
             "label": "Coverage",
             "description": "Share of units a policy resolves on its own, without escalating to a reasoning model.",
             "unit": "share",
@@ -221,7 +285,7 @@ EXPERIMENT = {
             "direction": "lower_better",
             "interpretation": "Only genuine uncertainty should escalate.",
         },
-        "false_ready_rate_delta_vs_holistic": {
+        "test.false_ready_rate_delta_vs_holistic": {
             "label": "False READY delta vs holistic",
             "description": "Paired difference in false-READY rate against the holistic arm on the same units.",
             "unit": "share difference",
@@ -235,27 +299,7 @@ EXPERIMENT = {
             "direction": "higher_better",
             "interpretation": "1.0 means every mutation moved the primitive it names.",
         },
-        "primitive_auc": {
-            "label": "Primitive AUC",
-            "description": "Discrimination / ranking performance of one primitive's P(yes) against the ready label: the probability that a ready contract scores above a not-ready one.",
-            "unit": "probability scale",
-            "direction": "higher_better",
-            "interpretation": "0.5 is random ranking; 1.0 is perfect ranking. A primitive is not the final label, so high AUC is evidence about that primitive only.",
-        },
-        "primitive_brier": {
-            "label": "Primitive Brier",
-            "description": "Mean squared error of one primitive's probability forecast against the ready label.",
-            "unit": "squared probability",
-            "direction": "lower_better",
-            "interpretation": "0 is a perfect forecast; 0.25 equals an uninformative 0.5 forecast.",
-        },
-        "primitive_ece": {
-            "label": "Primitive ECE",
-            "description": "Expected calibration error: compares each primitive's predicted probability with the empirical frequency in ten equal-width bins.",
-            "unit": "probability",
-            "direction": "lower_better",
-            "interpretation": "0 means predicted probabilities matched observed frequencies.",
-        },
+        **PER_PRIMITIVE_GLOSSARY,
     },
     "chart_specs": [
         {
@@ -263,21 +307,28 @@ EXPERIMENT = {
             "schema_version": "xtrm-research-chart-spec/v1",
             "title": "False READY rate by arm",
             "description": "The headline safety metric across the compared arms, with its interval.",
-            "datasets": ["false_ready_rate"],
+            "datasets": ["test.false_ready_rate"],
         },
         {
             "id": "arm-balance",
             "schema_version": "xtrm-research-chart-spec/v1",
             "title": "Balanced accuracy and coverage by arm",
             "description": "Decision quality against the share of units each arm resolves without escalation.",
-            "datasets": ["balanced_accuracy", "coverage"],
+            "datasets": ["test.balanced_accuracy", "test.coverage"],
         },
         {
-            "id": "primitive-signal",
+            "id": "primitive-discrimination",
             "schema_version": "xtrm-research-chart-spec/v1",
-            "title": "Primitive discrimination and calibration",
-            "description": "Per-primitive AUC, Brier and ECE against the ready label.",
-            "datasets": ["primitive_auc", "primitive_brier", "primitive_ece"],
+            "title": "Primitive discrimination by arm",
+            "description": "Ranking AUC of each primitive's P(yes) against the ready label. Calibration is the next chart; Brier is in the run metrics.",
+            "datasets": [f"{name}_auc" for name in policy_module.NOUL_FEATURES],
+        },
+        {
+            "id": "primitive-calibration",
+            "schema_version": "xtrm-research-chart-spec/v1",
+            "title": "Primitive calibration by arm",
+            "description": "Expected calibration error of each primitive's P(yes) in ten equal-width bins.",
+            "datasets": [f"{name}_ece" for name in policy_module.NOUL_FEATURES],
         },
     ],
 }
