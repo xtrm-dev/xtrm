@@ -139,7 +139,7 @@ export function mapRunSummary(w: WireRunSummary): RunSummary {
 }
 
 export function mapChartDataRow(w: WireChartDataRow): ChartDataRow {
-  if ("state" in w && w.state === "no_metric") return { runId: w.run_id, state: "no_metric", reason: w.reason };
+  if ("state" in w) return { runId: w.run_id, state: "no_metric", reason: w.reason };
   return { runId: w.run_id, state: "metric", ...mapMetric(w) };
 }
 
