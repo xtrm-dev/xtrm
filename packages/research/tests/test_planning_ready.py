@@ -565,3 +565,40 @@ def test_paired_delta_and_metric_rows_flatten_into_assessment_rows():
     rows = campaign.metric_rows("test", campaign.arm_metrics(evaluation, "x", good))
     assert all(row is None or "method" in row for row in rows.values())
     assert any(name.endswith("false_ready_rate") for name in rows)
+
+
+def test_published_samples_never_carry_text_the_send_guard_would_strip():
+    """A guard-refused unit's contract text was never sent, so publishing it raw
+    would put text into a run artifact that the guard itself deems unsafe."""
+    from xtrm_research.planning_ready import publish_runs
+    from xtrm_research.guards import redact
+
+    # Generated at runtime, never a literal: an assignment-shaped strong keyword
+    # is exactly what the send-guard redacts (and what the package's own
+    # no-credential-literal test forbids hardcoding).
+    secret_value = "".join(["not", "a", "real", "credential", "x9"])
+    unsafe_contract = {
+        "problem": f"The deploy log prints API_TOKEN={secret_value}, so a reviewer can read it.",
+        "success": "No secret appears in logs.",
+        "scope": ["utils/log.py"],
+        "nonGoals": ["Does not rotate keys."],
+        "constraints": ["The log line must never be printed again."],
+        "validation": [{"check": "grep the log for the token"}],
+        "output": [{"artifact": "commit removing the log line"}],
+    }
+    unit = _dataset_unit(contract=unsafe_contract, unit_id="XTRM-999@r1")
+    unit["research_label"] = {"value": "ready", "source": "outcome_anchored", "method": "test", "confidence": "high"}
+    # guard refused => no "answers" key on the answer row
+    refused = {"XTRM-999@r1": {"unit_id": "XTRM-999@r1", "status": "no_answer"}}
+    samples = publish_runs.battery_samples([unit], refused_ids=(r["unit_id"] for r in publish_runs._refused(refused)))
+    published = json.dumps(samples[0]["input"], ensure_ascii=False)
+    assert samples[0]["status"] == "refused_by_guard"
+    assert "body_note" in samples[0]["input"]
+    # the published body is the redacted form: the guard would change it no further
+    assert redact(published) == published
+
+    # a unit that was answered keeps its contract verbatim (it passed the guard when sent)
+    answered = {"XTRM-999@r1": {"unit_id": "XTRM-999@r1", "answers": {}}}
+    samples = publish_runs.battery_samples([unit], refused_ids=(r["unit_id"] for r in publish_runs._refused(answered)))
+    assert samples[0]["status"] == "ok"
+    assert samples[0]["input"]["contract"] == unsafe_contract

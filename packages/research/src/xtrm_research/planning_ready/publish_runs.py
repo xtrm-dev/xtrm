@@ -266,16 +266,55 @@ def primitive_metrics_for_run(
     return out
 
 
-def battery_samples(units: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [
-        {
+def _refused(answers: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Answer rows with no answer: the guard refused this unit, so its text was
+    never sent and must not be published raw."""
+    return [row for row in answers.values() if "answers" not in row]
+
+
+def battery_samples(
+    units: Sequence[dict[str, Any]],
+    refused_ids: Iterable[str] = (),
+) -> list[dict[str, Any]]:
+    """One published sample per unit.
+
+    A unit the send-guard refused never had its contract text sent, so its raw
+    text must not be published either: the guard's own redaction is applied to
+    the published contract (and the sample is marked), so a run artifact can
+    never carry text the guard would strip. The unredacted text stays only in
+    the local dataset directory (mode 700, outside git).
+    """
+    from xtrm_research.guards import redact as _redact_text
+
+    def _redact_value(value: Any) -> Any:
+        """Redact every string leaf, keeping the structure (and its shape)
+        intact: a round-trip through JSON text would make the published value
+        a string, and a redaction token is not guaranteed to be JSON-safe."""
+        if isinstance(value, str):
+            return _redact_text(value)
+        if isinstance(value, list):
+            return [_redact_value(v) for v in value]
+        if isinstance(value, dict):
+            return {k: _redact_value(v) for k, v in value.items()}
+        return value
+
+    refused = set(refused_ids)
+    rows: list[dict[str, Any]] = []
+    for u in units:
+        contract = u["contract"]
+        status = "ok"
+        if u["unit_id"] in refused:
+            contract = _redact_value(contract)
+            status = "refused_by_guard"
+        rows.append({
             "sample_id": u["unit_id"],
             "input": {
                 "locator": u["locator"],
                 "project": u["project_name"],
                 "revision": u["revision"],
                 "contract_hash": u["contract_hash"],
-                "contract": u["contract"],
+                "contract": contract,
+                **({"body_note": "contract text published in redacted form: the send-guard refused this unit"} if u["unit_id"] in refused else {}),
             },
             "output": {
                 "label": u["research_label"]["value"],
@@ -285,10 +324,9 @@ def battery_samples(units: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
                     "lifecycle_state": u["incumbent_state"]["lifecycle_state_at_snapshot"],
                 },
             },
-            "status": "ok",
-        }
-        for u in units
-    ]
+            "status": status,
+        })
+    return rows
 
 
 def battery_records(
@@ -579,7 +617,7 @@ def publish_arm_run(
             "requested_by": "operator",
             "tags": ["system-one", "planning-ready", "board-v2", arm],
         },
-        samples=battery_samples(units),
+        samples=battery_samples(units, refused_ids=(a["unit_id"] for a in _refused(answers))),
         records=arm_records(units, decisions, answers),
         # Per-sample primitive answers live in the `system_one_call` events (their durable
         # home). The assessment set carries this arm's derived metrics, and an assessment
@@ -630,7 +668,7 @@ def publish_battery_run(
             "requested_by": "operator",
             "tags": ["system-one", "planning-ready", "board-v2", "battery"],
         },
-        samples=battery_samples(units),
+        samples=battery_samples(units, refused_ids=(a["unit_id"] for a in _refused(answers))),
         records=battery_records(units, answers),
         assessments=[],
         metrics={k: v for k, v in metrics.items() if v is not None},
