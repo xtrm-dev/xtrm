@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:1e18b6f86ae92fc8c4f4071c1cd2294f858570304d70e202d6f59c0887ce7cd5",
+  "criteria": {
+    "false": "Every decision the work needs is already made in the contract, or the contract explicitly names who decides the open one.",
+    "true": "The contract leaves a design or scope decision unresolved and does not name who decides it."
+  },
+  "id": "planning-ready.open_decision",
+  "instructions": "The contract leaves a design or scope decision unresolved and does not name who decides it.",
+  "type": "noul",
+  "version": "v1"
+}

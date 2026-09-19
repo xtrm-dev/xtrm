@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:d44cce4dc35f9389fc2e79b4d6ce7f224009fdd13ca765454dcdcbe922e1376c",
+  "criteria": {
+    "false": "PROBLEM is a category label, a restatement of the title, an intention, or otherwise leaves no problem a worker can act on.",
+    "true": "PROBLEM names a real defect, missing capability, or decision pressure in prose: a fresh worker learns what is wrong or missing and why it matters, and can start investigating."
+  },
+  "id": "planning-ready.problem_actionable",
+  "instructions": "PROBLEM names a real defect, missing capability, or decision pressure in prose: a fresh worker learns what is wrong or missing and why it matters, and can start investigating.",
+  "type": "noul",
+  "version": "v1"
+}

@@ -124,6 +124,9 @@ def _cmd_run_show(args: argparse.Namespace) -> None:
 
 def _cmd_run_annotate(args: argparse.Namespace) -> None:
     root = Path(args.root)
+    result_summary = None
+    if getattr(args, "result_summary", None):
+        result_summary = json.loads(Path(args.result_summary).read_text(encoding="utf-8"))
     annotation = append_annotation(
         root,
         args.run_id,
@@ -131,6 +134,7 @@ def _cmd_run_annotate(args: argparse.Namespace) -> None:
         args.kind,
         args.text,
         evidence_status=args.evidence_status,
+        result_summary=result_summary,
     )
     _emit("run annotate", annotation, args.json)
 
@@ -153,6 +157,16 @@ def _cmd_workload_show(args: argparse.Namespace) -> None:
         else registry.latest("workload", args.workload_id)
     )
     _emit("workload show", workload, args.json)
+
+
+def _cmd_question_spec_show(args: argparse.Namespace) -> None:
+    registry = DefinitionRegistry(Path(args.registry_root))
+    spec = (
+        registry.get("question_spec", args.question_spec_id, args.version)
+        if args.version
+        else registry.latest("question_spec", args.question_spec_id)
+    )
+    _emit("question-spec show", spec, args.json)
 
 
 def _cmd_tail(args: argparse.Namespace) -> None:
@@ -289,9 +303,22 @@ def build_parser() -> argparse.ArgumentParser:
             "superseded_by",
             "invalid_reason",
             "evidence_status",
+            "result_summary",
         ],
     )
-    p_run_annotate.add_argument("--text", required=True)
+    p_run_annotate.add_argument(
+        "--text",
+        default="",
+        help="prose annotation text; for --kind result_summary the plain language lives in --result-summary",
+    )
+    p_run_annotate.add_argument(
+        "--result-summary",
+        dest="result_summary",
+        default=None,
+        metavar="FILE",
+        help="JSON file with {plain_language, supported_claims, unsupported_claims, caveats, decision} "
+        "for --kind result_summary (requires --evidence-status)",
+    )
     p_run_annotate.add_argument(
         "--evidence-status",
         dest="evidence_status",
@@ -328,6 +355,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_workload_show.add_argument("--version", default=None)
     p_workload_show.add_argument("--registry-root", required=True)
     p_workload_show.set_defaults(func=_cmd_workload_show)
+
+    p_question_spec = sub.add_parser("question-spec")
+    _add_common(p_question_spec)
+    question_spec_sub = p_question_spec.add_subparsers(
+        dest="question_spec_command", required=True
+    )
+    p_question_spec_show = question_spec_sub.add_parser("show")
+    _add_common(p_question_spec_show)
+    p_question_spec_show.add_argument("question_spec_id")
+    p_question_spec_show.add_argument("--version", default=None)
+    p_question_spec_show.add_argument("--registry-root", required=True)
+    p_question_spec_show.set_defaults(func=_cmd_question_spec_show)
 
     p_tail = sub.add_parser("tail")
     _add_common(p_tail)

@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:d9805b538eda570687d663b6a2485f4f0cde6da7ebc16944d1228bce2f6f3a7c",
+  "criteria": {
+    "false": "NON_GOALS is a formality: it restates SCOPE, states 'none' or an empty alternative, or excludes nothing a worker would plausibly consider.",
+    "true": "NON_GOALS excludes real nearby work that a worker might otherwise reasonably include."
+  },
+  "id": "planning-ready.non_goals_effective",
+  "instructions": "NON_GOALS excludes real nearby work that a worker might otherwise reasonably include.",
+  "type": "noul",
+  "version": "v1"
+}

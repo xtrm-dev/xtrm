@@ -1,0 +1,9 @@
+{
+  "config": {
+    "arm": "atomic-learned-composition"
+  },
+  "content_hash": "sha256:648d78798c67c0a1c8d988d3f85822bb8c9e3af29a8864643049ce726b03170e",
+  "description": "The same primitive answers composed by a calibrated learned classifier, enforcing no invariant.",
+  "id": "planning-ready-atomic-learned-composition",
+  "version": "v1"
+}

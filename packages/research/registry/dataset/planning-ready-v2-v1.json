@@ -1,0 +1,7 @@
+{
+  "content_hash": "sha256:56a29dc9a1aa016be1f8ce2a540d819ede40a8aba9415bb9882483e749bbd588",
+  "description": "Frozen Substrate board snapshot: every unit is one (issue, revision) contract pair from the five XTRM development repositories, with the incumbent state, observed outcome and research label recorded as separate channels and a frozen lineage-grouped split.",
+  "id": "planning-ready-v2",
+  "source": "/home/dawid/.xtrm/research/datasets/planning-ready-v2 (units sha256:fae0fa1e71832488befc9ab598a726773c824f476f32c9bc7bd2e87bd5865b6f)",
+  "version": "v1"
+}

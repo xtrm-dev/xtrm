@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:cce6ff91309939b454e5998f75b484c32e91a496b883c38ea3d0d9dc3a7c15ce",
+  "criteria": {
+    "false": "CONSTRAINTS restates the plan or SCOPE, or states nothing that binds the implementation.",
+    "true": "CONSTRAINTS states real invariants (compatibility, safety, ownership, architecture, rollout) that change what a correct implementation may do."
+  },
+  "id": "planning-ready.constraints_actionable",
+  "instructions": "CONSTRAINTS states real invariants (compatibility, safety, ownership, architecture, rollout) that change what a correct implementation may do.",
+  "type": "noul",
+  "version": "v1"
+}

@@ -116,6 +116,7 @@ export interface ResearchAdapter {
   getRun(runId: string): Promise<RunShow>;
   getExperiment(id: string, version?: string): Promise<Record<string, unknown>>;
   getWorkload(id: string, version?: string): Promise<Record<string, unknown>>;
+  getQuestionSpec(id: string, version?: string): Promise<Record<string, unknown>>;
   tail(runId: string, after?: TailCursor): Promise<TailResult>;
   getMetrics(runId: string): Promise<RunSummary>;
   getChartData(runIds: string[], metric: string): Promise<ChartDataRow[]>;

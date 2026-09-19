@@ -275,3 +275,26 @@ export function useResearchCompare(runIds: string[]) {
   const { research } = useAdapters();
   return useQuery({ queryKey: ["research", "compare", runIds], queryFn: () => research.compare(runIds), enabled: runIds.length >= 2, staleTime: 15_000, retry: false });
 }
+
+// --- Research: versioned definitions behind a run (board rerun, Jira XTRM-99 c.13438) ----
+// A run page resolves the exact Experiment/Workload/QuestionSpec versions its manifest
+// references and renders their semantic metadata; nothing is copied into the manifest.
+
+function versionRef(manifest: Record<string, unknown> | undefined, kind: string): { id: string; version: string } | null {
+  if (!manifest) return null;
+  const ref = manifest[kind];
+  if (typeof ref !== "object" || ref === null) return null;
+  const { id, version } = ref as { id?: unknown; version?: unknown };
+  return typeof id === "string" && typeof version === "string" ? { id, version } : null;
+}
+
+export function useResearchWorkloadForRun(manifest: Record<string, unknown> | undefined) {
+  const { research } = useAdapters();
+  const ref = versionRef(manifest, "workload");
+  return useQuery({ queryKey: ["research", "workload", ref?.id, ref?.version], queryFn: () => research.getWorkload(ref!.id, ref!.version), enabled: ref !== null, staleTime: 60_000, retry: false });
+}
+
+export function useResearchQuestionSpec(id: string | undefined, version: string | undefined) {
+  const { research } = useAdapters();
+  return useQuery({ queryKey: ["research", "question-spec", id, version], queryFn: () => research.getQuestionSpec(id!, version!), enabled: id !== undefined && version !== undefined, staleTime: 60_000, retry: false });
+}

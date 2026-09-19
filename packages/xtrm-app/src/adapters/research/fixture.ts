@@ -8,6 +8,9 @@ import fixture from "./__fixtures__/xtrm-research-fixture.json";
 const RUN_SHOW: Record<string, WireRunShow> = { "run-a": fixture.runShowA, "run-b": fixture.runShowB };
 const EXPERIMENTS: Record<string, Record<string, unknown>> = { "dup-detect-baseline": fixture.experimentShow };
 const WORKLOADS: Record<string, Record<string, unknown>> = { "dup-detect": fixture.workloadShow };
+const QUESTION_SPECS: Record<string, Record<string, unknown>> = fixture.questionSpecShow
+  ? { "dup-check": fixture.questionSpecShow }
+  : {};
 
 function get<T>(map: Record<string, T>, key: string, what: string): T {
   const value = map[key];
@@ -32,6 +35,9 @@ export const fixtureResearch: ResearchAdapter = {
   },
   async getWorkload(id) {
     return get(WORKLOADS, id, "workload");
+  },
+  async getQuestionSpec(id) {
+    return get(QUESTION_SPECS, id, "question spec");
   },
   // The captured tail fixture is a single fixed page; a `TailCursor` argument has nothing to
   // resume from here (unlike liveResearch, which sends it on to the CLI's `--after`).

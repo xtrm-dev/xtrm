@@ -1,0 +1,9 @@
+{
+  "config": {
+    "arm": "atomic-policy-escalation"
+  },
+  "content_hash": "sha256:f27182efa6dc5816612096956848af0481e6a010c32edf63b523f333c5cee884",
+  "description": "The explicit policy, with genuine uncertainty escalated to a reasoning model inside a bounded budget.",
+  "id": "planning-ready-atomic-policy-escalation",
+  "version": "v1"
+}

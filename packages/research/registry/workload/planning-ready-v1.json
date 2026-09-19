@@ -1,0 +1,128 @@
+{
+  "content_hash": "sha256:95411983ccff6b2e677ee6c26007b58c7e429263b1b7dde4748a4aa8f4dbc77f",
+  "default_metrics": [
+    "false_ready_rate",
+    "false_draft_rate",
+    "balanced_accuracy",
+    "accuracy",
+    "precision",
+    "recall",
+    "coverage",
+    "escalation_rate",
+    "false_ready_rate_delta_vs_holistic",
+    "mutation_intended_direction_ok",
+    "primitive_auc",
+    "primitive_brier",
+    "primitive_ece"
+  ],
+  "description": "Planning work-contract readiness: whether a contract revision is dispatchable, which readiness predicate is weak, what executing it requires, and whether it is blocked or leaves a decision open.",
+  "evaluators": [
+    {
+      "id": "planning-ready-policy",
+      "version": "v1"
+    }
+  ],
+  "id": "planning-ready",
+  "input_schema": {
+    "required": [
+      "locator",
+      "contract",
+      "ready_contract_standard"
+    ],
+    "type": "object"
+  },
+  "legend": {
+    "accuracy": "accuracy",
+    "balanced_accuracy": "balanced accuracy",
+    "coverage": "coverage",
+    "escalation_rate": "escalation rate",
+    "false_draft_rate": "false draft rate",
+    "false_ready_rate": "false ready rate",
+    "false_ready_rate_delta_vs_holistic": "false ready rate delta vs holistic",
+    "mutation_intended_direction_ok": "mutation intended direction ok",
+    "planning-ready-holistic.executable": "A fresh, competent worker with repository access could execute this contract from its text alone and produce the stated OUTPUT.",
+    "planning-ready.constraints_actionable": "CONSTRAINTS states real invariants (compatibility, safety, ownership, architecture, rollout) that change what a correct implementation may do.",
+    "planning-ready.depends_on_missing_context": "Completing this contract requires information that exists only outside it: a chat thread, a private dispatch prompt, or unstated convention.",
+    "planning-ready.execution_mode": "What does completing this contract require?",
+    "planning-ready.micromanages_implementation": "The contract prescribes an implementation mechanism (specific code structure, algorithm, or naming) that is not itself a required constraint.",
+    "planning-ready.non_goals_effective": "NON_GOALS excludes real nearby work that a worker might otherwise reasonably include.",
+    "planning-ready.open_decision": "The contract leaves a design or scope decision unresolved and does not name who decides it.",
+    "planning-ready.output_unambiguous": "OUTPUT names a durable result a worker can leave and another person can check: a specific commit, pull request, report, file, or record.",
+    "planning-ready.problem_actionable": "PROBLEM names a real defect, missing capability, or decision pressure in prose: a fresh worker learns what is wrong or missing and why it matters, and can start investigating.",
+    "planning-ready.scope_bounded": "SCOPE names the owned files, systems, or behaviours specifically enough to prevent accidental expansion: a worker can tell what is inside the work and what is not.",
+    "planning-ready.self_blocked": "The work is blocked on an external decision or another work item that has not happened yet.",
+    "planning-ready.success_observable": "SUCCESS names conditions an operator can observe to decide the work is complete: a check, artifact, or observable behaviour that would differ from now once the work is done.",
+    "planning-ready.validation_proves_success": "VALIDATION demonstrates the claimed SUCCESS: the named checks would fail if the success condition were not achieved, including integrated behaviour where the change crosses a boundary.",
+    "precision": "precision",
+    "primitive_auc": "primitive auc",
+    "primitive_brier": "primitive brier",
+    "primitive_ece": "primitive ece",
+    "recall": "recall"
+  },
+  "observers": [],
+  "output_schema": {
+    "type": "object"
+  },
+  "questions": [
+    {
+      "id": "planning-ready.problem_actionable",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready.success_observable",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready.scope_bounded",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready.non_goals_effective",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready.constraints_actionable",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready.validation_proves_success",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready.output_unambiguous",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready.open_decision",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready.depends_on_missing_context",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready.micromanages_implementation",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready.self_blocked",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready.execution_mode",
+      "version": "v1"
+    },
+    {
+      "id": "planning-ready-holistic.executable",
+      "version": "v1"
+    }
+  ],
+  "required_capabilities": [
+    "text_compare",
+    "repository_read"
+  ],
+  "runner_kind": "system_one",
+  "sample_provider": "xtrm_research.planning_ready.dataset (frozen Substrate snapshot)",
+  "state_builder": "xtrm_research.planning_ready.questions.state_of",
+  "version": "v1"
+}

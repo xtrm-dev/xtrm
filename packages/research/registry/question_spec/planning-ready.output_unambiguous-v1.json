@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:e94caf76eed817a3b3e789f90dbbd923e945d67b7e6a7fbc9ccf636337900581",
+  "criteria": {
+    "false": "OUTPUT is vague ('the fix'), or leaves no durable trace another person could check.",
+    "true": "OUTPUT names a durable result a worker can leave and another person can check: a specific commit, pull request, report, file, or record."
+  },
+  "id": "planning-ready.output_unambiguous",
+  "instructions": "OUTPUT names a durable result a worker can leave and another person can check: a specific commit, pull request, report, file, or record.",
+  "type": "noul",
+  "version": "v1"
+}

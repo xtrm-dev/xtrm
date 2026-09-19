@@ -199,6 +199,9 @@ export const liveResearch: ResearchAdapter = {
   async getWorkload(id, version) {
     return read<Record<string, unknown>>(`/workload${q({ id, version })}`, "workload show");
   },
+  async getQuestionSpec(id, version) {
+    return read<Record<string, unknown>>(`/question-spec${q({ id, version })}`, "question-spec show");
+  },
   // Cursor trap: `after` is the last-seen event `seq`, not a count, and it is passed straight
   // through to the Python CLI's `--after` (default -1, meaning "everything"). The bridge cannot
   // spell "from the beginning" as a number, so omit `after` for a fresh read — passing a cursor

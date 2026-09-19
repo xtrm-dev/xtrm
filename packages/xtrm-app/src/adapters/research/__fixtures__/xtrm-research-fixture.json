@@ -19,6 +19,20 @@
   ],
   "compareAB": {
     "run-a": {
+      "deltas": {
+        "exact-match::accuracy": {
+          "baseline_n": 2,
+          "run_n": 2,
+          "value_delta": 0.0,
+          "within_tolerance": null
+        },
+        "exact-match::latency_ms": {
+          "baseline_n": 1,
+          "run_n": 1,
+          "value_delta": 0.0,
+          "within_tolerance": null
+        }
+      },
       "event_count": 3,
       "metrics": {
         "exact-match::accuracy": {
@@ -39,12 +53,24 @@
           "value": 118.5
         }
       },
-      "sample_count": 2
+      "sample_count": 2,
+      "unpaired_metrics": []
     },
     "run-b": {
+      "deltas": {},
       "event_count": 1,
       "metrics": {},
-      "sample_count": 0
+      "sample_count": 0,
+      "unpaired_metrics": [
+        {
+          "metric": "exact-match::accuracy",
+          "missing_side": "run"
+        },
+        {
+          "metric": "exact-match::latency_ms",
+          "missing_side": "run"
+        }
+      ]
     }
   },
   "compareInvalidEnvelope": {
@@ -111,6 +137,16 @@
       }
     },
     "sample_count": 2
+  },
+  "questionSpecShow": {
+    "content_hash": "sha256:6ab540291c8806ec65ba4983c33dbe4ab7eff8c62f9443d15d9c58823f082821",
+    "criteria": {
+      "basis": "board text similarity"
+    },
+    "id": "dup-check",
+    "instructions": "Is this item a duplicate of the reference item?",
+    "type": "noul",
+    "version": "v1"
   },
   "runShowA": {
     "annotations": [
@@ -186,7 +222,7 @@
       "run_id": "run-a",
       "runtime": {
         "pi_version": null,
-        "research_version": "0.3.0",
+        "research_version": "0.4.0",
         "specialists_version": null
       },
       "schema_version": "xtrm-research-manifest/v1",
@@ -285,7 +321,7 @@
       "run_id": "run-b",
       "runtime": {
         "pi_version": null,
-        "research_version": "0.3.0",
+        "research_version": "0.4.0",
         "specialists_version": null
       },
       "schema_version": "xtrm-research-manifest/v1",
@@ -382,7 +418,8 @@
           "gen_ai.usage.input_tokens": null,
           "gen_ai.usage.output_tokens": null,
           "latency_ms": null,
-          "null_reason": "usage telemetry unavailable for this backend",
+          "null_detail": "usage telemetry unavailable for this backend",
+          "null_reason": "not_exposed_by_provider",
           "source": "unknown"
         }
       }

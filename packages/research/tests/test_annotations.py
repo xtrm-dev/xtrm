@@ -70,3 +70,63 @@ def test_torn_annotation_then_append_repairs_and_keeps_latest(registry, runs_roo
 
     rows = list_annotations(runs_root, "run-torn-ann")
     assert [r["text"] for r in rows] == ["later"]
+
+
+def test_result_summary_annotation_roundtrip(registry, runs_root):
+    from xtrm_research.annotations import list_annotations
+
+    manifest = make_manifest(registry, run_id="run-summary")
+    start_run(runs_root, "run-summary", manifest)
+    summary = {
+        "plain_language": "Arm B recovered 91% of ready contracts.",
+        "supported_claims": ["arm B separated ready from draft contracts"],
+        "unsupported_claims": ["production adoption"],
+        "caveats": ["labels are adjudicated, not outcomes"],
+        "decision": "keep the incumbent readiness logic until outcome labels exist",
+    }
+    row = append_annotation(
+        runs_root,
+        "run-summary",
+        "test",
+        "result_summary",
+        evidence_status="exploratory",
+        result_summary=summary,
+    )
+    assert "text" not in row  # the headline lives in plain_language
+    assert row["result_summary"] == summary
+    listed = list_annotations(runs_root, "run-summary")
+    assert listed[-1]["kind"] == "result_summary"
+    assert listed[-1]["result_summary"]["plain_language"].startswith("Arm B")
+
+
+def test_result_summary_requires_structured_block_and_status(registry, runs_root):
+    from xtrm_research.schemas import SchemaValidationError
+
+    manifest = make_manifest(registry, run_id="run-summary-2")
+    start_run(runs_root, "run-summary-2", manifest)
+    good = {
+        "plain_language": "x",
+        "supported_claims": [],
+        "unsupported_claims": [],
+        "caveats": [],
+        "decision": "d",
+    }
+    # structured block present but evidence_status missing: rejected
+    with pytest.raises(SchemaValidationError):
+        append_annotation(
+            runs_root,
+            "run-summary-2",
+            "test",
+            "result_summary",
+            result_summary=good,
+        )
+    # text alone is not a summary: rejected
+    with pytest.raises(SchemaValidationError):
+        append_annotation(
+            runs_root,
+            "run-summary-2",
+            "test",
+            "result_summary",
+            "text alone is not a summary",
+            evidence_status="exploratory",
+        )

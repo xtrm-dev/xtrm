@@ -1,0 +1,9 @@
+{
+  "config": {
+    "arm": "jev-battery"
+  },
+  "content_hash": "sha256:746b5f0062226cc79a6c70f5103e4e265c9b0fa8a40e9d7210a170899e45cfc5",
+  "description": "The System One battery answers themselves: one request per contract revision carrying the whole battery.",
+  "id": "planning-ready-jev-battery",
+  "version": "v1"
+}

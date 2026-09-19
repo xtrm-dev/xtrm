@@ -2,14 +2,16 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useAdapters } from "../adapters/index.tsx";
 import { readAccounting, readLineage, readVersionRef } from "../adapters/research/manifest.ts";
+import { readExperimentSemantics, readMetricGlossary, readResultSummary, readRunIntent } from "../adapters/research/semantics.ts";
 import { isInvalidManifestRow, type InvalidManifestRow, type RunListRow, type RunRow, type RunStatus, type RunSummary, type TailEvent, type UsageRecord } from "../adapters/research/types.ts";
 import { compareRunIds, validateCompareSearch } from "../app/research-compare-search.ts";
-import { useResearchCompare, useResearchExperiment, useResearchMetrics, useResearchRun, useResearchRuns, useResearchTail } from "../app/queries.ts";
+import { useResearchCompare, useResearchExperiment, useResearchMetrics, useResearchRun, useResearchRuns, useResearchTail, useResearchWorkloadForRun } from "../app/queries.ts";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceHeader, type Tone } from "../ui/primitives.tsx";
 import { MetricFields, UsageFields } from "./research-format.tsx";
 import { ResearchCharts } from "./research-charts.tsx";
+import { DecisionCriteriaSection, GlossaryMetricRow, MethodSection, ResearchQuestionSection, ResultSummarySection } from "./research-semantic.tsx";
 
 function runStatusTone(status: RunStatus): Tone {
   if (status === "success") return "done";
@@ -224,9 +226,18 @@ export function RunAnalysisSurface() {
   const run = useResearchRun(runId);
   const metrics = useResearchMetrics(runId);
   const tail = useResearchTail(runId);
-  const experimentRef = run.data ? readVersionRef(run.data.manifest.experiment) : null;
-  const variantRef = run.data ? readVersionRef(run.data.manifest.variant) : null;
+  // The run page resolves the *exact versioned* definitions its manifest references: the chart
+  // surface and the semantic sections read the same resolved definition, and neither copies
+  // prose into the manifest.
+  const manifest = run.data?.manifest;
+  const experimentRef = manifest ? readVersionRef(manifest.experiment) : null;
+  const variantRef = manifest ? readVersionRef(manifest.variant) : null;
   const experiment = useResearchExperiment(experimentRef?.id ?? null, experimentRef?.version);
+  const workload = useResearchWorkloadForRun(manifest);
+  const semantics = useMemo(() => (experiment.data ? readExperimentSemantics(experiment.data) : null), [experiment.data]);
+  const glossary = useMemo(() => (experiment.data ? readMetricGlossary(experiment.data) : new Map()), [experiment.data]);
+  const intent = useMemo(() => (manifest ? readRunIntent(manifest) : { purpose: null, rationale: null, trigger: null }), [manifest]);
+  const resultSummary = useMemo(() => (run.data ? readResultSummary(run.data.annotations) : null), [run.data]);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label={`Run ${runId}`}>
@@ -237,6 +248,7 @@ export function RunAnalysisSurface() {
         <span className="text-ink-faint">/</span>
         <span className="font-mono text-sm text-ink">{runId}</span>
         {run.data && <StatusDot tone={runStatusTone(run.data.status)} label={run.data.status} />}
+        {manifest && readVersionRef(manifest.variant) && <span className="ml-auto font-mono text-xs text-ink-faint">{readVersionRef(manifest.variant)!.id}@{readVersionRef(manifest.variant)!.version}</span>}
       </header>
       <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {run.isPending ? (
@@ -245,7 +257,11 @@ export function RunAnalysisSurface() {
           <ErrorState title={`Run manifest unreadable: ${runId}`} error={run.error} />
         ) : (
           <div className="flex flex-col gap-6">
-            <ManifestSection runId={runId} manifest={run.data.manifest} onInspect={() => inspect({ kind: "research-run", ref: runId })} />
+            {/* First viewport: why -> what would count -> what happened -> what it means. */}
+            <ResearchQuestionSection experiment={semantics} intent={intent} runId={runId} />
+            <DecisionCriteriaSection experiment={semantics} />
+            <ResultSummarySection summary={resultSummary} />
+            <MethodSection manifest={manifest!} workloadDef={workload.data} />
             <section aria-label="Metrics">
               <h2 className="mb-2 text-xs font-medium text-ink-faint">Metrics</h2>
               {metrics.isPending ? (
@@ -255,13 +271,23 @@ export function RunAnalysisSurface() {
               ) : Object.keys(metrics.data.metrics).length === 0 ? (
                 <p className="text-sm text-ink-faint">No metrics reported for this run.</p>
               ) : (
-                <div className="flex flex-col divide-y divide-border-muted rounded-md border border-border-muted">
-                  {Object.entries(metrics.data.metrics).map(([key, metric]) => (
-                    <Row key={key} density="list" onActivate={() => inspect({ kind: "research-metric", ref: `${runId}|${key}` })} aria-label={key}>
-                      <span className="w-56 shrink-0 truncate font-mono text-xs text-ink-faint">{key}</span>
-                      <MetricFields metric={metric} layout="inline" />
-                    </Row>
-                  ))}
+                <div className="flex flex-col rounded-md border border-border-muted">
+                  {Object.entries(metrics.data.metrics).map(([key, metric]) => {
+                    // Metric keys are namespaced `evaluator::metric`; the glossary and legend are
+                    // keyed by the bare metric name.
+                    const bare = key.includes("::") ? key.slice(key.indexOf("::") + 2) : key;
+                    const legendLabel = (experiment.data?.legend as Record<string, string> | undefined)?.[key] ?? (experiment.data?.legend as Record<string, string> | undefined)?.[bare];
+                    return (
+                      <GlossaryMetricRow
+                        key={key}
+                        name={key}
+                        metric={metric}
+                        entry={glossary.get(bare) ?? glossary.get(key)}
+                        legendLabel={legendLabel}
+                        onActivate={() => inspect({ kind: "research-metric", ref: `${runId}|${key}` })}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -307,12 +333,15 @@ export function RunAnalysisSurface() {
                   {run.data.annotations.map((a, i) => (
                     <Row key={i} density="list" onActivate={() => inspect({ kind: "research-annotation", ref: `${runId}|${i}` })} aria-label={String(a.kind ?? `annotation-${i}`)}>
                       <span className="w-32 shrink-0 truncate text-xs text-ink-faint">{String(a.kind ?? "—")}</span>
-                      <span className="min-w-0 flex-1 truncate text-ink-muted">{String(a.text ?? "")}</span>
+                      <span className="min-w-0 flex-1 truncate text-ink-muted">{String(a.text ?? (a.result_summary as Record<string, unknown> | undefined)?.plain_language ?? "")}</span>
                     </Row>
                   ))}
                 </div>
               )}
             </section>
+            {/* Provenance stays below the scientific reading (c.13438): the first viewport
+                answers why/what/means, the version pins and accounting follow. */}
+            <ManifestSection runId={runId} manifest={manifest!} onInspect={() => inspect({ kind: "research-run", ref: runId })} />
           </div>
         )}
       </div>

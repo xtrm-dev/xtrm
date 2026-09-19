@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:86ea20d17aa32303056e3a1532bef28aca1a52b8eb141f047fb2cbcbd5c865c9",
+  "criteria": {
+    "false": "The contract states what must be true and leaves the implementation mechanism to the worker, or the prescribed mechanism is itself a stated constraint.",
+    "true": "The contract prescribes an implementation mechanism (specific code structure, algorithm, or naming) that is not itself a required constraint."
+  },
+  "id": "planning-ready.micromanages_implementation",
+  "instructions": "The contract prescribes an implementation mechanism (specific code structure, algorithm, or naming) that is not itself a required constraint.",
+  "type": "noul",
+  "version": "v1"
+}
