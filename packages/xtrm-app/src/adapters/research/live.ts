@@ -1,4 +1,4 @@
-import type { LineageChild, LineageNode, Metric, ResearchAdapter, RunListRow, RunShow, RunStatus, RunSummary, TailCursor, TailResult, UsageRecord } from "./types.ts";
+import type { ChartDataRow, LineageChild, LineageNode, Metric, ResearchAdapter, RunListRow, RunShow, RunStatus, RunSummary, TailCursor, TailResult, UsageRecord } from "./types.ts";
 
 // Wire shapes of the `xtrm-research-cli/v1` envelope (packages/research). Only the fields read here.
 interface Envelope<T> {
@@ -77,6 +77,18 @@ export interface WireRunSummary {
 }
 export type WireCompare = Record<string, WireRunSummary>;
 
+export interface WireChartMetricRow extends WireMetric {
+  run_id: string;
+}
+
+export interface WireChartMissingRow {
+  run_id: string;
+  state: "no_metric";
+  reason: string;
+}
+
+export type WireChartDataRow = WireChartMetricRow | WireChartMissingRow;
+
 export class ResearchReadError extends Error {}
 
 /** `command` is the verb the caller actually asked for; a reply for a different verb is a protocol error, not a caller mistake. */
@@ -124,6 +136,11 @@ export function mapRunSummary(w: WireRunSummary): RunSummary {
   const metrics: Record<string, Metric> = {};
   for (const [key, metric] of Object.entries(w.metrics)) metrics[key] = mapMetric(metric);
   return { metrics, sampleCount: w.sample_count, eventCount: w.event_count };
+}
+
+export function mapChartDataRow(w: WireChartDataRow): ChartDataRow {
+  if ("state" in w && w.state === "no_metric") return { runId: w.run_id, state: "no_metric", reason: w.reason };
+  return { runId: w.run_id, state: "metric", ...mapMetric(w) };
 }
 
 export function mapUsage(w: WireUsageRecord): UsageRecord {
@@ -194,6 +211,12 @@ export const liveResearch: ResearchAdapter = {
   },
   async getMetrics(runId) {
     return mapRunSummary(await read<WireRunSummary>(`/metrics${q({ run: runId })}`, "metrics"));
+  },
+  async getChartData(runIds, metric) {
+    const usp = new URLSearchParams();
+    for (const runId of runIds) usp.append("run", runId);
+    usp.set("metric", metric);
+    return (await read<WireChartDataRow[]>(`/chart-data?${usp.toString()}`, "chart-data")).map(mapChartDataRow);
   },
   async compare(runIds) {
     const usp = new URLSearchParams();
