@@ -396,6 +396,12 @@ export function RunComparisonSurface() {
   const search = validateCompareSearch(rawSearch);
   const runIds = compareRunIds(search);
   const compare = useResearchCompare(runIds);
+  const runs = useResearchRuns();
+  const runLabels = Object.fromEntries(
+    (runs.data ?? [])
+      .filter((row): row is RunRow => !isInvalidManifestRow(row) && runIds.includes(row.id))
+      .map((row) => [row.id, row.variant]),
+  );
   const baselineRun = useResearchRun(runIds[0] ?? null);
   const baselineExperimentRef = baselineRun.data ? readVersionRef(baselineRun.data.manifest.experiment) : null;
   const experiment = useResearchExperiment(baselineExperimentRef?.id ?? null, baselineExperimentRef?.version);
@@ -450,7 +456,7 @@ export function RunComparisonSurface() {
         </table>
         {experiment.data ? (
           <div className="mt-6">
-            <ResearchCharts experiment={experiment.data} runIds={runIds} />
+            <ResearchCharts experiment={experiment.data} runIds={runIds} runLabels={runLabels} />
           </div>
         ) : experiment.isError ? (
           <div className="mt-6"><ErrorState title="Experiment chart definitions unavailable" error={experiment.error} /></div>
