@@ -216,6 +216,9 @@ describe("Run analysis surface (XTRM-433 slice 3)", () => {
     // exact-match::latency_ms has null se/ci95: the method stands in for the missing interval.
     expect(within(main).getByText("no interval — single-sample-no-variance")).toBeTruthy();
     expect(within(main).getByText("Baseline lands at chance accuracy, as hypothesised.")).toBeTruthy();
+    expect(await within(main).findByRole("region", { name: "Charts" })).toBeTruthy();
+    expect(within(main).getByRole("article", { name: "Accuracy by run" })).toBeTruthy();
+    expect(within(main).getByLabelText("accuracy chart").textContent).toContain("baseline");
   });
 
   it("renders the sample table from tail(), including the usage-unavailable state with its null_reason", async () => {
@@ -422,6 +425,15 @@ describe("Usage with some fields null and some present under one null_reason", (
     const row = await screen.findByLabelText("s-mixed");
     expect(row.textContent).not.toMatch(/\bnull\b/);
     expect(row.textContent).toContain("provider omitted completion tokens");
+  });
+});
+
+describe("Experiment-defined comparison charts", () => {
+  it("renders the same chart contract over the selected runs and names missing values honestly", async () => {
+    renderAt("/research/compare?baseline=run-a&candidate=run-b");
+    const charts = await screen.findByRole("region", { name: "Charts" });
+    expect(within(charts).getByRole("article", { name: "Accuracy by run" })).toBeTruthy();
+    expect(within(charts).getByLabelText("accuracy chart").textContent).toContain("not reported");
   });
 });
 
