@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Summary
+
+A bounded board read model, so listing issues stops costing a query per issue.
+
+`IssueService.listIssues` ran one id query and then hydrated every issue
+individually, and `sb issue ready` derived readiness per issue on top of that
+(N+1 over N+1). On the live store, `sb issue ready` cost 4.2 s for a 4,204-issue
+project and grew linearly with the project.
+
+This release adds `IssueService.queryIssues(query)`, one page of board rows in a
+statement count that does not grow with the project: keyset pagination over the
+full ordering tuple, SQL-level filters, batched revisions/attestations/blockers/
+claims/children, and a level-by-level locator walk. Readiness is derived by the
+same pure `deriveReadiness` the per-issue path used, so batched and per-issue
+values agree exactly; only the loading changed.
+
+- New: `queryIssues(query)` -> `IssueBoardPage` (`rows`, `nextCursor`, `hasMore`,
+  `scanned`, `truncated`) and `queryAllIssues(query)` for callers that must stay
+  exhaustive. Board rows carry board fields only: contract text, provenance,
+  journal entries and readiness reasons stay behind the single-issue read.
+- New: `sb issue query --project <id> [--limit] [--cursor] [--lifecycle]
+  [--kind] [--readiness] [--search]`, emitting the page unchanged under `--json`.
+- Migration `v13` adds the board read indices (`issues(project_id,
+  lifecycle_state, human_number)`, `issues(project_id, updated_at,
+  human_number)`, `issue_edges(to_issue, kind, active)`, `issue_edges(from_issue,
+  kind, active)`).
+- `sb issue list`, `sb issue ready`, MCP `issue_list`/`issue_ready` and the Pi
+  issue search read through the projection. Their output is unchanged; `list`
+  and `ready` still return every issue by walking pages.
+- Root exports: `domain/board.ts` and `domain/readiness.ts` are now exported from
+  the package root, which previously did not export the readiness types.
+
+A client older than this release fails closed against a `v13` database
+(`fail-closed: unknown migration version 13 in database`), so upgrade clients
+together.
+
 ## [0.2.1] - 2026-09-18
 
 ### Summary
