@@ -96,6 +96,19 @@ export interface RunSummary {
   eventCount: number;
 }
 
+export interface ChartMetricRow extends Metric {
+  runId: string;
+  state: "metric";
+}
+
+export interface ChartMissingRow {
+  runId: string;
+  state: "no_metric";
+  reason: string;
+}
+
+export type ChartDataRow = ChartMetricRow | ChartMissingRow;
+
 export interface ResearchAdapter {
   readonly source: DataSource;
   listRuns(): Promise<RunListRow[]>;
@@ -105,5 +118,6 @@ export interface ResearchAdapter {
   getWorkload(id: string, version?: string): Promise<Record<string, unknown>>;
   tail(runId: string, after?: TailCursor): Promise<TailResult>;
   getMetrics(runId: string): Promise<RunSummary>;
+  getChartData(runIds: string[], metric: string): Promise<ChartDataRow[]>;
   compare(runIds: string[]): Promise<Record<string, RunSummary>>;
 }

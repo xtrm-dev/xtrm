@@ -232,9 +232,31 @@ export function useResearchRuns() {
 // (map-433.md §B7 "derived views are never cached"), so polling is always safe; these hooks
 // stay one-shot (no refetchInterval) until a later slice adds live follow.
 
-export function useResearchRun(runId: string) {
+export function useResearchRun(runId: string | null) {
   const { research } = useAdapters();
-  return useQuery({ queryKey: ["research", "run", runId], queryFn: () => research.getRun(runId), staleTime: 15_000, retry: false });
+  return useQuery({ queryKey: ["research", "run", runId], queryFn: () => research.getRun(runId!), enabled: !!runId, staleTime: 15_000, retry: false });
+}
+
+export function useResearchExperiment(id: string | null, version?: string) {
+  const { research } = useAdapters();
+  return useQuery({
+    queryKey: ["research", "experiment", id, version ?? null],
+    queryFn: () => research.getExperiment(id!, version),
+    enabled: !!id,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function useResearchChartData(runIds: string[], metric: string) {
+  const { research } = useAdapters();
+  return useQuery({
+    queryKey: ["research", "chart-data", runIds, metric],
+    queryFn: () => research.getChartData(runIds, metric),
+    enabled: runIds.length > 0 && metric.length > 0,
+    staleTime: 15_000,
+    retry: false,
+  });
 }
 
 export function useResearchMetrics(runId: string) {

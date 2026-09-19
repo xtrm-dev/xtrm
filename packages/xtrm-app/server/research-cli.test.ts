@@ -49,6 +49,22 @@ describe("research CLI bridge reads: happy paths", () => {
     expect(readArgv("/compare", q("run=run-0001"))).toEqual(["compare", "run-0001"]);
     expect(readArgv("/compare", q("run=run-0001&run=run-0002"))).toEqual(["compare", "run-0001", "run-0002"]);
   });
+
+  it("chart-data preserves repeated run ids and the semantic dataset id", () => {
+    expect(readArgv("/chart-data", q("run=run-0001&run=run-0002&metric=accuracy"))).toEqual([
+      "chart-data",
+      "run-0001",
+      "run-0002",
+      "--metric",
+      "accuracy",
+    ]);
+    expect(readArgv("/chart-data", q("run=run-0001&metric=gate.retained_precision"))).toEqual([
+      "chart-data",
+      "run-0001",
+      "--metric",
+      "gate.retained_precision",
+    ]);
+  });
 });
 
 describe("research CLI bridge reads: injection and validation boundary", () => {
@@ -97,6 +113,13 @@ describe("research CLI bridge reads: injection and validation boundary", () => {
     expect(readArgv("/compare", q(runs.map((r) => `run=${r}`).join("&")))).toEqual(["compare", ...runs]);
     const tooMany = q([...runs, "run-20"].map((r) => `run=${r}`).join("&"));
     expect(readArgv("/compare", tooMany)).toBeNull();
+  });
+
+  it("rejects malformed chart-data requests", () => {
+    expect(readArgv("/chart-data", q("run=run-0001"))).toBeNull();
+    expect(readArgv("/chart-data", q("metric=accuracy"))).toBeNull();
+    expect(readArgv("/chart-data", q("run=../etc&metric=accuracy"))).toBeNull();
+    expect(readArgv("/chart-data", q("run=run-0001&metric=accuracy%20--root"))).toBeNull();
   });
 
   it("rejects an unknown path", () => {

@@ -57,6 +57,13 @@ describe("fixtureResearch serves the declared adapter shapes", () => {
     expect(compared["run-b"]?.metrics).toEqual({});
   });
 
+  it("returns chart-data rows using the Experiment named-dataset id", async () => {
+    expect(await fixtureResearch.getChartData(["run-a", "run-b"], "accuracy")).toEqual([
+      { runId: "run-a", state: "metric", value: 0.5, se: 0.5, ci95: [0, 1], n: 2, method: "binomial-proportion" },
+      { runId: "run-b", state: "no_metric", reason: "run 'run-b' has no metric 'accuracy'" },
+    ]);
+  });
+
   it("fails loudly on an id the fixture does not carry", async () => {
     await expect(fixtureResearch.getRun("ghost")).rejects.toThrow("unknown run: ghost");
     await expect(fixtureResearch.getExperiment("ghost")).rejects.toThrow("unknown experiment: ghost");
