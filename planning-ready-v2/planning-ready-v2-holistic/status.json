@@ -1,0 +1,7 @@
+{
+  "last_heartbeat": "2026-09-19T00:07:26.930789+00:00",
+  "manifest_content_hash": "sha256:<redacted>",
+  "run_id": "planning-ready-v2-holistic",
+  "schema_version": "xtrm-research-status/v1",
+  "state": "success"
+}

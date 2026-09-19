@@ -1,0 +1,584 @@
+{
+  "runs": {
+    "planning-ready-v2-atomic-explicit": {
+      "created_at": "2026-09-19T00:08:09.718620+00:00",
+      "evidence_status": "reproducible",
+      "experiment": "planning-ready-v2",
+      "files": {
+        "annotations.jsonl": "sha256:<redacted>",
+        "assessments/as-planning-ready-policy/assessment_set.json": "sha256:<redacted>",
+        "events.jsonl": "sha256:<redacted>",
+        "manifest.json": "sha256:<redacted>",
+        "refs.json": "sha256:<redacted>",
+        "samples.jsonl": "sha256:<redacted>",
+        "status.json": "sha256:<redacted>"
+      },
+      "headline_metrics": {
+        "test.balanced_accuracy": {
+          "ci95": [
+            0.5695970695970696,
+            0.783724340175953
+          ],
+          "method": "cluster percentile bootstrap over 53 work items, 2000 resamples, seed 20260919",
+          "n": 53,
+          "value": 0.6772727272727272
+        },
+        "test.false_draft_rate": {
+          "ci95": [
+            0.37985938536217456,
+            0.7015706148612388
+          ],
+          "method": "Wilson 95% interval for 18/33",
+          "n": 53,
+          "value": 0.5454545454545454
+        },
+        "test.false_ready_rate": {
+          "ci95": [
+            0.027866481213768224,
+            0.3010336452284873
+          ],
+          "method": "Wilson 95% interval for 2/20",
+          "n": 53,
+          "value": 0.1
+        },
+        "test.n": {
+          "ci95": null,
+          "method": "unit count on this population",
+          "n": 53,
+          "value": 53.0
+        }
+      },
+      "intent": {
+        "purpose": "Planning Ready-contract v2, arm atomic-explicit-policy: Eleven atomic Noul judgments plus one Choice, composed by the frozen non-compensatory policy.",
+        "rationale": "First board rerun after the Substrate migration; the historical contract-quality study is kept only as a comparison arm, and the Ready policy is now decomposed into deterministic checks plus atomic System One judgments.",
+        "trigger": "change_test"
+      },
+      "redaction": {
+        "annotations.jsonl": {
+          "redacted_values": 0,
+          "rows": 4
+        },
+        "assessments/as-planning-ready-policy/assessment_set.json": {
+          "redacted_values": 1,
+          "rows": 1
+        },
+        "events.jsonl": {
+          "redacted_values": 362,
+          "rows": 1098
+        },
+        "manifest.json": {
+          "redacted_values": 22,
+          "rows": 1
+        },
+        "refs.json": {
+          "redacted_values": 0,
+          "rows": 1
+        },
+        "samples.jsonl": {
+          "redacted_values": 496,
+          "rows": 378
+        },
+        "status.json": {
+          "redacted_values": 1,
+          "rows": 1
+        }
+      },
+      "variant": "planning-ready-atomic-explicit-policy"
+    },
+    "planning-ready-v2-deterministic-only": {
+      "created_at": "2026-09-19T00:07:45.586968+00:00",
+      "evidence_status": "reproducible",
+      "experiment": "planning-ready-v2",
+      "files": {
+        "annotations.jsonl": "sha256:<redacted>",
+        "assessments/as-planning-ready-policy/assessment_set.json": "sha256:<redacted>",
+        "events.jsonl": "sha256:<redacted>",
+        "manifest.json": "sha256:<redacted>",
+        "refs.json": "sha256:<redacted>",
+        "samples.jsonl": "sha256:<redacted>",
+        "status.json": "sha256:<redacted>"
+      },
+      "headline_metrics": {
+        "test.balanced_accuracy": {
+          "ci95": [
+            0.5,
+            0.5
+          ],
+          "method": "cluster percentile bootstrap over 53 work items, 2000 resamples, seed 20260919",
+          "n": 53,
+          "value": 0.5
+        },
+        "test.false_draft_rate": {
+          "ci95": [
+            0.0,
+            0.10426999754245206
+          ],
+          "method": "Wilson 95% interval for 0/33",
+          "n": 53,
+          "value": 0.0
+        },
+        "test.false_ready_rate": {
+          "ci95": [
+            0.8388748419471806,
+            1.0
+          ],
+          "method": "Wilson 95% interval for 20/20",
+          "n": 53,
+          "value": 1.0
+        },
+        "test.n": {
+          "ci95": null,
+          "method": "unit count on this population",
+          "n": 53,
+          "value": 53.0
+        }
+      },
+      "intent": {
+        "purpose": "Planning Ready-contract v2, arm deterministic-only: Structure checks only, no semantic judgment: the incumbent's deterministic channel.",
+        "rationale": "First board rerun after the Substrate migration; the historical contract-quality study is kept only as a comparison arm, and the Ready policy is now decomposed into deterministic checks plus atomic System One judgments.",
+        "trigger": "baseline"
+      },
+      "redaction": {
+        "annotations.jsonl": {
+          "redacted_values": 0,
+          "rows": 4
+        },
+        "assessments/as-planning-ready-policy/assessment_set.json": {
+          "redacted_values": 1,
+          "rows": 1
+        },
+        "events.jsonl": {
+          "redacted_values": 362,
+          "rows": 1098
+        },
+        "manifest.json": {
+          "redacted_values": 22,
+          "rows": 1
+        },
+        "refs.json": {
+          "redacted_values": 0,
+          "rows": 1
+        },
+        "samples.jsonl": {
+          "redacted_values": 496,
+          "rows": 378
+        },
+        "status.json": {
+          "redacted_values": 1,
+          "rows": 1
+        }
+      },
+      "variant": "planning-ready-deterministic-only"
+    },
+    "planning-ready-v2-escalation": {
+      "created_at": "2026-09-19T00:28:38.775969+00:00",
+      "evidence_status": "reproducible",
+      "experiment": "planning-ready-v2",
+      "files": {
+        "annotations.jsonl": "sha256:<redacted>",
+        "assessments/as-planning-ready-policy/assessment_set.json": "sha256:<redacted>",
+        "events.jsonl": "sha256:<redacted>",
+        "manifest.json": "sha256:<redacted>",
+        "refs.json": "sha256:<redacted>",
+        "samples.jsonl": "sha256:<redacted>",
+        "status.json": "sha256:<redacted>"
+      },
+      "headline_metrics": {
+        "test.balanced_accuracy": {
+          "ci95": [
+            0.5783475783475783,
+            0.796875
+          ],
+          "method": "cluster percentile bootstrap over 53 work items, 2000 resamples, seed 20260919",
+          "n": 53,
+          "value": 0.6924242424242424
+        },
+        "test.false_draft_rate": {
+          "ci95": [
+            0.3521837544891414,
+            0.674959578918663
+          ],
+          "method": "Wilson 95% interval for 17/33",
+          "n": 53,
+          "value": 0.5151515151515151
+        },
+        "test.false_ready_rate": {
+          "ci95": [
+            0.027866481213768224,
+            0.3010336452284873
+          ],
+          "method": "Wilson 95% interval for 2/20",
+          "n": 53,
+          "value": 0.1
+        },
+        "test.n": {
+          "ci95": null,
+          "method": "unit count on this population",
+          "n": 53,
+          "value": 53.0
+        }
+      },
+      "intent": {
+        "purpose": "Planning Ready-contract v2, arm atomic-policy-escalation: The explicit policy, with genuine uncertainty escalated to a reasoning model inside a bounded budget.",
+        "rationale": "First board rerun after the Substrate migration; the historical contract-quality study is kept only as a comparison arm, and the Ready policy is now decomposed into deterministic checks plus atomic System One judgments.",
+        "trigger": "change_test"
+      },
+      "redaction": {
+        "annotations.jsonl": {
+          "redacted_values": 0,
+          "rows": 4
+        },
+        "assessments/as-planning-ready-policy/assessment_set.json": {
+          "redacted_values": 1,
+          "rows": 1
+        },
+        "events.jsonl": {
+          "redacted_values": 362,
+          "rows": 1098
+        },
+        "manifest.json": {
+          "redacted_values": 22,
+          "rows": 1
+        },
+        "refs.json": {
+          "redacted_values": 0,
+          "rows": 1
+        },
+        "samples.jsonl": {
+          "redacted_values": 496,
+          "rows": 378
+        },
+        "status.json": {
+          "redacted_values": 1,
+          "rows": 1
+        }
+      },
+      "variant": "planning-ready-atomic-policy-escalation"
+    },
+    "planning-ready-v2-holistic": {
+      "created_at": "2026-09-19T00:07:20.708521+00:00",
+      "evidence_status": "exploratory",
+      "experiment": "planning-ready-v2",
+      "files": {
+        "annotations.jsonl": "sha256:<redacted>",
+        "assessments/as-planning-ready-policy/assessment_set.json": "sha256:<redacted>",
+        "events.jsonl": "sha256:<redacted>",
+        "manifest.json": "sha256:<redacted>",
+        "refs.json": "sha256:<redacted>",
+        "samples.jsonl": "sha256:<redacted>",
+        "status.json": "sha256:<redacted>"
+      },
+      "headline_metrics": {
+        "test.balanced_accuracy": {
+          "ci95": [
+            0.48333333333333334,
+            0.7326086956521739
+          ],
+          "method": "cluster percentile bootstrap over 53 work items, 2000 resamples, seed 20260919",
+          "n": 53,
+          "value": 0.6090909090909091
+        },
+        "test.false_draft_rate": {
+          "ci95": [
+            0.08610768208940667,
+            0.3438823163466992
+          ],
+          "method": "Wilson 95% interval for 6/33",
+          "n": 53,
+          "value": 0.18181818181818182
+        },
+        "test.false_ready_rate": {
+          "ci95": [
+            0.3865815007622531,
+            0.781193467627183
+          ],
+          "method": "Wilson 95% interval for 12/20",
+          "n": 53,
+          "value": 0.6
+        },
+        "test.n": {
+          "ci95": null,
+          "method": "unit count on this population",
+          "n": 53,
+          "value": 53.0
+        }
+      },
+      "intent": {
+        "purpose": "Planning Ready-contract v2, arm holistic: One holistic System One judgment: could a fresh worker execute this contract from its text alone?",
+        "rationale": "First board rerun after the Substrate migration; the historical contract-quality study is kept only as a comparison arm, and the Ready policy is now decomposed into deterministic checks plus atomic System One judgments.",
+        "trigger": "baseline"
+      },
+      "redaction": {
+        "annotations.jsonl": {
+          "redacted_values": 0,
+          "rows": 4
+        },
+        "assessments/as-planning-ready-policy/assessment_set.json": {
+          "redacted_values": 1,
+          "rows": 1
+        },
+        "events.jsonl": {
+          "redacted_values": 362,
+          "rows": 1098
+        },
+        "manifest.json": {
+          "redacted_values": 22,
+          "rows": 1
+        },
+        "refs.json": {
+          "redacted_values": 0,
+          "rows": 1
+        },
+        "samples.jsonl": {
+          "redacted_values": 496,
+          "rows": 378
+        },
+        "status.json": {
+          "redacted_values": 1,
+          "rows": 1
+        }
+      },
+      "variant": "planning-ready-holistic"
+    },
+    "planning-ready-v2-jev-battery": {
+      "created_at": "2026-09-19T00:07:15.447094+00:00",
+      "evidence_status": "exploratory",
+      "experiment": "planning-ready-v2",
+      "files": {
+        "annotations.jsonl": "sha256:<redacted>",
+        "assessments/as-planning-ready-policy/assessment_set.json": "sha256:<redacted>",
+        "events.jsonl": "sha256:<redacted>",
+        "manifest.json": "sha256:<redacted>",
+        "refs.json": "sha256:<redacted>",
+        "samples.jsonl": "sha256:<redacted>",
+        "status.json": "sha256:<redacted>"
+      },
+      "headline_metrics": {},
+      "intent": {
+        "purpose": "Planning Ready-contract v2: the System One battery answers over the frozen dataset",
+        "rationale": "Primitive answers are collected once and replayed by every composed arm, so arms differ only in composition.",
+        "trigger": "baseline"
+      },
+      "redaction": {
+        "annotations.jsonl": {
+          "redacted_values": 0,
+          "rows": 3
+        },
+        "assessments/as-planning-ready-policy/assessment_set.json": {
+          "redacted_values": 1,
+          "rows": 1
+        },
+        "events.jsonl": {
+          "redacted_values": 722,
+          "rows": 738
+        },
+        "manifest.json": {
+          "redacted_values": 22,
+          "rows": 1
+        },
+        "refs.json": {
+          "redacted_values": 0,
+          "rows": 1
+        },
+        "samples.jsonl": {
+          "redacted_values": 496,
+          "rows": 378
+        },
+        "status.json": {
+          "redacted_values": 1,
+          "rows": 1
+        }
+      },
+      "variant": "planning-ready-jev-battery"
+    },
+    "planning-ready-v2-learned": {
+      "created_at": "2026-09-19T00:08:34.967817+00:00",
+      "evidence_status": "exploratory",
+      "experiment": "planning-ready-v2",
+      "files": {
+        "annotations.jsonl": "sha256:<redacted>",
+        "assessments/as-planning-ready-policy/assessment_set.json": "sha256:<redacted>",
+        "events.jsonl": "sha256:<redacted>",
+        "manifest.json": "sha256:<redacted>",
+        "refs.json": "sha256:<redacted>",
+        "samples.jsonl": "sha256:<redacted>",
+        "status.json": "sha256:<redacted>"
+      },
+      "headline_metrics": {
+        "test.balanced_accuracy": {
+          "ci95": [
+            0.5224458204334366,
+            0.7795454545454545
+          ],
+          "method": "cluster percentile bootstrap over 53 work items, 2000 resamples, seed 20260919",
+          "n": 53,
+          "value": 0.6537878787878788
+        },
+        "test.false_draft_rate": {
+          "ci95": [
+            0.1283171337717501,
+            0.4102461982955736
+          ],
+          "method": "Wilson 95% interval for 8/33",
+          "n": 53,
+          "value": 0.24242424242424243
+        },
+        "test.false_ready_rate": {
+          "ci95": [
+            0.2581978582556243,
+            0.6579146575496577
+          ],
+          "method": "Wilson 95% interval for 9/20",
+          "n": 53,
+          "value": 0.45
+        },
+        "test.n": {
+          "ci95": null,
+          "method": "unit count on this population",
+          "n": 53,
+          "value": 53.0
+        }
+      },
+      "intent": {
+        "purpose": "Planning Ready-contract v2, arm atomic-learned-composition: The same primitive answers composed by a calibrated learned classifier, enforcing no invariant.",
+        "rationale": "First board rerun after the Substrate migration; the historical contract-quality study is kept only as a comparison arm, and the Ready policy is now decomposed into deterministic checks plus atomic System One judgments.",
+        "trigger": "change_test"
+      },
+      "redaction": {
+        "annotations.jsonl": {
+          "redacted_values": 0,
+          "rows": 4
+        },
+        "assessments/as-planning-ready-policy/assessment_set.json": {
+          "redacted_values": 1,
+          "rows": 1
+        },
+        "events.jsonl": {
+          "redacted_values": 362,
+          "rows": 1098
+        },
+        "manifest.json": {
+          "redacted_values": 22,
+          "rows": 1
+        },
+        "refs.json": {
+          "redacted_values": 0,
+          "rows": 1
+        },
+        "samples.jsonl": {
+          "redacted_values": 496,
+          "rows": 378
+        },
+        "status.json": {
+          "redacted_values": 1,
+          "rows": 1
+        }
+      },
+      "variant": "planning-ready-atomic-learned-composition"
+    },
+    "planning-ready-v2-mutations": {
+      "created_at": "2026-09-19T00:08:47.165349+00:00",
+      "evidence_status": "invalid",
+      "experiment": "planning-ready-v2",
+      "files": {
+        "annotations.jsonl": "sha256:<redacted>",
+        "assessments/as-planning-ready-policy/assessment_set.json": "sha256:<redacted>",
+        "events.jsonl": "sha256:<redacted>",
+        "manifest.json": "sha256:<redacted>",
+        "refs.json": "sha256:<redacted>",
+        "samples.jsonl": "sha256:<redacted>",
+        "status.json": "sha256:<redacted>"
+      },
+      "headline_metrics": {},
+      "intent": {
+        "purpose": "Planning Ready-contract v2: adversarial mutation acceptance test",
+        "rationale": "Synthetic single-invariant mutations complement the natural revision transitions in the dataset and test whether each primitive means what its name claims.",
+        "trigger": "change_test"
+      },
+      "redaction": {
+        "annotations.jsonl": {
+          "redacted_values": 0,
+          "rows": 5
+        },
+        "assessments/as-planning-ready-policy/assessment_set.json": {
+          "redacted_values": 1,
+          "rows": 1
+        },
+        "events.jsonl": {
+          "redacted_values": 0,
+          "rows": 220
+        },
+        "manifest.json": {
+          "redacted_values": 22,
+          "rows": 1
+        },
+        "refs.json": {
+          "redacted_values": 0,
+          "rows": 1
+        },
+        "samples.jsonl": {
+          "redacted_values": 97,
+          "rows": 220
+        },
+        "status.json": {
+          "redacted_values": 1,
+          "rows": 1
+        }
+      },
+      "variant": "planning-ready-mutation-suite"
+    },
+    "planning-ready-v2-mutations-r2": {
+      "created_at": "2026-09-19T00:10:11.078931+00:00",
+      "evidence_status": "exploratory",
+      "experiment": "planning-ready-v2",
+      "files": {
+        "annotations.jsonl": "sha256:<redacted>",
+        "assessments/as-planning-ready-policy/assessment_set.json": "sha256:<redacted>",
+        "events.jsonl": "sha256:<redacted>",
+        "manifest.json": "sha256:<redacted>",
+        "refs.json": "sha256:<redacted>",
+        "samples.jsonl": "sha256:<redacted>",
+        "status.json": "sha256:<redacted>"
+      },
+      "headline_metrics": {},
+      "intent": {
+        "purpose": "Planning Ready-contract v2: adversarial mutation acceptance test",
+        "rationale": "Synthetic single-invariant mutations complement the natural revision transitions in the dataset and test whether each primitive means what its name claims.",
+        "trigger": "change_test"
+      },
+      "redaction": {
+        "annotations.jsonl": {
+          "redacted_values": 0,
+          "rows": 3
+        },
+        "assessments/as-planning-ready-policy/assessment_set.json": {
+          "redacted_values": 1,
+          "rows": 1
+        },
+        "events.jsonl": {
+          "redacted_values": 0,
+          "rows": 220
+        },
+        "manifest.json": {
+          "redacted_values": 22,
+          "rows": 1
+        },
+        "refs.json": {
+          "redacted_values": 0,
+          "rows": 1
+        },
+        "samples.jsonl": {
+          "redacted_values": 97,
+          "rows": 220
+        },
+        "status.json": {
+          "redacted_values": 1,
+          "rows": 1
+        }
+      },
+      "variant": "planning-ready-mutation-suite"
+    }
+  },
+  "sanitized_from": "/home/dawid/.xtrm/research/runs",
+  "total_redacted_values": 5894
+}

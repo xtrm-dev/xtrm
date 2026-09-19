@@ -1,0 +1,278 @@
+{
+  "assessment_set_id": "as-planning-ready-policy",
+  "assessments": [],
+  "evaluator": {
+    "content_hash": "sha256:<redacted>",
+    "id": "planning-ready-policy",
+    "version": "v1"
+  },
+  "input_run_id": "planning-ready-v2-holistic",
+  "metrics": {
+    "holdout.accuracy": {
+      "ci95": [
+        0.7960663806533178,
+        0.9147175011394383
+      ],
+      "method": "Wilson 95% interval for 110/127",
+      "n": 127,
+      "se": null,
+      "value": 0.8661417322834646
+    },
+    "holdout.balanced_accuracy": {
+      "ci95": [
+        0.4818181818181818,
+        0.5980519480519481
+      ],
+      "method": "cluster percentile bootstrap over 114 work items, 2000 resamples, seed 20260919",
+      "n": 127,
+      "se": null,
+      "value": 0.522240990990991
+    },
+    "holdout.coverage": {
+      "ci95": null,
+      "method": "share of units the policy resolves without REVIEW",
+      "n": 127,
+      "se": null,
+      "value": 0.9921259842519685
+    },
+    "holdout.false_draft_rate": {
+      "ci95": [
+        0.004955178708528081,
+        0.06332555284276006
+      ],
+      "method": "Wilson 95% interval for 2/111",
+      "n": 127,
+      "se": null,
+      "value": 0.018018018018018018
+    },
+    "holdout.false_ready_rate": {
+      "ci95": [
+        0.7167126242970107,
+        0.9888806552353576
+      ],
+      "method": "Wilson 95% interval for 15/16",
+      "n": 127,
+      "se": null,
+      "value": 0.9375
+    },
+    "holdout.n": {
+      "ci95": null,
+      "method": "unit count on this population",
+      "n": 127,
+      "se": null,
+      "value": 127.0
+    },
+    "holdout.negatives": {
+      "ci95": null,
+      "method": "independently labelled not-ready units",
+      "n": 127,
+      "se": null,
+      "value": 16.0
+    },
+    "holdout.positives": {
+      "ci95": null,
+      "method": "independently labelled ready units",
+      "n": 127,
+      "se": null,
+      "value": 111.0
+    },
+    "holdout.precision": {
+      "ci95": [
+        0.8099807076815497,
+        0.9253050193989043
+      ],
+      "method": "Wilson 95% interval for 109/124",
+      "n": 127,
+      "se": null,
+      "value": 0.8790322580645161
+    },
+    "holdout.recall": {
+      "ci95": [
+        0.9366744471572399,
+        0.995044821291472
+      ],
+      "method": "Wilson 95% interval for 109/111",
+      "n": 127,
+      "se": null,
+      "value": 0.9819819819819819
+    },
+    "pooled.accuracy": {
+      "ci95": [
+        0.5926006082674153,
+        0.7095480309544979
+      ],
+      "method": "Wilson 95% interval for 164/251",
+      "n": 251,
+      "se": null,
+      "value": 0.6533864541832669
+    },
+    "pooled.balanced_accuracy": {
+      "ci95": [
+        0.510576923076923,
+        0.6156045751633987
+      ],
+      "method": "cluster percentile bootstrap over 247 work items, 2000 resamples, seed 20260919",
+      "n": 251,
+      "se": null,
+      "value": 0.5620619568264649
+    },
+    "pooled.coverage": {
+      "ci95": null,
+      "method": "share of units the policy resolves without REVIEW",
+      "n": 251,
+      "se": null,
+      "value": 0.9322709163346613
+    },
+    "pooled.false_draft_rate": {
+      "ci95": [
+        0.09530391957245064,
+        0.2016516667939668
+      ],
+      "method": "Wilson 95% interval for 23/164",
+      "n": 251,
+      "se": null,
+      "value": 0.1402439024390244
+    },
+    "pooled.false_ready_rate": {
+      "ci95": [
+        0.6344360127240146,
+        0.8168997598655378
+      ],
+      "method": "Wilson 95% interval for 64/87",
+      "n": 251,
+      "se": null,
+      "value": 0.735632183908046
+    },
+    "pooled.n": {
+      "ci95": null,
+      "method": "unit count on this population",
+      "n": 251,
+      "se": null,
+      "value": 251.0
+    },
+    "pooled.negatives": {
+      "ci95": null,
+      "method": "independently labelled not-ready units",
+      "n": 251,
+      "se": null,
+      "value": 87.0
+    },
+    "pooled.positives": {
+      "ci95": null,
+      "method": "independently labelled ready units",
+      "n": 251,
+      "se": null,
+      "value": 164.0
+    },
+    "pooled.precision": {
+      "ci95": [
+        0.6214083740284543,
+        0.7472923640089589
+      ],
+      "method": "Wilson 95% interval for 141/205",
+      "n": 251,
+      "se": null,
+      "value": 0.6878048780487804
+    },
+    "pooled.recall": {
+      "ci95": [
+        0.7983483332060332,
+        0.9046960804275493
+      ],
+      "method": "Wilson 95% interval for 141/164",
+      "n": 251,
+      "se": null,
+      "value": 0.8597560975609756
+    },
+    "test.accuracy": {
+      "ci95": [
+        0.5259478663754829,
+        0.7731296089867581
+      ],
+      "method": "Wilson 95% interval for 35/53",
+      "n": 53,
+      "se": null,
+      "value": 0.660377358490566
+    },
+    "test.balanced_accuracy": {
+      "ci95": [
+        0.48333333333333334,
+        0.7326086956521739
+      ],
+      "method": "cluster percentile bootstrap over 53 work items, 2000 resamples, seed 20260919",
+      "n": 53,
+      "se": null,
+      "value": 0.6090909090909091
+    },
+    "test.coverage": {
+      "ci95": null,
+      "method": "share of units the policy resolves without REVIEW",
+      "n": 53,
+      "se": null,
+      "value": 0.9056603773584906
+    },
+    "test.false_draft_rate": {
+      "ci95": [
+        0.08610768208940667,
+        0.3438823163466992
+      ],
+      "method": "Wilson 95% interval for 6/33",
+      "n": 53,
+      "se": null,
+      "value": 0.18181818181818182
+    },
+    "test.false_ready_rate": {
+      "ci95": [
+        0.3865815007622531,
+        0.781193467627183
+      ],
+      "method": "Wilson 95% interval for 12/20",
+      "n": 53,
+      "se": null,
+      "value": 0.6
+    },
+    "test.n": {
+      "ci95": null,
+      "method": "unit count on this population",
+      "n": 53,
+      "se": null,
+      "value": 53.0
+    },
+    "test.negatives": {
+      "ci95": null,
+      "method": "independently labelled not-ready units",
+      "n": 53,
+      "se": null,
+      "value": 20.0
+    },
+    "test.positives": {
+      "ci95": null,
+      "method": "independently labelled ready units",
+      "n": 53,
+      "se": null,
+      "value": 33.0
+    },
+    "test.precision": {
+      "ci95": [
+        0.5357874562585069,
+        0.8143406769308886
+      ],
+      "method": "Wilson 95% interval for 27/39",
+      "n": 53,
+      "se": null,
+      "value": 0.6923076923076923
+    },
+    "test.recall": {
+      "ci95": [
+        0.6561176836533009,
+        0.9138923179105933
+      ],
+      "method": "Wilson 95% interval for 27/33",
+      "n": 53,
+      "se": null,
+      "value": 0.8181818181818182
+    }
+  },
+  "schema_version": "xtrm-research-assessment-set/v1",
+  "timestamp": "2026-09-19T00:07:20.708521+00:00"
+}

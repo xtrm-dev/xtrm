@@ -1,0 +1,163 @@
+{
+  "accounting": {
+    "otel_semconv_ref": "gen_ai/v1.28",
+    "price_table_version": "2026-09-18.1",
+    "telemetry_schema_version": "xtrm-research-telemetry/v1"
+  },
+  "aliases": {
+    "resolved": [],
+    "unresolved": [
+      {
+        "input": "jev-latest",
+        "reason": "no resolver entry for alias 'jev-latest'"
+      }
+    ]
+  },
+  "backend": {
+    "model": "jev-latest",
+    "model_version": "jev-1.13.0",
+    "provider": "TypeSafe"
+  },
+  "code": {
+    "commit": "<redacted>",
+    "dirty": true,
+    "dirty_patch_hash": "sha256:<redacted>",
+    "repo": "/home/dawid/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-gefq/packages/research"
+  },
+  "created_at": "2026-09-19T00:07:45.586968+00:00",
+  "dataset": {
+    "content_hash": "sha256:<redacted>",
+    "id": "planning-ready-v2",
+    "version": "v1"
+  },
+  "environment": {
+    "flags": {},
+    "node_version": "v24.15.0",
+    "platform": "Linux-6.12.73+deb13-amd64-x86_64-with-glibc2.41",
+    "python_version": "3.13.5"
+  },
+  "evaluators": [
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready-policy",
+      "version": "v1"
+    }
+  ],
+  "experiment": {
+    "content_hash": "sha256:<redacted>",
+    "id": "planning-ready-v2",
+    "version": "v1"
+  },
+  "guards": {
+    "mask_version": "sha256:<redacted>",
+    "redaction_version": "sha256:<redacted>"
+  },
+  "intent": {
+    "purpose": "Planning Ready-contract v2, arm deterministic-only: Structure checks only, no semantic judgment: the incumbent's deterministic channel.",
+    "rationale": "First board rerun after the Substrate migration; the historical contract-quality study is kept only as a comparison arm, and the Ready policy is now decomposed into deterministic checks plus atomic System One judgments.",
+    "refs": [
+      "jira:XTRM-99#13435",
+      "jira:XTRM-99#13438",
+      "dataset:planning-ready-v2@v1"
+    ],
+    "requested_by": "operator",
+    "tags": [
+      "system-one",
+      "planning-ready",
+      "board-v2",
+      "deterministic-only"
+    ],
+    "trigger": "baseline"
+  },
+  "lineage": [
+    {
+      "relation": "replay_of",
+      "run_id": "planning-ready-v2-jev-battery"
+    }
+  ],
+  "question_specs": [
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.problem_actionable",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.success_observable",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.scope_bounded",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.non_goals_effective",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.constraints_actionable",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.validation_proves_success",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.output_unambiguous",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.open_decision",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.depends_on_missing_context",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.micromanages_implementation",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.self_blocked",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready.execution_mode",
+      "version": "v1"
+    },
+    {
+      "content_hash": "sha256:<redacted>",
+      "id": "planning-ready-holistic.executable",
+      "version": "v1"
+    }
+  ],
+  "run_id": "planning-ready-v2-deterministic-only",
+  "runtime": {
+    "pi_version": null,
+    "research_version": "0.4.0",
+    "specialists_version": null
+  },
+  "schema_version": "xtrm-research-manifest/v1",
+  "seed": 20260919,
+  "variant": {
+    "content_hash": "sha256:<redacted>",
+    "id": "planning-ready-deterministic-only",
+    "version": "v1"
+  },
+  "workload": {
+    "content_hash": "sha256:<redacted>",
+    "id": "planning-ready",
+    "version": "v1"
+  }
+}

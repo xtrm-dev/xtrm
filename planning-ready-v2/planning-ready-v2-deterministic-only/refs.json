@@ -1,0 +1,12 @@
+{
+  "experiment_id": "planning-ready-v2",
+  "lineage": [
+    {
+      "relation": "replay_of",
+      "run_id": "planning-ready-v2-jev-battery"
+    }
+  ],
+  "run_id": "planning-ready-v2-deterministic-only",
+  "schema_version": "xtrm-research-refs/v1",
+  "variant_id": "planning-ready-deterministic-only"
+}

@@ -1,0 +1,222 @@
+{
+  "assessment_set_id": "as-planning-ready-policy",
+  "assessments": [],
+  "evaluator": {
+    "content_hash": "sha256:<redacted>",
+    "id": "planning-ready-policy",
+    "version": "v1"
+  },
+  "input_run_id": "planning-ready-v2-mutations",
+  "metrics": {
+    "mutation_break_output_semantics_intended_direction_ok": {
+      "ci95": null,
+      "method": "declared primitives that moved in the declared direction with an interval excluding zero (count)",
+      "n": 1,
+      "se": null,
+      "value": 1.0
+    },
+    "mutation_break_output_semantics_output_unambiguous_delta_p": {
+      "ci95": [
+        -0.7755555555555556,
+        -0.7294444444444445
+      ],
+      "method": "percentile bootstrap over 18 mutated contracts, 2000 resamples, seed 20260919; declared direction down; interval excludes zero; materiality threshold 0.15 met",
+      "n": 18,
+      "se": null,
+      "value": -0.7533333333333334
+    },
+    "mutation_chat_only_context_depends_on_missing_context_delta_p": {
+      "ci95": [
+        -0.26611111111111113,
+        -0.19055555555555556
+      ],
+      "method": "percentile bootstrap over 18 mutated contracts, 2000 resamples, seed 20260919; declared direction up; interval excludes zero; materiality threshold 0.15 met",
+      "n": 18,
+      "se": null,
+      "value": -0.22333333333333336
+    },
+    "mutation_chat_only_context_intended_direction_ok": {
+      "ci95": null,
+      "method": "declared primitives that moved in the declared direction with an interval excluding zero (count)",
+      "n": 1,
+      "se": null,
+      "value": 0.0
+    },
+    "mutation_classes_ok": {
+      "ci95": null,
+      "method": "mutation classes in which every declared primitive moved as declared (count)",
+      "n": 11,
+      "se": null,
+      "value": 7.0
+    },
+    "mutation_hollow_non_goals_intended_direction_ok": {
+      "ci95": null,
+      "method": "declared primitives that moved in the declared direction with an interval excluding zero (count)",
+      "n": 1,
+      "se": null,
+      "value": 1.0
+    },
+    "mutation_hollow_non_goals_non_goals_effective_delta_p": {
+      "ci95": [
+        -0.8222222222222223,
+        -0.7911111111111111
+      ],
+      "method": "percentile bootstrap over 18 mutated contracts, 2000 resamples, seed 20260919; declared direction down; interval excludes zero; materiality threshold 0.15 met",
+      "n": 18,
+      "se": null,
+      "value": -0.8077777777777777
+    },
+    "mutation_intended_direction_ok": {
+      "ci95": null,
+      "method": "share of declared primitive checks that moved as declared, interval excluding zero",
+      "n": 11,
+      "se": null,
+      "value": 0.6363636363636364
+    },
+    "mutation_introduce_unnamed_decision_intended_direction_ok": {
+      "ci95": null,
+      "method": "declared primitives that moved in the declared direction with an interval excluding zero (count)",
+      "n": 1,
+      "se": null,
+      "value": 0.0
+    },
+    "mutation_introduce_unnamed_decision_open_decision_delta_p": {
+      "ci95": [
+        -0.5211111111111111,
+        -0.4061111111111111
+      ],
+      "method": "percentile bootstrap over 18 mutated contracts, 2000 resamples, seed 20260919; declared direction up; interval excludes zero; materiality threshold 0.15 met",
+      "n": 18,
+      "se": null,
+      "value": -0.46111111111111114
+    },
+    "mutation_over_prescribe_implementation_intended_direction_ok": {
+      "ci95": null,
+      "method": "declared primitives that moved in the declared direction with an interval excluding zero (count)",
+      "n": 1,
+      "se": null,
+      "value": 0.0
+    },
+    "mutation_over_prescribe_implementation_micromanages_implementation_delta_p": {
+      "ci95": [
+        -0.32944444444444443,
+        -0.22666666666666668
+      ],
+      "method": "percentile bootstrap over 18 mutated contracts, 2000 resamples, seed 20260919; declared direction up; interval excludes zero; materiality threshold 0.15 met",
+      "n": 18,
+      "se": null,
+      "value": -0.2777777777777778
+    },
+    "mutation_problem_as_label_intended_direction_ok": {
+      "ci95": null,
+      "method": "declared primitives that moved in the declared direction with an interval excluding zero (count)",
+      "n": 1,
+      "se": null,
+      "value": 1.0
+    },
+    "mutation_problem_as_label_problem_actionable_delta_p": {
+      "ci95": [
+        -0.8372222222222222,
+        -0.7033333333333334
+      ],
+      "method": "percentile bootstrap over 18 mutated contracts, 2000 resamples, seed 20260919; declared direction down; interval excludes zero; materiality threshold 0.15 met",
+      "n": 18,
+      "se": null,
+      "value": -0.7844444444444445
+    },
+    "mutation_remove_necessary_constraint_constraints_actionable_delta_p": {
+      "ci95": [
+        -0.7166666666666667,
+        -0.6405555555555555
+      ],
+      "method": "percentile bootstrap over 18 mutated contracts, 2000 resamples, seed 20260919; declared direction down; interval excludes zero; materiality threshold 0.15 met",
+      "n": 18,
+      "se": null,
+      "value": -0.6816666666666666
+    },
+    "mutation_remove_necessary_constraint_intended_direction_ok": {
+      "ci95": null,
+      "method": "declared primitives that moved in the declared direction with an interval excluding zero (count)",
+      "n": 1,
+      "se": null,
+      "value": 1.0
+    },
+    "mutation_remove_observable_success_intended_direction_ok": {
+      "ci95": null,
+      "method": "declared primitives that moved in the declared direction with an interval excluding zero (count)",
+      "n": 1,
+      "se": null,
+      "value": 1.0
+    },
+    "mutation_remove_observable_success_success_observable_delta_p": {
+      "ci95": [
+        -0.7255555555555556,
+        -0.6822222222222222
+      ],
+      "method": "percentile bootstrap over 18 mutated contracts, 2000 resamples, seed 20260919; declared direction down; interval excludes zero; materiality threshold 0.15 met",
+      "n": 18,
+      "se": null,
+      "value": -0.7033333333333334
+    },
+    "mutation_static_only_validation_intended_direction_ok": {
+      "ci95": null,
+      "method": "declared primitives that moved in the declared direction with an interval excluding zero (count)",
+      "n": 1,
+      "se": null,
+      "value": 1.0
+    },
+    "mutation_static_only_validation_validation_proves_success_delta_p": {
+      "ci95": [
+        -0.6155555555555555,
+        -0.4650000000000001
+      ],
+      "method": "percentile bootstrap over 18 mutated contracts, 2000 resamples, seed 20260919; declared direction down; interval excludes zero; materiality threshold 0.15 met",
+      "n": 18,
+      "se": null,
+      "value": -0.545
+    },
+    "mutation_unexplained_movement": {
+      "ci95": null,
+      "method": "count of primitives that moved further than the declared primitive without being declared (count)",
+      "n": 11,
+      "se": null,
+      "value": 55.0
+    },
+    "mutation_unresolved_dependency_intended_direction_ok": {
+      "ci95": null,
+      "method": "declared primitives that moved in the declared direction with an interval excluding zero (count)",
+      "n": 1,
+      "se": null,
+      "value": 0.0
+    },
+    "mutation_unresolved_dependency_self_blocked_delta_p": {
+      "ci95": [
+        -0.26611111111111113,
+        -0.17722222222222223
+      ],
+      "method": "percentile bootstrap over 18 mutated contracts, 2000 resamples, seed 20260919; declared direction up; interval excludes zero; materiality threshold 0.15 met",
+      "n": 18,
+      "se": null,
+      "value": -0.215
+    },
+    "mutation_vague_scope_intended_direction_ok": {
+      "ci95": null,
+      "method": "declared primitives that moved in the declared direction with an interval excluding zero (count)",
+      "n": 1,
+      "se": null,
+      "value": 1.0
+    },
+    "mutation_vague_scope_scope_bounded_delta_p": {
+      "ci95": [
+        -0.8522222222222222,
+        -0.815
+      ],
+      "method": "percentile bootstrap over 18 mutated contracts, 2000 resamples, seed 20260919; declared direction down; interval excludes zero; materiality threshold 0.15 met",
+      "n": 18,
+      "se": null,
+      "value": -0.835
+    }
+  },
+  "schema_version": "xtrm-research-assessment-set/v1",
+  "timestamp": "2026-09-19T00:08:47.165349+00:00"
+}

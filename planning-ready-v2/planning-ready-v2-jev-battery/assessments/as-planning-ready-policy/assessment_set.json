@@ -1,0 +1,421 @@
+{
+  "assessment_set_id": "as-planning-ready-policy",
+  "assessments": [],
+  "evaluator": {
+    "content_hash": "sha256:<redacted>",
+    "id": "planning-ready-policy",
+    "version": "v1"
+  },
+  "input_run_id": "planning-ready-v2-jev-battery",
+  "metrics": {
+    "constraints_actionable_auc": {
+      "ci95": [
+        0.5527643784786642,
+        0.6942275515895148
+      ],
+      "method": "rank AUC (Mann-Whitney, ties half) against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.623668348752453
+    },
+    "constraints_actionable_brier": {
+      "ci95": [
+        0.20345943775100403,
+        0.24564229249011857
+      ],
+      "method": "mean squared error against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.22365378486055776
+    },
+    "constraints_actionable_ece": {
+      "ci95": [
+        0.04808764940239042,
+        0.12944664031620556
+      ],
+      "method": "expected calibration error, ten equal-width bins",
+      "n": 251,
+      "se": null,
+      "value": 0.06155378486055776
+    },
+    "constraints_actionable_mean_p": {
+      "ci95": null,
+      "method": "mean P(yes) over the population",
+      "n": 251,
+      "se": null,
+      "value": 0.6378884462151395
+    },
+    "depends_on_missing_context_auc": {
+      "ci95": [
+        0.2957499634876588,
+        0.4334493400748572
+      ],
+      "method": "rank AUC (Mann-Whitney, ties half) against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.3635758340342024
+    },
+    "depends_on_missing_context_brier": {
+      "ci95": [
+        0.37258112449799197,
+        0.43484880952380955
+      ],
+      "method": "mean squared error against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.40450597609561756
+    },
+    "depends_on_missing_context_ece": {
+      "ci95": [
+        0.33996093750000006,
+        0.456470588235294
+      ],
+      "method": "expected calibration error, ten equal-width bins",
+      "n": 251,
+      "se": null,
+      "value": 0.39426294820717134
+    },
+    "depends_on_missing_context_mean_p": {
+      "ci95": null,
+      "method": "mean P(yes) over the population",
+      "n": 251,
+      "se": null,
+      "value": 0.2745816733067729
+    },
+    "micromanages_implementation_auc": {
+      "ci95": [
+        0.503968253968254,
+        0.6569694277888815
+      ],
+      "method": "rank AUC (Mann-Whitney, ties half) against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.580950378469302
+    },
+    "micromanages_implementation_brier": {
+      "ci95": [
+        0.32558346456692916,
+        0.38586275303643724
+      ],
+      "method": "mean squared error against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.35563187250996015
+    },
+    "micromanages_implementation_ece": {
+      "ci95": [
+        0.2963453815261044,
+        0.4146586345381526
+      ],
+      "method": "expected calibration error, ten equal-width bins",
+      "n": 251,
+      "se": null,
+      "value": 0.3544223107569721
+    },
+    "micromanages_implementation_mean_p": {
+      "ci95": null,
+      "method": "mean P(yes) over the population",
+      "n": 251,
+      "se": null,
+      "value": 0.29896414342629485
+    },
+    "non_goals_effective_auc": {
+      "ci95": [
+        0.5561542824730573,
+        0.7022267206477733
+      ],
+      "method": "rank AUC (Mann-Whitney, ties half) against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.6305368657134848
+    },
+    "non_goals_effective_brier": {
+      "ci95": [
+        0.20074262948207172,
+        0.2613007936507937
+      ],
+      "method": "mean squared error against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.2302215139442231
+    },
+    "non_goals_effective_ece": {
+      "ci95": [
+        0.0745019920318725,
+        0.18774703557312256
+      ],
+      "method": "expected calibration error, ten equal-width bins",
+      "n": 251,
+      "se": null,
+      "value": 0.12725099601593623
+    },
+    "non_goals_effective_mean_p": {
+      "ci95": null,
+      "method": "mean P(yes) over the population",
+      "n": 251,
+      "se": null,
+      "value": 0.754581673306773
+    },
+    "open_decision_auc": {
+      "ci95": [
+        0.3962075848303393,
+        0.5452247191011236
+      ],
+      "method": "rank AUC (Mann-Whitney, ties half) against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.468040370058873
+    },
+    "open_decision_brier": {
+      "ci95": [
+        0.2640924603174603,
+        0.29537091633466134
+      ],
+      "method": "mean squared error against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.279796812749004
+    },
+    "open_decision_ece": {
+      "ci95": [
+        0.14890688259109316,
+        0.25907630522088354
+      ],
+      "method": "expected calibration error, ten equal-width bins",
+      "n": 251,
+      "se": null,
+      "value": 0.19999999999999998
+    },
+    "open_decision_mean_p": {
+      "ci95": null,
+      "method": "mean P(yes) over the population",
+      "n": 251,
+      "se": null,
+      "value": 0.48175298804780875
+    },
+    "output_unambiguous_auc": {
+      "ci95": [
+        0.3977306547619048,
+        0.5441412520064205
+      ],
+      "method": "rank AUC (Mann-Whitney, ties half) against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.47245584524810763
+    },
+    "output_unambiguous_brier": {
+      "ci95": [
+        0.22457389558232932,
+        0.2793640316205534
+      ],
+      "method": "mean squared error against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.2513613545816733
+    },
+    "output_unambiguous_ece": {
+      "ci95": [
+        0.08419354838709675,
+        0.18713709677419355
+      ],
+      "method": "expected calibration error, ten equal-width bins",
+      "n": 251,
+      "se": null,
+      "value": 0.1222709163346613
+    },
+    "output_unambiguous_mean_p": {
+      "ci95": null,
+      "method": "mean P(yes) over the population",
+      "n": 251,
+      "se": null,
+      "value": 0.7028286852589641
+    },
+    "problem_actionable_auc": {
+      "ci95": [
+        0.5710239651416122,
+        0.7057971990304336
+      ],
+      "method": "rank AUC (Mann-Whitney, ties half) against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.6402088589851416
+    },
+    "problem_actionable_brier": {
+      "ci95": [
+        0.2196578313253012,
+        0.286076
+      ],
+      "method": "mean squared error against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.25179721115537845
+    },
+    "problem_actionable_ece": {
+      "ci95": [
+        0.12246963562753037,
+        0.23091269841269832
+      ],
+      "method": "expected calibration error, ten equal-width bins",
+      "n": 251,
+      "se": null,
+      "value": 0.16800796812749
+    },
+    "problem_actionable_mean_p": {
+      "ci95": null,
+      "method": "mean P(yes) over the population",
+      "n": 251,
+      "se": null,
+      "value": 0.7276095617529881
+    },
+    "scope_bounded_auc": {
+      "ci95": [
+        0.4578794480755265,
+        0.6123737373737373
+      ],
+      "method": "rank AUC (Mann-Whitney, ties half) against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.5371811045696664
+    },
+    "scope_bounded_brier": {
+      "ci95": [
+        0.20586586345381525,
+        0.2734366533864542
+      ],
+      "method": "mean squared error against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.23834741035856571
+    },
+    "scope_bounded_ece": {
+      "ci95": [
+        0.09646825396825397,
+        0.19948818897637796
+      ],
+      "method": "expected calibration error, ten equal-width bins",
+      "n": 251,
+      "se": null,
+      "value": 0.12900398406374505
+    },
+    "scope_bounded_mean_p": {
+      "ci95": null,
+      "method": "mean P(yes) over the population",
+      "n": 251,
+      "se": null,
+      "value": 0.760796812749004
+    },
+    "self_blocked_auc": {
+      "ci95": [
+        0.36083815028901733,
+        0.5122445855973062
+      ],
+      "method": "rank AUC (Mann-Whitney, ties half) against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.43544995794785535
+    },
+    "self_blocked_brier": {
+      "ci95": [
+        0.38856666666666667,
+        0.4537964285714286
+      ],
+      "method": "mean squared error against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.4214521912350597
+    },
+    "self_blocked_ece": {
+      "ci95": [
+        0.3800396825396825,
+        0.49567460317460316
+      ],
+      "method": "expected calibration error, ten equal-width bins",
+      "n": 251,
+      "se": null,
+      "value": 0.43047808764940243
+    },
+    "self_blocked_mean_p": {
+      "ci95": null,
+      "method": "mean P(yes) over the population",
+      "n": 251,
+      "se": null,
+      "value": 0.26250996015936257
+    },
+    "success_observable_auc": {
+      "ci95": [
+        0.46226930963773066,
+        0.6064900662251655
+      ],
+      "method": "rank AUC (Mann-Whitney, ties half) against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.5343776282590412
+    },
+    "success_observable_brier": {
+      "ci95": [
+        0.20560714285714288,
+        0.2546183266932271
+      ],
+      "method": "mean squared error against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.2291438247011952
+    },
+    "success_observable_ece": {
+      "ci95": [
+        0.055258964143426334,
+        0.16399999999999992
+      ],
+      "method": "expected calibration error, ten equal-width bins",
+      "n": 251,
+      "se": null,
+      "value": 0.10649402390438248
+    },
+    "success_observable_mean_p": {
+      "ci95": null,
+      "method": "mean P(yes) over the population",
+      "n": 251,
+      "se": null,
+      "value": 0.6972509960159362
+    },
+    "validation_proves_success_auc": {
+      "ci95": [
+        0.5159730558890223,
+        0.6544097413318657
+      ],
+      "method": "rank AUC (Mann-Whitney, ties half) against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.5870128959910289
+    },
+    "validation_proves_success_brier": {
+      "ci95": [
+        0.23624820717131473,
+        0.2815207843137255
+      ],
+      "method": "mean squared error against the ready label",
+      "n": 251,
+      "se": null,
+      "value": 0.2577884462151394
+    },
+    "validation_proves_success_ece": {
+      "ci95": [
+        0.09703557312252965,
+        0.19861111111111115
+      ],
+      "method": "expected calibration error, ten equal-width bins",
+      "n": 251,
+      "se": null,
+      "value": 0.12952191235059762
+    },
+    "validation_proves_success_mean_p": {
+      "ci95": null,
+      "method": "mean P(yes) over the population",
+      "n": 251,
+      "se": null,
+      "value": 0.5252988047808764
+    }
+  },
+  "schema_version": "xtrm-research-assessment-set/v1",
+  "timestamp": "2026-09-19T00:07:15.447094+00:00"
+}
