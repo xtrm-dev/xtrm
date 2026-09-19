@@ -123,14 +123,36 @@ def compare_runs(
     return summaries
 
 
+def _chart_metric(
+    metrics: dict[str, dict[str, Any]], metric_key: str
+) -> dict[str, Any] | None:
+    """Resolve an Experiment named-dataset id to exactly one run metric.
+
+    Persisted assessment metrics are evaluator-namespaced. Experiment
+    ``named_datasets`` are semantic ids, so an unqualified id such as
+    ``"accuracy"`` may resolve to ``"exact-match::accuracy"``.
+    Ambiguity fails closed instead of silently picking an evaluator.
+    """
+    exact = metrics.get(metric_key)
+    if exact is not None:
+        return exact
+    suffix = f"::{metric_key}"
+    matches = [(key, metric) for key, metric in metrics.items() if key.endswith(suffix)]
+    if len(matches) > 1:
+        names = ", ".join(key for key, _ in matches)
+        raise ValueError(
+            f"chart dataset {metric_key!r} is ambiguous across metrics: {names}"
+        )
+    return matches[0][1] if matches else None
+
+
 def chart_dataset_rows(
     root: Path, run_ids: list[str], metric_key: str
 ) -> list[dict[str, Any]]:
-    """One row per run carrying ``metric_key`` (an ``"<evaluator_id>::<metric>"``
-    key from :func:`run_metrics`), for a chart_spec's named dataset."""
+    """One row per run carrying a chart_spec named dataset."""
     rows = []
     for run_id in run_ids:
-        metric = run_metrics(root, run_id).get(metric_key)
+        metric = _chart_metric(run_metrics(root, run_id), metric_key)
         if metric is not None:
             rows.append({"run_id": run_id, **metric})
     return rows
