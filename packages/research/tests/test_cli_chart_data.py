@@ -166,3 +166,25 @@ def test_chart_data_flags_work_in_either_position(registry, runs_root, capsys):
     assert code == 0
     assert envelope["ok"] is True
     assert envelope["data"][0]["run_id"] == "run-chart"
+
+
+def test_chart_data_resolves_unqualified_experiment_dataset_id(
+    registry, runs_root, capsys
+):
+    _seed_chart_run(registry, runs_root)
+    code, envelope = _run_cli(
+        [
+            "--root",
+            str(runs_root),
+            "--json",
+            "chart-data",
+            "run-chart",
+            "--metric",
+            "accuracy",
+        ],
+        capsys,
+    )
+    assert code == 0
+    assert envelope["ok"] is True
+    assert envelope["data"][0]["run_id"] == "run-chart"
+    assert envelope["data"][0]["value"] == 1.0
