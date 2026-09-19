@@ -4,11 +4,12 @@ import { useAdapters } from "../adapters/index.tsx";
 import { readAccounting, readLineage, readVersionRef } from "../adapters/research/manifest.ts";
 import { isInvalidManifestRow, type InvalidManifestRow, type RunListRow, type RunRow, type RunStatus, type RunSummary, type TailEvent, type UsageRecord } from "../adapters/research/types.ts";
 import { compareRunIds, validateCompareSearch } from "../app/research-compare-search.ts";
-import { useResearchCompare, useResearchMetrics, useResearchRun, useResearchRuns, useResearchTail } from "../app/queries.ts";
+import { useResearchCompare, useResearchExperiment, useResearchMetrics, useResearchRun, useResearchRuns, useResearchTail } from "../app/queries.ts";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceHeader, type Tone } from "../ui/primitives.tsx";
 import { MetricFields, UsageFields } from "./research-format.tsx";
+import { ResearchCharts } from "./research-charts.tsx";
 
 function runStatusTone(status: RunStatus): Tone {
   if (status === "success") return "done";
@@ -223,6 +224,9 @@ export function RunAnalysisSurface() {
   const run = useResearchRun(runId);
   const metrics = useResearchMetrics(runId);
   const tail = useResearchTail(runId);
+  const experimentRef = run.data ? readVersionRef(run.data.manifest.experiment) : null;
+  const variantRef = run.data ? readVersionRef(run.data.manifest.variant) : null;
+  const experiment = useResearchExperiment(experimentRef?.id ?? null, experimentRef?.version);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label={`Run ${runId}`}>
@@ -261,6 +265,13 @@ export function RunAnalysisSurface() {
                 </div>
               )}
             </section>
+            {experiment.isPending ? (
+              <section aria-label="Charts"><LoadingState rows={3} label="Loading chart definitions" /></section>
+            ) : experiment.isError ? (
+              <section aria-label="Charts"><ErrorState title="Experiment chart definitions unavailable" error={experiment.error} /></section>
+            ) : experiment.data ? (
+              <ResearchCharts experiment={experiment.data} runIds={[runId]} runLabels={{ [runId]: variantRef?.id ?? runId }} />
+            ) : null}
             <section aria-label="Samples">
               <h2 className="mb-2 text-xs font-medium text-ink-faint">Samples</h2>
               {tail.isPending ? (
@@ -385,6 +396,9 @@ export function RunComparisonSurface() {
   const search = validateCompareSearch(rawSearch);
   const runIds = compareRunIds(search);
   const compare = useResearchCompare(runIds);
+  const baselineRun = useResearchRun(runIds[0] ?? null);
+  const baselineExperimentRef = baselineRun.data ? readVersionRef(baselineRun.data.manifest.experiment) : null;
+  const experiment = useResearchExperiment(baselineExperimentRef?.id ?? null, baselineExperimentRef?.version);
 
   let body: ReactNode;
   if (runIds.length < 2) {
@@ -434,6 +448,13 @@ export function RunComparisonSurface() {
             ))}
           </tbody>
         </table>
+        {experiment.data ? (
+          <div className="mt-6">
+            <ResearchCharts experiment={experiment.data} runIds={runIds} />
+          </div>
+        ) : experiment.isError ? (
+          <div className="mt-6"><ErrorState title="Experiment chart definitions unavailable" error={experiment.error} /></div>
+        ) : null}
       </div>
     );
   }
