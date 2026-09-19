@@ -85,7 +85,9 @@ def derive_readiness(
             reasons.append(f"{finding['field']}: {finding['message']}")
     elif not attestation_current:
         state = "draft"
-        reasons.append("no current semantic attestation for this revision + contract hash")
+        reasons.append(
+            "no current semantic attestation for this revision + contract hash"
+        )
     elif blockers:
         state = "blocked"
         reasons.append(f"unsatisfied blockers: {', '.join(blockers)}")

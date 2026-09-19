@@ -17,7 +17,6 @@ remote send, ``publish.publish_run`` for app-visible evidence, and
 
 from __future__ import annotations
 
-import argparse
 import json
 import math
 import random
@@ -43,7 +42,6 @@ from xtrm_research.planning_ready.policy import (
     brier,
     calibrate_holistic_threshold,
     calibrate_thresholds,
-    choice_of,
     classification_metrics,
     deterministic_only_policy,
     ece,
@@ -319,7 +317,11 @@ class HolisticWorkflow(_RecordingWorkflow):
 
 def load_units(dataset_dir: Path = DATASET_DIR) -> list[dict[str, Any]]:
     path = dataset_dir / "units.jsonl"
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
 
 
 def _answers_path(kind: str) -> Path:
@@ -387,7 +389,10 @@ def collect(
             row["records"] = records
         return row
 
-    with path.open("a", encoding="utf-8") as handle, ThreadPoolExecutor(max_workers=workers) as pool:
+    with (
+        path.open("a", encoding="utf-8") as handle,
+        ThreadPoolExecutor(max_workers=workers) as pool,
+    ):
         for row in pool.map(one, todo):
             handle.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
             handle.flush()
@@ -452,14 +457,18 @@ def arms_from_answers(
         u for u in units if u["split"]["partition"] == "train" and answered(u, atomic)
     ]
     calibration = [
-        u for u in units if u["split"]["partition"] == "calibration" and answered(u, atomic)
+        u
+        for u in units
+        if u["split"]["partition"] == "calibration" and answered(u, atomic)
     ]
     test = [u for u in units if u["split"]["partition"] == "test"]
     holdout = [u for u in units if u["split"]["partition"] == "repo_holdout"]
 
     train_atomic = {u["unit_id"]: atomic[u["unit_id"]]["answers"] for u in train}
     train_truth = truth_of(train)
-    thresholds, threshold_detail = calibrate_thresholds(train, train_atomic, train_truth)
+    thresholds, threshold_detail = calibrate_thresholds(
+        train, train_atomic, train_truth
+    )
 
     holistic_train = {
         u["unit_id"]: holistic[u["unit_id"]]["answers"]
@@ -467,7 +476,9 @@ def arms_from_answers(
         if answered(u, holistic)
     }
     holistic_threshold, holistic_detail = calibrate_holistic_threshold(
-        [u for u in train if u["unit_id"] in holistic_train], holistic_train, train_truth
+        [u for u in train if u["unit_id"] in holistic_train],
+        holistic_train,
+        train_truth,
     )
     thresholds = Thresholds(
         thresholds.mandatory_false_below,
@@ -495,19 +506,35 @@ def arms_from_answers(
         "remain in evaluation, where the explicit policy resolves them to REVIEW"
     )
 
-    decisions: dict[str, dict[str, dict[str, Any]]] = {arm: {} for arm in
-        ("holistic", "deterministic-only", "atomic-explicit-policy", "atomic-learned-composition")}
+    decisions: dict[str, dict[str, dict[str, Any]]] = {
+        arm: {}
+        for arm in (
+            "holistic",
+            "deterministic-only",
+            "atomic-explicit-policy",
+            "atomic-learned-composition",
+        )
+    }
     for unit in units:
         uid = unit["unit_id"]
         findings = unit["deterministic"]["structural_findings"]
         answers = atomic.get(uid, {}).get("answers") or {}
         decisions["holistic"][uid] = (
-            holistic_policy(answers_of(holistic.get(uid, {}).get("answers") or {}), thresholds)
+            holistic_policy(
+                answers_of(holistic.get(uid, {}).get("answers") or {}), thresholds
+            )
             if uid in holistic
-            else {"decision": "REVIEW", "reasons": ["no holistic answer"], "uncertain": [], "stage": "missing"}
+            else {
+                "decision": "REVIEW",
+                "reasons": ["no holistic answer"],
+                "uncertain": [],
+                "stage": "missing",
+            }
         )
         decisions["deterministic-only"][uid] = deterministic_only_policy(findings)
-        decisions["atomic-explicit-policy"][uid] = explicit_policy(findings, answers_of(answers), thresholds)
+        decisions["atomic-explicit-policy"][uid] = explicit_policy(
+            findings, answers_of(answers), thresholds
+        )
         decisions["atomic-learned-composition"][uid] = learned.policy(findings, answers)
 
     return {
@@ -517,7 +544,12 @@ def arms_from_answers(
         "learned": learned,
         "learned_detail": learned_detail,
         "decisions": decisions,
-        "partitions": {"train": train, "calibration": calibration, "test": test, "repo_holdout": holdout},
+        "partitions": {
+            "train": train,
+            "calibration": calibration,
+            "test": test,
+            "repo_holdout": holdout,
+        },
     }
 
 
@@ -584,7 +616,11 @@ def _bootstrap_ci(
     defined = sorted(d for d in draws if d is not None)
     point = statistics_fn(list(range(len(units))))
     if not defined or len(defined) < 0.95 * len(draws):
-        return {"value": point, "ci95": None, "method": f"cluster percentile bootstrap, {resamples} resamples, seed {seed}, insufficient defined resamples"}
+        return {
+            "value": point,
+            "ci95": None,
+            "method": f"cluster percentile bootstrap, {resamples} resamples, seed {seed}, insufficient defined resamples",
+        }
     low = defined[int(0.025 * len(defined))]
     high = defined[min(int(0.975 * len(defined)), len(defined) - 1)]
     return {
@@ -601,17 +637,29 @@ def arm_metrics(
 ) -> dict[str, Any]:
     """Decision metrics for one arm over one population, with intervals."""
     truth = [1 if u["research_label"]["value"] == "ready" else 0 for u in units]
-    predicted = [1 if decisions[u["unit_id"]]["decision"] == "READY" else 0 for u in units]
+    predicted = [
+        1 if decisions[u["unit_id"]]["decision"] == "READY" else 0 for u in units
+    ]
     base = classification_metrics(truth, predicted)
 
     def _stat(fn):
-        return lambda picked: fn([truth[i] for i in picked], [predicted[i] for i in picked])
+        return lambda picked: fn(
+            [truth[i] for i in picked], [predicted[i] for i in picked]
+        )
 
     out: dict[str, Any] = {
         "n": base["n"],
         "positives": base["positives"],
         "negatives": base["negatives"],
-        "confusion": {k: base[k] for k in ("true_positive", "true_negative", "false_positive", "false_negative")},
+        "confusion": {
+            k: base[k]
+            for k in (
+                "true_positive",
+                "true_negative",
+                "false_positive",
+                "false_negative",
+            )
+        },
     }
     for name, value in (
         ("false_ready_rate", base["false_ready_rate"]),
@@ -622,9 +670,19 @@ def arm_metrics(
         ("balanced_accuracy", base["balanced_accuracy"]),
     ):
         if value is None:
-            out[name] = {"value": None, "ci95": None, "method": "undefined on this population"}
+            out[name] = {
+                "value": None,
+                "ci95": None,
+                "method": "undefined on this population",
+            }
             continue
-        if name in ("false_ready_rate", "false_draft_rate", "precision", "recall", "accuracy"):
+        if name in (
+            "false_ready_rate",
+            "false_draft_rate",
+            "precision",
+            "recall",
+            "accuracy",
+        ):
             count = {
                 "false_ready_rate": base["false_positive"],
                 "false_draft_rate": base["false_negative"],
@@ -646,9 +704,16 @@ def arm_metrics(
                 "method": f"Wilson 95% interval for {count}/{denominator}",
             }
         else:
-            out[name] = _bootstrap_ci(units, _stat(lambda t, p: policy_module.balanced_accuracy(t, p)))
+            out[name] = _bootstrap_ci(
+                units, _stat(lambda t, p: policy_module.balanced_accuracy(t, p))
+            )
     out["coverage"] = {
-        "value": sum(1 for u in units if decisions[u["unit_id"]]["decision"] != "REVIEW") / len(units) if units else None,
+        "value": sum(
+            1 for u in units if decisions[u["unit_id"]]["decision"] != "REVIEW"
+        )
+        / len(units)
+        if units
+        else None,
         "ci95": None,
         "method": "share of units the policy resolves without REVIEW",
     }
@@ -664,14 +729,14 @@ def paired_false_ready_delta(
 
     def _rate(decisions, picked) -> float | None:
         negatives = [
-            i
-            for i in picked
-            if units[i]["research_label"]["value"] == "not_ready"
+            i for i in picked if units[i]["research_label"]["value"] == "not_ready"
         ]
         if not negatives:
             return None
         return sum(
-            1 for i in negatives if decisions[units[i]["unit_id"]]["decision"] == "READY"
+            1
+            for i in negatives
+            if decisions[units[i]["unit_id"]]["decision"] == "READY"
         ) / len(negatives)
 
     def _diff(picked) -> float | None:
@@ -681,7 +746,10 @@ def paired_false_ready_delta(
         return a - b
 
     result = _bootstrap_ci(units, _diff)
-    result["method"] = "paired cluster percentile bootstrap of (false-READY rate difference); " + str(result["method"])
+    result["method"] = (
+        "paired cluster percentile bootstrap of (false-READY rate difference); "
+        + str(result["method"])
+    )
     return result
 
 
@@ -696,12 +764,18 @@ def primitive_metrics(
     out: dict[str, Any] = {}
     for name in primitive_names:
         scores = [
-            float((atomic.get(u["unit_id"], {}).get("answers") or {}).get(name, {}).get("noul", 0.5))
+            float(
+                (atomic.get(u["unit_id"], {}).get("answers") or {})
+                .get(name, {})
+                .get("noul", 0.5)
+            )
             for u in units
         ]
 
         def _stat(fn):
-            return lambda picked: fn([truth[i] for i in picked], [scores[i] for i in picked])
+            return lambda picked: fn(
+                [truth[i] for i in picked], [scores[i] for i in picked]
+            )
 
         out[f"{name}.auc"] = _bootstrap_ci(units, _stat(auc))
         out[f"{name}.brier"] = _bootstrap_ci(units, _stat(brier))
@@ -771,14 +845,19 @@ def evaluate_mutations(
         rows = membership[name]
         pairs: list[tuple[dict[str, float], dict[str, float]]] = []
         for row in rows:
-            before = answers_of((original_answers.get(row["unit_id"]) or {}).get("answers") or {})
-            after = answers_of((mutated_answers.get(row["mutation_id"]) or {}).get("answers") or {})
+            before = answers_of(
+                (original_answers.get(row["unit_id"]) or {}).get("answers") or {}
+            )
+            after = answers_of(
+                (mutated_answers.get(row["mutation_id"]) or {}).get("answers") or {}
+            )
             if before and after:
                 pairs.append((before, after))
         stats: dict[str, Any] = {"n_pairs": len(pairs)}
         for primitive in STABILITY_WATCH:
             deltas = [
-                after.get(primitive, 0.0) - before.get(primitive, 0.0) for before, after in pairs
+                after.get(primitive, 0.0) - before.get(primitive, 0.0)
+                for before, after in pairs
             ]
             if not deltas:
                 continue
@@ -801,7 +880,14 @@ def evaluate_mutations(
         for primitive, direction in expected.items():
             entry = stats.get(primitive)
             if not entry:
-                checks.append({"primitive": primitive, "direction": direction, "ok": False, "reason": "no paired answers"})
+                checks.append(
+                    {
+                        "primitive": primitive,
+                        "direction": direction,
+                        "ok": False,
+                        "reason": "no paired answers",
+                    }
+                )
                 continue
             moved = entry["mean_delta"]
             excludes_zero = entry["ci95"][0] > 0 or entry["ci95"][1] < 0
@@ -827,7 +913,9 @@ def evaluate_mutations(
             for primitive, entry in stats.items()
             if isinstance(entry, dict) and primitive not in expected
         }
-        declared_magnitude = max((abs(c.get("mean_delta") or 0.0) for c in checks), default=0.0)
+        declared_magnitude = max(
+            (abs(c.get("mean_delta") or 0.0) for c in checks), default=0.0
+        )
         unexplained = sorted(
             primitive
             for primitive, entry in unintended.items()
@@ -838,8 +926,12 @@ def evaluate_mutations(
             stats["ok_count"] = len(checks)
         per_class[name] = {
             "changed_invariant": rows[0].get("changed_invariant", ""),
-            "expected_policy_consequence": rows[0].get("expected_policy_consequence", ""),
-            "structurally_valid_after": sum(1 for r in rows if r.get("structurally_valid_after")),
+            "expected_policy_consequence": rows[0].get(
+                "expected_policy_consequence", ""
+            ),
+            "structurally_valid_after": sum(
+                1 for r in rows if r.get("structurally_valid_after")
+            ),
             "primitives": stats,
             "checks": checks,
             "class_ok": all_ok,
@@ -855,7 +947,9 @@ def evaluate_mutations(
         "n_checks_ok": intended_ok_count,
         "share_checks_ok": share,
         "classes_ok": sum(1 for c in per_class.values() if c["class_ok"]),
-        "unexplained_total": sum(len(c["unexplained_movement"]) for c in per_class.values()),
+        "unexplained_total": sum(
+            len(c["unexplained_movement"]) for c in per_class.values()
+        ),
     }
 
 
@@ -871,8 +965,13 @@ def mutation_metrics(evaluation: dict[str, Any]) -> dict[str, dict[str, Any] | N
                     float(entry["mean_delta"]),
                     entry["ci95"],
                     int(klass["primitives"]["n_pairs"]),
-                    entry["method"] + f"; declared direction {check['direction']}; "
-                    + ("interval excludes zero" if check["interval_excludes_zero"] else "interval contains zero")
+                    entry["method"]
+                    + f"; declared direction {check['direction']}; "
+                    + (
+                        "interval excludes zero"
+                        if check["interval_excludes_zero"]
+                        else "interval contains zero"
+                    )
                     + f"; materiality threshold {check['materiality_threshold']} "
                     + ("met" if check["materially_moved"] else "not met"),
                 )
@@ -996,14 +1095,13 @@ def escalate_units(
                 row = json.loads(line)
                 existing.setdefault(row["unit_id"], row)
     candidates = escalation_candidates(units, decisions)
-    todo = [u for u in candidates if u["unit_id"] not in existing][: max(0, max_calls - len(existing))]
+    todo = [u for u in candidates if u["unit_id"] not in existing][
+        : max(0, max_calls - len(existing))
+    ]
     cost = 0.0
     with path.open("a", encoding="utf-8") as handle:
         for unit in todo:
-            uncertain = {
-                name: round(float(p), 3)
-                for name, p in answers_of({}).items()
-            }
+            uncertain = {name: round(float(p), 3) for name, p in answers_of({}).items()}
             decision = decisions[unit["unit_id"]]
             uncertain = {
                 name: decision.get("reasons", [])
@@ -1030,38 +1128,64 @@ def escalate_units(
                         "unit_id": unit["unit_id"],
                         "status": "no_output",
                         "model": ESCALATION_MODEL,
-                        "detail": (response.get("error") or "reply did not validate")[:300],
+                        "detail": (response.get("error") or "reply did not validate")[
+                            :300
+                        ],
                     }
                 else:
                     row = {
                         "unit_id": unit["unit_id"],
                         "status": "answered",
                         "ready": bool(out.get("ready")),
-                        "weakest_mandatory_section": out.get("weakest_mandatory_section"),
+                        "weakest_mandatory_section": out.get(
+                            "weakest_mandatory_section"
+                        ),
                         "rationale": (out.get("rationale") or "")[:600],
                         "model": ESCALATION_MODEL,
-                        "cost_usd": usage.get("cost") if isinstance(usage.get("cost"), (int, float)) else (usage.get("cost") or {}).get("total") if isinstance(usage.get("cost"), dict) else None,
-                        "input_tokens": usage.get("input_tokens") or usage.get("inputTokens"),
-                        "output_tokens": usage.get("output_tokens") or usage.get("outputTokens"),
+                        "cost_usd": usage.get("cost")
+                        if isinstance(usage.get("cost"), (int, float))
+                        else (usage.get("cost") or {}).get("total")
+                        if isinstance(usage.get("cost"), dict)
+                        else None,
+                        "input_tokens": usage.get("input_tokens")
+                        or usage.get("inputTokens"),
+                        "output_tokens": usage.get("output_tokens")
+                        or usage.get("outputTokens"),
                     }
                 if isinstance(row.get("cost_usd"), (int, float)):
                     cost += float(row["cost_usd"])
             except GuardFailure as exc:
-                row = {"unit_id": unit["unit_id"], "status": "guard_failure", "detail": exc.guard}
-            except Exception as exc:  # a refused budget is a recorded outcome, not a crash
-                row = {"unit_id": unit["unit_id"], "status": "error", "detail": f"{type(exc).__name__}: {exc}"[:300]}
+                row = {
+                    "unit_id": unit["unit_id"],
+                    "status": "guard_failure",
+                    "detail": exc.guard,
+                }
+            except (
+                Exception
+            ) as exc:  # a refused budget is a recorded outcome, not a crash
+                row = {
+                    "unit_id": unit["unit_id"],
+                    "status": "error",
+                    "detail": f"{type(exc).__name__}: {exc}"[:300],
+                }
             handle.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
             handle.flush()
     answered = {
         row["unit_id"]: row
         for row in (
-            [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            [
+                json.loads(line)
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
             if path.is_file()
             else []
         )
     }
     total_cost = sum(
-        float(r["cost_usd"]) for r in answered.values() if isinstance(r.get("cost_usd"), (int, float))
+        float(r["cost_usd"])
+        for r in answered.values()
+        if isinstance(r.get("cost_usd"), (int, float))
     )
     return {
         "candidates": len(candidates),
@@ -1107,7 +1231,9 @@ def apply_escalations(
             continue
         out[unit_id] = {
             "decision": "READY" if row.get("ready") else "DRAFT",
-            "reasons": [f"escalated to {ESCALATION_MODEL}: {row.get('weakest_mandatory_section')}"],
+            "reasons": [
+                f"escalated to {ESCALATION_MODEL}: {row.get('weakest_mandatory_section')}"
+            ],
             "uncertain": [],
             "stage": "escalation",
         }
@@ -1140,8 +1266,17 @@ def mutation_pseudo_units(
                     "structural_findings": [],
                     "structurally_valid": True,
                 },
-                "research_label": {"value": "ready", "source": "mutation", "method": "strong contract, unchanged structure", "confidence": "high"},
-                "split": {"partition": original["split"]["partition"], "cluster_key": row["mutation_id"], "cluster_bucket": 0},
+                "research_label": {
+                    "value": "ready",
+                    "source": "mutation",
+                    "method": "strong contract, unchanged structure",
+                    "confidence": "high",
+                },
+                "split": {
+                    "partition": original["split"]["partition"],
+                    "cluster_key": row["mutation_id"],
+                    "cluster_bucket": 0,
+                },
             }
         )
     return out

@@ -126,7 +126,9 @@ def _cmd_run_annotate(args: argparse.Namespace) -> None:
     root = Path(args.root)
     result_summary = None
     if getattr(args, "result_summary", None):
-        result_summary = json.loads(Path(args.result_summary).read_text(encoding="utf-8"))
+        result_summary = json.loads(
+            Path(args.result_summary).read_text(encoding="utf-8")
+        )
     annotation = append_annotation(
         root,
         args.run_id,

@@ -15,10 +15,7 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 from xtrm_research import publish
-from xtrm_research.definitions import DefinitionRegistry
-from xtrm_research.guards import guard_versions
 from xtrm_research.planning_ready import campaign
-from xtrm_research.planning_ready import mutations as mutations_module
 from xtrm_research.planning_ready import policy as policy_module
 from xtrm_research.planning_ready import questions as questions_module
 from xtrm_research.telemetry import usage_record
@@ -43,10 +40,22 @@ DATASET_ID = "planning-ready-v2"
 #: Run id per arm, and the variant definition id it references.
 ARM_RUNS = {
     "holistic": ("planning-ready-v2-holistic", "holistic"),
-    "deterministic-only": ("planning-ready-v2-deterministic-only", "deterministic-only"),
-    "atomic-explicit-policy": ("planning-ready-v2-atomic-explicit", "atomic-explicit-policy"),
-    "atomic-learned-composition": ("planning-ready-v2-learned", "atomic-learned-composition"),
-    "atomic-policy-escalation": ("planning-ready-v2-escalation", "atomic-policy-escalation"),
+    "deterministic-only": (
+        "planning-ready-v2-deterministic-only",
+        "deterministic-only",
+    ),
+    "atomic-explicit-policy": (
+        "planning-ready-v2-atomic-explicit",
+        "atomic-explicit-policy",
+    ),
+    "atomic-learned-composition": (
+        "planning-ready-v2-learned",
+        "atomic-learned-composition",
+    ),
+    "atomic-policy-escalation": (
+        "planning-ready-v2-escalation",
+        "atomic-policy-escalation",
+    ),
 }
 
 ARM_DESCRIPTIONS = {
@@ -60,7 +69,9 @@ ARM_DESCRIPTIONS = {
 }
 
 
-def definitions(registry_root: Path, dataset_hash: str, dataset_dir: Path) -> dict[str, Any]:
+def definitions(
+    registry_root: Path, dataset_hash: str, dataset_dir: Path
+) -> dict[str, Any]:
     """Register (write-once) every definition this campaign's runs reference."""
     reg = Path(registry_root)
     specs = questions_module.question_specs(
@@ -95,7 +106,9 @@ def definitions(registry_root: Path, dataset_hash: str, dataset_dir: Path) -> di
             },
             "output_schema": {"type": "object"},
             "state_builder": "xtrm_research.planning_ready.questions.state_of",
-            "questions": [{"id": s["id"], "version": s["version"]} for s in registered_specs],
+            "questions": [
+                {"id": s["id"], "version": s["version"]} for s in registered_specs
+            ],
             "observers": [],
             "evaluators": [{"id": EVALUATOR_ID, "version": "v1"}],
             "default_metrics": metric_names,
@@ -163,7 +176,10 @@ def definitions(registry_root: Path, dataset_hash: str, dataset_dir: Path) -> di
     # completeness), so the arm descriptions are added under their full ids.
     experiment_payload["legend"] = {
         **campaign.EXPERIMENT["legend"],
-        **{variants[arm]["id"]: description for arm, description in ARM_DESCRIPTIONS.items()},
+        **{
+            variants[arm]["id"]: description
+            for arm, description in ARM_DESCRIPTIONS.items()
+        },
     }
     experiment = publish.register(reg, "experiment", experiment_payload)
     return {
@@ -221,18 +237,36 @@ def arm_metrics_for_run(
         if not population:
             continue
         metrics = campaign.arm_metrics(population, arm, decisions)
-        for name in ("false_ready_rate", "false_draft_rate", "precision", "recall", "accuracy", "balanced_accuracy", "coverage"):
+        for name in (
+            "false_ready_rate",
+            "false_draft_rate",
+            "precision",
+            "recall",
+            "accuracy",
+            "balanced_accuracy",
+            "coverage",
+        ):
             out[f"{label}.{name}"] = _metric_row(name, metrics.get(name), metrics["n"])
-        out[f"{label}.n"] = publish.metric(float(metrics["n"]), None, metrics["n"], "unit count on this population")
+        out[f"{label}.n"] = publish.metric(
+            float(metrics["n"]), None, metrics["n"], "unit count on this population"
+        )
         # Positive and negative counts, so a reader can see the class balance.
         out[f"{label}.positives"] = publish.metric(
-            float(metrics["positives"]), None, metrics["n"], "independently labelled ready units"
+            float(metrics["positives"]),
+            None,
+            metrics["n"],
+            "independently labelled ready units",
         )
         out[f"{label}.negatives"] = publish.metric(
-            float(metrics["negatives"]), None, metrics["n"], "independently labelled not-ready units"
+            float(metrics["negatives"]),
+            None,
+            metrics["n"],
+            "independently labelled not-ready units",
         )
         if holistic_decisions is not None and arm != "holistic":
-            delta = campaign.paired_false_ready_delta(population, decisions, holistic_decisions)
+            delta = campaign.paired_false_ready_delta(
+                population, decisions, holistic_decisions
+            )
             out[f"{label}.false_ready_rate_delta_vs_holistic"] = _metric_row(
                 "false_ready_rate_delta_vs_holistic", delta, metrics["n"]
             )
@@ -250,9 +284,7 @@ def primitive_metrics_for_run(
         for u in units
         if (u["split"]["partition"] != "repo_holdout") == (partition == "pooled")
     ]
-    rows = campaign.primitive_metrics(
-        population, atomic, policy_module.NOUL_FEATURES
-    )
+    rows = campaign.primitive_metrics(population, atomic, policy_module.NOUL_FEATURES)
     out: dict[str, dict[str, Any] | None] = {}
     for key, entry in rows.items():
         name = key.replace(".", "_")
@@ -306,26 +338,38 @@ def battery_samples(
         if u["unit_id"] in refused:
             contract = _redact_value(contract)
             status = "refused_by_guard"
-        rows.append({
-            "sample_id": u["unit_id"],
-            "input": {
-                "locator": u["locator"],
-                "project": u["project_name"],
-                "revision": u["revision"],
-                "contract_hash": u["contract_hash"],
-                "contract": contract,
-                **({"body_note": "contract text published in redacted form: the send-guard refused this unit"} if u["unit_id"] in refused else {}),
-            },
-            "output": {
-                "label": u["research_label"]["value"],
-                "label_source": u["research_label"]["source"],
-                "incumbent": {
-                    "attested_ready_this_revision": u["incumbent_state"]["attested_ready_this_revision"],
-                    "lifecycle_state": u["incumbent_state"]["lifecycle_state_at_snapshot"],
+        rows.append(
+            {
+                "sample_id": u["unit_id"],
+                "input": {
+                    "locator": u["locator"],
+                    "project": u["project_name"],
+                    "revision": u["revision"],
+                    "contract_hash": u["contract_hash"],
+                    "contract": contract,
+                    **(
+                        {
+                            "body_note": "contract text published in redacted form: the send-guard refused this unit"
+                        }
+                        if u["unit_id"] in refused
+                        else {}
+                    ),
                 },
-            },
-            "status": status,
-        })
+                "output": {
+                    "label": u["research_label"]["value"],
+                    "label_source": u["research_label"]["source"],
+                    "incumbent": {
+                        "attested_ready_this_revision": u["incumbent_state"][
+                            "attested_ready_this_revision"
+                        ],
+                        "lifecycle_state": u["incumbent_state"][
+                            "lifecycle_state_at_snapshot"
+                        ],
+                    },
+                },
+                "status": status,
+            }
+        )
     return rows
 
 
@@ -377,7 +421,9 @@ def battery_records(
                 "kind": "outcome",
                 "sample_id": unit["unit_id"],
                 "data": {
-                    "research_label": unit["research_label"],  # source + method + confidence
+                    "research_label": unit[
+                        "research_label"
+                    ],  # source + method + confidence
                     "incumbent_state": unit["incumbent_state"],
                     "observed_outcome": unit["observed_outcome"],
                 },
@@ -426,7 +472,10 @@ def arm_records(
             {
                 "kind": "outcome",
                 "sample_id": unit["unit_id"],
-                "data": {"research_label": unit["research_label"], "observed_outcome": unit["observed_outcome"]},
+                "data": {
+                    "research_label": unit["research_label"],
+                    "observed_outcome": unit["observed_outcome"],
+                },
             }
         )
     return records
@@ -462,7 +511,11 @@ def result_summary_for_arm(
         f"Arm `{arm}` was evaluated on the pre-registered held-out test partition of {n} independently "
         f"labelled, structurally valid contract revisions ({positives} ready, {negatives} not ready). "
     )
-    if fr is not None and fd is not None and metrics.get("test.false_ready_rate", {}).get("ci95"):
+    if (
+        fr is not None
+        and fd is not None
+        and metrics.get("test.false_ready_rate", {}).get("ci95")
+    ):
         fr_ci = metrics["test.false_ready_rate"]["ci95"]
         fd_ci = metrics["test.false_draft_rate"]["ci95"]
         prose += (
@@ -486,7 +539,11 @@ def result_summary_for_arm(
             f"Against the holistic arm on the same units, the paired false-READY difference was "
             f"{delta['value']:+.3f}"
             + (f" [{ci[0]:+.3f}, {ci[1]:+.3f}]" if ci else "")
-            + ("; the interval excludes zero." if ci and (ci[0] > 0 or ci[1] < 0) else "; the interval contains zero, so this comparison is not decisive.")
+            + (
+                "; the interval excludes zero."
+                if ci and (ci[0] > 0 or ci[1] < 0)
+                else "; the interval contains zero, so this comparison is not decisive."
+            )
             + " "
         )
     prose += (
@@ -514,9 +571,13 @@ def result_summary_for_arm(
         supported.append(
             "The explicit atomic policy's decision quality on this population is measured with intervals."
         )
-        unsupported.append("That the atomic battery beats the holistic arm: see the paired difference above.")
+        unsupported.append(
+            "That the atomic battery beats the holistic arm: see the paired difference above."
+        )
     if arm == "holistic":
-        supported.append("The historical holistic judgment is reproduced on the same frozen population.")
+        supported.append(
+            "The historical holistic judgment is reproduced on the same frozen population."
+        )
     if arm == "atomic-learned-composition":
         caveats.append(
             "The learned composition enforces no invariant: a strong score here would not license replacing "
@@ -527,13 +588,19 @@ def result_summary_for_arm(
     decision = (
         "Hold: the incumbent deterministic-plus-attestation readiness stays authoritative until the atomic "
         "policy's advantage on the test partition is visible with an interval excluding zero."
-        if not (delta and delta.get("ci95") and (delta["ci95"][0] > 0 or delta["ci95"][1] < 0))
+        if not (
+            delta
+            and delta.get("ci95")
+            and (delta["ci95"][0] > 0 or delta["ci95"][1] < 0)
+        )
         else "The paired difference on the held-out partition favours the atomic policy; the next step is a "
         "larger independently labelled sample before any runtime change."
     )
 
     evidence_status = "exploratory"
-    if n >= 40 and (delta and delta.get("ci95") and (delta["ci95"][0] > 0 or delta["ci95"][1] < 0)):
+    if n >= 40 and (
+        delta and delta.get("ci95") and (delta["ci95"][0] > 0 or delta["ci95"][1] < 0)
+    ):
         evidence_status = "reproducible"
 
     summary = {
@@ -607,17 +674,25 @@ def publish_arm_run(
             "purpose": (
                 f"Planning Ready-contract v2, arm {arm}: {ARM_DESCRIPTIONS[arm]}"
             ),
-            "trigger": "baseline" if arm in ("holistic", "deterministic-only") else "change_test",
+            "trigger": "baseline"
+            if arm in ("holistic", "deterministic-only")
+            else "change_test",
             "rationale": (
                 "First board rerun after the Substrate migration; the historical contract-quality study is "
                 "kept only as a comparison arm, and the Ready policy is now decomposed into deterministic "
                 "checks plus atomic System One judgments."
             ),
-            "refs": ["jira:XTRM-99#13435", "jira:XTRM-99#13438", f"dataset:{DATASET_ID}@v1"],
+            "refs": [
+                "jira:XTRM-99#13435",
+                "jira:XTRM-99#13438",
+                f"dataset:{DATASET_ID}@v1",
+            ],
             "requested_by": "operator",
             "tags": ["system-one", "planning-ready", "board-v2", arm],
         },
-        samples=battery_samples(units, refused_ids=(a["unit_id"] for a in _refused(answers))),
+        samples=battery_samples(
+            units, refused_ids=(a["unit_id"] for a in _refused(answers))
+        ),
         records=arm_records(units, decisions, answers),
         # Per-sample primitive answers live in the `system_one_call` events (their durable
         # home). The assessment set carries this arm's derived metrics, and an assessment
@@ -668,13 +743,19 @@ def publish_battery_run(
             "requested_by": "operator",
             "tags": ["system-one", "planning-ready", "board-v2", "battery"],
         },
-        samples=battery_samples(units, refused_ids=(a["unit_id"] for a in _refused(answers))),
+        samples=battery_samples(
+            units, refused_ids=(a["unit_id"] for a in _refused(answers))
+        ),
         records=battery_records(units, answers),
         assessments=[],
         metrics={k: v for k, v in metrics.items() if v is not None},
         annotations=[
             {"kind": "conclusion", "text": prose},
-            {"kind": "evidence_status", "text": "primitive answers over a frozen dataset snapshot", "evidence_status": "reproducible"},
+            {
+                "kind": "evidence_status",
+                "text": "primitive answers over a frozen dataset snapshot",
+                "evidence_status": "reproducible",
+            },
         ],
         seed=20260919,
     )
@@ -744,9 +825,15 @@ def publish_mutation_run(
                 "kind": "system_one_call",
                 "sample_id": row["mutation_id"],
                 "data": {
-                    "answers": (mutated_answers.get(row["mutation_id"]) or {}).get("answers"),
-                    "original_answers": (original_answers.get(row["unit_id"]) or {}).get("answers"),
-                    "request_id": (mutated_answers.get(row["mutation_id"]) or {}).get("request_id"),
+                    "answers": (mutated_answers.get(row["mutation_id"]) or {}).get(
+                        "answers"
+                    ),
+                    "original_answers": (
+                        original_answers.get(row["unit_id"]) or {}
+                    ).get("answers"),
+                    "request_id": (mutated_answers.get(row["mutation_id"]) or {}).get(
+                        "request_id"
+                    ),
                 },
             }
             for row in mutation_rows

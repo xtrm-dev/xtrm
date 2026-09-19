@@ -105,7 +105,11 @@ def _git_head(path: Path) -> dict[str, Any]:
                 if line.endswith(" " + ref):
                     commit = line.split(" ", 1)[0]
                     break
-    return {"commit": commit, "branch": ref.split("refs/heads/", 1)[-1], "detached": False}
+    return {
+        "commit": commit,
+        "branch": ref.split("refs/heads/", 1)[-1],
+        "detached": False,
+    }
 
 
 def _checkout_provenance(checkouts: dict[str, Path]) -> dict[str, Any]:
@@ -168,8 +172,21 @@ def _issue_rows(db: sqlite3.Connection) -> dict[str, dict[str, Any]]:
     )
     out: dict[str, dict[str, Any]] = {}
     for row in rows:
-        (issue_id, project_id, number, kind, title, lifecycle, current_revision,
-         contract_hash, scrutiny, created, updated, prefix, defer_until) = row
+        (
+            issue_id,
+            project_id,
+            number,
+            kind,
+            title,
+            lifecycle,
+            current_revision,
+            contract_hash,
+            scrutiny,
+            created,
+            updated,
+            prefix,
+            defer_until,
+        ) = row
         out[issue_id] = {
             "issue_id": issue_id,
             "project": project_id,
@@ -188,7 +205,9 @@ def _issue_rows(db: sqlite3.Connection) -> dict[str, dict[str, Any]]:
     return out
 
 
-def _revision_rows(db: sqlite3.Connection, issues: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _revision_rows(
+    db: sqlite3.Connection, issues: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
     rows = db.execute(
         """select issue_id, revision, contract_hash, contract_json,
                   context_refs_json, ownership_json, authored_by, source_json, created_at
@@ -215,7 +234,9 @@ def _revision_rows(db: sqlite3.Connection, issues: dict[str, dict[str, Any]]) ->
     return out
 
 
-def _attestations(db: sqlite3.Connection) -> dict[tuple[str, int], list[dict[str, Any]]]:
+def _attestations(
+    db: sqlite3.Connection,
+) -> dict[tuple[str, int], list[dict[str, Any]]]:
     rows = db.execute(
         """select issue_id, issue_revision, contract_hash, outcome, policy,
                   attested_by, evidence_refs_json, blocking_gaps_json, created_at
@@ -270,14 +291,23 @@ def _journal(db: sqlite3.Connection) -> dict[str, list[dict[str, Any]]]:
     )
     out: dict[str, list[dict[str, Any]]] = {}
     for issue_id, revision, sequence, kind, semantic, created in rows:
-        entry: dict[str, Any] = {"revision": revision, "sequence": sequence, "kind": kind, "created_at": created}
+        entry: dict[str, Any] = {
+            "revision": revision,
+            "sequence": sequence,
+            "kind": kind,
+            "created_at": created,
+        }
         if semantic:
             try:
                 payload = json.loads(semantic)
             except json.JSONDecodeError:
                 payload = {}
             if isinstance(payload, dict):
-                summary = payload.get("summary") or payload.get("text") or payload.get("message")
+                summary = (
+                    payload.get("summary")
+                    or payload.get("text")
+                    or payload.get("message")
+                )
                 if isinstance(summary, str):
                     entry["summary"] = summary[:400]
         out.setdefault(issue_id, []).append(entry)
@@ -289,7 +319,9 @@ def _receipts(db: sqlite3.Connection) -> dict[str, int]:
     return {row[0]: row[1] for row in rows}
 
 
-def _unsatisfied_blockers(db: sqlite3.Connection, lifecycle: dict[str, str]) -> dict[str, list[str]]:
+def _unsatisfied_blockers(
+    db: sqlite3.Connection, lifecycle: dict[str, str]
+) -> dict[str, list[str]]:
     """Blocker edges whose prerequisite is not done/archived (mirrors the
     incumbent: a cancelled prerequisite stays unsatisfied)."""
     rows = db.execute(
@@ -307,20 +339,18 @@ def _unsatisfied_blockers(db: sqlite3.Connection, lifecycle: dict[str, str]) -> 
 
 
 def _active_claims(db: sqlite3.Connection, now_ms: int) -> set[str]:
-    rows = db.execute(
-        "select issue_id, expires_at, released_at from issue_claims"
-    )
+    rows = db.execute("select issue_id, expires_at, released_at from issue_claims")
     return {
-        row[0]
-        for row in rows
-        if row[2] is None and (row[1] is None or row[1] > now_ms)
+        row[0] for row in rows if row[2] is None and (row[1] is None or row[1] > now_ms)
     }
 
 
 # --- deterministic diagnostics ---------------------------------------------
 
 
-def deterministic_diagnostics(unit: dict[str, Any], checkouts: dict[str, Path]) -> dict[str, Any]:
+def deterministic_diagnostics(
+    unit: dict[str, Any], checkouts: dict[str, Path]
+) -> dict[str, Any]:
     contract = unit["contract"]
     findings = contracts.structural_findings(
         contract,
@@ -332,10 +362,20 @@ def deterministic_diagnostics(unit: dict[str, Any], checkouts: dict[str, Path]) 
     checkout = checkouts.get(unit["project"])
     paths = contracts.referenced_paths(contract)
     if checkout is None or not checkout.exists():
-        path_check: dict[str, Any] = {"checked": False, "reason": "no local checkout for this project", "paths": paths, "missing": []}
+        path_check: dict[str, Any] = {
+            "checked": False,
+            "reason": "no local checkout for this project",
+            "paths": paths,
+            "missing": [],
+        }
     else:
         missing = [p for p in paths if not (checkout / p).exists()]
-        path_check = {"checked": True, "checkout": str(checkout), "paths": paths, "missing": missing}
+        path_check = {
+            "checked": True,
+            "checkout": str(checkout),
+            "paths": paths,
+            "missing": missing,
+        }
     return {
         "structural_findings": findings,
         "structurally_valid": len(findings) == 0,
@@ -396,7 +436,8 @@ def _unit(
             "next_revision": next_revision["revision"],
             "next_contract_hash": next_revision["contract_hash"],
             "changed_sections": sorted(k for k, v in changed.items() if v),
-            "same_problem": next_revision["contract"].get("problem") == contract.get("problem"),
+            "same_problem": next_revision["contract"].get("problem")
+            == contract.get("problem"),
         }
 
     unit: dict[str, Any] = {
@@ -421,8 +462,13 @@ def _unit(
         "deterministic": diagnostics,
         "incumbent_state": {
             "attestation_this_revision": [
-                {"outcome": a["outcome"], "policy": a["policy"], "attested_by": a["attested_by"],
-                 "blocking_gaps": a["blocking_gaps"], "created_at": a["created_at"]}
+                {
+                    "outcome": a["outcome"],
+                    "policy": a["policy"],
+                    "attested_by": a["attested_by"],
+                    "blocking_gaps": a["blocking_gaps"],
+                    "created_at": a["created_at"],
+                }
                 for a in current_attestation
             ],
             "attested_ready_this_revision": any(
@@ -471,7 +517,9 @@ def _unit(
         },
         "deterministic_refs": {
             "locators_resolve": locator_check,
-            "locators_all_resolve": all(locator_check.values()) if locator_check else None,
+            "locators_all_resolve": all(locator_check.values())
+            if locator_check
+            else None,
         },
         "research_label": None,  # assigned by assign_label below
         "excluded_reason": None,
@@ -502,7 +550,11 @@ def assign_label(unit: dict[str, Any]) -> dict[str, Any]:
             "confidence": "high",
             "rationale": f"{len(finds)} structural finding(s)",
         }
-    if attested and outcome["revision_is_closure_revision"] and closure.get("outcome") == "completed":
+    if (
+        attested
+        and outcome["revision_is_closure_revision"]
+        and closure.get("outcome") == "completed"
+    ):
         return {
             "value": "ready",
             "source": "outcome_anchored",
@@ -622,8 +674,10 @@ def build(out: Path, db_path: Path, caps: dict[str, int]) -> dict[str, Any]:
             "lifecycle": unit["lifecycle_state"],
             "revision_count": len(rows),
             "contract_size_bucket": (
-                "small" if unit["contract_chars"] < 800
-                else "medium" if unit["contract_chars"] < 2400
+                "small"
+                if unit["contract_chars"] < 800
+                else "medium"
+                if unit["contract_chars"] < 2400
                 else "large"
             ),
             "has_attestation": unit["incumbent_state"]["attested_ready_this_revision"],
@@ -640,7 +694,9 @@ def build(out: Path, db_path: Path, caps: dict[str, int]) -> dict[str, Any]:
             return
         key = unit["unit_id"]
         if key in selected:
-            selected[key]["partitions"] = sorted(set(selected[key]["partitions"]) | {partition})
+            selected[key]["partitions"] = sorted(
+                set(selected[key]["partitions"]) | {partition}
+            )
             return
         unit["partitions"] = [partition]
         selected[key] = unit
@@ -687,7 +743,9 @@ def build(out: Path, db_path: Path, caps: dict[str, int]) -> dict[str, Any]:
         (
             i
             for i in issues.values()
-            if contracts.structural_findings(by_issue[i["issue_id"]][-1]["contract"], scrutiny=i["scrutiny"])
+            if contracts.structural_findings(
+                by_issue[i["issue_id"]][-1]["contract"], scrutiny=i["scrutiny"]
+            )
         ),
         key=lambda i: hashlib.sha256(i["issue_id"].encode()).hexdigest(),
     )
@@ -706,7 +764,9 @@ def build(out: Path, db_path: Path, caps: dict[str, int]) -> dict[str, Any]:
     }
 
 
-def distributions(units: list[dict[str, Any]], issues: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def distributions(
+    units: list[dict[str, Any]], issues: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     def _counts(key) -> dict[str, int]:
         return dict(sorted(Counter(key(u) for u in units).items()))
 
@@ -720,7 +780,9 @@ def distributions(units: list[dict[str, Any]], issues: dict[str, dict[str, Any]]
         "contract_size": _counts(lambda u: u["stratum"]["contract_size_bucket"]),
         "contract_chars": {
             "min": min((u["contract_chars"] for u in units), default=0),
-            "median": sorted(u["contract_chars"] for u in units)[len(units) // 2] if units else 0,
+            "median": sorted(u["contract_chars"] for u in units)[len(units) // 2]
+            if units
+            else 0,
             "max": max((u["contract_chars"] for u in units), default=0),
         },
         "incumbent_attested_ready": _counts(
@@ -732,21 +794,43 @@ def distributions(units: list[dict[str, Any]], issues: dict[str, dict[str, Any]]
         "partition": _counts(lambda u: u["split"]["partition"]),
         "partition_x_label": dict(
             sorted(
-                Counter(f"{u['split']['partition']}::{u['research_label']['value']}" for u in units).items()
+                Counter(
+                    f"{u['split']['partition']}::{u['research_label']['value']}"
+                    for u in units
+                ).items()
             )
         ),
         "easy_negative_by_partition": dict(
-            sorted(Counter(u["split"]["partition"] for u in units if u["easy_negative"]).items())
+            sorted(
+                Counter(
+                    u["split"]["partition"] for u in units if u["easy_negative"]
+                ).items()
+            )
         ),
-        "structural_findings": _counts(lambda u: str(len(u["deterministic"]["structural_findings"]))),
+        "structural_findings": _counts(
+            lambda u: str(len(u["deterministic"]["structural_findings"]))
+        ),
         "path_checks": _counts(
-            lambda u: "not_checked" if not u["deterministic"]["referenced_paths"]["checked"]
-            else ("no_paths" if not u["deterministic"]["referenced_paths"]["paths"]
-                  else ("all_exist" if not u["deterministic"]["referenced_paths"]["missing"] else "has_missing"))
+            lambda u: (
+                "not_checked"
+                if not u["deterministic"]["referenced_paths"]["checked"]
+                else (
+                    "no_paths"
+                    if not u["deterministic"]["referenced_paths"]["paths"]
+                    else (
+                        "all_exist"
+                        if not u["deterministic"]["referenced_paths"]["missing"]
+                        else "has_missing"
+                    )
+                )
+            )
         ),
         "locator_checks": _counts(
-            lambda u: "none" if u["deterministic_refs"]["locators_all_resolve"] is None
-            else str(u["deterministic_refs"]["locators_all_resolve"])
+            lambda u: (
+                "none"
+                if u["deterministic_refs"]["locators_all_resolve"] is None
+                else str(u["deterministic_refs"]["locators_all_resolve"])
+            )
         ),
         "superseded": _counts(lambda u: str(u["observed_outcome"]["superseded"])),
         "closure_outcome": _counts(
@@ -760,9 +844,7 @@ def readiness_summary(units: Sequence[dict[str, Any]]) -> dict[str, Any]:
     and how it relates to the research label. This is the incumbent baseline
     read-out; the independent CLI verification of the mirror lives in
     ``packages/research/scripts/verify_planning_ready_mirror.py``."""
-    states = Counter(
-        u["incumbent_state"]["derived_readiness"]["state"] for u in units
-    )
+    states = Counter(u["incumbent_state"]["derived_readiness"]["state"] for u in units)
     agreement = Counter(
         f"{u['incumbent_state']['derived_readiness']['state']}::"
         f"{u['research_label']['value']}"
@@ -772,7 +854,9 @@ def readiness_summary(units: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "derived_state_counts": dict(sorted(states.items())),
         "derived_state_x_label": dict(sorted(agreement.items())),
         "dispatchable_units": sum(
-            1 for u in units if u["incumbent_state"]["derived_readiness"]["dispatchable"]
+            1
+            for u in units
+            if u["incumbent_state"]["derived_readiness"]["dispatchable"]
         ),
         "attested_ready_this_revision": sum(
             1 for u in units if u["incumbent_state"]["attested_ready_this_revision"]
@@ -780,7 +864,13 @@ def readiness_summary(units: Sequence[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def write_dataset(out: Path, units: list[dict[str, Any]], payload: dict[str, Any], readiness: dict[str, Any], caps: dict[str, int]) -> dict[str, Any]:
+def write_dataset(
+    out: Path,
+    units: list[dict[str, Any]],
+    payload: dict[str, Any],
+    readiness: dict[str, Any],
+    caps: dict[str, int],
+) -> dict[str, Any]:
     units_path = out / "units.jsonl"
     with units_path.open("w", encoding="utf-8") as handle:
         for unit in units:
@@ -822,7 +912,9 @@ def write_dataset(out: Path, units: list[dict[str, Any]], payload: dict[str, Any
             "research_label": "source + method + confidence; 'unlabelled' when no independent evidence exists",
         },
         "code_state": code_state,
-        "checkout_provenance": _checkout_provenance({p: Path(path) for p, path in CHECKOUTS.items()}),
+        "checkout_provenance": _checkout_provenance(
+            {p: Path(path) for p, path in CHECKOUTS.items()}
+        ),
         "path_check_status": "advisory: a named path may legitimately not exist yet or exist only on another branch; never a readiness gate",
         "distributions": distributions(units, payload["issues"]),
         "incumbent_readiness": readiness,
@@ -833,7 +925,9 @@ def write_dataset(out: Path, units: list[dict[str, Any]], payload: dict[str, Any
         ),
         "counts": payload["counts"],
     }
-    (out / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (out / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return manifest
 
 
@@ -843,7 +937,9 @@ def main(argv: list[str] | None = None) -> int:
     build_parser = sub.add_parser("build")
     build_parser.add_argument("--out", required=True)
     build_parser.add_argument("--db", default=DEFAULT_DB)
-    build_parser.add_argument("--cap", type=int, default=None, help="override every partition cap")
+    build_parser.add_argument(
+        "--cap", type=int, default=None, help="override every partition cap"
+    )
     args = parser.parse_args(argv)
 
     caps = dict(CAPS)
@@ -854,7 +950,15 @@ def main(argv: list[str] | None = None) -> int:
     units = payload["units"]
     manifest = write_dataset(out, units, payload, readiness_summary(units), caps)
     print(json.dumps(manifest["distributions"], indent=2, sort_keys=True))
-    print(json.dumps({"counts": manifest["counts"], "incumbent_readiness": manifest["incumbent_readiness"]}, indent=2))
+    print(
+        json.dumps(
+            {
+                "counts": manifest["counts"],
+                "incumbent_readiness": manifest["incumbent_readiness"],
+            },
+            indent=2,
+        )
+    )
     print(f"wrote {len(units)} units to {out} ({manifest['units_sha256']})")
     return 0
 

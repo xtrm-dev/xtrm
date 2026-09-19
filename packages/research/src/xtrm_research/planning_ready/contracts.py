@@ -110,7 +110,11 @@ def validate_context_refs(refs: Any) -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     for i, entry in enumerate(refs):
         at = f"contextRefs[{i}]"
-        if not isinstance(entry, dict) or not isinstance(entry.get("key"), str) or not entry["key"].strip():
+        if (
+            not isinstance(entry, dict)
+            or not isinstance(entry.get("key"), str)
+            or not entry["key"].strip()
+        ):
             out.append(
                 {
                     "field": at,
@@ -321,6 +325,8 @@ def contract_text(contract: dict[str, Any]) -> str:
             lines.append(f"{field.upper()}:")
             lines.extend(f"- {item}" for item in _as_strings(value))
     return "\n".join(lines)
+
+
 #: A repository path as it appears in contract text: a token with a slash and a
 #: file-ish tail, or a bare known directory prefix. Deliberately conservative —
 #: a false extraction would be a false deterministic finding.

@@ -54,7 +54,9 @@ MUTATIONS: dict[str, Mutation] = {
         changed_invariant="SUCCESS no longer names observable completion conditions",
         expected_affected={"success_observable": "down"},
         expected_policy_consequence="not READY (DRAFT, or REVIEW while the predicate is uncertain)",
-        apply=lambda c: _with(c, success="The work is done when the improvement is complete."),
+        apply=lambda c: _with(
+            c, success="The work is done when the improvement is complete."
+        ),
     ),
     "static_only_validation": Mutation(
         name="static_only_validation",
@@ -63,7 +65,10 @@ MUTATIONS: dict[str, Mutation] = {
         expected_policy_consequence="not READY (DRAFT)",
         apply=lambda c: _with(
             c,
-            validation=[{"check": "npm run lint passes"}, {"check": "npm run typecheck passes"}],
+            validation=[
+                {"check": "npm run lint passes"},
+                {"check": "npm run typecheck passes"},
+            ],
         ),
     ),
     "introduce_unnamed_decision": Mutation(
@@ -91,7 +96,9 @@ MUTATIONS: dict[str, Mutation] = {
         changed_invariant="CONSTRAINTS no longer state a binding invariant",
         expected_affected={"constraints_actionable": "down"},
         expected_policy_consequence="not READY (DRAFT)",
-        apply=lambda c: _with(c, constraints=["Follow the existing plan and keep things tidy."]),
+        apply=lambda c: _with(
+            c, constraints=["Follow the existing plan and keep things tidy."]
+        ),
     ),
     "chat_only_context": Mutation(
         name="chat_only_context",
@@ -100,7 +107,9 @@ MUTATIONS: dict[str, Mutation] = {
         expected_policy_consequence="DRAFT (fresh-worker test fails)",
         apply=lambda c: _with(
             c,
-            scope=["As discussed in the planning thread: apply the agreed changes to the right places."],
+            scope=[
+                "As discussed in the planning thread: apply the agreed changes to the right places."
+            ],
         ),
     ),
     "over_prescribe_implementation": Mutation(
@@ -226,5 +235,6 @@ def primitive_deltas(
     """Paired probability movement per primitive (mutated minus original)."""
     names = set(original) | set(mutated)
     return {
-        name: (mutated.get(name, 0.0) - original.get(name, 0.0)) for name in sorted(names)
+        name: (mutated.get(name, 0.0) - original.get(name, 0.0))
+        for name in sorted(names)
     }

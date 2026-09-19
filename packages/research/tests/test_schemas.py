@@ -591,8 +591,12 @@ def _experiment_with_semantics(raw_definition, **overrides):
     body = {
         "research_question": "Can the tracker's own judgments separate duplicate pairs?",
         "primary_outcomes": ["auc"],
-        "success_criteria": ["System One AUC exceeds the lexical baseline with a CI95 lower bound above 0."],
-        "falsification_criteria": ["AUC interval overlaps the baseline's or is below it."],
+        "success_criteria": [
+            "System One AUC exceeds the lexical baseline with a CI95 lower bound above 0."
+        ],
+        "falsification_criteria": [
+            "AUC interval overlaps the baseline's or is below it."
+        ],
         "non_claims": ["No claim about runtime cost."],
         "metric_glossary": {
             "auc": {

@@ -68,7 +68,8 @@ def standard_provenance() -> dict[str, Any]:
         out.append(entry)
     return {
         "sources": out,
-        "standard_sha256": "sha256:" + hashlib.sha256(STANDARD.encode("utf-8")).hexdigest(),
+        "standard_sha256": "sha256:"
+        + hashlib.sha256(STANDARD.encode("utf-8")).hexdigest(),
     }
 
 
@@ -183,7 +184,9 @@ def holistic_battery() -> dict[str, dict[str, Any]]:
     return {"executable": HOLISTIC_QUESTION}
 
 
-def question_specs(battery: dict[str, dict[str, Any]], prefix: str) -> dict[str, dict[str, Any]]:
+def question_specs(
+    battery: dict[str, dict[str, Any]], prefix: str
+) -> dict[str, dict[str, Any]]:
     """Registry-shaped QuestionSpec bodies, built through
     :func:`xtrm_research.publish.question_spec` so a Choice derives its
     ``options`` and a Score its ``legend`` from ``criteria`` in exactly one

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any, Sequence
 
 from xtrm_research.planning_ready.questions import MANDATORY_PREDICATES
 
@@ -96,7 +96,9 @@ def explicit_policy(
     if deterministic_findings:
         return {
             "decision": "DRAFT",
-            "reasons": ["deterministic:" + f["message"] for f in deterministic_findings],
+            "reasons": [
+                "deterministic:" + f["message"] for f in deterministic_findings
+            ],
             "uncertain": [],
             "stage": "deterministic",
         }
@@ -106,7 +108,9 @@ def explicit_policy(
     if absent:
         return {
             "decision": "REVIEW",
-            "reasons": [f"no answer recorded for mandatory predicate {q}" for q in absent],
+            "reasons": [
+                f"no answer recorded for mandatory predicate {q}" for q in absent
+            ],
             "uncertain": absent,
             "stage": "answer_completeness",
         }
@@ -116,28 +120,46 @@ def explicit_policy(
         reasons.append(
             f"open_decision={p['open_decision']:.3f} > {thresholds.open_decision_above}"
         )
-        return {"decision": "NEEDS_DECISION", "reasons": reasons, "uncertain": [], "stage": "gate"}
+        return {
+            "decision": "NEEDS_DECISION",
+            "reasons": reasons,
+            "uncertain": [],
+            "stage": "gate",
+        }
     if p.get("self_blocked", 0.0) > thresholds.self_blocked_above:
         reasons.append(
             f"self_blocked={p['self_blocked']:.3f} > {thresholds.self_blocked_above}"
         )
-        return {"decision": "BLOCKED", "reasons": reasons, "uncertain": [], "stage": "gate"}
+        return {
+            "decision": "BLOCKED",
+            "reasons": reasons,
+            "uncertain": [],
+            "stage": "gate",
+        }
     if p.get("depends_on_missing_context", 0.0) > thresholds.missing_context_above:
         reasons.append(
             "depends_on_missing_context="
             f"{p['depends_on_missing_context']:.3f} > {thresholds.missing_context_above}: "
             "the contract fails the fresh-worker test"
         )
-        return {"decision": "DRAFT", "reasons": reasons, "uncertain": [], "stage": "gate"}
+        return {
+            "decision": "DRAFT",
+            "reasons": reasons,
+            "uncertain": [],
+            "stage": "gate",
+        }
 
     false_predicates = [
-        q for q in MANDATORY_PREDICATES if p.get(q, 0.0) < thresholds.mandatory_false_below
+        q
+        for q in MANDATORY_PREDICATES
+        if p.get(q, 0.0) < thresholds.mandatory_false_below
     ]
     if false_predicates:
         return {
             "decision": "DRAFT",
             "reasons": [
-                f"{q}={p[q]:.3f} < {thresholds.mandatory_false_below}" for q in false_predicates
+                f"{q}={p[q]:.3f} < {thresholds.mandatory_false_below}"
+                for q in false_predicates
             ],
             "uncertain": [],
             "stage": "mandatory_predicate",
@@ -146,7 +168,9 @@ def explicit_policy(
     uncertain_predicates = [
         q
         for q in MANDATORY_PREDICATES
-        if thresholds.mandatory_false_below <= p.get(q, 0.0) < thresholds.mandatory_true_above
+        if thresholds.mandatory_false_below
+        <= p.get(q, 0.0)
+        < thresholds.mandatory_true_above
     ]
     uncertainty.extend(uncertain_predicates)
     if uncertain_predicates:
@@ -175,7 +199,9 @@ def explicit_policy(
     return {"decision": "READY", "reasons": [], "uncertain": [], "stage": "ready"}
 
 
-def deterministic_only_policy(deterministic_findings: Sequence[dict[str, str]]) -> dict[str, Any]:
+def deterministic_only_policy(
+    deterministic_findings: Sequence[dict[str, str]],
+) -> dict[str, Any]:
     """Arm B0: no semantic judgment at all — structure only."""
     if deterministic_findings:
         return {
@@ -184,7 +210,12 @@ def deterministic_only_policy(deterministic_findings: Sequence[dict[str, str]]) 
             "uncertain": [],
             "stage": "deterministic",
         }
-    return {"decision": "READY", "reasons": [], "uncertain": [], "stage": "deterministic"}
+    return {
+        "decision": "READY",
+        "reasons": [],
+        "uncertain": [],
+        "stage": "deterministic",
+    }
 
 
 def holistic_policy(nouls: dict[str, float], thresholds: Thresholds) -> dict[str, Any]:
@@ -239,7 +270,9 @@ def feature_vector(
     row = [nouls.get(name, 0.5) for name in NOUL_FEATURES]
     probabilities = {}
     mode_answer = answers.get("execution_mode")
-    if isinstance(mode_answer, dict) and isinstance(mode_answer.get("probabilities"), dict):
+    if isinstance(mode_answer, dict) and isinstance(
+        mode_answer.get("probabilities"), dict
+    ):
         probabilities = mode_answer["probabilities"]
     row.append(float(probabilities.get("repo_only", 0.0)))
     row.append(float(probabilities.get("live_environment", 0.0)))
@@ -264,7 +297,11 @@ def _sigmoid(z: float) -> float:
 
 
 def fit_logistic(
-    rows: Sequence[Sequence[float]], labels: Sequence[int], *, l2: float = 1.0, steps: int = 200
+    rows: Sequence[Sequence[float]],
+    labels: Sequence[int],
+    *,
+    l2: float = 1.0,
+    steps: int = 200,
 ) -> list[float]:
     """Newton-Raphson (IRLS) logistic fit with L2 penalty, pure stdlib.
 
@@ -332,10 +369,16 @@ class LearnedComposition:
         self.weights = list(weights)
         self.threshold = threshold
 
-    def probability(self, deterministic_findings: Sequence[dict[str, str]], answers: dict[str, Any]) -> float:
-        return logistic_probability(self.weights, feature_vector(deterministic_findings, answers))
+    def probability(
+        self, deterministic_findings: Sequence[dict[str, str]], answers: dict[str, Any]
+    ) -> float:
+        return logistic_probability(
+            self.weights, feature_vector(deterministic_findings, answers)
+        )
 
-    def policy(self, deterministic_findings: Sequence[dict[str, str]], answers: dict[str, Any]) -> dict[str, Any]:
+    def policy(
+        self, deterministic_findings: Sequence[dict[str, str]], answers: dict[str, Any]
+    ) -> dict[str, Any]:
         p = self.probability(deterministic_findings, answers)
         decision = "READY" if p >= self.threshold else "DRAFT"
         return {
@@ -346,7 +389,16 @@ class LearnedComposition:
         }
 
     def freeze(self) -> dict[str, Any]:
-        return {"weights": self.weights, "threshold": self.threshold, "features": [*NOUL_FEATURES, *MODE_FEATURES, "deterministic_findings", "intercept"]}
+        return {
+            "weights": self.weights,
+            "threshold": self.threshold,
+            "features": [
+                *NOUL_FEATURES,
+                *MODE_FEATURES,
+                "deterministic_findings",
+                "intercept",
+            ],
+        }
 
 
 # --- calibration ------------------------------------------------------------
@@ -402,7 +454,9 @@ def calibrate_thresholds(
                                     answers_of(answers),
                                     thresholds,
                                 )
-                                predicted.append(1 if decision["decision"] == "READY" else 0)
+                                predicted.append(
+                                    1 if decision["decision"] == "READY" else 0
+                                )
                             observed = [truth[unit["unit_id"]] for unit in units]
                             score = balanced_accuracy(observed, predicted)
                             if math.isnan(score):
@@ -414,11 +468,16 @@ def calibrate_thresholds(
                             )
                             key = (score, -false_ready)
                             if best is None or key > (best[0], best[1]):
-                                best = (score, -false_ready, thresholds, {
-                                    "balanced_accuracy": score,
-                                    "false_ready_count": false_ready,
-                                    "n_train": len(units),
-                                })
+                                best = (
+                                    score,
+                                    -false_ready,
+                                    thresholds,
+                                    {
+                                        "balanced_accuracy": score,
+                                        "false_ready_count": false_ready,
+                                        "n_train": len(units),
+                                    },
+                                )
     if best is None:
         raise ValueError("no threshold configuration scored on the training units")
     _, _, thresholds, detail = best
@@ -461,7 +520,10 @@ def fit_learned_composition(
     """Fit the learned composition on train, then calibrate its threshold on
     the *calibration* partition where one exists (never on test)."""
     rows = [
-        feature_vector(unit["deterministic"]["structural_findings"], answers_by_unit[unit["unit_id"]])
+        feature_vector(
+            unit["deterministic"]["structural_findings"],
+            answers_by_unit[unit["unit_id"]],
+        )
         for unit in units
     ]
     labels = [truth[unit["unit_id"]] for unit in units]
@@ -490,7 +552,9 @@ def fit_learned_composition(
 # --- metrics ----------------------------------------------------------------
 
 
-def classification_metrics(truth: Sequence[int], predicted: Sequence[int]) -> dict[str, Any]:
+def classification_metrics(
+    truth: Sequence[int], predicted: Sequence[int]
+) -> dict[str, Any]:
     """Binary READY metrics with their counts. Rates are None when undefined
     (no positives or no negatives), never a fabricated zero."""
     n = len(truth)
@@ -513,7 +577,9 @@ def classification_metrics(truth: Sequence[int], predicted: Sequence[int]) -> di
         "precision": (tp / (tp + fp)) if (tp + fp) else None,
         "recall": (tp / positives) if positives else None,
         "accuracy": (tp + tn) / n if n else None,
-        "balanced_accuracy": balanced_accuracy(truth, predicted) if (positives and negatives) else None,
+        "balanced_accuracy": balanced_accuracy(truth, predicted)
+        if (positives and negatives)
+        else None,
     }
 
 

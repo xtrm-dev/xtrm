@@ -23,7 +23,9 @@ from pathlib import Path
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", default="~/.xtrm/research/datasets/planning-ready-v2")
+    parser.add_argument(
+        "--dataset", default="~/.xtrm/research/datasets/planning-ready-v2"
+    )
     parser.add_argument("--limit", type=int, default=0)
     args = parser.parse_args()
 
@@ -33,7 +35,9 @@ def main() -> int:
         for line in (dataset / "units.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    current = [u for u in units if u["is_current_revision"] and u["lifecycle_state"] == "open"]
+    current = [
+        u for u in units if u["is_current_revision"] and u["lifecycle_state"] == "open"
+    ]
     if args.limit:
         current = current[: args.limit]
 
@@ -52,10 +56,14 @@ def main() -> int:
         try:
             envelope = json.loads(result.stdout)
         except json.JSONDecodeError:
-            disagreements.append({"locator": unit["locator"], "error": "unparseable sb output"})
+            disagreements.append(
+                {"locator": unit["locator"], "error": "unparseable sb output"}
+            )
             continue
         if not envelope.get("ok"):
-            disagreements.append({"locator": unit["locator"], "error": str(envelope.get("error"))[:200]})
+            disagreements.append(
+                {"locator": unit["locator"], "error": str(envelope.get("error"))[:200]}
+            )
             continue
         data = envelope["data"]
         checked += 1
@@ -65,7 +73,8 @@ def main() -> int:
             for f in unit["deterministic"]["structural_findings"]
         ]
         incumbent_findings = [
-            r for r in (data.get("reasons") or [])
+            r
+            for r in (data.get("reasons") or [])
             if not r.startswith("no current semantic attestation")
             and not r.startswith("unsatisfied blockers")
             and not r.startswith("an active claim")
@@ -77,7 +86,9 @@ def main() -> int:
             structure_agree += 1
 
         derived = unit["incumbent_state"]["derived_readiness"]
-        if derived["state"] == data.get("readinessState") and bool(derived["dispatchable"]) == bool(data.get("dispatchable")):
+        if derived["state"] == data.get("readinessState") and bool(
+            derived["dispatchable"]
+        ) == bool(data.get("dispatchable")):
             state_agree += 1
         else:
             disagreements.append(
@@ -102,8 +113,16 @@ def main() -> int:
         "method": "sb --json issue show per sampled current revision, compared against the frozen dataset mirror",
     }
     out = dataset / "mirror-verification.json"
-    out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({k: v for k, v in report.items() if k != "disagreements"}, indent=2, sort_keys=True))
+    out.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    print(
+        json.dumps(
+            {k: v for k, v in report.items() if k != "disagreements"},
+            indent=2,
+            sort_keys=True,
+        )
+    )
     print(f"wrote {out}")
     return 0 if not disagreements else 1
 

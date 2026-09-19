@@ -1,10 +1,10 @@
 """CLI for the Planning Ready-contract campaign.
 
-    python -m xtrm_research.planning_ready collect --kind atomic
-    python -m xtrm_research.planning_ready mutations
-    python -m xtrm_research.planning_ready arms
-    python -m xtrm_research.planning_ready escalate --max-calls 80
-    python -m xtrm_research.planning_ready report
+python -m xtrm_research.planning_ready collect --kind atomic
+python -m xtrm_research.planning_ready mutations
+python -m xtrm_research.planning_ready arms
+python -m xtrm_research.planning_ready escalate --max-calls 80
+python -m xtrm_research.planning_ready report
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from typing import Any
 
 from xtrm_research.planning_ready import campaign
 from xtrm_research.planning_ready import mutations as mutations_module
-from xtrm_research.planning_ready import policy as policy_module
 from xtrm_research.planning_ready import publish_runs
 from xtrm_research import publish
 
@@ -44,7 +43,11 @@ def cmd_mutations(args: argparse.Namespace) -> int:
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
-    structural = sum(1 for r in rows if r["structurally_valid_after"] and r["structurally_valid_before"])
+    structural = sum(
+        1
+        for r in rows
+        if r["structurally_valid_after"] and r["structurally_valid_before"]
+    )
     print(
         json.dumps(
             {
@@ -65,7 +68,9 @@ def cmd_mutations_collect(args: argparse.Namespace) -> int:
     units = campaign.load_units(Path(args.dataset))
     rows = [
         json.loads(line)
-        for line in (campaign.ANSWERS_DIR / "mutations.jsonl").read_text(encoding="utf-8").splitlines()
+        for line in (campaign.ANSWERS_DIR / "mutations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
         if line.strip()
     ]
     pseudo = campaign.mutation_pseudo_units(units, rows)
@@ -82,7 +87,9 @@ def cmd_arms(args: argparse.Namespace) -> int:
     holistic = campaign.load_answers(campaign._answers_path("holistic"))
     missing = [u["unit_id"] for u in units if u["unit_id"] not in atomic]
     if missing:
-        raise SystemExit(f"{len(missing)} units have no atomic answers (run `collect --kind atomic` first)")
+        raise SystemExit(
+            f"{len(missing)} units have no atomic answers (run `collect --kind atomic` first)"
+        )
 
     evaluation_population = campaign.labelled_units(units)
     composition = campaign.arms_from_answers(evaluation_population, atomic, holistic)
@@ -91,7 +98,9 @@ def cmd_arms(args: argparse.Namespace) -> int:
         Path(args.registry_root), manifest["units_sha256"], dataset_dir
     )
 
-    battery_metrics = publish_runs.primitive_metrics_for_run(evaluation_population, atomic)
+    battery_metrics = publish_runs.primitive_metrics_for_run(
+        evaluation_population, atomic
+    )
     battery_run = publish_runs.publish_battery_run(
         definitions,
         root=Path(args.root),
@@ -108,7 +117,12 @@ def cmd_arms(args: argparse.Namespace) -> int:
     )
 
     published: dict[str, str] = {"jev-battery": battery_run.name}
-    for arm in ("holistic", "deterministic-only", "atomic-explicit-policy", "atomic-learned-composition"):
+    for arm in (
+        "holistic",
+        "deterministic-only",
+        "atomic-explicit-policy",
+        "atomic-learned-composition",
+    ):
         if arm == "holistic" and not holistic:
             continue
         metrics = publish_runs.arm_metrics_for_run(
@@ -124,7 +138,10 @@ def cmd_arms(args: argparse.Namespace) -> int:
                     for k, v in publish_runs.primitive_metrics_for_run(
                         evaluation_population, atomic
                     ).items()
-                    if k.startswith("primitive") or "_auc" in k or "_brier" in k or "_ece" in k
+                    if k.startswith("primitive")
+                    or "_auc" in k
+                    or "_brier" in k
+                    or "_ece" in k
                 }
             )
         run_path = publish_runs.publish_arm_run(
@@ -149,7 +166,27 @@ def cmd_arms(args: argparse.Namespace) -> int:
         )
         published[arm] = run_path.name
 
-    print(json.dumps({"published": published, **{k: v for k, v in composition.items() if k in ("thresholds", "threshold_detail", "holistic_detail", "learned_detail")}}, indent=2, sort_keys=True, default=str))
+    print(
+        json.dumps(
+            {
+                "published": published,
+                **{
+                    k: v
+                    for k, v in composition.items()
+                    if k
+                    in (
+                        "thresholds",
+                        "threshold_detail",
+                        "holistic_detail",
+                        "learned_detail",
+                    )
+                },
+            },
+            indent=2,
+            sort_keys=True,
+            default=str,
+        )
+    )
     return 0
 
 
@@ -250,17 +287,27 @@ def cmd_mutations_supersede(args: argparse.Namespace) -> int:
         args.reason,
         evidence_status="invalid",
     )
-    print(json.dumps({"run": args.run_id, "status": "invalid", "superseded_by": args.replacement}, indent=2))
+    print(
+        json.dumps(
+            {
+                "run": args.run_id,
+                "status": "invalid",
+                "superseded_by": args.replacement,
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
 def cmd_mutations_evaluate(args: argparse.Namespace) -> int:
     dataset_dir = Path(args.dataset)
-    units = campaign.load_units(dataset_dir)
     manifest = _load_manifest(dataset_dir)
     rows = [
         json.loads(line)
-        for line in (campaign.ANSWERS_DIR / "mutations.jsonl").read_text(encoding="utf-8").splitlines()
+        for line in (campaign.ANSWERS_DIR / "mutations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
         if line.strip()
     ]
     atomic = campaign.load_answers(campaign._answers_path("atomic"))
@@ -279,9 +326,17 @@ def cmd_mutations_evaluate(args: argparse.Namespace) -> int:
         mutated_answers=mutated,
         metrics=metrics,
     )
-    print(json.dumps({k: v for k, v in evaluation.items() if k != "classes"}, indent=2, sort_keys=True))
+    print(
+        json.dumps(
+            {k: v for k, v in evaluation.items() if k != "classes"},
+            indent=2,
+            sort_keys=True,
+        )
+    )
     for name, klass in evaluation["classes"].items():
-        print(f"\n{name}: ok={klass['class_ok']} unexpected={klass['unexplained_movement']}")
+        print(
+            f"\n{name}: ok={klass['class_ok']} unexpected={klass['unexplained_movement']}"
+        )
         for check in klass["checks"]:
             print(f"   {check['primitive']}: {check}")
     print(f"\nrun: {run_path.name}")
@@ -301,7 +356,9 @@ def main(argv: list[str] | None = None) -> int:
     p_collect = sub.add_parser("collect")
     p_collect.add_argument("--kind", choices=["atomic", "holistic"], required=True)
     p_collect.add_argument("--workers", type=int, default=6)
-    p_collect.add_argument("--limit", type=int, default=0, help="first N units only, for a smoke test")
+    p_collect.add_argument(
+        "--limit", type=int, default=0, help="first N units only, for a smoke test"
+    )
     p_collect.set_defaults(func=cmd_collect)
 
     p_mut = sub.add_parser("mutations")
