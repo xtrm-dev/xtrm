@@ -345,6 +345,50 @@ could not hold.
 The default root is `~/.xtrm/research/runs`; every API here takes the root
 explicitly, and tests always point it at a tmp directory.
 
+### Run bodies are private, and stay out of git
+
+A run holds the material it ran on: each `samples.jsonl` row carries the input
+(the full contract, ticket or passage), and `events.jsonl` carries the model's
+answers over it. For board and contract workloads that is **private issue
+prose**. The frozen datasets are larger still — one snapshot of the Substrate
+database alone is ~163 MB.
+
+So the split is deliberate and worth keeping:
+
+```text
+in git                       outside git (mode 700, ~/.xtrm/research/)
+  registry/<kind>/<id>.json    runs/<run-id>/**
+  docs/*.md                    datasets/<dataset-id>/**
+  the code that builds both    answers, response caches, budget ledgers
+```
+
+Definitions are in git because a run references them by content hash: without
+the versioned definition a published run cannot be resolved at all. Reports in
+`docs/` are in git because they are the human-readable claim. The bodies are
+not, and pointing a reader at this machine's runs root (`XTRM_RESEARCH_ROOT`, see
+`packages/xtrm-app/README.md` → *Research runs: seeing published runs locally*)
+needs no export and no PR.
+
+### Sharing a run without exporting it
+
+```bash
+./scripts/sanitize_runs.py --out ~/.xtrm/research/shared/board-v2 \
+  --run planning-ready-v2-atomic-explicit --run planning-ready-v2-holistic
+```
+
+`scripts/sanitize_runs.py` copies the named runs and redacts **every string
+value in every copied file** with `guards.redact` — the same rule that decides
+what may be sent to a model at all, which also strips local absolute paths.
+Structure, keys and numbers are preserved, so the copy is still readable by
+`xtrm-research` and by xtrm-app; `index.json` carries each run's headline metrics,
+evidence status and file hashes, and `SANITIZATION.md` states what was and was
+not touched. The tool fails closed: if a redaction rule does not reach a fixpoint
+(observed once, for a replaced value followed by stray punctuation), nothing is
+written. `tests/test_sanitize_runs.py` covers that.
+
+A sanitized copy is a *reading* copy. The original run directory stays the
+evidence of record.
+
 Every operator-supplied identifier that becomes part of a path (`run_id`,
 `assessment_set_id`) must be a single, safe path segment — no `..`, no `/`,
 no absolute paths (`xtrm_research.store.safe_segment`).
