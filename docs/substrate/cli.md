@@ -20,7 +20,7 @@ Global flags: `--db PATH` (else `$SUBSTRATE_DB`, else `~/.xtrm/state.db`),
 - `sb doctor` — store health, repository key, initialization state, bound
   Project, effective override. Exit 0 healthy / 1 otherwise. Takes no verbs.
 
-## issue — 21 verbs
+## issue — 22 verbs
 
 - `issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--scrutiny <LOW|MEDIUM|HIGH|CRITICAL>]` — create; pins the
   seven-field contract at write time. --scrutiny wins when present, otherwise the contract's own scrutiny applies; a missing or invalid value is refused at create naming the accepted levels.
@@ -37,6 +37,7 @@ Global flags: `--db PATH` (else `$SUBSTRATE_DB`, else `~/.xtrm/state.db`),
   explicit semantic sign-off for one contract revision.
 - `issue list [--project <id>]` — all Issues in the Project.
 - `issue ready [--project <id>]` — dispatchable Issues only.
+- `issue query --project <id> [--limit <n>] [--cursor <c>] [--lifecycle <s,...>] [--kind <k,...>] [--readiness <r,...>] [--search <q>]` — one paged board page (rows/nextCursor/hasMore/scanned/truncated).
 - `issue tree [--project <id> | --root <ref>]` / `issue children <ref>` —
   hierarchy views.
 - `issue relate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates>` —

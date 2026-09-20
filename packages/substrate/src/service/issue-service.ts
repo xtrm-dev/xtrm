@@ -22,6 +22,7 @@ import {
   type WorkContract,
 } from "../domain/contract.ts";
 import {
+  TERMINAL_LIFECYCLE,
   deriveReadiness,
   isBlockerSatisfied,
   resolveInheritedContext,
@@ -31,6 +32,20 @@ import {
   type ReadinessReport,
   type ResolvedContext,
 } from "../domain/readiness.ts";
+import {
+  CURSOR_VERSION,
+  MAX_DERIVED_SCAN,
+  MAX_PAGE_LIMIT,
+  SCAN_CHUNK,
+  clampPageLimit,
+  decodeCursor,
+  encodeCursor,
+  queryFilterFingerprint,
+  type BoardOrderKey,
+  type IssueBoardPage,
+  type IssueBoardRow,
+  type IssueQuery,
+} from "../domain/board.ts";
 import { EDGE_KINDS, wouldCreateCycle, type EdgeKind } from "../domain/edge.ts";
 import { DEFAULT_CLAIM_TTL_MS, isLiveClaim, sameHolder, type IssueClaim,
 } from "../domain/claim.ts";
@@ -89,6 +104,10 @@ function row<T>(db: DatabaseSync, sql: string, ...params: SQLInputValue[]): T | 
 
 function rows<T>(db: DatabaseSync, sql: string, ...params: SQLInputValue[]): T[] {
   return db.prepare(sql).all(...params) as T[];
+}
+
+function ph(count: number): string {
+  return Array.from({ length: count }, () => "?").join(", ");
 }
 
 /**
@@ -535,6 +554,397 @@ export class IssueService {
     return rows<Row>(this.db, "SELECT id FROM issues WHERE project_id = ? ORDER BY human_number", projectId).map((r) =>
       this.view(r["id"] as string),
     );
+  }
+
+  // -- bounded board read model (XTRM-393) ----------------------------------
+  //
+  // One page costs a bounded number of statements regardless of how many
+  // issues the project holds: the page rows, their current revisions, latest
+  // attestations, active blockers, open claims, children, and a level-by-level
+  // ancestor walk for locators. Readiness is derived by the same pure
+  // `deriveReadiness` the per-issue path calls, so batched and per-issue
+  // values cannot drift; only the loading changed.
+  /** Bounded, paged board projection: board fields plus derived readiness, no full hydration. */
+  queryIssues(query: IssueQuery, opts?: { now?: number }): IssueBoardPage {
+    const now = opts?.now ?? Date.now();
+    const limit = clampPageLimit(query.limit);
+    const filter = queryFilterFingerprint(query);
+    const project = this.getProject(query.project);
+    const readinessFilter = query.readiness?.length ? new Set<string>(query.readiness) : null;
+    // A derived predicate cannot be pushed into SQL, so it scans in chunks;
+    // the query without it fetches the page plus ONE lookahead row, so
+    // `hasMore` is exact rather than a guess (XTRM-540 defect).
+    const fetchSize = readinessFilter ? SCAN_CHUNK : limit + 1;
+
+    let after: BoardOrderKey | null = query.cursor
+      ? decodeCursor(query.cursor, { project: query.project, filter }).key
+      : null;
+    const out: IssueBoardRow[] = [];
+    let scanned = 0;
+    let truncated = false;
+    let hasMore = false;
+    let lastKey: BoardOrderKey | null = null;
+    let scanKey: BoardOrderKey | null = null;
+
+    const matchesFilter = (row: IssueBoardRow): boolean => !readinessFilter || readinessFilter.has(row.readinessState);
+    for (;;) {
+      const candidates = this.boardCandidates(query, after, fetchSize);
+      if (candidates.length === 0) break;
+      scanned += candidates.length;
+      const staged = this.boardRows(candidates, project.prefix, now);
+      let lastEmitted = -1;
+      for (let i = 0; i < staged.length; i += 1) {
+        const row = staged[i]!;
+        if (!matchesFilter(row)) continue;
+        out.push(row);
+        lastEmitted = i;
+        lastKey = [candidates[i]!["human_number"] as number, row.id];
+        if (out.length === limit) break;
+      }
+      const tail = candidates[candidates.length - 1]!;
+      after = [tail["human_number"] as number, tail["id"] as string];
+      scanKey = after;
+      if (out.length === limit) {
+        // `hasMore` must mean "another row can be emitted", not "the page is
+        // full". The unfiltered path fetched one row past the page, so a
+        // surviving row there is direct evidence; a full batch also leaves
+        // rows unexamined, which is the conservative answer for a derived
+        // predicate whose remaining candidates have not been derived yet.
+        hasMore = staged.slice(lastEmitted + 1).some(matchesFilter) || candidates.length === fetchSize;
+        break;
+      }
+      if (candidates.length < fetchSize) break;
+      if (readinessFilter && scanned >= MAX_DERIVED_SCAN) {
+        truncated = true;
+        hasMore = true;
+        break;
+      }
+    }
+
+    // A truncated derived scan advances from the last SCANNED candidate, not
+    // the last emitted row: every scanned-but-rejected candidate was already
+    // derived, so skipping it is correct, and it is the only way a page that
+    // emitted nothing can still hand the caller a resumable cursor.
+    const resumeKey = truncated ? scanKey : lastKey;
+    return {
+      rows: out,
+      nextCursor:
+        hasMore && resumeKey
+          ? encodeCursor({ v: CURSOR_VERSION, project: query.project, filter, key: [resumeKey[0], resumeKey[1]] })
+          : null,
+      hasMore,
+      scanned,
+      truncated,
+    };
+  }
+
+  /** Walk every page of a board query. Board consumers that must stay
+   * exhaustive (the CLI's `issue list`/`issue ready`, MCP's list/ready, the Pi
+   * search) use this instead of a single page, so their output is unchanged
+   * while the per-issue reads disappear. `maxRows` fails closed rather than
+   * looping forever on a store that keeps growing under the cursor. */
+  queryAllIssues(query: IssueQuery, opts?: { now?: number; maxRows?: number }): IssueBoardRow[] {
+    const maxRows = opts?.maxRows ?? 500_000;
+    const out: IssueBoardRow[] = [];
+    let cursor: string | null = query.cursor ?? null;
+    for (;;) {
+      const page = this.queryIssues({ ...query, cursor, limit: MAX_PAGE_LIMIT }, opts);
+      out.push(...page.rows);
+      if (out.length > maxRows) throw new Error(`board query exceeded maxRows (${maxRows})`);
+      if (!page.hasMore || !page.nextCursor) break;
+      cursor = page.nextCursor;
+      if (page.rows.length === 0 && page.truncated) continue;
+      if (page.rows.length === 0) break;
+    }
+    return out;
+  }
+
+  private boardCandidates(query: IssueQuery, after: BoardOrderKey | null, size: number): Row[] {
+    const where: string[] = ["i.project_id = ?"];
+    const params: SQLInputValue[] = [query.project];
+    if (query.lifecycle?.length) {
+      where.push(`i.lifecycle_state IN (${ph(query.lifecycle.length)})`);
+      params.push(...query.lifecycle);
+    }
+    if (query.kind?.length) {
+      where.push(`i.kind IN (${ph(query.kind.length)})`);
+      params.push(...query.kind);
+    }
+    const search = (query.search ?? "").trim();
+    if (search) {
+      where.push("instr(lower(i.title), lower(?)) > 0");
+      params.push(search);
+    }
+    if (query.parent === null) {
+      where.push(
+        "NOT EXISTS (SELECT 1 FROM issue_edges e WHERE e.to_issue = i.id AND e.kind = 'parent_child' AND e.active = 1)",
+      );
+    } else if (query.parent !== undefined) {
+      where.push(
+        "EXISTS (SELECT 1 FROM issue_edges e WHERE e.to_issue = i.id AND e.kind = 'parent_child' AND e.active = 1 AND e.from_issue = ?)",
+      );
+      params.push(query.parent);
+    }
+    if (after) {
+      // Keyset pagination over the FULL ordering tuple: the tiebreaker keeps
+      // equal sort keys from skipping or repeating rows.
+      where.push("(i.human_number > ? OR (i.human_number = ? AND i.id > ?))");
+      params.push(after[0], after[0], after[1]);
+    }
+    params.push(size);
+    return rows<Row>(
+      this.db,
+      `SELECT i.* FROM issues i WHERE ${where.join(" AND ")} ORDER BY i.human_number, i.id LIMIT ?`,
+      ...params,
+    );
+  }
+
+  private boardRows(issueRows: Row[], prefix: string, now: number): IssueBoardRow[] {
+    const ids = issueRows.map((r) => r["id"] as string);
+    const revisions = this.batchCurrentRevisions(ids);
+    const attestations = this.batchLatestAttestations(ids);
+    const blockers = this.batchBlockers(ids);
+    const claimed = this.batchOpenClaims(ids, now);
+    const locators = this.batchLocators(ids);
+    const children = this.batchChildren(ids);
+
+    return issueRows.map((r) => {
+      const id = r["id"] as string;
+      const revision = r["current_revision"] as number;
+      const rev = revisions.get(id);
+      // The per-issue path throws on a missing revision; fail the same way
+      // rather than deriving readiness from a partial row.
+      if (!rev) throw new Error(`unknown revision ${id}#${revision}`);
+      const own = (blockers.get(id) ?? []).filter((b) => b.lifecycle === null || !isBlockerSatisfied(b.lifecycle));
+      const report = deriveReadiness({
+        issueId: id,
+        revision,
+        contractHash: r["current_contract_hash"] as string,
+        contract: rev.contract,
+        scrutiny: r["scrutiny"] as string,
+        ownership: rev.ownership,
+        contextRefs: rev.contextRefs,
+        lifecycleState: r["lifecycle_state"] as string,
+        deferUntil: (r["defer_until"] as number | null) ?? null,
+        attestation: attestations.get(id) ?? null,
+        unsatisfiedBlockers: own.map((b) => b.id),
+        now,
+        hasActiveClaim: claimed.has(id),
+      });
+      const locator = locators.get(id);
+      const humanRef = formatHumanRef(prefix, r["human_number"] as number);
+      return {
+        id,
+        humanRef,
+        locator: locator?.locator ?? humanRef,
+        title: r["title"] as string,
+        kind: r["kind"] as IssueKind,
+        lifecycleState: r["lifecycle_state"] as LifecycleState,
+        priority: r["priority"] as number,
+        scrutiny: r["scrutiny"] as string,
+        revision,
+        readinessState: report.state,
+        dispatchable: report.dispatchable,
+        claimState: claimed.has(id) ? "claimed" : "none",
+        parentRef: locator?.parentRef ?? null,
+        parentLocator: locator?.parentLocator ?? null,
+        childCount: children.get(id)?.count ?? 0,
+        childrenTerminal: children.get(id)?.terminal ?? 0,
+        blockedBy: own.map((b) => b.ref),
+        createdAt: r["created_at"] as number,
+        updatedAt: r["updated_at"] as number,
+      };
+    });
+  }
+
+  // Latest attestation per issue, in one statement (the per-issue path takes
+  // ORDER BY id DESC LIMIT 1, which is the same row).
+  private batchLatestAttestations(ids: string[]): Map<string, ReadinessAttestation> {
+    const out = new Map<string, ReadinessAttestation>();
+    if (ids.length === 0) return out;
+    for (const r of rows<Row>(
+      this.db,
+      `SELECT a.* FROM readiness_attestations a
+         JOIN (SELECT issue_id, MAX(id) AS max_id FROM readiness_attestations
+                WHERE issue_id IN (${ph(ids.length)}) GROUP BY issue_id) latest
+           ON latest.issue_id = a.issue_id AND latest.max_id = a.id`,
+      ...ids,
+    )) {
+      out.set(r["issue_id"] as string, this.toAttestation(r));
+    }
+    return out;
+  }
+
+  // Current revision per issue, joined on the issue's own revision pointer.
+  private batchCurrentRevisions(
+    ids: string[],
+  ): Map<string, { contract: unknown; ownership: unknown; contextRefs: unknown[] }> {
+    const out = new Map<string, { contract: unknown; ownership: unknown; contextRefs: unknown[] }>();
+    if (ids.length === 0) return out;
+    for (const r of rows<Row>(
+      this.db,
+      `SELECT r.issue_id, r.contract_json, r.ownership_json, r.context_refs_json
+         FROM issue_revisions r
+         JOIN issues i ON i.id = r.issue_id AND i.current_revision = r.revision
+        WHERE r.issue_id IN (${ph(ids.length)})`,
+      ...ids,
+    )) {
+      out.set(r["issue_id"] as string, {
+        contract: JSON.parse(r["contract_json"] as string),
+        ownership: r["ownership_json"] == null ? null : JSON.parse(r["ownership_json"] as string),
+        contextRefs: JSON.parse((r["context_refs_json"] as string) ?? "[]"),
+      });
+    }
+    return out;
+  }
+
+  // Active blockers with their current lifecycle, ordered by blocker id: the
+  // same order and the same satisfaction rule as unsatisfiedBlockers. A LEFT
+  // JOIN keeps a dangling blocker visible as unsatisfied instead of dropping
+  // it (the per-issue path treats an unreadable blocker as unsatisfied).
+  private batchBlockers(ids: string[]): Map<string, Array<{ id: string; ref: string; lifecycle: string | null }>> {
+    const out = new Map<string, Array<{ id: string; ref: string; lifecycle: string | null }>>();
+    if (ids.length === 0) return out;
+    for (const r of rows<Row>(
+      this.db,
+      `SELECT e.to_issue, e.from_issue, b.lifecycle_state, b.human_number, b.project_id, p.prefix
+         FROM issue_edges e
+         LEFT JOIN issues b ON b.id = e.from_issue
+         LEFT JOIN projects p ON p.id = b.project_id
+        WHERE e.kind = 'blocks' AND e.active = 1 AND e.to_issue IN (${ph(ids.length)})
+        ORDER BY e.to_issue, e.from_issue`,
+      ...ids,
+    )) {
+      const target = r["to_issue"] as string;
+      const blockerId = r["from_issue"] as string;
+      const number = r["human_number"] as number | null;
+      const ref = number === null ? blockerId : formatHumanRef(r["prefix"] as string, number);
+      out.set(target, [...(out.get(target) ?? []), { id: blockerId, ref, lifecycle: (r["lifecycle_state"] as string | null) ?? null }]);
+    }
+    return out;
+  }
+
+  // Latest unclosed claim per issue, then the liveness check: identical to
+  // unclosedClaim + isLiveClaim, evaluated in memory.
+  private batchOpenClaims(ids: string[], now: number): Set<string> {
+    const out = new Set<string>();
+    if (ids.length === 0) return out;
+    const seen = new Set<string>();
+    for (const r of rows<Row>(
+      this.db,
+      `SELECT * FROM issue_claims WHERE issue_id IN (${ph(ids.length)}) AND released_at IS NULL ORDER BY issue_id, id DESC`,
+      ...ids,
+    )) {
+      const claim = this.toClaim(r);
+      if (seen.has(claim.issueId)) continue;
+      seen.add(claim.issueId);
+      if (isLiveClaim(claim, now)) out.add(claim.issueId);
+    }
+    return out;
+  }
+
+  // Children counts per issue, with terminal children counted the same way the
+  // board counted them (done/cancelled/archived).
+  private batchChildren(ids: string[]): Map<string, { count: number; terminal: number }> {
+    const out = new Map<string, { count: number; terminal: number }>();
+    if (ids.length === 0) return out;
+    for (const r of rows<Row>(
+      this.db,
+      `SELECT e.from_issue, b.lifecycle_state
+         FROM issue_edges e
+         JOIN issues b ON b.id = e.to_issue
+        WHERE e.kind = 'parent_child' AND e.active = 1 AND e.from_issue IN (${ph(ids.length)})`,
+      ...ids,
+    )) {
+      const parent = r["from_issue"] as string;
+      const cur = out.get(parent) ?? { count: 0, terminal: 0 };
+      cur.count += 1;
+      if ((TERMINAL_LIFECYCLE as readonly string[]).includes(r["lifecycle_state"] as string)) cur.terminal += 1;
+      out.set(parent, cur);
+    }
+    return out;
+  }
+
+  // Locators for a page, resolved a level at a time: the ancestor walk costs
+  // one statement per level, never one per issue (currentLocator walks the
+  // parent chain per issue, which is the same N+1 in a different shape).
+  private batchLocators(
+    ids: string[],
+  ): Map<string, { locator: string; parentRef: string | null; parentLocator: string | null }> {
+    const out = new Map<string, { locator: string; parentRef: string | null; parentLocator: string | null }>();
+    if (ids.length === 0) return out;
+    const parentOf = new Map<string, { from: string; slot: number }>();
+    let frontier = [...ids];
+    while (frontier.length > 0) {
+      const found = rows<Row>(
+        this.db,
+        `SELECT to_issue, from_issue, child_slot FROM issue_edges
+          WHERE kind = 'parent_child' AND active = 1 AND to_issue IN (${ph(frontier.length)})`,
+        ...frontier,
+      );
+      const next: string[] = [];
+      for (const r of found) {
+        const child = r["to_issue"] as string;
+        if (parentOf.has(child)) continue;
+        const from = r["from_issue"] as string;
+        parentOf.set(child, { from, slot: r["child_slot"] as number });
+        next.push(from);
+      }
+      frontier = next;
+    }
+
+    const needed = new Set<string>(ids);
+    for (const [child, parent] of parentOf) {
+      needed.add(child);
+      needed.add(parent.from);
+    }
+    const meta = new Map<string, { number: number; projectId: string }>();
+    for (const r of rows<Row>(
+      this.db,
+      `SELECT id, human_number, project_id FROM issues WHERE id IN (${ph(needed.size)})`,
+      ...needed,
+    )) {
+      meta.set(r["id"] as string, { number: r["human_number"] as number, projectId: r["project_id"] as string });
+    }
+    const projectIds = [...new Set([...meta.values()].map((m) => m.projectId))];
+    const prefixes = new Map<string, string>();
+    if (projectIds.length > 0) {
+      for (const r of rows<Row>(
+        this.db,
+        `SELECT id, prefix FROM projects WHERE id IN (${ph(projectIds.length)})`,
+        ...projectIds,
+      )) {
+        prefixes.set(r["id"] as string, r["prefix"] as string);
+      }
+    }
+    const refOf = (id: string): string => {
+      const m = meta.get(id);
+      return m ? formatHumanRef(prefixes.get(m.projectId) ?? "", m.number) : id;
+    };
+    const locatorOf = (id: string): string => {
+      const slots: number[] = [];
+      const seen = new Set<string>([id]);
+      let cur = id;
+      for (;;) {
+        const edge = parentOf.get(cur);
+        if (!edge) break;
+        slots.unshift(edge.slot);
+        cur = edge.from;
+        if (seen.has(cur)) throw new Error(`fail-closed: parent cycle detected at ${cur}`);
+        seen.add(cur);
+      }
+      const rootRef = refOf(cur);
+      return slots.length === 0 ? rootRef : `${rootRef}.${slots.join(".")}`;
+    };
+    for (const id of ids) {
+      const parent = parentOf.get(id);
+      out.set(id, {
+        locator: locatorOf(id),
+        parentRef: parent ? refOf(parent.from) : null,
+        parentLocator: parent ? locatorOf(parent.from) : null,
+      });
+    }
+    return out;
   }
 
   getRevision(issueId: string, revision: number): IssueRevision {

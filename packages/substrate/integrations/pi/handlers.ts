@@ -119,7 +119,12 @@ function piExecutionContext(opts: {
   });
 }
 
-function summary(i: ResolvedIssue): Record<string, unknown> {
+// Narrow structural input: a board row carries exactly these fields, so the
+// projection feeds the same summary as a hydrated issue without a fabricated
+// ResolvedIssue stand-in.
+type SummaryInput = Pick<ResolvedIssue, "locator" | "humanRef" | "title" | "kind" | "lifecycleState" | "currentRevision">;
+
+function summary(i: SummaryInput): Record<string, unknown> {
   return {
     locator: i.locator,
     humanRef: i.humanRef,
@@ -151,12 +156,25 @@ export function toolIssueSearch(
   svc: SubstrateServices,
   params: { project: string; query?: string; kind?: string },
 ): Array<Record<string, unknown>> {
+  // Bounded board read (XTRM-393): queryAllIssues walks every page of the
+  // board projection, so the result stays exhaustive while the per-issue
+  // reads disappear. Filter matches title, humanRef AND locator exactly as
+  // before; the summary shape below stays untouched.
   const q = (params.query ?? "").toLowerCase();
   return svc.issues
-    .listIssues(params.project)
-    .filter((i) => (params.kind ? i.kind === params.kind : true))
-    .filter((i) => (q ? `${i.title} ${i.humanRef} ${i.locator}`.toLowerCase().includes(q) : true))
-    .map(summary);
+    .queryAllIssues({ project: params.project })
+    .filter((r) => (params.kind ? r.kind === params.kind : true))
+    .filter((r) => (q ? `${r.title} ${r.humanRef} ${r.locator}`.toLowerCase().includes(q) : true))
+    .map((r) =>
+      summary({
+        locator: r.locator,
+        humanRef: r.humanRef,
+        title: r.title,
+        kind: r.kind,
+        lifecycleState: r.lifecycleState,
+        currentRevision: r.revision,
+      }),
+    );
 }
 
 export function toolIssueClaim(

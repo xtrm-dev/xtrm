@@ -40,11 +40,33 @@ export interface WireIssue {
   readinessState?: string;
   dispatchable?: boolean;
 }
-export interface WireExport {
-  issues: Array<{
-    issue: { id: string; kind: string; title: string; lifecycleState: string; priority: number; scrutiny: string; currentRevision: number; createdAt: number; updatedAt: number };
-  }>;
-  edges: Array<{ fromIssue: string; toIssue: string; kind: string; active: boolean; childSlot?: number }>;
+export interface WireProjectionRow {
+  id: string;
+  humanRef: string;
+  locator: string;
+  title: string;
+  kind: string;
+  lifecycleState: string;
+  priority: number;
+  scrutiny: string;
+  revision: number;
+  readinessState: string;
+  dispatchable: boolean;
+  claimState: string;
+  parentRef: string | null;
+  parentLocator: string | null;
+  childCount: number;
+  childrenTerminal: number;
+  blockedBy: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+interface WireBoardPage {
+  rows: WireProjectionRow[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  scanned: number;
+  truncated: boolean;
 }
 export interface WireIssueDetail extends WireIssue {
   readinessState: string;
@@ -93,49 +115,27 @@ export function mapProjects(projects: WireProject[], links: WireLinks): Substrat
   }));
 }
 
-/** Join list (human refs) + export (priority, dates, edges) + ready set into Jira-style rows. No per-issue reads. */
-export function mapBoard(list: WireIssue[], exported: WireExport | null, ready: WireIssue[]): IssueSummary[] {
-  const refById = new Map(list.map((i) => [i.id, i.humanRef]));
-  const locatorById = new Map(list.map((i) => [i.id, i.locator ?? i.humanRef]));
-  const lifecycleById = new Map(list.map((i) => [i.id, i.lifecycleState]));
-  const meta = new Map(exported?.issues.map((r) => [r.issue.id, r.issue]));
-  const readyIds = new Set(ready.filter((r) => r.dispatchable !== false).map((r) => r.id));
-  const parentOf = new Map<string, string>();
-  const children = new Map<string, string[]>();
-  const blockers = new Map<string, string[]>();
-  for (const e of exported?.edges ?? []) {
-    if (!e.active) continue;
-    if (e.kind === "parent_child") {
-      parentOf.set(e.toIssue, e.fromIssue);
-      children.set(e.fromIssue, [...(children.get(e.fromIssue) ?? []), e.toIssue]);
-    } else if (e.kind === "blocks") {
-      blockers.set(e.toIssue, [...(blockers.get(e.toIssue) ?? []), e.fromIssue]);
-    }
-  }
-  return list.map((i) => {
-    const m = meta.get(i.id);
-    const kids = children.get(i.id) ?? [];
-    const parent = parentOf.get(i.id);
-    return {
-      id: i.id,
-      ref: i.humanRef,
-      locator: i.locator ?? i.humanRef,
-      title: i.title,
-      kind: i.kind,
-      lifecycle: i.lifecycleState,
-      revision: i.revision,
-      priority: m ? m.priority : null,
-      scrutiny: m ? m.scrutiny || null : null,
-      createdAt: m?.createdAt ?? null,
-      updatedAt: m?.updatedAt ?? null,
-      parentRef: parent ? (refById.get(parent) ?? null) : null,
-      parentLocator: parent ? (locatorById.get(parent) ?? null) : null,
-      childCount: kids.length,
-      childrenDone: kids.filter((k) => TERMINAL.has(lifecycleById.get(k) ?? "")).length,
-      blockedBy: (blockers.get(i.id) ?? []).filter((b) => !TERMINAL.has(lifecycleById.get(b) ?? "")).map((b) => refById.get(b) ?? b),
-      readiness: readyIds.has(i.id) ? "ready" : "unknown",
-    };
-  });
+/** Map board-projection rows (`sb issue query`) to Jira-style rows. Single-issue fields stay on the detail read. */
+export function mapBoard(rows: WireProjectionRow[]): IssueSummary[] {
+  return rows.map((i) => ({
+    id: i.id,
+    ref: i.humanRef,
+    locator: i.locator,
+    title: i.title,
+    kind: i.kind,
+    lifecycle: i.lifecycleState,
+    revision: i.revision,
+    priority: i.priority,
+    scrutiny: i.scrutiny || null,
+    createdAt: i.createdAt,
+    updatedAt: i.updatedAt,
+    parentRef: i.parentRef,
+    parentLocator: i.parentLocator,
+    childCount: i.childCount,
+    childrenDone: i.childrenTerminal,
+    blockedBy: i.blockedBy,
+    readiness: i.readinessState as IssueSummary["readiness"],
+  }));
 }
 
 const link = (row: IssueSummary): IssueLink => ({ id: row.id, ref: row.ref, locator: row.locator, title: row.title, lifecycle: row.lifecycle, kind: row.kind });
@@ -319,6 +319,8 @@ async function write(path: string, body: Record<string, unknown>): Promise<unkno
 
 // ponytail: one bounded read of full bodies; `sb journal show` has no offset. Page server-side if journals outgrow it.
 export const JOURNAL_READ_LIMIT = 2000;
+// Page size for the board projection walk (`sb issue query`, MAX_PAGE_LIMIT 500).
+export const BOARD_PAGE_LIMIT = 500;
 
 const projectOf = (ref: string) => ref.split("-")[0]?.toUpperCase();
 
@@ -333,13 +335,20 @@ export const liveSubstrate: SubstrateAdapter = {
     return mapProjects(projects, links);
   },
   async listIssues(projectId) {
-    const q = `?project=${encodeURIComponent(projectId)}`;
-    const [list, exported, ready] = await Promise.all([
-      read<WireIssue[]>(`/issues${q}`),
-      read<WireExport>(`/export${q}`).catch(() => null),
-      read<WireIssue[]>(`/ready${q}`),
-    ]);
-    return mapBoard(list, exported, ready);
+    // One projection read per project, walked to exhaustion so the board stays
+    // complete (XTRM-393). Readiness is read from the row, never reconstructed.
+    const rows: WireProjectionRow[] = [];
+    let cursor: string | null = null;
+    for (;;) {
+      const path: string = cursor
+        ? `/query?project=${encodeURIComponent(projectId)}&limit=${BOARD_PAGE_LIMIT}&cursor=${encodeURIComponent(cursor)}`
+        : `/query?project=${encodeURIComponent(projectId)}&limit=${BOARD_PAGE_LIMIT}`;
+      const page: WireBoardPage = await read<WireBoardPage>(path);
+      rows.push(...page.rows);
+      if (!page.hasMore || !page.nextCursor) break;
+      cursor = page.nextCursor;
+    }
+    return mapBoard(rows);
   },
   async getIssue(ref, projectId) {
     const r = `?ref=${encodeURIComponent(ref)}`;

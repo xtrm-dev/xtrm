@@ -42,7 +42,8 @@ import { renderProvenanceTrace } from "../src/presentation/terminal.ts";
 import { assertContractShape, isValidScrutiny, SCRUTINY_LEVELS } from "../src/domain/contract.ts";
 import { enrichExecutionContext } from "../src/domain/execution-context.ts";
 import type { JournalEntry, JournalKind, ResultPayload } from "../src/domain/journal.ts";
-import type { ResolvedIssue } from "../src/domain/issue.ts";
+import type { IssueKind, LifecycleState, ResolvedIssue } from "../src/domain/issue.ts";
+import type { OperationalState } from "../src/domain/readiness.ts";
 
 export const SCHEMA_VERSION = "substrate-cli/v1";
 
@@ -61,7 +62,7 @@ interface Ctx {
 
 // Machine id rides inside the JSON projection only: human() picks named
 // fields, so one-line output never shows the opaque id (display rules).
-function issueSummary(i: ResolvedIssue): Record<string, unknown> {
+function issueSummary(i: IssueSummaryInput): Record<string, unknown> {
   return {
     id: i.id,
     locator: i.locator,
@@ -73,8 +74,42 @@ function issueSummary(i: ResolvedIssue): Record<string, unknown> {
   };
 }
 
-function readySummary(i: ResolvedIssue, state: string, dispatchable: boolean): Record<string, unknown> {
+function readySummary(i: IssueSummaryInput, state: string, dispatchable: boolean): Record<string, unknown> {
   return { ...issueSummary(i), readinessState: state, dispatchable };
+}
+
+// Board-row adapter (XTRM-393): the projection carries every list/ready key
+// the summaries read, so the N+1 reads retire while the 7-key shape below
+// stays untouched. The input is a narrow structural type, never a fabricated
+// ResolvedIssue: a zero-filled stand-in would silently answer future fields.
+interface IssueSummaryInput {
+  id: string;
+  locator: string;
+  humanRef: string;
+  title: string;
+  kind: IssueKind;
+  lifecycleState: LifecycleState;
+  currentRevision: number;
+}
+
+function boardRowSummaryInput(r: {
+  id: string;
+  locator: string;
+  humanRef: string;
+  title: string;
+  kind: IssueKind;
+  lifecycleState: LifecycleState;
+  revision: number;
+}): IssueSummaryInput {
+  return {
+    id: r.id,
+    locator: r.locator,
+    humanRef: r.humanRef,
+    title: r.title,
+    kind: r.kind,
+    lifecycleState: r.lifecycleState,
+    currentRevision: r.revision,
+  };
 }
 
 // ProvenanceTraceSummary shape surfaced early: Phase 8 owns receipts and
@@ -309,7 +344,7 @@ usage:
 
 groups:
   init        initialize this repository (bind it to a Project; idempotent)
-  issue       create|show|edit|note|validate|attest|list|ready|tree|children|relate|unrelate|claim|release|state|close|reopen|defer|cancel|archive|resume
+  issue       create|show|edit|note|validate|attest|list|ready|query|tree|children|relate|unrelate|claim|release|state|close|reopen|defer|cancel|archive|resume
   project     create|link|unlink|list|show|links|repair
   plan        check|apply
   journal     append|checkpoint|show|since|latest|timeline|render
@@ -373,6 +408,7 @@ project mapping (informational; never flips health).`,
   validate <ref>
   attest <ref> --outcome <ready|reject> --policy <p> --attested-by <who> [--project <id>] [--evidence-refs <a,b>] [--blocking-gaps <a,b>]
   list [--project <id>] | ready [--project <id>]
+  query --project <id> [--limit <n>] [--cursor <c>] [--lifecycle <s,...>] [--kind <k,...>] [--readiness <r,...>] [--search <q>]
   tree [--project <id> | --root <ref>] | children <ref>
   relate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates> [--project <id>]
   unrelate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates> [--project <id>]
@@ -429,6 +465,9 @@ reports readiness state, structural validity, attestation currency, blockers.`,
   "issue.ready": `usage: sb issue ready [--project <id>]
 
 lists dispatchable issues only.`,
+  "issue.query": `usage: sb issue query --project <id> [--limit <n>] [--cursor <c>] [--lifecycle <s,...>] [--kind <k,...>] [--readiness <r,...>] [--search <q>]
+
+emits one paged board page unchanged (rows/nextCursor/hasMore/scanned/truncated). Human mode renders the rows only; --json carries the full envelope.`,
   "issue.tree": `usage: sb issue tree [--project <id> | --root <ref>]`,
   "issue.children": `usage: sb issue children <ref>`,
   "issue.relate": `usage: sb issue relate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates> [--project <id>]
@@ -840,6 +879,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.attest": ["project", "outcome", "policy", "attested-by", "evidence-refs", "blocking-gaps"],
   "issue.list": ["project"],
   "issue.ready": ["project"],
+  "issue.query": ["project", "limit", "cursor", "lifecycle", "kind", "readiness", "search"],
   "issue.tree": ["project", "root"],
   "issue.children": [],
   "issue.relate": ["project", "from", "to", "kind"],
@@ -1261,17 +1301,48 @@ function runIssue(
       });
     }
     case "list": {
+      // Bounded board read (XTRM-393): queryAllIssues walks every page of
+      // the board projection, so the output stays exhaustive while the
+      // per-issue reads disappear. issueSummary below keeps the 7-key shape.
       const project = projectOf(svc, flags);
-      return emit(ctx, command, svc.listIssues(project).map(issueSummary));
+      return emit(ctx, command, svc.queryAllIssues({ project }).map((r) => issueSummary(boardRowSummaryInput(r))));
     }
     case "ready": {
+      // deriveReadiness sets dispatchable = state === "ready", so selecting
+      // readiness: ["ready"] rows is exactly what getReadiness(id).dispatchable
+      // selects today. queryAllIssues keeps the walk exhaustive.
       const project = projectOf(svc, flags);
-      const out = [];
-      for (const i of svc.listIssues(project)) {
-        const r = svc.getReadiness(i.id);
-        if (r.dispatchable) out.push(readySummary(i, r.state, true));
-      }
-      return emit(ctx, command, out);
+      return emit(
+        ctx,
+        command,
+        // r.dispatchable, never a literal: the filter already selects ready rows, but
+        // a literal would silently disagree if the derivation ever changed (XTRM-545 F2).
+        svc
+          .queryAllIssues({ project, readiness: ["ready"] })
+          .map((r) => readySummary(boardRowSummaryInput(r), r.readinessState, r.dispatchable)),
+      );
+    }
+    case "query": {
+      // Paged board read (XTRM-393): emits the IssueBoardPage unchanged
+      // (rows/nextCursor/hasMore/scanned/truncated). Human mode renders the
+      // rows only; the full envelope is one --json flag away.
+      const project = projectOf(svc, flags);
+      const list = (name: string): string[] | undefined => {
+        const raw = flag(flags, name);
+        if (raw === undefined) return undefined;
+        return String(raw).split(",").map((e) => e.trim()).filter((e) => e.length > 0);
+      };
+      const page = svc.queryIssues({
+        project,
+        limit: flag(flags, "limit") !== undefined ? Number(flag(flags, "limit")) : undefined,
+        cursor: flag(flags, "cursor"),
+        lifecycle: (list("lifecycle") ?? undefined) as LifecycleState[] | undefined,
+        kind: (list("kind") ?? undefined) as IssueKind[] | undefined,
+        readiness: (list("readiness") ?? undefined) as OperationalState[] | undefined,
+        search: flag(flags, "search") ?? undefined,
+      });
+      if (ctx.json) return emit(ctx, command, page);
+      return emit(ctx, command, page.rows.map((r) => readySummary(boardRowSummaryInput(r), r.readinessState, r.dispatchable)));
     }
     case "tree": {
       const root = flag(flags, "root");

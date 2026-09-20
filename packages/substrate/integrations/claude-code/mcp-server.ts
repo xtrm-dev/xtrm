@@ -109,6 +109,37 @@ function issueSummaryJson(i: {
   };
 }
 
+// Board-row adapter (XTRM-393): the projection carries every list/ready key
+// the summary needs without the full hydration, so the N+1 reads retire
+// while the 7-key issueSummaryJson shape above stays untouched.
+function boardRowAsSummaryInput(r: {
+  id: string;
+  locator: string;
+  humanRef: string;
+  title: string;
+  kind: string;
+  lifecycleState: string;
+  revision: number;
+}): {
+  id: string;
+  locator: string;
+  humanRef: string;
+  title: string;
+  kind: string;
+  lifecycleState: string;
+  currentRevision: number;
+} {
+  return {
+    id: r.id,
+    locator: r.locator,
+    humanRef: r.humanRef,
+    title: r.title,
+    kind: r.kind,
+    lifecycleState: r.lifecycleState,
+    currentRevision: r.revision,
+  };
+}
+
 function entryJson(e: JournalEntry): Record<string, unknown> {
   return {
     id: e.id,
@@ -219,7 +250,12 @@ const TOOL_DEFS: ToolDef[] = [
       const handles = openHandles(dbPath as string | undefined);
       try {
         const projectId = resolveProjectId(handles.svc, project as string | undefined);
-        return textPayload(handles.svc.listIssues(projectId).map(issueSummaryJson));
+        // Bounded board read (XTRM-393): queryAllIssues walks every page of
+        // the board projection, so the listing stays exhaustive while the
+        // per-issue reads disappear. Shape stays the 7-key issueSummaryJson.
+        return textPayload(
+          handles.svc.queryAllIssues({ project: projectId }).map((r) => issueSummaryJson(boardRowAsSummaryInput(r))),
+        );
       } finally {
         handles.db.close();
       }
@@ -239,12 +275,16 @@ const TOOL_DEFS: ToolDef[] = [
       const handles = openHandles(dbPath as string | undefined);
       try {
         const projectId = resolveProjectId(handles.svc, project as string | undefined);
-        const out = [];
-        for (const i of handles.svc.listIssues(projectId)) {
-          const r = handles.svc.getReadiness(i.id);
-          if (r.dispatchable) out.push({ ...issueSummaryJson(i), readinessState: r.state, dispatchable: true });
-        }
-        return textPayload(out);
+        // deriveReadiness sets dispatchable = state === "ready", so selecting
+        // readiness: ["ready"] rows is exactly what getReadiness(id).dispatchable
+        // selects today. queryAllIssues keeps the walk exhaustive.
+        return textPayload(
+          handles.svc
+            .queryAllIssues({ project: projectId, readiness: ["ready"] })
+            // r.dispatchable rather than a literal, so this cannot drift from the
+            // derivation the filter depends on (XTRM-545 F2).
+            .map((r) => ({ ...issueSummaryJson(boardRowAsSummaryInput(r)), readinessState: r.readinessState, dispatchable: r.dispatchable })),
+        );
       } finally {
         handles.db.close();
       }

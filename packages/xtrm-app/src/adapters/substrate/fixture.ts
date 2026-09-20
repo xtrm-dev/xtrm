@@ -56,7 +56,7 @@ function seed(): Map<string, Record_> {
         childCount: i === 0 ? 7 : 0,
         childrenDone: i === 0 ? 1 : 0,
         blockedBy: i === 4 ? ["XTRM-305"] : [],
-        readiness: lifecycle === "open" && i % 3 === 1 ? "ready" : "unknown",
+        readiness: lifecycle === "open" && i % 3 === 1 ? "ready" : "draft",
       },
       contract: imported
         ? {
@@ -199,7 +199,7 @@ export function createFixtureSubstrate(): SubstrateAdapter {
           childCount: 0,
           childrenDone: 0,
           blockedBy: [],
-          readiness: "unknown",
+          readiness: "draft",
         },
         contract: input.contract,
         journal: [],
