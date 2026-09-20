@@ -1315,7 +1315,11 @@ function runIssue(
       return emit(
         ctx,
         command,
-        svc.queryAllIssues({ project, readiness: ["ready"] }).map((r) => readySummary(boardRowSummaryInput(r), r.readinessState, true)),
+        // r.dispatchable, never a literal: the filter already selects ready rows, but
+        // a literal would silently disagree if the derivation ever changed (XTRM-545 F2).
+        svc
+          .queryAllIssues({ project, readiness: ["ready"] })
+          .map((r) => readySummary(boardRowSummaryInput(r), r.readinessState, r.dispatchable)),
       );
     }
     case "query": {

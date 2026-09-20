@@ -281,7 +281,9 @@ const TOOL_DEFS: ToolDef[] = [
         return textPayload(
           handles.svc
             .queryAllIssues({ project: projectId, readiness: ["ready"] })
-            .map((r) => ({ ...issueSummaryJson(boardRowAsSummaryInput(r)), readinessState: r.readinessState, dispatchable: true })),
+            // r.dispatchable rather than a literal, so this cannot drift from the
+            // derivation the filter depends on (XTRM-545 F2).
+            .map((r) => ({ ...issueSummaryJson(boardRowAsSummaryInput(r)), readinessState: r.readinessState, dispatchable: r.dispatchable })),
         );
       } finally {
         handles.db.close();
