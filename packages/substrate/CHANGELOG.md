@@ -31,23 +31,11 @@ values agree exactly; only the loading changed.
   journal entries and readiness reasons stay behind the single-issue read.
 - New: `sb issue query --project <id> [--limit] [--cursor] [--lifecycle]
   [--kind] [--readiness] [--search]`, emitting the page unchanged under `--json`.
-- Migration `v13` adds the two edge indices the board projection actually uses,
-  by plan evidence on a 20,000-issue project: `issue_edges(to_issue, kind,
-  active)` and `issue_edges(from_issue, kind, active)`, both covering, serving
-  blocker loads, child counts and the root-only `NOT EXISTS` filter. No
-  issues-side index is added: the `UNIQUE (project_id, human_number)` autoindex
-  already serves the board filter and its ordering with an early `LIMIT` exit,
-  and two candidates (`project_lifecycle`, `project_updated`) were measured and
-  never selected, so they were dropped rather than shipped unused.
 - `sb issue list`, `sb issue ready`, MCP `issue_list`/`issue_ready` and the Pi
   issue search read through the projection. Their output is unchanged; `list`
   and `ready` still return every issue by walking pages.
 - Root exports: `domain/board.ts` and `domain/readiness.ts` are now exported from
   the package root, which previously did not export the readiness types.
-
-A client older than this release fails closed against a `v13` database
-(`fail-closed: unknown migration version 13 in database`), so upgrade clients
-together.
 
 ## [0.2.1] - 2026-09-18
 
