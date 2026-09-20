@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import type { DatabaseSync } from "../src/store/database.ts";
-import { TERMINAL_LIFECYCLE } from "../src/domain/readiness.ts";
+import { TERMINAL_LIFECYCLE, registerScrutinyPolicy } from "../src/domain/readiness.ts";
 import { BOARD_ROW_FIELDS, DEFAULT_PAGE_LIMIT, type IssueBoardRow } from "../src/domain/board.ts";
 import { contract } from "./helpers.ts";
 
@@ -285,10 +285,16 @@ describe("queryIssues query count", () => {
       const page = counted.queryIssues({ project: "prj_count", limit: DEFAULT_PAGE_LIMIT });
       const used = counter.statements();
       assert.equal(page.rows.length, DEFAULT_PAGE_LIMIT);
-      assert.equal(page.hasMore, true);
+      // Exactly 200 issues at limit 200 means the data ends at the page edge:
+      // hasMore must be false there, not "the page filled". This assertion
+      // used to say `true`, which encoded the phantom-cursor defect XTRM-540
+      // reported; the lookahead row fixed it.
+      assert.equal(page.hasMore, size > DEFAULT_PAGE_LIMIT);
+      assert.equal(page.nextCursor !== null, size > DEFAULT_PAGE_LIMIT);
       assert.ok(used <= BOUND, `page cost ${used} statements, expected <= ${BOUND}`);
-      // The page must not read the whole project to fill itself.
-      assert.equal(page.scanned, DEFAULT_PAGE_LIMIT, "scanned exactly the page, no wider hydration");
+      // The page must not read the whole project to fill itself: at most the
+      // page plus the single lookahead row, and no lookahead when data ends.
+      assert.equal(page.scanned, Math.min(size, DEFAULT_PAGE_LIMIT + 1), "page (+ lookahead), no wider hydration");
       db.close();
     });
   }
@@ -475,6 +481,73 @@ describe("board row payload", () => {
       assert.ok(!serialized.includes(forbidden), `row leaked ${forbidden}`);
     }
     assert.equal(row.claimState, "none");
+    db.close();
+  });
+});
+
+// -- review-seeded edge cases ----------------------------------------------
+// Named by the XTRM-543 second-opinion review as properties its own reading
+// could not settle, and by XTRM-540's gap list.
+
+describe("review-seeded edge cases", () => {
+  it("resolves the attestation tie by the highest id on both paths", () => {
+    // getReadiness reads ORDER BY id DESC LIMIT 1; the loader reads MAX(id).
+    // A "latest READY attestation" shortcut answers `ready` here and diverges.
+    const { db, svc } = tempService();
+    const project = svc.createProject({ id: "prj_tie", prefix: "TIE", name: "tie" }).id;
+    const rejectedLast = svc.createIssue({ projectId: project, title: "rejected last", kind: "task", contract: contract(), scrutiny: "LOW" });
+    svc.attestReadiness(rejectedLast.id, { outcome: "ready", policy: "default", attestedBy: "t" });
+    svc.attestReadiness(rejectedLast.id, { outcome: "reject", policy: "default", attestedBy: "t" });
+    const readyLast = svc.createIssue({ projectId: project, title: "ready last", kind: "task", contract: contract(), scrutiny: "LOW" });
+    svc.attestReadiness(readyLast.id, { outcome: "reject", policy: "default", attestedBy: "t" });
+    svc.attestReadiness(readyLast.id, { outcome: "ready", policy: "default", attestedBy: "t" });
+
+    const rows = byId(svc.queryIssues({ project, limit: 50 }).rows);
+    const first = svc.getReadiness(rejectedLast.id);
+    const second = svc.getReadiness(readyLast.id);
+    assert.equal(first.state, "draft", "the newest attestation rejects");
+    assert.equal(second.state, "ready", "the newest attestation authorizes");
+    assert.equal(rows.get(rejectedLast.id)!.readinessState, first.state);
+    assert.equal(rows.get(readyLast.id)!.readinessState, second.state);
+    db.close();
+  });
+
+  it("keeps a dangling blocker edge impossible, which is why the loader LEFT JOINs", () => {
+    // The defensive LEFT JOIN in batchBlockers cannot be exercised by data:
+    // the store turns foreign keys on, so a blocker that does not exist is
+    // refused at write time. Pinning the invariant is the honest version of
+    // an "untested" case.
+    const { db, svc } = tempService();
+    const project = svc.createProject({ id: "prj_fk", prefix: "FK", name: "fk" }).id;
+    const target = svc.createIssue({ projectId: project, title: "target", kind: "task", contract: contract(), scrutiny: "LOW" });
+    const pragma = db.prepare("PRAGMA foreign_keys").get() as { foreign_keys: number };
+    assert.equal(pragma.foreign_keys, 1, "the store opens with foreign keys enforced");
+    assert.throws(
+      () =>
+        db
+          .prepare(
+            `INSERT INTO issue_edges (from_issue, to_issue, kind, child_slot, active, created_at)
+             VALUES ('iss_does_not_exist', ?, 'blocks', NULL, 1, 1)`,
+          )
+          .run(target.id),
+      /FOREIGN KEY/i,
+      "a dangling blocker edge is refused by the database",
+    );
+    assert.deepEqual(svc.queryIssues({ project, limit: 10 }).rows[0]!.blockedBy, []);
+    db.close();
+  });
+
+  it("applies the scrutiny policy to the batched path too", () => {
+    const { db, svc } = tempService();
+    registerScrutinyPolicy({ ref: "xtrm393-only-high", allow: (level) => level === "HIGH" });
+    const project = svc.createProject({ id: "prj_pol", prefix: "POL", name: "pol" }).id;
+    const issue = svc.createIssue({ projectId: project, title: "low scrutiny", kind: "task", contract: contract(), scrutiny: "LOW" });
+    svc.attestReadiness(issue.id, { outcome: "ready", policy: "xtrm393-only-high", attestedBy: "t" });
+    const report = svc.getReadiness(issue.id);
+    const row = svc.queryIssues({ project, limit: 10 }).rows.find((r) => r.id === issue.id)!;
+    assert.equal(report.state, "draft", "the policy denies LOW scrutiny");
+    assert.equal(row.readinessState, report.state, "the batched path rechecks the policy too");
+    assert.equal(row.dispatchable, false);
     db.close();
   });
 });

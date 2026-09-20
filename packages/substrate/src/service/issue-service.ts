@@ -572,8 +572,9 @@ export class IssueService {
     const project = this.getProject(query.project);
     const readinessFilter = query.readiness?.length ? new Set<string>(query.readiness) : null;
     // A derived predicate cannot be pushed into SQL, so it scans in chunks;
-    // the query without it fetches exactly the page and stops.
-    const fetchSize = readinessFilter ? SCAN_CHUNK : limit;
+    // the query without it fetches the page plus ONE lookahead row, so
+    // `hasMore` is exact rather than a guess (XTRM-540 defect).
+    const fetchSize = readinessFilter ? SCAN_CHUNK : limit + 1;
 
     let after: BoardOrderKey | null = query.cursor
       ? decodeCursor(query.cursor, { project: query.project, filter }).key
@@ -585,23 +586,31 @@ export class IssueService {
     let lastKey: BoardOrderKey | null = null;
     let scanKey: BoardOrderKey | null = null;
 
+    const matchesFilter = (row: IssueBoardRow): boolean => !readinessFilter || readinessFilter.has(row.readinessState);
     for (;;) {
       const candidates = this.boardCandidates(query, after, fetchSize);
       if (candidates.length === 0) break;
       scanned += candidates.length;
       const staged = this.boardRows(candidates, project.prefix, now);
+      let lastEmitted = -1;
       for (let i = 0; i < staged.length; i += 1) {
-        const candidate = staged[i]!;
-        if (readinessFilter && !readinessFilter.has(candidate.readinessState)) continue;
-        out.push(candidate);
-        lastKey = [candidates[i]!["human_number"] as number, candidate.id];
+        const row = staged[i]!;
+        if (!matchesFilter(row)) continue;
+        out.push(row);
+        lastEmitted = i;
+        lastKey = [candidates[i]!["human_number"] as number, row.id];
         if (out.length === limit) break;
       }
       const tail = candidates[candidates.length - 1]!;
       after = [tail["human_number"] as number, tail["id"] as string];
       scanKey = after;
       if (out.length === limit) {
-        hasMore = true;
+        // `hasMore` must mean "another row can be emitted", not "the page is
+        // full". The unfiltered path fetched one row past the page, so a
+        // surviving row there is direct evidence; a full batch also leaves
+        // rows unexamined, which is the conservative answer for a derived
+        // predicate whose remaining candidates have not been derived yet.
+        hasMore = staged.slice(lastEmitted + 1).some(matchesFilter) || candidates.length === fetchSize;
         break;
       }
       if (candidates.length < fetchSize) break;

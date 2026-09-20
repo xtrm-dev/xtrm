@@ -76,7 +76,8 @@ export interface IssueBoardPage {
    * is exhausted. */
   nextCursor: string | null;
   hasMore: boolean;
-  /** Candidate rows loaded to fill this page. */
+  /** Candidate rows loaded to serve this page, including the single
+   * lookahead row an unfiltered page fetches so `hasMore` is exact. */
   scanned: number;
   /** True when a derived-predicate scan hit its cap before the page filled. */
   truncated: boolean;

@@ -345,7 +345,12 @@ describe("honest page metadata", () => {
     let total = 0;
     for (;;) {
       const page = svc.queryIssues({ project, limit: 2, cursor });
-      assert.equal(page.scanned, page.rows.length, "unfiltered pages load exactly what they emit");
+      // An unfiltered page loads one candidate past the page: that lookahead
+      // row is what makes `hasMore` exact instead of a guess, and it is real
+      // work, so it is counted.
+      // A full page loads one lookahead row (that is what makes hasMore
+      // exact); the final page has no row beyond it, so nothing extra loads.
+      assert.equal(page.scanned, page.rows.length + (page.hasMore ? 1 : 0), "page plus lookahead when more remains");
       assert.equal(page.truncated, false);
       total += page.rows.length;
       if (!page.hasMore || !page.nextCursor) break;
@@ -360,14 +365,12 @@ describe("honest page metadata", () => {
     db.close();
   });
 
-  it("KNOWN DEFECT: a page that fills exactly at the end still promises a cursor", () => {
-    // Six issues at limit 3: the second page emits the last three rows AND
-    // sets hasMore with a cursor, but resuming yields an empty final page.
-    // The cursor is not wrong (the walk still terminates lossless), but it is
-    // a phantom: one wasted round trip per exactly-divisible walk. Smallest
-    // fix without changing the shape: fetch limit+1 candidates (or peek for a
-    // next row) and set hasMore from whether a row remains, not from whether
-    // the page filled. Reported, not fixed (bead scope is tests only).
+  it("a page that fills exactly at the end does not promise a phantom cursor", () => {
+    // Six issues at limit 3: the second page emits the last three rows and the
+    // data ends there, so hasMore must be false and no cursor may be handed
+    // back. Before the fix it promised a cursor whose page was empty (XTRM-540
+    // reported the defect; the fix fetches one lookahead row so hasMore is
+    // decided by whether a row remains, not by whether the page filled).
     const { db, svc } = tempService();
     const project = svc.createProject({ id: "prj_exact", prefix: "EX", name: "exact" }).id;
     for (let i = 0; i < 6; i += 1) {
@@ -375,15 +378,14 @@ describe("honest page metadata", () => {
     }
     const p1 = svc.queryIssues({ project, limit: 3 });
     assert.equal(p1.rows.length, 3);
-    assert.equal(p1.hasMore, true);
+    assert.equal(p1.hasMore, true, "three rows remain after the first page");
     const p2 = svc.queryIssues({ project, limit: 3, cursor: p1.nextCursor });
     assert.equal(p2.rows.length, 3, "the last three rows");
-    assert.equal(p2.hasMore, true, "DEFECT: promises more although the data ends here");
-    assert.ok(p2.nextCursor, "DEFECT: hands back a cursor for an empty tail");
-    const p3 = svc.queryIssues({ project, limit: 3, cursor: p2.nextCursor });
-    assert.equal(p3.rows.length, 0, "the promised page is empty");
-    assert.equal(p3.hasMore, false);
-    assert.equal(p3.nextCursor, null);
+    assert.equal(p2.hasMore, false, "the data ends here, so hasMore is false");
+    assert.equal(p2.nextCursor, null, "no cursor for a tail that does not exist");
+    // The walk is still lossless over exactly two pages.
+    const walked = [...p1.rows, ...p2.rows].map((r) => r.id);
+    assert.equal(new Set(walked).size, 6, "every issue exactly once");
     db.close();
   });
 
