@@ -362,6 +362,8 @@ Each adapter exposes an interface plus at least two implementations: the live im
 
 **Substrate integration blocker (re-`VERIFIED` @ `fdf2951`).** `packages/substrate/package.json` now declares `main: ./src/index.ts` but still has no `exports` or `types`; `src/domain/readiness.ts` is still not root-exported; `IssueService.listIssues(projectId)` still resolves one full `view()` per issue with no filter, pagination, or cursor; readiness is still per-issue (`getReadiness`), so a list with readiness is N+1; there is still no change feed. Consequence for the executable prototype:
 
+> **Resolved for the list path (XTRM-393, 2026-09-19).** The blocker above described `fdf2951`. `domain/readiness.ts` and `domain/board.ts` are now root-exported; `queryIssues`/`queryAllIssues` replace the per-issue `view()` with a bounded, filtered, cursor-paginated projection that derives readiness in the same pass; and the Console board consumes it in one read. `package.json` still has no `exports`/`types` field, and the change feed is deferred (see §16.4 and R4b).
+
 1. Build the Issues surface against `adapters/substrate` with the typed fixture when a bounded project listing with readiness is not available through the typed service.
 2. The live implementation may call `listIssues` + `getReadiness` for a bounded project (small N) and must record the query cost.
 3. Report the exact missing API (batched listing with readiness, pagination/cursor, root-exported readiness types, change feed) as a Substrate issue. Do not work around it by reading SQLite.
@@ -448,8 +450,10 @@ Wave C may start in parallel with B only if the query layer is settled first; wa
 |---|---|---|---|
 | R1 | ~~Placement P1 vs P2 unresolved~~ — resolved: P1 `ACCEPTED` 2026-09-16 | `ACCEPTED` | §1 |
 | R2 | `packages/substrate/package.json` has `main` (added since the audit) but no `exports`/`types`; readiness types are not root-exported | `VERIFIED` @ `fdf2951` | export `domain/readiness.ts` and add `exports`/`types`; until then `adapters/substrate` deep-imports inside the monorepo and the Issues UI may run on the typed fixture (§9.3) |
+| R2b | **RESOLVED (XTRM-393, 2026-09-19):** `domain/readiness.ts` and `domain/board.ts` are root-exported from `packages/substrate/src/index.ts` | `VERIFIED` on branch `feat/substrate-query-issues` | `exports`/`types` in `package.json` remain unset; deep imports still work inside the monorepo |
 | R3 | Console `resolveStateDaemonPaths` resolves `~/.xtrm/state.db`, identical to Substrate's canonical path | `VERIFIED` | resolve ownership explicitly before activating any Console state daemon; two schemas in one file is data loss |
 | R4 | Substrate has no bulk query, pagination, or change feed; `ready()` is N+1 | `VERIFIED` @ `fdf2951` | wave E reads a bounded project or the typed fixture; file a Substrate issue for a batched listing with readiness, cursor, and change feed before any large-fleet UI (§9.3) |
+| R4b | **RESOLVED for listing + pagination (XTRM-393, 2026-09-19):** `IssueService.queryIssues`/`queryAllIssues` returns a bounded board page with readiness derived in the same pass, SQL-level filters and keyset cursors over the full ordering tuple; `sb issue query` exposes it and the Console board reads it in one call. The change feed remains open and is deferred with a recorded reason (see §16.4). | `VERIFIED` on branch `feat/substrate-query-issues` | `WorkItemStore.ready`/`search` still map `getReadiness` per issue: those rows need readiness `reasons`, which a board row deliberately omits |
 | R5 | `motion-panels` is `0.x`, single maintainer, no `collapsedSize` | `VERIFIED` | exact pin, single import site, recorded fallback (`adoption-audit.md` §12.1–12.2) |
 | R6 | Console v1 ships two shells and duplicate GitHub UIs; deleting too early breaks pinned tests | `VERIFIED` | follow the ordered cutover in `console-v2-audit-console-v1-preservation.md` §9 |
 | R7 | `openPRs`/`openIssues` chips are 24 h event counts, not open totals | `VERIFIED` | rename or implement real counts in wave C; do not display as "open" |
@@ -553,6 +557,10 @@ Operator review of the first vertical against the v13/v15 mocks (`docs/mocks/` i
 ### 16.4 Read model for the list
 
 The list joins three typed reads without per-issue calls: `issue list` (hierarchical refs), `export project` (priority, scrutiny, timestamps, edges), `issue ready` (dispatchable set). Detail adds `issue show`, `issue resume`, `provenance trace`, `journal show`. The remaining read gaps are tracked in XTRM-393 (readiness for non-dispatchable issues, cursor, change feed; priority is absent from `show`/`list`/`resume` JSON).
+
+**Superseded (XTRM-393, 2026-09-19).** The list is now ONE read: `sb issue query --project <id> --limit 500 [--cursor]`, walked to exhaustion by the adapter (/query route in `server/substrate-cli.ts`). Every row carries its own derived `readinessState`, so the separate `issue ready` read is gone, and `parentRef`/`parentLocator`/`childCount`/`childrenTerminal`/`blockedBy` come from the projection, so `export project` is gone from the board path — that read cost 20.1 s and 22.3 MB on a 4,204-issue project to supply a small projection. The `readiness: "unknown"` placeholder is removed: the board shows the real state (`terminal|deferred|draft|blocked|claimed|ready`). One deliberate behaviour change: a **cancelled** blocker now stays blocking, matching Substrate's fail-closed rule (only `done`/`archived` satisfy), where the old client-side rule counted `cancelled` as resolved.
+
+Still open after XTRM-393: the change feed is deferred (no consumer exists yet; the trigger is the drawer's live-refresh work), and `WorkItemStore.ready`/`search` still derive readiness per issue because they return `reasons`, which a board row does not carry.
 
 ### 16.5 Drawer parity with Console v1
 

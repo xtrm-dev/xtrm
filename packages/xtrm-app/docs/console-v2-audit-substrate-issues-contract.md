@@ -609,3 +609,14 @@ Concrete, with refs. All `VERIFIED` unless tagged otherwise.
 6. **Will Substrate expose a read-only HTTP/MCP surface for a separate-process Console?** Today MCP has 7 read tools with no claim/plan/projection tools (3.17); there is no HTTP surface at all.
 7. **Is `~/.xtrm/state.db` shared between Substrate and the planned Console state daemon, or are they deliberately distinct?** `packages/core/src/state/paths.ts:4-5` and `packages/substrate/integrations/claude-code/runtime.ts:28` agree on the literal path; no document in either tree states whether that is intentional (gap 16).
 8. **Who consumes `checkDispatch`/`dispatchToSpecialist` in production?** In this repo, tests only (3.19). The Specialists repository is not present in either audited tree.
+
+---
+
+## 8. Resolution notes (XTRM-393, 2026-09-19)
+
+The findings above describe the audited tree at the SHA in §1 and are left as written. Two of them changed on branch `feat/substrate-query-issues`:
+
+- **Gap 4/5 (no bulk query surface, N+1 readiness) — RESOLVED for listing and readiness.** `IssueService.queryIssues(query)` returns one bounded board page with readiness derived in the same pass, and `queryAllIssues(query)` walks every page for callers that must stay exhaustive (`packages/substrate/src/service/issue-service.ts`). Board rows carry `readinessState`/`dispatchable` plus `parentRef`, `parentLocator`, `childCount`, `childrenTerminal` and `blockedBy`, so listing no longer needs `export project` (20.1 s / 22.3 MB on a 4,204-issue project) and no longer needs a separate `issue ready` read. `sb issue list`/`ready`, MCP `issue_list`/`issue_ready` and the Pi issue search read through it; the published 0.2.1 CLI output was verified byte-identical for both verbs on copies of the live store.
+- **Gap 6 (no pagination) — RESOLVED for the issue list.** Keyset cursor over the complete ordering tuple (sort key plus tiebreaker) with a filter fingerprint, `--limit` bounded to 500, SQL-level filters for project/lifecycle/kind/parent/search, and a derived-predicate scan that is chunked with an explicit cap. `listEvents`, `listRevisions` and `listActiveEdges` remain unpaginated.
+- **Gap 7 / open question 4 (change feed) — STILL OPEN, deliberately deferred.** No consumer exists yet, nothing in the acceptance criteria depends on it, and a feed needs its own semantics (what counts as a change, retention, who polls). Revisit trigger: the drawer's live-refresh work, or any consumer that needs incremental invalidation instead of a re-read. Paging already removes the need to refetch a whole project.
+- **`WorkItemStore.ready`/`search` still derive readiness per issue** (`src/workitems/substrate-store.ts:50-64`): those rows return `reasons`, which a board row deliberately omits, so they are out of scope for the projection rather than forgotten.
