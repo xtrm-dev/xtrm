@@ -2,15 +2,15 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useAdapters } from "../adapters/index.tsx";
 import { readAccounting, readLineage, readVersionRef } from "../adapters/research/manifest.ts";
-import { readExperimentSemantics, readMetricGlossary, readResultSummary, readRunIntent } from "../adapters/research/semantics.ts";
-import { isInvalidManifestRow, type InvalidManifestRow, type RunListRow, type RunRow, type RunStatus, type RunSummary, type TailEvent, type UsageRecord } from "../adapters/research/types.ts";
+import { readExperimentSemantics, directionGlyph, directionPhrase, readMetricGlossary, readResultSummary, readRunIntent, type MetricGlossaryEntry } from "../adapters/research/semantics.ts";
+import { isInvalidManifestRow, type ExperimentRef, type RunListRow, type RunRow, type RunStatus, type RunSummary, type SampleRecord } from "../adapters/research/types.ts";
 import { compareRunIds, validateCompareSearch } from "../app/research-compare-search.ts";
-import { useResearchCompare, useResearchExperiment, useResearchMetrics, useResearchRun, useResearchRuns, useResearchTail, useResearchWorkloadForRun } from "../app/queries.ts";
+import { useResearchCompare, useResearchExperiment, useResearchExperiments, useResearchMetrics, useResearchRun, useResearchRuns, useResearchSamples, useResearchTail, useResearchWorkloadForRun } from "../app/queries.ts";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceHeader, type Tone } from "../ui/primitives.tsx";
 import { MetricFields, UsageFields } from "./research-format.tsx";
-import { ResearchCharts } from "./research-charts.tsx";
+import { ResearchCharts, chartSpecs } from "./research-charts.tsx";
 import { DecisionCriteriaSection, GlossaryMetricRow, MethodSection, ResearchQuestionSection, ResultSummarySection } from "./research-semantic.tsx";
 
 function runStatusTone(status: RunStatus): Tone {
@@ -20,61 +20,54 @@ function runStatusTone(status: RunStatus): Tone {
   return "muted"; // interrupted
 }
 
-/** One distinct experiment id seen across `listRuns()`, plus how many runs reference it. There is
- * no `listExperiments` read verb (map-433.md §B2), so the experiment list is derived here rather
- * than sourced from a new adapter call. */
-interface ExperimentSummary {
-  id: string;
-  runCount: number;
-}
-
-interface DerivedExperiments {
-  experiments: ExperimentSummary[];
-  /** `invalid_manifest` rows: no resolvable experiment id, but a broken run must stay visible
-   * (rev 9) rather than being filtered out of the derived view, same rule as the run list's
-   * error row. */
-  unknown: InvalidManifestRow[];
-}
-
-function deriveExperiments(rows: RunListRow[] | undefined): DerivedExperiments {
-  if (!rows) return { experiments: [], unknown: [] };
-  const byId = new Map<string, ExperimentSummary>();
-  const unknown: InvalidManifestRow[] = [];
-  for (const row of rows) {
-    if (isInvalidManifestRow(row)) {
-      unknown.push(row);
-      continue;
-    }
-    const entry = byId.get(row.experiment) ?? { id: row.experiment, runCount: 0 };
-    entry.runCount += 1;
-    byId.set(row.experiment, entry);
+/** Run counts per experiment id, derived from the run list. The experiment list itself is
+ * registry-sourced, so a definition with zero runs still appears with an explicit `0 runs`. */
+function runCountsByExperiment(rows: RunListRow[] | undefined): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows ?? []) {
+    if (isInvalidManifestRow(row)) continue;
+    counts.set(row.experiment, (counts.get(row.experiment) ?? 0) + 1);
   }
-  return { experiments: [...byId.values()].sort((a, b) => a.id.localeCompare(b.id)), unknown };
+  return counts;
+}
+
+function experimentHref(id: string): string {
+  return `/research/experiments/${id}`;
 }
 
 export function ExperimentListSurface() {
   const { research } = useAdapters();
+  const experiments = useResearchExperiments();
   const runs = useResearchRuns();
-  const { experiments, unknown } = useMemo(() => deriveExperiments(runs.data), [runs.data]);
+  const navigate = useNavigate();
+  const runCounts = useMemo(() => runCountsByExperiment(runs.data), [runs.data]);
+  // `invalid_manifest` rows have no resolvable experiment id, but a broken run must stay
+  // visible rather than being filtered out of the view.
+  const unknown = useMemo(() => (runs.data ?? []).filter(isInvalidManifestRow), [runs.data]);
+  const openExperiment = (id: string) => void navigate({ to: experimentHref(id) } as never);
 
   let body;
-  if (runs.isPending) body = <LoadingState label="Loading experiments" />;
-  else if (runs.isError) body = <ErrorState title="Research bridge unavailable" error={runs.error} />;
-  else if (experiments.length === 0 && unknown.length === 0) body = <p className="px-6 py-6 text-sm text-ink-faint">No experiments have a run yet.</p>;
+  if (experiments.isPending) body = <LoadingState label="Loading experiments" />;
+  else if (experiments.isError) body = <ErrorState title="Research registry unavailable" error={experiments.error} />;
+  else if (experiments.data.length === 0 && unknown.length === 0) body = <p className="px-6 py-6 text-sm text-ink-faint">No experiment definitions are registered.</p>;
   else
     body = (
       <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-2">
-        {experiments.map((experiment) => (
-          <Row key={experiment.id}>
-            <span className="min-w-0 flex-1 truncate text-ink">{experiment.id}</span>
-            <span className="shrink-0 text-xs text-ink-faint tabular">
-              {experiment.runCount} run{experiment.runCount === 1 ? "" : "s"}
-            </span>
-          </Row>
-        ))}
+        {experiments.data.map((experiment: ExperimentRef) => {
+          const count = runCounts.get(experiment.id) ?? 0;
+          return (
+            <Row key={`${experiment.id}@${experiment.version}`} aria-label={experiment.id} onActivate={() => openExperiment(experiment.id)}>
+              <span className="min-w-0 flex-1 truncate text-ink">{experiment.id}</span>
+              <span className="w-16 shrink-0 truncate text-xs text-ink-faint">{experiment.version}</span>
+              <span className="shrink-0 text-xs text-ink-faint tabular">
+                {count} run{count === 1 ? "" : "s"}
+              </span>
+            </Row>
+          );
+        })}
         {unknown.length > 0 && (
           <>
-            <h2 className="px-3 py-1.5 text-xs font-medium text-ink-faint">Unknown experiment — manifest unreadable</h2>
+            <h2 className="px-3 py-1.5 text-xs font-medium text-ink-faint">Unreadable run — no resolvable experiment</h2>
             {unknown.map((row) => (
               <Row key={row.id} aria-label={`${row.id} unknown experiment`}>
                 <StatusDot tone="danger" label="invalid_manifest" />
@@ -93,6 +86,146 @@ export function ExperimentListSurface() {
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Experiments">
       <SurfaceHeader title="Experiments" meta={<SourceBadge source={research.source} />} />
       {body}
+    </section>
+  );
+}
+
+// --- experiment detail --------------------------------------------------
+
+function GlossaryDefinitionRow({ name, entry }: { name: string; entry: MetricGlossaryEntry }) {
+  return (
+    <div className="flex flex-col gap-0.5 border-b border-border-muted px-3 py-2 last:border-b-0" aria-label={name}>
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="font-mono text-xs text-ink-faint">{name}</span>
+        <span className="text-sm text-ink">{entry.label}</span>
+        <span className="text-xs text-ink-faint" title={directionPhrase(entry.direction)}>
+          {directionGlyph(entry.direction)} {directionPhrase(entry.direction)}
+          {entry.unit ? ` · ${entry.unit}` : ""}
+        </span>
+      </div>
+      <p className="text-xs leading-snug text-ink-faint">
+        {entry.description}
+        {entry.interpretation ? ` ${entry.interpretation}` : ""}
+      </p>
+    </div>
+  );
+}
+
+function DetailField({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="col-span-2 grid grid-cols-subgrid">
+      <dt className="text-ink-faint">{label}</dt>
+      <dd className="text-ink">{value}</dd>
+    </div>
+  );
+}
+
+/** The stable experiment-detail route: registry definition first, related runs second. Missing
+ * optional fields are explicitly absent, never placeholdered with invented prose. */
+export function ExperimentDetailSurface() {
+  const { experimentId } = useParams({ strict: false }) as { experimentId: string };
+  const navigate = useNavigate();
+  const experiment = useResearchExperiment(experimentId);
+  const runs = useResearchRuns();
+  const semantics = useMemo(() => (experiment.data ? readExperimentSemantics(experiment.data) : null), [experiment.data]);
+  const glossary = useMemo(() => (experiment.data ? readMetricGlossary(experiment.data) : new Map<string, MetricGlossaryEntry>()), [experiment.data]);
+  const specs = useMemo(() => (experiment.data ? chartSpecs(experiment.data) : []), [experiment.data]);
+  const relatedRuns = useMemo(
+    () => (runs.data ?? []).filter((row): row is RunRow => !isInvalidManifestRow(row) && row.experiment === experimentId),
+    [runs.data, experimentId],
+  );
+  const version = typeof experiment.data?.version === "string" ? experiment.data.version : null;
+
+  return (
+    <section className="flex min-h-0 flex-1 flex-col" aria-label={`Experiment ${experimentId}`}>
+      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border-muted px-4">
+        <button type="button" onClick={() => void navigate({ to: "/research/experiments" } as never)} className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-ink-faint hover:bg-hover hover:text-ink">
+          <Icon name="back" size="xs" /> Experiments
+        </button>
+        <span className="text-ink-faint">/</span>
+        <span className="font-mono text-sm text-ink">{experimentId}</span>
+        {version && <span className="ml-auto font-mono text-xs text-ink-faint">{experimentId}@{version}</span>}
+      </header>
+      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        {experiment.isPending ? (
+          <LoadingState rows={8} label="Loading experiment" />
+        ) : experiment.isError ? (
+          <ErrorState title={`Experiment definition unavailable: ${experimentId}`} error={experiment.error} />
+        ) : (
+          <div className="flex flex-col gap-6">
+            <section aria-label="Definition">
+              <h2 className="mb-2 text-xs font-medium text-ink-faint">Definition</h2>
+              <dl className="grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1.5 text-sm">
+                <DetailField label="Description" value={semantics?.description ?? <span className="text-ink-faint">not recorded</span>} />
+                <DetailField label="Research question" value={semantics?.researchQuestion ?? <span className="text-ink-faint">not recorded</span>} />
+                <DetailField label="Hypothesis" value={semantics?.hypothesis ?? <span className="text-ink-faint">not recorded</span>} />
+                {semantics?.terminology && (
+                  <DetailField
+                    label="Terminology"
+                    value={
+                      <dl className="space-y-0.5">
+                        {semantics.terminology.map(([term, definition]) => (
+                          <div key={term} className="flex gap-2 text-xs leading-snug">
+                            <dt className="shrink-0 font-mono text-ink">{term}</dt>
+                            <dd className="text-ink-faint">{definition}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    }
+                  />
+                )}
+              </dl>
+            </section>
+            <DecisionCriteriaSection experiment={semantics} />
+            <section aria-label="Metric glossary">
+              <h2 className="mb-2 text-xs font-medium text-ink-faint">Metric glossary</h2>
+              {glossary.size === 0 ? (
+                <p className="text-sm text-ink-faint">This experiment declares no metric glossary.</p>
+              ) : (
+                <div className="flex flex-col rounded-md border border-border-muted">
+                  {[...glossary.entries()].map(([name, entry]) => (
+                    <GlossaryDefinitionRow key={name} name={name} entry={entry} />
+                  ))}
+                </div>
+              )}
+            </section>
+            <section aria-label="Declared charts">
+              <h2 className="mb-2 text-xs font-medium text-ink-faint">Declared charts</h2>
+              {specs.length === 0 ? (
+                <p className="text-sm text-ink-faint">This experiment declares no charts.</p>
+              ) : relatedRuns.length > 0 ? (
+                <ResearchCharts experiment={experiment.data!} runIds={relatedRuns.map((r) => r.id)} />
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {specs.map((spec) => (
+                    <div key={spec.id} className="rounded-md border border-border-muted px-3 py-2">
+                      <p className="text-sm text-ink">{spec.title}</p>
+                      <p className="text-xs text-ink-faint">{spec.description}</p>
+                      <p className="mt-1 font-mono text-[11px] text-ink-faint">{spec.datasets.join(", ")}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+            <section aria-label="Related runs">
+              <h2 className="mb-2 text-xs font-medium text-ink-faint">Related runs</h2>
+              {relatedRuns.length === 0 ? (
+                <p className="text-sm text-ink-faint">No runs reference this experiment.</p>
+              ) : (
+                <div className="flex flex-col divide-y divide-border-muted rounded-md border border-border-muted">
+                  {relatedRuns.map((run) => (
+                    <Row key={run.id} density="list" aria-label={run.id} onActivate={() => void navigate({ to: `/research/runs/${run.id}` } as never)}>
+                      <StatusDot tone={runStatusTone(run.status)} label={run.status} />
+                      <span className="w-32 shrink-0 truncate font-mono text-xs text-ink-faint">{run.id}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs text-ink-muted">{run.purpose}</span>
+                    </Row>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -192,31 +325,48 @@ export function RunListSurface() {
 
 // --- run analysis -------------------------------------------------------
 
-interface SampleGroup {
-  sampleId: string;
-  kinds: string[];
-  usage: UsageRecord | null;
+function jsonPreview(value: unknown): string {
+  if (value === undefined) return "";
+  if (value === null) return "null";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
-function latestUsage(events: TailEvent[]): UsageRecord | null {
-  for (let i = events.length - 1; i >= 0; i--) {
-    const usage = events[i]!.usage;
-    if (usage) return usage;
-  }
-  return null;
+/** One arbitrary JSON value (a sample's input/output/candidate) rendered compactly. Absent stays
+ * an explicit dash: it is never replaced with an inferred value from the event log. */
+function JsonCell({ value, label }: { value: unknown; label: string }) {
+  if (value === undefined) return <span className="text-ink-faint">—</span>;
+  const text = jsonPreview(value);
+  return (
+    <span className="block truncate font-mono text-xs text-ink-muted" title={`${label}: ${text}`}>
+      {text}
+    </span>
+  );
 }
 
-/** Groups `tail()` events by `sampleId` — the sample table's only data source, since no CLI
- * verb exposes `samples.jsonl` directly (map-433.md §B7). */
-function groupSamples(events: TailEvent[]): SampleGroup[] {
-  const bySample = new Map<string, TailEvent[]>();
-  for (const e of events) {
-    if (e.sampleId === null) continue;
-    const list = bySample.get(e.sampleId) ?? [];
-    list.push(e);
-    bySample.set(e.sampleId, list);
-  }
-  return [...bySample.entries()].map(([sampleId, evs]) => ({ sampleId, kinds: evs.map((e) => e.kind), usage: latestUsage(evs) }));
+function SampleRowView({ sample, runId, onOpen }: { sample: SampleRecord; runId: string; onOpen: () => void }) {
+  return (
+    <Row density="list" aria-label={sample.sampleId} onActivate={onOpen}>
+      <span className="w-24 shrink-0 truncate font-mono text-xs text-ink-faint">{sample.sampleId}</span>
+      <span className="w-20 shrink-0 text-xs text-ink-faint">{sample.status}</span>
+      <span className="min-w-0 flex-1">
+        <JsonCell value={sample.input} label={`${sample.sampleId} input`} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <JsonCell value={sample.output} label={`${sample.sampleId} output`} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <JsonCell value={sample.candidate} label={`${sample.sampleId} candidate`} />
+      </span>
+      <span className="w-56 shrink-0 truncate text-xs text-ink-faint">
+        {sample.usage ? <UsageFields usage={sample.usage} layout="inline" /> : "no usage recorded"}
+      </span>
+    </Row>
+  );
 }
 
 export function RunAnalysisSurface() {
@@ -225,6 +375,9 @@ export function RunAnalysisSurface() {
   const navigate = useNavigate();
   const run = useResearchRun(runId);
   const metrics = useResearchMetrics(runId);
+  const samples = useResearchSamples(runId);
+  // Telemetry is a separate read from the sample records: the event log is never presented as
+  // sample contents, and a sample is never reconstructed from its events.
   const tail = useResearchTail(runId);
   // The run page resolves the *exact versioned* definitions its manifest references: the chart
   // surface and the semantic sections read the same resolved definition, and neither copies
@@ -300,28 +453,52 @@ export function RunAnalysisSurface() {
             ) : null}
             <section aria-label="Samples">
               <h2 className="mb-2 text-xs font-medium text-ink-faint">Samples</h2>
-              {tail.isPending ? (
+              {samples.isPending ? (
                 <LoadingState rows={3} label="Loading samples" />
-              ) : tail.isError ? (
-                <ErrorState title="Sample log unavailable" error={tail.error} />
+              ) : samples.isError ? (
+                <ErrorState title="Sample records unavailable" error={samples.error} />
+              ) : samples.data.length === 0 ? (
+                <p className="text-sm text-ink-faint">No sample records recorded.</p>
               ) : (
-                (() => {
-                  const groups = groupSamples(tail.data.events);
-                  if (groups.length === 0) return <p className="text-sm text-ink-faint">No per-sample events recorded yet.</p>;
-                  return (
-                    <div className="flex flex-col divide-y divide-border-muted rounded-md border border-border-muted">
-                      {groups.map((g) => (
-                        <Row key={g.sampleId} density="list" onActivate={() => inspect({ kind: "research-sample", ref: `${runId}|${g.sampleId}` })} aria-label={g.sampleId}>
-                          <span className="w-28 shrink-0 truncate font-mono text-xs text-ink-faint">{g.sampleId}</span>
-                          <span className="min-w-0 flex-1 truncate text-xs text-ink-faint">{g.kinds.join(", ")}</span>
-                          <span className="w-56 shrink-0 truncate text-xs text-ink-faint">
-                            {g.usage ? <UsageFields usage={g.usage} layout="inline" /> : "no usage recorded"}
-                          </span>
-                        </Row>
-                      ))}
-                    </div>
-                  );
-                })()
+                <div className="flex flex-col rounded-md border border-border-muted">
+                  <Row density="list" className="text-xs text-ink-faint">
+                    <span className="w-24 shrink-0">Sample</span>
+                    <span className="w-20 shrink-0">Status</span>
+                    <span className="min-w-0 flex-1">Input</span>
+                    <span className="min-w-0 flex-1">Output</span>
+                    <span className="min-w-0 flex-1">Candidate</span>
+                    <span className="w-56 shrink-0">Usage</span>
+                  </Row>
+                  <div className="flex flex-col divide-y divide-border-muted">
+                    {samples.data.map((sample) => (
+                      <SampleRowView key={sample.sampleId} sample={sample} runId={runId} onOpen={() => inspect({ kind: "research-sample", ref: `${runId}|${sample.sampleId}` })} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+            <section aria-label="Telemetry events">
+              <h2 className="mb-2 text-xs font-medium text-ink-faint">Telemetry events</h2>
+              {tail.isPending ? (
+                <LoadingState rows={3} label="Loading telemetry" />
+              ) : tail.isError ? (
+                <ErrorState title="Telemetry log unavailable" error={tail.error} />
+              ) : tail.data.events.length === 0 ? (
+                <p className="text-sm text-ink-faint">No telemetry events recorded.</p>
+              ) : (
+                <div className="flex flex-col divide-y divide-border-muted rounded-md border border-border-muted">
+                  {tail.data.events.map((event) => (
+                    <Row key={event.seq} density="list" aria-label={`event ${event.seq} ${event.kind}`}>
+                      <span className="w-12 shrink-0 tabular text-xs text-ink-faint">{event.seq}</span>
+                      <span className="w-40 shrink-0 truncate text-xs text-ink-faint">{new Date(event.ts).toLocaleString()}</span>
+                      <span className="w-40 shrink-0 truncate font-mono text-xs text-ink-muted">{event.kind}</span>
+                      <span className="w-24 shrink-0 truncate font-mono text-xs text-ink-faint">{event.sampleId ?? "—"}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs text-ink-faint">
+                        {event.usage ? <UsageFields usage={event.usage} layout="inline" /> : "no usage recorded"}
+                      </span>
+                    </Row>
+                  ))}
+                </div>
               )}
             </section>
             <section aria-label="Annotations">

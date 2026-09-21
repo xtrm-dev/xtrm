@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fixtureAdapters } from "../adapters/index.tsx";
 import { fixtureResearch } from "../adapters/research/fixture.ts";
 import fixture from "../adapters/research/__fixtures__/xtrm-research-fixture.json";
-import { isInvalidManifestRow, type Metric, type ResearchAdapter, type RunListRow, type RunSummary, type TailCursor, type TailEvent } from "../adapters/research/types.ts";
+import { isInvalidManifestRow, type Metric, type ResearchAdapter, type RunListRow, type RunSummary, type SampleRecord, type TailCursor, type TailEvent } from "../adapters/research/types.ts";
 import { MODES, modeForPath } from "./destinations.ts";
 import { createAppRouter } from "./router.tsx";
 
@@ -32,9 +32,27 @@ function renderWithResearch(url: string, research: Partial<ResearchAdapter>) {
   return { router };
 }
 
-const RESEARCH_VIEWS = [
-  { url: "/research/experiments", loading: "Loading experiments", empty: "No experiments have a run yet." },
-  { url: "/research/runs", loading: "Loading runs", empty: "No runs recorded yet." },
+// Each Research list view has its own read: the Experiments surface is registry-sourced
+// (`listExperiments`) so a zero-run definition still appears, while Recent Runs reads `listRuns`.
+const RESEARCH_LIST_VIEWS = [
+  {
+    url: "/research/experiments",
+    loading: "Loading experiments",
+    empty: "No experiment definitions are registered.",
+    errorTitle: "Research registry unavailable",
+    emptyOverride: { listExperiments: async () => [], listRuns: async () => [] },
+    pendingOverride: { listExperiments: () => new Promise<never>(() => {}) },
+    settled: "dup-detect-baseline",
+  },
+  {
+    url: "/research/runs",
+    loading: "Loading runs",
+    empty: "No runs recorded yet.",
+    errorTitle: "Research bridge unavailable",
+    emptyOverride: { listRuns: async () => [] },
+    pendingOverride: { listRuns: () => new Promise<never>(() => {}) },
+    settled: "Latest conclusion",
+  },
 ] as const;
 
 describe("Research destination", () => {
@@ -86,12 +104,15 @@ describe("Research destination", () => {
     expect(await screen.findByText("Workloads is not part of this vertical")).toBeTruthy();
   });
 
-  it("renders the experiment list derived from listRuns(), with the invalid_manifest run grouped under Unknown experiment rather than dropped", async () => {
+  it("renders the registry-sourced experiment list, including a definition with zero runs, and keeps the invalid_manifest run visible", async () => {
     renderAt("/research/experiments");
     expect(await screen.findByText("dup-detect-baseline")).toBeTruthy();
     expect(screen.getByText("2 runs")).toBeTruthy();
+    // A definition no run references is still listed, with its count stated explicitly.
+    expect(screen.getByText("zero-run-baseline")).toBeTruthy();
+    expect(screen.getByText("0 runs")).toBeTruthy();
 
-    expect(screen.getByText("Unknown experiment — manifest unreadable")).toBeTruthy();
+    expect(screen.getByText("Unreadable run — no resolvable experiment")).toBeTruthy();
     const unknown = screen.getByLabelText("run-c unknown experiment");
     expect(within(unknown).getByText(/JSONDecodeError/)).toBeTruthy();
   });
@@ -162,44 +183,86 @@ describe("Research uses the shared shell, and nothing of its own", () => {
 describe("Research list states come from the adapter", () => {
   const onlyInvalid = async (): Promise<RunListRow[]> => (await fixtureResearch.listRuns()).filter(isInvalidManifestRow);
 
-  it("keeps the unknown-experiment group when every row is invalid_manifest, instead of falling back to the empty state", async () => {
+  it("keeps the unreadable-run group when every run row is invalid_manifest, instead of falling back to the empty state", async () => {
     renderWithResearch("/research/experiments", { listRuns: onlyInvalid });
-    expect(await screen.findByText("Unknown experiment — manifest unreadable")).toBeTruthy();
+    expect(await screen.findByText("Unreadable run — no resolvable experiment")).toBeTruthy();
     expect(screen.getByLabelText("run-c unknown experiment")).toBeTruthy();
-    expect(screen.queryByText("No experiments have a run yet.")).toBeNull();
+    expect(screen.queryByText("No experiment definitions are registered.")).toBeNull();
   });
 
-  it.each(RESEARCH_VIEWS)("renders the empty state at $url when the adapter lists no runs", async ({ url, empty }) => {
-    renderWithResearch(url, { listRuns: async () => [] });
+  it.each(RESEARCH_LIST_VIEWS)("renders the empty state at $url when the adapter lists nothing", async ({ url, empty, emptyOverride }) => {
+    renderWithResearch(url, emptyOverride);
     expect(await screen.findByText(empty)).toBeTruthy();
   });
 
-  it.each(RESEARCH_VIEWS)("renders the error state at $url when the adapter rejects", async ({ url, empty }) => {
+  it.each(RESEARCH_LIST_VIEWS)("renders the error state at $url when the adapter rejects", async ({ url, empty, errorTitle, emptyOverride }) => {
     const failure = new Error("xtrm-research exited 1: no such command");
-    renderWithResearch(url, {
-      listRuns: async () => {
-        throw failure;
-      },
-    });
-    expect(await screen.findByText("Research bridge unavailable")).toBeTruthy();
+    const failing = "listExperiments" in emptyOverride ? { listExperiments: async (): Promise<never> => { throw failure; } } : { listRuns: async (): Promise<never> => { throw failure; } };
+    renderWithResearch(url, failing);
+    expect(await screen.findByText(errorTitle)).toBeTruthy();
     expect(screen.getByText(failure.message)).toBeTruthy();
     // An adapter failure is never reported as "nothing here".
     expect(screen.queryByText(empty)).toBeNull();
   });
 
-  it.each(RESEARCH_VIEWS)("renders the loading state at $url before the adapter resolves", async ({ url, loading }) => {
-    renderWithResearch(url, { listRuns: () => new Promise<RunListRow[]>(() => {}) });
+  it.each(RESEARCH_LIST_VIEWS)("renders the loading state at $url before the adapter resolves", async ({ url, loading, pendingOverride }) => {
+    renderWithResearch(url, pendingOverride);
     expect(await screen.findByLabelText(loading)).toBeTruthy();
   });
 
-  it.each(RESEARCH_VIEWS)("reads only listRuns() at $url: no per-run `run show` lookup behind the list", async ({ url }) => {
+  it.each(RESEARCH_LIST_VIEWS)("reads only the list verbs at $url: no per-run `run show` or `metrics` lookup behind the list", async ({ url, settled }) => {
     const getRun = vi.fn(fixtureResearch.getRun);
     const getMetrics = vi.fn(fixtureResearch.getMetrics);
     renderWithResearch(url, { getRun, getMetrics });
     // Wait for the resolved list, so the assertion follows a settled render, not an unmounted one.
-    expect(await screen.findByText(url.endsWith("runs") ? "Latest conclusion" : "dup-detect-baseline")).toBeTruthy();
+    expect(await screen.findByText(settled)).toBeTruthy();
     expect(getRun).not.toHaveBeenCalled();
     expect(getMetrics).not.toHaveBeenCalled();
+  });
+});
+
+describe("Experiment detail surface", () => {
+  it("opens a registry definition with zero runs from its list row and renders every declared semantic field", async () => {
+    const { router } = renderAt("/research/experiments");
+    fireEvent.click(await screen.findByLabelText("zero-run-baseline"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/research/experiments/zero-run-baseline"));
+
+    const main = await screen.findByRole("region", { name: "Experiment zero-run-baseline" });
+    const zeroRun = fixture.experimentShowZeroRun as Record<string, unknown>;
+    expect(within(main).getByText(String(zeroRun.description))).toBeTruthy();
+    expect(within(main).getByText(String(zeroRun.research_question))).toBeTruthy();
+    expect(within(main).getByText(String(zeroRun.hypothesis))).toBeTruthy();
+    expect(within(main).getByText(/Named dataset/)).toBeTruthy();
+    expect(within(main).getByText("Supports the hypothesis if")).toBeTruthy();
+    expect(within(main).getByText("Falsifies the hypothesis if")).toBeTruthy();
+    expect(within(main).getByText("This experiment does not establish")).toBeTruthy();
+    // Glossary entry renders its label, direction and unit, not a bare id.
+    expect(within(main).getByText("Accuracy")).toBeTruthy();
+    expect(within(main).getByText(/↑ higher is better/)).toBeTruthy();
+    // Declared charts are listed even though no run can populate them.
+    expect(within(main).getByText("Accuracy by run")).toBeTruthy();
+    expect(within(main).getByText("No runs reference this experiment.")).toBeTruthy();
+  });
+
+  it("shows the runs that reference an experiment and opens run analysis from one", async () => {
+    const { router } = renderAt("/research/experiments/dup-detect-baseline");
+    const main = await screen.findByRole("region", { name: "Experiment dup-detect-baseline" });
+    const related = await within(main).findByRole("region", { name: "Related runs" });
+    expect(await within(related).findByLabelText("run-a")).toBeTruthy();
+    expect(within(related).getByLabelText("run-b")).toBeTruthy();
+    fireEvent.click(within(related).getByLabelText("run-a"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/research/runs/run-a"));
+  });
+
+  it("renders an explicit unavailable state for an experiment definition the registry does not carry", async () => {
+    const failure = new Error("no experiment definition 'ghost' under /srv/registry");
+    renderWithResearch("/research/experiments/ghost", {
+      getExperiment: async () => {
+        throw failure;
+      },
+    });
+    expect(await screen.findByText("Experiment definition unavailable: ghost")).toBeTruthy();
+    expect(screen.getByText(failure.message)).toBeTruthy();
   });
 });
 
@@ -221,12 +284,17 @@ describe("Run analysis surface (XTRM-433 slice 3)", () => {
     expect((await within(main).findByLabelText("accuracy chart")).textContent).toContain("baseline");
   });
 
-  it("renders the sample table from tail(), including the usage-unavailable state with its null_reason", async () => {
+  it("renders the sample table from samples.jsonl, including input/output/candidate and the usage-unavailable state with its null_reason", async () => {
     renderAt("/research/runs/run-a");
     const main = await screen.findByRole("region", { name: "Run run-a" });
-    expect(await within(main).findByLabelText("s-0")).toBeTruthy();
-    expect(within(within(main).getByLabelText("s-0")).getByText("42 in / 7 out")).toBeTruthy();
+    const first = await within(main).findByLabelText("s-0");
+    expect(within(first).getByText("42 in / 7 out")).toBeTruthy();
+    // input/output/candidate come from the sample record, not from any event's data field.
+    expect(within(first).getByText(/a-0/)).toBeTruthy();
+    expect(within(first).getAllByText(/\"duplicate\":false/).length).toBeGreaterThan(0);
     expect(within(within(main).getByLabelText("s-1")).getByText("usage unavailable — not_exposed_by_provider")).toBeTruthy();
+    // Telemetry is a separate view, labelled as such, never merged into the sample table.
+    expect(within(main).getByRole("region", { name: "Telemetry events" })).toBeTruthy();
   });
 
   it("renders an explicit error naming the run when its manifest is unreadable, never a crash", async () => {
@@ -397,19 +465,21 @@ describe("A metric renders value, interval and method together, whichever half i
 });
 
 describe("Usage with some fields null and some present under one null_reason", () => {
-  const MIXED: TailEvent = {
-    seq: 1,
-    ts: "2026-09-17T12:00:00+00:00",
-    kind: "sample_completed",
+  const MIXED_SAMPLE: SampleRecord = {
     sampleId: "s-mixed",
-    data: null,
+    index: 1,
+    status: "ok",
+    input: { pair: ["a-mixed", "b-mixed"] },
+    output: { duplicate: false },
+    candidate: { duplicate: false, confidence: 0.5 },
     // One null_reason covers every null field; the present fields are real readings.
     usage: { source: "provider_api", inputTokens: 42, outputTokens: null, requestModel: "always-no-1", responseModel: null, latencyMs: 118.5, nullReason: "provider omitted completion tokens" },
+    createdAt: "2026-09-17T12:00:00+00:00",
   };
-  const tail = async () => ({ events: [MIXED], nextOffset: 1 as TailCursor });
+  const getSamples = async () => [MIXED_SAMPLE];
 
   it("renders the present values and the reason for the null ones in the drawer, never a zero", async () => {
-    renderWithResearch("/research/runs/run-a?inspect=research-sample%3Arun-a%7Cs-mixed", { tail });
+    renderWithResearch("/research/runs/run-a?inspect=research-sample%3Arun-a%7Cs-mixed", { getSamples });
     const drawer = await screen.findByTestId("inspector-drawer");
     await openDrawer(drawer);
     expect(within(drawer).getByText("42")).toBeTruthy();
@@ -421,7 +491,7 @@ describe("Usage with some fields null and some present under one null_reason", (
   });
 
   it("names the reason for a null token count in the sample row, rather than printing `null`", async () => {
-    renderWithResearch("/research/runs/run-a", { tail });
+    renderWithResearch("/research/runs/run-a", { getSamples });
     const row = await screen.findByLabelText("s-mixed");
     expect(row.textContent).not.toMatch(/\bnull\b/);
     expect(row.textContent).toContain("provider omitted completion tokens");
@@ -500,9 +570,9 @@ describe("Research drawers open from the URL alone, and name what is missing", (
   it.each([
     { what: "a run that does not exist", ref: "research-run:run-ghost", expect: "Run manifest unreadable: run-ghost" },
     { what: "a metric the run does not report", ref: "research-metric:run-a|nope::missing", expect: "nope::missing is not reported for run-a" },
-    { what: "a sample with no events", ref: "research-sample:run-a|s-404", expect: "s-404 has no recorded events" },
+    { what: "a sample not in the run's sample records", ref: "research-sample:run-a|s-404", expect: "s-404 is not in this run's sample records" },
     { what: "an annotation index past the end", ref: "research-annotation:run-a|99", expect: "Annotation is outside the loaded log" },
-    { what: "a sample of a run with no log", ref: "research-sample:run-ghost|s-0", expect: "Sample log unavailable for run-ghost" },
+    { what: "a sample of a run with no records", ref: "research-sample:run-ghost|s-0", expect: "Sample records unavailable for run-ghost" },
   ])("renders a named not-found state, not a blank drawer, for $what", async ({ ref, expect: text }) => {
     renderAt(`/research/runs?inspect=${encodeURIComponent(ref)}`);
     const drawer = await screen.findByTestId("inspector-drawer");

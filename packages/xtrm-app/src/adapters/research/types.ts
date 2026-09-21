@@ -37,6 +37,29 @@ export function isInvalidManifestRow(row: RunListRow): row is InvalidManifestRow
   return row.status === "invalid_manifest";
 }
 
+/** One registry experiment definition, from `xtrm-research experiments` (registry-sourced, so an
+ * experiment with zero runs is still listed). */
+export interface ExperimentRef {
+  id: string;
+  version: string;
+}
+
+export type SampleStatus = "ok" | "error" | "skipped";
+
+/** One `samples.jsonl` row, from `xtrm-research samples <run_id>`. `output`/`candidate`/`usage`
+ * are absent when the row does not carry them, and stay absent here — a sample is never
+ * reconstructed from tail events. */
+export interface SampleRecord {
+  sampleId: string;
+  index: number;
+  status: SampleStatus;
+  input: unknown;
+  output?: unknown;
+  candidate?: unknown;
+  usage: UsageRecord | null;
+  createdAt: string | null;
+}
+
 export interface LineageChild {
   relation: string;
   runId: string;
@@ -112,6 +135,7 @@ export type ChartDataRow = ChartMetricRow | ChartMissingRow;
 export interface ResearchAdapter {
   readonly source: DataSource;
   listRuns(): Promise<RunListRow[]>;
+  listExperiments(): Promise<ExperimentRef[]>;
   getLineage(runId: string): Promise<LineageNode>;
   getRun(runId: string): Promise<RunShow>;
   getExperiment(id: string, version?: string): Promise<Record<string, unknown>>;
@@ -119,6 +143,7 @@ export interface ResearchAdapter {
   getQuestionSpec(id: string, version?: string): Promise<Record<string, unknown>>;
   tail(runId: string, after?: TailCursor): Promise<TailResult>;
   getMetrics(runId: string): Promise<RunSummary>;
+  getSamples(runId: string): Promise<SampleRecord[]>;
   getChartData(runIds: string[], metric: string): Promise<ChartDataRow[]>;
   compare(runIds: string[]): Promise<Record<string, RunSummary>>;
 }

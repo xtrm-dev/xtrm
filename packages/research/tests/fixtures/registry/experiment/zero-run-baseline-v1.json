@@ -1,0 +1,61 @@
+{
+  "chart_specs": [
+    {
+      "datasets": [
+        "accuracy"
+      ],
+      "description": "Accuracy metric for each run of this experiment.",
+      "id": "accuracy-by-run",
+      "schema_version": "xtrm-research-chart-spec/v1",
+      "title": "Accuracy by run"
+    }
+  ],
+  "content_hash": "sha256:f356e109077aa786802c14ebfca516b7ffa6f51b9774ad32a6f9e9731e1f90c2",
+  "description": "A registered experiment that has never been executed, used to prove the Experiments surface is sourced from the registry rather than derived from runs.",
+  "falsification_criteria": [
+    "The definition is absent from the list, or its detail route fails to open."
+  ],
+  "hypothesis": "An unexecuted definition still appears in the Experiments list and opens its detail route.",
+  "id": "zero-run-baseline",
+  "legend": {
+    "accuracy": "fraction of samples whose predicted duplicate flag matched the label",
+    "baseline": "always predicts 'not a duplicate'"
+  },
+  "metric_glossary": {
+    "accuracy": {
+      "description": "Fraction of samples whose predicted flag matched the label.",
+      "direction": "higher_better",
+      "interpretation": "1.0 is a perfect match; 0.5 is chance for a balanced binary label.",
+      "label": "Accuracy",
+      "unit": "ratio"
+    }
+  },
+  "named_datasets": [
+    "accuracy"
+  ],
+  "non_claims": [
+    "This fixture claims nothing about a measured result: no run has produced one."
+  ],
+  "primary_outcomes": [
+    "accuracy"
+  ],
+  "research_question": "Does an experiment with zero runs remain visible and navigable?",
+  "success_criteria": [
+    "The definition is listed even though no run references it.",
+    "Its detail route renders every declared semantic field."
+  ],
+  "terminology": {
+    "Named dataset": "A semantic metric id an experiment chart declares; the CLI resolves it to a namespaced evaluator metric."
+  },
+  "variants": [
+    {
+      "id": "baseline",
+      "version": "v1"
+    }
+  ],
+  "version": "v1",
+  "workload": {
+    "id": "dup-detect",
+    "version": "v1"
+  }
+}

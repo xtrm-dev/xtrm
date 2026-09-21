@@ -17,13 +17,18 @@
 // it silently reads whatever `xtrm-research` happens to be on PATH — usually
 // another worktree, which is the trap this script exists to remove.
 //
+// This script is the release-identity record: it prints the UI commit, the
+// resolved CLI path, version and source commit, and both roots, and it refuses
+// to start when the resolved CLI does not belong to this checkout or does not
+// advertise the read verbs the bridge calls.
+//
 //   npm run research:dev                       # live, resolved for this checkout
 //   npm run research:dev -- --fixture          # UI only, served from the fixture
 //   npm run research:dev -- --runs DIR         # a different runs root
 //   npm run research:dev -- --port 5180         # other flags go to Vite
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,6 +63,41 @@ const fail = (lines) => {
   process.exit(1);
 };
 
+const git = (dir, ...args) => {
+  const out = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+  return out.status === 0 ? out.stdout.trim() : null;
+};
+const realpath = (path) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return null;
+  }
+};
+
+/** The CLI's own version, read by running the interpreter its shebang names. */
+function cliVersion(binPath) {
+  if (!binPath) return null;
+  let interpreter = null;
+  try {
+    const first = readFileSync(binPath, "utf8").split("\n")[0];
+    if (first.startsWith("#!")) interpreter = first.slice(2).trim();
+  } catch {
+    return null;
+  }
+  if (!interpreter) return null;
+  const out = spawnSync(interpreter, ["-c", "import xtrm_research; print(xtrm_research.__version__)"], { encoding: "utf8" });
+  return out.status === 0 ? out.stdout.trim() : null;
+}
+
+const uiCommit = git(appDir, "rev-parse", "--short", "HEAD");
+const appRepoRoot = git(appDir, "rev-parse", "--show-toplevel");
+
+let cliReal = null;
+let cliRepoRoot = null;
+let cliCommit = null;
+let cliVer = null;
+
 if (!fixture) {
   const problems = [];
   if (!existsSync(bin)) {
@@ -74,6 +114,39 @@ if (!fixture) {
     fail(problems);
   } else if (problems.length) {
     console.warn(`\n  research:dev warning:\n${problems.map((p) => `    ${p}`).join("\n")}\n`);
+  }
+
+  cliReal = realpath(bin);
+  cliRepoRoot = cliReal ? git(dirname(cliReal), "rev-parse", "--show-toplevel") : null;
+  cliCommit = cliRepoRoot ? git(cliRepoRoot, "rev-parse", "--short", "HEAD") : null;
+  cliVer = cliVersion(cliReal ?? bin);
+
+  // Release identity: the binary must belong to this app's checkout. A same-repo
+  // sibling worktree (the ambient-symlink trap) is still a different checkout at a
+  // different commit, and is refused here rather than surfacing as 400s later.
+  if (appRepoRoot && cliRepoRoot && cliRepoRoot !== appRepoRoot) {
+    fail([
+      "the resolved research CLI belongs to a different checkout than this app:",
+      `  app checkout   ${appRepoRoot} @ ${uiCommit ?? "unknown"}`,
+      `  CLI checkout   ${cliRepoRoot} @ ${cliCommit ?? "unknown"}`,
+      `  resolved CLI   ${cliReal ?? bin}`,
+      "  → run `npm run research:dev` with no XTRM_RESEARCH_BIN override, or point it at this checkout's CLI",
+    ]);
+  }
+
+  // Capability handshake: a CLI release that predates a read verb the bridge calls
+  // cannot serve the UI, and must fail here with the missing verbs named.
+  const REQUIRED_VERBS = ["runs", "run", "experiment", "workload", "question-spec", "tail", "metrics", "compare", "chart-data", "experiments", "samples"];
+  const help = spawnSync(bin, ["--help"], { encoding: "utf8" });
+  const helpText = `${help.stdout ?? ""}${help.stderr ?? ""}`;
+  const missing = REQUIRED_VERBS.filter((verb) => !helpText.includes(verb));
+  if (missing.length > 0) {
+    fail([
+      `the research CLI at ${cliReal ?? bin} does not support every read verb this app calls`,
+      `  missing verbs  ${missing.join(", ")}`,
+      `  CLI            ${cliReal ?? bin}${cliVer ? ` (xtrm-research ${cliVer})` : ""}`,
+      "  → rebuild this checkout's CLI: cd packages/research && ./.venv/bin/pip install -e '.[dev]'",
+    ]);
   }
 
   // The trap: a different `xtrm-research` earlier on PATH is what the bridge
@@ -93,13 +166,26 @@ const env = {
   ...(fixture ? {} : { XTRM_RESEARCH_BIN: bin, XTRM_RESEARCH_ROOT: runsRoot, XTRM_RESEARCH_REGISTRY_ROOT: registryRoot }),
 };
 
-console.log(`
-  research:dev
-    source        ${fixture ? "fixture (no runs root needed)" : "live"}
-${fixture ? "" : `    research CLI  ${bin}
-    runs root     ${runsRoot}
-    registry      ${registryRoot}
-`}`);
+if (fixture) {
+  console.log(`
+  research:dev — release identity
+    source                      fixture (no runs root or CLI needed)
+    ui commit                   ${uiCommit ?? "unknown"}
+    VITE_XTRM_RESEARCH=fixture
+`);
+} else {
+  console.log(`
+  research:dev — release identity
+    source                      live
+    ui commit                   ${uiCommit ?? "unknown"} (${appDir})
+    research CLI                ${cliReal ?? bin}${cliVer ? ` (xtrm-research ${cliVer})` : ""}
+    CLI source commit           ${cliCommit ?? "not a git checkout"}${cliRepoRoot ? ` (${cliRepoRoot})` : ""}
+    VITE_XTRM_RESEARCH=live
+    XTRM_RESEARCH_BIN=${bin}
+    XTRM_RESEARCH_ROOT=${runsRoot}
+    XTRM_RESEARCH_REGISTRY_ROOT=${registryRoot}
+`);
+}
 
 const child = spawn("npx", ["vite", ...passthrough], { cwd: appDir, env, stdio: "inherit", shell: false });
 child.on("exit", (code) => process.exit(code ?? 0));

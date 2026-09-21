@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fixtureResearch } from "./fixture.ts";
+import { capturedChartRows, fixtureResearch } from "./fixture.ts";
 import { researchAdapterFromEnv } from "./index.ts";
 import { liveResearch } from "./live.ts";
 import { isInvalidManifestRow, type RunListRow } from "./types.ts";
@@ -57,16 +57,40 @@ describe("fixtureResearch serves the declared adapter shapes", () => {
     expect(compared["run-b"]?.metrics).toEqual({});
   });
 
-  it("returns chart-data rows using the Experiment named-dataset id", async () => {
-    expect(await fixtureResearch.getChartData(["run-a", "run-b"], "accuracy")).toEqual([
-      { runId: "run-a", state: "metric", value: 0.5, se: 0.5, ci95: [0, 1], n: 2, method: "binomial-proportion" },
-      { runId: "run-b", state: "no_metric", reason: "run 'run-b' has no metric 'accuracy'" },
+  it("lists registry experiments, including one with zero runs", async () => {
+    expect(await fixtureResearch.listExperiments()).toEqual([
+      { id: "dup-detect-baseline", version: "v1" },
+      { id: "zero-run-baseline", version: "v1" },
     ]);
+  });
+
+  it("returns sample records, preserving an optional field's absence instead of inventing one", async () => {
+    const samples = await fixtureResearch.getSamples("run-a");
+    expect(samples.map((s) => s.sampleId)).toEqual(["s-0", "s-1"]);
+    expect(samples[0]).toMatchObject({ index: 0, status: "ok", output: { duplicate: false }, candidate: { duplicate: false, confidence: 0.5 } });
+    expect(samples[0]!.usage).toMatchObject({ inputTokens: 42, outputTokens: 7 });
+    // s-1 carries no output/candidate: they stay absent rather than becoming null or {}.
+    expect(samples[1]).not.toHaveProperty("output");
+    expect(samples[1]).not.toHaveProperty("candidate");
+    expect(samples[1]!.usage).toMatchObject({ inputTokens: null, nullReason: "not_exposed_by_provider" });
+  });
+
+  it("resolves a bare Experiment named-dataset id to the evaluator-namespaced metric, exactly as the CLI does", async () => {
+    const rows = await fixtureResearch.getChartData(["run-a", "run-b"], "accuracy");
+    // The fixture's metrics are stored namespaced (`exact-match::accuracy`); the bare dataset id
+    // must still resolve, and the resolved rows must equal the captured `chart-data` envelope.
+    expect(rows).toEqual(capturedChartRows);
+    expect(rows[0]).toMatchObject({ runId: "run-a", state: "metric", value: 0.5, se: 0.5, ci95: [0, 1], n: 2, method: "binomial-proportion" });
+    expect(rows[1]).toEqual({ runId: "run-b", state: "no_metric", reason: "run 'run-b' has no metric 'accuracy'" });
+    // An exact namespaced key is accepted too, and an unrelated id stays unresolved.
+    expect(await fixtureResearch.getChartData(["run-a"], "exact-match::accuracy")).toEqual(rows.slice(0, 1));
+    expect(await fixtureResearch.getChartData(["run-a"], "unrelated")).toEqual([{ runId: "run-a", state: "no_metric", reason: "run 'run-a' has no metric 'unrelated'" }]);
   });
 
   it("fails loudly on an id the fixture does not carry", async () => {
     await expect(fixtureResearch.getRun("ghost")).rejects.toThrow("unknown run: ghost");
     await expect(fixtureResearch.getExperiment("ghost")).rejects.toThrow("unknown experiment: ghost");
+    await expect(fixtureResearch.getSamples("ghost")).rejects.toThrow("unknown run: ghost");
     await expect(fixtureResearch.compare(["run-a", "ghost"])).rejects.toThrow("unknown run: ghost");
   });
 

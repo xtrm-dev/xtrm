@@ -60,6 +60,14 @@ export function readArgv(pathname: string, params: URLSearchParams): string[] | 
       const runId = id(params, "id");
       return runId ? ["run", "show", runId] : null;
     }
+    case "/experiments": {
+      const root = registryRoot();
+      return root ? ["experiments", "--registry-root", root] : null;
+    }
+    case "/samples": {
+      const runId = id(params, "run");
+      return runId ? ["samples", runId] : null;
+    }
     case "/experiment":
       return registryShowArgv("experiment", params);
     case "/workload":
@@ -109,9 +117,14 @@ function runResearch(bin: string, root: string | undefined, argv: string[]): Pro
 }
 
 export function researchCliApi(opts: { bin?: string; prefix?: string } = {}): Plugin {
-  const bin = opts.bin ?? process.env.XTRM_RESEARCH_BIN ?? "xtrm-research";
+  // No ambient PATH fallback: an unset XTRM_RESEARCH_BIN is a configuration error, not a reason
+  // to read whichever `xtrm-research` happens to be first on PATH (usually another checkout).
+  const bin = opts.bin ?? process.env.XTRM_RESEARCH_BIN ?? null;
+  // XTRM_RESEARCH_ROOT is the canonical run root; XTRM_RESEARCH_REGISTRY_ROOT is read per
+  // request by `registryRoot()`, which is also the allow-list boundary for registry reads.
   const root = process.env.XTRM_RESEARCH_ROOT || undefined;
   const prefix = opts.prefix ?? "/xtrm-api/research";
+  const registryPaths = new Set(["/experiments", "/experiment", "/workload", "/question-spec"]);
   // ponytail: in-process TTL cache, same shape as the Substrate bridge's (server/substrate-cli.ts).
   const cache = new Map<string, { at: number; value: Promise<{ status: number; body: string }> }>();
 
@@ -124,6 +137,15 @@ export function researchCliApi(opts: { bin?: string; prefix?: string } = {}): Pl
     if (req.method !== "GET") {
       res.statusCode = 405;
       return res.end();
+    }
+
+    if (!bin) {
+      res.statusCode = 503;
+      return res.end(JSON.stringify({ ok: false, error: "XTRM_RESEARCH_BIN is not set; start the app with `npm run research:dev`" }));
+    }
+    if (registryPaths.has(path) && !registryRoot()) {
+      res.statusCode = 503;
+      return res.end(JSON.stringify({ ok: false, error: "XTRM_RESEARCH_REGISTRY_ROOT is not set; start the app with `npm run research:dev`" }));
     }
 
     const argv = readArgv(path, url.searchParams);

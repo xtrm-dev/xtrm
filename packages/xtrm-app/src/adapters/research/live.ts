@@ -1,4 +1,4 @@
-import type { ChartDataRow, LineageChild, LineageNode, Metric, ResearchAdapter, RunListRow, RunShow, RunStatus, RunSummary, TailCursor, TailResult, UsageRecord } from "./types.ts";
+import type { ChartDataRow, ExperimentRef, LineageChild, LineageNode, Metric, ResearchAdapter, RunListRow, RunShow, RunStatus, RunSummary, SampleRecord, SampleStatus, TailCursor, TailResult, UsageRecord } from "./types.ts";
 
 // Wire shapes of the `xtrm-research-cli/v1` envelope (packages/research). Only the fields read here.
 interface Envelope<T> {
@@ -11,7 +11,7 @@ interface Envelope<T> {
 
 const ENVELOPE_SCHEMA = "xtrm-research-cli/v1";
 
-interface WireMetric {
+export interface WireMetric {
   value: number;
   se: number | null;
   ci95: number[] | null;
@@ -77,6 +77,24 @@ export interface WireRunSummary {
 }
 export type WireCompare = Record<string, WireRunSummary>;
 
+export interface WireExperimentRef {
+  id: string;
+  version: string;
+}
+
+/** `sample.schema.json`: `output`/`candidate`/`usage` are optional, `input`/`status` required. */
+export interface WireSample {
+  schema_version: string;
+  sample_id: string;
+  index: number;
+  input: unknown;
+  output?: unknown;
+  candidate?: unknown;
+  status: string;
+  usage?: WireUsageRecord | null;
+  created_at?: string;
+}
+
 export interface WireChartMetricRow extends WireMetric {
   run_id: string;
 }
@@ -138,6 +156,19 @@ export function mapRunSummary(w: WireRunSummary): RunSummary {
   return { metrics, sampleCount: w.sample_count, eventCount: w.event_count };
 }
 
+export function mapSample(w: WireSample): SampleRecord {
+  return {
+    sampleId: w.sample_id,
+    index: w.index,
+    status: w.status as SampleStatus,
+    input: w.input,
+    ...("output" in w ? { output: w.output } : {}),
+    ...("candidate" in w ? { candidate: w.candidate } : {}),
+    usage: w.usage ? mapUsage(w.usage) : null,
+    createdAt: w.created_at ?? null,
+  };
+}
+
 export function mapChartDataRow(w: WireChartDataRow): ChartDataRow {
   if ("state" in w) return { runId: w.run_id, state: "no_metric", reason: w.reason };
   return { runId: w.run_id, state: "metric", ...mapMetric(w) };
@@ -187,6 +218,9 @@ export const liveResearch: ResearchAdapter = {
   async listRuns() {
     return (await read<WireRunRow[]>("/runs", "runs")).map(mapRunRow);
   },
+  async listExperiments() {
+    return read<ExperimentRef[]>("/experiments", "experiments");
+  },
   async getLineage(runId) {
     return mapLineage(await read<WireLineageTree>(`/runs${q({ lineage: runId })}`, "runs"));
   },
@@ -214,6 +248,9 @@ export const liveResearch: ResearchAdapter = {
   },
   async getMetrics(runId) {
     return mapRunSummary(await read<WireRunSummary>(`/metrics${q({ run: runId })}`, "metrics"));
+  },
+  async getSamples(runId) {
+    return (await read<WireSample[]>(`/samples${q({ run: runId })}`, "samples")).map(mapSample);
   },
   async getChartData(runIds, metric) {
     const usp = new URLSearchParams();

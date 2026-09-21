@@ -2,7 +2,7 @@ import { useResearchChartData } from "../app/queries.ts";
 import type { ChartDataRow } from "../adapters/research/types.ts";
 import { ErrorState, LoadingState } from "../ui/primitives.tsx";
 
-interface ChartSpec {
+export interface ChartSpec {
   id: string;
   title: string;
   description: string;
@@ -24,7 +24,7 @@ function text(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function chartSpecs(experiment: Record<string, unknown>): ChartSpec[] {
+export function chartSpecs(experiment: Record<string, unknown>): ChartSpec[] {
   if (!Array.isArray(experiment.chart_specs)) return [];
   return experiment.chart_specs.flatMap((raw) => {
     const r = record(raw);

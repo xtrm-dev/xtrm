@@ -220,11 +220,17 @@ export function useProgram(follow = false) {
   return useQuery({ queryKey: ["program", "snapshot"], queryFn: () => program.snapshot(), staleTime: 60_000, refetchInterval: follow ? LIVE_MS : false, retry: false });
 }
 
-/** Backs both Research list views (XTRM-433 slice 2): the run list directly, the experiment
- * list by deduping `experiment` across rows — there is no `listExperiments` read verb. */
+/** Backs the Recent Runs list. The Experiments surface is registry-sourced through
+ * `useResearchExperiments`, so a definition with zero runs still appears. */
 export function useResearchRuns() {
   const { research } = useAdapters();
   return useQuery({ queryKey: ["research", "runs"], queryFn: () => research.listRuns(), staleTime: 30_000, retry: false });
+}
+
+/** Registry experiment definitions (`xtrm-research experiments`), not derived from runs. */
+export function useResearchExperiments() {
+  const { research } = useAdapters();
+  return useQuery({ queryKey: ["research", "experiments"], queryFn: () => research.listExperiments(), staleTime: 30_000, retry: false });
 }
 
 // --- Research: run analysis and comparison (XTRM-433 slice 3) --------------
@@ -262,6 +268,13 @@ export function useResearchChartData(runIds: string[], metric: string) {
 export function useResearchMetrics(runId: string) {
   const { research } = useAdapters();
   return useQuery({ queryKey: ["research", "metrics", runId], queryFn: () => research.getMetrics(runId), staleTime: 15_000, retry: false });
+}
+
+/** Sample records from `samples.jsonl` via the CLI `samples` verb — the sample table's content.
+ * Tail events are a separate telemetry read (`useResearchTail`) and are never sample contents. */
+export function useResearchSamples(runId: string) {
+  const { research } = useAdapters();
+  return useQuery({ queryKey: ["research", "samples", runId], queryFn: () => research.getSamples(runId), staleTime: 15_000, retry: false });
 }
 
 /** Full log, no cursor: the run analysis sample table reads every event once, unlike a live

@@ -2,7 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import type { RepoEvent } from "../adapters/index.tsx";
 import { readAccounting, readVersionRef } from "../adapters/research/manifest.ts";
-import { useEvents, useIssue, useProgram, useResearchMetrics, useResearchRun, useResearchTail } from "../app/queries.ts";
+import { useEvents, useIssue, useProgram, useResearchMetrics, useResearchRun, useResearchSamples, useResearchTail } from "../app/queries.ts";
 import { GithubIssuePanel } from "../github/GithubIssuePanel.tsx";
 import { PullPanel } from "../github/PullPanel.tsx";
 import { DevicePanel } from "../github/auth.tsx";
@@ -248,21 +248,65 @@ function MetricPanel({ runId, metricKey }: { runId: string; metricKey: string })
   );
 }
 
+function jsonText(value: unknown): string {
+  if (value === undefined) return "";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+/** One optional sample field: absent renders an explicit absence, never an inferred value. */
+function SampleField({ label: fieldLabel, value }: { label: string; value: unknown }) {
+  if (value === undefined) return <p className="text-sm text-ink-faint">{fieldLabel} not recorded on this sample.</p>;
+  return <ContentPanel className="mt-1 whitespace-pre-wrap" mono>{jsonText(value)}</ContentPanel>;
+}
+
 function SamplePanel({ runId, sampleId }: { runId: string; sampleId: string }) {
-  const q = useResearchTail(runId);
-  if (q.isPending) return <LoadingState rows={4} label="Loading sample" />;
-  if (q.isError) return <ErrorState title={`Sample log unavailable for ${runId}`} error={q.error} />;
-  const events = q.data.events.filter((e) => e.sampleId === sampleId);
-  if (events.length === 0) return <EmptyState icon="observability" title={`${sampleId} has no recorded events`} />;
+  // Sample content comes from the run's sample records. Telemetry events are a separate read,
+  // shown separately below and never folded into the sample's fields.
+  const samples = useResearchSamples(runId);
+  const telemetry = useResearchTail(runId);
+  if (samples.isPending) return <LoadingState rows={4} label="Loading sample" />;
+  if (samples.isError) return <ErrorState title={`Sample records unavailable for ${runId}`} error={samples.error} />;
+  const sample = samples.data.find((s) => s.sampleId === sampleId);
+  if (!sample) return <EmptyState icon="observability" title={`${sampleId} is not in this run's sample records`} />;
+  const events = (telemetry.data?.events ?? []).filter((e) => e.sampleId === sampleId);
   return (
     <>
       <Title eyebrow={<span className="font-mono">{runId}</span>}>{sampleId}</Title>
-      {events.map((e) => (
-        <InspectorSection key={e.seq} title={e.kind}>
-          <Fields rows={[["At", new Date(e.ts).toLocaleString()]]} />
-          {e.usage && <UsageFields usage={e.usage} />}
-        </InspectorSection>
-      ))}
+      <InspectorSection title="Sample record">
+        <Fields
+          rows={[
+            ["Index", <span className="tabular">{sample.index}</span>],
+            ["Status", sample.status],
+            ["Created", sample.createdAt ? new Date(sample.createdAt).toLocaleString() : <span className="text-ink-faint">—</span>],
+          ]}
+        />
+        {sample.usage && <UsageFields usage={sample.usage} />}
+      </InspectorSection>
+      <InspectorSection title="Input">
+        <SampleField label="Input" value={sample.input} />
+      </InspectorSection>
+      <InspectorSection title="Output">
+        <SampleField label="Output" value={sample.output} />
+      </InspectorSection>
+      <InspectorSection title="Candidate">
+        <SampleField label="Candidate" value={sample.candidate} />
+      </InspectorSection>
+      <InspectorSection title="Telemetry events">
+        {events.length === 0 ? (
+          <p className="text-sm text-ink-faint">No telemetry events reference this sample.</p>
+        ) : (
+          events.map((e) => (
+            <div key={e.seq} className="mb-2 last:mb-0">
+              <Fields rows={[["Event", e.kind], ["At", new Date(e.ts).toLocaleString()]]} />
+            </div>
+          ))
+        )}
+      </InspectorSection>
     </>
   );
 }

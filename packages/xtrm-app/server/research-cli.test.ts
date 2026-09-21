@@ -36,6 +36,19 @@ describe("research CLI bridge reads: happy paths", () => {
     expect(readArgv("/workload", q("id=dup-detect"))).toBeNull();
   });
 
+  it("experiments lists registry definitions with the configured registry root", () => {
+    process.env.XTRM_RESEARCH_REGISTRY_ROOT = "/srv/registry";
+    expect(readArgv("/experiments", q(""))).toEqual(["experiments", "--registry-root", "/srv/registry"]);
+  });
+
+  it("experiments refuses when the server has no registry root configured", () => {
+    expect(readArgv("/experiments", q(""))).toBeNull();
+  });
+
+  it("samples reads one run's sample records", () => {
+    expect(readArgv("/samples", q("run=run-0001"))).toEqual(["samples", "run-0001"]);
+  });
+
   it("tail, with and without --after", () => {
     expect(readArgv("/tail", q("run=run-0001"))).toEqual(["tail", "run-0001"]);
     expect(readArgv("/tail", q("run=run-0001&after=0"))).toEqual(["tail", "run-0001", "--after", "0"]);
@@ -120,6 +133,12 @@ describe("research CLI bridge reads: injection and validation boundary", () => {
     expect(readArgv("/chart-data", q("metric=accuracy"))).toBeNull();
     expect(readArgv("/chart-data", q("run=../etc&metric=accuracy"))).toBeNull();
     expect(readArgv("/chart-data", q("run=run-0001&metric=accuracy%20--root"))).toBeNull();
+  });
+
+  it("rejects samples without a run id, or with an unsafe one", () => {
+    expect(readArgv("/samples", q(""))).toBeNull();
+    expect(readArgv("/samples", q("run=" + encodeURIComponent("../etc")))).toBeNull();
+    expect(readArgv("/samples", q("run=" + encodeURIComponent("run; rm -rf /")))).toBeNull();
   });
 
   it("rejects an unknown path", () => {
@@ -222,6 +241,27 @@ function fakeRes() {
 }
 
 describe("research CLI bridge: middleware runtime branches", () => {
+  afterEach(() => {
+    delete process.env.XTRM_RESEARCH_REGISTRY_ROOT;
+    delete process.env.XTRM_RESEARCH_BIN;
+  });
+
+  it("returns 503 naming the missing CLI instead of falling back to an ambient PATH lookup", async () => {
+    const handle = mountMiddleware({ bin: "" });
+    const res = fakeRes();
+    await handle(fakeReq("/xtrm-api/research/runs", "GET"), res as unknown as ServerResponse, vi.fn());
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body!).error).toContain("XTRM_RESEARCH_BIN");
+  });
+
+  it("returns 503 naming the missing registry root for a registry read, not a generic 400", async () => {
+    const handle = mountMiddleware({ bin: "true" });
+    const res = fakeRes();
+    await handle(fakeReq("/xtrm-api/research/experiments", "GET"), res as unknown as ServerResponse, vi.fn());
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body!).error).toContain("XTRM_RESEARCH_REGISTRY_ROOT");
+  });
+
   it("refuses a non-GET request with 405 before any argv is built", async () => {
     const handle = mountMiddleware({ bin: "true" });
     const res = fakeRes();
