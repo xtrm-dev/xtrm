@@ -49,30 +49,53 @@ npm run build
 ### Research runs: seeing published runs locally
 
 The Research surfaces read published runs through the `xtrm-research` CLI, not
-through the repository. Three paths decide what you see, and the bridge has no
-sensible defaults for them:
+through the repository. The supported launch resolves the runtime identity for
+*this* checkout instead of exporting paths by hand. Four settings decide what
+you see:
 
 | variable | what it points at |
 |---|---|
-| `XTRM_RESEARCH_BIN` | the `xtrm-research` CLI to run |
+| `VITE_XTRM_RESEARCH` | `live` (default) or `fixture`; `fixture` serves the captured UI fixture and needs no CLI |
+| `XTRM_RESEARCH_BIN` | the release-matched `xtrm-research` executable |
 | `XTRM_RESEARCH_ROOT` | the published runs root |
-| `XTRM_RESEARCH_REGISTRY_ROOT` | the versioned registry definitions |
+| `XTRM_RESEARCH_REGISTRY_ROOT` | the matching shipped registry |
 
-Run them resolved for *this* checkout instead of exporting by hand:
+**Install (once per checkout).** The launcher expects the CLI at
+`packages/research/.venv/bin/xtrm-research`:
 
 ```bash
-npm run research:dev                     # resolve all three, then start Vite
+cd packages/research
+python3 -m venv .venv
+./.venv/bin/pip install -e '.[dev]'
+```
+
+**Update (after pulling changes to `packages/research`).** The install is
+editable, so source edits are picked up immediately; rerun the install when the
+entry point, dependencies, or `pyproject.toml` change:
+
+```bash
+cd packages/research && ./.venv/bin/pip install -e '.[dev]'
+```
+
+**Launch:**
+
+```bash
+npm run research:dev                     # resolve all four, print identities, then start Vite
 npm run research:dev -- --port 5180      # other flags go to Vite
 npm run research:dev -- --runs DIR       # a different runs root
 npm run research:fixture                 # UI only, no runs root needed
 ```
 
-`research:dev` prints what it resolved, and warns you when `xtrm-research` on
-`PATH` is a *different* one (usually another worktree's virtualenv). That trap is
-the reason the script exists: without `XTRM_RESEARCH_BIN`, the bridge silently
-reads whichever CLI is on `PATH`. The registry root matters just as much —
-without it the run page cannot resolve a run's Experiment / Workload /
-QuestionSpec definitions, and the semantic sections come back empty.
+`research:dev` prints the UI commit, the resolved CLI path / version / source
+commit and both roots, then starts Vite. It **refuses to start** when the
+resolved CLI belongs to a different checkout than the app (the ambient-symlink
+trap) or when it lacks a read verb the bridge calls, naming the two checkouts or
+the missing verbs. At runtime the bridge has no PATH fallback: an unset
+`XTRM_RESEARCH_BIN` or `XTRM_RESEARCH_REGISTRY_ROOT` is a `503` naming the
+missing variable, never a silent read of another worktree. The registry root
+matters just as much — without it the run page cannot resolve a run's
+Experiment / Workload / QuestionSpec definitions, and the semantic sections come
+back empty.
 
 Then open `/research/runs` and pick a run. The run page resolves the exact
 versioned definitions the run's manifest references and shows why the run
@@ -122,7 +145,7 @@ Data sources (select with `VITE_XTRM_GITHUB|SUBSTRATE|PROGRAM|RESEARCH=live|fixt
 |---|---|---|
 | GitHub / repository Activity, repository list | live | Console v1 backend (`XTRM_CONSOLE_URL`, default `http://127.0.0.1:3030`) via Vite proxy |
 | Substrate Issues list, issue page, issue drawer, Jira-style editing | live | installed `sb` CLI envelope `substrate-cli/v1` through an allow-listed bridge; reads plus writes via `sb issue edit/state/note/create` (`XTRM_SUBSTRATE_WRITES=0` for read-only, `XTRM_SB_DB=<path>` for a dev database); never SQLite |
-| Research runs, experiments, metrics, comparison | live | `xtrm-research --json` read verbs (`xtrm-research-cli/v1`) through an allow-listed bridge, pointed by `XTRM_RESEARCH_BIN`, `XTRM_RESEARCH_ROOT`, `XTRM_RESEARCH_REGISTRY_ROOT`; start it with `npm run research:dev` (below) or `npm run research:fixture` for the UI alone |
+| Research runs, registry experiments, sample records, metrics, comparison | live | `xtrm-research --json` read verbs (`xtrm-research-cli/v1`) through an allow-listed bridge, pointed by `XTRM_RESEARCH_BIN`, `XTRM_RESEARCH_ROOT`, `XTRM_RESEARCH_REGISTRY_ROOT`; start it with `npm run research:dev` (below) or `npm run research:fixture` for the UI alone |
 | Program | fixture | Console backend `/api/programme` is disabled by deployment policy (404); fixture uses the same `ProgrammeSnapshotResponse` mapper |
 
 UI references and MCP servers (shadcn, Spectrum UI, LiveKit docs): `docs/ui-component-reference-registry.md`.

@@ -72,10 +72,28 @@ standard runtime, Specialists runtime, Pi, or xtrm-app.
 
 ## Install
 
+xtrm-app's `npm run research:dev` expects the CLI at
+`packages/research/.venv/bin/xtrm-research`, so install into a checkout-local
+venv:
+
 ```bash
 cd packages/research
-pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
+python3 -m venv .venv
+./.venv/bin/pip install -e '.[dev]'   # or: uv pip install -e '.[dev]'
 ```
+
+## Update
+
+The install is editable, so source edits are picked up immediately. Rerun the
+install when the entry point, dependencies, or `pyproject.toml` change:
+
+```bash
+cd packages/research && ./.venv/bin/pip install -e '.[dev]'
+```
+
+xtrm-app refuses to start against a CLI that lacks a read verb the bridge calls,
+so a stale install fails at launch with the missing verbs named rather than as a
+silent wrong answer.
 
 To use the CLI from anywhere rather than only inside the venv:
 
@@ -83,6 +101,27 @@ To use the CLI from anywhere rather than only inside the venv:
 ln -sf "$PWD/.venv/bin/xtrm-research" ~/.local/bin/xtrm-research
 xtrm-research runs --json          # reads ~/.xtrm/research/runs by default
 ```
+
+This PATH symlink is a convenience for interactive use only. xtrm-app must not
+resolve its CLI from PATH: the supported launch sets `XTRM_RESEARCH_BIN` to an
+explicit checkout-local executable and refuses one from a different checkout.
+
+### Deployed instance (operators)
+
+The xtrm-app dev server reached over the tailnet (`:8446 -> 127.0.0.1:5178`) is
+an operator-run process, not a supervised service. Start or update it from the
+checkout that should be served:
+
+```bash
+# update the pinned runtime after a pull, then restart
+cd packages/research && ./.venv/bin/pip install -e '.[dev]'
+cd ../xtrm-app && npm run research:dev -- --host 127.0.0.1 --port 5178
+```
+
+The launcher prints the release identity (UI commit, CLI path/version/source
+commit, run root, registry root) on every start; record that output as the
+deployed identity. There is no unit file or restart supervisor in this
+repository, so the process does not survive a reboot without one.
 
 The Jev backend talks to TypeSafe through the optional `typesafe-sdk`
 (`pip install -e '.[jev]'`). The package and its full test suite import
