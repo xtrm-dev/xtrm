@@ -226,8 +226,17 @@ function contractSections(contract: unknown): string[] {
 
 const BOOLEAN_FLAGS = new Set(["json", "help", "version", "dry-run"]);
 
-function parseArgs(argv: string[]): { flags: Map<string, string | true>; positionals: string[] } {
-  const flags = new Map<string, string | true>();
+// Repeated-flag semantics (XTRM-552): a non-boolean flag accumulates every
+// supplied value in caller order. Scalar readers use flag() and take the
+// last value (explicit last-wins); list readers use flagList() and take
+// every value. A boolean flag is presence-only and repeats idempotently.
+// A bare non-boolean flag (`--reason` with no value) is presence without a
+// value and never clobbers values already supplied.
+type FlagValue = true | string[];
+type Flags = Map<string, FlagValue>;
+
+function parseArgs(argv: string[]): { flags: Flags; positionals: string[] } {
+  const flags: Flags = new Map();
   const positionals: string[] = [];
   let i = 0;
   while (i < argv.length) {
@@ -236,10 +245,14 @@ function parseArgs(argv: string[]): { flags: Map<string, string | true>; positio
       const key = a.slice(2);
       const next = argv[i + 1];
       if (!BOOLEAN_FLAGS.has(key) && next !== undefined && !next.startsWith("--")) {
-        flags.set(key, next);
+        const prev = flags.get(key);
+        if (Array.isArray(prev)) prev.push(next);
+        else flags.set(key, [next]);
         i += 2;
-      } else {
+      } else if (!flags.has(key)) {
         flags.set(key, true);
+        i += 1;
+      } else {
         i += 1;
       }
     } else {
@@ -250,9 +263,17 @@ function parseArgs(argv: string[]): { flags: Map<string, string | true>; positio
   return { flags, positionals };
 }
 
-function flag(flags: Map<string, string | true>, name: string): string | undefined {
+function flag(flags: Flags, name: string): string | undefined {
   const v = flags.get(name);
-  return typeof v === "string" ? v : undefined;
+  if (v === undefined || v === true) return undefined;
+  return v[v.length - 1];
+}
+
+// Every value supplied for a repeated flag, in caller order (XTRM-552).
+function flagList(flags: Flags, name: string): string[] | undefined {
+  const v = flags.get(name);
+  if (v === undefined || v === true) return undefined;
+  return v.slice();
 }
 
 function readJsonArg(value: string): unknown {
@@ -486,7 +507,9 @@ Methodology: close answers WHY the Issue became terminal. Pick the bounded
 outcome honestly (completed, superseded, duplicate, wont_fix, invalid,
 cancelled, abandoned); the reason lives in the Closure row, never only in
 git log. Cite the settlement evidence: --result journal result refs for the
-bounded outcome, --validation/--receipt/--artifact for the proof. Closure
+bounded outcome, --validation/--receipt/--artifact for the proof. Each
+evidence flag accepts a comma-separated list and may be repeated; repeated
+values accumulate in caller order, never silently drop a value. Closure
 rows are immutable history -- a mistaken close reopens, it never rewrites.
 Stopping one execution is NOT a close: release the claim instead.`,
   "issue.state": `usage: sb issue state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>] [--project <id>]
@@ -501,7 +524,7 @@ keeps every historical Closure row untouched, appends a reopen event, and restor
 alias for: sb issue state <ref> deferred [--until <ms|clear>].`,
   "issue.cancel": `usage: sb issue cancel <ref> --reason <r> [--actor <who>] [--result <a,b>] [--receipt <a,b>] [--validation <a,b>] [--artifact <a,b>] [--project <id>]
 
-writes a terminal Closure with the cancelled outcome resting on the cancelled lifecycle state. Stopping one execution is NOT this verb: release the claim (\`sb issue release\`) instead, which leaves lifecycle and Closure untouched. Bare \`sb issue cancel <ref>\` stays the legacy lifecycle alias (alias for: sb issue state <ref> cancelled).`,
+writes a terminal Closure with the cancelled outcome resting on the cancelled lifecycle state. Each evidence flag accepts a comma-separated list and may be repeated; repeated values accumulate in caller order. Stopping one execution is NOT this verb: release the claim (\`sb issue release\`) instead, which leaves lifecycle and Closure untouched. Bare \`sb issue cancel <ref>\` stays the legacy lifecycle alias (alias for: sb issue state <ref> cancelled).`,
   "issue.archive": `usage: sb issue archive <ref> [--project <id>]
 
 alias for: sb issue state <ref> archived.`,
@@ -928,7 +951,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
 
 const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export"]);
 
-function assertKnownFlags(flags: Map<string, string | true>, command: string): void {
+function assertKnownFlags(flags: Flags, command: string): void {
   const allowed = new Set([...GLOBAL_FLAGS, ...(FLAG_ALLOWLIST[command] ?? [])]);
   for (const name of flags.keys()) {
     if (!allowed.has(name)) throw new Error(`unknown flag --${name} for \`${command}\` (see usage)`);
@@ -992,7 +1015,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
 
 // Effective project context (ADR §4): explicit flag > SUBSTRATE_PROJECT >
 // initialized repository identity > explicit checkout link > fail closed.
-function projectOf(svc: IssueService, flags: Map<string, string | true>): string {
+function projectOf(svc: IssueService, flags: Flags): string {
   const repo = discoverRepository();
   return svc.resolveProject({
     explicit: flag(flags, "project") ?? undefined,
@@ -1005,7 +1028,7 @@ function projectOf(svc: IssueService, flags: Map<string, string | true>): string
 // Ref-scoped mutation guard (ADR §5): the effective context must resolve and
 // the ref must belong to it. `--project <other>` keeps deliberate
 // cross-project work possible (ADR §16).
-function refInContext(svc: IssueService, flags: Map<string, string | true>, ref: string): ResolvedIssue {
+function refInContext(svc: IssueService, flags: Flags, ref: string): ResolvedIssue {
   return svc.resolveRefInProject(ref, projectOf(svc, flags));
 }
 
@@ -1032,15 +1055,17 @@ function applyDeferUntil(svc: IssueService, issueId: string, raw: string | undef
 // stay legacy lifecycle aliases.
 const CLOSURE_FLAGS = ["outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact"];
 
-function hasClosureFlags(flags: Map<string, string | true>): boolean {
+function hasClosureFlags(flags: Flags): boolean {
   return CLOSURE_FLAGS.some((f) => flags.has(f));
 }
 
-// Comma-separated ref lists (--result a,b --receipt c). Single values stay
-// single; absence stays absent (never invented).
-function splitList(raw: string | undefined): string[] | undefined {
+// Comma-separated ref lists (--result a,b --receipt c). Each occurrence is
+// split on commas and every occurrence is kept in caller order, so
+// `--artifact a --artifact b,c` yields [a, b, c] (XTRM-552). Absence stays
+// absent (never invented).
+function splitList(raw: string[] | undefined): string[] | undefined {
   if (raw === undefined) return undefined;
-  const out = raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  const out = raw.flatMap((s) => s.split(",")).map((s) => s.trim()).filter((s) => s.length > 0);
   return out;
 }
 
@@ -1048,7 +1073,7 @@ function splitList(raw: string | undefined): string[] | undefined {
 // explicit typed flags plus the R4 env session. --session is deliberately
 // absent: session identity is runtime-known (XTRM_SESSION_ID), never a
 // CLI-invented label (§98).
-function closeEnvelope(flags: Map<string, string | true>): ReturnType<typeof enrichExecutionContext> {
+function closeEnvelope(flags: Flags): ReturnType<typeof enrichExecutionContext> {
   const activation = flag(flags, "activation");
   const attempt = flag(flags, "attempt");
   const actor = flag(flags, "actor");
@@ -1090,7 +1115,7 @@ function runIssue(
   ctx: Ctx,
   command: string,
   verb: string,
-  flags: Map<string, string | true>,
+  flags: Flags,
   rest: string[],
 ): CliResult {
   switch (verb) {
@@ -1428,10 +1453,10 @@ function runIssue(
         reason,
         actor: flag(flags, "actor") ?? "sb-cli",
         executionContext: closeEnvelope(flags),
-        validationRefs: splitList(flag(flags, "validation")),
-        journalResultRefs: splitList(flag(flags, "result")),
-        receiptRefs: splitList(flag(flags, "receipt")),
-        artifactRefs: splitList(flag(flags, "artifact")),
+        validationRefs: splitList(flagList(flags, "validation")),
+        journalResultRefs: splitList(flagList(flags, "result")),
+        receiptRefs: splitList(flagList(flags, "receipt")),
+        artifactRefs: splitList(flagList(flags, "artifact")),
       });
       return emit(ctx, command, { ...issueSummary(svc.getIssue(resolved.id)), closure: closurePayload(closure) });
     }
@@ -1483,10 +1508,10 @@ function runIssue(
         reason,
         actor: flag(flags, "actor") ?? "sb-cli",
         executionContext: closeEnvelope(flags),
-        validationRefs: splitList(flag(flags, "validation")),
-        journalResultRefs: splitList(flag(flags, "result")),
-        receiptRefs: splitList(flag(flags, "receipt")),
-        artifactRefs: splitList(flag(flags, "artifact")),
+        validationRefs: splitList(flagList(flags, "validation")),
+        journalResultRefs: splitList(flagList(flags, "result")),
+        receiptRefs: splitList(flagList(flags, "receipt")),
+        artifactRefs: splitList(flagList(flags, "artifact")),
       });
       return emit(ctx, command, { ...issueSummary(svc.getIssue(resolved.id)), closure: closurePayload(closure) });
     }
@@ -1600,7 +1625,7 @@ function runJournal(
   ctx: Ctx,
   command: string,
   verb: string,
-  flags: Map<string, string | true>,
+  flags: Flags,
   rest: string[],
 ): CliResult {
   const journal = new JournalService(db, svc);
@@ -1792,7 +1817,7 @@ function runProvenance(
   ctx: Ctx,
   command: string,
   verb: string,
-  flags: Map<string, string | true>,
+  flags: Flags,
   rest: string[],
 ): CliResult {
   const journal = new JournalService(db, svc);
@@ -1937,7 +1962,7 @@ function runProject(
   ctx: Ctx,
   command: string,
   verb: string,
-  flags: Map<string, string | true>,
+  flags: Flags,
 ): CliResult {
   if (verb === "link") {
     const root = discoverGitRoot();
@@ -2056,7 +2081,7 @@ function runProjectRepair(
 // Fail closed when a PlanDraft targets a Project outside the effective
 // repository context. Update specs are keyed by their stored Issue's Project
 // (the draft's projectId is not authoritative on updates).
-function requireDraftInContext(svc: IssueService, flags: Map<string, string | true>, draft: unknown): void {
+function requireDraftInContext(svc: IssueService, flags: Flags, draft: unknown): void {
   const issues = (draft as { issues?: unknown } | null | undefined)?.issues;
   if (!Array.isArray(issues)) return;
   const context = projectOf(svc, flags);
@@ -2084,7 +2109,7 @@ function runPlan(
   ctx: Ctx,
   command: string,
   verb: string,
-  flags: Map<string, string | true>,
+  flags: Flags,
 ): CliResult {
   const file = flag(flags, "file") ?? (() => { throw new Error("--file <plan.json> is required"); })();
   const draft = readJsonArg(file) as never;
@@ -2145,7 +2170,7 @@ function runImport(
   ctx: Ctx,
   command: string,
   verb: string,
-  flags: Map<string, string | true>,
+  flags: Flags,
 ): CliResult {
   if (verb !== "beads") throw new Error(`unknown import verb: ${verb} (want beads)`);
   const file = flag(flags, "file") ?? (() => { throw new Error("--file <beads-export.jsonl> is required"); })();
@@ -2466,7 +2491,7 @@ function runExport(
   ctx: Ctx,
   command: string,
   verb: string,
-  flags: Map<string, string | true>,
+  flags: Flags,
 ): CliResult {
   if (verb !== undefined && verb !== "project") throw new Error(`unknown export verb: ${verb} (want project)`);
   const project = flag(flags, "project") ?? (() => { throw new Error("--project is required"); })();
