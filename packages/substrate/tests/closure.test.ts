@@ -18,6 +18,7 @@ import { JournalService } from "../src/service/journal-service.ts";
 import { importBeads } from "../src/compatibility/beads/import.ts";
 import { CLOSURE_OUTCOMES } from "../src/domain/closure.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
+import { renderIssueShow } from "../src/presentation/terminal.ts";
 import { contract } from "./helpers.ts";
 
 const SCOPE = "/var/tmp";
@@ -173,6 +174,21 @@ describe("C1 §96 close-reason matrix", () => {
     assert.equal(shown.closure["outcome"], "completed");
     assert.equal(shown.closure["reason"], "done via cli");
     assert.equal(shown.closure["actor"], "cli-actor");
+    // XTRM-554: the evidence written by close is readable back from show, not
+    // only from the close response.
+    assert.deepEqual(shown.closure["validationRefs"], ["v1"]);
+    assert.deepEqual(shown.closure["journalResultRefs"], ["jr1", "jr2"]);
+    assert.deepEqual(shown.closure["receiptRefs"], ["rc1"]);
+    assert.deepEqual(shown.closure["artifactRefs"], ["a1"]);
+    const human = renderIssueShow(shown as Record<string, unknown>, { color: false });
+    assert.match(human, /evidence: 1 validation · 2 journal results · 1 receipt · 1 artifact/);
+    // ...and from the provenance spine, which carried no closure view before.
+    const trace = cli(dbPath, ["provenance", "trace", created.humanRef]) as { closures: Array<Record<string, unknown>> };
+    assert.equal(trace.closures.length, 1);
+    assert.deepEqual(trace.closures[0]!["validationRefs"], ["v1"]);
+    assert.deepEqual(trace.closures[0]!["artifactRefs"], ["a1"]);
+    assert.deepEqual(trace.closures[0]!["journalResultRefs"], ["jr1", "jr2"]);
+    assert.deepEqual(trace.closures[0]!["receiptRefs"], ["rc1"]);
   });
 
   it("close without outcome/reason fails closed and records nothing terminal", () => {
