@@ -108,20 +108,25 @@ explicit checkout-local executable and refuses one from a different checkout.
 
 ### Deployed instance (operators)
 
-The xtrm-app dev server reached over the tailnet (`:8446 -> 127.0.0.1:5178`) is
-an operator-run process, not a supervised service. Start or update it from the
-checkout that should be served:
+In the operator environment the tailnet route
+(`:8446 -> 127.0.0.1:5178`) is supervised by a systemd **user** unit,
+`xtrm-console-v2.service`, which serves a separate clone pinned to a detached
+`origin/main` commit. That unit's comment block carries the exact update recipe —
+fetch, `checkout --detach origin/main`, reinstall this package, then
+`systemctl --user restart xtrm-console-v2.service`. A restart is the deploy. The
+repository ships no unit file; the supervisor is operator-provided.
+
+For a manual run from any checkout:
 
 ```bash
-# update the pinned runtime after a pull, then restart
-cd packages/research && ./.venv/bin/pip install -e '.[dev]'
-cd ../xtrm-app && npm run research:dev -- --host 127.0.0.1 --port 5178
+npm run research:dev -- --host 127.0.0.1 --port 5178
 ```
 
-The launcher prints the release identity (UI commit, CLI path/version/source
-commit, run root, registry root) on every start; record that output as the
-deployed identity. There is no unit file or restart supervisor in this
-repository, so the process does not survive a reboot without one.
+Either way the launcher prints the release identity (UI commit, CLI
+path/version/source commit, run root, registry root) on every start; record that
+output as the deployed identity. The service must resolve its CLI from its own
+checkout — a restart with a mismatched binary or a missing read verb fails at
+startup rather than serving a half-current runtime.
 
 The Jev backend talks to TypeSafe through the optional `typesafe-sdk`
 (`pip install -e '.[jev]'`). The package and its full test suite import
