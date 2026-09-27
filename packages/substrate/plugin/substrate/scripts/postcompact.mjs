@@ -11,5 +11,5 @@ armPipeDrain();
 const { handlePostCompact } = await resolveSubstrate("postcompact.ts");
 const result = handlePostCompact(await readHookInput());
 
-process.stdout.write(JSON.stringify({ ok: true, entryId: result.entryId, reason: result.reason ?? null }) + "\n");
+process.stdout.write(JSON.stringify({ ok: true, entryId: result.entryId, reason: result.reason ?? undefined }) + "\n");
 process.exitCode = 0;

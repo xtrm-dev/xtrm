@@ -38,7 +38,8 @@ process.stdout.write(
   JSON.stringify({
     additionalContext: context,
     hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context ?? "" },
-    reason: context ? "mcp-precondition-unmet" : null,
+    // Claude Code validates `reason` as an optional string: null fails the whole hook output.
+    reason: context ? "mcp-precondition-unmet" : undefined,
   }) + "\n",
 );
 process.exitCode = 0;

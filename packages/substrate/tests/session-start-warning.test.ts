@@ -17,7 +17,9 @@ function runPrecondition(env: Record<string, string | undefined>): { code: numbe
     env: { ...process.env, ...env },
     timeout: 30000,
   });
-  const parsed = JSON.parse(out) as { additionalContext: string | null };
+  const parsed = JSON.parse(out) as { additionalContext: string | null; reason?: unknown };
+  // Claude Code rejects the whole hook output when `reason` is present but not a string.
+  assert.notEqual(parsed.reason, null, "reason must be omitted, never null");
   return { code: 0, context: parsed.additionalContext };
 }
 

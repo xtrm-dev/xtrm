@@ -21,7 +21,7 @@ process.stdout.write(
   JSON.stringify({
     additionalContext: result.additionalContext,
     hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: result.additionalContext ?? "" },
-    reason: result.reason ?? null,
+    reason: result.reason ?? undefined,
   }) + "\n",
 );
 process.exitCode = 0;
