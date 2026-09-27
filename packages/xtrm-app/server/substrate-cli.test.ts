@@ -1,8 +1,33 @@
 // @vitest-environment node
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readArgv, writeArgv } from "./substrate-cli.ts";
+import { readArgv, resolveSbBin, writeArgv } from "./substrate-cli.ts";
 
 const q = (s: string) => new URLSearchParams(s);
+
+describe("sb binary resolution", () => {
+  it("finds sb on PATH, falls back to the running node's bin dir, else keeps the bare name", () => {
+    const dir = mkdtempSync(join(tmpdir(), "sb-bin-"));
+    const name = "sb-resolve-fixture";
+    const file = join(dir, name);
+    writeFileSync(file, "#!/bin/sh\n", { mode: 0o755 });
+    const path = process.env.PATH;
+    try {
+      process.env.PATH = dir;
+      expect(resolveSbBin(name)).toBe(file);
+      expect(resolveSbBin("/opt/custom/sb")).toBe("/opt/custom/sb");
+      // Not on PATH: the node running this test is itself findable that way.
+      process.env.PATH = "";
+      expect(resolveSbBin(basename(process.execPath))).toBe(process.execPath);
+      expect(resolveSbBin(name)).toBe(name);
+    } finally {
+      process.env.PATH = path;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("substrate CLI bridge reads", () => {
   it("maps supported reads to fixed argv", () => {
