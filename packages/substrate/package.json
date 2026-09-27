@@ -1,6 +1,6 @@
 {
   "name": "@jaggerxtrm/substrate",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Durable work substrate: issue graph over SQLite/WAL (library-first; sb CLI consumes this). Published copies ship prebuilt JavaScript and run on Node >=24 or Bun >=1.3; from a source checkout the entry points are TypeScript and run directly, with no build step.",
   "type": "module",
   "main": "./src/index.ts",
