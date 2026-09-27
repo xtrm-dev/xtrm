@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.2.2] - 2026-09-27
+
 ### Summary
 
 A bounded board read model, so listing issues stops costing a query per issue.
@@ -36,6 +40,15 @@ values agree exactly; only the loading changed.
   and `ready` still return every issue by walking pages.
 - Root exports: `domain/board.ts` and `domain/readiness.ts` are now exported from
   the package root, which previously did not export the readiness types.
+
+Closure evidence is also durable end to end now. Writing it no longer loses
+repeated flags, and reading it no longer requires touching SQLite directly.
+
+### Fixed
+- Accumulate repeated closure evidence flags so `--artifact A --artifact B`
+  records both instead of silently keeping only B (XTRM-552) ([9747fa0](https://github.com/xtrm-dev/xtrm/commit/9747fa0558c92eb7bc8bd7bd2ab70bfd343fd842))
+- Read closure evidence refs back from `sb issue show` and `provenance trace`
+  instead of leaving them reachable only by reading SQLite rows (XTRM-554) ([fef8541](https://github.com/xtrm-dev/xtrm/commit/fef8541dce3847da4f7a4b8d1d76305af8268a03))
 
 ## [0.2.1] - 2026-09-18
 
