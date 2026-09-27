@@ -25,6 +25,10 @@ Portfolio tracker: Jira `ISSUE-140`. Repository-local executable work belongs in
 
 Audit evidence is historical at its pinned revision. When it conflicts with a canonical document, the canonical document wins.
 
+## Operational
+
+- `tailnet-deploy.md` — the always-on tailnet instance: pinned clone, systemd unit, update and verification steps.
+
 ## Historical
 
 - `implementation-packet.md`, `local-worker-dispatch.md` — pre-Console-v2 implementation briefs that use the superseded `Episode` term. Read `Episode` as `Frame`. Do not dispatch work from them.

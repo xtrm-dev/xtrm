@@ -12,7 +12,9 @@
 // to make the bridge read-only, or XTRM_SB_DB=<path> to target a development database.
 
 import { execFile } from "node:child_process";
+import { accessSync, constants } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { delimiter, dirname, join } from "node:path";
 import type { Plugin } from "vite";
 
 const PROJECT_RE = /^prj_[a-z0-9_-]{1,64}$/i;
@@ -138,6 +140,28 @@ export function writeArgv(pathname: string, body: Record<string, unknown>): stri
   }
 }
 
+/**
+ * Resolve `sb` without trusting PATH alone. A dev server started from a
+ * non-login shell (agent session, tmux, systemd, cron) has no nvm bin dir on
+ * PATH even though the running node lives in one — and a globally installed
+ * `sb` sits next to that node. Without this the bridge fails with
+ * `spawn sb ENOENT` while `sb` works fine in every interactive shell.
+ * A name containing a path separator is taken as given.
+ */
+export function resolveSbBin(bin: string): string {
+  if (bin.includes("/") || bin.includes("\\")) return bin;
+  for (const dir of [...(process.env.PATH ?? "").split(delimiter), dirname(process.execPath)]) {
+    const candidate = join(dir, bin);
+    try {
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // not here; keep looking
+    }
+  }
+  return bin; // nothing found: let execFile report ENOENT
+}
+
 function runSb(bin: string, db: string | undefined, argv: string[]): Promise<{ status: number; body: string }> {
   const full = [...(db ? ["--db", db] : []), "--json", ...argv];
   return new Promise((resolve) => {
@@ -147,7 +171,7 @@ function runSb(bin: string, db: string | undefined, argv: string[]): Promise<{ s
       if (body.startsWith("{")) return resolve({ status: 200, body });
       resolve({
         status: 502,
-        body: JSON.stringify({ ok: false, error: err ? `sb failed: ${err.message}` : "sb returned no JSON", stderr: stderr.slice(0, 500) }),
+        body: JSON.stringify({ ok: false, error: err ? `sb failed (bin=${bin}): ${err.message}` : "sb returned no JSON", stderr: stderr.slice(0, 500) }),
       });
     });
   });
@@ -173,7 +197,7 @@ function readBody(req: IncomingMessage): Promise<Record<string, unknown> | null>
 }
 
 export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): Plugin {
-  const bin = opts.bin ?? process.env.XTRM_SB_BIN ?? "sb";
+  const bin = resolveSbBin(opts.bin ?? process.env.XTRM_SB_BIN ?? "sb");
   const db = process.env.XTRM_SB_DB || undefined;
   const writes = process.env.XTRM_SUBSTRATE_WRITES !== "0";
   const prefix = opts.prefix ?? "/xtrm-api/substrate";
