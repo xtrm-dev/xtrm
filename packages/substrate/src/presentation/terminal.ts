@@ -278,6 +278,17 @@ export function renderIssueShow(payload: Record<string, unknown>, opts: Terminal
   }
   if (provenance) summary.push(`Provenance ${String(provenance.eventCount ?? 0)} events${provenance.lastEventType ? ` · ${String(provenance.lastEventType)}` : ""}`);
   if (closure) summary.push(`Closure ${String(closure.outcome ?? closure.terminalState ?? "terminal")} · ${String(closure.reason ?? "")}`.trim());
+  if (closure && closure["closed"] === true) {
+    // The evidence refs are why the Issue is terminal; name their counts so a
+    // reader knows the Closure row carries them and can read them with --json.
+    const refCounts = ([['validationRefs', 'validation'], ['journalResultRefs', 'journal result'], ['receiptRefs', 'receipt'], ['artifactRefs', 'artifact']] as const)
+      .map(([key, label]) => {
+        const n = Array.isArray(closure[key]) ? (closure[key] as unknown[]).length : 0;
+        return n > 0 ? `${n} ${label}${n === 1 ? '' : 's'}` : null;
+      })
+      .filter((part): part is string => part !== null);
+    if (refCounts.length > 0) summary.push(`  evidence: ${refCounts.join(" · ")}`);
+  }
   if (summary.length > 0) {
     lines.push("", dim("─".repeat(Math.min(width, 72)), opts.color));
     for (const s of summary) lines.push(dim(s, opts.color));
@@ -537,6 +548,15 @@ export interface ProvenanceTraceView {
   checkpoints: Array<{ entryId?: string; sequence?: number; kind?: string }>;
   commits: string[];
   prs: Array<{ value: string }>;
+  closures?: Array<{
+    outcome?: string;
+    terminalState?: string;
+    reason?: string;
+    validationRefs?: string[];
+    journalResultRefs?: string[];
+    receiptRefs?: string[];
+    artifactRefs?: string[];
+  }>;
 }
 
 function traceSection<T>(label: string, items: T[], renderItem: (item: T) => string, opts: TerminalStyleOptions): string[] {
@@ -568,5 +588,18 @@ export function renderProvenanceTrace(trace: ProvenanceTraceView, opts: Terminal
   );
   lines.push(...traceSection("commits", trace.commits, (c) => c, opts));
   lines.push(...traceSection("prs", trace.prs, (p) => p.value, opts));
+  lines.push(
+    ...traceSection(
+      "closures",
+      trace.closures ?? [],
+      (c) => {
+        const counts = ([['validationRefs', 'validation'], ['journalResultRefs', 'journal result'], ['receiptRefs', 'receipt'], ['artifactRefs', 'artifact']] as const)
+          .map(([key, label]) => `${(c[key] ?? []).length} ${label}`)
+          .join(" · ");
+        return `${c.outcome ?? c.terminalState ?? "terminal"}${c.reason ? ` · ${c.reason}` : ""} · evidence ${counts}`;
+      },
+      opts,
+    ),
+  );
   return lines.join("\n") + "\n";
 }

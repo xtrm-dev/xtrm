@@ -151,6 +151,13 @@ function closureSummary(db: ReturnType<typeof openSubstrate>, svc: IssueService,
         session: latest.executionContext?.xtrmSessionId ?? latest.executionContext?.host?.sessionId ?? null,
         revision: latest.issueRevision,
         contractHash: latest.contractHash,
+        // The evidence refs are the point of the Closure row (ADR §96): they are
+        // written by `issue close` and must be readable back, not only present in
+        // the close response.
+        validationRefs: latest.validationRefs,
+        journalResultRefs: latest.journalResultRefs,
+        receiptRefs: latest.receiptRefs,
+        artifactRefs: latest.artifactRefs,
       };
     }
   } catch {

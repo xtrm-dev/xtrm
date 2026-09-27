@@ -94,6 +94,9 @@ export interface ProvenanceTrace {
   commits: string[];
   prs: Array<{ value: string; provider: string | null }>;
   externalBindings: Array<{ provider: string; scope: string; remoteId: string; url?: string | null }>;
+  // Every Closure row in outcome order, with its evidence refs (ADR §96). A
+  // reopened and re-closed Issue carries one row per settlement.
+  closures: Closure[];
   closureRevision: number | null;
 }
 
@@ -729,6 +732,7 @@ export class ProvenanceService {
       commits,
       prs,
       externalBindings: this.listExternal(issueId),
+      closures: this.closureOutcomes(issueId),
       closureRevision: closed ? issue.currentRevision : null,
     };
   }
