@@ -1,7 +1,7 @@
 # Research UI contract
 
 **Status:** implementation contract  
-**Tracking:** Jira XTRM-99 c.13439 / XTRM-433  
+**Tracking:** Jira XTRM-99 c.13439 / XTRM-433 / XTRM-549  
 **Scope:** `packages/xtrm-app` Research surfaces and the read-only `xtrm-research` bridge
 
 ## Ownership
@@ -41,6 +41,13 @@ Run Analysis
 The first viewport should answer **why**, **what happened**, and **what it means**. Charts supplement the plain-language result; they never replace it.
 
 The comparison surface reuses the same Experiment chart definitions over the selected run ids. Missing metrics render as **not reported**, never zero.
+
+## Experiments, samples and telemetry
+
+- **Experiments** are registry definitions, read through `xtrm-research experiments`, not derived from runs. A definition with zero runs is listed with an explicit `0 runs` and opens `/research/experiments/$experimentId`.
+- **Experiment detail** renders the definition's declared semantics — description, research question, hypothesis, terminology, success and falsification criteria, non-claims, metric glossary with direction, declared charts, and the runs that reference it. A field the definition does not carry renders as explicit absence, never inferred prose.
+- **Samples** are the run's `samples.jsonl` records, read through `xtrm-research samples <run_id>`. Sample id, status, input, output, candidate and usage come from the sample record.
+- **Telemetry** is the run's `tail` event log, shown separately and never presented as sample content. A sample is never reconstructed from its events, and an event's usage is never attributed to a sample.
 
 ## Metric semantics
 

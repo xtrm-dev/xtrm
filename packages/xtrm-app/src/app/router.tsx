@@ -13,7 +13,7 @@ import { GithubIssuesSurface } from "../github/IssuesSurface.tsx";
 import { ReleasesSurface } from "../github/ReleasesSurface.tsx";
 import { PullsSurface } from "../github/PullsSurface.tsx";
 import { ProgramSurface } from "../surfaces/ProgramSurface.tsx";
-import { ExperimentListSurface, RunAnalysisSurface, RunComparisonSurface, RunListSurface } from "../surfaces/ResearchSurface.tsx";
+import { ExperimentDetailSurface, ExperimentListSurface, RunAnalysisSurface, RunComparisonSurface, RunListSurface } from "../surfaces/ResearchSurface.tsx";
 import { DeferredSurface, RepositoriesSurface } from "../surfaces/other.tsx";
 import { SettingsSurface } from "../settings/SettingsSurface.tsx";
 import { MODES, REPO_SECTIONS, RESEARCH_SECTIONS } from "./destinations.ts";
@@ -81,6 +81,8 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
       component: s.deferred || !Surface ? () => <DeferredSurface title={s.label} icon={s.icon} reason={s.deferred ?? "Not implemented"} /> : () => <Surface />,
     });
   });
+  // Experiment detail: reached from an experiment row, URL-addressable on its own.
+  const researchExperimentRoute = createRoute({ getParentRoute: () => rootRoute, path: "/research/experiments/$experimentId", component: ExperimentDetailSurface });
   // Run analysis (rev 10 slice 3): reached from a run row, URL-addressable on its own.
   const researchRunRoute = createRoute({ getParentRoute: () => rootRoute, path: "/research/runs/$runId", component: RunAnalysisSurface });
   // Comparison surface: its own search validator composed with the drawer's, so `?inspect=`
@@ -120,6 +122,7 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     programRoute,
     researchIndexRoute,
     ...researchRoutes,
+    researchExperimentRoute,
     researchRunRoute,
     researchCompareRoute,
     settingsRoute,

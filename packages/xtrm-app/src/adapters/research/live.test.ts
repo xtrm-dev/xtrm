@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ResearchReadError, liveResearch, mapRunRow, mapTail, unwrap } from "./live.ts";
+import { ResearchReadError, liveResearch, mapRunRow, mapSample, mapTail, unwrap } from "./live.ts";
 import type { TailCursor } from "./types.ts";
 import fixture from "./__fixtures__/xtrm-research-fixture.json";
 
@@ -66,6 +66,40 @@ describe("tail payload round-trip", () => {
   });
 });
 
+describe("mapSample: optional fields stay absent, never invented", () => {
+  it("maps a full sample record", () => {
+    expect(
+      mapSample({
+        schema_version: "xtrm-research-sample/v1",
+        sample_id: "s-0",
+        index: 0,
+        input: { pair: ["a", "b"] },
+        output: { duplicate: false },
+        candidate: { duplicate: false },
+        status: "ok",
+        usage: { source: "provider_api", "gen_ai.usage.input_tokens": 42, "gen_ai.usage.output_tokens": 7, "gen_ai.request.model": "m", "gen_ai.response.model": "m", latency_ms: 1, null_reason: null },
+        created_at: "2026-09-17T12:00:00+00:00",
+      }),
+    ).toEqual({
+      sampleId: "s-0",
+      index: 0,
+      status: "ok",
+      input: { pair: ["a", "b"] },
+      output: { duplicate: false },
+      candidate: { duplicate: false },
+      usage: { source: "provider_api", inputTokens: 42, outputTokens: 7, requestModel: "m", responseModel: "m", latencyMs: 1, nullReason: null },
+      createdAt: "2026-09-17T12:00:00+00:00",
+    });
+  });
+
+  it("keeps output/candidate/usage absent when the row omits them", () => {
+    const mapped = mapSample({ schema_version: "xtrm-research-sample/v1", sample_id: "s-1", index: 1, input: { pair: [] }, status: "skipped", created_at: "2026-09-17T12:00:00+00:00" });
+    expect(mapped).not.toHaveProperty("output");
+    expect(mapped).not.toHaveProperty("candidate");
+    expect(mapped.usage).toBeNull();
+  });
+});
+
 describe("research envelope unwrap: gaps a consumer would notice", () => {
   it("treats `data: null` as a protocol error naming the command, not as the payload", () => {
     // Fixed: `data: null` can't be a real payload for any verb (all are objects or arrays),
@@ -126,6 +160,20 @@ describe("liveResearch read path: non-envelope responses", () => {
       "/xtrm-api/research/tail?run=run-a",
       "/xtrm-api/research/compare?run=run-a&run=run-b",
     ]);
+  });
+
+  it("requests the documented query shape for experiments and samples", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      calls.push(url);
+      const isSamples = url.startsWith("/xtrm-api/research/samples");
+      const data = isSamples ? [] : [{ id: "dup-detect-baseline", version: "v1" }];
+      const command = isSamples ? "samples" : "experiments";
+      return { status: 200, json: async () => ({ schema: "xtrm-research-cli/v1", command, ok: true, data }) } as unknown as Response;
+    }));
+    expect(await liveResearch.listExperiments()).toEqual([{ id: "dup-detect-baseline", version: "v1" }]);
+    expect(await liveResearch.getSamples("run-a")).toEqual([]);
+    expect(calls).toEqual(["/xtrm-api/research/experiments", "/xtrm-api/research/samples?run=run-a"]);
   });
 
   it("a fresh read omits `after` entirely rather than sending a cursor of 0", async () => {

@@ -61,8 +61,17 @@ def _manifest(registry: DefinitionRegistry, run_id: str, trigger: str) -> dict:
     )
 
 
-def _sample(i: int) -> dict:
-    return {"schema_version": "xtrm-research-sample/v1", "sample_id": f"s-{i}", "index": i, "input": {"pair": [f"a-{i}", f"b-{i}"]}, "status": "ok", "created_at": FIXED_NOW.isoformat()}
+def _sample(i: int, *, output: dict | None = None, candidate: dict | None = None, usage: dict | None = None) -> dict:
+    sample = {"schema_version": "xtrm-research-sample/v1", "sample_id": f"s-{i}", "index": i, "input": {"pair": [f"a-{i}", f"b-{i}"]}, "status": "ok", "created_at": FIXED_NOW.isoformat()}
+    # `output`/`candidate`/`usage` are optional in sample.schema.json: s-0 carries them so the
+    # sample table has real content, s-1 omits them so the absent-field path is exercised too.
+    if output is not None:
+        sample["output"] = output
+    if candidate is not None:
+        sample["candidate"] = candidate
+    if usage is not None:
+        sample["usage"] = usage
+    return sample
 
 
 def _event(seq: int, kind: str, sample_id: str | None = None, usage: dict | None = None) -> dict:
@@ -104,8 +113,8 @@ def build(root: Path) -> dict:
     baseline.write_event(_event(0, "started"))
     baseline.write_event(_event(1, "sample_completed", sample_id="s-0", usage=usage_ok))
     baseline.write_event(_event(2, "sample_completed", sample_id="s-1", usage=usage_unavailable))
-    baseline.write_sample(_sample(0))
-    baseline.write_sample(_sample(1))
+    baseline.write_sample(_sample(0, output={"duplicate": False}, candidate={"duplicate": False, "confidence": 0.5}, usage=usage_ok))
+    baseline.write_sample(_sample(1, usage=usage_unavailable))
     write_assessment_set(
         root,
         "run-a",
@@ -136,8 +145,11 @@ def build(root: Path) -> dict:
         "runShowA": _cli(root, "run", "show", "run-a"),
         "runShowB": _cli(root, "run", "show", "run-b"),
         "experimentShow": _cli(root, "experiment", "show", "dup-detect-baseline", "--registry-root", str(REGISTRY_ROOT)),
+        "experimentShowZeroRun": _cli(root, "experiment", "show", "zero-run-baseline", "--registry-root", str(REGISTRY_ROOT)),
         "workloadShow": _cli(root, "workload", "show", "dup-detect", "--registry-root", str(REGISTRY_ROOT)),
         "questionSpecShow": _cli(root, "question-spec", "show", "dup-check", "--registry-root", str(REGISTRY_ROOT)),
+        "experiments": _cli(root, "experiments", "--registry-root", str(REGISTRY_ROOT)),
+        "samplesA": _cli(root, "samples", "run-a"),
         "tailA": _cli(root, "tail", "run-a"),
         "metricsA": _cli(root, "metrics", "run-a"),
         "compareAB": _cli(root, "compare", "run-a", "run-b"),
