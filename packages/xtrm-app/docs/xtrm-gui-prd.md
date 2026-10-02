@@ -1218,6 +1218,8 @@ fork
 
 Pi remains native-first because its event/tree/settled semantics map directly to the product model.
 
+Not every transport carries all of these. The retry lifecycle, queue state, the in-progress compaction lifecycle, and `agent_end(willRetry)` exist only in the in-process `AgentSessionRuntime` event stream. The XTRM Pi extension (§35.3) receives a reduced set. The Frame model depends only on `agent_settled`, turns, messages, and tool events, which every transport carries. The table in §35.3 lists the reduced semantics.
+
 ## 23. Non-Pi agents and ACP
 
 Do not immediately implement one custom adapter per ACP-capable agent.
@@ -1717,11 +1719,22 @@ The primary Pi integration is an **XTRM Pi extension** that runs inside every li
 
 The extension:
 
-- **pushes** native lifecycle events to the XTRM agent host: `session_start`, `before_agent_start`, `turn_end`, `message_end`, `tool_execution_start` / `_update` / `_end`, `agent_end`, `agent_settled`, `session_shutdown`. These map into the §22 vocabulary without loss, because they are the same events the Frame projector consumes;
+- **pushes** native lifecycle events to the XTRM agent host: `session_start`, `before_agent_start`, `agent_start` / `agent_end`, `agent_settled`, `turn_start` / `turn_end`, `message_start` / `_update` / `_end`, `tool_execution_start` / `_update` / `_end` (with `parentToolCallId`), `session_compact` / `session_compact_failed`, `ui_prompt_start` / `_end`, and `session_shutdown` (verified against the Pi 1.0.0 extension API for XTRM-562). This set is enough to build Frames, but it is **not** a lossless copy of the in-process `AgentSessionEvent` stream (see the table below);
 - **accepts** commands from the agent host: user message (`pi.sendUserMessage`), steer / follow-up, abort, and extension-UI responses (§20);
 - **attaches identity**: session id, cwd, worktree, role, bead / Substrate Issue, parent session, and tmux pane. This is the §11 identity read from the `xt pi` launch context (`@agent_task`, `@agent_parent_session`, `XTMUX_AGENT_BEAD`).
 
 A session without the extension remains visible as history only (§35.5).
+
+Fidelity over the extension transport (corrected under XTRM-573):
+
+| §22 semantics | in-process runtime | extension transport | host behaviour |
+|---|---|---|---|
+| Frame close | `agent_settled` | `agent_settled` | authoritative; unchanged |
+| `agent_end(willRetry)` | present | `agent_end` without `willRetry` | `willRetry` is optional in the protocol; the Frame stays open until `agent_settled` |
+| retry lifecycle (`auto_retry_*`) | present | absent | no retry state is shown; a retry appears as further turns inside the same Frame |
+| queue state | present | absent | the host tracks its own submit queue (§35.8 busy rule) |
+| compaction lifecycle (`compaction_start` / `_end`) | present | `session_compact` / `session_compact_failed` after the fact | the Frame shows a compaction note when the event arrives; no in-progress state |
+| extension UI requests | direct | `ui_prompt_start` / `_end`; the answer goes through a `ctx.ui` proxy in the extension | answers use the `RpcExtensionUIResponse` command shape |
 
 ### 35.4 Launch: tmux-hosted sessions
 
