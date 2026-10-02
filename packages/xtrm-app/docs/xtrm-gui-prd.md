@@ -1972,8 +1972,8 @@ Rules: adopt mechanisms, restyle everything onto the XTRM visual standard (§27,
 
 Existing stubs in this package become the starting point of the tranche:
 
-- `src/runtime/provider.ts` and `src/runtime/providers/{pi,claude}.ts` move behind the agent host. The provider adapters run in the host process (Node), not in the WebView (§25, §35.5). The UI consumes the host API.
-- `src/episode/model.ts` and the `episode_*` events are renamed to the Frame vocabulary (`InteractionFrame`, `FrameProjector`, `frame_*`).
+- The provider adapter sketches now live in `host/` (`host/provider.ts`, `host/providers/{pi,claude}.ts`), outside `src/`; the Vite app does not import them. They move into the agent host process (Node), not the WebView (§25, §35.5). The UI consumes the host API. (XTRM-561)
+- `src/episode/model.ts` became `host/frame-projector.ts`; the `episode_*` events are renamed to the Frame vocabulary (`InteractionFrame`, `FrameProjector`, `frame_*`). (XTRM-561)
 - The Agent route placeholder (`DeferredSurface` in `src/surfaces/other.tsx`) is replaced by the Agent half.
 
 ### 36.9 Later: tabs and multiple windows

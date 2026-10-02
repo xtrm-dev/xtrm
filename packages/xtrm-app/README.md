@@ -31,7 +31,7 @@ store.
 
 The package contains design docs, the executable Console v2 shell (`src/`), a
 historical static prototype (`prototype/`), and starter runtime/provider
-abstractions (`src/episode`, `src/runtime`, not yet wired). Read
+abstractions in `host/` (Frame projector and provider adapter sketches, outside the WebView bundle, not yet wired). Read
 [`docs/README.md`](docs/README.md) before implementation work.
 
 ## Console v2 executable shell
@@ -145,6 +145,7 @@ src/issues/      Jira-style Issues: list, issue page, shared IssueView, field ed
 src/surfaces/    Activity, Program, Repositories, Research (runs, comparison, run analysis + semantic sections), deferred placeholders
 src/app/         TanStack Router routes, one TanStack Query layer
 server/          dev-server bridge: read-only `sb … --json` allow-list, read-only `xtrm-research --json` allow-list
+host/            agent-host-side sketches: FrameProjector, provider adapter contract, Pi/Claude adapters (not bundled)
 scripts/         research-dev.mjs (resolve the research read surface + start Vite), screenshot capture
 ```
 

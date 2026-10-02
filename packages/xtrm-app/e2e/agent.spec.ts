@@ -172,7 +172,7 @@ test("native, MCP, extension, and coordination activity render with distinct con
   await expect(native).toHaveCount(1);
   await native.getByRole("button", { name: "Read 3 files · searched 1 pattern" }).click();
   await native.getByRole("button", { name: /grep agent_settled/ }).click();
-  await expect(native).toContainText("agent_settled closes the Episode");
+  await expect(native).toContainText("agent_settled closes the Frame");
 });
 
 test("an extension UI request is answered inline and the session continues", async ({ page }) => {

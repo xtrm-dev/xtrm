@@ -2,10 +2,10 @@
  * Pi adapter sketch.
  *
  * Key contract:
- * - one idle user submit starts one app Episode;
- * - raw Pi turn_start/turn_end are internal activity within that Episode;
- * - agent_end does NOT close the Episode because AgentSession may auto-retry;
- * - agent_settled closes the Episode.
+ * - one idle user submit starts one app Frame;
+ * - raw Pi turn_start/turn_end are internal activity within that Frame;
+ * - agent_end does NOT close the Frame because AgentSession may auto-retry;
+ * - agent_settled closes the Frame.
  *
  * Local workers must reconcile exact imports/types against the installed
  * @earendil-works/pi-coding-agent version before implementation.
@@ -17,14 +17,14 @@ import type {
   AppEvent,
   ConversationNode,
   SessionRef,
-} from "../provider";
+} from "../provider.ts";
 
 export class PiAdapter implements AgentProviderAdapter {
   readonly provider = "pi" as const;
 
   private currentSession?: any;
   private currentRuntime?: any;
-  private currentEpisodeId?: string;
+  private currentFrameId?: string;
   private currentTurnIndex = -1;
   private listeners = new Set<(event: AppEvent) => void>();
   private unsubscribePi?: () => void;
@@ -44,15 +44,15 @@ export class PiAdapter implements AgentProviderAdapter {
   async prompt(text: string): Promise<void> {
     if (!this.currentSession) throw new Error("No active Pi session");
     if (this.currentSession.isStreaming) {
-      throw new Error("Normal episode submit requires an idle session; use steer explicitly while running");
+      throw new Error("Normal frame submit requires an idle session; use steer explicitly while running");
     }
 
-    const episodeId = randomUUID();
-    this.currentEpisodeId = episodeId;
+    const frameId = randomUUID();
+    this.currentFrameId = frameId;
     this.currentTurnIndex = -1;
     this.emit({
-      type: "episode_started",
-      episodeId,
+      type: "frame_started",
+      frameId,
       session: {
         provider: "pi",
         id: this.currentSession.sessionId,
@@ -118,31 +118,31 @@ export class PiAdapter implements AgentProviderAdapter {
     this.currentSession = session;
 
     this.unsubscribePi = session.subscribe((event: any) => {
-      const episodeId = this.currentEpisodeId;
-      if (!episodeId) return;
+      const frameId = this.currentFrameId;
+      if (!frameId) return;
       const at = Date.now();
 
       switch (event.type) {
         case "turn_start":
           this.currentTurnIndex += 1;
-          this.emit({ type: "turn_started", episodeId, turnIndex: this.currentTurnIndex, at });
+          this.emit({ type: "turn_started", frameId, turnIndex: this.currentTurnIndex, at });
           break;
 
         case "turn_end":
-          this.emit({ type: "turn_finished", episodeId, turnIndex: this.currentTurnIndex, at });
-          this.emit({ type: "assistant_message_finished", episodeId, message: event.message, at });
+          this.emit({ type: "turn_finished", frameId, turnIndex: this.currentTurnIndex, at });
+          this.emit({ type: "assistant_message_finished", frameId, message: event.message, at });
           break;
 
         case "message_update":
           if (event.assistantMessageEvent?.type === "text_delta") {
-            this.emit({ type: "assistant_delta", episodeId, text: event.assistantMessageEvent.delta, at });
+            this.emit({ type: "assistant_delta", frameId, text: event.assistantMessageEvent.delta, at });
           }
           break;
 
         case "tool_execution_start":
           this.emit({
             type: "tool_started",
-            episodeId,
+            frameId,
             toolCallId: event.toolCallId,
             toolName: event.toolName,
             args: event.args,
@@ -153,7 +153,7 @@ export class PiAdapter implements AgentProviderAdapter {
         case "tool_execution_update":
           this.emit({
             type: "tool_updated",
-            episodeId,
+            frameId,
             toolCallId: event.toolCallId,
             update: event.partialResult,
             at,
@@ -163,7 +163,7 @@ export class PiAdapter implements AgentProviderAdapter {
         case "tool_execution_end":
           this.emit({
             type: "tool_finished",
-            episodeId,
+            frameId,
             toolCallId: event.toolCallId,
             toolName: event.toolName,
             result: event.result,
@@ -173,19 +173,19 @@ export class PiAdapter implements AgentProviderAdapter {
           break;
 
         case "auto_retry_start":
-          this.emit({ type: "retry_started", episodeId, attempt: event.attempt, at });
+          this.emit({ type: "retry_started", frameId, attempt: event.attempt, at });
           break;
 
         case "auto_retry_end":
-          this.emit({ type: "retry_finished", episodeId, success: event.success, at });
+          this.emit({ type: "retry_finished", frameId, success: event.success, at });
           break;
 
         case "compaction_start":
-          this.emit({ type: "compaction_started", episodeId, at });
+          this.emit({ type: "compaction_started", frameId, at });
           break;
 
         case "compaction_end":
-          this.emit({ type: "compaction_finished", episodeId, at });
+          this.emit({ type: "compaction_finished", frameId, at });
           break;
 
         case "agent_end":
@@ -193,8 +193,8 @@ export class PiAdapter implements AgentProviderAdapter {
           break;
 
         case "agent_settled":
-          this.emit({ type: "episode_settled", episodeId, at });
-          this.currentEpisodeId = undefined;
+          this.emit({ type: "frame_settled", frameId, at });
+          this.currentFrameId = undefined;
           break;
       }
     });
