@@ -1758,6 +1758,11 @@ Claude sessions    ──hooks─────────────▶     │
 - **Binding and authentication.** The host binds to loopback or a private-network address (tailnet) only. Pairing uses a short-lived one-time token that is exchanged for a revocable device session. The host never binds a public interface by default.
 - **Resource budget.** The host keeps no resident adapter per provider. Its idle cost is the registry plus the index.
 
+- **Connection modes.** The desktop app supports two equal ways to reach a remote agent host:
+  - *SSH (default for desktop).* The operator enters an SSH target (`user@host`, or a `~/.ssh/config` alias). The app uses the operator's own SSH keys and agent to probe the host, start or reuse the agent host bound to loopback, and forward that loopback port to the desktop. The agent host never listens on a network interface, no pairing token is needed, and access is exactly the operator's SSH access. Tailscale SSH works the same way.
+  - *Direct (tailnet + pairing).* For clients that cannot run SSH, such as mobile and web, or for a host that is deliberately bound to its tailnet address.
+- **SSH terminal handoff.** Every tmux-hosted agent offers "Open in terminal". This opens `ssh -t <target> tmux attach -t <session>` (or `switch-client` when already in tmux), so the GUI and the terminal stay interchangeable views of the same live session (§35.4).
+
 ### 35.6 Non-Pi agents
 
 - **Claude Code** reports through its hook surface into the same agent host and uses the same identity fields. Prompting a live Claude session follows whatever its runtime supports, and the GUI shows only the capabilities that are actually advertised.
@@ -1768,7 +1773,7 @@ Claude sessions    ──hooks─────────────▶     │
 | section | change |
 |---|---|
 | §12 Agents presence | Presence covers every session reporting to the agent host, including tmux / `xt pi` sessions started outside the GUI. |
-| §25 Desktop process architecture | The sidecar becomes a client of an agent host, local or remote. The in-process Pi runtime is an optional local mode (§35.4). |
+| §25 Desktop process architecture | The sidecar becomes a client of an agent host, local or remote, reached over SSH port forwarding or a direct tailnet connection (§35.5). The in-process Pi runtime is an optional local mode (§35.4). |
 | §29 Later | "remote execution" moves into v0. "Remote multi-host scheduling" (placing work across hosts) stays Later. |
 | §30 Non-goals | Remote access to a single agent host is no longer a non-goal. Multi-host scheduling remains one. |
 | §31 criteria 2–3 | Become: the operator selects a working directory and a launch profile, the agent starts in tmux on the agent host, and the GUI binds to it within seconds. A session started from a terminal on the same host appears in Agents presence without GUI action. |
@@ -1776,6 +1781,7 @@ Claude sessions    ──hooks─────────────▶     │
 ### 35.8 Open items
 
 - The extension ↔ agent host transport (Unix socket vs. local HTTP) and its event schema, versioned alongside the §22 vocabulary.
+- The SSH bootstrap contract: how the app detects, starts, and version-checks the agent host on a non-interactive SSH login, including Node and `xt` resolution under version managers.
 - Whether the agent host is a new `xt` subcommand or extends an existing daemon (xtmux, Substrate).
 - The Claude hook coverage needed for streaming versus status-only presence.
 - Conflict policy when the terminal and the GUI submit to the same live session at the same time.
