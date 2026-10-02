@@ -246,5 +246,5 @@ export function AgentSidebar() {
 }
 
 export function NewSessionButton() {
-  return <IconButton icon="plus" label="New session · needs the agent host launcher (XTRM-10)" size="md" disabled tooltipSide="right" />;
+  return <IconButton icon="plus" label="New session · needs the agent host launcher (XTRM-566)" size="md" disabled tooltipSide="right" />;
 }

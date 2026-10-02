@@ -19,7 +19,7 @@ export type * from "./agent/types.ts";
  * Defaults: GitHub live (Console v1 backend), Substrate live (sb CLI bridge),
  * Program fixture (the backend's programme route is disabled by deployment policy),
  * Research live (the xtrm-research CLI bridge, server/research-cli.ts),
- * Agent fixture until the agent host exists (XTRM-16 adds the live adapter).
+ * Agent fixture until the agent host exists (XTRM-572 adds the live adapter).
  */
 export function adaptersFromEnv(env: Record<string, string | undefined> = import.meta.env): Adapters {
   const pick = (key: string, fallback: DataSource): DataSource => (env[key] === "live" || env[key] === "fixture" ? env[key] : fallback);

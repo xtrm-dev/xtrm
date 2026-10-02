@@ -1,5 +1,5 @@
 // Agent half view models (PRD §36). The live source is the XTRM agent host
-// (xtrm.agent-host-api.v1, XTRM-6/XTRM-16); until it exists the UI runs on the fixture.
+// (xtrm.agent-host-api.v1, XTRM-562/XTRM-572); until it exists the UI runs on the fixture.
 import type { DataSource } from "../types.ts";
 
 export type SessionState = "working" | "waiting" | "settled" | "failed" | "history";

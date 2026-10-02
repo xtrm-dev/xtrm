@@ -1691,7 +1691,7 @@ After review of the first executable vertical: the rail selects modes and the si
 
 ## 35. Agent hosting, external sessions, and remote access — accepted amendment (2026-10-02)
 
-Status: **accepted** (2026-10-02, XTRM-2; decisions in §35.8). This section amends §12, §25, §29, §30, and §31. It does not change the Frame canon (§3–4, §34.8) or the persistence rules (§26).
+Status: **accepted** (2026-10-02, XTRM-558; decisions in §35.8). This section amends §12, §25, §29, §30, and §31. It does not change the Frame canon (§3–4, §34.8) or the persistence rules (§26).
 
 ### 35.1 Problem
 
@@ -1784,17 +1784,17 @@ Claude sessions    ──hooks─────────────▶     │
 | §30 Non-goals | Remote access to a single agent host is no longer a non-goal. Multi-host scheduling remains one. |
 | §31 criteria 2–3 | Become: the operator selects a working directory and a launch profile, the agent starts in tmux on the agent host, and the GUI binds to it within seconds. A session started from a terminal on the same host appears in Agents presence without GUI action. |
 
-### 35.8 Decisions (formerly open items, decided 2026-10-02 under XTRM-2)
+### 35.8 Decisions (formerly open items, decided 2026-10-02 under XTRM-558)
 
-1. **Extension ↔ agent host transport.** The extension connects to a Unix domain socket at `$XDG_RUNTIME_DIR/xtrm/agent-host.sock` (fallback `~/.xtrm/run/agent-host.sock`, mode `0600`). Frames are newline-delimited JSON. Each frame carries `schema`, `seq`, `sessionId`, `at`, and a payload. Events use `xtrm.agent-event.v1`; commands use `xtrm.agent-command.v1`. Clients (xtrm-app, other tools) use HTTP plus Server-Sent Events on `127.0.0.1` under `xtrm.agent-host-api.v1`; the host writes its port and pid to `~/.xtrm/run/agent-host.json`. Rationale: socket file permissions give same-user authentication for local extensions at no cost, and HTTP + SSE passes unchanged through SSH port forwarding and a browser. The schemas are one versioned package (XTRM-6) and map one-to-one onto the §22 vocabulary and the §36.7 `origin` field.
-2. **SSH bootstrap.** The app runs `ssh -o BatchMode=yes <target> -- "${SHELL:-/bin/sh}" -lc 'xt host ensure --json'`. The login shell resolves Node and `xt` under nvm, asdf, or mise. `xt host ensure` starts the host if it is not running and prints `{schema: "xtrm.agent-host-ensure.v1", version, protocol: {major}, port, pid}`. The app rejects a different protocol major and tells the operator to run `xt update` on that host. The app then holds `ssh -N -L <local>:127.0.0.1:<port> <target>` and reuses an SSH ControlMaster when the operator's configuration defines one (XTRM-11).
-3. **Daemon placement.** The agent host is a new `xt host` subcommand in `xtrm-dev/core`. It does not extend xtmux, which is transport and observability, or Substrate, which is durable work authority and must not hold runtime session state (XTRM-7).
-4. **Claude hook coverage (v0).** Status-and-tool presence only: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStop`, `SessionEnd`. Claude sessions advertise `capabilities: ["presence"]`; the GUI does not stream their assistant text and does not prompt them in v0 (XTRM-13).
+1. **Extension ↔ agent host transport.** The extension connects to a Unix domain socket at `$XDG_RUNTIME_DIR/xtrm/agent-host.sock` (fallback `~/.xtrm/run/agent-host.sock`, mode `0600`). Frames are newline-delimited JSON. Each frame carries `schema`, `seq`, `sessionId`, `at`, and a payload. Events use `xtrm.agent-event.v1`; commands use `xtrm.agent-command.v1`. Clients (xtrm-app, other tools) use HTTP plus Server-Sent Events on `127.0.0.1` under `xtrm.agent-host-api.v1`; the host writes its port and pid to `~/.xtrm/run/agent-host.json`. Rationale: socket file permissions give same-user authentication for local extensions at no cost, and HTTP + SSE passes unchanged through SSH port forwarding and a browser. The schemas are one versioned package (XTRM-562) and map one-to-one onto the §22 vocabulary and the §36.7 `origin` field.
+2. **SSH bootstrap.** The app runs `ssh -o BatchMode=yes <target> -- "${SHELL:-/bin/sh}" -lc 'xt host ensure --json'`. The login shell resolves Node and `xt` under nvm, asdf, or mise. `xt host ensure` starts the host if it is not running and prints `{schema: "xtrm.agent-host-ensure.v1", version, protocol: {major}, port, pid}`. The app rejects a different protocol major and tells the operator to run `xt update` on that host. The app then holds `ssh -N -L <local>:127.0.0.1:<port> <target>` and reuses an SSH ControlMaster when the operator's configuration defines one (XTRM-567).
+3. **Daemon placement.** The agent host is a new `xt host` subcommand in `xtrm-dev/core`. It does not extend xtmux, which is transport and observability, or Substrate, which is durable work authority and must not hold runtime session state (XTRM-563).
+4. **Claude hook coverage (v0).** Status-and-tool presence only: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStop`, `SessionEnd`. Claude sessions advertise `capabilities: ["presence"]`; the GUI does not stream their assistant text and does not prompt them in v0 (XTRM-569).
 5. **Concurrent submit policy.** The host serializes submits per session. A GUI normal submit while the session is working is rejected with `busy`; the GUI then offers Steer or Follow-up explicitly (§18). Terminal input is never intercepted: it reaches Pi directly, and the extension reports the resulting Frame with `ingress.origin: "terminal"` (GUI submits carry `"gui"`), which the Frame header shows. Between two GUI clients, the first accepted submit wins and the second receives `busy`. The host never merges or implicitly queues prompts.
 
 ## 36. Agent mode — accepted amendment (2026-10-02)
 
-Status: **accepted** (2026-10-02, XTRM-2; decisions in §36.12). This section amends §5, §10, §12, §17, §24, and §29. It uses §35 as its transport: the Agent mode is a client of the agent host, local or remote. It does not change the Frame canon (§3–4, §34.8), the drawer contract (§7, §34.5), or the persistence rules (§26).
+Status: **accepted** (2026-10-02, XTRM-558; decisions in §36.12). This section amends §5, §10, §12, §17, §24, and §29. It uses §35 as its transport: the Agent mode is a client of the agent host, local or remote. It does not change the Frame canon (§3–4, §34.8), the drawer contract (§7, §34.5), or the persistence rules (§26).
 
 ### 36.1 What makes the XTRM harness different
 
@@ -1986,7 +1986,7 @@ These criteria add to §31. Each criterion must pass against a real agent host a
 13. An extension UI request (`confirm` or `select`) renders inline in the Frame and the operator's answer reaches the extension.
 14. A specialist dispatch made through an extension tool renders as coordination activity (§14), with transport detail available on expand.
 
-### 36.12 Decisions (formerly open items, decided 2026-10-02 under XTRM-2)
+### 36.12 Decisions (formerly open items, decided 2026-10-02 under XTRM-558)
 
 1. **Switch binding.** `Mod+.` toggles between the halves. The Console modes keep `Mod+1…5` (Work, Agents, Program, Research, Observability); pressed in the Agent half, they switch to the Console half and open that mode. The Agent mode leaves the numbered mode list.
 2. **`@session` payload and budgets.** `@session` attaches identity, bound work item, live state, and the last settled response truncated to its budget. Budgets are UTF-8 bytes of rendered context:
@@ -2001,6 +2001,6 @@ These criteria add to §31. Each criterion must pass against a real agent host a
    | `@frame` | 8 KB | request, response truncated |
    | total per submit | 96 KB | submit blocked until references are removed |
 
-3. **MCP tools in Pi sessions.** Delegated to decision issue XTRM-3. On this host MCP reaches Pi through the `pi-mcp-adapter` extension, so the classification rule and the source of `origin.server` need evidence from that adapter.
+3. **MCP tools in Pi sessions.** Delegated to decision issue XTRM-559. On this host MCP reaches Pi through the `pi-mcp-adapter` extension, so the classification rule and the source of `origin.server` need evidence from that adapter.
 4. **Claude tool classes.** Claude built-in tools are `native`. `mcp__<server>__<tool>` is `mcp` with `origin.server = <server>`: this namespace is Claude's own registration scheme, so it is registration-source data, not a name heuristic. Claude's subagent tool is `coordination`. Claude sessions have no `extension` class.
 5. **Sidebar scope.** The session sidebar follows the repository selector. A scope control in the sidebar header switches between `This repository` (default) and `All repositories`; in `All`, sessions whose cwd is outside every known repository appear under `Other`.
