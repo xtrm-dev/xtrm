@@ -1,6 +1,7 @@
-import type { AppEvent, ProviderId } from "../runtime/provider";
+/** Host-side Frame projection: provider AppEvents -> InteractionFrame. Runs in the agent host, never in the WebView bundle (PRD §35.5, §36.8). */
+import type { AppEvent, ProviderId } from "./provider.ts";
 
-export interface EpisodeToolCall {
+export interface FrameToolCall {
   id: string;
   name: string;
   status: "running" | "complete" | "error";
@@ -10,7 +11,7 @@ export interface EpisodeToolCall {
   result?: unknown;
 }
 
-export interface Episode {
+export interface InteractionFrame {
   id: string;
   provider: ProviderId;
   sessionId: string;
@@ -21,16 +22,16 @@ export interface Episode {
   turnCount: number;
   retryCount: number;
   assistantText: string;
-  toolCalls: EpisodeToolCall[];
+  toolCalls: FrameToolCall[];
 }
 
-export class EpisodeProjector {
-  private readonly episodes = new Map<string, Episode>();
+export class FrameProjector {
+  private readonly frames = new Map<string, InteractionFrame>();
 
-  apply(event: AppEvent): Episode | undefined {
-    if (event.type === "episode_started") {
-      const episode: Episode = {
-        id: event.episodeId,
+  apply(event: AppEvent): InteractionFrame | undefined {
+    if (event.type === "frame_started") {
+      const frame: InteractionFrame = {
+        id: event.frameId,
         provider: event.session.provider,
         sessionId: event.session.id,
         ingress: event.ingress,
@@ -41,22 +42,22 @@ export class EpisodeProjector {
         assistantText: "",
         toolCalls: [],
       };
-      this.episodes.set(episode.id, episode);
-      return episode;
+      this.frames.set(frame.id, frame);
+      return frame;
     }
 
-    const episode = this.episodes.get(event.episodeId);
-    if (!episode) return undefined;
+    const frame = this.frames.get(event.frameId);
+    if (!frame) return undefined;
 
     switch (event.type) {
       case "turn_started":
-        episode.turnCount = Math.max(episode.turnCount, event.turnIndex + 1);
+        frame.turnCount = Math.max(frame.turnCount, event.turnIndex + 1);
         break;
       case "assistant_delta":
-        episode.assistantText += event.text;
+        frame.assistantText += event.text;
         break;
       case "tool_started":
-        episode.toolCalls.push({
+        frame.toolCalls.push({
           id: event.toolCallId,
           name: event.toolName,
           status: "running",
@@ -65,7 +66,7 @@ export class EpisodeProjector {
         });
         break;
       case "tool_finished": {
-        const tool = episode.toolCalls.find((t) => t.id === event.toolCallId);
+        const tool = frame.toolCalls.find((t) => t.id === event.toolCallId);
         if (tool) {
           tool.status = event.isError ? "error" : "complete";
           tool.finishedAt = event.at;
@@ -74,22 +75,22 @@ export class EpisodeProjector {
         break;
       }
       case "retry_started":
-        episode.retryCount += 1;
+        frame.retryCount += 1;
         break;
-      case "episode_settled":
-        episode.status = "settled";
-        episode.settledAt = event.at;
+      case "frame_settled":
+        frame.status = "settled";
+        frame.settledAt = event.at;
         break;
     }
 
-    return episode;
+    return frame;
   }
 
-  get(id: string): Episode | undefined {
-    return this.episodes.get(id);
+  get(id: string): InteractionFrame | undefined {
+    return this.frames.get(id);
   }
 
-  all(): Episode[] {
-    return [...this.episodes.values()];
+  all(): InteractionFrame[] {
+    return [...this.frames.values()];
   }
 }

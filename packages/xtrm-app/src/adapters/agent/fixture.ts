@@ -58,11 +58,11 @@ function seed(now: number): Seed[] {
           "Compare our Frame contract with Supernova's turn model and list the mismatches we must decide.",
           [
             tool("a1", "native", "read", "packages/xtrm-app/docs/console-v2-audit-supernova.md", { durationMs: 120, output: "## 3.3 Mismatches with the invariant as worded\n- Supernova groups provider turns per user message…\n- Retries reuse the turn id…" }),
-            tool("a2", "native", "read", "packages/xtrm-app/src/episode/model.ts", { durationMs: 80, output: "export class EpisodeProjector {\n  private readonly episodes = new Map<string, Episode>();\n  apply(event: AppEvent): Episode | undefined {" }),
-            tool("a3", "native", "grep", "agent_settled", { durationMs: 310, output: "src/runtime/providers/pi.ts:7: - agent_settled closes the Episode.\nsrc/runtime/providers/pi.ts:204: case \"agent_settled\":" }),
+            tool("a2", "native", "read", "packages/xtrm-app/host/frame-projector.ts", { durationMs: 80, output: "export class FrameProjector {\n  private readonly frames = new Map<string, InteractionFrame>();\n  apply(event: AppEvent): InteractionFrame | undefined {" }),
+            tool("a3", "native", "grep", "agent_settled", { durationMs: 310, output: "host/providers/pi.ts:8: - agent_settled closes the Frame.\nhost/providers/pi.ts:195: case \"agent_settled\":" }),
             tool("a4", "native", "read", "packages/xtrm-app/docs/xtrm-gui-prd.md", { durationMs: 140, output: "## 3. Core interaction concept: Frame\nA `Frame` represents one human interaction…" }),
           ],
-          "Three mismatches need a decision before the tranche:\n\n1. **Settlement.** Supernova closes a turn on `agent_end`; our contract closes on `agent_settled`, so retries stay inside one Frame. Keep ours.\n2. **Provisional ids.** Supernova assigns ids only after the first token. We need a Frame id at submit so the dock can show it immediately.\n3. **Compaction-only units.** A compaction without a prompt has no Frame. I propose a note activity on the next Frame instead of a synthetic Frame.\n\nThe rest of `EpisodeProjector` maps one-to-one once `episode_*` is renamed.",
+          "Three mismatches need a decision before the tranche:\n\n1. **Settlement.** Supernova closes a turn on `agent_end`; our contract closes on `agent_settled`, so retries stay inside one Frame. Keep ours.\n2. **Provisional ids.** Supernova assigns ids only after the first token. We need a Frame id at submit so the dock can show it immediately.\n3. **Compaction-only units.** A compaction without a prompt has no Frame. I propose a note activity on the next Frame instead of a synthetic Frame.\n\nThe rest of `FrameProjector` maps one-to-one onto the host protocol.",
           { settledAt: t(88) },
         ),
         frame(
@@ -328,7 +328,7 @@ const COMMITS: RefCandidate[] = [
 const FILES: RefCandidate[] = [
   { kind: "file", ref: "packages/xtrm-app/src/shell/ContextSidebar.tsx", title: "ContextSidebar.tsx", detail: "packages/xtrm-app/src/shell", preview: "export function ContextSidebar() {\n  const pathname = useRouterState({ select: (s) => s.location.pathname });\n  const mode = MODES.find((m) => m.id === modeForPath(pathname))!;" },
   { kind: "file", ref: "packages/xtrm-app/src/shell/AppShell.tsx", title: "AppShell.tsx", detail: "packages/xtrm-app/src/shell", preview: "/** Mode rail: selects the workspace mode; never shows repository state (§3). */\nfunction ModeRail() {" },
-  { kind: "file", ref: "packages/xtrm-app/src/runtime/providers/pi.ts", title: "pi.ts", detail: "packages/xtrm-app/src/runtime/providers", preview: "/**\n * Pi adapter sketch.\n *\n * - agent_end does NOT close the Episode because AgentSession may auto-retry;\n * - agent_settled closes the Episode.\n */" },
+  { kind: "file", ref: "packages/xtrm-app/host/providers/pi.ts", title: "pi.ts", detail: "packages/xtrm-app/host/providers", preview: "/**\n * Pi adapter sketch.\n *\n * - agent_end does NOT close the Frame because AgentSession may auto-retry;\n * - agent_settled closes the Frame.\n */" },
   { kind: "file", ref: "packages/xtrm-app/docs/xtrm-gui-prd.md", title: "xtrm-gui-prd.md", detail: "packages/xtrm-app/docs", preview: "# XTRM Agentic Operating Environment PRD\n\n**Status:** Draft v0.3 …" },
   { kind: "file", ref: "packages/substrate/src/domain/contract.ts", title: "contract.ts", detail: "packages/substrate/src/domain", preview: "// Canonical seven-field executable work contract (PRD §11)." },
 ];

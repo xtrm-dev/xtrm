@@ -6,9 +6,9 @@
  *
  * Desired mapping:
  * - SDK session listing/get messages -> app sidebar/reload;
- * - query/prompt start -> episode_started;
+ * - query/prompt start -> frame_started;
  * - assistant/tool stream -> normalized AppEvent activity;
- * - SDK result/settled boundary -> episode_settled;
+ * - SDK result/settled boundary -> frame_settled;
  * - forkSession(sourceSessionId, { upToMessageId }) -> branch;
  * - resume/query against forked session -> continue branch.
  *
