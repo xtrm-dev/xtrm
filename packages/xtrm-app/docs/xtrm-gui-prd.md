@@ -1,6 +1,6 @@
 # XTRM Agentic Operating Environment PRD
 
-**Status:** Draft v0.3 — product-direction baseline + canonical Console v2 amendments (§34, 2026-09-16) + proposed agent-hosting / remote amendment (§35, 2026-10-02)  
+**Status:** Draft v0.3 — product-direction baseline + canonical Console v2 amendments (§34, 2026-09-16) + accepted agent-hosting / remote amendment (§35, 2026-10-02) + accepted Agent mode amendment (§36, 2026-10-02)  
 **Package:** `xtrm-dev/xtrm/packages/xtrm-app`  
 **Product surface:** XTRM Console / desktop agent harness  
 **Primary runtime:** Pi `AgentSessionRuntime`  
@@ -253,6 +253,8 @@ Explore
 The repository rail must be truly collapsible: collapsed mode reduces the rail itself, not only its labels. It should preserve recognizable repository and navigation affordances without crowding the workspace.
 
 Under §34.3 this requirement applies to the **contextual sidebar**: it collapses to a narrow rounded reopen rail. The global icon rail never collapses.
+
+> Amendment §36.2 makes the Agent surface one half of the shell, selected by a `Console` / `Agent` switch on the global rail.
 
 The Agent surface must fit cleanly inside the global Console shell. It must not add another permanent conversation sidebar inside the main workspace.
 
@@ -572,6 +574,8 @@ The Program drawer should emphasize traversal to executable work and evidence ra
 
 ## 10. Typed references and first-class composer commands
 
+> Amendment §36.6 adds `@gh-issue`, `@commit`, `@file`, and `@session`, and defines resolution, revision, and messaging rules.
+
 The composer is not a plain text box only. It is a structured coordination surface.
 
 XTRM should support typed references such as:
@@ -659,7 +663,7 @@ Pi child sessions are one possible implementation mechanism, not the semantic de
 
 ## 12. First-class Agents presence view
 
-> Proposed amendment §35.3–35.5 defines how sessions started outside the GUI (tmux / `xt pi`) reach this view.
+> Amendment §35.3–35.5 defines how sessions started outside the GUI (tmux / `xt pi`) reach this view. §36.3 defines the per-session sidebar of the Agent half.
 
 XTRM needs a first-class surface for observing active and recent agents across the current repository or workspace.
 
@@ -1001,6 +1005,8 @@ Existing XTRM forensic / AgentOps event contracts should be reused and extended 
 
 ## 17. Activity normalization
 
+> Amendment §36.7 adds a tool `origin` and separate rendering contracts for native, MCP, Pi extension, and coordination tools.
+
 The GUI should consume normalized semantic activity records rather than provider-specific raw event blobs.
 
 A base tool activity may resemble:
@@ -1263,7 +1269,7 @@ Do not copy OpenCode's vertical transcript navigation model.
 
 ## 25. Desktop process architecture
 
-> Proposed amendment §35 makes this sidecar a client of an agent host and the in-process runtime an optional local mode.
+> Amendment §35 makes this sidecar a client of an agent host and the in-process runtime an optional local mode.
 
 Initial target:
 
@@ -1443,7 +1449,7 @@ Observability surface
 
 ### Later
 
-> Proposed amendment §35.7 moves single-host remote access into v0.
+> Amendment §35.7 moves single-host remote access into v0.
 
 Potential later integrations include:
 
@@ -1683,9 +1689,9 @@ A visible Agent destination does not authorize starting the Agent/Frames tranche
 
 After review of the first executable vertical: the rail selects modes and the sidebar shows only the active mode's context; global search moves to a full-width top bar; the inspector rail follows the v15 reference (separate column, floating inset drawer); Substrate Issues become a Jira-style surface with an issue page, in-place field editing, Markdown rendering, lossless contract writes through `sb` verbs, and reviewed normalization of imported contracts. Details: `console-v2-shell-architecture.md` §16.
 
-## 35. Agent hosting, external sessions, and remote access — proposed amendment (2026-10-02)
+## 35. Agent hosting, external sessions, and remote access — accepted amendment (2026-10-02)
 
-Status: **proposed**. This section amends §12, §25, §29, §30, and §31. It does not change the Frame canon (§3–4, §34.8) or the persistence rules (§26).
+Status: **accepted** (2026-10-02, XTRM-2; decisions in §35.8). This section amends §12, §25, §29, §30, and §31. It does not change the Frame canon (§3–4, §34.8) or the persistence rules (§26).
 
 ### 35.1 Problem
 
@@ -1778,10 +1784,223 @@ Claude sessions    ──hooks─────────────▶     │
 | §30 Non-goals | Remote access to a single agent host is no longer a non-goal. Multi-host scheduling remains one. |
 | §31 criteria 2–3 | Become: the operator selects a working directory and a launch profile, the agent starts in tmux on the agent host, and the GUI binds to it within seconds. A session started from a terminal on the same host appears in Agents presence without GUI action. |
 
-### 35.8 Open items
+### 35.8 Decisions (formerly open items, decided 2026-10-02 under XTRM-2)
 
-- The extension ↔ agent host transport (Unix socket vs. local HTTP) and its event schema, versioned alongside the §22 vocabulary.
-- The SSH bootstrap contract: how the app detects, starts, and version-checks the agent host on a non-interactive SSH login, including Node and `xt` resolution under version managers.
-- Whether the agent host is a new `xt` subcommand or extends an existing daemon (xtmux, Substrate).
-- The Claude hook coverage needed for streaming versus status-only presence.
-- Conflict policy when the terminal and the GUI submit to the same live session at the same time.
+1. **Extension ↔ agent host transport.** The extension connects to a Unix domain socket at `$XDG_RUNTIME_DIR/xtrm/agent-host.sock` (fallback `~/.xtrm/run/agent-host.sock`, mode `0600`). Frames are newline-delimited JSON. Each frame carries `schema`, `seq`, `sessionId`, `at`, and a payload. Events use `xtrm.agent-event.v1`; commands use `xtrm.agent-command.v1`. Clients (xtrm-app, other tools) use HTTP plus Server-Sent Events on `127.0.0.1` under `xtrm.agent-host-api.v1`; the host writes its port and pid to `~/.xtrm/run/agent-host.json`. Rationale: socket file permissions give same-user authentication for local extensions at no cost, and HTTP + SSE passes unchanged through SSH port forwarding and a browser. The schemas are one versioned package (XTRM-6) and map one-to-one onto the §22 vocabulary and the §36.7 `origin` field.
+2. **SSH bootstrap.** The app runs `ssh -o BatchMode=yes <target> -- "${SHELL:-/bin/sh}" -lc 'xt host ensure --json'`. The login shell resolves Node and `xt` under nvm, asdf, or mise. `xt host ensure` starts the host if it is not running and prints `{schema: "xtrm.agent-host-ensure.v1", version, protocol: {major}, port, pid}`. The app rejects a different protocol major and tells the operator to run `xt update` on that host. The app then holds `ssh -N -L <local>:127.0.0.1:<port> <target>` and reuses an SSH ControlMaster when the operator's configuration defines one (XTRM-11).
+3. **Daemon placement.** The agent host is a new `xt host` subcommand in `xtrm-dev/core`. It does not extend xtmux, which is transport and observability, or Substrate, which is durable work authority and must not hold runtime session state (XTRM-7).
+4. **Claude hook coverage (v0).** Status-and-tool presence only: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStop`, `SessionEnd`. Claude sessions advertise `capabilities: ["presence"]`; the GUI does not stream their assistant text and does not prompt them in v0 (XTRM-13).
+5. **Concurrent submit policy.** The host serializes submits per session. A GUI normal submit while the session is working is rejected with `busy`; the GUI then offers Steer or Follow-up explicitly (§18). Terminal input is never intercepted: it reaches Pi directly, and the extension reports the resulting Frame with `ingress.origin: "terminal"` (GUI submits carry `"gui"`), which the Frame header shows. Between two GUI clients, the first accepted submit wins and the second receives `busy`. The host never merges or implicitly queues prompts.
+
+## 36. Agent mode — accepted amendment (2026-10-02)
+
+Status: **accepted** (2026-10-02, XTRM-2; decisions in §36.12). This section amends §5, §10, §12, §17, §24, and §29. It uses §35 as its transport: the Agent mode is a client of the agent host, local or remote. It does not change the Frame canon (§3–4, §34.8), the drawer contract (§7, §34.5), or the persistence rules (§26).
+
+### 36.1 What makes the XTRM harness different
+
+§1 and §27 state what XTRM is not. This subsection states what the harness does that other agent harnesses do not do as one system. Each property is normative and points to the section that defines it.
+
+| property | XTRM behavior | defined in |
+|---|---|---|
+| Frame, not transcript | One human request and all activity it causes form one Frame. The current Frame is the foreground; history is a dock, a Frames view, and a Tree view. | §3–4 |
+| Work-bound sessions | A session can be bound to an executable contract. The composer references the whole work graph: issues, PRs, commits, sessions, files. | §8, §10, §36.6 |
+| Sessions it did not start are live | A session started in tmux or with `xt pi` streams into the GUI through the in-session extension. | §35.3 |
+| Terminal parity | The GUI and `tmux attach` are equal clients of the same live session. The agent outlives the GUI. | §35.4–35.5 |
+| Remote by construction | Local and remote use the same agent-host API. SSH forwarding is the default desktop path. | §35.5 |
+| Coordination is semantic | Messages, dispatches, chains, and reviews between agents render as first-class activity, not as generic tool calls. | §14 |
+| Tools by provenance | Native tools, MCP tools, and Pi extension tools have different rendering contracts. | §36.7 |
+| One shell for planning and execution | The Agent mode and the Console share one shell, one drawer, and one reference vocabulary. | §36.2, §36.5 |
+
+### 36.2 Console and Agent: two halves of one shell
+
+The Agent mode is a first-class half of the application, not one rail destination among several.
+
+- **Switch.** The top of the global rail carries a two-state switch: `Console` / `Agent`. The switch is always visible. It has a keyboard binding (§36.12).
+- **Console half.** Keeps the existing rail modes: Work, Agents (fleet presence, §12), Program, Research, Observability.
+- **Agent half.** Uses this layout:
+
+```text
+global rail | session sidebar | Frame surface | inspector rail + drawer
+```
+
+- **Shared state.** The repository context (§5) and the drawer navigation stack are shared by both halves.
+- **Independent state.** Each half keeps its own route. Switching halves restores the last route of the target half.
+- **No unmount of live work.** Switching halves, sessions, or Frames does not stop session streams or drop activity (§28).
+- **Promotion.** `Open session` from the Agents fleet or from an Agent drawer switches to the Agent half and selects that session (§7.5).
+
+### 36.3 Session sidebar
+
+In the Agent half, the contextual sidebar lists sessions. It follows the §34.4 and shell-architecture §16.2 sidebar rules (plain sidebar, collapse edge, search field at the top).
+
+**Scope.** The sidebar lists every session that the agent host knows: live sessions from the registry and stopped sessions from the incremental index (§35.5). It does not scan provider journals itself.
+
+**Grouping.** The default grouping is by repository. Alternative groupings: work item, parent session, role (§12).
+
+**Row anatomy (dense).**
+
+```text
+● pi-main                         coordinator · XTRM-561
+  opus · 64% ctx · Frame 15 · working · 12s
+```
+
+| field | source |
+|---|---|
+| title or name | session name, else first Frame title |
+| live state | `working` / `waiting for input` / `settled` / `failed` / `history only` (no extension connected) |
+| role | `xt pi --role` launch context (§35.3) |
+| bound work item | `--bead` / Substrate Issue binding |
+| model and thinking level | live session state |
+| context utilization | tokens used ÷ context window, shown as a percentage and a thin meter |
+| current Frame and last activity | Frame projector, relative time |
+| children | count of child sessions |
+
+**Selected-session details.** Below the list, the selected session shows the remaining metadata: provider, cwd, worktree, branch, tmux target (`session:pane`), origin (GUI-launched or terminal-launched), extension connected or history only, started, Frame count, tokens, and cost where the provider reports it. Full identity, telemetry, and evidence stay in the Agent drawer tabs (§13).
+
+**Row actions** (revealed on hover or focus, authority-derived): open in terminal (§35.5), fork, attach to composer (`@session`), stop.
+
+**Footer action.** `New session` opens the launch form from §35.4.
+
+The list is virtualized (§28).
+
+### 36.4 Frame surface
+
+The main area of the Agent half is the selected session's Frame surface (§3–4).
+
+- **Header.** Session name, role, bound work item chip (opens the issue in the drawer), model, context meter, live state, and actions: open in terminal, fork, options (`⋯`).
+- **Body.** The selected Frame: request, activity, settled response. The reading column is narrow (approximately 760 px) and centred.
+- **Chapters.** Frames are the chapters of a session. Each Frame has a title. The recent-Frames dock under the composer and the History view (Frames and Tree projections) are the chapter navigation (§4). The transcript is never one unbounded vertical scroll.
+- **Composer.** Typed references (§36.6), commands (§10), file attachments, and explicit steer while the session is working (§18).
+- **Per-session view state.** Selected Frame, scroll position, expanded activity groups, and the composer draft are kept per session. Switching sessions and back restores them.
+
+### 36.5 Drawer in the Agent half
+
+The drawer is the same primitive as in the Console (§7, §34.5). In the Agent half, its main job is to be a **reference source** for the composer.
+
+- The drawer inspects Substrate Issues, GitHub issues, pull requests, commits, files, other sessions, Frames, and chains.
+- Every inspected entity has an `Attach to composer` action. The action inserts the matching typed reference (§7.6).
+- A reference chip in a Frame or in the composer opens its entity in the drawer.
+- The drawer does not show the session that occupies the Frame surface (§7.5).
+- When the session is bound to a work item, the drawer can pin that contract while the operator works.
+
+### 36.6 Typed reference vocabulary
+
+This subsection amends §10. Every kind resolves through a typed adapter (§34.7) to a `ContextReference`. UI components never know where the data came from.
+
+| kind | syntax | resolves through | resolves to |
+|---|---|---|---|
+| Substrate Issue | `@issue:<ref>` | `adapters/substrate` | contract, state, readiness, claim |
+| Epic | `@epic:<ref>` | `adapters/substrate` | parent contract and children |
+| GitHub issue | `@gh-issue:<owner/repo#n>` | `adapters/github` | issue body, state, labels |
+| Pull request | `@pr:<owner/repo#n>` | `adapters/github` | PR body, state, checks, diff reference |
+| Commit | `@commit:<sha>` | `adapters/github` or the agent host (local git) | message, author, diff reference |
+| File | `@file:<path>[#L<a>-<b>]` | agent host, in the session's cwd | path, revision, content or excerpt |
+| Session | `@session:<name\|id>` | agent host registry and index | identity, state, bound work, last settled response |
+| Agent | `@agent:<name>` | agent host registry | the agent identity's current live session |
+| Frame | `@frame:<session>/<n>` | agent host | request and settled response |
+| Artifact, Program, Chain | `@artifact:` / `@program:` / `@chain:` | unchanged from §10 | unchanged |
+
+Rules:
+
+1. **Files resolve on the agent host.** The file is read from the session's cwd on the machine that runs the agent, which can be remote. The desktop file system is never the source.
+2. **Revision at submit.** The resolver records the revision (commit SHA, issue revision, file hash) at submit time in the `ContextReference`. A Frame keeps the revision it was given.
+3. **Bounded payload.** Each kind has a size budget. Above the budget, the reference carries an excerpt and a pointer, not the full content.
+4. **References do not send messages.** `@session` and `@agent` attach context. They do not deliver a message to that session. Delivery uses `/message @session:<x>` (§10, §14). Provider messaging does not grant workflow authority (§14).
+5. **Fail before submit.** An unresolvable reference is marked in the composer. Submit is blocked until the operator removes or fixes it.
+6. **Picker.** Typing `@` opens a `cmdk` picker with kind filters. The default scope is the session's repository. One control widens the scope to the workspace (§34.4).
+
+### 36.7 Tool taxonomy and rendering
+
+This subsection amends §17. Each tool activity carries its origin. The agent host sets the origin from the tool's registration source. The UI never guesses the class from the tool name.
+
+```text
+ToolActivity
+  ...                (fields from §17)
+  origin
+    class            native | mcp | extension | coordination
+    server?          MCP server name and transport
+    extension?       extension package and version
+```
+
+| class | examples | rendering contract |
+|---|---|---|
+| **native** | Pi built-ins: `read`, `write`, `edit`, `bash`, `grep`, `find`, `ls` | Dense one-line rows inside collapsed activity groups ("Ran 4 commands", "Read 3 files"). Lazy detail: command and output, file and range, diff for `edit` / `write`. Optimized for scanning. |
+| **mcp** | any tool from an MCP server | Server identity is always visible. Arguments render as structured fields from the tool's input schema, not raw JSON. Results render by content type (text, image, resource link, structured content). Protocol errors and tool errors are distinct. MCP calls are never merged into native groups. |
+| **extension** | tools registered by Pi extensions (`registerTool`) | Extension identity is visible. A GUI-native renderer is used when the extension declares one (§20); otherwise a structured fallback. Extension UI requests (`select`, `confirm`, `input`, `editor`) render inline in the Frame as blocks that wait for the operator's answer. A `tui_only` disposition is shown explicitly. |
+| **coordination** | message, dispatch, chain launch, review request, result receipt | Rendered as the semantic activity of §14, even when the transport is an extension tool or an MCP tool. Transport provenance stays available in the detail view. |
+
+Permission and approval prompts follow the class of the tool that asks.
+
+### 36.8 Component adoption for the Agent half
+
+This subsection applies §24 to the Agent half. Candidates come from `ui-component-reference-registry.md` ("Agent UI" and "Full product references").
+
+| need | candidate | disposition (proposed) |
+|---|---|---|
+| transcript and session-state primitives, control bar | LiveKit Agents UI (`agent-chat-transcript`, `agent-session-provider`, `agent-session-view-01`) | **ADAPT** after licence verification; restyle onto Base UI and XTRM tokens |
+| tool UI, permissions, diff and file views, composer, session fork | `zvzuola/acp-components` | per `adoption-audit.md` §3 |
+| activity groups, timeline, sidebar rows, composer feel | Supernova | **ADAPT** patterns; values rejected (§34.2) |
+| projection, deferred rendering, virtualization, diff review | OpenCode session UI | **REFERENCE**; do not copy its vertical transcript navigation |
+| idempotent send, event paging, stream budgets | PiChamber | **ADAPT** protocols |
+
+Rules: adopt mechanisms, restyle everything onto the XTRM visual standard (§27, §34.9), and install registry source through the `shadcn` MCP with `--cwd packages/xtrm-app`. Do not adopt a stock chat-first shell (§24).
+
+Existing stubs in this package become the starting point of the tranche:
+
+- `src/runtime/provider.ts` and `src/runtime/providers/{pi,claude}.ts` move behind the agent host. The provider adapters run in the host process (Node), not in the WebView (§25, §35.5). The UI consumes the host API.
+- `src/episode/model.ts` and the `episode_*` events are renamed to the Frame vocabulary (`InteractionFrame`, `FrameProjector`, `frame_*`).
+- The Agent route placeholder (`DeferredSurface` in `src/surfaces/other.tsx`) is replaced by the Agent half.
+
+### 36.9 Later: tabs and multiple windows
+
+- **Now.** One session is visible at a time. The operator switches sessions in the sidebar, and per-session view state is preserved (§36.4).
+- **Later.** Tabs in the Agent half, one session per tab. Separate desktop windows through Tauri multi-window.
+- **Not planned.** Permanent split panes (§34.3). Comparison of two agents stays a main-surface-plus-drawer pattern (§7.5).
+
+### 36.10 Changes to earlier sections
+
+| section | change |
+|---|---|
+| §5 Repository context and shell | The global rail carries the `Console` / `Agent` switch. The Agent half has its own sidebar (sessions). |
+| §10 Typed references | Adds `@gh-issue`, `@commit`, `@file`, `@session`. Defines resolution, revision, budget, and messaging rules (§36.6). |
+| §12 Agents presence | The fleet view stays in the Console half. `Open session` switches to the Agent half. |
+| §17 Activity normalization | `ToolActivity` gains `origin` and the four-class rendering contract (§36.7). |
+| §24 Adoption policy | Agent-half candidates and dispositions (§36.8). |
+| §29 Delivery sequence | v0 Agent vertical uses the §36 layout. Tabs move to Later. |
+
+### 36.11 Acceptance criteria — Agent half
+
+These criteria add to §31. Each criterion must pass against a real agent host and real provider activity.
+
+1. The `Console` / `Agent` switch is visible in every mode. Activating it restores the last route of the target half.
+2. Switching halves, sessions, or Frames does not interrupt a working session's stream.
+3. The session sidebar lists a session started from a terminal with `xt pi` on the agent host, without GUI action, and marks it live.
+4. A session without the extension is listed as `history only` and cannot receive prompts from the GUI.
+5. Each session row shows live state, role, bound work item, model, context utilization, and last activity from real host data.
+6. Switching to another session and back restores the selected Frame, scroll position, and composer draft.
+7. `@issue`, `@gh-issue`, `@pr`, `@commit`, `@file`, and `@session` each resolve through their adapter, and the submitted Frame records the revision of each reference.
+8. `@file` against a remote host reads the file on that host, not on the desktop.
+9. An unresolvable reference blocks submit and is marked in the composer.
+10. `Attach to composer` in the drawer inserts the matching typed reference.
+11. A `@session` reference does not deliver a message to that session. `/message` does.
+12. A native tool call, an MCP tool call, and a Pi extension tool call in the same Frame render with their distinct contracts, and the MCP call shows its server identity.
+13. An extension UI request (`confirm` or `select`) renders inline in the Frame and the operator's answer reaches the extension.
+14. A specialist dispatch made through an extension tool renders as coordination activity (§14), with transport detail available on expand.
+
+### 36.12 Decisions (formerly open items, decided 2026-10-02 under XTRM-2)
+
+1. **Switch binding.** `Mod+.` toggles between the halves. The Console modes keep `Mod+1…5` (Work, Agents, Program, Research, Observability); pressed in the Agent half, they switch to the Console half and open that mode. The Agent mode leaves the numbered mode list.
+2. **`@session` payload and budgets.** `@session` attaches identity, bound work item, live state, and the last settled response truncated to its budget. Budgets are UTF-8 bytes of rendered context:
+
+   | kind | budget | above budget |
+   |---|---|---|
+   | `@issue`, `@epic` | 16 KB | contract sections in order, then pointer |
+   | `@gh-issue`, `@pr` | 8 KB | body and metadata; diff always by pointer |
+   | `@commit` | 4 KB | message and file stat; diff always by pointer |
+   | `@file` | 32 KB | requested range, else first 200 lines, plus pointer |
+   | `@session`, `@agent` | 4 KB | identity and work, response truncated |
+   | `@frame` | 8 KB | request, response truncated |
+   | total per submit | 96 KB | submit blocked until references are removed |
+
+3. **MCP tools in Pi sessions.** Delegated to decision issue XTRM-3. On this host MCP reaches Pi through the `pi-mcp-adapter` extension, so the classification rule and the source of `origin.server` need evidence from that adapter.
+4. **Claude tool classes.** Claude built-in tools are `native`. `mcp__<server>__<tool>` is `mcp` with `origin.server = <server>`: this namespace is Claude's own registration scheme, so it is registration-source data, not a name heuristic. Claude's subagent tool is `coordination`. Claude sessions have no `extension` class.
+5. **Sidebar scope.** The session sidebar follows the repository selector. A scope control in the sidebar header switches between `This repository` (default) and `All repositories`; in `All`, sessions whose cwd is outside every known repository appear under `Other`.
