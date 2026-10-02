@@ -1,5 +1,6 @@
 // Typed adapter contracts (shell architecture §9.3).
 // UI components depend on these view models only, never on a source.
+import type { AgentAdapter } from "./agent/types.ts";
 
 import type { ResearchAdapter } from "./research/types.ts";
 
@@ -528,6 +529,7 @@ export interface ProgramAdapter {
 }
 
 export interface Adapters {
+  agent: AgentAdapter;
   github: GithubAdapter;
   githubAuth: GithubAuthAdapter;
   substrate: SubstrateAdapter;

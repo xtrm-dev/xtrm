@@ -1,3 +1,6 @@
 .receipts/
 dist/
 node_modules/
+
+# Playwright output
+e2e/.results/

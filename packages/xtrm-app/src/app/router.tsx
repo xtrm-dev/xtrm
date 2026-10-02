@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentType } from "react";
 import { Outlet, createRootRoute, createRoute, createRouter, redirect, type RouterHistory } from "@tanstack/react-router";
 import { AdaptersProvider, type Adapters } from "../adapters/index.tsx";
+import { AgentIndexSurface, AgentSessionSurface } from "../agent/AgentSurface.tsx";
 import { IssuePage } from "../issues/IssuePage.tsx";
 import { IssuesSurface } from "../issues/IssuesSurface.tsx";
 import { AppShell } from "../shell/AppShell.tsx";
@@ -52,6 +53,10 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
   const deferredModes = MODES.filter((m) => m.deferred && m.path).map((m) =>
     createRoute({ getParentRoute: () => rootRoute, path: m.path!, component: () => <DeferredSurface title={m.label} icon={m.icon} reason={m.deferred!} /> }),
   );
+
+  // Agent half (PRD §36.2): `/agent` reopens the last or most recent session.
+  const agentIndexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/agent", component: AgentIndexSurface });
+  const agentSessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/agent/$sessionId", component: AgentSessionSurface });
 
   const workRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -108,15 +113,20 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     ...REPO_SECTIONS.flatMap((s) => s.items)
       .filter((i) => i.deferred)
       .map((i) => createRoute({ getParentRoute: () => repoRoute, path: i.repoPath, component: () => <DeferredSurface title={i.label} icon={i.icon} reason={i.deferred!} /> })),
+    // Retired reservation: sessions are not repository-scoped routes (PRD §36.3 scope control).
     createRoute({
       getParentRoute: () => repoRoute,
       path: "/agent/$sessionId",
-      component: () => <DeferredSurface title="Agent session" icon="agent" reason="Reserved route for the Agent/Frames tranche (wave H)." />,
+      beforeLoad: ({ params }) => {
+        throw redirect({ to: `/agent/${(params as { sessionId: string }).sessionId}` } as never);
+      },
     }),
   ];
 
   const routeTree = rootRoute.addChildren([
     indexRoute,
+    agentIndexRoute,
+    agentSessionRoute,
     workRoute,
     repositoriesRoute,
     programRoute,

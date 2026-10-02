@@ -39,6 +39,13 @@ describe("drawer states", () => {
     expect(currentRef(s)).toEqual({ kind: "issue", ref: "XTRM-2" });
   });
 
+  it("a column inspect opens CLOSED as PINNED but never changes an already open drawer's state", () => {
+    const column = { type: "drawer/inspect", ref: { kind: "session", ref: "pi-main" }, column: true } as const;
+    expect(run(column).inspector.state).toBe("PINNED");
+    expect(run(issue("XTRM-1"), column).inspector.state).toBe("CONTEXTUAL");
+    expect(run(column, { type: "drawer/close" }, column).inspector.state).toBe("PINNED");
+  });
+
   it("opening pushes the sidebar and closing restores it", () => {
     const opened = run(issue("XTRM-1"));
     expect(opened.inspector.state).toBe("CONTEXTUAL");
