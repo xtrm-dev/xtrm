@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Agent half behaviour on the typed fixture (PRD §36.11; real-host criteria move to XTRM-16).
+// Agent half behaviour on the typed fixture (PRD §36.11; real-host criteria move to XTRM-572).
 const MOD = process.platform === "darwin" ? "Meta" : "Control";
 
 const composer = (page: Page, session: string) => page.getByRole("textbox", { name: `Message ${session}` });

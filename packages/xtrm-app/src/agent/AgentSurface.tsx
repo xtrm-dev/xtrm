@@ -161,7 +161,7 @@ function HistoryPanel({ s, selected, onSelect }: { s: AgentSessionDetail; select
         </ol>
       ) : (
         <p className="px-3 py-4 text-xs leading-5 text-ink-faint">
-          The provider-native branch and fork tree arrives with the live agent host (XTRM-16). Visual branch compression never rewrites provider history (PRD §4).
+          The provider-native branch and fork tree arrives with the live agent host (XTRM-572). Visual branch compression never rewrites provider history (PRD §4).
         </p>
       )}
     </div>

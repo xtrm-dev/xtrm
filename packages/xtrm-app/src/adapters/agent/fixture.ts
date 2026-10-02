@@ -318,7 +318,7 @@ function seed(now: number): Seed[] {
 }
 
 const COMMITS: RefCandidate[] = [
-  { kind: "commit", ref: "c874ca2", title: "docs(xtrm-app): accept PRD §35/§36 Agent mode and record harness decisions (XTRM-2)", preview: " packages/xtrm-app/docs/xtrm-gui-prd.md | 248 ++++++++++-\n 1 file changed" },
+  { kind: "commit", ref: "c874ca2", title: "docs(xtrm-app): accept PRD §35/§36 Agent mode and record harness decisions (XTRM-558)", preview: " packages/xtrm-app/docs/xtrm-gui-prd.md | 248 ++++++++++-\n 1 file changed" },
   { kind: "commit", ref: "0991ae2", title: "docs(xtrm-app): propose PRD §35 — agent hosting, external sessions, remote access (#260)", preview: " packages/xtrm-app/docs/xtrm-gui-prd.md | 104 +++++\n 1 file changed" },
   { kind: "commit", ref: "ed68bcf", title: "chore(release): @jaggerxtrm/substrate 0.2.2 (#255)", preview: " packages/substrate/package.json | 2 +-\n packages/substrate/CHANGELOG.md | 9 +++" },
   { kind: "commit", ref: "fef8541", title: "fix(substrate): read closure evidence refs back from issue show and provenance trace", preview: " packages/substrate/src/service/issue-service.ts | 41 ++++--" },
@@ -334,7 +334,7 @@ const FILES: RefCandidate[] = [
 ];
 
 const FIXTURE_RESPONSE =
-  "This response comes from the typed fixture. When the agent host is wired (XTRM-16), the provider's streamed output and real tool activity appear here.";
+  "This response comes from the typed fixture. When the agent host is wired (XTRM-572), the provider's streamed output and real tool activity appear here.";
 
 const clone = <T,>(v: T): T => structuredClone(v);
 
