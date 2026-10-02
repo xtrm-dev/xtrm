@@ -1930,6 +1930,19 @@ ToolActivity
 
 Permission and approval prompts follow the class of the tool that asks.
 
+**Classification rule for Pi sessions (decided under XTRM-559).** The agent host classifies each tool from Pi's registration record, not from the tool name. Pi 1.0.0 gives every tool a `sourceInfo {path, source, scope, origin, baseDir?}` (`pi.getAllTools()`), and an extension's tools inherit the extension's `sourceInfo`. The XTRM extension sends this record raw with each tool event (`tool: {sourceInfo, namespace?}`); the host derives `origin` from it. The rules apply in order:
+
+| # | registration record | class | `origin` fields |
+|---|---|---|---|
+| 1 | tool listed by the coordination table (specialists, intercom, pi-claude-link message and dispatch tools) | `coordination` | transport extension kept for the detail view |
+| 2 | `sourceInfo.path = "builtin:mcp"` (Pi's built-in MCP client) | `mcp` | `server` = `namespace.name` without the `mcp__` prefix; transport from the server config |
+| 3 | other `sourceInfo.source = "builtin"` (`builtin:read`, `builtin:bash`, …) | `native` | — |
+| 4 | `sourceInfo.source` names the `pi-mcp-adapter` package | `mcp` | `server` from the `mcp__<server>` namespace; for the proxy tool `mcp`, from the call's `server` argument; else `unknown` |
+| 5 | any other extension (`origin` `package` or `top-level`) | `extension` | package = `sourceInfo.source`; version read once from `package.json` under `baseDir` |
+| 6 | `sourceInfo.source = "sdk"` or no record | `extension` | `unknown` |
+
+Evidence (Pi 1.0.0 `dist/`): built-in tools get `createSyntheticSourceInfo("builtin:<name>", {source: "builtin"})` (`core/agent-session.js`); built-in extensions load from the path `builtin:<name>` and their tools inherit it (`core/extensions/loader.js` `createExtension`, `core/resource-loader.js` `applyExtensionSourceInfo`); package extensions get `{source: <package spec>, origin: "package"}` (`core/package-manager.js`). Pi does not load the built-in `mcp` when an installed extension registers the same tool names, so one session has one MCP path in practice; rules 2 and 4 cover both. `pi-mcp-adapter` direct tools with `toolPrefix: none` have no namespace; they are still `mcp` under rule 4, with `server = unknown` until the adapter exposes a tool→server map. The UI shows `MCP` with no server name in that case and never infers one.
+
 ### 36.8 Component adoption for the Agent half
 
 This subsection applies §24 to the Agent half. Candidates come from `ui-component-reference-registry.md` ("Agent UI" and "Full product references").
@@ -2001,6 +2014,6 @@ These criteria add to §31. Each criterion must pass against a real agent host a
    | `@frame` | 8 KB | request, response truncated |
    | total per submit | 96 KB | submit blocked until references are removed |
 
-3. **MCP tools in Pi sessions.** Delegated to decision issue XTRM-559. On this host MCP reaches Pi through the `pi-mcp-adapter` extension, so the classification rule and the source of `origin.server` need evidence from that adapter.
+3. **MCP tools in Pi sessions.** Decided under XTRM-559; the rule is in §36.7. Pi 1.0.0 has a built-in MCP client (`builtin:mcp`, tools `mcp__<server>__<tool>` in namespace `mcp__<server>`), and `pi-mcp-adapter` remains a supported alternative. The host reads both from `sourceInfo` and the tool namespace. XTRM-571 implements the rule in the agent host.
 4. **Claude tool classes.** Claude built-in tools are `native`. `mcp__<server>__<tool>` is `mcp` with `origin.server = <server>`: this namespace is Claude's own registration scheme, so it is registration-source data, not a name heuristic. Claude's subagent tool is `coordination`. Claude sessions have no `extension` class.
 5. **Sidebar scope.** The session sidebar follows the repository selector. A scope control in the sidebar header switches between `This repository` (default) and `All repositories`; in `All`, sessions whose cwd is outside every known repository appear under `Other`.
