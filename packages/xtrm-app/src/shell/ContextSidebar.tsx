@@ -2,7 +2,8 @@ import { Popover } from "@base-ui/react/popover";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useAdapters } from "../adapters/index.tsx";
-import { MODES, REPO_SECTIONS, RESEARCH_SECTIONS, modeForPath, repoHref } from "../app/destinations.ts";
+import { AgentSidebar } from "../agent/AgentSidebar.tsx";
+import { AGENT_MODE, MODES, REPO_SECTIONS, RESEARCH_SECTIONS, modeForPath, repoHref } from "../app/destinations.ts";
 import { isInvalidManifestRow } from "../adapters/research/types.ts";
 import { projectForRepo, useIssues, useProgram, useProjects, useRepoStats, useRepos, useResearchRuns } from "../app/queries.ts";
 import { Icon } from "../ui/icon.tsx";
@@ -106,6 +107,7 @@ function RepositorySelector() {
 function SourceFooter() {
   const adapters = useAdapters();
   const items = [
+    ["Agent host", adapters.agent.source],
     ["GitHub", adapters.github.source],
     ["Substrate", adapters.substrate.source],
     ["Program", adapters.program.source],
@@ -218,12 +220,15 @@ function DeferredSidebar({ label, reason }: { label: string; reason: string }) {
 
 export function ContextSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const mode = MODES.find((m) => m.id === modeForPath(pathname))!;
+  const id = modeForPath(pathname);
+  const mode = id === "agent" ? AGENT_MODE : MODES.find((m) => m.id === id)!;
 
   return (
     <nav aria-label={`${mode.label} navigation`} data-testid="context-sidebar" className="flex h-full min-w-0 flex-col py-1.5">
       <div className="flex min-h-0 flex-1 flex-col">
-        {mode.id === "work" ? (
+        {mode.id === "agent" ? (
+          <AgentSidebar />
+        ) : mode.id === "work" ? (
           <WorkSidebar pathname={pathname} />
         ) : mode.id === "program" ? (
           <ProgramSidebar />

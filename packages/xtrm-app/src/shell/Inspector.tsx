@@ -1,6 +1,8 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import type { RepoEvent } from "../adapters/index.tsx";
+import type { RefKind, RepoEvent } from "../adapters/index.tsx";
+import { HostRefPanel, SessionPanel } from "../agent/DrawerPanels.tsx";
+import { useAgentStore } from "../agent/workspace.tsx";
 import { readAccounting, readVersionRef } from "../adapters/research/manifest.ts";
 import { useEvents, useIssue, useProgram, useResearchMetrics, useResearchRun, useResearchSamples, useResearchTail } from "../app/queries.ts";
 import { GithubIssuePanel } from "../github/GithubIssuePanel.tsx";
@@ -370,6 +372,11 @@ export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; fo
       const [runId, indexStr] = splitResearchRef(entity.ref);
       return <AnnotationPanel key={entity.ref} runId={runId} index={Number(indexStr)} />;
     }
+    case "session":
+      return <SessionPanel key={entity.ref} id={entity.ref} />;
+    case "commit":
+    case "file":
+      return <HostRefPanel key={`${entity.kind}:${entity.ref}`} reference={{ kind: entity.kind, ref: entity.ref }} />;
   }
 }
 
@@ -384,11 +391,20 @@ const KIND_LABEL: Record<DrawerRef["kind"], string> = {
   "research-metric": "Metric",
   "research-sample": "Sample",
   "research-annotation": "Annotation",
+  session: "Session",
+  commit: "Commit",
+  file: "File",
 };
+
+/** Kinds the Agent composer accepts as typed references (PRD §36.5, §36.6). */
+const ATTACHABLE = new Set<DrawerRef["kind"]>(["issue", "pr", "gh-issue", "session", "commit", "file"]);
 
 export function InspectorDrawer({ variant }: { variant: "overlay" | "column" | "maximized" }) {
   const { layout, dispatch, inspected, repo } = useShell();
   const navigate = useNavigate();
+  const agentStore = useAgentStore();
+  const inAgent = useRouterState({ select: (st) => st.location.pathname.startsWith("/agent/") });
+  const canAttach = !!inspected && inAgent && ATTACHABLE.has(inspected.kind) && !(inspected.kind === "session" && inspected.ref === agentStore.active);
   const state = layout.inspector.state;
   const follow = layout.inspector.followLive;
 
@@ -400,6 +416,15 @@ export function InspectorDrawer({ variant }: { variant: "overlay" | "column" | "
         Inspector
       </span>
       <div className="ml-auto flex items-center gap-0.5">
+        {canAttach && (
+          <button
+            type="button"
+            onClick={() => agentStore.attach({ kind: inspected.kind as RefKind, ref: inspected.ref })}
+            className="mr-1 flex h-7 items-center gap-1.5 rounded-md border border-border-muted px-2 text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:border-border-strong"
+          >
+            <span className="font-mono leading-none">@</span> Attach to composer
+          </button>
+        )}
         {inspected?.kind === "issue" && (
           <button
             type="button"

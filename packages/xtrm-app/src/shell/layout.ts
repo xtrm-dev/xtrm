@@ -4,7 +4,7 @@
 
 export type DrawerState = "CLOSED" | "CONTEXTUAL" | "PINNED" | "MAXIMIZED";
 
-export type DrawerRefKind = "issue" | "program" | "activity" | "pr" | "gh-issue" | "github-auth" | "research-run" | "research-metric" | "research-sample" | "research-annotation";
+export type DrawerRefKind = "issue" | "program" | "activity" | "pr" | "gh-issue" | "github-auth" | "research-run" | "research-metric" | "research-sample" | "research-annotation" | "session" | "commit" | "file";
 
 /** Typed entity reference. Same vocabulary the composer will consume later (`@issue:XTRM-12`). */
 export interface DrawerRef {
@@ -95,7 +95,7 @@ export const initialLayout: LayoutState = {
 export type LayoutAction =
   | { type: "sidebar/toggle" }
   | { type: "sidebar/resize"; width: number }
-  | { type: "drawer/inspect"; ref: DrawerRef }
+  | { type: "drawer/inspect"; ref: DrawerRef; /** Open from CLOSED as a column beside the work (Agent half, PRD §36.5). */ column?: boolean }
   | { type: "drawer/open" }
   | { type: "drawer/pin" }
   | { type: "drawer/unpin" }
@@ -158,14 +158,15 @@ export function layoutReducer(s: LayoutState, a: LayoutAction): LayoutState {
     }
     case "drawer/inspect": {
       const current = s.stack[s.cursor];
+      const openAs = a.column ? "PINNED" : "CONTEXTUAL";
       if (current && current.kind === a.ref.kind && current.ref === a.ref.ref) {
         if (d.state !== "CLOSED") return s;
-        const reopened = openInspector(s, "CONTEXTUAL");
+        const reopened = openInspector(s, openAs);
         return { ...reopened };
       }
       const stack = [...s.stack.slice(0, s.cursor + 1), a.ref];
       const base = { ...s, stack, cursor: stack.length - 1 };
-      return d.state === "CLOSED" ? openInspector(base, "CONTEXTUAL") : base;
+      return d.state === "CLOSED" ? openInspector(base, openAs) : base;
     }
     case "drawer/open":
       return d.state === "CLOSED" ? openInspector(s, "CONTEXTUAL") : s;
@@ -205,7 +206,7 @@ export const currentRef = (s: LayoutState): DrawerRef | null => s.stack[s.cursor
 // ---------------------------------------------------------------------------
 // URL codec: ?inspect=<kind>:<ref>&drawer=contextual|pinned|maximized (§9.1)
 
-const KINDS: readonly DrawerRefKind[] = ["issue", "program", "activity", "pr", "gh-issue", "github-auth", "research-run", "research-metric", "research-sample", "research-annotation"];
+const KINDS: readonly DrawerRefKind[] = ["issue", "program", "activity", "pr", "gh-issue", "github-auth", "research-run", "research-metric", "research-sample", "research-annotation", "session", "commit", "file"];
 const URL_STATES = { contextual: "CONTEXTUAL", pinned: "PINNED", maximized: "MAXIMIZED" } as const;
 
 export interface DrawerSearch {

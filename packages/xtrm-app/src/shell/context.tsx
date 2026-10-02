@@ -157,7 +157,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     () => ({
       layout,
       dispatch,
-      inspect: (ref) => dispatch({ type: "drawer/inspect", ref }),
+      // In the Agent half the drawer is a reference source beside the conversation, never over it.
+      inspect: (ref) => dispatch({ type: "drawer/inspect", ref, column: location.pathname.startsWith("/agent") }),
       inspected: currentRef(layout),
       repo: { owner, name, fullName: `${owner}/${name}` },
       theme,
@@ -166,7 +167,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       openPalette,
       setPalette,
     }),
-    [layout, owner, name, theme, palette, openPalette, setPalette],
+    [layout, owner, name, theme, palette, openPalette, setPalette, location.pathname],
   );
 
   return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;

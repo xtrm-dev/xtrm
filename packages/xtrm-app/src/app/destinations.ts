@@ -1,7 +1,8 @@
 import type { IconName } from "../ui/icon.tsx";
 
-// Navigation model (accepted 2026-09-16): the global rail selects a MODE; the contextual sidebar
-// shows only that mode's context. No destination appears in both places.
+// Navigation model (accepted 2026-09-16, PRD §36.2 2026-10-02): the rail's top switch selects a HALF
+// (Console or Agent); in the Console half the rail selects a MODE and the contextual sidebar shows only
+// that mode's context. The Agent half has one sidebar: sessions. No destination appears in both places.
 
 export type ModeId = "work" | "agent" | "agents" | "program" | "research" | "observability";
 
@@ -16,12 +17,18 @@ export interface Mode {
 
 export const MODES: Mode[] = [
   { id: "work", label: "Work", icon: "work", path: null },
-  { id: "agent", label: "Agent", icon: "agent", path: "/agent", deferred: "Agent/Frames tranche (wave H)" },
   { id: "agents", label: "Agents", icon: "agents", path: "/agents", deferred: "Fleet presence arrives with the Agent/Frames tranche (wave H)" },
   { id: "program", label: "Program", icon: "program", path: "/program" },
   { id: "research", label: "Research", icon: "research", path: "/research" },
   { id: "observability", label: "Observability", icon: "observability", path: "/observability", deferred: "Fleet-level analysis (wave G)" },
 ];
+
+export type Half = "console" | "agent";
+
+export const halfForPath = (pathname: string): Half => (pathname === "/agent" || pathname.startsWith("/agent/") ? "agent" : "console");
+
+/** Agent half mode descriptor: not in the numbered rail list (PRD §36.12 decision 1). */
+export const AGENT_MODE: Mode = { id: "agent", label: "Agent", icon: "agent", path: "/agent" };
 
 export function modeForPath(pathname: string): ModeId {
   if (pathname.startsWith("/program")) return "program";

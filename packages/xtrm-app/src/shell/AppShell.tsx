@@ -1,10 +1,13 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { MODES, modeForPath, modeHref } from "../app/destinations.ts";
+import { NewSessionButton } from "../agent/AgentSidebar.tsx";
+import { AgentWorkspaceProvider, useAgentStore } from "../agent/workspace.tsx";
+import { MODES, halfForPath, modeForPath, modeHref, type Half } from "../app/destinations.ts";
 import { AccountControl } from "../github/auth.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Kbd, Tip, cx } from "../ui/primitives.tsx";
+import type { IconName } from "../ui/icon.tsx";
 import { FillPanel, ResizableGroup, ResizeHandle, ResizablePanel } from "../ui/resizable.tsx";
 import { ContextSidebar, useGo } from "./ContextSidebar.tsx";
 import { GlobalSearch } from "./GlobalSearch.tsx";
@@ -21,7 +24,7 @@ function TopBar() {
       <div className="flex w-12 shrink-0 justify-center">
         <div aria-hidden className="flex size-7 items-center justify-center rounded-md bg-accent text-[0.7rem] font-semibold tracking-tight text-white">X</div>
       </div>
-      <span className="hidden text-sm font-medium text-ink md:inline">XTRM Console</span>
+      <span className="hidden text-sm font-medium text-ink md:inline">XTRM</span>
       <button
         type="button"
         onClick={() => openPalette("search")}
@@ -42,18 +45,76 @@ function TopBar() {
   );
 }
 
-/** Mode rail: selects the workspace mode; never shows repository state (§3). */
+/** Remembers the last route of each half so the switch returns where the operator left off (PRD §36.2). */
+function useHalfNavigation() {
+  const store = useAgentStore();
+  const location = useRouterState({ select: (s) => s.location });
+  const go = useGo();
+  const half = halfForPath(location.pathname);
+  useEffect(() => {
+    store.lastHref[half] = location.href;
+  }, [store, half, location.href]);
+  const switchTo = (target: Half) => {
+    if (target === half) return;
+    go(store.lastHref[target] ?? (target === "agent" ? "/agent" : "/"));
+  };
+  return { half, switchTo };
+}
+
+const HALVES: Array<{ id: Half; label: string; icon: IconName }> = [
+  { id: "console", label: "Console", icon: "board" },
+  { id: "agent", label: "Agent", icon: "agent" },
+];
+
+/** Always-visible Console / Agent switch: the two halves of one shell (PRD §36.2). */
+function HalfSwitch({ half, onSwitch }: { half: Half; onSwitch: (h: Half) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Workspace" data-testid="half-switch" className="flex flex-col gap-0.5 rounded-lg bg-control p-0.5">
+      {HALVES.map((h) => {
+        const on = h.id === half;
+        return (
+          <Tip key={h.id} label={on ? h.label : `Switch to ${h.label}`} shortcut={modShortcut(".")} side="right">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={on}
+              aria-label={h.label}
+              onClick={() => onSwitch(h.id)}
+              className={cx(
+                "flex h-11 w-9 flex-col items-center justify-center gap-0.5 rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
+                on ? "bg-surface text-accent-ink shadow-[0_0_0_1px_var(--x-border-muted)]" : "text-ink-faint hover:text-ink-muted",
+              )}
+            >
+              <Icon name={h.icon} size="sm" />
+              <span className="text-[0.55rem] leading-none font-medium">{h.label}</span>
+            </button>
+          </Tip>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Rail: the half switch, then the Console modes (never repository state, §3) or the Agent half's actions. */
 function ModeRail() {
   const { repo } = useShell();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const go = useGo();
+  const { half, switchTo } = useHalfNavigation();
   const active = modeForPath(pathname);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isShortcutSuppressed(e.target) && e.key !== ".") return;
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      if (e.key === ".") {
+        e.preventDefault();
+        switchTo(half === "agent" ? "console" : "agent");
+        return;
+      }
       if (isShortcutSuppressed(e.target)) return;
       const n = Number(e.key);
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || !Number.isInteger(n)) return;
+      if (!Number.isInteger(n)) return;
       const mode = MODES[n - 1];
       if (!mode) return;
       e.preventDefault();
@@ -65,25 +126,31 @@ function ModeRail() {
 
   return (
     <nav aria-label="Modes" data-testid="global-rail" className="flex w-12 shrink-0 flex-col items-center gap-1 pb-2">
-      {MODES.map((m, i) => {
-        const isActive = m.id === active;
-        return (
-          <Tip key={m.id} label={m.deferred ? `${m.label} · deferred` : m.label} shortcut={modShortcut(String(i + 1))} side="right">
-            <button
-              type="button"
-              aria-label={m.label}
-              aria-current={isActive ? "page" : undefined}
-              onClick={() => go(modeHref(m, repo))}
-              className={cx(
-                "relative flex size-9 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
-                isActive ? "bg-accent-soft text-accent-ink" : "text-ink-faint hover:bg-hover hover:text-ink-muted",
-              )}
-            >
-              <Icon name={m.icon} size="md" />
-            </button>
-          </Tip>
-        );
-      })}
+      <HalfSwitch half={half} onSwitch={switchTo} />
+      <span aria-hidden className="my-1.5 h-px w-6 bg-border-muted" />
+      {half === "agent" ? (
+        <NewSessionButton />
+      ) : (
+        MODES.map((m, i) => {
+          const isActive = m.id === active;
+          return (
+            <Tip key={m.id} label={m.deferred ? `${m.label} · deferred` : m.label} shortcut={modShortcut(String(i + 1))} side="right">
+              <button
+                type="button"
+                aria-label={m.label}
+                aria-current={isActive ? "page" : undefined}
+                onClick={() => go(modeHref(m, repo))}
+                className={cx(
+                  "relative flex size-9 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
+                  isActive ? "bg-accent-soft text-accent-ink" : "text-ink-faint hover:bg-hover hover:text-ink-muted",
+                )}
+              >
+                <Icon name={m.icon} size="md" />
+              </button>
+            </Tip>
+          );
+        })
+      )}
     </nav>
   );
 }
@@ -154,7 +221,9 @@ export function AppShell() {
   return (
     <Tooltip.Provider delay={350}>
       <ShellProvider>
-        <ShellLayout />
+        <AgentWorkspaceProvider>
+          <ShellLayout />
+        </AgentWorkspaceProvider>
       </ShellProvider>
     </Tooltip.Provider>
   );
