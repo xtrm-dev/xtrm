@@ -1,6 +1,6 @@
 # XTRM Agentic Operating Environment PRD
 
-**Status:** Draft v0.3 — product-direction baseline + canonical Console v2 amendments (§34, 2026-09-16)  
+**Status:** Draft v0.3 — product-direction baseline + canonical Console v2 amendments (§34, 2026-09-16) + proposed agent-hosting / remote amendment (§35, 2026-10-02)  
 **Package:** `xtrm-dev/xtrm/packages/xtrm-app`  
 **Product surface:** XTRM Console / desktop agent harness  
 **Primary runtime:** Pi `AgentSessionRuntime`  
@@ -659,6 +659,8 @@ Pi child sessions are one possible implementation mechanism, not the semantic de
 
 ## 12. First-class Agents presence view
 
+> Proposed amendment §35.3–35.5 defines how sessions started outside the GUI (tmux / `xt pi`) reach this view.
+
 XTRM needs a first-class surface for observing active and recent agents across the current repository or workspace.
 
 The default presentation should be list-first rather than graph-first.
@@ -1261,6 +1263,8 @@ Do not copy OpenCode's vertical transcript navigation model.
 
 ## 25. Desktop process architecture
 
+> Proposed amendment §35 makes this sidecar a client of an agent host and the in-process runtime an optional local mode.
+
 Initial target:
 
 ```text
@@ -1438,6 +1442,8 @@ Observability surface
 ```
 
 ### Later
+
+> Proposed amendment §35.7 moves single-host remote access into v0.
 
 Potential later integrations include:
 
@@ -1676,3 +1682,100 @@ A visible Agent destination does not authorize starting the Agent/Frames tranche
 ### 34.12 Review revision (2026-09-16)
 
 After review of the first executable vertical: the rail selects modes and the sidebar shows only the active mode's context; global search moves to a full-width top bar; the inspector rail follows the v15 reference (separate column, floating inset drawer); Substrate Issues become a Jira-style surface with an issue page, in-place field editing, Markdown rendering, lossless contract writes through `sb` verbs, and reviewed normalization of imported contracts. Details: `console-v2-shell-architecture.md` §16.
+
+## 35. Agent hosting, external sessions, and remote access — proposed amendment (2026-10-02)
+
+Status: **proposed**. This section amends §12, §25, §29, §30, and §31. It does not change the Frame canon (§3–4, §34.8) or the persistence rules (§26).
+
+### 35.1 Problem
+
+§25 assumes that the GUI and the agents share a host: the desktop shell starts a Node sidecar, and the sidecar runs Pi in-process through `AgentSessionRuntime`. This assumption fails in three ways for actual operation:
+
+- **The agents run elsewhere.** Repositories, provider credentials, and agent sessions live on a server. The operator's desktop is a client. A sidecar on the desktop would run Pi on the wrong machine.
+- **Most sessions start outside the GUI.** Operators and coordinators start agents in tmux through `xt pi` (roles, beads, parent/child panes). §12 requires a presence view across the repository or workspace, but no section says how the GUI observes a session it did not create.
+- **Remote access is deferred.** §29 lists "remote execution" under Later and §30 lists "remote multi-host scheduling" as a non-goal. Neither the transport, the authentication, nor the client/server split is specified.
+
+### 35.2 Evidence: the ACP-bridge model (`giuliastro/harness-remote` 3.1.1)
+
+Harness Remote was run against a real XTRM host (2026-10-02). It drives each agent through an ACP adapter process that it owns (`@automatalabs/pi-acp`, `@agentclientprotocol/claude-agent-acp`, `codex-acp`) and discovers history by listing sessions through the adapter. Findings:
+
+- **The model owns its own processes.** A session started in tmux is visible only as persisted history. The bridge cannot stream it. Prompting it loads the session into a second Pi process, so concurrent use branches the conversation.
+- **Listing does not scale.** pi-acp implements `session/list` with `SessionManager.listAll`, which parses every journal on every call. With about 4,200 journals (2.6 GB), one scan took about 21 s on its own. Concurrent client polls queued behind each other for 30–140 s and hit the 30 s request timeout, so no Pi sessions were listed at all.
+- **The adapters stay resident.** The Claude, Pi, and Codex adapters plus the bridge held about 1.3 GB RSS and 1 GB swap on a production host that was already under load.
+
+Disposition (§24): **REFERENCE**. Adopt its principles: native sessions are authoritative, cross-agent and cross-machine handoff carries lineage, and capabilities and models are discovered from the running harness. Reject its process model as the primary Pi path.
+
+### 35.3 Decision: push from inside the session
+
+The primary Pi integration is an **XTRM Pi extension** that runs inside every live Pi session, however that session was started. The existing `herdr-agent-state` and `orca-agent-status` extensions already establish this pattern on XTRM hosts.
+
+The extension:
+
+- **pushes** native lifecycle events to the XTRM agent host: `session_start`, `before_agent_start`, `turn_end`, `message_end`, `tool_execution_start` / `_update` / `_end`, `agent_end`, `agent_settled`, `session_shutdown`. These map into the §22 vocabulary without loss, because they are the same events the Frame projector consumes;
+- **accepts** commands from the agent host: user message (`pi.sendUserMessage`), steer / follow-up, abort, and extension-UI responses (§20);
+- **attaches identity**: session id, cwd, worktree, role, bead / Substrate Issue, parent session, and tmux pane. This is the §11 identity read from the `xt pi` launch context (`@agent_task`, `@agent_parent_session`, `XTMUX_AGENT_BEAD`).
+
+A session without the extension remains visible as history only (§35.5).
+
+### 35.4 Launch: tmux-hosted sessions
+
+The GUI starts agents through the existing launcher instead of hosting Pi itself.
+
+A blank Agent surface asks for:
+
+```text
+working directory     repository / worktree picker (§5 repository context)
+command               pi | xt pi
+xt pi options         name · --role · --bead · --model · --thinking · --skill (repeatable) · --prompt · --parent / --child
+```
+
+The agent host runs the equivalent of `xt pi … --no-attach --json` (or a bare `pi` inside a new tmux session) and returns the `xtrm.command-outcome.v1` result, including `session_name:pane_id`. When the extension connects, the GUI binds the pane to the session, and Frame 1 starts on the first submit (§3).
+
+Consequences:
+
+- **The agent outlives the GUI.** Closing the app or losing the connection does not stop work.
+- **The terminal stays an equal client.** `tmux attach` works for every GUI-started agent, and the GUI sees every terminal-started agent.
+- **There is one launch path.** Roles, beads, worktrees, and specialist resolution remain owned by `xt pi`. The GUI does not duplicate them.
+
+The in-process `AgentSessionRuntime` path from §25 remains allowed for local-only use. It is no longer the only path, and it is not required for the first remote-capable vertical.
+
+### 35.5 Agent host
+
+Each machine that runs agents runs one **XTRM agent host** process:
+
+```text
+Pi sessions (tmux) ──extension socket──▶ agent host ◀──authenticated API── GUI (desktop / web / mobile)
+Claude sessions    ──hooks─────────────▶     │
+                                             ├─ live session registry (pushed state)
+                                             ├─ incremental session index
+                                             ├─ launcher (xt pi --no-attach --json)
+                                             └─ command routing to live sessions
+```
+
+- **Live registry.** Holds state pushed by the extension. Nothing is polled.
+- **Incremental index.** Covers sessions that are not running. It is built from provider journals by watching files and re-reading only the ones that changed, never by full rescans per request. It is a projection cache in the §26 sense: journals stay authoritative.
+- **API.** One API for local and remote clients. Local use goes through the same API over loopback, so remote is not a separate mode.
+- **Binding and authentication.** The host binds to loopback or a private-network address (tailnet) only. Pairing uses a short-lived one-time token that is exchanged for a revocable device session. The host never binds a public interface by default.
+- **Resource budget.** The host keeps no resident adapter per provider. Its idle cost is the registry plus the index.
+
+### 35.6 Non-Pi agents
+
+- **Claude Code** reports through its hook surface into the same agent host and uses the same identity fields. Prompting a live Claude session follows whatever its runtime supports, and the GUI shows only the capabilities that are actually advertised.
+- **Codex and other ACP agents** keep the §23 direction (generic ACP lane, evaluate `acp-kit` first). An ACP adapter is started on demand for a session the operator opens. It is not kept resident for listing.
+
+### 35.7 Changes to earlier sections
+
+| section | change |
+|---|---|
+| §12 Agents presence | Presence covers every session reporting to the agent host, including tmux / `xt pi` sessions started outside the GUI. |
+| §25 Desktop process architecture | The sidecar becomes a client of an agent host, local or remote. The in-process Pi runtime is an optional local mode (§35.4). |
+| §29 Later | "remote execution" moves into v0. "Remote multi-host scheduling" (placing work across hosts) stays Later. |
+| §30 Non-goals | Remote access to a single agent host is no longer a non-goal. Multi-host scheduling remains one. |
+| §31 criteria 2–3 | Become: the operator selects a working directory and a launch profile, the agent starts in tmux on the agent host, and the GUI binds to it within seconds. A session started from a terminal on the same host appears in Agents presence without GUI action. |
+
+### 35.8 Open items
+
+- The extension ↔ agent host transport (Unix socket vs. local HTTP) and its event schema, versioned alongside the §22 vocabulary.
+- Whether the agent host is a new `xt` subcommand or extends an existing daemon (xtmux, Substrate).
+- The Claude hook coverage needed for streaming versus status-only presence.
+- Conflict policy when the terminal and the GUI submit to the same live session at the same time.
