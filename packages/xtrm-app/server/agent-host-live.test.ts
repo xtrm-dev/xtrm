@@ -121,3 +121,40 @@ describe("bridge submit route (XTRM-597)", () => {
     expect((await post(submit(), { "content-type": "application/json", origin: "http://evil.example" })).status).toBe(403);
   });
 });
+
+describe("bridge reference route (XTRM-598)", () => {
+  const resolve = (references: unknown = ["@file:a.ts"]) => ({ schema: "xtrm.agent-host-api.v1", kind: "reference_resolve_request", sessionId: "s1", references });
+
+  it("forwards a reference_resolve_request to the host and accepts submit bodies above 64 KB", async () => {
+    const seen: Array<{ url?: string; body?: unknown }> = [];
+    const hostPort = await listen((req, res) => {
+      let raw = "";
+      req.on("data", (c: Buffer) => (raw += c));
+      req.on("end", () => {
+        seen.push({ url: req.url, body: JSON.parse(raw) });
+        res.setHeader("content-type", "application/json");
+        const kind = req.url === "/v1/submit" ? "submit_result" : "reference_resolve_result";
+        res.end(JSON.stringify({ schema: "xtrm.agent-host-api.v1", kind, commandId: "c1", status: "accepted", references: [], totalBytes: 0 }));
+      });
+    });
+    const conn = new AgentHostConnection({ settingsFile: join(mkdtempSync(join(tmpdir(), "xh-")), "c.json"), run: async () => ({ code: 1, stdout: "", stderr: "", timedOut: false }) });
+    const handle = agentHostHandler(conn, undefined, () => ({ port: hostPort, id: "local:t", local: true }));
+    const port = await listen((req, res) => void handle(req, res, () => ((res.statusCode = 404), res.end())));
+    const post = (path: string, body: unknown, headers: Record<string, string> = { "content-type": "application/json" }) =>
+      fetch(`http://127.0.0.1:${port}/xtrm-api/agent-host/api/v1${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+
+    const res = await post("/references/resolve", resolve());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ kind: "reference_resolve_result" });
+    expect(seen[0]).toEqual({ url: "/v1/references/resolve", body: resolve() });
+    expect((await post("/references/resolve", resolve([]))).status).toBe(400);
+    expect((await post("/references/resolve", resolve([1]))).status).toBe(400);
+    expect((await post("/references/resolve", resolve(), { "content-type": "text/plain" })).status).toBe(415);
+    expect((await post("/references/resolve", resolve(), { "content-type": "application/json", origin: "http://evil.example" })).status).toBe(403);
+
+    const content = "x".repeat(200 * 1024);
+    const big = { schema: "xtrm.agent-host-api.v1", kind: "submit_request", sessionId: "s1", command: { type: "prompt", commandId: "c1", message: content }, references: [{ kind: "file", raw: "@file:a", status: "resolved", content }] };
+    expect((await post("/submit", big)).status).toBe(200);
+    expect(seen[1]).toMatchObject({ url: "/v1/submit" });
+  });
+});

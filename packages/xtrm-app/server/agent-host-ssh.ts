@@ -19,6 +19,9 @@
 // Write route (XTRM-597): POST /api/v1/submit forwards one xtrm.agent-host-api.v1 submit_request to
 // the host's POST /v1/submit. Same-origin JSON only (a cross-site form cannot send
 // application/json without a preflight, which this bridge never answers).
+// Reference route (XTRM-598): POST /api/v1/references/resolve forwards one reference_resolve_request
+// to the host's POST /v1/references/resolve, under the same rules. Submit and resolve bodies may carry
+// resolved references (96 KB per submit, twice: index and message), so they get a larger body limit.
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -252,6 +255,24 @@ export async function hostPost(localPort: number, path: string, body: unknown, t
   return { status: res.status, body: await res.json() };
 }
 
+/** Shape check of a reference_resolve_request; the host validates the full schema and each reference. */
+export function isResolveRequest(b: Record<string, unknown>): boolean {
+  const refs = b.references;
+  return (
+    b.schema === API_SCHEMA &&
+    b.kind === "reference_resolve_request" &&
+    (b.sessionId === undefined || (typeof b.sessionId === "string" && SESSION_ID_RE.test(b.sessionId))) &&
+    Array.isArray(refs) &&
+    refs.length >= 1 &&
+    refs.length <= 64 &&
+    refs.every((r) => typeof r === "string" && r.length >= 1 && r.length <= 1024)
+  );
+}
+
+/** Body limit of the routes that carry resolved references. */
+const REFERENCE_BODY_BYTES = 1024 * 1024;
+const JSON_ROUTES = new Set(["/api/v1/submit", "/api/v1/references/resolve"]);
+
 /** Shape check of a submit_request before it leaves the bridge; the host validates the full schema. */
 export function isSubmitRequest(b: Record<string, unknown>): boolean {
   const c = b.command as Record<string, unknown> | null | undefined;
@@ -409,12 +430,12 @@ export function displayCommand(argv: string[]): string {
   return argv.map((a) => (/^[A-Za-z0-9_./@%+=:,-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`)).join(" ");
 }
 
-function readJson(req: IncomingMessage): Promise<Record<string, unknown> | null> {
+function readJson(req: IncomingMessage, maxBytes = 64 * 1024): Promise<Record<string, unknown> | null> {
   return new Promise((resolve) => {
     let raw = "";
     req.on("data", (chunk: Buffer) => {
       raw += chunk.toString("utf8");
-      if (raw.length > 64 * 1024) req.destroy();
+      if (raw.length > maxBytes) req.destroy();
     });
     req.on("end", () => {
       try {
@@ -487,18 +508,22 @@ export function agentHostHandler(conn: AgentHostConnection, prefix = "/xtrm-api/
     if (req.method === "POST") {
       const origin = req.headers.origin;
       if (origin && new URL(origin).host !== req.headers.host) return send(403, { ok: false, error: "cross-origin request rejected" });
-      if (path === "/api/v1/submit" && !/^application\/json\b/i.test(req.headers["content-type"] ?? "")) {
-        return send(415, { ok: false, error: "submit bodies must be application/json" });
+      if (JSON_ROUTES.has(path) && !/^application\/json\b/i.test(req.headers["content-type"] ?? "")) {
+        return send(415, { ok: false, error: "submit and reference bodies must be application/json" });
       }
-      const body = await readJson(req);
+      const body = await readJson(req, JSON_ROUTES.has(path) ? REFERENCE_BODY_BYTES : undefined);
       if (!body) return send(400, { ok: false, error: "invalid JSON body" });
       switch (path) {
-        case "/api/v1/submit": {
-          if (!isSubmitRequest(body)) return send(400, { ok: false, error: "expected an xtrm.agent-host-api.v1 submit_request" });
+        case "/api/v1/submit":
+        case "/api/v1/references/resolve": {
+          const submit = path === "/api/v1/submit";
+          if (submit ? !isSubmitRequest(body) : !isResolveRequest(body)) {
+            return send(400, { ok: false, error: `expected an xtrm.agent-host-api.v1 ${submit ? "submit_request" : "reference_resolve_request"}` });
+          }
           const ep = endpoint();
           if (!ep) return send(409, { ok: false, error: "no agent host: connect over SSH or start `xt host start` on this machine" });
           try {
-            const r = await hostPost(ep.port, "/v1/submit", body);
+            const r = await hostPost(ep.port, submit ? "/v1/submit" : "/v1/references/resolve", body);
             res.setHeader("x-xtrm-agent-host", ep.id);
             return send(r.status, r.body);
           } catch (e) {

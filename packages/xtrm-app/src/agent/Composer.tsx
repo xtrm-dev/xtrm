@@ -1,10 +1,11 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { blockReason } from "../adapters/agent/references.ts";
 import { BusyError, type AgentRef, type AgentSessionDetail, type RefCandidate } from "../adapters/agent/types.ts";
 import { Icon } from "../ui/icon.tsx";
 import { Kbd, cx } from "../ui/primitives.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
 import { REF_ICON } from "./meta.tsx";
-import { useAbort, useReferenceCandidates, useReferenceResolver, useSubmit, type PickerKind } from "./queries.ts";
+import { useAbort, useReferenceCandidates, useResolveForSubmit, useSubmit, type PickerKind } from "./queries.ts";
 import { activeMention, formatAgentRef, parseRefTokens, useAgentStore, useAgentStoreVersion } from "./workspace.tsx";
 
 const TABS: Array<[PickerKind, string]> = [
@@ -87,16 +88,19 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
   const [mode, setMode] = useState<"steer" | "follow-up">("steer");
   /** The host answered busy to a normal submit (PRD §35.8 item 5): offer Steer or Follow-up explicitly. */
   const [busy, setBusy] = useState(false);
+  /** Unresolved references of the last attempt, by `@kind:ref`: marked on their chips (§36.6 rule 5). */
+  const [failed, setFailed] = useState<Record<string, string>>({});
+  const [resolving, setResolving] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const submit = useSubmit(session.id);
   const abort = useAbort(session.id);
-  const resolve = useReferenceResolver();
+  const resolveRefs = useResolveForSubmit(session.id);
 
   const working = session.state === "working" || session.state === "waiting";
   const mention = activeMention(text, caret);
   const pickerOpen = !!mention && dismissed !== mention.start;
   const kind: PickerKind = kindOverride ?? mention?.kind ?? "all";
-  const candidates = useReferenceCandidates(mention?.query ?? "", kind, pickerOpen).filter((c) => !refs.some((r) => sameRef(r, c)));
+  const candidates = useReferenceCandidates(mention?.query ?? "", kind, pickerOpen, session.id).filter((c) => !refs.some((r) => sameRef(r, c)));
   const index = Math.min(active, Math.max(0, candidates.length - 1));
 
   useLayoutEffect(() => {
@@ -131,18 +135,21 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
 
   const send = async (explicit?: "steer" | "follow-up") => {
     const body = text.trim();
-    if (!body || submit.isPending) return;
-    const tokens = parseRefTokens(body);
-    const checks = await Promise.all(tokens.map(async (t) => [t, await resolve(t)] as const));
-    const unresolved = checks.filter(([, ok]) => !ok).map(([t]) => formatAgentRef(t));
-    if (unresolved.length) {
-      setError(`Unresolved reference ${unresolved.join(", ")}. Fix or remove it before sending.`);
-      return;
-    }
+    if (!body || submit.isPending || resolving) return;
     const all = [...refs];
-    for (const t of tokens) if (!all.some((r) => sameRef(r, t))) all.push(t);
+    for (const t of parseRefTokens(body)) if (!all.some((r) => sameRef(r, t))) all.push(t);
     try {
-      await submit.mutateAsync({ text: body, refs: all, mode: explicit ?? (working ? mode : "prompt") });
+      // Every reference resolves at submit, so the Frame records the revision it was given (§36.6 rule 2).
+      setResolving(true);
+      const check = await resolveRefs(all).finally(() => setResolving(false));
+      setFailed(Object.fromEntries(check.unresolved.map((r) => [r.raw, r.error ?? "unresolved"])));
+      const blocked = blockReason(check);
+      if (blocked) {
+        setBusy(false);
+        setError(blocked);
+        return;
+      }
+      await submit.mutateAsync({ text: body, refs: all, references: check.references, mode: explicit ?? (working ? mode : "prompt") });
       update("", 0);
       store.commit(session.id, { refs: [], frameId: null, scrollTop: 0 });
     } catch (e) {
@@ -211,7 +218,7 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
         {refs.length > 0 && (
           <div className="flex flex-wrap gap-1 px-2.5 pt-2" aria-label="Attached references">
             {refs.map((r) => (
-              <AgentRefChip key={`${r.kind}:${r.ref}`} reference={r} onRemove={() => setRefs(refs.filter((x) => !sameRef(x, r)))} />
+              <AgentRefChip key={`${r.kind}:${r.ref}`} reference={r} error={failed[formatAgentRef(r)]} onRemove={() => setRefs(refs.filter((x) => !sameRef(x, r)))} />
             ))}
           </div>
         )}
@@ -269,7 +276,7 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
             <button
               type="button"
               onClick={() => void send()}
-              disabled={!text.trim() || submit.isPending}
+              disabled={!text.trim() || submit.isPending || resolving}
               className="flex h-7 items-center gap-1.5 rounded-md bg-accent px-2.5 text-xs font-medium text-white outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-accent/40 disabled:bg-control disabled:text-ink-faint"
             >
               {working ? (mode === "steer" ? "Steer" : "Follow up") : "Send"}

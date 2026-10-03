@@ -9,8 +9,11 @@
 // - extension_ui_request renders as a prompt activity in the open Frame; extension_ui_resolved
 //   closes it, whoever answered (XTRM-597). `editor` is never proxied by the extension.
 // - A user message after the Frame's first one is a delivered steer or follow-up: a steer note.
+// - A message sent with @ references carries their context block (references.ts): the Frame shows the
+//   operator's text and keeps the references with the revisions they were given (XTRM-598).
 // The host keeps a bounded replay buffer, so Frames older than the buffer are not projected;
 // `snapshot` numbers the retained Frames against the host's frameCount.
+import { splitMessage } from "./references.ts";
 import type { HostAgentMessage, HostEventFrame, HostEventMessage, HostToolOrigin } from "./protocol.ts";
 import type { InteractionFrame, PromptActivity, ToolActivity } from "./types.ts";
 
@@ -106,8 +109,9 @@ export class AgentProjector {
       case "before_agent_start": {
         const f = s.open ?? this.openFrame(s, id, cursor, frame.at, p.ingress.origin);
         if (!f.ingress.text) {
-          f.ingress = { ...f.ingress, text: p.prompt, origin: p.ingress.origin };
-          f.title = frameTitle(p.prompt);
+          const { text, refs } = splitMessage(p.prompt);
+          f.ingress = { ...f.ingress, text, refs, origin: p.ingress.origin };
+          f.title = frameTitle(text);
         }
         break;
       }
@@ -221,7 +225,7 @@ export class AgentProjector {
   private user(s: SessionProjection, sessionId: string, cursor: string, m: HostAgentMessage) {
     if (!s.open) return;
     s.userMessages += 1;
-    const text = contentText(m.content).trim();
+    const text = splitMessage(contentText(m.content)).text.trim();
     if (s.userMessages > 1 && text) s.open.activity.push({ kind: "steer", id: `${sessionId}:${cursor}`, text: `Delivered while working: ${text}` });
   }
 

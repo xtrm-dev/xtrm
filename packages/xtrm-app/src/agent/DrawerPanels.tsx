@@ -5,6 +5,7 @@ import { ContentPanel, EmptyState, LoadingState, StatusDot, relativeTime } from 
 import { AgentRefChip } from "./RefChip.tsx";
 import { ContextMeter, REF_LABEL, STATE_LABEL, STATE_TONE, contextPercent, shortModel } from "./meta.tsx";
 import { useAgentSession } from "./queries.ts";
+import { useAgentStore } from "./workspace.tsx";
 
 function Eyebrow({ children }: { children: string }) {
   return <p className="text-[0.65rem] font-medium tracking-wide text-ink-faint uppercase">{children}</p>;
@@ -73,7 +74,9 @@ export function SessionPanel({ id }: { id: string }) {
 /** Host-resolved references (commit, file): bounded preview, never the whole artifact (PRD §36.6). */
 export function HostRefPanel({ reference }: { reference: AgentRef }) {
   const { agent } = useAdapters();
-  const q = useQuery({ queryKey: ["agent", "resolve", reference.kind, reference.ref], queryFn: () => agent.resolveReference(reference) });
+  // Files and commits resolve in the cwd of the session whose composer is active.
+  const sessionId = useAgentStore().active ?? undefined;
+  const q = useQuery({ queryKey: ["agent", "resolve", reference.kind, reference.ref, sessionId], queryFn: () => agent.resolveReference(reference, sessionId) });
   if (q.isPending) return <LoadingState rows={3} label="Resolving reference" />;
   if (!q.data) return <EmptyState icon="alert" title="Unresolved reference">{`@${reference.kind}:${reference.ref} does not resolve on the agent host.`}</EmptyState>;
   return (
@@ -81,6 +84,7 @@ export function HostRefPanel({ reference }: { reference: AgentRef }) {
       <Eyebrow>{REF_LABEL[reference.kind]}</Eyebrow>
       <h2 className="text-base font-medium text-ink">{q.data.title}</h2>
       <p className="font-mono text-xs break-all text-ink-faint">{q.data.ref}</p>
+      {q.data.detail && <p className="font-mono text-xs break-all text-ink-faint">{q.data.detail}</p>}
       {q.data.preview && (
         <ContentPanel mono className="whitespace-pre-wrap">
           {q.data.preview}

@@ -10,21 +10,43 @@
 //   steer / follow_up while working, abort, and extension_ui_response. The host answers busy for a
 //   normal prompt while the session works (§35.8 item 5); that surfaces as BusyError and the
 //   composer offers Steer or Follow-up. Nothing is retried or queued here.
-// - @ references are a separate issue: a submit that carries references is refused.
+// - @ references (XTRM-598): @file, @commit, @session, @agent and @frame resolve on the host
+//   (POST /v1/references/resolve) against the session, with revision and budget. A submit carries the
+//   resolved references in submit_request.references and, because the host forwards only the command
+//   to the session, as a context block appended to the message (references.ts).
 import { AgentProjector } from "./projector.ts";
+import { composeMessage, formatRef } from "./references.ts";
 import {
   EVENT_SCHEMA,
   HOST_API_SCHEMA,
   type HostCapability,
   type HostCommand,
+  type HostContextReference,
   type HostEventMessage,
+  type HostReferenceResolveRequest,
+  type HostReferenceResolveResult,
+  type HostApiError,
   type HostSessionDetail,
   type HostSessionList,
   type HostSessionSummary,
   type HostSubmitRequest,
   type HostSubmitResult,
 } from "./protocol.ts";
-import { BusyError, type AgentAdapter, type AgentSessionDetail, type AgentSessionSummary, type Activity, type InteractionFrame, type SessionCapability, type SessionState } from "./types.ts";
+import {
+  BusyError,
+  HOST_REF_KINDS,
+  type AgentAdapter,
+  type AgentRef,
+  type AgentSessionDetail,
+  type AgentSessionSummary,
+  type Activity,
+  type ContextReference,
+  type HostRefKind,
+  type InteractionFrame,
+  type RefCandidate,
+  type SessionCapability,
+  type SessionState,
+} from "./types.ts";
 
 const STATE: Record<HostSessionSummary["state"], SessionState> = {
   working: "working",
@@ -63,6 +85,19 @@ const commandId = () => (typeof crypto.randomUUID === "function" ? crypto.random
 /** Error text of a refused submit: the host's message, else its reason, else the status. */
 export function submitError(r: HostSubmitResult): Error {
   return new Error(r.message ?? r.reason ?? `the agent host answered ${r.status}`);
+}
+
+/** The host resolves at most this many references per request. */
+const RESOLVE_BATCH = 64;
+const PREVIEW_CHARS = 2_000;
+
+const isHostKind = (r: AgentRef): r is AgentRef & { kind: HostRefKind } => (HOST_REF_KINDS as readonly string[]).includes(r.kind);
+
+/** A host reference as the drawer and the picker show it: title, revision, bounded preview. */
+export function candidateOf(ref: AgentRef, r: ContextReference): RefCandidate | null {
+  if (r.status !== "resolved") return null;
+  const detail = [r.revision, r.truncated ? "excerpt" : null].filter(Boolean).join(" · ");
+  return { kind: ref.kind, ref: ref.ref, title: r.title ?? ref.ref, ...(detail ? { detail } : {}), ...(r.content ? { preview: r.content.slice(0, PREVIEW_CHARS) } : {}) };
 }
 
 export interface LiveAgentOptions {
@@ -210,15 +245,20 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
     };
   }
 
-  async function send(sessionId: string, command: HostCommand): Promise<void> {
-    const body: HostSubmitRequest = { schema: HOST_API_SCHEMA, kind: "submit_request", sessionId, command };
-    const res = await doFetch(`${base}/api/v1/submit`, {
+  async function post<T>(path: string, body: unknown): Promise<{ status: number; body: T | null }> {
+    const res = await doFetch(`${base}${path}`, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify(body),
     });
-    const r = (await res.json().catch(() => null)) as HostSubmitResult | null;
-    if (r?.kind !== "submit_result") throw hostError(res.status, r);
+    return { status: res.status, body: (await res.json().catch(() => null)) as T | null };
+  }
+
+  async function send(sessionId: string, command: HostCommand, references: ContextReference[] = []): Promise<void> {
+    const body: HostSubmitRequest = { schema: HOST_API_SCHEMA, kind: "submit_request", sessionId, command };
+    if (references.length) body.references = references as HostContextReference[];
+    const { status, body: r } = await post<HostSubmitResult>("/api/v1/submit", body);
+    if (r?.kind !== "submit_result") throw hostError(status, r);
     if (r.status === "accepted") return;
     // The extension may refuse a prompt itself when Pi is not idle: the same busy rule.
     if (r.status === "busy" || r.reason === "busy") throw new BusyError();
@@ -235,7 +275,7 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
     return frames;
   };
 
-  return {
+  const adapter: AgentAdapter & { close(): void; projector(): AgentProjector } = {
     source: "live",
     async listSessions() {
       ensureStream();
@@ -264,9 +304,8 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
       return detail;
     },
     async submit(sessionId, input) {
-      if (input.refs.length) throw new Error("References are not sent to the agent host yet. Remove them to send this message.");
       const type = input.mode === "follow-up" ? "follow_up" : input.mode;
-      await send(sessionId, { type, commandId: commandId(), message: input.text });
+      await send(sessionId, { type, commandId: commandId(), message: composeMessage(input.text, input.references) }, input.references);
     },
     async abort(sessionId) {
       await send(sessionId, { type: "abort", commandId: commandId() });
@@ -281,8 +320,53 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
       answers.set(activityId, answer ?? "Cancelled");
       notify(sessionId);
     },
-    searchReferences: () => Promise.resolve([]),
-    resolveReference: () => Promise.resolve(null),
+    async resolveReferences(sessionId, refs) {
+      const out: ContextReference[] = refs.map((r) => ({ kind: r.kind, raw: formatRef(r), status: "unresolved", error: "not_host_resolved" }));
+      const host = refs.map((r, i) => [r, i] as const).filter(([r]) => isHostKind(r));
+      for (let at = 0; at < host.length; at += RESOLVE_BATCH) {
+        const batch = host.slice(at, at + RESOLVE_BATCH);
+        const request: HostReferenceResolveRequest = { schema: HOST_API_SCHEMA, kind: "reference_resolve_request", sessionId, references: batch.map(([r]) => formatRef(r)) };
+        const { status, body } = await post<HostReferenceResolveResult | HostApiError>("/api/v1/references/resolve", request);
+        if (status === 200 && body?.kind === "reference_resolve_result" && body.references.length === batch.length) {
+          batch.forEach(([, i], k) => (out[i] = body.references[k] as ContextReference));
+          continue;
+        }
+        // The host refused the request as a whole (bad syntax): every reference in it is unresolved.
+        if (status === 400 && body?.kind === "error") {
+          const code = body.code;
+          for (const [, i] of batch) out[i] = { ...out[i]!, error: code };
+          continue;
+        }
+        throw hostError(status, body);
+      }
+      return out;
+    },
+    async resolveReference(ref, sessionId) {
+      if (!isHostKind(ref)) return null;
+      if (!sessionId) {
+        // Without a session only @session resolves, from the session list.
+        if (ref.kind !== "session") return null;
+        const s = (await adapter.listSessions()).find((x) => x.id === ref.ref || x.name === ref.ref);
+        return s ? { kind: "session", ref: ref.ref, title: s.title, detail: s.state } : null;
+      }
+      const [r] = await adapter.resolveReferences(sessionId, [ref]);
+      return r ? candidateOf(ref, r) : null;
+    },
+    async searchReferences(query, kind, _repo, sessionId) {
+      const q = query.trim();
+      if (kind === "session") {
+        const ql = q.toLowerCase();
+        return (await adapter.listSessions())
+          .filter((s) => s.id !== sessionId && (!ql || s.name.toLowerCase().includes(ql) || s.id.startsWith(ql) || s.title.toLowerCase().includes(ql)))
+          .map((s): RefCandidate => ({ kind: "session", ref: s.id, title: s.name, detail: [s.role, s.state].filter(Boolean).join(" · ") }));
+      }
+      // The host has no search route: a typed path or commit id is offered once it resolves.
+      if (!sessionId || !q || (kind === "commit" && !/^[0-9a-f]{4,64}$/i.test(q))) return [];
+      const ref: AgentRef = { kind, ref: q };
+      const [r] = await adapter.resolveReferences(sessionId, [ref]);
+      const c = r ? candidateOf(ref, r) : null;
+      return c ? [c] : [];
+    },
     subscribe(listener) {
       ensureStream();
       listeners.add(listener);
@@ -295,6 +379,7 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
     },
     projector: () => projector,
   };
+  return adapter;
 }
 
 export const liveAgent = createLiveAgent();
