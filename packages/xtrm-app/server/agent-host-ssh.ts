@@ -501,8 +501,8 @@ export function agentHostHandler(
 
     if (req.method === "GET") {
       if (path === "/connection") return send(200, state(conn.status()));
-      // Read-only host API: the session list, one session, and the event stream.
-      const m = /^\/api\/v1\/sessions(?:\/([^/]+))?$/.exec(path);
+      // Read-only host API: the session list, one session, its history (XTRM-604), and the event stream.
+      const m = /^\/api\/v1\/sessions(?:\/([^/]+)(\/history)?)?$/.exec(path);
       if (m || path === "/api/v1/events") {
         const ep = endpoint();
         if (!ep) return send(409, { ok: false, error: NO_HOST });
@@ -510,7 +510,10 @@ export function agentHostHandler(
         if (id !== null && !SESSION_ID_RE.test(id)) return send(400, { ok: false, error: "invalid session id" });
         if (!m) return proxyEvents(ep, req, res, id, (status) => refused(ep, status));
         try {
-          const r = await hostApi(ep, id ? `/v1/sessions/${encodeURIComponent(id)}` : "/v1/sessions");
+          // A history is the whole journal (bounded by the host): it gets a longer timeout.
+          const r = m[2]
+            ? await hostApi(ep, `/v1/sessions/${encodeURIComponent(id!)}/history`, 60_000)
+            : await hostApi(ep, id ? `/v1/sessions/${encodeURIComponent(id)}` : "/v1/sessions");
           refused(ep, r.status);
           if (r.status === 401 && ep.bearer) return send(401, { ok: false, code: "repair_required", error: REPAIR_MESSAGE });
           res.setHeader("x-xtrm-agent-host", ep.id);

@@ -77,6 +77,19 @@ export interface HostSessionDetail {
   lastSeq?: number;
 }
 
+/**
+ * xtrm.agent-host-api.v1 `session_history` (core XTRM-604): Pi journal entries (`message`,
+ * `compaction`) on the active branch, oldest first. Strings above 64 KiB are cut (`truncated`).
+ */
+export interface HostSessionHistory {
+  schema: typeof HOST_API_SCHEMA;
+  kind: "session_history";
+  sessionId: string;
+  provider: "pi";
+  entries: Record<string, unknown>[];
+  truncated?: boolean;
+}
+
 /** PRD §36.7 origin, set by the host from the tool's registration record. */
 export interface HostToolOrigin {
   class: "native" | "mcp" | "extension" | "coordination";
@@ -95,6 +108,8 @@ export interface HostAgentMessage {
   thinkingLevel?: string;
   stopReason?: string;
   errorMessage?: string;
+  /** Pi sets it when the message is created; the journal holds the same value (XTRM-604). */
+  timestamp?: number;
   usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; totalTokens?: number; cost?: { total?: number } };
 }
 

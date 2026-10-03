@@ -22,7 +22,7 @@ const event = (cursor: number, payload: object, sessionId = "s1") =>
   `id: ${cursor}\ndata: ${JSON.stringify({ schema: "xtrm.agent-host-api.v1", kind: "event", cursor: String(cursor), frame: { schema: "xtrm.agent-event.v1", seq: cursor, sessionId, at: 1000 + cursor, payload } })}\n\n`;
 
 /** Fake bridge: JSON routes plus one scripted event stream per request. */
-function bridge(streams: string[][], sessions: HostSessionSummary[] = [summary()]) {
+function bridge(streams: string[][], sessions: HostSessionSummary[] = [summary()], histories: Record<string, unknown[]> = {}) {
   const requests: Array<{ url: string; lastEventId: string | null }> = [];
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -42,6 +42,11 @@ function bridge(streams: string[][], sessions: HostSessionSummary[] = [summary()
       return new Response(body, { status: 200, headers: { "content-type": "text/event-stream", "x-xtrm-agent-host": "local:1" } });
     }
     if (url.includes("/repo?")) return json({ repo: "xtrm-dev/xtrm" });
+    const hm = /\/api\/v1\/sessions\/([^/]+)\/history$/.exec(url);
+    if (hm) {
+      const entries = histories[decodeURIComponent(hm[1]!)];
+      return entries ? json({ schema: "xtrm.agent-host-api.v1", kind: "session_history", sessionId: hm[1], provider: "pi", entries }) : json({ ok: false, error: "no route" }, 404);
+    }
     const m = /\/api\/v1\/sessions\/([^/]+)$/.exec(url);
     if (m) {
       const s = sessions.find((x) => x.sessionId === decodeURIComponent(m[1]!));
@@ -102,6 +107,45 @@ describe("live agent adapter", () => {
     expect(d!.frames[0]).toMatchObject({ index: 3, status: "settled", title: "Read the notes" });
     expect(d!.frames[0]!.activity[0]).toMatchObject({ kind: "tool", class: "native", subject: "notes.txt" });
     expect(await adapter.getSession("missing")).toBeNull();
+  });
+
+  it("shows Frames older than the replay buffer from the session history, without duplicates (XTRM-604)", async () => {
+    const msg = (role: string, text: string, timestamp: number, extra: object = {}) => ({ type: "message", timestamp: new Date(timestamp).toISOString(), message: { role, content: [{ type: "text", text }], timestamp, ...extra } });
+    const journal = [msg("user", "old one", 10), msg("assistant", "a1", 11, { stopReason: "stop" }), msg("user", "Read the notes", 20)];
+    const session = summary();
+    const { fetchImpl, requests } = bridge(
+      [
+        [
+          event(2, { type: "before_agent_start", prompt: "Read the notes", ingress: { origin: "terminal" } }),
+          event(3, { type: "message_end", message: { role: "user", content: "Read the notes", timestamp: 20 } }),
+          event(4, { type: "tool_execution_start", toolCallId: "c1", toolName: "read", args: { path: "notes.txt" }, origin: { class: "native" } }),
+        ],
+      ],
+      [session],
+      { s1: journal },
+    );
+    adapter = createLiveAgent({ fetch: fetchImpl, notifyMs: 5, retryMs: [5, 10] });
+    const changed: string[] = [];
+    adapter.subscribe((id) => changed.push(id));
+    await vi.waitFor(() => expect(changed).toContain("s1"));
+
+    const d = await adapter.getSession("s1");
+    expect(d!.frames.map((f) => [f.index, f.title, f.status])).toEqual([
+      [1, "old one", "settled"],
+      [2, "Read the notes", "working"],
+    ]);
+    expect(d!.frames[1]!.activity[0]).toMatchObject({ kind: "tool", class: "native" });
+    expect((await adapter.listSessions())[0]).toMatchObject({ title: "old one", frameCount: 2 });
+    const reads = () => requests.filter((r) => r.url.endsWith("/history")).length;
+    expect(reads()).toBe(1);
+    await adapter.getSession("s1");
+    expect(reads()).toBe(1);
+
+    // Once the session stops, the journal is read again; its Frames stay the same.
+    session.state = "history_only";
+    const after = await adapter.getSession("s1");
+    expect(reads()).toBe(2);
+    expect(after!.frames.map((f) => f.title)).toEqual(["old one", "Read the notes"]);
   });
 
   it("reconnects with Last-Event-ID set to the last cursor", async () => {

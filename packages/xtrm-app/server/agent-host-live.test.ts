@@ -75,6 +75,10 @@ describe("bridge read routes", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("x-xtrm-agent-host")).toBe("local:t");
     expect(((await res.json()) as { path: string }).path).toBe("/v1/sessions");
+    // Session history (XTRM-604) is a read route too.
+    const history = await fetch(`http://127.0.0.1:${port}/xtrm-api/agent-host/api/v1/sessions/s-1/history`);
+    expect(((await history.json()) as { path: string }).path).toBe("/v1/sessions/s-1/history");
+    expect((await fetch(`http://127.0.0.1:${port}/xtrm-api/agent-host/api/v1/sessions/s-1/other`)).status).toBe(404);
     expect((await fetch(`http://127.0.0.1:${port}/xtrm-api/agent-host/api/v1/events?sessionId=bad%20id`)).status).toBe(400);
     expect(await (await fetch(`http://127.0.0.1:${port}/xtrm-api/agent-host/repo?path=relative`)).json()).toEqual({ repo: null });
 

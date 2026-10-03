@@ -13,8 +13,11 @@
 //   operator's text and keeps the references with the revisions they were given (XTRM-598).
 // - session_status replaces the session's model, thinking level and context usage (XTRM-609); the
 //   model and thinking level of assistant messages are a fallback for producers that send no status.
-// The host keeps a bounded replay buffer, so Frames older than the buffer are not projected;
-// `snapshot` numbers the retained Frames against the host's frameCount.
+// - Each Frame records the Pi timestamps of its user messages (`keys`): the same values the session
+//   journal holds, so history.ts can match live Frames to journal Frames (XTRM-604).
+// The host keeps a bounded replay buffer, so the stream alone misses Frames older than the buffer;
+// the live adapter merges them from the session history (history.ts). Without history, `snapshot`
+// numbers the retained Frames against the host's frameCount.
 import { splitMessage } from "./references.ts";
 import type { HostAgentMessage, HostEventFrame, HostEventMessage, HostToolOrigin } from "./protocol.ts";
 
@@ -43,6 +46,8 @@ export interface SessionProjection {
   prompts: Map<string, PromptActivity>;
   /** User messages seen in the open Frame; the first is its request. */
   userMessages: number;
+  /** Pi timestamps of the user messages of each Frame, by Frame id; the first is its request. */
+  keys: Map<string, number[]>;
   status: SessionStatus | null;
   model: string | null;
   thinking: string | null;
@@ -98,11 +103,14 @@ function origin(o: HostToolOrigin | undefined): ToolActivity["origin"] {
 }
 
 export function emptyProjection(): SessionProjection {
-  return { frames: [], open: null, ending: null, tools: new Map(), prompts: new Map(), userMessages: 0, status: null, model: null, thinking: null, tokens: null, costUsd: null };
+  return { frames: [], open: null, ending: null, tools: new Map(), prompts: new Map(), userMessages: 0, keys: new Map(), status: null, model: null, thinking: null, tokens: null, costUsd: null };
 }
 
 export class AgentProjector {
   readonly sessions = new Map<string, SessionProjection>();
+
+  /** Retained Frames per session; history projection keeps every Frame (Infinity). */
+  constructor(private readonly maxFrames = MAX_FRAMES) {}
 
   /** Apply one host event message; returns the session id it changed. */
   apply(message: HostEventMessage): string {
@@ -215,7 +223,7 @@ export class AgentProjector {
       settledAt: null,
     };
     s.frames.push(f);
-    if (s.frames.length > MAX_FRAMES) s.frames.shift();
+    if (s.frames.length > this.maxFrames) s.keys.delete(s.frames.shift()!.id);
     s.open = f;
     s.ending = null;
     s.userMessages = 0;
@@ -236,6 +244,11 @@ export class AgentProjector {
   private user(s: SessionProjection, sessionId: string, cursor: string, m: HostAgentMessage) {
     if (!s.open) return;
     s.userMessages += 1;
+    if (typeof m.timestamp === "number") {
+      const keys = s.keys.get(s.open.id);
+      if (keys) keys.push(m.timestamp);
+      else s.keys.set(s.open.id, [m.timestamp]);
+    }
     const text = splitMessage(contentText(m.content)).text.trim();
     if (s.userMessages > 1 && text) s.open.activity.push({ kind: "steer", id: `${sessionId}:${cursor}`, text: `Delivered while working: ${text}` });
   }
