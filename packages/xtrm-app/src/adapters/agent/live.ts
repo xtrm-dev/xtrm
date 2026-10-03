@@ -6,6 +6,12 @@
 //   not used: it cannot send headers and the host answers no CORS preflight (PRD §35.5). A
 //   reconnect sends Last-Event-ID with the last cursor; the first request asks for the whole
 //   replay buffer (Last-Event-ID 0).
+// - Stream loss (XTRM-613): a stream that fails, ends, or stays silent longer than `idleMs` (the host
+//   writes a keepalive every 15 s; a suspended or re-routed connection can stay open without data) is
+//   dropped and reconnected. The browser going offline drops it at once; coming online or becoming
+//   visible again reconnects without waiting for the backoff. `streamState()` tells the UI that Frames
+//   and session states are unknown while disconnected. Every reconnect invalidates all sessions, so
+//   summaries and histories are read again even when the replay holds nothing new.
 // - Write path (XTRM-597): POST /v1/submit with an xtrm.agent-command.v1 command: prompt when idle,
 //   steer / follow_up while working, abort, and extension_ui_response. The host answers busy for a
 //   normal prompt while the session works (§35.8 item 5); that surfaces as BusyError and the
@@ -53,6 +59,7 @@ import {
   type RefCandidate,
   type SessionCapability,
   type SessionState,
+  type StreamState,
 } from "./types.ts";
 
 const STATE: Record<HostSessionSummary["state"], SessionState> = {
@@ -139,13 +146,19 @@ export interface LiveAgentOptions {
   notifyMs?: number;
   /** Backoff bounds for stream reconnects. */
   retryMs?: [number, number];
+  /** A connected stream silent this long is dropped and reconnected (host keepalive: 15 s). */
+  idleMs?: number;
+  /** Source of online/offline/visibilitychange events; the browser window when present. */
+  events?: Pick<EventTarget, "addEventListener" | "removeEventListener"> | null;
 }
 
 export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { close(): void; projector(): AgentProjector } {
   const base = opts.base ?? "/xtrm-api/agent-host";
   const doFetch = opts.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const notifyMs = opts.notifyMs ?? 150;
-  const [retryMin, retryMax] = opts.retryMs ?? [1_000, 15_000];
+  const [retryMin, retryMax] = opts.retryMs ?? [1_000, 5_000];
+  const idleMs = opts.idleMs ?? 40_000;
+  const events = opts.events !== undefined ? opts.events : typeof window === "undefined" ? null : window;
 
   let projector = new AgentProjector();
   let hostId: string | null = null;
@@ -162,6 +175,16 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
   const histories = new Map<string, { tag: string; value: Promise<HistoryFrames | null>; resolved?: HistoryFrames | null }>();
   /** Answers given from this app, by extension UI request id: the host event does not carry them. */
   const answers = new Map<string, string>();
+  let stream: StreamState = "connecting";
+  const streamListeners = new Set<() => void>();
+  /** Ends the current reconnect backoff early. */
+  let wake: (() => void) | null = null;
+
+  const setStream = (next: StreamState) => {
+    if (stream === next) return;
+    stream = next;
+    for (const l of streamListeners) l();
+  };
 
   const notify = (sessionId: string) => {
     if (pending.has(sessionId)) return;
@@ -197,10 +220,22 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
       for (const l of listeners) l("");
     }
     generation += 1;
+    setStream("connected");
+    // Events may have been missed: every session is read again (summaries, histories).
+    if (generation > 1) notify("");
     const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = "";
+    let idle: ReturnType<typeof setTimeout> | undefined;
     for (;;) {
-      const { value, done } = await reader.read();
+      clearTimeout(idle);
+      idle = setTimeout(() => abort?.abort(), idleMs);
+      let chunk: ReadableStreamReadResult<string>;
+      try {
+        chunk = await reader.read();
+      } finally {
+        clearTimeout(idle);
+      }
+      const { value, done } = chunk;
       if (done) return;
       const parsed = parseSse(buffer + value);
       buffer = parsed.rest;
@@ -229,17 +264,35 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
           await consume(res);
         }
       } catch {
-        // Aborted, bridge restarted, or forward closed: reconnect below.
+        // Aborted (offline, silent stream), bridge restarted, or forward closed: reconnect below.
       }
       if (closed) return;
-      await new Promise((r) => setTimeout(r, delay));
+      setStream("disconnected");
+      await new Promise<void>((r) => {
+        const t = setTimeout(done, delay);
+        function done() {
+          clearTimeout(t);
+          wake = null;
+          r();
+        }
+        wake = done;
+      });
       delay = Math.min(retryMax, delay * 2);
     }
   }
 
+  const onOffline = () => abort?.abort();
+  const onOnline = () => wake?.();
+  const onVisible = () => {
+    if (typeof document === "undefined" || document.visibilityState === "visible") wake?.();
+  };
+
   const ensureStream = () => {
     if (started || closed) return;
     started = true;
+    events?.addEventListener("offline", onOffline);
+    events?.addEventListener("online", onOnline);
+    events?.addEventListener("visibilitychange", onVisible);
     void run();
   };
 
@@ -276,16 +329,17 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
   }
 
   /** Every Frame of the session: history merged with the stream, else the stream's retained Frames. */
-  function framesOf(id: string, history: HistoryFrames | null | undefined, hostFrameCount: number): InteractionFrame[] {
-    const proj = projector.sessions.get(id);
-    if (!history) return projector.snapshot(id, hostFrameCount);
-    return mergeFrames(history, proj?.frames ?? [], proj?.keys ?? new Map());
+  function framesOf(h: HostSessionSummary, history: HistoryFrames | null | undefined): InteractionFrame[] {
+    const proj = projector.sessions.get(h.sessionId);
+    if (!history) return projector.snapshot(h.sessionId, h.frameCount ?? 0);
+    const idle = h.state === "settled" || h.state === "failed" || h.state === "history_only";
+    return mergeFrames(history, proj?.frames ?? [], proj?.keys ?? new Map(), idle);
   }
 
   async function summarize(h: HostSessionSummary): Promise<AgentSessionSummary> {
     const proj = projector.sessions.get(h.sessionId);
     const history = histories.get(h.sessionId)?.resolved;
-    const frames = history ? framesOf(h.sessionId, history, h.frameCount ?? 0) : (proj?.frames ?? []);
+    const frames = history ? framesOf(h, history) : (proj?.frames ?? []);
     const first = frames.find((f) => f.ingress.text);
     const name = displayName(h);
     return {
@@ -364,7 +418,7 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
         tmux: h.tmux ? `${h.tmux.session}:${h.tmux.paneId}` : null,
         tokens: proj?.tokens ?? null,
         costUsd: proj?.costUsd ?? null,
-        frames: withAnswers(framesOf(id, history, h.frameCount ?? 0)),
+        frames: withAnswers(framesOf(h, history)),
       };
       return detail;
     },
@@ -437,9 +491,19 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    streamState: () => stream,
+    subscribeStream(listener) {
+      ensureStream();
+      streamListeners.add(listener);
+      return () => streamListeners.delete(listener);
+    },
     close() {
       closed = true;
       abort?.abort();
+      wake?.();
+      events?.removeEventListener("offline", onOffline);
+      events?.removeEventListener("online", onOnline);
+      events?.removeEventListener("visibilitychange", onVisible);
       for (const t of pending.values()) clearTimeout(t);
     },
     projector: () => projector,

@@ -2,7 +2,14 @@ import type { AgentSessionSummary, RefKind, SessionState } from "../adapters/ind
 import type { IconName } from "../ui/icon.tsx";
 import { cx, type Tone } from "../ui/primitives.tsx";
 
-export const STATE_LABEL: Record<SessionState, string> = {
+/**
+ * A session state as shown: while the live stream is down (XTRM-613) a live session's state is unknown
+ * and shows `disconnected` instead of a possibly stale state (useShownState).
+ */
+export type ShownState = SessionState | "disconnected";
+
+export const STATE_LABEL: Record<ShownState, string> = {
+  disconnected: "disconnected",
   working: "working",
   waiting: "waiting for input",
   settled: "settled",
@@ -10,7 +17,8 @@ export const STATE_LABEL: Record<SessionState, string> = {
   history: "history only",
 };
 
-export const STATE_TONE: Record<SessionState, Tone> = {
+export const STATE_TONE: Record<ShownState, Tone> = {
+  disconnected: "muted",
   working: "active",
   waiting: "accent",
   settled: "neutral",

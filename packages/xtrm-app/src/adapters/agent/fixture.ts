@@ -523,6 +523,8 @@ export function createFixtureAgent({ now = Date.now(), delayMs = 900 }: { now?: 
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    streamState: () => "connected",
+    subscribeStream: () => () => {},
   };
 }
 

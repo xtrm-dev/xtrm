@@ -7,8 +7,8 @@ import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, cx, relativeTime } from "../ui/primitives.tsx";
 import { HostConnectionPanel, HostConnectionToggle } from "./HostConnection.tsx";
-import { ContextMeter, STATE_LABEL, STATE_TONE, contextPercent, modelLabel } from "./meta.tsx";
-import { useAgentSession, useAgentSessions } from "./queries.ts";
+import { ContextMeter, STATE_LABEL, STATE_TONE, contextPercent, modelLabel, type ShownState } from "./meta.tsx";
+import { useAgentSession, useAgentSessions, useShownState } from "./queries.ts";
 
 export type SessionScope = "repository" | "all";
 
@@ -76,19 +76,20 @@ export function buildSessionItems(sessions: AgentSessionSummary[], scope: Sessio
 function SessionRow({ s, depth, selected, onOpen }: { s: AgentSessionSummary; depth: number; selected: boolean; onOpen: () => void }) {
   const pct = contextPercent(s);
   const meta = [s.role, s.workRef, modelLabel(s)].filter(Boolean);
+  const state = useShownState(s.state);
   return (
     <Row
       density="sidebar"
       selected={selected}
       onActivate={onOpen}
-      aria-label={`${s.name} · ${STATE_LABEL[s.state]}`}
+      aria-label={`${s.name} · ${STATE_LABEL[state]}`}
       data-testid="session-row"
       className={cx("h-full items-start gap-2 py-1.5", depth > 0 && "pl-6")}
     >
       {selected && <span aria-hidden className="absolute top-2 bottom-2 left-0 w-0.5 rounded-full bg-accent" />}
       {depth > 0 && <span aria-hidden className="absolute top-0 bottom-0 left-3.5 w-px bg-border-muted" />}
       <span className="mt-0.5">
-        <StatusDot tone={STATE_TONE[s.state]} label={STATE_LABEL[s.state]} />
+        <StatusDot tone={STATE_TONE[state]} label={STATE_LABEL[state]} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex min-w-0 items-baseline gap-2">
@@ -97,7 +98,7 @@ function SessionRow({ s, depth, selected, onOpen }: { s: AgentSessionSummary; de
           <span className="ml-auto shrink-0 text-[0.7rem] text-ink-faint tabular">{relativeTime(s.lastActivityAt)}</span>
         </span>
         <span className="flex min-w-0 items-center gap-1.5 text-[0.7rem] text-ink-faint">
-          <span className="truncate">{meta.join(" · ") || STATE_LABEL[s.state]}</span>
+          <span className="truncate">{meta.join(" · ") || STATE_LABEL[state]}</span>
           {pct !== null && <ContextMeter percent={pct} className="ml-auto shrink-0" />}
         </span>
       </span>
@@ -106,10 +107,10 @@ function SessionRow({ s, depth, selected, onOpen }: { s: AgentSessionSummary; de
 }
 
 /** State plus what the session accepts: `working · prompt · steer`, `settled · presence only`, `history only`. */
-export function stateWithCapabilities(s: Pick<AgentSessionSummary, "state" | "capabilities">): string {
+export function stateWithCapabilities(s: Pick<AgentSessionSummary, "state" | "capabilities">, shown: ShownState = s.state): string {
   if (s.state === "history") return STATE_LABEL.history;
   const caps = s.capabilities.includes("presence") ? ["presence only"] : s.capabilities;
-  return [STATE_LABEL[s.state], ...caps].join(" · ");
+  return [STATE_LABEL[shown], ...caps].join(" · ");
 }
 
 function Detail({ label, value, mono }: { label: string; value: string | number | null | undefined; mono?: boolean }) {
@@ -128,6 +129,7 @@ function SessionDetails({ id }: { id: string }) {
   const session = useAgentSession(id);
   const [open, setOpen] = useState(true);
   const s = session.data;
+  const state = useShownState(s?.state ?? "settled");
   if (!s) return null;
   const tokens = s.tokens ? `${Math.round(s.tokens.input / 1000)}k in · ${Math.round(s.tokens.output / 1000)}k out` : null;
   return (
@@ -144,7 +146,7 @@ function SessionDetails({ id }: { id: string }) {
       {open && (
         <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-2 pt-0.5 pb-2 text-xs" data-testid="session-details">
           <Detail label="Provider" value={PROVIDER_LABEL[s.provider]} />
-          <Detail label="State" value={stateWithCapabilities(s)} />
+          <Detail label="State" value={stateWithCapabilities(s, state)} />
           <Detail label="Model" value={[s.model, s.thinking].filter(Boolean).join(" · ")} />
           <Detail label="Context" value={s.context ? `${contextPercent(s)}% · ${Math.round(s.context.used / 1000)}k / ${Math.round(s.context.window / 1000)}k` : null} />
           <Detail label="Tokens" value={tokens} />

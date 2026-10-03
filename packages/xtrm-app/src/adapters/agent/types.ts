@@ -173,6 +173,13 @@ export interface SubmitInput {
   mode: "prompt" | "steer" | "follow-up";
 }
 
+/**
+ * The live event stream (XTRM-613): `connecting` until the first connect, `connected` while events
+ * flow, `disconnected` while it is down and being re-established. Frames and session states are
+ * unknown while disconnected; a reconnect resynchronizes them from the host.
+ */
+export type StreamState = "connecting" | "connected" | "disconnected";
+
 export interface AgentAdapter {
   readonly source: DataSource;
   listSessions(): Promise<AgentSessionSummary[]>;
@@ -191,6 +198,10 @@ export interface AgentAdapter {
   resolveReferences(sessionId: string, refs: AgentRef[]): Promise<ContextReference[]>;
   /** Pushed change notifications; the argument is the changed session id. */
   subscribe(listener: (sessionId: string) => void): () => void;
+  /** Current live stream state; a fixture is always connected. */
+  streamState(): StreamState;
+  /** Called on every stream state change. */
+  subscribeStream(listener: () => void): () => void;
 }
 
 /** Contract error: a normal prompt reached a working session (PRD §35.8 submit policy). */

@@ -4,7 +4,7 @@ import { useGo } from "../shell/ContextSidebar.tsx";
 import { ContentPanel, EmptyState, LoadingState, StatusDot, relativeTime } from "../ui/primitives.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
 import { ContextMeter, REF_LABEL, STATE_LABEL, STATE_TONE, contextPercent, modelLabel } from "./meta.tsx";
-import { useAgentSession } from "./queries.ts";
+import { useAgentSession, useShownState } from "./queries.ts";
 import { useAgentStore } from "./workspace.tsx";
 
 function Eyebrow({ children }: { children: string }) {
@@ -15,6 +15,7 @@ function Eyebrow({ children }: { children: string }) {
 export function SessionPanel({ id }: { id: string }) {
   const session = useAgentSession(id);
   const go = useGo();
+  const state = useShownState(session.data?.state ?? "settled");
   if (session.isPending) return <LoadingState rows={4} label="Loading session" />;
   const s = session.data;
   if (!s) return <EmptyState icon="agent" title="Session not found">The agent host does not know session {id}.</EmptyState>;
@@ -24,7 +25,7 @@ export function SessionPanel({ id }: { id: string }) {
       <div className="flex flex-col gap-1.5">
         <Eyebrow>Session</Eyebrow>
         <div className="flex items-center gap-2">
-          <StatusDot tone={STATE_TONE[s.state]} label={STATE_LABEL[s.state]} />
+          <StatusDot tone={STATE_TONE[state]} label={STATE_LABEL[state]} />
           <h2 className="truncate text-base font-medium text-ink">{s.name}</h2>
           <button
             type="button"
@@ -35,7 +36,7 @@ export function SessionPanel({ id }: { id: string }) {
           </button>
         </div>
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-faint">
-          <span>{[STATE_LABEL[s.state], s.role, modelLabel(s)].filter(Boolean).join(" · ")}</span>
+          <span>{[STATE_LABEL[state], s.role, modelLabel(s)].filter(Boolean).join(" · ")}</span>
           <ContextMeter percent={contextPercent(s)} />
           {s.workRef && <AgentRefChip reference={{ kind: "issue", ref: s.workRef }} />}
         </p>
