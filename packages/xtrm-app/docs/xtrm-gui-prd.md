@@ -1719,7 +1719,10 @@ The primary Pi integration is an **XTRM Pi extension** that runs inside every li
 
 The extension:
 
-- **pushes** native lifecycle events to the XTRM agent host: `session_start`, `before_agent_start`, `agent_start` / `agent_end`, `agent_settled`, `turn_start` / `turn_end`, `message_start` / `_update` / `_end`, `tool_execution_start` / `_update` / `_end` (with `parentToolCallId`), `session_compact` / `session_compact_failed`, `ui_prompt_start` / `_end`, and `session_shutdown` (verified against the Pi 1.0.0 extension API for XTRM-562). This set is enough to build Frames, but it is **not** a lossless copy of the in-process `AgentSessionEvent` stream (see the table below);
+- **pushes** native lifecycle events to the XTRM agent host: `session_start`, `before_agent_start`, `agent_start` / `agent_end`, `agent_settled`, `turn_start` / `turn_end`, `message_start` / `_update` / `_end`, `tool_execution_start` / `_update` / `_end` (with `parentToolCallId`), `session_compact` / `session_compact_failed`, and `session_shutdown` (verified against the Pi 1.0.0 extension API for XTRM-562). This set is enough to build Frames, but it is **not** a lossless copy of the in-process `AgentSessionEvent` stream (see the table below). The wire format is `xtrm.agent-event.v1` in `@xtrm/contracts`. It also carries three XTRM messages that have no Pi event of the same name:
+  - `session_identity`: always sequence 0 on a connection. It carries runtime, producer, cwd, worktree, branch, role, work item, parent session, tmux pane, launch (`gui` | `terminal`), and capabilities;
+  - `extension_ui_request` / `extension_ui_resolved`: the extension's `ctx.ui` proxy (see below);
+  - `command_result`: the outcome of each host command, by `commandId` (`status`, optional `reason`, such as `busy` or `session_idle`);
 - **accepts** commands from the agent host: user message (`pi.sendUserMessage`), steer / follow-up, abort, and extension-UI responses (§20);
 - **attaches identity**: session id, cwd, worktree, role, bead / Substrate Issue, parent session, and tmux pane. This is the §11 identity read from the `xt pi` launch context (`@agent_task`, `@agent_parent_session`, `XTMUX_AGENT_BEAD`).
 
@@ -1734,7 +1737,7 @@ Fidelity over the extension transport (corrected under XTRM-573):
 | retry lifecycle (`auto_retry_*`) | present | absent | no retry state is shown; a retry appears as further turns inside the same Frame |
 | queue state | present | absent | the host tracks its own submit queue (§35.8 busy rule) |
 | compaction lifecycle (`compaction_start` / `_end`) | present | `session_compact` / `session_compact_failed` after the fact | the Frame shows a compaction note when the event arrives; no in-progress state |
-| extension UI requests | direct | `ui_prompt_start` / `_end`; the answer goes through a `ctx.ui` proxy in the extension | answers use the `RpcExtensionUIResponse` command shape |
+| extension UI requests | direct | `extension_ui_request` (`select`, `confirm`, `input`); exactly one `extension_ui_resolved {id, resolvedBy: local \| host, outcome: answered \| cancelled}` per request. The answer value is not carried. `editor()` is not proxied, because Pi 1.0.0 gives it no `AbortSignal` | the host answers with `extension_ui_response` (`RpcExtensionUIResponse` shape: one of `value`, `confirmed`, `cancelled`). The terminal dialog and the host race: when the host wins, the extension dismisses the terminal dialog. On `extension_ui_resolved` the host drops the pending request and leaves `waiting_for_input`; a later response is rejected `unknown_ui_request`. Upgrade `xt host` before the extension, because an older host rejects the new event as an invalid frame |
 
 ### 35.4 Launch: tmux-hosted sessions
 
@@ -1938,7 +1941,7 @@ ToolActivity
 |---|---|---|
 | **native** | Pi built-ins: `read`, `write`, `edit`, `bash`, `grep`, `find`, `ls` | Dense one-line rows inside collapsed activity groups ("Ran 4 commands", "Read 3 files"). Lazy detail: command and output, file and range, diff for `edit` / `write`. Optimized for scanning. |
 | **mcp** | any tool from an MCP server | Server identity is always visible. Arguments render as structured fields from the tool's input schema, not raw JSON. Results render by content type (text, image, resource link, structured content). Protocol errors and tool errors are distinct. MCP calls are never merged into native groups. |
-| **extension** | tools registered by Pi extensions (`registerTool`) | Extension identity is visible. A GUI-native renderer is used when the extension declares one (§20); otherwise a structured fallback. Extension UI requests (`select`, `confirm`, `input`, `editor`) render inline in the Frame as blocks that wait for the operator's answer. A `tui_only` disposition is shown explicitly. |
+| **extension** | tools registered by Pi extensions (`registerTool`) | Extension identity is visible. A GUI-native renderer is used when the extension declares one (§20); otherwise a structured fallback. Extension UI requests (`select`, `confirm`, `input`) render inline in the Frame as blocks that wait for the operator's answer, and close when `extension_ui_resolved` arrives, whoever answered. `editor` requests are terminal-only in Pi 1.0.0 (§35.3) and render as a notice. A `tui_only` disposition is shown explicitly. |
 | **coordination** | message, dispatch, chain launch, review request, result receipt | Rendered as the semantic activity of §14, even when the transport is an extension tool or an MCP tool. Transport provenance stays available in the detail view. |
 
 Permission and approval prompts follow the class of the tool that asks.
