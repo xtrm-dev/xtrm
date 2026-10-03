@@ -9,7 +9,8 @@ import { log, startPi, type RealHostState } from "./harness.ts";
 const OUT = "docs/screenshots/agent-half/real-host";
 const NAME = "breaks-pi";
 const SHORT = "Reply with the numbers 1 to 5, one number per line, nothing else: no list markers, no blank lines, no other text.";
-const LONG = "Count from 1 to 300, one number per line, no other text.";
+// Long enough to still be working after the offline window, the screenshots and the reconnect; Stop ends it.
+const LONG = "Count from 1 to 3000, one number per line, no other text.";
 const state = () => JSON.parse(process.env.XTRM_REAL_HOST_STATE!) as RealHostState;
 const composer = (page: Page) => page.getByRole("textbox", { name: `Message ${NAME}` });
 
@@ -18,7 +19,8 @@ async function shoot(page: Page, name: string) {
   mkdirSync(OUT, { recursive: true });
   for (const t of ["light", "dark"] as const) {
     await page.evaluate((v) => (document.documentElement.dataset.theme = v), t);
-    await page.screenshot({ path: `${OUT}/xtrm-615-${t}-${name}.png` });
+    // Colors transition on a theme change: finish them before the capture.
+    await page.screenshot({ path: `${OUT}/xtrm-615-${t}-${name}.png`, animations: "disabled" });
   }
 }
 
