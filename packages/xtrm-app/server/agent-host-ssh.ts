@@ -22,13 +22,15 @@
 // Reference route (XTRM-598): POST /api/v1/references/resolve forwards one reference_resolve_request
 // to the host's POST /v1/references/resolve, under the same rules. Submit and resolve bodies may carry
 // resolved references (96 KB per submit, twice: index and message), so they get a larger body limit.
+// Launch route (XTRM-601): POST /api/v1/launch forwards one launch_request (a cwd on the host and a
+// launch profile) to the host's POST /v1/launch, under the same rules; the host validates the options.
 // Direct mode (XTRM-600): POST /direct/pair exchanges a pairing token at an HTTPS front and
 // POST /direct/forget drops the stored device (server/agent-host-direct.ts). While no SSH connection
 // is up and a device is paired, the read and write routes go to the front with the device token; a
 // 401 from the front turns the connection into a re-pair prompt.
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
@@ -278,7 +280,40 @@ export function isResolveRequest(b: Record<string, unknown>): boolean {
 
 /** Body limit of the routes that carry resolved references. */
 const REFERENCE_BODY_BYTES = 1024 * 1024;
-const JSON_ROUTES = new Set(["/api/v1/submit", "/api/v1/references/resolve"]);
+const JSON_ROUTES = new Set(["/api/v1/submit", "/api/v1/references/resolve", "/api/v1/launch"]);
+
+const LAUNCH_OPTIONS = new Set(["name", "role", "bead", "model", "thinking", "prompt"]);
+/** Anthropic models are never launched with pi (operator rule); Claude runs as its own provider. */
+export const ANTHROPIC_MODEL = /(^|\/)(anthropic|claude)|claude-/i;
+
+/**
+ * Check of a launch_request before it leaves the bridge. Arguments are argv elements on the host (no
+ * shell), but an option value must still not read as an option: no leading "-", no control characters.
+ * A local host's cwd must be an existing directory here too; the host checks it again either way.
+ */
+export function launchRequestError(b: Record<string, unknown>, local: boolean): string | null {
+  if (b.schema !== API_SCHEMA || b.kind !== "launch_request") return "expected an xtrm.agent-host-api.v1 launch_request";
+  if (b.command !== "pi" && b.command !== "xt pi") return 'command must be "pi" or "xt pi"';
+  if (typeof b.cwd !== "string" || !b.cwd.startsWith("/") || b.cwd.length > 4096 || /[\u0000-\u001f\u007f]/.test(b.cwd)) return "cwd must be an absolute path";
+  if (local) {
+    try {
+      if (!statSync(b.cwd).isDirectory()) return `cwd ${b.cwd} is not a directory`;
+    } catch {
+      return `cwd ${b.cwd} does not exist`;
+    }
+  }
+  const o = b.options;
+  if (o === undefined) return null;
+  if (!o || typeof o !== "object" || Array.isArray(o)) return "options must be an object";
+  for (const [k, v] of Object.entries(o)) {
+    if (!LAUNCH_OPTIONS.has(k)) return `unknown launch option ${k}`;
+    if (typeof v !== "string" || v.length === 0 || v.length > 1024 || /[\u0000-\u001f\u007f]/.test(v)) return `${k} must be a non-empty single-line string`;
+    if (k !== "prompt" && v.startsWith("-")) return `${k} must not start with "-"`;
+  }
+  const model = (o as Record<string, unknown>).model;
+  if (typeof model === "string" && ANTHROPIC_MODEL.test(model)) return "Anthropic models are not launched with pi";
+  return null;
+}
 
 /** Shape check of a submit_request before it leaves the bridge; the host validates the full schema. */
 export function isSubmitRequest(b: Record<string, unknown>): boolean {
@@ -536,21 +571,26 @@ export function agentHostHandler(
       const origin = req.headers.origin;
       if (origin && new URL(origin).host !== req.headers.host) return send(403, { ok: false, error: "cross-origin request rejected" });
       if (JSON_ROUTES.has(path) && !/^application\/json\b/i.test(req.headers["content-type"] ?? "")) {
-        return send(415, { ok: false, error: "submit and reference bodies must be application/json" });
+        return send(415, { ok: false, error: "submit, reference and launch bodies must be application/json" });
       }
       const body = await readJson(req, JSON_ROUTES.has(path) ? REFERENCE_BODY_BYTES : undefined);
       if (!body) return send(400, { ok: false, error: "invalid JSON body" });
       switch (path) {
         case "/api/v1/submit":
-        case "/api/v1/references/resolve": {
-          const submit = path === "/api/v1/submit";
-          if (submit ? !isSubmitRequest(body) : !isResolveRequest(body)) {
-            return send(400, { ok: false, error: `expected an xtrm.agent-host-api.v1 ${submit ? "submit_request" : "reference_resolve_request"}` });
-          }
+        case "/api/v1/references/resolve":
+        case "/api/v1/launch": {
+          const launch = path === "/api/v1/launch";
+          const invalid = launch
+            ? launchRequestError(body, !!endpoint()?.local)
+            : (path === "/api/v1/submit" ? isSubmitRequest(body) : isResolveRequest(body))
+              ? null
+              : `expected an xtrm.agent-host-api.v1 ${path === "/api/v1/submit" ? "submit_request" : "reference_resolve_request"}`;
+          if (invalid) return send(400, { ok: false, error: invalid });
           const ep = endpoint();
           if (!ep) return send(409, { ok: false, error: NO_HOST });
           try {
-            const r = await hostPost(ep, submit ? "/v1/submit" : "/v1/references/resolve", body);
+            // The host waits for the launcher (xt pi can take seconds) up to its own 120 s timeout.
+            const r = await hostPost(ep, path.slice("/api".length), body, launch ? 130_000 : undefined);
             refused(ep, r.status);
             if (r.status === 401 && ep.bearer) return send(401, { ok: false, code: "repair_required", error: REPAIR_MESSAGE });
             res.setHeader("x-xtrm-agent-host", ep.id);

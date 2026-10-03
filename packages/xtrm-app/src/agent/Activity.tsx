@@ -22,6 +22,30 @@ export function groupActivity(activity: Activity[]): Block[] {
   return out;
 }
 
+/**
+ * A coordination-class tool call (the host classed it from its coordination table, §36.7 rule 1) as the
+ * semantic activity of §14: the tool name picks the action within the class, the arguments name the peer
+ * and the work item, and the transport (MCP server or extension, and the tool) stays for the detail view.
+ */
+export function coordinationOf(t: ToolActivity): CoordinationActivity {
+  const a = (t.args ?? {}) as Record<string, unknown>;
+  const str = (...keys: string[]) => keys.map((k) => a[k]).find((v): v is string => typeof v === "string" && v.trim() !== "")?.trim();
+  const name = t.name.toLowerCase();
+  const action: CoordinationActivity["action"] = /review/.test(name) ? "review" : /reply|result/.test(name) ? "reply" : /dispatch|resume|retry|steer|spawn|run/.test(name) ? "dispatch" : "message";
+  const via = t.origin.server ? `MCP ${t.origin.server}` : (t.origin.extension ?? "extension");
+  const outcome = t.output?.split("\n").find((l) => l.trim())?.trim();
+  return {
+    kind: "coordination",
+    id: t.id,
+    action,
+    peer: str("specialist", "to", "target", "agent", "session", "peer", "name") ?? "unknown peer",
+    summary: str("prompt", "message", "text", "summary") ?? outcome ?? t.subject,
+    workRef: str("issue", "bead", "workItem", "work_item"),
+    status: t.status === "running" ? "running" : "done",
+    transport: `${via} · ${t.name}${t.status === "error" ? " · failed" : ""}${outcome ? ` · ${outcome}` : ""}`,
+  };
+}
+
 const VERBS: Record<string, [string, string, string]> = {
   read: ["Read", "file", "files"],
   write: ["Wrote", "file", "files"],
@@ -408,6 +432,10 @@ export function ActivityThread({
         if (b.type === "native") return <NativeGroup key={b.key} tools={b.tools} isOpen={isOpen} toggle={toggle} />;
         const a = b.activity;
         if (a.kind === "tool" && a.script !== undefined) return <ScriptBlock key={b.key} t={a} isOpen={isOpen} toggle={toggle} />;
+        if (a.kind === "tool" && a.class === "coordination") {
+          const c = coordinationOf(a);
+          return <Coordination key={b.key} c={c} open={isOpen(a.id)} toggle={() => toggle(a.id)} />;
+        }
         if (a.kind === "tool") return <ClassTool key={b.key} t={a} open={isOpen(a.id)} toggle={() => toggle(a.id)} isOpen={isOpen} toggleId={toggle} onAnswer={onAnswer} />;
         if (a.kind === "coordination") return <Coordination key={b.key} c={a} open={isOpen(a.id)} toggle={() => toggle(a.id)} />;
         if (a.kind === "prompt")

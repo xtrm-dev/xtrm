@@ -35,6 +35,8 @@ import {
   type HostCommand,
   type HostContextReference,
   type HostEventMessage,
+  type HostLaunchRequest,
+  type HostLaunchResult,
   type HostReferenceResolveRequest,
   type HostReferenceResolveResult,
   type HostApiError,
@@ -71,6 +73,12 @@ const STATE: Record<HostSessionSummary["state"], SessionState> = {
 };
 
 /** Presence-only producers (Claude hooks) advertise only `presence`; history-only sessions nothing. */
+/** Token totals and cost of a session: the journal's for a stopped session, the stream's for a live one. */
+export function usageOf(h: HostSessionSummary, proj: SessionProjection | undefined, history: HistoryFrames | null | undefined): { tokens: { input: number; output: number } | null; costUsd: number | null } {
+  if (h.state === "history_only") return { tokens: history?.tokens ?? proj?.tokens ?? null, costUsd: history?.costUsd ?? proj?.costUsd ?? null };
+  return { tokens: proj?.tokens ?? history?.tokens ?? null, costUsd: proj?.costUsd ?? history?.costUsd ?? null };
+}
+
 export function capabilities(s: Pick<HostSessionSummary, "state" | "capabilities">): SessionCapability[] {
   if (s.state === "history_only") return [];
   if (s.capabilities.length > 0 && s.capabilities.every((c) => c === "presence")) return ["presence"];
@@ -141,9 +149,11 @@ function isFirstPrompt(name: string, frames: InteractionFrame[]): boolean {
  * while live > the last meaningful prompt > a generated name. A live session's host name (the
  * extension falls back to the tmux session) is the explicit one; so is its tmux session without one.
  * A history-only session's host name is explicit unless it is the first prompt; with no Frames
- * loaded the two cannot be told apart, so a name seen while live wins over it.
+ * loaded the two cannot be told apart, so a name seen while live wins over it. `complete`: the Frames
+ * come from the journal; stream Frames can miss the first ones (replay buffer), and then they cannot
+ * tell the first prompt either (XTRM-601: the row and the header named one session differently).
  */
-export function sessionName(h: HostSessionSummary, frames: InteractionFrame[], seen: string | undefined): string {
+export function sessionName(h: HostSessionSummary, frames: InteractionFrame[], seen: string | undefined, complete = true): string {
   const generated = h.tmux?.session ?? h.sessionId.slice(0, 8);
   const lastPrompt = () => {
     for (let i = frames.length - 1; i >= 0; i--) {
@@ -153,9 +163,9 @@ export function sessionName(h: HostSessionSummary, frames: InteractionFrame[], s
     return null;
   };
   if (h.state !== "history_only") return h.name ?? h.tmux?.session ?? seen ?? lastPrompt() ?? generated;
-  if (h.name && frames.length > 0 && !isFirstPrompt(h.name, frames)) return h.name;
+  if (h.name && complete && frames.length > 0 && !isFirstPrompt(h.name, frames)) return h.name;
   if (seen) return seen;
-  if (frames.length > 0) return lastPrompt() ?? h.name ?? generated;
+  if (complete && frames.length > 0) return lastPrompt() ?? h.name ?? generated;
   return h.name ?? generated;
 }
 
@@ -184,17 +194,29 @@ export function repoName(repository: string | undefined): string | null {
  * session_status on the stream wins: it is ordered with the other events and replaces the previous
  * state. Without one, the host summary (filled from the same frames); without either, the model and
  * thinking level of the last assistant message. A context with unknown tokens shows no meter.
- * A history-only session has no live status: the host summary (from its journal) is the only source.
+ * A history-only session has no live status: the host summary, else its journal (XTRM-601): the usage
+ * of the last model response gives the context tokens, and the window is the one a session_status
+ * reported for the same model (`windowOf`); the journal does not record windows.
  */
-export function status(h: HostSessionSummary, proj: SessionProjection | undefined): Pick<AgentSessionSummary, "model" | "thinking" | "context"> {
+export function status(
+  h: HostSessionSummary,
+  proj: SessionProjection | undefined,
+  history?: Pick<HistoryFrames, "contextTokens" | "model"> | null,
+  windowOf: (model: string) => number | null = () => null,
+): Pick<AgentSessionSummary, "model" | "thinking" | "context"> {
   const st = h.state === "history_only" ? undefined : proj?.status;
   const usage = st ? st.contextUsage : h.contextUsage;
-  return {
-    model: st?.model ?? h.model ?? proj?.model ?? null,
-    thinking: st?.thinkingLevel ?? h.thinkingLevel ?? proj?.thinking ?? null,
-    context: usage && typeof usage.tokens === "number" ? { used: usage.tokens, window: usage.contextWindow } : null,
-  };
+  const model = st?.model ?? h.model ?? proj?.model ?? history?.model ?? null;
+  let context = usage && typeof usage.tokens === "number" ? { used: usage.tokens, window: usage.contextWindow } : null;
+  if (!context && h.state === "history_only" && history?.contextTokens && model) {
+    const window = windowOf(model);
+    if (window) context = { used: history.contextTokens, window };
+  }
+  return { model, thinking: st?.thinkingLevel ?? h.thinkingLevel ?? proj?.thinking ?? null, context };
 }
+
+/** Model id without its provider prefix, for matching a journal model to a status model. */
+const bareModel = (model: string) => model.replace(/^[^/]+\//, "");
 
 /** Command ids are unique per submit; the host rejects a duplicate in flight. */
 const commandId = () => (typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -417,6 +439,15 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
     return mergeFrames(history, proj?.frames ?? [], proj?.keys ?? new Map(), idle);
   }
 
+  /** Context window a session_status reported for this model on this host (any session). */
+  function windowOf(model: string): number | null {
+    for (const p of projector.sessions.values()) {
+      const st = p.status;
+      if (st?.model && st.contextUsage?.contextWindow && bareModel(st.model) === bareModel(model)) return st.contextUsage.contextWindow;
+    }
+    return null;
+  }
+
   async function summarize(h: HostSessionSummary): Promise<AgentSessionSummary> {
     const proj = projector.sessions.get(h.sessionId);
     const history = histories.get(h.sessionId)?.resolved;
@@ -424,7 +455,7 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
     const first = frames.find((f) => f.ingress.text);
     const live = h.state !== "history_only" ? (h.name ?? h.tmux?.session) : undefined;
     if (live) names.set(h.sessionId, live);
-    const name = sessionName(h, frames, names.get(h.sessionId));
+    const name = sessionName(h, frames, names.get(h.sessionId), !!history);
     return {
       id: h.sessionId,
       name,
@@ -434,7 +465,7 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
       role: h.role ?? null,
       workRef: h.workItem?.ref ?? null,
       repo: repoName(h.repository) ?? (await repoOf(h.repositoryPath ?? (h.repository?.startsWith("/") ? h.repository : undefined) ?? h.worktree ?? h.cwd)),
-      ...status(h, proj),
+      ...status(h, proj, history, windowOf),
       startedAt: h.startedAt ?? 0,
       lastActivityAt: h.lastActivityAt ?? h.startedAt ?? 0,
       parentId: h.parentSessionId ?? null,
@@ -499,8 +530,8 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
         worktree: h.worktree ?? null,
         branch: h.branch ?? null,
         tmux: h.tmux ? `${h.tmux.session}:${h.tmux.paneId}` : null,
-        tokens: proj?.tokens ?? null,
-        costUsd: proj?.costUsd ?? null,
+        // A stopped session's totals come from its journal; a live one's from the stream, else the journal.
+        ...usageOf(h, proj, history),
         frames: withAnswers(framesOf(h, history)),
       };
       return detail;
@@ -511,6 +542,16 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
     },
     async abort(sessionId) {
       await send(sessionId, { type: "abort", commandId: commandId() });
+    },
+    async launch(input) {
+      const { cwd, command, ...rest } = input;
+      const options = Object.fromEntries(Object.entries(rest).filter(([, v]) => typeof v === "string" && v.trim() !== "").map(([k, v]) => [k, v!.trim()]));
+      const body: HostLaunchRequest = { schema: HOST_API_SCHEMA, kind: "launch_request", cwd: cwd.trim(), command, ...(Object.keys(options).length ? { options } : {}) };
+      const { status, body: r } = await post<HostLaunchResult>("/api/v1/launch", body);
+      if (r?.kind !== "launch_result") throw hostError(status, r);
+      const tmuxSession = r.tmux?.session ?? r.outcome.identity?.session_name;
+      if (r.outcome.status !== "ok" || !tmuxSession) throw new Error(r.outcome.summary || r.outcome.reason_code || "the agent host did not start the session");
+      return { tmuxSession };
     },
     async respond(sessionId, activityId, answer) {
       const ui = projector.sessions.get(sessionId)?.prompts.get(activityId)?.ui;

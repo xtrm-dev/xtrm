@@ -1,7 +1,7 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { NewSessionButton } from "../agent/AgentSidebar.tsx";
+import { NewSessionButton } from "../agent/NewSession.tsx";
 import { AgentWorkspaceProvider, useAgentStore } from "../agent/workspace.tsx";
 import { MODES, halfForPath, modeForPath, modeHref, type Half } from "../app/destinations.ts";
 import { AccountControl } from "../github/auth.tsx";

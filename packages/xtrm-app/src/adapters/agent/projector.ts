@@ -9,6 +9,9 @@
 // - extension_ui_request renders as a prompt activity in the open Frame; extension_ui_resolved
 //   closes it, whoever answered (XTRM-597). `editor` is never proxied by the extension.
 // - A user message after the Frame's first one is a delivered steer or follow-up: a steer note.
+// - A provider error in an open Frame is a retry note (XTRM-601, §31 criteria 7-8); Pi's retry, when it
+//   comes, continues the same Frame, and the note then says the turn was retried. The extension does not
+//   carry agent_end.willRetry, so the note never predicts a retry.
 // - A message sent with @ references carries their context block (references.ts): the Frame shows the
 //   operator's text and keeps the references with the revisions they were given (XTRM-598).
 // - session_status replaces the session's model, thinking level and context usage (XTRM-609); the
@@ -23,7 +26,7 @@ import type { HostAgentMessage, HostEventFrame, HostEventMessage, HostToolOrigin
 
 /** The latest xtrm.agent-event.v1 session_status: the complete current state; absent fields are unknown. */
 export type SessionStatus = Omit<Extract<HostEventFrame["payload"], { type: "session_status" }>, "type">;
-import type { InteractionFrame, PromptActivity, ToolActivity } from "./types.ts";
+import type { InteractionFrame, NoteActivity, PromptActivity, ToolActivity } from "./types.ts";
 
 const MAX_FRAMES = 200;
 const MAX_OUTPUT = 64 * 1024;
@@ -53,6 +56,10 @@ export interface SessionProjection {
   thinking: string | null;
   tokens: { input: number; output: number } | null;
   costUsd: number | null;
+  /** Context tokens after the last model response (its usage), as Pi estimates them; null after a compaction. */
+  contextTokens: number | null;
+  /** The retry note of the last provider error in the open Frame, until the next assistant message. */
+  providerError?: { note: NoteActivity; message: string } | null;
 }
 
 /** Text parts of a Pi content value (string, or an array of `{type: "text", text}` parts). */
@@ -103,7 +110,7 @@ function origin(o: HostToolOrigin | undefined): ToolActivity["origin"] {
 }
 
 export function emptyProjection(): SessionProjection {
-  return { frames: [], open: null, ending: null, tools: new Map(), prompts: new Map(), userMessages: 0, keys: new Map(), status: null, model: null, thinking: null, tokens: null, costUsd: null };
+  return { frames: [], open: null, ending: null, tools: new Map(), prompts: new Map(), userMessages: 0, keys: new Map(), status: null, model: null, thinking: null, tokens: null, costUsd: null, contextTokens: null };
 }
 
 export class AgentProjector {
@@ -189,6 +196,8 @@ export class AgentProjector {
         break;
       case "session_compact":
       case "session_compact_failed": {
+        // Pi cannot estimate the context after a compaction until the next model response.
+        if (p.type === "session_compact") s.contextTokens = null;
         const f = s.open ?? s.frames[s.frames.length - 1];
         const text = p.type === "session_compact" ? `Context compacted (${p.reason})` : `Compaction failed (${p.reason})${p.errorMessage ? `: ${p.errorMessage}` : ""}`;
         f?.activity.push({ kind: "compaction", id: `${id}:${cursor}`, text });
@@ -238,6 +247,7 @@ export class AgentProjector {
     for (const { tool } of s.tools.values()) if (tool.status === "running") tool.status = status === "settled" ? "done" : "error";
     s.open = null;
     s.ending = null;
+    s.providerError = null;
     s.tools.clear();
   }
 
@@ -255,6 +265,10 @@ export class AgentProjector {
 
   private assistant(s: SessionProjection, m: HostAgentMessage, final: boolean) {
     if (m.role !== "assistant") return;
+    if (s.providerError && m.stopReason !== "error") {
+      s.providerError.note.text = `Retried after a provider error: ${s.providerError.message}`;
+      s.providerError = null;
+    }
     const text = contentText(m.content).trim();
     if (s.open && text) s.open.response = text;
     if (!final) return;
@@ -262,13 +276,23 @@ export class AgentProjector {
     if (m.thinkingLevel) s.thinking = m.thinkingLevel;
     // An abort during a tool call ends the next model request with the AbortError message, not "aborted".
     if (m.stopReason === "aborted" || (m.stopReason === "error" && /operation was aborted/i.test(m.errorMessage ?? ""))) s.ending = "aborted";
-    else if (m.stopReason === "error") s.ending = "failed";
+    else if (m.stopReason === "error") {
+      s.ending = "failed";
+      if (s.open) {
+        const message = (m.errorMessage ?? "unknown error").slice(0, 300);
+        const note: NoteActivity = { kind: "retry", id: `${s.open.id}:error:${s.open.activity.length}`, text: `Provider error: ${message}` };
+        s.open.activity.push(note);
+        s.providerError = { note, message };
+      }
+    }
     else s.ending = null;
     const u = m.usage;
     if (u) {
       const prev = s.tokens ?? { input: 0, output: 0 };
       s.tokens = { input: prev.input + (u.input ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0), output: prev.output + (u.output ?? 0) };
       if (typeof u.cost?.total === "number") s.costUsd = (s.costUsd ?? 0) + u.cost.total;
+      const context = u.totalTokens ?? (u.input ?? 0) + (u.output ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
+      if (context > 0) s.contextTokens = context;
     }
   }
 

@@ -1,11 +1,14 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { blockReason } from "../adapters/agent/references.ts";
 import { BusyError, type AgentRef, type AgentSessionDetail, type RefCandidate } from "../adapters/agent/types.ts";
 import { Icon } from "../ui/icon.tsx";
 import { Kbd, cx } from "../ui/primitives.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
 import { REF_ICON } from "./meta.tsx";
-import { useAbort, useReferenceCandidates, useResolveForSubmit, useStreamState, useSubmit, type PickerKind } from "./queries.ts";
+import { useAdapters } from "../adapters/index.tsx";
+import { findTarget, messageText, parseMessageCommand } from "./message.ts";
+import { SETTLE_WINDOW_MS, submitAfterSettle } from "./settle-retry.ts";
+import { useAbort, useAgentSessions, useReferenceCandidates, useResolveForSubmit, useStreamState, useSubmit, type PickerKind } from "./queries.ts";
 import { activeMention, formatAgentRef, parseRefTokens, useAgentStore, useAgentStoreVersion } from "./workspace.tsx";
 
 const TABS: Array<[PickerKind, string]> = [
@@ -91,12 +94,31 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
   /** Unresolved references of the last attempt, by `@kind:ref`: marked on their chips (§36.6 rule 5). */
   const [failed, setFailed] = useState<Record<string, string>>({});
   const [resolving, setResolving] = useState(false);
+  /** Outcome of the last `/message` delivery. */
+  const [delivered, setDelivered] = useState<string | null>(null);
+  const { agent } = useAdapters();
+  const sessions = useAgentSessions();
   const area = useRef<HTMLTextAreaElement>(null);
   const submit = useSubmit(session.id);
   const abort = useAbort(session.id);
   const resolveRefs = useResolveForSubmit(session.id);
 
-  const working = session.state === "working" || session.state === "waiting";
+  // A Frame that settled moments ago can still have a stale `working` session state: the session is
+  // idle then, and a message is a new prompt, not a steer into the finished run (XTRM-601). With no
+  // new Frame yet (Pi's startup window), the working state stands and the composer offers steer.
+  const latest = session.frames[session.frames.length - 1];
+  const settledAt = latest && latest.status !== "working" ? latest.settledAt : null;
+  const justSettled = settledAt !== null && Date.now() - settledAt < SETTLE_WINDOW_MS;
+  const working = (session.state === "working" || session.state === "waiting") && !justSettled;
+  /** A prompt answered busy right after a settle is being sent again (settle-retry.ts). */
+  const [waitingAgent, setWaitingAgent] = useState(false);
+  // Re-render when the settle window ends: a still-working state then stands again.
+  const [, setWindowEnded] = useState(0);
+  useEffect(() => {
+    if (!justSettled || settledAt === null) return;
+    const t = setTimeout(() => setWindowEnded((n) => n + 1), settledAt + SETTLE_WINDOW_MS - Date.now() + 10);
+    return () => clearTimeout(t);
+  }, [justSettled, settledAt]);
   /** While the live stream is down the session state is unknown, so nothing is sent or stopped (XTRM-615). */
   const disconnected = useStreamState() === "disconnected";
   const mention = activeMention(text, caret);
@@ -117,6 +139,7 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
     setCaret(pos);
     setError(null);
     setBusy(false);
+    setDelivered(null);
     setActive(0);
     store.patch(session.id, { draft: value });
   };
@@ -138,6 +161,8 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
   const send = async (explicit?: "steer" | "follow-up") => {
     const body = text.trim();
     if (!body || submit.isPending || resolving || disconnected) return;
+    const message = parseMessageCommand(body, refs);
+    if (message) return deliver(message);
     const all = [...refs];
     for (const t of parseRefTokens(body)) if (!all.some((r) => sameRef(r, t))) all.push(t);
     try {
@@ -151,7 +176,16 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
         setError(blocked);
         return;
       }
-      await submit.mutateAsync({ text: body, refs: all, references: check.references, mode: explicit ?? (working ? mode : "prompt") });
+      const input = { text: body, refs: all, references: check.references, mode: explicit ?? (working ? mode : "prompt") } as const;
+      if (input.mode === "prompt") {
+        await submitAfterSettle(() => submit.mutateAsync(input), {
+          settledAt,
+          onWait: (n) => {
+            setWaitingAgent(true);
+            console.info(`[xtrm-agent] busy right after settle: retry ${n} for session ${session.id}`);
+          },
+        }).finally(() => setWaitingAgent(false));
+      } else await submit.mutateAsync(input);
       update("", 0);
       store.commit(session.id, { refs: [], frameId: null, scrollTop: 0 });
     } catch (e) {
@@ -159,6 +193,32 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
         setBusy(true);
         setError("The session is working. Send this as a steer or a follow-up instead.");
       } else setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  /** `/message`: deliver the text to the target session; the sending session gets no Frame (§36.6 rule 4). */
+  const deliver = async (m: NonNullable<ReturnType<typeof parseMessageCommand>>) => {
+    if ("error" in m) return setError(m.error);
+    const target = findTarget(sessions.data ?? [], m.target);
+    if (!target) return setError(`No session ${m.target.ref} on this agent host.`);
+    if (target.id === session.id) return setError("/message delivers to another session; type the message here instead.");
+    if (!target.capabilities.includes("prompt")) return setError(`${target.name} cannot receive messages (${target.state === "history" ? "history only" : "presence only"}).`);
+    const input = { text: messageText(session.name, m.text), refs: [], references: [] };
+    const idle = target.state !== "working" && target.state !== "waiting";
+    try {
+      setResolving(true);
+      await agent.submit(target.id, { ...input, mode: idle ? "prompt" : "follow-up" }).catch((e: unknown) => {
+        // The target started working since the list was read: queue it as a follow-up instead.
+        if (e instanceof BusyError) return agent.submit(target.id, { ...input, mode: "follow-up" });
+        throw e;
+      });
+      update("", 0);
+      store.commit(session.id, { refs: [] });
+      setDelivered(`Delivered to ${target.name}${idle ? "" : " as a follow-up"}.`);
+    } catch (e) {
+      setError(`Message to ${target.name} failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setResolving(false);
     }
   };
 
@@ -292,6 +352,18 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
         <p role="status" className="mt-1.5 flex items-center gap-1.5 px-1 text-xs text-ink-faint" data-testid="composer-disconnected">
           <Icon name="alert" size="xs" />
           Disconnected from the agent host · you can send{working ? " or stop" : ""} again when the stream reconnects
+        </p>
+      )}
+      {waitingAgent && (
+        <p role="status" className="mt-1.5 flex items-center gap-1.5 px-1 text-xs text-ink-faint" data-testid="composer-waiting">
+          <span className="size-1.5 animate-pulse rounded-full bg-accent motion-reduce:animate-none" />
+          Waiting for the agent…
+        </p>
+      )}
+      {delivered && (
+        <p role="status" className="mt-1.5 flex items-center gap-1.5 px-1 text-xs text-ink-muted" data-testid="message-delivered">
+          <Icon name="check" size="xs" />
+          {delivered}
         </p>
       )}
       {error && (

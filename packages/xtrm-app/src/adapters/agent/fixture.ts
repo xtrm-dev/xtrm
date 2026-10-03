@@ -440,6 +440,40 @@ export function createFixtureAgent({ now = Date.now(), delayMs = 900 }: { now?: 
         later(() => settle(s, f));
       });
     },
+    async launch(input) {
+      if (!input.cwd.startsWith("/") && !input.cwd.startsWith("~")) throw new Error(`cwd ${input.cwd} is not an absolute path`);
+      const name = input.name?.trim() || `pi-${Math.random().toString(16).slice(2, 8)}`;
+      const at = Date.now();
+      later(() => {
+        sessions.set(name, {
+          id: name,
+          name,
+          provider: "pi",
+          state: "settled",
+          role: input.command === "xt pi" ? input.role?.trim() || null : null,
+          workRef: input.command === "xt pi" ? input.bead?.trim() || null : null,
+          repo: "xtrm-dev/xtrm",
+          model: input.model?.trim() || "opencode-go/deepseek-v4.1-flash",
+          thinking: "medium",
+          context: null,
+          startedAt: at,
+          lastActivityAt: at,
+          parentId: null,
+          capabilities: ["prompt", "steer", "abort"],
+          origin: "gui",
+          cwd: input.cwd,
+          repositoryPath: null,
+          worktree: null,
+          branch: null,
+          tmux: `${name}:%1`,
+          tokens: null,
+          costUsd: null,
+          frames: [],
+        });
+        emit(name);
+      });
+      return { tmuxSession: name };
+    },
     async abort(id) {
       const s = sessions.get(id);
       const f = s?.frames[s.frames.length - 1];

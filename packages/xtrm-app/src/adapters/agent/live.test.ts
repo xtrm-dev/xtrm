@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { capabilities, createLiveAgent, parseSse, promptName, repoName, sessionName, storedSessionNames, type SessionNames } from "./live.ts";
+import { capabilities, createLiveAgent, parseSse, promptName, repoName, sessionName, status, storedSessionNames, usageOf, type SessionNames } from "./live.ts";
+import { emptyProjection } from "./projector.ts";
 import { splitMessage } from "./references.ts";
 import { BusyError, type ContextReference, type InteractionFrame } from "./types.ts";
 import type { HostSessionSummary } from "./protocol.ts";
@@ -564,5 +565,41 @@ describe("session naming precedence (XTRM-616)", () => {
     const broken = storedSessionNames({ getItem: () => "{not json", setItem: () => { throw new Error("full"); } });
     broken.set("x", "y");
     expect(broken.get("x")).toBe("y");
+  });
+});
+
+// XTRM-601: a history-only session has no live status; its journal carries the usage.
+describe("history-only status and usage", () => {
+  const h = (state: HostSessionSummary["state"]) => ({ sessionId: "s", provider: "pi", state, cwd: "/w", extensionConnected: false, capabilities: [], model: "opencode-go/deepseek-v4.1-flash" }) as HostSessionSummary;
+  const history = { contextTokens: 23_300, model: "deepseek-v4.1-flash", tokens: { input: 40_000, output: 900 }, costUsd: 0.12 };
+
+  it("shows the journal context against the window a status reported for the same model", () => {
+    expect(status(h("history_only"), undefined, history, (m) => (m.endsWith("deepseek-v4.1-flash") ? 1_000_000 : null)).context).toEqual({ used: 23_300, window: 1_000_000 });
+    expect(status(h("history_only"), undefined, history).context).toBeNull();
+    // A live session keeps its live status.
+    expect(status(h("settled"), undefined, history, () => 1_000_000).context).toBeNull();
+  });
+
+  it("takes a stopped session's totals from the journal and a live one's from the stream", () => {
+    const proj = { ...emptyProjection(), tokens: { input: 1, output: 1 }, costUsd: 0.001 };
+    const frames = { frames: [], keys: new Map(), truncated: false, ...history };
+    expect(usageOf(h("history_only"), proj, frames)).toEqual({ tokens: { input: 40_000, output: 900 }, costUsd: 0.12 });
+    expect(usageOf(h("settled"), proj, frames)).toEqual({ tokens: { input: 1, output: 1 }, costUsd: 0.001 });
+    expect(usageOf(h("settled"), undefined, frames)).toEqual({ tokens: { input: 40_000, output: 900 }, costUsd: 0.12 });
+  });
+});
+
+// XTRM-601 run 2: stream Frames that miss the first one must not make the first prompt look explicit.
+describe("session naming with partial stream Frames", () => {
+  const f = (text: string) => ({ ingress: { text } }) as InteractionFrame;
+  const h = { sessionId: "0123456789", provider: "pi", state: "history_only", cwd: "/w", extensionConnected: false, capabilities: [], name: "Do these steps" } as HostSessionSummary;
+
+  it("prefers the name seen while live over the host's first-prompt name", () => {
+    const partial = [f("F1: count"), f("F2: count")];
+    expect(sessionName(h, partial, "acc-hist", false)).toBe("acc-hist");
+    // With complete journal Frames the first prompt is recognized either way.
+    expect(sessionName(h, [f("Do these steps"), ...partial], "acc-hist", true)).toBe("acc-hist");
+    // Never seen live, partial Frames: the host's name.
+    expect(sessionName(h, partial, undefined, false)).toBe("Do these steps");
   });
 });

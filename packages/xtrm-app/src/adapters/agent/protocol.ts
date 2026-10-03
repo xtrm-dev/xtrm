@@ -217,6 +217,25 @@ export interface HostSubmitRequest {
   references?: HostContextReference[];
 }
 
+/** xtrm.agent-host-api.v1 `launch_request`: start an agent in tmux on the host (§35.4). */
+export interface HostLaunchRequest {
+  schema: typeof HOST_API_SCHEMA;
+  kind: "launch_request";
+  /** Absolute directory on the agent host. */
+  cwd: string;
+  command: "pi" | "xt pi";
+  /** `role` and `bead` need `xt pi`. */
+  options?: { name?: string; role?: string; bead?: string; model?: string; thinking?: string; prompt?: string };
+}
+
+/** xtrm.agent-host-api.v1 `launch_result`; `outcome` is an xtrm.command-outcome.v1 object. */
+export interface HostLaunchResult {
+  schema: typeof HOST_API_SCHEMA;
+  kind: "launch_result";
+  outcome: { status: string; reason_code?: string; summary?: string; identity?: { session_name?: string | null } };
+  tmux?: { session: string; paneId: string };
+}
+
 /** xtrm.agent-host-api.v1 `submit_result`. `busy`: a normal prompt while the session works (§35.8 item 5). */
 export interface HostSubmitResult {
   schema: typeof HOST_API_SCHEMA;

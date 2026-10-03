@@ -114,3 +114,23 @@ describe("merging history with the stream (XTRM-604)", () => {
     expect(mergeFrames({ frames: [], keys: new Map(), truncated: false }, live.frames, live.keys)).toHaveLength(3);
   });
 });
+
+// XTRM-601: a stopped session's tokens, cost and last context come from the usage its journal recorded.
+describe("journal usage", () => {
+  const used = (text: string, timestamp: number, usage: Record<string, unknown>) => ({ ...assistant(text, timestamp), message: { ...assistant(text, timestamp).message, model: "deepseek-v4.1-flash", usage } });
+
+  it("sums tokens and cost and keeps the context of the last response", () => {
+    n = 0;
+    const h = projectHistory(SID, [user("a", 1), used("x", 2, { input: 100, output: 10, cacheRead: 900, totalTokens: 1010, cost: { total: 0.01 } }), user("b", 3), used("y", 4, { input: 50, output: 5, cacheRead: 1100, totalTokens: 1155, cost: { total: 0.02 } })], true);
+    expect(h.tokens).toEqual({ input: 2150, output: 15 });
+    expect(h.costUsd).toBeCloseTo(0.03);
+    expect(h.contextTokens).toBe(1155);
+    expect(h.model).toBe("deepseek-v4.1-flash");
+  });
+
+  it("knows no context after a compaction until the next response", () => {
+    n = 0;
+    const h = projectHistory(SID, [user("a", 1), used("x", 2, { input: 100, output: 10, totalTokens: 110 }), { type: "compaction", id: "c", parentId: null, timestamp: new Date(5).toISOString(), summary: "s" }], true);
+    expect(h.contextTokens).toBeNull();
+  });
+});
