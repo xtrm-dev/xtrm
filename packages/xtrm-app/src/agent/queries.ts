@@ -1,10 +1,11 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { resolveForSubmit } from "../adapters/agent/references.ts";
-import { useAdapters, type AgentRef, type RefCandidate, type RefKind, type SubmitInput } from "../adapters/index.tsx";
+import { useAdapters, type AgentRef, type RefCandidate, type RefKind, type SessionState, type SubmitInput } from "../adapters/index.tsx";
 import { useGithubIssues, usePulls } from "../app/queries.ts";
 import { useIssueIndex } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
+import type { ShownState } from "./meta.tsx";
 
 /** Pushed host changes invalidate the affected queries; nothing polls (PRD §35.5). */
 export function useAgentLive() {
@@ -19,6 +20,17 @@ export function useAgentLive() {
       }),
     [agent, qc],
   );
+}
+
+/** The live event stream state (XTRM-613): Frames and session states are unknown while disconnected. */
+export function useStreamState() {
+  const { agent } = useAdapters();
+  return useSyncExternalStore(agent.subscribeStream, agent.streamState);
+}
+
+/** The state to show for a session: `disconnected` while the stream is down, except history-only sessions. */
+export function useShownState(state: SessionState): ShownState {
+  return useStreamState() === "disconnected" && state !== "history" ? "disconnected" : state;
 }
 
 export function useAgentSessions() {

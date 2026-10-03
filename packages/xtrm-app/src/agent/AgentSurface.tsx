@@ -12,7 +12,7 @@ import { Composer, ComposerNotice } from "./Composer.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
 import { useOpenInTerminal } from "./HostConnection.tsx";
 import { ContextMeter, STATE_LABEL, STATE_TONE, contextPercent, duration, modelLabel } from "./meta.tsx";
-import { useAgentLive, useAgentSession, useAgentSessions, useRespond } from "./queries.ts";
+import { useAgentLive, useAgentSession, useAgentSessions, useRespond, useShownState, useStreamState } from "./queries.ts";
 import { useAgentStore, useAgentStoreVersion } from "./workspace.tsx";
 
 const FRAME_TONE: Record<InteractionFrame["status"], Tone> = { working: "active", settled: "neutral", failed: "danger", aborted: "muted" };
@@ -26,20 +26,22 @@ function toolCount(f: InteractionFrame) {
 
 function SessionHeader({ s }: { s: AgentSessionDetail }) {
   const shell = useShell();
+  const state = useShownState(s.state);
   const [copied, setCopied] = useState<string | null>(null);
   const tmuxSession = s.tmux?.split(":")[0] || null;
   const attach = tmuxSession ? `tmux attach -t ${tmuxSession}` : null;
   const terminal = useOpenInTerminal(tmuxSession);
   return (
     <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border-muted px-4" data-testid="session-header">
-      <StatusDot tone={STATE_TONE[s.state]} label={STATE_LABEL[s.state]} />
+      <StatusDot tone={STATE_TONE[state]} label={STATE_LABEL[state]} />
       <h1 className="truncate text-sm font-medium text-ink">{s.name}</h1>
       {s.role && <span className="shrink-0 text-xs text-ink-faint">{s.role}</span>}
       {s.workRef && <AgentRefChip reference={{ kind: "issue", ref: s.workRef }} className="shrink-0" />}
       <span className="ml-auto flex shrink-0 items-center gap-3 text-xs text-ink-faint">
         {s.model && <span className="hidden md:inline">{modelLabel(s)}</span>}
         <ContextMeter percent={contextPercent(s)} />
-        <span className="hidden sm:inline">{STATE_LABEL[s.state]}</span>
+        {state !== "disconnected" && <span className="hidden sm:inline">{STATE_LABEL[state]}</span>}
+        <StreamState />
       </span>
       {attach && (
         <IconButton
@@ -72,8 +74,24 @@ function SessionHeader({ s }: { s: AgentSessionDetail }) {
   );
 }
 
+/** Live stream indicator: shown only while the stream is down (XTRM-613). */
+function StreamState() {
+  const state = useStreamState();
+  return (
+    <span data-testid="stream-state" data-stream={state} role="status" className={cx("flex items-center gap-1.5 text-danger", state !== "disconnected" && "hidden")}>
+      {state === "disconnected" && (
+        <>
+          <Icon name="alert" size="xs" />
+          Disconnected · reconnecting
+        </>
+      )}
+    </span>
+  );
+}
+
 function FrameView({ s, f }: { s: AgentSessionDetail; f: InteractionFrame }) {
   const store = useAgentStore();
+  const disconnected = useStreamState() === "disconnected";
   useAgentStoreVersion();
   const respond = useRespond(s.id);
   const expanded = store.view(s.id).expanded;
@@ -116,7 +134,13 @@ function FrameView({ s, f }: { s: AgentSessionDetail; f: InteractionFrame }) {
           </p>
         )}
         {f.response && <Markdown className="mt-4 text-[0.92rem] leading-7 text-ink">{f.response}</Markdown>}
-        {f.status === "working" && !f.response && (
+        {f.status === "working" && disconnected && (
+          <p className="mt-3 flex items-center gap-2 pl-1.5 text-xs text-ink-faint" data-testid="frame-disconnected">
+            <Icon name="alert" size="xs" />
+            Disconnected from the agent host · this Frame's state is unknown until the stream reconnects
+          </p>
+        )}
+        {f.status === "working" && !disconnected && !f.response && (
           <p className="mt-3 flex items-center gap-2 pl-1.5 text-xs text-ink-faint" data-testid="frame-working">
             <span className="size-1.5 animate-pulse rounded-full bg-accent motion-reduce:animate-none" />
             {s.state === "waiting" ? "Waiting for your answer" : "Working"}
@@ -188,6 +212,7 @@ function HistoryPanel({ s, selected, onSelect }: { s: AgentSessionDetail; select
 /** Recent-Frames dock under the composer: the session's chapter navigation (PRD §4, §36.4). */
 function FrameDock({ s, selected, onSelect }: { s: AgentSessionDetail; selected: string; onSelect: (id: string) => void }) {
   const [open, setOpen] = useState(false);
+  const disconnected = useStreamState() === "disconnected";
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = scroller.current;
@@ -229,7 +254,7 @@ function FrameDock({ s, selected, onSelect }: { s: AgentSessionDetail; selected:
               f.id === selected ? "bg-hover text-ink" : "text-ink-faint hover:bg-hover hover:text-ink-muted",
             )}
           >
-            <StatusDot tone={FRAME_TONE[f.status]} label={f.status} />
+            <StatusDot tone={disconnected && f.status === "working" ? "muted" : FRAME_TONE[f.status]} label={disconnected && f.status === "working" ? "disconnected" : f.status} />
             <span className="tabular">{f.index}</span>
             <span className="truncate">{f.title}</span>
           </button>

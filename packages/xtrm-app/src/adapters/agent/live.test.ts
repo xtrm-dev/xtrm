@@ -378,3 +378,126 @@ describe("session status and repository identity (XTRM-603, XTRM-609)", () => {
     expect((await adapter.listSessions())[0]).toMatchObject({ model: "glm-5", thinking: "low", context: null });
   });
 });
+
+describe("live stream loss and resync (XTRM-613)", () => {
+  /** Fake bridge whose event streams stay open until the test ends, errors or leaves them silent. */
+  function controlled(sessions: HostSessionSummary[] = [summary()], histories: Record<string, unknown[]> = {}) {
+    const base = bridge([], sessions, histories);
+    const enc = new TextEncoder();
+    const streams: Array<{ lastEventId: string | null; push(s: string): void; end(): void; error(): void; aborted: boolean }> = [];
+    let refuse = false;
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).endsWith("/api/v1/events")) return base.fetchImpl(input, init);
+      if (refuse) throw new TypeError("Failed to fetch");
+      let ctl!: ReadableStreamDefaultController<Uint8Array>;
+      const s = {
+        lastEventId: new Headers(init?.headers).get("last-event-id"),
+        aborted: false,
+        push: (x: string) => ctl.enqueue(enc.encode(x)),
+        end: () => ctl.close(),
+        error: () => ctl.error(new TypeError("network error")),
+      };
+      init?.signal?.addEventListener("abort", () => {
+        s.aborted = true;
+        try {
+          ctl.error(new DOMException("aborted", "AbortError"));
+        } catch {
+          // already closed
+        }
+      });
+      streams.push(s);
+      return new Response(new ReadableStream<Uint8Array>({ start: (c) => void (ctl = c) }), { status: 200, headers: { "content-type": "text/event-stream", "x-xtrm-agent-host": "local:1" } });
+    }) as typeof fetch;
+    return { fetchImpl, streams, requests: base.requests, refuse: (v: boolean) => void (refuse = v) };
+  }
+
+  it("reports disconnected while the stream is down and resynchronizes every session on reconnect", async () => {
+    const host = summary();
+    const b = controlled([host]);
+    adapter = createLiveAgent({ fetch: b.fetchImpl, notifyMs: 5, retryMs: [5, 10] });
+    const states: string[] = [];
+    adapter.subscribeStream(() => states.push(adapter!.streamState()));
+    const changed: string[] = [];
+    adapter.subscribe((id) => changed.push(id));
+    expect(adapter.streamState()).toBe("connecting");
+    await vi.waitFor(() => expect(adapter!.streamState()).toBe("connected"));
+    b.streams[0]!.push(event(1, { type: "before_agent_start", prompt: "Count", ingress: { origin: "gui" } }));
+    await vi.waitFor(async () => expect((await adapter!.getSession("s1"))!.frames[0]?.status).toBe("working"));
+
+    // The stream fails and reconnects fail too: disconnected, not "working".
+    b.refuse(true);
+    b.streams[0]!.error();
+    await vi.waitFor(() => expect(adapter!.streamState()).toBe("disconnected"));
+    await settle();
+    expect(adapter.streamState()).toBe("disconnected");
+
+    // The host settled the Frame meanwhile; the reconnect replays it after the last cursor.
+    host.state = "settled";
+    changed.length = 0;
+    b.refuse(false);
+    await vi.waitFor(() => expect(b.streams).toHaveLength(2));
+    expect(b.streams[1]!.lastEventId).toBe("1");
+    b.streams[1]!.push(event(2, { type: "agent_settled" }));
+    await vi.waitFor(() => expect(changed).toEqual(expect.arrayContaining(["", "s1"])));
+    expect(adapter.streamState()).toBe("connected");
+    expect((await adapter.getSession("s1"))!.frames[0]).toMatchObject({ status: "settled" });
+    expect((await adapter.listSessions())[0]!.state).toBe("settled");
+    expect(states[0]).toBe("connected");
+    expect(states).toContain("disconnected");
+    expect(states.at(-1)).toBe("connected");
+  });
+
+  it("drops a stream that stays silent past idleMs and reconnects with the last cursor", async () => {
+    const b = controlled();
+    adapter = createLiveAgent({ fetch: b.fetchImpl, notifyMs: 5, retryMs: [5, 10], idleMs: 60 });
+    adapter.subscribe(() => {});
+    await vi.waitFor(() => expect(b.streams).toHaveLength(1));
+    b.streams[0]!.push(event(7, { type: "agent_start" }));
+    // Keepalives keep it alive.
+    for (let i = 0; i < 4; i++) {
+      await new Promise((r) => setTimeout(r, 30));
+      b.streams[0]!.push(": keepalive\n\n");
+    }
+    expect(b.streams[0]!.aborted).toBe(false);
+    // Silence: the stream is dropped and reopened after cursor 7.
+    await vi.waitFor(() => expect(b.streams[0]!.aborted).toBe(true));
+    await vi.waitFor(() => expect(b.streams).toHaveLength(2));
+    expect(b.streams[1]!.lastEventId).toBe("7");
+  });
+
+  it("drops the stream when the browser goes offline and reconnects as soon as it is online", async () => {
+    const b = controlled();
+    const events = new EventTarget();
+    // A backoff far longer than the test: only the online event can reconnect in time.
+    adapter = createLiveAgent({ fetch: b.fetchImpl, notifyMs: 5, retryMs: [60_000, 60_000], events });
+    adapter.subscribe(() => {});
+    await vi.waitFor(() => expect(adapter!.streamState()).toBe("connected"));
+    events.dispatchEvent(new Event("offline"));
+    await vi.waitFor(() => expect(adapter!.streamState()).toBe("disconnected"));
+    expect(b.streams[0]!.aborted).toBe(true);
+    events.dispatchEvent(new Event("online"));
+    await vi.waitFor(() => expect(adapter!.streamState()).toBe("connected"));
+    expect(b.streams).toHaveLength(2);
+  });
+
+  it("settles a Frame whose end event fell out of the replay buffer once the host reports the session idle", async () => {
+    const msg = (role: string, text: string, timestamp: number, extra: object = {}) => ({ type: "message", timestamp: new Date(timestamp).toISOString(), message: { role, content: [{ type: "text", text }], timestamp, ...extra } });
+    const journal = [msg("user", "Count", 20), msg("assistant", "1 2 3", 21, { stopReason: "stop" })];
+    const host = summary();
+    const b = controlled([host], { s1: journal });
+    adapter = createLiveAgent({ fetch: b.fetchImpl, notifyMs: 5, retryMs: [5, 10] });
+    adapter.subscribe(() => {});
+    await vi.waitFor(() => expect(b.streams).toHaveLength(1));
+    b.streams[0]!.push(event(1, { type: "before_agent_start", prompt: "Count", ingress: { origin: "gui" } }));
+    b.streams[0]!.push(event(2, { type: "message_end", message: { role: "user", content: "Count", timestamp: 20 } }));
+    await vi.waitFor(() => expect(adapter!.projector().sessions.get("s1")?.frames).toHaveLength(1));
+    // While the host still reports the session working, the live status stands.
+    expect((await adapter.getSession("s1"))!.frames.map((f) => f.status)).toEqual(["working"]);
+    // The stream reconnects after the settle left the replay buffer: no agent_settled arrives.
+    host.state = "settled";
+    b.streams[0]!.end();
+    await vi.waitFor(() => expect(b.streams).toHaveLength(2));
+    const d = await adapter.getSession("s1");
+    expect(d!.frames.map((f) => [f.title, f.status, f.ingress.origin])).toEqual([["Count", "settled", "gui"]]);
+  });
+});

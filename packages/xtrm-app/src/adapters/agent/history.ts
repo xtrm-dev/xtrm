@@ -20,6 +20,9 @@
 //   that started before the buffer has no user message, but its calls are in the journal).
 // - A matched pair shows the live Frame (origins, nested calls, prompts, current status), preceded
 //   by history activity the live Frame lacks. Unmatched live Frames are newer and come last.
+// - Exception (XTRM-613): when the host reports the session idle, a live Frame still working missed
+//   its end event (the stream reconnected past the replay buffer); it takes the settled status of its
+//   last history Frame.
 import { AgentProjector } from "./projector.ts";
 import { EVENT_SCHEMA, HOST_API_SCHEMA, type HostAgentMessage, type HostEventMessage, type HostEventPayload } from "./protocol.ts";
 import type { Activity, InteractionFrame } from "./types.ts";
@@ -113,11 +116,14 @@ function missing(history: Activity[], live: Activity[]): Activity[] {
   });
 }
 
-function combine(hs: InteractionFrame[], live: InteractionFrame): InteractionFrame {
+function combine(hs: InteractionFrame[], live: InteractionFrame, idle: boolean): InteractionFrame {
   const first = hs[0]!;
+  const last = hs[hs.length - 1]!;
   const partial = !live.ingress.text && !!first.ingress.text;
+  const missedEnd = idle && live.status === "working" && last.status !== "working";
   return {
     ...live,
+    ...(missedEnd ? { status: last.status, settledAt: last.settledAt } : {}),
     ...(partial ? { title: first.title, ingress: first.ingress } : {}),
     activity: [...missing(hs.flatMap((h) => h.activity), live.activity), ...live.activity],
     response: live.response ?? hs[hs.length - 1]!.response,
@@ -128,8 +134,9 @@ function combine(hs: InteractionFrame[], live: InteractionFrame): InteractionFra
 /**
  * Every Frame of the session: history Frames in journal order, each matched live Frame in place of
  * the history Frames it covers, then the live Frames newer than the journal. Numbered 1..n.
+ * `idle`: the host reports the session not working (settled, failed, or history only).
  */
-export function mergeFrames(history: HistoryFrames, live: InteractionFrame[], liveKeys: Map<string, number[]>): InteractionFrame[] {
+export function mergeFrames(history: HistoryFrames, live: InteractionFrame[], liveKeys: Map<string, number[]>, idle = false): InteractionFrame[] {
   const byKey = new Map<number, InteractionFrame>();
   const byTool = new Map<string, InteractionFrame>();
   for (const h of history.frames) {
@@ -162,7 +169,7 @@ export function mergeFrames(history: HistoryFrames, live: InteractionFrame[], li
     if (!l) out.push(h);
     else if (!placed.has(l)) {
       placed.add(l);
-      out.push(combine(covered.get(l)!, l));
+      out.push(combine(covered.get(l)!, l, idle));
     }
   }
   for (const l of live) if (!placed.has(l) && !covered.has(l)) out.push(l);
