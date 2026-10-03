@@ -77,6 +77,9 @@ test("session rows show host model, thinking level, context meter and owner/name
   log(s, `xtrm-609 host summary after turn: ${status(after)}`);
   await expect.poll(async () => (await contextDetail(page).innerText()).trim(), { timeout: 30_000 }).not.toBe(detailBefore);
   await expect.poll(async () => (await meter(row).innerText()).trim(), { timeout: 30_000 }).not.toBe(meterBefore);
+  // XTRM-612: a 1M-window model must never show a rounded-away 0% after real turns.
+  expect(after.contextUsage!.tokens).toBeGreaterThan(0);
+  expect((await meter(row).innerText()).trim()).not.toBe("0%");
   log(s, `xtrm-609 app after turn: row "${(await row.innerText()).replace(/\s+/g, " ")}" meter ${(await meter(row).innerText()).trim()} context ${(await contextDetail(page).innerText()).trim()}`);
   await shoot(page, "2-after-turn");
 

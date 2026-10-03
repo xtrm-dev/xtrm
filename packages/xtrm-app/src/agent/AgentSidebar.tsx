@@ -7,7 +7,7 @@ import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, cx, relativeTime } from "../ui/primitives.tsx";
 import { HostConnectionPanel, HostConnectionToggle } from "./HostConnection.tsx";
-import { ContextMeter, STATE_LABEL, STATE_TONE, contextPercent, modelLabel, type ShownState } from "./meta.tsx";
+import { ContextMeter, STATE_LABEL, STATE_TONE, contextLabel, modelLabel, type ShownState } from "./meta.tsx";
 import { useAgentSession, useAgentSessions, useShownState } from "./queries.ts";
 
 export type SessionScope = "repository" | "all";
@@ -74,7 +74,6 @@ export function buildSessionItems(sessions: AgentSessionSummary[], scope: Sessio
 }
 
 function SessionRow({ s, depth, selected, onOpen }: { s: AgentSessionSummary; depth: number; selected: boolean; onOpen: () => void }) {
-  const pct = contextPercent(s);
   const meta = [s.role, s.workRef, modelLabel(s)].filter(Boolean);
   const state = useShownState(s.state);
   return (
@@ -99,7 +98,7 @@ function SessionRow({ s, depth, selected, onOpen }: { s: AgentSessionSummary; de
         </span>
         <span className="flex min-w-0 items-center gap-1.5 text-[0.7rem] text-ink-faint">
           <span className="truncate">{meta.join(" · ") || STATE_LABEL[state]}</span>
-          {pct !== null && <ContextMeter percent={pct} className="ml-auto shrink-0" />}
+          {s.context && <ContextMeter context={s.context} className="ml-auto shrink-0" />}
         </span>
       </span>
     </Row>
@@ -148,7 +147,7 @@ function SessionDetails({ id }: { id: string }) {
           <Detail label="Provider" value={PROVIDER_LABEL[s.provider]} />
           <Detail label="State" value={stateWithCapabilities(s, state)} />
           <Detail label="Model" value={[s.model, s.thinking].filter(Boolean).join(" · ")} />
-          <Detail label="Context" value={s.context ? `${contextPercent(s)}% · ${Math.round(s.context.used / 1000)}k / ${Math.round(s.context.window / 1000)}k` : null} />
+          <Detail label="Context" value={s.context ? `${contextLabel(s.context)} · ${Math.round(s.context.used / 1000)}k / ${Math.round(s.context.window / 1000)}k` : null} />
           <Detail label="Tokens" value={tokens} />
           <Detail label="Cost" value={s.costUsd !== null ? `$${s.costUsd.toFixed(2)}` : null} />
           <Detail label="Cwd" value={s.cwd} mono />

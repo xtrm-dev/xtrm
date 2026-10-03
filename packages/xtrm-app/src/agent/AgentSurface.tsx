@@ -11,7 +11,7 @@ import { ActivityThread } from "./Activity.tsx";
 import { Composer, ComposerNotice } from "./Composer.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
 import { useOpenInTerminal } from "./HostConnection.tsx";
-import { ContextMeter, STATE_LABEL, STATE_TONE, contextPercent, duration, modelLabel } from "./meta.tsx";
+import { ContextMeter, STATE_LABEL, STATE_TONE, contextLabel, duration, modelLabel } from "./meta.tsx";
 import { useAgentLive, useAgentSession, useAgentSessions, useRespond, useShownState, useStreamState } from "./queries.ts";
 import { useAgentStore, useAgentStoreVersion } from "./workspace.tsx";
 
@@ -39,7 +39,7 @@ function SessionHeader({ s }: { s: AgentSessionDetail }) {
       {s.workRef && <AgentRefChip reference={{ kind: "issue", ref: s.workRef }} className="shrink-0" />}
       <span className="ml-auto flex shrink-0 items-center gap-3 text-xs text-ink-faint">
         {s.model && <span className="hidden md:inline">{modelLabel(s)}</span>}
-        <ContextMeter percent={contextPercent(s)} />
+        <ContextMeter context={s.context} />
         {state !== "disconnected" && <span className="hidden sm:inline">{STATE_LABEL[state]}</span>}
         <StreamState />
       </span>
