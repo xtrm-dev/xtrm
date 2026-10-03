@@ -6,6 +6,7 @@ import { useGo } from "../shell/ContextSidebar.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, cx, relativeTime } from "../ui/primitives.tsx";
+import { HostConnectionPanel, HostConnectionToggle } from "./HostConnection.tsx";
 import { ContextMeter, STATE_LABEL, STATE_TONE, contextPercent, shortModel } from "./meta.tsx";
 import { useAgentSession, useAgentSessions } from "./queries.ts";
 
@@ -159,6 +160,7 @@ export function AgentSidebar() {
   const sessions = useAgentSessions();
   const [scope, setScopeState] = useState<SessionScope>(readScope);
   const [filter, setFilter] = useState("");
+  const [hostOpen, setHostOpen] = useState(false);
   const setScope = (next: SessionScope) => {
     setScopeState(next);
     try {
@@ -184,7 +186,10 @@ export function AgentSidebar() {
       <div className="flex items-center gap-1 px-3 pt-1 pb-2">
         <span className="text-sm font-medium text-ink">Sessions</span>
         <span className="text-xs text-ink-faint tabular">{items.filter((i) => i.type === "session").length || ""}</span>
-        <div className="ml-auto flex items-center rounded-md bg-control p-0.5 text-[0.7rem]" role="radiogroup" aria-label="Session scope">
+        <span className="ml-auto">
+          <HostConnectionToggle open={hostOpen} onToggle={() => setHostOpen((v) => !v)} />
+        </span>
+        <div className="flex items-center rounded-md bg-control p-0.5 text-[0.7rem]" role="radiogroup" aria-label="Session scope">
           {(
             [
               ["repository", repo.name],
@@ -207,6 +212,7 @@ export function AgentSidebar() {
           ))}
         </div>
       </div>
+      <HostConnectionPanel open={hostOpen} onClose={() => setHostOpen(false)} />
       <div className="px-2 pb-1">
         <label className="flex h-7 items-center gap-2 rounded-md border border-border-muted px-2 text-ink-faint focus-within:border-border-strong">
           <Icon name="search" size="xs" />
