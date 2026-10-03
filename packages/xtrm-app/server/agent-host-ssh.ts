@@ -175,28 +175,46 @@ export async function bootstrap(target: string, opts: { remoteCommand?: string |
 
 // --- processes -------------------------------------------------------------------
 
-/** Runs ssh with stdin closed, a hard timeout, and bounded output. */
+/**
+ * Runs ssh with stdin closed, a hard timeout, and bounded output.
+ *
+ * The child runs in its own process group so a timeout kills everything it started: a
+ * grandchild (a ProxyCommand, or a shell that does not exec its last command) would
+ * otherwise keep the pipes open, and `close` would not fire until it exited (XTRM-594).
+ */
 export function spawnRunner(bin: string): SshRunner {
   return (argv, timeoutMs) =>
     new Promise((resolve) => {
-      const child = spawn(bin, argv, { stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(bin, argv, { stdio: ["ignore", "pipe", "pipe"], detached: true });
       let stdout = "";
       let stderr = "";
       let timedOut = false;
+      let settled = false;
+      const finish = (result: Awaited<ReturnType<SshRunner>>) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      };
       child.stdout.on("data", (b: Buffer) => void (stdout.length < MAX_OUTPUT && (stdout += b.toString("utf8"))));
       child.stderr.on("data", (b: Buffer) => void (stderr.length < MAX_OUTPUT && (stderr += b.toString("utf8"))));
       const timer = setTimeout(() => {
         timedOut = true;
-        child.kill("SIGKILL");
+        try {
+          if (child.pid) process.kill(-child.pid, "SIGKILL");
+        } catch {
+          child.kill("SIGKILL");
+        }
       }, timeoutMs);
-      child.on("error", (e) => {
-        clearTimeout(timer);
-        resolve({ code: 255, stdout, stderr: `${stderr}\n${e.message}`, timedOut: false });
+      child.on("error", (e) => finish({ code: 255, stdout, stderr: `${stderr}\n${e.message}`, timedOut: false }));
+      // After a timeout the process has exited even if a stray holder keeps the pipes open.
+      child.on("exit", (code) => {
+        if (!timedOut) return;
+        child.stdout.destroy();
+        child.stderr.destroy();
+        finish({ code, stdout, stderr, timedOut });
       });
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        resolve({ code, stdout, stderr, timedOut });
-      });
+      child.on("close", (code) => finish({ code, stdout, stderr, timedOut }));
     });
 }
 
