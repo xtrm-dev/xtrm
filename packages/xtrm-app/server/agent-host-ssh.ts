@@ -24,6 +24,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { Plugin } from "vite";
 import type { AgentHostConnectionState, AgentHostSettings, BootstrapAttempt, TerminalLaunch } from "../src/adapters/agent/host-connection.ts";
+import { localEndpoint, proxyEvents, resolveRepo, type HostEndpoint } from "./agent-host-live.ts";
 import { resolveSbBin } from "./substrate-cli.ts";
 
 export const ENSURE_SCHEMA = "xtrm.agent-host-ensure.v1";
@@ -350,6 +351,12 @@ export class AgentHostConnection {
     return this.state.phase === "connected" ? (this.state.host?.localPort ?? null) : null;
   }
 
+  /** The forwarded remote host while connected; its identity changes with target and host pid. */
+  endpoint(): HostEndpoint | null {
+    const host = this.state.phase === "connected" ? this.state.host : undefined;
+    return host ? { port: host.localPort, id: `ssh:${this.state.settings?.target}:${host.pid}`, local: false } : null;
+  }
+
   private load(): AgentHostSettings | null {
     try {
       const raw = JSON.parse(readFileSync(this.settingsFile, "utf8")) as Record<string, unknown>;
@@ -400,7 +407,12 @@ function launchTerminal(argv: string[]): boolean {
   return true;
 }
 
-export function agentHostHandler(conn: AgentHostConnection, prefix = "/xtrm-api/agent-host") {
+/**
+ * The host the read routes use: the SSH forward while connected, else the loopback host (XTRM-572).
+ * `local` is injectable for tests.
+ */
+export function agentHostHandler(conn: AgentHostConnection, prefix = "/xtrm-api/agent-host", local: () => HostEndpoint | null = () => localEndpoint()) {
+  const endpoint = () => conn.endpoint() ?? local();
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = new URL(req.url ?? "/", "http://local");
     if (!url.pathname.startsWith(prefix)) return next();
@@ -415,19 +427,28 @@ export function agentHostHandler(conn: AgentHostConnection, prefix = "/xtrm-api/
 
     if (req.method === "GET") {
       if (path === "/connection") return send(200, conn.status());
-      // Read-only host API over the forward: the session list and one session.
+      // Read-only host API: the session list, one session, and the event stream.
       const m = /^\/api\/v1\/sessions(?:\/([^/]+))?$/.exec(path);
-      if (m) {
-        const port = conn.localPort();
-        if (!port) return send(409, { ok: false, error: "not connected to an agent host" });
-        const id = m[1] ? decodeURIComponent(m[1]) : null;
+      if (m || path === "/api/v1/events") {
+        const ep = endpoint();
+        if (!ep) return send(409, { ok: false, error: "no agent host: connect over SSH or start `xt host start` on this machine" });
+        const id = m?.[1] ? decodeURIComponent(m[1]) : (url.searchParams.get("sessionId") ?? null);
         if (id !== null && !SESSION_ID_RE.test(id)) return send(400, { ok: false, error: "invalid session id" });
+        if (!m) return proxyEvents(ep, req, res, id);
         try {
-          const r = await hostApi(port, id ? `/v1/sessions/${encodeURIComponent(id)}` : "/v1/sessions");
+          const r = await hostApi(ep.port, id ? `/v1/sessions/${encodeURIComponent(id)}` : "/v1/sessions");
+          res.setHeader("x-xtrm-agent-host", ep.id);
           return send(r.status, r.body);
         } catch (e) {
           return send(502, { ok: false, error: `agent host unreachable: ${e instanceof Error ? e.message : String(e)}` });
         }
+      }
+      // Repository identity of a session path; only the local host's paths exist on this machine.
+      if (path === "/repo") {
+        const p = url.searchParams.get("path") ?? "";
+        const ep = endpoint();
+        if (!ep?.local || !p.startsWith("/") || p.length > 4096 || p.includes("\0")) return send(200, { repo: null });
+        return send(200, { repo: await resolveRepo(p) });
       }
       return send(404, { ok: false, error: "unknown agent host route" });
     }

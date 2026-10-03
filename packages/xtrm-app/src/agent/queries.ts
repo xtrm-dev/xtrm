@@ -13,7 +13,8 @@ export function useAgentLive() {
     () =>
       agent.subscribe((id) => {
         void qc.invalidateQueries({ queryKey: ["agent", "sessions"] });
-        void qc.invalidateQueries({ queryKey: ["agent", "session", id] });
+        // An empty id means every session changed (the adapter switched hosts).
+        void qc.invalidateQueries({ queryKey: id ? ["agent", "session", id] : ["agent", "session"] });
       }),
     [agent, qc],
   );

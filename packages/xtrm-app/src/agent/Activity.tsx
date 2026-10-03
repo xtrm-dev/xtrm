@@ -9,12 +9,12 @@ import { duration } from "./meta.tsx";
 
 type Block = { type: "native"; key: string; tools: ToolActivity[] } | { type: "single"; key: string; activity: Activity };
 
-/** Consecutive native tools collapse into one group; every other activity stands alone. */
+/** Consecutive native tools collapse into one group; scripts and every other activity stand alone. */
 export function groupActivity(activity: Activity[]): Block[] {
   const out: Block[] = [];
   for (const a of activity) {
     const last = out[out.length - 1];
-    if (a.kind === "tool" && a.class === "native") {
+    if (a.kind === "tool" && a.class === "native" && a.script === undefined && !a.children?.length) {
       if (last?.type === "native") last.tools.push(a);
       else out.push({ type: "native", key: a.id, tools: [a] });
     } else out.push({ type: "single", key: a.id, activity: a });
@@ -186,9 +186,113 @@ function ExtensionPrompt({ t, onAnswer }: { t: ToolActivity; onAnswer: (answer: 
   );
 }
 
-function ClassTool({ t, open, toggle, onAnswer }: { t: ToolActivity; open: boolean; toggle: () => void; onAnswer: (activityId: string, answer: string) => void }) {
+/** Provenance tag text: `MCP github`, `pi-guardrails 0.4.1`, `native`. MCP without a known server shows `MCP` only (§36.7). */
+export function originTag(t: ToolActivity): string {
+  if (t.class === "mcp") return `MCP ${t.origin.server ?? ""}`.trim();
+  if (t.class === "native") return "native";
+  const ext = [t.origin.extension, t.origin.version].filter(Boolean).join(" ");
+  if (t.class === "coordination") return ext ? `coordination · ${ext}` : "coordination";
+  return ext || "extension";
+}
+
+/** Calls a tool or script made through `ctx.executeTool()`, in start order; each keeps its own origin (§36.7). */
+function NestedCalls({ calls, isOpen, toggle }: { calls: ToolActivity[]; isOpen: (id: string) => boolean; toggle: (id: string) => void }) {
+  if (calls.length === 0) return null;
+  return (
+    <ol className="mt-1 ml-[0.85rem] flex flex-col border-l border-border-muted pl-2" aria-label="Nested calls" data-testid="nested-calls">
+      {calls.map((c) => (
+        <li key={c.id} data-testid="nested-call" data-class={c.class}>
+          <button
+            type="button"
+            aria-expanded={isOpen(c.id)}
+            aria-label={`${originTag(c)} ${c.name} ${c.subject}`}
+            onClick={() => toggle(c.id)}
+            className="flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-hover focus-visible:bg-hover"
+          >
+            <OriginTag>{originTag(c)}</OriginTag>
+            <span className="shrink-0 font-mono text-xs text-ink">{c.name}</span>
+            <span className={cx("truncate font-mono text-xs", c.status === "error" ? "text-danger" : "text-ink-faint")}>{c.subject}</span>
+            <span className="ml-auto shrink-0 pl-2 text-xs text-ink-faint tabular">{c.status === "running" ? <Running /> : duration(c.durationMs)}</span>
+          </button>
+          {isOpen(c.id) && (
+            <div className="flex flex-col gap-2 pt-0.5 pb-1.5 pl-7">
+              {c.args && <Fields args={c.args} />}
+              <Output text={c.output} />
+            </div>
+          )}
+          {c.children && c.children.length > 0 && <NestedCalls calls={c.children} isOpen={isOpen} toggle={toggle} />}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** `Script completed` / `Script failed`, the wall time, and the output after `Output:` (Pi codemode result text). */
+export function scriptResult(t: ToolActivity): { verdict: string | null; wall: string | null; output: string | undefined } {
+  const text = t.output;
+  if (!text) return { verdict: null, wall: null, output: undefined };
+  const m = /^(Script completed|Script failed)\n(?:Wall time ([^\n]+)\n)?(?:Output:\n)?([\s\S]*)$/.exec(text);
+  return m ? { verdict: m[1]!, wall: m[2] ?? null, output: m[3] } : { verdict: null, wall: null, output: text };
+}
+
+/** The built-in codemode tool as a script block: collapsed source, output, verdict, nested calls (PRD §36.7). */
+function ScriptBlock({ t, isOpen, toggle }: { t: ToolActivity; isOpen: (id: string) => boolean; toggle: (id: string) => void }) {
+  const { verdict, wall, output } = scriptResult(t);
+  const failed = t.status === "error" || verdict === "Script failed";
+  const label = t.status === "running" ? "Running script" : (verdict ?? (failed ? "Script failed" : "Script completed"));
+  const sourceId = `src:${t.id}`;
+  const calls = t.children ?? [];
+  return (
+    <li data-activity="script" data-testid="activity-script" data-script-status={t.status}>
+      <div className="flex min-h-8 min-w-0 items-center gap-2 px-1.5 text-sm">
+        <Glyph icon="command" />
+        <span className={cx("shrink-0", failed ? "text-danger" : "text-ink-muted")} data-testid="script-verdict">
+          {label}
+        </span>
+        <span className="truncate font-mono text-xs text-ink-faint">{t.subject}</span>
+        <span className="ml-auto shrink-0 pl-2 text-xs text-ink-faint tabular">
+          {t.status === "running" ? <Running /> : [wall, `${calls.length} ${calls.length === 1 ? "call" : "calls"}`].filter(Boolean).join(" · ")}
+        </span>
+      </div>
+      <div className="ml-[1.85rem] flex flex-col gap-1.5">
+        <button
+          type="button"
+          aria-expanded={isOpen(sourceId)}
+          onClick={() => toggle(sourceId)}
+          className="flex h-6 w-fit items-center gap-1 rounded-md px-1 text-xs text-ink-faint outline-none hover:bg-hover hover:text-ink-muted focus-visible:bg-hover"
+        >
+          <Caret open={isOpen(sourceId)} />
+          Script source
+        </button>
+        {isOpen(sourceId) && (
+          <ContentPanel mono className="max-h-64 whitespace-pre" data-testid="script-source">
+            {t.script}
+          </ContentPanel>
+        )}
+        <NestedCalls calls={calls} isOpen={isOpen} toggle={toggle} />
+        {output !== undefined && output !== "" && <Output text={output} />}
+      </div>
+    </li>
+  );
+}
+
+function ClassTool({
+  t,
+  open,
+  toggle,
+  isOpen,
+  toggleId,
+  onAnswer,
+}: {
+  t: ToolActivity;
+  open: boolean;
+  toggle: () => void;
+  isOpen: (id: string) => boolean;
+  toggleId: (id: string) => void;
+  onAnswer: (activityId: string, answer: string) => void;
+}) {
   const mcp = t.class === "mcp";
-  const tag = mcp ? `MCP ${t.origin.server ?? ""}`.trim() : [t.origin.extension, t.origin.version].filter(Boolean).join(" ");
+  const tag = originTag(t);
   return (
     <li data-activity={t.class} data-testid={`activity-${t.class}`}>
       <RowButton open={open} onToggle={toggle} label={`${tag} ${t.name}`} meta={t.status === "running" && !t.ui ? <Running /> : duration(t.durationMs)}>
@@ -200,9 +304,12 @@ function ClassTool({ t, open, toggle, onAnswer }: { t: ToolActivity; open: boole
         <div className="flex flex-col gap-2 pt-1 pb-2 pl-7">
           {t.args && <Fields args={t.args} />}
           {t.output !== undefined && <Output text={t.output} />}
-          <p className="text-[0.7rem] text-ink-faint">{mcp ? `MCP server ${t.origin.server} · ${t.origin.transport ?? "transport unknown"}` : `Pi extension ${tag}`}</p>
+          <p className="text-[0.7rem] text-ink-faint">
+            {mcp ? `MCP server ${t.origin.server ?? "unknown"} · ${t.origin.transport ?? "transport unknown"}` : t.class === "native" ? "Built-in tool" : `Pi extension ${tag}`}
+          </p>
         </div>
       )}
+      {t.children && t.children.length > 0 && <NestedCalls calls={t.children} isOpen={isOpen} toggle={toggleId} />}
       {t.ui && <ExtensionPrompt t={t} onAnswer={(a) => onAnswer(t.id, a)} />}
     </li>
   );
@@ -273,7 +380,8 @@ export function ActivityThread({
       {groupActivity(activity).map((b) => {
         if (b.type === "native") return <NativeGroup key={b.key} tools={b.tools} isOpen={isOpen} toggle={toggle} />;
         const a = b.activity;
-        if (a.kind === "tool") return <ClassTool key={b.key} t={a} open={isOpen(a.id)} toggle={() => toggle(a.id)} onAnswer={onAnswer} />;
+        if (a.kind === "tool" && a.script !== undefined) return <ScriptBlock key={b.key} t={a} isOpen={isOpen} toggle={toggle} />;
+        if (a.kind === "tool") return <ClassTool key={b.key} t={a} open={isOpen(a.id)} toggle={() => toggle(a.id)} isOpen={isOpen} toggleId={toggle} onAnswer={onAnswer} />;
         if (a.kind === "coordination") return <Coordination key={b.key} c={a} open={isOpen(a.id)} toggle={() => toggle(a.id)} />;
         return <Note key={b.key} a={a} />;
       })}

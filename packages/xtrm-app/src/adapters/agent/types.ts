@@ -1,5 +1,5 @@
-// Agent half view models (PRD §36). The live source is the XTRM agent host
-// (xtrm.agent-host-api.v1, XTRM-562/XTRM-572); until it exists the UI runs on the fixture.
+// Agent half view models (PRD §36). Two adapters fill them: the typed fixture, and the live
+// adapter (live.ts) that projects xtrm.agent-host-api.v1 / xtrm.agent-event.v1 (XTRM-572).
 import type { DataSource } from "../types.ts";
 
 export type SessionState = "working" | "waiting" | "settled" | "failed" | "history";
@@ -10,7 +10,7 @@ export interface AgentSessionSummary {
   name: string;
   /** First Frame title when the session has no explicit name. */
   title: string;
-  provider: "pi" | "claude";
+  provider: "pi" | "claude" | "codex";
   state: SessionState;
   role: string | null;
   /** Bound Substrate Issue ref (`--bead`). */
@@ -67,7 +67,7 @@ export interface InteractionFrame {
   settledAt: number | null;
 }
 
-export type ToolClass = "native" | "mcp" | "extension";
+export type ToolClass = "native" | "mcp" | "extension" | "coordination";
 
 export interface ExtensionUiRequest {
   type: "confirm" | "select";
@@ -91,6 +91,10 @@ export interface ToolActivity {
   output?: string;
   /** Extension UI request awaiting (or answered by) the operator (PRD §20, §36.7). */
   ui?: ExtensionUiRequest;
+  /** Calls this tool made through `ctx.executeTool()` (`parentToolCallId`), in start order (PRD §36.7). */
+  children?: ToolActivity[];
+  /** The built-in codemode tool: rendered as a script block with this source (PRD §36.7). */
+  script?: string;
 }
 
 export interface CoordinationActivity {
