@@ -1740,6 +1740,8 @@ Fidelity over the extension transport (corrected under XTRM-573):
 | compaction lifecycle (`compaction_start` / `_end`) | present | `session_compact` / `session_compact_failed` after the fact | the Frame shows a compaction note when the event arrives; no in-progress state |
 | extension UI requests | direct | `extension_ui_request` (`select`, `confirm`, `input`); exactly one `extension_ui_resolved {id, resolvedBy: local \| host, outcome: answered \| cancelled}` per request. The answer value is not carried. `editor()` is not proxied, because Pi 1.0.0 gives it no `AbortSignal` | the host answers with `extension_ui_response` (`RpcExtensionUIResponse` shape: one of `value`, `confirmed`, `cancelled`). The terminal dialog and the host race: when the host wins, the extension dismisses the terminal dialog. On `extension_ui_resolved` the host drops the pending request and leaves `waiting_for_input`; a later response is rejected `unknown_ui_request`. Upgrade `xt host` before the extension, because an older host rejects the new event as an invalid frame |
 
+**Alternative not taken (yet): Pi's remote-session protocol.** Pi 0.84.0 added experimental remote-session client APIs: a transport-neutral `PiClient`, a CBOR protocol, a Unix-socket transport, and a `RemoteSession` controller with transcript reducers at `@earendil-works/pi-coding-agent/client`. The 1.0.0 npm package excludes them (`files` lists `!dist/client` and `!dist/experimental`; the `./client` export points at unshipped source), and an installed `pi` exposes no session socket. The agent host therefore keeps the extension transport. Revisit when a Pi release ships the client and a session-serving side: the host could then consume Pi's native stream for Pi sessions and keep the extension only for identity and XTRM-specific messages (XTRM-582).
+
 ### 35.4 Launch: tmux-hosted sessions
 
 The GUI starts agents through the existing launcher instead of hosting Pi itself.
@@ -1960,6 +1962,13 @@ ToolActivity
 | **coordination** | message, dispatch, chain launch, review request, result receipt | Rendered as the semantic activity of §14, even when the transport is an extension tool or an MCP tool. Transport provenance stays available in the detail view. |
 
 Permission and approval prompts follow the class of the tool that asks.
+
+**Nested calls and codemode (Pi 1.0.0, XTRM-582).** A tool can run other tools through `ctx.executeTool()`. Each nested call emits its own `tool_execution_start` / `_update` / `_end` with `parentToolCallId`, and Pi assigns it the id `<parent id>/<n>`. Nested calls add no transcript entries; only the calling tool reports their results. The UI follows these rules:
+
+- A nested call renders inside its parent's activity block, never as a top-level row and never merged into a native group. It keeps its own origin class and identity, so an MCP call made by a script still shows its server.
+- The built-in `codemode` tool (`builtin:codemode`) runs a model-written JavaScript script in a sandbox. It is classified `native` by rule 3 but renders as a **script block**: the script source (collapsed), the output, `Script completed` / `Script failed` with wall time, and its nested calls in order. A failed script keeps its partial output; calls made before the failure are real and stay visible.
+- MCP servers with the default `codemode` exposure are reached only through scripts, so their calls usually appear nested under a `codemode` block. Servers with `direct` exposure appear as top-level `mcp` rows.
+- The built-in `tool_search` is `native`.
 
 **Classification rule for Pi sessions (decided under XTRM-559).** The agent host classifies each tool from Pi's registration record, not from the tool name. Pi 1.0.0 gives every tool a `sourceInfo {path, source, scope, origin, baseDir?}` (`pi.getAllTools()`), and an extension's tools inherit the extension's `sourceInfo`. The XTRM extension sends this record raw with each tool event (`tool: {sourceInfo, namespace?}`); the host derives `origin` from it. The rules apply in order:
 
