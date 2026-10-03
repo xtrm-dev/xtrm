@@ -50,21 +50,33 @@ export const REF_LABEL: Record<RefKind, string> = {
   frame: "Frame",
 };
 
-export function contextPercent(s: Pick<AgentSessionSummary, "context">): number | null {
-  if (!s.context || s.context.window <= 0) return null;
-  return Math.round((s.context.used / s.context.window) * 100);
+/**
+ * The utilization shown as text (XTRM-612): whole percent from 10, one decimal below 10,
+ * `<1%` for a non-zero share too small for one decimal, `0%` only for an empty context —
+ * rounding 2330/1e6 to a whole percent must not show 0% on a 1M-window model.
+ */
+export function contextLabel(context: { used: number; window: number } | null | undefined): string | null {
+  if (!context || context.window <= 0) return null;
+  const pct = (context.used / context.window) * 100;
+  if (pct <= 0) return "0%";
+  if (pct < 1) return "<1%";
+  if (pct < 10) return `${pct.toFixed(1)}%`;
+  return `${Math.round(pct)}%`;
 }
 
-/** Context utilization: a number and a hairline meter; colour only past 85% (§15.1). */
-export function ContextMeter({ percent, className }: { percent: number | null; className?: string }) {
-  if (percent === null) return null;
-  const hot = percent >= 85;
+/** Context utilization: a number and a hairline meter; colour only past 85% (§15.1). The fill
+ * keeps a visible hairline for any non-zero context (XTRM-612). */
+export function ContextMeter({ context, className }: { context: { used: number; window: number } | null; className?: string }) {
+  if (!context || context.window <= 0) return null;
+  const pct = (context.used / context.window) * 100;
+  const label = contextLabel(context)!;
+  const hot = pct >= 85;
   return (
-    <span className={cx("inline-flex items-center gap-1.5", className)} title={`Context ${percent}% used`}>
+    <span className={cx("inline-flex items-center gap-1.5", className)} title={`Context ${label} used`}>
       <span className="relative h-1 w-6 overflow-hidden rounded-full bg-border">
-        <span className={cx("absolute inset-y-0 left-0 rounded-full", hot ? "bg-danger" : "bg-ink-faint")} style={{ width: `${Math.min(100, percent)}%` }} />
+        <span className={cx("absolute inset-y-0 left-0 rounded-full", hot ? "bg-danger" : "bg-ink-faint")} style={{ width: `${pct > 0 ? Math.min(100, Math.max(pct, 2)) : 0}%` }} />
       </span>
-      <span className={cx("tabular", hot ? "text-danger" : undefined)}>{percent}%</span>
+      <span className={cx("tabular", hot ? "text-danger" : undefined)}>{label}</span>
     </span>
   );
 }
