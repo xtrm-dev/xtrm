@@ -23,7 +23,7 @@ process.stdout.write(
     entryId: result.entryId,
     sequence: result.sequence,
     degraded: result.degraded,
-    reason: result.reason ?? null,
+    reason: result.reason ?? undefined,
   }) + "\n",
 );
 process.exitCode = 0;
