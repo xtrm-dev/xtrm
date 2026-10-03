@@ -1950,11 +1950,11 @@ Permission and approval prompts follow the class of the tool that asks.
 
 | # | registration record | class | `origin` fields |
 |---|---|---|---|
-| 1 | tool listed by the coordination table (specialists, intercom, pi-claude-link message and dispatch tools) | `coordination` | transport extension kept for the detail view |
-| 2 | `sourceInfo.path = "builtin:mcp"` (Pi's built-in MCP client) | `mcp` | `server` = `namespace.name` without the `mcp__` prefix; transport from the server config |
+| 1 | tool listed by the coordination table, keyed by registering package name (or MCP server) plus tool name: specialists, intercom, pi-claude-link message and dispatch tools | `coordination` | transport extension (package name and version) kept for the detail view |
+| 2 | `sourceInfo.path = "builtin:mcp"` (Pi's built-in MCP client) | `mcp` | `server` = `namespace.name` without the `mcp__` prefix, in Pi's namespace form (`-` becomes `_`); transport is not visible to the host and is omitted |
 | 3 | other `sourceInfo.source = "builtin"` (`builtin:read`, `builtin:bash`, …) | `native` | — |
-| 4 | `sourceInfo.source` names the `pi-mcp-adapter` package | `mcp` | `server` from the `mcp__<server>` namespace; for the proxy tool `mcp`, from the call's `server` argument; else `unknown` |
-| 5 | any other extension (`origin` `package` or `top-level`) | `extension` | package = `sourceInfo.source`; version read once from `package.json` under `baseDir` |
+| 4 | the registering package is `pi-mcp-adapter` (package.json name) | `mcp` | `server` from the `mcp__<server>` namespace; for the proxy tool `mcp`, from the call's `server` argument; else `unknown` |
+| 5 | any other extension (`origin` `package` or `top-level`) | `extension` | `extension` = the `name` in `package.json` under `sourceInfo.baseDir`, falling back to `sourceInfo.source` only when no name exists; `version` from the same `package.json`, read once per package. The raw install path or spec stays in `tool.sourceInfo.source` and is never the displayed identity |
 | 6 | `sourceInfo.source = "sdk"` or no record | `extension` | `unknown` |
 
 Evidence (Pi 1.0.0 `dist/`): built-in tools get `createSyntheticSourceInfo("builtin:<name>", {source: "builtin"})` (`core/agent-session.js`); built-in extensions load from the path `builtin:<name>` and their tools inherit it (`core/extensions/loader.js` `createExtension`, `core/resource-loader.js` `applyExtensionSourceInfo`); package extensions get `{source: <package spec>, origin: "package"}` (`core/package-manager.js`). Pi does not load the built-in `mcp` when an installed extension registers the same tool names, so one session has one MCP path in practice; rules 2 and 4 cover both. `pi-mcp-adapter` direct tools with `toolPrefix: none` have no namespace; they are still `mcp` under rule 4, with `server = unknown` until the adapter exposes a tool→server map. The UI shows `MCP` with no server name in that case and never infers one.
