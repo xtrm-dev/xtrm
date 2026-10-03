@@ -14,6 +14,12 @@
 //   (POST /v1/references/resolve) against the session, with revision and budget. A submit carries the
 //   resolved references in submit_request.references and, because the host forwards only the command
 //   to the session, as a context block appended to the message (references.ts).
+// - History (XTRM-604): GET /v1/sessions/:id/history returns the Pi journal entries of a session.
+//   Frames are projected from them and merged with the stream's Frames (history.ts), so Frames
+//   older than the replay buffer and Frames of history-only sessions are shown. The history is read
+//   again after a stream reconnect (events may have been missed) and once a session stops. A host
+//   without the route, or a Claude session, shows the stream's Frames only.
+import { mergeFrames, projectHistory, type HistoryFrames } from "./history.ts";
 import { AgentProjector, type SessionProjection } from "./projector.ts";
 import { composeMessage, formatRef } from "./references.ts";
 import {
@@ -27,6 +33,7 @@ import {
   type HostReferenceResolveResult,
   type HostApiError,
   type HostSessionDetail,
+  type HostSessionHistory,
   type HostSessionList,
   type HostSessionSummary,
   type HostSubmitRequest,
@@ -149,6 +156,10 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
   const listeners = new Set<(sessionId: string) => void>();
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
   const repoCache = new Map<string, Promise<string | null>>();
+  /** Bumped on every stream (re)connect: events may have been missed, so history is read again. */
+  let generation = 0;
+  /** Session history per session, tagged with the stream generation and whether the session had stopped. */
+  const histories = new Map<string, { tag: string; value: Promise<HistoryFrames | null>; resolved?: HistoryFrames | null }>();
   /** Answers given from this app, by extension UI request id: the host event does not carry them. */
   const answers = new Map<string, string>();
 
@@ -182,8 +193,10 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
       hostId = id;
       projector = new AgentProjector();
       cursor = null;
+      histories.clear();
       for (const l of listeners) l("");
     }
+    generation += 1;
     const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = "";
     for (;;) {
@@ -243,9 +256,36 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
     return p;
   };
 
+  /** Session history Frames; null without a history route, for Claude sessions, or on failure. */
+  function historyOf(h: HostSessionSummary): Promise<HistoryFrames | null> {
+    if (h.provider !== "pi") return Promise.resolve(null);
+    const ended = h.state === "history_only";
+    const tag = `${generation}:${ended}`;
+    const known = histories.get(h.sessionId);
+    if (known?.tag === tag) return known.value;
+    const entry: { tag: string; value: Promise<HistoryFrames | null>; resolved?: HistoryFrames | null } = {
+      tag,
+      value: get<HostSessionHistory>(`/api/v1/sessions/${encodeURIComponent(h.sessionId)}/history`)
+        .then(({ status, body }) => (status === 200 && body?.kind === "session_history" ? projectHistory(h.sessionId, body.entries, ended, body.truncated === true) : null))
+        .catch(() => null),
+    };
+    // A failed read keeps the previous history (if any) and is retried on the next tag.
+    entry.value = entry.value.then((v) => (entry.resolved = v ?? known?.resolved ?? null));
+    histories.set(h.sessionId, entry);
+    return entry.value;
+  }
+
+  /** Every Frame of the session: history merged with the stream, else the stream's retained Frames. */
+  function framesOf(id: string, history: HistoryFrames | null | undefined, hostFrameCount: number): InteractionFrame[] {
+    const proj = projector.sessions.get(id);
+    if (!history) return projector.snapshot(id, hostFrameCount);
+    return mergeFrames(history, proj?.frames ?? [], proj?.keys ?? new Map());
+  }
+
   async function summarize(h: HostSessionSummary): Promise<AgentSessionSummary> {
     const proj = projector.sessions.get(h.sessionId);
-    const frames = proj?.frames ?? [];
+    const history = histories.get(h.sessionId)?.resolved;
+    const frames = history ? framesOf(h.sessionId, history, h.frameCount ?? 0) : (proj?.frames ?? []);
     const first = frames.find((f) => f.ingress.text);
     const name = displayName(h);
     return {
@@ -262,7 +302,7 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
       lastActivityAt: h.lastActivityAt ?? h.startedAt ?? 0,
       parentId: h.parentSessionId ?? null,
       childCount: h.childCount ?? 0,
-      frameCount: Math.max(h.frameCount ?? 0, frames.length),
+      frameCount: history ? frames.length : Math.max(h.frameCount ?? 0, frames.length),
       capabilities: capabilities(h),
       origin: h.launch ?? "terminal",
     };
@@ -312,6 +352,7 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
       if (status === 404) return null;
       if (status !== 200 || body?.kind !== "session_detail") throw hostError(status, body);
       const h = body.session;
+      const history = await historyOf(h);
       const summary = await summarize(h);
       const proj = projector.sessions.get(id);
       const detail: AgentSessionDetail = {
@@ -323,7 +364,7 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
         tmux: h.tmux ? `${h.tmux.session}:${h.tmux.paneId}` : null,
         tokens: proj?.tokens ?? null,
         costUsd: proj?.costUsd ?? null,
-        frames: withAnswers(projector.snapshot(id, h.frameCount ?? 0)),
+        frames: withAnswers(framesOf(id, history, h.frameCount ?? 0)),
       };
       return detail;
     },

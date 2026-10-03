@@ -65,9 +65,21 @@ and `/v1/sessions/:id`; Frames and tool activity are projected in the app
 `before_agent_start` (or `agent_start` for Claude hooks, which report no prompt text) and closes only
 on `agent_settled`. Tool class and MCP server come from the host's `origin`; calls with
 `parentToolCallId` render inside their parent, and the built-in `codemode` tool renders as a script
-block with its nested calls. Claude sessions are presence only; stopped sessions are history only.
-Frames older than the host's replay buffer (1024 events) are not shown. The wire types are mirrored in `src/adapters/agent/protocol.ts`
+block with its nested calls. Claude sessions are presence only; stopped sessions are history only. The wire types are mirrored in `src/adapters/agent/protocol.ts`
 from `@xtrm/contracts` (core v0.14.0).
+
+**Session history (XTRM-604, PRD §26, §36.11 criterion 28).** The host's replay buffer holds 1024
+events, so the stream alone misses older Frames. For a Pi session, live or history only, the adapter
+reads `GET /v1/sessions/:id/history` (core XTRM-604, through the bridge's
+`/xtrm-api/agent-host/api/v1/sessions/:id/history`): the journal's `message` and `compaction` entries on
+the active branch, read only. `src/adapters/agent/history.ts` projects them through the same
+projector as live events and merges the two lists. A live Frame matches a journal Frame that has one
+of its user-message timestamps, or one of its tool call ids (a Frame cut by the buffer). Each Frame is
+shown once, numbered from 1, and the live Frame wins: origins, nested calls, prompts and status. The
+history is read again after a stream reconnect and once a session stops. Calls known only from the
+journal carry no host origin and show as unclassified (extension) calls, with no nested calls. A Frame
+only from the journal shows `terminal` ingress. A host without the route, or a Claude session, shows
+the stream's Frames only.
 
 **Live write path (XTRM-597).** The composer posts an `xtrm.agent-host-api.v1` `submit_request` to the
 bridge (`POST /xtrm-api/agent-host/api/v1/submit`: loopback, same-origin, `application/json` only),
@@ -134,7 +146,9 @@ Substrate board, read only: `XTRM_SUBSTRATE_WRITES=0`) and `@session` of a secon
 sends an oversize file as an excerpt, and checks that a `../` escape blocks submit. Its session status
 spec (`e2e/real-host/session-status.spec.ts`, XTRM-609) runs Pi in a repository with an origin remote and
 checks the row's model and thinking level, the meter after a turn, a thinking change from the terminal,
-and the owner/name group live and after `/quit`.
+and the owner/name group live and after `/quit`. Its session history spec (`e2e/real-host/session-history.spec.ts`, XTRM-604) drives
+turns until the host's replay buffer has dropped the session's first Frames, then checks that the Frame
+dock shows every Frame once, in order, live and after `/quit`.
 `npm run test:e2e:real-host:direct` (`e2e/real-host/direct-mode.spec.ts`, XTRM-600) runs the same host
 behind a local front that adds `X-Forwarded-For` and has the bridge reach it only through that front:
 pairing succeeds once, a replay fails, the session list and a streamed Frame work with the device
