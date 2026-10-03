@@ -1,8 +1,7 @@
 import { parseArgs } from "node:util";
 
-import { ModelRuntime, SettingsManager, resolveCliModel } from "@earendil-works/pi-coding-agent";
-
 import { writeClipboard } from "./clipboard.mjs";
+import { completeOnce, createRuntime, selectModel } from "./model.mjs";
 import {
   INTENTS,
   buildClarifiedDraft,
@@ -18,8 +17,6 @@ import {
 } from "./prompt.mjs";
 
 const VERSION = "0.1.0";
-const MAX_OUTPUT_TOKENS = 1600;
-const TIMEOUT_MS = 45_000;
 
 const USAGE = `Usage: xtprompt [options] "prompt"
        command | xtprompt [options]
@@ -98,7 +95,7 @@ export async function runCli(options = {}) {
 
   let runtime;
   try {
-    runtime = await (options.createRuntime ?? (() => ModelRuntime.create()))();
+    runtime = await createRuntime(options.createRuntime);
   } catch {
     stderr.write("xtprompt: could not load Pi model configuration.\n");
     return 1;
@@ -203,33 +200,6 @@ async function readContext(value, options) {
     return normalizeContext(await readFileFromDisk(path, "utf8"));
   }
   return normalizeContext(await readFile(path, "utf8"));
-}
-
-async function selectModel(runtime, requested, configuredSettings) {
-  if (requested) {
-    const resolved = resolveCliModel({ cliModel: requested, modelRuntime: runtime });
-    if (resolved.error) return { error: resolved.error };
-    if (resolved.model) return { model: resolved.model };
-  }
-
-  const settings = configuredSettings ?? SettingsManager.create(process.cwd());
-  const defaultProvider = settings.getDefaultProvider();
-  const defaultModel = settings.getDefaultModel();
-  if (defaultProvider && defaultModel) {
-    const preferred = runtime.getModel(defaultProvider, defaultModel);
-    if (preferred && runtime.hasConfiguredAuth(defaultProvider)) return { model: preferred };
-  }
-
-  let available;
-  try {
-    available = await runtime.getAvailable();
-  } catch {
-    return { error: "could not resolve authenticated Pi models." };
-  }
-  if (available.length === 0) {
-    return { error: "no authenticated Pi models are available; configure Pi auth or pass --model." };
-  }
-  return { model: available[0] };
 }
 
 async function runInteractive({ currentPrompt, intent, context, runtime, model, options, stderr }) {
@@ -370,12 +340,4 @@ function isActionableRewrite(prompt) {
   return Boolean(prompt)
     && !isClarificationOnly(prompt)
     && !/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/u.test(prompt);
-}
-
-function completeOnce(runtime, model, request, signal) {
-  const timeoutSignal = AbortSignal.timeout(TIMEOUT_MS);
-  return runtime.completeSimple(model, request, {
-    signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
-    maxTokens: Math.min(model.maxTokens ?? MAX_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS),
-  });
 }
