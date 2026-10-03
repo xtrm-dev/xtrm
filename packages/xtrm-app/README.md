@@ -66,8 +66,7 @@ and `/v1/sessions/:id`; Frames and tool activity are projected in the app
 on `agent_settled`. Tool class and MCP server come from the host's `origin`; calls with
 `parentToolCallId` render inside their parent, and the built-in `codemode` tool renders as a script
 block with its nested calls. Claude sessions are presence only; stopped sessions are history only.
-Frames older than the host's replay buffer (1024 events) are not shown. `@` references stay with
-the fixture until their own issue. The wire types are mirrored in `src/adapters/agent/protocol.ts`
+Frames older than the host's replay buffer (1024 events) are not shown. The wire types are mirrored in `src/adapters/agent/protocol.ts`
 from `@xtrm/contracts` (core v0.14.0).
 
 **Live write path (XTRM-597).** The composer posts an `xtrm.agent-host-api.v1` `submit_request` to the
@@ -81,15 +80,33 @@ second app client that has not seen the update yet, is answered `busy`, and the 
 An `extension_ui_request` (`confirm`, `select`, `input`) renders inline in the running Frame;
 `extension_ui_resolved` closes the block whoever answered, and the block says whether it was answered
 here or in the terminal. A delivered steer or follow-up appears in the Frame as
-`Delivered while working: …`. The Frame header shows its ingress, `GUI` or `terminal`. A submit that
-carries `@` references is refused until references resolve on the host.
+`Delivered while working: …`. The Frame header shows its ingress, `GUI` or `terminal`.
+
+**Live `@` references (XTRM-598, PRD §36.6, §36.12 item 2).** Every reference resolves when the
+composer submits, through its own adapter: `@issue` and `@epic` through `adapters/substrate`
+(revision `rev:<n>`, contract sections in order up to 16 KB, then `sb issue show <ref>`), `@gh-issue`
+and `@pr` through `adapters/github` (revision `updated:<time>`, 8 KB, a PR diff always by pointer),
+and `@file`, `@commit`, `@session`, `@agent`, `@frame` on the agent host (`POST
+/xtrm-api/agent-host/api/v1/references/resolve` → the host's `POST /v1/references/resolve`, against
+the session's cwd and registry: `sha256:` file revisions, `../` escapes rejected). A reference above
+its kind's budget is an excerpt plus a pointer. An unresolved reference, or more than 96 KB in total,
+blocks submit with the reason and marks the chip. The resolved references travel in
+`submit_request.references`; the host forwards only the command to the session, so the app also
+appends them to the message as a context block (`src/adapters/agent/references.ts`: an index with
+one JSON line per reference, then each reference's content). The Frame shows the operator's text and
+keeps each reference with the revision it was given; an excerpt is marked on its chip. In the picker,
+host kinds have no search route: a typed `@file:<path>` or `@commit:<sha>` is offered once it
+resolves, and `@session` lists the host's sessions. `@epic`, `@agent` and `@frame` are typed only.
 
 `npm run test:e2e:real-host` runs the live Agent half against a real host: an isolated `xt host start`
 (temp `HOME`, `--socket`, `--port`), a real Pi session with the `xtrm-agent-host` extension in a
 private tmux server, a prompt typed in its terminal, and the real Claude hook reporter. Its write-path
 spec (`e2e/real-host/write-path.spec.ts`) drives a second Pi session that also loads a test extension
 with one confirm tool (`e2e/real-host/probe-extension.ts`): a GUI prompt, busy and Steer from a second
-app client, Stop, and the confirm answered once in the GUI and once in the terminal. It needs `xt`
+app client, Stop, and the confirm answered once in the GUI and once in the terminal. Its references
+spec (`e2e/real-host/references.spec.ts`) resolves `@file` with a line range, `@issue` (against the real
+Substrate board, read only: `XTRM_SUBSTRATE_WRITES=0`) and `@session` of a second live Pi session,
+sends an oversize file as an excerpt, and checks that a `../` escape blocks submit. It needs `xt`
 0.14.0+, `pi` 1.0.0, tmux, the `xtrm-dev/core` checkout (`XTRM_CORE_DIR`, default `~/dev/core`) and an
 `opencode-go` entry in `~/.pi/agent/auth.json` (only that entry is copied into the temp agent dir,
 deleted on teardown). The run log goes to `.receipts/real-host/`, screenshots to

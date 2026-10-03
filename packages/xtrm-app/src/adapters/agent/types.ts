@@ -40,12 +40,40 @@ export interface AgentSessionDetail extends AgentSessionSummary {
   frames: InteractionFrame[];
 }
 
-export type RefKind = "issue" | "gh-issue" | "pr" | "commit" | "file" | "session";
+export type RefKind = "issue" | "epic" | "gh-issue" | "pr" | "commit" | "file" | "session" | "agent" | "frame";
+/** Kinds the agent host resolves against the session (POST /v1/references/resolve). */
+export type HostRefKind = "commit" | "file" | "session" | "agent" | "frame";
+export const HOST_REF_KINDS: readonly HostRefKind[] = ["commit", "file", "session", "agent", "frame"];
 
 /** Typed composer reference (PRD §36.6); serialized as `@kind:ref`. */
 export interface AgentRef {
   kind: RefKind;
   ref: string;
+  /** Revision recorded at submit (§36.6 rule 2); set on references a Frame was given. */
+  revision?: string;
+  /** Above its budget: the agent got an excerpt and this pointer (§36.12 item 2). */
+  pointer?: string;
+}
+
+/**
+ * A resolved typed reference: the app view of xtrm.agent-host-api.v1 `contextReference`.
+ * Content above the kind's budget is an excerpt (`truncated`) plus a `pointer`.
+ */
+export interface ContextReference {
+  kind: RefKind;
+  /** `@kind:ref` as submitted. */
+  raw: string;
+  status: "resolved" | "unresolved";
+  title?: string;
+  revision?: string;
+  content?: string;
+  truncated?: boolean;
+  pointer?: string;
+  /** UTF-8 bytes of `content`. */
+  bytes?: number;
+  budgetBytes?: number;
+  /** Reason code of an unresolved reference (`path_outside_cwd`, `issue_not_found`, …). */
+  error?: string;
 }
 
 export interface RefCandidate extends AgentRef {
@@ -136,6 +164,8 @@ export type Activity = ToolActivity | CoordinationActivity | NoteActivity | Prom
 export interface SubmitInput {
   text: string;
   refs: AgentRef[];
+  /** `refs` resolved at submit, every one `resolved` and within the total budget. */
+  references: ContextReference[];
   mode: "prompt" | "steer" | "follow-up";
 }
 
@@ -149,9 +179,12 @@ export interface AgentAdapter {
   abort(sessionId: string): Promise<void>;
   /** Answers an extension UI request; `null` cancels it. */
   respond(sessionId: string, activityId: string, answer: string | null): Promise<void>;
-  /** Host-resolved kinds only: commit, file, session (PRD §36.6). */
-  searchReferences(query: string, kind: "commit" | "file" | "session", repo: string): Promise<RefCandidate[]>;
-  resolveReference(ref: AgentRef): Promise<RefCandidate | null>;
+  /** Picker candidates for host-resolved kinds (PRD §36.6); `sessionId` is the composer's session. */
+  searchReferences(query: string, kind: "commit" | "file" | "session", repo: string, sessionId?: string): Promise<RefCandidate[]>;
+  /** Bounded preview of one host-resolved reference for the drawer; null when it does not resolve. */
+  resolveReference(ref: AgentRef, sessionId?: string): Promise<RefCandidate | null>;
+  /** Resolves host kinds against the session, with revision and budget, in request order (PRD §36.6). */
+  resolveReferences(sessionId: string, refs: AgentRef[]): Promise<ContextReference[]>;
   /** Pushed change notifications; the argument is the changed session id. */
   subscribe(listener: (sessionId: string) => void): () => void;
 }

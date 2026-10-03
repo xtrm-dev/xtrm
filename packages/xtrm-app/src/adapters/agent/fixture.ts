@@ -3,6 +3,7 @@ import type {
   Activity,
   AgentAdapter,
   AgentRef,
+  ContextReference,
   AgentSessionDetail,
   AgentSessionSummary,
   InteractionFrame,
@@ -338,6 +339,18 @@ const FIXTURE_RESPONSE =
 
 const clone = <T,>(v: T): T => structuredClone(v);
 
+async function sha256(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** The Frame keeps the revision each reference had at submit (PRD §36.6 rule 2). */
+const withRevisions = (refs: AgentRef[], references: ContextReference[]): AgentRef[] =>
+  refs.map((r) => {
+    const c = references.find((x) => x.raw === `@${r.kind}:${r.ref}`);
+    return c?.revision ? { ...r, revision: c.revision, ...(c.truncated && c.pointer ? { pointer: c.pointer } : {}) } : r;
+  });
+
 export function createFixtureAgent({ now = Date.now(), delayMs = 900 }: { now?: number; delayMs?: number } = {}): AgentAdapter {
   const sessions = new Map(seed(now).map((s) => [s.id, s]));
   const listeners = new Set<(id: string) => void>();
@@ -402,7 +415,7 @@ export function createFixtureAgent({ now = Date.now(), delayMs = 900 }: { now?: 
         index: s.frames.length + 1,
         title: input.text.split("\n")[0]!.slice(0, 72),
         status: "working",
-        ingress: { text: input.text, origin: "gui", refs: input.refs, at },
+        ingress: { text: input.text, origin: "gui", refs: withRevisions(input.refs, input.references), at },
         activity: [],
         response: null,
         startedAt: at,
@@ -452,6 +465,43 @@ export function createFixtureAgent({ now = Date.now(), delayMs = 900 }: { now?: 
         .filter((s) => s.repo === repo)
         .map((s): RefCandidate => ({ kind: "session", ref: s.id, title: summary(s).title, detail: [s.role, s.state].filter(Boolean).join(" · ") }))
         .filter(hit);
+    },
+    async resolveReferences(sessionId, refs) {
+      const out: ContextReference[] = [];
+      for (const ref of refs) {
+        const raw = `@${ref.kind}:${ref.ref}`;
+        const fail = (error: string): ContextReference => ({ kind: ref.kind, raw, status: "unresolved", error });
+        const ok = (title: string, revision: string, content: string, budget: number): ContextReference => ({
+          kind: ref.kind,
+          raw,
+          status: "resolved",
+          title,
+          revision,
+          content,
+          bytes: new TextEncoder().encode(content).length,
+          budgetBytes: budget,
+          truncated: false,
+        });
+        if (!sessions.has(sessionId)) out.push(fail("session_not_found"));
+        else if (ref.kind === "file") {
+          const path = ref.ref.replace(/#L\d+(?:-L?\d+)?$/, "");
+          const f = FILES.find((c) => c.ref === path);
+          if (path.split("/").includes("..") || path.startsWith("/")) out.push(fail("path_outside_cwd"));
+          else if (!f) out.push(fail("file_not_found"));
+          else out.push(ok(f.ref, `sha256:${await sha256(f.preview ?? "")}`, f.preview ?? "", 32 * 1024));
+        } else if (ref.kind === "commit") {
+          const c = COMMITS.find((x) => x.ref === ref.ref || ref.ref.startsWith(x.ref));
+          out.push(c ? ok(c.title, c.ref, `${c.title}\n\n${c.preview ?? ""}`, 4 * 1024) : fail("commit_not_found"));
+        } else if (ref.kind === "session" || ref.kind === "agent") {
+          const s = sessions.get(ref.ref) ?? [...sessions.values()].find((x) => x.name === ref.ref || (ref.kind === "agent" && x.role === ref.ref));
+          out.push(s ? ok(s.name, `seq:${s.frames.length}`, `session ${s.id} "${s.name}"\nprovider: ${s.provider}  state: ${s.state}`, 4 * 1024) : fail(ref.kind === "agent" ? "agent_not_live" : "session_not_found"));
+        } else if (ref.kind === "frame") {
+          const [sid, n] = [ref.ref.slice(0, ref.ref.lastIndexOf("/")), Number(ref.ref.slice(ref.ref.lastIndexOf("/") + 1))];
+          const f = sessions.get(sid)?.frames[n - 1];
+          out.push(f ? ok(`frame ${n} · ${sid}`, `seq:${n}`, `request:\n${f.ingress.text}\n\nresponse:\n${f.response ?? ""}`, 8 * 1024) : fail("frame_not_found"));
+        } else out.push(fail("not_host_resolved"));
+      }
+      return out;
     },
     async resolveReference(ref: AgentRef) {
       if (ref.kind === "commit") return COMMITS.find((c) => c.ref === ref.ref || ref.ref.startsWith(c.ref)) ?? null;

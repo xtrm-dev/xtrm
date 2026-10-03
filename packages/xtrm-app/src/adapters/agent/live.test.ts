@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { capabilities, createLiveAgent, parseSse } from "./live.ts";
-import { BusyError } from "./types.ts";
+import { splitMessage } from "./references.ts";
+import { BusyError, type ContextReference } from "./types.ts";
 import type { HostSessionSummary } from "./protocol.ts";
 
 const summary = (over: Partial<HostSessionSummary> = {}): HostSessionSummary => ({
@@ -145,9 +146,9 @@ describe("live AgentAdapter write path (XTRM-597)", () => {
   it("sends prompt, steer, follow_up and abort as xtrm.agent-command.v1 commands", async () => {
     const { fetchImpl, bodies } = submitBridge("accepted");
     adapter = createLiveAgent({ fetch: fetchImpl });
-    await adapter.submit("s1", { text: "hi", refs: [], mode: "prompt" });
-    await adapter.submit("s1", { text: "go left", refs: [], mode: "steer" });
-    await adapter.submit("s1", { text: "then this", refs: [], mode: "follow-up" });
+    await adapter.submit("s1", { text: "hi", refs: [], references: [], mode: "prompt" });
+    await adapter.submit("s1", { text: "go left", refs: [], references: [], mode: "steer" });
+    await adapter.submit("s1", { text: "then this", refs: [], references: [], mode: "follow-up" });
     await adapter.abort("s1");
     expect(bodies.map((b) => [b.sessionId, b.command.type, b.command.message])).toEqual([
       ["s1", "prompt", "hi"],
@@ -160,20 +161,25 @@ describe("live AgentAdapter write path (XTRM-597)", () => {
 
   it("maps busy (host or extension) to BusyError and other refusals to the host message", async () => {
     adapter = createLiveAgent({ fetch: submitBridge("busy", { reason: "session_working" }).fetchImpl });
-    await expect(adapter.submit("s1", { text: "hi", refs: [], mode: "prompt" })).rejects.toBeInstanceOf(BusyError);
+    await expect(adapter.submit("s1", { text: "hi", refs: [], references: [], mode: "prompt" })).rejects.toBeInstanceOf(BusyError);
     adapter.close();
     adapter = createLiveAgent({ fetch: submitBridge("rejected", { reason: "busy" }).fetchImpl });
-    await expect(adapter.submit("s1", { text: "hi", refs: [], mode: "prompt" })).rejects.toBeInstanceOf(BusyError);
+    await expect(adapter.submit("s1", { text: "hi", refs: [], references: [], mode: "prompt" })).rejects.toBeInstanceOf(BusyError);
     adapter.close();
     adapter = createLiveAgent({ fetch: submitBridge("rejected", { reason: "session_idle", message: "steer needs a running Frame; submit a prompt" }).fetchImpl });
-    await expect(adapter.submit("s1", { text: "hi", refs: [], mode: "steer" })).rejects.toThrow("steer needs a running Frame");
+    await expect(adapter.submit("s1", { text: "hi", refs: [], references: [], mode: "steer" })).rejects.toThrow("steer needs a running Frame");
   });
 
-  it("refuses references until they are resolved by the host", async () => {
+  it("sends resolved references with the submit and as a context block in the message", async () => {
     const { fetchImpl, bodies } = submitBridge("accepted");
     adapter = createLiveAgent({ fetch: fetchImpl });
-    await expect(adapter.submit("s1", { text: "hi", refs: [{ kind: "issue", ref: "XTRM-1" }], mode: "prompt" })).rejects.toThrow(/References/);
-    expect(bodies).toHaveLength(0);
+    const file: ContextReference = { kind: "file", raw: "@file:a.ts#L1-2", status: "resolved", title: "a.ts#L1-2", revision: "sha256:abc", content: "x\ny", bytes: 3, budgetBytes: 32768, truncated: false };
+    await adapter.submit("s1", { text: "read this", refs: [{ kind: "file", ref: "a.ts#L1-2" }], references: [file], mode: "prompt" });
+    const body = bodies[0] as unknown as { references: ContextReference[]; command: { message: string } };
+    expect(body.references).toEqual([file]);
+    expect(body.command.message.startsWith("read this\n\n<xtrm-references>\n")).toBe(true);
+    expect(body.command.message).toContain('<reference raw="@file:a.ts#L1-2" revision="sha256:abc">\nx\ny\n</reference>');
+    expect(splitMessage(body.command.message)).toEqual({ text: "read this", refs: [{ kind: "file", ref: "a.ts#L1-2", revision: "sha256:abc" }] });
   });
 
   it("answers an open extension UI request and shows the answer given here", async () => {
@@ -196,5 +202,64 @@ describe("live AgentAdapter write path (XTRM-597)", () => {
     const prompt = d!.frames[0]!.activity.find((a) => a.id === "ui-1");
     expect(prompt).toMatchObject({ kind: "prompt", ui: { type: "confirm", prompt: "Probe", detail: "Allow the probe?", answer: "Yes" } });
     await expect(adapter.respond("s1", "ui-unknown", "Yes")).rejects.toThrow(/no longer open/);
+  });
+});
+
+describe("live AgentAdapter references (XTRM-598)", () => {
+  /** Fake bridge whose resolve route answers from `answer` and records each request. */
+  function resolveBridge(answer: (refs: string[]) => { status: number; body: unknown }) {
+    const base = bridge([]);
+    const requests: Array<{ sessionId?: string; references: string[] }> = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/api/v1/references/resolve")) {
+        const body = JSON.parse(String(init?.body));
+        expect(body).toMatchObject({ schema: "xtrm.agent-host-api.v1", kind: "reference_resolve_request" });
+        requests.push(body);
+        const r = answer(body.references);
+        return new Response(JSON.stringify(r.body), { status: r.status });
+      }
+      return base.fetchImpl(input, init);
+    }) as typeof fetch;
+    return { fetchImpl, requests };
+  }
+  const ok = (raw: string): ContextReference => ({ kind: raw.slice(1, raw.indexOf(":")) as ContextReference["kind"], raw, status: "resolved", title: raw, revision: "sha256:1", content: "c", bytes: 1 });
+
+  it("resolves host kinds on the host, in order, and leaves app kinds to their adapters", async () => {
+    const { fetchImpl, requests } = resolveBridge((refs) => ({ status: 200, body: { schema: "xtrm.agent-host-api.v1", kind: "reference_resolve_result", references: refs.map(ok), totalBytes: refs.length } }));
+    adapter = createLiveAgent({ fetch: fetchImpl });
+    const out = await adapter.resolveReferences("s1", [
+      { kind: "file", ref: "a.ts" },
+      { kind: "issue", ref: "XTRM-1" },
+      { kind: "session", ref: "other" },
+    ]);
+    expect(requests).toEqual([{ schema: "xtrm.agent-host-api.v1", kind: "reference_resolve_request", sessionId: "s1", references: ["@file:a.ts", "@session:other"] }]);
+    expect(out.map((r) => [r.raw, r.status, r.error])).toEqual([
+      ["@file:a.ts", "resolved", undefined],
+      ["@issue:XTRM-1", "unresolved", "not_host_resolved"],
+      ["@session:other", "resolved", undefined],
+    ]);
+  });
+
+  it("marks every reference of a request the host refused as a whole with the host's code", async () => {
+    const { fetchImpl } = resolveBridge(() => ({ status: 400, body: { schema: "xtrm.agent-host-api.v1", kind: "error", code: "invalid_reference", message: "bad" } }));
+    adapter = createLiveAgent({ fetch: fetchImpl });
+    const out = await adapter.resolveReferences("s1", [{ kind: "frame", ref: "x" }]);
+    expect(out).toEqual([{ kind: "frame", raw: "@frame:x", status: "unresolved", error: "invalid_reference" }]);
+  });
+
+  it("offers a typed file path in the picker only when it resolves", async () => {
+    const { fetchImpl } = resolveBridge((refs) => ({
+      status: 200,
+      body: {
+        schema: "xtrm.agent-host-api.v1",
+        kind: "reference_resolve_result",
+        references: refs.map((r) => (r === "@file:ok.md" ? ok(r) : { kind: "file", raw: r, status: "unresolved", error: "file_not_found" })),
+        totalBytes: 0,
+      },
+    }));
+    adapter = createLiveAgent({ fetch: fetchImpl });
+    expect(await adapter.searchReferences("ok.md", "file", "o/r", "s1")).toEqual([{ kind: "file", ref: "ok.md", title: "@file:ok.md", detail: "sha256:1", preview: "c" }]);
+    expect(await adapter.searchReferences("missing.md", "file", "o/r", "s1")).toEqual([]);
+    expect(await adapter.searchReferences("not-hex", "commit", "o/r", "s1")).toEqual([]);
   });
 });

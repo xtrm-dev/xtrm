@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { AgentProjector, frameTitle, resultText, toolSubject } from "./projector.ts";
 import type { HostEventMessage, HostEventPayload } from "./protocol.ts";
+import { composeMessage } from "./references.ts";
+import type { ContextReference } from "./types.ts";
 
 // Payload shapes follow a real xt host 0.14.0 + Pi 1.0.0 run (read, direct MCP, codemode script).
 const SID = "01a100cb";
@@ -175,6 +177,23 @@ describe("write path projection (XTRM-597)", () => {
     expect(a!.activity).toEqual([{ kind: "steer", id: `${SID}:3`, text: "Delivered while working: stop at 3" }]);
     expect(b!.activity).toEqual([]);
     expect(b!.ingress.origin).toBe("terminal");
+  });
+});
+
+describe("@ reference projection (XTRM-598)", () => {
+  it("shows the operator's text and keeps the references with their revisions", () => {
+    cursor = 0;
+    const p = new AgentProjector();
+    const refs: ContextReference[] = [{ kind: "file", raw: "@file:notes.txt#L1-1", status: "resolved", revision: "sha256:9f", content: "hello", bytes: 5, truncated: false }];
+    const message = composeMessage("Summarize the note", refs);
+    p.apply(ev({ type: "before_agent_start", prompt: message, ingress: { origin: "gui", commandId: "c1" } }));
+    p.apply(ev({ type: "message_end", message: { role: "user", content: [{ type: "text", text: message }] } }));
+    p.apply(ev({ type: "message_end", message: { role: "user", content: [{ type: "text", text: composeMessage("and this", refs) }] } }));
+    const f = p.snapshot(SID)[0]!;
+    expect(f.title).toBe("Summarize the note");
+    expect(f.ingress.text).toBe("Summarize the note");
+    expect(f.ingress.refs).toEqual([{ kind: "file", ref: "notes.txt#L1-1", revision: "sha256:9f" }]);
+    expect(f.activity).toEqual([{ kind: "steer", id: `${SID}:3`, text: "Delivered while working: and this" }]);
   });
 });
 

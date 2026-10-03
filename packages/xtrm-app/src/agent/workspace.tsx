@@ -82,9 +82,9 @@ export function useAgentStoreVersion(): number {
 
 // --- typed reference tokens --------------------------------------------------
 
-export const REF_KINDS: readonly RefKind[] = ["issue", "gh-issue", "pr", "commit", "file", "session"];
+export const REF_KINDS: readonly RefKind[] = ["issue", "epic", "gh-issue", "pr", "commit", "file", "session", "agent", "frame"];
 
-const TOKEN_RE = /@(gh-issue|issue|pr|commit|file|session):(\S+)/g;
+const TOKEN_RE = /@(gh-issue|issue|epic|pr|commit|file|session|agent|frame):(\S+)/g;
 
 /** Literal `@kind:ref` tokens in composer text (PRD §36.6). Trailing sentence punctuation is not part of a ref. */
 export function parseRefTokens(text: string): AgentRef[] {

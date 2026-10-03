@@ -20,20 +20,26 @@ export const STATE_TONE: Record<SessionState, Tone> = {
 
 export const REF_ICON: Record<RefKind, IconName> = {
   issue: "issues",
+  epic: "board",
   "gh-issue": "comment",
   pr: "pull",
   commit: "commit",
   file: "file",
   session: "agent",
+  agent: "agents",
+  frame: "list",
 };
 
 export const REF_LABEL: Record<RefKind, string> = {
   issue: "Issue",
+  epic: "Epic",
   "gh-issue": "GitHub issue",
   pr: "Pull request",
   commit: "Commit",
   file: "File",
   session: "Session",
+  agent: "Agent",
+  frame: "Frame",
 };
 
 export function contextPercent(s: Pick<AgentSessionSummary, "context">): number | null {

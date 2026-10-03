@@ -6,6 +6,9 @@
 //   xtrm.agent-command.v1   — the command inside submit_request (prompt, steer, follow_up, abort,
 //                             extension_ui_response); mirrored from core origin/main 82fd5c42, unchanged
 //                             since v0.14.0 (XTRM-597)
+//   xtrm.agent-host-api.v1  — contextReference, reference_resolve_request / _result and
+//                             submit_request.references (POST /v1/references/resolve, core XTRM-570),
+//                             mirrored from core origin/main e9cb82e6, unchanged since v0.14.0 (XTRM-598)
 // Only the fields this app reads are typed; the JSON Schemas stay the source of truth.
 // A new major (v2) is a different contract: the live adapter rejects it, never guesses.
 
@@ -140,12 +143,53 @@ export type HostCommand =
   | { type: "abort"; commandId: string }
   | ({ type: "extension_ui_response"; commandId: string; id: string } & ({ value: string } | { confirmed: boolean } | { cancelled: true }));
 
-/** xtrm.agent-host-api.v1 `submit_request`; `references` stay with the @ reference issue. */
+/** xtrm.agent-host-api.v1 `contextReference` (§36.6). The app view type is ContextReference (types.ts). */
+export interface HostContextReference {
+  kind: "issue" | "epic" | "gh-issue" | "pr" | "commit" | "file" | "session" | "agent" | "frame" | "artifact" | "program" | "chain";
+  raw: string;
+  status: "resolved" | "unresolved";
+  title?: string;
+  revision?: string;
+  content?: string;
+  truncated?: boolean;
+  pointer?: string;
+  bytes?: number;
+  budgetBytes?: number;
+  error?: string;
+}
+
+/** xtrm.agent-host-api.v1 `reference_resolve_request`: `@kind:value` strings, at most 64. */
+export interface HostReferenceResolveRequest {
+  schema: typeof HOST_API_SCHEMA;
+  kind: "reference_resolve_request";
+  sessionId?: string;
+  references: string[];
+}
+
+/** xtrm.agent-host-api.v1 `reference_resolve_result`: one entry per requested reference, in order. */
+export interface HostReferenceResolveResult {
+  schema: typeof HOST_API_SCHEMA;
+  kind: "reference_resolve_result";
+  references: HostContextReference[];
+  totalBytes: number;
+  overBudget?: boolean;
+}
+
+/** xtrm.agent-host-api.v1 `error`: a request the host refused as a whole. */
+export interface HostApiError {
+  schema: typeof HOST_API_SCHEMA;
+  kind: "error";
+  code: string;
+  message: string;
+}
+
+/** xtrm.agent-host-api.v1 `submit_request`; the host refuses it while any reference is unresolved. */
 export interface HostSubmitRequest {
   schema: typeof HOST_API_SCHEMA;
   kind: "submit_request";
   sessionId: string;
   command: HostCommand;
+  references?: HostContextReference[];
 }
 
 /** xtrm.agent-host-api.v1 `submit_result`. `busy`: a normal prompt while the session works (§35.8 item 5). */

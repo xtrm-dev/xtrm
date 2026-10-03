@@ -28,7 +28,10 @@ export default defineConfig({
       VITE_XTRM_AGENT: "live",
       XTRM_AGENT_HOST_PORT: String(hostPort()),
       VITE_XTRM_GITHUB: "fixture",
-      VITE_XTRM_SUBSTRATE: "fixture",
+      // @issue references resolve against the real Substrate board (XTRM-598), read only: the bridge
+      // refuses every write route with XTRM_SUBSTRATE_WRITES=0.
+      VITE_XTRM_SUBSTRATE: "live",
+      XTRM_SUBSTRATE_WRITES: "0",
       VITE_XTRM_PROGRAM: "fixture",
       VITE_XTRM_RESEARCH: "fixture",
       VITE_XTRM_AGENT_HOST: "live",
