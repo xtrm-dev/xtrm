@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import {
   INTERACTIVE_COMMAND,
@@ -100,6 +101,20 @@ describe("spawnRunner", () => {
     expect(Date.now() - started).toBeLessThan(5_000);
     const stdin = await runner(["-c", "cat; echo done"], 5_000);
     expect(stdin).toMatchObject({ code: 0, stdout: "done\n", timedOut: false });
+  });
+
+  it("times out even when the child leaves a grandchild holding the pipes, and kills it", async () => {
+    // `sleep 37; true` keeps sleep as a grandchild on every shell (dash never execs it, bash cannot
+    // here). Without a process-group kill, `close` waits until sleep exits (XTRM-594).
+    const runner = spawnRunner("/bin/sh");
+    const marker = `37.${process.pid}`; // unique sleep argument, matched exactly below
+    const started = Date.now();
+    const hung = await runner(["-c", `sleep ${marker}; true`], 300);
+    expect(hung.timedOut).toBe(true);
+    expect(Date.now() - started).toBeLessThan(2_000);
+    await new Promise((r) => setTimeout(r, 100));
+    const left = spawnSync("pgrep", ["-f", `^sleep ${marker.replace(".", "\\.")}$`], { encoding: "utf8" });
+    expect(left.stdout.trim()).toBe("");
   });
 });
 
