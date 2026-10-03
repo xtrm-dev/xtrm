@@ -12,6 +12,8 @@ import { useAgentSession, useAgentSessions } from "./queries.ts";
 
 export type SessionScope = "repository" | "all";
 
+const PROVIDER_LABEL: Record<AgentSessionSummary["provider"], string> = { pi: "Pi", claude: "Claude Code", codex: "Codex" };
+
 type Item = { type: "header"; key: string; label: string; count: number } | { type: "session"; key: string; session: AgentSessionSummary; depth: number };
 
 const HEADER_H = 30;
@@ -103,6 +105,13 @@ function SessionRow({ s, depth, selected, onOpen }: { s: AgentSessionSummary; de
   );
 }
 
+/** State plus what the session accepts: `working · prompt · steer`, `settled · presence only`, `history only`. */
+export function stateWithCapabilities(s: Pick<AgentSessionSummary, "state" | "capabilities">): string {
+  if (s.state === "history") return STATE_LABEL.history;
+  const caps = s.capabilities.includes("presence") ? ["presence only"] : s.capabilities;
+  return [STATE_LABEL[s.state], ...caps].join(" · ");
+}
+
 function Detail({ label, value, mono }: { label: string; value: string | number | null | undefined; mono?: boolean }) {
   if (value === null || value === undefined || value === "") return null;
   return (
@@ -134,8 +143,8 @@ function SessionDetails({ id }: { id: string }) {
       </button>
       {open && (
         <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-2 pt-0.5 pb-2 text-xs" data-testid="session-details">
-          <Detail label="Provider" value={s.provider === "pi" ? "Pi" : "Claude Code"} />
-          <Detail label="State" value={STATE_LABEL[s.state]} />
+          <Detail label="Provider" value={PROVIDER_LABEL[s.provider]} />
+          <Detail label="State" value={stateWithCapabilities(s)} />
           <Detail label="Model" value={[shortModel(s.model), s.thinking].filter(Boolean).join(" · ")} />
           <Detail label="Context" value={s.context ? `${Math.round(s.context.used / 1000)}k / ${Math.round(s.context.window / 1000)}k` : null} />
           <Detail label="Tokens" value={tokens} />

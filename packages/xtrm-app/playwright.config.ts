@@ -5,6 +5,8 @@ const PORT = 5199;
 
 export default defineConfig({
   testDir: "e2e",
+  // e2e/real-host needs a real agent host: playwright.real-host.config.ts.
+  testIgnore: "real-host/**",
   outputDir: "e2e/.results",
   fullyParallel: true,
   reporter: [["list"]],

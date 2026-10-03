@@ -106,7 +106,7 @@ describe.skipIf(!existsSync(CORE_CLI))("SSH connection against the core CLI thro
     expect(log[2]).toBe(`-N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ConnectTimeout=10 -L 127.0.0.1:${state.host!.localPort}:127.0.0.1:${state.host!.port} nvm-box`);
 
     // The bridge reads the host API over the forwarded loopback port.
-    bridge = createServer((req, res) => void agentHostHandler(conn)(req, res, () => ((res.statusCode = 404), res.end())));
+    bridge = createServer((req, res) => void agentHostHandler(conn, undefined, () => null)(req, res, () => ((res.statusCode = 404), res.end())));
     await new Promise<void>((r) => bridge.listen(0, "127.0.0.1", r));
     bridgeUrl = `http://127.0.0.1:${(bridge.address() as { port: number }).port}/xtrm-api/agent-host`;
     const list = (await (await fetch(`${bridgeUrl}/api/v1/sessions`)).json()) as { schema: string; kind: string; sessions: unknown[] };

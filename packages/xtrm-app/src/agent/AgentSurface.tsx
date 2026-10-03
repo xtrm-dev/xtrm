@@ -84,7 +84,7 @@ function FrameView({ s, f }: { s: AgentSessionDetail; f: InteractionFrame }) {
         <span aria-hidden className={cx("mt-[0.55rem] size-2 shrink-0 rounded-full", f.status === "working" ? "bg-accent" : "bg-accent/60")} />
         <div className="min-w-0 flex-1">
           <p className="text-[0.95rem] leading-6 font-medium whitespace-pre-wrap text-ink" data-testid="frame-request">
-            {f.ingress.text}
+            {f.ingress.text || <span className="font-normal text-ink-faint italic">Prompt text not reported by this session</span>}
           </p>
           {f.ingress.refs.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1">
@@ -170,7 +170,7 @@ function HistoryPanel({ s, selected, onSelect }: { s: AgentSessionDetail; select
         </ol>
       ) : (
         <p className="px-3 py-4 text-xs leading-5 text-ink-faint">
-          The provider-native branch and fork tree arrives with the live agent host (XTRM-572). Visual branch compression never rewrites provider history (PRD §4).
+          The provider-native branch and fork tree is not projected yet. Visual branch compression never rewrites provider history (PRD §4).
         </p>
       )}
     </div>
