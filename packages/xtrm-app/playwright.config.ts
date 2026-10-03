@@ -18,6 +18,6 @@ export default defineConfig({
     command: `npx vite --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: !process.env.CI,
-    env: { VITE_XTRM_GITHUB: "fixture", VITE_XTRM_SUBSTRATE: "fixture", VITE_XTRM_PROGRAM: "fixture", VITE_XTRM_RESEARCH: "fixture" },
+    env: { VITE_XTRM_GITHUB: "fixture", VITE_XTRM_SUBSTRATE: "fixture", VITE_XTRM_PROGRAM: "fixture", VITE_XTRM_RESEARCH: "fixture", VITE_XTRM_AGENT_HOST: "fixture" },
   },
 });

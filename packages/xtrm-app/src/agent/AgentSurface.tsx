@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, IconButton, LoadingState, StatusDot, cx, relati
 import { ActivityThread } from "./Activity.tsx";
 import { Composer, ComposerNotice } from "./Composer.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
+import { useOpenInTerminal } from "./HostConnection.tsx";
 import { ContextMeter, STATE_LABEL, STATE_TONE, contextPercent, duration, shortModel } from "./meta.tsx";
 import { useAgentLive, useAgentSession, useAgentSessions, useRespond } from "./queries.ts";
 import { useAgentStore, useAgentStoreVersion } from "./workspace.tsx";
@@ -25,8 +26,10 @@ function toolCount(f: InteractionFrame) {
 
 function SessionHeader({ s }: { s: AgentSessionDetail }) {
   const shell = useShell();
-  const [copied, setCopied] = useState(false);
-  const attach = s.tmux ? `tmux attach -t ${s.tmux.split(":")[0]}` : null;
+  const [copied, setCopied] = useState<string | null>(null);
+  const tmuxSession = s.tmux?.split(":")[0] || null;
+  const attach = tmuxSession ? `tmux attach -t ${tmuxSession}` : null;
+  const terminal = useOpenInTerminal(tmuxSession);
   return (
     <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border-muted px-4" data-testid="session-header">
       <StatusDot tone={STATE_TONE[s.state]} label={STATE_LABEL[s.state]} />
@@ -41,12 +44,18 @@ function SessionHeader({ s }: { s: AgentSessionDetail }) {
       {attach && (
         <IconButton
           icon={copied ? "check" : "external"}
-          label={copied ? "Attach command copied" : `Open in terminal · copies ${attach}`}
-          onClick={() => {
-            copy(attach);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1600);
-          }}
+          label={copied ?? (terminal.remote ? "Open in terminal over ssh" : `Open in terminal · copies ${attach}`)}
+          disabled={terminal.open.isPending}
+          onClick={() =>
+            terminal.open.mutate(undefined, {
+              onSuccess: (r) => {
+                copy(r.command);
+                setCopied(`${r.launched ? "Started" : "Command copied"} · ${r.command}`);
+                setTimeout(() => setCopied(null), 4000);
+              },
+              onError: (e) => setCopied(`Open in terminal failed · ${e.message}`),
+            })
+          }
         />
       )}
       <OptionsMenu

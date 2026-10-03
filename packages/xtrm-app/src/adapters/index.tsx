@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { fixtureAgent } from "./agent/fixture.ts";
+import { fixtureAgentHost, liveAgentHost } from "./agent/host-connection.ts";
 import { fixtureGithub } from "./github/fixture.ts";
 import { fixtureGithubAuth, liveGithubAuth } from "./github/auth.ts";
 import { liveGithub } from "./github/live.ts";
@@ -13,19 +14,22 @@ import type { Adapters, DataSource } from "./types.ts";
 
 export type * from "./types.ts";
 export type * from "./agent/types.ts";
+export type * from "./agent/host-connection.ts";
 
 /**
  * Source selection is configuration, never a component decision (§9.3).
  * Defaults: GitHub live (Console v1 backend), Substrate live (sb CLI bridge),
  * Program fixture (the backend's programme route is disabled by deployment policy),
  * Research live (the xtrm-research CLI bridge, server/research-cli.ts),
- * Agent fixture until the agent host exists (XTRM-572 adds the live adapter).
+ * Agent fixture until the agent host exists (XTRM-572 adds the live adapter),
+ * agent host SSH connection live (server/agent-host-ssh.ts).
  */
 export function adaptersFromEnv(env: Record<string, string | undefined> = import.meta.env): Adapters {
   const pick = (key: string, fallback: DataSource): DataSource => (env[key] === "live" || env[key] === "fixture" ? env[key] : fallback);
   const githubLive = pick("VITE_XTRM_GITHUB", "live") === "live";
   return {
     agent: fixtureAgent,
+    agentHost: pick("VITE_XTRM_AGENT_HOST", "live") === "live" ? liveAgentHost : fixtureAgentHost,
     github: githubLive ? liveGithub : fixtureGithub,
     githubAuth: githubLive ? liveGithubAuth : fixtureGithubAuth,
     substrate: pick("VITE_XTRM_SUBSTRATE", "live") === "live" ? liveSubstrate : fixtureSubstrate,
@@ -36,6 +40,7 @@ export function adaptersFromEnv(env: Record<string, string | undefined> = import
 
 export const fixtureAdapters: Adapters = {
   agent: fixtureAgent,
+  agentHost: fixtureAgentHost,
   github: fixtureGithub,
   githubAuth: fixtureGithubAuth,
   substrate: fixtureSubstrate,
