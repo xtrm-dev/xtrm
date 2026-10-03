@@ -41,7 +41,7 @@ function seed(now: number): Seed[] {
       startedAt: t(96),
       lastActivityAt: t(0.2),
       parentId: null,
-      capabilities: ["prompt", "steer"],
+      capabilities: ["prompt", "steer", "abort"],
       origin: "terminal",
       cwd: "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-7k2m",
       worktree: "xtrm-xt-pi-7k2m",
@@ -123,7 +123,7 @@ function seed(now: number): Seed[] {
       startedAt: t(70),
       lastActivityAt: t(1),
       parentId: "pi-main",
-      capabilities: ["prompt", "steer"],
+      capabilities: ["prompt", "steer", "abort"],
       origin: "gui",
       cwd: "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-7k2m",
       worktree: "xtrm-xt-pi-7k2m",
@@ -168,7 +168,7 @@ function seed(now: number): Seed[] {
       startedAt: t(40),
       lastActivityAt: t(12),
       parentId: "pi-main",
-      capabilities: ["prompt", "steer"],
+      capabilities: ["prompt", "steer", "abort"],
       origin: "gui",
       cwd: "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-7k2m",
       worktree: "xtrm-xt-pi-7k2m",
@@ -280,7 +280,7 @@ function seed(now: number): Seed[] {
       startedAt: t(3 * 60),
       lastActivityAt: t(2 * 60),
       parentId: null,
-      capabilities: ["prompt", "steer"],
+      capabilities: ["prompt", "steer", "abort"],
       origin: "terminal",
       cwd: "~/dev/core",
       worktree: null,
@@ -419,13 +419,25 @@ export function createFixtureAgent({ now = Date.now(), delayMs = 900 }: { now?: 
         later(() => settle(s, f));
       });
     },
+    async abort(id) {
+      const s = sessions.get(id);
+      const f = s?.frames[s.frames.length - 1];
+      if (!s || !f || f.status !== "working") throw new Error("nothing to abort");
+      f.status = "aborted";
+      f.settledAt = Date.now();
+      for (const a of f.activity) if (a.kind === "tool" && a.status === "running") a.status = "error";
+      s.state = "settled";
+      s.lastActivityAt = Date.now();
+      emit(id);
+    },
     async respond(id, activityId, answer) {
       const s = sessions.get(id);
       const f = s?.frames[s.frames.length - 1];
       const a = f?.activity.find((x) => x.id === activityId);
       if (!s || !f || !a || a.kind !== "tool" || !a.ui) throw new Error("no pending request");
-      a.ui.answer = answer;
-      a.status = answer === "Deny" ? "error" : "done";
+      a.ui.answer = answer ?? "Cancelled";
+      a.ui.resolved = { by: "host", outcome: answer === null ? "cancelled" : "answered" };
+      a.status = answer === null || answer === "Deny" ? "error" : "done";
       a.durationMs = 2_000;
       s.state = "working";
       emit(id);

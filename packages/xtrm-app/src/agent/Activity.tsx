@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import type { Activity, CoordinationActivity, ToolActivity } from "../adapters/index.tsx";
+import { useState, type ReactNode } from "react";
+import type { Activity, CoordinationActivity, ExtensionUiRequest, ToolActivity } from "../adapters/index.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { ContentPanel, cx } from "../ui/primitives.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
@@ -155,33 +155,60 @@ function NativeGroup({ tools, isOpen, toggle }: { tools: ToolActivity[]; isOpen:
   );
 }
 
-function ExtensionPrompt({ t, onAnswer }: { t: ToolActivity; onAnswer: (answer: string) => void }) {
-  const ui = t.ui!;
-  if (ui.answer !== null)
+/** How an extension UI request ended, from this app's answer and the host's extension_ui_resolved. */
+export function promptOutcome(ui: ExtensionUiRequest): string | null {
+  if (ui.resolved?.outcome === "cancelled") return ui.resolved.by === "local" ? "Cancelled in the terminal" : "Cancelled";
+  if (ui.resolved?.by === "local") return "Answered in the terminal";
+  if (ui.answer !== null) return `Answered ${ui.answer}`;
+  // Answered from an app (this one before a reload, or another client): the host does not carry the value.
+  if (ui.resolved) return "Answered from the app";
+  return null;
+}
+
+/** An extension UI request (PRD §20, §35.3): confirm and select as buttons, input as a text field. */
+export function ExtensionPrompt({ ui, label, onAnswer }: { ui: ExtensionUiRequest; label: string; onAnswer: (answer: string | null) => void }) {
+  const [value, setValue] = useState("");
+  const outcome = promptOutcome(ui);
+  if (outcome)
     return (
-      <p className="flex items-center gap-1.5 pl-7 text-xs text-ink-faint">
-        <Icon name={ui.answer === "Deny" ? "close" : "check"} size="xs" />
-        Answered {ui.answer}
+      <p className="flex items-center gap-1.5 pl-7 text-xs text-ink-faint" data-testid="extension-request-outcome" data-resolved-by={ui.resolved?.by ?? ""}>
+        <Icon name={ui.answer === "Deny" || ui.resolved?.outcome === "cancelled" ? "close" : "check"} size="xs" />
+        {outcome}
       </p>
     );
+  const button = (primary: boolean) =>
+    cx(
+      "h-7 rounded-md px-3 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+      primary ? "bg-accent text-white hover:brightness-110" : "border border-border text-ink-muted hover:bg-hover hover:text-ink",
+    );
   return (
-    <div role="group" aria-label={`${t.origin.extension ?? "Extension"} request`} data-testid="extension-request" className="mt-1 ml-7 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-accent/30 bg-accent-soft/60 px-3 py-2">
-      <span className="min-w-0 flex-1 text-sm text-ink">{ui.prompt.replace(/`/g, "")}</span>
-      <span className="flex shrink-0 gap-1.5">
-        {ui.options.map((o, i) => (
-          <button
-            key={o}
-            type="button"
-            onClick={() => onAnswer(o)}
-            className={cx(
-              "h-7 rounded-md px-3 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-              i === 0 ? "bg-accent text-white hover:brightness-110" : "border border-border text-ink-muted hover:bg-hover hover:text-ink",
-            )}
-          >
-            {o}
-          </button>
-        ))}
+    <div role="group" aria-label={label} data-testid="extension-request" className="mt-1 ml-7 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-accent/30 bg-accent-soft/60 px-3 py-2">
+      <span className="min-w-0 flex-1 text-sm text-ink">
+        {ui.prompt.replace(/`/g, "")}
+        {ui.detail && <span className="block text-xs text-ink-muted">{ui.detail}</span>}
       </span>
+      {ui.type === "input" ? (
+        <form
+          className="flex shrink-0 gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (value.trim()) onAnswer(value);
+          }}
+        >
+          <input value={value} onChange={(e) => setValue(e.target.value)} aria-label={ui.prompt} className="h-7 w-48 rounded-md border border-border bg-surface px-2 text-xs text-ink outline-none focus:border-border-strong" />
+          <button type="submit" className={button(true)} disabled={!value.trim()}>
+            Answer
+          </button>
+        </form>
+      ) : (
+        <span className="flex shrink-0 gap-1.5">
+          {ui.options.map((o, i) => (
+            <button key={o} type="button" onClick={() => onAnswer(o)} className={button(i === 0)}>
+              {o}
+            </button>
+          ))}
+        </span>
+      )}
     </div>
   );
 }
@@ -289,7 +316,7 @@ function ClassTool({
   toggle: () => void;
   isOpen: (id: string) => boolean;
   toggleId: (id: string) => void;
-  onAnswer: (activityId: string, answer: string) => void;
+  onAnswer: (activityId: string, answer: string | null) => void;
 }) {
   const mcp = t.class === "mcp";
   const tag = originTag(t);
@@ -310,7 +337,7 @@ function ClassTool({
         </div>
       )}
       {t.children && t.children.length > 0 && <NestedCalls calls={t.children} isOpen={isOpen} toggle={toggleId} />}
-      {t.ui && <ExtensionPrompt t={t} onAnswer={(a) => onAnswer(t.id, a)} />}
+      {t.ui && <ExtensionPrompt ui={t.ui} label={`${t.origin.extension ?? "Extension"} request`} onAnswer={(a) => onAnswer(t.id, a)} />}
     </li>
   );
 }
@@ -372,7 +399,7 @@ export function ActivityThread({
   activity: Activity[];
   isOpen: (id: string) => boolean;
   toggle: (id: string) => void;
-  onAnswer: (activityId: string, answer: string) => void;
+  onAnswer: (activityId: string, answer: string | null) => void;
 }) {
   if (activity.length === 0) return null;
   return (
@@ -383,6 +410,16 @@ export function ActivityThread({
         if (a.kind === "tool" && a.script !== undefined) return <ScriptBlock key={b.key} t={a} isOpen={isOpen} toggle={toggle} />;
         if (a.kind === "tool") return <ClassTool key={b.key} t={a} open={isOpen(a.id)} toggle={() => toggle(a.id)} isOpen={isOpen} toggleId={toggle} onAnswer={onAnswer} />;
         if (a.kind === "coordination") return <Coordination key={b.key} c={a} open={isOpen(a.id)} toggle={() => toggle(a.id)} />;
+        if (a.kind === "prompt")
+          return (
+            <li key={b.key} data-activity="prompt" data-testid="activity-prompt" className="py-0.5">
+              <div className="flex min-h-7 items-center gap-2 px-1.5 text-xs text-ink-faint">
+                <Glyph icon="comment" />
+                Extension request · {a.ui.type}
+              </div>
+              <ExtensionPrompt ui={a.ui} label="Extension request" onAnswer={(answer) => onAnswer(a.id, answer)} />
+            </li>
+          );
         return <Note key={b.key} a={a} />;
       })}
     </ol>

@@ -37,7 +37,12 @@ export function useSubmit(sessionId: string) {
 
 export function useRespond(sessionId: string) {
   const { agent } = useAdapters();
-  return useMutation({ mutationFn: ({ activityId, answer }: { activityId: string; answer: string }) => agent.respond(sessionId, activityId, answer) });
+  return useMutation({ mutationFn: ({ activityId, answer }: { activityId: string; answer: string | null }) => agent.respond(sessionId, activityId, answer) });
+}
+
+export function useAbort(sessionId: string) {
+  const { agent } = useAdapters();
+  return useMutation({ mutationFn: () => agent.abort(sessionId) });
 }
 
 export type PickerKind = RefKind | "all";

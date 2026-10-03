@@ -123,6 +123,61 @@ describe("AgentProjector", () => {
   });
 });
 
+describe("write path projection (XTRM-597)", () => {
+  const user = (text: string) => ({ role: "user", content: [{ type: "text", text }] });
+
+  it("renders extension UI requests in the open Frame and closes them on extension_ui_resolved", () => {
+    cursor = 0;
+    const p = new AgentProjector();
+    p.apply(ev({ type: "before_agent_start", prompt: "probe", ingress: { origin: "gui", commandId: "c1" } }));
+    p.apply(ev({ type: "extension_ui_request", id: "u1", method: "confirm", title: "Probe", message: "Allow?" }));
+    p.apply(ev({ type: "extension_ui_request", id: "u2", method: "select", title: "Pick", options: ["a", "b"] }));
+    p.apply(ev({ type: "extension_ui_request", id: "u3", method: "editor", title: "Edit" }));
+    let f = p.snapshot(SID)[0]!;
+    expect(f.ingress.origin).toBe("gui");
+    expect(f.activity).toEqual([
+      { kind: "prompt", id: "u1", ui: { type: "confirm", prompt: "Probe", detail: "Allow?", options: ["Yes", "No"], answer: null } },
+      { kind: "prompt", id: "u2", ui: { type: "select", prompt: "Pick", options: ["a", "b"], answer: null } },
+    ]);
+    expect(p.sessions.get(SID)!.prompts.size).toBe(2);
+    p.apply(ev({ type: "extension_ui_resolved", id: "u1", resolvedBy: "host", outcome: "answered" }));
+    p.apply(ev({ type: "extension_ui_resolved", id: "u2", resolvedBy: "local", outcome: "cancelled" }));
+    f = p.snapshot(SID)[0]!;
+    expect(f.activity.map((a) => (a.kind === "prompt" ? a.ui.resolved : null))).toEqual([
+      { by: "host", outcome: "answered" },
+      { by: "local", outcome: "cancelled" },
+    ]);
+    expect(p.sessions.get(SID)!.prompts.size).toBe(0);
+  });
+
+  it("closes an aborted Frame as aborted, also when the abort surfaces as an AbortError", () => {
+    cursor = 0;
+    const p = new AgentProjector();
+    p.apply(ev({ type: "before_agent_start", prompt: "sleep", ingress: { origin: "gui" } }));
+    p.apply(ev({ type: "message_end", message: assistant("", { stopReason: "error", errorMessage: "This operation was aborted" }) }));
+    p.apply(ev({ type: "agent_settled" }));
+    p.apply(ev({ type: "before_agent_start", prompt: "again", ingress: { origin: "gui" } }));
+    p.apply(ev({ type: "message_end", message: assistant("", { stopReason: "error", errorMessage: "401 unauthorized" }) }));
+    p.apply(ev({ type: "agent_settled" }));
+    expect(p.snapshot(SID).map((f) => f.status)).toEqual(["aborted", "failed"]);
+  });
+
+  it("shows user messages after the Frame request as delivered steers", () => {
+    cursor = 0;
+    const p = new AgentProjector();
+    p.apply(ev({ type: "before_agent_start", prompt: "count", ingress: { origin: "gui" } }));
+    p.apply(ev({ type: "message_end", message: user("count") }));
+    p.apply(ev({ type: "message_end", message: user("stop at 3") }));
+    p.apply(ev({ type: "agent_settled" }));
+    p.apply(ev({ type: "before_agent_start", prompt: "next", ingress: { origin: "terminal" } }));
+    p.apply(ev({ type: "message_end", message: user("next") }));
+    const [a, b] = p.snapshot(SID);
+    expect(a!.activity).toEqual([{ kind: "steer", id: `${SID}:3`, text: "Delivered while working: stop at 3" }]);
+    expect(b!.activity).toEqual([]);
+    expect(b!.ingress.origin).toBe("terminal");
+  });
+});
+
 describe("projection helpers", () => {
   it("derives subjects, results and titles", () => {
     expect(toolSubject({ command: "npm test" })).toBe("npm test");

@@ -3,7 +3,7 @@
 import type { DataSource } from "../types.ts";
 
 export type SessionState = "working" | "waiting" | "settled" | "failed" | "history";
-export type SessionCapability = "prompt" | "steer" | "presence";
+export type SessionCapability = "prompt" | "steer" | "abort" | "presence";
 
 export interface AgentSessionSummary {
   id: string;
@@ -70,10 +70,16 @@ export interface InteractionFrame {
 export type ToolClass = "native" | "mcp" | "extension" | "coordination";
 
 export interface ExtensionUiRequest {
-  type: "confirm" | "select";
+  type: "confirm" | "select" | "input";
   prompt: string;
+  /** Body text of a confirm (Pi `ctx.ui.confirm(title, message)`). */
+  detail?: string;
+  /** Choices; for confirm the first option means yes. Empty for input. */
   options: string[];
+  /** The answer given from this app, when known. */
   answer: string | null;
+  /** How the request ended (extension_ui_resolved); absent while it is open. */
+  resolved?: { by: "local" | "host"; outcome: "answered" | "cancelled" };
 }
 
 export interface ToolActivity {
@@ -117,7 +123,15 @@ export interface NoteActivity {
   text: string;
 }
 
-export type Activity = ToolActivity | CoordinationActivity | NoteActivity;
+/** An extension UI request that is not attached to a tool call (live host: `extension_ui_request`). */
+export interface PromptActivity {
+  kind: "prompt";
+  /** The request id; `respond` answers it. */
+  id: string;
+  ui: ExtensionUiRequest;
+}
+
+export type Activity = ToolActivity | CoordinationActivity | NoteActivity | PromptActivity;
 
 export interface SubmitInput {
   text: string;
@@ -131,7 +145,10 @@ export interface AgentAdapter {
   getSession(id: string): Promise<AgentSessionDetail | null>;
   /** Rejects with `busy` for a normal prompt while the session is working (PRD §35.8). */
   submit(sessionId: string, input: SubmitInput): Promise<void>;
-  respond(sessionId: string, activityId: string, answer: string): Promise<void>;
+  /** Stops the running Frame (PRD §35.3 abort). */
+  abort(sessionId: string): Promise<void>;
+  /** Answers an extension UI request; `null` cancels it. */
+  respond(sessionId: string, activityId: string, answer: string | null): Promise<void>;
   /** Host-resolved kinds only: commit, file, session (PRD §36.6). */
   searchReferences(query: string, kind: "commit" | "file" | "session", repo: string): Promise<RefCandidate[]>;
   resolveReference(ref: AgentRef): Promise<RefCandidate | null>;

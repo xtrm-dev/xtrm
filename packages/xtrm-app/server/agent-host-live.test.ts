@@ -83,3 +83,41 @@ describe("bridge read routes", () => {
     expect((await fetch(`http://127.0.0.1:${port2}/xtrm-api/agent-host/api/v1/events`)).status).toBe(409);
   });
 });
+
+describe("bridge submit route (XTRM-597)", () => {
+  const submit = (sessionId = "s1") => ({
+    schema: "xtrm.agent-host-api.v1",
+    kind: "submit_request",
+    sessionId,
+    command: { type: "prompt", commandId: "c1", message: "hi" },
+  });
+
+  it("forwards a same-origin JSON submit_request to the host and returns its answer", async () => {
+    let seen: { url?: string; type?: string; body?: unknown } = {};
+    const hostPort = await listen((req, res) => {
+      let raw = "";
+      req.on("data", (c: Buffer) => (raw += c));
+      req.on("end", () => {
+        seen = { url: req.url, type: req.headers["content-type"], body: JSON.parse(raw) };
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ schema: "xtrm.agent-host-api.v1", kind: "submit_result", commandId: "c1", status: "busy", reason: "session_working" }));
+      });
+    });
+    const conn = new AgentHostConnection({ settingsFile: join(mkdtempSync(join(tmpdir(), "xh-")), "c.json"), run: async () => ({ code: 1, stdout: "", stderr: "", timedOut: false }) });
+    const handle = agentHostHandler(conn, undefined, () => ({ port: hostPort, id: "local:t", local: true }));
+    const port = await listen((req, res) => void handle(req, res, () => ((res.statusCode = 404), res.end())));
+    const url = `http://127.0.0.1:${port}/xtrm-api/agent-host/api/v1/submit`;
+    const post = (body: unknown, headers: Record<string, string> = { "content-type": "application/json" }) =>
+      fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+
+    const res = await post(submit());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ kind: "submit_result", status: "busy" });
+    expect(seen).toEqual({ url: "/v1/submit", type: "application/json", body: submit() });
+
+    expect((await post(submit(), { "content-type": "text/plain" })).status).toBe(415);
+    expect((await post(submit("bad id"))).status).toBe(400);
+    expect((await post({ ...submit(), kind: "launch_request" })).status).toBe(400);
+    expect((await post(submit(), { "content-type": "application/json", origin: "http://evil.example" })).status).toBe(403);
+  });
+});

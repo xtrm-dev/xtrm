@@ -96,7 +96,9 @@ function FrameView({ s, f }: { s: AgentSessionDetail; f: InteractionFrame }) {
         </div>
         <span className="mt-1 shrink-0 text-xs text-ink-faint tabular" title={new Date(f.ingress.at).toLocaleString()}>
           {clock(f.ingress.at)}
-          {f.ingress.origin === "terminal" && <span className="ml-1.5 rounded-sm border border-border-muted px-1 text-[0.65rem]">terminal</span>}
+          <span className="ml-1.5 rounded-sm border border-border-muted px-1 text-[0.65rem]" data-testid="frame-ingress" title={f.ingress.origin === "gui" ? "Sent from the app" : "Typed in the terminal"}>
+            {f.ingress.origin === "gui" ? "GUI" : "terminal"}
+          </span>
         </span>
       </header>
 
@@ -107,6 +109,12 @@ function FrameView({ s, f }: { s: AgentSessionDetail; f: InteractionFrame }) {
           toggle={(id) => store.commit(s.id, { expanded: { ...expanded, [id]: !expanded[id] } })}
           onAnswer={(activityId, answer) => respond.mutate({ activityId, answer })}
         />
+        {respond.error && (
+          <p role="alert" className="mt-1.5 flex items-center gap-1.5 pl-7 text-xs text-danger">
+            <Icon name="alert" size="xs" />
+            {respond.error.message}
+          </p>
+        )}
         {f.response && <Markdown className="mt-4 text-[0.92rem] leading-7 text-ink">{f.response}</Markdown>}
         {f.status === "working" && !f.response && (
           <p className="mt-3 flex items-center gap-2 pl-1.5 text-xs text-ink-faint" data-testid="frame-working">

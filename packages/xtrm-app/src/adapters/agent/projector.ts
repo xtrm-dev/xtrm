@@ -6,10 +6,13 @@
 // - Tool class and identity come from the host's `origin`, never from the tool name.
 // - A call with parentToolCallId renders inside its parent (ids `<parent>/<n>`), in start order.
 // - The built-in codemode tool (sourceInfo.path `builtin:codemode`) carries its script source.
+// - extension_ui_request renders as a prompt activity in the open Frame; extension_ui_resolved
+//   closes it, whoever answered (XTRM-597). `editor` is never proxied by the extension.
+// - A user message after the Frame's first one is a delivered steer or follow-up: a steer note.
 // The host keeps a bounded replay buffer, so Frames older than the buffer are not projected;
 // `snapshot` numbers the retained Frames against the host's frameCount.
 import type { HostAgentMessage, HostEventFrame, HostEventMessage, HostToolOrigin } from "./protocol.ts";
-import type { InteractionFrame, ToolActivity } from "./types.ts";
+import type { InteractionFrame, PromptActivity, ToolActivity } from "./types.ts";
 
 const MAX_FRAMES = 200;
 const MAX_OUTPUT = 64 * 1024;
@@ -28,6 +31,10 @@ export interface SessionProjection {
   /** Ending status of the open Frame from the last assistant stopReason. */
   ending: "failed" | "aborted" | null;
   tools: Map<string, Tracked>;
+  /** Extension UI requests not resolved yet, by request id. */
+  prompts: Map<string, PromptActivity>;
+  /** User messages seen in the open Frame; the first is its request. */
+  userMessages: number;
   model: string | null;
   thinking: string | null;
   tokens: { input: number; output: number } | null;
@@ -82,7 +89,7 @@ function origin(o: HostToolOrigin | undefined): ToolActivity["origin"] {
 }
 
 export function emptyProjection(): SessionProjection {
-  return { frames: [], open: null, ending: null, tools: new Map(), model: null, thinking: null, tokens: null, costUsd: null };
+  return { frames: [], open: null, ending: null, tools: new Map(), prompts: new Map(), userMessages: 0, model: null, thinking: null, tokens: null, costUsd: null };
 }
 
 export class AgentProjector {
@@ -109,8 +116,34 @@ export class AgentProjector {
         break;
       case "message_update":
       case "message_end":
-        this.assistant(s, p.message, p.type === "message_end");
+        if (p.type === "message_end" && p.message.role === "user") this.user(s, id, cursor, p.message);
+        else this.assistant(s, p.message, p.type === "message_end");
         break;
+      case "extension_ui_request": {
+        if (p.method === "editor") break;
+        const f = s.open ?? s.frames[s.frames.length - 1];
+        if (!f) break;
+        const prompt: PromptActivity = {
+          kind: "prompt",
+          id: p.id,
+          ui: {
+            type: p.method,
+            prompt: p.title,
+            ...(p.message ? { detail: p.message } : {}),
+            options: p.method === "confirm" ? ["Yes", "No"] : p.method === "select" ? (p.options ?? []) : [],
+            answer: null,
+          },
+        };
+        f.activity.push(prompt);
+        s.prompts.set(p.id, prompt);
+        break;
+      }
+      case "extension_ui_resolved": {
+        const prompt = s.prompts.get(p.id);
+        if (prompt) prompt.ui.resolved = { by: p.resolvedBy, outcome: p.outcome };
+        s.prompts.delete(p.id);
+        break;
+      }
       case "tool_execution_start":
         this.toolStart(s, id, cursor, frame.at, p);
         break;
@@ -170,6 +203,7 @@ export class AgentProjector {
     if (s.frames.length > MAX_FRAMES) s.frames.shift();
     s.open = f;
     s.ending = null;
+    s.userMessages = 0;
     return f;
   }
 
@@ -184,6 +218,13 @@ export class AgentProjector {
     s.tools.clear();
   }
 
+  private user(s: SessionProjection, sessionId: string, cursor: string, m: HostAgentMessage) {
+    if (!s.open) return;
+    s.userMessages += 1;
+    const text = contentText(m.content).trim();
+    if (s.userMessages > 1 && text) s.open.activity.push({ kind: "steer", id: `${sessionId}:${cursor}`, text: `Delivered while working: ${text}` });
+  }
+
   private assistant(s: SessionProjection, m: HostAgentMessage, final: boolean) {
     if (m.role !== "assistant") return;
     const text = contentText(m.content).trim();
@@ -191,8 +232,9 @@ export class AgentProjector {
     if (!final) return;
     if (m.model) s.model = m.model;
     if (m.thinkingLevel) s.thinking = m.thinkingLevel;
-    if (m.stopReason === "error") s.ending = "failed";
-    else if (m.stopReason === "aborted") s.ending = "aborted";
+    // An abort during a tool call ends the next model request with the AbortError message, not "aborted".
+    if (m.stopReason === "aborted" || (m.stopReason === "error" && /operation was aborted/i.test(m.errorMessage ?? ""))) s.ending = "aborted";
+    else if (m.stopReason === "error") s.ending = "failed";
     else s.ending = null;
     const u = m.usage;
     if (u) {

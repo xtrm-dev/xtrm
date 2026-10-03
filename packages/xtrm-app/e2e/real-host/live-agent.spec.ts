@@ -84,7 +84,7 @@ async function validate(page: Page, s: RealHostState, piId: string) {
     await page.getByRole("radio", { name: "All" }).click();
     await expect(sessionRow(page, PI_NAME)).toHaveAttribute("aria-label", `${PI_NAME} · settled`);
     await expect(page.getByTestId("session-header")).toContainText(PI_NAME);
-    await expect(page.getByTestId("session-details")).toContainText("settled · prompt · steer");
+    await expect(page.getByTestId("session-details")).toContainText("settled · prompt · steer · abort");
     await expect(page.getByTestId("session-details")).toContainText(`${PI_NAME}:%`);
   });
 
@@ -94,6 +94,7 @@ async function validate(page: Page, s: RealHostState, piId: string) {
     const frame = page.getByTestId("frame");
     await expect(frame).toHaveAttribute("data-frame-status", "working");
     await expect(page.getByTestId("frame-request")).toContainText("Do exactly these three steps");
+    await expect(page.getByTestId("frame-ingress")).toHaveText("terminal");
     log(s, "frame open (working) in the UI");
     await expect(frame).toHaveAttribute("data-frame-status", "settled", { timeout: 240_000 });
     await expect(sessionRow(page, PI_NAME)).toHaveAttribute("aria-label", `${PI_NAME} · settled`);
@@ -107,7 +108,8 @@ async function validate(page: Page, s: RealHostState, piId: string) {
     const native = page.getByTestId("activity-native").filter({ hasText: /Read \d+ file/ });
     await expect(native).toBeVisible();
     await native.first().getByRole("button").first().click();
-    await expect(native.first().getByRole("button", { name: /read .*notes\.txt/ })).toBeVisible();
+    // The model may read the file more than once; one row is enough.
+    await expect(native.first().getByRole("button", { name: /read .*notes\.txt/ }).first()).toBeVisible();
 
     const mcp = page.getByTestId("activity-mcp").filter({ hasText: "mcp__demo_direct__echo" });
     await expect(mcp).toContainText("MCP demo_direct");

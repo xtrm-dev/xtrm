@@ -13,6 +13,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const MODEL = "opencode-go/deepseek-v4.1-flash";
 export const PI_NAME = "real-pi";
@@ -147,23 +148,25 @@ async function start(runLog: string, partial: { state?: RealHostState }): Promis
   return state;
 }
 
-export async function startPi(state: RealHostState): Promise<string> {
+/** Starts pi in its own tmux session; `extensions` are loaded after xtrm-agent-host (`pi -e`). */
+export async function startPi(state: RealHostState, name = PI_NAME, extensions: string[] = []): Promise<string> {
   const ext = join(state.coreDir, "packages", "pi-extensions", "extensions", "xtrm-agent-host", "index.ts");
   const piEnv = [
     `PI_CODING_AGENT_DIR=${state.agentDir}`,
     `PI_AGENT_DIR=${state.agentDir}`,
     `XTRM_AGENT_HOST_SOCKET=${state.socket}`,
-    `XTRM_SESSION_NAME=${PI_NAME}`,
+    `XTRM_SESSION_NAME=${name}`,
   ];
-  tmux(state, "new-session", "-d", "-s", PI_NAME, "-x", "200", "-y", "50", "-c", state.work, "env", ...piEnv, "pi", "-e", ext, "--model", MODEL);
-  log(state, `pi started in tmux -L ${state.tmux} session ${PI_NAME} (${MODEL})`);
+  const loads = [ext, ...extensions].flatMap((e) => ["-e", e]);
+  tmux(state, "new-session", "-d", "-s", name, "-x", "200", "-y", "50", "-c", state.work, "env", ...piEnv, "pi", ...loads, "--model", MODEL);
+  log(state, `pi started in tmux -L ${state.tmux} session ${name} (${MODEL}; ${loads.length / 2} extensions)`);
   // Pi asks once whether to trust the work folder; answer "this session only" (no trust written).
   await until(
     "pi to start",
     () => {
-      const pane = tmux(state, "capture-pane", "-p", "-t", PI_NAME);
+      const pane = tmux(state, "capture-pane", "-p", "-t", name);
       if (pane.includes("Trust project folder?")) {
-        tmux(state, "send-keys", "-t", PI_NAME, "Down", "Down", "Enter");
+        tmux(state, "send-keys", "-t", name, "Down", "Down", "Enter");
         return false;
       }
       return pane.includes(MODEL.split("/")[1]!);
@@ -172,7 +175,7 @@ export async function startPi(state: RealHostState): Promise<string> {
   );
   const session = await until(
     "the pi session in the host registry",
-    async () => (await hostGet<{ sessions: Array<{ sessionId: string; name?: string }> }>(state, "/v1/sessions")).sessions.find((s) => s.name === PI_NAME),
+    async () => (await hostGet<{ sessions: Array<{ sessionId: string; name?: string }> }>(state, "/v1/sessions")).sessions.find((s) => s.name === name),
     60_000,
   );
   log(state, `pi session ${session.sessionId} connected`);
@@ -180,18 +183,36 @@ export async function startPi(state: RealHostState): Promise<string> {
 }
 
 /** Type a prompt into the pi terminal, as an operator would. */
-export function typeInTerminal(state: RealHostState, text: string) {
-  tmux(state, "send-keys", "-t", PI_NAME, "-l", text);
-  tmux(state, "send-keys", "-t", PI_NAME, "Enter");
+export function typeInTerminal(state: RealHostState, text: string, name = PI_NAME) {
+  tmux(state, "send-keys", "-t", name, "-l", text);
+  tmux(state, "send-keys", "-t", name, "Enter");
   log(state, `typed in terminal: ${text}`);
 }
 
-/** Feed Claude Code hook payloads to the real hook reporter (.xtrm/hooks/agent-host-reporter.mjs). */
+/**
+ * Feed Claude Code hook payloads to the real hook reporter (.xtrm/hooks/agent-host-reporter.mjs).
+ * Since core XTRM-592 the reporter is a module the hook dispatcher calls in-process
+ * (`reportToAgentHost(input)`), so it is imported and called the same way; an older reporter that
+ * runs as a script on import still works with the same stdin.
+ */
+const REPORT = `import { readFileSync } from "node:fs";
+const m = await import(process.argv[1]);
+if (typeof m.reportToAgentHost === "function") await m.reportToAgentHost(JSON.parse(readFileSync(0, "utf8")));`;
+
 export function claudeHook(state: RealHostState, hook: Record<string, unknown>) {
-  const reporter = join(state.coreDir, ".xtrm", "hooks", "agent-host-reporter.mjs");
+  const reporter = pathToFileURL(join(state.coreDir, ".xtrm", "hooks", "agent-host-reporter.mjs")).href;
   const input = JSON.stringify({ session_id: CLAUDE_SESSION, cwd: state.work, ...hook });
-  execFileSync("node", [reporter], { input, env: cleanEnv({ XTRM_AGENT_HOST_SOCKET: state.socket, XTRM_SESSION_NAME: CLAUDE_NAME }), timeout: 10_000 });
+  execFileSync("node", ["--input-type=module", "-e", REPORT, reporter], { input, env: cleanEnv({ XTRM_AGENT_HOST_SOCKET: state.socket, XTRM_SESSION_NAME: CLAUDE_NAME }), timeout: 10_000 });
   log(state, `claude hook ${String(hook.hook_event_name)}`);
+}
+
+/** Alive and not a zombie: the busy wait below blocks the event loop, so Node cannot reap the child. */
+function running(pid: number): boolean {
+  try {
+    return !/^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8"));
+  } catch {
+    return false;
+  }
 }
 
 export function stopRealHost(state: RealHostState) {
@@ -211,7 +232,10 @@ export function stopRealHost(state: RealHostState) {
         // already gone
       }
     }
-    log(state, `xt host ${state.hostPid} stopped`);
+    // The host writes its session index on shutdown: wait for it to exit before removing its HOME.
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline && running(state.hostPid)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    log(state, `xt host ${state.hostPid} ${running(state.hostPid) ? "still running after 10 s" : "stopped"}`);
   }
   try {
     appendFileSync(state.log, `--- host log ---\n${readFileSync(join(state.root, "host.log"), "utf8")}`);
@@ -221,4 +245,21 @@ export function stopRealHost(state: RealHostState) {
   rmSync(state.root, { recursive: true, force: true });
   rmSync(state.sockDir, { recursive: true, force: true });
   log(state, `removed ${state.root} and ${state.sockDir} (auth copy included)`);
+}
+
+/** Event payloads the host retained for one session, read from its replay buffer (Last-Event-ID 0). */
+export async function hostPayloads(state: Pick<RealHostState, "port">, sessionId: string): Promise<Array<Record<string, unknown> & { type: string }>> {
+  const ctl = new AbortController();
+  setTimeout(() => ctl.abort(), 1_500);
+  const out: Array<Record<string, unknown> & { type: string }> = [];
+  let buf = "";
+  try {
+    const res = await fetch(`http://127.0.0.1:${state.port}/v1/events?sessionId=${encodeURIComponent(sessionId)}`, { headers: { "last-event-id": "0" }, signal: ctl.signal });
+    const dec = new TextDecoder();
+    for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) buf += dec.decode(chunk, { stream: true });
+  } catch {
+    // aborted after the replay was written, or the host is unreachable
+  }
+  for (const line of buf.split("\n")) if (line.startsWith("data: ")) out.push((JSON.parse(line.slice(6)) as { frame: { payload: Record<string, unknown> & { type: string } } }).frame.payload);
+  return out;
 }

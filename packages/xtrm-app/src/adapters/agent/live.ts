@@ -6,11 +6,25 @@
 //   not used: it cannot send headers and the host answers no CORS preflight (PRD §35.5). A
 //   reconnect sends Last-Event-ID with the last cursor; the first request asks for the whole
 //   replay buffer (Last-Event-ID 0).
-// - Submitting prompts, extension-UI answers and @ references are separate issues: this adapter
-//   is the read path and rejects them.
+// - Write path (XTRM-597): POST /v1/submit with an xtrm.agent-command.v1 command: prompt when idle,
+//   steer / follow_up while working, abort, and extension_ui_response. The host answers busy for a
+//   normal prompt while the session works (§35.8 item 5); that surfaces as BusyError and the
+//   composer offers Steer or Follow-up. Nothing is retried or queued here.
+// - @ references are a separate issue: a submit that carries references is refused.
 import { AgentProjector } from "./projector.ts";
-import { EVENT_SCHEMA, HOST_API_SCHEMA, type HostCapability, type HostEventMessage, type HostSessionDetail, type HostSessionList, type HostSessionSummary } from "./protocol.ts";
-import type { AgentAdapter, AgentSessionDetail, AgentSessionSummary, SessionCapability, SessionState } from "./types.ts";
+import {
+  EVENT_SCHEMA,
+  HOST_API_SCHEMA,
+  type HostCapability,
+  type HostCommand,
+  type HostEventMessage,
+  type HostSessionDetail,
+  type HostSessionList,
+  type HostSessionSummary,
+  type HostSubmitRequest,
+  type HostSubmitResult,
+} from "./protocol.ts";
+import { BusyError, type AgentAdapter, type AgentSessionDetail, type AgentSessionSummary, type Activity, type InteractionFrame, type SessionCapability, type SessionState } from "./types.ts";
 
 const STATE: Record<HostSessionSummary["state"], SessionState> = {
   working: "working",
@@ -24,7 +38,7 @@ const STATE: Record<HostSessionSummary["state"], SessionState> = {
 export function capabilities(s: Pick<HostSessionSummary, "state" | "capabilities">): SessionCapability[] {
   if (s.state === "history_only") return [];
   if (s.capabilities.length > 0 && s.capabilities.every((c) => c === "presence")) return ["presence"];
-  return s.capabilities.filter((c: HostCapability): c is "prompt" | "steer" => c === "prompt" || c === "steer");
+  return s.capabilities.filter((c: HostCapability): c is "prompt" | "steer" | "abort" => c === "prompt" || c === "steer" || c === "abort");
 }
 
 export function displayName(s: HostSessionSummary): string {
@@ -41,6 +55,14 @@ export function parseSse(buffer: string): { data: string[]; rest: string } {
     if (lines.length) data.push(lines.map((l) => l.slice(l[5] === " " ? 6 : 5)).join("\n"));
   }
   return { data, rest };
+}
+
+/** Command ids are unique per submit; the host rejects a duplicate in flight. */
+const commandId = () => (typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+/** Error text of a refused submit: the host's message, else its reason, else the status. */
+export function submitError(r: HostSubmitResult): Error {
+  return new Error(r.message ?? r.reason ?? `the agent host answered ${r.status}`);
 }
 
 export interface LiveAgentOptions {
@@ -67,6 +89,8 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
   const listeners = new Set<(sessionId: string) => void>();
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
   const repoCache = new Map<string, Promise<string | null>>();
+  /** Answers given from this app, by extension UI request id: the host event does not carry them. */
+  const answers = new Map<string, string>();
 
   const notify = (sessionId: string) => {
     if (pending.has(sessionId)) return;
@@ -186,7 +210,30 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
     };
   }
 
-  const readOnly = () => Promise.reject(new Error("The live agent adapter is read-only: submitting from the app is a separate issue."));
+  async function send(sessionId: string, command: HostCommand): Promise<void> {
+    const body: HostSubmitRequest = { schema: HOST_API_SCHEMA, kind: "submit_request", sessionId, command };
+    const res = await doFetch(`${base}/api/v1/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+    });
+    const r = (await res.json().catch(() => null)) as HostSubmitResult | null;
+    if (r?.kind !== "submit_result") throw hostError(res.status, r);
+    if (r.status === "accepted") return;
+    // The extension may refuse a prompt itself when Pi is not idle: the same busy rule.
+    if (r.status === "busy" || r.reason === "busy") throw new BusyError();
+    throw submitError(r);
+  }
+
+  /** Fill in the answers this app gave, which the event stream does not carry. */
+  const withAnswers = (frames: InteractionFrame[]): InteractionFrame[] => {
+    if (!answers.size) return frames;
+    const fill = (a: Activity) => {
+      if ((a.kind === "prompt" || (a.kind === "tool" && a.ui)) && a.ui && answers.has(a.id)) a.ui.answer = answers.get(a.id)!;
+    };
+    for (const f of frames) f.activity.forEach(fill);
+    return frames;
+  };
 
   return {
     source: "live",
@@ -212,12 +259,28 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
         tmux: h.tmux ? `${h.tmux.session}:${h.tmux.paneId}` : null,
         tokens: proj?.tokens ?? null,
         costUsd: proj?.costUsd ?? null,
-        frames: projector.snapshot(id, h.frameCount ?? 0),
+        frames: withAnswers(projector.snapshot(id, h.frameCount ?? 0)),
       };
       return detail;
     },
-    submit: readOnly,
-    respond: readOnly,
+    async submit(sessionId, input) {
+      if (input.refs.length) throw new Error("References are not sent to the agent host yet. Remove them to send this message.");
+      const type = input.mode === "follow-up" ? "follow_up" : input.mode;
+      await send(sessionId, { type, commandId: commandId(), message: input.text });
+    },
+    async abort(sessionId) {
+      await send(sessionId, { type: "abort", commandId: commandId() });
+    },
+    async respond(sessionId, activityId, answer) {
+      const ui = projector.sessions.get(sessionId)?.prompts.get(activityId)?.ui;
+      if (!ui) throw new Error("This request is no longer open.");
+      const base = { type: "extension_ui_response" as const, commandId: commandId(), id: activityId };
+      const command: HostCommand =
+        answer === null ? { ...base, cancelled: true } : ui.type === "confirm" ? { ...base, confirmed: answer === ui.options[0] } : { ...base, value: answer };
+      await send(sessionId, command);
+      answers.set(activityId, answer ?? "Cancelled");
+      notify(sessionId);
+    },
     searchReferences: () => Promise.resolve([]),
     resolveReference: () => Promise.resolve(null),
     subscribe(listener) {
