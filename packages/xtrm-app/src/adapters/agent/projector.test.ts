@@ -217,3 +217,39 @@ describe("projection helpers", () => {
     expect(p.sessions.get(SID)!.status).toEqual({ model: "opencode-go/glm-5" });
   });
 });
+
+// XTRM-601 (§31 criteria 7-8): a provider error and Pi's retry stay in one Frame, which settles once.
+describe("provider error and retry", () => {
+  const start = () => {
+    cursor = 0;
+    const p = new AgentProjector();
+    p.apply(ev({ type: "before_agent_start", prompt: "Say hi", ingress: { origin: "gui" } }));
+    p.apply(ev({ type: "message_end", message: assistant("", { stopReason: "error", errorMessage: "503 The server is overloaded, please retry" }) }));
+    p.apply(ev({ type: "agent_end", messages: [] }));
+    return p;
+  };
+
+  it("keeps the Frame working with a retry note after a failed turn, and names the retry once the next turn answers", () => {
+    const p = start();
+    let [f] = p.snapshot(SID);
+    expect(f!.status).toBe("working");
+    expect(f!.activity).toEqual([expect.objectContaining({ kind: "retry", text: "Provider error: 503 The server is overloaded, please retry" })]);
+    p.apply(ev({ type: "message_update", message: assistant("RETRIED") }));
+    p.apply(ev({ type: "message_end", message: assistant("RETRIED-OK", { stopReason: "stop" }) }));
+    p.apply(ev({ type: "agent_end", messages: [] }));
+    p.apply(ev({ type: "agent_settled" }));
+    [f] = p.snapshot(SID);
+    expect(p.snapshot(SID)).toHaveLength(1);
+    expect(f!.status).toBe("settled");
+    expect(f!.response).toBe("RETRIED-OK");
+    expect(f!.activity).toEqual([expect.objectContaining({ kind: "retry", text: "Retried after a provider error: 503 The server is overloaded, please retry" })]);
+  });
+
+  it("fails the Frame when no retry follows", () => {
+    const p = start();
+    p.apply(ev({ type: "agent_settled" }));
+    const [f] = p.snapshot(SID);
+    expect(f!.status).toBe("failed");
+    expect(f!.activity[0]).toMatchObject({ kind: "retry", text: expect.stringMatching(/^Provider error/) });
+  });
+});

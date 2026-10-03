@@ -15,6 +15,18 @@ const probeConfirm = defineTool({
   },
 });
 
+// XTRM-601 acceptance: an extension tool without UI, for the native / MCP / extension mix of §36.11 criterion 12.
+const probeNote = defineTool({
+  name: "probe_note",
+  label: "Probe note",
+  description: "Records a short note for the acceptance probe and returns it. Call it when asked to record a probe note.",
+  parameters: Type.Object({ note: Type.String({ description: "The note to record" }) }),
+  async execute(_toolCallId, params) {
+    return { content: [{ type: "text", text: `probe note recorded: ${params.note}` }], details: { note: params.note } };
+  },
+});
+
 export default function (pi: ExtensionAPI) {
   pi.registerTool(probeConfirm);
+  pi.registerTool(probeNote);
 }

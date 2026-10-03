@@ -34,6 +34,11 @@ export interface HistoryFrames {
   frames: InteractionFrame[];
   keys: Map<string, number[]>;
   truncated: boolean;
+  /** Usage the journal recorded on assistant messages (XTRM-601): totals, cost, and the last context. */
+  tokens?: { input: number; output: number } | null;
+  costUsd?: number | null;
+  contextTokens?: number | null;
+  model?: string | null;
 }
 
 interface ToolCallPart {
@@ -98,7 +103,15 @@ export function projectHistory(sessionId: string, entries: Entry[], ended: boole
   const projector = new AgentProjector(Infinity);
   for (const ev of historyEvents(sessionId, entries, ended)) projector.apply(ev);
   const s = projector.sessions.get(sessionId);
-  return { frames: s?.frames ?? [], keys: s?.keys ?? new Map(), truncated };
+  return {
+    frames: s?.frames ?? [],
+    keys: s?.keys ?? new Map(),
+    truncated,
+    tokens: s?.tokens ?? null,
+    costUsd: s?.costUsd ?? null,
+    contextTokens: s?.contextTokens ?? null,
+    model: s?.model ?? null,
+  };
 }
 
 /** Top-level tool call ids of a Frame. */

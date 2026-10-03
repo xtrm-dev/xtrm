@@ -162,3 +162,45 @@ describe("bridge reference route (XTRM-598)", () => {
     expect(seen[1]).toMatchObject({ url: "/v1/submit" });
   });
 });
+
+describe("bridge launch route (XTRM-601)", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "xh-launch-"));
+  const launch = (extra: Record<string, unknown> = {}) => ({ schema: "xtrm.agent-host-api.v1", kind: "launch_request", cwd, command: "pi", options: { name: "gui-pi" }, ...extra });
+
+  it("forwards a launch_request to the host's /v1/launch and returns its launch_result", async () => {
+    const seen: Array<{ url?: string; body?: unknown }> = [];
+    const hostPort = await listen((req, res) => {
+      let raw = "";
+      req.on("data", (c: Buffer) => (raw += c));
+      req.on("end", () => {
+        seen.push({ url: req.url, body: JSON.parse(raw) });
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ schema: "xtrm.agent-host-api.v1", kind: "launch_result", outcome: { status: "ok" }, tmux: { session: "gui-pi", paneId: "%1" } }));
+      });
+    });
+    const conn = new AgentHostConnection({ settingsFile: join(mkdtempSync(join(tmpdir(), "xh-")), "c.json"), run: async () => ({ code: 1, stdout: "", stderr: "", timedOut: false }) });
+    const handle = agentHostHandler(conn, undefined, () => ({ origin: `http://127.0.0.1:${hostPort}`, id: "local:t", local: true }));
+    const port = await listen((req, res) => void handle(req, res, () => ((res.statusCode = 404), res.end())));
+    const post = (body: unknown, headers: Record<string, string> = { "content-type": "application/json" }) =>
+      fetch(`http://127.0.0.1:${port}/xtrm-api/agent-host/api/v1/launch`, { method: "POST", headers, body: JSON.stringify(body) });
+
+    const res = await post(launch());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ kind: "launch_result", tmux: { session: "gui-pi" } });
+    expect(seen).toEqual([{ url: "/v1/launch", body: launch() }]);
+    expect((await post(launch({ cwd: "relative/dir" }))).status).toBe(400);
+    expect((await post(launch({ command: "bash" }))).status).toBe(400);
+    expect((await post(launch({ options: ["--evil"] }))).status).toBe(400);
+    // A local host's cwd must exist; options never read as options and never name an Anthropic model.
+    expect(await (await post(launch({ cwd: join(cwd, "missing") }))).json()).toMatchObject({ error: expect.stringContaining("does not exist") });
+    expect((await post(launch({ options: { name: "-x" } }))).status).toBe(400);
+    expect((await post(launch({ options: { shell: "rm -rf /" } }))).status).toBe(400);
+    expect((await post(launch({ options: { name: "a\nb" } }))).status).toBe(400);
+    for (const model of ["anthropic/claude-opus-5-5", "claude-sonnet-5-5", "openrouter/anthropic/claude-x"]) {
+      expect(await (await post(launch({ options: { model } }))).json()).toMatchObject({ error: "Anthropic models are not launched with pi" });
+    }
+    expect((await post(launch(), { "content-type": "text/plain" })).status).toBe(415);
+    expect((await post(launch(), { "content-type": "application/json", origin: "http://evil.example" })).status).toBe(403);
+    expect(seen).toHaveLength(1);
+  });
+});

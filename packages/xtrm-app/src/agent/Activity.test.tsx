@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import type { Activity, ToolActivity } from "../adapters/index.tsx";
-import { ActivityThread, groupActivity, originTag, promptOutcome, scriptResult } from "./Activity.tsx";
+import { ActivityThread, coordinationOf, groupActivity, originTag, promptOutcome, scriptResult } from "./Activity.tsx";
 
 const tool = (id: string, over: Partial<ToolActivity> = {}): ToolActivity => ({ kind: "tool", id, class: "native", name: "read", subject: "notes.txt", status: "done", durationMs: 5, origin: {}, ...over });
 
@@ -85,4 +85,29 @@ describe("extension UI requests (XTRM-597)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Answer" }));
     expect(answers).toEqual(["probe"]);
   });
+});
+
+// XTRM-601 (§36.11 criterion 14): a coordination-class tool renders as the §14 semantic activity.
+describe("coordination-class tools", () => {
+  const dispatch = tool("d", {
+    class: "coordination",
+    name: "mcp__specialists__specialist_dispatch",
+    subject: "executor",
+    origin: { server: "specialists" },
+    args: { specialist: "executor", issue: "XTRM-601", prompt: "Run the acceptance checks" },
+    output: "Dispatched executor on XTRM-601 as act:1",
+  });
+
+  it("maps the call to a dispatch with peer, work item and transport", () => {
+    expect(coordinationOf(dispatch)).toMatchObject({
+      action: "dispatch",
+      peer: "executor",
+      workRef: "XTRM-601",
+      summary: "Run the acceptance checks",
+      status: "done",
+      transport: "MCP specialists · mcp__specialists__specialist_dispatch · Dispatched executor on XTRM-601 as act:1",
+    });
+    expect(coordinationOf(tool("m", { class: "coordination", name: "intercom", origin: { extension: "pi-intercom" }, args: { to: "peer", message: "hi" } }))).toMatchObject({ action: "message", peer: "peer", transport: "pi-intercom · intercom" });
+  });
+
 });

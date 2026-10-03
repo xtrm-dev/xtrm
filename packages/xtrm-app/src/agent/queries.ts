@@ -1,7 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { resolveForSubmit } from "../adapters/agent/references.ts";
-import { useAdapters, type AgentRef, type RefCandidate, type RefKind, type SessionState, type SubmitInput } from "../adapters/index.tsx";
+import { useAdapters, type AgentRef, type LaunchInput, type RefCandidate, type RefKind, type SessionState, type SubmitInput } from "../adapters/index.tsx";
 import { useGithubIssues, usePulls } from "../app/queries.ts";
 import { useIssueIndex } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
@@ -51,6 +51,12 @@ export function useSubmit(sessionId: string) {
 export function useRespond(sessionId: string) {
   const { agent } = useAdapters();
   return useMutation({ mutationFn: ({ activityId, answer }: { activityId: string; answer: string | null }) => agent.respond(sessionId, activityId, answer) });
+}
+
+/** New session: the host starts the agent in tmux (PRD §35.4); the session list follows the registry push. */
+export function useLaunch() {
+  const { agent } = useAdapters();
+  return useMutation({ mutationFn: (input: LaunchInput) => agent.launch(input) });
 }
 
 export function useAbort(sessionId: string) {

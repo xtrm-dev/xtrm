@@ -173,6 +173,23 @@ export interface SubmitInput {
   mode: "prompt" | "steer" | "follow-up";
 }
 
+/** New session (PRD §35.4, §36.3 footer): a working directory on the agent host and a launch profile. */
+export interface LaunchInput {
+  cwd: string;
+  command: "pi" | "xt pi";
+  name?: string;
+  model?: string;
+  /** `xt pi` only. */
+  role?: string;
+  /** `xt pi` only: the bound work item. */
+  bead?: string;
+}
+
+/** The tmux session the host started; the agent session joins the registry once its extension connects. */
+export interface LaunchResult {
+  tmuxSession: string;
+}
+
 /**
  * The live event stream (XTRM-613): `connecting` until the first connect, `connected` while events
  * flow, `disconnected` while it is down and being re-established. Frames and session states are
@@ -188,6 +205,8 @@ export interface AgentAdapter {
   submit(sessionId: string, input: SubmitInput): Promise<void>;
   /** Stops the running Frame (PRD §35.3 abort). */
   abort(sessionId: string): Promise<void>;
+  /** Starts an agent in tmux on the host; rejects with the host's summary when it does not start. */
+  launch(input: LaunchInput): Promise<LaunchResult>;
   /** Answers an extension UI request; `null` cancels it. */
   respond(sessionId: string, activityId: string, answer: string | null): Promise<void>;
   /** Picker candidates for host-resolved kinds (PRD §36.6); `sessionId` is the composer's session. */

@@ -4,15 +4,21 @@ import { useGo } from "../shell/ContextSidebar.tsx";
 import { ContentPanel, EmptyState, LoadingState, StatusDot, relativeTime } from "../ui/primitives.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
 import { ContextMeter, REF_LABEL, STATE_LABEL, STATE_TONE, contextLabel, modelLabel } from "./meta.tsx";
-import { useAgentSession, useShownState } from "./queries.ts";
+import { findTarget } from "./message.ts";
+import { useAgentSession, useAgentSessions, useShownState } from "./queries.ts";
 import { useAgentStore } from "./workspace.tsx";
 
 function Eyebrow({ children }: { children: string }) {
   return <p className="text-[0.65rem] font-medium tracking-wide text-ink-faint uppercase">{children}</p>;
 }
 
-/** Agent presence in the drawer; work happens in the Agent surface (PRD §7.5). */
-export function SessionPanel({ id }: { id: string }) {
+/**
+ * Agent presence in the drawer; work happens in the Agent surface (PRD §7.5). `id` is the reference as
+ * written, `@session:<name|id>` (§36.6): a name resolves to the live session of that name (XTRM-601).
+ */
+export function SessionPanel({ id: ref }: { id: string }) {
+  const sessions = useAgentSessions();
+  const id = findTarget(sessions.data ?? [], { kind: "session", ref })?.id ?? ref;
   const session = useAgentSession(id);
   const go = useGo();
   const state = useShownState(session.data?.state ?? "settled");

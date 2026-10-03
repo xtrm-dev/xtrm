@@ -209,3 +209,41 @@ test("Stop aborts the working Frame and the Frame header names its ingress", asy
   await expect(page.getByTestId("frame-settled")).toContainText("aborted");
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0);
 });
+
+test("New session starts an agent in a chosen directory with a launch profile and opens it", async ({ page }) => {
+  await page.goto("/agent/pi-main");
+  await page.getByRole("button", { name: "New session" }).click();
+  const form = page.getByTestId("new-session");
+  // The open session's cwd is the default directory on the same host.
+  await expect(form.getByLabel("Working directory")).toHaveValue("~/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-7k2m");
+  await form.getByRole("radio", { name: "xt pi" }).click();
+  await form.getByLabel("Name").fill("fixture-launch");
+  await form.getByLabel("Role").fill("reviewer");
+  await form.getByRole("button", { name: "Start session" }).click();
+  await expect(page).toHaveURL(/\/agent\/fixture-launch$/);
+  await expect(page.getByTestId("session-header")).toContainText("reviewer");
+  await expect(page.getByTestId("session-details")).toContainText("started from the app");
+});
+
+
+test("/message delivers to the named session and opens no Frame in the sender", async ({ page }) => {
+  await page.goto("/agent/test-engineer");
+  const frames = page.getByRole("navigation", { name: "Frames" }).getByRole("button", { name: /^Frame / });
+  const before = await frames.count();
+  await composer(page, "test-engineer").fill("/message @session:host-core Please rebase on main");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("message-delivered")).toHaveText("Delivered to host-core.");
+  await expect(composer(page, "test-engineer")).toHaveValue("");
+  await expect(frames).toHaveCount(before);
+
+  // The fixture keeps its state in the page: navigate in the app, never reload.
+  await page.getByRole("radio", { name: "All" }).click();
+  await sessionRow(page, "host-core").click();
+  await expect(page.getByTestId("frame-request")).toContainText("Message from test-engineer (sent with /message from xtrm-app): Please rebase on main");
+
+  // A history-only target cannot receive it; the composer says why and keeps the text.
+  await sessionRow(page, "test-engineer").click();
+  await composer(page, "test-engineer").fill("/message @session:docs-sweep hello");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("alert")).toContainText("docs-sweep cannot receive messages (history only)");
+});

@@ -5,7 +5,7 @@ import type { AgentSessionSummary } from "../adapters/index.tsx";
 import { useGo } from "../shell/ContextSidebar.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
-import { IconButton, Row, StatusDot, cx, relativeTime } from "../ui/primitives.tsx";
+import { Row, StatusDot, cx, relativeTime } from "../ui/primitives.tsx";
 import { HostConnectionPanel, HostConnectionToggle } from "./HostConnection.tsx";
 import { ContextMeter, STATE_LABEL, STATE_TONE, contextLabel, modelLabel, modelProvider } from "./meta.tsx";
 import { useAgentSession, useAgentSessions, useShownState } from "./queries.ts";
@@ -272,8 +272,4 @@ export function AgentSidebar() {
       {selectedId && <SessionDetails id={selectedId} />}
     </div>
   );
-}
-
-export function NewSessionButton() {
-  return <IconButton icon="plus" label="New session · needs the agent host launcher (XTRM-566)" size="md" disabled tooltipSide="right" />;
 }
