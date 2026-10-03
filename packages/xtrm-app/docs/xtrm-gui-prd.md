@@ -1780,12 +1780,18 @@ Claude sessions    ──hooks─────────────▶     │
 - **Live registry.** Holds state pushed by the extension. Nothing is polled.
 - **Incremental index.** Covers sessions that are not running. It is built from provider journals by watching files and re-reading only the ones that changed, never by full rescans per request. It is a projection cache in the §26 sense: journals stay authoritative.
 - **API.** One API for local and remote clients. Local use goes through the same API over loopback, so remote is not a separate mode.
-- **Binding and authentication.** The host binds to loopback or a private-network address (tailnet) only. Pairing uses a short-lived one-time token that is exchanged for a revocable device session. The host never binds a public interface by default.
+- **Binding and authentication.** The host binds `127.0.0.1` in every mode; it never binds a tailnet, wildcard, or public address (corrected under XTRM-589, implemented in XTRM-568). Remote clients reach it through an HTTPS front that proxies to the loopback port: `tailscale serve --bg --https=<port> http://127.0.0.1:<host port>`, with the host started on a fixed `--port`. The operator runs the front; the host does not change network configuration.
+  - A request is **local** only when it arrives on loopback, its `Host` header is a loopback name, and it carries no proxy header (`X-Forwarded-*`, `Forwarded`, `X-Real-IP`, `Tailscale-User-*`). `tailscale serve` always sets `X-Forwarded-Host` and `X-Forwarded-For`, so a tailnet client cannot pass as local. `Tailscale-User-Login` is absent for tagged nodes and is not relied on.
+  - Every other request needs `Authorization: Bearer xtd_…`, except `POST /v1/pair`. With direct mode off (the default; `xt host start --direct --direct-host <tailnet name>` turns it on), proxied requests get `403 direct_mode_disabled`.
+  - Pairing: `xt host pair` issues a 128-bit single-use token (`xtp_…`) that expires within 10 minutes and is held only as a SHA-256 hash in memory. It is exchanged once for a 256-bit device token (`xtd_…`), stored as a SHA-256 hash in `~/.xtrm/agent-host/devices.json` (file `0600`, directory `0700`) and compared with `timingSafeEqual` across all devices. `xt host devices` lists and `xt host revoke <id>` revokes; revoking closes the device's open streams. Pairing and device endpoints answer local clients only.
+  - Tokens never appear in URLs or logs; responses carry `Cache-Control: no-store`.
+  - Residual risk: another OS user on the same machine can reach the loopback port without a token. The host assumes a single-user machine.
+  - Web clients: `EventSource` cannot send an `Authorization` header and the host answers no CORS preflight. The app uses `fetch` streaming from the same origin as the front (XTRM-572); tokens are never put in query strings.
 - **Resource budget.** The host keeps no resident adapter per provider. Its idle cost is the registry plus the index.
 
 - **Connection modes.** The desktop app supports two equal ways to reach a remote agent host:
   - *SSH (default for desktop).* The operator enters an SSH target (`user@host`, or a `~/.ssh/config` alias). The app uses the operator's own SSH keys and agent to probe the host, start or reuse the agent host bound to loopback, and forward that loopback port to the desktop. The agent host never listens on a network interface, no pairing token is needed, and access is exactly the operator's SSH access. Tailscale SSH works the same way.
-  - *Direct (tailnet + pairing).* For clients that cannot run SSH, such as mobile and web, or for a host that is deliberately bound to its tailnet address.
+  - *Direct (HTTPS front + pairing).* For clients that cannot run SSH, such as mobile and web. The host stays on loopback behind `tailscale serve`; the client pairs once and then uses its device token (see Binding and authentication).
 - **SSH terminal handoff.** Every tmux-hosted agent offers "Open in terminal". This opens `ssh -t <target> tmux attach -t <session>` (or `switch-client` when already in tmux), so the GUI and the terminal stay interchangeable views of the same live session (§35.4).
 
 ### 35.6 Non-Pi agents
