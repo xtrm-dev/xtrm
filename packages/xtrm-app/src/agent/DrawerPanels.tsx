@@ -3,7 +3,7 @@ import { useAdapters, type AgentRef } from "../adapters/index.tsx";
 import { useGo } from "../shell/ContextSidebar.tsx";
 import { ContentPanel, EmptyState, LoadingState, StatusDot, relativeTime } from "../ui/primitives.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
-import { ContextMeter, REF_LABEL, STATE_LABEL, STATE_TONE, contextPercent, shortModel } from "./meta.tsx";
+import { ContextMeter, REF_LABEL, STATE_LABEL, STATE_TONE, contextPercent, modelLabel } from "./meta.tsx";
 import { useAgentSession } from "./queries.ts";
 import { useAgentStore } from "./workspace.tsx";
 
@@ -35,7 +35,7 @@ export function SessionPanel({ id }: { id: string }) {
           </button>
         </div>
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-faint">
-          <span>{[STATE_LABEL[s.state], s.role, shortModel(s.model)].filter(Boolean).join(" · ")}</span>
+          <span>{[STATE_LABEL[s.state], s.role, modelLabel(s)].filter(Boolean).join(" · ")}</span>
           <ContextMeter percent={contextPercent(s)} />
           {s.workRef && <AgentRefChip reference={{ kind: "issue", ref: s.workRef }} />}
         </p>
@@ -54,6 +54,8 @@ export function SessionPanel({ id }: { id: string }) {
       </div>
       <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs">
         {[
+          ["Repository", s.repo],
+          ["Root", s.repositoryPath],
           ["Cwd", s.cwd],
           ["Branch", s.branch],
           ["tmux", s.tmux],

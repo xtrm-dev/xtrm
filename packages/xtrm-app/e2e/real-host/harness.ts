@@ -36,6 +36,11 @@ export interface RealHostState {
 
 const env = process.env;
 export const coreDir = () => resolve(env.XTRM_CORE_DIR ?? join(homedir(), "dev", "core"));
+/**
+ * The host CLI: `XTRM_REAL_HOST_XT=<core>/cli/dist/index.cjs` runs a host built from the same core
+ * commit as the extension in XTRM_CORE_DIR (an older installed host rejects newer frames); else `xt`.
+ */
+const xt = (...args: string[]): [string, string[]] => (env.XTRM_REAL_HOST_XT ? ["node", [resolve(env.XTRM_REAL_HOST_XT), ...args]] : ["xt", args]);
 export const hostPort = () => Number(env.XTRM_REAL_HOST_PORT ?? 47573);
 
 export function log(state: Pick<RealHostState, "log">, line: string) {
@@ -112,10 +117,10 @@ async function start(runLog: string, partial: { state?: RealHostState }): Promis
     coreDir: coreDir(),
   };
   partial.state = state;
-  const version = execFileSync("xt", ["--version"], { encoding: "utf8", env: cleanEnv({}) }).trim();
+  const version = execFileSync(...xt("--version"), { encoding: "utf8", env: cleanEnv({}) }).trim();
   const [maj, min] = version.split(".").map(Number);
   if (maj! === 0 && min! < 14) throw new Error(`xt ${version} on PATH has no \`xt host start\`; need 0.14.0 or later`);
-  log(state, `xt ${version}, pi ${execFileSync("pi", ["--version"], { encoding: "utf8", env: cleanEnv({}) }).trim()}`);
+  log(state, `xt ${version} (${xt()[0]} ${xt()[1].join(" ")}), pi ${execFileSync("pi", ["--version"], { encoding: "utf8", env: cleanEnv({}) }).trim()}`);
   log(state, `root ${root} socket ${state.socket} port ${state.port} tmux -L ${state.tmux}`);
 
   // Only the opencode-go credential, copied into the isolated agent dir.
@@ -134,7 +139,7 @@ async function start(runLog: string, partial: { state?: RealHostState }): Promis
   execFileSync("git", ["init", "-q"], { cwd: work });
 
   const hostLog = join(root, "host.log");
-  const host = spawn("xt", ["host", "start", "--socket", state.socket, "--port", String(state.port), "--json"], {
+  const host = spawn(...xt("host", "start", "--socket", state.socket, "--port", String(state.port), "--json"), {
     env: cleanEnv({ HOME: home, XDG_RUNTIME_DIR: "" }),
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
@@ -149,7 +154,7 @@ async function start(runLog: string, partial: { state?: RealHostState }): Promis
 }
 
 /** Starts pi in its own tmux session; `extensions` are loaded after xtrm-agent-host (`pi -e`). */
-export async function startPi(state: RealHostState, name = PI_NAME, extensions: string[] = []): Promise<string> {
+export async function startPi(state: RealHostState, name = PI_NAME, extensions: string[] = [], cwd = state.work): Promise<string> {
   const ext = join(state.coreDir, "packages", "pi-extensions", "extensions", "xtrm-agent-host", "index.ts");
   const piEnv = [
     `PI_CODING_AGENT_DIR=${state.agentDir}`,
@@ -158,7 +163,7 @@ export async function startPi(state: RealHostState, name = PI_NAME, extensions: 
     `XTRM_SESSION_NAME=${name}`,
   ];
   const loads = [ext, ...extensions].flatMap((e) => ["-e", e]);
-  tmux(state, "new-session", "-d", "-s", name, "-x", "200", "-y", "50", "-c", state.work, "env", ...piEnv, "pi", ...loads, "--model", MODEL);
+  tmux(state, "new-session", "-d", "-s", name, "-x", "200", "-y", "50", "-c", cwd, "env", ...piEnv, "pi", ...loads, "--model", MODEL);
   log(state, `pi started in tmux -L ${state.tmux} session ${name} (${MODEL}; ${loads.length / 2} extensions)`);
   // Pi asks once whether to trust the work folder; answer "this session only" (no trust written).
   await until(

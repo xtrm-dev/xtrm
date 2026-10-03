@@ -15,10 +15,12 @@ export interface AgentSessionSummary {
   role: string | null;
   /** Bound Substrate Issue ref (`--bead`). */
   workRef: string | null;
-  /** `owner/name` of the repository the cwd belongs to; null when outside every known repository. */
+  /** `owner/name` of the repository the cwd belongs to (host `repository`); null without a remote. */
   repo: string | null;
+  /** `<provider>/<model id>` from the host's session_status. */
   model: string | null;
   thinking: string | null;
+  /** Estimated context tokens of the active model; null while unknown (no meter). */
   context: { used: number; window: number } | null;
   startedAt: number;
   lastActivityAt: number;
@@ -31,6 +33,8 @@ export interface AgentSessionSummary {
 
 export interface AgentSessionDetail extends AgentSessionSummary {
   cwd: string;
+  /** Root of the main repository on the agent host; null when the host does not report it. */
+  repositoryPath: string | null;
   worktree: string | null;
   branch: string | null;
   /** `session:pane` of the hosting tmux pane. */

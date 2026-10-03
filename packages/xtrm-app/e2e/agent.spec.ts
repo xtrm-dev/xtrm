@@ -35,8 +35,11 @@ test("session rows show live state, role, work item, model, context, and last ac
   await expect(row).toHaveAttribute("aria-label", "pi-main · working");
   await expect(row).toContainText("coordinator");
   await expect(row).toContainText("XTRM-310");
+  await expect(row).toContainText("opus 5.5 · high");
   await expect(row).toContainText("64%");
   await expect(row).toContainText("now");
+  await expect(page.getByTestId("session-details")).toContainText("anthropic/claude-opus-5-5 · high");
+  await expect(page.getByTestId("session-details")).toContainText("64% · 128k / 200k");
   await expect(page.getByTestId("session-details")).toContainText("started in a terminal");
   await expect(page.getByTestId("session-details")).toContainText("xtrm-main:%12");
 
@@ -136,6 +139,9 @@ test("the drawer attaches an inspected entity to the composer", async ({ page })
   await page.getByRole("button", { name: /^Frame 2: Split the tranche/ }).click();
   await page.getByTestId("frame").getByRole("button", { name: "Session quant-reviewer" }).first().click();
   await expect(page.getByTestId("session-panel")).toContainText("quant-reviewer");
+  // Repository identity (owner/name) and its root on the host (XTRM-609).
+  await expect(page.getByTestId("session-panel")).toContainText("xtrm-dev/xtrm");
+  await expect(page.getByTestId("session-panel")).toContainText("~/dev/xtrm");
   await page.getByRole("button", { name: "Attach to composer" }).click();
   await expect(page.getByTestId("composer-ref")).toContainText("quant-reviewer");
 

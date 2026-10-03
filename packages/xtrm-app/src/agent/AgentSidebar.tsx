@@ -7,14 +7,14 @@ import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, cx, relativeTime } from "../ui/primitives.tsx";
 import { HostConnectionPanel, HostConnectionToggle } from "./HostConnection.tsx";
-import { ContextMeter, STATE_LABEL, STATE_TONE, contextPercent, shortModel } from "./meta.tsx";
+import { ContextMeter, STATE_LABEL, STATE_TONE, contextPercent, modelLabel } from "./meta.tsx";
 import { useAgentSession, useAgentSessions } from "./queries.ts";
 
 export type SessionScope = "repository" | "all";
 
 const PROVIDER_LABEL: Record<AgentSessionSummary["provider"], string> = { pi: "Pi", claude: "Claude Code", codex: "Codex" };
 
-type Item = { type: "header"; key: string; label: string; count: number } | { type: "session"; key: string; session: AgentSessionSummary; depth: number };
+type Item = { type: "header"; key: string; label: string; count: number } | { type: "session"; key: string; session: AgentSessionSummary; depth: number; group: string };
 
 const HEADER_H = 30;
 const ROW_H = 46;
@@ -69,13 +69,13 @@ export function buildSessionItems(sessions: AgentSessionSummary[], scope: Sessio
     .filter(([, list]) => list.length > 0)
     .flatMap(([label, list]): Item[] => [
       { type: "header", key: `h:${label}`, label, count: list.length },
-      ...threaded(list).map(({ session, depth }): Item => ({ type: "session", key: session.id, session, depth })),
+      ...threaded(list).map(({ session, depth }): Item => ({ type: "session", key: session.id, session, depth, group: label })),
     ]);
 }
 
 function SessionRow({ s, depth, selected, onOpen }: { s: AgentSessionSummary; depth: number; selected: boolean; onOpen: () => void }) {
   const pct = contextPercent(s);
-  const meta = [s.role, s.workRef, shortModel(s.model)].filter(Boolean);
+  const meta = [s.role, s.workRef, modelLabel(s)].filter(Boolean);
   return (
     <Row
       density="sidebar"
@@ -145,8 +145,8 @@ function SessionDetails({ id }: { id: string }) {
         <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-2 pt-0.5 pb-2 text-xs" data-testid="session-details">
           <Detail label="Provider" value={PROVIDER_LABEL[s.provider]} />
           <Detail label="State" value={stateWithCapabilities(s)} />
-          <Detail label="Model" value={[shortModel(s.model), s.thinking].filter(Boolean).join(" · ")} />
-          <Detail label="Context" value={s.context ? `${Math.round(s.context.used / 1000)}k / ${Math.round(s.context.window / 1000)}k` : null} />
+          <Detail label="Model" value={[s.model, s.thinking].filter(Boolean).join(" · ")} />
+          <Detail label="Context" value={s.context ? `${contextPercent(s)}% · ${Math.round(s.context.used / 1000)}k / ${Math.round(s.context.window / 1000)}k` : null} />
           <Detail label="Tokens" value={tokens} />
           <Detail label="Cost" value={s.costUsd !== null ? `$${s.costUsd.toFixed(2)}` : null} />
           <Detail label="Cwd" value={s.cwd} mono />
@@ -241,7 +241,7 @@ export function AgentSidebar() {
           {virtualizer.getVirtualItems().map((v) => {
             const item = items[v.index]!;
             return (
-              <div key={v.key} role="listitem" className="absolute inset-x-0" style={{ top: v.start, height: v.size }}>
+              <div key={v.key} role="listitem" className="absolute inset-x-0" style={{ top: v.start, height: v.size }} data-group={item.type === "session" ? item.group : undefined}>
                 {item.type === "header" ? (
                   <div className="flex h-full items-end gap-1.5 px-2 pb-1 text-xs font-medium text-ink-faint">
                     <span className="truncate">{item.label}</span>

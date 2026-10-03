@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { capabilities, createLiveAgent, parseSse } from "./live.ts";
+import { capabilities, createLiveAgent, parseSse, repoName } from "./live.ts";
 import { splitMessage } from "./references.ts";
 import { BusyError, type ContextReference } from "./types.ts";
 import type { HostSessionSummary } from "./protocol.ts";
@@ -89,10 +89,9 @@ describe("live agent adapter", () => {
     adapter = createLiveAgent({ fetch: fetchImpl, notifyMs: 5, retryMs: [5, 10] });
     const changed: string[] = [];
     adapter.subscribe((id) => changed.push(id));
-    await settle();
+    await vi.waitFor(() => expect(changed).toContain("s1"));
 
     expect(requests.find((r) => r.url.endsWith("/events"))?.lastEventId).toBe("0");
-    expect(changed).toContain("s1");
 
     const [s] = await adapter.listSessions();
     expect(s).toMatchObject({ id: "s1", name: "probe", title: "Read the notes", state: "working", repo: "xtrm-dev/xtrm", capabilities: ["prompt", "steer", "abort"], frameCount: 3, origin: "terminal" });
@@ -261,5 +260,77 @@ describe("live AgentAdapter references (XTRM-598)", () => {
     expect(await adapter.searchReferences("ok.md", "file", "o/r", "s1")).toEqual([{ kind: "file", ref: "ok.md", title: "@file:ok.md", detail: "sha256:1", preview: "c" }]);
     expect(await adapter.searchReferences("missing.md", "file", "o/r", "s1")).toEqual([]);
     expect(await adapter.searchReferences("not-hex", "commit", "o/r", "s1")).toEqual([]);
+  });
+});
+
+describe("session status and repository identity (XTRM-603, XTRM-609)", () => {
+  it("reads repository as owner/name and falls back to local resolution of repositoryPath", async () => {
+    expect(repoName("xtrm-dev/core")).toBe("xtrm-dev/core");
+    expect(repoName("group/sub/name")).toBe("group/sub/name");
+    expect(repoName("/home/u/dev/core")).toBeNull();
+    expect(repoName(undefined)).toBeNull();
+
+    const sessions = [
+      summary({ sessionId: "named", repository: "xtrm-dev/core", repositoryPath: "/home/u/dev/core" }),
+      summary({ sessionId: "history", state: "history_only", capabilities: [], repository: "xtrm-dev/core", repositoryPath: "/home/u/dev/core" }),
+      summary({ sessionId: "noremote", repositoryPath: "/home/u/scratch" }),
+      // A v0.14.0 host sent the repository root as a path.
+      summary({ sessionId: "old", repository: "/home/u/dev/xtrm" }),
+    ];
+    const { fetchImpl, requests } = bridge([], sessions);
+    adapter = createLiveAgent({ fetch: fetchImpl });
+    const list = await adapter.listSessions();
+    expect(Object.fromEntries(list.map((s) => [s.id, s.repo]))).toEqual({ named: "xtrm-dev/core", history: "xtrm-dev/core", noremote: "xtrm-dev/xtrm", old: "xtrm-dev/xtrm" });
+    const looked = requests.filter((r) => r.url.includes("/repo?")).map((r) => decodeURIComponent(r.url.split("path=")[1]!));
+    expect(looked.sort()).toEqual(["/home/u/dev/xtrm", "/home/u/scratch"]);
+    expect(await adapter.getSession("named")).toMatchObject({ repo: "xtrm-dev/core", repositoryPath: "/home/u/dev/core" });
+  });
+
+  it("takes model, thinking level and context from the host summary", async () => {
+    const { fetchImpl } = bridge([], [summary({ model: "opencode-go/deepseek-v4.1-flash", thinkingLevel: "high", contextUsage: { tokens: 14_576, contextWindow: 1_000_000 } })]);
+    adapter = createLiveAgent({ fetch: fetchImpl });
+    const [s] = await adapter.listSessions();
+    expect(s).toMatchObject({ model: "opencode-go/deepseek-v4.1-flash", thinking: "high", context: { used: 14_576, window: 1_000_000 } });
+  });
+
+  it("updates from session_status frames as they arrive, with no meter while tokens are unknown", async () => {
+    const host = summary({ model: "opencode-go/deepseek-v4.1-flash", thinkingLevel: "high", contextUsage: { tokens: 0, contextWindow: 1_000_000 } });
+    const { fetchImpl } = bridge(
+      [
+        [
+          event(1, { type: "session_status", model: "opencode-go/deepseek-v4.1-flash", thinkingLevel: "high", contextUsage: { tokens: 0, contextWindow: 1_000_000 } }),
+          // An assistant message names a model too; session_status wins.
+          event(2, { type: "message_end", message: { role: "assistant", content: "ok", model: "deepseek-v4.1-flash", thinkingLevel: "low", stopReason: "stop" } }),
+          event(3, { type: "session_status", model: "opencode-go/deepseek-v4.1-flash", thinkingLevel: "max", contextUsage: { tokens: 14_576, contextWindow: 1_000_000 } }),
+        ],
+      ],
+      [host],
+    );
+    adapter = createLiveAgent({ fetch: fetchImpl, notifyMs: 5, retryMs: [5, 10] });
+    const changed: string[] = [];
+    adapter.subscribe((id) => changed.push(id));
+    await vi.waitFor(() => expect(adapter!.projector().sessions.get("s1")?.status?.thinkingLevel).toBe("max"));
+    expect((await adapter.listSessions())[0]).toMatchObject({ thinking: "max", context: { used: 14_576, window: 1_000_000 } });
+
+    // After compaction Pi cannot estimate the tokens: the status says null, the app shows no meter.
+    adapter.projector().apply({ schema: "xtrm.agent-host-api.v1", kind: "event", cursor: "4", frame: { schema: "xtrm.agent-event.v1", seq: 4, sessionId: "s1", at: 4, payload: { type: "session_status", model: "opencode-go/deepseek-v4.1-flash", thinkingLevel: "max", contextUsage: { tokens: null, contextWindow: 1_000_000 } } } });
+    expect((await adapter.getSession("s1"))!).toMatchObject({ model: "opencode-go/deepseek-v4.1-flash", thinking: "max", context: null });
+  });
+
+  it("shows a history-only session from the host summary, not the last live status", async () => {
+    const history = summary({ state: "history_only", capabilities: [], model: "opencode-go/deepseek-v4.1-flash", thinkingLevel: "max" });
+    const { fetchImpl } = bridge([[event(1, { type: "session_status", model: "opencode-go/deepseek-v4.1-flash", thinkingLevel: "max", contextUsage: { tokens: 6_559, contextWindow: 1_000_000 } })]], [history]);
+    adapter = createLiveAgent({ fetch: fetchImpl, notifyMs: 5, retryMs: [5, 10] });
+    adapter.subscribe(() => {});
+    await vi.waitFor(() => expect(adapter!.projector().sessions.get("s1")?.status).not.toBeNull());
+    expect((await adapter.listSessions())[0]).toMatchObject({ state: "history", model: "opencode-go/deepseek-v4.1-flash", thinking: "max", context: null });
+  });
+
+  it("falls back to the assistant message model when the producer sends no status", async () => {
+    const { fetchImpl } = bridge([[event(1, { type: "message_end", message: { role: "assistant", content: "ok", model: "glm-5", thinkingLevel: "low", stopReason: "stop" } })]], [summary()]);
+    adapter = createLiveAgent({ fetch: fetchImpl, notifyMs: 5, retryMs: [5, 10] });
+    adapter.subscribe(() => {});
+    await vi.waitFor(() => expect(adapter!.projector().sessions.get("s1")?.model).toBe("glm-5"));
+    expect((await adapter.listSessions())[0]).toMatchObject({ model: "glm-5", thinking: "low", context: null });
   });
 });

@@ -11,10 +11,15 @@
 // - A user message after the Frame's first one is a delivered steer or follow-up: a steer note.
 // - A message sent with @ references carries their context block (references.ts): the Frame shows the
 //   operator's text and keeps the references with the revisions they were given (XTRM-598).
+// - session_status replaces the session's model, thinking level and context usage (XTRM-609); the
+//   model and thinking level of assistant messages are a fallback for producers that send no status.
 // The host keeps a bounded replay buffer, so Frames older than the buffer are not projected;
 // `snapshot` numbers the retained Frames against the host's frameCount.
 import { splitMessage } from "./references.ts";
 import type { HostAgentMessage, HostEventFrame, HostEventMessage, HostToolOrigin } from "./protocol.ts";
+
+/** The latest xtrm.agent-event.v1 session_status: the complete current state; absent fields are unknown. */
+export type SessionStatus = Omit<Extract<HostEventFrame["payload"], { type: "session_status" }>, "type">;
 import type { InteractionFrame, PromptActivity, ToolActivity } from "./types.ts";
 
 const MAX_FRAMES = 200;
@@ -38,6 +43,7 @@ export interface SessionProjection {
   prompts: Map<string, PromptActivity>;
   /** User messages seen in the open Frame; the first is its request. */
   userMessages: number;
+  status: SessionStatus | null;
   model: string | null;
   thinking: string | null;
   tokens: { input: number; output: number } | null;
@@ -92,7 +98,7 @@ function origin(o: HostToolOrigin | undefined): ToolActivity["origin"] {
 }
 
 export function emptyProjection(): SessionProjection {
-  return { frames: [], open: null, ending: null, tools: new Map(), prompts: new Map(), userMessages: 0, model: null, thinking: null, tokens: null, costUsd: null };
+  return { frames: [], open: null, ending: null, tools: new Map(), prompts: new Map(), userMessages: 0, status: null, model: null, thinking: null, tokens: null, costUsd: null };
 }
 
 export class AgentProjector {
@@ -113,6 +119,11 @@ export class AgentProjector {
           f.ingress = { ...f.ingress, text, refs, origin: p.ingress.origin };
           f.title = frameTitle(text);
         }
+        break;
+      }
+      case "session_status": {
+        const { type: _type, ...status } = p;
+        s.status = status;
         break;
       }
       case "agent_start":
