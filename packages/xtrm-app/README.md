@@ -110,8 +110,21 @@ live and history-only sessions alike, core XTRM-608); only without it does the b
 `repositoryPath` (else the worktree or cwd) to `owner/name`, and only for a loopback host. The drawer's
 session panel shows the repository and its root.
 
+**Direct mode (XTRM-600, PRD §35.5).** For a host reached through an HTTPS front (`tailscale serve`
+in front of a host started with `xt host start --direct --direct-host <front name>`), the `Host`
+panel has a `Direct` mode: the front URL (`https://…`; `http://` only on `127.0.0.1` / `localhost`),
+a one-time pairing token from `xt host pair` on that host, and a device name. The bridge
+(`server/agent-host-direct.ts`) exchanges the token once at `POST /v1/pair`
+(`xtrm.agent-host-auth.v1`, mirrored in `src/adapters/agent/host-auth.ts`) and keeps the device token
+in its own file (`XTRM_AGENT_DEVICE_FILE`, mode `0600`, directory `0700`); the page sees only the
+device summary. While no SSH connection is up, the read routes, the event stream (fetch streaming,
+same origin as the page) and the write routes go to the front with `Authorization: Bearer`. When the
+front answers 401 (for example after `xt host revoke <id>`), the bridge deletes the token and the
+panel shows a re-pair prompt. Host selection order: SSH forward, then the paired front, then the
+loopback host.
+
 `npm run test:e2e:real-host` runs the live Agent half against a real host: an isolated `xt host start`
-(temp `HOME`, `--socket`, `--port`), a real Pi session with the `xtrm-agent-host` extension in a
+(temp `HOME`, `--socket`, `--port`, `--direct`), a real Pi session with the `xtrm-agent-host` extension in a
 private tmux server, a prompt typed in its terminal, and the real Claude hook reporter. Its write-path
 spec (`e2e/real-host/write-path.spec.ts`) drives a second Pi session that also loads a test extension
 with one confirm tool (`e2e/real-host/probe-extension.ts`): a GUI prompt, busy and Steer from a second
@@ -121,7 +134,12 @@ Substrate board, read only: `XTRM_SUBSTRATE_WRITES=0`) and `@session` of a secon
 sends an oversize file as an excerpt, and checks that a `../` escape blocks submit. Its session status
 spec (`e2e/real-host/session-status.spec.ts`, XTRM-609) runs Pi in a repository with an origin remote and
 checks the row's model and thinking level, the meter after a turn, a thinking change from the terminal,
-and the owner/name group live and after `/quit`. The host and the extension must come from the same core
+and the owner/name group live and after `/quit`.
+`npm run test:e2e:real-host:direct` (`e2e/real-host/direct-mode.spec.ts`, XTRM-600) runs the same host
+behind a local front that adds `X-Forwarded-For` and has the bridge reach it only through that front:
+pairing succeeds once, a replay fails, the session list and a streamed Frame work with the device
+token, and `xt host revoke` shows the re-pair prompt; the device file lives in a temp dir removed on
+teardown. The host and the extension must come from the same core
 commit: set `XTRM_REAL_HOST_XT=<core>/cli/dist/index.cjs` with `XTRM_CORE_DIR=<core>` to run a host built
 from that checkout instead of the installed `xt` (an older host rejects newer frames). It needs `xt`
 0.14.0+, `pi` 1.0.0, tmux, the `xtrm-dev/core` checkout (`XTRM_CORE_DIR`, default `~/dev/core`) and an
@@ -148,6 +166,7 @@ header) builds `ssh -t <target> tmux attach -t <session>`, copies it, and starts
 | `XTRM_AGENT_HOST_PORT` | loopback agent host port for the live read path when no SSH connection is up (default: the port in `~/.xtrm/run/agent-host.json`) |
 | `XTRM_SSH_BIN` | ssh executable (default `ssh` on PATH) |
 | `XTRM_AGENT_CONNECTION_FILE` | connection settings (default `~/.xtrm/app/agent-host-connection.json`, mode `0600`); `~/.ssh` is never read or written |
+| `XTRM_AGENT_DEVICE_FILE` | direct-mode front URL, device and device token (default `~/.xtrm/app/agent-host-device.json`, mode `0600`) |
 | `XTRM_TERMINAL` | optional terminal launcher for Open in terminal |
 | `XTRM_CORE_CLI` | test only: core `cli/dist/index.cjs` for `server/agent-host-ssh.integration.test.ts` (fake `ssh`, local run; skipped when absent) |
 

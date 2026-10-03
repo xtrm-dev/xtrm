@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { startRealHost, stopRealHost, log } from "./harness.ts";
 
@@ -12,5 +12,11 @@ export default async function globalSetup() {
   return () => {
     log(state, "teardown");
     stopRealHost(state);
+    // Direct mode: the bridge's device token file (playwright.real-host-direct.config.ts).
+    const deviceDir = process.env.XTRM_REAL_HOST_DEVICE_DIR;
+    if (deviceDir) {
+      rmSync(deviceDir, { recursive: true, force: true });
+      log(state, `removed ${deviceDir} (device token included)`);
+    }
   };
 }
