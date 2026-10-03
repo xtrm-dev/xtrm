@@ -8,6 +8,8 @@ const PORT = Number(process.env.XTRM_REAL_HOST_APP_PORT ?? 5299);
 
 export default defineConfig({
   testDir: "e2e/real-host",
+  // Direct mode needs a bridge without a loopback host: playwright.real-host-direct.config.ts.
+  testIgnore: "direct-mode.spec.ts",
   outputDir: "e2e/.results/real-host",
   globalSetup: "./e2e/real-host/global-setup.ts",
   workers: 1,

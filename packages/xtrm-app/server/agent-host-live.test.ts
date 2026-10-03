@@ -20,10 +20,10 @@ describe("localEndpoint", () => {
   it("prefers XTRM_AGENT_HOST_PORT, then a live info file", () => {
     const dir = mkdtempSync(join(tmpdir(), "xh-"));
     const info = join(dir, "agent-host.json");
-    expect(localEndpoint({ XTRM_AGENT_HOST_PORT: "4100" }, info)).toEqual({ port: 4100, id: "local:4100", local: true });
+    expect(localEndpoint({ XTRM_AGENT_HOST_PORT: "4100" }, info)).toEqual({ origin: "http://127.0.0.1:4100", id: "local:4100", local: true });
     expect(localEndpoint({}, info)).toBeNull();
     writeFileSync(info, JSON.stringify({ port: 4200, pid: process.pid }));
-    expect(localEndpoint({}, info)).toEqual({ port: 4200, id: `local:4200:${process.pid}`, local: true });
+    expect(localEndpoint({}, info)).toEqual({ origin: "http://127.0.0.1:4200", id: `local:4200:${process.pid}`, local: true });
     writeFileSync(info, JSON.stringify({ port: 4200, pid: 2 ** 22 + 12345 }));
     expect(localEndpoint({}, info)).toBeNull();
   });
@@ -47,7 +47,7 @@ describe("event stream proxy", () => {
       res.write(": xtrm agent host\n\n");
       res.end('id: 8\ndata: {"cursor":"8"}\n\n');
     });
-    const port = await listen((req, res) => proxyEvents({ port: hostPort, id: "local:x", local: true }, req, res, "s1"));
+    const port = await listen((req, res) => proxyEvents({ origin: `http://127.0.0.1:${hostPort}`, id: "local:x", local: true }, req, res, "s1"));
     const res = await fetch(`http://127.0.0.1:${port}/`, { headers: { "last-event-id": "7" } });
     expect(res.headers.get("x-xtrm-agent-host")).toBe("local:x");
     expect(await res.text()).toContain('data: {"cursor":"8"}');
@@ -57,7 +57,7 @@ describe("event stream proxy", () => {
   it("answers 502 when the host is unreachable", async () => {
     const dead = await listen(() => {});
     servers.pop()!.close();
-    const port = await listen((req, res) => proxyEvents({ port: dead, id: "x", local: true }, req, res, null));
+    const port = await listen((req, res) => proxyEvents({ origin: `http://127.0.0.1:${dead}`, id: "x", local: true }, req, res, null));
     expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(502);
   });
 });
@@ -69,7 +69,7 @@ describe("bridge read routes", () => {
       res.end(JSON.stringify({ schema: "xtrm.agent-host-api.v1", kind: "session_list", sessions: [], path: req.url }));
     });
     const conn = new AgentHostConnection({ settingsFile: join(mkdtempSync(join(tmpdir(), "xh-")), "c.json"), run: async () => ({ code: 1, stdout: "", stderr: "", timedOut: false }) });
-    const handle = agentHostHandler(conn, undefined, () => ({ port: hostPort, id: "local:t", local: true }));
+    const handle = agentHostHandler(conn, undefined, () => ({ origin: `http://127.0.0.1:${hostPort}`, id: "local:t", local: true }));
     const port = await listen((req, res) => void handle(req, res, () => ((res.statusCode = 404), res.end())));
     const res = await fetch(`http://127.0.0.1:${port}/xtrm-api/agent-host/api/v1/sessions`);
     expect(res.status).toBe(200);
@@ -104,7 +104,7 @@ describe("bridge submit route (XTRM-597)", () => {
       });
     });
     const conn = new AgentHostConnection({ settingsFile: join(mkdtempSync(join(tmpdir(), "xh-")), "c.json"), run: async () => ({ code: 1, stdout: "", stderr: "", timedOut: false }) });
-    const handle = agentHostHandler(conn, undefined, () => ({ port: hostPort, id: "local:t", local: true }));
+    const handle = agentHostHandler(conn, undefined, () => ({ origin: `http://127.0.0.1:${hostPort}`, id: "local:t", local: true }));
     const port = await listen((req, res) => void handle(req, res, () => ((res.statusCode = 404), res.end())));
     const url = `http://127.0.0.1:${port}/xtrm-api/agent-host/api/v1/submit`;
     const post = (body: unknown, headers: Record<string, string> = { "content-type": "application/json" }) =>
@@ -138,7 +138,7 @@ describe("bridge reference route (XTRM-598)", () => {
       });
     });
     const conn = new AgentHostConnection({ settingsFile: join(mkdtempSync(join(tmpdir(), "xh-")), "c.json"), run: async () => ({ code: 1, stdout: "", stderr: "", timedOut: false }) });
-    const handle = agentHostHandler(conn, undefined, () => ({ port: hostPort, id: "local:t", local: true }));
+    const handle = agentHostHandler(conn, undefined, () => ({ origin: `http://127.0.0.1:${hostPort}`, id: "local:t", local: true }));
     const port = await listen((req, res) => void handle(req, res, () => ((res.statusCode = 404), res.end())));
     const post = (path: string, body: unknown, headers: Record<string, string> = { "content-type": "application/json" }) =>
       fetch(`http://127.0.0.1:${port}/xtrm-api/agent-host/api/v1${path}`, { method: "POST", headers, body: JSON.stringify(body) });

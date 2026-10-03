@@ -1,6 +1,15 @@
-// Real agent host harness for the live Agent half (XTRM-572). Local only: it needs the globally
-// installed `xt` (0.14.0+, `xt host start`), `pi` (1.0.0), tmux, an opencode-go credential, and the
-// xtrm-dev/core checkout for the xtrm-agent-host Pi extension and the Claude hook reporter.
+// Real agent host harness for the live Agent half (XTRM-572). Local only: it needs an agent host,
+// `pi` (1.0.0), tmux, an opencode-go credential, and the xtrm-dev/core checkout for the
+// xtrm-agent-host Pi extension and the Claude hook reporter. The host is
+// `node $XTRM_REAL_HOST_XT` when that names a built core `cli/dist/index.cjs` (use the same core commit
+// as XTRM_CORE_DIR: a host and an extension from different commits can disagree on frames), else the
+// `xt` on PATH.
+//
+// Direct mode (XTRM-600): the host starts with `--direct --direct-host xtrm-front.test`, and a local
+// reverse proxy (the "front", standing in for `tailscale serve`) forwards to it with Host
+// xtrm-front.test and X-Forwarded-For / -Host / -Proto, so every request through the front is
+// non-local and needs a device token. The front logs method, path, status and whether a bearer was
+// present, never the header itself.
 //
 // Isolation, by construction:
 // - The host runs with a temporary HOME: its info file, index cache and journal roots (~/.pi,
@@ -11,6 +20,7 @@
 // - Teardown kills that tmux server and the host, and deletes the temp dirs (the auth copy included).
 import { execFileSync, spawn } from "node:child_process";
 import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, request, type Server } from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -32,7 +42,12 @@ export interface RealHostState {
   tmux: string;
   log: string;
   coreDir: string;
+  /** Port of the local front (reverse proxy) on 127.0.0.1. */
+  frontPort: number;
 }
+
+/** Host name the front forwards, as `tailscale serve` forwards the tailnet name. */
+export const FRONT_HOST = "xtrm-front.test";
 
 const env = process.env;
 export const coreDir = () => resolve(env.XTRM_CORE_DIR ?? join(homedir(), "dev", "core"));
@@ -42,7 +57,15 @@ export const coreDir = () => resolve(env.XTRM_CORE_DIR ?? join(homedir(), "dev",
  */
 const xt = (...args: string[]): [string, string[]] => (env.XTRM_REAL_HOST_XT ? ["node", [resolve(env.XTRM_REAL_HOST_XT), ...args]] : ["xt", args]);
 export const hostPort = () => Number(env.XTRM_REAL_HOST_PORT ?? 47573);
+export const frontPort = () => Number(env.XTRM_REAL_HOST_FRONT_PORT ?? 47574);
 
+/**
+ * Runs `xt host <args>` against the test host (its HOME holds the info file and the device store).
+ * The output can hold a pairing token: callers must not log it.
+ */
+export function hostCli(state: Pick<RealHostState, "home">, ...args: string[]): string {
+  return execFileSync(...xt("host", ...args), { encoding: "utf8", env: cleanEnv({ HOME: state.home, XDG_RUNTIME_DIR: "" }), timeout: 15_000 });
+}
 export function log(state: Pick<RealHostState, "log">, line: string) {
   appendFileSync(state.log, `${new Date().toISOString()} ${line}\n`);
 }
@@ -115,13 +138,20 @@ async function start(runLog: string, partial: { state?: RealHostState }): Promis
     tmux: `xtrm572-${process.pid}`,
     log: runLog,
     coreDir: coreDir(),
+    frontPort: frontPort(),
   };
   partial.state = state;
   const version = execFileSync(...xt("--version"), { encoding: "utf8", env: cleanEnv({}) }).trim();
   const [maj, min] = version.split(".").map(Number);
-  if (maj! === 0 && min! < 14) throw new Error(`xt ${version} on PATH has no \`xt host start\`; need 0.14.0 or later`);
-  log(state, `xt ${version} (${xt()[0]} ${xt()[1].join(" ")}), pi ${execFileSync("pi", ["--version"], { encoding: "utf8", env: cleanEnv({}) }).trim()}`);
-  log(state, `root ${root} socket ${state.socket} port ${state.port} tmux -L ${state.tmux}`);
+  if (maj! === 0 && min! < 14) throw new Error(`xt ${version} has no \`xt host start\`; need 0.14.0 or later`);
+  let coreRev = "?";
+  try {
+    coreRev = execFileSync("git", ["-C", state.coreDir, "rev-parse", "--short=8", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    // not a git checkout
+  }
+  log(state, `host ${[xt()[0], ...xt()[1]].join(" ")} (xt ${version}), core ${state.coreDir} @ ${coreRev}, pi ${execFileSync("pi", ["--version"], { encoding: "utf8", env: cleanEnv({}) }).trim()}`);
+  log(state, `root ${root} socket ${state.socket} port ${state.port} front ${state.frontPort} tmux -L ${state.tmux}`);
 
   // Only the opencode-go credential, copied into the isolated agent dir.
   const authSource = env.XTRM_REAL_HOST_AUTH ?? join(homedir(), ".pi", "agent", "auth.json");
@@ -139,7 +169,7 @@ async function start(runLog: string, partial: { state?: RealHostState }): Promis
   execFileSync("git", ["init", "-q"], { cwd: work });
 
   const hostLog = join(root, "host.log");
-  const host = spawn(...xt("host", "start", "--socket", state.socket, "--port", String(state.port), "--json"), {
+  const host = spawn(...xt("host", "start", "--socket", state.socket, "--port", String(state.port), "--direct", "--direct-host", FRONT_HOST, "--json"), {
     env: cleanEnv({ HOME: home, XDG_RUNTIME_DIR: "" }),
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
@@ -149,8 +179,50 @@ async function start(runLog: string, partial: { state?: RealHostState }): Promis
   host.unref();
   state.hostPid = host.pid!;
   const info = await until("xt host to listen", async () => (await hostGet<{ schema: string }>(state, "/v1/sessions")).schema === "xtrm.agent-host-api.v1");
-  log(state, `xt host pid ${state.hostPid} listening: ${info}`);
+  log(state, `xt host pid ${state.hostPid} listening (direct mode, ${FRONT_HOST}): ${info}`);
+  await startFront(state);
   return state;
+}
+
+let front: Server | null = null;
+
+/** The local front: a reverse proxy that marks every request as proxied, like `tailscale serve`. */
+function startFront(state: RealHostState): Promise<void> {
+  const server = createServer((req, res) => {
+    const bearer = typeof req.headers.authorization === "string" && req.headers.authorization.startsWith("Bearer ");
+    const up = request(
+      {
+        host: "127.0.0.1",
+        port: state.port,
+        method: req.method,
+        path: req.url,
+        headers: { ...req.headers, host: FRONT_HOST, "x-forwarded-for": req.socket.remoteAddress ?? "127.0.0.1", "x-forwarded-host": FRONT_HOST, "x-forwarded-proto": "https" },
+      },
+      (r) => {
+        log(state, `front ${req.method} ${(req.url ?? "").replace(/\?.*$/, "")} ${r.statusCode} bearer=${bearer ? "yes" : "no"}`);
+        res.writeHead(r.statusCode ?? 502, r.headers);
+        r.pipe(res);
+        // An upstream that closes early (a revoked device's stream) closes the client connection too.
+        r.on("close", () => {
+          if (!r.complete) res.destroy();
+        });
+      },
+    );
+    up.on("error", (e) => {
+      if (!res.headersSent) res.writeHead(502, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    });
+    res.on("close", () => up.destroy());
+    req.pipe(up);
+  });
+  front = server;
+  return new Promise((r, reject) => {
+    server.once("error", reject);
+    server.listen(state.frontPort, "127.0.0.1", () => {
+      log(state, `front http://127.0.0.1:${state.frontPort} → 127.0.0.1:${state.port} as ${FRONT_HOST} (X-Forwarded-For)`);
+      r();
+    });
+  });
 }
 
 /** Starts pi in its own tmux session; `extensions` are loaded after xtrm-agent-host (`pi -e`). */
@@ -221,6 +293,12 @@ function running(pid: number): boolean {
 }
 
 export function stopRealHost(state: RealHostState) {
+  if (front) {
+    front.closeAllConnections();
+    front.close();
+    front = null;
+    log(state, "front stopped");
+  }
   try {
     tmux(state, "kill-server");
     log(state, `tmux -L ${state.tmux} stopped`);

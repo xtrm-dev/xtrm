@@ -22,6 +22,10 @@
 // Reference route (XTRM-598): POST /api/v1/references/resolve forwards one reference_resolve_request
 // to the host's POST /v1/references/resolve, under the same rules. Submit and resolve bodies may carry
 // resolved references (96 KB per submit, twice: index and message), so they get a larger body limit.
+// Direct mode (XTRM-600): POST /direct/pair exchanges a pairing token at an HTTPS front and
+// POST /direct/forget drops the stored device (server/agent-host-direct.ts). While no SSH connection
+// is up and a device is paired, the read and write routes go to the front with the device token; a
+// 401 from the front turns the connection into a re-pair prompt.
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -31,7 +35,8 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { Plugin } from "vite";
 import type { AgentHostConnectionState, AgentHostSettings, BootstrapAttempt, TerminalLaunch } from "../src/adapters/agent/host-connection.ts";
-import { localEndpoint, proxyEvents, resolveRepo, type HostEndpoint } from "./agent-host-live.ts";
+import { DirectConnection, PairError, REPAIR_MESSAGE } from "./agent-host-direct.ts";
+import { endpointHeaders, localEndpoint, loopbackOrigin, proxyEvents, resolveRepo, type HostEndpoint } from "./agent-host-live.ts";
 import { resolveSbBin } from "./substrate-cli.ts";
 
 export const ENSURE_SCHEMA = "xtrm.agent-host-ensure.v1";
@@ -237,18 +242,20 @@ export function freePort(): Promise<number> {
   });
 }
 
-/** GET /v1/sessions on the forwarded port answers as an xtrm.agent-host-api.v1 host. */
-export async function hostApi(localPort: number, path: string, timeoutMs = 5_000): Promise<{ status: number; body: unknown }> {
+type EndpointTarget = Pick<HostEndpoint, "origin" | "bearer">;
+
+/** GET on the host API: loopback and forwarded ports, or the direct-mode front with its device token. */
+export async function hostApi(ep: EndpointTarget, path: string, timeoutMs = 5_000): Promise<{ status: number; body: unknown }> {
   // Loopback URL, loopback Host header, no proxy headers: the host treats the request as local (§35.5).
-  const res = await fetch(`http://127.0.0.1:${localPort}${path}`, { signal: AbortSignal.timeout(timeoutMs) });
+  const res = await fetch(`${ep.origin}${path}`, { headers: endpointHeaders(ep), signal: AbortSignal.timeout(timeoutMs) });
   return { status: res.status, body: await res.json() };
 }
 
 /** POST a JSON body to the host API; the host waits up to its command timeout (10 s) for the session. */
-export async function hostPost(localPort: number, path: string, body: unknown, timeoutMs = 15_000): Promise<{ status: number; body: unknown }> {
-  const res = await fetch(`http://127.0.0.1:${localPort}${path}`, {
+export async function hostPost(ep: EndpointTarget, path: string, body: unknown, timeoutMs = 15_000): Promise<{ status: number; body: unknown }> {
+  const res = await fetch(`${ep.origin}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: endpointHeaders(ep, { "content-type": "application/json" }),
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
   });
@@ -291,7 +298,7 @@ export function isSubmitRequest(b: Record<string, unknown>): boolean {
 
 async function probe(localPort: number): Promise<boolean> {
   try {
-    const { status, body } = await hostApi(localPort, "/v1/sessions", 2_000);
+    const { status, body } = await hostApi({ origin: loopbackOrigin(localPort) }, "/v1/sessions", 2_000);
     return status === 200 && (body as { schema?: unknown })?.schema === API_SCHEMA;
   } catch {
     return false;
@@ -306,11 +313,14 @@ export interface ConnectionOptions {
   forwardTimeoutMs?: number;
 }
 
+/** The SSH half of AgentHostConnectionState; the bridge adds the direct-mode state. */
+export type SshConnectionState = Omit<AgentHostConnectionState, "direct">;
+
 /** One connection (target + optional remote command) and its forward lifecycle. */
 export class AgentHostConnection {
-  private state: AgentHostConnectionState;
+  private state: SshConnectionState;
   private forward: ChildProcess | null = null;
-  private pending: Promise<AgentHostConnectionState> | null = null;
+  private pending: Promise<SshConnectionState> | null = null;
   readonly sshBin: string;
   private readonly run: SshRunner;
   private readonly settingsFile: string;
@@ -323,11 +333,11 @@ export class AgentHostConnection {
     this.state = { phase: settings ? "disconnected" : "unconfigured", settings };
   }
 
-  status(): AgentHostConnectionState {
+  status(): SshConnectionState {
     return this.state;
   }
 
-  save(settings: AgentHostSettings): AgentHostConnectionState {
+  save(settings: AgentHostSettings): SshConnectionState {
     this.disconnect();
     mkdirSync(dirname(this.settingsFile), { recursive: true, mode: 0o700 });
     writeFileSync(this.settingsFile, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
@@ -335,7 +345,7 @@ export class AgentHostConnection {
     return this.state;
   }
 
-  connect(): Promise<AgentHostConnectionState> {
+  connect(): Promise<SshConnectionState> {
     if (this.pending) return this.pending;
     if (this.state.phase === "connected") return Promise.resolve(this.state);
     const settings = this.state.settings;
@@ -344,7 +354,7 @@ export class AgentHostConnection {
     return this.pending;
   }
 
-  private async doConnect(settings: AgentHostSettings): Promise<AgentHostConnectionState> {
+  private async doConnect(settings: AgentHostSettings): Promise<SshConnectionState> {
     this.state = { phase: "connecting", settings, step: "bootstrap" };
     try {
       const host = await bootstrap(settings.target, { remoteCommand: settings.remoteCommand, run: this.run, timeoutMs: this.opts.bootstrapTimeoutMs });
@@ -393,7 +403,7 @@ export class AgentHostConnection {
   }
 
   /** Stops the forward. The remote agent host keeps running: agents outlive the GUI (§35.4). */
-  disconnect(): AgentHostConnectionState {
+  disconnect(): SshConnectionState {
     this.stopForward();
     if (this.state.settings) this.state = { phase: "disconnected", settings: this.state.settings };
     return this.state;
@@ -406,7 +416,7 @@ export class AgentHostConnection {
   /** The forwarded remote host while connected; its identity changes with target and host pid. */
   endpoint(): HostEndpoint | null {
     const host = this.state.phase === "connected" ? this.state.host : undefined;
-    return host ? { port: host.localPort, id: `ssh:${this.state.settings?.target}:${host.pid}`, local: false } : null;
+    return host ? { origin: loopbackOrigin(host.localPort), id: `ssh:${this.state.settings?.target}:${host.pid}`, local: false } : null;
   }
 
   private load(): AgentHostSettings | null {
@@ -459,12 +469,24 @@ function launchTerminal(argv: string[]): boolean {
   return true;
 }
 
+const NO_HOST = "no agent host: connect over SSH, pair a direct-mode front, or start `xt host start` on this machine";
+
 /**
- * The host the read routes use: the SSH forward while connected, else the loopback host (XTRM-572).
- * `local` is injectable for tests.
+ * The host the read and write routes use: the SSH forward while connected, else a paired direct-mode
+ * front (XTRM-600), else the loopback host (XTRM-572). `local` and `direct` are injectable for tests.
  */
-export function agentHostHandler(conn: AgentHostConnection, prefix = "/xtrm-api/agent-host", local: () => HostEndpoint | null = () => localEndpoint()) {
-  const endpoint = () => conn.endpoint() ?? local();
+export function agentHostHandler(
+  conn: AgentHostConnection,
+  prefix = "/xtrm-api/agent-host",
+  local: () => HostEndpoint | null = () => localEndpoint(),
+  direct: DirectConnection | null = null,
+) {
+  const endpoint = () => conn.endpoint() ?? direct?.endpoint() ?? local();
+  const state = (ssh: SshConnectionState): AgentHostConnectionState => ({ ...ssh, direct: direct?.status() ?? { phase: "unpaired", url: null } });
+  /** A 401 from the front for the stored device token: drop it and ask the operator to pair again. */
+  const refused = (ep: HostEndpoint, status: number) => {
+    if (status === 401 && ep.bearer) direct?.refused(ep.bearer);
+  };
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = new URL(req.url ?? "/", "http://local");
     if (!url.pathname.startsWith(prefix)) return next();
@@ -478,17 +500,19 @@ export function agentHostHandler(conn: AgentHostConnection, prefix = "/xtrm-api/
     if (!LOOPBACK.has(req.socket.remoteAddress ?? "")) return send(403, { ok: false, error: "the agent host bridge answers loopback clients only" });
 
     if (req.method === "GET") {
-      if (path === "/connection") return send(200, conn.status());
+      if (path === "/connection") return send(200, state(conn.status()));
       // Read-only host API: the session list, one session, and the event stream.
       const m = /^\/api\/v1\/sessions(?:\/([^/]+))?$/.exec(path);
       if (m || path === "/api/v1/events") {
         const ep = endpoint();
-        if (!ep) return send(409, { ok: false, error: "no agent host: connect over SSH or start `xt host start` on this machine" });
+        if (!ep) return send(409, { ok: false, error: NO_HOST });
         const id = m?.[1] ? decodeURIComponent(m[1]) : (url.searchParams.get("sessionId") ?? null);
         if (id !== null && !SESSION_ID_RE.test(id)) return send(400, { ok: false, error: "invalid session id" });
-        if (!m) return proxyEvents(ep, req, res, id);
+        if (!m) return proxyEvents(ep, req, res, id, (status) => refused(ep, status));
         try {
-          const r = await hostApi(ep.port, id ? `/v1/sessions/${encodeURIComponent(id)}` : "/v1/sessions");
+          const r = await hostApi(ep, id ? `/v1/sessions/${encodeURIComponent(id)}` : "/v1/sessions");
+          refused(ep, r.status);
+          if (r.status === 401 && ep.bearer) return send(401, { ok: false, code: "repair_required", error: REPAIR_MESSAGE });
           res.setHeader("x-xtrm-agent-host", ep.id);
           return send(r.status, r.body);
         } catch (e) {
@@ -521,9 +545,11 @@ export function agentHostHandler(conn: AgentHostConnection, prefix = "/xtrm-api/
             return send(400, { ok: false, error: `expected an xtrm.agent-host-api.v1 ${submit ? "submit_request" : "reference_resolve_request"}` });
           }
           const ep = endpoint();
-          if (!ep) return send(409, { ok: false, error: "no agent host: connect over SSH or start `xt host start` on this machine" });
+          if (!ep) return send(409, { ok: false, error: NO_HOST });
           try {
-            const r = await hostPost(ep.port, submit ? "/v1/submit" : "/v1/references/resolve", body);
+            const r = await hostPost(ep, submit ? "/v1/submit" : "/v1/references/resolve", body);
+            refused(ep, r.status);
+            if (r.status === 401 && ep.bearer) return send(401, { ok: false, code: "repair_required", error: REPAIR_MESSAGE });
             res.setHeader("x-xtrm-agent-host", ep.id);
             return send(r.status, r.body);
           } catch (e) {
@@ -536,12 +562,25 @@ export function agentHostHandler(conn: AgentHostConnection, prefix = "/xtrm-api/
           const hasCommand = typeof body.remoteCommand === "string" && body.remoteCommand.trim() !== "";
           const remoteCommand = hasCommand ? validateRemoteCommand(body.remoteCommand) : null;
           if (hasCommand && !remoteCommand) return send(400, { ok: false, error: "invalid remote command: one line, at most 4096 characters" });
-          return send(200, conn.save({ target, remoteCommand }));
+          return send(200, state(conn.save({ target, remoteCommand })));
         }
         case "/connect":
-          return send(200, await conn.connect());
+          return send(200, state(await conn.connect()));
         case "/disconnect":
-          return send(200, conn.disconnect());
+          return send(200, state(conn.disconnect()));
+        case "/direct/pair": {
+          if (!direct) return send(404, { ok: false, error: "direct mode is not available in this bridge" });
+          try {
+            await direct.pair({ url: body.url as string, pairingToken: body.pairingToken as string, deviceName: body.deviceName as string });
+          } catch (e) {
+            if (!(e instanceof PairError)) throw e;
+            return send(400, { ok: false, code: e.code, error: e.message });
+          }
+          return send(200, state(conn.status()));
+        }
+        case "/direct/forget":
+          direct?.forget();
+          return send(200, state(conn.status()));
         case "/terminal": {
           const target = conn.status().settings?.target;
           if (!target) return send(409, { ok: false, error: "no SSH connection is configured" });
@@ -558,8 +597,9 @@ export function agentHostHandler(conn: AgentHostConnection, prefix = "/xtrm-api/
   };
 }
 
-export function agentHostSshApi(opts: ConnectionOptions & { prefix?: string } = {}): Plugin {
+export function agentHostSshApi(opts: ConnectionOptions & { prefix?: string; deviceFile?: string } = {}): Plugin {
   let conn: AgentHostConnection | null = null;
+  let direct: DirectConnection | null = null;
   // Created lazily so `vite build` neither reads settings nor resolves ssh.
   const get = () =>
     (conn ??= new AgentHostConnection({
@@ -568,7 +608,8 @@ export function agentHostSshApi(opts: ConnectionOptions & { prefix?: string } = 
       settingsFile: opts.settingsFile ?? (process.env.XTRM_AGENT_CONNECTION_FILE || undefined),
     }));
   const install = (server: { middlewares: { use: (fn: ReturnType<typeof agentHostHandler>) => void }; httpServer?: { once: (e: "close", fn: () => void) => void } | null }) => {
-    const handler = agentHostHandler(get(), opts.prefix);
+    direct ??= new DirectConnection({ file: opts.deviceFile ?? (process.env.XTRM_AGENT_DEVICE_FILE || undefined) });
+    const handler = agentHostHandler(get(), opts.prefix, undefined, direct);
     server.middlewares.use(handler);
     // Stop the forward with the server; the remote host keeps running.
     server.httpServer?.once("close", () => conn?.disconnect());

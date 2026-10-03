@@ -17,7 +17,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:real-host": "playwright test -c playwright.real-host.config.ts"
+    "test:e2e:real-host": "playwright test -c playwright.real-host.config.ts",
+    "test:e2e:real-host:direct": "playwright test -c playwright.real-host-direct.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

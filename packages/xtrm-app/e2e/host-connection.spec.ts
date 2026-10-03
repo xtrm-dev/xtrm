@@ -59,3 +59,40 @@ test("an ssh failure shows the error and offers Retry", async ({ page }) => {
   await page.getByTestId("host-connection-toggle").click();
   await expect(page.getByTestId("host-connection-error")).toBeVisible();
 });
+
+// Direct mode (PRD §35.5, XTRM-600) on the fixture: the real front, pairing and revoke are covered by
+// e2e/real-host/direct-mode.spec.ts.
+test("direct mode pairs once with a pairing token, refuses a replay, and forgets the device", async ({ page }) => {
+  await page.goto("/agent/pi-main");
+  const panel = page.getByTestId("host-connection");
+  const toggle = page.getByTestId("host-connection-toggle");
+  await toggle.click();
+  await panel.getByTestId("host-mode-direct").click();
+  await expect(page.getByTestId("host-direct-phase")).toHaveText("Not paired");
+  const form = panel.getByRole("form", { name: "Pair with an agent host" });
+  const pairButton = form.getByRole("button", { name: "Pair", exact: true });
+  await form.getByRole("textbox", { name: "Front URL" }).fill("https://agent-box.tailnet.ts.net");
+  await expect(pairButton).toBeDisabled();
+  // The pairing token is a password field: never echoed on screen.
+  await expect(form.getByLabel("Pairing token")).toHaveAttribute("type", "password");
+  await form.getByLabel("Pairing token").fill("xtp_fixture1");
+  await form.getByRole("textbox", { name: "Device name" }).fill("laptop");
+  await pairButton.click();
+  await expect(page.getByTestId("host-direct-phase")).toHaveText("Paired");
+  await expect(page.getByTestId("host-direct-device")).toContainText("as laptop");
+  await expect(page.getByTestId("host-session-count")).toHaveText("2 sessions on host");
+  await expect(toggle).toHaveAccessibleName("Agent host · Paired");
+
+  // The same token again is refused, and the paired device stays.
+  await panel.getByRole("button", { name: "Pair again" }).click();
+  await form.getByLabel("Pairing token").fill("xtp_fixture1");
+  await pairButton.click();
+  await expect(page.getByTestId("host-direct-error")).toContainText("unknown, used or expired");
+  await expect(form.getByLabel("Pairing token")).toHaveValue("");
+  await panel.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByTestId("host-direct-phase")).toHaveText("Paired");
+
+  await panel.getByRole("button", { name: "Forget device" }).click();
+  await expect(page.getByTestId("host-direct-phase")).toHaveText("Not paired");
+  await expect(form.getByRole("textbox", { name: "Front URL" })).toHaveValue("");
+});

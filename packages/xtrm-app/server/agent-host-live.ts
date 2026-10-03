@@ -1,23 +1,35 @@
 // Read routes of the live Agent half (XTRM-572): which agent host the bridge reads, the event
 // stream proxy, and repository identity for local session paths.
 //
-// Host selection: the SSH-forwarded remote host while the SSH connection is up (XTRM-585), else
-// the loopback host on this machine: XTRM_AGENT_HOST_PORT, or the port in the host's info file
-// (~/.xtrm/run/agent-host.json, written by `xt host start`) when its pid is alive. Requests carry a
-// loopback Host header and no proxy headers, so the host treats them as local (PRD §35.5).
+// Host selection: the SSH-forwarded remote host while the SSH connection is up (XTRM-585), else a
+// paired direct-mode front (XTRM-600), else the loopback host on this machine: XTRM_AGENT_HOST_PORT,
+// or the port in the host's info file (~/.xtrm/run/agent-host.json, written by `xt host start`) when
+// its pid is alive. Loopback and forwarded requests carry a loopback Host header and no proxy
+// headers, so the host treats them as local (PRD §35.5). Direct-mode requests go to the HTTPS front
+// with `Authorization: Bearer <device token>`; the token never reaches the page.
 
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { request, type IncomingMessage, type ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 export interface HostEndpoint {
-  port: number;
+  /** `http://127.0.0.1:<port>` for the loopback host and the SSH forward; the front URL in direct mode. */
+  origin: string;
   /** Stable identity of the host instance; sent to the app as `x-xtrm-agent-host`. */
   id: string;
   /** True for the loopback host on this machine: its session paths exist here. */
   local: boolean;
+  /** Direct mode: the device token, sent as `Authorization: Bearer`. Never logged or sent to the page. */
+  bearer?: string;
+}
+
+export const loopbackOrigin = (port: number) => `http://127.0.0.1:${port}`;
+
+/** Request headers for one endpoint: the bearer token in direct mode, nothing else added. */
+export function endpointHeaders(ep: Pick<HostEndpoint, "bearer">, extra: Record<string, string> = {}): Record<string, string> {
+  return ep.bearer ? { ...extra, authorization: `Bearer ${ep.bearer}` } : extra;
 }
 
 export function defaultInfoFile(): string {
@@ -36,11 +48,11 @@ function alive(pid: number): boolean {
 /** The loopback agent host: an explicit port, else a live info file; null when none runs. */
 export function localEndpoint(env: NodeJS.ProcessEnv = process.env, infoFile = env.XTRM_AGENT_HOST_INFO || defaultInfoFile()): HostEndpoint | null {
   const explicit = Number(env.XTRM_AGENT_HOST_PORT);
-  if (Number.isInteger(explicit) && explicit > 0 && explicit < 65536) return { port: explicit, id: `local:${explicit}`, local: true };
+  if (Number.isInteger(explicit) && explicit > 0 && explicit < 65536) return { origin: loopbackOrigin(explicit), id: `local:${explicit}`, local: true };
   try {
     const info = JSON.parse(readFileSync(infoFile, "utf8")) as { port?: unknown; pid?: unknown };
     const { port, pid } = info;
-    if (Number.isInteger(port) && Number.isInteger(pid) && alive(pid as number)) return { port: port as number, id: `local:${port}:${pid}`, local: true };
+    if (Number.isInteger(port) && Number.isInteger(pid) && alive(pid as number)) return { origin: loopbackOrigin(port as number), id: `local:${port}:${pid}`, local: true };
   } catch {
     // no info file: no local host
   }
@@ -50,49 +62,54 @@ export function localEndpoint(env: NodeJS.ProcessEnv = process.env, infoFile = e
 /**
  * Pipe the host's SSE stream (GET /v1/events) to the client. Last-Event-ID is forwarded so a
  * reconnecting client resumes from the host's replay buffer. The upstream request ends with the
- * client, and the client response ends with the upstream (host stopped, forward closed).
+ * client, and the client response ends with the upstream (host stopped, forward closed, device
+ * revoked). A non-200 answer is passed on with its status; `onStatus` sees it first (direct mode
+ * turns a 401 into a re-pair prompt).
  */
-export function proxyEvents(ep: HostEndpoint, req: IncomingMessage, res: ServerResponse, sessionId: string | null) {
+export function proxyEvents(ep: HostEndpoint, req: IncomingMessage, res: ServerResponse, sessionId: string | null, onStatus?: (status: number) => void) {
   const lastEventId = req.headers["last-event-id"];
   const path = `/v1/events${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`;
-  const upstream = request(
-    {
-      host: "127.0.0.1",
-      port: ep.port,
-      path,
-      method: "GET",
-      headers: { accept: "text/event-stream", ...(typeof lastEventId === "string" && /^\d{1,20}$/.test(lastEventId) ? { "last-event-id": lastEventId } : {}) },
-    },
-    (up) => {
-      if (up.statusCode !== 200) {
-        res.statusCode = 502;
-        res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify({ ok: false, error: `agent host event stream answered ${up.statusCode}` }));
-        up.resume();
-        return;
-      }
-      res.writeHead(200, {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-store",
-        connection: "keep-alive",
-        "x-xtrm-agent-host": ep.id,
-      });
-      res.flushHeaders();
-      up.on("data", (chunk: Buffer) => res.write(chunk));
-      up.on("end", () => res.end());
-      up.on("error", () => res.end());
-    },
-  );
-  upstream.on("error", (e) => {
-    if (res.headersSent) return void res.end();
-    res.statusCode = 502;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ ok: false, error: `agent host unreachable: ${e.message}` }));
-  });
-  const stop = () => upstream.destroy();
+  const ctl = new AbortController();
+  const stop = () => ctl.abort();
   req.on("close", stop);
   res.on("close", stop);
-  upstream.end();
+  const fail = (status: number, error: string) => {
+    if (res.headersSent) return void res.end();
+    res.statusCode = status;
+    res.setHeader("content-type", "application/json");
+    res.setHeader("cache-control", "no-store");
+    res.end(JSON.stringify({ ok: false, error }));
+  };
+  void (async () => {
+    let up: Response;
+    try {
+      up = await fetch(`${ep.origin}${path}`, {
+        headers: endpointHeaders(ep, { accept: "text/event-stream", ...(typeof lastEventId === "string" && /^\d{1,20}$/.test(lastEventId) ? { "last-event-id": lastEventId } : {}) }),
+        signal: ctl.signal,
+      });
+    } catch (e) {
+      if (!ctl.signal.aborted) fail(502, `agent host unreachable: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
+    onStatus?.(up.status);
+    if (up.status !== 200 || !up.body) {
+      await up.body?.cancel().catch(() => undefined);
+      return fail(up.status === 401 ? 401 : 502, `agent host event stream answered ${up.status}`);
+    }
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-store",
+      connection: "keep-alive",
+      "x-xtrm-agent-host": ep.id,
+    });
+    res.flushHeaders();
+    try {
+      for await (const chunk of up.body as unknown as AsyncIterable<Uint8Array>) res.write(chunk);
+    } catch {
+      // upstream closed or aborted
+    }
+    res.end();
+  })();
 }
 
 /** `owner/name` from a git remote URL (https, ssh, scp-like); null for anything else. */
