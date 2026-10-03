@@ -40,6 +40,8 @@ test("the open session outside the repository filter stays in the list", async (
 
 for (const t of ["dark", "light"] as const) {
   test(`details and filter screens (${t})`, async ({ page }) => {
+    // Three navigations with screenshots; font loading is slow on a busy machine.
+    test.slow();
     await theme(page, t);
     await page.goto("/agent/pi-main");
     await expect(page.getByTestId("session-details")).toBeVisible();
