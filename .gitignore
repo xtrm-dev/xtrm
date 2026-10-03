@@ -64,3 +64,10 @@ __pycache__/
 .specialists/db/*.db-shm
 .worktrees/xtrm-2m3.10/xtrm-2m3.10-executor/
 .worktrees/
+
+# xtrm runtime state (per-machine, do not track)
+.xtrm/skills/state.json
+.xtrm/worktrees/
+.xtrm/cache/
+.xtrm/statusline-claim
+.pi/skills/
