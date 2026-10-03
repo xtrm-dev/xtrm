@@ -4,13 +4,26 @@ import remarkGfm from "remark-gfm";
 import { ReferenceChip, referenceFromHref, remarkReferences } from "../refs/references.tsx";
 import { cx } from "./primitives.tsx";
 
-/** Read-only GitHub-flavoured markdown. Links open in a new tab; issue references render as chips; raw HTML is not rendered. */
-export const Markdown = memo(function Markdown({ children, className, inline }: { children: string; className?: string; inline?: boolean }) {
+type MdNode = { type: string; value?: string; children?: MdNode[] };
+
+/** Soft line breaks render as line breaks, as in chat replies (XTRM-615). Code is untouched: it is never a `text` node. */
+function remarkSoftBreaks() {
+  const split = (value: string): MdNode[] =>
+    value.split("\n").flatMap((part, i): MdNode[] => [...(i ? [{ type: "break" }] : []), ...(part ? [{ type: "text", value: part }] : [])]);
+  const walk = (node: MdNode) => {
+    if (!node.children) return;
+    node.children = node.children.flatMap((child) => (child.type === "text" && child.value?.includes("\n") ? split(child.value) : (walk(child), [child])));
+  };
+  return (tree: MdNode) => walk(tree);
+}
+
+/** Read-only GitHub-flavoured markdown. Links open in a new tab; issue references render as chips; raw HTML is not rendered. `breaks` keeps single newlines. */
+export const Markdown = memo(function Markdown({ children, className, inline, breaks }: { children: string; className?: string; inline?: boolean; breaks?: boolean }) {
   if (!children.trim()) return null;
   return (
     <div className={cx("xtrm-prose", inline && "[&>p]:m-0", className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkReferences]}
+        remarkPlugins={breaks ? [remarkGfm, remarkReferences, remarkSoftBreaks] : [remarkGfm, remarkReferences]}
         urlTransform={(url) => (referenceFromHref(url) ? url : defaultUrlTransform(url))}
         components={{
           // A wide table scrolls inside its own box instead of squeezing every column (XTRM-397).

@@ -133,7 +133,7 @@ function FrameView({ s, f }: { s: AgentSessionDetail; f: InteractionFrame }) {
             {respond.error.message}
           </p>
         )}
-        {f.response && <Markdown className="mt-4 text-[0.92rem] leading-7 text-ink">{f.response}</Markdown>}
+        {f.response && <Markdown breaks className="mt-4 text-[0.92rem] leading-7 text-ink">{f.response}</Markdown>}
         {f.status === "working" && disconnected && (
           <p className="mt-3 flex items-center gap-2 pl-1.5 text-xs text-ink-faint" data-testid="frame-disconnected">
             <Icon name="alert" size="xs" />
