@@ -38,7 +38,8 @@ test("session rows show live state, role, work item, model, context, and last ac
   await expect(row).toContainText("opus 5.5 · high");
   await expect(row).toContainText("64%");
   await expect(row).toContainText("now");
-  await expect(page.getByTestId("session-details")).toContainText("anthropic/claude-opus-5-5 · high");
+  await expect(page.getByTestId("session-details")).toContainText("opus 5.5 · high");
+  await expect(page.getByTestId("session-details")).toContainText("anthropic");
   await expect(page.getByTestId("session-details")).toContainText("64% · 128k / 200k");
   // A large-context one-decimal share shows its decimal, never a rounded 0% (XTRM-612).
   await expect(sessionRow(page, "quant-reviewer")).toContainText("1.0%");

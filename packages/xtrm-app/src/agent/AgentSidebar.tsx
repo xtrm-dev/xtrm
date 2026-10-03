@@ -7,7 +7,7 @@ import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, cx, relativeTime } from "../ui/primitives.tsx";
 import { HostConnectionPanel, HostConnectionToggle } from "./HostConnection.tsx";
-import { ContextMeter, STATE_LABEL, STATE_TONE, contextLabel, modelLabel, type ShownState } from "./meta.tsx";
+import { ContextMeter, STATE_LABEL, STATE_TONE, contextLabel, modelLabel, modelProvider } from "./meta.tsx";
 import { useAgentSession, useAgentSessions, useShownState } from "./queries.ts";
 
 export type SessionScope = "repository" | "all";
@@ -19,6 +19,8 @@ type Item = { type: "header"; key: string; label: string; count: number } | { ty
 const HEADER_H = 30;
 const ROW_H = 46;
 const SCOPE_KEY = "xtrm.agent.scope.v1";
+/** Repository-scope group holding the open session when it belongs to another repository. */
+export const outsideGroup = (repo: string) => `Open · not in ${repo.split("/").pop()}`;
 
 export const sessionIdFromPath = (pathname: string) => /^\/agent\/([^/?#]+)/.exec(pathname)?.[1] ?? null;
 
@@ -49,7 +51,11 @@ function threaded(sessions: AgentSessionSummary[]): Array<{ session: AgentSessio
   return out;
 }
 
-export function buildSessionItems(sessions: AgentSessionSummary[], scope: SessionScope, repo: string, filter: string): Item[] {
+/**
+ * List items by scope and text filter. In repository scope the open session stays visible when it
+ * belongs to another repository (or none): it gets its own group instead of disappearing.
+ */
+export function buildSessionItems(sessions: AgentSessionSummary[], scope: SessionScope, repo: string, filter: string, openId: string | null = null): Item[] {
   const q = filter.trim().toLowerCase();
   const match = (s: AgentSessionSummary) => !q || [s.name, s.title, s.role, s.workRef, s.model].some((v) => v?.toLowerCase().includes(q));
   const visible = sessions.filter(match);
@@ -58,6 +64,7 @@ export function buildSessionItems(sessions: AgentSessionSummary[], scope: Sessio
       ? [
           ["Live", visible.filter((s) => s.repo === repo && s.state !== "history")],
           ["History", visible.filter((s) => s.repo === repo && s.state === "history")],
+          [outsideGroup(repo), visible.filter((s) => s.id === openId && s.repo !== repo)],
         ]
       : [
           ...[...new Set(visible.map((s) => s.repo).filter((r): r is string => !!r))]
@@ -105,19 +112,19 @@ function SessionRow({ s, depth, selected, onOpen }: { s: AgentSessionSummary; de
   );
 }
 
-/** State plus what the session accepts: `working · prompt · steer`, `settled · presence only`, `history only`. */
-export function stateWithCapabilities(s: Pick<AgentSessionSummary, "state" | "capabilities">, shown: ShownState = s.state): string {
-  if (s.state === "history") return STATE_LABEL.history;
-  const caps = s.capabilities.includes("presence") ? ["presence only"] : s.capabilities;
-  return [STATE_LABEL[shown], ...caps].join(" · ");
+/** What the session accepts: `prompt · steer · abort`, `presence only`; null for history or none. */
+export function acceptsLabel(s: Pick<AgentSessionSummary, "state" | "capabilities">): string | null {
+  if (s.state === "history" || s.capabilities.length === 0) return null;
+  return s.capabilities.includes("presence") ? "presence only" : s.capabilities.join(" · ");
 }
 
-function Detail({ label, value, mono }: { label: string; value: string | number | null | undefined; mono?: boolean }) {
+/** One details row; `wrap` rows break instead of truncating (short values whose meaning a cut would lose). */
+function Detail({ label, value, mono, wrap }: { label: string; value: string | number | null | undefined; mono?: boolean; wrap?: boolean }) {
   if (value === null || value === undefined || value === "") return null;
   return (
     <>
       <dt className="text-ink-faint">{label}</dt>
-      <dd className={cx("min-w-0 truncate text-ink-muted", mono && "font-mono text-[0.68rem]")} title={String(value)}>
+      <dd className={cx("min-w-0 text-ink-muted", wrap ? "break-words" : "truncate", mono && "font-mono text-[0.68rem]")} title={String(value)}>
         {value}
       </dd>
     </>
@@ -132,7 +139,7 @@ function SessionDetails({ id }: { id: string }) {
   if (!s) return null;
   const tokens = s.tokens ? `${Math.round(s.tokens.input / 1000)}k in · ${Math.round(s.tokens.output / 1000)}k out` : null;
   return (
-    <section className="border-t border-border-muted px-1 pt-1" aria-label="Session details">
+    <section className="thin-scrollbar min-h-0 shrink overflow-y-auto border-t border-border-muted px-1 pt-1" aria-label="Session details">
       <button
         type="button"
         aria-expanded={open}
@@ -144,9 +151,11 @@ function SessionDetails({ id }: { id: string }) {
       </button>
       {open && (
         <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-2 pt-0.5 pb-2 text-xs" data-testid="session-details">
-          <Detail label="Provider" value={PROVIDER_LABEL[s.provider]} />
-          <Detail label="State" value={stateWithCapabilities(s, state)} />
-          <Detail label="Model" value={[s.model, s.thinking].filter(Boolean).join(" · ")} />
+          <Detail label="Agent" value={PROVIDER_LABEL[s.provider]} />
+          <Detail label="State" value={STATE_LABEL[state]} wrap />
+          <Detail label="Accepts" value={acceptsLabel(s)} wrap />
+          <Detail label="Model" value={modelLabel(s)} wrap />
+          <Detail label="Provider" value={modelProvider(s.model)} />
           <Detail label="Context" value={s.context ? `${contextLabel(s.context)} · ${Math.round(s.context.used / 1000)}k / ${Math.round(s.context.window / 1000)}k` : null} />
           <Detail label="Tokens" value={tokens} />
           <Detail label="Cost" value={s.costUsd !== null ? `$${s.costUsd.toFixed(2)}` : null} />
@@ -180,7 +189,11 @@ export function AgentSidebar() {
     }
   };
 
-  const items = useMemo(() => buildSessionItems(sessions.data ?? [], scope, repo.fullName, filter), [sessions.data, scope, repo.fullName, filter]);
+  const items = useMemo(
+    () =>
+      buildSessionItems(sessions.data ?? [], scope, repo.fullName, filter, selectedId),
+    [sessions.data, scope, repo.fullName, filter, selectedId],
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -235,7 +248,7 @@ export function AgentSidebar() {
           />
         </label>
       </div>
-      <div ref={scrollRef} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-1" role="list" aria-label="Sessions">
+      <div ref={scrollRef} className="thin-scrollbar min-h-36 flex-1 overflow-y-auto px-1" role="list" aria-label="Sessions">
         {sessions.isPending && <p className="px-3 py-2 text-xs text-ink-faint">Loading sessions…</p>}
         {sessions.data && items.length === 0 && <p className="px-3 py-2 text-xs text-ink-faint">{filter ? "No session matches the filter." : `No sessions in ${repo.name}.`}</p>}
         <div className="relative" style={{ height: virtualizer.getTotalSize() }}>

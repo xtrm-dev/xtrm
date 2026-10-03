@@ -77,8 +77,86 @@ export function capabilities(s: Pick<HostSessionSummary, "state" | "capabilities
   return s.capabilities.filter((c: HostCapability): c is "prompt" | "steer" | "abort" => c === "prompt" || c === "steer" || c === "abort");
 }
 
-export function displayName(s: HostSessionSummary): string {
-  return s.name ?? s.tmux?.session ?? s.sessionId.slice(0, 8);
+/** Names the app saw on live sessions, kept after they stop (XTRM-616). */
+export interface SessionNames {
+  get(sessionId: string): string | undefined;
+  set(sessionId: string, name: string): void;
+}
+
+const NAMES_KEY = "xtrm.agent.names.v1";
+const NAMES_MAX = 500;
+
+/** Browser-local name memory; an in-memory map when storage is unavailable. */
+export function storedSessionNames(storage: Pick<Storage, "getItem" | "setItem"> | null = typeof localStorage === "undefined" ? null : localStorage): SessionNames {
+  let names = new Map<string, string>();
+  try {
+    const raw = storage?.getItem(NAMES_KEY);
+    if (raw) names = new Map(Object.entries(JSON.parse(raw) as Record<string, string>).filter(([, v]) => typeof v === "string"));
+  } catch {
+    // unreadable storage: start empty
+  }
+  return {
+    get: (id) => names.get(id),
+    set(id, name) {
+      if (names.get(id) === name) return;
+      names.delete(id);
+      names.set(id, name);
+      // Oldest first in insertion order: drop the oldest beyond the cap.
+      for (const k of names.keys()) {
+        if (names.size <= NAMES_MAX) break;
+        names.delete(k);
+      }
+      try {
+        storage?.setItem(NAMES_KEY, JSON.stringify(Object.fromEntries(names)));
+      } catch {
+        // storage full or blocked: keep the in-memory map
+      }
+    },
+  };
+}
+
+const NAME_CHARS = 72;
+const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
+
+/** A prompt that can name a session: letters or digits, not a slash command; bounded like the host. */
+export function promptName(text: string): string | null {
+  const t = oneLine(text);
+  if (!/[\p{L}\p{N}]/u.test(t) || t.startsWith("/")) return null;
+  return t.length > NAME_CHARS ? `${t.slice(0, NAME_CHARS - 1)}…` : t;
+}
+
+/**
+ * The host names a history-only session from its journal: the Pi session_info name, else the
+ * Claude AI title, else the first prompt. True when that name is the first prompt (bounded).
+ */
+function isFirstPrompt(name: string, frames: InteractionFrame[]): boolean {
+  const first = frames.find((f) => f.ingress.text)?.ingress.text;
+  if (!first) return false;
+  const n = oneLine(name).replace(/…$/, "");
+  return n.length > 0 && oneLine(first).startsWith(n);
+}
+
+/**
+ * Session name precedence (XTRM-616): explicit name (XTRM_SESSION_NAME, Pi rename) > the name seen
+ * while live > the last meaningful prompt > a generated name. A live session's host name (the
+ * extension falls back to the tmux session) is the explicit one; so is its tmux session without one.
+ * A history-only session's host name is explicit unless it is the first prompt; with no Frames
+ * loaded the two cannot be told apart, so a name seen while live wins over it.
+ */
+export function sessionName(h: HostSessionSummary, frames: InteractionFrame[], seen: string | undefined): string {
+  const generated = h.tmux?.session ?? h.sessionId.slice(0, 8);
+  const lastPrompt = () => {
+    for (let i = frames.length - 1; i >= 0; i--) {
+      const n = promptName(frames[i]!.ingress.text);
+      if (n) return n;
+    }
+    return null;
+  };
+  if (h.state !== "history_only") return h.name ?? h.tmux?.session ?? seen ?? lastPrompt() ?? generated;
+  if (h.name && frames.length > 0 && !isFirstPrompt(h.name, frames)) return h.name;
+  if (seen) return seen;
+  if (frames.length > 0) return lastPrompt() ?? h.name ?? generated;
+  return h.name ?? generated;
 }
 
 /** Split an SSE buffer into complete events; returns the `data` of each and the unconsumed rest. */
@@ -150,6 +228,8 @@ export interface LiveAgentOptions {
   idleMs?: number;
   /** Source of online/offline/visibilitychange events; the browser window when present. */
   events?: Pick<EventTarget, "addEventListener" | "removeEventListener"> | null;
+  /** Names seen while live, kept for history-only sessions; browser storage by default. */
+  names?: SessionNames;
 }
 
 export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { close(): void; projector(): AgentProjector } {
@@ -158,6 +238,7 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
   const notifyMs = opts.notifyMs ?? 150;
   const [retryMin, retryMax] = opts.retryMs ?? [1_000, 5_000];
   const idleMs = opts.idleMs ?? 40_000;
+  const names = opts.names ?? storedSessionNames();
   const events = opts.events !== undefined ? opts.events : typeof window === "undefined" ? null : window;
 
   let projector = new AgentProjector();
@@ -341,7 +422,9 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
     const history = histories.get(h.sessionId)?.resolved;
     const frames = history ? framesOf(h, history) : (proj?.frames ?? []);
     const first = frames.find((f) => f.ingress.text);
-    const name = displayName(h);
+    const live = h.state !== "history_only" ? (h.name ?? h.tmux?.session) : undefined;
+    if (live) names.set(h.sessionId, live);
+    const name = sessionName(h, frames, names.get(h.sessionId));
     return {
       id: h.sessionId,
       name,

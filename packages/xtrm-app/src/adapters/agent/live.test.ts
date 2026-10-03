@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { capabilities, createLiveAgent, parseSse, repoName } from "./live.ts";
+import { capabilities, createLiveAgent, parseSse, promptName, repoName, sessionName, storedSessionNames, type SessionNames } from "./live.ts";
 import { splitMessage } from "./references.ts";
-import { BusyError, type ContextReference } from "./types.ts";
+import { BusyError, type ContextReference, type InteractionFrame } from "./types.ts";
 import type { HostSessionSummary } from "./protocol.ts";
 
 const summary = (over: Partial<HostSessionSummary> = {}): HostSessionSummary => ({
@@ -499,5 +499,70 @@ describe("live stream loss and resync (XTRM-613)", () => {
     await vi.waitFor(() => expect(b.streams).toHaveLength(2));
     const d = await adapter.getSession("s1");
     expect(d!.frames.map((f) => [f.title, f.status, f.ingress.origin])).toEqual([["Count", "settled", "gui"]]);
+  });
+});
+
+describe("session naming precedence (XTRM-616)", () => {
+  const f = (text: string) => ({ ingress: { text } }) as InteractionFrame;
+  const frames = [f("Fix the login redirect"), f("/compact"), f("Now add a test for it"), f("ok?")];
+  const memory = (): SessionNames & { map: Map<string, string> } => {
+    const map = new Map<string, string>();
+    return { map, get: (id) => map.get(id), set: (id, n) => void map.set(id, n) };
+  };
+
+  it("keeps meaningful prompts only, bounded like the host", () => {
+    expect(promptName("  Fix the\n login  ")).toBe("Fix the login");
+    expect(promptName("/compact")).toBeNull();
+    expect(promptName("  ")).toBeNull();
+    expect(promptName("?!")).toBeNull();
+    expect(promptName("x".repeat(100))).toBe(`${"x".repeat(71)}…`);
+  });
+
+  it("names a live session by its explicit name, else tmux, else what was seen, else the last prompt, else the id", () => {
+    expect(sessionName(summary({ name: "auth-fix" }), frames, "older")).toBe("auth-fix");
+    expect(sessionName(summary({ name: undefined }), frames, "older")).toBe("probe");
+    expect(sessionName(summary({ tmux: undefined }), frames, "older")).toBe("older");
+    expect(sessionName(summary({ tmux: undefined }), frames, undefined)).toBe("ok?");
+    expect(sessionName(summary({ tmux: undefined, sessionId: "0123456789" }), [f("/x")], undefined)).toBe("01234567");
+  });
+
+  it("names a history-only session by an explicit journal name, else the live name, else the last prompt", () => {
+    const h = (name?: string) => summary({ state: "history_only", capabilities: [], tmux: undefined, sessionId: "abcdef0123", name });
+    // Pi session_info rename: not the first prompt, so explicit.
+    expect(sessionName(h("auth-fix"), frames, "seen-live")).toBe("auth-fix");
+    // The host fell back to the first prompt: the name seen while live wins, then the last prompt.
+    expect(sessionName(h("Fix the login redirect"), frames, "seen-live")).toBe("seen-live");
+    expect(sessionName(h("Fix the login redirect"), frames, undefined)).toBe("ok?");
+    expect(sessionName(h("Fix the login re…"), frames, undefined)).toBe("ok?");
+    // Frames not loaded yet: the host name cannot be classified; a live name still wins.
+    expect(sessionName(h("Fix the login redirect"), [], "seen-live")).toBe("seen-live");
+    expect(sessionName(h("Fix the login redirect"), [], undefined)).toBe("Fix the login redirect");
+    expect(sessionName(h(), [], undefined)).toBe("abcdef01");
+  });
+
+  it("remembers the live name and uses it once the session is history only", async () => {
+    const session = summary({ name: "auth-fix" });
+    const { fetchImpl } = bridge([[]], [session]);
+    const names = memory();
+    adapter = createLiveAgent({ fetch: fetchImpl, notifyMs: 5, retryMs: [5, 10], names });
+    expect((await adapter.listSessions())[0]!.name).toBe("auth-fix");
+    expect(names.map.get("s1")).toBe("auth-fix");
+    Object.assign(session, { state: "history_only", capabilities: [], tmux: undefined, name: "Fix the login redirect" });
+    expect((await adapter.listSessions())[0]!.name).toBe("auth-fix");
+  });
+
+  it("keeps names in storage, newest kept past the cap, and survives unusable storage", () => {
+    const data = new Map<string, string>();
+    const storage = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+    storedSessionNames(storage).set("a", "one");
+    expect(storedSessionNames(storage).get("a")).toBe("one");
+    const many = storedSessionNames(storage);
+    for (let i = 0; i < 510; i++) many.set(`s${i}`, `n${i}`);
+    const reread = storedSessionNames(storage);
+    expect(reread.get("a")).toBeUndefined();
+    expect(reread.get("s509")).toBe("n509");
+    const broken = storedSessionNames({ getItem: () => "{not json", setItem: () => { throw new Error("full"); } });
+    broken.set("x", "y");
+    expect(broken.get("x")).toBe("y");
   });
 });

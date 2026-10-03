@@ -97,5 +97,8 @@ export const shortModel = (model: string | null) =>
     .replace(/^claude-/, "")
     .replace(/-(\d+)-(\d+)$/, " $1.$2") ?? null;
 
+/** Provider of a `<provider>/<model id>` model (`opencode-go`); null for a bare model id. */
+export const modelProvider = (model: string | null) => (model ? (/^([^/]+)\//.exec(model)?.[1] ?? null) : null);
+
 /** Model and thinking level as rows and headers show them: `deepseek-v4.1-flash · high`. */
 export const modelLabel = (s: Pick<AgentSessionSummary, "model" | "thinking">): string | null => [shortModel(s.model), s.thinking].filter(Boolean).join(" · ") || null;
