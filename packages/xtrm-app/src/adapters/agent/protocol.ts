@@ -9,6 +9,10 @@
 //   xtrm.agent-host-api.v1  — contextReference, reference_resolve_request / _result and
 //                             submit_request.references (POST /v1/references/resolve, core XTRM-570),
 //                             mirrored from core origin/main e9cb82e6, unchanged since v0.14.0 (XTRM-598)
+//   xtrm.agent-event.v1     — session_status (model, thinkingLevel, contextUsage), and
+//   xtrm.agent-host-api.v1  — sessionSummary.repository as `owner/name` plus repositoryPath: additive
+//                             within v1, mirrored from core origin/main 5f0734c9 (XTRM-603, XTRM-608).
+//                             A v0.14.0 host may still send repository as a filesystem path.
 // Only the fields this app reads are typed; the JSON Schemas stay the source of truth.
 // A new major (v2) is a different contract: the live adapter rejects it, never guesses.
 
@@ -36,7 +40,10 @@ export interface HostSessionSummary {
   state: "working" | "waiting_for_input" | "settled" | "failed" | "history_only";
   name?: string;
   cwd: string;
+  /** `owner/name` from the git remote; absent without a remote. A v0.14.0 host sends a path here. */
   repository?: string;
+  /** Root of the main repository on the host (parent of the git common directory). */
+  repositoryPath?: string;
   worktree?: string;
   branch?: string;
   role?: string;
@@ -105,6 +112,9 @@ export type HostEventPayload =
   | { type: "session_identity"; capabilities: HostCapability[] }
   | { type: "before_agent_start"; prompt: string; ingress: { origin: "gui" | "terminal"; commandId?: string } }
   | { type: "agent_start" }
+  // Complete current state; replaces the previous one. An absent field is unknown; tokens is null when
+  // Pi cannot estimate them (after compaction, before the next model response).
+  | { type: "session_status"; model?: string; thinkingLevel?: string; contextUsage?: { tokens: number | null; contextWindow: number } }
   | { type: "message_start" | "message_update" | "message_end"; message: HostAgentMessage }
   | ({ type: "tool_execution_start" } & ToolEventBase)
   | ({ type: "tool_execution_update"; partialResult: unknown } & ToolEventBase)

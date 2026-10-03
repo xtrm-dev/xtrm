@@ -98,6 +98,18 @@ keeps each reference with the revision it was given; an excerpt is marked on its
 host kinds have no search route: a typed `@file:<path>` or `@commit:<sha>` is offered once it
 resolves, and `@session` lists the host's sessions. `@epic`, `@agent` and `@frame` are typed only.
 
+**Model, thinking level, context and repository (XTRM-609, PRD §36.3, §36.11 criterion 5).** Model
+(`<provider>/<model id>`), thinking level and context utilization come from the host: the latest
+`session_status` frame on the event stream (`xtrm.agent-event.v1`, core XTRM-603), else the host session
+summary, else the last assistant message for producers that send no status. Each `session_status`
+replaces the previous state; a context whose tokens Pi cannot estimate (after compaction) shows no
+meter. A history-only session shows only what the host summary reports. Rows show the model id and
+thinking level (`deepseek-v4.1-flash · high`) and the meter; details show the full model and
+`1% · 7k / 1000k`. Sessions group by the host's `repository` (`owner/name` from the git remote, for
+live and history-only sessions alike, core XTRM-608); only without it does the bridge resolve a local
+`repositoryPath` (else the worktree or cwd) to `owner/name`, and only for a loopback host. The drawer's
+session panel shows the repository and its root.
+
 `npm run test:e2e:real-host` runs the live Agent half against a real host: an isolated `xt host start`
 (temp `HOME`, `--socket`, `--port`), a real Pi session with the `xtrm-agent-host` extension in a
 private tmux server, a prompt typed in its terminal, and the real Claude hook reporter. Its write-path
@@ -106,7 +118,12 @@ with one confirm tool (`e2e/real-host/probe-extension.ts`): a GUI prompt, busy a
 app client, Stop, and the confirm answered once in the GUI and once in the terminal. Its references
 spec (`e2e/real-host/references.spec.ts`) resolves `@file` with a line range, `@issue` (against the real
 Substrate board, read only: `XTRM_SUBSTRATE_WRITES=0`) and `@session` of a second live Pi session,
-sends an oversize file as an excerpt, and checks that a `../` escape blocks submit. It needs `xt`
+sends an oversize file as an excerpt, and checks that a `../` escape blocks submit. Its session status
+spec (`e2e/real-host/session-status.spec.ts`, XTRM-609) runs Pi in a repository with an origin remote and
+checks the row's model and thinking level, the meter after a turn, a thinking change from the terminal,
+and the owner/name group live and after `/quit`. The host and the extension must come from the same core
+commit: set `XTRM_REAL_HOST_XT=<core>/cli/dist/index.cjs` with `XTRM_CORE_DIR=<core>` to run a host built
+from that checkout instead of the installed `xt` (an older host rejects newer frames). It needs `xt`
 0.14.0+, `pi` 1.0.0, tmux, the `xtrm-dev/core` checkout (`XTRM_CORE_DIR`, default `~/dev/core`) and an
 `opencode-go` entry in `~/.pi/agent/auth.json` (only that entry is copied into the temp agent dir,
 deleted on teardown). The run log goes to `.receipts/real-host/`, screenshots to

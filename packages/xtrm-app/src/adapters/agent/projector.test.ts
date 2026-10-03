@@ -206,4 +206,14 @@ describe("projection helpers", () => {
     expect(resultText(null)).toBeUndefined();
     expect(frameTitle("x".repeat(100))).toHaveLength(80);
   });
+
+  it("keeps the latest session_status as the complete current state (XTRM-609)", () => {
+    cursor = 0;
+    const p = new AgentProjector();
+    p.apply(ev({ type: "session_status", model: "opencode-go/deepseek-v4.1-flash", thinkingLevel: "high", contextUsage: { tokens: 0, contextWindow: 1_000_000 } }));
+    expect(p.sessions.get(SID)!.status).toEqual({ model: "opencode-go/deepseek-v4.1-flash", thinkingLevel: "high", contextUsage: { tokens: 0, contextWindow: 1_000_000 } });
+    // A frame without a field means that field is unknown now, not unchanged.
+    p.apply(ev({ type: "session_status", model: "opencode-go/glm-5" }));
+    expect(p.sessions.get(SID)!.status).toEqual({ model: "opencode-go/glm-5" });
+  });
 });

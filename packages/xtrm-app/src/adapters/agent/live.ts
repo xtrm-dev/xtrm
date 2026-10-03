@@ -14,7 +14,7 @@
 //   (POST /v1/references/resolve) against the session, with revision and budget. A submit carries the
 //   resolved references in submit_request.references and, because the host forwards only the command
 //   to the session, as a context block appended to the message (references.ts).
-import { AgentProjector } from "./projector.ts";
+import { AgentProjector, type SessionProjection } from "./projector.ts";
 import { composeMessage, formatRef } from "./references.ts";
 import {
   EVENT_SCHEMA,
@@ -77,6 +77,31 @@ export function parseSse(buffer: string): { data: string[]; rest: string } {
     if (lines.length) data.push(lines.map((l) => l.slice(l[5] === " " ? 6 : 5)).join("\n"));
   }
   return { data, rest };
+}
+
+/** xtrm.agent-event.v1 `repositoryName`: `owner/name`, nested owners kept (`group/sub/name`). */
+const REPO_NAME = /^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)+$/;
+
+/** The host's `owner/name` repository identity; null when absent or a v0.14.0 host sent a path. */
+export function repoName(repository: string | undefined): string | null {
+  return repository && REPO_NAME.test(repository) ? repository : null;
+}
+
+/**
+ * Model, thinking level and context utilization (PRD §36.3, §36.11 criterion 5). The latest
+ * session_status on the stream wins: it is ordered with the other events and replaces the previous
+ * state. Without one, the host summary (filled from the same frames); without either, the model and
+ * thinking level of the last assistant message. A context with unknown tokens shows no meter.
+ * A history-only session has no live status: the host summary (from its journal) is the only source.
+ */
+export function status(h: HostSessionSummary, proj: SessionProjection | undefined): Pick<AgentSessionSummary, "model" | "thinking" | "context"> {
+  const st = h.state === "history_only" ? undefined : proj?.status;
+  const usage = st ? st.contextUsage : h.contextUsage;
+  return {
+    model: st?.model ?? h.model ?? proj?.model ?? null,
+    thinking: st?.thinkingLevel ?? h.thinkingLevel ?? proj?.thinking ?? null,
+    context: usage && typeof usage.tokens === "number" ? { used: usage.tokens, window: usage.contextWindow } : null,
+  };
 }
 
 /** Command ids are unique per submit; the host rejects a duplicate in flight. */
@@ -231,10 +256,8 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
       state: STATE[h.state] ?? "settled",
       role: h.role ?? null,
       workRef: h.workItem?.ref ?? null,
-      repo: await repoOf(h.repository ?? h.worktree ?? h.cwd),
-      model: h.model ?? proj?.model ?? null,
-      thinking: h.thinkingLevel ?? proj?.thinking ?? null,
-      context: h.contextUsage ? { used: h.contextUsage.tokens, window: h.contextUsage.contextWindow } : null,
+      repo: repoName(h.repository) ?? (await repoOf(h.repositoryPath ?? (h.repository?.startsWith("/") ? h.repository : undefined) ?? h.worktree ?? h.cwd)),
+      ...status(h, proj),
       startedAt: h.startedAt ?? 0,
       lastActivityAt: h.lastActivityAt ?? h.startedAt ?? 0,
       parentId: h.parentSessionId ?? null,
@@ -294,6 +317,7 @@ export function createLiveAgent(opts: LiveAgentOptions = {}): AgentAdapter & { c
       const detail: AgentSessionDetail = {
         ...summary,
         cwd: h.cwd,
+        repositoryPath: h.repositoryPath ?? null,
         worktree: h.worktree ?? null,
         branch: h.branch ?? null,
         tmux: h.tmux ? `${h.tmux.session}:${h.tmux.paneId}` : null,

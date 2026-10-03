@@ -70,4 +70,12 @@ export function duration(ms: number | null): string {
   return `${m}m ${Math.round(s % 60)}s`;
 }
 
-export const shortModel = (model: string | null) => model?.replace(/^claude-/, "").replace(/-(\d+)-(\d+)$/, " $1.$2") ?? null;
+/** Model id without its provider (`opencode-go/deepseek-v4.1-flash` → `deepseek-v4.1-flash`, `claude-opus-5-5` → `opus 5.5`). */
+export const shortModel = (model: string | null) =>
+  model
+    ?.replace(/^[^/]+\//, "")
+    .replace(/^claude-/, "")
+    .replace(/-(\d+)-(\d+)$/, " $1.$2") ?? null;
+
+/** Model and thinking level as rows and headers show them: `deepseek-v4.1-flash · high`. */
+export const modelLabel = (s: Pick<AgentSessionSummary, "model" | "thinking">): string | null => [shortModel(s.model), s.thinking].filter(Boolean).join(" · ") || null;
