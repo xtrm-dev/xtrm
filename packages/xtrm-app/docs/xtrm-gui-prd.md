@@ -1723,6 +1723,7 @@ The extension:
   - `session_identity`: always sequence 0 on a connection. It carries runtime, producer, cwd, worktree, branch, role, work item, parent session, tmux pane, launch (`gui` | `terminal`), and capabilities;
   - `extension_ui_request` / `extension_ui_resolved`: the extension's `ctx.ui` proxy (see below);
   - `command_result`: the outcome of each host command, by `commandId` (`status`, optional `reason`, such as `busy` or `session_idle`);
+  - `notification` and `subagent_end`: sent only by the Claude hook reporter (§35.8 item 4);
 - **accepts** commands from the agent host: user message (`pi.sendUserMessage`), steer / follow-up, abort, and extension-UI responses (§20);
 - **attaches identity**: session id, cwd, worktree, role, bead / Substrate Issue, parent session, and tmux pane. This is the §11 identity read from the `xt pi` launch context (`@agent_task`, `@agent_parent_session`, `XTMUX_AGENT_BEAD`).
 
@@ -1806,6 +1807,20 @@ Claude sessions    ──hooks─────────────▶     │
 2. **SSH bootstrap.** The app runs `ssh -o BatchMode=yes <target> -- "${SHELL:-/bin/sh}" -lc 'xt host ensure --json'`. The login shell resolves Node and `xt` under nvm, asdf, or mise. `xt host ensure` starts the host if it is not running and prints `{schema: "xtrm.agent-host-ensure.v1", version, protocol: {major}, port, pid}`. The app rejects a different protocol major and tells the operator to run `xt update` on that host. The app then holds `ssh -N -L <local>:127.0.0.1:<port> <target>` and reuses an SSH ControlMaster when the operator's configuration defines one (XTRM-567).
 3. **Daemon placement.** The agent host is a new `xt host` subcommand in `xtrm-dev/core`. It does not extend xtmux, which is transport and observability, or Substrate, which is durable work authority and must not hold runtime session state (XTRM-563).
 4. **Claude hook coverage (v0).** Status-and-tool presence only: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStop`, `SessionEnd`. Claude sessions advertise `capabilities: ["presence"]`; the GUI does not stream their assistant text and does not prompt them in v0 (XTRM-569).
+
+   The hook reporter (`.xtrm/hooks/agent-host-reporter.mjs`, installed by `xt update`) opens one short connection per hook call. It sends `session_identity` (the same fields as Pi), then the mapped `xtrm.agent-event.v1` events:
+
+   | Claude hook | event |
+   |---|---|
+   | `SessionStart` | `session_start` |
+   | `UserPromptSubmit` | `agent_start` (no prompt text) |
+   | `PreToolUse` / `PostToolUse` | `tool_execution_start` / `_end`; tool input above 4 KB is dropped; origin per §36.12 item 4 |
+   | `Notification` | `notification {kind, title?, message?}`; a `permission_prompt` or `elicitation_dialog` kind puts the session in `waiting_for_input` until its next lifecycle or tool event |
+   | `Stop` | `agent_end` + `agent_settled` |
+   | `SubagentStop` | `subagent_end {agentId?, agentType?}` |
+   | `SessionEnd` | `session_shutdown` |
+
+   The hook exits 0 within an 80 ms budget, never writes to stdout, and exits at once when no host socket exists. For a presence-only session, a tool start with no open Frame opens one; this covers a blocked `Stop` and a host restarted mid-turn. Upgrade `xt host` before the hooks: an older host rejects `notification` and `subagent_end` as `invalid_payload` and keeps the connection open.
 5. **Concurrent submit policy.** The host serializes submits per session. A GUI normal submit while the session is working is rejected with `busy`; the GUI then offers Steer or Follow-up explicitly (§18). Terminal input is never intercepted: it reaches Pi directly, and the extension reports the resulting Frame with `ingress.origin: "terminal"` (GUI submits carry `"gui"`), which the Frame header shows. Between two GUI clients, the first accepted submit wins and the second receives `busy`. The host never merges or implicitly queues prompts.
 
 ## 36. Agent mode — accepted amendment (2026-10-02)
