@@ -15,6 +15,10 @@
 // argument is an argv element; the only shell strings are the fixed bootstrap commands and the remote
 // command the operator stored. Every route answers loopback clients only: the dev server may be
 // reachable on the tailnet, and the forwarded host API must not be.
+//
+// Write route (XTRM-597): POST /api/v1/submit forwards one xtrm.agent-host-api.v1 submit_request to
+// the host's POST /v1/submit. Same-origin JSON only (a cross-site form cannot send
+// application/json without a preflight, which this bridge never answers).
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -237,6 +241,33 @@ export async function hostApi(localPort: number, path: string, timeoutMs = 5_000
   return { status: res.status, body: await res.json() };
 }
 
+/** POST a JSON body to the host API; the host waits up to its command timeout (10 s) for the session. */
+export async function hostPost(localPort: number, path: string, body: unknown, timeoutMs = 15_000): Promise<{ status: number; body: unknown }> {
+  const res = await fetch(`http://127.0.0.1:${localPort}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  return { status: res.status, body: await res.json() };
+}
+
+/** Shape check of a submit_request before it leaves the bridge; the host validates the full schema. */
+export function isSubmitRequest(b: Record<string, unknown>): boolean {
+  const c = b.command as Record<string, unknown> | null | undefined;
+  return (
+    b.schema === API_SCHEMA &&
+    b.kind === "submit_request" &&
+    typeof b.sessionId === "string" &&
+    SESSION_ID_RE.test(b.sessionId) &&
+    !!c &&
+    typeof c === "object" &&
+    !Array.isArray(c) &&
+    typeof c.type === "string" &&
+    typeof c.commandId === "string"
+  );
+}
+
 async function probe(localPort: number): Promise<boolean> {
   try {
     const { status, body } = await hostApi(localPort, "/v1/sessions", 2_000);
@@ -456,9 +487,24 @@ export function agentHostHandler(conn: AgentHostConnection, prefix = "/xtrm-api/
     if (req.method === "POST") {
       const origin = req.headers.origin;
       if (origin && new URL(origin).host !== req.headers.host) return send(403, { ok: false, error: "cross-origin request rejected" });
+      if (path === "/api/v1/submit" && !/^application\/json\b/i.test(req.headers["content-type"] ?? "")) {
+        return send(415, { ok: false, error: "submit bodies must be application/json" });
+      }
       const body = await readJson(req);
       if (!body) return send(400, { ok: false, error: "invalid JSON body" });
       switch (path) {
+        case "/api/v1/submit": {
+          if (!isSubmitRequest(body)) return send(400, { ok: false, error: "expected an xtrm.agent-host-api.v1 submit_request" });
+          const ep = endpoint();
+          if (!ep) return send(409, { ok: false, error: "no agent host: connect over SSH or start `xt host start` on this machine" });
+          try {
+            const r = await hostPost(ep.port, "/v1/submit", body);
+            res.setHeader("x-xtrm-agent-host", ep.id);
+            return send(r.status, r.body);
+          } catch (e) {
+            return send(502, { ok: false, error: `agent host unreachable: ${e instanceof Error ? e.message : String(e)}` });
+          }
+        }
         case "/settings": {
           const target = validateTarget(body.target);
           if (!target) return send(400, { ok: false, error: "invalid SSH target: use user@host or an ~/.ssh/config alias" });

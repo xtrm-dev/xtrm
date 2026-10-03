@@ -1,12 +1,17 @@
 // Agent host wire types, mirrored by hand from @xtrm/contracts (xtrm-dev/core
 // packages/contracts/schemas, origin/main 53e9a8c6, release v0.14.0):
 //   xtrm.agent-event.v1     — event frames pushed by the Pi extension / Claude hooks
-//   xtrm.agent-host-api.v1  — session_list, session_detail, event (SSE data line), error
+//   xtrm.agent-host-api.v1  — session_list, session_detail, event (SSE data line), submit_request,
+//                             submit_result, error
+//   xtrm.agent-command.v1   — the command inside submit_request (prompt, steer, follow_up, abort,
+//                             extension_ui_response); mirrored from core origin/main 82fd5c42, unchanged
+//                             since v0.14.0 (XTRM-597)
 // Only the fields this app reads are typed; the JSON Schemas stay the source of truth.
 // A new major (v2) is a different contract: the live adapter rejects it, never guesses.
 
 export const EVENT_SCHEMA = "xtrm.agent-event.v1";
 export const HOST_API_SCHEMA = "xtrm.agent-host-api.v1";
+export const COMMAND_SCHEMA = "xtrm.agent-command.v1";
 
 export type HostCapability = "presence" | "stream" | "prompt" | "steer" | "follow_up" | "abort" | "extension_ui";
 
@@ -105,7 +110,7 @@ export type HostEventPayload =
   | { type: "agent_settled" }
   | { type: "session_compact"; reason: string }
   | { type: "session_compact_failed"; reason: string; errorMessage?: string }
-  | { type: "extension_ui_request"; id: string; method: string; title: string }
+  | { type: "extension_ui_request"; id: string; method: "select" | "confirm" | "input" | "editor"; title: string; message?: string; options?: string[]; placeholder?: string; prefill?: string; timeout?: number }
   | { type: "extension_ui_resolved"; id: string; resolvedBy: "local" | "host"; outcome: "answered" | "cancelled" }
   | { type: "notification"; kind: string; title?: string; message?: string }
   | { type: "session_shutdown"; reason: string }
@@ -127,4 +132,28 @@ export interface HostEventMessage {
   kind: "event";
   cursor: string;
   frame: HostEventFrame;
+}
+
+/** xtrm.agent-command.v1 `command`. Images are part of the schema but not sent by this app yet. */
+export type HostCommand =
+  | { type: "prompt" | "steer" | "follow_up"; commandId: string; message: string }
+  | { type: "abort"; commandId: string }
+  | ({ type: "extension_ui_response"; commandId: string; id: string } & ({ value: string } | { confirmed: boolean } | { cancelled: true }));
+
+/** xtrm.agent-host-api.v1 `submit_request`; `references` stay with the @ reference issue. */
+export interface HostSubmitRequest {
+  schema: typeof HOST_API_SCHEMA;
+  kind: "submit_request";
+  sessionId: string;
+  command: HostCommand;
+}
+
+/** xtrm.agent-host-api.v1 `submit_result`. `busy`: a normal prompt while the session works (§35.8 item 5). */
+export interface HostSubmitResult {
+  schema: typeof HOST_API_SCHEMA;
+  kind: "submit_result";
+  commandId: string;
+  status: "accepted" | "busy" | "rejected" | "not_found" | "unsupported" | "failed";
+  reason?: string;
+  message?: string;
 }

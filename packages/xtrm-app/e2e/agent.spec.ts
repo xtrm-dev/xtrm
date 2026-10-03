@@ -192,3 +192,12 @@ test("a working session takes explicit steer input instead of a new Frame", asyn
   await expect(page.getByTestId("frame")).toContainText("Steer: Skip the flaky suite for now");
   await expect(page.getByRole("navigation", { name: "Frames" }).getByRole("button", { name: /^Frame / })).toHaveCount(3);
 });
+
+test("Stop aborts the working Frame and the Frame header names its ingress", async ({ page }) => {
+  await page.goto("/agent/pi-main");
+  await expect(page.getByTestId("frame-ingress")).toHaveText("terminal");
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(page.getByTestId("frame")).toHaveAttribute("data-frame-status", "aborted");
+  await expect(page.getByTestId("frame-settled")).toContainText("aborted");
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0);
+});

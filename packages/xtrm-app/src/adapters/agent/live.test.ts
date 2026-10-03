@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { capabilities, createLiveAgent, parseSse } from "./live.ts";
+import { BusyError } from "./types.ts";
 import type { HostSessionSummary } from "./protocol.ts";
 
 const summary = (over: Partial<HostSessionSummary> = {}): HostSessionSummary => ({
@@ -67,7 +68,7 @@ describe("capabilities", () => {
   it("maps presence-only, history-only and promptable sessions", () => {
     expect(capabilities(summary({ provider: "claude", capabilities: ["presence"] }))).toEqual(["presence"]);
     expect(capabilities(summary({ state: "history_only", capabilities: [] }))).toEqual([]);
-    expect(capabilities(summary())).toEqual(["prompt", "steer"]);
+    expect(capabilities(summary())).toEqual(["prompt", "steer", "abort"]);
   });
 });
 
@@ -93,7 +94,7 @@ describe("live agent adapter", () => {
     expect(changed).toContain("s1");
 
     const [s] = await adapter.listSessions();
-    expect(s).toMatchObject({ id: "s1", name: "probe", title: "Read the notes", state: "working", repo: "xtrm-dev/xtrm", capabilities: ["prompt", "steer"], frameCount: 3, origin: "terminal" });
+    expect(s).toMatchObject({ id: "s1", name: "probe", title: "Read the notes", state: "working", repo: "xtrm-dev/xtrm", capabilities: ["prompt", "steer", "abort"], frameCount: 3, origin: "terminal" });
 
     const d = await adapter.getSession("s1");
     expect(d).toMatchObject({ tmux: "probe:%0", cwd: "/w" });
@@ -121,8 +122,79 @@ describe("live agent adapter", () => {
     expect(adapter.projector().sessions.size).toBe(0);
   });
 
-  it("is read-only", async () => {
-    adapter = createLiveAgent({ fetch: bridge([]).fetchImpl });
-    await expect(adapter.submit("s1", { text: "hi", refs: [], mode: "prompt" })).rejects.toThrow(/read-only/);
+});
+
+describe("live AgentAdapter write path (XTRM-597)", () => {
+  /** Fake bridge whose POST /api/v1/submit answers with `status` and records each request body. */
+  function submitBridge(status: string, extra: Record<string, unknown> = {}, streams: string[][] = []) {
+    const base = bridge(streams);
+    const bodies: Array<{ sessionId: string; command: Record<string, unknown> }> = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/api/v1/submit")) {
+        expect(new Headers(init?.headers).get("content-type")).toBe("application/json");
+        const body = JSON.parse(String(init?.body));
+        expect(body).toMatchObject({ schema: "xtrm.agent-host-api.v1", kind: "submit_request" });
+        bodies.push(body);
+        return new Response(JSON.stringify({ schema: "xtrm.agent-host-api.v1", kind: "submit_result", commandId: body.command.commandId, status, ...extra }), { status: 200 });
+      }
+      return base.fetchImpl(input, init);
+    }) as typeof fetch;
+    return { fetchImpl, bodies };
+  }
+
+  it("sends prompt, steer, follow_up and abort as xtrm.agent-command.v1 commands", async () => {
+    const { fetchImpl, bodies } = submitBridge("accepted");
+    adapter = createLiveAgent({ fetch: fetchImpl });
+    await adapter.submit("s1", { text: "hi", refs: [], mode: "prompt" });
+    await adapter.submit("s1", { text: "go left", refs: [], mode: "steer" });
+    await adapter.submit("s1", { text: "then this", refs: [], mode: "follow-up" });
+    await adapter.abort("s1");
+    expect(bodies.map((b) => [b.sessionId, b.command.type, b.command.message])).toEqual([
+      ["s1", "prompt", "hi"],
+      ["s1", "steer", "go left"],
+      ["s1", "follow_up", "then this"],
+      ["s1", "abort", undefined],
+    ]);
+    expect(new Set(bodies.map((b) => b.command.commandId)).size).toBe(4);
+  });
+
+  it("maps busy (host or extension) to BusyError and other refusals to the host message", async () => {
+    adapter = createLiveAgent({ fetch: submitBridge("busy", { reason: "session_working" }).fetchImpl });
+    await expect(adapter.submit("s1", { text: "hi", refs: [], mode: "prompt" })).rejects.toBeInstanceOf(BusyError);
+    adapter.close();
+    adapter = createLiveAgent({ fetch: submitBridge("rejected", { reason: "busy" }).fetchImpl });
+    await expect(adapter.submit("s1", { text: "hi", refs: [], mode: "prompt" })).rejects.toBeInstanceOf(BusyError);
+    adapter.close();
+    adapter = createLiveAgent({ fetch: submitBridge("rejected", { reason: "session_idle", message: "steer needs a running Frame; submit a prompt" }).fetchImpl });
+    await expect(adapter.submit("s1", { text: "hi", refs: [], mode: "steer" })).rejects.toThrow("steer needs a running Frame");
+  });
+
+  it("refuses references until they are resolved by the host", async () => {
+    const { fetchImpl, bodies } = submitBridge("accepted");
+    adapter = createLiveAgent({ fetch: fetchImpl });
+    await expect(adapter.submit("s1", { text: "hi", refs: [{ kind: "issue", ref: "XTRM-1" }], mode: "prompt" })).rejects.toThrow(/References/);
+    expect(bodies).toHaveLength(0);
+  });
+
+  it("answers an open extension UI request and shows the answer given here", async () => {
+    const stream = [
+      event(1, { type: "before_agent_start", prompt: "probe", ingress: { origin: "gui", commandId: "c0" } }),
+      event(2, { type: "extension_ui_request", id: "ui-1", method: "confirm", title: "Probe", message: "Allow the probe?" }),
+      event(3, { type: "extension_ui_request", id: "ui-2", method: "select", title: "Pick", options: ["a", "b"] }),
+    ];
+    const { fetchImpl, bodies } = submitBridge("accepted", {}, [stream]);
+    adapter = createLiveAgent({ fetch: fetchImpl, notifyMs: 5 });
+    adapter.subscribe(() => {});
+    await settle();
+    await adapter.respond("s1", "ui-1", "Yes");
+    await adapter.respond("s1", "ui-2", "b");
+    expect(bodies.map((b) => b.command)).toEqual([
+      expect.objectContaining({ type: "extension_ui_response", id: "ui-1", confirmed: true }),
+      expect.objectContaining({ type: "extension_ui_response", id: "ui-2", value: "b" }),
+    ]);
+    const d = await adapter.getSession("s1");
+    const prompt = d!.frames[0]!.activity.find((a) => a.id === "ui-1");
+    expect(prompt).toMatchObject({ kind: "prompt", ui: { type: "confirm", prompt: "Probe", detail: "Allow the probe?", answer: "Yes" } });
+    await expect(adapter.respond("s1", "ui-unknown", "Yes")).rejects.toThrow(/no longer open/);
   });
 });

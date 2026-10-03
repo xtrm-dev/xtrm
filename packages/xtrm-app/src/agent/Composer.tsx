@@ -4,7 +4,7 @@ import { Icon } from "../ui/icon.tsx";
 import { Kbd, cx } from "../ui/primitives.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
 import { REF_ICON } from "./meta.tsx";
-import { useReferenceCandidates, useReferenceResolver, useSubmit, type PickerKind } from "./queries.ts";
+import { useAbort, useReferenceCandidates, useReferenceResolver, useSubmit, type PickerKind } from "./queries.ts";
 import { activeMention, formatAgentRef, parseRefTokens, useAgentStore, useAgentStoreVersion } from "./workspace.tsx";
 
 const TABS: Array<[PickerKind, string]> = [
@@ -85,8 +85,11 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
   const [dismissed, setDismissed] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"steer" | "follow-up">("steer");
+  /** The host answered busy to a normal submit (PRD §35.8 item 5): offer Steer or Follow-up explicitly. */
+  const [busy, setBusy] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const submit = useSubmit(session.id);
+  const abort = useAbort(session.id);
   const resolve = useReferenceResolver();
 
   const working = session.state === "working" || session.state === "waiting";
@@ -107,6 +110,7 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
     setText(value);
     setCaret(pos);
     setError(null);
+    setBusy(false);
     setActive(0);
     store.patch(session.id, { draft: value });
   };
@@ -125,7 +129,7 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
     });
   };
 
-  const send = async () => {
+  const send = async (explicit?: "steer" | "follow-up") => {
     const body = text.trim();
     if (!body || submit.isPending) return;
     const tokens = parseRefTokens(body);
@@ -138,11 +142,14 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
     const all = [...refs];
     for (const t of tokens) if (!all.some((r) => sameRef(r, t))) all.push(t);
     try {
-      await submit.mutateAsync({ text: body, refs: all, mode: working ? mode : "prompt" });
+      await submit.mutateAsync({ text: body, refs: all, mode: explicit ?? (working ? mode : "prompt") });
       update("", 0);
       store.commit(session.id, { refs: [], frameId: null, scrollTop: 0 });
     } catch (e) {
-      setError(e instanceof BusyError ? "The session is working. Use Steer or Follow-up." : e instanceof Error ? e.message : String(e));
+      if (e instanceof BusyError) {
+        setBusy(true);
+        setError("The session is working. Send this as a steer or a follow-up instead.");
+      } else setError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -232,6 +239,17 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
             <Kbd>Enter</Kbd> send <Kbd>Shift Enter</Kbd> newline
           </span>
           <span className="ml-auto flex items-center gap-1.5">
+            {working && session.capabilities.includes("abort") && (
+              <button
+                type="button"
+                onClick={() => abort.mutate(undefined, { onError: (e) => setError(`Stop failed: ${e.message}`) })}
+                disabled={abort.isPending}
+                className="flex h-7 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40 disabled:text-ink-faint"
+              >
+                <Icon name="close" size="xs" />
+                Stop
+              </button>
+            )}
             {working && (
               <span className="flex items-center rounded-md bg-control p-0.5 text-[0.7rem]" role="radiogroup" aria-label="Delivery while working">
                 {(["steer", "follow-up"] as const).map((m) => (
@@ -264,6 +282,21 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
         <p role="alert" className="mt-1.5 flex items-center gap-1.5 px-1 text-xs text-danger">
           <Icon name="alert" size="xs" />
           {error}
+          {busy && (
+            <span className="ml-1 flex gap-1.5">
+              {(["steer", "follow-up"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => void send(m)}
+                  disabled={submit.isPending}
+                  className="h-6 rounded-md border border-border px-2 text-xs font-medium text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent/40"
+                >
+                  {m === "steer" ? "Send as steer" : "Send as follow-up"}
+                </button>
+              ))}
+            </span>
+          )}
         </p>
       )}
     </div>

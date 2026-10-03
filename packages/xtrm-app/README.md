@@ -66,13 +66,30 @@ and `/v1/sessions/:id`; Frames and tool activity are projected in the app
 on `agent_settled`. Tool class and MCP server come from the host's `origin`; calls with
 `parentToolCallId` render inside their parent, and the built-in `codemode` tool renders as a script
 block with its nested calls. Claude sessions are presence only; stopped sessions are history only.
-Frames older than the host's replay buffer (1024 events) are not shown. Submitting, extension-UI
-answers and `@` references stay with the fixture until their own issues. The wire types are mirrored
-in `src/adapters/agent/protocol.ts` from `@xtrm/contracts` (core v0.14.0).
+Frames older than the host's replay buffer (1024 events) are not shown. `@` references stay with
+the fixture until their own issue. The wire types are mirrored in `src/adapters/agent/protocol.ts`
+from `@xtrm/contracts` (core v0.14.0).
+
+**Live write path (XTRM-597).** The composer posts an `xtrm.agent-host-api.v1` `submit_request` to the
+bridge (`POST /xtrm-api/agent-host/api/v1/submit`: loopback, same-origin, `application/json` only),
+which forwards it to the host's `POST /v1/submit`. The command is `xtrm.agent-command.v1`: `prompt`
+while the session is idle, `steer` or `follow_up` (the composer's delivery switch) while it works,
+`abort` from Stop, and `extension_ui_response` for an extension request. The host serializes submits
+per session (PRD §35.8 item 5): a normal prompt that reaches a working session, for example from a
+second app client that has not seen the update yet, is answered `busy`, and the composer then offers
+`Send as steer` and `Send as follow-up` for the same text. Nothing is queued or retried by the app.
+An `extension_ui_request` (`confirm`, `select`, `input`) renders inline in the running Frame;
+`extension_ui_resolved` closes the block whoever answered, and the block says whether it was answered
+here or in the terminal. A delivered steer or follow-up appears in the Frame as
+`Delivered while working: …`. The Frame header shows its ingress, `GUI` or `terminal`. A submit that
+carries `@` references is refused until references resolve on the host.
 
 `npm run test:e2e:real-host` runs the live Agent half against a real host: an isolated `xt host start`
 (temp `HOME`, `--socket`, `--port`), a real Pi session with the `xtrm-agent-host` extension in a
-private tmux server, a prompt typed in its terminal, and the real Claude hook reporter. It needs `xt`
+private tmux server, a prompt typed in its terminal, and the real Claude hook reporter. Its write-path
+spec (`e2e/real-host/write-path.spec.ts`) drives a second Pi session that also loads a test extension
+with one confirm tool (`e2e/real-host/probe-extension.ts`): a GUI prompt, busy and Steer from a second
+app client, Stop, and the confirm answered once in the GUI and once in the terminal. It needs `xt`
 0.14.0+, `pi` 1.0.0, tmux, the `xtrm-dev/core` checkout (`XTRM_CORE_DIR`, default `~/dev/core`) and an
 `opencode-go` entry in `~/.pi/agent/auth.json` (only that entry is copied into the temp agent dir,
 deleted on teardown). The run log goes to `.receipts/real-host/`, screenshots to

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import type { Activity, ToolActivity } from "../adapters/index.tsx";
-import { ActivityThread, groupActivity, originTag, scriptResult } from "./Activity.tsx";
+import { ActivityThread, groupActivity, originTag, promptOutcome, scriptResult } from "./Activity.tsx";
 
 const tool = (id: string, over: Partial<ToolActivity> = {}): ToolActivity => ({ kind: "tool", id, class: "native", name: "read", subject: "notes.txt", status: "done", durationMs: 5, origin: {}, ...over });
 
@@ -52,5 +52,37 @@ describe("tool activity rendering (PRD §36.7)", () => {
     expect(originTag(tool("x", { class: "mcp", origin: {} }))).toBe("MCP");
     expect(originTag(tool("x", { class: "extension", origin: { extension: "pi-guardrails", version: "0.4.1" } }))).toBe("pi-guardrails 0.4.1");
     expect(originTag(tool("x", { class: "coordination", origin: { extension: "specialists" } }))).toBe("coordination · specialists");
+  });
+});
+
+describe("extension UI requests (XTRM-597)", () => {
+  const ui = (over: object = {}) => ({ type: "confirm" as const, prompt: "Probe", detail: "Allow the probe?", options: ["Yes", "No"], answer: null, ...over });
+
+  it("renders an open request with its choices and sends the chosen answer", () => {
+    const answers: Array<[string, string | null]> = [];
+    render(<ActivityThread activity={[{ kind: "prompt", id: "u1", ui: ui() }]} isOpen={() => false} toggle={() => {}} onAnswer={(id, a) => answers.push([id, a])} />);
+    const req = screen.getByTestId("extension-request");
+    expect(req.textContent).toContain("Allow the probe?");
+    fireEvent.click(within(req).getByRole("button", { name: "Yes" }));
+    expect(answers).toEqual([["u1", "Yes"]]);
+  });
+
+  it("closes the block whoever answered", () => {
+    expect(promptOutcome(ui())).toBeNull();
+    expect(promptOutcome(ui({ answer: "Yes", resolved: { by: "host", outcome: "answered" } }))).toBe("Answered Yes");
+    expect(promptOutcome(ui({ resolved: { by: "host", outcome: "answered" } }))).toBe("Answered from the app");
+    expect(promptOutcome(ui({ resolved: { by: "local", outcome: "answered" } }))).toBe("Answered in the terminal");
+    expect(promptOutcome(ui({ resolved: { by: "local", outcome: "cancelled" } }))).toBe("Cancelled in the terminal");
+    render(<ActivityThread activity={[{ kind: "prompt", id: "u1", ui: ui({ resolved: { by: "local", outcome: "answered" } }) }]} isOpen={() => false} toggle={() => {}} onAnswer={() => {}} />);
+    expect(screen.queryByTestId("extension-request")).toBeNull();
+    expect(screen.getByTestId("extension-request-outcome").getAttribute("data-resolved-by")).toBe("local");
+  });
+
+  it("takes text for an input request", () => {
+    const answers: Array<string | null> = [];
+    render(<ActivityThread activity={[{ kind: "prompt", id: "u2", ui: { type: "input", prompt: "Name", options: [], answer: null } }]} isOpen={() => false} toggle={() => {}} onAnswer={(_, a) => answers.push(a)} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "probe" } });
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
+    expect(answers).toEqual(["probe"]);
   });
 });
