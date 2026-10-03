@@ -5,7 +5,7 @@ import { Icon } from "../ui/icon.tsx";
 import { Kbd, cx } from "../ui/primitives.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
 import { REF_ICON } from "./meta.tsx";
-import { useAbort, useReferenceCandidates, useResolveForSubmit, useSubmit, type PickerKind } from "./queries.ts";
+import { useAbort, useReferenceCandidates, useResolveForSubmit, useStreamState, useSubmit, type PickerKind } from "./queries.ts";
 import { activeMention, formatAgentRef, parseRefTokens, useAgentStore, useAgentStoreVersion } from "./workspace.tsx";
 
 const TABS: Array<[PickerKind, string]> = [
@@ -97,6 +97,8 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
   const resolveRefs = useResolveForSubmit(session.id);
 
   const working = session.state === "working" || session.state === "waiting";
+  /** While the live stream is down the session state is unknown, so nothing is sent or stopped (XTRM-615). */
+  const disconnected = useStreamState() === "disconnected";
   const mention = activeMention(text, caret);
   const pickerOpen = !!mention && dismissed !== mention.start;
   const kind: PickerKind = kindOverride ?? mention?.kind ?? "all";
@@ -135,7 +137,7 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
 
   const send = async (explicit?: "steer" | "follow-up") => {
     const body = text.trim();
-    if (!body || submit.isPending || resolving) return;
+    if (!body || submit.isPending || resolving || disconnected) return;
     const all = [...refs];
     for (const t of parseRefTokens(body)) if (!all.some((r) => sameRef(r, t))) all.push(t);
     try {
@@ -250,7 +252,7 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
               <button
                 type="button"
                 onClick={() => abort.mutate(undefined, { onError: (e) => setError(`Stop failed: ${e.message}`) })}
-                disabled={abort.isPending}
+                disabled={abort.isPending || disconnected}
                 className="flex h-7 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40 disabled:text-ink-faint"
               >
                 <Icon name="close" size="xs" />
@@ -265,8 +267,9 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
                     type="button"
                     role="radio"
                     aria-checked={mode === m}
+                    disabled={disconnected}
                     onClick={() => setMode(m)}
-                    className={cx("rounded px-1.5 py-0.5 outline-none", mode === m ? "bg-surface text-ink shadow-[0_0_0_1px_var(--x-border-muted)]" : "text-ink-faint hover:text-ink-muted")}
+                    className={cx("rounded px-1.5 py-0.5 outline-none disabled:opacity-50", mode === m ? "bg-surface text-ink shadow-[0_0_0_1px_var(--x-border-muted)]" : "text-ink-faint hover:text-ink-muted")}
                   >
                     {m === "steer" ? "Steer" : "Follow-up"}
                   </button>
@@ -276,7 +279,7 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
             <button
               type="button"
               onClick={() => void send()}
-              disabled={!text.trim() || submit.isPending || resolving}
+              disabled={!text.trim() || submit.isPending || resolving || disconnected}
               className="flex h-7 items-center gap-1.5 rounded-md bg-accent px-2.5 text-xs font-medium text-white outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-accent/40 disabled:bg-control disabled:text-ink-faint"
             >
               {working ? (mode === "steer" ? "Steer" : "Follow up") : "Send"}
@@ -285,6 +288,12 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
           </span>
         </div>
       </div>
+      {disconnected && (
+        <p role="status" className="mt-1.5 flex items-center gap-1.5 px-1 text-xs text-ink-faint" data-testid="composer-disconnected">
+          <Icon name="alert" size="xs" />
+          Disconnected from the agent host · you can send{working ? " or stop" : ""} again when the stream reconnects
+        </p>
+      )}
       {error && (
         <p role="alert" className="mt-1.5 flex items-center gap-1.5 px-1 text-xs text-danger">
           <Icon name="alert" size="xs" />
@@ -296,7 +305,7 @@ export function Composer({ session }: { session: AgentSessionDetail }) {
                   key={m}
                   type="button"
                   onClick={() => void send(m)}
-                  disabled={submit.isPending}
+                  disabled={submit.isPending || disconnected}
                   className="h-6 rounded-md border border-border px-2 text-xs font-medium text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent/40"
                 >
                   {m === "steer" ? "Send as steer" : "Send as follow-up"}
