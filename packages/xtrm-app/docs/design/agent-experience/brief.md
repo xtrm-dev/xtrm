@@ -1,6 +1,7 @@
 # Agent experience — design brief (Phase 0 inputs)
 
 Epic: XTRM-621 · This brief: XTRM-622 · Navigator implementation: XTRM-630 · Date: 2026-10-04
+Decision record: [ADR-001 — Agent experience: design authority and process](../../adr/ADR-001-agent-experience-design-authority.md)
 
 This brief is the shared starting point for every Phase 0 design direction. It states the goal, the
 users, what exists today, what the operator asked for, the hard constraints, the scenarios that every
