@@ -3,7 +3,8 @@
 > Status: ACCEPTED (process); the visual direction stays OPEN until the Phase 0 operator decision (XTRM-628) · Date: 2026-10-04
 > Deciders: operator; recorded by the XTRM-557/XTRM-621 coordinator
 > Amended 2026-10-04: operator requirements, Decision 9 (shipped data layer, open hierarchy, graph library) and Decision 10 (behaviour), preconditions and known gaps
-> Work: Substrate epic XTRM-621 (local board; server board XTRM-620), Phase 0 children XTRM-622–628 · Jira XTRM-104
+> Work: Substrate epic XTRM-621 (local board; server board XTRM-620): Phase 0 children XTRM-622–628, navigation children XTRM-629 (host topology feed) and XTRM-630 (Sessions navigator) · Jira XTRM-104
+> Numbering: this is the xtrm-app ADR series (`packages/xtrm-app/docs/adr/`). It is separate from the runtime ADR series in `docs/runtime/adr/` (001–006); the numbers do not refer to each other.
 > Related: Jira XTRM-105 (ADR: tmux-derived Sessions navigator and optional topology graph view; Proposed) · Substrate XTRM-630 (Sessions navigator)
 
 ## Context
@@ -43,7 +44,11 @@ These statements come from the operator's live use and review. They are the requ
    - a component selection study across the registries (XTRM-626);
    - a Claude design pass that critiques and refines each direction and compares them side by side (XTRM-627);
    - the operator's decision on direction and component set (XTRM-628).
-5. **The chosen Phase 0 design becomes the implementation reference.** Implementation children are created only after XTRM-628.
+
+   Board state on 2026-10-04: XTRM-622 is done (PR #278). XTRM-623 to XTRM-626 are ready and not yet dispatched. XTRM-627 and XTRM-628 wait on them.
+5. **The chosen Phase 0 design becomes the implementation reference.** UI implementation children are created only after XTRM-628. There are two exceptions, both from the operator's navigation request (Decision 9):
+   - XTRM-629 (host topology feed) is a data dependency with no UI. It ran before XTRM-628 and is done (core PR #717).
+   - XTRM-630 (Sessions navigator) was created early so its contract could be reviewed. It is blocked by XTRM-628 and XTRM-629 and implements the chosen design, not one fixed in advance.
 6. **Registry-first components.** Every implementation child records which `@agents-ui`, `@spectrumui`, `@shadcn` and Base UI candidates it searched, installed, adapted or rejected before building a component by hand. Dispositions go into `docs/ui-component-reference-registry.md`.
 7. **Acceptance adds experience checks to the behavioural ones.** Each implementation child must:
    - keep the XTRM-601 real-host suite (45 tests) green;
