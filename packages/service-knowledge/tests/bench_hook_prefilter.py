@@ -81,49 +81,6 @@ def setup(root: Path) -> Path:
     return scripts
 
 
-def measure(root: Path, scripts: Path, payloads_in, n: int, use_prefilter: bool, hook: str, extra) -> dict:
-    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(root)}
-    mode = "post" if hook.startswith("drift") else "pre"
-    per_payload: dict[str, list[float]] = {label: [] for label, _ in payloads_in}
-
-    argv = (["/bin/sh", str(scripts / "hook_prefilter.sh"), mode, hook, *extra]
-            if use_prefilter else [sys.executable, str(scripts / hook), *extra])
-
-    # Warm the page cache / bytecode cache so we measure steady state, not first-call disk.
-    for _label, body in payloads_in:
-        subprocess.run(argv, input=body, capture_output=True, env=env, cwd=str(root))
-
-    t_all: list[float] = []
-    for _ in range(n):
-        for label, body in payloads_in:
-            t0 = time.perf_counter()
-            subprocess.run(argv, input=body, capture_output=True, env=env, cwd=str(root))
-            dt = (time.perf_counter() - t0) * 1000.0
-            per_payload[label].append(dt)
-            t_all.append(dt)
-
-    t_all.sort()
-
-    def pct(vals, q):
-        vals = sorted(vals)
-        return vals[max(0, min(len(vals) - 1, int(round(q * (len(vals) - 1)))))]
-
-    out_of = [v for l, vs in per_payload.items() if l.startswith("out-of-territory") for v in vs]
-    drift = [v for l, vs in per_payload.items() if l == "drift-edit" for v in vs]
-    return {
-        "hook": hook,
-        "side": "after" if use_prefilter else "before",
-        "calls": len(t_all),
-        "mean_ms": round(statistics.mean(t_all), 2),
-        "p95_ms": round(pct(t_all, 0.95), 2),
-        "min_ms": round(min(t_all), 2),
-        "out_of_territory_mean_ms": round(statistics.mean(out_of), 2) if out_of else None,
-        "out_of_territory_p95_ms": round(pct(out_of, 0.95), 2) if out_of else None,
-        "drift_mean_ms": round(statistics.mean(drift), 2) if drift else None,
-        "by_payload": {l: round(statistics.mean(v), 2) for l, v in per_payload.items()},
-    }
-
-
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=50)
@@ -197,6 +154,11 @@ def summarize(hook: str, side: str, per_payload: dict) -> dict:
         "out_of_territory_p95_ms": round(pct(out_of, 0.95), 2) if out_of else None,
         "drift_mean_ms": round(statistics.mean(drift), 2) if drift else None,
         "by_payload": {l: round(statistics.mean(v), 2) for l, v in per_payload.items()},
+        # On a shared, saturated host the minimum is the best available estimator of
+        # unloaded cost; the mean carries contention that both sides share equally.
+        "by_payload_min": {l: round(min(v), 2) for l, v in per_payload.items()},
+        "out_of_territory_min_ms": round(min(out_of), 2) if out_of else None,
+        "drift_min_ms": round(min(drift), 2) if drift else None,
     }
 
 
