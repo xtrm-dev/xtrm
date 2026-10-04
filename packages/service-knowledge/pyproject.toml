@@ -48,6 +48,7 @@ where = ["src"]
 service_knowledge = [
   "py.typed",
   "scripts/*.py",
+  "scripts/*.sh",
   "contracts/*.json",
   "skills/*.md",
   "install/*.py",

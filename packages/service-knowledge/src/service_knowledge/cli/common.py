@@ -112,11 +112,27 @@ def vendor_machinery(root: Path) -> list[str]:
 
 
 # --- settings.json hook wiring ------------------------------------------------
-def _hook_command(script: str, extra_arg: str = "") -> str:
-    """Defensive project-local hook command (no-op if the machinery file is absent)."""
-    p = f"$CLAUDE_PROJECT_DIR/{MACHINERY_REL.as_posix()}/scripts/{script}"
+def _hook_command(script: str, extra_arg: str = "", mode: str = "") -> str:
+    """Defensive project-local hook command (no-op if the machinery file is absent).
+
+    Registered through ``hook_prefilter.sh`` (XTRM-556): the pre-filter decides in awk
+    whether the payload can touch a registered territory and only spawns the python hook
+    when it can. It is strictly fail-safe — a missing/stale index or anything it cannot
+    decide hands the untouched payload to the real hook, so output is unchanged.
+    """
+    base = f"$CLAUDE_PROJECT_DIR/{MACHINERY_REL.as_posix()}/scripts"
+    p = f"{base}/{script}"
     run = f'python3 "$p"' + (f" {extra_arg}" if extra_arg else "")
-    return f'sh -c \'p="{p}"; [ -f "$p" ] || exit 0; exec {run}\''
+    if not mode:
+        return f'sh -c \'p="{p}"; [ -f "$p" ] || exit 0; exec {run}\''
+    pf = f"{base}/hook_prefilter.sh"
+    args = f" {mode} {script}" + (f" {extra_arg}" if extra_arg else "")
+    # A missing pre-filter must fall through to the hook, never disable it: exiting 0
+    # would silently drop evidence bundles AND the Write/Edit blocking gate.
+    return (
+        f'sh -c \'p="{p}"; [ -f "$p" ] || exit 0; '
+        f'pf="{pf}"; [ -f "$pf" ] || exec {run}; exec sh "$pf"{args}\''
+    )
 
 
 def _is_machinery_hook(entry: dict, script: str) -> bool:
@@ -127,24 +143,28 @@ def _is_machinery_hook(entry: dict, script: str) -> bool:
 
 
 _DESIRED_HOOKS = {
-    "SessionStart": {"script": "cataloger.py", "extra": "", "matcher": None, "timeout": None},
+    "SessionStart": {"script": "cataloger.py", "extra": "", "mode": "", "matcher": None, "timeout": None},
     "PreToolUse": {
         "script": "skill_activator.py",
         "extra": "",
+        "mode": "pre",
         "matcher": "Read|Write|Edit|Glob|Grep|Bash|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
         "timeout": None,
     },
     "PostToolUse": {
         "script": "drift_detector.py",
         "extra": "check-hook",
+        "mode": "post",
         "matcher": "Write|Edit|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
-        "timeout": 10000,
+        # Claude Code reads this as SECONDS. 10000 was ~2.8 h; aligned with the packaged
+        # template (and with every other hook in the tree), which has always been 10.
+        "timeout": 10,
     },
 }
 
 
 def _build_hook_entry(spec: dict) -> dict:
-    hook: dict = {"type": "command", "command": _hook_command(spec["script"], spec["extra"])}
+    hook: dict = {"type": "command", "command": _hook_command(spec["script"], spec["extra"], spec.get("mode", ""))}
     if spec["timeout"] is not None:
         hook["timeout"] = spec["timeout"]
     entry: dict = {"hooks": [hook]}
