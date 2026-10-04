@@ -96,7 +96,7 @@ These were found by the XTRM-622 and XTRM-629 workers on 2026-10-04. They do not
 | Gap | Blocks | Resolution |
 |---|---|---|
 | The topology feed is merged but unreleased: the operator's installed `xt` does not serve it | XTRM-630 real-host acceptance | next `xt` release, after coordination with the session that released v0.15.1 and v0.15.2 |
-| Agents do not record who dispatched them: `parent_pane_id` and `parent_session_id` are empty on the real host | graph view lineage edges | `xt` writes the lineage pane options at launch (issue to file) |
-| No last-state-change timestamp per pane | "stale" and "finished, unread" states | same `xt` issue: write `@agent_last_transition` reliably |
+| Agents do not record who dispatched them: `parent_pane_id` and `parent_session_id` are empty on the real host | graph view lineage edges | `xt` writes the lineage pane options at launch (XTRM-631, blocks XTRM-630) |
+| No last-state-change timestamp per pane | "stale" and "finished, unread" states | XTRM-631: write `@agent_last_transition` reliably |
 | The feed's tmux control-mode watcher appears as an attached client | any "operator is watching" signal | consumers ignore control-mode clients |
 | `checks_state` is always null without GitHub enrichment | PR check badges | GitHub enrichment stays opt-in (`xt host start --topology-github`); designs show the absent state
