@@ -18,6 +18,7 @@ Index health is read straight from ``.xtrm/cache/service-knowledge.sqlite`` with
   * ``absent`` — no index yet (run `service-knowledge index build`)
 """
 
+import os
 import sqlite3
 import subprocess
 import sys
@@ -167,6 +168,15 @@ def main() -> None:
     catalog = generate_catalog(legacy=legacy)
     if catalog:
         print(catalog)
+    # Refresh the hook pre-filter's territory index once per session (XTRM-556). The
+    # write is mtime/content keyed, so a clean registry costs no write at all. Failures
+    # are silent: a stale index only costs the hook its fast path, never correctness.
+    try:
+        from build_territory_index import build as _build_territory_index
+
+        _build_territory_index(os.environ.get("CLAUDE_PROJECT_DIR") or None)
+    except Exception:
+        pass
     # Silent if no services registered — don't break session start
 
 
