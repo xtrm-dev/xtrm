@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'pf=\"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/hook_prefilter.sh\"; [ -f \"$pf\" ] || exit 0; p=\"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/skill_activator.py\"; [ -f \"$p\" ] || exit 0; exec sh \"$pf\" pre skill_activator.py'"
+            "command": "sh -c 'p=\"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/skill_activator.py\"; [ -f \"$p\" ] || exit 0; pf=\"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/hook_prefilter.sh\"; [ -f \"$pf\" ] || exec python3 \"$p\"; exec sh \"$pf\" pre skill_activator.py'"
           }
         ]
       }
@@ -27,8 +27,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'pf=\"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/hook_prefilter.sh\"; [ -f \"$pf\" ] || exit 0; p=\"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/drift_detector.py\"; [ -f \"$p\" ] || exit 0; exec sh \"$pf\" post drift_detector.py check-hook'",
-            "timeout": 10000
+            "command": "sh -c 'p=\"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/drift_detector.py\"; [ -f \"$p\" ] || exit 0; pf=\"$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/hook_prefilter.sh\"; [ -f \"$pf\" ] || exec python3 \"$p\" check-hook; exec sh \"$pf\" post drift_detector.py check-hook'",
+            "timeout": 10
           }
         ]
       }

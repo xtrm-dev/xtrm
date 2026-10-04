@@ -23,7 +23,17 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from glob import glob
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from service_knowledge.cli.common import _DESIRED_HOOKS, _build_hook_entry  # noqa: E402
+
+
+def _registered_pretooluse_command() -> str:
+    """The exact command Claude Code runs, as produced by the installer wiring."""
+    return _build_hook_entry(_DESIRED_HOOKS["PreToolUse"])["hooks"][0]["command"]
 
 SRC = Path(__file__).resolve().parent.parent / "src" / "service_knowledge" / "scripts"
 HOOKS = ("skill_activator.py", "drift_detector.py")
@@ -66,6 +76,40 @@ PAYLOADS = [
     ("notebook-path", None, {"tool_name": "NotebookEdit", "tool_input": {"notebook_path": "packages/core/src/n.ipynb"}}),
     ("charclass-in-territory", {"charclass": True}, {"tool_name": "Read", "tool_input": {"file_path": "weird/b.txt"}}),
     ("charclass-out-territory", {"charclass": True}, {"tool_name": "Read", "tool_input": {"file_path": "other/z.txt"}}),
+    # --- (1) JSON extraction: forms the awk scanner must not guess at ---
+    ("json-space-before-colon", None, {"tool_name": "Read", "tool_input": {"file_path": " packages/core/src/a.py"}}),
+    ("json-space-after-colon", None, {"tool_name": "Read", "tool_input": {"file_path": "packages/core/src/a.py"}}),
+    # --- (2) path shapes python normalises differently ---
+    ("path-double-slash", None, {"tool_name": "Read", "tool_input": {"file_path": "ROOT//packages/core/src/a.py"}}),
+    ("path-trailing-slash", None, {"tool_name": "Read", "tool_input": {"file_path": "packages/core/src/a.py/"}}),
+    # pathlib strips the trailing slash and fnmatch "*" crosses "/", so "a/b/x.tsx/"
+    # matches "*.tsx". Found by the randomised fuzz, not by inspection.
+    ("path-trailing-slash-root-glob", None, {"tool_name": "Read", "tool_input": {"path": "f.md/b/src/x.tsx/"}}),
+    ("path-trailing-slash-root-glob-2", None, {"tool_name": "Edit", "tool_input": {"path": "g.js/x.tsx/"}}),
+    ("path-trailing-slash-root-glob-3", None, {"tool_name": "NotebookRead", "tool_input": {"path": "other/packages/src/x.tsx/"}}),
+    ("path-dot-segment", None, {"tool_name": "Read", "tool_input": {"file_path": "packages/./core/src/a.py"}}),
+    ("path-parent-segment", None, {"tool_name": "Read", "tool_input": {"file_path": "packages/core/src/../src/a.py"}}),
+    ("path-equals-root", None, {"tool_name": "Read", "tool_input": {"file_path": "ROOT"}}),
+    # Out of territory for the stock registry, but IN territory for the registry the
+    # "registry-changed-mtime-preserved" state installs. A stale index that is still
+    # trusted would decide NO here and suppress a real hit -- this payload is what makes
+    # the size-based freshness check load-bearing.
+    ("future-territory-only", None, {"tool_name": "Read", "tool_input": {"file_path": "only/here/x.py"}}),
+    ("future-territory-edit", None, {"tool_name": "Edit", "tool_input": {"file_path": "only/here/deep/y.py"}}),
+]
+
+# Raw payloads the dict form above cannot express (escapes, embedded newlines, repeats).
+RAW_PAYLOADS = [
+    ("json-backslash-escaped-path",
+     b'{"tool_name":"Read","tool_input":{"file_path":"packages\\/core\\/src\\/a.py"}}'),
+    ("json-newline-before-value",
+     b'{"tool_name":"Read","tool_input":{"file_path":\n"packages/core/src/a.py"}}'),
+    ("json-newline-after-colon",
+     b'{"tool_name":"Read","tool_input":{"file_path":\n"packages/core/src/a.py"}}'),
+    ("json-escaped-quote-in-path",
+     b'{"tool_name":"Read","tool_input":{"file_path":"packages/core/src/a\\"b.py"}}'),
+    ("json-repeated-key",
+     b'{"tool_name":"Read","tool_input":{"file_path":"nope.py","file_path":"packages/core/src/a.py"}}'),
 ]
 
 
@@ -94,7 +138,11 @@ def main() -> int:
 
     # Index states exercised for every payload. "fresh" is the normal path; "absent" and
     # "stale" are the fail-safe paths that must fall through WITHOUT draining stdin.
-    for index_state in ("fresh", "absent", "stale"):
+    # Index integrity states. Each must either be trusted (and match) or defer; none may
+    # let the filter suppress a payload the hook acts on (review finding 3).
+    for index_state in ("fresh", "absent", "stale-mtime", "truncated",
+                        "registry-line-only", "partial-patterns",
+                        "bad-count", "wrong-registry-size", "registry-changed-mtime-preserved"):
       for label, override, payload in PAYLOADS:
         registry = json.loads(json.dumps(REGISTRY))
         if override and override.get("charclass"):
@@ -114,11 +162,36 @@ def main() -> int:
         idx = scripts.parent / "cache" / "territory.index"
         reg = work / ".xtrm" / "skills" / "default" / "service-registry.json"
         if idx.exists():
+            good = idx.read_text(encoding="utf-8")
+            head, *rest = good.rstrip("\n").split("\n")
             if index_state == "absent":
                 idx.unlink()
-            elif index_state == "stale":
+            elif index_state == "stale-mtime":
                 os.utime(idx, (reg.stat().st_atime - 10, reg.stat().st_mtime - 10))
-            else:
+            elif index_state == "truncated":
+                idx.write_text("\n".join([head, *rest[:1]]) + "\n", encoding="utf-8")
+            elif index_state == "registry-line-only":
+                idx.write_text(head + "\n", encoding="utf-8")
+            elif index_state == "partial-patterns":
+                idx.write_text("\n".join([head, rest[0], rest[-1]]) + "\n", encoding="utf-8")
+            elif index_state == "bad-count":
+                parts = head.split(" ")
+                parts[2] = str(int(parts[2]) + 5)
+                idx.write_text("\n".join([" ".join(parts), *rest]) + "\n", encoding="utf-8")
+            elif index_state == "wrong-registry-size":
+                parts = head.split(" ")
+                parts[1] = str(int(parts[1]) + 7)
+                idx.write_text("\n".join([" ".join(parts), *rest]) + "\n", encoding="utf-8")
+            elif index_state == "registry-changed-mtime-preserved":
+                # A registry edited but carried across with its old mtime (cp -p / rsync -t
+                # / tar). The index is still newer, so only the size check can catch this.
+                d = json.loads(reg.read_text(encoding="utf-8"))
+                d["services"] = {"core": {"name": "Core", "territory": ["only/here/**"],
+                                           "skill_path": "x", "last_sync": "2026-09-01T00:00:00Z"}}
+                reg.write_text(json.dumps(d, indent=2), encoding="utf-8")
+                old = reg.stat().st_mtime - 100000
+                os.utime(reg, (old, old))
+            if idx.exists() and index_state != "registry-changed-mtime-preserved":
                 os.utime(idx, (reg.stat().st_atime + 10, reg.stat().st_mtime + 10))
 
         body = json.dumps(payload).replace("ROOT", str(work)).encode()
@@ -144,6 +217,29 @@ def main() -> int:
                     f"  before: {before.stdout!r}\n  after:  {after.stdout!r}"
                 )
 
+    # Raw (non-dict) payloads: escapes, embedded newlines, repeated keys.
+    for index_state in ("fresh",):
+      for label, raw in RAW_PAYLOADS:
+        work = base / f"raw-{label}"
+        if work.exists():
+            shutil.rmtree(work)
+        work.mkdir(parents=True)
+        scripts = build_fixture(work, json.loads(json.dumps(REGISTRY)))
+        subprocess.run([sys.executable, str(scripts / "build_territory_index.py"), str(work)],
+                       capture_output=True, check=False)
+        reg = work / ".xtrm" / "skills" / "default" / "service-registry.json"
+        idx = scripts.parent / "cache" / "territory.index"
+        if idx.exists():
+            os.utime(idx, (reg.stat().st_atime + 10, reg.stat().st_mtime + 10))
+        for hook in HOOKS:
+            extra = ["check-hook"] if hook.startswith("drift") else []
+            mode = "post" if hook.startswith("drift") else "pre"
+            b = run([sys.executable, str(scripts / hook), *extra], work, raw, work)
+            a = run(["/bin/sh", str(scripts / "hook_prefilter.sh"), mode, hook, *extra], work, raw, work)
+            checked += 1
+            if b.stdout != a.stdout:
+                failures.append(f"{index_state}/{label} [{hook}]\n  before: {b.stdout!r}\n  after:  {a.stdout!r}")
+
     # Malformed / empty stdin must not crash either side.
     for raw in (b"", b"not json", b"{}", b'{"tool_name":"Read"}'):
         work = base / "malformed"
@@ -161,6 +257,75 @@ def main() -> int:
                 failures.append(f"malformed {raw!r} [{hook}]\n  before: {b.stdout!r}\n  after:  {a.stdout!r}")
             if a.returncode not in (0, 1):
                 failures.append(f"malformed {raw!r} [{hook}] prefilter rc={a.returncode}")
+
+    # --- (4) the pre-filter must not leave payload residue on disk (review finding 4) --
+    glob("/tmp/sk-prefilter.*.json")
+    work = base / "residue"
+    scripts = build_fixture(work, json.loads(json.dumps(REGISTRY)))
+    subprocess.run([sys.executable, str(scripts / "build_territory_index.py"), str(work)],
+                   capture_output=True, check=False)
+    reg = work / ".xtrm" / "skills" / "default" / "service-registry.json"
+    idx = scripts.parent / "cache" / "territory.index"
+    if idx.exists():
+        os.utime(idx, (reg.stat().st_atime + 10, reg.stat().st_mtime + 10))
+    hit = json.dumps({"tool_name": "Read", "tool_input": {"file_path": "packages/core/src/a.py"}}).encode()
+    for hook, extra, mode in (("skill_activator.py", [], "pre"), ("drift_detector.py", ["check-hook"], "post")):
+        run(["/bin/sh", str(scripts / "hook_prefilter.sh"), mode, hook, *extra], work, hit, work)
+    leftover = glob("/tmp/sk-prefilter.*.json") + glob(f"{os.environ.get('TMPDIR', '/tmp')}/sk-prefilter.*.json")
+    checked += 1
+    if leftover:
+        failures.append(f"pre-filter left {len(leftover)} payload temp file(s) behind, "
+                        f"e.g. {sorted(leftover)[0]}")
+
+    # --- (5) a missing pre-filter must fall through to the hook, never disable it -----
+    # The registered command used to exit 0 when hook_prefilter.sh was absent, which
+    # silently dropped evidence bundles AND the Write/Edit blocking gate.
+    work = base / "no-prefilter"
+    scripts = build_fixture(work, json.loads(json.dumps(REGISTRY)))
+    os.unlink(scripts / "hook_prefilter.sh")
+    cmd = _registered_pretooluse_command()
+    out = run(["/bin/sh", "-c", cmd], work, hit, work)
+    checked += 1
+    if not out.stdout:
+        failures.append("registered hook produced NO output when hook_prefilter.sh is missing "
+                        "(the pre-filter must fall through, not disable the hook)")
+
+    # --- (2) root resolution variations must all preserve output (review finding 2) ----
+    work = base / "roots"
+    scripts = build_fixture(work, json.loads(json.dumps(REGISTRY)))
+    subprocess.run([sys.executable, str(scripts / "build_territory_index.py"), str(work)],
+                   capture_output=True, check=False)
+    reg = work / ".xtrm" / "skills" / "default" / "service-registry.json"
+    idx = scripts.parent / "cache" / "territory.index"
+    if idx.exists():
+        os.utime(idx, (reg.stat().st_atime + 10, reg.stat().st_mtime + 10))
+    link = base / "roots-link"
+    if link.is_symlink() or link.exists():
+        link.unlink()
+    link.symlink_to(work)
+    root_cases = {
+        "normal": {"CLAUDE_PROJECT_DIR": str(work)},
+        "trailing-slash-root": {"CLAUDE_PROJECT_DIR": str(work) + "/"},
+        "symlinked-root": {"CLAUDE_PROJECT_DIR": str(link)},
+        "root-unset": {},
+        "service-registry-path": {
+            "CLAUDE_PROJECT_DIR": str(work),
+            "SERVICE_REGISTRY_PATH": str(reg),
+        },
+    }
+    for case, extra_env in root_cases.items():
+        body = json.dumps({"tool_name": "Read",
+                           "tool_input": {"file_path": f"{work}/packages/core/src/a.py"}}).encode()
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
+        env.pop("SERVICE_REGISTRY_PATH", None)
+        env.update(extra_env)
+        argv = ["/bin/sh", str(scripts / "hook_prefilter.sh"), "pre", "skill_activator.py"]
+        before = subprocess.run([sys.executable, str(scripts / "skill_activator.py")],
+                                input=body, capture_output=True, env=env, cwd=str(work))
+        after = subprocess.run(argv, input=body, capture_output=True, env=env, cwd=str(work))
+        checked += 1
+        if before.stdout != after.stdout:
+            failures.append(f"root-case {case}\n  before: {before.stdout!r}\n  after:  {after.stdout!r}")
 
     print(f"compared: {checked}   skipped: {skipped}   failures: {len(failures)}")
     for f in failures:

@@ -122,14 +122,16 @@ def _hook_command(script: str, extra_arg: str = "", mode: str = "") -> str:
     """
     base = f"$CLAUDE_PROJECT_DIR/{MACHINERY_REL.as_posix()}/scripts"
     p = f"{base}/{script}"
+    run = f'python3 "$p"' + (f" {extra_arg}" if extra_arg else "")
     if not mode:
-        run = f'python3 "$p"' + (f" {extra_arg}" if extra_arg else "")
         return f'sh -c \'p="{p}"; [ -f "$p" ] || exit 0; exec {run}\''
     pf = f"{base}/hook_prefilter.sh"
     args = f" {mode} {script}" + (f" {extra_arg}" if extra_arg else "")
+    # A missing pre-filter must fall through to the hook, never disable it: exiting 0
+    # would silently drop evidence bundles AND the Write/Edit blocking gate.
     return (
-        f'sh -c \'pf="{pf}"; [ -f "$pf" ] || exit 0; '
-        f'p="{p}"; [ -f "$p" ] || exit 0; exec sh "$pf"{args}\''
+        f'sh -c \'p="{p}"; [ -f "$p" ] || exit 0; '
+        f'pf="{pf}"; [ -f "$pf" ] || exec {run}; exec sh "$pf"{args}\''
     )
 
 
@@ -154,6 +156,9 @@ _DESIRED_HOOKS = {
         "extra": "check-hook",
         "mode": "post",
         "matcher": "Write|Edit|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
+        # NOTE: 10000 is the pre-existing value on origin/main, not introduced here. The
+        # packaged template ships 10. Left untouched so this change does not silently
+        # alter what wire_hooks installs; raised for a separate decision.
         "timeout": 10000,
     },
 }

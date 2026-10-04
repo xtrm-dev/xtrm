@@ -12,6 +12,18 @@ line, with the source registry path on line 1. ``hook_prefilter.sh`` treats a mi
 or older-than-registry index as "undecided" and defers to the hook, so a stale index degrades
 to today's behaviour instead of to a wrong answer.
 
+The index is self-verifying. ``hook_prefilter.sh`` trusts it only when:
+
+* the header records the registry path, its byte size, and the pattern count;
+* the number of pattern lines equals that count;
+* an end marker repeats the count, so a truncated or partial index is detected;
+* the registry on disk still has that byte size, and the index is newer than it.
+
+The size check exists because ``cp -p``, ``rsync -t`` and ``tar`` all preserve an old
+mtime, so an mtime-only freshness rule would keep trusting an index built from a registry
+that has since changed — and would then suppress hooks for territories that are still
+registered.
+
 Writes atomically (tmp + rename) so a concurrent hook never reads a half-written index.
 """
 
@@ -61,7 +73,14 @@ def build(project_root: str | None = None) -> int:
     target = index_path()
     target.parent.mkdir(parents=True, exist_ok=True)
 
-    payload = "\n".join([str(registry_path), *patterns]) + "\n"
+    try:
+        reg_size = registry_path.stat().st_size
+    except OSError:
+        return 1
+
+    header = f"{registry_path} {reg_size} {len(patterns)}"
+    body = [*patterns, f"#end {len(patterns)}"]
+    payload = "\n".join([header, *body]) + "\n"
 
     # Unchanged registry: keep the existing mtime so the hot path keeps using it.
     try:
@@ -74,6 +93,7 @@ def build(project_root: str | None = None) -> int:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(payload)
+        os.chmod(tmp, 0o600)
         os.replace(tmp, target)
     except OSError:
         try:
