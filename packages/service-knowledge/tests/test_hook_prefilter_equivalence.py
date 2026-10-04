@@ -132,8 +132,11 @@ def run(cmd, cwd, payload: bytes, root: Path):
     return subprocess.run(cmd, cwd=str(cwd), input=payload, capture_output=True, env=env)
 
 
-def main() -> int:
-    base = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(tempfile.mkdtemp(prefix="pf-golden-"))
+def main(argv: list[str] | None = None) -> int:
+    # argv is injectable so the pytest entry point below is not at the mercy of pytest's
+    # own sys.argv (where argv[1] would be a flag like "-q", resolved as a directory).
+    args = argv if argv is not None else sys.argv[1:]
+    base = Path(args[0]).resolve() if args else Path(tempfile.mkdtemp(prefix="pf-golden-"))
     failures, checked, skipped = [], 0, 0
 
     # Index states exercised for every payload. "fresh" is the normal path; "absent" and
@@ -406,6 +409,17 @@ def main() -> int:
     for f in failures:
         print("FAIL " + f)
     return 1 if failures else 0
+
+
+def test_prefilter_equivalence() -> None:
+    """Collected entry point.
+
+    This file is primarily a script, so without an explicit ``test_*`` function pytest
+    collects nothing from it and the whole equivalence suite silently never runs. An
+    empty argv keeps the run off pytest's own arguments; the suite builds its own
+    throwaway fixtures and needs no path.
+    """
+    assert main([]) == 0
 
 
 if __name__ == "__main__":
