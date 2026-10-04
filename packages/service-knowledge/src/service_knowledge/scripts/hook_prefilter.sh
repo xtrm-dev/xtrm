@@ -133,9 +133,18 @@ END {
   if (MODE == "pre" && tool ~ /Bash/) defer()
 
   fp = extract(buf, "file_path")
-  if (fp == "") fp = extract(buf, "path")
-  if (fp == "") fp = extract(buf, "notebook_path")
-  if (fp == "") defer()
+  if (MODE == "pre") {
+    # The activator resolves file_path -> path -> notebook_path.
+    if (fp == "") fp = extract(buf, "path")
+    if (fp == "") fp = extract(buf, "notebook_path")
+    # With no path at all the activator can never match: the value only feeds
+    # `if file_path:`, so match stays None and it exits 0. Bash, the one tool that
+    # matches on `command`, already deferred above.
+    if (fp == "") exit 0
+  } else {
+    # check-hook reads tool_input.file_path and nothing else.
+    if (fp == "") exit 0
+  }
 
   rel = fp
   if (substr(fp, 1, 1) == "/") {
