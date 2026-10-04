@@ -1,0 +1,562 @@
+{
+  "schema_version": "xtrm.topology.projection.v1",
+  "generated_at_ms": 1791100000000,
+  "host": {
+    "host_id": "host-sample-01",
+    "tmux_server_id": null
+  },
+  "sources": [
+    {
+      "name": "xtmux",
+      "status": "ok",
+      "reason": null,
+      "duration_ms": 369
+    },
+    {
+      "name": "tmux",
+      "status": "ok",
+      "reason": null,
+      "duration_ms": 14
+    },
+    {
+      "name": "specialists",
+      "status": "ok",
+      "reason": null,
+      "duration_ms": 310
+    },
+    {
+      "name": "beads",
+      "status": "error",
+      "reason": "Error: no beads database found",
+      "duration_ms": 83
+    },
+    {
+      "name": "git",
+      "status": "ok",
+      "reason": null,
+      "duration_ms": 84
+    },
+    {
+      "name": "github",
+      "status": "unavailable",
+      "reason": "skipped by --no-github",
+      "duration_ms": 0
+    }
+  ],
+  "panes": [
+    {
+      "pane_id": "%13",
+      "session_id": "$7",
+      "session_name": "claude-agent-exp-inputs",
+      "window_id": "@12",
+      "current_command": "claude",
+      "current_path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-exp-inputs",
+      "agent": {
+        "state": "running",
+        "role": null,
+        "task": "session:agent-exp-inputs",
+        "bead_id": "XTRM-622",
+        "worktree": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-exp-inputs",
+        "branch": "xt/agent-exp-inputs",
+        "parent_session_id": null,
+        "parent_pane_id": null,
+        "instance_id": "inst-bfce"
+      },
+      "jobs": [],
+      "bead": {
+        "id": "XTRM-622",
+        "status": "unknown"
+      },
+      "worktree": {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-exp-inputs",
+        "branch": "xt/agent-exp-inputs",
+        "head_sha": "71caa940889a8ef94d9deedd19e34d15b2c6b502",
+        "detached": false,
+        "shared_by_pane_ids": [
+          "%13"
+        ]
+      },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%14",
+      "session_id": "$8",
+      "session_name": "claude-topology-feed",
+      "window_id": "@13",
+      "current_command": "claude",
+      "current_path": "~/dev/core/.xtrm/worktrees/core-xt-claude-topology-feed",
+      "agent": {
+        "state": "running",
+        "role": null,
+        "task": "session:topology-feed",
+        "bead_id": "XTRM-629",
+        "worktree": "~/dev/core/.xtrm/worktrees/core-xt-claude-topology-feed",
+        "branch": "xt/topology-feed",
+        "parent_session_id": null,
+        "parent_pane_id": null,
+        "instance_id": "inst-c177"
+      },
+      "jobs": [],
+      "bead": {
+        "id": "XTRM-629",
+        "status": "unknown"
+      },
+      "worktree": {
+        "path": "~/dev/core/.xtrm/worktrees/core-xt-claude-topology-feed",
+        "branch": "xt/topology-feed",
+        "head_sha": "5a5b1aa1d7b4e38003fe9850d7cf01b7c21bef6e",
+        "detached": false,
+        "shared_by_pane_ids": [
+          "%14"
+        ]
+      },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%0",
+      "session_id": "$0",
+      "session_name": "xtrm",
+      "window_id": "@0",
+      "current_command": "claude",
+      "current_path": "~/dev/specialists",
+      "agent": {
+        "state": "running",
+        "role": null,
+        "task": null,
+        "bead_id": null,
+        "worktree": null,
+        "branch": null,
+        "parent_session_id": null,
+        "parent_pane_id": null,
+        "instance_id": "inst-4d47"
+      },
+      "jobs": [],
+      "bead": null,
+      "worktree": {
+        "path": "~/dev/specialists",
+        "branch": "feat/specialists-feed-and-pane",
+        "head_sha": "43b5c9cb1154d357e5913d5ebba627a714e302ac",
+        "detached": false,
+        "shared_by_pane_ids": [
+          "%0",
+          "%8",
+          "%12"
+        ]
+      },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%1",
+      "session_id": "$0",
+      "session_name": "xtrm",
+      "window_id": "@1",
+      "current_command": "pi",
+      "current_path": "~/dev/core",
+      "agent": {
+        "state": "done",
+        "role": null,
+        "task": null,
+        "bead_id": null,
+        "worktree": null,
+        "branch": null,
+        "parent_session_id": null,
+        "parent_pane_id": null,
+        "instance_id": "inst-6d75"
+      },
+      "jobs": [],
+      "bead": null,
+      "worktree": {
+        "path": "~/dev/core",
+        "branch": "main",
+        "head_sha": "5a5b1aa1d7b4e38003fe9850d7cf01b7c21bef6e",
+        "detached": false,
+        "shared_by_pane_ids": [
+          "%1"
+        ]
+      },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%2",
+      "session_id": "$0",
+      "session_name": "xtrm",
+      "window_id": "@2",
+      "current_command": "node",
+      "current_path": "~/dev/xtrm",
+      "agent": {
+        "state": "running",
+        "role": null,
+        "task": null,
+        "bead_id": null,
+        "worktree": null,
+        "branch": null,
+        "parent_session_id": null,
+        "parent_pane_id": null,
+        "instance_id": "inst-1a2c"
+      },
+      "jobs": [],
+      "bead": null,
+      "worktree": {
+        "path": "~/dev/xtrm",
+        "branch": "main",
+        "head_sha": "71caa940889a8ef94d9deedd19e34d15b2c6b502",
+        "detached": false,
+        "shared_by_pane_ids": [
+          "%2"
+        ]
+      },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%3",
+      "session_id": "$0",
+      "session_name": "xtrm",
+      "window_id": "@3",
+      "current_command": "pi",
+      "current_path": "~/dev/core/.xtrm/worktrees/core-xt-pi-7trm",
+      "agent": {
+        "state": "done",
+        "role": null,
+        "task": null,
+        "bead_id": null,
+        "worktree": null,
+        "branch": null,
+        "parent_session_id": null,
+        "parent_pane_id": null,
+        "instance_id": "inst-9c2d"
+      },
+      "jobs": [],
+      "bead": null,
+      "worktree": {
+        "path": "~/dev/core/.xtrm/worktrees/core-xt-pi-7trm",
+        "branch": "docs/jev-suggesters",
+        "head_sha": "88a65d6cf21684571650f97eb365a70cb24e088b",
+        "detached": false,
+        "shared_by_pane_ids": [
+          "%3"
+        ]
+      },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%8",
+      "session_id": "$0",
+      "session_name": "xtrm",
+      "window_id": "@7",
+      "current_command": "zsh",
+      "current_path": "~/dev/specialists",
+      "agent": {
+        "state": "off",
+        "role": null,
+        "task": null,
+        "bead_id": null,
+        "worktree": null,
+        "branch": null,
+        "parent_session_id": null,
+        "parent_pane_id": null,
+        "instance_id": "inst-1e7d"
+      },
+      "jobs": [],
+      "bead": null,
+      "worktree": {
+        "path": "~/dev/specialists",
+        "branch": "feat/specialists-feed-and-pane",
+        "head_sha": "43b5c9cb1154d357e5913d5ebba627a714e302ac",
+        "detached": false,
+        "shared_by_pane_ids": [
+          "%0",
+          "%8",
+          "%12"
+        ]
+      },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%12",
+      "session_id": "$0",
+      "session_name": "xtrm",
+      "window_id": "@11",
+      "current_command": "zsh",
+      "current_path": "~/dev/specialists",
+      "agent": null,
+      "jobs": [],
+      "bead": null,
+      "worktree": {
+        "path": "~/dev/specialists",
+        "branch": "feat/specialists-feed-and-pane",
+        "head_sha": "43b5c9cb1154d357e5913d5ebba627a714e302ac",
+        "detached": false,
+        "shared_by_pane_ids": [
+          "%0",
+          "%8",
+          "%12"
+        ]
+      },
+      "pull_request": null
+    }
+  ],
+  "orphans": {
+    "jobs": [],
+    "worktrees": [
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-48ac",
+        "branch": "feature/XTRM-557-agent-harness",
+        "head_sha": "2b8f0e1c463f89ada64e9cbfcd669b3d608f974b",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-acceptance",
+        "branch": "feature/XTRM-601-agent-acceptance",
+        "head_sha": "5a4c20b809717c104d799a20c5333ed0f659e0e7",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-direct-mode",
+        "branch": "feat/xtrm-600-direct-mode",
+        "head_sha": "c68c7f54739c466b5c1905cb8dbf738cf69445f4",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-history",
+        "branch": "feature/XTRM-604-session-history",
+        "head_sha": "1ef5f2a1f2912c9dcdd3cdf453706434244332f7",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-host-status",
+        "branch": "feature/XTRM-609-host-status",
+        "head_sha": "507176d5175f73209a107c6bc0bdea33885a4511",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-live-read",
+        "branch": "feature/XTRM-572-live-agent-read",
+        "head_sha": "92b43c9a8eea659a5323894ba6b8a11776416999",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-references",
+        "branch": "feature/XTRM-598-agent-references",
+        "head_sha": "4e119b53b2f41f0b69315d3b0ed86ae72b014e62",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-stream-resync",
+        "branch": "fix/XTRM-613-stream-resync",
+        "head_sha": "6e8f3f33c81fa8026d95a0bd4059eeb89b1efe1f",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-write-path",
+        "branch": "feature/XTRM-597-agent-write-path",
+        "head_sha": "d7837f83e4b9898c36686f0057f6e0c30f7b097b",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-app-ssh-connect",
+        "branch": "xt/app-ssh-connect",
+        "head_sha": "c7afd1149f3e3c79f6e85cd263ad20c643a0c9b3",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-details-naming",
+        "branch": "fix/XTRM-616-details-naming",
+        "head_sha": "403b255e072386f472d9b5bab7f18768a7289419",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-j52p",
+        "branch": "xt/j52p",
+        "head_sha": "0991ae2966b9748140c25fc117466909c480f440",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-reply-breaks-composer",
+        "branch": "fix/XTRM-615-reply-breaks-composer",
+        "head_sha": "0274aae5c4a1e1be4308823fa916fcfe01867a12",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-meter-precision",
+        "branch": "xt/meter-precision",
+        "head_sha": "eca8765bfb1d759ccdf360f22d81fed95d6cfa69",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xtrm605-e2e",
+        "branch": null,
+        "head_sha": "0a822a54713ae126894b7d505caf9ac86509f638",
+        "detached": true,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/core/.xtrm/worktrees/core-xt-pi-compact2",
+        "branch": "chore/compact-skill-card-v2",
+        "head_sha": "811f6516750f4e767782288c97507fde74489910",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/core/.xtrm/worktrees/core-xt-pi-ctx",
+        "branch": "fix/input-seam-conversation-context",
+        "head_sha": "581fd24f4628727bb2e622332f997acdd9c3857b",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/core/.xtrm/worktrees/core-xt-pi-gold",
+        "branch": "style/gold-block-chrome",
+        "head_sha": "754f443bb73f90e011c717942b06756d6c73b358",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/core/.xtrm/worktrees/core-xt-pi-nudge",
+        "branch": "fix/ignore-control-nudges",
+        "head_sha": "011707017d15f0d402d0f94573db8de3aeb602c1",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/core/.xtrm/worktrees/core-xt-pi-rendfix",
+        "branch": "fix/renderer-compact-card",
+        "head_sha": "767164d4478f7d14fb671561d09dbd726ee4c111",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/core/.xtrm/worktrees/core-xt-pi-roster",
+        "branch": "fix/roster-list-descriptions",
+        "head_sha": "3c23cc277c7b27cf0e72636ff5f0397d1afc427a",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/core/.xtrm/worktrees/core-xt-pi-seamfix",
+        "branch": "fix/input-seam-transform-only",
+        "head_sha": "0a2c0c346d625d3f3c70df2b83b5a7c1e6ec38cf",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/core/.xtrm/worktrees/core-xt-pi-testfix",
+        "branch": "test/cwd-independent-source-probe",
+        "head_sha": "0601b1d72de0d1311366e07c73a615d1abfd72c9",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/core/.xtrm/worktrees/core-xt-pi-turnev",
+        "branch": "feat/agent-end-turn-evidence",
+        "head_sha": "8544119af54266dae6a06a7d0078fda7dcf40d55",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-0er69/unitAI-0er69-executor",
+        "branch": "feature/unitAI-0er69-executor",
+        "head_sha": "85a70e26f7ce8f9652d10f80899071c6697ca98e",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-7t93q.1/unitAI-7t93q.1-executor",
+        "branch": "feature/unitAI-7t93q.1-executor",
+        "head_sha": "3f76725a998622679df63fb66d98d9c38736fa74",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-7t93q.2/unitAI-7t93q.2-executor",
+        "branch": "feature/unitAI-7t93q.2-executor",
+        "head_sha": "a3ed515b6cc6e455adb6a1900ee9af86d7b1d1e3",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-8vb65.4/unitAI-8vb65.4-executor",
+        "branch": "feature/unitAI-8vb65.4-executor",
+        "head_sha": "bc0f290c41798dc7a866ff4aa81ad1cf5dce22a6",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-8vb65.5/unitAI-8vb65.5-executor",
+        "branch": "feature/unitAI-8vb65.5-executor",
+        "head_sha": "ce047408f910f80b3192add46a7963276faa0e29",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-8vb65.7/unitAI-8vb65.7-executor",
+        "branch": "feature/unitAI-8vb65.7-executor",
+        "head_sha": "fa2f18c6f701ce5ea8493254f972434086a74f3a",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-b0bc6.3/unitAI-b0bc6.3-executor",
+        "branch": "feature/unitAI-b0bc6.3-executor",
+        "head_sha": "e538fb70f8de8fbed958a576a78f7c9e7bbbde4f",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-b0bc6.4/unitAI-b0bc6.4-executor",
+        "branch": "feature/unitAI-b0bc6.4-executor",
+        "head_sha": "e538fb70f8de8fbed958a576a78f7c9e7bbbde4f",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-b0bc6.5/unitAI-b0bc6.5-executor",
+        "branch": "feature/unitAI-b0bc6.5-executor",
+        "head_sha": "e538fb70f8de8fbed958a576a78f7c9e7bbbde4f",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-dults/unitAI-dults-executor",
+        "branch": "feature/unitAI-dults-executor",
+        "head_sha": "831a52c3a50960cdde7b9c5d55543567a4b563f6",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-xk8f3/unitAI-xk8f3-reviewer",
+        "branch": "feature/unitAI-xk8f3-reviewer",
+        "head_sha": "8477fde639ea8796d160e4df286775cb96e6cd37",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-xqzg6/unitAI-xqzg6-executor",
+        "branch": "feature/unitAI-xqzg6-executor",
+        "head_sha": "c549bb06ffb02842c785c346b9b006f4405910cf",
+        "detached": false,
+        "shared_by_pane_ids": []
+      },
+      {
+        "path": "~/dev/specialists/.worktrees/unitAI-z9cku.4/unitAI-z9cku.4-executor",
+        "branch": "feature/unitAI-z9cku.4-executor",
+        "head_sha": "38584b1cfa7007d3f689bc03e7a27f5333c79376",
+        "detached": false,
+        "shared_by_pane_ids": []
+      }
+    ]
+  }
+}

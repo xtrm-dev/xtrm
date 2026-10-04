@@ -30,6 +30,17 @@ Rebuilt mock informed by the Supernova/PiChamber/Conar audit round. It explores 
 
 It retains the global rail, contextual sidebar and canonical Inspector Drawer, while moving away from dashboard/card-heavy composition.
 
+### `console-v2-v14-agent-supernova-substrate.html`
+
+The operator's v14 "Final GUI Simulation", added for the Agent experience epic (XTRM-621, brief in `../design/agent-experience/brief.md`). It is the richest Agent-surface reference so far:
+
+- Frame header with History / Fork / Inspect / `⋯` actions;
+- grouped command activity ("Ran 3 commands · 1 failed"), coordination blocks (message, reply, chain run with gates, fork with lineage);
+- History panel with Frames and Tree tabs, `/` command menu, reference bar, composer with model/effort picker and permission mode;
+- Frame dock, drawer tabs (Overview, Live, Work, Coordination, Telemetry, Evidence), plus Agents fleet and graph views.
+
+The only change from the operator's original file is the removal of the Google Fonts `@import` on line 7, so the file loads without network access; fonts fall back to the local stacks. Inspiration, not authority.
+
 ## How to use these files
 
 Use them to compare interaction geometry, density, search/navigation placement, collapse behavior and visual direction while implementing `packages/xtrm-app`.

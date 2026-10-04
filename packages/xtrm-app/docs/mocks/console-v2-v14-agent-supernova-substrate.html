@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>XTRM Final GUI Simulation</title>
+<style>
+:root{--x:#833CF0;--xd:#B88CFF;--bg:#fafaf7;--e:#fff;--s:#f2f2ee;--b:#e4e4de;--bs:#cecec8;--t:#0a0a0a;--t2:#50504d;--m:#767672;--ok:#16825d;--warn:#b7791f;--bad:#c53a3a;--mercury:#4169e1;--ui:Inter,system-ui,sans-serif;--display:"Space Grotesk",Inter,sans-serif;--mono:"Cascadia Code",monospace;--r6:6px;--r8:8px;--r12:12px;--top:48px;--global:52px;--left:238px;--leftc:34px;--rail:30px;--drawer:min(42vw,640px);--drawermax:calc(100vw - var(--global) - var(--leftc) - var(--rail) - 56px)}
+[data-theme=dark]{--bg:#18181b;--e:#1f1f23;--s:#252529;--b:#34343a;--bs:#47474f;--t:#f7f7f4;--t2:#d1d1cd;--m:#9e9e99}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--t);font:13px/1.5 var(--ui);overflow:hidden}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer}.mono,code{font-family:var(--mono)}.hidden{display:none!important}
+.top{height:var(--top);display:grid;grid-template-columns:210px 1fr auto;align-items:center;padding:0 12px;border-bottom:1px solid var(--b)}
+.brand{display:flex;align-items:center;gap:8px}.mark{width:24px;height:24px;border-radius:7px;background:var(--x);color:#fff;display:grid;place-items:center;font:700 11px var(--display)}.brand strong{font:600 14px var(--display)}.brand span{color:var(--m);font-size:11px}
+.search{justify-self:center;width:min(600px,85%);height:32px;display:flex;align-items:center;gap:8px;border:1px solid var(--b);border-radius:var(--r6);background:var(--e);padding:0 10px;color:var(--m)}.search input{width:100%;border:0;outline:0;background:transparent;color:var(--t)}
+.icon,.btn{height:30px;border:1px solid var(--b);background:transparent;border-radius:var(--r6);padding:0 9px}.icon{width:30px;padding:0}.icon:hover,.btn:hover{background:var(--s)}.btn.primary{background:var(--x);border-color:var(--x);color:#fff}
+.app{height:calc(100vh - var(--top));display:flex;gap:12px;padding:12px var(--rail) 12px 12px}.left{width:var(--left);flex:0 0 var(--left);height:100%;border:1px solid var(--b);border-radius:var(--r12);background:var(--e);display:flex;flex-direction:column;overflow:hidden;transition:.18s}.app.collapsed .left{width:var(--leftc);flex-basis:var(--leftc)}
+.lh{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;border-bottom:1px solid var(--b)}.lb{padding:6px;overflow:auto}.sec{padding:11px 8px 5px;color:var(--m);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}.repo,.nav{width:100%;border:0;background:transparent;border-radius:var(--r6);color:var(--t2);text-align:left}.repo{display:grid;grid-template-columns:18px 1fr auto;gap:7px;padding:7px}.repo:hover,.nav:hover{background:var(--s);color:var(--t)}.repo.active,.nav.active{background:rgba(184,140,255,.10);color:var(--t)}.stat{font:9px var(--mono);color:var(--m);border:1px solid var(--b);border-radius:5px;padding:1px 4px}.nav{display:flex;gap:8px;align-items:center;padding:7px 8px}.bar{width:4px;height:13px;border-radius:3px}.nav.active .bar{background:var(--xd)}.lf{margin-top:auto;border-top:1px solid var(--b);padding:8px;color:var(--m);font-size:9px}
+
+.main{flex:1;min-width:0;height:100%;overflow:hidden}.view{height:100%;display:flex;flex-direction:column;min-height:0}.ph{min-height:42px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}.ph h1{font:600 21px var(--display);margin:0}.ph p{margin:2px 0 0;color:var(--m);font-size:11px}.actions{display:flex;gap:6px}
+.controls{display:flex;justify-content:space-between;gap:8px;margin-bottom:8px}.controls>div{display:flex;gap:6px}.input,.select{height:30px;border:1px solid var(--b);border-radius:var(--r6);background:var(--e);padding:0 8px}.input{width:260px}.count{font-size:10px;color:var(--m)}
+.navicon{width:15px;flex:0 0 15px;display:inline-grid;place-items:center;color:var(--m);font-size:11px}.nav.active .navicon{color:var(--xd)}.app.collapsed .navicon{display:none}
+
+.global-rail{width:var(--global);flex:0 0 var(--global);height:100%;display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:6px;color:var(--m);background:transparent}
+.global-logo{width:32px;height:32px;border:0;border-radius:10px;background:transparent;display:grid;place-items:center;color:var(--xd);font:700 15px var(--display);margin-bottom:8px}
+.global-action{width:36px;height:36px;border:1px solid transparent;background:transparent;border-radius:var(--r8);display:grid;place-items:center;color:var(--m);font-size:15px}
+.global-action:hover{background:var(--s);color:var(--t)}
+.global-action.active{color:var(--xd);background:rgba(184,140,255,.10);border-color:color-mix(in srgb,var(--xd) 28%,var(--b))}
+.global-spacer{flex:1}.global-sep{width:22px;height:1px;background:var(--b);margin:4px 0}
+.global-avatar{width:30px;height:30px;border-radius:50%;border:1px solid var(--b);background:var(--e);display:grid;place-items:center;font:600 10px var(--mono);color:var(--t2)}
+.left{position:relative}
+.app.collapsed .left{width:var(--leftc);flex-basis:var(--leftc);border-radius:var(--r12)}
+.app.collapsed .left .lb,.app.collapsed .left .lf{display:none}
+.app.collapsed .left .lh{height:100%;min-height:0;border-bottom:0;padding:0;justify-content:center;align-items:center}
+.app.collapsed .left .lh strong{display:none}
+.app.collapsed .left #lt{width:18px!important;height:42px!important;border:1px solid var(--bs);border-radius:var(--r6);background:transparent}
+.app.collapsed .left #lt:hover{background:var(--s)}
+
+/* contracts */
+.list{overflow:auto;border-top:1px solid var(--b)}.gh{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 7px;border-bottom:1px solid var(--b);background:color-mix(in srgb,var(--s) 50%,transparent);font-size:9px;color:var(--m);font-weight:700;text-transform:uppercase}
+.row{display:grid;grid-template-columns:26px 40px 90px minmax(0,1fr) 112px 108px 54px 26px;align-items:center;min-height:52px;border-bottom:1px solid var(--b);padding:0 7px}.row:hover{background:var(--s)}.row.inspected{background:rgba(184,140,255,.10)}.prio{font:600 10px var(--mono);color:var(--m)}.iid{font:600 11px var(--mono)}.imain{min-width:0;padding-right:8px}.ititle{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.imeta{font-size:9px;color:var(--m);margin-top:3px}.state{display:flex;gap:6px;align-items:center;font-size:10px}.dot{width:7px;height:7px;border-radius:50%;background:var(--m)}.ready .dot{background:var(--ok)}.working .dot{background:var(--xd)}.draft .dot{background:var(--warn)}.blocked .dot{background:var(--bad)}.owner{display:flex;align-items:center;gap:6px;font-size:10px}.avatar{width:20px;height:20px;border-radius:50%;border:1px solid var(--b);background:var(--s);display:grid;place-items:center;font-size:8px}.score{font:600 10px var(--mono);color:var(--ok)}.score.bad{color:var(--warn)}
+/* agent view */
+.ahead{min-height:38px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.aleft{display:flex;align-items:center;gap:8px}.chip{font-size:10px;border:1px solid var(--b);border-radius:5px;background:var(--s);padding:2px 5px;color:var(--m)}.astate{font-size:9px;color:var(--m);display:flex;align-items:center;gap:5px}.astate .dot{background:var(--ok)}
+.framezone{height:calc(100% - 44px);position:relative;overflow:hidden;border-top:1px solid var(--b)}.scroll{height:100%;overflow:auto;padding:24px 0 205px}.content{width:min(760px,calc(100% - 42px));margin:auto}.ingress{display:flex;gap:8px;align-items:flex-start;margin-bottom:22px}.pdot{width:8px;height:8px;border-radius:50%;background:var(--xd);margin-top:5px}.prompt{font-weight:600}.time{margin-left:auto;font-size:9px;color:var(--m)}.assistant{color:var(--t2);line-height:1.6}.assistant p{margin:0 0 13px}.inline{font:11px var(--mono);background:var(--s);border:1px solid var(--b);border-radius:5px;padding:1px 4px;color:var(--t)}
+.at{margin:16px 0}.atog{width:100%;border:0;background:transparent;display:flex;align-items:center;gap:7px;color:var(--t2);padding:0;text-align:left}.caret{width:16px;color:var(--m);transition:.15s}.atog.open .caret{transform:rotate(90deg)}.alist{display:none;margin-top:8px;border:1px solid var(--b);border-radius:var(--r8);overflow:hidden;background:var(--e)}.alist.open{display:block}.aitem{border-bottom:1px solid var(--b)}.aitem:last-child{border:0}.aihead{min-height:36px;display:grid;grid-template-columns:18px 1fr auto;gap:6px;align-items:center;padding:7px 9px}.aihead:hover{background:var(--s)}.aititle{font-size:11px}.aist{font-size:9px;color:var(--m)}.aibody{display:none;padding:9px 10px 11px 33px;border-top:1px solid var(--b);background:color-mix(in srgb,var(--s) 55%,transparent)}.aitem.open .aibody{display:block}.cmd{background:#111113;color:#eee;border-radius:var(--r8);padding:9px 10px;font:10px/1.55 var(--mono);white-space:pre;overflow:auto}.msg{border:1px solid var(--b);border-radius:var(--r8);background:var(--s);padding:9px 10px;font-size:11px}.msg strong{display:block;margin-bottom:4px}.chain{display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--b);border-radius:var(--r8);background:var(--s);padding:9px 10px}.gates{display:flex;gap:5px}.gate{width:22px;height:5px;border-radius:3px;background:var(--b)}.gate.done{background:var(--ok)}.gate.active{background:var(--xd)}.settled{display:flex;gap:8px;align-items:center;margin:25px 0 14px;font-size:9px;color:var(--m);text-transform:uppercase}.settled:before,.settled:after{content:"";height:1px;background:var(--b);flex:1}
+
+/* v11 — preserve the v9 visual language, reduce vertical waste */
+.assistant p{margin:0 0 10px}
+.at{margin:12px 0}
+.atog{
+  min-height:30px;
+  padding:0;
+  gap:6px;
+  line-height:1.25;
+}
+.atog .caret{width:14px}
+.alist{margin-top:6px}
+.aihead{
+  min-height:31px;
+  padding:4px 9px;
+  gap:5px;
+}
+.aititle{font-size:10.5px}
+.aist{font-size:8.5px}
+.aibody{
+  padding:7px 9px 8px 31px;
+}
+.cmd{
+  padding:7px 9px;
+  font-size:9.5px;
+  line-height:1.45;
+}
+.msg{
+  padding:7px 9px;
+  font-size:10.5px;
+  line-height:1.45;
+}
+.msg strong{margin-bottom:2px}
+.chain{
+  padding:7px 9px;
+}
+.settled{margin:18px 0 10px}
+
+/* composer + history */
+.cwrap{position:absolute;left:0;right:0;bottom:49px;display:flex;justify-content:center;pointer-events:none;z-index:16}.composer{width:min(760px,calc(100% - 42px));border:1px solid var(--bs);border-radius:var(--r12);background:var(--e);box-shadow:0 10px 28px rgba(0,0,0,.18);pointer-events:auto;overflow:hidden}.refbar{display:none;min-height:30px;gap:6px;align-items:center;padding:6px 9px;border-bottom:1px solid var(--b);background:var(--s)}.refbar.open{display:flex}.ref{height:22px;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--b);border-radius:999px;padding:0 7px;font-size:9px}.cctx{height:30px;display:flex;justify-content:space-between;align-items:center;padding:0 10px;background:var(--s);border-bottom:1px solid var(--b);font-size:9px;color:var(--m)}.composer textarea{width:100%;height:48px;resize:none;border:0;outline:0;background:transparent;padding:10px 12px 5px}.cbot{height:34px;display:flex;justify-content:space-between;align-items:center;padding:0 8px 6px 10px}.ctools,.model{display:flex;gap:8px;color:var(--m);font-size:9px;align-items:center}.send{width:28px;height:28px;border:0;border-radius:50%;background:var(--x);color:#fff}
+.hdock{position:absolute;left:0;right:0;bottom:8px;height:34px;display:flex;justify-content:center;pointer-events:none}.hstrip{width:min(760px,calc(100% - 42px));display:flex;gap:4px;align-items:center;pointer-events:auto;overflow:hidden}.hframe{height:30px;min-width:0;flex:0 1 128px;border:1px solid transparent;background:transparent;border-radius:var(--r6);color:var(--m);display:flex;gap:6px;align-items:center;padding:0 8px}.hframe.active{background:var(--e);border-color:var(--b);color:var(--t)}.hframe .dot{width:5px;height:5px;background:var(--ok)}.hframe.active .dot{background:var(--xd)}.hnum{font:600 9px var(--mono)}.htitle{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hexpand{margin-left:auto;height:30px;border:1px solid var(--b);background:var(--e);border-radius:var(--r6);padding:0 9px;display:flex;align-items:center;gap:6px}
+.hpanel{position:absolute;left:50%;bottom:92px;transform:translateX(-50%) translateY(8px);width:min(920px,calc(100% - 42px));max-height:64vh;border:1px solid var(--b);border-radius:var(--r12);background:var(--e);box-shadow:0 16px 42px rgba(0,0,0,.22);opacity:0;pointer-events:none;overflow:hidden;z-index:24;transition:.18s}.hpanel.open{opacity:1;pointer-events:auto;transform:translateX(-50%)}.hhead{height:42px;display:flex;justify-content:space-between;align-items:center;padding:0 11px;border-bottom:1px solid var(--b)}.modes{display:flex;gap:2px;padding:2px;border:1px solid var(--b);border-radius:var(--r8);background:var(--s)}.modes button{height:26px;border:0;background:transparent;border-radius:var(--r6);padding:0 8px;color:var(--m);font-size:10px}.modes button.active{background:var(--e);color:var(--t)}.hbody{max-height:calc(64vh - 42px);overflow:auto;padding:12px}.hgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:8px}.hcard{min-height:110px;border:1px solid var(--b);border-radius:var(--r8);background:var(--bg);padding:10px}.hcard.selected{border-color:var(--xd);box-shadow:inset 3px 0 0 var(--xd)}.hcard h3{font:600 12px var(--display);margin:7px 0 4px}.hcard p{font-size:10px;color:var(--t2);margin:0}.htree{display:none}.htree.open{display:block}.hgrid.off{display:none}.branch{margin-bottom:12px}.branch strong{font-size:11px}.branch small{display:block;color:var(--m);margin:2px 0 7px 18px}.branchlist{margin-left:8px;padding-left:12px;border-left:1px solid var(--b)}.branchitem{display:grid;grid-template-columns:48px 1fr auto;gap:8px;padding:5px 7px;border-radius:var(--r6)}.branchitem.active{background:rgba(184,140,255,.10)}.slash{display:none;position:absolute;left:50%;transform:translateX(-50%);bottom:150px;width:min(620px,calc(100% - 90px));border:1px solid var(--b);border-radius:var(--r12);background:var(--e);box-shadow:0 16px 40px rgba(0,0,0,.22);padding:6px;z-index:25}.slash.open{display:block}.sitem{width:100%;display:grid;grid-template-columns:90px 1fr;gap:8px;border:0;background:transparent;border-radius:var(--r6);padding:7px 8px;text-align:left}.sitem:hover{background:var(--s)}.sitem code{color:var(--xd);font-size:10px}.sitem span{font-size:10px;color:var(--t2)}
+/* agents */
+.agentcols{display:grid;grid-template-columns:1fr 290px;gap:12px;min-height:0;flex:1}.agentlist{overflow:auto;border-top:1px solid var(--b)}.agentrow{display:grid;grid-template-columns:30px 1fr 135px 110px 65px;align-items:center;min-height:58px;border-bottom:1px solid var(--b);padding:0 8px}.agentrow:hover{background:var(--s)}.presence{width:20px;height:20px;border:1px solid var(--b);border-radius:50%;display:grid;place-items:center}.presence .dot{background:var(--ok)}.aname{font-weight:600}.asub{font-size:9px;color:var(--m);margin-top:3px}.aside{border:1px solid var(--b);border-radius:var(--r12);background:var(--e);padding:12px}.tree-mini .line{padding:6px 7px;border-radius:var(--r6);font-size:10px}.tree-mini .line.active{background:rgba(184,140,255,.10)}.tree-mini .child{margin-left:15px;border-left:1px solid var(--b);padding-left:9px}
+/* program/obs/graph */
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}.card{border:1px solid var(--b);border-radius:var(--r8);background:var(--e);padding:10px}.card .k{font-size:9px;color:var(--m);text-transform:uppercase}.card .v{font:600 18px var(--display)}.mercury{display:flex;align-items:center;gap:6px;color:var(--m)}.mdot{width:8px;height:8px;border-radius:2px;background:var(--mercury)}
+.events{border-top:1px solid var(--b);overflow:auto}.event{display:grid;grid-template-columns:78px 110px 120px 1fr;gap:10px;padding:8px 7px;border-bottom:1px solid var(--b);font-size:10px}.etime{font:9px var(--mono);color:var(--m)}
+.graph{position:relative;flex:1;border-top:1px solid var(--b);background:linear-gradient(color-mix(in srgb,var(--b) 55%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--b) 55%,transparent) 1px,transparent 1px);background-size:26px 26px}.graph svg{position:absolute;inset:0;width:100%;height:100%}.edge{fill:none;stroke:var(--bs);stroke-width:1.5}.edge.auth{stroke:var(--xd)}.node{position:absolute;width:205px;border:1px solid var(--b);border-radius:var(--r8);background:var(--e);padding:10px;text-align:left}.node.focus{border-color:var(--xd);box-shadow:inset 3px 0 0 var(--xd)}.node .kind{font-size:9px;color:var(--m);text-transform:uppercase}.node .nid{font:600 11px var(--mono);margin-top:5px}
+/* drawer */
+.rail{position:fixed;top:calc(var(--top) + 12px);bottom:12px;right:12px;width:var(--rail);border:1px solid var(--b);border-radius:var(--r12);background:var(--e);z-index:80;transition:.18s}.rail.expanded{right:calc(var(--drawer) + 12px);border-right:0;border-radius:var(--r12) 0 0 var(--r12)}.rail.max{right:calc(var(--drawermax) + 12px)}.rail button{width:100%;height:100%;border:0;background:transparent;color:var(--m)}.rg{width:16px;height:38px;border:1px solid var(--bs);border-radius:var(--r6);display:grid;place-items:center;margin:auto}
+.drawer{position:fixed;top:calc(var(--top) + 12px);bottom:12px;right:12px;width:var(--drawer);border:1px solid var(--b);border-radius:0 var(--r12) var(--r12) 0;background:var(--e);box-shadow:0 12px 34px rgba(0,0,0,.15);z-index:79;display:flex;flex-direction:column;transform:translateX(calc(100% + 30px));opacity:0;pointer-events:none;transition:.18s}.drawer.open{transform:none;opacity:1;pointer-events:auto}.drawer.max{width:var(--drawermax)}.dhead{padding:13px 15px 10px;border-bottom:1px solid var(--b)}.dtop{display:flex;justify-content:space-between;align-items:center}.dtitle{font:600 18px var(--display);margin-top:6px}.dsub{font-size:10px;color:var(--t2)}.dmeta{display:flex;gap:8px;margin-top:8px;font-size:9px;color:var(--m)}.dtabs{display:flex;gap:2px;padding:0 10px;border-bottom:1px solid var(--b);overflow:auto}.dtabs button{border:0;background:transparent;padding:8px 6px;color:var(--t2)}.dtabs button.active{font-weight:600;color:var(--t);border-bottom:2px solid var(--xd)}.dbody{padding:15px 17px;overflow:auto}.dsec+.dsec{margin-top:18px;padding-top:17px;border-top:1px solid var(--b)}.dsec h3{font:600 12px var(--display);margin:0 0 10px}.dl{display:grid;grid-template-columns:122px 1fr;gap:7px 10px}.dl dt{font-size:9px;color:var(--m)}.dl dd{margin:0;font-size:11px}.code{font:10px/1.6 var(--mono);background:var(--s);border:1px solid var(--b);border-radius:var(--r8);padding:10px;white-space:pre-wrap}.dactions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+</style>
+</head>
+<body>
+<header class="top"><div class="brand"><div class="mark">x</div><strong>XTRM</strong><span>Console</span></div><label class="search">⌕<input placeholder="Search repository, issue, agent, Frame, Program…"><span class="mono">/</span></label><div><button class="icon" id="theme">◐</button> <button class="icon">⌘</button></div></header>
+
+<div class="app" id="app">
+
+<aside class="global-rail" aria-label="Global navigation">
+  <button class="global-logo" title="XTRM">X</button>
+  <button class="global-action" data-global="agent" title="Agent">⌁</button>
+  <button class="global-action active" data-global="work" title="Work">◫</button>
+  <button class="global-action" data-global="repos" title="Repositories">◇</button>
+  <button class="global-action" data-global="agents" title="Agents">◉</button>
+  <button class="global-action" data-global="program" title="Program">◆</button>
+  <button class="global-action" data-global="observability" title="Observability">◌</button>
+  <div class="global-spacer"></div>
+  <div class="global-sep"></div>
+  <button class="global-action" title="Commands">⌘</button>
+  <button class="global-action" id="globalTheme" title="Theme">◐</button>
+  <div class="global-avatar" title="Profile">DJ</div>
+</aside>
+
+<aside class="left">
+<div class="lh"><strong id="contextTitle">Repository</strong><button class="icon" id="lt" style="width:26px;height:26px" title="Collapse contextual sidebar">‹</button></div>
+<div class="lb">
+<div style="padding:2px 2px 6px"><label class="search" style="width:100%;height:30px"><span>⌕</span><input id="contextSearch" placeholder="Filter current context…"></label></div>
+<div class="sec">Repositories</div>
+<button class="repo active"><span class="ri">◇</span><span>market-data</span><span class="stat">bd:31</span></button>
+<button class="repo"><span class="ri">◇</span><span>console</span><span class="stat">bd:14</span></button>
+<button class="repo"><span class="ri">◇</span><span>core</span><span class="stat">bd:22</span></button>
+<button class="repo"><span class="ri">◇</span><span>specialists</span><span class="stat">bd:8</span></button>
+<div class="sec">Work</div>
+<button class="nav active" data-view="issues" data-short="I"><span class="bar"></span><span class="navicon">◫</span>Issues</button>
+<button class="nav" data-view="agent" data-short="A"><span class="bar"></span><span class="navicon">⌁</span>Agent</button>
+<button class="nav" data-view="agents" data-short="N"><span class="bar"></span><span class="navicon">◉</span>Agents</button>
+<button class="nav" data-view="graph" data-short="G"><span class="bar"></span><span class="navicon">⌘</span>Graph</button>
+<div class="sec">Governance</div>
+<button class="nav" data-view="program" data-short="P"><span class="bar"></span><span class="navicon">◆</span>Program</button>
+<button class="nav" data-view="observability" data-short="O"><span class="bar"></span><span class="navicon">◌</span>Observability</button>
+</div><div class="lf"><span class="mono">market-data</span> · GitHub + Substrate · main</div>
+</aside>
+
+<main class="main">
+<section class="view" id="agentView">
+<div class="ahead"><div class="aleft"><strong id="sessionTitle">Worker cleanup and pruning</strong><span class="chip">market-data</span><span class="chip" id="agentId">pi-main</span><span class="chip mono" title="Durable session identity">sess_7f3a</span><span class="astate"><span class="dot"></span><span id="agentState">working</span></span></div><div class="actions"><button class="btn" id="historyTop">History</button><button class="btn">Fork</button><button class="btn" data-inspect="agent:pi-main">Inspect agent</button><button class="btn">⋯</button></div></div>
+<div class="framezone">
+<div class="scroll"><article class="content">
+<div class="ingress"><span class="pdot"></span><div class="prompt">Check the SCID sentinel semantics before we proceed with the cleanup.</div><span class="time">12:54</span></div>
+<div class="assistant">
+<p>You're right. I should verify the format contract directly before changing the merged path.</p>
+<div class="at"><button class="atog open" data-target="a1"><span class="caret">›</span><strong>Ran 3 commands</strong><span style="font-size:10px;color:var(--m)">1 failed</span></button><div class="alist open" id="a1">
+<div class="aitem open" data-inspect="tool:located"><div class="aihead"><span>⌘</span><span class="aititle"><strong>Located production SCID files</strong></span><span class="aist">1.3s</span></div><div class="aibody"><div class="cmd">$ grep -rn "SCID_DIR" config docker-compose.yml</div></div></div>
+<div class="aitem" data-inspect="tool:sample"><div class="aihead"><span>⌘</span><span class="aititle"><strong>Sampled largest production SCID file</strong></span><span class="aist">1.8s</span></div><div class="aibody"><div class="cmd">$ python scripts/sample_scid.py --largest --records 8</div></div></div>
+<div class="aitem" data-inspect="tool:failed"><div class="aihead"><span>!</span><span class="aititle"><strong>Checked remote mount metadata</strong></span><span class="aist" style="color:#e37b76">failed</span></div><div class="aibody"><div class="cmd">error: permission denied</div></div></div>
+</div></div>
+<p>That changes things materially. I want independent evidence before mutation.</p>
+<div class="at"><button class="atog open" data-target="a2"><span class="caret">›</span><strong>Coordination</strong><span style="font-size:10px;color:var(--m)">2 agents · 1 chain</span></button><div class="alist open" id="a2">
+<div class="aitem open" data-inspect="agent:quant-reviewer"><div class="aihead"><span>↗</span><span class="aititle"><strong>Messaged quant-reviewer</strong> · verify format semantics</span><span class="aist">14s</span></div><div class="aibody"><div class="msg"><strong>pi-main → quant-reviewer</strong>Verify the traded-range semantics against the exact format contract and return source-backed conclusions only.</div></div></div>
+<div class="aitem open" data-inspect="agent:quant-reviewer"><div class="aihead"><span>↙</span><span class="aititle"><strong>quant-reviewer replied</strong> · defect confirmed</span><span class="aist">31s</span></div><div class="aibody"><div class="msg"><strong>quant-reviewer → pi-main</strong>Confirmed. Quote extrema are used where traded price range is required. Exact source refs attached.</div></div></div>
+<div class="aitem open" data-inspect="chain:scid"><div class="aihead"><span>⟲</span><span class="aititle"><strong>Started ChainRun</strong> · SCID remediation</span><span class="aist">2/4 gates</span></div><div class="aibody"><div class="chain"><div><strong>SCID remediation</strong><div style="font-size:9px;color:var(--m)">implementation → validation → review → acceptance</div></div><div class="gates"><span class="gate done"></span><span class="gate active"></span><span class="gate"></span><span class="gate"></span></div></div></div></div>
+</div></div>
+<div class="at"><button class="atog" data-target="a3"><span class="caret">›</span><strong>Forked conversation</strong><span style="font-size:10px;color:var(--m)">relation=fork · idle</span></button><div class="alist" id="a3"><div class="aitem open" data-inspect="agent:pi-fork-1"><div class="aihead"><span>⑂</span><span class="aititle"><strong>pi-fork-1</strong> · alternate remediation path</span><span class="aist">sess_f44d</span></div><div class="aibody"><div class="msg"><strong>Fork lineage</strong>Forked from Frame 15 at a durable turn boundary. The child owns a separate AgentSession while retaining lineage to pi-main.</div></div></div></div></div><p>The implementation agent can proceed against the exact work contract while validation runs independently.</p>
+<div class="settled"><span>settled</span></div>
+<p><strong style="color:var(--t)">Conclusion:</strong> the merged range calculation uses quote extrema instead of traded-price range. The watcher path needs the same correction before pruning is safe.</p>
+</div></article></div>
+
+<section class="hpanel" id="hpanel"><div class="hhead"><strong>Conversation history · 15 Frames · 2 branches</strong><div style="display:flex;gap:7px"><div class="modes"><button class="active" id="framesBtn">Frames</button><button id="treeBtn">Tree</button></div><button class="icon" id="hclose" style="width:28px;height:28px">×</button></div></div><div class="hbody">
+<div class="hgrid" id="hgrid"><article class="hcard"><span class="mono">Frame 12</span><h3>Find candidate cleanup work</h3><p>Repository scan and candidate selection.</p></article><article class="hcard"><span class="mono">Frame 13</span><h3>Inspect worker ownership</h3><p>Compare watcher responsibilities.</p></article><article class="hcard"><span class="mono">Frame 14</span><h3>Validate pruning boundary</h3><p>Establish safe removal scope.</p></article><article class="hcard selected"><span class="mono">Frame 15</span><h3>SCID sentinel semantics</h3><p>Evidence-backed range defect.</p></article><article class="hcard"><span class="mono">feature/cleanup</span><h3>Compressed fork</h3><p>F8 → F10 · +3 compressed</p></article></div>
+<div class="htree" id="htree"><div class="branch"><strong>▾ main</strong><small>Primary line</small><div class="branchlist"><div class="branchitem"><span class="mono">F12</span><span>Find candidate cleanup work</span><span class="dot"></span></div><div class="branchitem"><span class="mono">F13</span><span>Inspect worker ownership</span><span class="dot"></span></div><div class="branchitem"><span class="mono">F14</span><span>Validate pruning boundary</span><span class="dot"></span></div><div class="branchitem active"><span class="mono">F15</span><span>SCID sentinel semantics</span><span class="dot"></span></div></div></div><div class="branch"><strong>▾ feature/cleanup</strong><small>Forked from F13 · +3 compressed</small></div></div>
+</div></section>
+
+<div class="slash" id="slash"><button class="sitem" data-command="/issue"><code>/issue</code><span>Attach/open an executable work contract</span></button><button class="sitem" data-command="/work"><code>/work</code><span>Start work against a READY contract</span></button><button class="sitem" data-command="/message"><code>/message</code><span>Message another agent</span></button><button class="sitem" data-command="/dispatch"><code>/dispatch</code><span>Dispatch a governed specialist</span></button><button class="sitem" data-command="/run-chain"><code>/run-chain</code><span>Start a ChainRun</span></button></div>
+
+<div class="cwrap"><div class="composer"><div class="refbar" id="refbar"></div><div class="cctx"><span><span class="mono">market-data</span> · main · <span id="composerAgent">pi-main</span></span><button class="btn" style="height:24px;font-size:9px">Create PR ▾</button></div><textarea id="composer" placeholder="Type / for commands or @ to reference work, agents, Frames…"></textarea><div class="cbot"><div class="ctools"><span>Bypass permissions</span><span>＋</span><span>◉</span></div><div class="model"><span>Opus 4.1</span><span>Medium</span><button class="send">↵</button></div></div></div></div>
+<div class="hdock"><div class="hstrip"><button class="hframe"><span class="dot"></span><span class="hnum">F12</span><span class="htitle">Candidates</span></button><button class="hframe"><span class="dot"></span><span class="hnum">F13</span><span class="htitle">Ownership</span></button><button class="hframe"><span class="dot"></span><span class="hnum">F14</span><span class="htitle">Boundary</span></button><button class="hframe active"><span class="dot"></span><span class="hnum">F15</span><span class="htitle">SCID semantics</span></button><button class="hexpand" id="hexpand">History <span class="mono">15</span> ⌃</button></div></div>
+</div>
+</section>
+
+<section class="view hidden" id="issuesView"><div class="ph"><div><h1>Substrate Issues</h1><p>Executable work contracts · planning is first-class</p></div><div class="actions"><button class="btn primary">New contract</button></div></div><div class="controls"><div><input class="input" placeholder="Search id, contract, owner"><select class="select"><option>all states</option></select></div><span class="count">47 contracts</span></div><div class="list">
+<div class="gh"><span>Working</span><span>2</span></div>
+<div class="row" data-inspect="issue:b73q.4"><span>⌄</span><span class="prio">P0</span><span class="iid">b73q.4</span><div class="imain"><div class="ititle">Correct SCID traded-price attribution</div><div class="imeta">change contract · validation defined · 2 children</div></div><span class="state working"><span class="dot"></span>Working</span><span class="owner"><span class="avatar">PI</span>pi-main</span><span class="score">10/10</span><span>⋯</span></div>
+<div class="row" data-inspect="issue:b73q.5"><span>›</span><span class="prio">P1</span><span class="iid">b73q.5</span><div class="imain"><div class="ititle">Validate watcher correction against production samples</div><div class="imeta">step contract · input b73q.4</div></div><span class="state working"><span class="dot"></span>Working</span><span class="owner"><span class="avatar">TE</span>test-eng</span><span class="score">10/10</span><span>⋯</span></div>
+<div class="gh"><span>Ready</span><span>18</span></div>
+<div class="row" data-inspect="issue:forge-7xu"><span>›</span><span class="prio">P2</span><span class="iid">forge-7xu</span><div class="imain"><div class="ititle">Console repository context sidebar rebuild</div><div class="imeta">change contract · shell</div></div><span class="state ready"><span class="dot"></span>Ready</span><span class="owner"><span class="avatar">—</span>unowned</span><span class="score">10/10</span><span>⋯</span></div>
+<div class="gh"><span>Draft</span><span>4</span></div>
+<div class="row" data-inspect="issue:forge-81a"><span>›</span><span class="prio">P2</span><span class="iid">forge-81a</span><div class="imain"><div class="ititle">Unify agent evidence summary surface</div><div class="imeta">missing validation · missing non-goals</div></div><span class="state draft"><span class="dot"></span>Draft</span><span class="owner"><span class="avatar">CC</span>coord</span><span class="score bad">8/10</span><span>⋯</span></div>
+</div></section>
+
+<section class="view hidden" id="agentsView"><div class="ph"><div><h1>Agents</h1><p>Live presence across repository work, chains and sessions</p></div><div class="actions"><button class="btn">Topology</button><button class="btn">Refresh</button></div></div><div class="agentcols"><div class="agentlist"><div class="gh"><span>market-data</span><span>4 active</span></div>
+<div class="agentrow" data-inspect="agent:pi-main"><span class="presence"><span class="dot"></span></span><div><div class="aname">pi-main</div><div class="asub">coordinator · b73q · Frame 15</div></div><span>SCID remediation</span><span>thinking</span><span class="mono">12s</span></div>
+<div class="agentrow" data-inspect="agent:quant-reviewer"><span class="presence"><span class="dot"></span></span><div><div class="aname">quant-reviewer</div><div class="asub">reviewer · b73q.4</div></div><span>format semantics</span><span>reading</span><span class="mono">6s</span></div>
+<div class="agentrow" data-inspect="agent:test-eng"><span class="presence"><span class="dot"></span></span><div><div class="aname">test-eng</div><div class="asub">validator · b73q.5</div></div><span>production samples</span><span>7/12 checks</span><span class="mono">3s</span></div>
+<div class="agentrow" data-inspect="agent:pi-fork-1"><span class="presence"><span class="dot" style="background:var(--m)"></span></span><div><div class="aname">pi-fork-1</div><div class="asub">sess_f44d · coordinator fork · Frame 15</div></div><span>alternate path</span><span>idle</span><span class="mono">18s</span></div><div class="gh"><span>console</span><span>2 active</span></div>
+<div class="agentrow" data-inspect="agent:claude-ui"><span class="presence"><span class="dot"></span></span><div><div class="aname">claude-ui</div><div class="asub">executor · forge-7xu</div></div><span>Sidebar.tsx</span><span>editing</span><span class="mono">9s</span></div>
+</div><aside class="aside"><strong>market-data topology</strong><div class="tree-mini"><div class="line active">● pi-main · coordinator</div><div class="child"><div class="line">↳ dispatch · quant-reviewer</div><div class="line">↳ chain · test-eng</div><div class="line">⑂ fork · pi-fork-1</div><div class="line">↔ peer · researcher</div></div></div><div style="border-top:1px solid var(--b);margin-top:12px;padding-top:10px"><small style="color:var(--m)">CHAIN</small><div style="font-weight:600;margin-top:4px">SCID remediation</div><div class="gates" style="margin-top:8px"><span class="gate done"></span><span class="gate active"></span><span class="gate"></span><span class="gate"></span></div></div></aside></div></section>
+
+<section class="view hidden" id="graphView"><div class="ph"><div><h1>Graph</h1><p>Dependencies, authority and execution relationships</p></div><div class="actions"><button class="btn">Fit</button></div></div><div class="graph"><svg viewBox="0 0 1200 620"><path class="edge auth" d="M260 130 C400 130 410 260 540 260"/><path class="edge" d="M540 260 C700 260 720 150 870 150"/></svg><button class="node focus" style="left:50px;top:80px" data-inspect="issue:b73q.4"><div class="kind">Contract</div><div class="nid">b73q.4</div><div>Correct traded-price attribution</div></button><button class="node" style="left:470px;top:210px" data-inspect="chain:scid"><div class="kind">ChainRun</div><div class="nid">scid-remediation</div><div>2/4 gates active</div></button><button class="node" style="left:840px;top:100px" data-inspect="agent:quant-reviewer"><div class="kind">Agent</div><div class="nid">quant-reviewer</div><div>reviewing semantics</div></button></div></section>
+
+<section class="view hidden" id="programView"><div class="ph"><div><h1>Program</h1><p class="mercury"><span class="mdot"></span>Mercury Intelligence · cross-repository intent and governance</p></div><div class="actions"><button class="btn">Source</button><button class="btn">Refresh</button></div></div><div class="cards"><div class="card"><div class="k">Workstreams</div><div class="v">10</div><small>cross-repo intent</small></div><div class="card"><div class="k">Assignments</div><div class="v">35</div><small>governance projections</small></div><div class="card"><div class="k">Executable refs</div><div class="v">74</div><small>issues referenced, not duplicated</small></div><div class="card"><div class="k">Blocked</div><div class="v">3</div><small>evidence/authority gates</small></div></div><div class="list"><div class="gh"><span>Current assignments</span><span>35</span></div>
+<div class="row" data-inspect="program:EXP-020"><span>›</span><span class="prio">EXP</span><span class="iid">EXP-020</span><div class="imain"><div class="ititle">Console Program dashboard integration</div><div class="imeta">WS-001 · links 3 executable contracts</div></div><span class="state ready"><span class="dot"></span>Accepted</span><span class="owner"><span class="avatar">MW</span>web</span><span class="score">3 refs</span><span>⋯</span></div>
+<div class="row" data-inspect="program:OPS-011"><span>›</span><span class="prio">OPS</span><span class="iid">OPS-011</span><div class="imain"><div class="ititle">Preview and deploy Program dashboard</div><div class="imeta">operational acceptance · links console work</div></div><span class="state blocked"><span class="dot"></span>Blocked</span><span class="owner"><span class="avatar">OP</span>operator</span><span class="score">2 refs</span><span>⋯</span></div>
+</div></section>
+
+<section class="view hidden" id="observabilityView"><div class="ph"><div><h1>Observability</h1><p>AgentOps + forensic evidence projections</p></div><div class="actions"><button class="btn">Live</button></div></div><div class="cards"><div class="card"><div class="k">Active agents</div><div class="v">6</div><small>2 coordinators · 4 specialists</small></div><div class="card"><div class="k">Open ChainRuns</div><div class="v">2</div><small>1 at validation gate</small></div><div class="card"><div class="k">Tool calls / 15m</div><div class="v">148</div><small>3 failures · 2 retries</small></div><div class="card"><div class="k">Context pressure</div><div class="v">61%</div><small>pi-main · no compaction</small></div></div><div class="events"><div class="event"><span class="etime">14:24:08</span><span>session.event</span><strong>pi-main</strong><span>durable · assistant/message committed · Frame 15</span></div><div class="event"><span class="etime">14:24:03</span><span>agent/status</span><strong>pi-fork-1</strong><span>live · running → idle</span></div><div class="event"><span class="etime">14:23:57</span><span>tool.end</span><strong>pi-main</strong><span>durable · rg record.low|record.high · 731ms</span></div><div class="event"><span class="etime">14:23:44</span><span>agent.message</span><strong>quant-reviewer</strong><span>evidence-backed conclusion delivered</span></div><div class="event"><span class="etime">14:23:31</span><span>chain.gate</span><strong>test-eng</strong><span>validation gate active · 7/12 checks</span></div></div></section>
+
+</main></div>
+
+<aside class="rail" id="rail"><button id="railbtn"><span class="rg" id="rg">‹</span></button></aside>
+<aside class="drawer" id="drawer"><div class="dhead"><div class="dtop"><div><button class="icon" id="back" style="width:26px;height:26px">‹</button> <span style="font-size:9px;color:var(--m)" id="trail">inspect</span></div><div><button class="icon" id="pin">⌖</button> <button class="icon" id="max">↗</button> <button class="icon" id="close">×</button></div></div><div class="dtitle" id="dtitle">pi-main</div><div class="dsub" id="dsub">Agent · coordinator</div><div class="dmeta" id="dmeta"><span>market-data</span><span>working</span><span>Frame 15</span></div></div>
+<div class="dtabs"><button class="active" data-tab="Overview">Overview</button><button data-tab="Live">Live</button><button data-tab="Work">Work</button><button data-tab="Coordination">Coordination</button><button data-tab="Telemetry">Telemetry</button><button data-tab="Evidence">Evidence</button></div>
+<div class="dbody">
+<div id="dOverview"><div class="dsec"><h3>Overview</h3><dl class="dl"><dt>Identity</dt><dd class="mono" id="did">pi-main</dd><dt>Role</dt><dd id="drole">coordinator</dd><dt>Repository</dt><dd>market-data</dd><dt>Current work</dt><dd id="dwork">b73q · SCID remediation</dd><dt>Frame</dt><dd>15</dd></dl><div class="dactions"><button class="btn primary" id="openSession">Open session</button><button class="btn" id="message">Message</button><button class="btn">Steer</button><button class="btn">Request review</button></div></div></div>
+<div class="hidden" id="dLive"><div class="dsec"><h3>Live activity</h3><div class="code">14:23:57  reading crates/scid/src/record.rs
+14:23:44  received evidence from quant-reviewer
+14:23:31  validation child started
+14:23:12  message → quant-reviewer</div></div></div>
+<div class="hidden" id="dWork"><div class="dsec"><h3>Executable work</h3><div class="code">b73q
+  SCID remediation
+
+b73q.4
+  Correct traded-price attribution
+  READY → WORKING</div><div class="dactions"><button class="btn" data-attach="@issue:b73q.4">Attach b73q.4</button><button class="btn" data-inspect="issue:b73q.4">Open contract</button></div></div></div>
+<div class="hidden" id="dCoordination"><div class="dsec"><h3>Coordination</h3><div class="code">pi-main · coordinator
+├─ quant-reviewer · reviewer · working
+├─ test-eng · validator · working
+└─ researcher · settled
+
+ChainRun: SCID remediation · 2/4 gates</div></div></div>
+<div class="hidden" id="dTelemetry"><div class="dsec"><h3>Telemetry</h3><dl class="dl"><dt>Runtime</dt><dd>4m 18s</dd><dt>Context</dt><dd>61%</dd><dt>Tokens</dt><dd>37.2k</dd><dt>Tool calls</dt><dd>14</dd><dt>Retries</dt><dd>1</dd><dt>Children</dt><dd>2</dd></dl></div></div>
+<div class="hidden" id="dEvidence"><div class="dsec"><h3>Evidence</h3><div class="code">source: xtrm.forensic.v1
+AgentOps projection: active
+tool evidence: 8
+tests: 7 / 12 running
+review verdict: pending</div></div></div>
+</div></aside>
+
+<script>
+const app=document.getElementById('app'),root=document.documentElement;
+function toggleTheme(){root.dataset.theme=root.dataset.theme==='dark'?'light':'dark'};theme.onclick=toggleTheme;document.getElementById('globalTheme').onclick=toggleTheme;
+let lc=false,lmax=false;function setContextCollapsed(next,source='manual'){lc=next;app.classList.toggle('collapsed',lc);lt.textContent=lc?'›':'‹';lt.title=lc?'Expand contextual sidebar':'Collapse contextual sidebar';if(source==='manual')lmax=false}lt.onclick=()=>setContextCollapsed(!lc,'manual');
+
+const globalMap={agent:{view:'agent',title:'Repository'},work:{view:'issues',title:'Work'},repos:{view:'graph',title:'Repositories'},agents:{view:'agents',title:'Agents'},program:{view:'program',title:'Program'},observability:{view:'observability',title:'Observability'}};
+document.querySelectorAll('[data-global]').forEach(btn=>{btn.onclick=()=>{document.querySelectorAll('[data-global]').forEach(x=>x.classList.remove('active'));btn.classList.add('active');const cfg=globalMap[btn.dataset.global];document.getElementById('contextTitle').textContent=cfg.title;show(cfg.view);if(lc)setContextCollapsed(false,'global')}});
+
+const views={issues:'issuesView',agent:'agentView',agents:'agentsView',graph:'graphView',program:'programView',observability:'observabilityView'};
+function show(v){Object.entries(views).forEach(([k,id])=>document.getElementById(id).classList.toggle('hidden',k!==v));document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view===v))}
+document.querySelectorAll('.nav').forEach(n=>n.onclick=()=>{show(n.dataset.view);const map={issues:'work',agent:'agent',agents:'agents',graph:'repos',program:'program',observability:'observability'};document.querySelectorAll('[data-global]').forEach(x=>x.classList.toggle('active',x.dataset.global===map[n.dataset.view]))});
+
+document.getElementById('contextSearch').addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();document.querySelectorAll('.repo,.nav').forEach(el=>{el.style.display=!q||el.textContent.toLowerCase().includes(q)?'':'none'})});
+
+document.querySelectorAll('.atog').forEach(t=>t.onclick=()=>{t.classList.toggle('open');document.getElementById(t.dataset.target).classList.toggle('open')});
+document.querySelectorAll('.aihead').forEach(h=>h.onclick=()=>h.closest('.aitem').classList.toggle('open'));
+const hp=document.getElementById('hpanel');function hopen(v){hp.classList.toggle('open',v)};hexpand.onclick=()=>hopen(!hp.classList.contains('open'));historyTop.onclick=()=>hopen(true);hclose.onclick=()=>hopen(false);
+framesBtn.onclick=()=>{framesBtn.classList.add('active');treeBtn.classList.remove('active');hgrid.classList.remove('off');htree.classList.remove('open')};treeBtn.onclick=()=>{treeBtn.classList.add('active');framesBtn.classList.remove('active');hgrid.classList.add('off');htree.classList.add('open')};
+const input=document.getElementById('composer'),slash=document.getElementById('slash'),refbar=document.getElementById('refbar');let refs=[];function refsRender(){refbar.innerHTML=refs.map((r,i)=>`<span class="ref">${r}<span data-ri="${i}" style="color:var(--m);cursor:pointer">×</span></span>`).join('');refbar.classList.toggle('open',refs.length>0);refbar.querySelectorAll('[data-ri]').forEach(x=>x.onclick=()=>{refs.splice(+x.dataset.ri,1);refsRender()})}function attach(r){if(!refs.includes(r))refs.push(r);refsRender()}
+input.oninput=()=>slash.classList.toggle('open',input.value.trim().startsWith('/'));document.querySelectorAll('.sitem').forEach(x=>x.onclick=()=>{input.value=x.dataset.command+' ';slash.classList.remove('open');input.focus()});
+let open=false,maxed=false,pinned=false,stack=[];const data={
+'agent:pi-main':['pi-main','Agent · coordinator','coordinator','b73q · SCID remediation',['market-data','working','Frame 15']],
+'agent:pi-fork-1':['pi-fork-1','Agent · coordinator fork','coordinator','alternate remediation path',['market-data','idle','forked from Frame 15']],
+'agent:quant-reviewer':['quant-reviewer','Agent · reviewer','reviewer','b73q.4 · format semantics',['market-data','working','child of pi-main']],
+'agent:test-eng':['test-eng','Agent · validator','validator','b73q.5 · production validation',['market-data','working','7/12 checks']],
+'agent:claude-ui':['claude-ui','Agent · executor','executor','forge-7xu · Sidebar.tsx',['console','working','editing']],
+'issue:b73q.4':['b73q.4','Executable work contract · P0','contract','Correct SCID traded-price attribution',['market-data','READY → WORKING','10/10']],
+'issue:b73q.5':['b73q.5','Executable step contract · P1','contract','Production validation',['market-data','WORKING','10/10']],
+'issue:forge-7xu':['forge-7xu','Executable work contract · P2','contract','Console repository context sidebar rebuild',['console','READY','10/10']],
+'issue:forge-81a':['forge-81a','Draft work contract · P2','contract','Unify evidence surface',['console','DRAFT','8/10']],
+'chain:scid':['SCID remediation','ChainRun · 2/4 gates','chain','b73q remediation chain',['market-data','validation active','3 agents']],
+'program:EXP-020':['EXP-020','Program assignment','program','Console Program dashboard integration',['Mercury','accepted','3 refs']],
+'program:OPS-011':['OPS-011','Program operational assignment','program','Preview and deploy Program dashboard',['Mercury','blocked','2 refs']],
+'tool:located':['Located production SCID files','Tool activity','tool','Frame 15',['pi-main','1.3s','evidence']],
+'tool:sample':['Sampled largest production SCID file','Tool activity','tool','Frame 15',['pi-main','1.8s','evidence']],
+'tool:failed':['Remote metadata check','Tool activity · failed','tool','Frame 15',['pi-main','failed','permission denied']]
+};
+function dopen(v){open=v;drawer.classList.toggle('open',v);rail.classList.toggle('expanded',v);rg.textContent=v?'›':'‹';if(!v&&maxed)dmax(false)}
+function dmax(v){maxed=v;drawer.classList.toggle('max',v);rail.classList.toggle('max',v);max.textContent=v?'↙':'↗';if(v){if(!lc){lmax=true;setContextCollapsed(true,'maximize')}}else if(lmax){lmax=false;setContextCollapsed(false,'maximize')}}
+function tab(name){document.querySelectorAll('.dtabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));['Overview','Live','Work','Coordination','Telemetry','Evidence'].forEach(n=>document.getElementById('d'+n).classList.toggle('hidden',n!==name))}
+function inspect(id,push=true){const d=data[id]||[id,'XTRM entity','entity','',[]];if(push&&stack.at(-1)!==id)stack.push(id);dtitle.textContent=d[0];dsub.textContent=d[1];did.textContent=d[0];drole.textContent=d[2];dwork.textContent=d[3];dmeta.innerHTML=d[4].map(x=>`<span>${x}</span>`).join('');trail.textContent=stack.length>1?stack.length+' entities':'inspect';tab('Overview');dopen(true)}
+railbtn.onclick=()=>dopen(!open);close.onclick=()=>dopen(false);max.onclick=()=>{if(!open)dopen(true);dmax(!maxed)};pin.onclick=()=>{pinned=!pinned;pin.textContent=pinned?'●':'⌖'};back.onclick=()=>{if(stack.length>1){stack.pop();inspect(stack.at(-1),false)}};document.querySelectorAll('.dtabs button').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
+document.querySelectorAll('[data-inspect]').forEach(el=>el.onclick=e=>{if(e.target.closest('[data-attach]'))return;inspect(el.dataset.inspect)});document.querySelectorAll('[data-attach]').forEach(el=>el.onclick=e=>{e.stopPropagation();attach(el.dataset.attach)});
+openSession.onclick=()=>{const n=dtitle.textContent;if(!n.includes('-')&&n!=='pi-main')return;show('issues');sessionTitle.textContent=n==='pi-main'?'Worker cleanup and pruning':n+' session';agentId.textContent=n;composerAgent.textContent=n;agentState.textContent=n.includes('reviewer')?'reviewing':n.includes('test')?'validating':'working';if(!pinned)dopen(false)};
+message.onclick=()=>{const n=dtitle.textContent;attach('@agent:'+n);show('agent');input.value='/message ';input.focus();if(!pinned)dopen(false)};
+document.onkeydown=e=>{if(e.key!=='Escape')return;if(slash.classList.contains('open')){slash.classList.remove('open');return}if(hp.classList.contains('open')){hopen(false);return}if(open)dopen(false)};
+</script>
+</body></html>
+<style>
+/* v14 reconciliation: Supernova-inspired restraint */
+.main, .view { background: var(--bg); }
+.card, .panel, .section-card { box-shadow:none!important; }
+button, input, textarea { font-family:inherit; }
+.repo,.nav,.agentrow,.issue-row,.event { border-radius:6px; }
+.aitem { margin-top:8px!important; }
+.aihead { min-height:28px!important; }
+.aibody { padding-top:5px!important; padding-bottom:7px!important; }
+</style>
