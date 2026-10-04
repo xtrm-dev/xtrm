@@ -1,0 +1,136 @@
+{
+  "_comment": "SYNTHETIC scenario in the xtrm.topology.projection.v1 shape. Authored for mock designers; not captured from a host. The real, sanitized capture is topology-sample.json. This file adds what the real capture lacks today: dispatch lineage (parent_pane_id), specialist jobs and chains, pull requests, issue status, and every attention state.",
+  "schema_version": "xtrm.topology.projection.v1",
+  "generated_at_ms": 1791100000000,
+  "host": { "host_id": "host-sample-01", "tmux_server_id": "srv-01" },
+  "sources": [
+    { "name": "xtmux", "status": "ok", "reason": null, "duration_ms": 120 },
+    { "name": "tmux", "status": "ok", "reason": null, "duration_ms": 12 },
+    { "name": "specialists", "status": "ok", "reason": null, "duration_ms": 240 },
+    { "name": "beads", "status": "ok", "reason": null, "duration_ms": 60 },
+    { "name": "git", "status": "ok", "reason": null, "duration_ms": 80 },
+    { "name": "github", "status": "ok", "reason": null, "duration_ms": 900 }
+  ],
+  "panes": [
+    {
+      "pane_id": "%20", "session_id": "$10", "session_name": "claude-48ac", "window_id": "@20",
+      "current_command": "claude", "current_path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-48ac",
+      "agent": { "state": "running", "role": "coordinator", "task": "session:48ac", "bead_id": "XTRM-621",
+        "worktree": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-48ac", "branch": "feature/XTRM-621-agent-experience",
+        "parent_session_id": null, "parent_pane_id": null, "instance_id": "inst-0a01" },
+      "jobs": [],
+      "bead": { "id": "XTRM-621", "status": "open", "title": "Agent harness experience", "issue_type": "epic", "priority": 1, "parent_id": null },
+      "worktree": { "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-48ac", "branch": "feature/XTRM-621-agent-experience", "head_sha": "a1b2c3d", "detached": false, "shared_by_pane_ids": ["%20"] },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%21", "session_id": "$11", "session_name": "claude-agent-exp-inputs", "window_id": "@21",
+      "current_command": "claude", "current_path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-exp-inputs",
+      "agent": { "state": "done", "role": null, "task": "session:agent-exp-inputs", "bead_id": "XTRM-622",
+        "worktree": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-exp-inputs", "branch": "xt/agent-exp-inputs",
+        "parent_session_id": "$10", "parent_pane_id": "%20", "instance_id": "inst-0a02" },
+      "jobs": [],
+      "bead": { "id": "XTRM-622", "status": "closed", "title": "Phase 0 inputs", "issue_type": "task", "priority": 1, "parent_id": "XTRM-621" },
+      "worktree": { "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-exp-inputs", "branch": "xt/agent-exp-inputs", "head_sha": "b2c3d4e", "detached": false, "shared_by_pane_ids": ["%21"] },
+      "pull_request": { "number": 812, "state": "MERGED", "url": "https://github.com/example/xtrm/pull/812", "title": "docs(xtrm-app): Agent experience Phase 0 inputs (XTRM-622)", "head_branch": "xt/agent-exp-inputs", "base_branch": "main", "is_draft": false, "merged_at": "2026-10-04T16:20:00Z", "checks_state": "SUCCESS" }
+    },
+    {
+      "pane_id": "%22", "session_id": "$12", "session_name": "claude-direction-a", "window_id": "@22",
+      "current_command": "claude", "current_path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-direction-a",
+      "agent": { "state": "needs-input", "role": null, "task": "session:direction-a", "bead_id": "XTRM-623",
+        "worktree": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-direction-a", "branch": "xt/direction-a",
+        "parent_session_id": "$10", "parent_pane_id": "%20", "instance_id": "inst-0a03" },
+      "jobs": [],
+      "bead": { "id": "XTRM-623", "status": "in_progress", "title": "Direction A: calm workbench", "issue_type": "task", "priority": 1, "parent_id": "XTRM-621" },
+      "worktree": { "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-direction-a", "branch": "xt/direction-a", "head_sha": "c3d4e5f", "detached": false, "shared_by_pane_ids": ["%22"] },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%23", "session_id": "$13", "session_name": "pi-direction-b", "window_id": "@23",
+      "current_command": "pi", "current_path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-direction-b",
+      "agent": { "state": "running", "role": null, "task": "session:direction-b", "bead_id": "XTRM-624",
+        "worktree": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-direction-b", "branch": "xt/direction-b",
+        "parent_session_id": "$10", "parent_pane_id": "%20", "instance_id": "inst-0a04" },
+      "jobs": [
+        { "job_id": "job-7f01", "specialist": "executor", "status": "running", "bead_id": "XTRM-624", "epic_id": "XTRM-621",
+          "chain_id": "chain-b1", "chain_root_job_id": "job-7f01", "is_chain_root": true, "branch": "xt/direction-b",
+          "worktree_path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-direction-b", "integration_target_branch": "xt/direction-b",
+          "started_at_ms": 1791099100000, "owning_pane_id": "%23" },
+        { "job_id": "job-7f02", "specialist": "reviewer", "status": "waiting", "bead_id": "XTRM-624", "epic_id": "XTRM-621",
+          "chain_id": "chain-b1", "chain_root_job_id": "job-7f01", "is_chain_root": false, "branch": "xt/direction-b",
+          "worktree_path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-direction-b", "integration_target_branch": "xt/direction-b",
+          "started_at_ms": 1791099700000, "owning_pane_id": "%23" }
+      ],
+      "bead": { "id": "XTRM-624", "status": "in_progress", "title": "Direction B: topology-first navigator", "issue_type": "task", "priority": 1, "parent_id": "XTRM-621" },
+      "worktree": { "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-direction-b", "branch": "xt/direction-b", "head_sha": "d4e5f6a", "detached": false, "shared_by_pane_ids": ["%23"] },
+      "pull_request": { "number": 815, "state": "OPEN", "url": "https://github.com/example/xtrm/pull/815", "title": "docs(xtrm-app): Direction B mocks (XTRM-624)", "head_branch": "xt/direction-b", "base_branch": "main", "is_draft": true, "merged_at": null, "checks_state": "PENDING" }
+    },
+    {
+      "pane_id": "%24", "session_id": "$14", "session_name": "claude-direction-c", "window_id": "@24",
+      "current_command": "zsh", "current_path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-direction-c",
+      "agent": { "state": "failed", "role": null, "task": "session:direction-c", "bead_id": "XTRM-625",
+        "worktree": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-direction-c", "branch": "xt/direction-c",
+        "parent_session_id": "$10", "parent_pane_id": "%20", "instance_id": "inst-0a05" },
+      "jobs": [],
+      "bead": { "id": "XTRM-625", "status": "in_progress", "title": "Direction C: conversation-first", "issue_type": "task", "priority": 1, "parent_id": "XTRM-621" },
+      "worktree": { "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-direction-c", "branch": "xt/direction-c", "head_sha": "e5f6a7b", "detached": false, "shared_by_pane_ids": ["%24"] },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%25", "session_id": "$15", "session_name": "claude-components", "window_id": "@25",
+      "current_command": "claude", "current_path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-components",
+      "agent": { "state": "running", "role": null, "task": "session:components", "bead_id": "XTRM-626",
+        "worktree": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-components", "branch": "xt/components",
+        "parent_session_id": "$10", "parent_pane_id": "%20", "instance_id": "inst-0a06" },
+      "jobs": [],
+      "bead": { "id": "XTRM-626", "status": "in_progress", "title": "Component selection study", "issue_type": "task", "priority": 1, "parent_id": "XTRM-621" },
+      "worktree": { "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-components", "branch": "xt/components", "head_sha": "f6a7b8c", "detached": false, "shared_by_pane_ids": ["%25"] },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%1", "session_id": "$1", "session_name": "xtrm", "window_id": "@1",
+      "current_command": "pi", "current_path": "~/dev/core",
+      "agent": { "state": "done", "role": null, "task": null, "bead_id": null, "worktree": "~/dev/core", "branch": "main",
+        "parent_session_id": null, "parent_pane_id": null, "instance_id": "inst-0b01" },
+      "jobs": [], "bead": null,
+      "worktree": { "path": "~/dev/core", "branch": "main", "head_sha": "0a1b2c3", "detached": false, "shared_by_pane_ids": ["%1"] },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%2", "session_id": "$1", "session_name": "xtrm", "window_id": "@1",
+      "current_command": "node", "current_path": "~/dev/xtrm",
+      "agent": null, "jobs": [], "bead": null,
+      "worktree": { "path": "~/dev/xtrm", "branch": "main", "head_sha": "1b2c3d4", "detached": false, "shared_by_pane_ids": ["%2"] },
+      "pull_request": null
+    },
+    {
+      "pane_id": "%3", "session_id": "$1", "session_name": "xtrm", "window_id": "@2",
+      "current_command": "claude", "current_path": "~/dev/specialists",
+      "agent": { "state": "running", "role": null, "task": null, "bead_id": null, "worktree": "~/dev/specialists", "branch": "feat/specialists-feed-and-pane",
+        "parent_session_id": null, "parent_pane_id": null, "instance_id": "inst-0b03" },
+      "jobs": [], "bead": null,
+      "worktree": { "path": "~/dev/specialists", "branch": "feat/specialists-feed-and-pane", "head_sha": "2c3d4e5", "detached": false, "shared_by_pane_ids": ["%3", "%8"] },
+      "pull_request": { "number": 230, "state": "OPEN", "url": "https://github.com/example/specialists/pull/230", "title": "feat: feed and pane", "head_branch": "feat/specialists-feed-and-pane", "base_branch": "main", "is_draft": false, "merged_at": null, "checks_state": "FAILURE" }
+    },
+    {
+      "pane_id": "%8", "session_id": "$1", "session_name": "xtrm", "window_id": "@2",
+      "current_command": "zsh", "current_path": "~/dev/specialists",
+      "agent": { "state": "off", "role": null, "task": null, "bead_id": null, "worktree": "~/dev/specialists", "branch": "feat/specialists-feed-and-pane",
+        "parent_session_id": null, "parent_pane_id": null, "instance_id": null },
+      "jobs": [], "bead": null,
+      "worktree": { "path": "~/dev/specialists", "branch": "feat/specialists-feed-and-pane", "head_sha": "2c3d4e5", "detached": false, "shared_by_pane_ids": ["%3", "%8"] },
+      "pull_request": null
+    }
+  ],
+  "orphans": {
+    "jobs": [
+      { "job_id": "job-6e09", "specialist": "explorer", "status": "failed", "bead_id": "XTRM-490", "epic_id": null,
+        "chain_id": null, "chain_root_job_id": null, "is_chain_root": true, "branch": null, "worktree_path": null,
+        "integration_target_branch": null, "started_at_ms": 1789725074894, "owning_pane_id": null }
+    ],
+    "worktrees": [
+      { "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-history", "branch": "feature/XTRM-604-session-history", "head_sha": "1ef5f2a", "detached": false, "shared_by_pane_ids": [] },
+      { "path": "~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-agent-live-read", "branch": "feature/XTRM-572-live-agent-read", "head_sha": "92b43c9", "detached": false, "shared_by_pane_ids": [] }
+    ]
+  }
+}
