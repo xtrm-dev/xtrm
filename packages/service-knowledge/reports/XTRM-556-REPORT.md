@@ -327,8 +327,25 @@ stale index. Both gaps are now closed.
 Budget (≤20 ms mean, ≤40 ms p95) is met at load ≤ ~26 and **missed at load 21–29** for
 `skill_activator` (24.01 ms, p95 56.47). Reported rather than smoothed: the absolute floor
 is ~8.8 ms and the residual is scheduler cost for the shell and awk processes, so the
-out-of-territory cost scales with contention even though the hook logic is gone. Needs
-confirming on the Mercury production host rather than here.
+out-of-territory cost scales with contention even though the hook logic is gone.
+
+### Calm-host confirmation on the final code (`21e740a9`, load ≈ 11)
+
+The load-21–29 miss was contention, not a regression from the fixes. Re-run against the
+final code on the least contended window captured:
+
+| hook | before mean | after mean | before p95 | after p95 | before min | after min |
+|---|---|---|---|---|---|---|
+| `skill_activator.py` | 98.49 ms | **16.53 ms** | 143.87 ms | **29.43 ms** | 62.10 ms | **8.54 ms** |
+| `drift_detector.py` | 77.90 ms | **15.73 ms** | 114.66 ms | **27.15 ms** | 47.80 ms | **8.39 ms** |
+
+−83 % and −80 % on the mean, both inside budget, p95 under 30 ms, floor ~8.4 ms unchanged.
+Still needs a confirming run on the Mercury production host.
+
+One number stated rather than buried: `skill_activator`'s **all-payload** p95 is 246 ms
+after vs 231 ms before. That p95 is dominated by in-territory hits, which by design still
+run the real hook and now pay the pre-filter on top. It is not the budgeted path and does
+not affect correctness — it is the honest cost of the fail-safe design.
 
 ### Local test command (no PR CI on this package)
 
