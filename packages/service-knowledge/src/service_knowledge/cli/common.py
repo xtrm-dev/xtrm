@@ -156,10 +156,9 @@ _DESIRED_HOOKS = {
         "extra": "check-hook",
         "mode": "post",
         "matcher": "Write|Edit|mcp__serena__rename_symbol|mcp__serena__replace_symbol_body|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol",
-        # NOTE: 10000 is the pre-existing value on origin/main, not introduced here. The
-        # packaged template ships 10. Left untouched so this change does not silently
-        # alter what wire_hooks installs; raised for a separate decision.
-        "timeout": 10000,
+        # Claude Code reads this as SECONDS. 10000 was ~2.8 h; aligned with the packaged
+        # template (and with every other hook in the tree), which has always been 10.
+        "timeout": 10,
     },
 }
 

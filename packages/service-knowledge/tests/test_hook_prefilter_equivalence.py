@@ -258,6 +258,81 @@ def main() -> int:
             if a.returncode not in (0, 1):
                 failures.append(f"malformed {raw!r} [{hook}] prefilter rc={a.returncode}")
 
+    # --- A: freshness must key on CONTENT, not on size + mtime (review finding A) -------
+    # A same-length territory edit (docs/** -> newd/**) leaves the file size identical,
+    # and cp -p / rsync -t / tar leave the mtime older than the index, so size and mtime
+    # both pass while the index describes a registry the hook no longer reads.
+    for state in ("same-size-edit", "same-size-edit-post"):
+        work = base / state
+        if work.exists():
+            shutil.rmtree(work)
+        work.mkdir(parents=True)
+        # "umbd/**" and "newd/**" are the same length, so swapping one for the other
+        # leaves the registry byte-identical in size.
+        reg_registry = {"version": "1.0", "services": {"core": {
+            "name": "Core", "territory": ["umbd/**"], "skill_path": "x",
+            "last_sync": "2026-09-01T00:00:00Z"}}}
+        scripts = build_fixture(work, reg_registry)
+        subprocess.run([sys.executable, str(scripts / "build_territory_index.py"), str(work)],
+                       capture_output=True, check=False)
+        reg = work / ".xtrm" / "skills" / "default" / "service-registry.json"
+        idx = scripts.parent / "cache" / "territory.index"
+        before_size = reg.stat().st_size
+        if idx.exists():
+            os.utime(idx, (reg.stat().st_atime + 10, reg.stat().st_mtime + 10))
+        d = json.loads(reg.read_text(encoding="utf-8"))
+        d["services"]["core"]["territory"] = ["newd/**"]
+        reg.write_text(json.dumps(d, indent=2), encoding="utf-8")
+        assert reg.stat().st_size == before_size, (
+            f"test bug: size must be unchanged ({before_size} -> {reg.stat().st_size})")
+        old = 1500000000
+        os.utime(reg, (old, old))
+        if idx.exists():
+            os.utime(idx, (old + 10, old + 10))   # index still looks newer
+        body = json.dumps({"tool_name": "Edit", "tool_input": {"file_path": "newd/x.py"}}).encode()
+        for hook, extra, mode in (("skill_activator.py", [], "pre"),
+                                  ("drift_detector.py", ["check-hook"], "post")):
+            b = run([sys.executable, str(scripts / hook), *extra], work, body, work)
+            a = run(["/bin/sh", str(scripts / "hook_prefilter.sh"), mode, hook, *extra],
+                    work, body, work)
+            checked += 1
+            if b.stdout != a.stdout:
+                failures.append(
+                    f"finding-A/{state} [{hook}]: registry content changed with an unchanged "
+                    f"size and an older mtime, and the pre-filter suppressed the hook's "
+                    f"output\n  before: {b.stdout!r}\n  after:  {a.stdout!r}")
+
+    # --- B: a registry that OUTRANKS the indexed one must invalidate the index ---------
+    # bootstrap.get_registry_path() prefers the umbrella-owned registry, so creating one
+    # after the index was built silently changes which file the hook reads.
+    work = base / "higher-precedence"
+    if work.exists():
+        shutil.rmtree(work)
+    work.mkdir(parents=True)
+    scripts = build_fixture(work, json.loads(json.dumps(REGISTRY)))
+    subprocess.run([sys.executable, str(scripts / "build_territory_index.py"), str(work)],
+                   capture_output=True, check=False)
+    reg = work / ".xtrm" / "skills" / "default" / "service-registry.json"
+    idx = scripts.parent / "cache" / "territory.index"
+    if idx.exists():
+        os.utime(idx, (reg.stat().st_atime + 10, reg.stat().st_mtime + 10))
+    umbrella = scripts.parent / "service-registry.json"
+    umbrella.write_text(json.dumps({"version": "1.0", "services": {"umb": {
+        "name": "Umb", "territory": ["umb/**"], "skill_path": "u",
+        "last_sync": "2026-09-01T00:00:00Z"}}}, indent=2), encoding="utf-8")
+    body = json.dumps({"tool_name": "Edit", "tool_input": {"file_path": "umb/x.py"}}).encode()
+    for hook, extra, mode in (("skill_activator.py", [], "pre"),
+                              ("drift_detector.py", ["check-hook"], "post")):
+        b = run([sys.executable, str(scripts / hook), *extra], work, body, work)
+        a = run(["/bin/sh", str(scripts / "hook_prefilter.sh"), mode, hook, *extra],
+                work, body, work)
+        checked += 1
+        if b.stdout != a.stdout:
+            failures.append(
+                f"finding-B [{hook}]: a higher-precedence registry appeared after the "
+                f"index was built and the pre-filter suppressed the hook's output\n"
+                f"  before: {b.stdout!r}\n  after:  {a.stdout!r}")
+
     # --- (4) the pre-filter must not leave payload residue on disk (review finding 4) --
     glob("/tmp/sk-prefilter.*.json")
     work = base / "residue"

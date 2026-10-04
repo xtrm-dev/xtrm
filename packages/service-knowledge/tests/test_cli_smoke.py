@@ -105,7 +105,9 @@ def test_wire_hooks_preserves_siblings_and_timeout(consumer_repo: Path) -> None:
     post_entry = settings["hooks"]["PostToolUse"][0]
     assert post_entry["matcher"] == "Write"
     drift = next(h for h in post_entry["hooks"] if "drift_detector.py" in h["command"])
-    assert drift["timeout"] == 10000
+    # Claude Code reads this as SECONDS. The seeded 10000 (~2.8 h) is pre-existing state;
+    # wire_hooks must correct it to the desired value rather than preserve it.
+    assert drift["timeout"] == 10
 
 
 def test_installed_post_merge_hook_uses_service_knowledge_flow(consumer_repo: Path) -> None:

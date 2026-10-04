@@ -28,6 +28,7 @@ Writes atomically (tmp + rename) so a concurrent hook never reads a half-written
 """
 
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -39,6 +40,16 @@ from bootstrap import (  # noqa: E402  # type: ignore[import-not-found]
     get_registry_path,
     load_registry,
 )
+
+
+def content_digest(path: Path) -> str:
+    """cksum of the registry file. Cheap (~1 ms) and catches same-size edits, which a
+    size check cannot and an mtime check is defeated by ``cp -p`` / ``rsync -t``."""
+    try:
+        out = subprocess.run(["cksum", str(path)], capture_output=True, text=True, timeout=5)
+        return out.stdout.split()[0] if out.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError, IndexError):
+        return ""
 
 
 def index_path() -> Path:
@@ -78,7 +89,9 @@ def build(project_root: str | None = None) -> int:
     except OSError:
         return 1
 
-    header = f"{registry_path} {reg_size} {len(patterns)}"
+    digest = content_digest(registry_path)
+
+    header = f"{registry_path} {reg_size} {len(patterns)} {digest}"
     body = [*patterns, f"#end {len(patterns)}"]
     payload = "\n".join([header, *body]) + "\n"
 

@@ -53,21 +53,50 @@ command -v awk >/dev/null 2>&1 || { run_hook "$@"; exit $?; }
 # which file that resolves to without redoing the precedence search in shell.
 [ -n "${SERVICE_REGISTRY_PATH:-}" ] && { run_hook "$@"; exit $?; }
 
-# Index header: <registry_path> <registry_size> <pattern_count>. Read with the builtin so
-# this costs no process.
-registry=""; idx_size=""; idx_count=""
-IFS=' ' read -r registry idx_size idx_count < "$index" 2>/dev/null || true
+# Index header: <registry_path> <registry_size> <pattern_count> <cksum>. Read with the
+# builtin so this costs no process.
+registry=""; idx_size=""; idx_count=""; idx_digest=""
+IFS=' ' read -r registry idx_size idx_count idx_digest < "$index" 2>/dev/null || true
 case ${idx_count:-} in ''|*[!0-9]*) { run_hook "$@"; exit $?; } ;; esac
 [ -n "$registry" ] && [ -f "$registry" ] || { run_hook "$@"; exit $?; }
 case ${idx_size:-} in ''|*[!0-9]*) { run_hook "$@"; exit $?; } ;; esac
 
-# Freshness is keyed on the registry's CONTENT SIZE as well as mtime: `cp -p`,
-# `rsync -t` and `tar` all preserve an old mtime, so an mtime-only check would keep
-# trusting an index built from a registry that has since changed.
+# Freshness is keyed on CONTENT, not on metadata. Size and mtime are both defeated by
+# `cp -p` / `rsync -t` / `tar`, and a same-length edit (docs/** -> newd/**) defeats the
+# size check on its own. cksum of a registry-sized file costs about a millisecond, and
+# correctness is not negotiable against latency here.
 reg_size=$(wc -c < "$registry" 2>/dev/null)
 # Numeric compare, so wc's possible leading whitespace does not matter.
 [ "${reg_size:-0}" -eq "${idx_size:-1}" ] 2>/dev/null || { run_hook "$@"; exit $?; }
 [ "$index" -nt "$registry" ] || { run_hook "$@"; exit $?; }
+
+case ${idx_digest:-} in ''|*[!0-9]*) { run_hook "$@"; exit $?; } ;; esac
+command -v cksum >/dev/null 2>&1 || { run_hook "$@"; exit $?; }
+reg_digest=$(cksum < "$registry" 2>/dev/null)
+reg_digest=${reg_digest%% *}
+[ -n "$reg_digest" ] && [ "$reg_digest" = "$idx_digest" ] || { run_hook "$@"; exit $?; }
+
+# Re-walk the precedence ladder bootstrap.get_registry_path() uses and confirm it still
+# resolves to the registry this index was built from. A registry that outranks ours but
+# did not exist at build time (a new umbrella-owned pack, say) would silently win in the
+# hook while the index kept describing the old one. Shell globbing costs no process.
+[ -n "$root" ] || { run_hook "$@"; exit $?; }
+resolved=""
+for candidate in \
+    "$root"/.xtrm/skills/*/service-knowledge/service-registry.json \
+    "$root"/.xtrm/skills/*/service-skills/service-registry.json \
+    "$root"/.xtrm/skills/*/service-registry.json; do
+  [ -e "$candidate" ] || continue
+  resolved=$candidate
+  break
+done
+if [ -z "$resolved" ] && [ -e "$root/service-registry.json" ]; then
+  resolved=$root/service-registry.json
+fi
+if [ -z "$resolved" ] && [ -e "$root/.claude/skills/service-registry.json" ]; then
+  resolved=$root/.claude/skills/service-registry.json
+fi
+[ -n "$resolved" ] && [ "$resolved" = "$registry" ] || { run_hook "$@"; exit $?; }
 
 # awk prints GO when the hook must run, NO only on a proven miss. Anything else
 # (including an awk error) falls through to the hook.
