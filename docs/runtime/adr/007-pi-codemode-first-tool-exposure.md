@@ -1,8 +1,8 @@
 # ADR-007 — Pi codemode-first tool exposure and pi-mcp-adapter retirement
 
-> Status: PROPOSED (audit pending) · Date: 2026-10-13
+> Status: PROPOSED (audit pending) · Date: 2026-10-13 (updated)
 > Depends: ADR-003 (native participant runtime), ADR-004 (specialist activation capabilities); consumes the first-party agent-runtime design home ([`../agent-runtime/`](../agent-runtime/)).
-> Evidence: Substrate **XTRM-638** rev 5 (contract + verified audit); Pi 1.0.4 `dist/extensions/codemode/tool.js` and `docs/{codemode,extensions,mcp,settings,cli}.md`; live 93-tool registry enumeration; adapter-free spike (below); [`../../.xtrm/config/claude.mcp.json`](../../.xtrm/config/claude.mcp.json) native-http parity.
+> Evidence: Substrate **XTRM-638** rev 5 (contract + verified audit); Pi 1.0.4 `dist/extensions/codemode/tool.js` and `docs/{codemode,extensions,mcp,settings,cli}.md`; live 93-tool registry enumeration; adapter-free spike; [`../../.xtrm/config/claude.mcp.json`](../../.xtrm/config/claude.mcp.json) native-http parity; Pi codemode sandbox limits and Cloudflare Code Mode pattern (2026-10-13 research); Bun Zig→Rust rewrite outcomes (memory, binary size, reliability).
 
 ## Context
 
@@ -38,6 +38,25 @@ facts driving this ADR:
 5. The live session registry (93 tools) shows duplicate routes:
    `mcp__specialists__*` ≡ `specialist_*` 1:1 (11 tools); `mcp__gitnexus__*`
    (17) ⊃ `gitnexus_*` extension (8).
+6. Sandbox limits (Pi `docs/codemode.md` + source): QuickJS WASM, no Node APIs /
+   FS / network / timers; 256 MB heap; output capped at ~16.7 M characters or
+   100 k `text`/`image`/`console` calls (truncated results write a temp file);
+   `store`/`load` limited to 256 KB per value and 1 MB total; at most 4
+   concurrent non-LLM model calls. Scripts cannot start other scripts. Large
+   results must be filtered or aggregated inside the script.
+7. Token economics: Pi release notes document a GPT-5.6 request dropping from
+   ~5 300 to ~3 300 prompt tokens with default tools + Codemode (declarations
+   shrink to one line; models API moves to on-demand docs). Cloudflare Code Mode
+   (the related pattern) reports similar fixed-footprint gains for large APIs.
+   Discovery (`searchTools` / `ALL_TOOLS`) is the critical path; quiet failure
+   is the main operational risk if guidance is weak.
+8. Runtime choice: Core, Specialists and Substrate are Bun-first TypeScript.
+   Bun’s Zig→Rust rewrite (v1.4) eliminated large classes of memory leaks,
+   shrank binaries ~20 %, and improved reliability via the borrow checker.
+   XTRM tools remain TypeScript (or thin Node-API modules). The rewrite is the
+   reason the Bun runtime is trusted; it does not require XTRM surfaces to be
+   rewritten in Rust. High-frequency first-party tools should prefer Bun-native
+   defaults over Node extension packages to avoid the Node resolution/startup tax.
 
 ## Decision
 
@@ -83,6 +102,13 @@ facts driving this ADR:
    `codemode` exposure with Substrate-backed state (no independent `.pi/tasks`
    authority for claimed XTRM work). None of the three imports Fusion or
    delegated-agent orchestration (design-home boundary).
+3c. **Implementation preference for first-party surfaces.** Stable,
+   high-frequency tools that will live under `codemode.mode: "only"` should be
+   Bun-native defaults (or direct TypeScript entrypoints under Bun) rather than
+   optional Node extension packages. This removes the Node module-resolution and
+   startup tax while keeping the developer surface in TypeScript. Third-party
+   packages in the fork-and-watch set remain Pi extensions with exposure-only
+   deltas.
 4. **pi-mcp-adapter is not installed anywhere.** Removed from the managed
    registry, settings template, install schema, and docs; the
    `~/.pi/agent/npm/node_modules/pi-mcp-adapter` copy is uninstalled;
@@ -126,23 +152,31 @@ facts driving this ADR:
     (rejected for this stack), OpenUI (scoped to xtrm-app peripherals only).
     The fork-and-watch set (§7) covers exposure-only changes to adopted
     packages; it does not cover runtime substrates.
+12. **TUI is downstream and minimal.** `packages/xtrm-tui` is a thin Bun
+    entrypoint over Pi’s public `AgentSessionRuntime` + `@earendil-works/pi-tui`.
+    It projects `InteractionFrame`s and reuses shared UI primitives extracted
+    from xtrm-ui. Full Frame navigator, overview, branch tree and three-level
+    tool cycle are deferred until the Bun host + codemode-only loadout is
+    proven. The TUI must render nested codemode calls with the same tool-view
+    policy; it does not special-case call origin. No Pi interactive-mode fork
+    for v0. `xt pi` remains the low-level escape hatch.
 
 ### Exposure matrix
 
-| Tool surface | Origin | Exposure (target) | Codemode-listed | Model-declared |
-|---|---|---|---|---|
-| `python` (persistent kernel) | python-kernel (ours) | `codemode` | yes | no |
-| `bash/read/edit/write/find/grep/ls` | xtrm-ui (ours) | `codemode` | yes | no |
-| `gitnexus_*` (17) | gitnexus MCP server (native) | `codemode` (default) | yes | no |
-| `mcp__deepwiki__*`, `mcp__github-grep__*` | native HTTP MCP | `codemode` (default) | yes | no |
-| `mcp__exa__*`, `mcp__context7__*` | native MCP | `codemode` (default) | yes | no |
-| `structured_return`, `goal_*`, `bg_*`, `agentrun`, `ast_grep` | fork set | `codemode` (in-fork) | yes | no |
-| `specialist_*` (11) | native-specialists (excluded) | `direct` (unchanged) | no | yes |
-| `intercom`, `contact_supervisor`, `claude_link` | excluded → xtrm-intercom | `model-only` (in first-party impl) | no | yes |
-| xtrm-background tools (process subset) | first-party impl (excluded-via-design) | `codemode` | yes | no |
-| Issue Task Plan tools | first-party impl (excluded-via-design) | `codemode` | yes | no |
-| skill-suggest, substrate-suggest | excluded suggestors | no tools — events only | n/a | n/a |
-| `codemode`, `tool_search` | Pi built-ins | active orchestrators | — | yes |
+| Tool surface | Origin | Exposure (target) | Codemode-listed | Model-declared | Implementation preference |
+|---|---|---|---|---|---|
+| `python` (persistent kernel) | python-kernel (ours) | `codemode` | yes | no | Bun-native default |
+| `bash/read/edit/write/find/grep/ls` | xtrm-ui (ours) | `codemode` | yes | no | Bun-native default |
+| `gitnexus_*` (17) | gitnexus MCP server (native) | `codemode` (default) | yes | no | native MCP |
+| `mcp__deepwiki__*`, `mcp__github-grep__*` | native HTTP MCP | `codemode` (default) | yes | no | native MCP |
+| `mcp__exa__*`, `mcp__context7__*` | native MCP | `codemode` (default) | yes | no | native MCP |
+| `structured_return`, `goal_*`, `bg_*`, `agentrun`, `ast_grep` | fork set | `codemode` (in-fork) | yes | no | Pi extension (exposure fork) |
+| `specialist_*` (11) | native-specialists (excluded) | `direct` (unchanged) | no | yes | unchanged |
+| `intercom`, `contact_supervisor`, `claude_link` | excluded → xtrm-intercom | `model-only` (in first-party impl) | no | yes | first-party |
+| xtrm-background tools (process subset) | first-party impl (excluded-via-design) | `codemode` | yes | no | Bun-native default |
+| Issue Task Plan tools | first-party impl (excluded-via-design) | `codemode` | yes | no | Bun-native default |
+| skill-suggest, substrate-suggest | excluded suggestors | no tools — events only | n/a | n/a | events only |
+| `codemode`, `tool_search` | Pi built-ins | active orchestrators | — | yes | Pi built-in |
 
 ### Architecture
 
@@ -271,11 +305,14 @@ Fork `provenance.md` format (per fork, no silent vendoring):
 
 ## Outputs and handoff
 
-Per-repo PR set (XTRM-638) plus two handoff artifacts: (1) the exposure specs
+Per-repo PR set (XTRM-638) plus handoff artifacts: (1) the exposure specs
 in §Decision-3b and the matrix above, handed to the first-party implementation
 packets (xtrm-intercom, xtrm-background, Issue Task Plan) — the packets own the
 build, this ADR owns the interface contract; (2) the fork set with provenance
-plus update-watch wiring; (3) the fusion disposition decision with evidence.
+plus update-watch wiring; (3) the fusion disposition decision with evidence;
+(4) the minimal Bun TUI runtime contract (entrypoint + Frame projector + shared
+UI primitive extraction) as a downstream note under XTRM-638, not part of the
+ADR acceptance gate.
 
 ## Change plan
 
@@ -286,7 +323,9 @@ pi-extensions exposure changes (python-kernel, xtrm-ui) + optional
 native-specialists stays direct (no change); fork set with provenance +
 update-watch; retirements with orphan sweep; adapter uninstall. Live home
 settings edit is operator-approved. Third-party exposure changes land in forks,
-not upstream PRs.
+not upstream PRs. Bun-native preference for first-party surfaces is applied
+during the implementation packets, not as a separate gate. The thin Bun TUI
+entrypoint is scheduled after the codemode-only loadout is verified.
 
 ## Verification
 
@@ -294,7 +333,8 @@ Proven (2026-10-13): native-HTTP MCP without adapter under a
 `codemode,tool_search`-only loadout (`mcp__deepwiki` connected and discoverable
 via `searchTools`); nested-call semantics from Pi source; exposure model from
 Pi source; 93-tool live registry enumeration; reviewer specialist definition
-contains no ocr references.
+contains no ocr references; sandbox limits and token economics from Pi docs and
+Cloudflare Code Mode references.
 
 Pending (executable, in XTRM-638 validation): effective model-facing list under
 `pi --tools codemode,tool_search`; excluded tools not callable/listed from
@@ -302,10 +342,14 @@ codemode scripts while their UI surfaces work; `pi mcp list` adapter-free with
 zero references in configs and no npm dir; specialists server absent from synced
 `.pi/mcp.json` with native-specialists dispatch intact; python kernel state
 across codemode calls; hooks/nestedCalls under nested calls; core CLI tests
-green; orphan sweep for retirements; token/context delta before/after; a live
-agentrun Jev run (inspect passes; full run blocked on `TYPESAFE_API_KEY` in the
-host env — the validator must re-run with the key present before accepting the
-agentrun fork).
+green; orphan sweep for retirements; token/context delta before/after (record
+the measured number against the ~5.3 k → ~3.3 k baseline); a live agentrun Jev
+run (inspect passes; full run blocked on `TYPESAFE_API_KEY` in the host env —
+the validator must re-run with the key present before accepting the agentrun
+fork); discovery probe that successfully `searchTools` + calls at least one
+tool from each of deepwiki, gitnexus and one other MCP namespace under a pure
+`codemode,tool_search` loadout; Bun host smoke of the thin TUI entrypoint
+against the codemode-only loadout (after the loadout itself is green).
 
 ## Audit
 
@@ -328,13 +372,13 @@ trackers — listed so the audit trail is complete, not to widen this ADR:
   composition with specialist system prompts proven twice (mechanism +
   behavioral probe via `xt pi` role sessions).
 - Provenance evidence steer + skill roster discovery (uncommitted dev/core
-diff: substrate-suggest duties/index, skill-suggest roster, suggestor tests).
+  diff: substrate-suggest duties/index, skill-suggest roster, suggestor tests).
 - Upgrade pass over specialists/skills: SPECIALISTS-4258 (agentrun extension
-enabled on all 38 specialist entries; ocr + agentrun skill packs installed at
-~/.xtrm/skills/).
+  enabled on all 38 specialist entries; ocr + agentrun skill packs installed at
+  ~/.xtrm/skills/).
 - GitNexus-in-codemode proven end-to-end with a fresh index (24,182 nodes /
-54,958 edges at `/home/dawid/dev/xtrm`); MCP exposure defaults verified from
-the live 93-tool registry.
+  54,958 edges at `/home/dawid/dev/xtrm`); MCP exposure defaults verified from
+  the live 93-tool registry.
 - ocr engine notes: CLI + delegation/full-engine via local shim
   (`~/.local/share/ocr-shim/shim.js`, systemd `ocr-zen-shim.service`),
   reviews `/tmp/ocr-*.json`, MMD teaching pack
@@ -345,15 +389,7 @@ the live 93-tool registry.
 - RSI-Anything research: full graded report retrieved under
   `.pi/fusion/01a13057-*/research-e15012e3bd8f65707e5fc13f461b7ceb`
   (DeepWiki 429 for all fetchers; GitHub source used as supplement).
-
-## References
-
-- Substrate **XTRM-638** rev 5 — durable contract, audit table, validation plan
-- First-party design home: [`../agent-runtime/`](../agent-runtime/)
-  (`xtrm-agent-runtime-design.md`, `ADOPTION-CREDITS.md`,
-  `IMPLEMENTATION-PACKETS.md`) — operator-view tracker: Jira XTRM-91
-- Pi 1.0.4: `docs/codemode.md`, `docs/extensions.md` (Tool exposure),
-  `docs/mcp.md` (Control tool exposure), `docs/settings.md` (Tools),
-  `dist/extensions/codemode/tool.js`
-- Local Substrate XTRM-91 is an unrelated closed mcpq seconder pass — never
-  reference it for this work
+- Bun Zig→Rust rewrite outcomes and Bun-first tooling preference (memory,
+  binary size, reliability; high-frequency surfaces prefer Bun-native defaults).
+- xtrm-tui package status and minimal Bun-runtime scope (thin entrypoint +
+  Frame projector; full product deferred).
