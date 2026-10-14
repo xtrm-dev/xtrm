@@ -92,6 +92,16 @@
             "timeout": 10000
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/xtrm-primer.mjs"],
+            "timeout": 10000
+          }
+        ]
       }
     ]
   }
