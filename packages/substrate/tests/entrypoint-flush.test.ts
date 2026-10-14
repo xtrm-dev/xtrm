@@ -268,6 +268,7 @@ describe("XTRM-335 exit-code matrix", () => {
       { script: join(SCRIPTS, "precompact.mjs"), stdin: "{}" },
       { script: join(SCRIPTS, "postcompact.mjs"), stdin: "{}" },
       { script: join(SCRIPTS, "session-precondition.mjs"), stdin: "{}" },
+      { script: join(SCRIPTS, "xtrm-primer.mjs"), stdin: "{}" },
     ];
     for (const c of cases) {
       const direct = spawnSync(process.execPath, [c.script], {
@@ -492,6 +493,7 @@ describe("XTRM-335 structural detector", () => {
       "plugin/substrate/scripts/precompact.mjs",
       "plugin/substrate/scripts/postcompact.mjs",
       "plugin/substrate/scripts/session-precondition.mjs",
+      "plugin/substrate/scripts/xtrm-primer.mjs",
       "plugin/substrate/scripts/wake-on-event.mjs",
       "plugin/substrate/scripts/tail-events.mjs",
     ];

@@ -46,6 +46,9 @@ is no single-project default.
 PreCompact              mechanical checkpoint first
 PostCompact             compaction occurrence
 SessionStart(compact)   Resume Capsule head as additionalContext
+SessionStart(*)         XTRM primer as additionalContext: excerpts of the global
+                        using-xtrm and multiplexing skills (~/.xtrm/skills/default),
+                        never a project copy; no global skill, no output
 ```
 
 Other packaged gates protect edit/write authority, provenance commit binding and
