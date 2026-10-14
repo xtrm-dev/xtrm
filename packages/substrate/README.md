@@ -124,6 +124,11 @@ never `sb` subprocesses or CLI-text parsing. The MCP surface includes first-clas
 claim/release, contract update, Journal result/checkpoint/query, Closure,
 Issue/session/activation provenance and Resume Capsule operations.
 
+Install from the repository marketplace with
+`claude plugin marketplace add xtrm-dev/xtrm` and
+`claude plugin install substrate@substrate`. Updates follow the version in
+`plugin.json`; see [Distribution and updates](docs/claude.md#distribution-and-updates).
+
 See [`docs/claude.md`](docs/claude.md).
 
 ## Specialists integration

@@ -1,0 +1,14 @@
+{
+  "name": "substrate",
+  "description": "XTRM Substrate marketplace: installs the substrate Claude Code plugin from this repository. Versions come from plugin.json, so each release must bump it.",
+  "owner": {
+    "name": "XTRM"
+  },
+  "plugins": [
+    {
+      "name": "substrate",
+      "source": "./packages/substrate/plugin/substrate",
+      "description": "Substrate durable work substrate for Claude Code: MCP tools over the typed service, plus PreCompact/PostCompact/SessionStart lifecycle and the XTRM primer."
+    }
+  ]
+}

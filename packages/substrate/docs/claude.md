@@ -63,3 +63,59 @@ provider-session-only audit event. See [Integrations](integrations.md#identity-p
 
 Edit/write fencing is per-Issue claim authority, not a Substrate workspace
 lease. Workspace exclusion is owned by the Specialists activation layer.
+
+## Distribution and updates
+
+The repository root carries a Claude Code marketplace, `.claude-plugin/marketplace.json`,
+named `substrate`. It offers the `substrate` plugin from
+`packages/substrate/plugin/substrate`.
+
+Install, one time. The repository is private, so the user needs read access and git
+credentials:
+
+```bash
+claude plugin marketplace add xtrm-dev/xtrm
+claude plugin install substrate@substrate
+```
+
+Update:
+
+```bash
+claude plugin update substrate@substrate
+```
+
+Claude Code detects an update from the plugin **version string**, not from commits. A plugin
+change with an unchanged version is not delivered to anyone. The rules are:
+
+- The version lives in `plugin/substrate/.claude-plugin/plugin.json` only. A version in the
+  marketplace entry is silently overridden by `plugin.json`, so the entry carries none.
+- `plugin.json` equals `package.json`. `npm version <x>` runs the `version` script
+  (`scripts/sync-plugin-version.mjs`) and stages the manifest. `tests/marketplace-distribution.test.ts`
+  fails when the two differ.
+- A merge that changes the plugin needs a version bump to reach users.
+
+Auto-update is off by default for marketplaces that are not Anthropic's. A user turns it on
+under `/plugin`, then Marketplaces, or registers the marketplace with `autoUpdate` in
+settings (`~/.claude/settings.json`, or `.claude/settings.json` committed in a project):
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "substrate": {
+      "source": { "source": "github", "repo": "xtrm-dev/xtrm" },
+      "autoUpdate": true
+    }
+  }
+}
+```
+
+A running session keeps the old version until `/reload-plugins` or the next start.
+
+A user registers one marketplace per name. In a checkout, keep the local marketplace
+(`claude plugin marketplace add <checkout>/packages/substrate`, which loads the plugin in
+place) and do not add the GitHub one on the same machine.
+
+The plugin scripts resolve Substrate modules through `SUBSTRATE_HOME` or the installed
+`@jaggerxtrm/substrate` package, so install the package version that matches the plugin
+(`npm install -g @jaggerxtrm/substrate@<plugin version>`). The XTRM primer hook is
+self-contained and does not need the package.
