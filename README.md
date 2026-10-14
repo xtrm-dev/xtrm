@@ -89,6 +89,17 @@ continues to expose the stable service-oriented contract.
 Substrate ships first-party Pi and Claude integrations over the same typed
 services. Provider tool names intentionally differ; authority semantics do not.
 
+Install the Claude Code plugin from this repository's marketplace (read access to
+the repository is required):
+
+```bash
+claude plugin marketplace add xtrm-dev/xtrm
+claude plugin install substrate@substrate
+```
+
+Updates follow the version in `plugin.json`; see
+[Distribution and updates](packages/substrate/docs/claude.md#distribution-and-updates).
+
 ## 3. Core / `xt`
 
 Repository: [`xtrm-dev/core`](https://github.com/xtrm-dev/core)
