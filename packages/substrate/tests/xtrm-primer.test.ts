@@ -23,8 +23,13 @@ function install(home: string, name: string, text: string): void {
   writeFileSync(join(dir, "SKILL.md"), text);
 }
 
-function run(home: string, cwd: string): { context: string; top: string | undefined; reason: unknown } {
-  const out = execFileSync("node", [ENTRY], { input: JSON.stringify({ source: "startup", cwd }), encoding: "utf8", cwd, env: { ...process.env, HOME: home }, timeout: 30000 });
+const IDENTITY_VARS = ["XTRM_DISPATCHER_NAME", "XTRM_DISPATCHER_ADDRESS", "SUBSTRATE_HOLDER"];
+
+function run(home: string, cwd: string, extra: Record<string, string> = {}): { context: string; top: string | undefined; reason: unknown } {
+  // The runner may itself be an xt worker; its identity must not leak into the case.
+  const env: Record<string, string | undefined> = { ...process.env, HOME: home };
+  for (const k of IDENTITY_VARS) delete env[k];
+  const out = execFileSync("node", [ENTRY], { input: JSON.stringify({ source: "startup", cwd }), encoding: "utf8", cwd, env: { ...env, ...extra }, timeout: 30000 });
   const parsed = JSON.parse(out) as { additionalContext?: string; reason?: unknown; hookSpecificOutput: { hookEventName: string; additionalContext: string } };
   assert.equal(parsed.hookSpecificOutput.hookEventName, "SessionStart");
   return { context: parsed.hookSpecificOutput.additionalContext, top: parsed.additionalContext, reason: parsed.reason };
@@ -68,6 +73,25 @@ describe("SessionStart XTRM primer entry (XTRM-637)", () => {
     const { context, top } = run(home, project);
     assert.equal(context, "");
     assert.equal(top, undefined);
+  });
+
+  it("names the dispatcher and the participant when xt exported them (CORE-2390)", () => {
+    const { context } = run(home, project, {
+      XTRM_DISPATCHER_NAME: "coord-a",
+      XTRM_DISPATCHER_ADDRESS: "uds:/run/x/1.sock",
+      SUBSTRATE_HOLDER: "worker-b",
+    });
+    assert.ok(context.startsWith("### Launch identity"), "identity comes first, even with no skill installed");
+    assert.ok(context.includes("dispatched by coord-a (uds:/run/x/1.sock)"));
+    assert.ok(context.includes("SendMessage to uds:/run/x/1.sock"), "reply goes to the exact address, not the display name");
+    assert.ok(context.includes("participant is worker-b") && context.includes("--holder worker-b"));
+  });
+
+  it("omits each identity line whose variable is absent or blank", () => {
+    const holderOnly = run(home, project, { SUBSTRATE_HOLDER: "worker-b", XTRM_DISPATCHER_NAME: "  " }).context;
+    assert.ok(holderOnly.includes("participant is worker-b"));
+    assert.ok(!holderOnly.includes("dispatched by"), "a blank dispatcher name is absent, not a line");
+    assert.equal(run(home, project).context, "", "no identity and no skill: no context");
   });
 
   it("never reads the project copy of a skill (global load only)", () => {
