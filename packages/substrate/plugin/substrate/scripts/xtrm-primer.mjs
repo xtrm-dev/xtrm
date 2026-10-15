@@ -71,9 +71,27 @@ function buildPrimer() {
   ].join("\n\n");
 }
 
+// CORE-2390: xt exports who launched this worker and its Substrate participant.
+// Unknown stays absent: no variable, no line.
+function launchIdentity(env) {
+  const clean = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const name = clean(env.XTRM_DISPATCHER_NAME);
+  const address = clean(env.XTRM_DISPATCHER_ADDRESS);
+  const holder = clean(env.SUBSTRATE_HOLDER);
+  const lines = [];
+  if (name || address) {
+    const who = name && address ? `${name} (${address})` : name ?? address;
+    lines.push(`You were dispatched by ${who}. Report to it and ask it questions with SendMessage to ${address ?? name}.`);
+  }
+  if (holder) {
+    lines.push(`Your Substrate participant is ${holder}: claim your Issue with --holder ${holder}; your journal entries already carry it.`);
+  }
+  return lines.length ? `### Launch identity\n\n${lines.join("\n")}` : null;
+}
+
 let context = null;
 try {
-  context = buildPrimer();
+  context = [launchIdentity(process.env), buildPrimer()].filter(Boolean).join("\n\n") || null;
 } catch {
   context = null;
 }
