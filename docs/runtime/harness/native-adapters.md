@@ -6,6 +6,7 @@
 
 
 **Status:** proposal for independent verification and decomposition
+**Outcome (M1, CORE-2443, 2026-10-17):** the evaluation concluded with XT-91 ADR rev 2: first-party `intercom` and `background` extensions in `xtrm-dev/core/packages/pi-extensions` replace all four upstream packages, which are retired and no longer installed. Candidate descriptions below are the pre-decision record.
 **Date:** 24 July 2026
 **Program relationship:** independent from the Specialists modernization roadmap and from the CLI program, but blocked on a stable CLI outcome contract for production adoption
 **Primary repositories:** `xtrm-dev/core`, `Jaggerxtrm/xtmux`, `xtrm-dev/specialists`

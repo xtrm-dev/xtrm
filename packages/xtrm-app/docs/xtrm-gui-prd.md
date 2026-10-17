@@ -1985,7 +1985,7 @@ Permission and approval prompts follow the class of the tool that asks.
 
 | # | registration record | class | `origin` fields |
 |---|---|---|---|
-| 1 | tool listed by the coordination table, keyed by registering package name (or MCP server) plus tool name: specialists, intercom, pi-claude-link message and dispatch tools | `coordination` | transport extension (package name and version) kept for the detail view |
+| 1 | tool listed by the coordination table, keyed by registering package name (or MCP server) plus tool name: specialists and first-party SendMessage/ListAgents message tools | `coordination` | transport extension (package name and version) kept for the detail view |
 | 2 | `sourceInfo.path = "builtin:mcp"` (Pi's built-in MCP client) | `mcp` | `server` = `namespace.name` without the `mcp__` prefix, in Pi's namespace form (`-` becomes `_`); transport is not visible to the host and is omitted |
 | 3 | other `sourceInfo.source = "builtin"` (`builtin:read`, `builtin:bash`, …) | `native` | — |
 | 4 | the registering package is `pi-mcp-adapter` (package.json name) | `mcp` | `server` from the `mcp__<server>` namespace; for the proxy tool `mcp`, from the call's `server` argument; else `unknown` |

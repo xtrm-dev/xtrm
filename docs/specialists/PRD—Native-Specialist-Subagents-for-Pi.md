@@ -1,6 +1,7 @@
 # PRD — Native Interactive XTRM Specialists for Pi and Claude Code
 
-**Status:** Draft v0.3  
+**Status:** Draft v0.3
+**Outcome (M1, CORE-2443, 2026-10-17):** the replacements this PRD calls for shipped as first-party `SendMessage`/`ListAgents` plus the Claude transport in `xtrm-dev/core/packages/pi-extensions`; `pi-intercom`, `pi-claude-link`, `pi-background-tasks` and `pi-processes` are retired and no longer installed. Mentions below are the pre-decision record.  
 **Date:** 2026-09-06  
 **Owner:** `xtrm-dev/specialists`  
 **Primary execution runtime:** Pi `AgentSession`  
