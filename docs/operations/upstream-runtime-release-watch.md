@@ -35,15 +35,12 @@ Tier A is checked every run. Tier B is checked only while present on a current r
 | `npm:@narumitw/pi-goal` | B | Core managed registry | goal/settled lifecycle |
 | `git:github.com/DietrichGebert/ponytail` | B | Core managed registry | engineering guidance package |
 | `npm:@tintinweb/pi-tasks` | B | Core managed registry | task UI/storage |
-| `npm:pi-background-tasks@latest` | B | Core managed registry | background jobs/delegation; mutable selector hazard |
 | `npm:pi-mcp-adapter` | B | Core managed registry | MCP discovery/auth/lifecycle |
-| `npm:pi-intercom` | B | Core managed registry | Pi↔Pi live coordination |
-| `git:github.com/alonw0/pi-claude-link` | B | Core managed registry | Pi↔Claude transport |
 | `npm:pi-ast-grep` | B | Core managed registry | structural search |
 | `npm:pi-mermaid-viewer` | B / unresolved | Core managed registry only | Mermaid TUI rendering; no release disposition until canonical source is proven |
 | Dolt / DoltLab | B | live Beads storage/migration compatibility only | transitional SQL-server/storage/recovery |
 
-Core no longer manages `npm:@gotgenes/pi-subagents`, `npm:@zenobius/pi-worktrees`, or `npm:@aliou/pi-processes`. Do not keep release-checking them from historical docs alone. Re-add only if current manifests, install policy, or runtime code makes them live again.
+Core no longer manages `npm:@gotgenes/pi-subagents`, `npm:@zenobius/pi-worktrees`, `npm:@aliou/pi-processes`, `npm:pi-background-tasks@latest`, `npm:pi-intercom`, or `git:github.com/alonw0/pi-claude-link` (the last three retired by CORE-2443 M1: first-party `intercom`/`background` extensions replace them). Do not keep release-checking them from historical docs alone. Re-add only if current manifests, install policy, or runtime code makes them live again.
 
 XTRM-owned packages such as `npm:@jaggerxtrm/pi-extensions` and `npm:@jaggerxtrm/pi-service-knowledge` use XTRM/Core release processes rather than this external-upstream watch.
 

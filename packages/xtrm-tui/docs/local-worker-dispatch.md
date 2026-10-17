@@ -557,8 +557,8 @@ Design seams now; do not make them v0 dependencies.
 Future interactive coordination may expose first-class capabilities backed by:
 
 ```text
-Pi ↔ Pi        pi-intercom
-Claude ↔ Pi    Pi/Claude link
+Pi ↔ Pi        first-party SendMessage/ListAgents
+Claude ↔ Pi    first-party Claude transport
 Claude ↔ Claude native provider messaging
 ```
 

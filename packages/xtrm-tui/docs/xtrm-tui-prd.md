@@ -969,8 +969,8 @@ semantic coordination
     Channels
         ↓
 provider transport adapter
-    pi-intercom
-    pi-claude-link
+    first-party SendMessage/ListAgents
+    first-party Claude transport
     Claude native peer messaging
 ```
 

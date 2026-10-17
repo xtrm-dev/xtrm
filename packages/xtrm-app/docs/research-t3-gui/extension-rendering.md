@@ -104,7 +104,9 @@ guidance only (`extensions.md:222`). But the question stands for any chatty exte
 - Rule of thumb: fewer than ~1 event per turn and worth re-reading later → card lane;
   continuous progress during a turn → stream lane with a summary card at close.
 
-## 6. Third-party extensions (pi-intercom, claude-link, pi-background-tasks): render the data, never their UI
+## 6. Coordination tools (first-party post-M1; research used the retired third-party set): render the data, never their UI
+
+> Outcome (M1, CORE-2443, 2026-10-17): `pi-background-tasks`, `pi-intercom` and `pi-claude-link` are retired and no longer installed; the first-party `SendMessage`/`ListAgents`/`BashBackground`/`Monitor` tools replace them. The rendering rules below now apply to the first-party tools; the package names above are the pre-decision research record.
 
 These are installed, not owned — verified on disk: `pi-background-tasks` (ISC) at
 `~/.bun/.../pi-background-tasks`, plus the `pi-intercom` / `pi-claude-link` skills. They
