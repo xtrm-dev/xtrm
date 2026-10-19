@@ -25,6 +25,7 @@ import argparse
 import json
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from service_knowledge.cli import common
@@ -32,6 +33,12 @@ from service_knowledge.cli import common
 # Dual marker names — canonical wins when both present (16118989 semantics).
 CANONICAL_MARKER_REL = Path(".xtrm") / ".service-knowledge-drift-pending"
 LEGACY_MARKER_REL = Path(".xtrm") / ".service-skills-drift-pending"
+
+# Marker reason tags (B2 schema — shared with the post-merge hook).
+REASON_REF_RANGE = "ref-range"
+REASON_MTIME = "mtime-heuristic"
+REASON_INITIAL_SYNC = "initial-sync-needed"
+REASON_RANGE_UNKNOWN = "range-unknown"
 
 RECONCILE_HINT = (
     "action: run /updating-service-knowledge (service-knowledge-sync) to reconcile + stamp last_sync_ref\n"
@@ -62,7 +69,9 @@ def _project_root_for_scan(root: Path) -> Path:
 
 
 def marker_paths(root: Path) -> list[Path]:
-    """All pending marker files present, canonical first. Empty when none."""
+    """All pending marker files present, canonical first. Empty when none.
+
+    Live read: checks the filesystem at call time, never a cached snapshot."""
     out: list[Path] = []
     if (root / CANONICAL_MARKER_REL).exists():
         out.append(root / CANONICAL_MARKER_REL)
@@ -71,14 +80,83 @@ def marker_paths(root: Path) -> list[Path]:
     return out
 
 
-def write_marker(root: Path, branch: str, services: list[str], file_count: int) -> Path:
-    """Write the canonical pending marker with a per-service inventory. Returns its path."""
+def _existing_range_start(root: Path) -> str | None:
+    """Live re-read of the canonical marker's range start (preserve-earliest-range)."""
+    try:
+        text = (root / CANONICAL_MARKER_REL).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if line.strip().startswith("range:"):
+            val = line.split(":", 1)[1].strip()
+            if not val or val == "unknown":
+                return None
+            return val.split("..")[0].strip() or None
+    return None
+
+
+def read_marker(root: Path) -> dict | None:
+    """Live parse of the pending marker at use time (never a session-start snapshot).
+
+    Returns ``{"trigger", "range", "reason", "services", "timestamp", "path"}``
+    or None when absent/unparsable. Canonical wins over legacy; legacy markers
+    predate the schema and yield reason/timestamp as None."""
+    for rel in (CANONICAL_MARKER_REL, LEGACY_MARKER_REL):
+        p = root / rel
+        try:
+            text = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        fields: dict = {"path": rel.as_posix(), "raw": text}
+        for line in text.splitlines():
+            stripped = line.strip()
+            for key in ("trigger", "range", "reason", "services", "timestamp", "files"):
+                if stripped.startswith(f"{key}:"):
+                    fields[key] = stripped.split(":", 1)[1].strip()
+        if rel == LEGACY_MARKER_REL and "reason" not in fields:
+            fields["reason"] = None
+            fields["timestamp"] = fields.get("timestamp")
+        return fields
+    return None
+
+
+def write_marker(
+    root: Path,
+    branch: str,
+    services: list[str],
+    file_count: int,
+    *,
+    trigger: str = "drift",
+    range_: str = "",
+    reason: str = REASON_MTIME,
+    timestamp: str | None = None,
+) -> Path:
+    """Write the canonical pending marker with a per-service inventory.
+
+    B2 schema: ``trigger, range, reason, services, files, timestamp`` plus the
+    reconcile hint. Refresh preserves the earliest range start (live re-read
+    at write time) so consecutive touches do not overwrite provenance.
+    Returns its path."""
     marker = root / CANONICAL_MARKER_REL
     marker.parent.mkdir(parents=True, exist_ok=True)
+    range_str = range_.strip() or branch.strip() or "unknown"
+    prev_start = _existing_range_start(root)
+    if prev_start and range_str != "unknown":
+        cur_start = range_str.split("..")[0].strip() if ".." in range_str else range_str
+        cur_end = range_str.split("..", 1)[1].strip() if ".." in range_str else ""
+        if cur_start and cur_end and prev_start != cur_start:
+            range_str = f"{prev_start}..{cur_end}"
+        elif cur_start and not cur_end:
+            range_str = f"{prev_start}..{cur_start}" if prev_start != cur_start else range_str
+    ts = timestamp or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     lines = [
         f"service-knowledge drift detected on '{branch or 'default'}'\n",
-        f"services: {', '.join(services)}\n",
+        f"trigger: {trigger}\n",
+        f"range: {range_str}\n",
+        f"reason: {reason}\n",
+        f"services: {', '.join(services) if services else '(none)'}\n",
         f"files: {file_count}\n",
+        f"timestamp: {ts}\n",
     ]
     for svc in services:
         lines.append(f"service {svc}: pending\n")
@@ -118,7 +196,11 @@ def _cmd_drift(args: argparse.Namespace) -> int:
 
     services = sorted({str(item.get("service_id", "?")) for item in drift})
     head = _git_head(root)
-    marker = write_marker(root, head, services, len(drift))
+    # Drift-cause tagging: a never-synced service needs an initial verified sync,
+    # not a "merge caused drift" claim.
+    never_synced = bool(drift) and all(item.get("never_synced") for item in drift)
+    reason = REASON_INITIAL_SYNC if never_synced else REASON_MTIME
+    marker = write_marker(root, head, services, len(drift), trigger="drift", range_=head, reason=reason)
     print("⚠  service-knowledge drift detected.")
     print(f"   {len(drift)} drifted file(s) across service(s): {', '.join(services)}")
     print(f"   (pending marker: {marker.relative_to(root).as_posix()})")
