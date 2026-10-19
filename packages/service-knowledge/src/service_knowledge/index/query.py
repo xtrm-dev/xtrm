@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import re
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -31,6 +32,36 @@ from service_knowledge.index import ranking, schema, telemetry
 
 _VERDICT_VERIFIED = {"verified", "pass", "verified_pass", "supported"}
 _VERDICT_INSUFFICIENT = {"insufficient_evidence", "insufficient", "unknown"}
+
+# Retrieval normalization (XTRM-651): FTS5 treats `-` / `:` / `"` / `*` as query syntax,
+# so a raw hyphenated query (`per-page ...`) raises `no such column` and degrades to zero
+# hits via the OperationalError swallow below. All free-text matching normalizes hyphens
+# (ASCII + unicode dashes + underscore) to spaces and casefolds, mirroring the index-side
+# `_literals` split in builder.py; FTS MATCH strings are rebuilt from quoted alnum tokens.
+_HYPHEN_RE = re.compile(r"[\-\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D_]+")
+_WORD_RE = re.compile(r"[^\W_]+", re.UNICODE)
+_FTS_OPERATORS = frozenset({"and", "or", "not", "near"})
+
+
+def _normalize_text(text: str) -> str:
+    """Case/collapse-normalized free text with hyphens/dashes/underscores as spaces."""
+    return " ".join(_HYPHEN_RE.sub(" ", str(text)).casefold().split())
+
+
+def _query_tokens(text: str) -> list[str]:
+    """Alnum tokens for intent/FTS matching (operators kept: caller decides)."""
+    return _WORD_RE.findall(_normalize_text(text))
+
+
+def _fts_match_query(raw: str) -> str:
+    """Safe FTS5 MATCH string: quoted alnum tokens, FTS operators dropped.
+
+    Bare `AND`/`OR`/`NOT`/`NEAR` stay query syntax even when the user meant plain words;
+    dropping them keeps implicit-AND semantics (`apples and oranges` -> both terms).
+    Returns `""` when nothing searchable remains (caller skips the FTS round).
+    """
+    tokens = [t for t in _query_tokens(raw) if t not in _FTS_OPERATORS]
+    return " ".join(f'"{t}"' for t in tokens)
 
 
 @dataclass(frozen=True)
@@ -56,11 +87,16 @@ def _territory_base(pattern: str) -> str:
 
 
 def _path_in_territory(path: str, territory: list[str]) -> bool:
+    # Case-insensitive: territory patterns are config, payload paths vary in case;
+    # hyphens stay literal (filesystem-significant) — only case is folded here.
+    # Free-text hyphen handling lives in _normalize_text / _fts_match_query.
+    folded_path = str(path).casefold()
     for pattern in territory:
-        if fnmatch.fnmatch(path, pattern):
+        folded_pattern = str(pattern).casefold()
+        if fnmatch.fnmatch(folded_path, folded_pattern):
             return True
-        base = _territory_base(pattern)
-        if base and (path == base or path.startswith(base + "/")):
+        base = _territory_base(folded_pattern)
+        if base and (folded_path == base or folded_path.startswith(base + "/")):
             return True
     return False
 
@@ -80,27 +116,30 @@ def _territory_signal(item: dict[str, Any], ctx: QueryContext) -> float:
     if ctx.service_id and item.get("service_id") == ctx.service_id:
         return ranking.T_SERVICE_EXPLICIT
     triggers = item.get("triggers", [])
-    query_lower = ctx.query.casefold()
-    if triggers and any(trigger.casefold() in query_lower for trigger in triggers if trigger):
+    query_norm = _normalize_text(ctx.query)
+    if triggers and any(
+        _normalize_text(trigger) in query_norm for trigger in triggers if trigger
+    ):
         return ranking.T_TRIGGER
     return ranking.T_NONE
 
 
 def _intent_signal(item: dict[str, Any], ctx: QueryContext) -> float:
     """Fraction of the query's literal tokens that exactly match the item's searchable surface."""
-    tokens = [t for t in ctx.query.casefold().split() if len(t) >= 3]
-    tokens.extend(t.casefold() for t in ctx.paths)
+    tokens = [t for t in _query_tokens(ctx.query) if len(t) >= 3]
+    for p in ctx.paths:
+        tokens.extend(t for t in _query_tokens(p) if len(t) >= 2)
     tokens = sorted(set(tokens))
     if not tokens:
         return 0.0
     haystack = " ".join(
         [
-            str(item.get("title", "")).casefold(),
-            str(item.get("tags", "")).casefold(),
-            str(item.get("literals", "")).casefold(),
-            str(item.get("service_id", "")).casefold(),
-            " ".join(t.casefold() for t in item.get("triggers", [])),
-            " ".join(c.get("path", "").casefold() for c in item.get("citations", [])),
+            _normalize_text(item.get("title", "")),
+            _normalize_text(item.get("tags", "")),
+            _normalize_text(item.get("literals", "")),
+            _normalize_text(item.get("service_id", "")),
+            " ".join(_normalize_text(t) for t in item.get("triggers", [])),
+            " ".join(_normalize_text(c.get("path", "")) for c in item.get("citations", [])),
         ]
     )
     matched = sum(1 for token in tokens if token in haystack)
@@ -158,7 +197,7 @@ def _candidate_lexical_scores(
     document relevance even when the section text alone would not match.
     """
     scores: dict[str, float] = {}
-    query = ctx.query.strip()
+    query = _fts_match_query(ctx.query)
     if query:
         try:
             fts_rows = conn.execute(
