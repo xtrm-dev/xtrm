@@ -313,7 +313,13 @@ def migrate_umbrellas(root: Path) -> list[str]:
 def install_git_hooks(root: Path) -> list[str]:
     """Delegate to the vendored install-service-knowledge.py --hooks-only (non-blocking
     pre-commit/pre-push/post-merge reminders). Reports ``.githooks`` touched only when a
-    hook file actually changed, so idempotent re-runs report zero touches."""
+    hook file actually changed, so idempotent re-runs report zero touches.
+
+    B0: the vendored installer runs a post-install self-check (git-resolved
+    active hooks dir + sweep-body checksum). On failure it exits non-zero and
+    prints no ``activated`` line — surface its output loudly here instead of
+    silently reporting zero touches so a dead hook can never look installed.
+    """
     installer = machinery_dir(root) / "install" / "install-service-knowledge.py"
     if not installer.exists():
         return []
@@ -324,6 +330,13 @@ def install_git_hooks(root: Path) -> list[str]:
         cwd=root, capture_output=True, text=True, check=False,
     )
     if r.returncode != 0:
+        # Loud, not silent: installer already explains which check failed.
+        out = (r.stdout or "").strip()
+        err = (r.stderr or "").strip()
+        tail = "\n".join((out + "\n" + err).strip().splitlines()[-15:])
+        print(f"{YELLOW}!! hooks self-check FAILED (no hook claimed):{NC}")
+        if tail:
+            print(tail)
         return []
     after = {h: h.read_bytes() for h in hook_files if h.exists()}
     return [".githooks"] if before != after else []
