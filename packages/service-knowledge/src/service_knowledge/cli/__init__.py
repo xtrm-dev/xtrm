@@ -59,6 +59,12 @@ def build_parser() -> argparse.ArgumentParser:
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
         sp.add_argument("--path", default=None, help="Consumer repo root (default: git toplevel of cwd).")
+        if name in ("install", "update"):
+            sp.add_argument(
+                "--all-worktrees", action="store_true", default=False,
+                help="Chain + self-check git hooks in every linked worktree "
+                "(default: only the current worktree's active hooks dir).",
+            )
     # `index` and `canary` carry nested actions; register them separately.
     index_cmd.register(sub)
     canary_cmd.register(sub)

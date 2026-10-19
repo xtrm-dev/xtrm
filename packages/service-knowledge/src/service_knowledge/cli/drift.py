@@ -34,11 +34,15 @@ from service_knowledge.cli import common
 CANONICAL_MARKER_REL = Path(".xtrm") / ".service-knowledge-drift-pending"
 LEGACY_MARKER_REL = Path(".xtrm") / ".service-skills-drift-pending"
 
-# Marker reason tags (B2 schema — shared with the post-merge hook).
+# Marker reason tags (B2/B3 schema — shared with the drift hooks:
+# post-merge, post-checkout, post-rewrite). fresh-cache is written only by
+# post-checkout on clone/worktree creation (cold cache, no diff to gate on);
+# mtime-heuristic is written only by this drift-CLI fallback, never by hooks.
 REASON_REF_RANGE = "ref-range"
 REASON_MTIME = "mtime-heuristic"
 REASON_INITIAL_SYNC = "initial-sync-needed"
 REASON_RANGE_UNKNOWN = "range-unknown"
+REASON_FRESH_CACHE = "fresh-cache"
 
 RECONCILE_HINT = (
     "action: run /updating-service-knowledge (service-knowledge-sync) to reconcile + stamp last_sync_ref\n"

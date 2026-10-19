@@ -9,7 +9,9 @@ from service_knowledge.cli import common
 
 def run(args: argparse.Namespace) -> int:
     root = common.resolve_consumer_root(args.path)
-    from_version, touched, duration_ms = common.apply(root, "install")
+    from_version, touched, duration_ms = common.apply(
+        root, "install", all_worktrees=getattr(args, "all_worktrees", False)
+    )
 
     print(f"{common.GREEN}service-knowledge v{__version__} installed into:{common.NC} {root}")
     if from_version and from_version != __version__:
