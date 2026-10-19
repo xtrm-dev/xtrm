@@ -385,6 +385,54 @@ def update_yaml_registry(project_root: Path, new_ref: str, new_sync_iso: str | N
         atomic_write(path, text)
 
 
+def regenerate_umbrella_for_project(project_root: Path) -> dict[str, Any]:
+    """Regenerate the per-repo umbrella from the just-stamped registry (B4).
+
+    The umbrella table + index provenance + OKF envelopes are pure functions of the
+    registry; only the ``<!-- SEMANTIC_START -->`` human block is preserved
+    byte-identically across regen (marker contract shared with skill_migrator).
+    Regeneration heals toward the registry: a hand-deleted envelope or a stale
+    freshness cell is restored from the stamped registry on the next regen.
+    Best-effort: never raises — reconcile surfaces a failure as partial rather
+    than crashing a successful stamp.
+    """
+    try:
+        from bootstrap import get_registry_path, get_umbrella_dir, load_registry as _load_registry  # type: ignore[import-not-found]  # noqa: E402
+        from umbrella_generator import read_index_state, write_umbrella  # type: ignore[import-not-found]  # noqa: E402
+    except ImportError as exc:
+        return {"regenerated": False, "path": None, "reason": f"import_failed: {exc}"}
+    try:
+        umbrella_dir = None
+        try:
+            umbrella_dir = get_umbrella_dir(str(project_root))
+        except Exception:
+            umbrella_dir = None
+        if umbrella_dir is None:
+            try:
+                reg_path = get_registry_path(str(project_root))
+                if reg_path.parent.name in ("service-knowledge", "service-skills"):
+                    umbrella_dir = reg_path.parent
+            except Exception:
+                umbrella_dir = None
+        if umbrella_dir is None:
+            return {"regenerated": False, "path": None, "reason": "no-umbrella-dir"}
+        umbrella_path = Path(umbrella_dir) / "SKILL.md"
+        registry = _load_registry(str(project_root))
+        repo_name = Path(project_root).name
+        try:
+            index_state = read_index_state(str(project_root))
+        except Exception:
+            index_state = {}
+        changed = write_umbrella(Path(umbrella_path), registry, repo_name, index_state or {})
+        try:
+            rel = Path(umbrella_path).relative_to(Path(project_root)).as_posix()
+        except ValueError:
+            rel = str(umbrella_path)
+        return {"regenerated": changed, "path": rel, "reason": "generated" if changed else "unchanged"}
+    except Exception as exc:
+        return {"regenerated": False, "path": None, "reason": f"regen_failed: {type(exc).__name__}: {str(exc)[:160]}"}
+
+
 def reconcile(options: ReconcileOptions) -> dict[str, Any]:
     project_root = Path(get_project_root())
     registry = load_registry(str(project_root))
@@ -470,6 +518,24 @@ def reconcile(options: ReconcileOptions) -> dict[str, Any]:
             result["failed"].append({"file_path": drift.get("file_path"), "error": redact_exception(exc, options.api_key)})
     if result["reconciled_count"] and not (options.dry_run or result["status"] == "partial"):
         result["last_sync_ref_old"] = bump_last_sync_ref(project_root, result["last_sync_ref_new"], options.dry_run)
+        # B4: a stamp without umbrella regen is a split-brain freshness display (registry
+        # current while the umbrella table still shows the old sync). The umbrella is a
+        # pure function of the registry + the preserved SEMANTIC block, so regen right
+        # after the stamp keeps both convergent. Skipped only when nothing was stamped.
+        regen = regenerate_umbrella_for_project(project_root)
+        result["umbrella_regenerated"] = bool(regen.get("regenerated"))
+        result["umbrella_path"] = regen.get("path")
+        result["umbrella_reason"] = regen.get("reason")
+        if regen.get("reason", "").startswith(("regen_failed", "import_failed", "no-umbrella")):
+            result["status"] = "partial"
+            result["failed"].append({
+                "file_path": None,
+                "error": f"umbrella_regen: {regen.get('reason')}",
+            })
+    else:
+        result["umbrella_regenerated"] = False
+        result["umbrella_path"] = None
+        result["umbrella_reason"] = "dry-run" if options.dry_run else ("partial-no-stamp" if result["status"] == "partial" else "nothing-reconciled")
     return result
 
 
