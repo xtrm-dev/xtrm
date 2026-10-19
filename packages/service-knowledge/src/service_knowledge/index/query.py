@@ -26,6 +26,7 @@ import bootstrap  # type: ignore[import-not-found]
 from vaultctl.store import search as vaultctl_search
 
 from service_knowledge.index import freshness as freshness_mod
+from service_knowledge.index import gate as gate_mod
 from service_knowledge.index import ranking, schema, telemetry
 
 _VERDICT_VERIFIED = {"verified", "pass", "verified_pass", "supported"}
@@ -318,8 +319,9 @@ def rank(conn: sqlite3.Connection, consumer_root: Path, ctx: QueryContext) -> li
 
 
 def search(consumer_root: Path, ctx: QueryContext) -> dict[str, Any]:
-    """Public search entry: rank + telemetry + retrieval-event audit row."""
+    """Public search entry: freshness-gate + rank + telemetry + retrieval-event audit row."""
     started = time.perf_counter()
+    gate_outcome = gate_mod.ensure_fresh(consumer_root, reason="search")
     conn = schema.connect(consumer_root)
     try:
         ranked = rank(conn, consumer_root, ctx)
@@ -336,12 +338,15 @@ def search(consumer_root: Path, ctx: QueryContext) -> dict[str, Any]:
             candidate_count=len(ranked),
             duration_ms=round(duration_ms, 2),
             source_ref=source_ref,
+            stale_served=1 if gate_outcome.stale_served else 0,
         )
         return {
             "query": ctx.query,
             "paths": list(ctx.paths),
             "service_id": ctx.service_id,
             "source_ref": source_ref,
+            "stale_served": gate_outcome.stale_served,
+            "notice": gate_outcome.notice,
             "results": [
                 {"item": r.item, "score": r.score, "signals": r.signals,
                  "penalties": list(r.penalties), "advisories": list(r.advisories)}
