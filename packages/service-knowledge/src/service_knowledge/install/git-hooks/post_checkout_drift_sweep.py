@@ -33,25 +33,21 @@ Contract (XTRM-641 §3-§4, B2 touches gate carried over):
     each). Target <1s no-touch / <2s touch. Always exits 0 — hooks must never
     fail a checkout. Never reads stdin (the checkout protocol carries no SHAs
     there; SHAs arrive via argv).
-  - Auto-reconcile (``XTRM_AUTO_RECONCILE_DRIFT=1``) is unchanged (B7 owns it):
-    on a marker write the hook still offers the opt-in ``sp script`` path.
+  - No auto-reconcile (B7, XTRM-650): the opt-in ``sp script``
+    service-knowledge-sync subprocess path is cut. Marker + next-session
+    reconciliation only — run /updating-service-knowledge in the next session.
 """
 from __future__ import annotations
 
 import fnmatch
 import json
 import os
-import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 MARKER_REL = Path(".xtrm") / ".service-knowledge-drift-pending"
-AUTO_RECONCILE_ENV = "XTRM_AUTO_RECONCILE_DRIFT"
-AUTO_RECONCILE_TIMEOUT_MS_ENV = "XTRM_AUTO_RECONCILE_TIMEOUT_MS"
-AUTO_RECONCILE_TIMEOUT_MS_DEFAULT = 600_000
-RUNLOG_REL = Path(".xtrm") / ".service-knowledge-auto-reconcile.log"
 
 TRIGGER = "post-checkout"
 
@@ -370,100 +366,6 @@ def _notice(range_str: str, reason: str, services: set[str] | list[str], files: 
     print()
 
 
-def _run_sp_subprocess(cmd: list[str], env: dict[str, str], timeout_s: float) -> subprocess.CompletedProcess[str]:
-    """Thin wrapper around subprocess.run so tests can patch ONLY the sp-script call site
-    without breaking the hook's own git usage (which shares the global module)."""
-    return subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=timeout_s, check=False)
-
-
-def _resolve_pack(root: Path) -> str | None:
-    """Return first v2 pack, with v1 user/packs fallback, owning a service registry."""
-    packs_roots = [
-        root / ".xtrm" / "skills",
-        root / ".xtrm" / "skills" / "user" / "packs",
-    ]
-    for packs in packs_roots:
-        if not packs.is_dir():
-            continue
-        for pack in sorted(packs.iterdir()):
-            if not pack.is_dir() or pack.name in {"default", "optional", "user", "active", "local-legacy"}:
-                continue
-            if (pack / "service-skills" / "service-registry.json").exists() or (pack / "service-knowledge" / "service-registry.json").exists() or (pack / "service-registry.json").exists():
-                return pack.name
-    return None
-
-
-def _auto_reconcile(root: Path) -> tuple[bool, str]:
-    """Invoke `sp script service-knowledge-sync` to reconcile drift. Returns (success, message).
-
-    Gates: opt-in via XTRM_AUTO_RECONCILE_DRIFT=1, `sp` on PATH, resolvable pack.
-    Failure modes return (False, reason) — the caller logs but does NOT remove the marker so
-    operator/agent can pick up where the automation left off.
-    """
-    if os.environ.get(AUTO_RECONCILE_ENV, "").lower() not in {"1", "true", "yes", "on"}:
-        return (False, f"opt-in disabled (set {AUTO_RECONCILE_ENV}=1 to enable)")
-
-    sp = shutil.which("sp")
-    if not sp:
-        return (False, "`sp` not on PATH; specialists CLI not installed")
-
-    pack = _resolve_pack(root)
-    if not pack:
-        return (False, "no pack with service-registry resolvable under .xtrm/skills")
-
-    try:
-        timeout_ms = int(os.environ.get(AUTO_RECONCILE_TIMEOUT_MS_ENV, AUTO_RECONCILE_TIMEOUT_MS_DEFAULT))
-    except ValueError:
-        timeout_ms = AUTO_RECONCILE_TIMEOUT_MS_DEFAULT
-
-    cmd = [
-        sp, "script", "service-knowledge-sync",
-        "--template-field", "script_template",
-        "--vars", f"repo={root.name}",
-        "--vars", f"pack={pack}",
-        "--vars", f"cwd={root}",
-        "--allow-local-scripts",
-        "--allow-write-capable",
-        "--json",
-        "--timeout-ms", str(timeout_ms),
-    ]
-
-    env = os.environ.copy()
-    env["CLAUDE_PROJECT_DIR"] = str(root)
-
-    try:
-        r = _run_sp_subprocess(cmd, env, (timeout_ms / 1000) + 60)
-    except subprocess.TimeoutExpired:
-        return (False, f"sp script timed out after {timeout_ms // 1000}s")
-    except OSError as exc:
-        return (False, f"sp script invocation failed: {exc}")
-
-    if r.returncode != 0:
-        return (False, f"sp script exit={r.returncode} stderr={r.stderr.strip()[:300]}")
-
-    try:
-        payload = json.loads(r.stdout)
-    except json.JSONDecodeError as exc:
-        return (False, f"sp script returned non-JSON stdout: {exc}")
-
-    if not payload.get("success"):
-        err = payload.get("error", "unspecified")
-        return (False, f"sp script success=false error={err}")
-
-    return (True, f"sp script success: {payload.get('meta', {}).get('trace_id', '(no trace)')}")
-
-
-def _append_runlog(root: Path, line: str) -> None:
-    """Append one line to the auto-reconcile runlog; best-effort, swallow IO errors."""
-    log = root / RUNLOG_REL
-    try:
-        log.parent.mkdir(parents=True, exist_ok=True)
-        with log.open("a", encoding="utf-8") as fh:
-            fh.write(line.rstrip("\n") + "\n")
-    except OSError:
-        pass
-
-
 def _write_unknown_and_notice(root: Path) -> None:
     """Fallback marker when no range is resolvable (never a scan or rebuild)."""
     _write_marker(root, orig=None, head=None, reason=REASON_RANGE_UNKNOWN, services=set(), files=0)
@@ -512,16 +414,12 @@ def main(argv: list[str] | None = None) -> int:
     if status == "fresh":
         try:
             _write_fresh_and_notice(root, new)
-            ok, msg = _auto_reconcile(root)
-            _append_runlog(root, f"{'OK' if ok else 'SKIP'} post-checkout fresh-cache | services=(none) | {msg}")
         except Exception:
             pass
         return 0
     if status == "unknown" or not prev or not new:
         try:
             _write_unknown_and_notice(root)
-            ok, msg = _auto_reconcile(root)
-            _append_runlog(root, f"{'OK' if ok else 'SKIP'} post-checkout unknown | services=(none) | {msg}")
         except Exception:
             pass
         return 0
@@ -537,8 +435,6 @@ def main(argv: list[str] | None = None) -> int:
     if diff is None or tracked is None:
         try:
             _write_unknown_and_notice(root)
-            ok, msg = _auto_reconcile(root)
-            _append_runlog(root, f"{'OK' if ok else 'SKIP'} post-checkout unknown | services=(none) | {msg}")
         except Exception:
             pass
         return 0
@@ -568,16 +464,6 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         return 0
 
-    try:
-        ok, msg = _auto_reconcile(root)
-        if ok:
-            print(f"   ✓ auto-reconcile via sp script service-knowledge-sync — {msg}")
-            print("   the specialist removes the pending marker on success.")
-            _append_runlog(root, f"OK post-checkout {prev[:7]}..{new[:7]} | services={','.join(sorted(services))} | {msg}")
-        else:
-            _append_runlog(root, f"SKIP post-checkout {prev[:7]}..{new[:7]} | services={','.join(sorted(services))} | {msg}")
-    except Exception:
-        pass
     return 0
 
 

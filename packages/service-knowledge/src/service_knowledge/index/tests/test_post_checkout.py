@@ -4,7 +4,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
-import types
 from pathlib import Path
 
 import pytest
@@ -87,7 +86,6 @@ def test_no_registry_silent_no_marker(checkout_hook, monkeypatch, tmp_path, caps
 def test_missing_argv_writes_range_unknown(checkout_hook, monkeypatch, tmp_path, capsys) -> None:
     repo = _make_repo(tmp_path)
     monkeypatch.setattr(checkout_hook, "_project_root", lambda: repo)
-    monkeypatch.setattr(checkout_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert checkout_hook.main(["post-checkout"]) == 0
     content = (repo / checkout_hook.MARKER_REL).read_text(encoding="utf-8")
     assert "trigger: post-checkout" in content
@@ -98,7 +96,6 @@ def test_missing_argv_writes_range_unknown(checkout_hook, monkeypatch, tmp_path,
 def test_null_prev_writes_fresh_cache_no_services(checkout_hook, monkeypatch, tmp_path, capsys) -> None:
     repo = _make_repo(tmp_path)
     monkeypatch.setattr(checkout_hook, "_project_root", lambda: repo)
-    monkeypatch.setattr(checkout_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     argv = ["post-checkout", NULL_PREV, "b" * 40, "1"]
     assert checkout_hook.main(argv) == 0
     content = (repo / checkout_hook.MARKER_REL).read_text(encoding="utf-8")
@@ -150,7 +147,6 @@ def test_touching_territory_writes_marker_only(checkout_hook, monkeypatch, tmp_p
     monkeypatch.setattr(checkout_hook, "_checkout_range", lambda argv: ("aaa0000" * 2, "bbb0001" * 2, "1", "range"))
     monkeypatch.setattr(checkout_hook, "_tracked_files", lambda root: {"db/schema.sql"})
     monkeypatch.setattr(checkout_hook, "_diff_files", lambda root, o, h: ["db/schema.sql"])
-    monkeypatch.setattr(checkout_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert checkout_hook.main(["post-checkout", "aaa0000" * 2, "bbb0001" * 2, "1"]) == 0
     marker = repo / checkout_hook.MARKER_REL
     content = marker.read_text(encoding="utf-8")
@@ -173,7 +169,6 @@ def test_never_synced_reason_initial_sync_needed(checkout_hook, monkeypatch, tmp
     monkeypatch.setattr(checkout_hook, "_checkout_range", lambda argv: ("aaa0000" * 2, "bbb0001" * 2, "1", "range"))
     monkeypatch.setattr(checkout_hook, "_tracked_files", lambda root: {"db/schema.sql"})
     monkeypatch.setattr(checkout_hook, "_diff_files", lambda root, o, h: ["db/schema.sql"])
-    monkeypatch.setattr(checkout_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert checkout_hook.main(["post-checkout", "aaa0000" * 2, "bbb0001" * 2, "1"]) == 0
     content = (repo / checkout_hook.MARKER_REL).read_text(encoding="utf-8")
     assert "reason: initial-sync-needed" in content
@@ -194,7 +189,6 @@ def test_existing_marker_preserves_earliest_range(checkout_hook, monkeypatch, tm
     monkeypatch.setattr(checkout_hook, "_checkout_range", lambda argv: ("bbb0001" * 2, "ccc0002" * 2, "1", "range"))
     monkeypatch.setattr(checkout_hook, "_tracked_files", lambda root: {"db/schema.sql"})
     monkeypatch.setattr(checkout_hook, "_diff_files", lambda root, o, h: ["db/schema.sql"])
-    monkeypatch.setattr(checkout_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert checkout_hook.main(["post-checkout", "x", "y", "1"]) == 0
     content = marker.read_text(encoding="utf-8")
     assert "range: aaa0000..ccc0002" in content
@@ -210,22 +204,27 @@ def test_exceptions_always_exit_zero(checkout_hook, monkeypatch, tmp_path) -> No
     assert checkout_hook.main(["post-checkout", "a", "b", "1"]) == 0
 
 
-def test_auto_reconcile_invokes_service_knowledge_specialist(checkout_hook, monkeypatch, tmp_path):
-    calls: list[list[str]] = []
-    monkeypatch.setenv(checkout_hook.AUTO_RECONCILE_ENV, "1")
-    monkeypatch.setattr(checkout_hook.shutil, "which", lambda command: "/usr/bin/sp")
-    monkeypatch.setattr(checkout_hook, "_resolve_pack", lambda root: "infra")
 
-    def run(cmd, env, timeout_s):
-        calls.append(cmd)
-        return types.SimpleNamespace(
-            returncode=0,
-            stdout='{"success": true, "meta": {"trace_id": "trace-1"}}',
-            stderr="",
-        )
-
-    monkeypatch.setattr(checkout_hook, "_run_sp_subprocess", run)
-
-    assert checkout_hook._auto_reconcile(tmp_path) == (True, "sp script success: trace-1")
-    assert calls[0][2] == "service-knowledge-sync"
+def test_no_auto_reconcile_subprocess_path(checkout_hook) -> None:
+    """B7 cut: no hook subprocess invocation; marker + next-session only."""
+    src = _HOOK_PATH.read_text(encoding="utf-8")
+    for token in (
+        "_auto_reconcile",
+        "_run_sp_subprocess",
+        "_append_runlog",
+        "_resolve_pack",
+        "AUTO_RECONCILE",
+        "RUNLOG_REL",
+        "allow-write-capable",
+        "service-knowledge-auto-reconcile",
+    ):
+        assert token not in src
+    assert "shutil" not in src
+    assert not hasattr(checkout_hook, "_auto_reconcile")
+    assert not hasattr(checkout_hook, "_run_sp_subprocess")
+    assert not hasattr(checkout_hook, "_append_runlog")
+    assert not hasattr(checkout_hook, "_resolve_pack")
+    assert not hasattr(checkout_hook, "AUTO_RECONCILE_ENV")
+    assert not hasattr(checkout_hook, "RUNLOG_REL")
     assert checkout_hook.TRIGGER == "post-checkout"
+    assert checkout_hook.MARKER_REL == Path(".xtrm/.service-knowledge-drift-pending")

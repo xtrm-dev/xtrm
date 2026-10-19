@@ -4,7 +4,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
-import types
 from pathlib import Path
 
 import pytest
@@ -115,7 +114,6 @@ def test_touching_territory_writes_marker_only(post_merge_hook, monkeypatch, tmp
     monkeypatch.setattr(post_merge_hook, "_resolve_range", lambda root: ("aaa0000" * 2, "bbb0001" * 2))
     monkeypatch.setattr(post_merge_hook, "_tracked_files", lambda root: {"db/schema.sql"})
     monkeypatch.setattr(post_merge_hook, "_diff_files", lambda root, o, h: ["db/schema.sql"])
-    monkeypatch.setattr(post_merge_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert post_merge_hook.main() == 0
     marker = repo / post_merge_hook.MARKER_REL
     assert marker.exists()
@@ -137,7 +135,6 @@ def test_registry_path_touch_attributes_all_services(post_merge_hook, monkeypatc
     monkeypatch.setattr(post_merge_hook, "_resolve_range", lambda root: ("aaa0000" * 2, "bbb0001" * 2))
     monkeypatch.setattr(post_merge_hook, "_tracked_files", lambda root: {reg_rel})
     monkeypatch.setattr(post_merge_hook, "_diff_files", lambda root, o, h: [reg_rel])
-    monkeypatch.setattr(post_merge_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert post_merge_hook.main() == 0
     content = (repo / post_merge_hook.MARKER_REL).read_text(encoding="utf-8")
     assert "services: db" in content
@@ -154,7 +151,6 @@ def test_never_synced_reason_initial_sync_needed(post_merge_hook, monkeypatch, t
     monkeypatch.setattr(post_merge_hook, "_resolve_range", lambda root: ("aaa0000" * 2, "bbb0001" * 2))
     monkeypatch.setattr(post_merge_hook, "_tracked_files", lambda root: {"db/schema.sql"})
     monkeypatch.setattr(post_merge_hook, "_diff_files", lambda root, o, h: ["db/schema.sql"])
-    monkeypatch.setattr(post_merge_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert post_merge_hook.main() == 0
     content = (repo / post_merge_hook.MARKER_REL).read_text(encoding="utf-8")
     assert "reason: initial-sync-needed" in content
@@ -164,7 +160,6 @@ def test_range_unknown_writes_marker_exit_zero(post_merge_hook, monkeypatch, tmp
     repo = _make_repo(tmp_path)
     monkeypatch.setattr(post_merge_hook, "_project_root", lambda: repo)
     monkeypatch.setattr(post_merge_hook, "_resolve_range", lambda root: (None, None))
-    monkeypatch.setattr(post_merge_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert post_merge_hook.main() == 0
     content = (repo / post_merge_hook.MARKER_REL).read_text(encoding="utf-8")
     assert "reason: range-unknown" in content
@@ -186,7 +181,6 @@ def test_existing_marker_preserves_earliest_range(post_merge_hook, monkeypatch, 
     monkeypatch.setattr(post_merge_hook, "_resolve_range", lambda root: ("bbb0001" * 2, "ccc0002" * 2))
     monkeypatch.setattr(post_merge_hook, "_tracked_files", lambda root: {"db/schema.sql"})
     monkeypatch.setattr(post_merge_hook, "_diff_files", lambda root, o, h: ["db/schema.sql"])
-    monkeypatch.setattr(post_merge_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert post_merge_hook.main() == 0
     content = marker.read_text(encoding="utf-8")
     assert "range: aaa0000..ccc0002" in content
@@ -202,23 +196,27 @@ def test_exceptions_always_exit_zero(post_merge_hook, monkeypatch, tmp_path) -> 
     assert post_merge_hook.main() == 0
 
 
-def test_auto_reconcile_invokes_service_knowledge_specialist(post_merge_hook, monkeypatch, tmp_path):
-    calls: list[list[str]] = []
-    monkeypatch.setenv(post_merge_hook.AUTO_RECONCILE_ENV, "1")
-    monkeypatch.setattr(post_merge_hook.shutil, "which", lambda command: "/usr/bin/sp")
-    monkeypatch.setattr(post_merge_hook, "_resolve_pack", lambda root: "infra")
 
-    def run(cmd, env, timeout_s):
-        calls.append(cmd)
-        return types.SimpleNamespace(
-            returncode=0,
-            stdout='{"success": true, "meta": {"trace_id": "trace-1"}}',
-            stderr="",
-        )
-
-    monkeypatch.setattr(post_merge_hook, "_run_sp_subprocess", run)
-
-    assert post_merge_hook._auto_reconcile(tmp_path) == (True, "sp script success: trace-1")
-    assert calls[0][2] == "service-knowledge-sync"
+def test_no_auto_reconcile_subprocess_path(post_merge_hook) -> None:
+    """B7 cut: no hook subprocess invocation; marker + next-session only."""
+    src = _HOOK_PATH.read_text(encoding="utf-8")
+    for token in (
+        "_auto_reconcile",
+        "_run_sp_subprocess",
+        "_append_runlog",
+        "_resolve_pack",
+        "AUTO_RECONCILE",
+        "RUNLOG_REL",
+        "allow-write-capable",
+        "service-knowledge-auto-reconcile",
+    ):
+        assert token not in src
+    assert "shutil" not in src
+    assert not hasattr(post_merge_hook, "_auto_reconcile")
+    assert not hasattr(post_merge_hook, "_run_sp_subprocess")
+    assert not hasattr(post_merge_hook, "_append_runlog")
+    assert not hasattr(post_merge_hook, "_resolve_pack")
+    assert not hasattr(post_merge_hook, "AUTO_RECONCILE_ENV")
+    assert not hasattr(post_merge_hook, "RUNLOG_REL")
+    assert post_merge_hook.TRIGGER == "post-merge"
     assert post_merge_hook.MARKER_REL == Path(".xtrm/.service-knowledge-drift-pending")
-    assert post_merge_hook.RUNLOG_REL == Path(".xtrm/.service-knowledge-auto-reconcile.log")
