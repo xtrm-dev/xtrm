@@ -143,7 +143,19 @@ def _ensure_block(content: str, marker: str, desired: str) -> tuple[str, bool]:
     # line, so the next `#` line always starts foreign content.
     end = content.find("\n#", start + len(marker))
     if end < 0:
-        return content[:start] + desired_block, True
+        # No following comment: end our block at its `fi` terminator and
+        # preserve everything after verbatim. Every installer-written block
+        # (reminder/staleness/drift invocations, chains) terminates with a
+        # top-level `fi`; anything past it is foreign (e.g. a consumer's
+        # `exit "$_gate_rc"` RC propagation) and must never be truncated.
+        # No recognizable terminator: leave the file untouched (fail-safe).
+        fi_end = content.find("\nfi", start + len(marker))
+        if fi_end < 0:
+            return content, False
+        term = fi_end + len("\nfi")
+        if term < len(content) and content[term] == "\n":
+            term += 1
+        return content[:start] + desired_block + content[term:], True
     tail = content[end:]
     # desired_block ends with "\n" and tail starts with "\n#": join without
     # doubling the blank line separator.

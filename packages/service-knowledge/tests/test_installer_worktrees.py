@@ -205,3 +205,43 @@ def test_post_rewrite_e2e_amend_writes_marker(
     content = marker.read_text(encoding="utf-8")
     assert "trigger: post-rewrite" in content
     assert "services: db" in content
+
+
+def test_ensure_block_preserves_foreign_tail_without_following_comment(
+    installer,
+) -> None:
+    """Foreign tail (e.g. a consumer's `exit "$_gate_rc"` RC propagation)
+    after our block with no following comment line must survive a rewrite."""
+    marker = installer.MARKER_STALENESS
+    old_block = (
+        "\n" + marker + "\n"
+        'if [ -f "/old/service-skills/x.py" ]; then\n'
+        '    python3 "/old/service-skills/x.py" || true\n'
+        "fi\n"
+    )
+    content = "#!/usr/bin/env sh\n_gate_rc=1\n" + old_block + '\nexit "$_gate_rc"\n'
+    desired = (
+        "\n" + marker + "\n"
+        'root="$(git rev-parse --show-toplevel 2>/dev/null)"\n'
+        'if [ -n "$root" ]; then\n'
+        '    python3 "$root/new.py" || true\n'
+        "fi\n"
+    )
+    new_content, changed = installer._ensure_block(content, marker, desired)
+    assert changed is True
+    assert new_content.endswith('exit "$_gate_rc"\n')
+    assert "service-skills" not in new_content
+    assert 'python3 "$root/new.py" || true' in new_content
+    # Idempotent: second run is a no-op.
+    again, changed_again = installer._ensure_block(new_content, marker, desired)
+    assert changed_again is False
+    assert again == new_content
+
+
+def test_ensure_block_no_terminator_leaves_file_untouched(installer) -> None:
+    """Marker present but no recognizable block end: fail-safe no-op."""
+    marker = installer.MARKER_STALENESS
+    content = "#!/usr/bin/env sh\n" + marker + "\nrun-weird-stuff\n"
+    new_content, changed = installer._ensure_block(content, marker, "SOME DESIRED")
+    assert changed is False
+    assert new_content == content
