@@ -207,7 +207,7 @@ Per-service runnable health checks live in each service skill's `scripts/health_
 
 - Per-service skills are listed in the **Services** table above — open the linked `SKILL.md`.
 - To scaffold a missing service: use the `service-knowledge` machinery (create flow).
-- Drift sync runs post-merge on master; see the `service-knowledge` updating flow.
+- Drift markers are touches-gated post-merge/post-checkout/post-rewrite advisories; the index rebuilds read-time via the source_ref-vs-HEAD gate; see the `service-knowledge` updating flow.
 
 ---
 
