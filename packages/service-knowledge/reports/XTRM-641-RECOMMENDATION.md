@@ -263,6 +263,26 @@ services) to close open questions. Findings, all observed, not inferred:
    logic is touched. Semantic-block preservation held in practice (hand edit
    survived regen).
 
+## 13. Validation: darth-feedor swap + read-only e2e (2026-10-19/20)
+
+Swap executed from `xt/sk-hooks`: `service-knowledge update` (22 files,
+370 ms), all three hook chains runtime-relative with argv passthrough,
+zero `service-skills` survivors, B2-schema marker, B1 self-heal demonstrated
+live (query moved `source_ref` to HEAD, `stale_served: false`). Independent
+read-only e2e by the platform session confirmed all items green and closed
+PLT-760; remaining darth-feedor-owner items are the 60-file reconcile,
+mutating e2e, footprint merge (`sk-hooks-swap` branch), and their red unit
+gate that blocked push.
+
+Incident during swap (XTRM-652, fixed): the installer rewrite truncated
+`.githooks/pre-push`'s trailing `exit "$_gate_rc"`, neutering the stable
+push guard. Repaired in place, root-fixed (`_ensure_block` preserves foreign
+tails, fail-safe no-op), regression-tested, re-verified.
+
+Release caveat: the released pipx v0.7.0 CLI predates B1 and does NOT
+self-heal. Until the package is versioned/released with this work, verify
+with `PYTHONPATH` at the new `src`.
+
 ## Evidence base
 
 Reviewed in-repo: `install/git-hooks/post_merge_drift_sweep.py` (full),
