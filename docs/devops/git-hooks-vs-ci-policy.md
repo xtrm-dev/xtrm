@@ -95,6 +95,37 @@ If you are reviewing a PR and the PR body notes `--no-verify` used, ask:
 - Was one specific hook failing for infrastructure reasons? If yes, the bead should reference that failing hook.
 - Did the `--no-verify` bypass a check that CI does NOT re-run? That's the failure mode to catch — the change lands unchecked.
 
+## Service-knowledge split: Layer 1 vs CI (authoritative)
+
+For service-knowledge drift the responsibility split is explicit and
+non-overlapping (XTRM-641 §2/§7, XTRM-648):
+
+- **CI gates committed drift (authoritative).** The `service-knowledge drift`
+  required status check (`.github/workflows/service-knowledge-drift.yml` →
+  `packages/service-knowledge/scripts/ci_drift_check.py`) runs the
+  touches-gated, seconds-budgeted drift scan with **no gitnexus enrichment**
+  and blocks merge on a dirty result or an umbrella/registry mismatch
+  (Services table vs `service-registry.json`, missing `skill_path`).
+  Reuses the B2 touches gate (`drift_detector.scan_drift` with
+  `use_gitnexus=False`: tracked-only, territory-glob, `last_sync_ref..HEAD`
+  ref-first). Read-only: never writes the pending marker, never builds the
+  FTS5 cache.
+- **Layer 1 gates local freshness (authoritative).** The read-time
+  `source_ref`-vs-`HEAD` gate rebuilds the per-checkout FTS5 cache on first
+  query under a budgeted single-flight lock. It covers every landing path
+  hooks miss (rebase, `--no-verify`, fresh clone/worktree) and fixes fresh
+  checkouts for free (absent cache = forced rebuild).
+- **Hooks stay advisory marker-only.** `post-merge`/`post-checkout`/
+  `post-rewrite` write/refresh `.xtrm/.service-knowledge-drift-pending` and
+  print a notice; they never rebuild the index and never decide merges.
+- **CI never attempts per-checkout FTS5 caches.** The cache is a gitignored
+  derived artifact; repairing it in CI repairs nothing in any checkout.
+  Freshness backstop claims about CI are a category error — Layer 1 is the
+  freshness backstop, CI is the committed-drift backstop.
+
 ## Change log
 
+- 2026-10-19: B5 (XTRM-648) documents the Layer-1-vs-CI split and ships the
+  required committed-drift check (touches-gated, seconds-budgeted, no gitnexus
+  enrichment; dirty or umbrella/registry mismatch blocks merge).
 - 2026-07-03: initial version. Extracted from mmd-sprint 2026-07-03 (sprint-side friction section, EVAL follow-up). Cross-referenced with bead `mercury-market-data-vzmx`.

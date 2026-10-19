@@ -1,0 +1,52 @@
+name: service-knowledge drift
+
+# B5 (XTRM-648) — CI authoritative gate for *committed* drift.
+#
+# Responsibility split (see docs/devops/git-hooks-vs-ci-policy.md):
+#   - CI gates COMMITTED drift (this workflow): touches-gated, seconds-budgeted
+#     drift scan with no gitnexus enrichment + umbrella/registry convergence.
+#     Dirty result or umbrella/registry mismatch FAILS the check and must block
+#     merge as a required status check.
+#   - Layer 1 gates LOCAL freshness: the read-time source_ref-vs-HEAD gate
+#     rebuilds the per-checkout FTS5 cache on first query. CI never attempts
+#     per-checkout FTS5 caches (gitignored derived artifacts); hooks stay
+#     advisory marker-only touches gates and are unchanged by CI.
+#
+# Required-check setup (repo settings → branches → require status checks):
+#   mark `service-knowledge drift` required so a dirty-PR failure blocks merge.
+
+on:
+  push:
+    paths:
+      - "packages/service-knowledge/**"
+      - ".xtrm/skills/**/service-registry.json"
+      - ".xtrm/skills/**/SKILL.md"
+      - ".github/workflows/service-knowledge-drift.yml"
+  pull_request:
+    paths:
+      - "packages/service-knowledge/**"
+      - ".xtrm/skills/**/service-registry.json"
+      - ".xtrm/skills/**/SKILL.md"
+      - ".github/workflows/service-knowledge-drift.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: service-knowledge drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history for ref-range scoping)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Committed-drift gate (touches-gated, no gitnexus, no FTS5)
+        run: python3 packages/service-knowledge/src/service_knowledge/scripts/ci_drift_check.py --budget-seconds 60
