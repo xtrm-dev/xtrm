@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import fnmatch
 import json
 import os
 import sys
@@ -14,6 +15,17 @@ from bootstrap import RootResolutionError, _gitnexus_repo_name, find_service_for
 # falls back to mtime instead of fanning out a gitnexus subprocess per file (which OOMs the
 # host on a broad/unfiltered territory — xtrm-08i0b). Override via DRIFT_MAX_ENRICH.
 MAX_ENRICH_CANDIDATES = int(os.environ.get("DRIFT_MAX_ENRICH", "200"))
+
+# Drift-cause tags (B4 — shared with the drift CLI and the post-merge/post-checkout/
+# post-rewrite hooks; hooks own their copies, this module must not import them).
+# ``initial-sync-needed`` marks a catalogued-but-never-verified service; ``ref-range``
+# marks committed drift decided by ``last_sync_ref..HEAD`` (ref wins over wall-clock);
+# ``mtime-heuristic`` is the timestamp/uncommitted fallback; ``range-unknown`` is the
+# fallback when a recorded ref cannot be resolved by git (rewritten/gc'd history).
+REASON_INITIAL_SYNC = "initial-sync-needed"
+REASON_REF_RANGE = "ref-range"
+REASON_MTIME = "mtime-heuristic"
+REASON_RANGE_UNKNOWN = "range-unknown"
 
 def check_drift(file_path: str, project_root: str | None = None) -> dict:
     if project_root is None:
@@ -179,6 +191,92 @@ def _service_last_sync_ref(service: dict[str, Any]) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def _territory_base(pattern: str) -> str:
+    """Base dir of a territory glob (pure path math, no filesystem scan)."""
+    return pattern.replace("/**/*", "").replace("/**", "").replace("/*", "").rstrip("/")
+
+
+def _path_in_territory(path: str, patterns: list[str]) -> bool:
+    """Pure path match (no filesystem scan): fnmatch + base-prefix fallback.
+
+    Same contract as the drift hooks and the index ranker — kept local (not
+    imported) so this vendored script stays hook-independent (B4 NON_GOALS).
+    """
+    for pattern in patterns:
+        if not isinstance(pattern, str) or not pattern:
+            continue
+        try:
+            if fnmatch.fnmatch(path, pattern):
+                return True
+        except Exception:
+            continue
+        base = _territory_base(pattern)
+        if base and (path == base or path.startswith(base + "/")):
+            return True
+    return False
+
+
+def _is_valid_ref(ref: str, project_root: str) -> bool:
+    """True when git can resolve ``ref`` to a commit (handles gc/rewritten history)."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", project_root, "cat-file", "-e", f"{ref}^{{commit}}"],
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+    except Exception:
+        return False
+    return result.returncode == 0
+
+
+def _ref_changed_in_territory(project_root: str, ref: str, territory: list[str]) -> list[str] | None:
+    """Committed files in ``ref..HEAD`` that match the service territory.
+
+    Returns None when git cannot answer (bad ref / git failure) so the caller
+    falls back to mtime with ``range-unknown`` instead of trusting a timestamp.
+    """
+    import subprocess
+
+    patterns = [p for p in (territory or []) if isinstance(p, str) and p]
+    if not patterns:
+        return []
+    if not _is_valid_ref(ref, project_root):
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-C", project_root, "diff", "--name-only", f"{ref}..HEAD"],
+            capture_output=True, text=True, check=False, timeout=15,
+        )
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    changed = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    return [f for f in changed if _path_in_territory(f, patterns)]
+
+
+def _working_tree_changed_files(project_root: str) -> set[str] | None:
+    """Tracked working-tree modifications vs HEAD (staged + unstaged, no mtime).
+
+    Returns None when git cannot answer so the caller falls back to mtime.
+    Untracked files are intentionally excluded: the tracked-files filter below
+    already drops them (xtrm-08i0b), so including them would only add noise.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", project_root, "diff", "--name-only", "HEAD"],
+            capture_output=True, text=True, check=False, timeout=15,
+        )
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
 def territory_gitignore_report(project_root: str | None = None) -> list[dict]:
     """Per (service, territory pattern), report filesystem-glob matches that are NOT git-tracked
     — i.e. gitignored build/vendor/cache files a glob sweeps in (xtrm-br179).
@@ -243,12 +341,59 @@ def scan_drift(project_root: str | None = None, enrich_with_gitnexus: bool = Fal
         # timestamp-less catalog masked real drift: the mtime pre-filter returned 0 and every
         # service looked clean (xtrm-008tr). Compare against the epoch so every tracked file
         # counts; the git-tracked filter + enrichment cap below keep the candidate set bounded.
+        # Tagged initial-sync-needed (B4) so markers never misattribute it to a merge.
         never_synced = sync_time is None
+        territory = service.get("territory", [])
+        ref = _service_last_sync_ref(service)
+        if never_synced:
+            floor = datetime.fromtimestamp(0, tz=timezone.utc)
+            for pattern in territory:
+                for fp in root.glob(pattern):
+                    if fp.is_file() and datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
+                        drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": True, "reason": REASON_INITIAL_SYNC})
+            continue
+        # B4 ref-vs-timestamp precedence (pairs with Layer 1): when a valid ref exists,
+        # committed drift is decided by ref..HEAD — never by wall-clock. mtime lies under
+        # clock skew and cherry-picks (rewritten committer dates, preserved mtimes), but
+        # the ref range is the source of truth. Working-tree edits are decided by git
+        # working-tree state, also without mtime. mtime survives only as the fallback
+        # when git cannot answer (bad ref -> range-unknown) or when no ref was recorded.
+        if ref:
+            committed = _ref_changed_in_territory(str(project_root), ref, territory)
+            if committed is not None:
+                for rel in committed:
+                    drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": rel, "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_REF_RANGE})
+                committed_set = set(committed)
+                working = _working_tree_changed_files(str(project_root))
+                if working is not None:
+                    for rel in sorted(working):
+                        if rel not in committed_set and _path_in_territory(rel, territory):
+                            drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": rel, "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_MTIME})
+                else:
+                    # Git could not report working-tree state: mtime fallback for
+                    # uncommitted edits only (committed drift already covered by the ref).
+                    floor = sync_time if sync_time is not None else datetime.fromtimestamp(0, tz=timezone.utc)
+                    for pattern in territory:
+                        for fp in root.glob(pattern):
+                            rel = str(fp.relative_to(root))
+                            if rel in committed_set:
+                                continue
+                            if fp.is_file() and datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
+                                drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": rel, "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_MTIME})
+                continue
+            # Invalid/unresolvable ref: mtime fallback, tagged range-unknown (B4) so the
+            # marker never claims a precise ref range it could not compute.
+            floor = sync_time if sync_time is not None else datetime.fromtimestamp(0, tz=timezone.utc)
+            for pattern in territory:
+                for fp in root.glob(pattern):
+                    if fp.is_file() and datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
+                        drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_RANGE_UNKNOWN})
+            continue
         floor = sync_time if sync_time is not None else datetime.fromtimestamp(0, tz=timezone.utc)
-        for pattern in service.get("territory", []):
+        for pattern in territory:
             for fp in root.glob(pattern):
                 if fp.is_file() and datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
-                    drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": _service_last_sync_ref(service), "never_synced": never_synced})
+                    drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_MTIME})
     if not drifted:
         return []
     # Respect .gitignore: drop candidates that are not git-tracked (build/vendor/cache trees
