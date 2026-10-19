@@ -4,7 +4,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
-import types
 from pathlib import Path
 
 import pytest
@@ -88,7 +87,6 @@ def test_no_registry_silent_no_marker(rewrite_hook, monkeypatch, tmp_path, capsy
 def test_missing_argv_writes_range_unknown(rewrite_hook, monkeypatch, tmp_path) -> None:
     repo = _make_repo(tmp_path)
     monkeypatch.setattr(rewrite_hook, "_project_root", lambda: repo)
-    monkeypatch.setattr(rewrite_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert rewrite_hook.main(["post-rewrite"], stdin_text="") == 0
     content = (repo / rewrite_hook.MARKER_REL).read_text(encoding="utf-8")
     assert "trigger: post-rewrite" in content
@@ -98,7 +96,6 @@ def test_missing_argv_writes_range_unknown(rewrite_hook, monkeypatch, tmp_path) 
 def test_bad_command_writes_range_unknown(rewrite_hook, monkeypatch, tmp_path) -> None:
     repo = _make_repo(tmp_path)
     monkeypatch.setattr(rewrite_hook, "_project_root", lambda: repo)
-    monkeypatch.setattr(rewrite_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert rewrite_hook.main(["post-rewrite", "frobnicate"], stdin_text="aaa bbb\n") == 0
     content = (repo / rewrite_hook.MARKER_REL).read_text(encoding="utf-8")
     assert "reason: range-unknown" in content
@@ -107,7 +104,6 @@ def test_bad_command_writes_range_unknown(rewrite_hook, monkeypatch, tmp_path) -
 def test_empty_stdin_writes_range_unknown(rewrite_hook, monkeypatch, tmp_path) -> None:
     repo = _make_repo(tmp_path)
     monkeypatch.setattr(rewrite_hook, "_project_root", lambda: repo)
-    monkeypatch.setattr(rewrite_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert rewrite_hook.main(_amend_argv(), stdin_text="") == 0
     content = (repo / rewrite_hook.MARKER_REL).read_text(encoding="utf-8")
     assert "reason: range-unknown" in content
@@ -130,7 +126,6 @@ def test_amend_touch_writes_marker_only(rewrite_hook, monkeypatch, tmp_path, cap
     )
     monkeypatch.setattr(rewrite_hook, "_tracked_files", lambda root: {"db/schema.sql"})
     monkeypatch.setattr(rewrite_hook, "_union_diff_files", lambda root, pairs: ["db/schema.sql"])
-    monkeypatch.setattr(rewrite_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert rewrite_hook.main(_amend_argv(), stdin_text="aaa bbb\n") == 0
     marker = repo / rewrite_hook.MARKER_REL
     content = marker.read_text(encoding="utf-8")
@@ -163,7 +158,6 @@ def test_rebase_union_scopes_all_pairs(rewrite_hook, monkeypatch, tmp_path) -> N
         rewrite_hook, "_diff_files",
         lambda root, o, h: ["README.md"] if o.startswith("aaa") else ["db/schema.sql"],
     )
-    monkeypatch.setattr(rewrite_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     stdin_text = f'{"a" * 40} {"b" * 40}\n{"c" * 40} {"d" * 40}\n'
     assert rewrite_hook.main(["post-rewrite", "rebase"], stdin_text=stdin_text) == 0
     assert seen and len(seen[0]) == 2  # union over both rewritten commits
@@ -192,7 +186,6 @@ def test_unresolvable_shas_write_range_unknown(rewrite_hook, monkeypatch, tmp_pa
     )
     monkeypatch.setattr(rewrite_hook, "_tracked_files", lambda root: {"db/schema.sql"})
     monkeypatch.setattr(rewrite_hook, "_union_diff_files", lambda root, pairs: None)
-    monkeypatch.setattr(rewrite_hook, "_auto_reconcile", lambda root: (False, "opt-in disabled"))
     assert rewrite_hook.main(_amend_argv(), stdin_text="x y\n") == 0
     content = (repo / rewrite_hook.MARKER_REL).read_text(encoding="utf-8")
     assert "reason: range-unknown" in content
@@ -223,22 +216,27 @@ def test_exceptions_always_exit_zero(rewrite_hook, monkeypatch, tmp_path) -> Non
     assert rewrite_hook.main(_amend_argv(), stdin_text="a b\n") == 0
 
 
-def test_auto_reconcile_invokes_service_knowledge_specialist(rewrite_hook, monkeypatch, tmp_path):
-    calls: list[list[str]] = []
-    monkeypatch.setenv(rewrite_hook.AUTO_RECONCILE_ENV, "1")
-    monkeypatch.setattr(rewrite_hook.shutil, "which", lambda command: "/usr/bin/sp")
-    monkeypatch.setattr(rewrite_hook, "_resolve_pack", lambda root: "infra")
 
-    def run(cmd, env, timeout_s):
-        calls.append(cmd)
-        return types.SimpleNamespace(
-            returncode=0,
-            stdout='{"success": true, "meta": {"trace_id": "trace-1"}}',
-            stderr="",
-        )
-
-    monkeypatch.setattr(rewrite_hook, "_run_sp_subprocess", run)
-
-    assert rewrite_hook._auto_reconcile(tmp_path) == (True, "sp script success: trace-1")
-    assert calls[0][2] == "service-knowledge-sync"
+def test_no_auto_reconcile_subprocess_path(rewrite_hook) -> None:
+    """B7 cut: no hook subprocess invocation; marker + next-session only."""
+    src = _HOOK_PATH.read_text(encoding="utf-8")
+    for token in (
+        "_auto_reconcile",
+        "_run_sp_subprocess",
+        "_append_runlog",
+        "_resolve_pack",
+        "AUTO_RECONCILE",
+        "RUNLOG_REL",
+        "allow-write-capable",
+        "service-knowledge-auto-reconcile",
+    ):
+        assert token not in src
+    assert "shutil" not in src
+    assert not hasattr(rewrite_hook, "_auto_reconcile")
+    assert not hasattr(rewrite_hook, "_run_sp_subprocess")
+    assert not hasattr(rewrite_hook, "_append_runlog")
+    assert not hasattr(rewrite_hook, "_resolve_pack")
+    assert not hasattr(rewrite_hook, "AUTO_RECONCILE_ENV")
+    assert not hasattr(rewrite_hook, "RUNLOG_REL")
     assert rewrite_hook.TRIGGER == "post-rewrite"
+    assert rewrite_hook.MARKER_REL == Path(".xtrm/.service-knowledge-drift-pending")
