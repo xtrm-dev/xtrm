@@ -2,6 +2,40 @@
 
 All notable changes to the `service-knowledge` package.
 
+## [0.8.0] - 2026-10-19
+
+### Changed — post-merge freshness epic (XTRM-641 decision, B0–B7 board)
+- B0: dead consumer post-merge hook resuscitated (relative runtime
+  resolution, installer self-check, idempotent repair of legacy
+  `service-skills` absolute paths).
+- B1: read-time `source_ref`-vs-`HEAD` freshness gate on all read paths
+  (sidecar lock, 90 s provisional budget, stale-served telemetry). Local
+  freshness is now authoritative at read time; fresh clones self-heal on
+  first query.
+- B2: marker-only touches-gated `post-merge` sweep (tracked-files-only
+  gate, live marker reads, `trigger/range/reason/services/files/timestamp`
+  marker schema). No-touch exits <1 s silent; touch writes marker only.
+- B3: `post-checkout` (`fresh-cache` on clone/worktree) + `post-rewrite`
+  touches-gated hooks; worktree-aware installer (`--all-worktrees`,
+  `core.hooksPath` handling, stale-path rewrite, per-worktree self-check).
+- B4: reconcile stamps regenerate the umbrella (SEMANTIC preserved);
+  `last_sync_ref` takes precedence over wall-clock (skew/cherry-pick).
+- B5: CI required check for committed drift
+  (`.github/workflows/service-knowledge-drift.yml`); Layer-1-vs-CI
+  responsibility split documented in `docs/devops/git-hooks-vs-ci-policy.md`.
+- B6: dead `post_merge_reindex.py` purged; drift-contract wording corrected.
+- B7: hook-invoked auto-reconcile cut (marker + next-session only).
+
+### Fixed
+- Retrieval hyphen/case normalization (XTRM-651): raw `per-page`-style
+  queries hit FTS5 `MATCH` syntax (`no such column`); queries are now
+  sanitized (quoted alnum tokens) across both FTS5 paths, trigger/intent
+  matching, and territory routing.
+- Installer preserves foreign hook tails on rewrite (XTRM-652): a consumer
+  `.githooks/pre-push` trailing `exit "$_gate_rc"` was truncated; the EOF
+  branch now ends at the block `fi` terminator and preserves the tail,
+  fail-safe no-op otherwise. Regression-tested.
+
 ## [0.6.0] - 2026-07-25
 
 ### Added — PR5a: eval corpus + telemetry + alert-to-service routing
