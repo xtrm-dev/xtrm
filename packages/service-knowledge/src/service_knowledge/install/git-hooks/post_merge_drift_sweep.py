@@ -46,9 +46,9 @@ RUNLOG_REL = Path(".xtrm") / ".service-knowledge-auto-reconcile.log"
 
 TRIGGER = "post-merge"
 
-# Marker reason tags (B2 schema). This hook emits ref-range /
+# Marker reason tags (B2/B3 schema). This hook emits ref-range /
 # initial-sync-needed / range-unknown only; mtime-heuristic is reserved for
-# the drift-CLI fallback writer and future post-checkout/post-rewrite hooks.
+# the drift-CLI fallback writer and fresh-cache for the post-checkout hook.
 REASON_REF_RANGE = "ref-range"
 REASON_INITIAL_SYNC = "initial-sync-needed"
 REASON_RANGE_UNKNOWN = "range-unknown"

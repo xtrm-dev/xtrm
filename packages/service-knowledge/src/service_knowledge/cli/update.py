@@ -13,7 +13,9 @@ from service_knowledge.cli import common
 
 def run(args: argparse.Namespace) -> int:
     root = common.resolve_consumer_root(args.path)
-    from_version, touched, duration_ms = common.apply(root, "update")
+    from_version, touched, duration_ms = common.apply(
+        root, "update", all_worktrees=getattr(args, "all_worktrees", False)
+    )
 
     if from_version == __version__ and not touched:
         print(f"{common.GREEN}○{common.NC} {root.name} already at v{__version__} (no changes)")
