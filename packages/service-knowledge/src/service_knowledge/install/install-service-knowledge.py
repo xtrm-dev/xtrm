@@ -22,7 +22,6 @@ The Claude SessionStart/PreToolUse/PostToolUse hooks are wired by the CLI into
 
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -57,14 +56,12 @@ _DRIFT_HOOK_BODIES = {
     "post-rewrite": "post_rewrite_drift_sweep.py",
 }
 
-# All sweep bodies this installer has ever wired, including the dead B0-era
-# post_merge_reindex.py (deleted in B3): stale absolute invocations of any
+# All sweep bodies this installer has ever wired: stale absolute invocations of any
 # of these without our marker are stripped so re-run repairs them.
 _STALE_BODY_NAMES = (
     "post_merge_drift_sweep.py",
     "post_checkout_drift_sweep.py",
     "post_rewrite_drift_sweep.py",
-    "post_merge_reindex.py",
     "doc_reminder.py",
     "skill_staleness.py",
 )
@@ -126,8 +123,7 @@ def _ensure_block(content: str, marker: str, desired: str) -> tuple[str, bool]:
         # Legacy absolute invocation without our marker (pre-rename installer
         # baked ``.../service-skills/.../<body>.py`` guarded by ``[ -f ]``).
         # Strip those stale lines so re-run repairs instead of stacking a
-        # second invocation alongside the dead one. Covers the dead B0-era
-        # post_merge_reindex.py too (deleted in B3).
+        # second invocation alongside the dead one.
         lines = content.splitlines(keepends=True)
         kept = [ln for ln in lines if not any(name in ln for name in _STALE_BODY_NAMES)]
         stripped = "".join(kept)
@@ -350,25 +346,6 @@ def _drift_body_rel(hook_name: str) -> str:
     )
 
 
-_DEAD_GUARDED_BLOCK_RE = re.compile(
-    r"if \[ -f [^\n]*post_merge_reindex\.py[^\n]*\]; then\n(?:[^\n]*\n)?fi\n?"
-)
-
-
-def _strip_dead_body_lines(text: str) -> tuple[str, bool]:
-    """Drop invocations of bodies that no longer exist (dead reindex era).
-
-    The B0-era ``post_merge_reindex.py`` was deleted in B3 and never wired
-    by any shipped installer, but a hand-added absolute invocation would
-    otherwise survive beside the canonical block (which _ensure_block leaves
-    untouched when its marker is already present). Removes the whole ``if``
-    guard as a block so no dangling ``fi`` survives; our own snippets never
-    name that file, so any match is dead by construction.
-    """
-    stripped, n = _DEAD_GUARDED_BLOCK_RE.subn("", text)
-    return stripped, n > 0
-
-
 def _write_githooks_sources(worktree_root: Path) -> None:
     """Ensure the five ``.githooks/*`` sources (idempotent, repair-in-place)."""
     doc_rel = ".xtrm/skills/default/service-knowledge/install/git-hooks/doc_reminder.py"
@@ -410,8 +387,6 @@ def _write_githooks_sources(worktree_root: Path) -> None:
         raw = hook_path.read_text(encoding="utf-8")
         content, legacy_fixed = _normalize_legacy_hook_text(raw)
         new_content, _block_changed = _ensure_block(content, marker, snippet)
-        new_content, dead_stripped = _strip_dead_body_lines(new_content)
-        legacy_fixed = legacy_fixed or dead_stripped
         if new_content != raw:
             hook_path.write_text(new_content, encoding="utf-8")
             hook_path.chmod(0o755)

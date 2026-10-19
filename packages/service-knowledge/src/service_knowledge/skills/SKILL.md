@@ -129,10 +129,13 @@ output. The graph is an enhancement, never a hard dependency.
 
 ## Drift Cadence (update flow)
 
-The automatic sync pipeline runs **post-merge on master only** (not on feature-branch merges) —
-the single point where code is final. Drift is measured **semantically** since each service's
-`last_sync_ref` (committed range `last_sync_ref..HEAD`), not by file mtime alone, and tiered
-`cosmetic | medium | high | unknown` with explicit provenance. See
+The sync pipeline is touches-gated and advisory: `post-merge`/`post-checkout`/`post-rewrite`
+hooks write a pending marker only when the landed range touches registered territory — they
+never rebuild the index and never decide merges. Freshness is Layer 1: every read compares
+the index `source_ref` to HEAD and rebuilds under a budgeted single-flight lock on mismatch
+(fresh clones and rebase landings heal on first query). Drift is measured **semantically**
+since each service's `last_sync_ref` (committed range `last_sync_ref..HEAD`), not by file mtime
+alone, and tiered `cosmetic | medium | high | unknown` with explicit provenance. See
 [references/updating.md](references/updating.md).
 
 ```bash

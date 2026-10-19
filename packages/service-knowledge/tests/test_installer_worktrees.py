@@ -90,21 +90,6 @@ def test_install_repairs_stale_service_skills_paths_in_new_hooks(
         assert "/service-skills/" not in content, name
 
 
-def test_install_strips_dead_reindex_invocation(
-    installer, consumer_repo: Path, isolated_git_config
-) -> None:
-    assert installer.install_git_hooks(consumer_repo) is True
-    hook = consumer_repo / ".githooks" / "post-merge"
-    hook.write_text(
-        hook.read_text() + 'if [ -f /x/service-skills/install/git-hooks/post_merge_reindex.py ]; then\n'
-        '  python3 /x/service-skills/install/git-hooks/post_merge_reindex.py || true\nfi\n',
-        encoding="utf-8",
-    )
-    assert installer.install_git_hooks(consumer_repo) is True
-    content = hook.read_text()
-    assert "post_merge_reindex.py" not in content
-
-
 def test_hooks_path_override_installs_there(
     installer, consumer_repo: Path, isolated_git_config, tmp_path
 ) -> None:
