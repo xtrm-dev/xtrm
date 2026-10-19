@@ -310,20 +310,39 @@ def migrate_umbrellas(root: Path) -> list[str]:
 
 
 # --- git hooks + cache --------------------------------------------------------
-def install_git_hooks(root: Path) -> list[str]:
+def install_git_hooks(root: Path, all_worktrees: bool = False) -> list[str]:
     """Delegate to the vendored install-service-knowledge.py --hooks-only (non-blocking
-    pre-commit/pre-push/post-merge reminders). Reports ``.githooks`` touched only when a
-    hook file actually changed, so idempotent re-runs report zero touches."""
+    pre-commit/pre-push reminders + touches-gated post-merge/post-checkout/
+    post-rewrite drift markers). Reports ``.githooks`` touched only when a
+    hook file actually changed, so idempotent re-runs report zero touches.
+
+    B0: the vendored installer runs a post-install self-check (git-resolved
+    active hooks dir + sweep-body checksum). On failure it exits non-zero and
+    prints no ``activated`` line — surface its output loudly here instead of
+    silently reporting zero touches so a dead hook can never look installed.
+    B3: ``all_worktrees`` forwards ``--all-worktrees`` so linked worktrees
+    are chained + self-checked too.
+    """
     installer = machinery_dir(root) / "install" / "install-service-knowledge.py"
     if not installer.exists():
         return []
-    hook_files = [root / ".githooks" / n for n in ("pre-commit", "pre-push", "post-merge")]
+    hook_files = [root / ".githooks" / n for n in ("pre-commit", "pre-push", "post-merge", "post-checkout", "post-rewrite")]
     before = {h: h.read_bytes() for h in hook_files if h.exists()}
+    cmd = ["python3", str(installer), "--hooks-only"]
+    if all_worktrees:
+        cmd.append("--all-worktrees")
     r = subprocess.run(
-        ["python3", str(installer), "--hooks-only"],
+        cmd,
         cwd=root, capture_output=True, text=True, check=False,
     )
     if r.returncode != 0:
+        # Loud, not silent: installer already explains which check failed.
+        out = (r.stdout or "").strip()
+        err = (r.stderr or "").strip()
+        tail = "\n".join((out + "\n" + err).strip().splitlines()[-15:])
+        print(f"{YELLOW}!! hooks self-check FAILED (no hook claimed):{NC}")
+        if tail:
+            print(tail)
         return []
     after = {h: h.read_bytes() for h in hook_files if h.exists()}
     return [".githooks"] if before != after else []
@@ -379,7 +398,7 @@ def ensure_runtime_gitignored(root: Path) -> list[str]:
 
 
 # --- orchestration ------------------------------------------------------------
-def apply(root: Path, event: str) -> tuple[str | None, list[str], float]:
+def apply(root: Path, event: str, all_worktrees: bool = False) -> tuple[str | None, list[str], float]:
     """Full idempotent apply: vendor machinery, migrate umbrellas, wire hooks, install
     git hooks, ensure cache, emit telemetry. Shared by ``install`` and ``update``."""
     from service_knowledge.cli import telemetry
@@ -390,7 +409,7 @@ def apply(root: Path, event: str) -> tuple[str | None, list[str], float]:
     touched += vendor_machinery(root)
     touched += migrate_umbrellas(root)
     touched += wire_hooks(root)
-    touched += install_git_hooks(root)
+    touched += install_git_hooks(root, all_worktrees=all_worktrees)
     touched += ensure_cache(root)
     touched += ensure_runtime_gitignored(root)
     duration_ms = (time.monotonic() - t0) * 1000.0

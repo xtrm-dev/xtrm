@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from service_knowledge.index import gate as gate_mod
 from service_knowledge.index import ranking, schema
 
 
@@ -80,6 +81,7 @@ def _trim_to_budget(bundle: dict[str, Any]) -> dict[str, Any]:
 def build_bundle(search_result: dict[str, Any], consumer_root: Path) -> dict[str, Any]:
     """Assemble a §3.2 evidence bundle from a ``query.search`` result."""
     consumer_root = Path(consumer_root)
+    gate_outcome = gate_mod.ensure_fresh(consumer_root, reason="build_bundle")
     results = search_result.get("results", [])
     paths = list(search_result.get("paths", []))
     source_ref = str(search_result.get("source_ref", ""))
@@ -127,7 +129,10 @@ def build_bundle(search_result: dict[str, Any], consumer_root: Path) -> dict[str
         "conflicts_and_caveats": [],
         "probes": [],
         "skill_links": skill_links,
+        "stale_served": gate_outcome.stale_served,
     }
+    if gate_outcome.notice:
+        bundle["routing"]["freshness_notice"] = gate_outcome.notice
 
     conn = schema.connect(consumer_root)
     try:

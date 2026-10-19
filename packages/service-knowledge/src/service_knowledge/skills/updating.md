@@ -39,20 +39,22 @@ Use '/updating-service-knowledge' to sync the Database Expert documentation.
 
 ## Manual Sync Process
 
-> **Cadence:** drift is reconciled **post-merge on the default branch only** (not on
-> feature-branch merges) — that is the single canonical point where the code is final.
-> Drift is measured semantically since the service's `last_sync_ref`, not by file mtime alone.
+> **Cadence:** drift markers are touches-gated advisories (`post-merge`/`post-checkout`/`post-rewrite`
+> write `.xtrm/.service-knowledge-drift-pending` only when the landed range touches registered
+> territory) — not a default-branch-only sweep. Freshness is read-time: every index read compares
+> `source_ref` to HEAD and rebuilds under lock on mismatch. Drift is measured semantically
+> since the service's `last_sync_ref`, not by file mtime alone.
 >
-> **Automatic backstop (xtrm-jcmub).** A managed `post-merge` git hook
-> (`post_merge_drift_sweep.py`) is wired into every service-registry repo on the
-> foolproof path (`xt update --apply` / `xt init`, via the service-knowledge installer's
-> `--hooks-only` step). On a default-branch merge it runs the scan below, and on drift
-> it prints a notice and drops a pending marker at `.xtrm/.service-knowledge-drift-pending`.
-> The hook only **surfaces** drift — it never auto-runs a model-backed specialist — so
-> reconcile by running `/updating-service-knowledge` (the `service-knowledge-sync` specialist),
-> which syncs the drifted SKILL.md and advances `last_sync_ref`. The in-session
-> PostToolUse nudge is the proactive signal; this post-merge sweep is the guaranteed
-> backstop so drift can no longer accumulate silently.
+> **Automatic backstop.** Managed `post-merge`/`post-checkout`/`post-rewrite` git hooks
+> (`post_merge_drift_sweep.py` et al.) are wired into every service-registry repo on the
+> foolproof path (`service-knowledge install`, via the installer's `--hooks-only` step). On a
+> landing that touches registered territory they print a notice and drop a pending marker at
+> `.xtrm/.service-knowledge-drift-pending`. The hooks only **surface** drift — they never rebuild
+> the index and never auto-run a model-backed specialist — so reconcile by running
+> `/updating-service-knowledge` (the `service-knowledge-sync` specialist), which syncs the
+> drifted SKILL.md and advances `last_sync_ref`. The in-session PostToolUse nudge is the
+> proactive signal; these touches-gated sweeps are the guaranteed backstop so drift can no
+> longer accumulate silently.
 
 ### Step 1 — Scan for all drift (gitnexus-default)
 

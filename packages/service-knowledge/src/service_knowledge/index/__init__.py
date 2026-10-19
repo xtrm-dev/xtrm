@@ -20,6 +20,7 @@ from service_knowledge.index import (
     schema,
 )
 from service_knowledge.index import bundle as _bundle
+from service_knowledge.index import gate as _gate
 from service_knowledge.index import query as _query
 from service_knowledge.index.builder import BuildStats, build
 from service_knowledge.index.query import QueryContext, RankedItem
@@ -58,7 +59,12 @@ def get_full_skill(consumer_root: Path, skill_rel_path: str) -> dict[str, Any] |
 
 
 def evidence_for_files(consumer_root: Path, paths: list[str], *, limit: int = 7) -> dict[str, Any]:
-    """Build a §3.2 evidence bundle for a list of file paths (routing by territory ownership)."""
+    """Build a §3.2 evidence bundle for a list of file paths (routing by territory ownership).
+
+    Freshness-gated up front; the inner ``search`` + ``build_bundle`` calls re-gate
+    cheaply, and the activator inherits the gate transitively (no hook change).
+    """
+    _gate.ensure_fresh(consumer_root, reason="evidence_for_files")
     ctx = QueryContext(query=" ".join(paths), paths=tuple(paths), limit=limit)
     result = _query.search(consumer_root, ctx)
     return _bundle.build_bundle(result, consumer_root)
