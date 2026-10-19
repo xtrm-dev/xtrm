@@ -37,6 +37,11 @@ MARKER_CHAIN      = "# [jaggers] chain-githooks"
 NEW_UMBRELLA = "service-knowledge"
 LEGACY_UMBRELLA = "service-skills"
 
+# B0 hotfix: canonical hook names owned by this installer. Self-check gates on
+# post-merge (the drift-sweep reconciliation point); pre-commit/pre-push warn
+# but do not fail the install.
+_HOOK_NAMES = ("pre-commit", "pre-push", "post-merge")
+
 
 def get_project_root() -> Path:
     try:
@@ -48,7 +53,202 @@ def get_project_root() -> Path:
         sys.exit(1)
 
 
-def install_git_hooks(project_root: Path) -> None:
+def _resolve_active_hooks_dir(project_root: Path) -> Path:
+    """Resolve the active hooks dir exactly as git would.
+
+    Single source of truth: ``git rev-parse --git-path hooks`` respects
+    ``core.hooksPath`` (including absolute overrides) and linked-worktree
+    ``.git/worktrees/<n>/hooks`` layouts. Never read ``core.hooksPath``
+    directly — that bypasses git's own resolution and drifts from what
+    actually fires.
+    """
+    try:
+        resolved = subprocess.check_output(
+            ["git", "-C", str(project_root), "rev-parse", "--git-path", "hooks"],
+            text=True, timeout=5,
+        ).strip()
+        if resolved:
+            p = Path(resolved)
+            return p if p.is_absolute() else project_root / resolved
+    except Exception:
+        pass
+    return project_root / ".git" / "hooks"
+
+
+def _normalize_legacy_hook_text(content: str) -> tuple[str, bool]:
+    """Rewrite ``service-skills`` path segments to ``service-knowledge``.
+
+    Covers the umbrella rename: consumer ``.githooks/*`` files (and old
+    chain blocks) that bake the absolute legacy body path become valid
+    again. Idempotent — no-op when the legacy name is absent.
+    """
+    if LEGACY_UMBRELLA not in content:
+        return content, False
+    return content.replace(LEGACY_UMBRELLA, NEW_UMBRELLA), True
+
+
+def _ensure_block(content: str, marker: str, desired: str) -> tuple[str, bool]:
+    """Ensure exactly one canonical ``marker`` block equals ``desired``.
+
+    Rewrite (never duplicate): a stale block under the same marker is
+    replaced in place; duplicate markers collapse to one. Returns
+    (new_content, changed).
+    """
+    desired_block = desired.lstrip("\n")
+    if marker not in content:
+        # Legacy absolute invocation without our marker (pre-rename installer
+        # baked ``.../service-skills/.../post_merge_drift_sweep.py`` guarded by
+        # ``[ -f ]``). Strip those stale lines so re-run repairs instead of
+        # stacking a second invocation alongside the dead one.
+        lines = content.splitlines(keepends=True)
+        kept = [ln for ln in lines if "post_merge_drift_sweep.py" not in ln
+                and "doc_reminder.py" not in ln
+                and "skill_staleness.py" not in ln]
+        stripped = "".join(kept)
+        changed = stripped != content
+        base = stripped if stripped.endswith("\n") or stripped == "" else stripped + "\n"
+        return base + desired_block, True
+    if desired in content:
+        # Collapse accidental duplicates (re-run must not append chains).
+        parts = content.split(desired)
+        if len(parts) == 2:
+            return content, False
+        return parts[0] + desired + parts[-1].lstrip("\n"), True
+    start = content.index(marker)
+    # End our block at the next comment line (any `#...`), not just the next
+    # jaggers marker: sibling conventions (`.bd-sync`, beads/dolt custom
+    # blocks) must survive a rewrite. Our blocks never contain a `#`-led
+    # line, so the next `#` line always starts foreign content.
+    end = content.find("\n#", start + len(marker))
+    if end < 0:
+        return content[:start] + desired_block, True
+    tail = content[end:]
+    # desired_block ends with "\n" and tail starts with "\n#": join without
+    # doubling the blank line separator.
+    if desired_block.endswith("\n") and tail.startswith("\n"):
+        tail = tail[1:]
+    return content[:start] + desired_block + tail, True
+
+
+def _desired_chain_snippet(hook_name: str) -> str:
+    """Runtime-relative chain: resolve the toplevel at fire time.
+
+    Never bakes the install-time absolute ``source_hook`` path — absolute
+    chains outlive moves, ephemeral worktrees, and linked-worktree gitdirs.
+    """
+    return (
+        f"\n{MARKER_CHAIN}\n"
+        'root="$(git rev-parse --show-toplevel 2>/dev/null)"\n'
+        f'if [ -n "$root" ] && [ -x "$root/.githooks/{hook_name}" ]; then\n'
+        f'    "$root/.githooks/{hook_name}" "$@"\n'
+        "fi\n"
+    )
+
+
+def _self_check(project_root: Path, active_hooks_dir: Path) -> tuple[bool, list[str]]:
+    """Post-install self-check: resolve as git would, checksum/execute body.
+
+    Fails (ok=False) when no hook can fire: missing source, missing chain
+    in the git-resolved active dir, stale ``service-skills`` survivors, or a
+    missing/uncompilable sweep body. Never claims success on failure — the
+    caller must not print ``activated`` when ok is False.
+    """
+    problems: list[str] = []
+    details: list[str] = []
+    # Active dir, exactly as git resolves it.
+    try:
+        git_resolved = subprocess.check_output(
+            ["git", "-C", str(project_root), "rev-parse", "--git-path", "hooks"],
+            text=True, timeout=5,
+        ).strip()
+        details.append(f"git-path hooks: {git_resolved}")
+    except Exception as exc:
+        problems.append(f"git rev-parse --git-path hooks failed: {exc}")
+        git_resolved = ""
+    post_src = project_root / ".githooks" / "post-merge"
+    if not post_src.is_file():
+        problems.append(f".githooks/post-merge missing: {post_src}")
+    else:
+        try:
+            src_text = post_src.read_text(encoding="utf-8")
+        except OSError as exc:
+            problems.append(f".githooks/post-merge unreadable: {exc}")
+            src_text = ""
+        if src_text:
+            if MARKER_DRIFT_SWEEP not in src_text:
+                problems.append(".githooks/post-merge missing drift-sweep marker")
+            if LEGACY_UMBRELLA in src_text:
+                problems.append(".githooks/post-merge still references service-skills")
+            if "service-knowledge/install/git-hooks/post_merge_drift_sweep.py" not in src_text:
+                problems.append(".githooks/post-merge missing renamed sweep body ref")
+            if "git rev-parse --show-toplevel" not in src_text:
+                problems.append(".githooks/post-merge missing relative runtime resolution")
+            r = subprocess.run(["bash", "-n", str(post_src)],
+                               capture_output=True, text=True, timeout=5)
+            if r.returncode != 0:
+                problems.append(f".githooks/post-merge bash -n failed: {r.stderr.strip()[:200]}")
+    # Chain in the active (git-resolved) dir — unless it IS the source dir
+    # (core.hooksPath=.githooks convention: no chain needed, same file fires).
+    try:
+        same = post_src.resolve() == (active_hooks_dir / "post-merge").resolve()
+    except OSError:
+        same = False
+    active_post = active_hooks_dir / "post-merge"
+    if same:
+        details.append("active hooks dir == .githooks (hooksPath convention): chain n/a")
+    else:
+        if not active_post.is_file():
+            problems.append(f"active post-merge missing: {active_post}")
+        else:
+            try:
+                active_text = active_post.read_text(encoding="utf-8")
+            except OSError as exc:
+                problems.append(f"active post-merge unreadable: {exc}")
+                active_text = ""
+            if active_text:
+                if MARKER_CHAIN not in active_text:
+                    problems.append(f"active post-merge missing chain marker ({active_post})")
+                if LEGACY_UMBRELLA in active_text:
+                    problems.append("active post-merge still references service-skills")
+                # Stale absolute chain bakes the install-time source path.
+                if '.githooks/post-merge"' in active_text and 'if [ -x "/' in active_text:
+                    problems.append("active post-merge chain still bakes an absolute path")
+                if ".githooks/post-merge" not in active_text:
+                    problems.append("active post-merge chain does not resolve .githooks/post-merge")
+                # .bd-sync sibling convention: never clobber the beads chain.
+                bd_sync = active_hooks_dir / "post-merge.bd-sync"
+                if bd_sync.is_file() and "post-merge.bd-sync" not in active_text:
+                    problems.append("active post-merge lost its .bd-sync sibling chaining")
+                r = subprocess.run(["bash", "-n", str(active_post)],
+                                   capture_output=True, text=True, timeout=5)
+                if r.returncode != 0:
+                    problems.append(f"active post-merge bash -n failed: {r.stderr.strip()[:200]}")
+    # Resolved body: checksum + compile (execute-equivalent without side effects).
+    body = (project_root / ".xtrm/skills/default/service-knowledge"
+            / "install/git-hooks/post_merge_drift_sweep.py")
+    if not body.is_file():
+        # Standalone fallback (CLI not vendored yet): package copy must exist.
+        if not (GIT_HOOKS / "post_merge_drift_sweep.py").is_file():
+            problems.append(f"sweep body missing: {body}")
+        else:
+            details.append(f"body not yet vendored; package copy present")
+    else:
+        try:
+            import hashlib
+            digest = hashlib.sha256(body.read_bytes()).hexdigest()[:12]
+            details.append(f"body sha256:{digest} {body.relative_to(project_root)}")
+        except OSError as exc:
+            problems.append(f"sweep body unreadable: {exc}")
+        else:
+            r = subprocess.run(["python3", "-m", "py_compile", str(body)],
+                               capture_output=True, text=True, timeout=30)
+            if r.returncode != 0:
+                problems.append(f"sweep body py_compile failed: {r.stderr.strip()[:200]}")
+    return (len(problems) == 0, problems + details)
+
+
+def install_git_hooks(project_root: Path) -> bool:
+    """Install + self-check git hooks. Returns True only when a hook can fire."""
     print("\n── Git hooks ───────────────────────────")
     doc_script       = GIT_HOOKS / "doc_reminder.py"
     staleness_script = GIT_HOOKS / "skill_staleness.py"
@@ -91,58 +291,47 @@ def install_git_hooks(project_root: Path) -> None:
     ]
 
     for hook_path, marker, snippet in snippets:
-        content = hook_path.read_text(encoding="utf-8")
-        if marker not in content:
-            hook_path.write_text(content + snippet, encoding="utf-8")
-            print(f"{GREEN}  ✓{NC} {hook_path.relative_to(project_root)}")
-        elif snippet not in content:
-            start = content.index(marker)
-            end = content.find("\n# [jaggers]", start + len(marker))
-            hook_path.write_text(content[:start] + snippet.lstrip("\n") + content[end if end >= 0 else len(content):], encoding="utf-8")
-            print(f"{GREEN}  ✓{NC} updated: {hook_path.name}")
+        raw = hook_path.read_text(encoding="utf-8")
+        content, legacy_fixed = _normalize_legacy_hook_text(raw)
+        new_content, _block_changed = _ensure_block(content, marker, snippet)
+        if new_content != raw:
+            hook_path.write_text(new_content, encoding="utf-8")
+            hook_path.chmod(0o755)
+            action = "repaired" if (legacy_fixed or marker in raw) else "installed"
+            print(f"{GREEN}  ✓{NC} {action}: {hook_path.relative_to(project_root)}")
         else:
             print(f"{YELLOW}  ○{NC} already installed: {hook_path.name}")
 
-    hooks_path = ""
-    try:
-        r = subprocess.run(["git", "config", "--get", "core.hooksPath"], cwd=project_root,
-                           capture_output=True, text=True, timeout=5, check=False)
-        if r.returncode == 0:
-            hooks_path = r.stdout.strip()
-    except Exception:
-        hooks_path = ""
-
-    if hooks_path:
-        active_hooks_dir = Path(hooks_path) if Path(hooks_path).is_absolute() else project_root / hooks_path
-    else:
-        # Use git-resolved hooks path — handles linked worktrees where .git is a file not a dir
-        try:
-            resolved = subprocess.check_output(["git", "-C", str(project_root), "rev-parse", "--git-path", "hooks"], text=True).strip()
-            active_hooks_dir = Path(resolved) if Path(resolved).is_absolute() else project_root / resolved
-        except Exception:
-            active_hooks_dir = project_root / ".git" / "hooks"
-    activation_targets = {active_hooks_dir}
-
-    for hooks_dir in activation_targets:
+    active_hooks_dir = _resolve_active_hooks_dir(project_root)
+    for hooks_dir in {active_hooks_dir}:
         hooks_dir.mkdir(parents=True, exist_ok=True)
         for name, source_hook in (("pre-commit", pre_commit), ("pre-push", pre_push), ("post-merge", post_merge)):
             target_hook = hooks_dir / name
             if not target_hook.exists():
                 target_hook.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
             target_hook.chmod(0o755)
-            if target_hook.resolve() == source_hook.resolve():
-                continue
-            chain_snippet = (
-                f"\n{MARKER_CHAIN}\n"
-                f"if [ -x \"{source_hook}\" ]; then\n"
-                f"    \"{source_hook}\" \"$@\"\n"
-                "fi\n"
-            )
-            target_content = target_hook.read_text(encoding="utf-8")
-            if MARKER_CHAIN not in target_content:
-                target_hook.write_text(target_content + chain_snippet, encoding="utf-8")
+            try:
+                if target_hook.resolve() == source_hook.resolve():
+                    continue
+            except OSError:
+                pass
+            desired = _desired_chain_snippet(name)
+            raw_target = target_hook.read_text(encoding="utf-8")
+            norm_target, _ = _normalize_legacy_hook_text(raw_target)
+            new_target, _chain_changed = _ensure_block(norm_target, MARKER_CHAIN, desired)
+            if new_target != raw_target:
+                target_hook.write_text(new_target, encoding="utf-8")
+                target_hook.chmod(0o755)
 
-    print(f"{GREEN}  ✓{NC} activated in .git/hooks/")
+    ok, report = _self_check(project_root, active_hooks_dir)
+    if ok:
+        print(f"{GREEN}  ✓{NC} activated in {active_hooks_dir} (self-check: {'; '.join(report)})")
+        return True
+    print(f"\033[1;31m  xx hooks self-check FAILED:{NC}", file=sys.stderr)
+    for line in report:
+        print(f"     - {line}", file=sys.stderr)
+    print("     No hook can be trusted to fire; not claiming activation.", file=sys.stderr)
+    return False
 
 
 RESERVED_PACK_NAMES = {"default", "optional", "user", "active", "local-legacy"}
@@ -244,13 +433,17 @@ def main() -> None:
     project_root = get_project_root()
 
     if "--hooks-only" in sys.argv[1:]:
-        install_git_hooks(project_root)
+        ok = install_git_hooks(project_root)
+        if not ok:
+            sys.exit(1)
         return
 
     print(f"Installing into: {project_root}")
-    install_git_hooks(project_root)
+    hooks_ok = install_git_hooks(project_root)
     migrate_existing_skills(project_root)
     generate_umbrellas(project_root)
+    if not hooks_ok:
+        sys.exit(1)
     print(f"\n{GREEN}Done.{NC}")
     print("  Migration applied. For the full, foolproof path use the package CLI:")
     print("      service-knowledge install")
