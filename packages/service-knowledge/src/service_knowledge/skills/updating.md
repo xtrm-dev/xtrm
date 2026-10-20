@@ -202,10 +202,10 @@ once and pass the consumer root explicitly (state persists across cells):
 
 ```python
 import sys
-sys.path.insert(0, "/home/dawid/dev/xtrm/packages/service-knowledge/src")
+sys.path.insert(0, "/path/to/xtrm/packages/service-knowledge/src")  # xtrm checkout
 import service_knowledge
 from service_knowledge import index
-stats = index.build("/home/dawid/projects/mercury/infra")   # consumer ROOT, not the worktree cwd
+stats = index.build("/path/to/consumer-repo")   # consumer ROOT, not the worktree cwd
 print(stats)
 ```
 

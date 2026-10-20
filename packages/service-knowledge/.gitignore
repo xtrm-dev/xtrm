@@ -1,0 +1,7 @@
+# Service-knowledge runtime state — never tracked, always derived.
+# The FTS5 cache, telemetry log, and drift markers are rebuilt by
+# install / index / drift commands; committing them leaks per-run
+# telemetry (timestamps, query hashes, durations) into history.
+.xtrm/
+*.sqlite*
+*.egg-info/
