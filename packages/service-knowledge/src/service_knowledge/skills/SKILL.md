@@ -218,8 +218,10 @@ contract, and builds the FTS5 evidence index. Safe to re-run after upgrades (or 
 1. Baseline first: `service-knowledge status` — record package vs installed
    version and the drift-marker state before changing anything.
 2. Pull the package, then in the consumer root run `service-knowledge update`
-   (`--all-worktrees` when the repo uses linked worktrees). Expect
-   `activated in <dir>`; a loud `FAILED` + exit 1 means STOP and report —
+   (`--all-worktrees` when the repo uses linked worktrees). Expect a clean
+   `updated to vX.Y.Z` with no `FAILED` and exit 0 — then confirm the
+   `activated in <dir>` line by re-running the vendored installer
+   `--hooks-only` in step 3. A loud `FAILED` + exit 1 means STOP and report —
    never claim success, never hand-edit hooks to make it pass.
 3. Verify: re-run the vendored installer `--hooks-only` and quote its
    self-check verbatim; `bash -n` all five `.githooks` files; `git status`
