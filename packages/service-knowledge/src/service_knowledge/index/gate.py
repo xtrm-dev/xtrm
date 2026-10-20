@@ -18,6 +18,11 @@ Gated read paths (all four funnel through :func:`ensure_fresh`):
 Semantics:
 
 * Absent cache (no sqlite file, no ``sk_index_state`` row) counts as mismatch.
+* Uncommitted skill edits count as mismatch: the gate also compares a stat-sweep
+  fingerprint of the indexed inputs (registry + SKILL.md files, recorded at
+  build time) against the live tree. ``source_ref`` alone is blind to those;
+  the fingerprint is not. Same-size+same-mtime_ns content swaps are the
+  documented residual (git operations always bump mtime).
 * On mismatch the index rebuilds under a cross-session single-flight lock — a sidecar
   file next to the sqlite cache (see :mod:`service_knowledge.index.paths`) — so
   concurrent sessions do not stampede the rebuild. The lock is re-checked after
@@ -43,6 +48,7 @@ from typing import Any
 
 from service_knowledge.index import _compat  # noqa: F401  (scripts/ on sys.path first)
 from service_knowledge.index import freshness as freshness_mod
+from service_knowledge.index import inputs as inputs_mod
 from service_knowledge.index import paths, telemetry
 
 try:
@@ -109,6 +115,32 @@ def read_index_source_ref(consumer_root: Path) -> str | None:
     finally:
         conn.close()
     if row is None:
+        return None
+    return str(row[0])
+
+
+def read_index_fingerprint(consumer_root: Path) -> str | None:
+    """Cached ``sk_index_state.inputs_fingerprint``; ``None`` when unknown.
+
+    ``None`` covers: absent DB, v1 caches predating the column (migration
+    stamps it on next rebuild), unreadable state. Unknown always counts as
+    mismatch — one bounded rebuild stamps it — never as fresh.
+    """
+    db = paths.db_path(Path(consumer_root))
+    if not db.exists():
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+    except sqlite3.Error:
+        return None
+    try:
+        try:
+            row = conn.execute("SELECT inputs_fingerprint FROM sk_index_state WHERE id=1").fetchone()
+        except sqlite3.Error:
+            return None
+    finally:
+        conn.close()
+    if row is None or not row[0]:
         return None
     return str(row[0])
 
@@ -227,12 +259,20 @@ def ensure_fresh(
     budget = resolve_budget(budget_seconds)
     head = freshness_mod.git_head(str(root))
     current = read_index_source_ref(root)
+    stored_fp = read_index_fingerprint(root)
+    try:
+        live_fp = inputs_mod.fingerprint_inputs(root)
+    except Exception:
+        live_fp = None
+    fp_ok = stored_fp is not None and live_fp is not None and stored_fp == live_fp
 
     def elapsed() -> float:
         return (time.perf_counter() - started) * 1000.0
 
-    # Fast path: cache matches HEAD.
-    if current is not None and head and current == head:
+    # Fast path: cache matches HEAD *and* the indexed inputs are unchanged.
+    # source_ref alone is blind to uncommitted skill edits; the fingerprint
+    # covers registry + skill bodies (stat sweep, no content reads).
+    if current is not None and head and current == head and fp_ok:
         return GateOutcome(
             rebuilt=False, stale_served=False,
             source_ref=current, head=head, duration_ms=elapsed(),
@@ -251,12 +291,18 @@ def ensure_fresh(
             source_ref=current, head=head, duration_ms=elapsed(), notice=notice,
         )
 
-    # Slow path: absent cache or source_ref != HEAD. Single-flight under the sidecar lock.
+    # Slow path: absent cache, source_ref != HEAD, or indexed inputs changed
+    # since the build (e.g. uncommitted SKILL.md edits — HEAD alone cannot see
+    # those). Single-flight under the sidecar lock.
+    if current is not None and head and current == head and not fp_ok:
+        stale_why = "indexed skills changed since the build (source_ref matches HEAD)"
+    else:
+        stale_why = f"{_short(current or '')} != HEAD {_short(head)}"
     deadline = time.monotonic() + budget
     lock = _acquire_lock(paths.lock_path(root), deadline, budget)
     if lock is None:
         notice = (
-            f"service-knowledge index stale ({_short(current or '')} != HEAD {_short(head)}); "
+            f"service-knowledge index stale ({stale_why}); "
             f"rebuild skipped — lock busy past {budget:g}s budget; serving cached results"
         )
         _emit_gate(root, reason=reason, rebuilt=False, stale_served=True,
@@ -268,7 +314,7 @@ def ensure_fresh(
     try:
         if time.monotonic() >= deadline:
             notice = (
-                f"service-knowledge index stale ({_short(current or '')} != HEAD {_short(head)}); "
+                f"service-knowledge index stale ({stale_why}); "
                 f"rebuild skipped — {budget:g}s budget exhausted waiting for lock; "
                 "serving cached results"
             )
@@ -279,8 +325,17 @@ def ensure_fresh(
                 source_ref=current or "", head=head, duration_ms=elapsed(), notice=notice,
             )
         # Double-checked locking: another session may have rebuilt while we waited.
+        # Re-verify BOTH signals — a concurrent rebuild stamps ref *and* fingerprint.
         rechecked = read_index_source_ref(root)
-        if rechecked is not None and head and rechecked == head:
+        rechecked_fp = read_index_fingerprint(root)
+        try:
+            live_fp2 = inputs_mod.fingerprint_inputs(root)
+        except Exception:
+            live_fp2 = None
+        if (
+            rechecked is not None and head and rechecked == head
+            and rechecked_fp is not None and live_fp2 is not None and rechecked_fp == live_fp2
+        ):
             return GateOutcome(
                 rebuilt=False, stale_served=False,
                 source_ref=rechecked, head=head, duration_ms=elapsed(),

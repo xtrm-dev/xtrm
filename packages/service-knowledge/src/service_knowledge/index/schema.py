@@ -23,9 +23,13 @@ from pathlib import Path
 
 from vaultctl.store import db as vaultctl_db
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 # FTS5 tokenizer reused verbatim from vaultctl's sections_fts (constraint: no tokenizer change).
 FTS_TOKENIZE = "unicode61 remove_diacritics 2"
+
+# v2 additive migration (XTRM-667): inputs_fingerprint records the stat sweep over
+# every indexed input (registry + skill files) at build time so the read gate
+# detects uncommitted skill edits, not just HEAD moves.
 
 _DOMAIN_DDL = f"""
 CREATE TABLE IF NOT EXISTS sk_items (
@@ -114,6 +118,7 @@ CREATE TABLE IF NOT EXISTS sk_index_state (
   index_hash        TEXT NOT NULL DEFAULT '',
   item_count        INTEGER NOT NULL DEFAULT 0,
   services_count    INTEGER NOT NULL DEFAULT 0,
+  inputs_fingerprint TEXT NOT NULL DEFAULT '',
   built_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -131,6 +136,26 @@ def connect(consumer_root: Path) -> sqlite3.Connection:
 def ensure_domain_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(_DOMAIN_DDL)
     conn.commit()
+    _ensure_inputs_fingerprint_column(conn)
+
+
+def _ensure_inputs_fingerprint_column(conn: sqlite3.Connection) -> None:
+    """v1 -> v2 additive migration: old caches lack the column entirely.
+
+    SQLite has no ADD COLUMN IF NOT EXISTS; probe the table and alter only
+    when missing. Missing column reads as fingerprint-unknown, which the
+    gate treats as mismatch (one bounded rebuild stamps it)."""
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(sk_index_state)").fetchall()}
+    except sqlite3.Error:
+        return
+    if "inputs_fingerprint" in cols:
+        return
+    try:
+        conn.execute("ALTER TABLE sk_index_state ADD COLUMN inputs_fingerprint TEXT NOT NULL DEFAULT ''")
+        conn.commit()
+    except sqlite3.Error:
+        pass
 
 
 def domain_tables(conn: sqlite3.Connection) -> list[str]:

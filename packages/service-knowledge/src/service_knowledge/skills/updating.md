@@ -108,10 +108,13 @@ reconciled):
    by walking up from the worktree to the main checkout. Deleting the marker in the worktree
    does **not** clear it — the `drift: PENDING` note persists until the PR that deletes it
    **merges**. It is advisory; never block on it.
-3. **`index build` reflects MAIN, not your branch.** The index is built from the consumer
-   root's SKILL.md files — in a worktree, that means the main checkout. After editing SKILLs
-   on a branch, a rebuild will not show your branch's content until the PR merges. That is
-   correct behavior, not a failure; verify branch edits by reading the branch file directly.
+3. **The index follows the checkout you query from — including uncommitted
+   edits.** Reads compare both `source_ref` vs HEAD *and* a fingerprint of
+   the indexed inputs (registry + SKILL.md files, recorded at build time),
+   so a rebuild fires on any skill change, committed or not, in any
+   worktree. An edit in *this* checkout is visible to the next query in
+   *this* checkout — no merge, no manual rebuild needed. (Older behavior
+   keyed freshness to HEAD alone; that gap is closed.)
 
 ### Step 2 — Read the current skill
 

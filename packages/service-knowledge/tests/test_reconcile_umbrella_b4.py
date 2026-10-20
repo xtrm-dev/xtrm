@@ -215,3 +215,26 @@ def test_umbrella_envelope_healing_restores_deleted_release_flow() -> None:
     assert '"id": "service:release-flow"' not in damaged
     healed = ug.generate_umbrella(registry, "infra", damaged, state)
     assert '"id": "service:release-flow"' in healed
+
+
+def test_finish_successful_reconcile_warms_index(tmp_path: Path) -> None:
+    """XTRM-667: the post-stamp finish rebuilds the index so the next reader
+    is fresh even with uncommitted skill edits (gate alone can't see those)."""
+    from service_knowledge.index.builder import build as index_build
+    from service_knowledge.index import query as query_mod
+
+    repo, _registry = _make_repo(tmp_path)
+    index_build(repo)
+    skill = repo / ".xtrm" / "skills" / "acme" / "service-knowledge" / "services" / "db" / "SKILL.md"
+    marker = "quux-reconciled-but-uncommitted"
+    with skill.open("a", encoding="utf-8") as fh:
+        fh.write(f"\n{marker} verified wiring detail.\n")
+
+    result: dict = {"status": "success", "failed": []}
+    reconcile_mod._finish_successful_reconcile(repo, result)
+    assert result.get("index_rebuilt") is True, result
+
+    ctx = query_mod.QueryContext(query="quux-reconciled-but-uncommitted")
+    out = query_mod.search(repo, ctx)
+    assert out["stale_served"] is False
+    assert out["results"], "warmed index must contain the reconciled edit"
