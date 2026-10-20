@@ -209,3 +209,56 @@ def test_rebuild_wall_within_provisional_budget(infra_consumer):
     stats = index.build(infra_consumer)
     assert stats.services == 17
     assert (stats.duration_ms / 1000.0) < gate_mod.GATE_BUDGET_SECONDS
+
+def _first_skill(repo: Path) -> Path:
+    skills = sorted((repo / ".xtrm" / "skills").rglob("services/*/SKILL.md"))
+    assert skills, "fixture must carry at least one per-service SKILL.md"
+    return skills[0]
+
+
+def test_uncommitted_skill_edit_triggers_rebuild(alertmanager_consumer):
+    """HEAD-blind spot (XTRM-667): an uncommitted SKILL.md edit must rebuild on next read."""
+    index.build(alertmanager_consumer)
+    quiet = gate_mod.ensure_fresh(alertmanager_consumer)
+    assert quiet.rebuilt is False and quiet.stale_served is False
+
+    skill = _first_skill(alertmanager_consumer)
+    with skill.open("a", encoding="utf-8") as fh:
+        fh.write("\nquux-uncommitted-freshness-probe reconciled wiring detail.\n")
+
+    out = gate_mod.ensure_fresh(alertmanager_consumer)
+    assert out.rebuilt is True, "uncommitted skill edit must force a rebuild"
+    assert out.stale_served is False
+    result = index.search(alertmanager_consumer, "quux-uncommitted-freshness-probe")
+    assert result["results"], "rebuilt index must contain the uncommitted edit"
+    assert result["stale_served"] is False
+
+
+def test_unchanged_inputs_take_silent_fast_path(alertmanager_consumer):
+    """No input change: single stat sweep, no rebuild, no telemetry noise."""
+    from service_knowledge.index import inputs as inputs_mod
+
+    index.build(alertmanager_consumer)
+    stored = gate_mod.read_index_fingerprint(alertmanager_consumer)
+    assert stored, "build must stamp an inputs fingerprint"
+    assert stored == inputs_mod.fingerprint_inputs(alertmanager_consumer)
+    before = _gate_events(alertmanager_consumer)
+    out = gate_mod.ensure_fresh(alertmanager_consumer)
+    assert out.rebuilt is False and out.stale_served is False
+    assert _gate_events(alertmanager_consumer) == before
+
+
+def test_territory_source_touch_does_not_rebuild(alertmanager_consumer):
+    """Precision: indexed inputs are registry + SKILL.md only — touching a
+    territory source file must NOT invalidate the index."""
+    index.build(alertmanager_consumer)
+    gate_mod.ensure_fresh(alertmanager_consumer)
+    touched = False
+    for cand in alertmanager_consumer.rglob("*.yml"):
+        if ".xtrm" not in cand.parts:
+            cand.write_text(cand.read_text(encoding="utf-8") + "# touch\n", encoding="utf-8")
+            touched = True
+            break
+    assert touched, "fixture must contain a territory source file"
+    out = gate_mod.ensure_fresh(alertmanager_consumer)
+    assert out.rebuilt is False and out.stale_served is False

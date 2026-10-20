@@ -518,25 +518,53 @@ def reconcile(options: ReconcileOptions) -> dict[str, Any]:
             result["failed"].append({"file_path": drift.get("file_path"), "error": redact_exception(exc, options.api_key)})
     if result["reconciled_count"] and not (options.dry_run or result["status"] == "partial"):
         result["last_sync_ref_old"] = bump_last_sync_ref(project_root, result["last_sync_ref_new"], options.dry_run)
-        # B4: a stamp without umbrella regen is a split-brain freshness display (registry
-        # current while the umbrella table still shows the old sync). The umbrella is a
-        # pure function of the registry + the preserved SEMANTIC block, so regen right
-        # after the stamp keeps both convergent. Skipped only when nothing was stamped.
-        regen = regenerate_umbrella_for_project(project_root)
-        result["umbrella_regenerated"] = bool(regen.get("regenerated"))
-        result["umbrella_path"] = regen.get("path")
-        result["umbrella_reason"] = regen.get("reason")
-        if regen.get("reason", "").startswith(("regen_failed", "import_failed", "no-umbrella")):
-            result["status"] = "partial"
-            result["failed"].append({
-                "file_path": None,
-                "error": f"umbrella_regen: {regen.get('reason')}",
-            })
+        _finish_successful_reconcile(project_root, result)
     else:
         result["umbrella_regenerated"] = False
         result["umbrella_path"] = None
         result["umbrella_reason"] = "dry-run" if options.dry_run else ("partial-no-stamp" if result["status"] == "partial" else "nothing-reconciled")
+        result["index_rebuilt"] = False
+        result["index_reason"] = result["umbrella_reason"]
     return result
+
+
+def _finish_successful_reconcile(project_root: Path, result: dict) -> None:
+    """Stamp-path finish: umbrella regen + index rebuild (XTRM-667). Mutates ``result`` in place."""
+    # B4: a stamp without umbrella regen is a split-brain freshness display (registry
+    # current while the umbrella table still shows the old sync). The umbrella is a
+    # pure function of the registry + the preserved SEMANTIC block, so regen right
+    # after the stamp keeps both convergent. Skipped only when nothing was stamped.
+    regen = regenerate_umbrella_for_project(project_root)
+    result["umbrella_regenerated"] = bool(regen.get("regenerated"))
+    result["umbrella_path"] = regen.get("path")
+    result["umbrella_reason"] = regen.get("reason")
+    if regen.get("reason", "").startswith(("regen_failed", "import_failed", "no-umbrella")):
+        result["status"] = "partial"
+        result["failed"].append({
+            "file_path": None,
+            "error": f"umbrella_regen: {regen.get('reason')}",
+        })
+    # XTRM-667: a reconcile that stamps + regenerates but leaves the old
+    # index in place hands the next reader stale content when nothing
+    # else triggers a rebuild. Rebuild now, while the fresh SKILL.md
+    # files are on disk. Best-effort: any failure only records
+    # index_rebuilt=False (the read-time gate self-heals on next query)
+    # — it never degrades a good reconcile to partial.
+    try:
+        from service_knowledge.index.builder import build as index_build  # type: ignore[import-not-found]
+    except (ImportError, OSError):
+        index_build = None
+    if index_build is None:
+        result["index_rebuilt"] = False
+        result["index_reason"] = "builder-unavailable"
+    else:
+        try:
+            index_stats = index_build(project_root)
+            result["index_rebuilt"] = True
+            result["index_items"] = index_stats.items
+        except Exception as exc:
+            result["index_rebuilt"] = False
+            result["index_reason"] = type(exc).__name__
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -37,6 +37,7 @@ from service_knowledge import __version__
 from service_knowledge.index import citations as citations_mod
 from service_knowledge.index import claims as claims_mod
 from service_knowledge.index import freshness as freshness_mod
+from service_knowledge.index import inputs as inputs_mod
 from service_knowledge.index import probes as probes_mod
 from service_knowledge.index import ranking, schema, secrets, telemetry
 from service_knowledge.index.markdown_sections import parse_skill
@@ -91,6 +92,7 @@ class BuildStats:
     duration_ms: float
     source_ref: str
     index_hash: str
+    inputs_fingerprint: str
 
 
 class _ItemWriter:
@@ -351,7 +353,8 @@ def build(consumer_root: Path, *, repo_name: str | None = None) -> BuildStats:
 
         superseded = _supersede_stale_claims(conn, writer.ids)
         index_hash = _compute_index_hash(conn)
-        _write_index_state(conn, source_ref, index_hash, writer, len(services))
+        inputs_fingerprint = inputs_mod.fingerprint_inputs(consumer_root) or ""
+        _write_index_state(conn, source_ref, index_hash, writer, len(services), inputs_fingerprint)
         conn.commit()
 
         duration_ms = (time.perf_counter() - started) * 1000.0
@@ -366,6 +369,7 @@ def build(consumer_root: Path, *, repo_name: str | None = None) -> BuildStats:
             duration_ms=duration_ms,
             source_ref=source_ref,
             index_hash=index_hash,
+            inputs_fingerprint=inputs_fingerprint,
         )
         telemetry.emit(
             consumer_root,
@@ -418,19 +422,21 @@ def _compute_index_hash(conn: sqlite3.Connection) -> str:
 
 
 def _write_index_state(
-    conn: sqlite3.Connection, source_ref: str, index_hash: str, writer: _ItemWriter, services: int
+    conn: sqlite3.Connection, source_ref: str, index_hash: str, writer: _ItemWriter, services: int,
+    inputs_fingerprint: str = "",
 ) -> None:
     conn.execute(
         """
         INSERT INTO sk_index_state(id, source_ref, schema_version, generator_version,
-                                    index_hash, item_count, services_count, built_at)
-        VALUES (1,?,?,?,?,?,?,?)
+                                    index_hash, item_count, services_count,
+                                    inputs_fingerprint, built_at)
+        VALUES (1,?,?,?,?,?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET
           source_ref=excluded.source_ref, schema_version=excluded.schema_version,
           generator_version=excluded.generator_version, index_hash=excluded.index_hash,
           item_count=excluded.item_count, services_count=excluded.services_count,
-          built_at=excluded.built_at
+          inputs_fingerprint=excluded.inputs_fingerprint, built_at=excluded.built_at
         """,
         (source_ref, schema.SCHEMA_VERSION, __version__, index_hash,
-         sum(writer.counts.values()), services, _utc_now()),
+         sum(writer.counts.values()), services, inputs_fingerprint, _utc_now()),
     )
