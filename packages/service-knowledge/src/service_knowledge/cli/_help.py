@@ -291,7 +291,7 @@ Typical workflow, end to end
      service-knowledge canary status
      python3 -m service_knowledge.eval.harness run \\
          --corpus src/service_knowledge/eval/corpus/ \\
-         --output-dir .beads/eval-reports/
+         --output-dir .xtrm/eval-reports/
 """,
     "verifier": """\
 Deterministic claim verifier
@@ -373,12 +373,12 @@ Eval harness
 ------------
 Ships a labeled corpus (85+ cases) exercising routing, retrieval, verifier
 accuracy, and diagnostic latency. Weekly report writes to
-.beads/eval-reports/YYYY-WW.md.
+.xtrm/eval-reports/YYYY-WW.md.
 
 Run:
   python3 -m service_knowledge.eval.harness run \\
       --corpus src/service_knowledge/eval/corpus/ \\
-      --output-dir .beads/eval-reports/
+      --output-dir .xtrm/eval-reports/
 
 Gated metrics:
   routing_precision           >= 0.80

@@ -1,0 +1,23 @@
+{
+  "case_id": "sb-core-xtrm-9vt7",
+  "query_or_task": "docs(changelog): backfill [Unreleased] entries for recent commits (skill align, dashscope migration, gitnexus scrub, layout guards, partial-install surfacing)",
+  "touched_paths": [
+    "packages/changelog-keeper/src/changelog-keeper.py"
+  ],
+  "expected_services": [
+    "changelog-keeper",
+    "sync-docs",
+    "gitnexus"
+  ],
+  "required_evidence": [
+    "packages/changelog-keeper/src/changelog-keeper.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": true,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "sb:xtrm-9vt7@core"
+  ]
+}

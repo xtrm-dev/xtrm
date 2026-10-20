@@ -28,7 +28,7 @@ classifiers = [
 # Consumers get it via `install.sh` (pipx inject --editable), which is the
 # supported installer path. Manual pipx users: `pipx inject --editable
 # service-knowledge /path/to/vaultctl` after `pipx install --editable .`.
-# The CLI itself is stdlib-only and must NOT depend on xtrm/bd/sp/xt/xtmux.
+# The CLI itself is stdlib-only and must NOT depend on xtrm/sp/xt/xtmux.
 dependencies = [
   "jsonschema>=4.0",
   "markdown-it-py>=4.0",

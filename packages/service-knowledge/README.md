@@ -177,10 +177,11 @@ is:
    is absent or stale, fall back to `git log -p --follow -- <file>` for
    per-file history, `git log --grep`/`--oneline` for corpus, and diffs vs
    `last_sync_ref` when a registry states one. Commits do not go stale.
-3. **bd memories** — before workflow-sensitive questions, run
-   `bd memories <topic>` / `bd recall <key>`; write durable findings back with
-   `bd remember`. Underuse is the default failure mode — check before
-   re-deriving.
+3. **Substrate work tracking** — before workflow-sensitive questions, search
+   `sb issue query --search <topic>` / `sb issue list --search <q>` for prior
+   issues, resume continuity with `sb issue resume <ref>` / `sb journal since
+   <ref>`, and record durable findings with `sb issue note <ref>`. Underuse
+   is the default failure mode — check before re-deriving.
 
 **Drift doctrine**: if a drift marker (`.service-skills-drift-pending` or
 `service-knowledge status`) reports drift, treat it as **advisory**. Suggest
@@ -252,12 +253,12 @@ Wired automatically by `service-knowledge install` (writes `.claude/settings.jso
 ## Eval harness
 
 Ships a labeled corpus (85 cases on 2026-07-25) exercising routing, retrieval, verifier
-accuracy, and diagnostic latency. Weekly report writes to `.beads/eval-reports/YYYY-WW.md`:
+accuracy, and diagnostic latency. Weekly report writes to `.xtrm/eval-reports/YYYY-WW.md`:
 
 ```bash
 python3 -m service_knowledge.eval.harness run \
     --corpus src/service_knowledge/eval/corpus/ \
-    --output-dir .beads/eval-reports/
+    --output-dir .xtrm/eval-reports/
 ```
 
 Gated metrics:
@@ -306,7 +307,7 @@ src/service_knowledge/
 ## Dependencies
 
 Stdlib-only CLI. The single cross-package dep is **vaultctl** (SQLite/FTS5/BM25 substrate).
-The CLI does **not** depend on xtrm/bd/sp/xt/xtmux.
+The CLI does **not** depend on xtrm/sp/xt/xtmux.
 
 ---
 

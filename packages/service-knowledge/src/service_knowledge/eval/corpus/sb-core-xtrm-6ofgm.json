@@ -1,0 +1,22 @@
+{
+  "case_id": "sb-core-xtrm-6ofgm",
+  "query_or_task": "xt update --apply bakes worktree cwd into .claude/settings.json hook paths",
+  "touched_paths": [
+    ".xtrm/skills/default/xtrm/"
+  ],
+  "expected_services": [
+    "xtrm",
+    "worktree"
+  ],
+  "required_evidence": [
+    ".xtrm/skills/default/xtrm/SKILL.md"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": true,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "sb:xtrm-6ofgm@core"
+  ]
+}

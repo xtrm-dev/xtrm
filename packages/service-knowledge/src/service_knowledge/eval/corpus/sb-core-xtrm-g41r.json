@@ -1,0 +1,21 @@
+{
+  "case_id": "sb-core-xtrm-g41r",
+  "query_or_task": "scaffolder: ensure_legacy_symlink rejects all real callers",
+  "touched_paths": [
+    ".xtrm/skills/default/xtrm/"
+  ],
+  "expected_services": [
+    "xtrm"
+  ],
+  "required_evidence": [
+    ".xtrm/skills/default/xtrm/SKILL.md"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "sb:xtrm-g41r@core"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "case_id": "sb-core-xtrm-h42ka-2",
+  "query_or_task": "security: final audit Core PR #425",
+  "touched_paths": [
+    ".xtrm/skills/default/xtrm/"
+  ],
+  "expected_services": [
+    "xtrm"
+  ],
+  "required_evidence": [
+    ".xtrm/skills/default/xtrm/SKILL.md"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "sb:xtrm-h42ka.2@core"
+  ]
+}

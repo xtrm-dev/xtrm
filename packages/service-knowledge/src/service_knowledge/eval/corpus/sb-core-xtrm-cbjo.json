@@ -1,0 +1,22 @@
+{
+  "case_id": "sb-core-xtrm-cbjo",
+  "query_or_task": "fix(worktree): drop .beads symlink; rely on absolute hooksPath + skip-worktree (eliminates merge hazard)",
+  "touched_paths": [
+    ".xtrm/skills/default/bd/"
+  ],
+  "expected_services": [
+    "bd",
+    "worktree"
+  ],
+  "required_evidence": [
+    ".xtrm/skills/default/bd/SKILL.md"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": true,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "sb:xtrm-cbjo@core"
+  ]
+}

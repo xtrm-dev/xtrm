@@ -1,7 +1,7 @@
 """service-knowledge CLI — standalone lifecycle for the service-knowledge package.
 
 Entry point ``service-knowledge = service_knowledge.cli:main`` (pyproject.toml).
-Stdlib-only; does NOT depend on xtrm/bd/sp/xt/xtmux. Subcommands: install · update ·
+Stdlib-only; does NOT depend on xtrm/sp/xt/xtmux. Subcommands: install · update ·
 status · migrate · remove · index · canary · help.
 """
 from __future__ import annotations
