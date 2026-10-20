@@ -93,6 +93,13 @@ Ranking:  `0.40·T + 0.30·L + 0.15·I + 0.10·A + 0.05·F` (territory, BM25 lex
 authority, freshness). Read-only queries add zero latency to the hot path — retrieval is
 sub-10ms on the reference corpus (17 services, ~230 items).
 
+Reads are freshness-gated (Layer 1): every query compares `sk_index_state.source_ref`
+against `HEAD` and rebuilds under a cross-session lock within a 90 s budget on
+mismatch (absent cache counts as mismatch), serving stale plus a `stale_served`
+notice on budget exhaustion — never blocking, never raising. Fresh clones and
+post-landing checkouts self-heal on first query; explicit `index build` stays
+for forcing a rebuild.
+
 ### `canary`
 
 Manages the per-repo auto-merge canary. Disabled by default; enabling is an explicit
@@ -125,13 +132,35 @@ service-knowledge drift clear          # remove marker(s) + rebuild evidence ind
 ```
 
 `drift` scans each service's territory for files changed since its last sync
-(`last_sync_ref` -> HEAD semantics) and, on drift, writes a pending marker at
-`.xtrm/.service-knowledge-drift-pending` with a per-service inventory. The
-legacy `.xtrm/.service-skills-drift-pending` name is recognized too — the
-canonical name wins when both exist, matching the pi extension's semantics.
-Reconcile stays skill-driven (`/updating-service-knowledge`); `drift clear`
-removes the marker and rebuilds the FTS5 evidence index AFTER a successful
-reconcile.
+(`last_sync_ref` -> HEAD ref-range semantics with a tracked-files filter; mtime
+is fallback only) and, on drift, writes a pending marker at
+`.xtrm/.service-knowledge-drift-pending` carrying `trigger, range, reason,
+services, files, timestamp` plus a per-service inventory. Reason tags:
+`ref-range`, `mtime-heuristic`, `initial-sync-needed` (never-synced service),
+`range-unknown`. The legacy `.xtrm/.service-skills-drift-pending` name is
+recognized too — the canonical name wins when both exist, matching the pi
+extension's semantics. Reconcile stays skill-driven
+(`/updating-service-knowledge`): it syncs the drifted SKILL.md, stamps
+`last_sync_ref`, regenerates the umbrella table (SEMANTIC block preserved),
+and only then is the marker removed and the FTS5 evidence index rebuilt
+(`drift clear` does the marker removal + rebuild AFTER a successful
+reconcile). Marker reads are live — re-read the file at use time; never rely
+on session-start snapshots.
+
+### Git hooks
+
+Three touches-gated, marker-only git hooks keep the marker fresh across every
+landing path — merge, rebase/amend, checkout/switch, worktree creation:
+`post-merge` (`ORIG_HEAD..HEAD`), `post-checkout` (argv range,
+`reason: fresh-cache` on clone/worktree), `post-rewrite` (amend/rebase SHAs).
+A landing *touches* service-knowledge when a git-tracked file in range is the
+registry, a skill body, the umbrella, or matches a registered territory glob
+(untracked scratch dirs never count). No-touch exits silent in <1 s; touch
+writes/refreshes the marker only — hooks never build the index and always
+exit 0. Installed by `service-knowledge install` / `update` (idempotent,
+`--all-worktrees` covers every linked worktree), with a post-install
+self-check that fails loudly when no hook can fire (wrong active dir, stale
+paths, syntax errors).
 
 ---
 
