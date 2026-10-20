@@ -245,3 +245,104 @@ def test_ensure_block_no_terminator_leaves_file_untouched(installer) -> None:
     new_content, changed = installer._ensure_block(content, marker, "SOME DESIRED")
     assert changed is False
     assert new_content == content
+
+
+def _sweep_snippet(installer, hook_name="post-merge"):
+    body = installer._DRIFT_HOOK_BODIES[hook_name]
+    return (
+        "\n" + installer.MARKER_DRIFT_SWEEP + "\n"
+        "if command -v python3 &>/dev/null; then\n"
+        '    root="$(git rev-parse --show-toplevel 2>/dev/null)"\n'
+        '    if [ -n "$root" ] && [ -f "$root/.xtrm/skills/default/service-knowledge/install/git-hooks/' + body + '" ]; then\n'
+        '        python3 "$root/.xtrm/skills/default/service-knowledge/install/git-hooks/' + body + '" "$@" || true\n'
+        "    fi\n"
+        "fi\n"
+    )
+
+
+def _bash_n_ok(path):
+    import subprocess
+    r = subprocess.run(["bash", "-n", str(path)], capture_output=True, text=True, timeout=5)
+    return r.returncode == 0
+
+
+def test_markerless_skroot_two_line_repairs_cleanly(installer, tmp_path):
+    """XTRM-654 variant B: markerless SK_ROOT + two-line if must be replaced
+    as a span - never line-stripped into orphan SK_ROOT/fi."""
+    hook = tmp_path / "post-merge"
+    hook.write_text(
+        "#!/usr/bin/env sh\n"
+        'SK_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)/.xtrm/skills/default/service-knowledge"\n'
+        'if [ -f "$SK_ROOT/install/git-hooks/post_merge_drift_sweep.py" ]; then\n'
+        '    python3 "$SK_ROOT/install/git-hooks/post_merge_drift_sweep.py" "$@" || true\n'
+        "fi\n",
+        encoding="utf-8",
+    )
+    content = hook.read_text(encoding="utf-8")
+    desired = _sweep_snippet(installer)
+    new_content, changed = installer._ensure_block(content, installer.MARKER_DRIFT_SWEEP, desired)
+    assert changed is True
+    hook.write_text(new_content, encoding="utf-8")
+    assert _bash_n_ok(hook)
+    assert "SK_ROOT" not in new_content
+    assert "service-knowledge/install/git-hooks/post_merge_drift_sweep.py" in new_content
+    again, changed_again = installer._ensure_block(new_content, installer.MARKER_DRIFT_SWEEP, desired)
+    assert changed_again is False
+    assert again == new_content
+
+
+def test_one_line_legacy_if_span_repairs(installer, tmp_path):
+    """Single-line if-then-fi legacy form: the opener line is the span."""
+    hook = tmp_path / "post-merge"
+    hook.write_text(
+        "#!/usr/bin/env sh\n"
+        'if [ -f "/old/abs/service-skills/install/git-hooks/post_merge_drift_sweep.py" ]; then python3 "/old/abs/service-skills/install/git-hooks/post_merge_drift_sweep.py" || true; fi\n',
+        encoding="utf-8",
+    )
+    content = hook.read_text(encoding="utf-8")
+    desired = _sweep_snippet(installer)
+    content, _ = installer._normalize_legacy_hook_text(content)
+    new_content, changed = installer._ensure_block(content, installer.MARKER_DRIFT_SWEEP, desired)
+    assert changed is True
+    hook.write_text(new_content, encoding="utf-8")
+    assert _bash_n_ok(hook)
+    assert "service-skills" not in new_content
+
+
+def test_foreign_active_dir_gets_bodies_not_bare_chain(
+    installer, consumer_repo, isolated_git_config, tmp_path
+):
+    """XTRM-654: hooksPath at another checkout's .githooks must get sweep
+    bodies there - never a bare chain (runtime self-recursion)."""
+    linked = tmp_path / "linked"
+    _git(["worktree", "add", str(linked)], consumer_repo)
+    try:
+        main_hooks = consumer_repo / ".githooks"
+        _git(["config", "core.hooksPath", str(main_hooks)], linked)
+        assert installer.install_git_hooks(linked) is True
+        for name in DRIFT_HOOKS:
+            src = main_hooks / name
+            assert src.is_file(), name
+            text = src.read_text(encoding="utf-8")
+            assert installer.MARKER_DRIFT_SWEEP in text, name
+            assert _bash_n_ok(src), name
+        post = (main_hooks / "post-checkout").read_text(encoding="utf-8")
+        assert "post_checkout_drift_sweep.py" in post
+    finally:
+        _git(["worktree", "remove", "--force", str(linked)], consumer_repo)
+
+
+def test_self_check_fails_self_recursive_chain(
+    installer, consumer_repo, isolated_git_config
+):
+    """A bare chain in a checkout's own .githooks (no body) must fail."""
+    src = consumer_repo / ".githooks" / "post-merge"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_text(
+        "#!/usr/bin/env sh\n" + installer._desired_chain_snippet("post-merge"),
+        encoding="utf-8",
+    )
+    active = consumer_repo / ".githooks"
+    ok, report = installer._self_check_worktree(consumer_repo, active)
+    assert ok is False
+    assert any("self-recursive" in line for line in report)
