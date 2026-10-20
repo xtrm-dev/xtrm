@@ -22,6 +22,7 @@ The Claude SessionStart/PreToolUse/PostToolUse hooks are wired by the CLI into
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -56,8 +57,14 @@ _DRIFT_HOOK_BODIES = {
     "post-rewrite": "post_rewrite_drift_sweep.py",
 }
 
-# All sweep bodies this installer has ever wired: stale absolute invocations of any
-# of these without our marker are stripped so re-run repairs them.
+# Pure `VAR=value` assignment line (legacy-block span absorption target).
+_ASSIGN_LINE_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)=\S.*$")
+
+# All sweep bodies this installer has ever wired: stale invocations of any of
+# these are replaced span-aware (enclosing ``if...fi``) so re-run repairs
+# them. NEVER delete by bare line-substring: variant-B markerless two-line
+# ``SK_ROOT`` + ``if`` forms orphaned ``SK_ROOT``/``fi`` lines that way
+# (XTRM-654: syntax-invalid hooks, pre-push guard down repo-wide).
 _STALE_BODY_NAMES = (
     "post_merge_drift_sweep.py",
     "post_checkout_drift_sweep.py",
@@ -65,6 +72,69 @@ _STALE_BODY_NAMES = (
     "doc_reminder.py",
     "skill_staleness.py",
 )
+
+
+def _replace_legacy_body_span(content: str, desired_block: str) -> tuple[str, bool]:
+    """Replace one stale body invocation span with ``desired_block``.
+
+    Finds lines referencing a stale body name, expands to the enclosing
+    shell ``if...fi`` span (backward to the nearest preceding line starting
+    with ``if ``, forward to the next line that is exactly ``fi``; a
+    single-line ``if ...; fi`` opener counts as its own span), and swaps
+    the whole span. Returns ``(content, False)`` when no stale reference
+    exists OR no well-formed span is found — the caller must leave the
+    file untouched so the self-check fails loudly instead of mangling it.
+    """
+    stale = [i for i, ln in enumerate(content.splitlines())
+             if any(name in ln for name in _STALE_BODY_NAMES)]
+    if not stale:
+        return content, False
+    lines = content.splitlines(keepends=True)
+    first, last = stale[0], stale[-1]
+    # Backward: nearest preceding `if ` opener within 3 lines (legacy
+    # invocations keep opener adjacent to the body ref; the bound stops
+    # the span from swallowing an enclosing FOREIGN block — failure
+    # degrades to loud self-check instead of silent mangling).
+    opener = None
+    for i in range(first, max(first - 3, -1), -1):
+        if lines[i].lstrip().startswith("if "):
+            opener = i
+            break
+    if opener is None:
+        return content, False
+    # Absorb immediately-preceding env assignments feeding the block
+    # (legacy ``SK_ROOT="..."`` two-line form): contiguous `VAR=value`
+    # lines, at most 3 up, whose variable is referenced in the following
+    # ~10 lines. Without this the assignment survives as an orphan.
+    for _ in range(3):
+        if opener == 0:
+            break
+        prev = lines[opener - 1]
+        assign = _ASSIGN_LINE_RE.match(prev)
+        if assign is None:
+            break
+        var = assign.group(1)
+        window = "".join(lines[opener:opener + 10])
+        if ("$" + var) not in window and ("${" + var) not in window:
+            break
+        opener -= 1
+    # Single-line `if ...; fi` form: the opener line is the whole span.
+    if lines[opener].strip().endswith("fi"):
+        span_end = opener + 1
+    else:
+        # Forward: nearest bare `fi` within 6 lines (legacy bodies are
+        # ~4 lines; same anti-swallow bound as above).
+        closer = None
+        for i in range(last, min(last + 6, len(lines))):
+            if lines[i].strip() == "fi":
+                closer = i
+                break
+        if closer is None:
+            return content, False
+        span_end = closer + 1
+    if span_end <= opener:
+        return content, False
+    return "".join(lines[:opener]) + desired_block + "".join(lines[span_end:]), True
 
 
 def get_project_root() -> Path:
@@ -120,15 +190,18 @@ def _ensure_block(content: str, marker: str, desired: str) -> tuple[str, bool]:
     """
     desired_block = desired.lstrip("\n")
     if marker not in content:
-        # Legacy absolute invocation without our marker (pre-rename installer
-        # baked ``.../service-skills/.../<body>.py`` guarded by ``[ -f ]``).
-        # Strip those stale lines so re-run repairs instead of stacking a
-        # second invocation alongside the dead one.
-        lines = content.splitlines(keepends=True)
-        kept = [ln for ln in lines if not any(name in ln for name in _STALE_BODY_NAMES)]
-        stripped = "".join(kept)
-        changed = stripped != content
-        base = stripped if stripped.endswith("\n") or stripped == "" else stripped + "\n"
+        # Legacy invocation without our marker (pre-rename absolute bake,
+        # markerless SK_ROOT two-line form). Replace the enclosing span so
+        # re-run repairs instead of stacking a second invocation — and NEVER
+        # blind-delete lines: partial deletion orphans multi-line
+        # constructs (XTRM-654). Unparseable: leave untouched; the
+        # self-check flags the missing body ref loudly.
+        new_content, replaced = _replace_legacy_body_span(content, desired_block)
+        if replaced:
+            return new_content, True
+        if any(name in content for name in _STALE_BODY_NAMES):
+            return content, False
+        base = content if content.endswith("\n") or content == "" else content + "\n"
         return base + desired_block, True
     if desired in content:
         # Collapse accidental duplicates (re-run must not append chains).
@@ -255,13 +328,6 @@ def _check_drift_chain(
 ) -> None:
     """Self-check one active-dir chain (gating) — unless it IS the source dir
     (core.hooksPath=.githooks convention: no chain needed, same file fires)."""
-    try:
-        same = source_hook.resolve() == (active_hooks_dir / hook_name).resolve()
-    except OSError:
-        same = False
-    if same:
-        details.append(f"{hook_name}: active hooks dir == .githooks (hooksPath convention): chain n/a")
-        return
     target = active_hooks_dir / hook_name
     if not target.is_file():
         problems.append(f"active {hook_name} missing: {target}")
@@ -271,6 +337,21 @@ def _check_drift_chain(
     except OSError as exc:
         problems.append(f"active {hook_name} unreadable: {exc}")
         return
+    try:
+        same = source_hook.resolve() == target.resolve()
+    except OSError:
+        same = False
+    if same:
+        # Same file fires (core.hooksPath=.githooks): it must carry the
+        # sweep body — a bare chain here dispatches to itself (XTRM-654).
+        if MARKER_CHAIN in text and MARKER_DRIFT_SWEEP not in text:
+            problems.append(
+                f"active {hook_name} is self-recursive: chain dispatches to "
+                f"itself with no sweep body in {target}"
+            )
+        else:
+            details.append(f"{hook_name}: active hooks dir == .githooks (hooksPath convention): chain n/a")
+            return
     if MARKER_CHAIN not in text:
         problems.append(f"active {hook_name} missing chain marker ({target})")
     if LEGACY_UMBRELLA in text:
@@ -284,6 +365,17 @@ def _check_drift_chain(
     bd_sync = active_hooks_dir / f"{hook_name}.bd-sync"
     if bd_sync.is_file() and f"{hook_name}.bd-sync" not in text:
         problems.append(f"active {hook_name} lost its .bd-sync sibling chaining")
+    # Self-recursion guard (XTRM-654): when the active dir IS a checkout's
+    # own `.githooks`, the runtime chain target (`$root/.githooks/<name>`)
+    # is this file itself — so it must ALSO carry the sweep body block.
+    # A bare chain here passes `bash -n` and recurses forever at runtime.
+    if MARKER_DRIFT_SWEEP not in text:
+        owner = _owning_checkout(active_hooks_dir)
+        if owner is not None and (owner / ".githooks" / hook_name).resolve() == target.resolve():
+            problems.append(
+                f"active {hook_name} is self-recursive: chain dispatches to "
+                f"itself with no sweep body in the owning checkout ({owner})"
+            )
     r = subprocess.run(["bash", "-n", str(target)],
                        capture_output=True, text=True, timeout=5)
     if r.returncode != 0:
@@ -453,6 +545,47 @@ def _chain_active_hooks_dir(worktree_root: Path, active_hooks_dir: Path) -> None
                 print(f"{YELLOW}!!{NC} cannot write chain {target_hook}: {exc}")
 
 
+def _owning_checkout(active_hooks_dir: Path) -> Path | None:
+    """Checkout owning an active hooks dir, when detectable (XTRM-654).
+
+    ``<toplevel>/.githooks`` convention: the checkout owns its sources, so a
+    chain installed there must dispatch to bodies that exist in THAT
+    checkout — otherwise the chain calls itself (runtime self-recursion).
+    Returns None for non-checkout dirs (stock ``.git/hooks``, custom paths
+    like ``.beads/hooks``): those dispatch runtime-relative to the firing
+    checkout, which the per-worktree source writes already cover.
+    """
+    if active_hooks_dir.name != ".githooks":
+        return None
+    owner = active_hooks_dir.parent
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(owner), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+        if r.returncode == 0 and Path(r.stdout.strip()).resolve() == owner.resolve():
+            return owner
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def _source_roots(project_root: Path, worktrees: list[Path]) -> list[Path]:
+    """Checkouts needing sweep-body sources: invoking worktrees plus the
+    checkout owning each worktree's active hooks dir (XTRM-654).
+
+    Without the owner, a foreign active dir gets a bare chain whose runtime
+    target (``$root/.githooks/<name>``) is itself — valid ``bash -n``,
+    infinite recursion at runtime.
+    """
+    roots = list(worktrees)
+    for wt in worktrees:
+        owner = _owning_checkout(_resolve_active_hooks_dir(wt))
+        if owner is not None and owner not in roots:
+            roots.append(owner)
+    return roots
+
+
 def install_git_hooks(project_root: Path, all_worktrees: bool = False) -> bool:
     """Install + self-check git hooks. Returns True only when a hook can fire.
 
@@ -461,7 +594,9 @@ def install_git_hooks(project_root: Path, all_worktrees: bool = False) -> bool:
     the chain + self-check for every linked worktree from ``git worktree
     list --porcelain``. A detected ``core.hooksPath`` override is installed
     into (it IS the git-resolved active dir) and reported loudly — never
-    silently skipped.
+    silently skipped. Sweep-body sources are additionally written into the
+    checkout owning a foreign active dir, so no chain dispatches to itself
+    (XTRM-654).
     """
     print("\n── Git hooks ───────────────────────────")
     override = _detect_hooks_path_override(project_root)
@@ -473,8 +608,12 @@ def install_git_hooks(project_root: Path, all_worktrees: bool = False) -> bool:
         print(f"   --all-worktrees: covering {len(worktrees)} worktree(s).")
     else:
         worktrees = [project_root]
+    roots = _source_roots(project_root, worktrees)
+    foreign = [str(r) for r in roots if r not in worktrees]
+    if foreign:
+        print(f"   foreign active-dir owner(s) also get sources: {', '.join(foreign)}")
 
-    for wt in worktrees:
+    for wt in roots:
         try:
             label = wt.relative_to(project_root)
             shown_wt = f". ({wt})" if str(label) != "." else f" ({wt})"
@@ -485,7 +624,7 @@ def install_git_hooks(project_root: Path, all_worktrees: bool = False) -> bool:
         _chain_active_hooks_dir(wt, _resolve_active_hooks_dir(wt))
 
     overall_ok = True
-    for wt in worktrees:
+    for wt in roots:
         active = _resolve_active_hooks_dir(wt)
         ok, report = _self_check_worktree(wt, active)
         if ok:
