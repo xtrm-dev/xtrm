@@ -60,6 +60,10 @@ _DRIFT_HOOK_BODIES = {
 # Pure `VAR=value` assignment line (legacy-block span absorption target).
 _ASSIGN_LINE_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)=\S.*$")
 
+# Markers for files that already fire something (sweep bodies, reminders).
+# A marker-less rewrite must never touch these (XTRM-654 follow-up).
+_BODY_MARKERS = (MARKER_DRIFT_SWEEP, MARKER_DOC, MARKER_STALENESS)
+
 # All sweep bodies this installer has ever wired: stale invocations of any of
 # these are replaced span-aware (enclosing ``if...fi``) so re-run repairs
 # them. NEVER delete by bare line-substring: variant-B markerless two-line
@@ -190,6 +194,13 @@ def _ensure_block(content: str, marker: str, desired: str) -> tuple[str, bool]:
     """
     desired_block = desired.lstrip("\n")
     if marker not in content:
+        # A sweep/reminder body is already here under a different marker:
+        # never rewrite around it from a marker-less call. The chain step
+        # hits this path on body-carrying files and previously ate the
+        # fresh body as a "legacy" span (XTRM-654 follow-up). Leave
+        # untouched; the self-check validates what's there.
+        if any(bm in content for bm in _BODY_MARKERS):
+            return content, False
         # Legacy invocation without our marker (pre-rename absolute bake,
         # markerless SK_ROOT two-line form). Replace the enclosing span so
         # re-run repairs instead of stacking a second invocation — and NEVER
@@ -323,6 +334,21 @@ def _check_drift_source(project_root: Path, hook_name: str, problems: list[str])
         problems.append(f".githooks/{hook_name} bash -n failed: {r.stderr.strip()[:200]}")
 
 
+def _resolves_to_self(active_hooks_dir: Path, hook_name: str, target: Path) -> bool:
+    """True when the chain's runtime target is the chain file itself.
+
+    The chain dispatches to ``$root/.githooks/<name>`` where ``$root`` is the
+    firing checkout. When the active dir IS a checkout's own ``.githooks``,
+    that resolves to this file — infinite recursion unless the file also
+    carries the sweep body (XTRM-654).
+    """
+    try:
+        owner = _owning_checkout(active_hooks_dir)
+        return owner is not None and (owner / ".githooks" / hook_name).resolve() == target.resolve()
+    except OSError:
+        return False
+
+
 def _check_drift_chain(
     active_hooks_dir: Path, hook_name: str, source_hook: Path, problems: list[str], details: list[str]
 ) -> None:
@@ -341,17 +367,39 @@ def _check_drift_chain(
         same = source_hook.resolve() == target.resolve()
     except OSError:
         same = False
+    has_body = MARKER_DRIFT_SWEEP in text
+    has_chain = MARKER_CHAIN in text
+    if has_body:
+        # Target fires the sweep itself (source checkout or owning
+        # checkout): chain requirements don't apply, and a chain here
+        # would be self-recursive (XTRM-654).
+        if has_chain and _resolves_to_self(active_hooks_dir, hook_name, target):
+            problems.append(
+                f"active {hook_name} is self-recursive: chain dispatches to "
+                f"itself alongside the sweep body in {target}"
+            )
+        if LEGACY_UMBRELLA in text:
+            problems.append(f"active {hook_name} still references service-skills")
+        r = subprocess.run(["bash", "-n", str(target)],
+                           capture_output=True, text=True, timeout=5)
+        if r.returncode != 0:
+            problems.append(f"active {hook_name} bash -n failed: {r.stderr.strip()[:200]}")
+        return
     if same:
-        # Same file fires (core.hooksPath=.githooks): it must carry the
-        # sweep body — a bare chain here dispatches to itself (XTRM-654).
-        if MARKER_CHAIN in text and MARKER_DRIFT_SWEEP not in text:
+        # Same file fires but carries no sweep body: a chain here would
+        # dispatch to itself, and nothing fires the sweep (XTRM-654).
+        if has_chain:
             problems.append(
                 f"active {hook_name} is self-recursive: chain dispatches to "
                 f"itself with no sweep body in {target}"
             )
         else:
-            details.append(f"{hook_name}: active hooks dir == .githooks (hooksPath convention): chain n/a")
-            return
+            problems.append(f"active {hook_name} has no sweep body to fire ({target})")
+        r = subprocess.run(["bash", "-n", str(target)],
+                           capture_output=True, text=True, timeout=5)
+        if r.returncode != 0:
+            problems.append(f"active {hook_name} bash -n failed: {r.stderr.strip()[:200]}")
+        return
     if MARKER_CHAIN not in text:
         problems.append(f"active {hook_name} missing chain marker ({target})")
     if LEGACY_UMBRELLA in text:
@@ -365,17 +413,15 @@ def _check_drift_chain(
     bd_sync = active_hooks_dir / f"{hook_name}.bd-sync"
     if bd_sync.is_file() and f"{hook_name}.bd-sync" not in text:
         problems.append(f"active {hook_name} lost its .bd-sync sibling chaining")
-    # Self-recursion guard (XTRM-654): when the active dir IS a checkout's
-    # own `.githooks`, the runtime chain target (`$root/.githooks/<name>`)
-    # is this file itself — so it must ALSO carry the sweep body block.
-    # A bare chain here passes `bash -n` and recurses forever at runtime.
-    if MARKER_DRIFT_SWEEP not in text:
-        owner = _owning_checkout(active_hooks_dir)
-        if owner is not None and (owner / ".githooks" / hook_name).resolve() == target.resolve():
-            problems.append(
-                f"active {hook_name} is self-recursive: chain dispatches to "
-                f"itself with no sweep body in the owning checkout ({owner})"
-            )
+    # Dangling-chain guard (XTRM-654): a bare chain whose runtime target is
+    # itself (owning checkout's file, no body anywhere) passes `bash -n`
+    # and recurses forever at runtime. The installer writes owner sources,
+    # so reaching here means hand-created or pre-fix damage.
+    if _resolves_to_self(active_hooks_dir, hook_name, target):
+        problems.append(
+            f"active {hook_name} is self-recursive: chain dispatches to "
+            f"itself with no sweep body in {target}"
+        )
     r = subprocess.run(["bash", "-n", str(target)],
                        capture_output=True, text=True, timeout=5)
     if r.returncode != 0:
@@ -536,6 +582,11 @@ def _chain_active_hooks_dir(worktree_root: Path, active_hooks_dir: Path) -> None
             print(f"{YELLOW}!!{NC} cannot read chain {target_hook}: {exc}")
             continue
         norm_target, _ = _normalize_legacy_hook_text(raw_target)
+        if MARKER_DRIFT_SWEEP in norm_target:
+            # Target already fires the sweep itself (owner sources written
+            # this run or a previous one). Chaining it would dispatch to
+            # itself — definitionally self-recursive (XTRM-654). Skip.
+            continue
         new_target, _chain_changed = _ensure_block(norm_target, MARKER_CHAIN, desired)
         if new_target != raw_target:
             try:
@@ -613,6 +664,9 @@ def install_git_hooks(project_root: Path, all_worktrees: bool = False) -> bool:
     if foreign:
         print(f"   foreign active-dir owner(s) also get sources: {', '.join(foreign)}")
 
+    # Sources first for every root, chains second: chain decisions depend
+    # on final source content (a body-present target must never be chained
+    # — XTRM-654), so the outcome cannot depend on worktree order.
     for wt in roots:
         try:
             label = wt.relative_to(project_root)
@@ -621,6 +675,7 @@ def install_git_hooks(project_root: Path, all_worktrees: bool = False) -> bool:
             shown_wt = f" ({wt})"
         print(f"   worktree:{shown_wt}")
         _write_githooks_sources(wt)
+    for wt in roots:
         _chain_active_hooks_dir(wt, _resolve_active_hooks_dir(wt))
 
     overall_ok = True

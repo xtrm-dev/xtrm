@@ -346,3 +346,64 @@ def test_self_check_fails_self_recursive_chain(
     ok, report = installer._self_check_worktree(consumer_repo, active)
     assert ok is False
     assert any("self-recursive" in line for line in report)
+
+
+def _snapshot_hooks(root):
+    out = {}
+    for name in ALL_HOOKS:
+        f = root / ".githooks" / name
+        out[name] = f.read_bytes() if f.is_file() else None
+    return out
+
+
+def test_foreign_active_body_present_chain_absent(
+    installer, consumer_repo, isolated_git_config, tmp_path
+):
+    """XTRM-654 follow-up: the owning checkout's sources must carry the
+    sweep body and must NOT gain a chain block (self-recursion)."""
+    linked = tmp_path / "linked"
+    _git(["worktree", "add", str(linked)], consumer_repo)
+    try:
+        main_hooks = consumer_repo / ".githooks"
+        _git(["config", "core.hooksPath", str(main_hooks)], linked)
+        assert installer.install_git_hooks(linked) is True
+        for name in DRIFT_HOOKS:
+            text = (main_hooks / name).read_text(encoding="utf-8")
+            assert installer.MARKER_DRIFT_SWEEP in text, name
+            assert installer.MARKER_CHAIN not in text, name
+            assert _bash_n_ok(main_hooks / name), name
+    finally:
+        _git(["worktree", "remove", "--force", str(linked)], consumer_repo)
+
+
+def test_two_runs_byte_identical_on_variant_b(
+    installer, consumer_repo, isolated_git_config, tmp_path
+):
+    """XTRM-654: full installer runs are byte-idempotent, even starting
+    from a markerless SK_ROOT legacy block in a foreign-active setup."""
+    linked = tmp_path / "linked"
+    _git(["worktree", "add", str(linked)], consumer_repo)
+    try:
+        main_hooks = consumer_repo / ".githooks"
+        _git(["config", "core.hooksPath", str(main_hooks)], linked)
+        legacy = (
+            "#!/usr/bin/env sh\n"
+            'SK_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)/.xtrm/skills/default/service-knowledge"\n'
+            'if [ -f "$SK_ROOT/install/git-hooks/post_merge_drift_sweep.py" ]; then\n'
+            '    python3 "$SK_ROOT/install/git-hooks/post_merge_drift_sweep.py" "$@" || true\n'
+            "fi\n"
+        )
+        (linked / ".githooks").mkdir(parents=True, exist_ok=True)
+        (linked / ".githooks" / "post-merge").write_text(legacy, encoding="utf-8")
+        assert installer.install_git_hooks(linked) is True
+        first = _snapshot_hooks(linked)
+        first_main = _snapshot_hooks(consumer_repo)
+        assert installer.install_git_hooks(linked) is True
+        assert _snapshot_hooks(linked) == first
+        assert _snapshot_hooks(consumer_repo) == first_main
+        text = (linked / ".githooks" / "post-merge").read_text(encoding="utf-8")
+        assert "SK_ROOT" not in text
+        assert installer.MARKER_DRIFT_SWEEP in text
+        assert _bash_n_ok(linked / ".githooks" / "post-merge")
+    finally:
+        _git(["worktree", "remove", "--force", str(linked)], consumer_repo)
