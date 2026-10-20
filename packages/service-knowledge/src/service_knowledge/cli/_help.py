@@ -15,24 +15,29 @@ EPILOGS: dict[str, str] = {
     "install": """\
 Wires machinery into a consumer repo: vendors the reference SKILLs into
 `.xtrm/skills/<pack>/service-knowledge/`, installs the Claude hooks
-(SessionStart catalog · PreToolUse activator · PostToolUse drift), and builds
-the initial FTS5 evidence index. Idempotent — safe to re-run after upgrading
-the package.
+(SessionStart catalog · PreToolUse activator · PostToolUse drift), the git
+hooks (marker-only touches-gated post-merge / post-checkout / post-rewrite —
+see `help hooks`), and builds the initial FTS5 evidence index. A post-install
+self-check fails loudly when no hook can fire. Idempotent — safe to re-run
+after upgrading the package.
 
 Examples:
   service-knowledge install                    # bootstrap the current repo
   service-knowledge install --path ~/my/repo   # bootstrap a specific repo
+  service-knowledge install --all-worktrees    # chain + self-check every linked worktree
 
 Runs `git rev-parse --show-toplevel` when --path is omitted.
 """,
     "update": """\
 Pulls the currently-installed package version into the consumer's vendored
 copy. No-op when the two versions already match. Use after upgrading the
-package (git pull in the source tree or a fresh `install.sh`).
+package (git pull in the source tree or a fresh `install.sh`). Rewires git
+hooks (see `help hooks`) and re-runs the self-check.
 
 Examples:
   service-knowledge update                     # sync the current repo
   service-knowledge update --path ~/my/repo    # sync a specific repo
+  service-knowledge update --all-worktrees     # sync every linked worktree
 
 See also: `service-knowledge status` to check drift without applying.
 """,
@@ -48,19 +53,25 @@ Examples:
 """,
     "drift": """\
 Detects service-knowledge drift: scans each service's territory for files
-changed since its last sync (`last_sync_ref` -> HEAD semantics) and, on drift,
-writes a pending marker at `.xtrm/.service-knowledge-drift-pending` with a
-per-service inventory. The legacy `.xtrm/.service-skills-drift-pending` name is
+changed since its last sync (`last_sync_ref` -> HEAD ref-range semantics with
+a tracked-files filter; mtime is fallback only) and, on drift, writes a
+pending marker at `.xtrm/.service-knowledge-drift-pending` carrying
+`trigger, range, reason, services, files, timestamp` plus a per-service
+inventory (reason tags: ref-range / mtime-heuristic / initial-sync-needed /
+range-unknown). The legacy `.xtrm/.service-skills-drift-pending` name is
 recognized too (canonical wins when both exist); `clear` removes whichever is
-present. Read-only except for the marker under `<root>/.xtrm/`.
+present. Read-only except for the marker under `<root>/.xtrm/`. Marker reads
+are live — re-read the file at use time; never rely on session-start
+snapshots.
 
 Examples:
   service-knowledge drift                    # scan + write marker if drifted
   service-knowledge drift clear              # remove the pending marker(s)
 
 Reconcile stays skill-driven: run /updating-service-knowledge (the
-service-knowledge-sync specialist), which syncs the drifted SKILL.md and
-stamps `last_sync_ref`. After a successful reconcile the marker is removed and
+service-knowledge-sync specialist), which syncs the drifted SKILL.md, stamps
+`last_sync_ref`, and regenerates the umbrella table (SEMANTIC block
+preserved). After a successful reconcile the marker is removed and
 the FTS5 evidence index is rebuilt.
 """,
     "migrate": """\
@@ -91,6 +102,11 @@ The per-repo FTS5 evidence index at `.xtrm/cache/service-knowledge.sqlite`.
 Ranking: 0.40·T + 0.30·L + 0.15·I + 0.10·A + 0.05·F
          (territory · BM25 lexical · intent · authority · freshness).
 Sub-10ms queries on the reference corpus (17 services, ~230 items).
+
+Reads are freshness-gated (Layer 1): every query compares `source_ref`
+against HEAD and rebuilds under a lock within a 90 s budget on mismatch
+(absent cache counts), serving stale plus a `stale_served` notice on
+budget exhaustion — never blocking, never raising.
 
 Actions:
   build / rebuild  Full rebuild — run after `install`, after skill edits, or
@@ -263,7 +279,7 @@ Typical workflow, end to end
      .xtrm/skills/<pack>/service-knowledge/services/<id>/SKILL.md
    Every reconcile run gates the diff through the verifier — see `help verifier`.
 
-4. Rebuild the FTS5 index after edits:
+4. The FTS5 index self-heals on read (see `help index`); force a rebuild only when needed:
      service-knowledge index build
 
 5. During ops / incidents, retrieve evidence:
@@ -416,6 +432,13 @@ Kinds indexed: service (one per registered service), section (per SKILL.md
 heading block), claim (typed source claims), probe (runnable diagnostics),
 citation (source-of-truth pointers).
 
+Reads are freshness-gated (Layer 1): every query compares
+`sk_index_state.source_ref` against HEAD and rebuilds under a
+cross-session lock within a 90 s budget on mismatch (absent cache
+counts), serving stale plus a `stale_served` notice on budget
+exhaustion — never blocking, never raising. Fresh clones and
+post-landing checkouts self-heal on first query.
+
 Sub-10ms retrieval on the reference corpus.
 """,
     "install": """\
@@ -450,20 +473,50 @@ Removes with `service-knowledge remove` (keeps the per-service knowledge).
 Drift detection and reconciliation
 ----------------------------------
 `service-knowledge drift` scans each service's territory for files changed
-since its last sync (`last_sync_ref` -> HEAD semantics) and, on drift, writes a
-pending marker at `.xtrm/.service-knowledge-drift-pending` with a per-service
-inventory. The legacy `.xtrm/.service-skills-drift-pending` name is recognized
-too (canonical wins when both exist); `drift clear` removes whichever is
-present and rebuilds the FTS5 evidence index.
+since its last sync (`last_sync_ref` -> HEAD ref-range semantics with a
+tracked-files filter; mtime is fallback only) and, on drift, writes a
+pending marker at `.xtrm/.service-knowledge-drift-pending` carrying
+`trigger, range, reason, services, files, timestamp` plus a per-service
+inventory (reason tags: ref-range / mtime-heuristic / initial-sync-needed /
+range-unknown). The legacy `.xtrm/.service-skills-drift-pending` name is
+recognized too (canonical wins when both exist); `drift clear` removes
+whichever is present and rebuilds the FTS5 evidence index.
 
 Drift is advisory, never required: a drift check on session start surfaces a
 notice; reconciliation stays skill-driven via `/updating-service-knowledge`
 (the service-knowledge-sync specialist), which syncs the drifted SKILL.md,
-stamps `last_sync_ref`, and triggers the index rebuild AFTER a successful
-reconcile.
+stamps `last_sync_ref`, regenerates the umbrella table (SEMANTIC block
+preserved), and triggers the index rebuild AFTER a successful
+reconcile. Marker reads are live — re-read the file at use time; never
+rely on session-start snapshots.
 
     service-knowledge drift          # scan + write marker if drifted
     service-knowledge drift clear    # remove marker(s) + rebuild index
+""",
+    "hooks": """\
+Touches-gated git hooks (marker-only, advisory)
+------------------------------------------------
+Three hooks keep the drift marker fresh across every landing path:
+`post-merge` (`ORIG_HEAD..HEAD`), `post-checkout` (argv prev/new/flag;
+`reason: fresh-cache` on clone/worktree), `post-rewrite` (amend/rebase
+SHAs from argv/stdin). A landing *touches* service-knowledge when a
+git-tracked file in range is the registry, a skill body, the umbrella,
+or matches a registered territory glob — untracked scratch dirs never
+count, and missing refs degrade to `reason: range-unknown`, never to a
+scan or rebuild.
+
+No-touch exits silent in <1 s; touch writes/refreshes the marker only
+(`trigger, range, reason, services, files, timestamp`; earliest range
+preserved). Hooks never build the index, never consult canary state,
+and always exit 0 — they cannot fail a merge, checkout, or rebase.
+Installed by `service-knowledge install` / `update` (idempotent):
+sources into each checkout's `.githooks/`, chains into the git-resolved
+active hooks dir (`--all-worktrees` covers every linked worktree, including
+`core.hooksPath` overrides), plus a post-install self-check that fails
+loudly when no hook can fire (wrong active dir, stale absolute paths,
+syntax errors, self-recursive chains). Legacy markerless blocks are
+replaced span-aware; foreign tails are never truncated; a file that
+fires the sweep is never chained.
 """,
 }
 
@@ -472,6 +525,8 @@ TOPIC_ORDER = [
     "install",
     "bootstrap",
     "index",
+    "hooks",
+    "drift",
     "verifier",
     "mcp",
     "activator",

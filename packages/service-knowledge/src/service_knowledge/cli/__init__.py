@@ -73,7 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
     # `help <topic>` — concept-level explainers (workflow / verifier / mcp / …).
     help_p = sub.add_parser(
         "help",
-        help="Explain concepts (workflow · verifier · mcp · activator · eval · canary · telemetry · index).",
+        help="Explain concepts (workflow · install · bootstrap · index · hooks · drift · verifier · mcp · activator · eval · canary · telemetry).",
         description=(
             "Show a concept-level explainer for a topic. "
             "Run `service-knowledge help topics` for the full list."
