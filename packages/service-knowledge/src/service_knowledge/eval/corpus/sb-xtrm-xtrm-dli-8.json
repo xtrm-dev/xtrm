@@ -1,0 +1,21 @@
+{
+  "case_id": "sb-xtrm-xtrm-dli-8",
+  "query_or_task": "debugger: fix PR3 secret persistence CLI query and clean-install gaps",
+  "touched_paths": [
+    ".xtrm/skills/default/xtrm/"
+  ],
+  "expected_services": [
+    "xtrm"
+  ],
+  "required_evidence": [
+    ".xtrm/skills/default/xtrm/SKILL.md"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "sb:xtrm-dli.8@xtrm"
+  ]
+}

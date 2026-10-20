@@ -3,7 +3,7 @@
 Usage:
     python3 -m service_knowledge.eval.harness run \
         --corpus src/service_knowledge/eval/corpus/ \
-        --output-dir .beads/eval-reports/
+        --output-dir .xtrm/eval-reports/
 
 For every case JSON in the corpus dir the harness:
   1. Calls the shipped retrieval surface with the case's ``query_or_task`` /
@@ -12,7 +12,7 @@ For every case JSON in the corpus dir the harness:
      lets the metrics module exercise both offline and live shapes.
   2. Calls the shipped verifier when the case ships candidate/current fixtures.
   3. Assembles an outcome dict shaped for :mod:`service_knowledge.eval.metrics`.
-  4. Emits ``.beads/eval-reports/YYYY-WW.md`` with per-metric values, threshold
+  4. Emits ``.xtrm/eval-reports/YYYY-WW.md`` with per-metric values, threshold
      status, unclassified-failure suggestions, and one ``component=eval-harness``
      telemetry line per run + per metric.
 """

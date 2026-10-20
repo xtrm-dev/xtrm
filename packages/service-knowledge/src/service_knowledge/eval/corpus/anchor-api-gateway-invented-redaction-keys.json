@@ -1,18 +1,29 @@
 {
   "case_id": "api-gateway-invented-redaction-keys",
   "query_or_task": "Document the api-gateway redaction key set for a runbook",
-  "touched_paths": ["services/api-gateway/redaction.py"],
-  "expected_services": ["api-gateway"],
+  "touched_paths": [
+    "services/api-gateway/redaction.py"
+  ],
+  "expected_services": [
+    "api-gateway"
+  ],
   "required_evidence": [
     "services/api-gateway/redaction.py",
     "services/api-gateway/SKILL.md"
   ],
-  "forbidden_evidence": ["services/api-gateway/legacy/old_redaction.py"],
-  "expected_probes": ["grep -n 'REDACTION_KEYS' services/api-gateway/redaction.py"],
+  "forbidden_evidence": [
+    "services/api-gateway/legacy/old_redaction.py"
+  ],
+  "expected_probes": [
+    "grep -n 'REDACTION_KEYS' services/api-gateway/redaction.py"
+  ],
   "cross_repo_required": false,
   "outcome": "conflict_detected",
   "expected_verifier": "CONFLICT",
-  "provenance": ["incident:2026-07-api-gateway-runbook-drift", "bead:xtrm-56flm"],
+  "provenance": [
+    "incident:2026-07-api-gateway-runbook-drift",
+    "sb:xtrm-56flm"
+  ],
   "regression_class": "invented-literal-set",
   "notes": "Skill claimed redaction key set that never existed in source; verifier must flag CONFLICT."
 }

@@ -1,0 +1,21 @@
+{
+  "case_id": "sb-xtrm-xtrm-dli-4",
+  "query_or_task": "test-runner: execute PR3 validation matrix",
+  "touched_paths": [
+    "packages/runners/src/runners.py"
+  ],
+  "expected_services": [
+    "runners"
+  ],
+  "required_evidence": [
+    "packages/runners/src/runners.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "sb:xtrm-dli.4@xtrm"
+  ]
+}

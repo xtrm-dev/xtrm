@@ -1,0 +1,22 @@
+{
+  "case_id": "sb-core-xtrm-plnt",
+  "query_or_task": "Test-runner: refresh xtrm-ok7c CLI failure map",
+  "touched_paths": [
+    "packages/runners/src/runners.py"
+  ],
+  "expected_services": [
+    "runners",
+    "xtrm"
+  ],
+  "required_evidence": [
+    "packages/runners/src/runners.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": true,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "sb:xtrm-plnt@core"
+  ]
+}

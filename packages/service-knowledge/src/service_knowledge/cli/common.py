@@ -1,6 +1,6 @@
 """Shared engine for the service-knowledge CLI subcommands.
 
-Stdlib-only. The CLI must NOT depend on xtrm/bd/sp/xt/xtmux being installed; the only
+Stdlib-only. The CLI must NOT depend on xtrm/sp/xt/xtmux being installed; the only
 cross-package dependency is vaultctl (declared in pyproject, wired in PR3). Everything
 here is idempotent: re-running any operation on an already-current consumer produces no
 diff (validated by ``service-knowledge install`` running twice with an empty diff).

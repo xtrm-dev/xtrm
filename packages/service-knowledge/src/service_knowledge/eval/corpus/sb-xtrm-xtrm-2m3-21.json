@@ -1,0 +1,21 @@
+{
+  "case_id": "sb-xtrm-xtrm-2m3-21",
+  "query_or_task": "Reviewer — Phase B mcpq CLI subcommands",
+  "touched_paths": [
+    "packages/reviewer/src/reviewer.py"
+  ],
+  "expected_services": [
+    "reviewer"
+  ],
+  "required_evidence": [
+    "packages/reviewer/src/reviewer.py"
+  ],
+  "forbidden_evidence": [],
+  "expected_probes": [],
+  "cross_repo_required": false,
+  "outcome": "success",
+  "expected_verifier": "PASS",
+  "provenance": [
+    "sb:xtrm-2m3.21@xtrm"
+  ]
+}
