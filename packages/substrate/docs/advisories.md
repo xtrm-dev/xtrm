@@ -29,7 +29,7 @@ Evaluated in this order. A caller usually shows the first rule that is not cooli
 | `claim_renew` | Less than 20% of the TTL left (5 min floor) | 10 min |
 | `close_due` | Latest journal entry is a `result` | 20 min |
 | `revise_contract` | Claimed, current revision `draft` | 30 min |
-| `checkpoint_due` | 8 or more entries since the last checkpoint, or none ever | 20 min |
+| `checkpoint_due` | 8 or more entries since the last checkpoint, or 3 or more with no checkpoint yet | 20 min |
 | `handoff_due` | Stop phase only: no handoff 30 min after the claim | 60 min |
 
 Terminal issues (`done`, `cancelled`, `archived`) produce no advisories.
