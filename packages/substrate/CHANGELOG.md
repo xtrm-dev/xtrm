@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (XTRM-679): one using-substrate skill, and Pi loads it
+
+The Pi half of the skill was never loaded: the `pi` manifest declared only the
+extension, and the file had no `name`/`description` frontmatter. There is now
+one host-neutral skill (`skills/using-substrate/SKILL.md`) with a table of the
+Claude hooks and Pi events; the plugin ships a byte-identical copy guarded by a
+test, and `pi.skills` declares `./skills`.
+
 ### Fixed (XTRM-678): journal text is never cut silently
 
 The Claude MCP server cut `journal_append` summaries to 2,000 characters with no

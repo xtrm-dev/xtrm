@@ -29,7 +29,10 @@ describe("XTRM-94 provider-facing doctrine follows live registrations", () => {
     const skill = readPkg("skills/using-substrate/SKILL.md");
     const names = piToolNames();
     assert.equal(names.length, 9, "Pi tool count changed: update the skill/reference deliberately");
-    for (const name of names) assert.match(skill, new RegExp(`\\b${name}\\b`), `Pi skill missing ${name}`);
+    // One skill (XTRM-679): it names the shared tools and the Pi prefix rule.
+    for (const name of claudeToolNames()) assert.match(skill, new RegExp(`\\b${name}\\b`), `skill missing ${name}`);
+    assert.match(skill, /prefixes each name with `substrate_`/);
+    assert.ok(names.every((n) => n.startsWith("substrate_")));
     assert.match(skill, /SUBSTRATE_ISSUE_REF.*canonical/s);
     assert.match(skill, /SUBSTRATE_ISSUE.*compatibility alias/s);
   });

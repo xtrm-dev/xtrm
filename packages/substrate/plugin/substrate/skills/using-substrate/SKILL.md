@@ -1,16 +1,16 @@
 ---
 name: using-substrate
-description: Substrate durable work doctrine for Claude Code — Issue authority, the live MCP surface, session binding, Journal/Closure/provenance, and compaction continuity.
+description: Substrate durable work doctrine for Claude Code and Pi — Issue authority, the shared nine-tool surface, identity and claims, Journal/Closure/provenance, advisories, and compaction continuity. Use before claiming, journaling, closing or resuming Substrate work.
 ---
 
-# Using Substrate (Claude-facing)
+# Using Substrate
 
-Substrate owns durable work. This is the Claude half of the shared
-`using-substrate` doctrine. The Authority block below is byte-identical to the
-Pi skill and is guarded by package tests. Provider tool names differ by design;
-provider semantics and authority must not.
-
-Invocation: `/substrate:using-substrate`.
+Substrate owns durable work. This one skill serves Claude Code (plugin
+`substrate`, invoke `/substrate:using-substrate`) and Pi (package
+`@jaggerxtrm/substrate`, invoke `/skill:using-substrate`). The plugin ships a
+byte-identical copy and package tests fail on drift: edit
+`packages/substrate/skills/using-substrate/SKILL.md`, then copy it to
+`plugin/substrate/skills/using-substrate/SKILL.md`.
 
 ## Authority (non-negotiable)
 
@@ -34,43 +34,56 @@ Executor output never self-certifies provenance. Checkpoints record what the
 host observed; the service validates shapes fail-closed.
 ```
 
-## Live Claude MCP surface
+## Tools (same on both hosts)
 
-The MCP server calls the typed service in-process. It never shells out to `sb`
-and never parses terminal output. The stable registration set is:
+Claude's MCP server and Pi's extension call the typed service in-process. They
+never shell out to `sb` and never parse terminal output. Both register the same
+nine tools with the same parameters; Pi prefixes each name with `substrate_`
+(`issue_get` is `substrate_issue_get` on Pi).
 
 ```text
 issue_get       issue_list      issue_claim     issue_update    issue_close
 journal_append  journal_read    resume_capsule  provenance
 ```
 
-Grouped semantics:
-
 - `issue_list` takes `status` (`ready` = dispatchable), `query`, `kind`, and
-  `claimedBy` (holder or `me`).
+  `claimedBy` (holder or `me`; returns `{holder, issues}` with each claim and
+  the latest handoff).
 - `issue_claim` is op-discriminated (`claim|renew|release`). `holder` defaults to
-  `SUBSTRATE_HOLDER`, else the xt worktree name. Renew before the lease expires.
+  your identity. Renew before the lease expires; a repeated claim does not
+  extend it.
 - `issue_update` changes title, priority or contract. A new revision stales
   readiness; never use it for progress, findings or results.
-- `journal_append` writes continuity for every writable kind; `sb help kinds`
-  explains them. `result` is the bounded outcome (required for kind `result`),
-  `checkpoint` takes the mechanical path. Write a real summary: what changed,
-  evidence, next step.
-- `journal_read` is mode-discriminated (`latest|since|timeline|show`).
+- `journal_append` writes every writable kind (`sb help kinds`). `result` is the
+  bounded outcome (required for kind `result`); `checkpoint` takes the
+  mechanical path.
+- `journal_read` is mode-discriminated (`latest|since|timeline|show`) and returns
+  full bodies.
 - `issue_close` writes the immutable Closure; cite result and validation refs
   when the outcome is `completed` (the response warns otherwise).
 - `provenance` takes exactly one of `ref`, `sessionId`, `activationId`.
 - `resume_capsule` derives continuation state from durable records.
 
-Read `tools/list` for machine schemas. Tool text is defined once in
-`integrations/tool-surface.ts` and shared with Pi.
+`<ref>` accepts a machine ID, durable reference, locator, historical locator or
+alias. Mutating tools return structured feedback (`success`, `noop`,
+`warning`); a failure stays a failure from the typed service. The `sb` CLI
+follows the same model; `sb help contract|kinds|identity` hold the shapes.
 
-## Repository and Project resolution
+## Identity
+
+Who you are on the journal resolves as `SUBSTRATE_HOLDER`, else the xt worktree
+name (`.xtrm/worktrees/<repo>-xt-<runtime>-<name>`), else nobody.
+`XTRM_SESSION_NAME` is never used: tmux panes share it. At session start the
+host exports a worktree-derived name for shell children (Claude through
+`CLAUDE_ENV_FILE`, Pi into the process environment); the tools resolve it
+themselves. With no identity, journal entries record no author and the edit
+gate refuses edits on a claimed Issue; the host warns you, and
+`sb help identity` explains the fix.
+
+## Repository, Project and database
 
 One global database may contain many Projects. That never makes one Project the
-implicit context for another repository.
-
-Project-scoped tools resolve:
+implicit context for another repository. Project-scoped tools resolve:
 
 ```text
 explicit project
@@ -79,86 +92,81 @@ explicit project
 → fail closed with `sb init` guidance
 ```
 
-There is no single-project-cardinality fallback. `sb init` establishes the Git
-repository → Project relationship; worktrees share that repository identity.
-
-## Database authority
-
-One store: explicit `dbPath` where a tool exposes it, otherwise
-`SUBSTRATE_DB`, otherwise `~/.xtrm/state.db`. The plugin ships no repo-local
-`SUBSTRATE_DB` default because that would fork authority away from `sb` and Pi.
+There is no single-project-cardinality fallback. The store is an explicit
+`dbPath` where a tool exposes it, else `SUBSTRATE_DB`, else `~/.xtrm/state.db`.
+No host ships a repo-local `SUBSTRATE_DB` default.
 
 ## Session binding and resume
 
-`SUBSTRATE_ISSUE_REF` is the canonical process-level issue binding;
-`SUBSTRATE_ISSUE` is a compatibility alias. Host-known session, participant, run
-and activation identity is enriched into durable execution context where the
-runtime knows it. Journal and checkpoint writes fill unstated participant and
-activation from `SUBSTRATE_HOLDER` and `SUBSTRATE_ACTIVATION_ID`; explicit
+`SUBSTRATE_ISSUE_REF` is the canonical process-level Issue binding;
+`SUBSTRATE_ISSUE` is a compatibility alias only. A successful claim binds the
+session to the Issue. Journal and checkpoint writes fill unstated participant
+and activation from `SUBSTRATE_HOLDER` and `SUBSTRATE_ACTIVATION_ID`; explicit
 arguments win; unknown values stay absent rather than fabricated.
 
-Resume from the derived Capsule, never from compacted chat.
-
-## Identity
-
-Who you are on the journal resolves as `SUBSTRATE_HOLDER`, else the xt worktree
-name (`.xtrm/worktrees/<repo>-xt-<runtime>-<name>`), else nobody. At session
-start the plugin exports a worktree-derived name for Bash through
-`CLAUDE_ENV_FILE`; MCP tools resolve it themselves. With no identity, journal
-entries record no author and the edit gate refuses edits on a claimed Issue:
-the plugin warns you, and `sb help identity` explains the fix.
-
-## Plugin lifecycle
+Resume from the derived capsule, never from compacted chat:
 
 ```text
-SessionStart (every source)  identity, your live claims with TTL and latest handoff, top advisory
-SessionStart(compact)        full Resume Capsule: contract, checkpoint, LATEST HANDOFF, claim expiry
-PreToolUse Edit|Write        edit gate: deny with the remedy (claim, or export SUBSTRATE_HOLDER)
-PreToolUse Bash (git commit) provenance nudge when no dispatch/receipt context exists
-PostToolUse sb / MCP tools   advisories for the issues the call touched
-Stop                         continuity notice (deduplicated) and end-of-turn advisories;
-                             a missing handoff continues the turn once
-PreCompact                   mechanical checkpoint first, then a conversation-text summary
-PostCompact                  records Claude's compact_summary as a finding
+current Issue revision + latest checkpoint + LATEST HANDOFF + Journal delta
++ claim (expiry) / blockers + provenance  →  Resume Capsule
 ```
 
-A semantic summarizer failure cannot erase the mechanical checkpoint. A storage
-failure never blocks Claude's own context-overflow recovery.
+## Host lifecycle
+
+| Moment | Claude Code (plugin hooks) | Pi (extension events) |
+|---|---|---|
+| Session start | SessionStart: identity, your live claims with TTL and latest handoff, top advisory | `session_start`: the same content as hidden next-turn context, plus a notification |
+| After compaction or resume | SessionStart(compact): the full Resume Capsule in context | notification with the capsule head; `/substrate-resume` prints it in full |
+| Edit / write | PreToolUse Edit/Write: deny with the remedy (claim, or export `SUBSTRATE_HOLDER`) | `tool_call` gate: same rule |
+| Commit | PreToolUse Bash (`git commit`): provenance nudge | none |
+| After an `sb` command or Substrate tool | PostToolUse: advisories for the touched Issues | `tool_result`: advisory appended to the result, operator notified |
+| End of turn | Stop: continuity notice; a missing handoff continues the turn once | `agent_end`: a missing handoff triggers one follow-up turn |
+| Compaction | PreCompact: mechanical checkpoint, then a summary; PostCompact records `compact_summary` as a finding | `session_before_compact`: mechanical checkpoint, then a summary |
+| Status | band above the prompt (function hooks enabled); `/substrate status\|show\|hide` | `substrate` widget |
+
+A summarizer failure cannot erase the mechanical checkpoint. A storage failure
+never blocks the host's own context-overflow recovery. With no Issue bound, Pi's
+normal compaction is untouched.
 
 ## Advisories
 
 Advisories are deterministic nudges computed from durable state (catalogue:
-`packages/substrate/docs/advisories.md`): missing identity, claim about to
+`packages/substrate/docs/advisories.md`): missing identity, a claim about to
 expire (`issue_claim op renew`), a recorded result that is not closed, a draft
 revision under a claim, a checkpoint or handoff that is due, a completed close
-with no evidence. You see one line; the agent receives the exact next command.
-Each advisory has a per-session cooldown. `SUBSTRATE_ADVISORIES=off` silences
-them; gates and CLI errors stay on. With function hooks enabled, the band above
-the prompt shows the same claims and TTL (`/substrate status|show|hide`).
+with no evidence. The operator sees one line; the agent receives the exact next
+command. Each advisory has a per-session cooldown. `SUBSTRATE_ADVISORIES=off`
+silences them; gates and errors stay on.
 
-## Journal quality
+## Journal and revisions
 
+```text
+progress / finding / decision / blocker / milestone / handoff / result
+→ Journal
+
+SCOPE / SUCCESS / NON_GOALS / CONSTRAINTS / VALIDATION / OUTPUT changes
+→ stop → /planning → new Issue revision → readiness / attestation
+```
+
+A meaningful settled outcome is `kind=result`; a progress note is not a result.
 An entry without content is rejected. A summary under eight words or a
 placeholder (`done`, `wip`, `ok`, ...) is accepted with a warning: write what
-changed, the evidence, and the next step. A summary over 16,000 characters fails
-and nothing is written; pass long text with `summaryFile` (CLI:
-`--summary-file <path|->`). Text previews mark cuts; `--json` is complete. `sb help kinds` lists the kinds and
-the `--semantic` / `--result` shapes; `sb help contract` shows the contract
-JSON shape.
+changed, the evidence, and the next step. A summary over 16,000 characters
+fails and nothing is written; pass long text with `summaryFile` (CLI:
+`--summary-file <path|->`) or split it. Text previews mark cuts; `--json` and
+`journal_read` return the full text.
 
-## Operation feedback
+## Mutation authority
 
-Mutation results include shared structured feedback (`success`, `noop`,
-`warning`, or error at the call boundary). This is presentation metadata over
-the same durable service result, not a second authority model.
-
-## Where this plugin lives
-
-Plugin scripts resolve through `${CLAUDE_PLUGIN_ROOT}`, never the consumer
-project path. `${CLAUDE_PROJECT_DIR}` is user-project state, not package code.
+A session bound to an Issue may edit or write only under its own live claim.
+Substrate provides no workspace-exclusion guarantee (XTRM-414): per-issue claim
+fencing is the only mutation authority here; workspace exclusion is owned by
+the specialists activation layer. Unbound sessions are never implicitly bound
+to a random Project or Issue.
 
 ## Where to read more
 
-- `packages/substrate/docs/claude.md` — exact provider lifecycle and tool map
+- `packages/substrate/docs/advisories.md` — advisory catalogue and identity
+- `packages/substrate/docs/claude.md`, `packages/substrate/docs/pi.md` — provider references
 - `packages/substrate/docs/workflow.md` — end-to-end work lifecycle
 - `packages/substrate/docs/provenance-and-closure.md` — evidence and closeout

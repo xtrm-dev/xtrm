@@ -95,17 +95,19 @@ describe("packaged plugin (xtrm-iip.1)", () => {
     assert.match(skill, /^---\n(?:.*\n)*?name:\s*using-substrate\s*$/m);
   });
 
-  it("keeps one doctrine: the Authority block is byte-identical in both halves", () => {
-    const authority = (src: string) => {
-      const m = /## Authority \(non-negotiable\)\s*\n\n```text\n([\s\S]*?)\n```/.exec(src);
-      assert.ok(m, "Authority block not found");
-      return m[1];
-    };
+  it("keeps one skill: the plugin copy is byte-identical to the canonical skill (XTRM-679)", () => {
     const canonical = readFileSync(new URL("../skills/using-substrate/SKILL.md", import.meta.url), "utf8");
     assert.equal(
-      authority(read("skills/using-substrate/SKILL.md")),
-      authority(canonical),
-      "plugin skill Authority block drifted from the canonical Pi doctrine; edit the Pi half, then mirror",
+      read("skills/using-substrate/SKILL.md"),
+      canonical,
+      "plugin skill drifted: edit packages/substrate/skills/using-substrate/SKILL.md, then copy it into the plugin",
     );
+  });
+
+  it("Pi loads the skill: the pi manifest declares ./skills and the skill has name + description (XTRM-679)", () => {
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { pi?: { skills?: string[] } };
+    assert.ok(pkg.pi?.skills?.includes("./skills"), "package.json pi.skills must include ./skills or Pi never loads using-substrate");
+    const canonical = readFileSync(new URL("../skills/using-substrate/SKILL.md", import.meta.url), "utf8");
+    assert.match(canonical, /^---\nname: using-substrate\ndescription: \S.{0,1022}\n---\n/);
   });
 });

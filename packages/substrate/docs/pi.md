@@ -44,6 +44,12 @@ commits/PRs, external bindings and closure revision.
 
 Mutating tools return structured success/no-op/warning feedback.
 
+## Skill
+
+The package manifest declares `"skills": ["./skills"]`, so Pi loads the
+`using-substrate` skill (`/skill:using-substrate`). It is the same file the
+Claude plugin ships; a package test fails if the copies differ.
+
 ## Session lifecycle
 
 A successful claim binds the Pi session. `SUBSTRATE_ISSUE_REF` is the canonical
