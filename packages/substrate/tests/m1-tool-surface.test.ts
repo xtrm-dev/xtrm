@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JOURNAL_KINDS } from "../src/domain/journal.ts";
+import { TOOL_SPEC_BY_NAME } from "../integrations/tool-surface.ts";
 import { runCli } from "../cli/sb.ts";
 import { contract } from "./helpers.ts";
 import {
@@ -44,15 +45,6 @@ function cliHelpKeys(): string[] {
 
 // --- Clause 1: inventory ----------------------------------------------------
 
-const DESCRIPTION_LABELS = [
-  "Changes:",
-  "Does not change:",
-  "Revision:",
-  "Readiness:",
-  "Use the Journal instead:",
-  "Automatic context:",
-];
-
 describe("m1 inventory: help, descriptions, documented set", () => {
   it("every registered sb command is reachable through help", () => {
     for (const key of cliHelpKeys()) {
@@ -64,28 +56,21 @@ describe("m1 inventory: help, descriptions, documented set", () => {
     }
   });
 
-  it("every registered MCP tool carries a non-trivial normative description", () => {
-    assert.ok(MCP_TOOL_NAMES.length >= 13, "M1 final set must be present");
+  it("the shared tool surface is the minimal nine with a short description each (XTRM-674)", () => {
+    assert.equal(MCP_TOOL_NAMES.length, 9);
     assert.deepEqual([...new Set(MCP_TOOL_NAMES)], MCP_TOOL_NAMES, "tool names must be unique");
     for (const name of MCP_TOOL_NAMES) {
       const description = MCP_TOOL_DESCRIPTIONS[name];
-      assert.ok(typeof description === "string" && description.length >= 200, `${name} needs a non-trivial description`);
-      for (const label of DESCRIPTION_LABELS) {
-        assert.ok(description.includes(label), `${name} description must state ${label}`);
-      }
+      assert.ok(typeof description === "string" && description.length >= 20 && description.length <= 300, `${name} needs a short description`);
     }
   });
 
   it("the documented MCP inventory matches registration exactly", () => {
-    const cli = readDoc("docs/substrate/cli.md");
-    const section = cli.slice(cli.indexOf("## MCP tools"));
-    const fence = section.match(/```text\n([\s\S]*?)```/);
-    assert.ok(fence, "cli.md needs the MCP inventory code fence");
+    const doc = readSrc("docs/claude.md");
+    const fence = doc.slice(doc.indexOf("## Live MCP tools")).match(/```text\n([\s\S]*?)```/);
+    assert.ok(fence, "claude.md needs the MCP inventory code fence");
     const documented = fence[1]!.split(/\s+/).filter(Boolean).sort();
     assert.deepEqual(documented, [...MCP_TOOL_NAMES].sort(), "documented set must equal registration");
-    for (const name of MCP_TOOL_NAMES) {
-      assert.ok(cli.includes(name), `${name} must be named in the operator docs`);
-    }
   });
 
   it("cli.md documents all nine journal kinds on journal append", () => {
@@ -101,38 +86,27 @@ describe("m1 inventory: help, descriptions, documented set", () => {
 });
 
 // --- Clause 2: description content -------------------------------------------
+// The kind glossary and the result methodology live in `sb help kinds` and the
+// skill (XTRM-674), not in four copies inside tool descriptions.
 
-const JOURNAL_FACING = ["journal_append", "journal_checkpoint", "journal_show", "journal_query", "issue_note"];
-
-describe("m1 description content: revision, readiness, journal-instead, automatic context", () => {
-  it("each durable-work description covers the four semantic facets", () => {
-    for (const name of MCP_TOOL_NAMES) {
-      const lower = MCP_TOOL_DESCRIPTIONS[name]!.toLowerCase();
-      assert.ok(lower.includes("revision"), `${name} must say whether the Issue revision changes`);
-      assert.ok(lower.includes("readiness"), `${name} must say whether readiness goes stale`);
-      assert.ok(lower.includes("journal"), `${name} must say when the Journal is used instead`);
-      assert.ok(lower.includes("automatic"), `${name} must say what actor/session/provenance context is added automatically`);
+describe("m1 description content: kinds and result methodology live in one place", () => {
+  it("journal_append lists every writable kind and points at sb help kinds", () => {
+    const spec = TOOL_SPEC_BY_NAME.journal_append;
+    assert.match(spec.description, /sb help kinds/);
+    for (const kind of JOURNAL_KINDS.filter((k) => k !== "compaction")) {
+      assert.ok(spec.params["kind"]!.doc.includes(kind), `journal_append kind doc must list ${kind}`);
     }
   });
 
-  it("journal-facing descriptions explain all kinds for correct agent use", () => {
-    for (const name of JOURNAL_FACING) {
-      const lower = MCP_TOOL_DESCRIPTIONS[name]!.toLowerCase();
-      for (const kind of JOURNAL_KINDS) {
-        assert.ok(lower.includes(kind), `${name} must explain journal kind ${kind}`);
-      }
-    }
+  it("result stays a bounded payload and close cites refs", () => {
+    assert.match(TOOL_SPEC_BY_NAME.journal_append.params["result"]!.doc, /Required for kind result/);
+    assert.match(TOOL_SPEC_BY_NAME.issue_close.description, /result or validation refs/);
   });
 
-  it("result methodology is explicit: bounded payload, never a plain note", () => {
-    for (const name of ["journal_append", "journal_checkpoint", "issue_note", "issue_close"]) {
-      const lower = MCP_TOOL_DESCRIPTIONS[name]!.toLowerCase();
-      assert.ok(lower.includes("result"), `${name} must teach the result methodology`);
-      assert.ok(
-        lower.includes("never a plain note") || lower.includes("must not be used in place of a result"),
-        `${name} must forbid substituting a note or contract edit for a result`,
-      );
-    }
+  it("the help topic carries the kind glossary", () => {
+    const res = runCli(["help", "kinds"], { dbPath: join(mkdtempSync(join(tmpdir(), "sb-m1-kinds-")), "x.db") });
+    assert.equal(res.code, 0);
+    for (const kind of JOURNAL_KINDS) assert.ok(res.stdout.includes(kind), `sb help kinds must explain ${kind}`);
   });
 });
 

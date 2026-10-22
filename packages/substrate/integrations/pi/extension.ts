@@ -11,7 +11,7 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Type, type Usage } from "@earendil-works/pi-ai";
+import { type Usage } from "@earendil-works/pi-ai";
 import {
   convertToLlm,
   defineTool,
@@ -28,27 +28,17 @@ import {
   decidePiEditCall,
   SessionBindings,
   openServices,
+  piToolContext,
   resumeForSession,
   runBeforeCompact,
-  toolIssueClaim,
-  toolIssueGet,
-  toolIssueResume,
-  toolIssueSearch,
-  toolIssueUpdate,
-  toolJournalAppend,
-  toolJournalCheckpoint,
-  toolProvenanceTrace,
+  toolHandles,
   toPiCompaction,
 } from "./handlers.ts";
+import { runTool } from "../tool-core.ts";
+import { piToolName, TOOL_SPECS, type ToolName } from "../tool-surface.ts";
+import { PI_PARAMETERS } from "./parameters.ts";
 import type { SemanticCheckpoint } from "../../src/domain/journal.ts";
-import {
-  noopFeedback,
-  successFeedback,
-  warningFeedback,
-  withFeedback,
-  type OperationFeedback,
-} from "../../src/presentation/operation-feedback.ts";
-
+import { registerAdvisor } from "./advisor.ts";
 function dbPath(): string {
   return process.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db");
 }
@@ -57,12 +47,10 @@ function textResult(data: unknown): { content: Array<{ type: "text"; text: strin
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], details: { ok: true } };
 }
 
-function feedbackResult(data: Record<string, unknown>, feedback: OperationFeedback) {
-  return textResult(withFeedback(data, feedback));
-}
-
 export default function (pi: ExtensionAPI): void {
   const bindings = new SessionBindings();
+  // XTRM-673: same advisories as the Claude plugin (identity, claims, nudges).
+  registerAdvisor(pi, { dbPath });
 
   const withServices = <T>(fn: (svc: ReturnType<typeof openServices>) => T | Promise<T>): Promise<T> => {
     const svc = openServices(dbPath());
@@ -74,34 +62,12 @@ export default function (pi: ExtensionAPI): void {
     }
   };
 
-  const tools = [
+  const tools = TOOL_SPECS.map((spec) =>
     defineTool({
-      name: "substrate_issue_get",
-      label: "Substrate issue get",
-      description: "Get a Substrate issue with contract, readiness, claim, and attestation. Ref accepts machine ID, durable reference, locator, historical locator, or alias.",
-      parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }) }),
-      async execute(_id: string, params: Record<string, unknown>) {
-        return textResult(await withServices((svc) => toolIssueGet(svc, { ref: params.ref as string })));
-      },
-    }),
-    defineTool({
-      name: "substrate_issue_search",
-      label: "Substrate issue search",
-      description: "Search Substrate issues within a project by title/reference substring, optionally filtered by kind.",
-      parameters: Type.Object({ project: Type.String({ description: "Project id" }), query: Type.Optional(Type.String({ description: "Substring match" })), kind: Type.Optional(Type.String({ description: "Issue kind" })) }),
-      async execute(_id: string, params: Record<string, unknown>) {
-        return textResult(
-          await withServices((svc) =>
-            toolIssueSearch(svc, { project: params.project as string, query: params.query as string | undefined, kind: params.kind as string | undefined }),
-          ),
-        );
-      },
-    }),
-    defineTool({
-      name: "substrate_issue_claim",
-      label: "Substrate issue claim",
-      description: "Claim a dispatchable Substrate issue for a holder. Binds the Pi session to the issue for checkpoints and resume. Successful mutations include structured feedback.",
-      parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), holder: Type.String({ description: "Claim holder" }), activationId: Type.Optional(Type.String({ description: "Activation id" })), sessionId: Type.Optional(Type.String({ description: "Pi session id" })) }),
+      name: piToolName(spec.name),
+      label: `Substrate ${spec.name.replace("_", " ")}`,
+      description: spec.description,
+      parameters: PI_PARAMETERS[spec.name],
       async execute(
         _id: string,
         params: Record<string, unknown>,
@@ -109,85 +75,12 @@ export default function (pi: ExtensionAPI): void {
         _onUpdate: AgentToolUpdateCallback<{ ok: boolean }> | undefined,
         ctx: ExtensionContext,
       ) {
-        const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
-        const result = await withServices((svc) => toolIssueClaim(svc, bindings, { ref: params.ref as string, holder: params.holder as string, activationId: params.activationId as string | undefined, sessionId }));
-        return feedbackResult(result, successFeedback("issue_claimed", `Claimed ${params.ref as string}`, `holder ${params.holder as string}`));
+        const context = piToolContext(bindings, { sessionId: ctx?.sessionManager?.getSessionId?.(), cwd: ctx?.cwd });
+        const result = await withServices((svc) => runTool(spec.name, params, toolHandles(svc), context));
+        return textResult(result);
       },
     }),
-    defineTool({
-      name: "substrate_issue_update",
-      label: "Substrate issue update",
-      description: "Revise a Substrate issue contract (revision-on-change; identical contracts are a no-op). Results include structured success/no-op feedback so agents can distinguish a persisted revision from an idempotent repeat.",
-      parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), contract: Type.Unknown({ description: "Seven-field work contract" }) }),
-      async execute(_id: string, params: Record<string, unknown>) {
-        const result = await withServices((svc) => toolIssueUpdate(svc, { ref: params.ref as string, contract: params.contract }));
-        return feedbackResult(
-          result,
-          result.revisionCreated
-            ? successFeedback("issue_updated", `Updated ${params.ref as string}`, "new revision created; readiness must be revalidated")
-            : noopFeedback("issue_unchanged", `${params.ref as string} already has this contract`, "no new revision created"),
-        );
-      },
-    }),
-    defineTool({
-      name: "substrate_journal_append",
-      label: "Substrate journal append",
-      description: "Append a journal entry (note, finding, decision, blocker, milestone, handoff, result, checkpoint, compaction) to an issue. Results include a structured persistence confirmation.",
-      parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), kind: Type.String({ description: "Entry kind" }), sessionId: Type.Optional(Type.String({ description: "Pi session id" })) }),
-      async execute(
-        _id: string,
-        params: Record<string, unknown>,
-        _signal: AbortSignal | undefined,
-        _onUpdate: AgentToolUpdateCallback<{ ok: boolean }> | undefined,
-        ctx: ExtensionContext,
-      ) {
-        const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
-        const result = await withServices((svc) => toolJournalAppend(svc, { ref: params.ref as string, kind: params.kind as string, sessionId }));
-        return feedbackResult(result, successFeedback("journal_written", `Added ${params.kind as string} to ${params.ref as string}`, `journal seq ${String(result.sequence)}`));
-      },
-    }),
-    defineTool({
-      name: "substrate_journal_checkpoint",
-      label: "Substrate journal checkpoint",
-      description: "Write a mechanical-first journal checkpoint for an issue. Results distinguish complete from degraded semantic enrichment while confirming the durable mechanical checkpoint.",
-      parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), sessionId: Type.Optional(Type.String({ description: "Pi session id" })), headCommit: Type.Optional(Type.String({ description: "Head commit SHA" })) }),
-      async execute(
-        _id: string,
-        params: Record<string, unknown>,
-        _signal: AbortSignal | undefined,
-        _onUpdate: AgentToolUpdateCallback<{ ok: boolean }> | undefined,
-        ctx: ExtensionContext,
-      ) {
-        const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
-        const result = await withServices((svc) => toolJournalCheckpoint(svc, { ref: params.ref as string, sessionId, headCommit: params.headCommit as string | undefined }));
-        return feedbackResult(
-          result,
-          result.degraded
-            ? warningFeedback("journal_degraded", `Checkpoint persisted for ${params.ref as string}`, "mechanical state is durable; semantic enrichment degraded")
-            : successFeedback("journal_written", `Checkpoint persisted for ${params.ref as string}`, `journal seq ${String(result.sequence)}`),
-        );
-      },
-    }),
-    defineTool({
-      name: "substrate_issue_resume",
-      label: "Substrate issue resume",
-      description: "Build the bounded resume capsule for an issue: current contract, latest checkpoint, Journal delta, blockers, claim, and provenance.",
-      parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }) }),
-      async execute(_id: string, params: Record<string, unknown>) {
-        const capsule = await withServices((svc) => toolIssueResume(svc, { ref: params.ref as string }));
-        return { content: [{ type: "text" as const, text: capsule }], details: { ok: true } };
-      },
-    }),
-    defineTool({
-      name: "substrate_provenance_trace",
-      label: "Substrate provenance trace",
-      description: "Trace the full durable evidence spine for an issue: revision/hash, attestation, claims, execution bindings, WorkReceipts with artifacts, checkpoints, commits/PRs, external bindings, and closure revision.",
-      parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }) }),
-      async execute(_id: string, params: Record<string, unknown>) {
-        return textResult(await withServices((svc) => toolProvenanceTrace(svc, { ref: params.ref as string })));
-      },
-    }),
-  ];
+  );
   for (const t of tools) pi.registerTool(t);
 
   // A session bound to an Issue may mutate only under its own live claim

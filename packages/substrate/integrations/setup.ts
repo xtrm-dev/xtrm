@@ -284,7 +284,7 @@ export function installPlan(pkgRoot: string = PKG_ROOT): InstallPlan {
         steps: [
           "ensure @jaggerxtrm/substrate is resolvable by the Pi session",
           "load integrations/pi/extension.ts as the substrate extension",
-          "verify tools substrate_issue_get/search/claim/update + journal + resume register",
+          "verify the nine substrate_* tools (issue, journal, resume, provenance) register",
         ],
       },
     ],

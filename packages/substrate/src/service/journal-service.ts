@@ -12,7 +12,10 @@ import type { IssueService } from "./issue-service.ts";
 import {
   assertResultPayload,
   assertSemanticCheckpoint,
+  previewText,
+  assessJournalEntry,
   isJournalKind,
+  unknownJournalKindMessage,
   newJournalEntryId,
   validateEvidenceRefs,
   validateMechanicalCheckpoint,
@@ -142,14 +145,15 @@ export interface JournalOperationalContext {
 export const DEFAULT_CONTEXT_LIMIT = 10;
 export const MAX_CONTEXT_LIMIT = 50;
 
+// XTRM-678: rendered views cut long text with a marker, never silently.
 function trunc(s: string, max = 2000): string {
-  return s.length > max ? `${s.slice(0, max)}…` : s;
+  return previewText(s, max, "full text: sb journal show --json");
 }
 
 const CONTEXT_SUMMARY_MAX = 280;
 
 function contextTrunc(s: string | null): string | null {
-  return s === null ? null : s.length > CONTEXT_SUMMARY_MAX ? `${s.slice(0, CONTEXT_SUMMARY_MAX)}…` : s;
+  return s === null ? null : previewText(s, CONTEXT_SUMMARY_MAX, "full text: sb journal show --json");
 }
 
 /**
@@ -177,11 +181,13 @@ export class JournalService {
 
   /** Single append-only write allocating the next sequence; continuity only, never execution authority. */
   appendEntry(issueId: string, input: AppendEntryInput): JournalEntry {
-    if (!isJournalKind(input.kind)) throw new Error(`unknown journal kind: ${String(input.kind)}`);
+    if (!isJournalKind(input.kind)) throw new Error(unknownJournalKindMessage(input.kind));
     if (input.refs !== undefined) {
       const problems = validateEvidenceRefs(input.refs);
       if (problems.length > 0) throw new Error(`invalid journal refs: ${problems[0]}`);
     }
+    const quality = assessJournalEntry(input);
+    if (quality.errors.length > 0) throw new Error(quality.errors[0]);
     if (input.semantic !== undefined) assertSemanticCheckpoint(input.semantic);
     if (input.result !== undefined) assertResultPayload(input.result);
     if (input.mechanical !== undefined) {
@@ -197,7 +203,7 @@ export class JournalService {
     // A result is a bounded execution outcome, never an unbounded body: the
     // kind is only legal with a validated ResultPayload (§§29, 39).
     if (input.kind === "result" && input.result === undefined) {
-      throw new Error('journal kind "result" requires a bounded result payload (§29)');
+      throw new Error('journal kind "result" requires a bounded result payload (§29); pass --result \'{"summary":"…"}\'');
     }
     if (input.kind !== "result" && input.result !== undefined) {
       throw new Error(`journal kind "${input.kind}" does not carry a result payload`);
@@ -291,7 +297,7 @@ export class JournalService {
     let sql = "SELECT * FROM issue_journal WHERE issue_id = ?";
     const params: SQLInputValue[] = [issueId];
     if (opts?.kind !== undefined) {
-      if (!isJournalKind(opts.kind)) throw new Error(`unknown journal kind: ${String(opts.kind)}`);
+      if (!isJournalKind(opts.kind)) throw new Error(unknownJournalKindMessage(opts.kind));
       sql += " AND kind = ?";
       params.push(opts.kind);
     }
@@ -333,7 +339,7 @@ export class JournalService {
   latest(issueId: string, opts?: { kind?: JournalKind }): JournalEntry | null {
     this.issues.getIssue(issueId);
     if (opts?.kind !== undefined && !isJournalKind(opts.kind)) {
-      throw new Error(`unknown journal kind: ${String(opts.kind)}`);
+      throw new Error(unknownJournalKindMessage(opts.kind));
     }
     const r =
       opts?.kind !== undefined
@@ -353,7 +359,7 @@ export class JournalService {
   timeline(issueId: string, opts?: { kind?: JournalKind; limit?: number }): JournalEntry[] {
     this.issues.getIssue(issueId);
     if (opts?.kind !== undefined && !isJournalKind(opts.kind)) {
-      throw new Error(`unknown journal kind: ${String(opts.kind)}`);
+      throw new Error(unknownJournalKindMessage(opts.kind));
     }
     const limit = opts?.limit ?? 50;
     if (!Number.isInteger(limit) || limit <= 0) throw new Error("limit must be a positive integer");
@@ -576,7 +582,11 @@ export class JournalService {
     }
     const s = entry.semantic;
     if (!s) {
-      lines.push("SEMANTIC: (mechanical-only; summarizer pending or degraded)");
+      // XTRM-420: name what the entry actually carries; "(mechanical-only)"
+      // on an entry without a mechanical payload asserted evidence that is absent.
+      if (entry.result) lines.push(`RESULT: ${trunc(entry.result.summary)}${entry.result.outcome ? ` (${entry.result.outcome})` : ""}`);
+      else if (m) lines.push("SEMANTIC: (mechanical-only; summarizer pending or degraded)");
+      else lines.push("SEMANTIC: (empty entry: no mechanical, semantic or result payload)");
       return lines.join("\n");
     }
     lines.push(`SUMMARY: ${trunc(s.summary)}`);

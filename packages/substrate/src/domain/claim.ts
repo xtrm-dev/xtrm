@@ -50,6 +50,12 @@ export function isLiveClaim(c: Pick<IssueClaim, "expiresAt" | "releasedAt">, now
   return c.releasedAt === null && c.expiresAt > now;
 }
 
+// Human-readable instant for errors and confirmations: ISO-8601 UTC without
+// milliseconds, never raw epoch ms.
+export function isoTime(ms: number): string {
+  return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
 // Canonical workspace key: a normalized worktree path. Key derivation only —
 // Substrate attaches no exclusion to this key (XTRM-414).
 export function normalizeWorkspace(input: string | WorkspaceIdentity): string {

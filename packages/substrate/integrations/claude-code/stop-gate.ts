@@ -157,14 +157,16 @@ export async function handleStopGate(input: StopGateInput = {}): Promise<StopGat
         checkpointFailed = true;
       }
     }
+    // Stop fires at the end of every turn, not only at session end.
+    const minsLeft = Math.round((claim.expiresAt - Date.now()) / 60000);
     const parts = [
-      `session ending with live claim on ${issueRef} (holder ${claim.holder}).`,
+      `turn ended with live claim on ${issueRef} (holder ${claim.holder}; ${minsLeft >= 0 ? `expires in ${minsLeft} min` : "expired"}).`,
       `continuity: ${checkpoints + (checkpointed ? 1 : 0)} checkpoint(s) since claim${checkpointed ? " (one written at stop)" : ""}, ` +
         `${handoffs} handoff(s), ${results} result(s), ${blockers} blocker entr(ies) on record.`,
     ];
     if (results === 0) {
       parts.push(
-        `no meaningful result recorded since claim; record one with \`sb issue note ${issueRef} --kind result\` when there is something to record — ending now is fine, work stays open.`,
+        `no meaningful result recorded since claim; record one with \`sb journal append ${issueRef} --kind result --result '{"summary":"<what changed>","outcome":"<…>","validation":["<evidence>"]}'\` when there is something to record — ending now is fine, work stays open.`,
       );
     }
     if (pendingAsks.length > 0) {
@@ -182,7 +184,9 @@ export async function handleStopGate(input: StopGateInput = {}): Promise<StopGat
       );
     }
     if (handoffs === 0 && !closureReady) {
-      parts.push(`no handoff since claim; write one with \`sb journal append ${issueRef} --kind handoff\` if the next session needs context.`);
+      parts.push(
+        `no handoff since claim; write one with \`sb journal append ${issueRef} --kind handoff --semantic '{"summary":"<state, evidence>","next":["<step>"]}'\` if the next session needs context.`,
+      );
     }
     let action: StopGateAction = checkpointed ? "checkpointed" : "continuity";
     if (closureReady) {
@@ -224,6 +228,52 @@ export async function handleStopGate(input: StopGateInput = {}): Promise<StopGat
   }
 }
 
+// Stop output (code.claude.com/docs/en/hooks#stop-decision-control): a
+// top-level additionalContext is not read, and hookSpecificOutput
+// .additionalContext would force the turn to continue. The gate never
+// blocks, so it informs the operator via systemMessage only, and only when
+// the actionable signal changed since the last notice for this session —
+// Stop runs every turn and an identical repeat is noise.
+export function stopGateSignature(result: StopGateResult): string | null {
+  const s = result.signals;
+  if (!result.continuity || !s) return null;
+  return [
+    result.issueRef,
+    result.action,
+    s.resultsSinceClaim === 0 ? "no-result" : "result",
+    s.handoffsSinceClaim === 0 ? "no-handoff" : "handoff",
+    s.pendingAsks.length,
+    s.openBlockers.join(","),
+    s.openReceipts > 0 ? "receipts" : "",
+    result.claimReleased ? "released" : "",
+  ].join("|");
+}
+
+export function stopGateHookOutput(
+  result: StopGateResult,
+  opts: { sessionId?: string; stateDir?: string } = {},
+): Record<string, unknown> | null {
+  const signature = stopGateSignature(result);
+  if (!signature) return null;
+  if (opts.sessionId) {
+    const fs = process.getBuiltinModule("node:fs") as typeof import("node:fs");
+    const os = process.getBuiltinModule("node:os") as typeof import("node:os");
+    const path = process.getBuiltinModule("node:path") as typeof import("node:path");
+    const file = path.join(opts.stateDir ?? os.tmpdir(), `substrate-stop-${opts.sessionId.replace(/[^\w.-]/g, "_")}.sig`);
+    try {
+      if (fs.readFileSync(file, "utf8") === signature) return null;
+    } catch {
+      // first notice for this session
+    }
+    try {
+      fs.writeFileSync(file, signature);
+    } catch {
+      // dedupe is best-effort; still notify
+    }
+  }
+  return { systemMessage: `Substrate: ${result.continuity}` };
+}
+
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
     let data = "";
@@ -262,7 +312,8 @@ if (invokedAsMain) {
   });
   // XTRM-335: the no-continuity exit is a proven zero-byte quiet path; only
   // the write-then-terminate path drains via exitCode.
-  if (!result.continuity) process.exit(0);
-  process.stdout.write(JSON.stringify({ additionalContext: result.continuity }) + "\n");
+  const out = stopGateHookOutput(result, { sessionId: hook["session_id"] as string | undefined });
+  if (!out) process.exit(0);
+  process.stdout.write(JSON.stringify(out) + "\n");
   process.exitCode = 0;
 }

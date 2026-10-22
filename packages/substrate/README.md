@@ -97,17 +97,18 @@ contract and is side-effect-free.
 
 ## Pi integration
 
-Pi registers eight native Substrate tools over the same typed services:
+Pi registers nine native Substrate tools over the same typed services:
 
 ```text
 substrate_issue_get
-substrate_issue_search
+substrate_issue_list
 substrate_issue_claim
 substrate_issue_update
+substrate_issue_close
 substrate_journal_append
-substrate_journal_checkpoint
-substrate_issue_resume
-substrate_provenance_trace
+substrate_journal_read
+substrate_resume_capsule
+substrate_provenance
 ```
 
 The Pi integration also owns the claim-gated edit/write hook, resume command and

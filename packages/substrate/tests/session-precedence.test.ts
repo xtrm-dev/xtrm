@@ -39,7 +39,7 @@ for (const command of [["journal", "append"], ["journal", "checkpoint"], ["prove
           svc.claimIssue(issue.id, "tester");
           const args = ["--db", dbPath, "--project", "prj_test", ...command, issue.id];
           if (json) args.push("--json");
-          if (command[1] === "append") args.push("--kind", "note");
+          if (command[1] === "append") args.push("--kind", "note", "--semantic", JSON.stringify({ summary: "precedence check records which session identity wins for this entry" }));
           if (command[1] === "dispatch") args.push("--workspace", dir, "--participant", "tester");
           if (c.explicit !== undefined) args.push("--session", c.explicit);
           const result = await runUxCli(args);

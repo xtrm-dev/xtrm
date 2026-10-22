@@ -52,7 +52,9 @@ export function evaluateEditState(state: {
     return {
       allow: false,
       issueRef: state.issueRef,
-      reason: `no live claim on ${state.issueRef}; run \`sb issue claim ${state.issueRef} --holder <name>\` first`,
+      reason:
+        `no live claim on ${state.issueRef} (never claimed, released, or expired). ` +
+        `Run \`sb issue claim ${state.issueRef} --holder ${state.holder || "<name>"} --ttl-ms <ms>\` before editing.`,
     };
   }
   if (claim) {
@@ -60,14 +62,20 @@ export function evaluateEditState(state: {
       return {
         allow: false,
         issueRef: state.issueRef,
-        reason: `live claim on ${state.issueRef} held by ${claim.holder}; no current holder supplied, refusing without WHO`,
+        reason:
+          `live claim on ${state.issueRef} held by ${claim.holder}, but this session has no SUBSTRATE_HOLDER, so the gate cannot tell who is editing. ` +
+          `If you are ${claim.holder}: run \`export SUBSTRATE_HOLDER=${claim.holder}\` (xt claude|pi|codex <name> sets it at launch). ` +
+          `If you are not the holder, do not edit; ask ${claim.holder} or work on your own claimed issue.`,
       };
     }
     if (!sameHolder(claim, state.holder, state.activationId ?? null)) {
       return {
         allow: false,
         issueRef: state.issueRef,
-        reason: `live claim on ${state.issueRef} held by ${claim.holder}${claim.activationId ? ` (activation ${claim.activationId})` : ""}; holder ${state.holder} may not mutate`,
+        reason:
+          `live claim on ${state.issueRef} held by ${claim.holder}${claim.activationId ? ` (activation ${claim.activationId})` : ""}; ` +
+          `this session is ${state.holder}${state.activationId ? ` (activation ${state.activationId})` : ""} and may not edit under it. ` +
+          `Coordinate with ${claim.holder}, or claim your own issue.`,
       };
     }
   }
@@ -99,6 +107,18 @@ export function handleEditGate(input: EditGateInput = {}): EditGateResult {
       // best-effort
     }
   }
+}
+
+// PreToolUse output (code.claude.com/docs/en/hooks#pretooluse-decision-control):
+// top-level decision/reason is deprecated for this event; deny via
+// hookSpecificOutput.permissionDecision. systemMessage tells the operator too.
+export function editGateHookOutput(result: EditGateResult): Record<string, unknown> | null {
+  if (result.allow) return null;
+  const reason = result.reason ?? "no live claim";
+  return {
+    hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `Substrate edit gate: ${reason}` },
+    systemMessage: `Substrate edit gate blocked an edit on ${result.issueRef ?? "the bound issue"}`,
+  };
 }
 
 function readStdin(): Promise<string> {
@@ -142,7 +162,8 @@ if (invokedAsMain) {
   // PreToolUse contract: exit 0 always; a block is JSON on stdout.
   // XTRM-335: the allow exit is a proven zero-byte quiet path; only the
   // write-then-terminate path drains via exitCode.
-  if (result.allow) process.exit(0);
-  process.stdout.write(JSON.stringify({ decision: "block", reason: result.reason ?? "no live claim" }) + "\n");
+  const out = editGateHookOutput(result);
+  if (!out) process.exit(0);
+  process.stdout.write(JSON.stringify(out) + "\n");
   process.exitCode = 0;
 }

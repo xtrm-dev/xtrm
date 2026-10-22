@@ -5,11 +5,15 @@
 
 import { createHash } from "node:crypto";
 import { enrichExecutionContext } from "../../src/domain/execution-context.ts";
+import { clipWithMarker, SEMANTIC_SUMMARY_MAX } from "../../src/domain/journal.ts";
 import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
 import { armPipeDrain } from "../write-and-exit.ts";
 
 export interface PostCompactInput {
   session_id?: string;
+  // Claude Code sends the summary as compact_summary
+  // (code.claude.com/docs/en/hooks#postcompact); summary is kept for direct callers.
+  compact_summary?: string;
   summary?: string;
   cwd?: string;
   issueRef?: string;
@@ -29,7 +33,7 @@ function hashSummary(s: string): string {
 export function handlePostCompact(input: PostCompactInput = {}): PostCompactResult {
   const cwd = input.cwd ?? process.cwd();
   const issueRef = input.issueRef ?? discoverIssueRef(cwd);
-  const summary = (input.summary ?? "").trim();
+  const summary = (input.compact_summary ?? input.summary ?? "").trim();
   if (!issueRef) return { ok: true, entryId: null, reason: "no issue ref; audit skipped" };
   if (!summary) return { ok: true, entryId: null, reason: "no compact summary provided; audit skipped" };
   let handles: ReturnType<typeof openHandles> | null = null;
@@ -40,10 +44,13 @@ export function handlePostCompact(input: PostCompactInput = {}): PostCompactResu
       kind: "finding",
       // Provider session, not participant identity (§98); see precompact.ts.
       sessionId: input.session_id,
-      semantic: { summary: summary.slice(0, 2000) },
+      semantic: { summary: clipWithMarker(summary, SEMANTIC_SUMMARY_MAX, "compact_summary") },
       refs: [{ kind: "claude-compact-summary", key: hashSummary(summary) }],
       executionContext: enrichExecutionContext({
         host: input.session_id ? { type: "claude", sessionId: input.session_id } : null,
+        // An explicit envelope disables the service's ambient fallback, so
+        // carry the holder here or the entry records no participant.
+        participantId: process.env["SUBSTRATE_HOLDER"] || null,
       }),
     });
     return { ok: true, entryId: entry.id };

@@ -62,15 +62,12 @@ export function knownGroups(): Set<string> {
 }
 
 export function mcpToolNames(): string[] {
-  const src = readSrc("integrations/claude-code/mcp-server.ts");
-  const start = src.indexOf("const TOOL_DEFS");
-  // TOOL_DEFS is the terminal statement of the registration table: it ends
-  // where the exported-inventory marker comment begins (the table body
-  // itself contains nested array literals, so a bare "];" search ends early).
-  const end = src.indexOf("// Exported registration inventory", start);
-  assert.ok(start >= 0 && end > start, "TOOL_DEFS table must exist in mcp-server.ts");
-  const names = [...src.slice(start, end).matchAll(/name: "([^"]+)"/g)].map((m) => m[1]!);
-  assert.ok(names.length > 0, "TOOL_DEFS must register at least one tool");
+  const src = readSrc("integrations/tool-surface.ts");
+  const start = src.indexOf("export const TOOL_NAMES = [");
+  const end = src.indexOf("] as const;", start);
+  assert.ok(start >= 0 && end > start, "TOOL_NAMES table must exist in tool-surface.ts");
+  const names = [...src.slice(start, end).matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+  assert.ok(names.length > 0, "TOOL_NAMES must register at least one tool");
   return names;
 }
 
@@ -281,27 +278,18 @@ describe("docs-drift-gate: cli.md matches CLI registrations", () => {
 // --- Gate: MCP tools ----------------------------------------------------------
 
 describe("docs-drift-gate: MCP tools", () => {
-  it("every registered MCP tool is named in the operator docs", () => {
-    const cli = readDoc(CLI_DOC);
-    const missing = mcpToolNames().filter((t) => !cli.includes(t));
-    assert.deepEqual(missing, [], "registered MCP tools missing from operator docs");
+  it("every registered MCP tool is named in the Claude integration doc", () => {
+    const doc = readSrc("docs/claude.md");
+    const missing = mcpToolNames().filter((t) => !doc.includes(t));
+    assert.deepEqual(missing, [], "registered MCP tools missing from claude.md");
   });
-  it("MCP description inventory is landed (owner M1)", () => {
-    const cli = readDoc(CLI_DOC);
-    // Exported inventory agrees with the registration table (never a copy).
-    assert.deepEqual([...MCP_TOOL_NAMES].sort(), [...mcpToolNames()].sort(), "exported MCP inventory must match TOOL_DEFS");
-    assert.ok(MCP_TOOL_NAMES.length >= 13, "M1 final set covers get/search, claim/release, update, note, close, append/checkpoint/show/query, trace, resume");
+  it("the exported inventory agrees with the shared tool surface", () => {
+    assert.deepEqual([...MCP_TOOL_NAMES].sort(), [...mcpToolNames()].sort(), "exported MCP inventory must match TOOL_NAMES");
+    assert.equal(MCP_TOOL_NAMES.length, 9, "XTRM-674 minimal surface");
     for (const name of MCP_TOOL_NAMES) {
-      assert.ok(cli.includes(name), `${name} must be named in the operator docs`);
       const description = MCP_TOOL_DESCRIPTIONS[name];
-      assert.ok(typeof description === "string" && description.length >= 200, `${name} must carry a non-trivial normative description`);
-      for (const label of ["Changes:", "Does not change:", "Revision:", "Readiness:", "Use the Journal instead:", "Automatic context:"]) {
-        assert.ok(description.includes(label), `${name} description must state ${label}`);
-      }
+      assert.ok(typeof description === "string" && description.length >= 20, `${name} must carry a description`);
     }
-    assert.match(cli, /LANDED/, "cli.md must record the landed MCP inventory state");
-    assert.match(cli, /M1/, "cli.md must name M1 as the owner of the MCP inventory");
-    assert.doesNotMatch(cli, /PENDING/, "cli.md must no longer record the MCP inventory as pending");
   });
 });
 
@@ -419,10 +407,10 @@ describe("docs-drift-gate matchers fail on regressed content", () => {
   it("MCP inventory is derived from registrations, not a copy", () => {
     const names = mcpToolNames();
     assert.ok(names.includes("resume_capsule"), "resume_capsule must come from the registration scan");
-    assert.ok(names.includes("provenance_trace"), "provenance_trace must come from the registration scan");
+    assert.ok(names.includes("provenance"), "provenance must come from the registration scan");
     assert.ok(names.includes("issue_claim"), "op-discriminated issue_claim must come from the registration scan");
-    assert.ok(names.includes("journal_query"), "op-discriminated journal_query must come from the registration scan");
+    assert.ok(names.includes("journal_read"), "mode-discriminated journal_read must come from the registration scan");
     assert.deepEqual([...names].sort(), [...MCP_TOOL_NAMES].sort(), "scan and export must agree exactly");
-    assert.ok(names.length >= 13, "the full M1 tool set must be found by the scan");
+    assert.equal(names.length, 9, "the full tool set must be found by the scan");
   });
 });

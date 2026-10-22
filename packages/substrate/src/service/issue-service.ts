@@ -47,7 +47,7 @@ import {
   type IssueQuery,
 } from "../domain/board.ts";
 import { EDGE_KINDS, wouldCreateCycle, type EdgeKind } from "../domain/edge.ts";
-import { DEFAULT_CLAIM_TTL_MS, isLiveClaim, sameHolder, type IssueClaim,
+import { DEFAULT_CLAIM_TTL_MS, isLiveClaim, isoTime, sameHolder, type IssueClaim,
 } from "../domain/claim.ts";
 import { mutateOnce, nextInNamespace, withTransaction } from "../store/transactions.ts";
 
@@ -430,7 +430,8 @@ export class IssueService {
   ): { issue: ResolvedIssue; created: boolean } {
     const issue = this.requireIssue(issueId);
     if (expectedRevision !== undefined && issue.currentRevision !== expectedRevision) {
-      throw new Error(`revision conflict on ${issueId}: expected ${expectedRevision}, current ${issue.currentRevision}`);
+      const ref = this.refOf(issueId);
+      throw new Error(`revision conflict on ${ref}: expected ${expectedRevision}, current ${issue.currentRevision}; re-read with \`sb issue show ${ref}\` and retry`);
     }
     const hash = hashContract(contract);
     if (hash === issue.currentContractHash && ownership === undefined && contextRefs === undefined) {
@@ -1577,7 +1578,8 @@ export class IssueService {
     this.requireIssue(issueId);
     const blockers = rows<Row>(
       this.db,
-      "SELECT from_issue FROM issue_edges WHERE to_issue = ? AND kind = 'blocks' AND active = 1 ORDER BY from_issue",
+      // DISTINCT: a repeated relate leaves duplicate active edges; a blocker is one fact.
+      "SELECT DISTINCT from_issue FROM issue_edges WHERE to_issue = ? AND kind = 'blocks' AND active = 1 ORDER BY from_issue",
       issueId,
     ).map((r) => r["from_issue"] as string);
     return blockers.filter((b) => {
@@ -1710,7 +1712,8 @@ export class IssueService {
   ): IssueClaim {
     const issue = this.requireIssue(issueId);
     if (expectedRevision !== undefined && issue.currentRevision !== expectedRevision) {
-      throw new Error(`revision conflict on ${issueId}: expected ${expectedRevision}, current ${issue.currentRevision}`);
+      const ref = this.refOf(issueId);
+      throw new Error(`revision conflict on ${ref}: expected ${expectedRevision}, current ${issue.currentRevision}; re-read with \`sb issue show ${ref}\` and retry`);
     }
     const open = this.openClaim(issueId, now);
     const unclosed = open ?? this.unclosedClaim(issueId);
@@ -1718,8 +1721,9 @@ export class IssueService {
       if (isLiveClaim(unclosed, now)) {
         // Idempotent same-holder retry (C16); anything else is steal (C17).
         if (sameHolder(unclosed, holder, activationId ?? null)) return unclosed;
+        const ref = this.refOf(issueId);
         throw new Error(
-          `claim-held: ${issueId} is live-held by ${unclosed.holder} until ${unclosed.expiresAt} (anti-steal)`,
+          `claim-held: ${ref} is live-held by ${unclosed.holder} until ${isoTime(unclosed.expiresAt)} (anti-steal); wait for expiry or ask the holder to run \`sb issue release ${ref} --holder ${unclosed.holder}\``,
         );
       }
       // Expired: reclaim per policy (C18) — close the old generation first
@@ -1736,7 +1740,17 @@ export class IssueService {
     // live row would have thrown above, the expired row is just closed.
     const report = this.readinessReport(issueId, now, false);
     if (!report.dispatchable) {
-      throw new Error(`not-claimable: ${issueId} is ${report.state}: ${report.reasons.join("; ")}`);
+      const ref = this.refOf(issueId);
+      // Blockers surface as human refs, once each (edges can repeat a target).
+      const blockers = [...new Set(report.unsatisfiedBlockers)].map((id) => this.refOf(id));
+      const reasons = report.reasons.map((r) => (r.startsWith("unsatisfied blockers:") ? `unsatisfied blockers: ${blockers.join(", ")}` : r));
+      const needsAttestation = report.reasons.some((r) => r.startsWith("no current semantic attestation"));
+      const remedy = needsAttestation
+        ? `sb issue attest ${ref} --outcome ready --policy default --attested-by <you>`
+        : report.state === "blocked" && blockers.length > 0
+          ? `sb issue show ${blockers[0]}`
+          : `sb issue validate ${ref}`;
+      throw new Error(`not-claimable: ${ref} is ${report.state}: ${reasons.join("; ")}; run \`${remedy}\``);
     }
     const ttl = ttlMs ?? DEFAULT_CLAIM_TTL_MS;
     if (!Number.isInteger(ttl) || ttl <= 0) throw new Error("claim ttlMs must be a positive integer");
@@ -1780,10 +1794,11 @@ export class IssueService {
     return withTransaction(this.db, () => {
       const now = opts?.now ?? Date.now();
       const open = this.unclosedClaim(issueId);
-      if (!open) throw new Error(`no-claim: ${issueId} has no open claim to renew`);
-      if (!isLiveClaim(open, now)) throw new Error(`claim-expired: ${issueId} generation ${open.generation} expired; reclaim with claimIssue`);
+      const humanRef = this.refOf(issueId);
+      if (!open) throw new Error(`no-claim: ${humanRef} has no open claim to renew; run \`sb issue claim ${humanRef} --holder ${holder}\``);
+      if (!isLiveClaim(open, now)) throw new Error(`claim-expired: ${humanRef} generation ${open.generation} expired at ${isoTime(open.expiresAt)}; reclaim with \`sb issue claim ${humanRef} --holder ${holder}\``);
       if (!sameHolder(open, holder, opts?.activationId ?? null)) {
-        throw new Error(`claim-held: ${issueId} is live-held by ${open.holder} (anti-steal)`);
+        throw new Error(`claim-held: ${humanRef} is live-held by ${open.holder} (anti-steal); only the holder renews`);
       }
       const ttl = opts?.ttlMs ?? DEFAULT_CLAIM_TTL_MS;
       if (!Number.isInteger(ttl) || ttl <= 0) throw new Error("claim ttlMs must be a positive integer");
@@ -1803,7 +1818,8 @@ export class IssueService {
       const open = this.unclosedClaim(issueId);
       if (!open) return null;
       if (!sameHolder(open, holder, opts?.activationId ?? null)) {
-        throw new Error(`claim-held: ${issueId} is held by ${open.holder}; only the holder releases (anti-steal)`);
+        const humanRef = this.refOf(issueId);
+        throw new Error(`claim-held: ${humanRef} is held by ${open.holder}; only the holder releases (anti-steal); run \`sb issue release ${humanRef} --holder ${open.holder}\` as that holder`);
       }
       this.closeClaimRow(open.id, now);
       this.appendEvent(issueId, "claim.released", { claim: open.id, generation: open.generation });
@@ -1821,6 +1837,24 @@ export class IssueService {
     return rows<Row>(this.db, "SELECT * FROM issue_claims WHERE issue_id = ? ORDER BY id", issueId).map((r) =>
       this.toClaim(r),
     );
+  }
+
+  // Unreleased claims of one holder on non-terminal issues, live or recently
+  // expired, newest first: lets a session see what it holds without a
+  // hand-kept roster (XTRM-672). Closing does not release a claim, so
+  // terminal issues are filtered here. Expired rows within `graceMs` are kept
+  // so an advisory can say "expired".
+  listClaimsByHolder(holder: string, opts?: { now?: number; graceMs?: number }): IssueClaim[] {
+    const now = opts?.now ?? Date.now();
+    return rows<Row>(
+      this.db,
+      `SELECT c.* FROM issue_claims c JOIN issues i ON i.id = c.issue_id
+       WHERE c.holder = ? AND c.released_at IS NULL AND c.expires_at >= ?
+         AND i.lifecycle_state NOT IN ('done', 'cancelled', 'archived')
+       ORDER BY c.acquired_at DESC`,
+      holder,
+      now - (opts?.graceMs ?? 0),
+    ).map((r) => this.toClaim(r));
   }
 
   private assertHolder(holder: string): void {
@@ -1874,6 +1908,11 @@ export class IssueService {
   }
 
   // -- internals ---------------------------------------------------------------
+
+  // Human ref for error text only: errors never leak machine ids.
+  private refOf(id: string): string {
+    return this.getIssue(id).humanRef;
+  }
 
   private requireIssue(id: string): Issue {
     const r = row<Row>(this.db, "SELECT * FROM issues WHERE id = ?", id);

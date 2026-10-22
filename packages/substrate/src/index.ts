@@ -25,3 +25,4 @@ export * from "./projections/types.ts";
 export * as githubProjection from "./projections/github/mapping.ts";
 export * as jiraProjection from "./projections/jira/mapping.ts";
 export * as filesystemProjection from "./projections/filesystem/render.ts";
+export * from "./presentation/advisories.ts";

@@ -14,19 +14,33 @@ Source: `integrations/pi/extension.ts` + `handlers.ts`.
 
 ```text
 substrate_issue_get
-substrate_issue_search
+substrate_issue_list
 substrate_issue_claim
 substrate_issue_update
+substrate_issue_close
 substrate_journal_append
-substrate_journal_checkpoint
-substrate_issue_resume
-substrate_provenance_trace
+substrate_journal_read
+substrate_resume_capsule
+substrate_provenance
 ```
 
-All call typed services directly. `substrate_provenance_trace` delegates to the
-canonical `ProvenanceService.trace()` and therefore includes execution bindings,
-WorkReceipts with artifacts/context, checkpoints, commits/PRs, external bindings
-and closure revision.
+| Tool (Pi: `substrate_` prefix) | Purpose |
+|---|---|
+| `issue_get {ref}` | Contract, readiness, claim, attestation |
+| `issue_list {project?, status?, query?, kind?, limit?, claimedBy?}` | Replaces `issue_list`/`issue_ready`/`issue_search`; `claimedBy` (holder or `me`) lists held issues with the latest handoff |
+| `issue_claim {ref, op?, holder?, ttlMs?, activationId?}` | `op` claim\|renew\|release; `holder` defaults to `SUBSTRATE_HOLDER`, else the xt worktree name |
+| `issue_update {ref, title?, priority?, contract?}` | Metadata or revision-bearing change |
+| `issue_close {ref, outcome, reason, *Refs?, participant?}` | Warns when `completed` cites no refs; `participant` defaults to the resolved identity |
+| `journal_append {ref, kind, summary?, next?, details?, result?}` | All writable kinds; `checkpoint` takes the mechanical path; Pi entries now carry the summary |
+| `journal_read {ref, mode, kind?, cursor?, limit?}` | `mode` latest\|since\|timeline\|show, full bodies |
+| `resume_capsule {ref}` | Derived continuation capsule |
+| `provenance {ref? \| sessionId? \| activationId?}` | Exactly one selector |
+
+These are the same nine tools as the Claude MCP server (shared definitions in
+`integrations/tool-surface.ts`, behaviour in `integrations/tool-core.ts`).
+`substrate_provenance` with `ref` delegates to `ProvenanceService.trace()`:
+execution bindings, WorkReceipts with artifacts/context, checkpoints,
+commits/PRs, external bindings and closure revision.
 
 Mutating tools return structured success/no-op/warning feedback.
 

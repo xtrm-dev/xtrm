@@ -103,7 +103,7 @@ describe("Journal kind vocabulary (ADR §22)", () => {
       const created = cli(["issue", "create", "--project", "prj_xtrm", "--title", "K", "--kind", "task", "--contract", c, "--scrutiny", "LOW"]) as {
         humanRef: string;
       };
-      const note = cli(["journal", "append", created.humanRef, "--kind", "note", "--project", "prj_xtrm"]) as { kind: string };
+      const note = cli(["journal", "append", created.humanRef, "--kind", "note", "--semantic", '{"summary":"note recorded to prove the cli accepts the note kind"}', "--project", "prj_xtrm"]) as { kind: string };
       assert.equal(note.kind, "note");
       const result = cli(["issue", "note", created.humanRef, "specialist finished", "--kind", "result", "--project", "prj_xtrm"]) as {
         kind: string;

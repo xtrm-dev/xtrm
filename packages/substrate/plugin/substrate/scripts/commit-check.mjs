@@ -13,7 +13,7 @@ import { armPipeDrain } from "./write-and-exit.mjs";
 // swallows only EPIPE.
 armPipeDrain();
 
-const { handleCommitCheck } = await resolveSubstrate("commit-check.ts");
+const { handleCommitCheck, commitCheckHookOutput } = await resolveSubstrate("commit-check.ts");
 const hook = await readHookInput();
 if (hook.tool_name !== "Bash") process.exit(0);
 const result = handleCommitCheck({
@@ -23,7 +23,6 @@ const result = handleCommitCheck({
   issueRef: process.env["SUBSTRATE_ISSUE_REF"],
 });
 
-if (result.intercept && result.nudge) {
-  process.stdout.write(JSON.stringify({ additionalContext: result.nudge }) + "\n");
-}
+const out = commitCheckHookOutput(result);
+if (out) process.stdout.write(JSON.stringify(out) + "\n");
 process.exitCode = 0;

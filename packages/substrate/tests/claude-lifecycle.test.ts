@@ -171,9 +171,12 @@ describe("MCP server calls the library directly (exec sb forbidden)", () => {
       assert.ok(!/\b(execFileSync|execSync|spawnSync|spawn|exec)\s*\(/.test(src), `${f} must not exec subprocesses`);
       assert.ok(!/["']sb[\s"']/.test(src), `${f} must not reference the sb CLI`);
     }
+    // XTRM-674: tool behaviour lives in the shared core, called by both adapters.
+    const core = stripComments(readFileSync(join(dir, "..", "tool-core.ts"), "utf8"));
+    assert.ok(!/child_process/.test(core) && !/["']sb[\s"']/.test(core), "tool-core.ts must not spawn or reference the sb CLI");
     const mcp = stripComments(readFileSync(join(dir, "mcp-server.ts"), "utf8"));
     assert.ok(/openHandles/.test(mcp), "MCP server opens the typed service (library-direct)");
-    assert.ok(/handles\.(svc|journal|resume)/.test(mcp), "MCP tools call the service handles, never a subprocess");
+    assert.ok(/runTool\(/.test(mcp) && /h\.(svc|journal|resume)/.test(core), "MCP tools call the service handles through the shared core, never a subprocess");
   });
 });
 

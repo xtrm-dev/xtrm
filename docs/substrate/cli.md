@@ -45,7 +45,10 @@ Global flags: `--db PATH` (else `$SUBSTRATE_DB`, else `~/.xtrm/state.db`),
   affect readiness.
 - `issue claim <ref> --holder <who>` / `issue release <ref> --holder <who>` —
   atomic lease, exactly one live holder; anti-steal, expiry closes the old
-  generation first.
+  generation first. `--holder` defaults to `SUBSTRATE_HOLDER`. A repeated
+  claim by the live holder does not extend the lease.
+- `issue renew <ref> [--holder <who>] [--ttl-ms <ms>]` — extend the live
+  claim's expiry (holder defaults to `SUBSTRATE_HOLDER`).
 - `issue state <ref> <open|deferred|done|cancelled|archived>` — set the
   lifecycle state; every transition emits a durable event.
 - `issue close|reopen|cancel|archive <ref>` — lifecycle aliases:
@@ -89,10 +92,11 @@ onboarding workflow. New repositories start with `sb init`.
 
 ## journal
 
-- `journal append <ref> --kind <checkpoint|handoff|milestone|decision|finding|blocker|result|compaction|note> [--mechanical/--semantic/--refs <file|json>] [--result <file|json>]` —
+- `journal append <ref> --kind <checkpoint|handoff|milestone|decision|finding|blocker|result|compaction|note> [--mechanical/--semantic/--refs <file|json>] [--summary-file <path|->] [--result <file|json>]` —
   full journal surface; `checkpoint`/`compaction` require a mechanical row, `result` requires a bounded
   `--result` payload. `result` carries a bounded execution outcome with an optional result payload and is
   required for a meaningful settlement: a progress note or a contract edit must not be used in place of a result.
+  Summary text is limited to 16,000 characters (CLI, MCP and Pi alike); longer text fails, never cut.
 - `journal checkpoint <ref>` — mechanical-first checkpoint now.
 - `journal show <ref> [--kind <k>] [--limit <n>]` — full bodies, newest last.
 - `journal since <ref> <cursor>` — compact delta after cursor (0 reads all).
@@ -128,47 +132,35 @@ Graphs and closure doctrine: [`provenance.md`](./provenance.md).
   as aliases.
 - `export project --project <id> [--file <path>]` — project snapshot.
 
-## MCP tools (Claude integration)
+## MCP and Pi tools (shared surface)
 
-Registered in `packages/substrate/integrations/claude-code/mcp-server.ts`
-in stable order (served in-process, never via CLI text):
+Claude (MCP server `integrations/claude-code/mcp-server.ts`) and Pi
+(`integrations/pi/extension.ts`, names prefixed `substrate_`) expose the same
+nine tools with the same parameter keys. Names, one-line descriptions and
+parameter docs are defined once in `packages/substrate/integrations/tool-surface.ts`
+(under 5000 characters in total); behaviour lives in `integrations/tool-core.ts`.
 
 ```text
-issue_get  issue_list  issue_ready
-issue_claim  issue_update  issue_note  issue_close
-journal_append  journal_checkpoint  journal_show  journal_query
-provenance_trace  provenance_session  provenance_activation  resume_capsule
+issue_get  issue_list  issue_claim  issue_update  issue_close
+journal_append  journal_read  resume_capsule  provenance
 ```
 
-`issue_get` read one Issue with live readiness; `issue_list` / `issue_ready`
-search one Project (all Issues / dispatchable only); `issue_claim`
-op-discriminated lease (`op` claim|release, exactly one live holder);
-`issue_update` metadata vs revision-bearing writes; `issue_note` append-only
-journal fast path; `issue_close` canonical close with bounded outcome,
-reason and cited refs; `journal_append` full nine-kind surface;
-`journal_checkpoint` mechanical-first checkpoint now; `journal_show`
-full-body read; `journal_query` op-discriminated bounded reads
-(`op` since|latest|timeline); `provenance_trace` lineage spine;
-`resume_capsule` derived continuity capsule with rendering.
+- `issue_list` covers listing, ready and search; `claimedBy` (holder or `me`)
+  returns `{holder, issues}` with each claim and the latest handoff.
+- `issue_claim` takes `op` claim|renew|release; `holder` defaults to
+  `SUBSTRATE_HOLDER`, else the xt worktree name.
+- `issue_close` warns when `completed` cites no refs; `participant` defaults
+  to the resolved identity.
+- `journal_append` writes every writable kind with a summary (`checkpoint`
+  takes the mechanical path); `journal_read` takes `mode`
+  latest|since|timeline|show and returns full bodies.
+- `provenance` takes exactly one of `ref`, `sessionId`, `activationId`.
 
-Every tool carries a description (normative instruction surface, ADR
-§63): what the tool changes, what it does not change, whether the Issue
-revision changes, whether readiness goes stale, when to use the Journal
-instead of a contract edit, and what actor/session/provenance context is
-added automatically. Journal-facing tools explain all nine kinds (ADR §64).
-The exported registration inventory lives in
-`packages/substrate/integrations/claude-code/mcp-server.ts`
-(`MCP_TOOL_NAMES`, `MCP_TOOL_DESCRIPTIONS`), and the release gate checks
-name presence, non-trivial description depth and inventory agreement —
-description inventory LANDED, owner M1.
-
-## Pi tools
-
-`integrations/pi/` consumes the typed service directly (never `exec sb`):
-`substrate_issue_get/search/claim/update`,
-`substrate_journal_append/checkpoint`, `substrate_issue_resume`,
-`substrate_provenance_trace`, plus the `substrate-resume` command and the
-claim-gated edit/write `tool_call` gate.
+The journal kind glossary is `sb help kinds`; the removed tool names and their
+replacements are listed in `packages/substrate/CHANGELOG.md`. Pi also keeps
+the `substrate-resume` command, the claim-gated edit/write `tool_call` gate
+and the advisor (`integrations/pi/advisor.ts`): the same advisories and status
+widget as the Claude plugin hooks and mod (`docs/advisories.md`).
 
 ## Help is methodology
 

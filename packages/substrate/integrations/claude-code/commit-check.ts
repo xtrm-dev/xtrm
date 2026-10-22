@@ -74,6 +74,16 @@ export function handleCommitCheck(input: CommitCheckInput = {}): CommitCheckResu
   }
 }
 
+// PreToolUse reads additionalContext only inside hookSpecificOutput; the
+// former top-level field was silently dropped, so the nudge never arrived.
+export function commitCheckHookOutput(result: CommitCheckResult): Record<string, unknown> | null {
+  if (!result.intercept || !result.nudge) return null;
+  return {
+    hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: `Substrate commit check: ${result.nudge}` },
+    systemMessage: `Substrate: commit on ${result.issueRef} has no dispatch/receipt context`,
+  };
+}
+
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
     let data = "";
@@ -112,7 +122,8 @@ if (invokedAsMain) {
   });
   // XTRM-335: the two exits above are proven zero-byte quiet paths (no write
   // precedes either); only this write-then-terminate path drains via exitCode.
-  if (!result.intercept || !result.nudge) process.exit(0);
-  process.stdout.write(JSON.stringify({ additionalContext: result.nudge }) + "\n");
+  const out = commitCheckHookOutput(result);
+  if (!out) process.exit(0);
+  process.stdout.write(JSON.stringify(out) + "\n");
   process.exitCode = 0;
 }

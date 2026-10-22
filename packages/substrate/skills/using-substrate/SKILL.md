@@ -33,20 +33,18 @@ CLI-text parsing:
 
 ```text
 substrate_issue_get <ref>            contract + readiness + claim + attestation
-substrate_issue_search <project>     title/reference substring, optional kind
-substrate_issue_claim <ref>          claim for a holder; binds this Pi session
-substrate_issue_update <ref>         revise the contract (no-op if identical)
-substrate_journal_append <ref>       append one of the nine Journal kinds
-substrate_journal_checkpoint <ref>   mechanical-first checkpoint now
-substrate_issue_resume <ref>         bounded Resume Capsule
-substrate_provenance_trace <ref>     full evidence spine: bindings, receipts,
-                                     artifacts, checkpoints, commits/PRs,
-                                     external bindings and closure revision
+substrate_issue_list                 status|query|kind filters; claimedBy=me
+substrate_issue_claim <ref>          op claim|renew|release; holder defaults to identity
+substrate_issue_update <ref>         title, priority or contract (no-op if identical)
+substrate_issue_close <ref>          outcome + reason + evidence refs
+substrate_journal_append <ref>       any writable kind; summary required; checkpoint = mechanical
+substrate_journal_read <ref>         mode latest|since|timeline|show, full bodies
+substrate_resume_capsule <ref>       bounded Resume Capsule
+substrate_provenance                 one of ref|sessionId|activationId
 ```
 
 `<ref>` accepts machine ID, durable reference, current locator, historical
-locator, or alias. `substrate_issue_claim`, `substrate_issue_update`, Journal
-append and checkpoint return structured success/no-op/warning feedback; a
+locator, or alias. Every mutating tool (`substrate_issue_claim`, `_update`, `_close`, `_journal_append`) returns structured success/no-op/warning feedback; a
 failure remains a failure from the typed service rather than a guessed success.
 
 ## Session binding and resume
@@ -105,8 +103,23 @@ the specialists activation layer. Unbound sessions are not implicitly bound to
 a random Project or Issue. Repository/project initialization is `sb init`; global
 database cardinality is never project context.
 
+## Identity and advisories
+
+Identity resolves as `SUBSTRATE_HOLDER`, else the xt worktree name, else nobody;
+the extension exports a worktree-derived name into the process environment at
+session start so `bash` children inherit it. The extension applies the same
+deterministic advisories as the Claude plugin (`packages/substrate/docs/advisories.md`):
+at session start (your live claims, TTL, latest handoff), after `sb` and
+`substrate_*` tool results (advisory appended to the result, operator notified),
+and at the end of a turn (a missing handoff triggers one follow-up turn). The
+`substrate` widget shows your claims and TTL. `SUBSTRATE_ADVISORIES=off`
+silences advisories. Empty journal entries are rejected; thin summaries warn;
+a summary over 16,000 characters fails (use `summaryFile`), it is never cut.
+`sb help kinds|contract|identity` hold the shapes.
+
 ## Where to read more
 
+- `packages/substrate/docs/advisories.md` — advisory catalogue and identity
 - `packages/substrate/docs/pi.md` — provider reference
 - `packages/substrate/docs/workflow.md` — end-to-end work lifecycle
 - `packages/substrate/docs/provenance-and-closure.md` — evidence and closeout

@@ -173,8 +173,11 @@ populated where available.
 ## Manual metadata
 
 `--refs` binds explicit references (receipts, commits, PRs, external
-bindings) to an entry. Semantic text stays bounded (MCP appends cap the
-summary at 2000 chars).
+bindings) to an entry. Summary text is limited to 16,000 characters on the
+CLI, MCP and Pi alike; a longer summary fails and writes nothing (it is never
+cut). Supply long text with `--summary-file <path|->` (or `summaryFile` on the
+`journal_append` tool), or split it into several entries. Text views mark a cut
+preview with `… (+N chars, …)`; `--json` carries the full text.
 
 ## Coordinator methodology
 

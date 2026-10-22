@@ -22,18 +22,10 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { resolveSubstrateDir } from "./setup.ts";
 import { packageRoot } from "../src/package-root.ts";
+import { piToolName, TOOL_NAMES } from "./tool-surface.ts";
 import { armPipeDrain } from "./write-and-exit.ts";
 
-export const EXPECTED_SUBSTRATE_TOOLS = [
-  "substrate_issue_get",
-  "substrate_issue_search",
-  "substrate_issue_claim",
-  "substrate_issue_update",
-  "substrate_issue_resume",
-  "substrate_journal_append",
-  "substrate_journal_checkpoint",
-  "substrate_provenance_trace",
-] as const;
+export const EXPECTED_SUBSTRATE_TOOLS = TOOL_NAMES.map(piToolName);
 
 export interface LoadProbeResult {
   ok: boolean;

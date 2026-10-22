@@ -11,24 +11,24 @@ const repo = join(pkg, "..", "..");
 const readPkg = (rel: string) => readFileSync(join(pkg, rel), "utf8");
 const readRepo = (rel: string) => readFileSync(join(repo, rel), "utf8");
 
-function piToolNames(): string[] {
-  const src = readPkg("integrations/pi/extension.ts");
-  return [...new Set([...src.matchAll(/name:\s*"(substrate_[a-z_]+)"/g)].map((m) => m[1]!))];
+// Both providers register the shared tool surface (XTRM-674); the inventory is
+// the TOOL_NAMES table, not a copy.
+function sharedToolNames(): string[] {
+  const src = readPkg("integrations/tool-surface.ts");
+  const start = src.indexOf("export const TOOL_NAMES = [");
+  const end = src.indexOf("] as const;", start);
+  assert.ok(start >= 0 && end > start, "TOOL_NAMES inventory must remain parseable");
+  return [...src.slice(start, end).matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
 }
 
-function claudeToolNames(): string[] {
-  const src = readPkg("integrations/claude-code/mcp-server.ts");
-  const start = src.indexOf("const TOOL_DEFS");
-  const end = src.indexOf("// Exported registration inventory", start);
-  assert.ok(start >= 0 && end > start, "Claude TOOL_DEFS inventory must remain parseable");
-  return [...src.slice(start, end).matchAll(/name:\s*"([^"]+)"/g)].map((m) => m[1]!);
-}
+const piToolNames = (): string[] => sharedToolNames().map((n) => `substrate_${n}`);
+const claudeToolNames = sharedToolNames;
 
 describe("XTRM-94 provider-facing doctrine follows live registrations", () => {
   it("Pi skill names every registered Pi Substrate tool", () => {
     const skill = readPkg("skills/using-substrate/SKILL.md");
     const names = piToolNames();
-    assert.equal(names.length, 8, "Pi tool count changed: update the skill/reference deliberately");
+    assert.equal(names.length, 9, "Pi tool count changed: update the skill/reference deliberately");
     for (const name of names) assert.match(skill, new RegExp(`\\b${name}\\b`), `Pi skill missing ${name}`);
     assert.match(skill, /SUBSTRATE_ISSUE_REF.*canonical/s);
     assert.match(skill, /SUBSTRATE_ISSUE.*compatibility alias/s);
@@ -37,7 +37,7 @@ describe("XTRM-94 provider-facing doctrine follows live registrations", () => {
   it("Claude skill names every registered MCP tool and never teaches cardinality fallback", () => {
     const skill = readPkg("plugin/substrate/skills/using-substrate/SKILL.md");
     const names = claudeToolNames();
-    assert.equal(names.length, 15, "Claude MCP inventory changed: update skill/reference deliberately");
+    assert.equal(names.length, 9, "Claude MCP inventory changed: update skill/reference deliberately");
     for (const name of names) assert.match(skill, new RegExp(`\\b${name}\\b`), `Claude skill missing ${name}`);
     assert.doesNotMatch(skill, /single-project default|only project|sole project/i);
     assert.match(skill, /fail closed.*sb init/is);

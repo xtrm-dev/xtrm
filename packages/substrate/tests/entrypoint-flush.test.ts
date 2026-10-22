@@ -269,6 +269,8 @@ describe("XTRM-335 exit-code matrix", () => {
       { script: join(SCRIPTS, "postcompact.mjs"), stdin: "{}" },
       { script: join(SCRIPTS, "session-precondition.mjs"), stdin: "{}" },
       { script: join(SCRIPTS, "xtrm-primer.mjs"), stdin: "{}" },
+      { script: join(SCRIPTS, "advisor-session.mjs"), stdin: "{}" },
+      { script: join(SCRIPTS, "advisor-post-tool.mjs"), stdin: JSON.stringify({ tool_name: "Bash", tool_input: { command: "ls" } }) },
     ];
     for (const c of cases) {
       const direct = spawnSync(process.execPath, [c.script], {
@@ -450,6 +452,8 @@ const QUIET_ALLOWLIST: Record<string, { count: number; why: string }> = {
   "plugin/substrate/scripts/commit-check.mjs": { count: 1, why: "non-Bash guard; the nudge JSON drains via exitCode" },
   "plugin/substrate/scripts/wake-on-event.mjs": { count: 2, why: "no-ref / null-baseline guards; the wake line drains via exitCode" },
   "plugin/substrate/scripts/tail-events.mjs": { count: 2, why: "no-ref / null-first guards before the monitor loop writes" },
+  "plugin/substrate/scripts/advisor-post-tool.mjs": { count: 2, why: "non-sb Bash fast path and missing advisor module guard; output drains via exitCode" },
+  "plugin/substrate/scripts/advisor-session.mjs": { count: 1, why: "missing advisor module guard (older installed package); output drains via exitCode" },
 };
 
 describe("XTRM-335 structural detector", () => {

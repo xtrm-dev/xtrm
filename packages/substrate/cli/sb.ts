@@ -37,10 +37,11 @@ import { CLOSURE_OUTCOMES, isClosureOutcome } from "../src/domain/closure.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
-import { assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
+import { assertResultPayload, assessJournalEntry, isJournalKind, unknownJournalKindMessage } from "../src/domain/journal.ts";
+import { isoTime } from "../src/domain/claim.ts";
 import { renderProvenanceTrace } from "../src/presentation/terminal.ts";
-import { assertContractShape, isValidScrutiny, SCRUTINY_LEVELS } from "../src/domain/contract.ts";
-import { enrichExecutionContext } from "../src/domain/execution-context.ts";
+import { assertContractShape, contractShapeHints, isValidScrutiny, SCRUTINY_LEVELS } from "../src/domain/contract.ts";
+import { enrichExecutionContext, SUBSTRATE_HOLDER_ENV } from "../src/domain/execution-context.ts";
 import type { JournalEntry, JournalKind, ResultPayload } from "../src/domain/journal.ts";
 import type { IssueKind, LifecycleState, ResolvedIssue } from "../src/domain/issue.ts";
 import type { OperationalState } from "../src/domain/readiness.ts";
@@ -184,7 +185,7 @@ function renderOperationalContext(ctx: JournalOperationalContext): string[] {
   if (ctx.latestByKind.length > 0) {
     lines.push("latest by kind:");
     for (const e of ctx.latestByKind) {
-      const bit = e.summary ? ` ${e.summary.slice(0, 200)}` : "";
+      const bit = e.summary ? ` ${e.summary}` : ""; // already a marked preview (XTRM-678)
       lines.push(`- seq${e.sequence} ${e.kind}:${bit}`);
     }
   } else {
@@ -283,6 +284,17 @@ function flagList(flags: Flags, name: string): string[] | undefined {
   return v.slice();
 }
 
+// XTRM-678: --summary-file supplies long summary text without shell quoting;
+// it overrides summary in --semantic and keeps the other fields.
+function semanticArg(semRaw: string | undefined, summaryFile: string | undefined): never {
+  const semantic = semRaw !== undefined ? (readJsonArg(semRaw) as Record<string, unknown>) : undefined;
+  if (summaryFile === undefined) return semantic as never;
+  if (summaryFile !== "-" && !existsSync(summaryFile)) throw new Error(`--summary-file not found: ${summaryFile}`);
+  const text = readFileSync(summaryFile === "-" ? 0 : summaryFile, "utf8");
+  if (text.trim() === "") throw new Error(`--summary-file is empty: ${summaryFile}`);
+  return { ...(semantic ?? {}), summary: text } as never;
+}
+
 function readJsonArg(value: string): unknown {
   // Distinguish the two inputs the flag accepts. The single try/catch this
   // replaced reported a malformed FILE as "<path> is not valid JSON": the
@@ -294,6 +306,10 @@ function readJsonArg(value: string): unknown {
     } catch (err) {
       throw new Error(`${value}: file is not valid JSON (${err instanceof Error ? err.message : String(err)})`);
     }
+  }
+  // Inline JSON is an object/array; anything else is a mistyped file path.
+  if (!/^\s*[[{]/.test(value)) {
+    throw new Error(`${value.slice(0, 80)}: file not found (pass a readable JSON file path, or inline JSON starting with { or [)`);
   }
   try {
     return JSON.parse(value);
@@ -365,14 +381,14 @@ const HELP_TOP = `sb — Substrate work tracker CLI
 
 usage:
   sb [--db PATH] [--json] <group> <verb> [args...]
-  sb --help | sb help [group [verb]] [--json]
+  sb --help | sb help [group [verb] | contract | kinds | identity] [--json]
   sb --version
   sb init [--db PATH] [--json]
   sb doctor [--db PATH] [--json]
 
 groups:
   init        initialize this repository (bind it to a Project; idempotent)
-  issue       create|show|edit|note|validate|attest|list|ready|query|tree|children|relate|unrelate|claim|release|state|close|reopen|defer|cancel|archive|resume
+  issue       create|show|edit|note|validate|attest|list|ready|query|tree|children|relate|unrelate|claim|renew|release|state|close|reopen|defer|cancel|archive|resume
   project     create|link|unlink|list|show|links|repair
   plan        check|apply
   journal     append|checkpoint|show|since|latest|timeline|render
@@ -397,6 +413,81 @@ content as machine-readable data (capability detection for agents).`,
 
 prints the CLI version (parseable semver, e.g. "sb 0.1.0") without opening
 or creating the database.`,
+  contract: `usage: sb help contract
+
+the work contract JSON (sb issue create --contract <file|json>):
+
+    {
+      "problem":     "why this work exists (non-empty string)",
+      "success":     "observable end state (non-empty string)",
+      "scope":       ["paths/surfaces the work may touch"],
+      "nonGoals":    ["what must NOT change"],
+      "constraints": ["rules the work must respect"],
+      "validation":  [{"check": "how success is proven"}],
+      "output":      [{"artifact": "what the work delivers"}],
+      "scrutiny":    "LOW|MEDIUM|HIGH|CRITICAL"
+    }
+
+- Pass the object itself; do not nest it under a "contract" key.
+- validation and output hold objects, not plain strings: {"check": "…"}, {"artifact": "…"}.
+- scope, nonGoals and constraints are non-empty arrays of non-empty strings.
+- TBD/TODO/XXX/FIXME anywhere keeps the issue draft ("unresolved marker").
+- scrutiny is the contract key or --scrutiny; the flag wins.
+- A valid contract is still draft until attested:
+    sb issue validate <ref>
+    sb issue attest <ref> --outcome ready --policy default --attested-by <you>
+- Changing the contract creates a new revision and invalidates the attestation.`,
+  kinds: `usage: sb help kinds
+
+journal kinds (sb journal append <ref> --kind <kind> ...):
+
+note        progress that is not a finding or decision
+finding     something learned that others need (evidence, not opinion)
+decision    a choice made and why; alternatives rejected
+blocker     work cannot proceed; name what unblocks it
+milestone   a meaningful step completed
+handoff     state for the next worker: done, open, next step
+result      the settled outcome; requires --result; cite it when closing
+checkpoint  mechanical-first snapshot (sb journal checkpoint); requires --mechanical
+compaction  host-written record of a context compaction; requires --mechanical
+
+--semantic '{"summary":"what changed / evidence / next step", "next":["…"]}'
+  summary is required; optional completed, current, next, blocked, openQuestions,
+  keyDecisions, materialFindings (string arrays; current is a string).
+--result '{"summary":"…"}'
+  optional attempted, outcome (strings); completed, validation, findings,
+  artifactRefs, receiptRefs, provenanceRefs (string arrays). No other keys.
+
+- Text after the ref is rejected: put prose in --semantic.
+- An entry with no payload is rejected for note, finding, decision, blocker, milestone, handoff.
+- A summary under 8 words, or done/wip/ok/todo/tbd/.../-, is accepted with a warning.
+- Summary text is limited to 16000 characters on the CLI, MCP and Pi; a longer one fails
+  and nothing is written (it is never cut). Long text: --summary-file <path|->, or split it.
+- Text views cut long summaries with "… (+N chars, …)"; --json always has the full text.
+- Close with evidence: sb issue close <ref> --outcome completed --reason … --result <entry id>
+- Reads: journal latest/since print headers; journal show or --json print bodies.`,
+  identity: `usage: sb help identity
+
+holder, SUBSTRATE_HOLDER and participant:
+
+--holder        who owns a claim lease (sb issue claim|renew|release). Required unless
+                SUBSTRATE_HOLDER is set; a differing --holder prints a stderr warning.
+SUBSTRATE_HOLDER  environment default for the acting name. Export it once per session:
+                  export SUBSTRATE_HOLDER=<name>
+                It defaults --holder, and fills the participant on journal entries and closures.
+--participant   who authored one journal entry or closure; overrides SUBSTRATE_HOLDER.
+                With neither, the entry records "(none recorded)" and the CLI warns.
+--attested-by   who attested readiness (sb issue attest); independent of the claim holder.
+--actor         closure actor label (sb issue close); defaults to sb-cli.
+
+- A claim says who owns the work; it does not narrate progress and is not readiness.
+- The edit gate allows edits only for the live holder: SUBSTRATE_HOLDER must equal the
+  claim holder.
+- Session identity is runtime-known (XTRM_SESSION_ID); the CLI never invents it.
+- xt claude|pi|codex <name> exports SUBSTRATE_HOLDER. Inside an xt worktree
+  (.xtrm/worktrees/<repo>-xt-<runtime>-<name>) the Claude plugin and the Pi extension
+  derive <name> when it is unset and export it for Bash; the CLI alone reads only the env.
+- XTRM_SESSION_NAME is shared by every pane of a tmux session and is never an identity.`,
   init: `usage: sb init [--db PATH] [--json]
 
 initialize this Git repository for Substrate: discover the Git common root,
@@ -504,8 +595,18 @@ parent_child is structural and not exposed here.`,
   "issue.unrelate": `usage: sb issue unrelate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates> [--project <id>]
 
 deactivates the active edge between the endpoints for the given kind.`,
-  "issue.claim": `usage: sb issue claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>] [--project <id>]`,
-  "issue.release": `usage: sb issue release <ref> --holder <who> [--activation <id>] [--project <id>]`,
+  "issue.claim": `usage: sb issue claim <ref> [--holder <who>] [--ttl-ms <n>] [--activation <id>] [--project <id>]
+
+--holder defaults to $SUBSTRATE_HOLDER; one of them is required. A --holder that differs
+from $SUBSTRATE_HOLDER is reported on stderr. A repeat claim by the live holder returns the
+existing lease unchanged: use \`sb issue renew\` to extend it. See \`sb help identity\`.`,
+  "issue.renew": `usage: sb issue renew <ref> [--holder <who>] [--ttl-ms <n>] [--activation <id>] [--project <id>]
+
+extends the expiry of your live claim (default ttl 15 min from now). --holder defaults to
+$SUBSTRATE_HOLDER. Fails with claim-held for another holder, claim-expired after expiry.`,
+  "issue.release": `usage: sb issue release <ref> [--holder <who>] [--activation <id>] [--project <id>]
+
+--holder defaults to $SUBSTRATE_HOLDER.`,
   "issue.close": `usage: sb issue close <ref> --outcome <completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned> --reason <r> [--actor <who>] [--participant <id>] [--run <id>] [--activation <id>] [--attempt <id>] [--result <a,b>] [--receipt <a,b>] [--validation <a,b>] [--artifact <a,b>] [--project <id>]
 
 writes an immutable Closure row (outcome, reason, actor, session, revision/hash, refs) and rests on done (cancelled for the cancelled outcome). Bare \`sb issue close <ref>\` stays the legacy lifecycle alias (no Closure invented).
@@ -632,7 +733,12 @@ be appended as a plain note. Reads are bounded: show for bodies, since for
 the delta after a cursor, latest/timeline for windows.
 
 Every verb runs over one JournalService; latest/timeline are bounded reads.`,
-  "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--result <file|json>] [--refs <file|json>] [--project <id>]
+  "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--summary-file <path|->] [--result <file|json>] [--refs <file|json>] [--project <id>]
+
+--summary-file reads the summary text from a file (- = stdin); other --semantic
+fields still apply. Summary text is limited to 16000 characters: a longer one
+fails and writes nothing (it is never cut). Put longer material in a file and
+cite the path.
 
 --kind result requires a bounded --result payload (summary required).
 
@@ -915,6 +1021,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.relate": ["project", "from", "to", "kind"],
   "issue.unrelate": ["project", "from", "to", "kind"],
   "issue.claim": ["project", "holder", "ttl-ms", "activation"],
+  "issue.renew": ["project", "holder", "ttl-ms", "activation"],
   "issue.release": ["project", "holder", "activation"],
   "issue.close": ["project", "outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact"],
   "issue.state": ["project", "until"],
@@ -932,7 +1039,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "project.repair": [],
   "plan.check": ["project", "file"],
   "plan.apply": ["project", "file"],
-  "journal.append": ["project", "kind", "run", "participant", "activation", "session", "mechanical", "semantic", "result", "refs"],
+  "journal.append": ["project", "kind", "run", "participant", "activation", "session", "mechanical", "semantic", "summary-file", "result", "refs"],
   "journal.checkpoint": ["project", "run", "participant", "activation", "session", "mechanical", "semantic", "refs", "workspace", "branch", "base-commit", "head-commit"],
   "journal.show": ["kind", "limit"],
   "journal.since": [],
@@ -961,8 +1068,33 @@ const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "pr
 function assertKnownFlags(flags: Flags, command: string): void {
   const allowed = new Set([...GLOBAL_FLAGS, ...(FLAG_ALLOWLIST[command] ?? [])]);
   for (const name of flags.keys()) {
-    if (!allowed.has(name)) throw new Error(`unknown flag --${name} for \`${command}\` (see usage)`);
+    if (allowed.has(name)) continue;
+    // A flag and its value glued into one argv token ("--parent XTRM-1").
+    const merged = /^(\S+)\s+(.+)$/.exec(name);
+    const hint = merged ? `; flag and value must be separate arguments (--${merged[1]} ${JSON.stringify(merged[2])})` : "";
+    throw new Error(`unknown flag --${name} for \`${command}\` (see usage)${hint}`);
   }
+  assertFlagValues(flags);
+}
+
+// A value flag with no value used to become `true` and read back as absent,
+// silently dropping operator intent.
+function assertFlagValues(flags: Flags): void {
+  for (const [name, value] of flags) {
+    if (value === true && !BOOLEAN_FLAGS.has(name)) throw new Error(`--${name} requires a value`);
+  }
+}
+
+// Verbs take one ref; extra positional text used to be dropped silently.
+const MAX_POSITIONALS: Record<string, number> = { "issue.state": 2, "journal.since": 2, "provenance.bind": 2 };
+
+function assertArity(command: string, rest: string[]): void {
+  if (command === "issue.note") return; // positional text is the note body
+  const max = MAX_POSITIONALS[command] ?? 1;
+  if (rest.length <= max) return;
+  const extra = rest.slice(max).join(" ");
+  const hint = command === "journal.append" ? `; put the text in --semantic '{"summary":"…"}'` : "";
+  throw new Error(`unexpected extra argument${rest.length - max === 1 ? "" : "s"}: ${JSON.stringify(extra)} (${command} takes ${max === 1 ? "one ref" : `${max} arguments`})${hint}`);
 }
 
 export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
@@ -991,6 +1123,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
       if (verb !== undefined) throw new Error("usage: sb init [--db PATH] [--json] (init takes no verbs)");
       return runInit(db, svc, ctx);
     }
+    if (group === "issue" || group === "journal" || group === "provenance") assertArity(command, rest);
     if (group === "issue") return runIssue(db, svc, ctx, command, verb, flags, rest);
     if (group === "project") return runProject(db, svc, ctx, command, verb, flags);
     if (group === "plan") return runPlan(db, svc, ctx, command, verb, flags);
@@ -1044,6 +1177,22 @@ function needRef(rest: string[]): string {
   return rest[0];
 }
 
+// Holder resolution for claim/renew/release (XTRM-670): --holder, else
+// SUBSTRATE_HOLDER. A differing explicit --holder is reported on stderr, the
+// same pattern as --session vs XTRM_SESSION_ID.
+function resolveHolder(flags: Flags): { holder: string; warning: string } {
+  const explicit = flag(flags, "holder")?.trim();
+  const ambient = process.env[SUBSTRATE_HOLDER_ENV]?.trim();
+  if (!explicit && !ambient) throw new Error(`--holder is required (or export ${SUBSTRATE_HOLDER_ENV}=<name> to default it)`);
+  const warning =
+    explicit && ambient && explicit !== ambient
+      ? `warning: --holder ${JSON.stringify(explicit)} overrides ${SUBSTRATE_HOLDER_ENV} ${JSON.stringify(ambient)}\n`
+      : "";
+  return { holder: (explicit || ambient) as string, warning };
+}
+
+const NO_PARTICIPANT_WARNING = `no participant recorded; export ${SUBSTRATE_HOLDER_ENV}=<name> so writes are attributed`;
+
 // --until parsing shared by `issue state` and `issue defer`: a millisecond
 // timestamp sets the deferral, "clear" removes it, absence leaves it alone.
 function applyDeferUntil(svc: IssueService, issueId: string, raw: string | undefined): void {
@@ -1086,10 +1235,15 @@ function closeEnvelope(flags: Flags): ReturnType<typeof enrichExecutionContext> 
   const actor = flag(flags, "actor");
   return enrichExecutionContext({
     actor: actor ? { type: "human", name: actor } : null,
-    participantId: flag(flags, "participant") ?? null,
+    participantId: flag(flags, "participant") ?? (process.env[SUBSTRATE_HOLDER_ENV]?.trim() || null),
     runId: flag(flags, "run") ?? null,
     specialist: activation || attempt ? { activationId: activation ?? null, attemptId: attempt ?? null } : null,
   });
+}
+
+// Bare close/cancel/reopen move lifecycle only: no Closure row, no reason.
+function legacyLifecycleWarning(verb: string, humanRef: string): string {
+  return `legacy ${verb}: lifecycle changed but no Closure row was recorded; use \`sb issue ${verb} ${humanRef} ${verb === "reopen" ? "--reason <why>" : `--outcome ${verb === "cancel" ? "cancelled" : "completed"} --reason <why>`}\` to record one`;
 }
 
 function closurePayload(c: {
@@ -1113,6 +1267,25 @@ function closurePayload(c: {
     receiptRefs: c.receiptRefs,
     artifactRefs: c.artifactRefs,
     closedAt: c.closedAt,
+  };
+}
+
+// Claim/renew payload: ids stay for compatibility, the human ref and ISO
+// expiry are added so confirmations never print epoch milliseconds.
+function claimData(
+  humanRef: string,
+  claim: { issueId: string; holder: string; expiresAt: number; generation: number },
+  alreadyHeld: boolean,
+): Record<string, unknown> {
+  return {
+    issueId: claim.issueId,
+    humanRef,
+    holder: claim.holder,
+    expiresAt: claim.expiresAt,
+    expiresAtIso: isoTime(claim.expiresAt),
+    expiresInMinutes: Math.max(0, Math.round((claim.expiresAt - Date.now()) / 60000)),
+    generation: claim.generation,
+    alreadyHeld,
   };
 }
 
@@ -1161,7 +1334,14 @@ function runIssue(
         parentId: parent ? svc.resolveRefInProject(parent, project).id : undefined,
         authoredBy: "sb-cli",
       });
-      return emit(ctx, command, issueSummary(svc.getIssue(issue.id)));
+      // Draft is legal at create; say why instead of leaving it silent.
+      const readiness = svc.getReadiness(issue.id);
+      return emit(ctx, command, {
+        ...issueSummary(svc.getIssue(issue.id)),
+        readinessState: readiness.state,
+        reasons: readiness.reasons,
+        warnings: contractShapeHints(parsedContract),
+      });
     }
     case "show": {
       const ref = needRef(rest);
@@ -1246,7 +1426,13 @@ function runIssue(
         revisionCreated = revisionCreated || next.currentRevision !== before;
         id = next.id;
       }
-      return emit(ctx, command, { ...issueSummary(svc.getIssue(id)), revisionCreated });
+      const edited = contractRaw !== undefined ? svc.getReadiness(id) : null;
+      return emit(ctx, command, {
+        ...issueSummary(svc.getIssue(id)),
+        revisionCreated,
+        ...(edited ? { readinessState: edited.state, reasons: edited.reasons } : {}),
+        ...(contractRaw !== undefined ? { warnings: contractShapeHints(readJsonArg(contractRaw)) } : {}),
+      });
     }
     case "note": {
       // §22 convenience over JournalService: append-only, no revision bump.
@@ -1287,8 +1473,7 @@ function runIssue(
         semantic: kindRaw === "result" ? undefined : { summary: text },
         result,
       });
-      if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), result: entry.result });
-      return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
+      return journalWriteResult(ctx, command, svc, entry, resolved.humanRef, assessJournalEntry({ kind: kindRaw, semantic: entry.semantic, result: entry.result }).warnings);
     }
     case "validate": {
       const ref = needRef(rest);
@@ -1323,13 +1508,19 @@ function runIssue(
         evidenceRefs: list("evidence-refs"),
         blockingGaps: list("blocking-gaps"),
       });
+      // The attestation row is written either way; the resulting readiness
+      // is the answer the operator needs (a ready outcome can leave draft).
+      const readiness = svc.getReadiness(resolved.id);
       return emit(ctx, command, {
         id: attestation.id,
         issueId: attestation.issueId,
+        humanRef: resolved.humanRef,
         issueRevision: attestation.issueRevision,
         outcome: attestation.outcome,
         policy: attestation.policy,
         attestedBy: attestation.attestedBy,
+        readinessState: readiness.state,
+        reasons: readiness.reasons,
       });
     }
     case "list": {
@@ -1409,21 +1600,39 @@ function runIssue(
     }
     case "claim": {
       const ref = needRef(rest);
-      const holder = flag(flags, "holder") ?? (() => { throw new Error("--holder is required"); })();
+      const { holder, warning } = resolveHolder(flags);
       const ttl = flag(flags, "ttl-ms");
       const resolved = refInContext(svc, flags, ref);
+      const prior = svc.getActiveClaim(resolved.id);
       const claim = svc.claimIssue(resolved.id, holder, {
         activationId: flag(flags, "activation"),
         ttlMs: ttl !== undefined ? Number(ttl) : undefined,
       });
-      return emit(ctx, command, { issueId: claim.issueId, holder: claim.holder, expiresAt: claim.expiresAt, generation: claim.generation });
+      const result = emit(ctx, command, claimData(resolved.humanRef, claim, prior?.id === claim.id));
+      result.stderr += warning;
+      return result;
+    }
+    case "renew": {
+      const ref = needRef(rest);
+      const { holder, warning } = resolveHolder(flags);
+      const ttl = flag(flags, "ttl-ms");
+      const resolved = refInContext(svc, flags, ref);
+      const claim = svc.renewClaim(resolved.id, holder, {
+        activationId: flag(flags, "activation"),
+        ttlMs: ttl !== undefined ? Number(ttl) : undefined,
+      });
+      const result = emit(ctx, command, claimData(resolved.humanRef, claim, false));
+      result.stderr += warning;
+      return result;
     }
     case "release": {
       const ref = needRef(rest);
-      const holder = flag(flags, "holder") ?? (() => { throw new Error("--holder is required"); })();
+      const { holder, warning } = resolveHolder(flags);
       const resolved = refInContext(svc, flags, ref);
       const released = svc.releaseClaim(resolved.id, holder, { activationId: flag(flags, "activation") });
-      return emit(ctx, command, { released: released !== null });
+      const result = emit(ctx, command, { released: released !== null, humanRef: resolved.humanRef });
+      result.stderr += warning;
+      return result;
     }
     case "state": {
       // §26 canonical lifecycle operation. --until sets/clears the
@@ -1449,7 +1658,7 @@ function runIssue(
       const resolved = refInContext(svc, flags, ref);
       if (!hasClosureFlags(flags)) {
         const closed = svc.setLifecycleState(resolved.id, "done");
-        return emit(ctx, command, issueSummary(closed));
+        return emit(ctx, command, { ...issueSummary(closed), warnings: [legacyLifecycleWarning("close", resolved.humanRef)] });
       }
       const outcomeRaw = flag(flags, "outcome") ?? (() => { throw new Error(`--outcome is required (want ${CLOSURE_OUTCOMES.join("|")})`); })();
       if (!isClosureOutcome(outcomeRaw)) throw new Error(`unknown closure outcome: ${outcomeRaw} (want ${CLOSURE_OUTCOMES.join("|")})`);
@@ -1465,7 +1674,13 @@ function runIssue(
         receiptRefs: splitList(flagList(flags, "receipt")),
         artifactRefs: splitList(flagList(flags, "artifact")),
       });
-      return emit(ctx, command, { ...issueSummary(svc.getIssue(resolved.id)), closure: closurePayload(closure) });
+      const hasEvidence = ["result", "validation", "receipt", "artifact"].some((f) => flags.has(f));
+      const warnings: string[] = [];
+      if (outcomeRaw === "completed" && !hasEvidence) {
+        warnings.push("closed as completed with no evidence; attach --result <journal result id>, --validation, --receipt or --artifact (reopen to correct)");
+      }
+      if (!closure.executionContext?.participantId) warnings.push(NO_PARTICIPANT_WARNING);
+      return emit(ctx, command, { ...issueSummary(svc.getIssue(resolved.id)), closure: closurePayload(closure), warnings });
     }
     case "reopen": {
       // Canonical reopen (C1, ADR §45): with --reason this keeps every
@@ -1475,7 +1690,7 @@ function runIssue(
       const ref = needRef(rest);
       const resolved = refInContext(svc, flags, ref);
       if (flag(flags, "reason") === undefined && !hasClosureFlags(flags)) {
-        return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "open")));
+        return emit(ctx, command, { ...issueSummary(svc.setLifecycleState(resolved.id, "open")), warnings: [legacyLifecycleWarning("reopen", resolved.humanRef)] });
       }
       const reason = flag(flags, "reason") ?? (() => { throw new Error("--reason is required: reopening appends a durable reopen event"); })();
       const closures = new ClosureService(db, svc);
@@ -1503,7 +1718,7 @@ function runIssue(
       const ref = needRef(rest);
       const resolved = refInContext(svc, flags, ref);
       if (!hasClosureFlags(flags)) {
-        return emit(ctx, command, issueSummary(svc.setLifecycleState(resolved.id, "cancelled")));
+        return emit(ctx, command, { ...issueSummary(svc.setLifecycleState(resolved.id, "cancelled")), warnings: [legacyLifecycleWarning("cancel", resolved.humanRef)] });
       }
       const outcomeRaw = flag(flags, "outcome");
       if (outcomeRaw !== undefined && outcomeRaw !== "cancelled") {
@@ -1520,7 +1735,11 @@ function runIssue(
         receiptRefs: splitList(flagList(flags, "receipt")),
         artifactRefs: splitList(flagList(flags, "artifact")),
       });
-      return emit(ctx, command, { ...issueSummary(svc.getIssue(resolved.id)), closure: closurePayload(closure) });
+      return emit(ctx, command, {
+        ...issueSummary(svc.getIssue(resolved.id)),
+        closure: closurePayload(closure),
+        warnings: closure.executionContext?.participantId ? [] : [NO_PARTICIPANT_WARNING],
+      });
     }
     case "archive": {
       const ref = needRef(rest);
@@ -1569,12 +1788,36 @@ function journalSummary(e: JournalEntry): Record<string, unknown> {
   };
 }
 
+// Write confirmation shared by append/note/checkpoint: the entry plus the
+// human ref and the warnings that apply (thin summary, no participant).
+function journalWriteResult(
+  ctx: Ctx,
+  command: string,
+  svc: IssueService,
+  entry: JournalEntry,
+  humanRef: string,
+  qualityWarnings: string[],
+  extra: Record<string, unknown> = {},
+): CliResult {
+  const warnings = entry.participantId ? qualityWarnings : [...qualityWarnings, NO_PARTICIPANT_WARNING];
+  if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), result: entry.result, ref: humanRef, warnings, ...extra });
+  const degraded = typeof extra["reason"] === "string" ? ` [degraded: ${extra["reason"]}]` : "";
+  return { code: 0, stdout: `${journalLine(svc, entry)}${degraded}\n`, stderr: warnings.map((w) => `warning: ${w}\n`).join("") };
+}
+
+// since/latest print headers only; say where the bodies are.
+function fullBodiesHint(humanRef: string): string {
+  return `(headers only; full bodies: sb journal show ${humanRef}, or add --json)`;
+}
+
 function journalLine(svc: IssueService, e: JournalEntry): string {
   const issue = svc.getIssue(e.issueId);
   // XTRM-449: explicit absence, matching the journal-family convention in
   // journalIdentity — never a blank that is indistinguishable from a capture gap.
   const actor = e.participantId ? ` · by ${e.participantId}` : " · by (none recorded)";
-  return `${issue.locator} · ${issue.humanRef} · seq${e.sequence} ${e.kind} rev${e.issueRevision}${e.semantic ? "" : " (mechanical-only)"}${actor}`;
+  // XTRM-420: label what is present; never claim "mechanical-only" without a mechanical payload.
+  const payload = e.semantic ? "" : e.result ? " (result)" : e.mechanical ? " (mechanical-only)" : " (empty)";
+  return `${issue.locator} · ${issue.humanRef} · seq${e.sequence} ${e.kind} rev${e.issueRevision}${payload}${actor}`;
 }
 
 // Stored execution identity for `journal show` (XTRM-410): names the actor
@@ -1653,23 +1896,25 @@ function runJournal(
     case "append": {
       const ref = needRef(rest);
       const kindRaw = flag(flags, "kind") ?? (() => { throw new Error("--kind is required"); })();
-      if (!isJournalKind(kindRaw)) throw new Error(`unknown journal kind: ${kindRaw}`);
+      if (!isJournalKind(kindRaw)) throw new Error(unknownJournalKindMessage(kindRaw));
       const resolved = refInContext(svc, flags, ref);
       const mechRaw = flag(flags, "mechanical");
       const semRaw = flag(flags, "semantic");
       const resRaw = flag(flags, "result");
       const refsRaw = flag(flags, "refs");
-      const entry = journal.appendEntry(resolved.id, {
+      const input = {
         kind: kindRaw,
         ...contextFlags,
         mechanical: mechRaw !== undefined ? (mechanicalArg(svc, resolved.id, mechRaw) as never) : undefined,
-        semantic: semRaw !== undefined ? (readJsonArg(semRaw) as never) : undefined,
+        semantic: semanticArg(semRaw, flag(flags, "summary-file")),
         result: resRaw !== undefined ? (readJsonArg(resRaw) as ResultPayload) : undefined,
         refs: refsRaw !== undefined ? (readJsonArg(refsRaw) as never) : undefined,
         executionContext: undefined,
-      });
-      if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), result: entry.result });
-      return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
+      };
+      const quality = assessJournalEntry(input);
+      if (quality.errors.length > 0) throw new Error(quality.errors[0]);
+      const entry = journal.appendEntry(resolved.id, input);
+      return journalWriteResult(ctx, command, svc, entry, resolved.humanRef, quality.warnings);
     }
     case "checkpoint": {
       // Mechanical-first (§20.4): the mechanical row commits before the
@@ -1698,25 +1943,22 @@ function runJournal(
         executionContext: undefined,
       });
       if (semRaw === undefined) {
-        if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), degraded: false });
-        return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
+        return journalWriteResult(ctx, command, svc, entry, resolved.humanRef, [], { degraded: false });
       }
       try {
         const enriched = journal.enrichEntry(entry.id, readJsonArg(semRaw) as never);
-        if (ctx.json) return emit(ctx, command, { ...journalSummary(enriched), degraded: false });
-        return { code: 0, stdout: journalLine(svc, enriched) + "\n", stderr: "" };
+        return journalWriteResult(ctx, command, svc, enriched, resolved.humanRef, [], { degraded: false });
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
         svc.appendEvent(resolved.id, "journal.checkpoint_degraded", { entry: entry.id, sequence: entry.sequence, reason });
-        if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), degraded: true, reason });
-        return { code: 0, stdout: `${journalLine(svc, entry)} [degraded: ${reason}]\n`, stderr: "" };
+        return journalWriteResult(ctx, command, svc, entry, resolved.humanRef, [], { degraded: true, reason });
       }
     }
     case "show": {
       const ref = needRef(rest);
       const resolved = svc.resolveRef(ref);
       const kindRaw = flag(flags, "kind");
-      if (kindRaw !== undefined && !isJournalKind(kindRaw)) throw new Error(`unknown journal kind: ${kindRaw}`);
+      if (kindRaw !== undefined && !isJournalKind(kindRaw)) throw new Error(unknownJournalKindMessage(kindRaw));
       const limitRaw = flag(flags, "limit");
       const entries = journal.listEntries(resolved.id, {
         kind: kindRaw as never,
@@ -1744,6 +1986,7 @@ function runJournal(
       };
       if (ctx.json) return emit(ctx, command, data);
       const lines = delta.entries.map((e) => journalLine(svc, e));
+      if (lines.length > 0) lines.push(fullBodiesHint(resolved.humanRef));
       return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : `(no entries since ${cursor})`) + "\n", stderr: "" };
     }
     case "latest": {
@@ -1751,21 +1994,21 @@ function runJournal(
       const ref = needRef(rest);
       const resolved = svc.resolveRef(ref);
       const kindRaw = flag(flags, "kind");
-      if (kindRaw !== undefined && !isJournalKind(kindRaw)) throw new Error(`unknown journal kind: ${kindRaw}`);
+      if (kindRaw !== undefined && !isJournalKind(kindRaw)) throw new Error(unknownJournalKindMessage(kindRaw));
       const entry = journal.latest(resolved.id, kindRaw !== undefined ? { kind: kindRaw } : undefined);
       if (!entry) {
         const label = kindRaw !== undefined ? ` (kind ${kindRaw})` : "";
         throw new Error(`no journal entry${label} for this issue`);
       }
       if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), semantic: entry.semantic, result: entry.result });
-      return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
+      return { code: 0, stdout: `${journalLine(svc, entry)}\n${fullBodiesHint(resolved.humanRef)}\n`, stderr: "" };
     }
     case "timeline": {
       // Bounded recent window in chronological order (§49).
       const ref = needRef(rest);
       const resolved = svc.resolveRef(ref);
       const kindRaw = flag(flags, "kind");
-      if (kindRaw !== undefined && !isJournalKind(kindRaw)) throw new Error(`unknown journal kind: ${kindRaw}`);
+      if (kindRaw !== undefined && !isJournalKind(kindRaw)) throw new Error(unknownJournalKindMessage(kindRaw));
       const limitRaw = flag(flags, "limit");
       const limit = limitRaw !== undefined ? Number(limitRaw) : undefined;
       if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) throw new Error("--limit must be a positive integer");

@@ -12,18 +12,13 @@ import {
   openServices,
   resumeForSession,
   runBeforeCompact,
-  toolIssueClaim,
-  toolIssueGet,
-  toolIssueResume,
-  toolIssueSearch,
-  toolIssueUpdate,
-  toolJournalAppend,
-  toolJournalCheckpoint,
-  toolProvenanceTrace,
   toPiCompaction,
 } from "../integrations/pi/handlers.ts";
 import { discoverIssueRef } from "../integrations/claude-code/runtime.ts";
 import { contract } from "./helpers.ts";
+import { runPiTool } from "./pi-run.ts";
+
+const SUMMARY = "entry recorded for the pi tool surface test with enough words";
 
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), "substrate-pi-"));
@@ -41,7 +36,7 @@ function readyIssue(svc: ReturnType<typeof openServices>, title = "Pi work"): st
 
 describe("tool surface over the typed service", () => {
   it("session-only journal paths preserve ambient identity and explicit absence (XTRM-435)", async () => {
-    const { svc } = setup();
+    const { svc, dir } = setup();
     const keys = ["XTRM_SESSION_ID", "XTRM_SESSION_NAME", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"];
     const prior = keys.map((key) => process.env[key]);
     try {
@@ -55,8 +50,8 @@ describe("tool surface over the typed service", () => {
           delete process.env["SUBSTRATE_HOLDER"];
           delete process.env["SUBSTRATE_ACTIVATION_ID"];
         }
-        const append = toolJournalAppend(svc, { ref: id, kind: "finding", sessionId: "pi-session" });
-        const checkpoint = await toolJournalCheckpoint(svc, { ref: id, sessionId: "pi-session" });
+        const append = await runPiTool(svc, "journal_append", { ref: id, kind: "finding", summary: SUMMARY }, { sessionId: "pi-session", cwd: dir });
+        const checkpoint = await runPiTool(svc, "journal_append", { ref: id, kind: "checkpoint" }, { sessionId: "pi-session", cwd: dir });
         for (const entryId of [append.entryId, checkpoint.entryId]) {
           const row = svc.db.prepare("SELECT participant_id, activation_id, execution_context_json FROM issue_journal WHERE id = ?").get(entryId as string) as {
             participant_id: string | null; activation_id: string | null; execution_context_json: string;
@@ -73,7 +68,7 @@ describe("tool surface over the typed service", () => {
   });
 
   for (const facet of ["specialist", "coordinator"] as const) {
-    it(`preserves trusted ${facet} while filling unstated activation (XTRM-435)`, () => {
+    it(`preserves trusted ${facet} while filling unstated activation (XTRM-435)`, async () => {
       const { svc } = setup();
       const keys = ["XTRM_SESSION_ID", "XTRM_SESSION_NAME", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"];
       const prior = keys.map((key) => process.env[key]);
@@ -84,20 +79,14 @@ describe("tool surface over the typed service", () => {
         const base = facet === "specialist"
           ? { specialist: { name: "probe" } }
           : { coordinator: { participantId: "parent" } };
-        for (const activationId of [undefined, "act:abcdef12-345"]) {
-          const appended = toolJournalAppend(svc, { ref: id, kind: "finding", sessionId: "pi-session", activationId, executionContext: base });
-          const raw = svc.db.prepare("SELECT activation_id, execution_context_json FROM issue_journal WHERE id = ?").get(appended.entryId as string) as { activation_id: string; execution_context_json: string };
-          const ctx = JSON.parse(raw.execution_context_json);
-          assert.equal(raw.activation_id, activationId ?? "act:23b2212a-c44");
-          if (facet === "specialist") assert.equal(ctx.specialist.name, "probe");
-          else assert.deepEqual(ctx.coordinator, { participantId: "parent" });
-        }
-        const before = svc.journal.listEntries(id).length;
-        assert.throws(() => toolJournalAppend(svc, {
-          ref: id, kind: "finding", sessionId: "pi-session", activationId: "act:abcdef12-345",
-          executionContext: { specialist: { activationId: "act:23b2212a-c44" } },
-        }));
-        assert.equal(svc.journal.listEntries(id).length, before, "conflict must write nothing");
+        const appended = await runPiTool(svc, "journal_append", { ref: id, kind: "finding", summary: SUMMARY }, { sessionId: "pi-session", executionContext: base });
+        const raw = svc.db.prepare("SELECT activation_id, execution_context_json FROM issue_journal WHERE id = ?").get(appended.entryId as string) as { activation_id: string; execution_context_json: string };
+        const ctx = JSON.parse(raw.execution_context_json);
+        assert.equal(raw.activation_id, "act:23b2212a-c44");
+        if (facet === "specialist") assert.equal(ctx.specialist.name, "probe");
+        else assert.deepEqual(ctx.coordinator, { participantId: "parent" });
+        // Conflicting trusted activation vs the flat one is covered at the
+        // service seam; the tool surface no longer accepts an activation arg.
       } finally {
         keys.forEach((key, i) => { if (prior[i] === undefined) delete process.env[key]; else process.env[key] = prior[i]; });
         svc.close();
@@ -105,26 +94,27 @@ describe("tool surface over the typed service", () => {
     });
   }
 
-  it("get/search/claim/update/append/resume/trace round-trip without SQL in the caller", () => {
+  it("get/list/claim/update/append/resume/provenance round-trip without SQL in the caller", async () => {
     const { svc } = setup();
     try {
       const id = readyIssue(svc);
       const bindings = new SessionBindings();
-      const got = toolIssueGet(svc, { ref: "PI-1" });
+      const got = await runPiTool(svc, "issue_get", { ref: "PI-1" });
       assert.equal(got["humanRef"], "PI-1");
       assert.equal(got["dispatchable"], true);
-      const found = toolIssueSearch(svc, { project: "prj_pi", query: "pi work" });
-      assert.equal(found.length, 1);
-      const claim = toolIssueClaim(svc, bindings, { ref: id, holder: "pi-holder", sessionId: "sess-1" });
-      assert.equal(claim["holder"], "pi-holder");
+      const found = await runPiTool(svc, "issue_list", { project: "prj_pi", query: "pi work" });
+      assert.equal(found.issues.length, 1);
+      const claim = await runPiTool(svc, "issue_claim", { ref: id, holder: "pi-holder" }, { bindings, sessionId: "sess-1" });
+      assert.equal(claim["claim"].holder, "pi-holder");
+      assert.equal(claim["participantId"], "pi-holder");
       assert.equal(bindings.boundRef("sess-1"), id);
-      const updated = toolIssueUpdate(svc, { ref: "PI-1", contract: { ...contract(), problem: "v2" } });
+      const updated = await runPiTool(svc, "issue_update", { ref: "PI-1", contract: { ...contract(), problem: "v2" } });
       assert.equal(updated["revisionCreated"], true);
-      const appended = toolJournalAppend(svc, { ref: "PI-1", kind: "finding", sessionId: "sess-1" });
+      const appended = await runPiTool(svc, "journal_append", { ref: "PI-1", kind: "finding", summary: SUMMARY }, { sessionId: "sess-1" });
       assert.equal(appended["kind"], "finding");
-      const capsule = toolIssueResume(svc, { ref: "PI-1" });
-      assert.match(capsule, /PI-1/);
-      const trace = toolProvenanceTrace(svc, { ref: "PI-1" });
+      const capsule = await runPiTool(svc, "resume_capsule", { ref: "PI-1" });
+      assert.match(capsule.rendered, /PI-1/);
+      const trace = await runPiTool(svc, "provenance", { ref: "PI-1" });
       assert.equal(trace.revision, 2);
       assert.ok(Array.isArray(trace.bindings));
       assert.ok(Array.isArray(trace.receipts));
@@ -133,7 +123,7 @@ describe("tool surface over the typed service", () => {
     }
   });
 
-  it("Pi provenance is the canonical receipt/artifact trace", () => {
+  it("Pi provenance is the canonical receipt/artifact trace", async () => {
     const { dir, svc } = setup();
     try {
       const id = readyIssue(svc, "Receipt work");
@@ -141,12 +131,12 @@ describe("tool surface over the typed service", () => {
       const binding = svc.provenance.dispatch(id, { workspace: dir, participantId: "pi-holder" });
       const receipt = svc.provenance.allocateReceipt(binding.id);
       svc.provenance.bindCommit(receipt.id, "a".repeat(40));
-      const trace = toolProvenanceTrace(svc, { ref: "PI-1" });
+      const trace = await runPiTool(svc, "provenance", { ref: "PI-1" });
       assert.equal(trace.bindings.length, 1);
       assert.equal(trace.receipts.length, 1);
       assert.equal(trace.receipts[0]?.id, receipt.id);
       assert.deepEqual(trace.commits, ["a".repeat(40)]);
-      assert.ok(trace.receipts[0]?.artifacts.some((a) => a.kind === "commit" && a.value === "a".repeat(40)));
+      assert.ok(trace.receipts[0]?.artifacts.some((a: { kind: string; value: unknown }) => a.kind === "commit" && a.value === "a".repeat(40)));
     } finally {
       svc.close();
     }

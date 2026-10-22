@@ -9,6 +9,8 @@ export interface OperationFeedback {
   message: string;
   detail?: string;
   hint?: string;
+  // Non-blocking notes shown under a confirmation (additive field).
+  warnings?: string[];
   retryable?: boolean;
 }
 
@@ -59,11 +61,30 @@ export function errorFeedback(
   };
 }
 
+export function withWarnings(feedback: OperationFeedback, warnings: unknown): OperationFeedback {
+  const list = Array.isArray(warnings) ? warnings.filter((w): w is string => typeof w === "string" && w !== "") : [];
+  return list.length > 0 ? { ...feedback, warnings: list } : feedback;
+}
+
 export function withFeedback<T>(data: T, feedback: OperationFeedback): T & { feedback: OperationFeedback } {
   if (data !== null && typeof data === "object" && !Array.isArray(data)) {
     return { ...(data as Record<string, unknown>), feedback } as T & { feedback: OperationFeedback };
   }
   return { value: data, feedback } as unknown as T & { feedback: OperationFeedback };
+}
+
+// Same actor/kind surface as the CLI confirmation, when the payload carries it.
+function journalDetail(data: Record<string, unknown>): string {
+  const kind = typeof data.kind === "string" ? `${data.kind} · ` : "";
+  const actor = typeof data.participantId === "string" && data.participantId ? data.participantId : "(none recorded)";
+  return `${kind}seq ${String(data.sequence)} · by ${actor}`;
+}
+
+function journalNextHint(data: Record<string, unknown>): string | undefined {
+  const ref = typeof data.ref === "string" ? data.ref : undefined;
+  if (!ref) return undefined;
+  if (data.kind === "result") return `sb issue close ${ref} --outcome completed --reason … --result ${String(data.entryId)}`;
+  return `sb journal timeline ${ref}`;
 }
 
 // Provider-neutral inference for mutation responses that already have a
@@ -101,7 +122,7 @@ export function attachMutationFeedback(value: unknown): unknown {
   if (typeof data.entryId === "string" && typeof data.sequence === "number") {
     return data.degraded === true
       ? withFeedback(data, warningFeedback("journal_degraded", "Checkpoint persisted with degraded semantic enrichment", String(data.reason ?? "mechanical checkpoint is durable")))
-      : withFeedback(data, successFeedback("journal_written", "Journal entry persisted", `seq ${data.sequence}`));
+      : withFeedback(data, successFeedback("journal_written", "Journal entry persisted", journalDetail(data), journalNextHint(data)));
   }
 
   return value;

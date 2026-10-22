@@ -1,5 +1,5 @@
 // Model-free Pi load probe tests (bead xtrm-6qu.13): the SDK probe script
-// reports the 8 registered substrate tools with no model call, fails on an
+// reports the 9 registered substrate tools with no model call, fails on an
 // empty HOME, and surfaces relevant extension load errors. Fixture HOME dirs
 // only (pi install is HOME-scoped); scratch under /var/tmp with cleanup.
 
@@ -39,11 +39,11 @@ function runProbe(home: string): { status: number | null; json: Record<string, u
 }
 
 describe("pi load probe (xtrm-6qu.13)", () => {
-  it("expects exactly the 8 substrate tools", () => {
-    assert.equal(EXPECTED_SUBSTRATE_TOOLS.length, 8);
+  it("expects exactly the 9 substrate tools", () => {
+    assert.equal(EXPECTED_SUBSTRATE_TOOLS.length, 9);
   });
 
-  it("reports all 8 tools with no model call in an enrolled fixture HOME", () => {
+  it("reports all 9 tools with no model call in an enrolled fixture HOME", () => {
     const home = scratch("sb-load-ok.");
     mkdirSync(home, { recursive: true });
     piInstall(home, PKG_ROOT);
@@ -61,7 +61,7 @@ describe("pi load probe (xtrm-6qu.13)", () => {
     const { status, json } = runProbe(home);
     assert.equal(status, 1);
     assert.equal(json["ok"], false);
-    assert.equal((json["missing"] as string[]).length, 8);
+    assert.equal((json["missing"] as string[]).length, 9);
   });
 
   it("surfaces relevant extension load errors", () => {

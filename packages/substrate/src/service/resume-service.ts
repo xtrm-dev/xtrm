@@ -7,7 +7,7 @@
 import type { DatabaseSync } from "../store/database.ts";
 import type { IssueService } from "./issue-service.ts";
 import type { JournalService } from "./journal-service.ts";
-import type { JournalEntry } from "../domain/journal.ts";
+import { previewText, type JournalEntry } from "../domain/journal.ts";
 import type { IssueClaim } from "../domain/claim.ts";
 
 export interface ChildCapsuleSummary {
@@ -51,6 +51,17 @@ export interface ReleaseState {
   allChildrenDone: boolean | null;
 }
 
+// The newest handoff is the coordinator's own continuity note; a capsule that
+// only counted it forced agents to hand-maintain "handoff seq N+" pointers.
+export interface HandoffRef {
+  entryId: string;
+  sequence: number;
+  summary: string;
+  next: string[];
+  participantId: string | null;
+  createdAt: number;
+}
+
 export interface ResumeCapsule {
   issueId: string;
   humanRef: string;
@@ -64,7 +75,8 @@ export interface ResumeCapsule {
   readiness: { state: string; dispatchable: boolean; reasons: string[] };
   resolvedContext: { hash: string; entryCount: number };
   latestCheckpoint: JournalEntry | null;
-  delta: { afterSequence: number; entries: JournalEntry[]; nextCursor: number };
+  latestHandoff: HandoffRef | null;
+  delta:{ afterSequence: number; entries: JournalEntry[]; nextCursor: number };
   children: ChildCapsuleSummary[];
   results: ResultRef[];
   criticalDecisions: DecisionRef[];
@@ -86,6 +98,10 @@ interface ExternalProvider {
 // never a dump of the whole journal.
 const CAPSULE_RESULT_LIMIT = 5;
 const CAPSULE_DECISION_LIMIT = 5;
+// Text-only bounds: the JSON capsule keeps every child; the rendered text
+// lists open children first and summarizes the rest by count.
+const CAPSULE_CHILD_LINES = 12;
+const CAPSULE_DELTA_LINES = 5;
 
 /**
  * Authority for Resume Capsules: builds the bounded continuity view from the
@@ -155,6 +171,17 @@ export class ResumeService {
     const criticalDecisions: DecisionRef[] = this.journal
       .timeline(issueId, { kind: "decision", limit: CAPSULE_DECISION_LIMIT })
       .map((e) => ({ entryId: e.id, sequence: e.sequence, summary: e.semantic?.summary ?? "" }));
+    const handoff = this.journal.latest(issueId, { kind: "handoff" });
+    const latestHandoff: HandoffRef | null = handoff
+      ? {
+          entryId: handoff.id,
+          sequence: handoff.sequence,
+          summary: handoff.semantic?.summary ?? "",
+          next: handoff.semantic?.next ?? [],
+          participantId: handoff.participantId,
+          createdAt: handoff.createdAt,
+        }
+      : null;
     const blockers = this.issues.unsatisfiedBlockers(issueId);
     const childrenDone = children.filter((c) => c.lifecycleState === "done").length;
     const release: ReleaseState = {
@@ -183,6 +210,7 @@ export class ResumeService {
       readiness: { state: readiness.state, dispatchable: readiness.dispatchable, reasons: readiness.reasons },
       resolvedContext: { hash: resolved.hash, entryCount: resolved.entries.length },
       latestCheckpoint,
+      latestHandoff,
       delta: { afterSequence: delta.afterSequence, entries: delta.entries, nextCursor: delta.nextCursor },
       children,
       results,
@@ -231,15 +259,31 @@ export class ResumeService {
       if (s.current) lines.push("", "CURRENT", s.current);
       if (s.next?.length) lines.push("", "NEXT", ...s.next.map((e) => `- ${e}`));
     }
+    lines.push("", "LATEST HANDOFF");
+    const h = c.latestHandoff;
+    if (h) {
+      lines.push(`seq${h.sequence} by ${h.participantId ?? "(none recorded)"} at ${new Date(h.createdAt).toISOString()}`);
+      if (h.summary) lines.push(truncate(h.summary, 1500));
+      lines.push(...h.next.map((e) => `- next: ${e}`));
+    } else {
+      lines.push("(none yet)");
+    }
     lines.push("", "BLOCKERS / OPEN QUESTIONS");
     const blocks = [...c.blockers.map((b) => `blocked by ${b}`), ...c.asks.map((a) => `ask: ${a}`)];
     lines.push(...(blocks.length > 0 ? blocks.map((b) => `- ${b}`) : ["(none)"]));
     if (c.children.length > 0) {
       lines.push("", "CHILDREN");
-      for (const ch of c.children) {
+      const terminal = new Set(["done", "cancelled", "archived"]);
+      const open = c.children.filter((ch) => !terminal.has(ch.lifecycleState));
+      for (const ch of open.slice(0, CAPSULE_CHILD_LINES)) {
         const blocked = ch.blockedBy.length > 0 ? ` blocked by ${ch.blockedBy.join(",")}` : "";
         const result = ch.latestResult ? ` result@${ch.latestResult.ref}${ch.latestResult.outcome ? ` (${ch.latestResult.outcome})` : ""}` : "";
         lines.push(`- ${ch.locator} ${ch.humanRef} ${ch.lifecycleState} rev${ch.revision} @${ch.checkpointRef ?? "no-checkpoint"}${result}${blocked}`);
+      }
+      const hiddenOpen = open.length - Math.min(open.length, CAPSULE_CHILD_LINES);
+      const closedCount = c.children.length - open.length;
+      if (hiddenOpen > 0 || closedCount > 0) {
+        lines.push(`- (${hiddenOpen > 0 ? `${hiddenOpen} more open, ` : ""}${closedCount} closed not listed; full list: sb issue children ${c.humanRef})`);
       }
     }
     lines.push("", "RESULTS");
@@ -262,7 +306,10 @@ export class ResumeService {
       "",
       "CHANGES SINCE CHECKPOINT",
       `${c.delta.entries.length} journal entries, ${c.provenance.eventCount} events total`,
-      ...(c.claim ? [`claim held by ${c.claim.holder}`] : ["no active claim"]),
+      ...c.delta.entries
+        .slice(-CAPSULE_DELTA_LINES)
+        .map((e) => `- seq${e.sequence} ${e.kind} by ${e.participantId ?? "(none recorded)"}: ${truncate(entryGist(e), 200)}`),
+      ...(c.claim ? [claimLine(c.claim, c.renderedAt)] : ["no active claim"]),
     );
     lines.push("", "EXTERNAL");
     lines.push(
@@ -275,11 +322,22 @@ export class ResumeService {
   }
 }
 
+function entryGist(e: JournalEntry): string {
+  return e.result?.summary ?? e.semantic?.summary ?? (e.mechanical ? "(mechanical checkpoint)" : "(empty entry)");
+}
+
+// Expiry is the signal coordinators renewed by cron; render it, not just the holder.
+function claimLine(claim: IssueClaim, now: number): string {
+  const mins = Math.round((claim.expiresAt - now) / 60000);
+  const when = mins >= 0 ? `expires in ${mins} min` : `EXPIRED ${-mins} min ago`;
+  return `claim held by ${claim.holder}${claim.activationId ? ` (activation ${claim.activationId})` : ""}; ${when} (${new Date(claim.expiresAt).toISOString()})`;
+}
+
 function dedupe(values: string[]): string[] {
   return [...new Set(values.map((v) => v.trim()).filter((v) => v !== ""))];
 }
 
 // Capsule text stays bounded even when a result summary is long (§39).
 function truncate(s: string, max: number): string {
-  return s.length > max ? `${s.slice(0, max)}…` : s;
+  return previewText(s, max, "full text: sb journal show --json");
 }

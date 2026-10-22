@@ -165,7 +165,7 @@ export class ClosureService {
       if (problems.length > 0) throw new Error(problems[0]!);
     }
     if ((TERMINAL_STATES as readonly string[]).includes(issue.lifecycleState)) {
-      throw new Error(`already terminal: ${issueId} is ${issue.lifecycleState}; reopen before closing again (history is immutable)`);
+      throw new Error(`already terminal: ${issue.humanRef} is ${issue.lifecycleState}; run \`sb issue reopen ${issue.humanRef} --reason <why>\` before closing again (history is immutable)`);
     }
     // XTRM-447: closure identity passes through the SAME canonical write seam
     // as the journal (XTRM-412) — canonicalise, then fail closed before any row

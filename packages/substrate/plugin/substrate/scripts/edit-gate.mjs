@@ -15,7 +15,7 @@ import { armPipeDrain } from "./write-and-exit.mjs";
 // nothing. armPipeDrain() swallows only EPIPE.
 armPipeDrain();
 
-const { handleEditGate } = await resolveSubstrate("edit-gate.ts");
+const { handleEditGate, editGateHookOutput } = await resolveSubstrate("edit-gate.ts");
 const hook = await readHookInput();
 const result = handleEditGate({
   tool_name: hook.tool_name,
@@ -28,7 +28,6 @@ const result = handleEditGate({
   workspace: hook.cwd ?? process.cwd(),
 });
 
-if (!result.allow) {
-  process.stdout.write(JSON.stringify({ decision: "block", reason: result.reason ?? "no live claim" }) + "\n");
-}
+const out = editGateHookOutput(result);
+if (out) process.stdout.write(JSON.stringify(out) + "\n");
 process.exitCode = 0;

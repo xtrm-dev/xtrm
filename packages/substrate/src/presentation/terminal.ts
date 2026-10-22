@@ -2,11 +2,13 @@
 // Sparse by design: data semantics stay in services/JSON; this module only
 // projects them for human TTY/plain surfaces.
 
+import { previewText } from "../domain/journal.ts";
 import {
   errorFeedback,
   noopFeedback,
   successFeedback,
   warningFeedback,
+  withWarnings,
   type OperationFeedback,
 } from "./operation-feedback.ts";
 
@@ -154,7 +156,8 @@ function renderContractValue(value: unknown, opts: TerminalStyleOptions): string
 // XTRM-409: legacy journal rows carry the semantic checkpoint double-encoded
 // as `{"summary":"…"}` inside `summary`. Unwrap it so the human journal view
 // prints prose, never a JSON object, without changing the `--json` payload.
-const JOURNAL_SUMMARY_MAX = 200;
+// Above the service's marked 280-char context preview, so its marker survives.
+const JOURNAL_SUMMARY_MAX = 360;
 const JOURNAL_SUMMARY_ENVELOPE = /^\{\s*"summary"\s*:\s*"([\s\S]*)$/;
 
 // The producer's bounded truncation can cut the envelope mid-string, so the
@@ -192,7 +195,7 @@ function journalSummaryText(raw: unknown): string {
     if (!match || !match[1]) break;
     text = decodeJournalProse(match[1]);
   }
-  return text.replace(/\s+/g, " ").trim().slice(0, JOURNAL_SUMMARY_MAX);
+  return previewText(text.replace(/\s+/g, " ").trim(), JOURNAL_SUMMARY_MAX);
 }
 
 function formatState(value: string, color: boolean): string {
@@ -438,48 +441,109 @@ function issueRefFromArgs(args: string[]): string | null {
   return idx >= 0 && args[idx + 2] ? args[idx + 2]! : null;
 }
 
+const NO_ACTOR = "(none recorded)";
+const ATTEST_HINT = (ref: string): string => `sb issue attest ${ref} --outcome ready --policy default --attested-by <you>`;
+
+// Next step for a draft: attest when the contract is complete, otherwise
+// validate to see what is missing.
+function draftHint(ref: string, reasons: unknown): string {
+  const needsAttestation = Array.isArray(reasons) && reasons.some((r) => typeof r === "string" && r.startsWith("no current semantic attestation"));
+  return needsAttestation ? ATTEST_HINT(ref) : `sb issue validate ${ref}`;
+}
+
+function reasonText(reasons: unknown): string | undefined {
+  return Array.isArray(reasons) && reasons.length > 0 ? reasons.join("; ") : undefined;
+}
+
+function journalHint(ref: string, kind: string, entryId: unknown): string {
+  if (kind === "result") return `sb issue close ${ref} --outcome completed --reason … --result ${typeof entryId === "string" ? entryId : "<id>"}`;
+  if (kind === "checkpoint" || kind === "compaction" || kind === "handoff") return `sb issue resume ${ref}`;
+  return `sb journal timeline ${ref}`;
+}
+
+function journalFeedback(command: string, data: Record<string, unknown>, ref: string): OperationFeedback {
+  const kind = String(data.kind ?? "note");
+  const actor = typeof data.participantId === "string" && data.participantId ? data.participantId : NO_ACTOR;
+  const detail = `${kind} · seq ${String(data.sequence ?? "?")} · by ${actor}`;
+  if (data.degraded) {
+    return withWarnings(warningFeedback("journal_degraded", `Checkpoint persisted on ${ref} with degraded semantic enrichment`, `${detail} · ${String(data.reason ?? "mechanical checkpoint is durable")}`, journalHint(ref, kind, data.id)), data.warnings);
+  }
+  const verb = command === "issue.note" ? "Added" : "Recorded";
+  return withWarnings(successFeedback("journal_written", `${verb} ${kind} on ${ref}`, detail, journalHint(ref, kind, data.id)), data.warnings);
+}
+
 export function feedbackForCommand(command: string, args: string[], data: Record<string, unknown>): OperationFeedback {
-  const ref = String(data.humanRef ?? data.locator ?? issueRefFromArgs(args) ?? data.issueId ?? "issue");
+  const ref = String(data.humanRef ?? data.locator ?? data.ref ?? issueRefFromArgs(args) ?? data.issueId ?? "issue");
   switch (command) {
-    case "issue.create":
-      return successFeedback("issue_created", `Created ${ref}${data.kind ? ` [${String(data.kind)}]` : ""}${data.title ? ` · ${String(data.title)}` : ""}`);
-    case "issue.edit":
-      return successFeedback("issue_updated", `Updated ${ref}`, data.revisionCreated ? "new revision created; readiness must be revalidated" : undefined);
+    case "issue.create": {
+      const message = `Created ${ref}${data.kind ? ` [${String(data.kind)}]` : ""}${data.title ? ` · ${String(data.title)}` : ""}`;
+      if (data.readinessState === "draft") {
+        return withWarnings(warningFeedback("issue_created_draft", message, `draft: ${reasonText(data.reasons) ?? "contract incomplete"}`, draftHint(ref, data.reasons)), data.warnings);
+      }
+      return withWarnings(successFeedback("issue_created", message, undefined, `sb issue validate ${ref}`), data.warnings);
+    }
+    case "issue.edit": {
+      const stale = data.revisionCreated === true;
+      const draft = data.readinessState === "draft";
+      const detail = draft ? `draft: ${reasonText(data.reasons) ?? "contract incomplete"}` : stale ? "new revision created; readiness must be revalidated" : undefined;
+      const hint = draft ? draftHint(ref, data.reasons) : stale ? ATTEST_HINT(ref) : `sb issue show ${ref}`;
+      return withWarnings(successFeedback("issue_updated", `Updated ${ref}`, detail, hint), data.warnings);
+    }
     case "issue.note":
-      return successFeedback("journal_written", `Added ${String(data.kind ?? "note")} to ${issueRefFromArgs(args) ?? ref}`, data.sequence ? `journal seq ${String(data.sequence)}` : undefined);
-    case "issue.attest":
-      return successFeedback("issue_attested", `Attested ${issueRefFromArgs(args) ?? ref} as ${String(data.outcome ?? "unknown")}`, data.policy ? `policy ${String(data.policy)}` : undefined);
-    case "issue.claim":
-      return successFeedback("issue_claimed", `Claimed ${issueRefFromArgs(args) ?? ref}`, data.holder ? `holder ${String(data.holder)}` : undefined);
+      return journalFeedback(command, data, ref);
+    case "issue.attest": {
+      const outcome = String(data.outcome ?? "unknown");
+      const state = typeof data.readinessState === "string" ? data.readinessState : undefined;
+      if (outcome === "ready" && state !== undefined && state !== "ready" && state !== "claimed") {
+        return warningFeedback("issue_attested_not_ready", `Attested ${ref} as ready, but it is still ${state}`, reasonText(data.reasons), draftHint(ref, data.reasons));
+      }
+      const detail = `policy ${String(data.policy ?? "?")}${state ? ` · now ${state}` : ""}`;
+      return successFeedback("issue_attested", `Attested ${ref} as ${outcome}`, detail, outcome === "ready" ? `sb issue claim ${ref} --holder <you>` : `sb issue edit ${ref} --contract <file>`);
+    }
+    case "issue.claim": {
+      const expiry = `expires ${String(data.expiresAtIso ?? data.expiresAt ?? "?")}${typeof data.expiresInMinutes === "number" ? ` (in ${data.expiresInMinutes} min)` : ""}`;
+      if (data.alreadyHeld === true) {
+        return noopFeedback("issue_claim_held", `${ref} already held by you; ${expiry} — use sb issue renew ${ref} --ttl-ms <ms> to extend`);
+      }
+      return successFeedback("issue_claimed", `Claimed ${ref}`, `holder ${String(data.holder ?? "?")} · ${expiry}`, `sb issue release ${ref}  (when done or stopping)`);
+    }
+    case "issue.renew": {
+      const minutes = typeof data.expiresInMinutes === "number" ? ` (in ${data.expiresInMinutes} min)` : "";
+      return successFeedback("issue_renewed", `Renewed ${ref} · expires ${String(data.expiresAtIso ?? data.expiresAt ?? "?")}${minutes}`, data.holder ? `holder ${String(data.holder)}` : undefined, `sb issue release ${ref}  (when done or stopping)`);
+    }
     case "issue.release":
       return data.released === false
-        ? noopFeedback("claim_absent", `No live claim was released for ${issueRefFromArgs(args) ?? ref}`)
-        : successFeedback("issue_released", `Released ${issueRefFromArgs(args) ?? ref}`);
-    case "issue.close":
-      return successFeedback("issue_closed", `Closed ${ref}`, data.outcome ? `outcome ${String(data.outcome)}` : undefined);
+        ? noopFeedback("claim_absent", `No live claim was released for ${ref}`, undefined, `sb issue claim ${ref} --holder <you>`)
+        : successFeedback("issue_released", `Released ${ref}`, undefined, `sb issue ready`);
+    case "issue.close": {
+      // The engine nests the Closure row under data.closure; data.outcome never existed.
+      const closure = (data.closure ?? null) as { outcome?: unknown; executionContext?: { participantId?: string | null } | null } | null;
+      const outcome = closure?.outcome ?? data.outcome;
+      const actor = closure?.executionContext?.participantId || NO_ACTOR;
+      const detail = outcome ? `outcome ${String(outcome)} · by ${actor}` : "legacy close: no Closure row (pass --outcome and --reason to record one)";
+      return withWarnings(successFeedback("issue_closed", `Closed ${ref}`, detail, "sb issue ready"), data.warnings);
+    }
     case "issue.reopen":
-      return successFeedback("issue_reopened", `Reopened ${ref}`);
+      return withWarnings(successFeedback("issue_reopened", `Reopened ${ref}`, undefined, `sb issue claim ${ref} --holder <you>`), data.warnings);
     case "issue.cancel":
-      return successFeedback("issue_cancelled", `Cancelled ${ref}`);
+      return withWarnings(successFeedback("issue_cancelled", `Cancelled ${ref}`, undefined, "sb issue ready"), data.warnings);
     case "issue.archive":
-      return successFeedback("issue_archived", `Archived ${ref}`);
+      return successFeedback("issue_archived", `Archived ${ref}`, undefined, "sb issue ready");
     case "issue.defer":
-      return successFeedback("issue_deferred", `Deferred ${ref}`);
+      return successFeedback("issue_deferred", `Deferred ${ref}`, undefined, `sb issue state ${ref} open  (to resume)`);
     case "issue.relate":
-      return successFeedback("issues_linked", "Linked issues", `${String(data.kind ?? "relation")}`);
+      return successFeedback("issues_linked", "Linked issues", `${String(data.kind ?? "relation")}`, "sb issue tree");
     case "issue.unrelate":
-      return successFeedback("issues_unlinked", "Removed issue relation", `${String(data.kind ?? "relation")}`);
+      return successFeedback("issues_unlinked", "Removed issue relation", `${String(data.kind ?? "relation")}`, "sb issue tree");
     case "project.repair":
       return data.repaired === false
         ? noopFeedback("project_link_current", "Repository link already correct")
-        : successFeedback("project_link_repaired", "Repaired repository link");
+        : successFeedback("project_link_repaired", "Repaired repository link", undefined, "sb doctor");
     case "plan.apply":
-      return successFeedback("plan_applied", "Applied plan");
+      return successFeedback("plan_applied", "Applied plan", undefined, "sb issue ready");
     case "journal.append":
     case "journal.checkpoint":
-      return data.degraded
-        ? warningFeedback("journal_degraded", "Checkpoint persisted with degraded semantic enrichment", String(data.reason ?? "mechanical checkpoint is durable"))
-        : successFeedback("journal_written", "Journal entry persisted", data.sequence ? `seq ${String(data.sequence)}` : undefined);
+      return journalFeedback(command, data, ref);
     default:
       return successFeedback("operation_completed", `${command.replace(/\./g, " ")} completed`);
   }
@@ -490,6 +554,7 @@ export function renderFeedback(feedback: OperationFeedback, opts: TerminalStyleO
   const paint = feedback.level === "success" ? green : feedback.level === "warning" ? yellow : feedback.level === "error" ? red : cyan;
   const lines = [`${paint(glyph, opts.color)} ${feedback.message}`];
   if (feedback.detail) lines.push(`  ${dim(feedback.detail, opts.color)}`);
+  for (const w of feedback.warnings ?? []) lines.push(`  ${yellow("!", opts.color)} ${w}`);
   if (feedback.hint) lines.push(`  ${dim(`next: ${feedback.hint}`, opts.color)}`);
   return lines.join("\n") + "\n";
 }
@@ -502,7 +567,12 @@ export function feedbackForError(command: string, message: string): OperationFee
   else if (/unknown issue verb|unknown group|unknown verb/i.test(message)) hint = "sb help";
   else if (/unknown closure outcome/i.test(message)) hint = "sb help issue close";
   else if (/must be an integer|must be a number/i.test(message)) hint = `sb help ${command.replace(".", " ")}`;
-  else if (/claim|holder|activation/i.test(message) && command.startsWith("issue.")) hint = "sb issue show <ref>";
+  else if (/requires a value/i.test(message)) hint = `sb help ${command.replace(".", " ")}`;
+  else if (/unknown journal kind|empty journal entry/i.test(message)) hint = "sb help kinds";
+  else if (/invalid contract|nested under/i.test(message)) hint = "sb help contract";
+  else if (/claim|holder|activation/i.test(message) && command.startsWith("issue.")) hint = "sb help identity";
+  // The message already carries its exact remedy; a generic hint would dilute it.
+  if (/run `sb /.test(message)) hint = undefined;
   return errorFeedback("operation_failed", `${command || "sb"} failed`, message, hint, false);
 }
 

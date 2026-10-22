@@ -9,6 +9,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (XTRM-678): journal text is never cut silently
+
+The Claude MCP server cut `journal_append` summaries to 2,000 characters with no
+error; the CLI stored any length. Now one limit (`SEMANTIC_SUMMARY_MAX`, 16,000
+characters) applies to the CLI, MCP and Pi: within it the text is stored
+byte-for-byte, above it the write fails with the size and the limit. Long text
+comes from `sb journal append --summary-file <path|->` or the `summaryFile`
+tool parameter. Text previews mark every cut (`… (+N chars, …)`); PostCompact and
+imported comments that exceed the limit carry an explicit cut marker; Beads
+history above it is imported in parts.
+
+### Changed (XTRM-674): one minimal tool surface for Claude MCP and Pi
+
+The Claude MCP server and the Pi extension now register the same nine tools with
+the same parameter keys (Pi names carry the `substrate_` prefix). Names,
+descriptions and parameter docs live in `integrations/tool-surface.ts`; behaviour
+in `integrations/tool-core.ts`. Model-facing text fell from 13,875 characters
+(MCP descriptions only, four copies of the kind glossary) to under 5,000 for
+descriptions plus parameter docs. The kind glossary is `sb help kinds`.
+
+Removed tool names and their replacements:
+
+| Removed (MCP) | Replacement | CLI equivalent |
+|---|---|---|
+| `issue_ready` | `issue_list {status: "ready"}` | `sb issue ready` |
+| `issue_note` | `journal_append {kind, summary}` | `sb issue note` |
+| `journal_checkpoint` | `journal_append {kind: "checkpoint", summary?}` | `sb journal checkpoint` |
+| `journal_show` | `journal_read {mode: "show"}` | `sb journal show` |
+| `journal_query` | `journal_read {mode: "latest"\|"since"\|"timeline"}` | `sb journal latest\|since\|timeline` |
+| `provenance_trace` | `provenance {ref}` | `sb provenance trace` |
+| `provenance_session` | `provenance {sessionId}` | `sb provenance session` |
+| `provenance_activation` | `provenance {activationId}` | `sb provenance activation` |
+
+| Removed (Pi) | Replacement |
+|---|---|
+| `substrate_issue_search` | `substrate_issue_list {query, kind}` |
+| `substrate_issue_resume` | `substrate_resume_capsule` |
+| `substrate_journal_checkpoint` | `substrate_journal_append {kind: "checkpoint"}` |
+| `substrate_provenance_trace` | `substrate_provenance {ref}` |
+
+Behaviour changes:
+
+- `issue_claim` gains `op: renew` (extends the lease; a same-holder re-claim
+  never did) and defaults `holder` to `SUBSTRATE_HOLDER`, else the xt worktree
+  name; with neither it fails naming `SUBSTRATE_HOLDER`. Pi no longer requires
+  `holder`.
+- `issue_close` takes `participant` (default: resolved identity) instead of
+  `actor`, records it in the closure, and warns when a `completed` close cites
+  no result, validation or receipt refs.
+- `journal_append` on Pi now accepts `summary`, `next`, `details` and `result`;
+  Pi entries were empty before.
+- `issue_list` returns `{total, issues}` (default limit 100) and accepts
+  `claimedBy` (holder or `me`), returning held issues with the latest handoff.
+- The tools no longer take `dbPath`, `project` (writes), `sessionId`,
+  `participantId` or `runId`; the DB comes from `SUBSTRATE_DB`, the project from
+  `SUBSTRATE_PROJECT` or the repository binding.
+- Every mutation returns structured `feedback` including `participantId` and
+  `warnings`.
+
 ---
 
 ## [0.2.2] - 2026-09-27

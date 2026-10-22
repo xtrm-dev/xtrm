@@ -11,10 +11,11 @@ import { IssueService } from "../../src/service/issue-service.ts";
 import { JournalService, type Summarizer } from "../../src/service/journal-service.ts";
 import { ResumeService } from "../../src/service/resume-service.ts";
 import { ProvenanceService } from "../../src/service/provenance-service.ts";
-import { isJournalKind, type SemanticCheckpoint } from "../../src/domain/journal.ts";
+import { type SemanticCheckpoint } from "../../src/domain/journal.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
 import { currentExecutionContext, enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
-import type { ResolvedIssue } from "../../src/domain/issue.ts";
+import { resolveIdentity } from "../../src/presentation/advisories.ts";
+import type { ToolContext, ToolHandles } from "../tool-core.ts";
 // Type-only: erased at compile time, so this module stays free of runtime Pi imports.
 import type { Usage } from "@earendil-works/pi-ai";
 
@@ -119,134 +120,41 @@ function piExecutionContext(opts: {
   });
 }
 
-// Narrow structural input: a board row carries exactly these fields, so the
-// projection feeds the same summary as a hydrated issue without a fabricated
-// ResolvedIssue stand-in.
-type SummaryInput = Pick<ResolvedIssue, "locator" | "humanRef" | "title" | "kind" | "lifecycleState" | "currentRevision">;
+// -- tool surface adapter -------------------------------------------------------
+// The model-facing tools live in integrations/tool-core.ts (shared with the
+// Claude MCP server). These two helpers only bind Pi's host facts to it.
 
-function summary(i: SummaryInput): Record<string, unknown> {
-  return {
-    locator: i.locator,
-    humanRef: i.humanRef,
-    title: i.title,
-    kind: i.kind,
-    lifecycleState: i.lifecycleState,
-    revision: i.currentRevision,
-  };
+export function toolHandles(svc: SubstrateServices): ToolHandles {
+  return { db: svc.db, svc: svc.issues, journal: svc.journal, resume: svc.resume };
 }
 
-// -- model-facing tools (thin over the service) --------------------------------
-
-export function toolIssueGet(svc: SubstrateServices, params: { ref: string }): Record<string, unknown> {
-  const resolved = svc.issues.resolveRef(params.ref);
-  const readiness = svc.issues.getReadiness(resolved.id);
-  const revision = svc.issues.getRevision(resolved.id, resolved.currentRevision);
-  return {
-    ...summary(resolved),
-    contract: revision.contract,
-    readinessState: readiness.state,
-    dispatchable: readiness.dispatchable,
-    reasons: readiness.reasons,
-    attestation: svc.issues.latestAttestation(resolved.id),
-    claim: svc.issues.getActiveClaim(resolved.id),
-  };
-}
-
-export function toolIssueSearch(
-  svc: SubstrateServices,
-  params: { project: string; query?: string; kind?: string },
-): Array<Record<string, unknown>> {
-  // Bounded board read (XTRM-393): queryAllIssues walks every page of the
-  // board projection, so the result stays exhaustive while the per-issue
-  // reads disappear. Filter matches title, humanRef AND locator exactly as
-  // before; the summary shape below stays untouched.
-  const q = (params.query ?? "").toLowerCase();
-  return svc.issues
-    .queryAllIssues({ project: params.project })
-    .filter((r) => (params.kind ? r.kind === params.kind : true))
-    .filter((r) => (q ? `${r.title} ${r.humanRef} ${r.locator}`.toLowerCase().includes(q) : true))
-    .map((r) =>
-      summary({
-        locator: r.locator,
-        humanRef: r.humanRef,
-        title: r.title,
-        kind: r.kind,
-        lifecycleState: r.lifecycleState,
-        currentRevision: r.revision,
-      }),
-    );
-}
-
-export function toolIssueClaim(
-  svc: SubstrateServices,
+export function piToolContext(
   bindings: SessionBindings,
-  params: { ref: string; holder: string; activationId?: string; ttlMs?: number; sessionId?: string },
-): Record<string, unknown> {
-  const resolved = svc.issues.resolveRef(params.ref);
-  const claim = svc.issues.claimIssue(resolved.id, params.holder, {
-    activationId: params.activationId,
-    ttlMs: params.ttlMs,
-  });
-  if (params.sessionId) bindings.bind(params.sessionId, resolved.id, { holder: params.holder, activationId: params.activationId });
-  return { issueId: claim.issueId, holder: claim.holder, expiresAt: claim.expiresAt, generation: claim.generation };
-}
-
-export function toolIssueUpdate(
-  svc: SubstrateServices,
-  params: { ref: string; contract: unknown; expectedRevision?: number },
-): Record<string, unknown> {
-  const resolved = svc.issues.resolveRef(params.ref);
-  const { issue, created } = svc.issues.updateContract(resolved.id, params.contract as never, "pi-extension", {
-    expectedRevision: params.expectedRevision,
-  });
-  return { ...summary(svc.issues.getIssue(issue.id)), revisionCreated: created };
-}
-
-export function toolJournalAppend(
-  svc: SubstrateServices,
-  params: { ref: string; kind: string; sessionId?: string; participantId?: string; activationId?: string; runId?: string; executionContext?: ExecutionContext | null },
-): Record<string, unknown> {
-  if (!isJournalKind(params.kind)) throw new Error(`unknown journal kind: ${params.kind}`);
-  const resolved = svc.issues.resolveRef(params.ref);
-  const entry = svc.journal.appendEntry(resolved.id, {
-    kind: params.kind,
-    sessionId: params.sessionId,
-    participantId: params.participantId,
-    activationId: params.activationId,
-    runId: params.runId,
-    executionContext: piExecutionContext({
-      sessionId: params.sessionId ?? null,
-      holder: params.participantId ?? null,
-      activationId: params.activationId ?? null,
-      executionContext: params.executionContext ?? null,
-    }),
-  });
-  return { entryId: entry.id, sequence: entry.sequence, kind: entry.kind };
-}
-
-export async function toolJournalCheckpoint(
-  svc: SubstrateServices,
-  params: { ref: string; sessionId?: string; headCommit?: string; changedFiles?: string[]; executionContext?: ExecutionContext | null },
-): Promise<Record<string, unknown>> {
-  const resolved = svc.issues.resolveRef(params.ref);
-  const r = await svc.journal.checkpoint(resolved.id, {
-    sessionId: params.sessionId,
-    headCommit: params.headCommit,
-    changedFiles: params.changedFiles,
-    executionContext: piExecutionContext({ sessionId: params.sessionId ?? null, executionContext: params.executionContext ?? null }),
-  });
-  return { entryId: r.entry.id, sequence: r.entry.sequence, degraded: r.degraded };
-}
-
-export function toolIssueResume(svc: SubstrateServices, params: { ref: string }): string {
-  const resolved = svc.issues.resolveRef(params.ref);
-  return svc.resume.renderCapsule(svc.resume.buildCapsule(resolved.id));
-}
-
-/** Full canonical evidence spine; Pi and Claude consume the same ProvenanceService. */
-export function toolProvenanceTrace(svc: SubstrateServices, params: { ref: string }) {
-  const resolved = svc.issues.resolveRef(params.ref);
-  return svc.provenance.trace(resolved.id);
+  opts: { sessionId?: string; cwd?: string; executionContext?: ExecutionContext | null } = {},
+): ToolContext {
+  const cwd = opts.cwd ?? process.cwd();
+  return {
+    author: "pi-extension",
+    guardProject: false,
+    cwd,
+    identity: (participant) => {
+      const holder = participant ?? resolveIdentity(process.env, cwd).holder ?? undefined;
+      const executionContext = piExecutionContext({
+        sessionId: opts.sessionId ?? null,
+        holder: holder ?? null,
+        executionContext: opts.executionContext ?? null,
+      });
+      return {
+        sessionId: opts.sessionId,
+        participantId: executionContext?.participantId ?? undefined,
+        activationId: executionContext?.specialist?.activationId ?? undefined,
+        executionContext,
+      };
+    },
+    onClaim: (issueId, holder, activationId) => {
+      if (opts.sessionId) bindings.bind(opts.sessionId, issueId, { holder, activationId });
+    },
+  };
 }
 
 // -- compaction ---------------------------------------------------------------
@@ -462,5 +370,6 @@ export function evaluateStopContinuity(state: StopContinuityState): {
 export function resumeForSession(svc: SubstrateServices, bindings: SessionBindings, sessionId: string | undefined): string | null {
   const ref = bindings.boundRef(sessionId);
   if (!ref) return null;
-  return toolIssueResume(svc, { ref });
+  const resolved = svc.issues.resolveRef(ref);
+  return svc.resume.renderCapsule(svc.resume.buildCapsule(resolved.id));
 }

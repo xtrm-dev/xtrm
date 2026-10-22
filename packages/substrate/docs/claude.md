@@ -17,24 +17,35 @@ default.
 ```text
 issue_get
 issue_list
-issue_ready
 issue_claim
 issue_update
-issue_note
 issue_close
 journal_append
-journal_checkpoint
-journal_show
-journal_query
-provenance_trace
-provenance_session
-provenance_activation
+journal_read
 resume_capsule
+provenance
 ```
 
-`issue_claim` is `claim|release`; `journal_query` is
-`since|latest|timeline`. Tool descriptions are normative instruction surfaces
-and are exported from the same `TOOL_DEFS` registration table.
+| Tool (Pi: `substrate_` prefix) | Purpose |
+|---|---|
+| `issue_get {ref}` | Contract, readiness, claim, attestation |
+| `issue_list {project?, status?, query?, kind?, limit?, claimedBy?}` | Replaces `issue_list`/`issue_ready`/`issue_search`; `claimedBy` (holder or `me`) lists held issues with the latest handoff |
+| `issue_claim {ref, op?, holder?, ttlMs?, activationId?}` | `op` claim\|renew\|release; `holder` defaults to `SUBSTRATE_HOLDER`, else the xt worktree name |
+| `issue_update {ref, title?, priority?, contract?}` | Metadata or revision-bearing change |
+| `issue_close {ref, outcome, reason, *Refs?, participant?}` | Warns when `completed` cites no refs; `participant` defaults to the resolved identity |
+| `journal_append {ref, kind, summary?, next?, details?, result?}` | All writable kinds; `checkpoint` takes the mechanical path; Pi entries now carry the summary |
+| `journal_read {ref, mode, kind?, cursor?, limit?}` | `mode` latest\|since\|timeline\|show, full bodies |
+| `resume_capsule {ref}` | Derived continuation capsule |
+| `provenance {ref? \| sessionId? \| activationId?}` | Exactly one selector |
+
+The Pi extension registers the same nine tools with the same parameter keys
+(prefix `substrate_`). Names, descriptions and parameter docs are defined once
+in `integrations/tool-surface.ts` and total under 5000 characters; behaviour
+lives in `integrations/tool-core.ts`. The journal kind glossary is `sb help
+kinds`. The DB comes from `SUBSTRATE_DB` and the project from
+`SUBSTRATE_PROJECT`; the tools take no `dbPath` or `project` write parameter.
+Every mutation returns structured `feedback` with `participantId` and
+`warnings`.
 
 Repository project resolution is explicit project → `SUBSTRATE_PROJECT` →
 repository binding/checkout alias → fail closed with `sb init` guidance. There

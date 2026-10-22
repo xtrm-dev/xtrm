@@ -11,6 +11,7 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dirname, "..");
 const mcpSource = readFileSync(join(ROOT, "integrations", "claude-code", "mcp-server.ts"), "utf8");
+const coreSource = readFileSync(join(ROOT, "integrations", "tool-core.ts"), "utf8");
 const cliSource = readFileSync(join(ROOT, "cli", "sb.ts"), "utf8");
 const indexSource = readFileSync(join(ROOT, "src", "index.ts"), "utf8");
 
@@ -23,10 +24,11 @@ describe("MCP/CLI decoupling (XTRM-337)", () => {
     );
   });
 
-  it("mcp-server.ts imports discovery from the shared domain module", () => {
+  it("the MCP tool path imports discovery from the shared domain module", () => {
+    // XTRM-674: project resolution moved from mcp-server.ts into the shared tool core.
     assert.ok(
-      mcpSource.includes('from "../../src/domain/repository-discovery.ts"'),
-      "mcp-server.ts must import discoverRepository from src/domain/repository-discovery.ts",
+      coreSource.includes('from "../src/domain/repository-discovery.ts"'),
+      "tool-core.ts must import discoverRepository from src/domain/repository-discovery.ts",
     );
   });
 

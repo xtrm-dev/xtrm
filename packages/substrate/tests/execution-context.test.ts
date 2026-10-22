@@ -27,7 +27,8 @@ import {
   XTRM_SESSION_NAME_ENV,
 } from "../src/domain/execution-context.ts";
 import { dispatchToSpecialist } from "../src/workitems/dispatch-gate.ts";
-import { openServices, toolJournalAppend, toolJournalCheckpoint, runBeforeCompact } from "../integrations/pi/handlers.ts";
+import { openServices, runBeforeCompact } from "../integrations/pi/handlers.ts";
+import { runPiTool } from "./pi-run.ts";
 import { handlePreCompact } from "../integrations/claude-code/precompact.ts";
 import { contract } from "./helpers.ts";
 
@@ -272,6 +273,7 @@ describe("X1 storage: envelope write/read with flat projection agreement", () =>
       const journal = new JournalService(s.db, s.svc);
       const e = journal.appendEntry(issue.id, {
         kind: "finding",
+        semantic: { summary: "entry recorded for the identity assertion under test" },
         participantId: "p1",
         executionContext: { participantId: "p1", xtrmSessionId: ENV_ID },
       });
@@ -284,6 +286,7 @@ describe("X1 storage: envelope write/read with flat projection agreement", () =>
       assert.throws(
         () => journal.appendEntry(issue.id, {
           kind: "finding",
+          semantic: { summary: "entry recorded for the identity assertion under test" },
           participantId: "legacy-p",
           executionContext: { participantId: "env-p" },
         }),
@@ -310,7 +313,7 @@ describe("X1 storage: envelope write/read with flat projection agreement", () =>
         { participantId: " " },
       ]) {
         assert.throws(
-          () => journal.appendEntry(issue.id, { kind: "note", executionContext: bad as never }),
+          () => journal.appendEntry(issue.id, { kind: "note", semantic: { summary: "entry recorded for the identity assertion under test" }, executionContext: bad as never }),
           /invalid execution context|unknown|non-empty/,
           `journal append rejects ${JSON.stringify(bad)}`,
         );
@@ -446,7 +449,7 @@ describe("X1 §97: R4 env → Pi/Claude → Journal carries equal session id/nam
     const svc = openServices(s.dbPath);
     try {
       const { issue } = readyIssue(s.svc);
-      const appended = toolJournalAppend(svc, { ref: issue.id, kind: "finding", sessionId: "pi-sess-9" });
+      const appended = await runPiTool(svc, "journal_append", { ref: issue.id, kind: "finding", summary: "finding recorded through the pi trusted adapter path" }, { sessionId: "pi-sess-9" });
       const entry = svc.journal.getEntry(appended.entryId as string);
       assert.equal(entry.executionContext?.xtrmSessionId, ENV_ID);
       assert.equal(entry.executionContext?.xtrmSessionName, ENV_NAME);
@@ -455,7 +458,7 @@ describe("X1 §97: R4 env → Pi/Claude → Journal carries equal session id/nam
       // Flat session follows the automatic R4 session first (finding 2),
       // while the provider session stays typed in the envelope.
       assert.equal(entry.sessionId, ENV_ID, "flat session column follows xtrmSessionId");
-      const cp = await toolJournalCheckpoint(svc, { ref: issue.id, sessionId: "pi-sess-9" });
+      const cp = await runPiTool(svc, "journal_append", { ref: issue.id, kind: "checkpoint" }, { sessionId: "pi-sess-9" });
       const cpEntry = svc.journal.getEntry(cp.entryId as string);
       assert.equal(cpEntry.executionContext?.xtrmSessionId, ENV_ID);
       assert.equal(cpEntry.executionContext?.xtrmSessionName, ENV_NAME);
@@ -465,9 +468,11 @@ describe("X1 §97: R4 env → Pi/Claude → Journal carries equal session id/nam
       assert.equal(compactEntry.executionContext?.xtrmSessionName, ENV_NAME);
       // A known activation is recorded, not dropped (X1 review P2-1): the
       // envelope and the flat column agree on the same activation id.
-      const withActivation = toolJournalAppend(svc, {
-        ref: issue.id, kind: "finding", sessionId: "pi-sess-9", activationId: "act-pi-1",
-      });
+      process.env["SUBSTRATE_ACTIVATION_ID"] = "act-pi-1";
+      const withActivation = await runPiTool(svc, "journal_append", {
+        ref: issue.id, kind: "finding", summary: "finding recorded under a known activation id",
+      }, { sessionId: "pi-sess-9" });
+      delete process.env["SUBSTRATE_ACTIVATION_ID"];
       const activationEntry = svc.journal.getEntry(withActivation.entryId as string);
       assert.equal(activationEntry.executionContext?.specialist?.activationId, "act-pi-1");
       assert.equal(activationEntry.activationId, "act-pi-1");
@@ -646,7 +651,7 @@ describe("X1 joint §98 with R1: unavailable identity stays absent/null", () => 
       const { issue } = readyIssue(s.svc, "unknown work", "coord-holder");
       const journal = new JournalService(s.db, s.svc);
       const prov = new ProvenanceService(s.db, s.svc, journal);
-      const e = journal.appendEntry(issue.id, { kind: "note" });
+      const e = journal.appendEntry(issue.id, { kind: "note", semantic: { summary: "entry recorded for the identity assertion under test" } });
       assert.equal(e.executionContext, null);
       const b = prov.dispatch(issue.id, { workspace: s.dir, participantId: "coord-holder" });
       const bRaw = s.db.prepare("SELECT execution_context_json AS j FROM execution_bindings WHERE id = ?").get(b.id) as { j: string | null };
@@ -681,7 +686,7 @@ describe("X1 joint §98 with R1: unavailable identity stays absent/null", () => 
       const { issue } = readyIssue(s.svc, "flat session work", "coord-holder");
       const journal = new JournalService(s.db, s.svc);
       // Legacy manual flag with no envelope and no provider knowledge.
-      const e = journal.appendEntry(issue.id, { kind: "note", sessionId: "01a0ac95-8370-74c5-9081-4490653e7e94" });
+      const e = journal.appendEntry(issue.id, { kind: "note", semantic: { summary: "entry recorded for the identity assertion under test" }, sessionId: "01a0ac95-8370-74c5-9081-4490653e7e94" });
       assert.equal(e.sessionId, "01a0ac95-8370-74c5-9081-4490653e7e94", "flat session column stays queryable");
       const reread = journal.getEntry(e.id);
       assert.equal(reread.sessionId, "01a0ac95-8370-74c5-9081-4490653e7e94");
@@ -766,7 +771,7 @@ describe("XTRM-412: canonical identity at the write seam", () => {
     try {
       const { issue } = readyIssue(s.svc, "write gate");
       const journal = new JournalService(s.db, s.svc);
-      assert.throws(() => journal.appendEntry(issue.id, { kind: "note", sessionId: "not a session!!" }), IdentityFormatError);
+      assert.throws(() => journal.appendEntry(issue.id, { kind: "note", semantic: { summary: "entry recorded for the identity assertion under test" }, sessionId: "not a session!!" }), IdentityFormatError);
       assert.equal(journal.listEntries(issue.id).length, 0, "nothing is stored on rejection");
       // The launcher-surfaced tmux session is derived, not refused.
       process.env[XTRM_SESSION_ID_ENV] = "$2";

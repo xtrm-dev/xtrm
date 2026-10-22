@@ -11,7 +11,7 @@ import { armPipeDrain } from "./write-and-exit.mjs";
 // writes nothing. armPipeDrain() swallows only EPIPE.
 armPipeDrain();
 
-const { handleStopGate } = await resolveSubstrate("stop-gate.ts");
+const { handleStopGate, stopGateHookOutput } = await resolveSubstrate("stop-gate.ts");
 const hook = await readHookInput();
 const result = await handleStopGate({
   cwd: hook.cwd ?? process.cwd(),
@@ -23,7 +23,18 @@ const result = await handleStopGate({
   releaseClaim: process.env["SUBSTRATE_STOP_RELEASE_CLAIM"] === "1",
 });
 
-if (result.continuity) {
-  process.stdout.write(JSON.stringify({ additionalContext: result.continuity }) + "\n");
+// XTRM-672: the shared advisories ride the same Stop output. An older
+// installed package has no advisor module; the gate notice must still go out.
+let out = stopGateHookOutput(result, { sessionId: hook.session_id });
+try {
+  const { handleStopAdvisor, advisorHookOutput, combineStopOutputs } = await resolveSubstrate("advisor.ts");
+  const advisor = advisorHookOutput(
+    "Stop",
+    handleStopAdvisor({ session_id: hook.session_id, cwd: hook.cwd ?? process.cwd(), stop_hook_active: hook.stop_hook_active === true }),
+  );
+  out = combineStopOutputs(out, advisor);
+} catch {
+  // fail-open: gate notice only
 }
+if (out) process.stdout.write(JSON.stringify(out) + "\n");
 process.exitCode = 0;

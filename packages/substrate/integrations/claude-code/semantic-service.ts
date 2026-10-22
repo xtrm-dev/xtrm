@@ -4,15 +4,16 @@
 // Claude does not support on PreCompact). v0 is a deterministic extractive
 // fallback: real model summarizers plug in via the Summarizer signature.
 
-import type { MechanicalCheckpoint, SemanticCheckpoint } from "../../src/domain/journal.ts";
+import { previewText, type MechanicalCheckpoint, type SemanticCheckpoint } from "../../src/domain/journal.ts";
 import type { Summarizer } from "../../src/service/journal-service.ts";
 
 const MAX_SUMMARY = 2000;
 const MAX_ITEM = 500;
 const MAX_ITEMS = 20;
 
+// Host-generated text: a cut is marked with the dropped length (XTRM-678).
 function trunc(s: string, max: number): string {
-  return s.length > max ? `${s.slice(0, max)}…` : s;
+  return previewText(s, max, "cut by the checkpoint summarizer");
 }
 
 function items(values: string[] | undefined): string[] | undefined {
@@ -36,7 +37,7 @@ export function summarizeMechanical(
   const head: string[] = [`Checkpoint ${bits.join("; ")}.`];
   if (childBits) head.push(`Children ${childBits}.`);
   if (mechanical.pendingAsks?.length) head.push(`Open: ${mechanical.pendingAsks.slice(0, 5).join(" | ")}.`);
-  const tail = (transcriptTail ?? "").trim().split("\n").slice(-20).join("\n").trim();
+  const tail = transcriptGist(transcriptTail ?? "").slice(-20).join("\n").trim();
   const summary = trunc([...head, tail ? `Recent context:\n${tail}` : ""].filter(Boolean).join("\n"), MAX_SUMMARY);
   return {
     summary,
@@ -46,6 +47,32 @@ export function summarizeMechanical(
   };
 }
 
+// Claude transcripts are JSONL records; pasting them raw put requestIds and
+// token counters into checkpoint summaries. Keep only conversational text and
+// tool names; non-JSON lines (a tail cut mid-record) and metadata are dropped.
+export function transcriptGist(raw: string): string[] {
+  const out: string[] = [];
+  for (const line of raw.split("\n")) {
+    let rec: { type?: unknown; message?: { content?: unknown } };
+    try {
+      rec = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (rec?.type !== "user" && rec?.type !== "assistant") continue;
+    const content = rec.message?.content;
+    const blocks = typeof content === "string" ? [{ type: "text", text: content }] : Array.isArray(content) ? content : [];
+    for (const b of blocks as Array<{ type?: string; text?: string; name?: string }>) {
+      if (b?.type === "text" && typeof b.text === "string" && b.text.trim() !== "") {
+        out.push(`${rec.type}: ${trunc(b.text.trim().replace(/\s+/g, " "), 300)}`);
+      } else if (b?.type === "tool_use" && typeof b.name === "string") {
+        out.push(`tool: ${b.name}`);
+      }
+    }
+  }
+  return out;
+}
+
 // JournalService-compatible summarizer with a transcript-tail cap.
 // SIMPLIFIED: extractive fallback, no model call. Upgrade when a bounded
 // child-model runner lands (inject any Summarizer into precompact).
@@ -53,7 +80,8 @@ export function createSemanticSummarizer(opts?: { transcriptTail?: string }): Su
   return (_persisted, mechanical) => summarizeMechanical(mechanical, opts?.transcriptTail);
 }
 
-export function readTranscriptTail(path: string | null, maxChars = 8000): string {
+// The raw tail is mostly JSON envelope; read enough to keep ~20 gist lines.
+export function readTranscriptTail(path: string | null, maxChars = 64000): string {
   if (!path) return "";
   try {
     const { readFileSync } = process.getBuiltinModule("node:fs") as typeof import("node:fs");

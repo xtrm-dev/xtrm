@@ -77,11 +77,22 @@ function scratchDb(): { dir: string; dbPath: string; humanRef: string } {
 describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
   let s: ReturnType<typeof scratchDb>;
   let wire: Wire;
+  // Tools resolve the DB and project from the environment only (no dbPath /
+  // project parameters on the shared surface), so every test pins both.
+  const savedEnv = { db: process.env["SUBSTRATE_DB"], project: process.env["SUBSTRATE_PROJECT"] };
+  const restoreEnv = (key: string, value: string | undefined) => {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  };
   beforeEach(async () => {
     s = scratchDb();
+    process.env["SUBSTRATE_DB"] = s.dbPath;
+    process.env["SUBSTRATE_PROJECT"] = "prj_xtrm";
     wire = await linkedServer();
   });
   afterEach(async () => {
+    restoreEnv("SUBSTRATE_DB", savedEnv.db);
+    restoreEnv("SUBSTRATE_PROJECT", savedEnv.project);
     await wire.close();
     rmSync(s.dir, { recursive: true, force: true });
   });
@@ -95,13 +106,16 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
       holder: process.env["SUBSTRATE_HOLDER"],
       activation: process.env["SUBSTRATE_ACTIVATION_ID"],
     };
+    // Outside an xt worktree, so the worktree-name identity fallback stays empty.
+    const priorCwd = process.cwd();
+    process.chdir(s.dir);
     delete process.env["XTRM_SESSION_ID"];
     process.env["SUBSTRATE_HOLDER"] = "specialist::probe";
     process.env["SUBSTRATE_ACTIVATION_ID"] = "act:23b2212a-c44";
     try {
       const res = await wire.send("tools/call", {
         name: "journal_append",
-        arguments: { dbPath: s.dbPath, project: "prj_xtrm", ref: s.humanRef, kind: "finding", sessionId: "claude-session", summary: "ambient carry" },
+        arguments: { ref: s.humanRef, kind: "finding", summary: "ambient carry check with evidence and the next step" },
         _meta: meta(),
       });
       assert.ok(!res.error, JSON.stringify(res.error));
@@ -121,7 +135,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
       delete process.env["SUBSTRATE_ACTIVATION_ID"];
       const res2 = await wire.send("tools/call", {
         name: "journal_append",
-        arguments: { dbPath: s.dbPath, project: "prj_xtrm", ref: s.humanRef, kind: "finding", sessionId: "claude-session", summary: "ambient absent" },
+        arguments: { ref: s.humanRef, kind: "finding", summary: "ambient absent check with evidence and the next step" },
         _meta: meta(),
       });
       assert.ok(!res2.error, JSON.stringify(res2.error));
@@ -137,6 +151,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
         db2.close();
       }
     } finally {
+      process.chdir(priorCwd);
       if (prior.session === undefined) delete process.env["XTRM_SESSION_ID"];
       else process.env["XTRM_SESSION_ID"] = prior.session;
       if (prior.holder === undefined) delete process.env["SUBSTRATE_HOLDER"];
@@ -170,7 +185,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     // the missing envelope is -32602.
     const list = await wire.send("tools/list", { _meta: meta() });
     assert.ok(!list.error);
-    const res = await wire.send("tools/call", { name: "issue_get", arguments: { ref: s.humanRef, dbPath: s.dbPath } });
+    const res = await wire.send("tools/call", { name: "issue_get", arguments: { ref: s.humanRef } });
     assert.ok(res.error, "claim-less request must fail");
     assert.equal(res.error.code, -32602);
   });
@@ -184,19 +199,13 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     assert.deepEqual(result.tools.map((t) => t.name), [
       "issue_get",
       "issue_list",
-      "issue_ready",
       "issue_claim",
       "issue_update",
-      "issue_note",
       "issue_close",
       "journal_append",
-      "journal_checkpoint",
-      "journal_show",
-      "journal_query",
-      "provenance_trace",
-      "provenance_session",
-      "provenance_activation",
+      "journal_read",
       "resume_capsule",
+      "provenance",
     ]);
     assert.equal(result.resultType, "complete");
     assert.equal(typeof result.ttlMs, "number");
@@ -205,7 +214,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
 
   it("sequential requests with different capability metadata are honored independently (stateless)", async () => {
     const call = (caps: unknown) =>
-      wire.send("tools/call", { name: "issue_get", arguments: { ref: s.humanRef, dbPath: s.dbPath }, _meta: meta(caps) });
+      wire.send("tools/call", { name: "issue_get", arguments: { ref: s.humanRef }, _meta: meta(caps) });
     const a = await call({ sampling: {} });
     const b = await call({ roots: { listChanged: true } });
     assert.ok(!a.error && !b.error, `${JSON.stringify(a.error)} ${JSON.stringify(b.error)}`);
@@ -224,7 +233,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     const call = async (name: string, extra: Record<string, unknown>) => {
       const res = await wire.send("tools/call", {
         name,
-        arguments: { dbPath: s.dbPath, project: "prj_xtrm", ...extra },
+        arguments: { ...extra },
         _meta: meta(),
       });
       assert.ok(!res.error, `${name}: ${JSON.stringify(res.error)}`);
@@ -246,7 +255,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     assert.equal(noopFeedback["level"], "noop");
     assert.equal(noopFeedback["code"], "issue_unchanged");
 
-    const appended = await call("journal_append", { ref: s.humanRef, kind: "finding", summary: "feedback wiring" });
+    const appended = await call("journal_append", { ref: s.humanRef, kind: "finding", summary: "feedback wiring check with evidence and the next step" });
     const appendFeedback = appended["feedback"] as Record<string, unknown>;
     assert.equal(appendFeedback["level"], "success");
     assert.equal(appendFeedback["code"], "journal_written");
@@ -259,7 +268,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     try {
       const res = await wire.send("tools/call", {
         name: "nope",
-        arguments: { dbPath: join(s.dir, "no-such-dir", "state.db") },
+        arguments: {},
         _meta: meta(),
       });
       assert.ok(res.error, "unknown tool must fail");
@@ -272,51 +281,57 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
   });
 
   it("every tool executes against a tmp DB through the server (xtrm-iip.4)", async () => {
-    const args = { dbPath: s.dbPath };
     const call = async (name: string, extra: Record<string, unknown>) => {
-      const res = await wire.send("tools/call", { name, arguments: { ...args, ...extra }, _meta: meta() });
+      const res = await wire.send("tools/call", { name, arguments: extra, _meta: meta() });
       assert.ok(!res.error, `${name}: ${JSON.stringify(res.error)}`);
       return JSON.parse(
         ((res.result as { content: Array<{ text: string }> }).content[0] as { text: string }).text,
       ) as unknown;
     };
-    const listed = (await call("issue_list", { project: "prj_xtrm" })) as unknown[];
-    assert.ok(Array.isArray(listed) && listed.length === 1);
-    const ready = (await call("issue_ready", { project: "prj_xtrm" })) as unknown[];
-    assert.ok(Array.isArray(ready));
-    const appended = (await call("journal_append", { ref: s.humanRef, kind: "finding", summary: "e4 finding", project: "prj_xtrm" })) as Record<string, unknown>;
+    const holder = "mcp-tester";
+    const listed = (await call("issue_list", {})) as { total: number; issues: unknown[] };
+    assert.equal(listed.total, 1);
+    const ready = (await call("issue_list", { status: "ready" })) as { issues: unknown[] };
+    assert.equal(ready.issues.length, 1);
+    const appended = (await call("journal_append", { ref: s.humanRef, kind: "finding", summary: "e4 finding recorded with evidence and the next step" })) as Record<string, unknown>;
     assert.ok(appended["entryId"]);
-    const shown = (await call("journal_show", { ref: s.humanRef })) as Array<{ semantic: { summary: string } }>;
-    assert.ok(shown.some((e) => e.semantic?.summary === "e4 finding"));
-    const noted = (await call("issue_note", { ref: s.humanRef, kind: "milestone", summary: "e4 milestone", project: "prj_xtrm" })) as Record<string, unknown>;
+    const shown = (await call("journal_read", { ref: s.humanRef, mode: "show" })) as Array<{ semantic: { summary: string } }>;
+    assert.ok(shown.some((e) => e.semantic?.summary.startsWith("e4 finding")));
+    const noted = (await call("journal_append", { ref: s.humanRef, kind: "milestone", summary: "e4 milestone reached with evidence and next step" })) as Record<string, unknown>;
     assert.ok(noted["entryId"]);
-    const checkpointed = (await call("journal_checkpoint", { ref: s.humanRef, summary: "e4 checkpoint", project: "prj_xtrm" })) as Record<string, unknown>;
+    const checkpointed = (await call("journal_append", { ref: s.humanRef, kind: "checkpoint", summary: "e4 checkpoint" })) as Record<string, unknown>;
     assert.ok(checkpointed["entryId"]);
     assert.equal(checkpointed["degraded"], false);
-    const since = (await call("journal_query", { op: "since", ref: s.humanRef, cursor: 0 })) as { entries: unknown[]; nextCursor: number };
+    const since = (await call("journal_read", { mode: "since", ref: s.humanRef, cursor: 0 })) as { entries: unknown[]; nextCursor: number };
     assert.ok(since.entries.length >= 3);
-    const latest = (await call("journal_query", { op: "latest", ref: s.humanRef, kind: "checkpoint" })) as { kind: string };
+    const latest = (await call("journal_read", { mode: "latest", ref: s.humanRef, kind: "checkpoint" })) as { kind: string };
     assert.equal(latest["kind"], "checkpoint");
-    const timeline = (await call("journal_query", { op: "timeline", ref: s.humanRef, limit: 2 })) as unknown[];
+    const timeline = (await call("journal_read", { mode: "timeline", ref: s.humanRef, limit: 2 })) as unknown[];
     assert.equal(timeline.length, 2);
-    const updated = (await call("issue_update", { ref: s.humanRef, title: "mcp work renamed", project: "prj_xtrm" })) as Record<string, unknown>;
+    const updated = (await call("issue_update", { ref: s.humanRef, title: "mcp work renamed" })) as Record<string, unknown>;
     assert.equal(updated["revisionCreated"], false);
-    const claimed = (await call("issue_claim", { op: "claim", ref: s.humanRef, holder: "mcp-tester", project: "prj_xtrm" })) as Record<string, unknown>;
-    assert.equal((claimed["claim"] as { holder: string }).holder, "mcp-tester");
-    const released = (await call("issue_claim", { op: "release", ref: s.humanRef, holder: "mcp-tester", project: "prj_xtrm" })) as Record<string, unknown>;
+    assert.equal((updated["feedback"] as { code: string }).code, "issue_updated");
+    const claimed = (await call("issue_claim", { ref: s.humanRef, holder })) as Record<string, unknown>;
+    assert.equal((claimed["claim"] as { holder: string }).holder, holder);
+    const mine = (await call("issue_list", { claimedBy: holder })) as { holder: string; issues: Array<{ ref: string; claim: { holder: string } }> };
+    assert.equal(mine.holder, holder);
+    assert.deepEqual(mine.issues.map((r) => r.ref), [s.humanRef]);
+    const released = (await call("issue_claim", { op: "release", ref: s.humanRef, holder })) as Record<string, unknown>;
     assert.equal(released["op"], "release");
     const capsule = (await call("resume_capsule", { ref: s.humanRef })) as Record<string, unknown>;
     assert.ok(capsule["capsule"] && typeof capsule["rendered"] === "string");
-    const trace = (await call("provenance_trace", { ref: s.humanRef })) as Record<string, unknown>;
+    const trace = (await call("provenance", { ref: s.humanRef })) as Record<string, unknown>;
     assert.equal(trace["humanRef"], s.humanRef);
     assert.ok(Array.isArray(trace["receipts"]));
-    const sess = (await call("provenance_session", { sessionId: "no-such-session" })) as Record<string, unknown>;
+    const sess = (await call("provenance", { sessionId: "no-such-session" })) as Record<string, unknown>;
     assert.deepEqual(sess["issueIds"], []);
-    const act = (await call("provenance_activation", { activationId: "no-such-activation" })) as Record<string, unknown>;
+    const act = (await call("provenance", { activationId: "no-such-activation" })) as Record<string, unknown>;
     assert.deepEqual(act["issueIds"], []);
-    const closed = (await call("issue_close", { ref: s.humanRef, outcome: "completed", reason: "mcp e2e done", actor: "mcp-tester", project: "prj_xtrm" })) as Record<string, unknown>;
+    const closed = (await call("issue_close", { ref: s.humanRef, outcome: "completed", reason: "mcp e2e done", participant: holder })) as Record<string, unknown>;
     assert.equal(closed["outcome"], "completed");
     assert.equal(closed["terminalState"], "done");
+    assert.equal(closed["participantId"], holder);
+    assert.match(String((closed["feedback"] as { warnings?: string[] }).warnings?.[0]), /completed without/);
   });
 
   it("tool call over real stdio reads the same row sb wrote (tmp DB)", async () => {
@@ -374,10 +389,10 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
       // No `project` argument: the repository binding from cwd resolves it.
       process.chdir(repo);
       try {
-        const res = await wire.send("tools/call", { name: "issue_list", arguments: { dbPath: env.dbPath }, _meta: meta() });
+        const res = await wire.send("tools/call", { name: "issue_list", arguments: {}, _meta: meta() });
         assert.ok(!res.error, JSON.stringify(res.error));
         const text = ((res.result as { content: Array<{ text: string }> }).content[0] as { text: string }).text;
-        const listed = JSON.parse(text) as Array<{ humanRef: string }>;
+        const listed = (JSON.parse(text) as { issues: Array<{ humanRef: string }> }).issues;
         assert.deepEqual(listed.map((i) => i.humanRef), ["MCPREPO-1"]);
       } finally {
         process.chdir(prev);
@@ -388,7 +403,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
       const other = env.gitRepo("mcp-other");
       process.chdir(other);
       try {
-        const res = await wire.send("tools/call", { name: "issue_list", arguments: { dbPath: env.dbPath }, _meta: meta() });
+        const res = await wire.send("tools/call", { name: "issue_list", arguments: {}, _meta: meta() });
         const failure = res.error !== undefined ? JSON.stringify(res.error) : JSON.stringify(res.result);
         assert.match(failure, /Run `sb init`/, "uninitialized repository must fail closed");
       } finally {
@@ -420,7 +435,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
       );
 
       const append = (args: Record<string, unknown>) =>
-        wire.send("tools/call", { name: "journal_append", arguments: { kind: "finding", summary: "mcp scoped", ...args, dbPath: env.dbPath }, _meta: meta() });
+        wire.send("tools/call", { name: "journal_append", arguments: { kind: "finding", summary: "mcp scoped append with evidence and the next step", ...args }, _meta: meta() });
 
       // An uninitialized repository cannot write anywhere.
       const orphan = env.gitRepo("mcp-wc");
@@ -439,8 +454,9 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
         const refused = await append({ ref: "MCPWA-1" });
         const failure = refused.error !== undefined ? JSON.stringify(refused.error) : JSON.stringify(refused.result);
         assert.match(failure, /belongs to project prj_mcp_wa, not the effective project prj_mcp_wb/);
-        assert.match(failure, /pass --project prj_mcp_wa/);
-        const deliberate = await append({ ref: "MCPWA-1", project: "prj_mcp_wa" });
+        assert.match(failure, /--project prj_mcp_wa/);
+        process.env["SUBSTRATE_PROJECT"] = "prj_mcp_wa";
+        const deliberate = await append({ ref: "MCPWA-1" });
         assert.ok(!deliberate.error, JSON.stringify(deliberate.error));
         const entryId = (JSON.parse(((deliberate.result as { content: Array<{ text: string }> }).content[0] as { text: string }).text) as { entryId: string }).entryId;
         assert.ok(entryId);
