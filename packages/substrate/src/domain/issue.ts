@@ -68,6 +68,13 @@ export function formatHumanRef(prefix: string, n: number): string {
   return `${prefix}-${n}`;
 }
 
+// Human-facing label (PRD §8.4): the hierarchical locator leads because it
+// shows where the issue sits; the durable reference follows when it differs.
+// Commands and citations keep the durable reference, which never changes.
+export function displayRef(locator: string | null | undefined, humanRef: string): string {
+  return locator && locator !== humanRef ? `${locator} (${humanRef})` : humanRef;
+}
+
 export function parseHumanRef(ref: string): { prefix: string; number: number } | null {
   const m = /^([A-Za-z][A-Za-z0-9]*)-(\d+)$/.exec(ref.trim());
   if (!m) return null;

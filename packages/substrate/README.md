@@ -153,7 +153,7 @@ cli/                 machine engine + human terminal presentation
 integrations/pi/     Pi-native tools, gates and compaction lifecycle
 integrations/claude-code/  MCP + hook/runtime integration
 plugin/substrate/    packaged Claude Code plugin
-skills/              the one using-substrate skill (Pi loads it; the plugin ships a byte-identical copy)
+skills/              source of the one using-substrate skill (xt vendors and installs it; neither the plugin nor Pi ships it)
 docs/                current product/operator/reference documentation
 tests/               acceptance, provider, docs and anti-drift gates
 ```

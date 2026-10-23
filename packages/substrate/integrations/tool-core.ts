@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { assessJournalEntry, isJournalKind, previewText, type JournalEntry, type SemanticCheckpoint } from "../src/domain/journal.ts";
 import { CLOSURE_OUTCOMES } from "../src/domain/closure.ts";
 import type { ExecutionContext } from "../src/domain/execution-context.ts";
-import type { LifecycleState } from "../src/domain/issue.ts";
+import { displayRef, type LifecycleState } from "../src/domain/issue.ts";
 import type { OperationalState } from "../src/domain/readiness.ts";
 import { discoverRepository } from "../src/domain/repository-discovery.ts";
 import { resolveIdentity } from "../src/presentation/advisories.ts";
@@ -171,6 +171,7 @@ function claimedByRows(h: ToolHandles, ctx: ToolContext, claimedBy: string): { h
     const text = handoff?.semantic?.summary ?? null;
     return {
       ref: issue.humanRef,
+      locator: issue.locator,
       title: issue.title,
       lifecycleState: issue.lifecycleState,
       readiness: h.svc.getReadiness(issue.id).state,
@@ -260,21 +261,22 @@ function issueClaim(h: ToolHandles, ctx: ToolContext, a: Args): Record<string, u
   const activationId = str(a["activationId"]);
   const ttlMs = num(a["ttlMs"]);
   const issue = resolveWrite(h, ctx, a["ref"] as string);
-  const base = { op, issueId: issue.id, ref: issue.humanRef, participantId: holder };
+  const label = displayRef(issue.locator, issue.humanRef);
+  const base = { op, issueId: issue.id, ref: issue.humanRef, locator: issue.locator, participantId: holder };
   if (op === "release") {
     const claim = h.svc.releaseClaim(issue.id, holder, { activationId });
     return finish({ ...base, claim }, [], claim
-      ? successFeedback("issue_released", `Released ${issue.humanRef}`)
-      : noopFeedback("claim_absent", `No live claim to release on ${issue.humanRef}`));
+      ? successFeedback("issue_released", `Released ${label}`)
+      : noopFeedback("claim_absent", `No live claim to release on ${label}`));
   }
   if (op === "renew") {
     const claim = h.svc.renewClaim(issue.id, holder, { activationId, ttlMs });
-    return finish({ ...base, claim }, [], successFeedback("claim_renewed", `Renewed ${issue.humanRef}`, `expires ${new Date(claim.expiresAt).toISOString()}`));
+    return finish({ ...base, claim }, [], successFeedback("claim_renewed", `Renewed ${label}`, `expires ${new Date(claim.expiresAt).toISOString()}`));
   }
   if (op !== "claim") throw new Error(`issue_claim: op must be claim|renew|release, got ${op}`);
   const claim = h.svc.claimIssue(issue.id, holder, { activationId, ttlMs });
   ctx.onClaim?.(issue.id, holder, activationId);
-  return finish({ ...base, claim }, [], successFeedback("issue_claimed", `Claimed ${issue.humanRef}`, `holder ${holder}`));
+  return finish({ ...base, claim }, [], successFeedback("issue_claimed", `Claimed ${label}`, `holder ${holder}`));
 }
 
 function issueUpdate(h: ToolHandles, ctx: ToolContext, a: Args): Record<string, unknown> {
@@ -297,7 +299,7 @@ function issueUpdate(h: ToolHandles, ctx: ToolContext, a: Args): Record<string, 
   const after = h.svc.getIssue(id);
   const metadataChanged = after.title !== before.title || (priority !== undefined && priority !== (before as { priority?: number }).priority);
   const participantId = ctx.identity().participantId ?? null;
-  const ref = after.humanRef;
+  const ref = displayRef(after.locator, after.humanRef);
   const feedback = revisionCreated
     ? successFeedback("issue_updated", `Updated ${ref}`, "new revision created; readiness must be revalidated")
     : metadataChanged
@@ -334,6 +336,7 @@ function issueClose(h: ToolHandles, ctx: ToolContext, a: Args): Record<string, u
       closureId: closure.closureId,
       issueId: closure.issueId,
       ref: issue.humanRef,
+      locator: issue.locator,
       outcome: closure.outcome,
       terminalState: closure.terminalState,
       issueRevision: closure.issueRevision,
@@ -382,12 +385,12 @@ async function journalAppend(h: ToolHandles, ctx: ToolContext, a: Args): Promise
       summarizer: semantic ? () => semantic : undefined,
     });
     return finish(
-      { ref: issue.humanRef, entryId: r.entry.id, sequence: r.entry.sequence, kind, degraded: r.degraded, ...(r.reason ? { reason: r.reason } : {}), participantId: r.entry.participantId },
+      { ref: issue.humanRef, locator: issue.locator, entryId: r.entry.id, sequence: r.entry.sequence, kind, degraded: r.degraded, ...(r.reason ? { reason: r.reason } : {}), participantId: r.entry.participantId },
       warnings,
     );
   }
   const entry = h.journal.appendEntry(issue.id, { kind, ...identity, semantic, result: result as never });
-  return finish({ ref: issue.humanRef, entryId: entry.id, sequence: entry.sequence, kind, participantId: entry.participantId }, warnings);
+  return finish({ ref: issue.humanRef, locator: issue.locator, entryId: entry.id, sequence: entry.sequence, kind, participantId: entry.participantId }, warnings);
 }
 
 /** Runs one tool. Throws on invalid input; adapters render errors for their host. */

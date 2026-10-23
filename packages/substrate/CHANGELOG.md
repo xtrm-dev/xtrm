@@ -14,8 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The Pi half of the skill was never loaded: the `pi` manifest declared only the
 extension, and the file had no `name`/`description` frontmatter. There is now
 one host-neutral skill (`skills/using-substrate/SKILL.md`) with a table of the
-Claude hooks and Pi events; the plugin ships a byte-identical copy guarded by a
-test, and `pi.skills` declares `./skills`.
+Claude hooks and Pi events. The `xt skills` default mechanism installs it for
+Claude, Pi and Codex, so neither the plugin nor the Pi manifest ships it. The
+plugin monitor gate is now `on-skill-invoke:using-substrate` (the xt-installed
+skill has no plugin namespace; not yet proven on a live rig).
+
+### Changed: issues show the hierarchy by default
+
+Human-facing messages (confirmations, advisories, session-start claims, the Pi
+widget, tool feedback) name an issue `XTRM-668.9 (XTRM-677)`: locator first,
+durable ref in parentheses, one value for a root issue. Commands and citations
+keep the durable ref. `sb` accepts a locator in any case (`xtrm-668.9`). Tool
+results gain a `locator` field. Root issues no longer print `XTRM-678 · XTRM-678`.
 
 ### Fixed (XTRM-678): journal text is never cut silently
 

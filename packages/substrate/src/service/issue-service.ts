@@ -525,9 +525,11 @@ export class IssueService {
     }
     const alias = row<Row>(this.db, "SELECT issue_id FROM issue_aliases WHERE alias = ?", q);
     if (alias) return this.view(alias["issue_id"] as string);
-    const hist = row<Row>(this.db, "SELECT issue_id FROM issue_locator_history WHERE locator = ?", q);
+    // Locators are stored with the uppercase project prefix; accept any case.
+    const locator = q.toUpperCase();
+    const hist = row<Row>(this.db, "SELECT issue_id FROM issue_locator_history WHERE locator = ?", locator);
     if (hist) return this.view(hist["issue_id"] as string);
-    const current = this.findByCurrentLocator(q);
+    const current = this.findByCurrentLocator(locator);
     if (current) return current;
     throw new Error(`unresolvable ref: ${ref}`);
   }

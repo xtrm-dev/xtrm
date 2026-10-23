@@ -11,6 +11,7 @@
 import type { IssueService } from "../service/issue-service.ts";
 import type { JournalService } from "../service/journal-service.ts";
 import { SUBSTRATE_HOLDER_ENV } from "../domain/execution-context.ts";
+import { displayRef } from "../domain/issue.ts";
 import { TERMINAL_LIFECYCLE } from "../domain/readiness.ts";
 
 export type AdvisoryCode =
@@ -45,6 +46,8 @@ export interface Identity {
 
 export interface IssueSnapshot {
   ref: string;
+  /** Human label (locator plus durable ref); messages only, never commands. */
+  label?: string;
   lifecycleState: string;
   readinessState: string | null;
   claim: { holder: string; activationId: string | null; acquiredAt: number; expiresAt: number } | null;
@@ -112,6 +115,7 @@ export function evaluateIssue(s: IssueSnapshot, identity: Identity, opts: { phas
   if (TERMINAL.has(s.lifecycleState)) return [];
   const out: Advisory[] = [];
   const ref = s.ref;
+  const tag = s.label ?? ref;
   const add = (code: AdvisoryCode, severity: Advisory["severity"], message: string, instruction: string) =>
     out.push({ code, severity, issueRef: ref, message, instruction });
 
@@ -119,23 +123,23 @@ export function evaluateIssue(s: IssueSnapshot, identity: Identity, opts: { phas
     add(
       "identity_missing",
       "warning",
-      `${ref}: no SUBSTRATE_HOLDER in this session; journal entries record no author and edits are refused`,
+      `${tag}: no SUBSTRATE_HOLDER in this session; journal entries record no author and edits are refused`,
       `Set the holder before writing: \`export SUBSTRATE_HOLDER=${s.claim.holder}\` if you are ${s.claim.holder}.`,
     );
   } else if (s.claim && identity.holder && identity.holder !== s.claim.holder) {
     add(
       "holder_mismatch",
       "warning",
-      `${ref}: claimed by ${s.claim.holder}, this session is ${identity.holder}`,
+      `${tag}: claimed by ${s.claim.holder}, this session is ${identity.holder}`,
       `Do not edit under ${s.claim.holder}'s claim; coordinate with ${s.claim.holder} or claim your own issue.`,
     );
   }
 
   if (!s.claim) {
     if (s.readinessState === "draft") {
-      add("attest_ready", "info", `${ref}: contract is draft, so it cannot be claimed`, `Repair the contract, then \`sb issue attest ${ref} --outcome ready --policy default --attested-by ${holderArg(identity, s)}\`.`);
+      add("attest_ready", "info", `${tag}: contract is draft, so it cannot be claimed`, `Repair the contract, then \`sb issue attest ${ref} --outcome ready --policy default --attested-by ${holderArg(identity, s)}\`.`);
     } else if (s.readinessState === "ready") {
-      add("claim_start", "info", `${ref}: work is happening without a claim`, `\`sb issue claim ${ref} --holder ${holderArg(identity, s)} --ttl-ms <ms>\` before editing.`);
+      add("claim_start", "info", `${tag}: work is happening without a claim`, `\`sb issue claim ${ref} --holder ${holderArg(identity, s)} --ttl-ms <ms>\` before editing.`);
     }
     return out;
   }
@@ -143,31 +147,31 @@ export function evaluateIssue(s: IssueSnapshot, identity: Identity, opts: { phas
   const left = s.claim.expiresAt - s.now;
   const ttl = s.claim.expiresAt - s.claim.acquiredAt;
   if (left <= 0) {
-    add("claim_expired", "warning", `${ref}: claim by ${s.claim.holder} expired ${minutes(-left)} min ago`, `Re-claim now: \`sb issue claim ${ref} --holder ${s.claim.holder} --ttl-ms <ms>\`.`);
+    add("claim_expired", "warning", `${tag}: claim by ${s.claim.holder} expired ${minutes(-left)} min ago`, `Re-claim now: \`sb issue claim ${ref} --holder ${s.claim.holder} --ttl-ms <ms>\`.`);
   } else if (left < Math.max(ADVISORY_TUNING.renewFloorMs, ttl * ADVISORY_TUNING.renewFraction)) {
-    add("claim_renew", "warning", `${ref}: claim expires in ${minutes(left)} min`, `Renew: \`sb issue renew ${ref} --holder ${s.claim.holder} --ttl-ms <ms>\`.`);
+    add("claim_renew", "warning", `${tag}: claim expires in ${minutes(left)} min`, `Renew: \`sb issue renew ${ref} --holder ${s.claim.holder} --ttl-ms <ms>\`.`);
   }
 
   if (s.latestKind === "result") {
-    add("close_due", "info", `${ref}: a result is recorded; the issue is still open`, `If validation passed: \`sb issue close ${ref} --outcome completed --reason "<why>" --result <journal-id>\`.`);
+    add("close_due", "info", `${tag}: a result is recorded; the issue is still open`, `If validation passed: \`sb issue close ${ref} --outcome completed --reason "<why>" --result <journal-id>\`.`);
   }
   if (s.readinessState === "draft") {
-    add("revise_contract", "warning", `${ref}: claimed, but the current contract revision is draft`, `Re-attest the revision you are executing: \`sb issue validate ${ref}\` and attest, or repair the contract via /planning.`);
+    add("revise_contract", "warning", `${tag}: claimed, but the current contract revision is draft`, `Re-attest the revision you are executing: \`sb issue validate ${ref}\` and attest, or repair the contract via /planning.`);
   }
   const sinceCheckpoint = s.journalSeq - s.lastCheckpointSeq;
   if (sinceCheckpoint >= ADVISORY_TUNING.entriesSinceCheckpoint || (s.lastCheckpointSeq === 0 && s.journalSeq >= ADVISORY_TUNING.firstCheckpointAfter)) {
     const since = s.lastCheckpointSeq === 0 ? "and no checkpoint yet" : "since the last checkpoint";
-    add("checkpoint_due", "info", `${ref}: ${sinceCheckpoint} journal entries ${since}`,`\`sb journal checkpoint ${ref} --semantic '{"summary":"<state>","next":["<step>"]}'\`.`);
+    add("checkpoint_due", "info", `${tag}: ${sinceCheckpoint} journal entries ${since}`,`\`sb journal checkpoint ${ref} --semantic '{"summary":"<state>","next":["<step>"]}'\`.`);
   }
   if (opts.phase === "stop" && s.handoffsSinceClaim === 0 && s.now - s.claim.acquiredAt >= ADVISORY_TUNING.handoffAfterMs) {
-    add("handoff_due", "info", `${ref}: no handoff since the claim ${minutes(s.now - s.claim.acquiredAt)} min ago`, `\`sb journal append ${ref} --kind handoff --semantic '{"summary":"<state, evidence>","next":["<step>"]}'\`.`);
+    add("handoff_due", "info", `${tag}: no handoff since the claim ${minutes(s.now - s.claim.acquiredAt)} min ago`, `\`sb journal append ${ref} --kind handoff --semantic '{"summary":"<state, evidence>","next":["<step>"]}'\`.`);
   }
   return out;
 }
 
 export type OperationFact =
-  | { op: "journal_append"; issueRef: string; kind: string; participantId: string | null }
-  | { op: "issue_close"; issueRef: string; outcome: string | null; resultRefs: number; evidenceRefs: number; participantId: string | null };
+  | { op: "journal_append"; issueRef: string; issueLabel?: string; kind: string; participantId: string | null }
+  | { op: "issue_close"; issueRef: string; issueLabel?: string; outcome: string | null; resultRefs: number; evidenceRefs: number; participantId: string | null };
 
 /** Rules on the result of one write; they describe that write, so they never cool down. */
 export function evaluateOperation(fact: OperationFact): Advisory[] {
@@ -177,7 +181,7 @@ export function evaluateOperation(fact: OperationFact): Advisory[] {
       code: "identity_missing",
       severity: "warning",
       issueRef: fact.issueRef,
-      message: `${fact.issueRef}: the ${fact.op === "issue_close" ? "closure" : `${fact.kind} entry`} was recorded with no author`,
+      message: `${fact.issueLabel ?? fact.issueRef}: the ${fact.op === "issue_close" ? "closure" : `${fact.kind} entry`} was recorded with no author`,
       instruction: "Set `export SUBSTRATE_HOLDER=<your name>` (xt claude|pi|codex <name> sets it) so later writes are attributed.",
     });
   }
@@ -186,7 +190,7 @@ export function evaluateOperation(fact: OperationFact): Advisory[] {
       code: "close_without_result",
       severity: "warning",
       issueRef: fact.issueRef,
-      message: `${fact.issueRef}: closed as completed with no result or evidence reference`,
+      message: `${fact.issueLabel ?? fact.issueRef}: closed as completed with no result or evidence reference`,
       instruction: `Record what was achieved: \`sb journal append ${fact.issueRef} --kind result --result '{"summary":"…","validation":["…"]}'\`.`,
     });
   }
@@ -195,7 +199,7 @@ export function evaluateOperation(fact: OperationFact): Advisory[] {
 
 // ── Cooldowns ───────────────────────────────────────────────────────────────
 
-export type AdvisoryCooldowns = Record<string, number>; // `${ref}:${code}` -> epoch ms when reusable
+export type AdvisoryCooldowns = Record<string, number>; // `${tag}:${code}` -> epoch ms when reusable
 
 /** First advisory not cooling down; records its cooldown in `cooldowns`. */
 export function selectAdvisory(list: Advisory[], cooldowns: AdvisoryCooldowns, now: number): Advisory | null {
@@ -251,6 +255,7 @@ export function snapshotIssue(issues: IssueService, journal: JournalService, iss
   }
   return {
     ref: issue.humanRef,
+    label: displayRef(issue.locator, issue.humanRef),
     lifecycleState: issue.lifecycleState,
     readinessState: readiness.state,
     claim: claim ? { holder: claim.holder, activationId: claim.activationId, acquiredAt: claim.acquiredAt, expiresAt: claim.expiresAt } : null,

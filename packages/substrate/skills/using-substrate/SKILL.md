@@ -5,12 +5,11 @@ description: Substrate durable work doctrine for Claude Code and Pi — Issue au
 
 # Using Substrate
 
-Substrate owns durable work. This one skill serves Claude Code (plugin
-`substrate`, invoke `/substrate:using-substrate`) and Pi (package
-`@jaggerxtrm/substrate`, invoke `/skill:using-substrate`). The plugin ships a
-byte-identical copy and package tests fail on drift: edit
-`packages/substrate/skills/using-substrate/SKILL.md`, then copy it to
-`plugin/substrate/skills/using-substrate/SKILL.md`.
+Substrate owns durable work. This one skill serves Claude Code, Pi and Codex.
+The xt default-skills mechanism (`xt skills`) installs it for every runtime:
+the plugin and the Pi package do not ship it. The source lives in
+`packages/substrate/skills/using-substrate/SKILL.md`; core vendors it into
+`.xtrm/skills/default/using-substrate` pinned to a commit of this repository.
 
 ## Authority (non-negotiable)
 

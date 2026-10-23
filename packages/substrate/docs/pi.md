@@ -46,9 +46,9 @@ Mutating tools return structured success/no-op/warning feedback.
 
 ## Skill
 
-The package manifest declares `"skills": ["./skills"]`, so Pi loads the
-`using-substrate` skill (`/skill:using-substrate`). It is the same file the
-Claude plugin ships; a package test fails if the copies differ.
+The package does not ship a skill. `xt skills` installs `using-substrate` as a
+default skill for Pi, Claude Code and Codex (`/skill:using-substrate` on Pi). The
+source is `skills/using-substrate/SKILL.md`; core vendors it pinned to a commit.
 
 ## Session lifecycle
 

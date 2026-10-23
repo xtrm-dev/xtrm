@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 // Acceptance xtrm-iip.1 (closeout E1): the packaged plugin is installable and
 // path-correct. Hermetic: reads files only, opens no database, spawns nothing.
@@ -41,11 +41,11 @@ describe("packaged plugin (xtrm-iip.1)", () => {
 
   it("declares undiscoverable components and namespaced monitor gate (xtrm-iip.12)", () => {
     assert.equal(manifest.experimental?.monitors, "./monitors/monitors.json", "manifest must declare the monitors path - monitors/ is NOT auto-discovered (xtrm-iip.12)");
-    // Live rig proof: the bare skill name never fires; the gate must use the
-    // plugin-namespaced form even though the docs example shows the bare
-    // form. Pin the namespace so the gate cannot silently regress.
+    // The skill is installed by xt as a user skill (XTRM-679), so its invocation
+    // name is bare. xtrm-iip.12 proved the namespaced form for the plugin copy
+    // that no longer exists. Not yet proven on a live rig with the xt install.
     const gate = monitors.find((m) => m.name === "substrate-events")?.when;
-    assert.equal(gate, "on-skill-invoke:substrate:using-substrate", "monitor gate must name the namespaced skill (xtrm-iip.12)");
+    assert.equal(gate, "on-skill-invoke:using-substrate");
   });
 
   it("declares an author, without which validate --strict fails", () => {
@@ -88,26 +88,11 @@ describe("packaged plugin (xtrm-iip.1)", () => {
     }
   });
 
-  it("sets an explicit skill name rather than inheriting the install directory", () => {
-    // Marketplace install directories are version strings that change on every
-    // update, so a skill without an explicit name changes invocation name too.
-    const skill = read("skills/using-substrate/SKILL.md");
-    assert.match(skill, /^---\n(?:.*\n)*?name:\s*using-substrate\s*$/m);
-  });
-
-  it("keeps one skill: the plugin copy is byte-identical to the canonical skill (XTRM-679)", () => {
-    const canonical = readFileSync(new URL("../skills/using-substrate/SKILL.md", import.meta.url), "utf8");
-    assert.equal(
-      read("skills/using-substrate/SKILL.md"),
-      canonical,
-      "plugin skill drifted: edit packages/substrate/skills/using-substrate/SKILL.md, then copy it into the plugin",
-    );
-  });
-
-  it("Pi loads the skill: the pi manifest declares ./skills and the skill has name + description (XTRM-679)", () => {
+  it("ships the skill source for xt to vendor, and no copy in the plugin or the Pi manifest (XTRM-679)", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { pi?: { skills?: string[] } };
-    assert.ok(pkg.pi?.skills?.includes("./skills"), "package.json pi.skills must include ./skills or Pi never loads using-substrate");
-    const canonical = readFileSync(new URL("../skills/using-substrate/SKILL.md", import.meta.url), "utf8");
-    assert.match(canonical, /^---\nname: using-substrate\ndescription: \S.{0,1022}\n---\n/);
+    assert.equal(pkg.pi?.skills, undefined, "Pi must not load a package skill: xt installs using-substrate");
+    assert.equal(existsSync(new URL("../plugin/substrate/skills", import.meta.url)), false, "plugin must not ship a second copy of the skill");
+    const source = readFileSync(new URL("../skills/using-substrate/SKILL.md", import.meta.url), "utf8");
+    assert.match(source, /^---\nname: using-substrate\ndescription: \S.{0,1022}\n---\n/);
   });
 });

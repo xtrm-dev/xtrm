@@ -16,9 +16,6 @@
   "pi": {
     "extensions": [
       "./integrations/pi/extension.ts"
-    ],
-    "skills": [
-      "./skills"
     ]
   },
   "files": [

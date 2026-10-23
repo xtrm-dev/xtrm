@@ -202,7 +202,6 @@ function skillFiles(): string[] {
   const dirs = [
     "docs/substrate/skills",
     "packages/substrate/skills/using-substrate",
-    "packages/substrate/plugin/substrate/skills/using-substrate",
   ];
   for (const d of dirs) {
     const abs = join(ROOT, d);

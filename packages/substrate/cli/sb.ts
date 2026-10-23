@@ -202,9 +202,14 @@ function treeSummary(svc: IssueService, id: string): Record<string, unknown> {
   };
 }
 
+// "locator · ref" (PRD §8.4); one value when they coincide (root issues).
+function idPair(locator: unknown, humanRef: unknown): string {
+  return locator === humanRef ? String(humanRef) : `${String(locator)} · ${String(humanRef)}`;
+}
+
 function human(summary: Record<string, unknown>): string {
   const state = (summary["readinessState"] as string | undefined) ?? (summary["lifecycleState"] as string);
-  return `${summary["locator"]} · ${summary["humanRef"]} · ${summary["title"]} [${state} rev${summary["revision"]}]`;
+  return `${idPair(summary["locator"], summary["humanRef"])} · ${summary["title"]} [${state} rev${summary["revision"]}]`;
 }
 
 // Contract sections for human show (bead xtrm-7wc.5.9): the contract is the
@@ -1817,7 +1822,7 @@ function journalLine(svc: IssueService, e: JournalEntry): string {
   const actor = e.participantId ? ` · by ${e.participantId}` : " · by (none recorded)";
   // XTRM-420: label what is present; never claim "mechanical-only" without a mechanical payload.
   const payload = e.semantic ? "" : e.result ? " (result)" : e.mechanical ? " (mechanical-only)" : " (empty)";
-  return `${issue.locator} · ${issue.humanRef} · seq${e.sequence} ${e.kind} rev${e.issueRevision}${payload}${actor}`;
+  return `${idPair(issue.locator, issue.humanRef)} · seq${e.sequence} ${e.kind} rev${e.issueRevision}${payload}${actor}`;
 }
 
 // Stored execution identity for `journal show` (XTRM-410): names the actor

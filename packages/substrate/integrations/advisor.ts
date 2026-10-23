@@ -7,6 +7,7 @@
 // (the one deliberate block is the Stop handoff advisory, once per cooldown).
 
 import { appendFileSync } from "node:fs";
+import { displayRef } from "../src/domain/issue.ts";
 import { discoverIssueRef, openHandles, resolveIssueId } from "./claude-code/runtime.ts";
 import {
   cooldownFile,
@@ -87,7 +88,7 @@ export function handleSessionAdvisor(input: SessionAdvisorInput, deps: AdvisorDe
     for (const claim of claims.slice(0, CLAIM_LIST_LIMIT)) {
       const issue = handles.svc.getIssue(claim.issueId);
       const mins = Math.round((claim.expiresAt - now) / 60000);
-      lines.push(`- ${issue.humanRef} ${issue.title} — ${mins >= 0 ? `expires in ${mins} min` : `EXPIRED ${-mins} min ago`}`);
+      lines.push(`- ${displayRef(issue.locator, issue.humanRef)} ${issue.title} — ${mins >= 0 ? `expires in ${mins} min` : `EXPIRED ${-mins} min ago`}`);
       const handoff = handles.journal.latest(claim.issueId, { kind: "handoff" });
       if (handoff?.semantic?.summary) lines.push(`  latest handoff seq${handoff.sequence}: ${truncate(handoff.semantic.summary, 300)}`);
       if (!advisoriesDisabled(env)) {
@@ -175,6 +176,8 @@ export function handlePostToolAdvisor(input: PostToolInput, deps: AdvisorDeps = 
       } catch {
         continue;
       }
+      const labelled = handles.svc.getIssue(issueId);
+      const issueLabel = displayRef(labelled.locator, labelled.humanRef);
       // Operation facts come from what was persisted, not from parsing tool output.
       if (call.write === "journal") {
         const latest = handles.journal.listEntries(issueId).reduce<{ sequence: number; createdAt: number; participantId: string | null; kind: string } | null>(
@@ -182,13 +185,14 @@ export function handlePostToolAdvisor(input: PostToolInput, deps: AdvisorDeps = 
           null,
         );
         if (latest && now - latest.createdAt < 120_000) {
-          picked.push(...evaluateOperation({ op: "journal_append", issueRef: ref, kind: latest.kind, participantId: latest.participantId }));
+          picked.push(...evaluateOperation({ op: "journal_append", issueRef: ref, issueLabel, kind: latest.kind, participantId: latest.participantId }));
         }
       } else if (call.write === "close" && call.closeFlags) {
         picked.push(
           ...evaluateOperation({
             op: "issue_close",
             issueRef: ref,
+            issueLabel,
             outcome: call.closeFlags.outcome,
             resultRefs: 0,
             evidenceRefs: call.closeFlags.evidence,

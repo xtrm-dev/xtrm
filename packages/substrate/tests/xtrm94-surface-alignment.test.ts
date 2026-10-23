@@ -38,7 +38,7 @@ describe("XTRM-94 provider-facing doctrine follows live registrations", () => {
   });
 
   it("Claude skill names every registered MCP tool and never teaches cardinality fallback", () => {
-    const skill = readPkg("plugin/substrate/skills/using-substrate/SKILL.md");
+    const skill = readPkg("skills/using-substrate/SKILL.md");
     const names = claudeToolNames();
     assert.equal(names.length, 9, "Claude MCP inventory changed: update skill/reference deliberately");
     for (const name of names) assert.match(skill, new RegExp(`\\b${name}\\b`), `Claude skill missing ${name}`);
@@ -51,7 +51,6 @@ describe("XTRM-94 provider-facing doctrine follows live registrations", () => {
       "integrations/pi/handlers.ts",
       "integrations/pi/extension.ts",
       "skills/using-substrate/SKILL.md",
-      "plugin/substrate/skills/using-substrate/SKILL.md",
     ]) {
       const text = readPkg(rel);
       assert.doesNotMatch(text, /receipt-backed trace lands in Phase 8|before Phase 8 owns receipts/i, `${rel} is stale`);

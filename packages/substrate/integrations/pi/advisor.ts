@@ -9,6 +9,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { handlePostToolAdvisor, handleSessionAdvisor, handleStopAdvisor, substrateCall } from "../advisor.ts";
 import { resolveIdentity, type Identity } from "../../src/presentation/advisories.ts";
+import { displayRef } from "../../src/domain/issue.ts";
 import { openHandles } from "../claude-code/runtime.ts";
 
 const CUSTOM_TYPE = "substrate-advisor";
@@ -63,7 +64,7 @@ export function registerAdvisor(pi: ExtensionAPI, deps: { dbPath?: () => string 
           for (const c of handles.svc.listClaimsByHolder(identity.holder, { graceMs: 2 * 3_600_000 })) {
             const issue = handles.svc.getIssue(c.issueId);
             const handoff = handles.journal.latest(c.issueId, { kind: "handoff" });
-            claims.push({ ref: issue.humanRef, title: issue.title, expiresAt: c.expiresAt, handoffSeq: handoff?.sequence ?? null });
+            claims.push({ ref: displayRef(issue.locator, issue.humanRef), title: issue.title, expiresAt: c.expiresAt, handoffSeq: handoff?.sequence ?? null });
           }
         } finally {
           handles.db.close();

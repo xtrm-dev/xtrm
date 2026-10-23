@@ -2,6 +2,7 @@
 // Sparse by design: data semantics stay in services/JSON; this module only
 // projects them for human TTY/plain surfaces.
 
+import { displayRef } from "../domain/issue.ts";
 import { previewText } from "../domain/journal.ts";
 import {
   errorFeedback,
@@ -217,7 +218,7 @@ function issueStatus(row: Pick<IssueTreeRow, "lifecycleState" | "readinessState"
 
 export function renderIssueShow(payload: Record<string, unknown>, opts: TerminalStyleOptions): string {
   const width = Math.max(50, opts.width ?? 100);
-  const ref = String(payload.humanRef ?? payload.locator ?? "issue");
+  const ref = payload.humanRef !== undefined ? displayRef(payload.locator as string | undefined, String(payload.humanRef)) : String(payload.locator ?? "issue");
   const title = String(payload.title ?? "");
   const headerText = ` ${ref}  ${truncate(title, Math.max(12, width - ref.length - 5))} `;
   const header = opts.color ? selected(padRight(headerText, width), true) : `${ref}  ${title}`;
@@ -461,22 +462,29 @@ function journalHint(ref: string, kind: string, entryId: unknown): string {
   return `sb journal timeline ${ref}`;
 }
 
+// Message text shows the locator with the durable ref; commands keep `ref`.
+function labelFor(data: Record<string, unknown>, ref: string): string {
+  return typeof data.humanRef === "string" ? displayRef(data.locator as string | undefined, data.humanRef) : ref;
+}
+
 function journalFeedback(command: string, data: Record<string, unknown>, ref: string): OperationFeedback {
   const kind = String(data.kind ?? "note");
+  const label = labelFor(data, ref);
   const actor = typeof data.participantId === "string" && data.participantId ? data.participantId : NO_ACTOR;
   const detail = `${kind} · seq ${String(data.sequence ?? "?")} · by ${actor}`;
   if (data.degraded) {
-    return withWarnings(warningFeedback("journal_degraded", `Checkpoint persisted on ${ref} with degraded semantic enrichment`, `${detail} · ${String(data.reason ?? "mechanical checkpoint is durable")}`, journalHint(ref, kind, data.id)), data.warnings);
+    return withWarnings(warningFeedback("journal_degraded", `Checkpoint persisted on ${label} with degraded semantic enrichment`, `${detail} · ${String(data.reason ?? "mechanical checkpoint is durable")}`, journalHint(ref, kind, data.id)), data.warnings);
   }
   const verb = command === "issue.note" ? "Added" : "Recorded";
-  return withWarnings(successFeedback("journal_written", `${verb} ${kind} on ${ref}`, detail, journalHint(ref, kind, data.id)), data.warnings);
+  return withWarnings(successFeedback("journal_written", `${verb} ${kind} on ${label}`, detail, journalHint(ref, kind, data.id)), data.warnings);
 }
 
 export function feedbackForCommand(command: string, args: string[], data: Record<string, unknown>): OperationFeedback {
   const ref = String(data.humanRef ?? data.locator ?? data.ref ?? issueRefFromArgs(args) ?? data.issueId ?? "issue");
+  const label = labelFor(data, ref);
   switch (command) {
     case "issue.create": {
-      const message = `Created ${ref}${data.kind ? ` [${String(data.kind)}]` : ""}${data.title ? ` · ${String(data.title)}` : ""}`;
+      const message = `Created ${label}${data.kind ? ` [${String(data.kind)}]` : ""}${data.title ? ` · ${String(data.title)}` : ""}`;
       if (data.readinessState === "draft") {
         return withWarnings(warningFeedback("issue_created_draft", message, `draft: ${reasonText(data.reasons) ?? "contract incomplete"}`, draftHint(ref, data.reasons)), data.warnings);
       }
@@ -487,7 +495,7 @@ export function feedbackForCommand(command: string, args: string[], data: Record
       const draft = data.readinessState === "draft";
       const detail = draft ? `draft: ${reasonText(data.reasons) ?? "contract incomplete"}` : stale ? "new revision created; readiness must be revalidated" : undefined;
       const hint = draft ? draftHint(ref, data.reasons) : stale ? ATTEST_HINT(ref) : `sb issue show ${ref}`;
-      return withWarnings(successFeedback("issue_updated", `Updated ${ref}`, detail, hint), data.warnings);
+      return withWarnings(successFeedback("issue_updated", `Updated ${label}`, detail, hint), data.warnings);
     }
     case "issue.note":
       return journalFeedback(command, data, ref);
@@ -495,42 +503,42 @@ export function feedbackForCommand(command: string, args: string[], data: Record
       const outcome = String(data.outcome ?? "unknown");
       const state = typeof data.readinessState === "string" ? data.readinessState : undefined;
       if (outcome === "ready" && state !== undefined && state !== "ready" && state !== "claimed") {
-        return warningFeedback("issue_attested_not_ready", `Attested ${ref} as ready, but it is still ${state}`, reasonText(data.reasons), draftHint(ref, data.reasons));
+        return warningFeedback("issue_attested_not_ready", `Attested ${label} as ready, but it is still ${state}`, reasonText(data.reasons), draftHint(ref, data.reasons));
       }
       const detail = `policy ${String(data.policy ?? "?")}${state ? ` · now ${state}` : ""}`;
-      return successFeedback("issue_attested", `Attested ${ref} as ${outcome}`, detail, outcome === "ready" ? `sb issue claim ${ref} --holder <you>` : `sb issue edit ${ref} --contract <file>`);
+      return successFeedback("issue_attested", `Attested ${label} as ${outcome}`, detail, outcome === "ready" ? `sb issue claim ${ref} --holder <you>` : `sb issue edit ${ref} --contract <file>`);
     }
     case "issue.claim": {
       const expiry = `expires ${String(data.expiresAtIso ?? data.expiresAt ?? "?")}${typeof data.expiresInMinutes === "number" ? ` (in ${data.expiresInMinutes} min)` : ""}`;
       if (data.alreadyHeld === true) {
-        return noopFeedback("issue_claim_held", `${ref} already held by you; ${expiry} — use sb issue renew ${ref} --ttl-ms <ms> to extend`);
+        return noopFeedback("issue_claim_held", `${label} already held by you; ${expiry} — use sb issue renew ${ref} --ttl-ms <ms> to extend`);
       }
-      return successFeedback("issue_claimed", `Claimed ${ref}`, `holder ${String(data.holder ?? "?")} · ${expiry}`, `sb issue release ${ref}  (when done or stopping)`);
+      return successFeedback("issue_claimed", `Claimed ${label}`, `holder ${String(data.holder ?? "?")} · ${expiry}`, `sb issue release ${ref}  (when done or stopping)`);
     }
     case "issue.renew": {
       const minutes = typeof data.expiresInMinutes === "number" ? ` (in ${data.expiresInMinutes} min)` : "";
-      return successFeedback("issue_renewed", `Renewed ${ref} · expires ${String(data.expiresAtIso ?? data.expiresAt ?? "?")}${minutes}`, data.holder ? `holder ${String(data.holder)}` : undefined, `sb issue release ${ref}  (when done or stopping)`);
+      return successFeedback("issue_renewed", `Renewed ${label} · expires ${String(data.expiresAtIso ?? data.expiresAt ?? "?")}${minutes}`, data.holder ? `holder ${String(data.holder)}` : undefined, `sb issue release ${ref}  (when done or stopping)`);
     }
     case "issue.release":
       return data.released === false
-        ? noopFeedback("claim_absent", `No live claim was released for ${ref}`, undefined, `sb issue claim ${ref} --holder <you>`)
-        : successFeedback("issue_released", `Released ${ref}`, undefined, `sb issue ready`);
+        ? noopFeedback("claim_absent", `No live claim was released for ${label}`, undefined, `sb issue claim ${ref} --holder <you>`)
+        : successFeedback("issue_released", `Released ${label}`, undefined, `sb issue ready`);
     case "issue.close": {
       // The engine nests the Closure row under data.closure; data.outcome never existed.
       const closure = (data.closure ?? null) as { outcome?: unknown; executionContext?: { participantId?: string | null } | null } | null;
       const outcome = closure?.outcome ?? data.outcome;
       const actor = closure?.executionContext?.participantId || NO_ACTOR;
       const detail = outcome ? `outcome ${String(outcome)} · by ${actor}` : "legacy close: no Closure row (pass --outcome and --reason to record one)";
-      return withWarnings(successFeedback("issue_closed", `Closed ${ref}`, detail, "sb issue ready"), data.warnings);
+      return withWarnings(successFeedback("issue_closed", `Closed ${label}`, detail, "sb issue ready"), data.warnings);
     }
     case "issue.reopen":
-      return withWarnings(successFeedback("issue_reopened", `Reopened ${ref}`, undefined, `sb issue claim ${ref} --holder <you>`), data.warnings);
+      return withWarnings(successFeedback("issue_reopened", `Reopened ${label}`, undefined, `sb issue claim ${ref} --holder <you>`), data.warnings);
     case "issue.cancel":
-      return withWarnings(successFeedback("issue_cancelled", `Cancelled ${ref}`, undefined, "sb issue ready"), data.warnings);
+      return withWarnings(successFeedback("issue_cancelled", `Cancelled ${label}`, undefined, "sb issue ready"), data.warnings);
     case "issue.archive":
-      return successFeedback("issue_archived", `Archived ${ref}`, undefined, "sb issue ready");
+      return successFeedback("issue_archived", `Archived ${label}`, undefined, "sb issue ready");
     case "issue.defer":
-      return successFeedback("issue_deferred", `Deferred ${ref}`, undefined, `sb issue state ${ref} open  (to resume)`);
+      return successFeedback("issue_deferred", `Deferred ${label}`, undefined, `sb issue state ${ref} open  (to resume)`);
     case "issue.relate":
       return successFeedback("issues_linked", "Linked issues", `${String(data.kind ?? "relation")}`, "sb issue tree");
     case "issue.unrelate":
