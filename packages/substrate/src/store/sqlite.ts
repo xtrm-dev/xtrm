@@ -1,4 +1,6 @@
+import { closeSync, mkdirSync, openSync } from "node:fs";
 import { createRequire } from "node:module";
+import { dirname } from "node:path";
 import { migrate } from "./migrations/runner.ts";
 import type { SQLInputValue, SubstrateDatabase, SubstrateStatement } from "./database.ts";
 
@@ -44,10 +46,19 @@ function adaptDatabase(inner: RuntimeDatabase): SubstrateDatabase {
   };
 }
 
+// The store holds work history: create a missing parent directory as 0700 and
+// a missing DB file as 0600. Existing directories and files keep their modes
+// (the user may have chosen them); mkdir's mode applies only to dirs it creates.
+function ensurePrivateStore(dbPath: string): void {
+  mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 });
+  closeSync(openSync(dbPath, "a", 0o600));
+}
+
 // Canonical store opener: SQLite/WAL, fail-closed on corrupt schema or
 // unknown migration state (PRD §§7, 46). Committed transactions survive
 // restart via WAL (PRD §47).
 export function openSubstrate(dbPath: string): SubstrateDatabase {
+  ensurePrivateStore(dbPath);
   const db = adaptDatabase(new (loadDriver())(dbPath));
   db.exec("PRAGMA journal_mode = WAL");
   // Concurrent claim/lease writers serialize on BEGIN IMMEDIATE; wait for
