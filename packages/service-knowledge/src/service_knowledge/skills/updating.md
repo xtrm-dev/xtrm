@@ -116,6 +116,35 @@ reconciled):
    *this* checkout — no merge, no manual rebuild needed. (Older behavior
    keyed freshness to HEAD alone; that gap is closed.)
 
+### Step 1b — Coverage audit at PR scale (AgentRun DSL, recommended for ranges over ~50 files)
+
+The scan tells you *which files* drifted, not whether the registry *covers* them.
+New subsystems land as unrouted files and silently stay that way unless something
+classifies them. For ranges too wide to eyeball, run the coverage audit as an
+AgentRun workflow — never as per-item API calls from the session (one model round
+trip per item costs context on every call; the workflow snapshots once, then judges
+every item with one typed call each).
+
+```bash
+CA="$CLAUDE_PROJECT_DIR/.xtrm/skills/default/service-knowledge/scripts/coverage_audit"
+SK_REPO=<consumer-root> node "$CA/snapshot-prs.mjs"
+node "$CA/run-prs.mjs" --inspect-only   # must print validate=ok
+node "$CA/run-prs.mjs"                  # exits 4 if the holdout gate fails
+```
+
+Shape: deterministic snapshot (PR merges in `last_sync_ref..HEAD` with per-PR files +
+registry owner counts) → class judge (`new_skill` / `extend_territory` /
+`leave_unowned` / `unclear`) → boolean confirm judge on the deterministic candidate →
+code transcription. Judge-only: needs `runJudge`, no `runNode`. Snapshot freshness gate
+<1h; read-only proof (HEAD + registry hash unchanged); holdout gate discards the batch
+on mismatch. Full rules: `scripts/coverage_audit/README.md`.
+
+Read the verdicts, not just the counts: `extend_territory` names its target service
+(apply through Step 4 + territory update); `new_skill` names the candidate (scaffold
+through the create flow, then narrow its territory so it does not overlap); `unclear`
+is a verdict, not a failure — split the group and re-run rather than forcing it.
+
+
 ### Step 2 — Read the current skill
 
 ```
