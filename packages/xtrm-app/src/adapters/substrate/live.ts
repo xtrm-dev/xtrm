@@ -64,6 +64,8 @@ export interface WireProjectionRow {
   journalCount?: number;
   pointerCount?: number;
   lastActivityAt?: number;
+  attestationState?: "none" | "current" | "stale" | "rejected";
+  structurallyValid?: boolean;
 }
 interface WireBoardPage {
   rows: WireProjectionRow[];
@@ -136,6 +138,9 @@ export function mapBoard(rows: WireProjectionRow[]): IssueSummary[] {
     lastActivityAt: i.lastActivityAt ?? i.updatedAt,
     eventCount: i.journalCount ?? 0,
     pointerCount: i.pointerCount ?? 0,
+    attestation: i.attestationState ?? null,
+    contractComplete: i.structurallyValid ?? null,
+    dispatchable: i.dispatchable,
     parentRef: i.parentRef,
     parentLocator: i.parentLocator,
     childCount: i.childCount,
@@ -283,6 +288,8 @@ export function mapIssueDetail(
     lastActivityAt: row?.lastActivityAt ?? null,
     eventCount: row?.eventCount ?? journal.length,
     pointerCount: row?.pointerCount ?? 0,
+    attestation: row?.attestation ?? null,
+    contractComplete: row?.contractComplete ?? null,
     updatedAt: row?.updatedAt ?? null,
     parentRef: row?.parentRef ?? null,
     parentLocator: row?.parentLocator ?? null,

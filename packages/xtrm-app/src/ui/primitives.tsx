@@ -94,7 +94,7 @@ export function Row({ density = "list", selected, onActivate, actions, className
       className={cx(
         "group/row relative flex min-w-0 items-center gap-2.5 outline-none transition-colors focus-visible:bg-hover",
         density === "table" ? "h-full rounded-none" : "rounded-md",
-        density === "sidebar" ? "h-7 px-2" : density === "list" && "h-9 px-3",
+        density === "sidebar" ? "h-7 px-2" : density === "list" && "h-8 px-3",
         onActivate && "cursor-default hover:bg-hover",
         selected && "bg-hover text-ink",
         className,

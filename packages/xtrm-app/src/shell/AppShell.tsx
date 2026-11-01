@@ -76,7 +76,7 @@ function ShellLayout() {
 
   return (
     <div className="flex h-full min-h-0 bg-surface text-ink">
-      {/* Single motion-panels driver for sidebar, main, and inspector: one Group using the default TRANSITION, which SHELL_MOTION mirrors (250ms, cubic-bezier(0.32,0.72,0,1)). No CSS width transitions on layout regions. */}
+      {/* Two motion-panels Groups: sidebar beside the viewport, and main beside the inspector under the top bar, so the inspector never reaches the top bar. Both use the default TRANSITION, which SHELL_MOTION mirrors (250ms, cubic-bezier(0.32,0.72,0,1)). No CSS width transitions on layout regions. */}
       <ResizableGroup>
         <ResizablePanel
           data-testid="sidebar-panel"
@@ -91,13 +91,17 @@ function ShellLayout() {
           </div>
         </ResizablePanel>
         <ResizeHandle label="Resize sidebar" hidden={!sidebar.open} />
-        <FillPanel data-testid="main-panel" className="flex flex-col overflow-hidden">
+        <FillPanel className="flex flex-col overflow-hidden">
           <TopBar />
-          <main data-testid="primary-region" className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            <Outlet />
-          </main>
+          <ResizableGroup className="min-h-0 pr-2">
+            <FillPanel data-testid="main-panel" className="flex justify-center overflow-hidden">
+              <main data-testid="primary-region" className="relative flex min-h-0 w-[90%] min-w-0 flex-col">
+                <Outlet />
+              </main>
+            </FillPanel>
+            <InspectorDock />
+          </ResizableGroup>
         </FillPanel>
-        <InspectorDock />
       </ResizableGroup>
       <GlobalSearch />
     </div>

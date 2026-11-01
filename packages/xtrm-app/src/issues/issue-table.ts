@@ -1,12 +1,11 @@
 import type { IssueSummary } from "../adapters/index.tsx";
-import type { Tone } from "../ui/primitives.tsx";
-import { TERMINAL, lifecycleLabel, lifecycleTone } from "./meta.tsx";
+import { TERMINAL, lifecycleLabel } from "./meta.tsx";
 
-export type SortKey = "key" | "title" | "status" | "priority" | "children" | "events" | "pointers" | "created" | "updated";
+export type SortKey = "key" | "title" | "priority" | "children" | "events" | "pointers" | "created" | "updated";
 export type Sort = { key: SortKey; desc: boolean };
 
 /** Direction a column sorts in on its first click. */
-export const defaultDesc = (key: SortKey) => !["key", "title", "status", "priority"].includes(key);
+export const defaultDesc = (key: SortKey) => !["key", "title", "priority"].includes(key);
 
 export function refOrder(a: string, b: string) {
   const na = a.split(/[-.]/).slice(1).map(Number);
@@ -18,25 +17,27 @@ export function refOrder(a: string, b: string) {
   return 0;
 }
 
-const STATUS_ORDER = ["Ready", "Claimed", "Open", "Draft", "Blocked", "Deferred", "Done", "Cancelled", "Archived"];
+export type StatusTone = "accent" | "active" | "danger" | "neutral" | "muted";
 
-/** One status per issue: the stored lifecycle once it is settled, otherwise the derived readiness. */
-export function issueStatus(i: IssueSummary): { label: string; tone: Tone; rank: number } {
-  const settled = TERMINAL.has(i.lifecycle) || i.lifecycle === "deferred";
-  const blocked = i.blockedBy.length > 0 || i.readiness === "blocked";
-  const [label, tone]: [string, Tone] = settled
-    ? [lifecycleLabel(i.lifecycle), lifecycleTone(i.lifecycle)]
-    : blocked
-      ? ["Blocked", "danger"]
-      : i.readiness === "ready"
-        ? ["Ready", "accent"]
-        : i.readiness === "claimed"
-          ? ["Claimed", "active"]
-          : i.readiness === "draft"
-            ? ["Draft", "muted"]
-            : ["Open", "neutral"];
-  const rank = STATUS_ORDER.indexOf(label);
-  return { label, tone, rank: rank < 0 ? STATUS_ORDER.length : rank };
+/**
+ * One status per issue, in Substrate's vocabulary. The stored lifecycle wins once settled; otherwise
+ * the derived readiness, with `draft` split by what is missing and `ready` by whether dispatch is allowed.
+ */
+export function issueStatus(i: IssueSummary): { label: string; tone: StatusTone; hint: string } {
+  if (TERMINAL.has(i.lifecycle)) return { label: lifecycleLabel(i.lifecycle), tone: "muted", hint: "Closed" };
+  if (i.lifecycle === "deferred" || i.readiness === "deferred") return { label: "Deferred", tone: "muted", hint: "Deferred" };
+  if (i.blockedBy.length > 0 || i.readiness === "blocked") return { label: "Blocked", tone: "danger", hint: `Blocked by ${i.blockedBy.join(", ") || "an open issue"}` };
+  if (i.readiness === "claimed") return { label: "In progress", tone: "active", hint: "Claimed by a worker" };
+  if (i.readiness === "ready") {
+    return i.dispatchable === false
+      ? { label: "Attested", tone: "neutral", hint: "Attested, but the scrutiny policy denies dispatch" }
+      : { label: "Ready", tone: "accent", hint: "Attested and dispatchable" };
+  }
+  if (i.contractComplete === false) return { label: "Draft", tone: "muted", hint: "The work contract is incomplete" };
+  if (i.attestation === "rejected") return { label: "Rejected", tone: "danger", hint: "Attestation rejected this revision" };
+  if (i.attestation === "stale") return { label: "Stale", tone: "neutral", hint: "Attested on an older revision" };
+  if (i.attestation === "none") return { label: "Unattested", tone: "neutral", hint: "The contract is complete but not attested" };
+  return { label: "Draft", tone: "muted", hint: "Not ready for dispatch" };
 }
 
 export interface Rollup {
@@ -87,7 +88,6 @@ function comparator({ key, desc }: Sort, rollups: Map<string, Rollup>) {
   const value: Record<SortKey, (i: IssueSummary) => number | string | null> = {
     key: () => null,
     title: (i) => i.title.toLowerCase(),
-    status: (i) => issueStatus(i).rank,
     priority: (i) => i.priority,
     children: (i) => i.childCount,
     events: (i) => roll(i).events,

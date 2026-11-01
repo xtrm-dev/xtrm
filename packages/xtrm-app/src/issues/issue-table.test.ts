@@ -4,7 +4,7 @@ import { buildTree, issueStatus, keyColumnRem, rollupActivity, type Sort } from 
 
 const issue = (ref: string, over: Partial<IssueSummary> = {}): IssueSummary => ({
   id: ref, ref, locator: ref, title: ref, kind: "task", lifecycle: "open", revision: 1, priority: 2, scrutiny: null,
-  createdAt: 1, updatedAt: 1, lastActivityAt: 1, eventCount: 0, pointerCount: 0, parentRef: null, parentLocator: null,
+  createdAt: 1, updatedAt: 1, lastActivityAt: 1, eventCount: 0, pointerCount: 0, attestation: null, contractComplete: null, dispatchable: null, parentRef: null, parentLocator: null,
   childCount: 0, childrenDone: 0, blockedBy: [], readiness: "not_ready", ...over,
 });
 const updated: Sort = { key: "updated", desc: true };
@@ -52,10 +52,17 @@ describe("issue table", () => {
     expect(rollupActivity(rows).size).toBe(2);
   });
 
-  it("derives one status: settled lifecycle first, then blocked, then readiness", () => {
-    expect(issueStatus(issue("X-1", { readiness: "ready" })).label).toBe("Ready");
-    expect(issueStatus(issue("X-1", { readiness: "ready", blockedBy: ["X-2"] })).label).toBe("Blocked");
-    expect(issueStatus(issue("X-1", { lifecycle: "done", readiness: "terminal", blockedBy: ["X-2"] })).label).toBe("Done");
+  it("uses Substrate's vocabulary: settled lifecycle, then blocked, in progress, attested, then what a draft lacks", () => {
+    const label = (over: Partial<IssueSummary>) => issueStatus(issue("X-1", over)).label;
+    expect(label({ lifecycle: "done", readiness: "terminal", blockedBy: ["X-2"] })).toBe("Done");
+    expect(label({ readiness: "ready", blockedBy: ["X-2"] })).toBe("Blocked");
+    expect(label({ readiness: "claimed" })).toBe("In progress");
+    expect(label({ readiness: "ready", dispatchable: true })).toBe("Ready");
+    expect(label({ readiness: "ready", dispatchable: false })).toBe("Attested");
+    expect(label({ readiness: "draft", contractComplete: false, attestation: "none" })).toBe("Draft");
+    expect(label({ readiness: "draft", contractComplete: true, attestation: "none" })).toBe("Unattested");
+    expect(label({ readiness: "draft", contractComplete: true, attestation: "stale" })).toBe("Stale");
+    expect(label({ readiness: "draft", contractComplete: true, attestation: "rejected" })).toBe("Rejected");
   });
 
   it("widens the key column to the longest key so it never truncates", () => {

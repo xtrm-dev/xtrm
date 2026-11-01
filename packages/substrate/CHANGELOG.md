@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Board rows carry `journalCount`, `pointerCount` and `lastActivityAt`. A journal write does not touch `updatedAt`, so board readers can now see journal activity without a per-issue read.
+- Board rows carry `attestationState` and `structurallyValid`, so a board can tell an incomplete contract from an unattested, stale or rejected one.
 
 ---
 
