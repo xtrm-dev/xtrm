@@ -43,9 +43,14 @@ export const BOARD_ROW_FIELDS = [
   "journalCount",
   "pointerCount",
   "lastActivityAt",
+  "attestationState",
+  "structurallyValid",
 ] as const;
 
 export type BoardClaimState = "none" | "claimed";
+
+/** Latest attestation against the current revision: `stale` attested an older one. */
+export type BoardAttestationState = "none" | "current" | "stale" | "rejected";
 
 export interface IssueBoardRow {
   id: string;
@@ -77,6 +82,9 @@ export interface IssueBoardRow {
   pointerCount: number;
   /** Latest of `updatedAt` and the newest journal entry. */
   lastActivityAt: number;
+  attestationState: BoardAttestationState;
+  /** False when the work contract fails structural validation. */
+  structurallyValid: boolean;
 }
 
 export interface IssueBoardPage {

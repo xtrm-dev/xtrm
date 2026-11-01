@@ -108,14 +108,15 @@ export function InspectorDock() {
       size={dockWidth(state, width)}
       minSize={RAIL}
       maxSize={5000}
-      className="relative my-2 mr-2 ml-3 self-stretch"
+      className="relative self-stretch"
     >
       <div
         ref={frame}
         data-testid="inspector-frame"
         style={{ "--frame-min": `${initialMinWidth}px`, minWidth: "var(--frame-min)" } as React.CSSProperties}
         className={cx(
-          "absolute top-0 right-0 bottom-0 z-30 flex w-full min-h-0 overflow-hidden rounded-lg border bg-raised",
+          "absolute top-0 bottom-[max(1rem,4vh)] z-30 flex min-h-0 overflow-hidden rounded-lg border bg-raised",
+          maximized ? "inset-x-2" : "right-0 w-full",
           !open ? "border-border-muted bg-transparent" : pinned ? "border-border-muted" : "border-border shadow-float",
         )}
       >

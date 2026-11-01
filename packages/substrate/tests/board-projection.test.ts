@@ -486,6 +486,24 @@ describe("board row payload", () => {
   });
 });
 
+describe("board row attestation state", () => {
+  it("reports none, rejected, current and stale against the current revision", () => {
+    const { db, svc } = tempService();
+    const projectId = svc.createProject({ id: "prj_att", prefix: "ATT", name: "attested" }).id;
+    const issue = svc.createIssue({ projectId, title: "t", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    const row = () => svc.queryIssues({ project: projectId, limit: 1 }).rows[0]!;
+    assert.equal(row().attestationState, "none");
+    assert.equal(row().structurallyValid, true);
+    svc.attestReadiness(issue.id, { outcome: "reject", policy: "default", attestedBy: "t" });
+    assert.equal(row().attestationState, "rejected");
+    svc.attestReadiness(issue.id, { outcome: "ready", policy: "default", attestedBy: "t" });
+    assert.equal(row().attestationState, "current");
+    svc.updateContract(issue.id, contract({ problem: "changed" }), "t");
+    assert.equal(row().attestationState, "stale");
+    db.close();
+  });
+});
+
 describe("board row journal activity", () => {
   it("counts journal entries and refs and moves lastActivityAt, while updatedAt stays put", () => {
     const { svc, db } = tempService();

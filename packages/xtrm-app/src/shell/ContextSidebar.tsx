@@ -7,7 +7,7 @@ import { useAgentStore } from "../agent/workspace.tsx";
 import { AGENT_MODE, MODES, REPO_SECTIONS, RESEARCH_SECTIONS, halfForPath, modeForPath, modeHref, repoHref, type Half } from "../app/destinations.ts";
 import { isInvalidManifestRow } from "../adapters/research/types.ts";
 import { projectForRepo, useIssues, useProgram, useProjects, useRepoStats, useRepos, useResearchRuns } from "../app/queries.ts";
-import { Icon, type IconName } from "../ui/icon.tsx";
+import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, Tip, cx, relativeTime } from "../ui/primitives.tsx";
 import { SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
 import { useShell } from "./context.tsx";
@@ -216,9 +216,9 @@ function WorkSidebar({ pathname }: { pathname: string }) {
   );
 }
 
-const HALVES: Array<{ id: Half; label: string; icon: IconName }> = [
-  { id: "console", label: "Work", icon: "board" },
-  { id: "agent", label: "Agent", icon: "agent" },
+const HALVES: Array<{ id: Half; label: string }> = [
+  { id: "console", label: "Work" },
+  { id: "agent", label: "Agent" },
 ];
 
 /** Remembers the last route of each half so the switch returns where the operator left off (PRD §36.2). */
@@ -253,11 +253,10 @@ function HalfSwitch() {
               aria-label={h.label}
               onClick={() => switchTo(h.id)}
               className={cx(
-                "flex h-7 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
+                "flex h-7 min-w-0 flex-1 items-center justify-center rounded-md text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
                 on ? "bg-control text-ink shadow-[0_0_0_1px_var(--x-border-muted)]" : "text-ink-faint hover:text-ink-muted",
               )}
             >
-              <Icon name={h.icon} size="xs" />
               {h.label}
             </button>
           </Tip>

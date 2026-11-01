@@ -295,6 +295,12 @@ export interface IssueSummary {
   eventCount: number;
   /** Evidence refs carried by those journal entries. */
   pointerCount: number;
+  /** Latest attestation against the current revision; null when the source does not expose it. */
+  attestation: "none" | "current" | "stale" | "rejected" | null;
+  /** False when the work contract fails structural validation; null when unknown. */
+  contractComplete: boolean | null;
+  /** Attested for this revision and allowed by the scrutiny policy. */
+  dispatchable: boolean | null;
   parentRef: string | null;
   parentLocator: string | null;
   childCount: number;

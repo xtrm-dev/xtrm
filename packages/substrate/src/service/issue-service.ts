@@ -735,6 +735,7 @@ export class IssueService {
       const locator = locators.get(id);
       const humanRef = formatHumanRef(prefix, r["human_number"] as number);
       const activity = journal.get(id);
+      const attestation = attestations.get(id) ?? null;
       const updatedAt = r["updated_at"] as number;
       return {
         id,
@@ -759,6 +760,14 @@ export class IssueService {
         journalCount: activity?.count ?? 0,
         pointerCount: activity?.pointers ?? 0,
         lastActivityAt: Math.max(updatedAt, activity?.lastAt ?? 0),
+        attestationState: !attestation
+          ? "none"
+          : report.attestationCurrent
+            ? "current"
+            : attestation.outcome === "reject" && attestation.issueRevision === revision
+              ? "rejected"
+              : "stale",
+        structurallyValid: report.structurallyValid,
       };
     });
   }

@@ -5,19 +5,20 @@ import { projectForRepo, useIssues, useProjects } from "../app/queries.ts";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, StatusDot, cx, relativeTime } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, cx, relativeTime } from "../ui/primitives.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
-import { buildTree, defaultDesc, issueStatus, keyColumnRem, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
+import { buildTree, defaultDesc, issueStatus, keyColumnRem, rollupActivity, type Sort, type SortKey, type StatusTone, type TreeRow } from "./issue-table.ts";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
 import { ReferenceChip } from "../refs/references.tsx";
 
-type View = "open" | "ready" | "blocked" | "deferred" | "done" | "all";
+type View = "open" | "progress" | "ready" | "blocked" | "deferred" | "done" | "all";
 
 const VIEWS: Array<[View, string, (i: IssueSummary) => boolean]> = [
   ["open", "Open", (i) => i.lifecycle === "open"],
+  ["progress", "In progress", (i) => i.readiness === "claimed"],
   ["ready", "Ready", (i) => i.readiness === "ready"],
   ["blocked", "Blocked", (i) => i.lifecycle === "open" && i.blockedBy.length > 0],
   ["deferred", "Deferred", (i) => i.lifecycle === "deferred"],
@@ -31,16 +32,16 @@ const copy = (text: string) => void navigator.clipboard?.writeText(text).catch((
 const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "right" }> = [
   { key: "key", label: "Key", width: "var(--key-col)" },
   { key: "title", label: "Summary", width: "minmax(20rem,1fr)" },
-  { key: "status", label: "Status", width: "7rem" },
-  { key: "priority", label: "Priority", width: "5rem" },
-  { key: "children", label: "Children", width: "5.5rem", align: "right" },
-  { key: "events", label: "Events", width: "5rem", align: "right" },
-  { key: "pointers", label: "Pointers", width: "5.5rem", align: "right" },
-  { key: "created", label: "Created", width: "5.5rem", align: "right" },
-  { key: "updated", label: "Updated", width: "5.5rem", align: "right" },
+  { key: "priority", label: "Priority", width: "5.25rem" },
+  { key: "children", label: "Children", width: "5.25rem", align: "right" },
+  { key: "events", label: "Events", width: "4.5rem", align: "right" },
+  { key: "pointers", label: "Pointers", width: "5.25rem", align: "right" },
+  { key: "created", label: "Created", width: "5rem", align: "right" },
+  { key: "updated", label: "Updated", width: "5.25rem", align: "right" },
 ];
 const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
-const CELL = "flex h-full min-w-0 items-center border-r border-border-muted px-3 last:border-r-0";
+const CELL_EDGE = "flex h-full min-w-0 items-center border-r border-border-muted last:border-r-0";
+const CELL = `${CELL_EDGE} px-2`;
 
 export function IssuesSurface() {
   const { repo, inspect, inspected } = useShell();
@@ -105,21 +106,23 @@ export function IssuesSurface() {
       <VirtualList
         label="Issues"
         items={tree}
-        rowHeight={40}
+        rowHeight={32}
         flush
-        minWidth={`calc(${keyCol} + 60rem)`}
+        minWidth={`calc(${keyCol} + 51rem)`}
         getKey={(r) => r.issue.id}
         header={
-          <div role="row" className="sticky top-0 z-10 grid h-9 border-b border-border bg-surface" style={{ ...tableVars, ...GRID }}>
+          <div role="row" className="sticky top-0 z-10 grid h-8 border-b border-border bg-deep" style={{ ...tableVars, ...GRID }}>
             {COLUMNS.map((c) => (
-              <div key={c.key} role="columnheader" aria-sort={sort.key === c.key ? (sort.desc ? "descending" : "ascending") : "none"} className={cx(CELL, "p-0")}>
+              <div key={c.key} role="columnheader" aria-sort={sort.key === c.key ? (sort.desc ? "descending" : "ascending") : "none"} className={CELL_EDGE}>
                 <button
                   type="button"
                   onClick={() => setSort((s) => ({ key: c.key, desc: s.key === c.key ? !s.desc : defaultDesc(c.key) }))}
-                  className={cx("flex h-full w-full items-center gap-1 px-3 text-xs font-medium outline-none hover:text-ink focus-visible:bg-hover", sort.key === c.key ? "text-ink" : "text-ink-faint", c.align === "right" && "justify-end")}
+                  className={cx("flex h-full w-full items-center gap-0.5 overflow-hidden px-2 text-xs font-medium outline-none hover:text-ink focus-visible:bg-hover", sort.key === c.key ? "text-ink" : "text-ink-faint", c.align === "right" && "justify-end")}
                 >
+                  <span className={cx("flex w-3.5 shrink-0", c.align === "right" && "order-first")}>
+                    {sort.key === c.key && <Icon name="chevronDown" size="xs" className={cx("transition-transform", !sort.desc && "rotate-180")} />}
+                  </span>
                   {c.label}
-                  {sort.key === c.key && <Icon name="chevronDown" size="xs" className={cx("shrink-0 transition-transform", !sort.desc && "rotate-180")} />}
                 </button>
               </div>
             ))}
@@ -133,7 +136,7 @@ export function IssuesSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="XTRM Issues">
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border-muted px-4 py-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-border-muted px-2 py-2">
         <h1 className="text-base font-medium text-ink">Issues</h1>
         {project && <span className="font-mono text-xs text-ink-faint">{project.prefix}</span>}
         <SourceBadge source={substrate.source} />
@@ -155,7 +158,7 @@ export function IssuesSurface() {
         <div className="ml-auto flex items-center gap-2">
           <div className="flex h-8 items-center gap-1.5 rounded-md bg-hover px-2.5 focus-within:bg-pressed">
             <Icon name="search" size="xs" className="text-ink-faint" />
-            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter issues" aria-label="Filter issues" className="w-40 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint" />
+            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter issues" aria-label="Filter issues" className="w-24 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint" />
           </div>
           <div role="radiogroup" aria-label="Layout" className="flex h-8 items-center rounded-md bg-hover p-0.5">
             {(["list", "board"] as const).map((l) => (
@@ -190,6 +193,14 @@ export function IssuesSurface() {
 
 const NUMBER = "text-xs text-ink-muted tabular";
 
+const STATUS_CHIP: Record<StatusTone, string> = {
+  accent: "bg-accent-soft text-accent-ink",
+  active: "bg-accent-soft text-ink",
+  danger: "bg-danger/12 text-danger",
+  neutral: "bg-pressed text-ink-muted",
+  muted: "bg-hover text-ink-faint",
+};
+
 function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: TreeRow; vars: CSSProperties; selected: boolean; onToggle: () => void; onInspect: () => void; onOpen: () => void }) {
   const { issue, depth, rollup, hasChildren, collapsed, detached } = row;
   const terminal = TERMINAL.has(issue.lifecycle);
@@ -221,6 +232,9 @@ function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: T
           <span title={issue.kind} className="flex shrink-0">
             <Icon name={kindIcon(issue.kind)} size="xs" className="text-ink-faint" />
           </span>
+          <span title={status.hint} className={cx("w-[4.75rem] shrink-0 rounded-sm py-px text-center text-[0.68rem] leading-4", STATUS_CHIP[status.tone])}>
+            {status.label}
+          </span>
           <span title={issue.title} className={cx("min-w-0 truncate", terminal ? "text-ink-muted" : issue.kind === "epic" ? "font-medium text-ink" : "text-ink")}>
             {issue.title}
           </span>
@@ -233,10 +247,6 @@ function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: T
             <IconButton icon="open" label={`Open ${issue.ref}`} onClick={onOpen} />
             <IconButton icon="copy" label={`Copy ${issue.ref}`} onClick={() => copy(issue.ref)} />
           </span>
-        </div>
-        <div className={cx(CELL, "gap-1.5")} title={issue.blockedBy.length ? `Blocked by ${issue.blockedBy.join(", ")}` : undefined}>
-          <StatusDot tone={status.tone} label={status.label} />
-          <span className="truncate text-ink-muted">{status.label}</span>
         </div>
         <div className={cx(CELL, "gap-1.5 text-xs text-ink-muted")}>
           <PriorityGlyph priority={issue.priority} />
