@@ -51,6 +51,9 @@ function seed(): Map<string, Record_> {
         scrutiny: ["LOW", "MEDIUM", "HIGH"][i % 3]!,
         createdAt: NOW - (60 - i) * DAY,
         updatedAt: NOW - (i % 9) * 3_600_000,
+        lastActivityAt: NOW - (i % 9) * 1_800_000,
+        eventCount: (i * 7) % 23,
+        pointerCount: (i * 3) % 11,
         parentRef: i > 0 && i < 8 ? "XTRM-300" : null,
         parentLocator: i > 0 && i < 8 ? "XTRM-300" : null,
         childCount: i === 0 ? 7 : 0,
@@ -100,7 +103,7 @@ export function createFixtureSubstrate(): SubstrateAdapter {
     if (!r) throw new Error(`unknown issue ${ref}`);
     return r;
   };
-  const touch = (r: Record_) => void (r.summary = { ...r.summary, updatedAt: Date.now() });
+  const touch = (r: Record_) => void (r.summary = { ...r.summary, updatedAt: Date.now(), lastActivityAt: Date.now() });
 
   return {
     source: "fixture",
@@ -186,6 +189,9 @@ export function createFixtureSubstrate(): SubstrateAdapter {
           id: `iss_fixture-${n}`,
           ref,
           locator: ref,
+          lastActivityAt: null,
+          eventCount: 0,
+          pointerCount: 0,
           title: input.title,
           kind: input.kind,
           lifecycle: "open",

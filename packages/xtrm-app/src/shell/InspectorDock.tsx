@@ -108,7 +108,7 @@ export function InspectorDock() {
       size={dockWidth(state, width)}
       minSize={RAIL}
       maxSize={5000}
-      className="relative ml-1.5 self-stretch"
+      className="relative my-2 mr-2 ml-3 self-stretch"
     >
       <div
         ref={frame}

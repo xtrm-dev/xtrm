@@ -10,7 +10,7 @@ test("the Console/Agent switch is always visible and returns each half to its la
   await page.goto("/program");
   const sw = page.getByTestId("half-switch");
   await expect(sw).toBeVisible();
-  await expect(page.getByRole("radio", { name: "Console" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("radio", { name: "Work" })).toHaveAttribute("aria-checked", "true");
 
   await page.getByRole("radio", { name: "Agent" }).click();
   await expect(page).toHaveURL(/\/agent\/pi-main$/);

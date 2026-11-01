@@ -1,15 +1,17 @@
 import { Popover } from "@base-ui/react/popover";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useAdapters } from "../adapters/index.tsx";
 import { AgentSidebar } from "../agent/AgentSidebar.tsx";
-import { AGENT_MODE, MODES, REPO_SECTIONS, RESEARCH_SECTIONS, modeForPath, repoHref } from "../app/destinations.ts";
+import { useAgentStore } from "../agent/workspace.tsx";
+import { AGENT_MODE, MODES, REPO_SECTIONS, RESEARCH_SECTIONS, halfForPath, modeForPath, modeHref, repoHref, type Half } from "../app/destinations.ts";
 import { isInvalidManifestRow } from "../adapters/research/types.ts";
 import { projectForRepo, useIssues, useProgram, useProjects, useRepoStats, useRepos, useResearchRuns } from "../app/queries.ts";
-import { Icon } from "../ui/icon.tsx";
-import { Row, StatusDot, relativeTime } from "../ui/primitives.tsx";
+import { Icon, type IconName } from "../ui/icon.tsx";
+import { IconButton, Row, StatusDot, Tip, cx, relativeTime } from "../ui/primitives.tsx";
 import { SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
 import { useShell } from "./context.tsx";
+import { modShortcut } from "./layout.ts";
 
 export function useGo() {
   const navigate = useNavigate();
@@ -113,19 +115,62 @@ function SourceFooter() {
     ["Program", adapters.program.source],
     ["Research", adapters.research.source],
   ] as const;
+  const live = items.filter(([, source]) => source === "live").length;
   return (
-    <div className="flex flex-col gap-0.5 px-2 py-2 text-xs text-ink-faint" aria-label="Data sources">
-      {items.map(([label, source]) => (
-        <div key={label} className="flex h-5 items-center gap-2">
-          <StatusDot tone={source === "live" ? "done" : "muted"} label={source} />
-          <span>{label}</span>
-          <span className="ml-auto">{source}</span>
-        </div>
-      ))}
-    </div>
+    <details aria-label="Data sources" className="group/src px-2 py-1.5 text-xs text-ink-faint">
+      <summary className="flex h-6 cursor-default list-none items-center gap-2 rounded-md px-1 outline-none hover:text-ink-muted [&::-webkit-details-marker]:hidden">
+        <StatusDot tone={live === items.length ? "done" : "muted"} label={`${live} of ${items.length} live`} />
+        <span>{live === items.length ? "All sources live" : `${live} of ${items.length} sources live`}</span>
+        <Icon name="chevronDown" size="xs" className="ml-auto transition-transform group-open/src:rotate-180" />
+      </summary>
+      <div className="flex flex-col gap-0.5 px-1 pt-1">
+        {items.map(([label, source]) => (
+          <div key={label} className="flex h-5 items-center gap-2">
+            <StatusDot tone={source === "live" ? "done" : "muted"} label={source} />
+            <span>{label}</span>
+            <span className="ml-auto">{source}</span>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 
+function ProgramRows() {
+  const program = useProgram();
+  const counts = (kind: string) => program.data?.items.filter((i) => i.kind === kind).length ?? null;
+  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "smooth" });
+  return (
+    <>
+      <SidebarRow indent icon="target" label="Workstreams" count={counts("workstream")} onActivate={() => jump("program-workstream")} />
+      <SidebarRow indent icon="agents" label="Assignments" count={counts("assignment")} onActivate={() => jump("program-assignment")} />
+      <SidebarRow indent icon="done" label="Decisions" count={counts("decision")} onActivate={() => jump("program-decision")} />
+      <SidebarRow indent icon="commit" label="Recent changes" onActivate={() => jump("program-activity")} />
+    </>
+  );
+}
+
+/** Experiments and Recent Runs are counted from `listRuns()`; Saved Comparisons and Workloads have no listing source yet and render deferred. */
+function ResearchRows({ pathname }: { pathname: string }) {
+  const go = useGo();
+  const runs = useResearchRuns();
+  const experimentCount = runs.data ? new Set(runs.data.filter((r) => !isInvalidManifestRow(r)).map((r) => r.experiment)).size : null;
+  const countFor = (id: string) => (id === "experiments" ? experimentCount : id === "runs" ? (runs.data?.length ?? null) : null);
+  return RESEARCH_SECTIONS.map((section) => (
+    <SidebarRow
+      key={section.id}
+      indent
+      icon={section.icon}
+      label={section.label}
+      selected={pathname === section.path}
+      deferred={!!section.deferred}
+      count={countFor(section.id)}
+      onActivate={() => go(section.path)}
+    />
+  ));
+}
+
+/** Every Work-half destination in one list: repository rows, then the workspace modes under Work. */
 function WorkSidebar({ pathname }: { pathname: string }) {
   const { repo } = useShell();
   const go = useGo();
@@ -133,12 +178,13 @@ function WorkSidebar({ pathname }: { pathname: string }) {
   const project = projectForRepo(projects.data, repo);
   const issues = useIssues(project?.id);
   const openCount = issues.data?.filter((i) => i.lifecycle === "open").length;
+  const active = modeForPath(pathname);
   return (
     <>
-      <div className="px-1">
+      <div className="px-2">
         <RepositorySelector />
       </div>
-      <div className="thin-scrollbar mt-3 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1">
+      <div className="thin-scrollbar mt-2 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2">
         {REPO_SECTIONS.map((section) => (
           <SidebarSection key={section.label} label={section.label}>
             {section.items.map((item) => {
@@ -155,6 +201,14 @@ function WorkSidebar({ pathname }: { pathname: string }) {
                 />
               );
             })}
+            {section.label === "Work" &&
+              MODES.filter((m) => m.id !== "work").map((m) => (
+                <Fragment key={m.id}>
+                  <SidebarRow icon={m.icon} label={m.label} selected={m.id === active} deferred={!!m.deferred} onActivate={() => go(modeHref(m, repo))} />
+                  {m.id === active && m.id === "program" && <ProgramRows />}
+                  {m.id === active && m.id === "research" && <ResearchRows pathname={pathname} />}
+                </Fragment>
+              ))}
           </SidebarSection>
         ))}
       </div>
@@ -162,85 +216,71 @@ function WorkSidebar({ pathname }: { pathname: string }) {
   );
 }
 
-function ProgramSidebar() {
-  const program = useProgram();
-  const counts = (kind: string) => program.data?.items.filter((i) => i.kind === kind).length ?? null;
-  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "smooth" });
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-1">
-      <div className="px-2 py-1.5">
-        <span className="text-[0.65rem] font-medium tracking-wide text-ink-faint uppercase">Program</span>
-        <p className="truncate text-sm font-medium text-ink">{program.data?.source.repository ?? "Governance"}</p>
-      </div>
-      <SidebarSection label="Sections">
-        <SidebarRow icon="target" label="Workstreams" count={counts("workstream")} onActivate={() => jump("program-workstream")} />
-        <SidebarRow icon="agents" label="Assignments" count={counts("assignment")} onActivate={() => jump("program-assignment")} />
-        <SidebarRow icon="done" label="Decisions" count={counts("decision")} onActivate={() => jump("program-decision")} />
-        <SidebarRow icon="commit" label="Recent changes" onActivate={() => jump("program-activity")} />
-      </SidebarSection>
-    </div>
-  );
-}
+const HALVES: Array<{ id: Half; label: string; icon: IconName }> = [
+  { id: "console", label: "Work", icon: "board" },
+  { id: "agent", label: "Agent", icon: "agent" },
+];
 
-/** Research contextual sidebar (XTRM-433 slice 2): Experiments/Recent Runs are counted from
- * `listRuns()`; Saved Comparisons and Workloads have no listing source yet and render deferred,
- * same convention as `REPO_SECTIONS`. Research owns no sidebar of its own beyond this list. */
-function ResearchSidebar({ pathname }: { pathname: string }) {
+/** Remembers the last route of each half so the switch returns where the operator left off (PRD §36.2). */
+export function useHalfNavigation() {
+  const store = useAgentStore();
+  const location = useRouterState({ select: (s) => s.location });
   const go = useGo();
-  const runs = useResearchRuns();
-  const experimentCount = runs.data ? new Set(runs.data.filter((r) => !isInvalidManifestRow(r)).map((r) => r.experiment)).size : null;
-  const countFor = (id: string) => (id === "experiments" ? experimentCount : id === "runs" ? (runs.data?.length ?? null) : null);
-  return (
-    <div className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1">
-      <SidebarSection label="Research">
-        {RESEARCH_SECTIONS.map((section) => (
-          <SidebarRow
-            key={section.id}
-            icon={section.icon}
-            label={section.label}
-            selected={pathname === section.path}
-            deferred={!!section.deferred}
-            count={countFor(section.id)}
-            onActivate={() => go(section.path)}
-          />
-        ))}
-      </SidebarSection>
-    </div>
-  );
+  const half = halfForPath(location.pathname);
+  useEffect(() => {
+    store.lastHref[half] = location.href;
+  }, [store, half, location.href]);
+  const switchTo = (target: Half) => {
+    if (target === half) return;
+    go(store.lastHref[target] ?? (target === "agent" ? "/agent" : "/"));
+  };
+  return { half, switchTo };
 }
 
-function DeferredSidebar({ label, reason }: { label: string; reason: string }) {
+/** Always-visible Work / Agent switch: the two halves of one shell (PRD §36.2). */
+function HalfSwitch() {
+  const { half, switchTo } = useHalfNavigation();
   return (
-    <div className="flex flex-col gap-2 px-3 py-1.5">
-      <span className="text-[0.65rem] font-medium tracking-wide text-ink-faint uppercase">{label}</span>
-      <p className="text-xs text-ink-faint">{reason}</p>
+    <div role="radiogroup" aria-label="Workspace" data-testid="half-switch" className="flex h-8 min-w-0 flex-1 items-center gap-0.5 rounded-lg bg-pressed p-0.5">
+      {HALVES.map((h) => {
+        const on = h.id === half;
+        return (
+          <Tip key={h.id} label={on ? h.label : `Switch to ${h.label}`} shortcut={modShortcut(".")}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={on}
+              aria-label={h.label}
+              onClick={() => switchTo(h.id)}
+              className={cx(
+                "flex h-7 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
+                on ? "bg-control text-ink shadow-[0_0_0_1px_var(--x-border-muted)]" : "text-ink-faint hover:text-ink-muted",
+              )}
+            >
+              <Icon name={h.icon} size="xs" />
+              {h.label}
+            </button>
+          </Tip>
+        );
+      })}
     </div>
   );
 }
 
 export function ContextSidebar() {
+  const { dispatch } = useShell();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const id = modeForPath(pathname);
   const mode = id === "agent" ? AGENT_MODE : MODES.find((m) => m.id === id)!;
 
   return (
-    <nav aria-label={`${mode.label} navigation`} data-testid="context-sidebar" className="flex h-full min-w-0 flex-col py-1.5">
-      <div className="flex min-h-0 flex-1 flex-col">
-        {mode.id === "agent" ? (
-          <AgentSidebar />
-        ) : mode.id === "work" ? (
-          <WorkSidebar pathname={pathname} />
-        ) : mode.id === "program" ? (
-          <ProgramSidebar />
-        ) : mode.id === "research" ? (
-          <ResearchSidebar pathname={pathname} />
-        ) : (
-          <DeferredSidebar label={mode.label} reason={mode.deferred ?? ""} />
-        )}
+    <nav aria-label={`${mode.label} navigation`} data-testid="context-sidebar" className="flex h-full min-w-0 flex-col">
+      <div className="flex h-11 shrink-0 items-center gap-1.5 px-2">
+        <HalfSwitch />
+        <IconButton data-testid="sidebar-collapse-edge" icon="sidebar" label="Collapse sidebar" shortcut={modShortcut("B")} onClick={() => dispatch({ type: "sidebar/toggle" })} />
       </div>
-      <div className="mt-1 border-t border-border-muted px-1 pt-1">
-        <SourceFooter />
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col">{mode.id === "agent" ? <AgentSidebar /> : <WorkSidebar pathname={pathname} />}</div>
+      <SourceFooter />
     </nav>
   );
 }

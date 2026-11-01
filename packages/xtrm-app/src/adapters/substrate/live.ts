@@ -60,6 +60,10 @@ export interface WireProjectionRow {
   blockedBy: string[];
   createdAt: number;
   updatedAt: number;
+  // Absent from `sb` builds older than the journal aggregates.
+  journalCount?: number;
+  pointerCount?: number;
+  lastActivityAt?: number;
 }
 interface WireBoardPage {
   rows: WireProjectionRow[];
@@ -129,6 +133,9 @@ export function mapBoard(rows: WireProjectionRow[]): IssueSummary[] {
     scrutiny: i.scrutiny || null,
     createdAt: i.createdAt,
     updatedAt: i.updatedAt,
+    lastActivityAt: i.lastActivityAt ?? i.updatedAt,
+    eventCount: i.journalCount ?? 0,
+    pointerCount: i.pointerCount ?? 0,
     parentRef: i.parentRef,
     parentLocator: i.parentLocator,
     childCount: i.childCount,
@@ -273,6 +280,9 @@ export function mapIssueDetail(
     priority: row?.priority ?? null,
     scrutiny: row?.scrutiny ?? null,
     createdAt: row?.createdAt ?? null,
+    lastActivityAt: row?.lastActivityAt ?? null,
+    eventCount: row?.eventCount ?? journal.length,
+    pointerCount: row?.pointerCount ?? 0,
     updatedAt: row?.updatedAt ?? null,
     parentRef: row?.parentRef ?? null,
     parentLocator: row?.parentLocator ?? null,

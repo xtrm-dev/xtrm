@@ -1,5 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useRef, type ReactNode } from "react";
+import { cx } from "./primitives.tsx";
 
 /** Fixed-height virtualized list (`@tanstack/react-virtual`, the only virtualization library). */
 export function VirtualList<T>({
@@ -10,6 +11,8 @@ export function VirtualList<T>({
   label,
   header,
   widthClass = "max-w-5xl",
+  flush,
+  minWidth,
 }: {
   items: T[];
   rowHeight: number;
@@ -18,6 +21,10 @@ export function VirtualList<T>({
   label: string;
   header?: ReactNode;
   widthClass?: string;
+  /** Edge-to-edge rows for tables: no centring, gutters or row inset. */
+  flush?: boolean;
+  /** Below this width the list scrolls sideways instead of squeezing its columns. */
+  minWidth?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -31,14 +38,16 @@ export function VirtualList<T>({
   });
 
   return (
-    <div ref={scrollRef} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto" role="list" aria-label={label}>
-      {header}
-      <div className={`relative mx-auto w-full ${widthClass} px-2 py-1`} style={{ height: virtualizer.getTotalSize() + 8 }}>
-        {virtualizer.getVirtualItems().map((v) => (
-          <div key={v.key} role="listitem" className="absolute right-2 left-2" style={{ top: v.start + 4, height: v.size }}>
-            {renderRow(items[v.index]!)}
-          </div>
-        ))}
+    <div ref={scrollRef} className={cx("thin-scrollbar min-h-0 flex-1 overflow-y-auto", flush && "overflow-x-auto")} role="list" aria-label={label}>
+      <div style={{ minWidth }}>
+        {header}
+        <div className={flush ? "relative w-full" : `relative mx-auto w-full ${widthClass} px-2 py-1`} style={{ height: virtualizer.getTotalSize() + (flush ? 0 : 8) }}>
+          {virtualizer.getVirtualItems().map((v) => (
+            <div key={v.key} role="listitem" className={flush ? "absolute inset-x-0" : "absolute right-2 left-2"} style={{ top: flush ? v.start : v.start + 4, height: v.size }}>
+              {renderRow(items[v.index]!)}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -69,7 +69,7 @@ export function IconButton({ icon, label, shortcut, size = "sm", active, tooltip
 // --- Row ------------------------------------------------------------------
 
 type RowProps = Omit<ComponentProps<"div">, "onClick"> & {
-  density?: "sidebar" | "list";
+  density?: "sidebar" | "list" | "table";
   selected?: boolean;
   onActivate?: () => void;
   /** Secondary actions: revealed on hover and keyboard focus, never hover-only. */
@@ -92,8 +92,9 @@ export function Row({ density = "list", selected, onActivate, actions, className
       }}
       {...props}
       className={cx(
-        "group/row relative flex min-w-0 items-center gap-2.5 rounded-md outline-none transition-colors focus-visible:bg-hover",
-        density === "sidebar" ? "h-7 px-2" : "h-9 px-3",
+        "group/row relative flex min-w-0 items-center gap-2.5 outline-none transition-colors focus-visible:bg-hover",
+        density === "table" ? "h-full rounded-none" : "rounded-md",
+        density === "sidebar" ? "h-7 px-2" : density === "list" && "h-9 px-3",
         onActivate && "cursor-default hover:bg-hover",
         selected && "bg-hover text-ink",
         className,

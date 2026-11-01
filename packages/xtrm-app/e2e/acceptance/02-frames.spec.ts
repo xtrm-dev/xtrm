@@ -204,7 +204,7 @@ test("§36.11-2 switching halves, sessions and Frames does not interrupt a worki
   expect((await send(page, NAME, COUNT)).status).toBe("accepted");
   await expect(frame(page)).toHaveAttribute("data-frame-status", "working", { timeout: 60_000 });
   // Halves.
-  await page.getByRole("radio", { name: "Console" }).click();
+  await page.getByRole("radio", { name: "Work" }).click();
   await expect(page.getByTestId("half-switch")).toBeVisible();
   await page.getByRole("radio", { name: "Agent" }).click();
   // Sessions.

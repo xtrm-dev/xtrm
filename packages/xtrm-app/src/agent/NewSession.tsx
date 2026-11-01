@@ -149,9 +149,9 @@ export function NewSessionButton() {
       <Tip label="New session" side="right">
         <Popover.Trigger
           aria-label="New session"
-          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-ink-muted transition-colors outline-none hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40 data-[popup-open]:bg-hover data-[popup-open]:text-ink"
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-ink-muted transition-colors outline-none hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40 data-[popup-open]:bg-hover data-[popup-open]:text-ink"
         >
-          <Icon name="plus" size="md" />
+          <Icon name="plus" size="sm" />
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>

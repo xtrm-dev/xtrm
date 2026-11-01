@@ -6,7 +6,7 @@
 //
 // Two constraints are encoded in this file and must not be relaxed:
 //   1. A row carries board fields only. Contract text, provenance, journal
-//      entries and readiness reasons are NOT here; opening a drawer is the
+//      entry bodies and readiness reasons are NOT here (journal aggregates are); opening a drawer is the
 //      boundary where the full single-issue read happens.
 //   2. The cursor carries the complete deterministic ordering tuple (every
 //      sort key plus the unique tiebreaker). A cursor holding only the issue
@@ -40,6 +40,9 @@ export const BOARD_ROW_FIELDS = [
   "blockedBy",
   "createdAt",
   "updatedAt",
+  "journalCount",
+  "pointerCount",
+  "lastActivityAt",
 ] as const;
 
 export type BoardClaimState = "none" | "claimed";
@@ -68,6 +71,12 @@ export interface IssueBoardRow {
   blockedBy: string[];
   createdAt: number;
   updatedAt: number;
+  /** Journal entries on this issue. Journal writes do not touch `updatedAt`. */
+  journalCount: number;
+  /** Evidence refs carried by those journal entries. */
+  pointerCount: number;
+  /** Latest of `updatedAt` and the newest journal entry. */
+  lastActivityAt: number;
 }
 
 export interface IssueBoardPage {

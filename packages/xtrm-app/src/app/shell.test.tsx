@@ -19,12 +19,12 @@ const drawer = () => screen.queryByTestId("inspector-drawer");
 const search = (router: ReturnType<typeof renderAt>["router"]) => router.state.location.search as Record<string, unknown>;
 
 describe("Console v2 shell", () => {
-  it("redirects / to the default repository Issues surface with top bar, mode rail, sidebar, and inspector rail", async () => {
+  it("redirects / to the default repository Issues surface with top bar, sidebar, and inspector rail", async () => {
     const { router } = renderAt("/");
     expect(await screen.findByRole("region", { name: "XTRM Issues" })).toBeTruthy();
     expect(router.state.location.pathname).toBe("/rep/xtrm-dev/xtrm/work/issues");
     expect(screen.getByTestId("top-bar")).toBeTruthy();
-    expect(screen.getByTestId("global-rail")).toBeTruthy();
+    expect(screen.queryByTestId("global-rail")).toBeNull();
     expect(screen.getByTestId("context-sidebar")).toBeTruthy();
     expect(screen.getByTestId("inspector-rail")).toBeTruthy();
     // Hierarchical locator is the primary key; the flat ref follows dimmed.
@@ -32,16 +32,15 @@ describe("Console v2 shell", () => {
     expect(screen.getAllByText("/ XTRM-301").length).toBeGreaterThan(0);
   });
 
-  it("rail selects modes; the sidebar only shows the active mode's context", async () => {
+  it("lists every mode in one sidebar and nests the active mode's rows under it", async () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
     const sidebar = await screen.findByTestId("context-sidebar");
     expect(within(sidebar).getByText("Issues")).toBeTruthy();
     expect(within(sidebar).getByText("GitHub Issues")).toBeTruthy();
-    // Modes live only in the rail: no Program/Agents navigation rows in the Work sidebar.
-    expect(within(sidebar).queryByRole("button", { name: /^Program/ })).toBeNull();
-    expect(within(sidebar).queryByRole("button", { name: /^Agents/ })).toBeNull();
+    expect(within(sidebar).getByRole("button", { name: "Agents" })).toBeTruthy();
+    expect(within(sidebar).queryByText("Workstreams")).toBeNull();
 
-    fireEvent.click(within(screen.getByTestId("global-rail")).getByRole("button", { name: "Program" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Program" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/program"));
     expect(await within(screen.getByTestId("context-sidebar")).findByText("Workstreams")).toBeTruthy();
   });
@@ -51,7 +50,7 @@ describe("Console v2 shell", () => {
     expect(await screen.findByText("Agents is not part of this vertical")).toBeTruthy();
   });
 
-  it("inspecting expands the rail into a CONTEXTUAL drawer whose left edge is the rail, never over the mode rail or sidebar", async () => {
+  it("inspecting expands the rail into a CONTEXTUAL drawer whose left edge is the rail, never over the sidebar", async () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
     fireEvent.click(await screen.findByText("XTRM-300.1"));
     const el = await screen.findByTestId("inspector-drawer");
@@ -62,7 +61,6 @@ describe("Console v2 shell", () => {
     expect(dock.contains(el)).toBe(true);
     expect(dock.contains(screen.getByTestId("inspector-rail"))).toBe(true);
     expect(screen.getByTestId("inspector-rail").getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByTestId("global-rail").contains(el)).toBe(false);
     expect(screen.getByTestId("context-sidebar").contains(el)).toBe(false);
     await waitFor(() => expect(search(router).inspect).toBe("issue:XTRM-301"));
     expect(await within(el).findByText("Problem")).toBeTruthy();
