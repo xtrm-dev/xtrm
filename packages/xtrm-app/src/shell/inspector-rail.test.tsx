@@ -107,10 +107,10 @@ describe("command list shortcuts", () => {
   });
 });
 
-describe("mode rail", () => {
-  it("has no inspector toggle; the sidebar edge handle is the only left-edge affordance", async () => {
+describe("left edge", () => {
+  it("has no inspector toggle; the sidebar collapse button is the only left-edge affordance", async () => {
     renderAt("/rep/xtrm-dev/xtrm/work/issues");
-    await screen.findByTestId("global-rail");
+    await screen.findByTestId("context-sidebar");
     expect(screen.queryByTestId("rail-inspector-toggle")).toBeNull();
     expect(screen.getByTestId("sidebar-collapse-edge")).toBeTruthy();
   });

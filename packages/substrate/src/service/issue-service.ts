@@ -707,6 +707,7 @@ export class IssueService {
     const claimed = this.batchOpenClaims(ids, now);
     const locators = this.batchLocators(ids);
     const children = this.batchChildren(ids);
+    const journal = this.batchJournalActivity(ids);
 
     return issueRows.map((r) => {
       const id = r["id"] as string;
@@ -733,6 +734,8 @@ export class IssueService {
       });
       const locator = locators.get(id);
       const humanRef = formatHumanRef(prefix, r["human_number"] as number);
+      const activity = journal.get(id);
+      const updatedAt = r["updated_at"] as number;
       return {
         id,
         humanRef,
@@ -752,9 +755,29 @@ export class IssueService {
         childrenTerminal: children.get(id)?.terminal ?? 0,
         blockedBy: own.map((b) => b.ref),
         createdAt: r["created_at"] as number,
-        updatedAt: r["updated_at"] as number,
+        updatedAt,
+        journalCount: activity?.count ?? 0,
+        pointerCount: activity?.pointers ?? 0,
+        lastActivityAt: Math.max(updatedAt, activity?.lastAt ?? 0),
       };
     });
+  }
+
+  // Journal aggregates per issue, in one statement. A journal write never
+  // touches `issues.updated_at`, so the board reads activity from here.
+  private batchJournalActivity(ids: string[]): Map<string, { count: number; pointers: number; lastAt: number }> {
+    const out = new Map<string, { count: number; pointers: number; lastAt: number }>();
+    if (ids.length === 0) return out;
+    for (const r of rows<Row>(
+      this.db,
+      `SELECT issue_id, COUNT(*) AS n, MAX(created_at) AS last_at,
+              SUM(CASE WHEN json_valid(refs_json) THEN json_array_length(refs_json) ELSE 0 END) AS pointers
+         FROM issue_journal WHERE issue_id IN (${ph(ids.length)}) GROUP BY issue_id`,
+      ...ids,
+    )) {
+      out.set(r["issue_id"] as string, { count: r["n"] as number, pointers: r["pointers"] as number, lastAt: r["last_at"] as number });
+    }
+    return out;
   }
 
   // Latest attestation per issue, in one statement (the per-issue path takes

@@ -1,3 +1,4 @@
+import { NewSessionButton } from "./NewSession.tsx";
 import { useRouterState } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useMemo, useRef, useState } from "react";
@@ -209,7 +210,8 @@ export function AgentSidebar() {
       <div className="flex items-center gap-1 px-3 pt-1 pb-2">
         <span className="text-sm font-medium text-ink">Sessions</span>
         <span className="text-xs text-ink-faint tabular">{items.filter((i) => i.type === "session").length || ""}</span>
-        <span className="ml-auto">
+        <span className="ml-auto flex items-center gap-0.5">
+          <NewSessionButton />
           <HostConnectionToggle open={hostOpen} onToggle={() => setHostOpen((v) => !v)} />
         </span>
         <div className="flex items-center rounded-md bg-control p-0.5 text-[0.7rem]" role="radiogroup" aria-label="Session scope">

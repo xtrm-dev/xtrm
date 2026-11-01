@@ -56,19 +56,19 @@ const RESEARCH_LIST_VIEWS = [
 ] as const;
 
 describe("Research destination", () => {
-  it("appears in the global rail and is reachable by its Mod+<n> shortcut", async () => {
+  it("appears in the sidebar and is reachable by its Mod+<n> shortcut", async () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
-    const rail = await screen.findByTestId("global-rail");
+    const rail = await screen.findByTestId("context-sidebar");
     expect(within(rail).getByRole("button", { name: "Research" })).toBeTruthy();
 
     fireEvent.click(within(rail).getByRole("button", { name: "Research" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/research/experiments"));
   });
 
-  it("selects Research with the keyboard shortcut for its rail position", async () => {
+  it("selects Research with the keyboard shortcut for its mode position", async () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
-    await screen.findByTestId("global-rail");
-    // Mod+<n> binds to MODES[n-1] (ModeRail), so the key is derived from the position rather
+    await screen.findByTestId("context-sidebar");
+    // Mod+<n> binds to MODES[n-1], so the key is derived from the position rather
     // than hard-coded: inserting a mode before Research must not silently pass this test.
     const position = MODES.findIndex((m) => m.id === "research") + 1;
     expect(position).toBeGreaterThan(0);
@@ -140,8 +140,7 @@ describe("Research uses the shared shell, and nothing of its own", () => {
     expect(within(main).getByRole("region", { name: "Runs" })).toBeTruthy();
     expect(screen.getByTestId("top-bar")).toBeTruthy();
     expect(screen.getByTestId("inspector-rail")).toBeTruthy();
-    // One mode rail, one contextual sidebar, and the sidebar is the shared one in Research mode.
-    expect(screen.getAllByTestId("global-rail")).toHaveLength(1);
+    // One sidebar, and it is the shared one in Research mode.
     const sidebars = screen.getAllByTestId("context-sidebar");
     expect(sidebars).toHaveLength(1);
     expect(sidebars[0]!.getAttribute("aria-label")).toBe("Research navigation");

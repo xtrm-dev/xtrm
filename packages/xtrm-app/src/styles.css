@@ -38,13 +38,13 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --x-deep: #0c0c0e;
-  --x-sidebar: #0c0c0e;
-  --x-surface: #131315;
-  --x-raised: #1a1a1d;
-  --x-control: #1f1f23;
-  --x-hover: rgb(255 255 255 / 0.04);
-  --x-pressed: rgb(255 255 255 / 0.07);
+  --x-deep: #141416;
+  --x-sidebar: #212124;
+  --x-surface: #1a1a1c;
+  --x-raised: #242427;
+  --x-control: #2b2b2f;
+  --x-hover: rgb(255 255 255 / 0.05);
+  --x-pressed: rgb(255 255 255 / 0.1);
   --x-ink: #ececef;
   --x-ink-muted: #a0a0a8;
   --x-ink-faint: #6a6a72;
@@ -89,7 +89,7 @@
 
   --radius-sm: 6px;
   --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-lg: 10px;
 
   --shadow-float: var(--x-shadow-float);
 

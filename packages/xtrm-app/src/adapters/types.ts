@@ -289,6 +289,12 @@ export interface IssueSummary {
   scrutiny: string | null;
   createdAt: number | null;
   updatedAt: number | null;
+  /** Latest of `updatedAt` and the newest journal entry; journal writes do not move `updatedAt`. */
+  lastActivityAt: number | null;
+  /** Journal entries on this issue. */
+  eventCount: number;
+  /** Evidence refs carried by those journal entries. */
+  pointerCount: number;
   parentRef: string | null;
   parentLocator: string | null;
   childCount: number;

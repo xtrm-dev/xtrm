@@ -1,35 +1,32 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { NewSessionButton } from "../agent/NewSession.tsx";
-import { AgentWorkspaceProvider, useAgentStore } from "../agent/workspace.tsx";
-import { MODES, halfForPath, modeForPath, modeHref, type Half } from "../app/destinations.ts";
+import { AgentWorkspaceProvider } from "../agent/workspace.tsx";
+import { MODES, modeHref } from "../app/destinations.ts";
 import { AccountControl } from "../github/auth.tsx";
 import { Icon } from "../ui/icon.tsx";
-import { IconButton, Kbd, Tip, cx } from "../ui/primitives.tsx";
-import type { IconName } from "../ui/icon.tsx";
+import { IconButton, Kbd } from "../ui/primitives.tsx";
 import { FillPanel, ResizableGroup, ResizeHandle, ResizablePanel } from "../ui/resizable.tsx";
-import { ContextSidebar, useGo } from "./ContextSidebar.tsx";
+import { ContextSidebar, useGo, useHalfNavigation } from "./ContextSidebar.tsx";
 import { GlobalSearch } from "./GlobalSearch.tsx";
 import { InspectorDock } from "./InspectorDock.tsx";
 import { ShellProvider, useShell } from "./context.tsx";
 import { SIDEBAR, isShortcutSuppressed, modShortcut } from "./layout.ts";
 
-/** Full-width top bar: brand, global search, command and theme (v13 reference). */
+/** Top bar of the main viewport: search, then the global options. */
 function TopBar() {
-  const { theme, toggleTheme, openPalette, repo } = useShell();
+  const { theme, toggleTheme, openPalette, repo, layout, dispatch } = useShell();
   const navigate = useNavigate();
   return (
-    <header className="flex h-11 shrink-0 items-center gap-3 px-2" data-testid="top-bar">
-      <div className="flex w-12 shrink-0 justify-center">
-        <div aria-hidden className="flex size-7 items-center justify-center rounded-md bg-accent text-[0.7rem] font-semibold tracking-tight text-white">X</div>
-      </div>
-      <span className="hidden text-sm font-medium text-ink md:inline">XTRM</span>
+    <header className="flex h-11 shrink-0 items-center gap-3 px-3" data-testid="top-bar">
+      {!layout.sidebar.open && (
+        <IconButton data-testid="sidebar-reopen-rail" icon="sidebar" label="Open sidebar" shortcut={modShortcut("B")} onClick={() => dispatch({ type: "sidebar/toggle" })} />
+      )}
       <button
         type="button"
         onClick={() => openPalette("search")}
         aria-label="Search"
-        className="mx-auto flex h-8 w-full max-w-xl items-center gap-2 rounded-md border border-border-muted bg-surface/70 px-3 text-left text-sm text-ink-faint outline-none hover:border-border hover:text-ink-muted focus-visible:border-border-strong"
+        className="mx-auto flex h-8 w-full max-w-xl items-center gap-2 rounded-md bg-hover px-3 text-left text-sm text-ink-faint outline-none hover:bg-pressed hover:text-ink-muted focus-visible:bg-pressed"
       >
         <Icon name="search" size="xs" />
         <span className="flex-1 truncate">Search issues, repositories, Program in {repo.name} or the workspace…</span>
@@ -45,64 +42,11 @@ function TopBar() {
   );
 }
 
-/** Remembers the last route of each half so the switch returns where the operator left off (PRD §36.2). */
-function useHalfNavigation() {
-  const store = useAgentStore();
-  const location = useRouterState({ select: (s) => s.location });
-  const go = useGo();
-  const half = halfForPath(location.pathname);
-  useEffect(() => {
-    store.lastHref[half] = location.href;
-  }, [store, half, location.href]);
-  const switchTo = (target: Half) => {
-    if (target === half) return;
-    go(store.lastHref[target] ?? (target === "agent" ? "/agent" : "/"));
-  };
-  return { half, switchTo };
-}
-
-const HALVES: Array<{ id: Half; label: string; icon: IconName }> = [
-  { id: "console", label: "Console", icon: "board" },
-  { id: "agent", label: "Agent", icon: "agent" },
-];
-
-/** Always-visible Console / Agent switch: the two halves of one shell (PRD §36.2). */
-function HalfSwitch({ half, onSwitch }: { half: Half; onSwitch: (h: Half) => void }) {
-  return (
-    <div role="radiogroup" aria-label="Workspace" data-testid="half-switch" className="flex flex-col gap-0.5 rounded-lg bg-control p-0.5">
-      {HALVES.map((h) => {
-        const on = h.id === half;
-        return (
-          <Tip key={h.id} label={on ? h.label : `Switch to ${h.label}`} shortcut={modShortcut(".")} side="right">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={on}
-              aria-label={h.label}
-              onClick={() => onSwitch(h.id)}
-              className={cx(
-                "flex h-11 w-9 flex-col items-center justify-center gap-0.5 rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
-                on ? "bg-surface text-accent-ink shadow-[0_0_0_1px_var(--x-border-muted)]" : "text-ink-faint hover:text-ink-muted",
-              )}
-            >
-              <Icon name={h.icon} size="sm" />
-              <span className="text-[0.55rem] leading-none font-medium">{h.label}</span>
-            </button>
-          </Tip>
-        );
-      })}
-    </div>
-  );
-}
-
-/** Rail: the half switch, then the Console modes (never repository state, §3) or the Agent half's actions. */
-function ModeRail() {
+/** Mod+. switches half; Mod+<n> opens the n-th mode. */
+function useModeShortcuts() {
   const { repo } = useShell();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const go = useGo();
   const { half, switchTo } = useHalfNavigation();
-  const active = modeForPath(pathname);
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isShortcutSuppressed(e.target) && e.key !== ".") return;
@@ -123,95 +67,38 @@ function ModeRail() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
-
-  return (
-    <nav aria-label="Modes" data-testid="global-rail" className="flex w-12 shrink-0 flex-col items-center gap-1 pb-2">
-      <HalfSwitch half={half} onSwitch={switchTo} />
-      <span aria-hidden className="my-1.5 h-px w-6 bg-border-muted" />
-      {half === "agent" ? (
-        <NewSessionButton />
-      ) : (
-        MODES.map((m, i) => {
-          const isActive = m.id === active;
-          return (
-            <Tip key={m.id} label={m.deferred ? `${m.label} · deferred` : m.label} shortcut={modShortcut(String(i + 1))} side="right">
-              <button
-                type="button"
-                aria-label={m.label}
-                aria-current={isActive ? "page" : undefined}
-                onClick={() => go(modeHref(m, repo))}
-                className={cx(
-                  "relative flex size-9 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
-                  isActive ? "bg-accent-soft text-accent-ink" : "text-ink-faint hover:bg-hover hover:text-ink-muted",
-                )}
-              >
-                <Icon name={m.icon} size="md" />
-              </button>
-            </Tip>
-          );
-        })
-      )}
-    </nav>
-  );
-}
-
-/** Sidebar toggle: one light edge — beside the mode rail when collapsed, on the sidebar's right edge when open. */
-function SidebarEdge({ open }: { open: boolean }) {
-  const { dispatch } = useShell();
-  const label = open ? "Collapse sidebar" : "Open sidebar";
-  return (
-    <Tip label={label} shortcut={modShortcut("B")} side="right">
-      <button
-        type="button"
-        data-testid={open ? "sidebar-collapse-edge" : "sidebar-reopen-rail"}
-        aria-label={label}
-        onClick={() => dispatch({ type: "sidebar/toggle" })}
-        className={cx("group/edge flex w-4 shrink-0 items-center justify-center outline-none", open ? "absolute inset-y-0 right-0 z-20" : "-ml-1 mb-1.5")}
-      >
-        <span className="flex h-10 w-1 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 motion-reduce:transition-none group-hover/edge:h-12 group-hover/edge:w-4 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-12 group-focus-visible/edge:w-4 group-focus-visible/edge:bg-hover">
-          <Icon name={open ? "back" : "forward"} size="xs" className="shrink-0 opacity-0 transition-opacity motion-reduce:transition-none group-hover/edge:opacity-100 group-focus-visible/edge:opacity-100" />
-        </span>
-      </button>
-    </Tip>
-  );
 }
 
 function ShellLayout() {
   const { layout, dispatch } = useShell();
   const { sidebar } = layout;
+  useModeShortcuts();
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-deep text-ink">
-      <TopBar />
-      <div className="flex min-h-0 flex-1 pr-1.5 pb-1.5">
-        <ModeRail />
-        {!sidebar.open && <SidebarEdge open={false} />}
-        {/* Single motion-panels driver for sidebar, main, and inspector: one Group using the default TRANSITION, which SHELL_MOTION mirrors (250ms, cubic-bezier(0.32,0.72,0,1)). No CSS width transitions on layout regions. */}
-        <ResizableGroup>
-          <ResizablePanel
-            data-testid="sidebar-panel"
-            size={sidebar.width}
-            minSize={SIDEBAR.min}
-            maxSize={SIDEBAR.max}
-            collapsed={!sidebar.open}
-            onSizeChange={(width) => dispatch({ type: "sidebar/resize", width })}
-          >
-            <div inert={!sidebar.open} data-state={sidebar.open ? "expanded" : "collapsed"} className="relative h-full pr-3">
-              <ContextSidebar />
-              <SidebarEdge open />
-            </div>
-          </ResizablePanel>
-          <ResizeHandle label="Resize sidebar" hidden={!sidebar.open} />
-          <FillPanel data-testid="main-panel" className="flex">
-            <div className="flex min-w-0 flex-1 overflow-hidden rounded-lg border border-border-muted bg-surface">
-              <main data-testid="primary-region" className="relative flex min-w-0 flex-1 flex-col">
-                <Outlet />
-              </main>
-            </div>
-          </FillPanel>
-          <InspectorDock />
-        </ResizableGroup>
-      </div>
+    <div className="flex h-full min-h-0 bg-surface text-ink">
+      {/* Single motion-panels driver for sidebar, main, and inspector: one Group using the default TRANSITION, which SHELL_MOTION mirrors (250ms, cubic-bezier(0.32,0.72,0,1)). No CSS width transitions on layout regions. */}
+      <ResizableGroup>
+        <ResizablePanel
+          data-testid="sidebar-panel"
+          size={sidebar.width}
+          minSize={SIDEBAR.min}
+          maxSize={SIDEBAR.max}
+          collapsed={!sidebar.open}
+          onSizeChange={(width) => dispatch({ type: "sidebar/resize", width })}
+        >
+          <div inert={!sidebar.open} data-state={sidebar.open ? "expanded" : "collapsed"} className="h-full bg-sidebar">
+            <ContextSidebar />
+          </div>
+        </ResizablePanel>
+        <ResizeHandle label="Resize sidebar" hidden={!sidebar.open} />
+        <FillPanel data-testid="main-panel" className="flex flex-col overflow-hidden">
+          <TopBar />
+          <main data-testid="primary-region" className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+            <Outlet />
+          </main>
+        </FillPanel>
+        <InspectorDock />
+      </ResizableGroup>
       <GlobalSearch />
     </div>
   );

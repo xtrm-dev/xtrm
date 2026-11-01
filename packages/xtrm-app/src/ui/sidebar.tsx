@@ -33,6 +33,7 @@ export function SidebarRow({
   status,
   selected,
   deferred,
+  indent,
   onActivate,
   actions,
 }: {
@@ -42,12 +43,20 @@ export function SidebarRow({
   status?: { tone: Tone; label: string };
   selected?: boolean;
   deferred?: boolean;
+  /** Sub-row under the destination it belongs to. */
+  indent?: boolean;
   onActivate: () => void;
   actions?: ReactNode;
 }) {
   return (
-    <Row density="sidebar" selected={selected} onActivate={onActivate} actions={actions} className={cx(selected ? "text-ink" : "text-ink-muted")}>
-      {selected && <span aria-hidden className="absolute top-1.5 bottom-1.5 left-0 w-0.5 rounded-full bg-accent" />}
+    <Row
+      density="sidebar"
+      selected={selected}
+      onActivate={onActivate}
+      actions={actions}
+      style={indent ? { paddingLeft: "1.75rem" } : undefined}
+      className={cx("h-8", selected ? "bg-pressed text-ink" : "text-ink-muted")}
+    >
       <Icon name={icon} size="xs" className={selected ? "text-ink" : "text-ink-faint"} />
       <span className={cx("truncate", deferred && "text-ink-faint")}>{label}</span>
       {status && <StatusDot tone={status.tone} label={status.label} />}

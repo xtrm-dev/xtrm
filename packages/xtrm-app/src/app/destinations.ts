@@ -1,8 +1,8 @@
 import type { IconName } from "../ui/icon.tsx";
 
-// Navigation model (accepted 2026-09-16, PRD §36.2 2026-10-02): the rail's top switch selects a HALF
-// (Console or Agent); in the Console half the rail selects a MODE and the contextual sidebar shows only
-// that mode's context. The Agent half has one sidebar: sessions. No destination appears in both places.
+// Navigation model: the sidebar's top switch selects a HALF (Work or Agent). The Work half lists every
+// destination in one sidebar: repository rows plus the workspace MODES, and the active mode's own
+// sub-rows nest under it. The Agent half has one sidebar: sessions.
 
 export type ModeId = "work" | "agent" | "agents" | "program" | "research" | "observability";
 
@@ -93,7 +93,7 @@ export const REPO_SECTIONS: RepoSection[] = [
     label: "System",
     items: [
       { id: "graph", label: "Graph", icon: "graph", repoPath: "/system/graph", deferred: "Graph shell integration (wave G)" },
-      { id: "repo-observability", label: "Observability", icon: "observability", repoPath: "/system/observability", deferred: "Observability shell integration (wave G)" },
+      { id: "repo-observability", label: "Repository observability", icon: "observability", repoPath: "/system/observability", deferred: "Observability shell integration (wave G)" },
     ],
   },
 ];

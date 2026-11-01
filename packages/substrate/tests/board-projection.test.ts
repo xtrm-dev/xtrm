@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
+import { JournalService } from "../src/service/journal-service.ts";
 import type { DatabaseSync } from "../src/store/database.ts";
 import { TERMINAL_LIFECYCLE, registerScrutinyPolicy } from "../src/domain/readiness.ts";
 import { BOARD_ROW_FIELDS, DEFAULT_PAGE_LIMIT, type IssueBoardRow } from "../src/domain/board.ts";
@@ -481,6 +482,31 @@ describe("board row payload", () => {
       assert.ok(!serialized.includes(forbidden), `row leaked ${forbidden}`);
     }
     assert.equal(row.claimState, "none");
+    db.close();
+  });
+});
+
+describe("board row journal activity", () => {
+  it("counts journal entries and refs and moves lastActivityAt, while updatedAt stays put", () => {
+    const { svc, db } = tempService();
+    const projectId = variedProject(svc, db);
+    const before = svc.queryIssues({ project: projectId, limit: 2 }).rows;
+    const [target, quiet] = [before[0]!, before[1]!];
+    assert.equal(target.journalCount, 0);
+    assert.equal(target.pointerCount, 0);
+    assert.equal(target.lastActivityAt, target.updatedAt);
+
+    const journal = new JournalService(db, svc);
+    journal.appendEntry(target.id, { kind: "note", semantic: { summary: "one" }, refs: [{ kind: "evidence", key: "a", value: "1" }, { kind: "evidence", key: "b", value: "2" }] });
+    journal.appendEntry(target.id, { kind: "note", semantic: { summary: "two" } });
+    db.prepare("UPDATE issue_journal SET created_at = ? WHERE issue_id = ?").run(target.updatedAt + 5_000, target.id);
+
+    const [row, other] = svc.queryIssues({ project: projectId, limit: 2 }).rows;
+    assert.equal(row!.journalCount, 2);
+    assert.equal(row!.pointerCount, 2);
+    assert.equal(row!.updatedAt, target.updatedAt);
+    assert.equal(row!.lastActivityAt, target.updatedAt + 5_000);
+    assert.equal(other!.journalCount, quiet.journalCount);
     db.close();
   });
 });
