@@ -22,8 +22,9 @@ import { migrate } from "../store/migrations/runner.ts";
 import { parseRemoteSpec, shellQuote, type RemoteSpec } from "../remote/spec.ts";
 import { sshArgv } from "../remote/ssh.ts";
 import { RemoteError } from "../remote/spec.ts";
-import { selectRemote, type RemoteConfig, type RemoteSelection } from "../remote/config.ts";
-import { CAPABILITIES, OPERATIONS, classifyError, createServices } from "./ops.ts";
+import { mappingKey, selectRemote, type RemoteConfig, type RemoteSelection } from "../remote/config.ts";
+import { discoverRepository } from "../domain/repository-discovery.ts";
+import { CAPABILITIES, OPERATIONS, assertKnownArgs, classifyError, createServices } from "./ops.ts";
 import {
   MAX_FRAME_BYTES,
   PROTOCOL_VERSION,
@@ -41,11 +42,18 @@ export interface SubstrateService {
   close(): Promise<void>;
 }
 
+/**
+ * Why a link ended. A spawn failure, a broken stdin pipe and an ordinary exit need
+ * different answers from the caller, so the transport says which happened instead
+ * of leaving the client to guess from an exit code.
+ */
+export type LinkExitKind = "exit" | "spawn_failed" | "stdin_broken";
+
 /** The transport a client needs: write a frame, hear frames, hear the end. */
 export interface ServiceLink {
   write(frame: string): void;
   onFrame(handler: (line: string) => void): void;
-  onExit(handler: (code: number | null, signal: NodeJS.Signals | null, reason?: string) => void): void;
+  onExit(handler: (code: number | null, signal: NodeJS.Signals | null, reason?: string, kind?: LinkExitKind) => void): void;
   /** Diagnostics from the far side, for a caller that wants to log them. */
   diagnostics(): string;
   close(): Promise<void>;
@@ -97,6 +105,7 @@ export function createLocalService(dbPath: string, version: string): SubstrateSe
         throw new ServiceCallError("unknown_op", `unknown operation "${op}"`);
       }
       try {
+        assertKnownArgs(op, args);
         const answer = OPERATIONS[op]!(services, args);
         return (answer instanceof Promise ? await answer : answer) as T;
       } catch (error) {
@@ -115,6 +124,8 @@ export interface RemoteServiceOptions {
   client?: string;
   clientVersion?: string;
   protocol?: number;
+  /** How errors name the far side, e.g. `ssh:server`. */
+  remoteLabel?: string;
 }
 
 interface Pending {
@@ -126,10 +137,13 @@ interface Pending {
 /** Speaks the protocol over a link. */
 export function createServiceClient(link: ServiceLink, options: RemoteServiceOptions = {}): SubstrateService {
   const timeoutMs = options.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS;
+  const where = options.remoteLabel ?? "the server";
   const pending = new Map<number | string, Pending>();
   let nextId = 1;
   let hello: Promise<HelloResult> | null = null;
   let ended: string | null = null;
+  let endedCode: "peer_noise" | "protocol_mismatch" | "connection_lost" = "connection_lost";
+  let sawFrame = false;
   let closed = false;
 
   const failAll = (error: Error): void => {
@@ -150,21 +164,25 @@ export function createServiceClient(link: ServiceLink, options: RemoteServiceOpt
   };
 
   link.onFrame((line) => {
+    sawFrame = true;
     if (line.length > MAX_LINE_BYTES) {
-      ended = `the service sent a ${line.length}-byte line, above the ${MAX_LINE_BYTES}-byte limit`;
-      failAll(new ServiceCallError("unsupported", ended));
+      endedCode = "peer_noise";
+      ended = `${where} sent a ${line.length}-byte line, above the ${MAX_LINE_BYTES}-byte limit`;
+      failAll(new ServiceCallError(endedCode, ended));
       void link.close();
       return;
     }
     const response = decodeResponse(line);
     if ("code" in response) {
-      // A first line that is not a frame means the far end is not this service:
-      // an older sb, a shell banner, a login prompt. Name the version that ships
-      // the service, so the reader knows what to install rather than what to debug.
+      // A line that is not a frame means the far end is not this service at all: a
+      // login banner, a shell startup message, a proxy. Quote what it actually said
+      // (sanitised) instead of guessing an installation problem.
+      endedCode = "peer_noise";
       ended =
-        "the server did not answer with the service protocol " +
-        "(is a Substrate with `sb serve --stdio` installed there, 0.2.4 or newer?)";
-      failAll(new ServiceCallError("unsupported", ended));
+        `${where} answered with something other than the service protocol: ` +
+        `${sanitizeDiagnostic(line).slice(0, 120) || "(an unreadable line)"}. ` +
+        "Nothing before the handshake is a frame; check for a login banner or a proxy on the far side.";
+      failAll(new ServiceCallError(endedCode, ended));
       return;
     }
     if (response.id === null) {
@@ -193,20 +211,52 @@ export function createServiceClient(link: ServiceLink, options: RemoteServiceOpt
     }
   });
 
-  link.onExit((code, signal, reason) => {
+  link.onExit((code, signal, reason, kind) => {
     closed = true;
     // The server's own stderr is not reproduced here: it is untrusted text from
     // the far side, and a caller logging it as an error line would make it look
     // like our own diagnostic. `link.diagnostics()` is the place to read it.
-    const message =
-      ended ?? reason ?? `the service connection ended (exit ${code ?? "none"}${signal ? `, ${signal}` : ""})`;
-    failAll(new ServiceCallError("unsupported", message));
+    if (ended !== null) {
+      failAll(new ServiceCallError(endedCode, ended));
+      return;
+    }
+    if (kind === "spawn_failed") {
+      failAll(new ServiceCallError("spawn_failed", `${where}: ${reason ?? "the connection program could not be started"}`));
+      return;
+    }
+    if (kind === "stdin_broken") {
+      failAll(
+        new ServiceCallError(
+          "connection_lost",
+          `${where}: the pipe to the service closed mid-session (${reason ?? "a write failed"}); calls already sent may or may not have run`,
+        ),
+      );
+      return;
+    }
+    // Nothing was read and the far side printed usage: that is an sb without the
+    // verb, not a dropped connection.
+    if (!sawFrame && /usage|unknown (command|verb)|serve/i.test(link.diagnostics())) {
+      failAll(
+        new ServiceCallError(
+          "not_installed",
+          `${where} has no \`sb serve --stdio\`: its sb printed usage and exited ${code ?? "?"} ` +
+            "(the service ships in a release after 0.2.4)",
+        ),
+      );
+      return;
+    }
+    failAll(
+      new ServiceCallError(
+        "connection_lost",
+        `${where}: the service connection ended (exit ${code ?? "none"}${signal ? `, ${signal}` : ""})`,
+      ),
+    );
   });
 
   const send = <T>(request: ServiceRequestLike): Promise<T> =>
     new Promise<T>((resolve, reject) => {
       if (closed) {
-        reject(new ServiceCallError("unsupported", ended ?? "the service connection is closed"));
+        reject(new ServiceCallError(endedCode, ended ?? "the service connection is closed"));
         return;
       }
       const timer = setTimeout(() => {
@@ -214,7 +264,8 @@ export function createServiceClient(link: ServiceLink, options: RemoteServiceOpt
         reject(
           new ServiceCallError(
             "timeout",
-            `the service did not answer "${request.op}" within ${timeoutMs} ms; it may still be running on the server`,
+            `${where} did not answer "${request.op}" within ${timeoutMs} ms; the call is not cancelled and may still ` +
+              "run there, and a retry may therefore run it twice (the protocol carries no idempotency key yet)",
           ),
         );
       }, timeoutMs);
@@ -225,13 +276,23 @@ export function createServiceClient(link: ServiceLink, options: RemoteServiceOpt
 
   const handshake = async (): Promise<HelloResult> => {
     const id = nextId++;
-    const hello = await send<HelloResult>({
-      id,
-      op: "hello",
-      args: { protocol: options.protocol ?? PROTOCOL_VERSION, client: options.client ?? "substrate-client", version: options.clientVersion ?? "unknown" },
-    });
+    let hello: HelloResult;
+    try {
+      hello = await send<HelloResult>({
+        id,
+        op: "hello",
+        args: { protocol: options.protocol ?? PROTOCOL_VERSION, client: options.client ?? "substrate-client", version: options.clientVersion ?? "unknown" },
+      });
+    } catch (error) {
+      // The server refuses a protocol it does not speak with `unsupported`: that is
+      // a version skew between two working sides, not a broken peer.
+      if (error instanceof ServiceCallError && error.code === "unsupported") {
+        throw new ServiceCallError("protocol_mismatch", `${where}: ${error.message}`);
+      }
+      throw error;
+    }
     if (typeof hello?.protocol !== "number") {
-      throw new ServiceCallError("unsupported", "the handshake did not answer with a protocol version");
+      throw new ServiceCallError("protocol_mismatch", `${where}: the handshake did not answer with a protocol version`);
     }
     return hello;
   };
@@ -247,7 +308,7 @@ export function createServiceClient(link: ServiceLink, options: RemoteServiceOpt
     },
     close: async () => {
       closed = true;
-      failAll(new ServiceCallError("unsupported", "the client closed the connection"));
+      failAll(new ServiceCallError("connection_lost", "the client closed the connection"));
       await link.close();
     },
   };
@@ -260,7 +321,9 @@ export function spawnLink(argv: string[], env: NodeJS.ProcessEnv = process.env):
     stdio: ["pipe", "pipe", "pipe"],
   });
   let frames: ((line: string) => void) | null = null;
-  let exits: ((code: number | null, signal: NodeJS.Signals | null, reason?: string) => void) | null = null;
+  let exits:
+    | ((code: number | null, signal: NodeJS.Signals | null, reason?: string, kind?: LinkExitKind) => void)
+    | null = null;
   let queued: string[] = [];
   let stderrTail = "";
 
@@ -277,16 +340,33 @@ export function spawnLink(argv: string[], env: NodeJS.ProcessEnv = process.env):
     // reason travels with the exit, or the caller sees "it ended (exit none)".
     const reason = `cannot run ${argv[0]}: ${error.message}`;
     stderrTail = (stderrTail + "\n" + reason).trim();
-    exits?.(null, null, reason);
+    exits?.(null, null, reason, "spawn_failed");
+  });
+  // A child that answers the handshake and then closes fd 0 leaves a pipe that
+  // reports EPIPE on the next write. Without this listener that error is
+  // unhandled, and the host process (a Pi session, a commit hook, a specialists
+  // run) dies with exit 1.
+  child.stdin.on("error", (error) => {
+    const reason = error.message;
+    stderrTail = (stderrTail + "\nstdin: " + reason).trim();
+    exits?.(null, null, reason, "stdin_broken");
   });
   child.on("close", (code, signal) => {
-    exits?.(code, signal);
+    exits?.(code, signal, undefined, "exit");
   });
 
   return {
     write: (frame) => {
-      if (child.stdin.destroyed) return;
-      child.stdin.write(frame + "\n");
+      if (child.stdin.destroyed || child.stdin.writableEnded) {
+        exits?.(null, null, "the pipe to the service is already closed", "stdin_broken");
+        return;
+      }
+      try {
+        child.stdin.write(frame + "\n");
+      } catch (error) {
+        // A synchronous EPIPE is the same condition as the async one above.
+        exits?.(null, null, error instanceof Error ? error.message : String(error), "stdin_broken");
+      }
     },
     onFrame: (handler) => {
       frames = handler;
@@ -304,13 +384,23 @@ export function spawnLink(argv: string[], env: NodeJS.ProcessEnv = process.env):
           resolve();
           return;
         }
-        child.once("close", () => resolve());
-        child.stdin.end();
-        const timer = setTimeout(() => {
-          child.kill("SIGTERM");
+        let done = false;
+        const finish = (): void => {
+          if (done) return;
+          done = true;
           resolve();
-        }, 300);
-        timer.unref?.();
+        };
+        // Resolve on the child's exit, not on the signal being sent: a child that
+        // ignores SIGTERM would otherwise outlive the close and keep the host alive,
+        // and a wedged service is exactly what close() is for.
+        child.once("exit", finish);
+        child.stdin.end();
+        const term = setTimeout(() => child.kill("SIGTERM"), 150);
+        const kill = setTimeout(() => child.kill("SIGKILL"), 2000);
+        const giveUp = setTimeout(finish, 3000);
+        term.unref?.();
+        kill.unref?.();
+        giveUp.unref?.();
       });
     },
   };
@@ -356,15 +446,25 @@ export function sshServiceArgv(options: Pick<OpenSshServiceOptions, "host" | "sb
 
 /** Opens a service session on another machine over ssh. */
 export function openSshService(options: OpenSshServiceOptions): { service: SubstrateService; link: ServiceLink } {
-  const link = spawnLink(sshServiceArgv(options), options.env ?? process.env);
+  const argv = sshServiceArgv(options);
+  const link = spawnLink(argv, options.env ?? process.env);
   return {
     service: createServiceClient(link, {
       timeoutMs: options.timeoutMs,
       client: options.client,
       clientVersion: options.clientVersion,
+      remoteLabel: `ssh:${options.host}`,
     }),
     link,
   };
+}
+
+function safeRepositoryKey(): string | null {
+  try {
+    return discoverRepository().identity?.repositoryKey ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export type ServiceEndpoint =
@@ -431,10 +531,15 @@ export function openService(
     XTRM_SESSION_ID: env["XTRM_SESSION_ID"],
     XTRM_SESSION_NAME: env["XTRM_SESSION_NAME"],
   };
+  // The checkout for the repository this process is in, if setup verified one: the
+  // server's `sb` has to run from a directory that resolves to a project.
+  const repositoryKey = safeRepositoryKey();
+  const root =
+    repositoryKey === null ? null : (endpoint.config.checkouts[mappingKey(endpoint.host, repositoryKey)]?.root ?? null);
   const { service } = openSshService({
     host: endpoint.host,
     sbPath,
-    root: endpoint.config.checkouts[`${endpoint.host} ${env["SUBSTRATE_SERVICE_REPO"] ?? ""}`]?.root ?? null,
+    root,
     env,
     forwardedEnv: forwarded,
     clientVersion: opts.version,

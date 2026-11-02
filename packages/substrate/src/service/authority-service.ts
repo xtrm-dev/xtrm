@@ -24,6 +24,13 @@ import { ServiceCallError } from "./protocol.ts";
 
 export const AUTHORITY_SCHEMA_VERSION = 1;
 
+/**
+ * How many live rows the specialists SessionStart reader asks for. `authority.list`
+ * with `activeOnly` answers the same query with the same order and the same default
+ * limit, so a remote client sees what that reader sees.
+ */
+export const ACTIVITY_READER_LIMIT = 10;
+
 export const ACTIVATIONS_DDL = `CREATE TABLE IF NOT EXISTS activations (
   activation_id TEXT PRIMARY KEY,
   specialist TEXT NOT NULL,
@@ -33,10 +40,22 @@ export const ACTIVATIONS_DDL = `CREATE TABLE IF NOT EXISTS activations (
 )`;
 
 /** States the specialists host records. An unknown one is refused, not stored. */
-export const AUTHORITY_STATES = ["pending", "running", "waiting", "blocked", "settled", "failed", "stopped"] as const;
+// `disposed` is in the shipped reader's filter, not in the host's own transition
+// table: a stream that reports it directly must still be accepted, or a disposed
+// activation could not be recorded at all.
+export const AUTHORITY_STATES = [
+  "pending",
+  "running",
+  "waiting",
+  "blocked",
+  "settled",
+  "failed",
+  "stopped",
+  "disposed",
+] as const;
 export type AuthorityState = (typeof AUTHORITY_STATES)[number];
 
-const TERMINAL_STATES: readonly AuthorityState[] = ["settled", "failed", "stopped"];
+const TERMINAL_STATES: readonly AuthorityState[] = ["settled", "failed", "stopped", "disposed"];
 const LIVE_STATES: readonly AuthorityState[] = ["pending", "running", "waiting", "blocked"];
 
 /** Identifier shape for anything the SessionStart reader prints. */
@@ -80,8 +99,10 @@ function state(value: unknown): AuthorityState {
 }
 
 function activityTime(value: unknown, now: number): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
-    throw new ServiceCallError("bad_request", 'argument "lastActivityAt" must be a positive integer (epoch ms)');
+  // The specialists writer records 0 for a row its host has not touched yet, so a
+  // non-positive stamp is accepted; only a future one would poison the ordering.
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+    throw new ServiceCallError("bad_request", 'argument "lastActivityAt" must be an epoch-millisecond integer');
   }
   if (value > now + MAX_CLOCK_SKEW_MS) {
     throw new ServiceCallError(
@@ -93,7 +114,9 @@ function activityTime(value: unknown, now: number): number {
 }
 
 function issueReference(value: unknown): string | null {
-  if (value === undefined || value === null) return null;
+  // The specialists writer stores whatever its snapshot carries; an empty string is
+  // the "no issue" case it actually sends. Both are recorded as no issue.
+  if (value === undefined || value === null || value === "") return null;
   if (typeof value !== "string" || !ISSUE_REF.test(value)) {
     throw new ServiceCallError("bad_request", 'argument "issueRef" must look like XTRM-690, or be null');
   }
@@ -189,6 +212,37 @@ export function removeAuthority(
   }
   db.prepare("DELETE FROM activations WHERE activation_id = ?").run(id);
   return { removed: true };
+}
+
+/**
+ * The SessionStart reader's query: live rows only, newest activity first, at most
+ * `limit` rows.
+ */
+export function listActiveAuthority(db: SubstrateDatabase, limit = ACTIVITY_READER_LIMIT): AuthorityRow[] {
+  ensureAuthorityTable(db);
+  const rows = (
+    db
+      .prepare(
+        `SELECT activation_id, specialist, state, bead_id, last_activity_at
+           FROM activations
+           WHERE state NOT IN ('settled', 'disposed')
+           ORDER BY last_activity_at DESC LIMIT ?`,
+      )
+      .all(limit) as unknown as Array<{
+      activation_id: string;
+      specialist: string;
+      state: string;
+      bead_id: string | null;
+      last_activity_at: number;
+    }>
+  );
+  return rows.map((row) => ({
+    activationId: row.activation_id,
+    specialist: row.specialist,
+    state: row.state,
+    issueRef: row.bead_id,
+    lastActivityAt: row.last_activity_at,
+  }));
 }
 
 export function listAuthority(db: SubstrateDatabase, activationId?: string | null): AuthorityRow[] {

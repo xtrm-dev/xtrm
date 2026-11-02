@@ -32,7 +32,7 @@ import { readSync, writeSync } from "node:fs";
 import type { SubstrateDatabase } from "../store/database.ts";
 import { openSubstrate } from "../store/sqlite.ts";
 import { migrate } from "../store/migrations/runner.ts";
-import { CAPABILITIES, OPERATIONS, classifyError, createServices } from "./ops.ts";
+import { CAPABILITIES, OPERATIONS, assertKnownArgs, classifyError, createServices } from "./ops.ts";
 import {
   MAX_FRAME_BYTES,
   PROTOCOL_VERSION,
@@ -312,6 +312,7 @@ export async function serveStdio(options: ServeOptions): Promise<number> {
         // A handler may be async (journal.checkpoint awaits a summarizer): awaiting
         // it here turns its rejection into this frame's answer instead of an
         // unhandled rejection that would end a process holding the store.
+        assertKnownArgs(op, args);
         const answer = OPERATIONS[op]!(services, args);
         const result = answer instanceof Promise ? await answer : answer;
         respond({ id, ok: true, result });

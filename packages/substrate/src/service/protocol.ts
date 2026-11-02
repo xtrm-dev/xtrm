@@ -23,7 +23,15 @@ export type ServiceErrorCode =
   | "not_found"
   | "conflict"
   | "unsupported"
-  | "internal";
+  | "internal"
+  // The transport failed in four distinguishable ways, because they call for four
+  // different actions: install a newer sb, fix the ssh program, retry the call, or
+  // upgrade one of the two sides.
+  | "not_installed"
+  | "spawn_failed"
+  | "connection_lost"
+  | "protocol_mismatch"
+  | "peer_noise";
 
 export interface ServiceError {
   code: ServiceErrorCode;

@@ -270,10 +270,13 @@ documenting the risk:
   is async; without the await its promise was serialised as `{}` (an `ok: true`
   answer for work that never ran) and its rejection killed the process holding
   the store.
-- *`journal.enrichEntry` is not an operation.* It rewrites any existing entry;
-  the local CLI only enriches the entry it just created. A remote caller has no
-  business rewriting history, so the verb is absent from the surface and from
-  the advertised capabilities.
+- *`journal.enrichEntry` is an operation, and it can only touch one column.* An
+  audit first read it as "rewrites any existing entry" and it was removed; the
+  service method it calls updates `semantic_json` on that entry and appends an
+  audit event, leaving the entry's id, issue, kind, body and sequence untouched.
+  Consumers call it (the Claude MCP server enriches a degraded checkpoint), so it
+  is exposed — with that limit, which is the method's own and not the surface's
+  invention.
 - *Identity comes from the frame, not from the server's environment.* The
   process serving the store removes the ambient identity variables
   (`SUBSTRATE_HOLDER`, `SUBSTRATE_ISSUE_REF`, `SUBSTRATE_ACTIVATION_ID`, session
@@ -285,6 +288,23 @@ documenting the risk:
   limits) and `lastActivityAt` additionally refuses anything beyond a five-minute
   clock skew, because a forged stamp at the top of the ordering pins a row first
   forever.
+- *The surface is derived from the consumers' call sites, not from the services'
+  method lists.* Every method Pi handlers, the Claude hook scripts and MCP server,
+  and the specialists ports actually call has an operation; methods they never
+  call are left out. Left out deliberately: `issue.trailersForCommit` (a hook on
+  the commit path, which has its own remote handling and an 8 s budget),
+  `provenance.generateBundle`, `provenance.closureOutcomes` and the audit
+  queries (`closuresLackingProvenance`, `resultsLackingReceipts`,
+  `issuesForSession`) — reporting tools that read a whole store, not operations a
+  consumer performs mid-task.
+- *`authority.list` answers the SessionStart reader's query when asked to.* With
+  `{"activeOnly": true}` it runs the same statement the shipped reader runs —
+  `state NOT IN ('settled','disposed')`, newest activity first, `LIMIT ?` — so a
+  remote client sees the same rows in the same order. `authority.record` accepts
+  what the specialists writer accepts (an empty `issueRef`, a stamp of 0 for a
+  row not touched yet) and refuses only what would poison a listing: a
+  non-integer or far-future stamp, a non-identifier id, an invented state, a
+  re-attributed row or a live row deleted without `expectState`.
 - *Activation rows are validated as identifiers, not text.* The SessionStart
   reader prints `activation_id`, `specialist`, `state` and `bead_id` verbatim
   into a model's context, so a newline in a field stored a line of instructions
@@ -326,9 +346,13 @@ two-way rule, applied to code instead of commands.
    handshake there:
    `printf '%s\n' '{"id":0,"op":"hello","args":{"protocol":1}}' | sb serve --stdio`.
 3. Land the consumers — Pi handlers, Claude hooks and MCP server, specialists
-   ports (XTRM-691, XTRM-692, SPECIALISTS-4395). Each must treat a failed
-   handshake as "no remote service" and keep its local behaviour; none may assume
-   the service is present.
+   ports (XTRM-691, XTRM-692, SPECIALISTS-4395). A consumer fails closed: when
+   `substrate.remote` is set, a failed handshake, an `sb` without the verb or a
+   dropped connection ends the call with an error naming the remote. It never
+   opens the local store as a substitute, because a stale local store answers
+   questions the operator did not ask. Local behaviour applies only when
+   `substrate.remote` is unset — the both-ways rule is a configuration choice,
+   not a runtime fallback.
 4. Only then switch activation authority to the service on machines that own a
    server store.
 
@@ -336,7 +360,26 @@ Nothing in steps 3–4 is safe to land before step 2 in a repository whose store
 lives on the server: a consumer that assumes the service would lose its
 operations silently, which is the failure mode this order prevents.
 
-**Verification.** `packages/substrate/tests/service-protocol.test.ts` drives a
+**When the transport fails, it says which failure it is.** One code for every
+transport problem made an unanswering `ssh` look like a version skew. The client
+distinguishes `not_installed` (the far side ran an `sb` without the verb: usage on
+stderr, exit 1, nothing on stdout), `spawn_failed` (the command could not be
+started at all), `connection_lost` (the pipe closed or a write failed), 
+`protocol_mismatch` (the server refused the protocol number) and `peer_noise`
+(stdout carried something that is not a frame — a banner, a proxy, a login
+prompt), and each message names the remote (`ssh:<host>`). Two consequences are
+documented rather than fixed: a call that times out is **not cancelled** on the
+server, and the protocol carries **no idempotency key**, so a retried mutation can
+run twice.
+
+**Verification.** `packages/substrate/tests/service-operations.test.ts` runs
+every operation twice — once through a real child process with its own store, once
+in process — and requires the two answers to agree on the outcome, the error code
+and the result shape; it also refuses an unknown argument name on every
+operation, covers each invalid argument class, and pins the transport codes above
+(`not_installed`, `peer_noise`, `protocol_mismatch`, `spawn_failed`,
+`connection_lost` after an EPIPE, and a timeout that cannot hang the suite).
+`packages/substrate/tests/service-protocol.test.ts` drives a
 real `sb serve --stdio` child over pipes with real frames, against a store the
 client process never opens: the authority row is read back from the server's file
 with `openSubstrate` directly, the client's file stays empty through the same

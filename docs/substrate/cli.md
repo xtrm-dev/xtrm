@@ -68,7 +68,7 @@ operations rather than a command line speaks this protocol instead of opening
   every other one.
 
 Operations are named calls into the same services `sb` itself uses
-(`issue.get`, `issue.claimReady`, `journal.append`, `provenance.trace`,
+(`issue.get`, `issue.claimReady`, `journal.appendEntry`, `provenance.trace`,
 `authority.record`, …). There is no SQL operation, no path operation and no
 expression operation: a client on another machine can ask for a claim to be
 released and cannot ask for the statements that do it. Activation authority is
@@ -79,6 +79,13 @@ A client reaches it over ssh (`ssh <host> sb serve --stdio`), one connection per
 client process, so the store stays on the machine that owns it. Unset
 `substrate.remote` and the same client library runs the same operations
 in-process, with no ssh requirement.
+
+The fallback is not automatic. When `substrate.remote` is set, a failed handshake,
+an `sb` without the verb, or a dropped connection ends the call with an error
+naming the remote — `not_installed`, `spawn_failed`, `connection_lost`,
+`protocol_mismatch` or `peer_noise` — and never opens a local store instead. A
+call that times out is not cancelled on the server, and the protocol carries no
+idempotency key, so a retried mutation may run twice.
 
 ## issue — 22 verbs
 

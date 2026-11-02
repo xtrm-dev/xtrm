@@ -369,14 +369,31 @@ describe("sb serve --stdio", () => {
       assert.equal(refused.error?.code, "bad_request");
       assert.match(String(refused.error?.message), /specialist/);
 
-      server.send({ id: 31, op: "authority.record", args: { activationId: "act_x", specialist: "r", state: "running", lastActivityAt: 0 } });
+      // 0 is what the specialists writer sends for a row its host has not touched;
+      // a non-integer and a future stamp are the two that must not land.
+      server.send({
+        id: 31,
+        op: "authority.record",
+        args: { activationId: "act_x", specialist: "r", state: "running", lastActivityAt: 0 },
+      });
+      const zero = await server.next();
+      assert.equal(zero.ok, true, "a zero stamp is what the shipped writer records");
+      server.send({
+        id: 32,
+        op: "authority.record",
+        args: { activationId: "act_y", specialist: "r", state: "running", lastActivityAt: "soon" },
+      });
       const badTime = await server.next();
       assert.equal(badTime.error?.code, "bad_request");
       assert.match(String(badTime.error?.message), /lastActivityAt/);
 
-      server.send({ id: 32, op: "authority.list", args: {} });
+      server.send({ id: 33, op: "authority.list", args: {} });
       const listed = await server.next();
-      assert.deepEqual(listed.result?.["rows"], [], "a refused write wrote nothing");
+      assert.deepEqual(
+        (listed.result?.["rows"] as Array<{ activationId: string }>).map((row) => row.activationId),
+        ["act_x"],
+        "the refused writes (no specialist, a non-integer stamp) wrote nothing; the zero-stamp row did",
+      );
     } finally {
       await server.close();
     }
@@ -421,12 +438,19 @@ describe("service client", () => {
     const link = spawnLink([NODE, "-e", "process.stdin.resume()"]);
     const client = createServiceClient(link, { timeoutMs: 150 });
     try {
-      await assert.rejects(client.ready(), (error: Error & { code?: string }) => {
-        assert.equal(error.code, "timeout");
-        return true;
-      });
+      // Raced with a bound of its own, so a broken timer fails this test in two
+      // seconds instead of leaving the runner waiting on a promise that never settles.
+      const outcome = await Promise.race([
+        client.ready().then(
+          () => ({ kind: "resolved" as const }),
+          (error: Error & { code?: string }) => ({ kind: "rejected" as const, error }),
+        ),
+        new Promise<{ kind: "hung" }>((resolve) => setTimeout(() => resolve({ kind: "hung" }), 2000)),
+      ]);
+      assert.equal(outcome.kind, "rejected", "the call settled although the server never answered");
+      assert.equal((outcome as { error: Error & { code?: string } }).error.code, "timeout");
     } finally {
-      client.close();
+      await Promise.race([client.close(), new Promise<void>((resolve) => setTimeout(resolve, 4000))]);
     }
   });
 
@@ -443,14 +467,69 @@ describe("service client", () => {
     }
   });
 
-  it("names a server that does not speak the protocol", async () => {
-    // What a 0.2.2 server does: it prints CLI help, not a frame.
+  it("names stdout that is not the protocol, quoting what it saw", async () => {
+    // A banner or a login message on stdout is not this service. The error quotes
+    // the line (bounded) so the reader can tell a proxy from an old sb.
     const link = spawnLink([NODE, "-e", "console.log('usage: sb <group> <verb>'); process.stdin.resume()"]);
     const client = createServiceClient(link, { timeoutMs: 5000 });
     try {
       await assert.rejects(client.ready(), (error: Error & { code?: string }) => {
-        assert.equal(error.code, "unsupported");
-        assert.match(error.message, /0\.2\.4/);
+        assert.equal(error.code, "peer_noise");
+        assert.match(error.message, /usage: sb <group> <verb>/);
+        return true;
+      });
+    } finally {
+      client.close();
+    }
+  });
+
+  it("names an sb without the verb as not_installed, the way a real 0.2.x sb behaves", async () => {
+    // What an sb without `serve` actually does: usage on stderr, exit 1, nothing on
+    // stdout. The earlier version of this test sent the usage text on stdout, which
+    // no real sb does.
+    const link = spawnLink([
+      NODE,
+      "-e",
+      "process.stderr.write('sb: serve: usage: sb serve --stdio\\n'); process.exit(1);",
+    ]);
+    const client = createServiceClient(link, { timeoutMs: 5000, remoteLabel: "ssh:server" });
+    try {
+      await assert.rejects(client.ready(), (error: Error & { code?: string }) => {
+        assert.equal(error.code, "not_installed");
+        assert.match(error.message, /ssh:server/);
+        assert.match(error.message, /no `sb serve --stdio`/);
+        assert.match(error.message, /release after 0\.2\.4/, "0.2.4 itself has no service");
+        return true;
+      });
+    } finally {
+      client.close();
+    }
+  });
+
+  it("relays a protocol refusal as protocol_mismatch", async () => {
+    // A file, not `-e`: nested quoting through a shell-less spawn is a trap, and the
+    // fake's own source stays readable.
+    const dir = mkdtempSync(join(tmpdir(), "sb-service-skew-"));
+    const file = join(dir, "fake.mjs");
+    writeFileSync(
+      file,
+      [
+        'process.stdin.setEncoding("utf8");',
+        'process.stdin.on("data", (chunk) => {',
+        "  for (const line of chunk.split('\\n').filter(Boolean)) {",
+        "    const request = JSON.parse(line);",
+        "    process.stdout.write(JSON.stringify({ id: request.id, ok: false, error: { code: 'unsupported', message: 'protocol 9 is not supported by this server (it speaks 1)' } }) + '\\n');",
+        "  }",
+        "});",
+        "setInterval(() => {}, 1000);",
+      ].join("\n"),
+    );
+    const link = spawnLink([NODE, file]);
+    const client = createServiceClient(link, { timeoutMs: 5000, remoteLabel: "ssh:skew" });
+    try {
+      await assert.rejects(client.ready(), (error: Error & { code?: string }) => {
+        assert.equal(error.code, "protocol_mismatch");
+        assert.match(error.message, /ssh:skew/);
         return true;
       });
     } finally {
@@ -642,15 +721,28 @@ describe("audit findings", () => {
     }
   });
 
-  it("has no verb that rewrites an existing journal entry (M1)", async () => {
-    const server = spawnServer(tempDb("norewrite"));
+  it("exposes enrichment, which can only change an entry's semantic layer (M1)", async () => {
+    // The audit's M1 said enrichment rewrites an entry. It does not: the service
+    // updates `semantic_json` and appends an audit event, and the entry's id, issue,
+    // kind and sequence are untouched. Consumers call it, so it stays — with a test
+    // that pins what it can and cannot change.
+    const server = spawnServer(tempDb("enrich"));
     try {
       const hello = await handshake(server);
-      assert.equal(CAPABILITIES.includes("journal.enrichEntry"), false);
-      assert.equal((hello.result?.["capabilities"] as string[]).includes("journal.enrichEntry"), false);
-      server.send({ id: 60, op: "journal.enrichEntry", args: { entryId: "x", semantic: {} } });
+      assert.equal((hello.result?.["capabilities"] as string[]).includes("journal.enrichEntry"), true);
+      server.send({ id: 60, op: "journal.enrichEntry", args: { entryId: "missing", semantic: { summary: "x" } } });
       const refused = await server.next();
-      assert.equal(refused.error?.code, "unknown_op");
+      assert.equal(refused.ok, false);
+      assert.equal(refused.error?.code, "not_found", "an unknown entry is not_found, not internal");
+      // Unknown fields are refused rather than ignored, so a misspelt argument cannot
+      // silently change what was written.
+      server.send({
+        id: 61,
+        op: "journal.enrichEntry",
+        args: { entryId: "missing", semantic: { summary: "x" }, semanticJson: "typo" },
+      });
+      const typo = await server.next();
+      assert.equal(typo.error?.code, "bad_request");
     } finally {
       await server.close();
     }
