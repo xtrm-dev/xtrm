@@ -263,7 +263,11 @@ two-way rule, applied to code instead of commands.
 **Rollout order (the server runs `sb` 0.2.2 today).**
 
 1. Release `packages/substrate` with `sb serve --stdio` and `src/service/`.
-2. Upgrade the server's `sb` to that release and verify the handshake there:
+   `0.2.4` is published and does **not** carry it: the release that does is the
+   next one. Publishing first is still step one, because every later step
+   depends on a version number an operator can install.
+2. Upgrade the store-owning machine's `sb` to that release and verify the
+   handshake there:
    `printf '%s\n' '{"id":0,"op":"hello","args":{"protocol":1}}' | sb serve --stdio`.
 3. Land the consumers — Pi handlers, Claude hooks and MCP server, specialists
    ports (XTRM-691, XTRM-692, SPECIALISTS-4395). Each must treat a failed

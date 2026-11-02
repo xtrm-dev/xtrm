@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sb serve --stdio`, the typed service for in-process consumers (XTRM-690, ADR-008 item 2). Newline-delimited JSON frames on stdout: `hello` first (protocol number, version, sorted capability list), then 48 named operations over issue, gate, store, journal, provenance, resume and authority. Structured operations only — no SQL, exec or query-expression verb, every argument validated, unknown operations refused by name. `authority.record`, `authority.remove` and `authority.list` are the only operations that name the `activations` table, with the columns the shipped specialists SessionStart reader already reads. The client (`createServiceClient`, `spawnLink`, `openSshService`) speaks the same protocol over a child process — `ssh -T … sb serve --stdio` for a server-owned store — and `createLocalService` runs the identical operation table in-process, so a consumer stays local when `substrate.remote` is unset. A server that does not speak the protocol is named as such, not reported as a timeout.
+
+  Rollout order: release this package, upgrade the store-owning machine's `sb`, then land consumers that fall back to local behaviour when the handshake fails.
+
 ---
 
 ## [0.2.4] - 2026-11-02
