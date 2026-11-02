@@ -37,7 +37,14 @@ export const sshTransport: RemoteTransport = {
       stdio: ["pipe", "pipe", "pipe"],
     });
     if (result.error !== undefined && result.error !== null) {
-      return { code: 255, stdout: result.stdout ?? "", stderr: result.error.message };
+      // A timeout is not the same fact as a refused connection: the command may
+      // have run to completion on the server before this side gave up, so the
+      // message says so instead of implying nothing happened.
+      const timedOut = (result.error as NodeJS.ErrnoException).code === "ETIMEDOUT";
+      const detail = timedOut
+        ? `ssh ${request.host} timed out after ${request.timeoutMs ?? 120_000} ms; the command may have run on the server`
+        : result.error.message;
+      return { code: 255, stdout: result.stdout ?? "", stderr: detail };
     }
     return { code: result.status ?? 255, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
   },

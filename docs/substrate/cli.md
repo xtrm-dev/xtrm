@@ -26,8 +26,11 @@ Design and limits: [`../runtime/adr/008-substrate-remote-store-access.md`](../ru
 One argument changes the store, nothing else changes: with
 `SUBSTRATE_REMOTE=ssh:<host>` every command is executed by `sb` on that
 host over ssh, and the local store is never opened. `--db` or
-`SUBSTRATE_DB` keeps the invocation local; `--help`, `--version`,
-`doctor`, `help` and `remote` always answer locally.
+`SUBSTRATE_DB` keeps the invocation local — for the CLI, for the git hooks
+and for `doctor`, which then prints the note that says which store it chose;
+`--help`, `--version`, `doctor`, `help` and `remote` always answer locally.
+An unreadable client config is reported by `doctor` as an error, never
+silently treated as "no remote".
 
 - `sb remote setup ssh:<host> [--server-root <path>] [--refresh]` — verify the
   remote `sb` (version, latency) and resolve which checkout of this

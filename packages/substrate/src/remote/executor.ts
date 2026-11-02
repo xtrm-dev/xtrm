@@ -5,7 +5,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { RemoteError, type RemoteUpload } from "./spec.ts";
-import { clientRepositoryKey, openRemoteSession, resolveMapping, runRemote, type RemoteSession } from "./session.ts";
+import { clientRepositoryKey, openRemoteSession, resolveMapping, runRemote, storedMapping, type RemoteSession } from "./session.ts";
 import type { RemoteTransport } from "./ssh.ts";
 
 export interface ForwardDeps {
@@ -15,6 +15,9 @@ export interface ForwardDeps {
   // Reads the client's stdin for an argument that names it (`--file -`).
   // Injected so a test never depends on the runner's own fd 0.
   readStdin?: () => string;
+  // The caller already decided this invocation is local (an embedded caller's
+  // dbPath, for instance). A string states the reason; null means "decide".
+  localStore?: string | null;
 }
 
 export interface CliOutcome {
@@ -36,15 +39,28 @@ const FORWARDED_ENV = [
   "TZ",
 ];
 
-// Flags whose value is a client-side document. `sb` accepts inline JSON or a
-// path (readJsonArg / readJsonLines), so the decision is made the same way it
-// is made locally: a value that exists as a file here is uploaded, anything
-// else travels unchanged. A hand-maintained flag list drifts against the CLI's
-// `--file <path|->` surface, and the drift is silent: the server reads a
-// different file, or a path of the same name. A `-` value keeps its meaning
-// (stdin) and the bytes travel as the forwarded stdin.
-const JSON_FLAGS = new Set(["contract", "ownership", "context-refs", "mechanical", "semantic", "result", "refs"]);
+// Flags whose value is a client-side document, per command. Scoping matters:
+// `--result` is a `<file|json>` document on `journal append` and an `<a,b>` ref
+// list on `issue close`, so one global set would upload a ref list and hand the
+// server a temp path in place of a ref. Every entry here is one the CLI reads
+// with readJsonArg, and every value is materialised on the server: a file is
+// uploaded, inline JSON is uploaded as its own bytes, and a bare path is
+// refused (the server would resolve a same-named file of its own).
+const EMPTY_FLAGS: ReadonlySet<string> = new Set();
+const DOCUMENT_FLAGS: Record<string, ReadonlySet<string>> = {
+  "issue.create": new Set(["contract"]),
+  "issue.edit": new Set(["contract", "ownership", "context-refs"]),
+  "journal.append": new Set(["mechanical", "semantic", "result", "refs"]),
+  "journal.checkpoint": new Set(["mechanical", "semantic"]),
+};
+
+// Flags whose value is always a path the server must read.
 const FILE_FLAGS = new Set(["file", "edges-file"]);
+
+// An output path is not an input: `sb export project --file` writes the
+// snapshot where the command runs, so in remote mode it would land on the
+// server while the client reports success with no file. Refused, not dropped.
+const OUTPUT_FLAGS: Record<string, ReadonlySet<string>> = { export: new Set(["file"]) };
 
 // Handled locally by design: help/version never open a store, doctor reports
 // this machine's mode, and `remote` configures it.
@@ -71,10 +87,20 @@ export function parseArgv(argv: string[]): ParsedArgv {
   return { group: positionals[0] ?? null, verb: positionals[1] ?? null, positionals };
 }
 
+// An explicit local store is a deliberate local invocation, and it wins over
+// every remote setting: `sb --db X` and `SUBSTRATE_DB=X` mean "this store, on
+// this machine". Hooks and doctor ask the same question through this function,
+// so a hook with SUBSTRATE_DB set can never write to the server.
+export function localStoreRequested(argv: string[], env: NodeJS.ProcessEnv = process.env): string | null {
+  const fromEnv = (env["SUBSTRATE_DB"] ?? "").trim();
+  if (fromEnv !== "") return "SUBSTRATE_DB=" + fromEnv;
+  const flagged = flagValue(argv, "db");
+  if (flagged !== null) return "--db " + flagged;
+  return null;
+}
+
 export function shouldForward(argv: string[], env: NodeJS.ProcessEnv): boolean {
-  // An explicit local store is a deliberate local invocation.
-  if ((env["SUBSTRATE_DB"] ?? "") !== "") return false;
-  if (argv.includes("--db")) return false;
+  if (localStoreRequested(argv, env) !== null) return false;
   if (argv.includes("--help") || argv.includes("--version")) return false;
   const { group } = parseArgv(argv);
   if (group === null) return false;
@@ -96,6 +122,9 @@ export interface PreparedFiles {
 // send the temp path in place of the flag and drop the flag name from the
 // server's argv.
 export function prepareFiles(argv: string[]): PreparedFiles {
+  const { group, command } = commandOf(argv);
+  const documents = DOCUMENT_FLAGS[command] ?? EMPTY_FLAGS;
+  const outputs = (group === null ? EMPTY_FLAGS : OUTPUT_FLAGS[group]) ?? EMPTY_FLAGS;
   const uploads: RemoteUpload[] = [];
   const rewritten: string[] = [];
   let wantsStdin = false;
@@ -104,8 +133,15 @@ export function prepareFiles(argv: string[]): PreparedFiles {
     if (token.startsWith("--")) {
       const eq = token.indexOf("=");
       const flagName = eq === -1 ? token.slice(2) : token.slice(2, eq);
-      if (JSON_FLAGS.has(flagName) || FILE_FLAGS.has(flagName)) {
-        const value = eq === -1 ? (argv[index + 1] ?? "") : token.slice(eq + 1);
+      const value = eq === -1 ? (argv[index + 1] ?? "") : token.slice(eq + 1);
+      if (outputs.has(flagName)) {
+        throw new RemoteError(
+          "unsupported",
+          "--" + flagName + " " + JSON.stringify(value) + " is an output path: the file would be written on the server, not on this machine. " +
+            "Omit --" + flagName + " and read the result from stdout (add --json), or run the command where the server store is local",
+        );
+      }
+      if (documents.has(flagName) || FILE_FLAGS.has(flagName)) {
         rewritten.push("--" + flagName);
         if (eq === -1) index += 1;
         if (value === "-") {
@@ -113,14 +149,10 @@ export function prepareFiles(argv: string[]): PreparedFiles {
           rewritten.push(value);
           continue;
         }
-        if (!existsSync(value)) {
-          // Inline JSON, or a path only the server can resolve: not ours to read.
-          rewritten.push(value);
-          continue;
-        }
         const argvIndex = rewritten.length;
+        const content = documentBytes(flagName, value, documents.has(flagName));
         rewritten.push(value);
-        uploads.push({ argvIndex, content: readLocalFile(flagName, value) });
+        uploads.push({ argvIndex, content });
         continue;
       }
     }
@@ -129,15 +161,40 @@ export function prepareFiles(argv: string[]): PreparedFiles {
   return { argv: rewritten, uploads, wantsStdin };
 }
 
-function readLocalFile(flagName: string, value: string): Buffer {
-  if (value === "" || !existsSync(value)) {
-    throw new RemoteError("unsupported", "--" + flagName + " " + JSON.stringify(value) + ": file not found on this machine");
-  }
-  return readFileSync(value);
+// The bytes to send for a document flag: the file when the value names one, the
+// inline JSON itself otherwise. Inline JSON travels as an uploaded file too, so
+// it never appears in the server's process list and reaches the server byte for
+// byte. A bare path that is not a file here is refused, never forwarded.
+function documentBytes(flagName: string, value: string, inlineAllowed: boolean): Buffer {
+  if (value !== "" && existsSync(value)) return readFileSync(value);
+  if (inlineAllowed && /^\s*[[{]/.test(value)) return Buffer.from(value);
+  throw new RemoteError(
+    "unsupported",
+    inlineAllowed
+      ? "--" + flagName + " " + JSON.stringify(value) + ": not a file on this machine and not inline JSON. sb remote uploads the document from here"
+      : "--" + flagName + " " + JSON.stringify(value) + ": file not found on this machine (sb remote does not accept a server-side path)",
+  );
 }
 
 function hasFlag(argv: string[], name: string): boolean {
   return argv.some((token) => token === "--" + name || token.startsWith("--" + name + "="));
+}
+
+// Both spellings of a value flag, so `--db=X` is not mistaken for an ordinary
+// token the way `argv.includes("--db")` mistook it.
+function flagValue(argv: string[], name: string): string | null {
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index]!;
+    if (token === "--" + name) return argv[index + 1] ?? "";
+    if (token.startsWith("--" + name + "=")) return token.slice(name.length + 3);
+  }
+  return null;
+}
+
+function commandOf(argv: string[]): { group: string | null; command: string } {
+  const { group, verb } = parseArgv(argv);
+  if (group === null) return { group, command: "" };
+  return { group, command: verb === null ? group : group + "." + verb };
 }
 
 function forwardedEnv(env: NodeJS.ProcessEnv, argv: string[], projectId: string | null): Record<string, string | undefined> {
@@ -156,6 +213,8 @@ function forwardedEnv(env: NodeJS.ProcessEnv, argv: string[], projectId: string 
 
 export function forwardCli(argv: string[], deps: ForwardDeps = {}): CliOutcome | null {
   const env = deps.env ?? process.env;
+  const localStore = deps.localStore === undefined ? localStoreRequested(argv, env) : deps.localStore;
+  if (localStore !== null) return null;
   if (!shouldForward(argv, env)) return null;
   const schema = deps.schema ?? "substrate-cli/v1";
   let session: RemoteSession | null;
@@ -166,19 +225,33 @@ export function forwardCli(argv: string[], deps: ForwardDeps = {}): CliOutcome |
   }
   if (session === null) return null;
   try {
+    const prepared = prepareFiles(argv);
+    // An explicit --project names the project itself, so it needs no checkout
+    // here to resolve one: the server checkout is then only a working
+    // directory, and not being inside one is not a mapping failure.
+    const explicitProject = hasFlag(prepared.argv, "project");
     const repositoryKey = clientRepositoryKey();
-    if (repositoryKey === null) {
+    let cwd: string | null = null;
+    let projectId: string | null = null;
+    if (repositoryKey !== null) {
+      try {
+        const mapping = resolveMapping(session, repositoryKey);
+        cwd = mapping.root;
+        projectId = mapping.projectId;
+      } catch (err) {
+        if (!explicitProject) throw err;
+        cwd = storedMapping(session, repositoryKey)?.root ?? null;
+      }
+    } else if (!explicitProject) {
       throw new RemoteError(
         "mapping",
         "substrate.remote=" + session.config.remote + ": not inside a Git checkout, so no server checkout can be verified. " +
-          "Run sb from a checkout of the repository, or run it on " + session.spec.host,
+          "Run sb from a checkout of the repository, pass --project to name the project explicitly, or run it on " + session.spec.host,
       );
     }
-    const mapping = resolveMapping(session, repositoryKey);
-    const prepared = prepareFiles(argv);
     const result = runRemote(session, prepared.argv, {
-      cwd: mapping.root,
-      env: forwardedEnv(env, prepared.argv, mapping.projectId),
+      cwd,
+      env: forwardedEnv(env, prepared.argv, projectId),
       uploads: prepared.uploads,
       stdin: prepared.wantsStdin ? (deps.readStdin ?? (() => readFileSync(0, "utf8")))() : null,
     });

@@ -12,6 +12,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { attachTrailers, formatTrailers } from "../src/domain/provenance.ts";
 import { selectRemote } from "../src/remote/config.ts";
+import { localStoreRequested } from "../src/remote/executor.ts";
 import {
   clientRepositoryKey,
   openRemoteSession,
@@ -29,9 +30,13 @@ function warn(err: unknown): void {
   process.stderr.write(`xtrm: remote: ${message.split(" (candidates: ")[0]!.trim()}\n`);
 }
 
-// Malformed configuration is also "not local": writing to the stale local store
-// would be worse than doing nothing.
+// A hook has no argv, but it has the environment, and an explicit local store
+// wins over every remote setting there too: without this, `SUBSTRATE_DB=X git
+// commit` would bind the commit on the server while the caller asked for X.
 export function remoteHookMode(): boolean {
+  if (localStoreRequested([], process.env) !== null) return false;
+  // Malformed configuration is also "not local": writing to the stale local
+  // store would be worse than doing nothing.
   try {
     return selectRemote() !== null;
   } catch (err) {
@@ -39,6 +44,11 @@ export function remoteHookMode(): boolean {
     return true;
   }
 }
+
+// A hook runs inside `git commit`, so its network budget is a fraction of the
+// CLI's 120 s default: past this, reporting the miss is better than holding the
+// commit. The server may still have applied the write; the warning says so.
+export const HOOK_TIMEOUT_MS = 15_000;
 
 function discoverIssueRef(repoRoot: string): string | null {
   const env = process.env["SUBSTRATE_ISSUE_REF"]?.trim() || process.env["SUBSTRATE_ISSUE"]?.trim();
@@ -77,7 +87,7 @@ interface TraceBinding {
 // path it was handed at dispatch or its own checkout, so both are accepted;
 // anything else stays unresolved rather than guessing.
 function openReceiptId(session: RemoteSession, serverRoot: string, ref: string, clientRoot: string): string | null {
-  const data = (runRemoteJson(session, ["provenance", "trace", ref], { cwd: serverRoot })) as {
+  const data = (runRemoteJson(session, ["provenance", "trace", ref], { cwd: serverRoot, timeoutMs: HOOK_TIMEOUT_MS })) as {
     receipts?: TraceReceipt[];
     bindings?: TraceBinding[];
   };
@@ -108,7 +118,7 @@ export function remotePostCommit(repoRoot: string): void {
       warn("cannot resolve HEAD SHA");
       return;
     }
-    const result = runRemote(session, ["provenance", "bind", receiptId, sha], { cwd: mapping.root });
+    const result = runRemote(session, ["provenance", "bind", receiptId, sha], { cwd: mapping.root, timeoutMs: HOOK_TIMEOUT_MS });
     if (result.code !== 0) warn(result.stderr.trim() || "provenance bind failed");
   } catch (err) {
     warn(err);
@@ -124,7 +134,7 @@ export function remotePrepareCommitMsg(messageFile: string): void {
     const repositoryKey = clientRepositoryKey();
     if (repositoryKey === null) return;
     const mapping = resolveMapping(session, repositoryKey);
-    const data = (runRemoteJson(session, ["provenance", "receipt", receiptId], { cwd: mapping.root })) as {
+    const data = (runRemoteJson(session, ["provenance", "receipt", receiptId], { cwd: mapping.root, timeoutMs: HOOK_TIMEOUT_MS })) as {
       receipt?: { id?: string; issueId?: string; issueRevision?: number };
     };
     const receipt = data.receipt;

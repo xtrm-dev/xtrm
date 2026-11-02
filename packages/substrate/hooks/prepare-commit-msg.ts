@@ -29,13 +29,16 @@ function dbPath(): string {
 armPipeDrain();
 const messageFile = process.argv[2];
 if (!messageFile) process.exit(0);
+// No receipt means nothing to attach, in either mode: the check comes before
+// the mode decision so a remote checkout with no active execution pays no ssh
+// round trip on every commit, and a quiet exit stays a quiet exit.
 const receiptId = process.env["XTRM_RECEIPT_ID"];
-if (!receiptId && !remoteHookMode()) process.exit(0);
+if (!receiptId) process.exit(0);
 
 if (remoteHookMode()) {
   remotePrepareCommitMsg(messageFile);
 } else {
-  localPrepareCommitMsg(messageFile, receiptId!);
+  localPrepareCommitMsg(messageFile, receiptId);
 }
 
 function localPrepareCommitMsg(file: string, receipt: string): void {

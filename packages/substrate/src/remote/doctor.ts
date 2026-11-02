@@ -34,12 +34,17 @@ export interface RemoteDoctorReport {
   checkout: { root: string; projectId: string | null; cached: boolean } | null;
   capabilities: RemoteCapabilities;
   error: string | null;
+  // Why remote mode was not consulted for this invocation (an explicit local
+  // store), so `sb doctor` names the reason instead of looking unconfigured.
+  note: string | null;
 }
 
 export interface RemoteDoctorDeps {
   transport?: RemoteTransport;
   env?: NodeJS.ProcessEnv;
   clientVersion?: string | null;
+  // `--db` or SUBSTRATE_DB on this invocation: the local store is deliberate.
+  localStore?: string | null;
 }
 
 // Verified against a live server, not assumed. sb 0.2.2 rejects
@@ -90,7 +95,16 @@ export function remoteDoctor(deps: RemoteDoctorDeps = {}): RemoteDoctorReport {
     checkout: null,
     capabilities: capabilitiesFor(null),
     error: null,
+    note: null,
   };
+
+  // An explicit local store outranks every remote setting, including a
+  // malformed config file: the operator asked for this store on this machine,
+  // and reading the remote config would only fail the invocation.
+  if (deps.localStore !== undefined && deps.localStore !== null) {
+    report.note = deps.localStore + " selects the local store, so remote mode is not consulted for this invocation";
+    return report;
+  }
 
   let session: RemoteSession | null;
   try {

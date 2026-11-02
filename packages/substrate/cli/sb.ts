@@ -24,7 +24,7 @@ import { assertSchemaHealthy } from "../src/store/migrations/runner.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { RepositoryService } from "../src/service/repository-service.ts";
 import { discoverGitRoot, discoverRepository, type RepositoryDiscovery } from "../src/domain/repository-discovery.ts";
-import { forwardCli } from "../src/remote/executor.ts";
+import { forwardCli, localStoreRequested } from "../src/remote/executor.ts";
 import type { RemoteTransport } from "../src/remote/ssh.ts";
 import { remoteDoctor, type RemoteDoctorReport } from "../src/remote/doctor.ts";
 import { renderRemoteDoctor, renderRemoteSetup, renderRemoteStatus } from "../src/remote/render.ts";
@@ -801,9 +801,13 @@ function runRemoteDoctor(ctx: Ctx, report: RemoteDoctorReport): CliResult {
       stderr: "",
     };
   }
+  const heading =
+    report.mode === "ssh"
+      ? "sb doctor: remote (no local store is opened in remote mode)\n"
+      : "sb doctor: local\n";
   return {
     code: ok ? 0 : 1,
-    stdout: "sb doctor: remote (no local store is opened in remote mode)\n" + renderRemoteDoctor(report),
+    stdout: heading + renderRemoteDoctor(report),
     stderr: ok ? "" : `sb: doctor: ${report.error}\n`,
   };
 }
@@ -1080,13 +1084,15 @@ function assertKnownFlags(flags: Flags, command: string): void {
   }
 }
 
-export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.ProcessEnv; transport?: RemoteTransport }): CliResult {
+export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.ProcessEnv; transport?: RemoteTransport; readStdin?: () => string }): CliResult {
   // env/transport are injection seams for tests and embedding; production
   // callers pass neither.
   const remoteDeps = { env: opts?.env ?? process.env, transport: opts?.transport };
   const { flags, positionals } = parseArgs(argv);
   const ctx: Ctx = {
-    dbPath: flag(flags, "db") ?? opts?.dbPath ?? process.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db"),
+    // The injected env is authoritative here, exactly as it is for the remote
+    // decision: a caller that passes env expects that env's store.
+    dbPath: flag(flags, "db") ?? opts?.dbPath ?? remoteDeps.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db"),
     json: flags.has("json"),
   };
   const [group, verb, ...rest] = positionals;
@@ -1097,16 +1103,33 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
   // Remote mode (ADR-008): the invocation runs on the server, and this is
   // decided before the local store is opened, so a stale local database can
   // never absorb a remote-mode write.
-  const forwarded = forwardCli(argv, remoteDeps);
+  // One decision for every remote consumer in this process: an explicit local
+  // store (the caller's dbPath, --db, or SUBSTRATE_DB) outranks remote mode.
+  const localStore = opts?.dbPath !== undefined ? "--db " + opts.dbPath + " (caller)" : localStoreRequested(argv, remoteDeps.env);
+  const forwarded = forwardCli(argv, { ...remoteDeps, readStdin: opts?.readStdin, localStore });
   if (forwarded !== null) return forwarded;
   let db: ReturnType<typeof openSubstrate> | null = null;
   try {
     if (group === "doctor") {
       assertKnownFlags(flags, "doctor");
       if (verb !== undefined) throw new Error("usage: sb doctor [--db PATH] [--json] (doctor takes no verbs)");
-      const remote = remoteDoctor({ clientVersion: cliVersion(), env: remoteDeps.env, transport: remoteDeps.transport });
-      if (remote.mode === "ssh") return runRemoteDoctor(ctx, remote);
-      return runDoctor(ctx);
+      const remote = remoteDoctor({
+        clientVersion: cliVersion(),
+        env: remoteDeps.env,
+        transport: remoteDeps.transport,
+        localStore,
+      });
+      // A configured-but-corrupt remote is an error to report, not a silent
+      // fallback to the local store.
+      if (remote.mode === "ssh" || remote.error !== null) return runRemoteDoctor(ctx, remote);
+      const local = runDoctor(ctx);
+      // A deliberate local override still prints the local report, and says why
+      // remote mode was not consulted. In --json mode the envelope is machine
+      // output and the note goes to stderr instead of corrupting it.
+      if (remote.note === null) return local;
+      return ctx.json
+        ? { ...local, stderr: local.stderr + `note: ${remote.note}\n` }
+        : { ...local, stdout: local.stdout + `note: ${remote.note}\n` };
     }
     if (group === "remote") return runRemoteGroup(ctx, verb, flags, rest, remoteDeps);
     if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|import|export|remote> <verb> [args...]");

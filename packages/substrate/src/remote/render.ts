@@ -27,11 +27,14 @@ export function renderRemoteSetup(result: RemoteSetupResult, configPath: string)
 
 export function renderRemoteStatus(report: RemoteDoctorReport): string {
   if (report.mode === "local") {
-    return [
+    const lines = [
       "sb remote: local (no remote configured)",
       `config: ${report.configPath}`,
       "configure with: sb remote setup ssh:<host>",
-    ].join("\n") + "\n";
+    ];
+    if (report.note !== null) lines.push(`note: ${report.note}`);
+    if (report.error !== null) lines.push(`error: ${report.error}`);
+    return lines.join("\n") + "\n";
   }
   const lines = [
     `sb remote: ${report.remote} (config: ${report.configPath})`,
@@ -43,6 +46,7 @@ export function renderRemoteStatus(report: RemoteDoctorReport): string {
       ? "server checkout: (not mapped)"
       : `server checkout: ${report.checkout.root}${report.checkout.projectId === null ? "" : ` (project ${report.checkout.projectId})`}${report.checkout.cached ? " [cached]" : ""}`,
   ];
+  if (report.note !== null) lines.push(`note: ${report.note}`);
   if (report.error !== null) lines.push(`error: ${report.error}`);
   lines.push("capabilities:");
   for (const [name, text] of Object.entries(report.capabilities)) lines.push(`  ${name}: ${text}`);

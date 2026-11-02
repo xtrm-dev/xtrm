@@ -79,7 +79,7 @@ Measured against the live server (`ssh server`, `zsh -lic 'command -v sb'` → `
 
 | Capability | 0.2.2 | 0.2.3 (this repo) |
 |---|---|---|
-| `SUBSTRATE_HOLDER` → recorded `participantId` | read as ambient identity (`dist/src/domain/execution-context.js`, `currentExecutionContext` → `ambientIdentityFallback`); **a forwarded write preserves the participant** (verified: `sb issue note XTRM-685` with the holder exported recorded journal seq 7 with that participant) | same, plus explicit `--participant` |
+| `SUBSTRATE_HOLDER` → recorded `participantId` | read as ambient identity (`dist/src/domain/execution-context.js`, `currentExecutionContext` → `ambientIdentityFallback`); **a forwarded write preserves the participant** (verified through the transport, not the shell: `sb issue note XTRM-685` recorded journal seq 9 and `sb journal append XTRM-685 --mechanical <file>` seq 10, both with `participantId: core-xt-pi-6vnw`; a throwaway probe issue recorded the same holder on its claim, note, append and close) | same, plus explicit `--participant` |
 | `journal append --participant` | rejected (`unknown flag --participant`) | accepted |
 | `journal checkpoint --workspace` | accepted | accepted |
 | `provenance dispatch --participant --workspace` | accepted | accepted |
@@ -115,7 +115,10 @@ Non-interactive `ssh` does not find `sb` (verified empty for `command -v sb`; `s
 
 `SUBSTRATE_HOLDER`, `SUBSTRATE_ISSUE_REF`, `SUBSTRATE_ISSUE`, `SUBSTRATE_ACTIVATION_ID`, `XTRM_SESSION_ID`, `XTRM_SESSION_NAME`, `SUBSTRATE_PROJECT`, `LANG`, `TZ`.
 
-`SUBSTRATE_DB` is never forwarded: when it is set, the invocation is local by definition. A Journal append executed through the transport must record `SUBSTRATE_HOLDER` as its participant, which is how worker identity survives the hop.
+`SUBSTRATE_DB` is never forwarded, because an explicit local store makes the invocation local by definition.
+
+### An explicit local store outranks remote everywhere
+`--db <path>`, `--db=<path>` and `SUBSTRATE_DB` each select the local store for every consumer in the process: the CLI, the three git hooks, `sb doctor`, and embedded callers that pass their own `dbPath`. A hook with `SUBSTRATE_DB` set writes to that database and never opens an ssh connection — the failure this rule closes is the opposite one, where a hook inherited a remote setting and bound a commit on the server while the caller had named a local store. `sb doctor` reports which store was chosen and why (`note: SUBSTRATE_DB=… selects the local store`), and an unreadable remote configuration is reported as an error instead of silently degrading to local mode. A Journal write executed through the transport records `SUBSTRATE_HOLDER` as its participant, which is how worker identity survives the hop.
 
 ### Path mapping (cwd, workspaces, files)
 - The client resolves its `repositoryKey` from the Git origin URL (`src/domain/repository-discovery.ts`, `deriveRepositoryIdentity`), which is identical on both machines for the same repository.
@@ -123,10 +126,12 @@ Non-interactive `ssh` does not find `sb` (verified empty for `command -v sb`; `s
 - Worktrees map to their repository, not to their own toplevel: the client sends the client's repository-relative subdirectory, resolved against the mapped server root.
 - No mapping, or more than one match → fail closed, naming the remote host and the remedy (`--server-root` for an ambiguous case, `sb remote setup` after cloning there). Never fall back to a bash-identical path guess.
 - `--project` is portable and passes through; when the caller did not pass it, the client injects the project it already resolved from the mapping.
-- **Workspace identity stays the client path** where the server can record it. Journal entries and execution bindings record the worktree the operator edits in (`journal-service.ts:471`, `execution-binding.ts:26`). On `sb 0.2.2` only `provenance dispatch` and `journal checkpoint` accept the explicit `--workspace`/`--participant`; `journal append` does not, so an append issued through the transport records no participant until the server is 0.2.3. The rule is unchanged, the coverage is partial, and `sb doctor` states which case applies.
+- **Workspace identity stays the client path** where the server can record it. Journal entries and execution bindings record the worktree the operator edits in (`journal-service.ts:471`, `execution-binding.ts:26`). On `sb 0.2.2` only `provenance dispatch` and `journal checkpoint` accept the explicit `--workspace` flag; `journal append` does not, so an append issued through the transport records the ambient holder but no explicit workspace. The rule is unchanged, the coverage is partial, and `sb doctor` states which case applies.
 
 ### Local-file arguments
-`--contract <file>` names a PC path. Two acceptable outcomes: stream the file to a remote temp path and rewrite the argument, or fail closed with a message that names the flag and the file. Silent reading of a different server file is a defect. `--file` in the write direction (e.g. `export --file`) is not supported in Stage 2: fail closed and name the follow-up.
+A document argument (`--contract`, `--mechanical`, `--semantic`, `--result`, `--refs`, `--ownership`, `--context-refs`, `journal checkpoint` documents, `import --file`/`--edges-file`) may name a PC file or carry inline JSON. Both are streamed to a remote temp path and the argument is rewritten; a value that is neither an existing local file nor parseable inline JSON fails closed, naming the flag and the value, because silently reading a same-named file on the server is a defect. An argument naming stdin (`--file -`) forwards the client's stdin.
+
+`--file` in the **write** direction is the opposite case: `sb export project --file <path>` writes on the machine the command runs on, so the transport refuses it rather than leaving the operator with an exit code and no file. Downloading the export is a follow-up; refusing is the Stage 2 answer.
 
 ### stdout
 Machine-clean. `--json` output is byte-identical to the same invocation run locally on the server; no shell banner, no progress line, no rewritten payload. Transport metadata appears only in `sb doctor`.
