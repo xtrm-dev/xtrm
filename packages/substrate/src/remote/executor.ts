@@ -91,7 +91,29 @@ export const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
 // Directories whose contents are secrets or kernel state, never documents: an
 // ssh key or a credentials file must not become a Journal entry because a caller
 // passed its path (review H1).
-const DENIED_ROOTS = [join(homedir(), ".ssh"), join(homedir(), ".secrets"), join(homedir(), ".gnupg"), "/proc", "/sys", "/dev"];
+const DENIED_SUFFIXES = [".ssh", ".secrets", ".gnupg", ".aws", ".docker", ".kube", join(".config", "gh")];
+const DENIED_FILES = [".netrc", ".npmrc"];
+const DENIED_ABSOLUTE = ["/proc", "/sys", "/dev"];
+
+function realpathSafe(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+// Resolved at check time, not at import time: `$HOME` may itself be a symlink,
+// and an unresolved root would let `~/link-to-secrets/key` through. This is a
+// guard against accidents, not a security boundary (ADR-008).
+function deniedRoots(): string[] {
+  const home = realpathSafe(homedir());
+  return [
+    ...DENIED_SUFFIXES.map((suffix) => join(home, suffix)),
+    ...DENIED_FILES.map((name) => join(home, name)),
+    ...DENIED_ABSOLUTE,
+  ];
+}
 
 export interface ParsedArgv {
   group: string | null;
@@ -257,14 +279,23 @@ function readInputFile(flagName: string, value: string): Buffer {
   }
   if (info.isSymbolicLink()) throw unsupported("--" + flagName + " " + JSON.stringify(value) + ": refusing a symlink; pass the file it points at");
   if (!info.isFile()) throw unsupported("--" + flagName + " " + JSON.stringify(value) + ": not a regular file");
+  // A hard link to a key passes every path check, because the link lives
+  // elsewhere. Refusing extra links closes the accidental form; a link made by
+  // an adversary is outside what a denylist can promise (ADR-008).
+  if (info.nlink > 1) {
+    throw unsupported(
+      "--" + flagName + " " + JSON.stringify(value) + ": has " + info.nlink + " hard links; pass a file with a single link",
+    );
+  }
   if (info.size > MAX_DOCUMENT_BYTES) {
     throw unsupported(
       "--" + flagName + " " + JSON.stringify(value) + ": " + info.size + " bytes, above the " + MAX_DOCUMENT_BYTES + "-byte limit",
     );
   }
   const real = realpathSync(absolute);
-  for (const denied of DENIED_ROOTS) {
-    if (real === denied || real.startsWith(denied + sep)) {
+  for (const denied of deniedRoots()) {
+    const root = realpathSafe(denied);
+    if (real === root || real.startsWith(root + sep)) {
       throw unsupported("--" + flagName + " " + JSON.stringify(value) + ": " + denied + " holds secrets or kernel state, never a Substrate document");
     }
   }

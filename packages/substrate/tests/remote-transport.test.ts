@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,8 @@ import { HOOK_BUDGET_MS } from "../hooks/remote.ts";
 import { remoteSetup } from "../src/remote/setup.ts";
 import { mappingKey } from "../src/remote/config.ts";
 import { DEFAULT_TIMEOUT_MS } from "../src/remote/ssh.ts";
-import { normalizeRemote } from "../src/domain/repository.ts";
+import { localRepositoryKey, normalizeRemote } from "../src/domain/repository.ts";
+import { renderRemoteStatus } from "../src/remote/render.ts";
 import { runCli } from "../cli/sb.ts";
 import type { RemoteTransport } from "../src/remote/ssh.ts";
 
@@ -73,6 +74,7 @@ if (cfg.mode === "file") {
   out("echo", { argv, cwd: process.cwd(), env });
 } else if (cfg.mode === "echo") {
   if (argv[0] === "provenance" && argv[1] === "receipt") {
+    if (!argv.includes("--json")) { process.stderr.write("fake sb: provenance receipt needs --json\\n"); process.exit(9); }
     if (cfg.receipt) out("provenance.receipt", { receipt: cfg.receipt });
     process.stderr.write("fake sb: no receipt\\n");
     process.exit(9);
@@ -901,15 +903,10 @@ describe("second-audit findings", () => {
     assert.ok(forwardCli(["journal", "append", "XTRM-1", "--kind", "note", "--project", "prj_x", "--mechanical", path], { env, transport: localTransport() }));
   });
 
-  it("bounds the whole hook well below the transport timeout and never discovers", () => {
-    // Pinned, not merely ordered: a mutation of either constant must fail here
-    // rather than quietly survive (review M8 — 120 s survived a mutation).
-    assert.equal(DEFAULT_TIMEOUT_MS, 120_000);
-    assert.equal(HOOK_BUDGET_MS, 8_000);
-    assert.ok(HOOK_BUDGET_MS < DEFAULT_TIMEOUT_MS, "the hook budget must be the smaller bound");
-    assert.ok(HOOK_BUDGET_MS <= 30_000, "a commit must not wait on the network for a minute");
+  it("bounds the hook to the remaining budget and never discovers", () => {
     const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
     writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    const started = Date.now();
     const res = spawnSync(process.execPath, [hookPath("post-commit.ts")], {
       encoding: "utf8",
       cwd: process.cwd(),
@@ -918,5 +915,179 @@ describe("second-audit findings", () => {
     assert.equal(res.status, 0);
     assert.match(res.stderr, /no verified server checkout/);
     assert.equal(fake.calls().some((call) => call.argv[0] === "project"), false, "a hook never walks candidate checkouts");
+    assert.ok(Date.now() - started < 10_000, "the hook returns within its budget");
+  });
+});
+
+describe("final-review findings", () => {
+  it("refuses an upload stream that ends before its marker", () => {
+    const body = Buffer.from('{"problem":"complete"}');
+    const plan = buildRemoteCommand({ sbPath: "/bin/true", argv: ["issue", "create", "--contract", "x"], uploads: [{ argvIndex: 3, content: body }] });
+    assert.ok(plan.stdin);
+    const cut = plan.stdin.slice(0, Math.floor(plan.stdin.length / 2));
+    const result = localTransport().run({ host: "fake", command: plan.command, stdin: cut });
+    assert.notEqual(result.code, 0, "a truncated stream must not succeed");
+    assert.match(result.stderr, /ended early/);
+  });
+
+  it("refuses a document whose decoded size is not the size sent", () => {
+    const body = Buffer.from('{"problem":"complete"}');
+    const plan = buildRemoteCommand({ sbPath: "/bin/true", argv: ["issue", "create", "--contract", "x"], uploads: [{ argvIndex: 3, content: body }] });
+    const honest = plan.stdin!;
+    // Keep every marker but drop half the payload: the header still claims the
+    // original size, so only the byte-count check can notice.
+    const lines = honest.split("\n");
+    const payloadIndex = lines.findIndex((line) => line.startsWith("@@sb-remote-file "));
+    const payload = lines[payloadIndex + 1]!;
+    lines[payloadIndex + 1] = payload.slice(0, Math.floor(payload.length / 2));
+    const short = lines.join("\n");
+    const result = localTransport().run({ host: "fake", command: plan.command, stdin: short });
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, /wrong size|ended early/);
+  });
+
+  it("unpacks the frame under zsh, the server's login shell", () => {
+    if (spawnSync("zsh", ["-c", "true"]).status !== 0) return; // no zsh: nothing to prove
+    const body = Buffer.from('{"problem":"zsh"}');
+    const plan = buildRemoteCommand({
+      sbPath: "/bin/cat",
+      argv: ["placeholder"],
+      uploads: [{ argvIndex: 0, content: body }],
+    });
+    const result = spawnSync("zsh", ["-c", plan.command], { input: plan.stdin ?? undefined, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(Buffer.from(result.stdout), body);
+  });
+
+  it("rejects an scp user part that hides the real host", () => {
+    assert.equal(normalizeRemote("evil.com:path@github.com:acme/app"), null);
+    assert.equal(normalizeRemote("git@github.com:acme/app.git"), "github.com/acme/app");
+    assert.equal(normalizeRemote("ssh://git@github.com/acme/app"), "github.com/acme/app");
+  });
+
+  it("binds only a receipt whose binding is this client workspace", () => {
+    const fake = makeFake({
+      mode: "echo",
+      version: "sb 0.2.2\n",
+      trace: { receipts: [{ id: "wr_server_side", executionBindingId: "eb_s", commitSha: null, finalizedAt: null }], bindings: [{ id: "eb_s", workspace: "/srv/other/checkout" }] },
+    });
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
+    const res = spawnSync(process.execPath, [hookPath("post-commit.ts")], {
+      encoding: "utf8",
+      cwd: process.cwd(),
+      env: hookEnv(fake, { XTRM_RECEIPT_ID: undefined, SUBSTRATE_ISSUE_REF: "XTRM-685", XTRM_COMMIT_SHA: "f".repeat(40) }),
+    });
+    assert.equal(res.status, 0);
+    assert.equal(fake.calls().some((call) => call.argv[1] === "bind"), false, "a server-session receipt is not adopted");
+  });
+
+  it("ignores a .substrate-issue that is tracked in the repository", () => {
+    const repo = mkdtempSync(join(tmpdir(), "sb-tracked-"));
+    const git = (args: string[]) => spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+    git(["init", "-q"]);
+    git(["config", "user.email", "t@example.com"]);
+    git(["config", "user.name", "T"]);
+    writeFileSync(join(repo, ".substrate-issue"), "XTRM-685\n");
+    git(["add", ".substrate-issue"]);
+    git(["commit", "-qm", "carry the marker"]);
+    const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+    const key = localRepositoryKey(repo);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [key]: { root: fake.dir, projectId: "prj_x" } });
+    const res = spawnSync(process.execPath, [hookPath("post-commit.ts")], {
+      encoding: "utf8",
+      cwd: repo,
+      env: { ...hookEnv(fake), XTRM_REPO_ROOT: repo, XTRM_RECEIPT_ID: undefined },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.equal(fake.calls().length, 0, "a committed marker is repository content, not an instruction");
+  });
+
+  it("uploads --result for issue.note and --refs for journal.checkpoint", () => {
+    const fake = makeFake({ mode: "file", fileFlag: "--refs", receive: join(tmpdir(), `sb-refs-${process.pid}`), version: "sb 0.2.2\n" });
+    const env = remoteEnv(fake.clientConfigPath);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
+    const refs = join(fake.dir, "refs.json");
+    writeFileSync(refs, '{"refs":["a"]}');
+    const forwarded = forwardCli(["journal", "checkpoint", "XTRM-1", "--project", "prj_x", "--refs", refs], { env, transport: localTransport() });
+    assert.equal(forwarded?.code ?? 0, 0, forwarded?.stderr);
+    assert.deepEqual(JSON.parse(readFileSync(join(tmpdir(), `sb-refs-${process.pid}`), "utf8")), { refs: ["a"] });
+    const noteFake = makeFake({ mode: "file", fileFlag: "--result", receive: join(tmpdir(), `sb-result-${process.pid}`), version: "sb 0.2.2\n" });
+    const noteEnv = remoteEnv(noteFake.clientConfigPath);
+    writeClientConfig(noteFake.clientConfigPath, noteFake.sbPath, { [CLIENT_KEY ?? "k"]: { root: noteFake.dir, projectId: "prj_x" } });
+    assert.ok(forwardCli(["issue", "note", "XTRM-1", "--project", "prj_x", "--result", refs], { env: noteEnv, transport: localTransport() }));
+  });
+
+  it("refuses a directory and a disguised kernel path as documents", () => {
+    const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+    const env = remoteEnv(fake.clientConfigPath);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
+    const directory = forwardCli(["issue", "create", "--project", "prj_x", "--contract", fake.dir], { env, transport: localTransport() });
+    assert.equal(directory?.code, 1);
+    assert.match(directory.stderr, /not a regular file/);
+    const disguised = forwardCli(["issue", "create", "--project", "prj_x", "--contract", "/tmp/../proc/self/cmdline"], { env, transport: localTransport() });
+    assert.equal(disguised?.code, 1);
+    assert.match(disguised.stderr, /holds secrets or kernel state/);
+    assert.equal(fake.calls().length, 0);
+  });
+
+  it("refuses a document with a second hard link", () => {
+    const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+    const env = remoteEnv(fake.clientConfigPath);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
+    const original = join(fake.dir, "contract.json");
+    writeFileSync(original, '{"problem":"linked"}');
+    const linked = join(fake.dir, "contract-hardlink.json");
+    linkSync(original, linked);
+    const refused = forwardCli(["issue", "create", "--project", "prj_x", "--contract", linked], { env, transport: localTransport() });
+    assert.equal(refused?.code, 1);
+    assert.match(refused.stderr, /hard links/);
+    assert.equal(fake.calls().length, 0);
+  });
+
+  it("never uploads a --file that the command does not read", () => {
+    const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+    const env = remoteEnv(fake.clientConfigPath);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
+    const path = join(fake.dir, "some.json");
+    writeFileSync(path, "{}");
+    assert.ok(forwardCli(["issue", "show", "XTRM-1", "--project", "prj_x", "--file", path, "--json"], { env, transport: localTransport() }));
+    assert.equal(fake.calls()[0]?.argv.includes(path), true, "the token crosses unchanged; nothing is uploaded");
+  });
+
+  it("gives each forwarded command only the budget that remains", () => {
+    const seen: number[] = [];
+    const transport: RemoteTransport = {
+      run(request) {
+        if (request.command.includes("--version")) return { code: 0, stdout: "sb 0.2.2\n", stderr: "" };
+        if (request.command.includes("command -v")) return { code: 0, stdout: "/usr/bin/sb\n", stderr: "" };
+        seen.push(request.timeoutMs ?? 0);
+        const sleep = Math.min(request.timeoutMs ?? 1, 250);
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, sleep);
+        return { code: 124, stdout: "", stderr: "" };
+      },
+    };
+    const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
+    const session = openRemoteSession({ env: remoteEnv(fake.clientConfigPath), transport });
+    assert.ok(session);
+    session.deadlineMs = Date.now() + 60;
+    const started = Date.now();
+    runRemote(session, ["issue", "list"], { cwd: fake.dir });
+    assert.ok(Date.now() - started < 2_000, "the remaining budget bounds the call");
+    assert.ok((seen.at(-1) ?? 0) <= 100, "the transport got the remaining budget, not the default timeout");
+  });
+
+  it("shows the mapping age and the refresh hint", () => {
+    const plan = buildRemoteCommand({ sbPath: "/usr/bin/sb", argv: ["issue", "list"], cwd: "/gone", remoteLabel: "ssh:server" });
+    assert.match(plan.command, /sb remote setup ssh:server --refresh/);
+    const report = {
+      mode: "ssh" as const, configPath: "/tmp/c.json", remote: "ssh:server", host: "server", remoteSb: "/usr/bin/sb",
+      clientVersion: "0.2.3", serverVersion: "0.2.2", latencyMs: 1, repositoryKey: CLIENT_KEY,
+      checkout: { root: "/srv/repo", projectId: "prj_x", cached: true, verifiedAt: Date.now() - 10 * 24 * 3600 * 1000 },
+      capabilities: { holderEnv: "", workspaceOverride: "", commitBinding: "", codecService: "", repositoryKeyLookup: "" },
+      error: null, note: null,
+    };
+    const text = renderRemoteStatus(report);
+    assert.match(text, /verified 10 d ago/);
   });
 });

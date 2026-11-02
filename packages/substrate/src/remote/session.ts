@@ -86,7 +86,7 @@ function timeoutFor(session: RemoteSession, requested?: number): number | undefi
 
 // Discovery only: a login shell is required to find `sb` (it lives on an
 // nvm/fnm PATH that non-interactive ssh does not get), and it is paid once,
-// then cached, so steady state runs the absolute path under `sh -c`.
+// then cached, so steady state runs the absolute path through the login shell.
 const DISCOVERY_SHELLS = ["zsh -lic", "bash -lc", "sh -lc"];
 
 export function resolveServerSb(session: RemoteSession): string {
@@ -131,6 +131,7 @@ export function runRemote(session: RemoteSession, argv: string[], options: Remot
     cwd: options.cwd ?? null,
     env: options.env,
     uploads: options.uploads,
+    remoteLabel: "ssh:" + session.spec.host,
   });
   // One stdin, one consumer: a large upload already rides stdin, so a command
   // that also names stdin cannot be forwarded faithfully.

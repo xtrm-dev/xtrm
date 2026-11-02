@@ -4,6 +4,18 @@
 import type { RemoteDoctorReport } from "./doctor.ts";
 import type { RemoteSetupResult } from "./setup.ts";
 
+// Mapping age, so an operator can tell a fresh verification from a cached one.
+function ageOf(verifiedAt: number): string {
+  if (verifiedAt <= 0) return "age unknown";
+  const seconds = Math.max(0, Math.round((Date.now() - verifiedAt) / 1000));
+  if (seconds < 90) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} d ago`;
+}
+
 export function renderRemoteSetup(result: RemoteSetupResult, configPath: string): string {
   const lines = [
     `sb remote: ${result.remote} (config: ${configPath})`,
@@ -44,7 +56,7 @@ export function renderRemoteStatus(report: RemoteDoctorReport): string {
     `repository: ${report.repositoryKey ?? "(not a Git checkout)"}`,
     report.checkout === null
       ? "server checkout: (not mapped)"
-      : `server checkout: ${report.checkout.root}${report.checkout.projectId === null ? "" : ` (project ${report.checkout.projectId})`}${report.checkout.cached ? " [cached]" : ""}`,
+      : `server checkout: ${report.checkout.root}${report.checkout.projectId === null ? "" : ` (project ${report.checkout.projectId})`}${report.checkout.cached ? " [cached]" : ""} (verified ${ageOf(report.checkout.verifiedAt)})`,
   ];
   if (report.note !== null) lines.push(`note: ${report.note}`);
   if (report.error !== null) lines.push(`error: ${report.error}`);

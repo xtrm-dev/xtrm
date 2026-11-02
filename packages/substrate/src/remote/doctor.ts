@@ -31,7 +31,7 @@ export interface RemoteDoctorReport {
   serverVersion: string | null;
   latencyMs: number | null;
   repositoryKey: string | null;
-  checkout: { root: string; projectId: string | null; cached: boolean } | null;
+  checkout: { root: string; projectId: string | null; cached: boolean; verifiedAt: number } | null;
   capabilities: RemoteCapabilities;
   error: string | null;
   // Why remote mode was not consulted for this invocation (an explicit local
@@ -138,7 +138,7 @@ export function remoteDoctor(deps: RemoteDoctorDeps = {}): RemoteDoctorReport {
     if (repositoryKey !== null) {
       const cached = storedMapping(session, repositoryKey);
       const mapping = resolveMapping(session, repositoryKey);
-      report.checkout = { root: mapping.root, projectId: mapping.projectId, cached: cached !== null };
+      report.checkout = { root: mapping.root, projectId: mapping.projectId, cached: cached !== null, verifiedAt: mapping.verifiedAt };
     }
   } catch (err) {
     report.error = err instanceof Error ? err.message : String(err);

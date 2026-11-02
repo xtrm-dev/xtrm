@@ -115,10 +115,19 @@ export function normalizeRemote(raw: string): string | null {
   } else {
     // SCP-like form: [user@]host:owner/repo(.git)
     if (input.includes("://")) return null;
-    const scp = /^(?:[^@/]+@)?([^@/:\\]+):(.+)$/.exec(input);
+    // A ':' inside the user part is a second host: `evil.com:path@github.com:
+    // acme/app` is scp-form for host `evil.com`, path `path@github.com:acme/app`,
+    // while git would connect to evil.com. Folding it to github.com/acme/app
+    // would hand the caller another repository's key (final review H2).
+    const scp = /^(?:[^@:/\\]+@)?([^@/:\\]+):(.+)$/.exec(input);
     if (!scp) return null;
     host = scp[1]!;
     rawPath = scp[2]!;
+    // A second ':' or an '@' in the path means the first token was not the
+    // host: `evil.com:path@github.com:acme/app` is git's host `evil.com` with a
+    // path that names another host. Refuse it rather than keying a repository
+    // under a host that never served it (final review H2).
+    if (rawPath.includes(":") || rawPath.includes("@")) return null;
   }
 
   if (rawPath.includes("\\")) return null;

@@ -159,5 +159,13 @@ export function selectRemote(env: NodeJS.ProcessEnv = process.env): RemoteSelect
   if (config === null) return null;
   const spec = parseRemoteSpec(config.remote);
   if (spec === null) return null;
-  return { spec, config, configPath: remoteConfigPath(env), envOverride: asString(env["SUBSTRATE_REMOTE"]) !== null };
+  const envRemote = asString(env["SUBSTRATE_REMOTE"]);
+  const envOverride = envRemote !== null;
+  // `remoteSb` and `serverVersion` were verified for the host named in the file.
+  // An env-selected host that is a *different* host must resolve its own sb path
+  // instead of running a binary path verified elsewhere (final review, M2); the
+  // same host keeps them, so a one-off override still works.
+  const fileHost = parseRemoteSpec(config.remote)?.host ?? null;
+  const scoped = envOverride && fileHost !== spec.host ? { ...config, remoteSb: null, serverVersion: null } : config;
+  return { spec, config: scoped, configPath: remoteConfigPath(env), envOverride };
 }

@@ -44,7 +44,9 @@ function originHost(): string | null {
     const authority = scheme[1]!.slice(scheme[1]!.lastIndexOf("@") + 1);
     return authority.replace(/:\d+$/, "");
   }
-  const scp = /^(?:[^@/]+@)?([^:/]+):/.exec(raw);
+  // Same rule as normalizeRemote: a ':' in the user part means the real host is
+  // the earlier token, so the warning must not compare against the later one.
+  const scp = /^(?:[^@:/\\]+@)?([^:/]+):/.exec(raw);
   return scp === null ? null : scp[1]!;
 }
 

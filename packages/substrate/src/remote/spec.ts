@@ -69,13 +69,19 @@ export interface RemoteCommandInput {
   env?: Record<string, string | undefined>;
   uploads?: RemoteUpload[];
   tmpTemplate?: string;
+  // The remote the operator configured, for the recovery hint in the `cd`
+  // failure message.
+  remoteLabel?: string;
 }
 
 const TMP_TEMPLATE = "/tmp/sb-remote.XXXXXX";
 // Splits the framed stream into <dir>/fN.b64 files. Written against POSIX awk:
 // no gawk extensions, no pipes, so quoting cannot be broken by a payload.
+// The end marker is mandatory: a channel that drops mid-stream would otherwise
+// leave a truncated document that decodes cleanly, and a truncated contract
+// would reach the shared store as if it were complete (final review).
 const FRAME_AWK =
-  '/^@@sb-remote-file /{f=d"/"$2".b64";next} /^@@sb-remote-end$/{f="";next} f!=""{print >> f}';
+  '/^@@sb-remote-file /{f=d"/"$2".b64";print "" > f;next} /^@@sb-remote-end$/{saw=1;f="";next} f!=""{print >> f} END{if(!saw) exit 3}';
 
 
 // Frame markers. Base64 cannot contain "@", so no payload line can imitate one.
@@ -88,7 +94,9 @@ const END_MARKER = "@@sb-remote-end";
 export function frameUploads(uploads: RemoteUpload[]): string {
   const lines: string[] = [];
   for (const upload of uploads) {
-    lines.push(FILE_MARKER + `f${upload.argvIndex}`);
+    // The byte count travels in the header, so the server proves the decoded
+    // file is the whole document and not a prefix of it.
+    lines.push(FILE_MARKER + `f${upload.argvIndex} ` + String(upload.content.length));
     const body = upload.content.toString("base64");
     if (body !== "") lines.push(body);
   }
@@ -117,13 +125,21 @@ export function buildRemoteCommand(input: RemoteCommandInput): RemoteCommandPlan
       lines.push(`: > ${path}`);
     }
     lines.push(
-      `awk -v d="$sb_remote_dir" '${FRAME_AWK}' || { echo "sb remote: cannot unpack the uploaded documents" >&2; exit 70; }`,
+      `awk -v d="$sb_remote_dir" '${FRAME_AWK}' || { printf 'sb remote: the upload stream ended early; nothing ran on the server\\n' >&2; exit 72; }`,
     );
-    lines.push(`for b in "$sb_remote_dir"/*.b64; do`);
-    lines.push(`  [ -e "$b" ] || continue`);
-    lines.push(`  base64 -d "$b" > "\${b%.b64}" || { echo "sb remote: cannot decode an uploaded document" >&2; exit 70; }`);
-    lines.push(`  rm -f "$b"`);
-    lines.push(`done`);
+    // Explicit indices, not a `*.b64` glob: the server's login shell is zsh,
+    // where an unmatched glob is a fatal error the loop body never sees. This
+    // form behaves identically in sh and zsh.
+    for (const upload of uploads) {
+      const encoded = `"$sb_remote_dir/f${upload.argvIndex}.b64"`;
+      const target = `"$sb_remote_dir/f${upload.argvIndex}"`;
+      lines.push(`[ -f ${encoded} ] || { printf 'sb remote: an uploaded document is missing from the stream\\n' >&2; exit 72; }`);
+      lines.push(`base64 -d ${encoded} > ${target} || { printf 'sb remote: cannot decode an uploaded document\\n' >&2; exit 72; }`);
+      lines.push(`rm -f ${encoded}`);
+      lines.push(
+        `[ "$(wc -c < ${target})" -eq ${upload.content.length} ] || { printf 'sb remote: an uploaded document arrived with the wrong size\\n' >&2; exit 73; }`,
+      );
+    }
   }
 
   const parts: string[] = [];
@@ -137,8 +153,9 @@ export function buildRemoteCommand(input: RemoteCommandInput): RemoteCommandPlan
     // The path travels as a quoted argument to printf, never inside a
     // double-quoted string: a cwd containing $(...), backticks or a backslash
     // would otherwise be expanded by the remote shell.
+    const hint = input.remoteLabel === undefined ? "" : `; run \`sb remote setup ${input.remoteLabel} --refresh\` to re-verify the mapping`;
     lines.push(
-      `cd ${shellQuote(input.cwd)} || { printf 'sb remote: cannot cd to %s on the server\\n' ${shellQuote(input.cwd)} >&2; exit 71; }`,
+      `cd ${shellQuote(input.cwd)} || { printf 'sb remote: cannot cd to %s on the server${hint}\\n' ${shellQuote(input.cwd)} >&2; exit 71; }`,
     );
   }
   lines.push(invocation);
