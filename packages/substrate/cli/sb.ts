@@ -24,6 +24,13 @@ import { assertSchemaHealthy } from "../src/store/migrations/runner.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { RepositoryService } from "../src/service/repository-service.ts";
 import { discoverGitRoot, discoverRepository, type RepositoryDiscovery } from "../src/domain/repository-discovery.ts";
+import { BOOLEAN_FLAGS, type FlagValue, type Flags, flag, flagList, parseArgs } from "../src/domain/argv.ts";
+import { forwardCli, localStoreRequested } from "../src/remote/executor.ts";
+import type { RemoteTransport } from "../src/remote/ssh.ts";
+import { remoteDoctor, type RemoteDoctorReport } from "../src/remote/doctor.ts";
+import { renderRemoteDoctor, renderRemoteSetup, renderRemoteStatus } from "../src/remote/render.ts";
+import { remoteSetup } from "../src/remote/setup.ts";
+import { clearRemoteConfig, remoteConfigPath } from "../src/remote/config.ts";
 // Compat re-export (XTRM-337): discoverRepository/discoverGitRoot moved to the
 // shared domain module; re-exported here so existing `../cli/sb.ts` importers
 // keep working while new code imports the shared module directly.
@@ -231,57 +238,9 @@ function contractSections(contract: unknown): string[] {
 
 // -- argv --------------------------------------------------------------------
 
-const BOOLEAN_FLAGS = new Set(["json", "help", "version", "dry-run"]);
-
-// Repeated-flag semantics (XTRM-552): a non-boolean flag accumulates every
-// supplied value in caller order. Scalar readers use flag() and take the
-// last value (explicit last-wins); list readers use flagList() and take
-// every value. A boolean flag is presence-only and repeats idempotently.
-// A bare non-boolean flag (`--reason` with no value) is presence without a
-// value and never clobbers values already supplied.
-type FlagValue = true | string[];
-type Flags = Map<string, FlagValue>;
-
-function parseArgs(argv: string[]): { flags: Flags; positionals: string[] } {
-  const flags: Flags = new Map();
-  const positionals: string[] = [];
-  let i = 0;
-  while (i < argv.length) {
-    const a = argv[i] as string;
-    if (a.startsWith("--")) {
-      const key = a.slice(2);
-      const next = argv[i + 1];
-      if (!BOOLEAN_FLAGS.has(key) && next !== undefined && !next.startsWith("--")) {
-        const prev = flags.get(key);
-        if (Array.isArray(prev)) prev.push(next);
-        else flags.set(key, [next]);
-        i += 2;
-      } else if (!flags.has(key)) {
-        flags.set(key, true);
-        i += 1;
-      } else {
-        i += 1;
-      }
-    } else {
-      positionals.push(a);
-      i += 1;
-    }
-  }
-  return { flags, positionals };
-}
-
-function flag(flags: Flags, name: string): string | undefined {
-  const v = flags.get(name);
-  if (v === undefined || v === true) return undefined;
-  return v[v.length - 1];
-}
-
-// Every value supplied for a repeated flag, in caller order (XTRM-552).
-function flagList(flags: Flags, name: string): string[] | undefined {
-  const v = flags.get(name);
-  if (v === undefined || v === true) return undefined;
-  return v.slice();
-}
+// The parser is shared with the remote forwarder (src/domain/argv.ts), so the
+// two cannot disagree about which token is a flag's value: that disagreement
+// let `--project X export project --file out` look like an export of project X.
 
 function readJsonArg(value: string): unknown {
   // Distinguish the two inputs the flag accepts. The single try/catch this
@@ -369,6 +328,8 @@ usage:
   sb --version
   sb init [--db PATH] [--json]
   sb doctor [--db PATH] [--json]
+  sb remote setup ssh:<host> [--server-root PATH] [--refresh] [--json]
+  sb remote disable [--json]
 
 groups:
   init        initialize this repository (bind it to a Project; idempotent)
@@ -377,6 +338,7 @@ groups:
   plan        check|apply
   journal     append|checkpoint|show|since|latest|timeline|render
   provenance  dispatch|allocate|bind|trace|commit|receipt|pr|session|activation|bundle
+  remote      setup|status|disable
   import      beads
   export      project
 
@@ -389,6 +351,42 @@ per-verb help: sb issue create --help  |  sb help issue create`;
 
 const COMMAND_HELP: Record<string, string> = {
   top: HELP_TOP,
+  remote: `usage: sb remote <setup|status|disable> [--json]
+
+  setup ssh:<host> [--server-root PATH] [--refresh]
+  status
+  disable
+
+remote mode runs every sb invocation on the server over ssh, with the same
+argv, stdin, stdout and exit code (ADR-008): no listener and no daemon. The
+client resolves its own repository key from Git and maps it to the server
+checkout that reports the same key; a path that merely looks identical is
+never used as evidence. --db and SUBSTRATE_DB name a local store, so those
+invocations are not forwarded. help, version and doctor never open a store
+and are answered here. Configuration lives in ~/.xtrm/config/substrate.json
+(override the path with SUBSTRATE_REMOTE_CONFIG). Remote mode is opt-in:
+without a remote setting every consumer runs locally and needs no ssh.
+Disable with \`sb remote disable\`, or delete the file.`,
+  "remote.setup": `usage: sb remote setup ssh:<host> [--server-root PATH] [--refresh] [--json]
+
+verifies the connection, resolves sb on the server once through a login
+shell, records the server version and round-trip latency, and maps this
+repository to its server checkout by repository key. Fails when the server
+has no checkout of this repository, or when several match and --server-root
+does not choose one. --refresh re-verifies a cached mapping.`,
+  "remote.disable": `usage: sb remote disable [--json]
+
+removes the remote setting so every consumer runs locally again, and drops
+the server sb path, version and checkout cache recorded from that server.
+Nothing on the server is touched: the store there is untouched and stays
+available to the next client that configures it.`,
+  "remote.status": `usage: sb remote status [--json]
+
+reports the mode (local or ssh), the resolved server sb path and version,
+the round-trip latency, the mapped server checkout, and the capabilities the
+server version actually supports — including the ones it does not, so a
+0.2.2 server reports the missing holder environment and stdio service
+instead of pretending they work.`,
   help: `usage: sb help [group [verb]] [--json]  |  sb <group> [<verb>] --help
 
 prints this help without opening the database. With --json, emits the same
@@ -744,6 +742,84 @@ function renderVersion(ctx: Ctx): CliResult {
 // and the explicit override are three separate facts. `repository.initialized`
 // is a repository_bindings fact — never a successful resolveProject and never
 // true because of an override or a checkout alias.
+// In remote mode the local store is out of scope: doctor reports the
+// connection, the mapping and the capabilities the server actually has, and
+// opens nothing (ADR-008: remote mode never touches the stale local database).
+function runRemoteDoctor(ctx: Ctx, report: RemoteDoctorReport): CliResult {
+  const ok = report.error === null;
+  if (ctx.json) {
+    return {
+      code: ok ? 0 : 1,
+      stdout: JSON.stringify({ schema: SCHEMA_VERSION, command: "doctor", ok, ...(ok ? {} : { error: report.error }), data: { mode: "remote", remote: report } }) + "\n",
+      stderr: "",
+    };
+  }
+  // The heading states what actually happened, not what was configured: a
+  // corrupt config is "remote configured, unusable", and a local override is
+  // "local because <reason>". Saying "remote" for either hid the reason.
+  const heading =
+    report.mode === "ssh"
+      ? report.error === null
+        ? "sb doctor: remote (no local store is opened in remote mode)\n"
+        : "sb doctor: remote configured, unusable (no local store was opened)\n"
+      : report.note === null
+        ? "sb doctor: local\n"
+        : "sb doctor: local (" + report.note + ")\n";
+  return {
+    code: ok ? 0 : 1,
+    stdout: heading + renderRemoteDoctor(report),
+    stderr: ok ? "" : `sb: doctor: ${report.error}\n`,
+  };
+}
+
+// `sb remote <setup|status>`: configuration, not work. Neither verb opens the
+// local store; setup observes the server and writes the client config.
+function runRemoteGroup(ctx: Ctx, verb: string | undefined, flags: Flags, rest: string[], deps: { env: NodeJS.ProcessEnv; transport?: RemoteTransport }): CliResult {
+  if (verb === "disable") {
+    if (rest.length > 0) throw new Error("usage: sb remote disable [--json]");
+    const result = clearRemoteConfig(deps.env);
+    // The environment variable outranks the file, so a disable must say so
+    // instead of claiming a mode the next invocation will not use.
+    const envOverride = (deps.env["SUBSTRATE_REMOTE"] ?? "").trim();
+    const payload = {
+      configPath: result.configPath,
+      cleared: result.cleared,
+      mode: envOverride === "" ? ("local" as const) : ("remote" as const),
+      envOverride: envOverride === "" ? null : envOverride,
+    };
+    const note = envOverride === "" ? "" : `SUBSTRATE_REMOTE=${envOverride} overrides the file, so this process stays remote.`;
+    if (ctx.json) return emit(ctx, "remote.disable", { ...payload, warning: note === "" ? null : note });
+    return {
+      code: 0,
+      stdout:
+        (result.cleared
+          ? `sb remote: disabled (${result.configPath}). Every consumer runs locally again.\n`
+          : `sb remote: already local (no remote setting in ${remoteConfigPath(deps.env)}).\n`) + (note === "" ? "" : `sb remote: ${note}\n`),
+      stderr: "",
+    };
+  }
+  if (verb === "status") {
+    if (rest.length > 0) throw new Error("usage: sb remote status [--json]");
+    const report = remoteDoctor({ clientVersion: cliVersion(), env: deps.env, transport: deps.transport });
+    if (ctx.json && report.error !== null) return fail(ctx, "remote.status", new Error(report.error));
+    if (ctx.json) return emit(ctx, "remote.status", report);
+    return {
+      code: report.error === null ? 0 : 1,
+      stdout: renderRemoteStatus(report),
+      stderr: report.error === null ? "" : `sb: remote status: ${report.error}\n`,
+    };
+  }
+  if (verb === "setup") {
+    const spec = rest[0];
+    if (spec === undefined) throw new Error("usage: sb remote setup ssh:<host> [--server-root PATH] [--refresh] [--json]");
+    if (rest.length > 1) throw new Error(`usage: sb remote setup ssh:<host> [--server-root PATH] [--refresh] [--json] (unexpected: ${rest.slice(1).join(" ")})`);
+    const result = remoteSetup(spec, { serverRoot: flag(flags, "server-root") ?? null, refresh: flags.has("refresh"), env: deps.env, transport: deps.transport });
+    if (ctx.json) return emit(ctx, "remote.setup", result);
+    return { code: 0, stdout: renderRemoteSetup(result, result.configPath), stderr: "" };
+  }
+  throw new Error("usage: sb remote <setup|status> [--json]");
+}
+
 function runDoctor(ctx: Ctx): CliResult {
   const repo = discoverRepository();
   const effectiveOverride = (process.env["SUBSTRATE_PROJECT"] ?? "").trim() === "" ? null : process.env["SUBSTRATE_PROJECT"]!.trim();
@@ -951,12 +1027,15 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "provenance.bundle": ["project", "repo-root"],
   "init.": [],
   "doctor": [],
+  "remote.setup": ["server-root", "refresh"],
+  "remote.disable": [],
+  "remote.status": [],
   "import.beads": ["file", "project", "edges-file", "create-project", "dry-run"],
   "export.": ["project", "file"],
   "export.project": ["project", "file"],
 };
 
-const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export"]);
+const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export", "remote"]);
 
 function assertKnownFlags(flags: Flags, command: string): void {
   const allowed = new Set([...GLOBAL_FLAGS, ...(FLAG_ALLOWLIST[command] ?? [])]);
@@ -965,10 +1044,15 @@ function assertKnownFlags(flags: Flags, command: string): void {
   }
 }
 
-export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
+export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.ProcessEnv; transport?: RemoteTransport; readStdin?: () => string }): CliResult {
+  // env/transport are injection seams for tests and embedding; production
+  // callers pass neither.
+  const remoteDeps = { env: opts?.env ?? process.env, transport: opts?.transport };
   const { flags, positionals } = parseArgs(argv);
   const ctx: Ctx = {
-    dbPath: flag(flags, "db") ?? opts?.dbPath ?? process.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db"),
+    // The injected env is authoritative here, exactly as it is for the remote
+    // decision: a caller that passes env expects that env's store.
+    dbPath: flag(flags, "db") ?? opts?.dbPath ?? remoteDeps.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db"),
     json: flags.has("json"),
   };
   const [group, verb, ...rest] = positionals;
@@ -976,14 +1060,39 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
   // Side-effect-free surface (§28): help/version never open SQLite.
   if (flags.has("help") || group === "help") return renderHelp(ctx, flags.has("help") ? positionals : positionals.slice(1));
   if (flags.has("version") || group === "version") return renderVersion(ctx);
+  // Remote mode (ADR-008): the invocation runs on the server, and this is
+  // decided before the local store is opened, so a stale local database can
+  // never absorb a remote-mode write.
+  // One decision for every remote consumer in this process: an explicit local
+  // store (the caller's dbPath, --db, or SUBSTRATE_DB) outranks remote mode.
+  const localStore = opts?.dbPath !== undefined ? "--db " + opts.dbPath + " (caller)" : localStoreRequested(argv, remoteDeps.env);
+  const forwarded = forwardCli(argv, { ...remoteDeps, readStdin: opts?.readStdin, localStore });
+  if (forwarded !== null) return forwarded;
   let db: ReturnType<typeof openSubstrate> | null = null;
   try {
     if (group === "doctor") {
       assertKnownFlags(flags, "doctor");
       if (verb !== undefined) throw new Error("usage: sb doctor [--db PATH] [--json] (doctor takes no verbs)");
-      return runDoctor(ctx);
+      const remote = remoteDoctor({
+        clientVersion: cliVersion(),
+        env: remoteDeps.env,
+        transport: remoteDeps.transport,
+        localStore,
+      });
+      // A configured-but-corrupt remote is an error to report, not a silent
+      // fallback to the local store.
+      if (remote.mode === "ssh" || remote.error !== null) return runRemoteDoctor(ctx, remote);
+      const local = runDoctor(ctx);
+      // A deliberate local override still prints the local report, and says why
+      // remote mode was not consulted. In --json mode the envelope is machine
+      // output and the note goes to stderr instead of corrupting it.
+      if (remote.note === null) return local;
+      return ctx.json
+        ? { ...local, stderr: local.stderr + `note: ${remote.note}\n` }
+        : { ...local, stdout: local.stdout + `note: ${remote.note}\n` };
     }
-    if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|import|export> <verb> [args...]");
+    if (group === "remote") return runRemoteGroup(ctx, verb, flags, rest, remoteDeps);
+    if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|import|export|remote> <verb> [args...]");
     if (group && KNOWN_GROUPS.has(group)) assertKnownFlags(flags, `${group}.${verb ?? ""}`);
     db = openSubstrate(ctx.dbPath);
     const svc = new IssueService(db);
@@ -1008,7 +1117,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
     }
     if (group === "import") return runImport(db, svc, ctx, command, verb, flags);
     if (group === "export") return runExport(db, svc, ctx, command, verb, flags);
-    throw new Error(`unknown group: ${group} (want issue|project|plan|journal|provenance|import|export)`);
+    throw new Error(`unknown group: ${group} (want issue|project|plan|journal|provenance|import|export|remote)`);
   } catch (err) {
     return fail(ctx, command, err);
   } finally {

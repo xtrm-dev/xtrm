@@ -20,6 +20,38 @@ Global flags: `--db PATH` (else `$SUBSTRATE_DB`, else `~/.xtrm/state.db`),
 - `sb doctor` — store health, repository key, initialization state, bound
   Project, effective override. Exit 0 healthy / 1 otherwise. Takes no verbs.
 
+## remote — dispatch to a server-owned store
+
+Design and limits: [`../runtime/adr/008-substrate-remote-store-access.md`](../runtime/adr/008-substrate-remote-store-access.md).
+One argument changes the store, nothing else changes: with
+`SUBSTRATE_REMOTE=ssh:<host>` every command is executed by `sb` on that
+host over ssh, and the local store is never opened. `--db` or
+`SUBSTRATE_DB` keeps the invocation local — for the CLI, for the git hooks
+and for `doctor`, which then prints the note that says which store it chose;
+`--help`, `--version`, `doctor`, `help` and `remote` always answer locally.
+An unreadable client config is reported by `doctor` as an error, never
+silently treated as "no remote".
+
+- `sb remote setup ssh:<host> [--server-root <path>] [--refresh]` — verify the
+  remote `sb` (version, latency) and resolve which checkout of this
+  repository the server owns. The server reports repository keys, not
+  client paths, so the mapping is keyed by `repositoryKey`; `--server-root`
+  picks one explicitly when more than one server checkout matches. Writes
+  `~/.xtrm/config/substrate.json` and no state.
+- `sb remote status` — the configured remote, resolved `sb` path, server
+  version, latency, repository key and cached checkout, plus the
+  capabilities the server's version actually has. Read-only.
+- `sb remote disable` — remove the setting so every consumer (CLI, hooks,
+  in-process callers, the MCP launcher) runs locally again, and drop the
+  server `sb` path, version and checkout cache. Nothing on the server is
+  touched. Remote mode is opt-in and reversible: with no setting there is no
+  ssh requirement at all. Precedence is stated, not implied — `disable`
+  reports an active `SUBSTRATE_REMOTE`, which outranks the file.
+
+Not yet covered: native dispatch against the server (the stdio server mode
+needs server 0.2.3) and `post-rewrite` reconciliation (no CLI verb before
+0.2.3).
+
 ## issue — 22 verbs
 
 - `issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--scrutiny <LOW|MEDIUM|HIGH|CRITICAL>]` — create; pins the

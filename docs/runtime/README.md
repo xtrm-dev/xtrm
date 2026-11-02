@@ -55,6 +55,7 @@ Non-negotiable invariants: agent finished ≠ protocol completed · result exist
 | [`adr/004-specialist-activation-capabilities-probes.md`](adr/004-specialist-activation-capabilities-probes.md) | Definitions/profiles/grants/skills/probes/effects |
 | [`adr/005-channels-cooperative-runtime.md`](adr/005-channels-cooperative-runtime.md) | How ChainRun participants consume Channels (references canon) |
 | [`adr/006-runtime-supervision-boundary.md`](adr/006-runtime-supervision-boundary.md) | ActivationSupervisor vs xtmux RuntimeSupervisor vs Scheduler |
+| [`adr/008-substrate-remote-store-access.md`](adr/008-substrate-remote-store-access.md) | One authoritative Substrate store reached from a second machine (ssh-exec; no listener) |
 | [`reconciliation/asset-absorption-matrix.md`](reconciliation/asset-absorption-matrix.md) | Corpus dispositions |
 | [`reconciliation/runtime-decision-matrix.md`](reconciliation/runtime-decision-matrix.md) | 30 architectural decisions with evidence |
 | [`reconciliation/source-register.{md,json}`](reconciliation/source-register.md) | Corpus freeze gate |

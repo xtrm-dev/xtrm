@@ -103,16 +103,36 @@ export function normalizeRemote(raw: string): string | null {
     const at = authorityRaw.lastIndexOf("@");
     let authority = at >= 0 ? authorityRaw.slice(at + 1) : authorityRaw;
     if (authority === "") return null;
+    // A query, a fragment, a backslash or a control character in the authority
+    // means the URL is not the remote it appears to be: `http://127.0.0.1:1#@
+    // github.com/acme/app` has authority `127.0.0.1:1#@github.com` and would
+    // otherwise fold into another repository's key (review H2). Refuse the
+    // input instead of guessing which part was meant.
+    if (/[\s?#\\\u0000-\u001f\u007f]/.test(authorityRaw)) return null;
     const portMatch = /^(.*?):(\d+)$/.exec(authority);
     if (portMatch && DEFAULT_PORTS[scheme] === portMatch[2]) authority = portMatch[1]!;
     host = authority;
   } else {
-    // SCP-like form: [user@]host:owner/repo(.git)
+    // SCP-like form: [user@]host:path. Git splits at the FIRST ':' and takes
+    // everything before it as [user@]host, so `evil.com:path@github.com:acme/app`
+    // belongs to host `evil.com` and can never fold onto github.com (review H2).
+    // The path is not inspected: a legitimate remote may contain '@' or ':' in
+    // its path, and refusing it would silently re-key an existing repository
+    // (an `a@b` path, or a local-only repository whose key would change).
     if (input.includes("://")) return null;
-    const scp = /^(?:[^@/]+@)?([^@/:\\]+):(.+)$/.exec(input);
-    if (!scp) return null;
-    host = scp[1]!;
-    rawPath = scp[2]!;
+    const bracketed = /^(?:[^@/]+@)?\[([^\]\s]+)\]:(.+)$/.exec(input);
+    if (bracketed) {
+      host = `[${bracketed[1]}]`;
+      rawPath = bracketed[2]!;
+    } else {
+      const colon = input.indexOf(":");
+      if (colon < 0) return null;
+      const authority = input.slice(0, colon);
+      const at = authority.lastIndexOf("@");
+      host = at >= 0 ? authority.slice(at + 1) : authority;
+      rawPath = input.slice(colon + 1);
+    }
+    if (host === "" || rawPath === "") return null;
   }
 
   if (rawPath.includes("\\")) return null;
