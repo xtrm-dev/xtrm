@@ -9,10 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.2.4] - 2026-11-02
+
 ### Added
 
+- Remote store access (XTRM-685, ADR-008). `substrate.remote` (`ssh:<host>`, or `SUBSTRATE_REMOTE`) makes `sb` and the git hooks run on the machine that owns the store, over `ssh`, with no listener and no daemon. `sb remote setup|status|disable` manage it, and `sb doctor` reports the mode, the server version, the round-trip time and what the server's `sb` cannot do. Unset means fully local, exactly as before. `SUBSTRATE_DB` or `--db` always selects the local store. Document arguments (`--contract`, `--file` and similar) travel as a framed stream on stdin; a truncated stream is refused and nothing runs. `--file` is refused for secrets directories, symlinks and files with a second hard link.
 - Board rows carry `journalCount`, `pointerCount` and `lastActivityAt`. A journal write does not touch `updatedAt`, so board readers can now see journal activity without a per-issue read.
 - Board rows carry `attestationState` and `structurallyValid`, so a board can tell an incomplete contract from an unattested, stale or rejected one.
+
+### Changed
+
+- `openSubstrate` creates the state directory with mode 0700 and the database with mode 0600 (CORE-2381).
+- Repository identity: an scp-style origin takes its host from the first `:`, as git does, so `evil.com:path@github.com:acme/app` keys under `evil.com`. A URL whose authority contains `?`, `#`, `\` or a control character is no longer treated as a remote, because it could fold onto another repository's key.
+
+---
+
+## [0.2.3] - 2026-11-02
+
+Released without a changelog entry. Reconstructed from the commits between 0.2.2 and the release.
+
+### Added
+
+- Claude plugin marketplace with version-driven updates (XTRM-640).
+- SessionStart XTRM primer from the global `using-xtrm` and `multiplexing` skills (XTRM-637), naming the dispatcher and the Substrate participant (CORE-2390).
+
+### Fixed
+
+- Claude hook output is schema-valid (#256).
 
 ---
 
