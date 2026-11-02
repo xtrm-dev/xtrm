@@ -100,6 +100,14 @@ export function runRemote(session: RemoteSession, argv: string[], options: Remot
     env: options.env,
     uploads: options.uploads,
   });
+  // One stdin, one consumer: a large upload already rides stdin, so a command
+  // that also names stdin cannot be forwarded faithfully.
+  if (options.stdin != null && plan.stdin !== null) {
+    throw new RemoteError(
+      "unsupported",
+      "sb " + argv.join(" ") + " needs stdin twice (an uploaded file and a '-' argument): pass the document as a file path instead",
+    );
+  }
   const result = session.transport.run({
     host: session.spec.host,
     command: plan.command,

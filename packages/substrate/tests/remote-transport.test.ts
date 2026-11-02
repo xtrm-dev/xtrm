@@ -283,6 +283,69 @@ describe("remote execution passthrough", () => {
     assert.equal(fake.calls()[0]?.env.project, null);
   });
 
+  it("carries the participant of a forwarded journal write to the server's environment", () => {
+    // Measured on the real server: sb 0.2.2 reads SUBSTRATE_HOLDER as the
+    // ambient identity for a write that supplies none, so an exported holder is
+    // the whole mechanism by which a forwarded note records its participant.
+    const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+    assert.ok(CLIENT_KEY);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
+    const outcome = forwardCli(["issue", "note", "XTRM-685", "probe", "--kind", "note"], {
+      env: remoteEnv(fake.clientConfigPath, { SUBSTRATE_HOLDER: "holder-probe-pc" }),
+      transport: localTransport(),
+    });
+    assert.ok(outcome);
+    assert.equal(outcome.code, 0, outcome.stderr);
+    assert.equal(fake.calls()[0]?.env.holder, "holder-probe-pc");
+  });
+
+  it("uploads every document flag, whether its value is a file or inline JSON", () => {
+    // The live probe caught this: --mechanical was not in the upload list, so
+    // the server read a path that does not exist there and reported it as bad
+    // inline JSON. The rule is the CLI's own: a value that exists as a file
+    // here is uploaded, anything else travels untouched.
+    const receive = join(tmpdir(), `sb-remote-mech-${process.pid}-${Date.now()}`);
+    const fake = makeFake({ mode: "file", fileFlag: "--mechanical", receive, version: "sb 0.2.2\n" });
+    const mechanicalPath = join(fake.dir, "mechanical.json");
+    const body = '{"summary":"transport probe"}';
+    writeFileSync(mechanicalPath, body);
+    assert.ok(CLIENT_KEY);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
+    const fromFile = forwardCli(["journal", "append", "XTRM-685", "--kind", "note", "--mechanical", mechanicalPath], {
+      env: remoteEnv(fake.clientConfigPath),
+      transport: localTransport(),
+    });
+    assert.ok(fromFile);
+    assert.equal(fromFile.code, 0, fromFile.stderr);
+    assert.equal(readFileSync(receive, "utf8"), body);
+
+    const inline = forwardCli(["journal", "append", "XTRM-685", "--kind", "note", "--mechanical", body], {
+      env: remoteEnv(fake.clientConfigPath),
+      transport: localTransport(),
+    });
+    assert.ok(inline);
+    // Inline JSON is not a file here, so it must reach the server verbatim
+    // instead of being replaced by an uploaded copy.
+    const argv = fake.calls().pop()?.argv ?? [];
+    assert.equal(argv[argv.indexOf("--mechanical") + 1], body);
+  });
+
+  it("forwards the client's stdin when an argument is '-'", () => {
+    const fake = makeFake({ mode: "cat", version: "sb 0.2.2\n" });
+    assert.ok(CLIENT_KEY);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
+    const document = "## PROBLEM\nfrom stdin\n";
+    const outcome = forwardCli(["issue", "note", "XTRM-685", "--file", "-"], {
+      env: remoteEnv(fake.clientConfigPath),
+      transport: localTransport(),
+      readStdin: () => document,
+    });
+    assert.ok(outcome);
+    assert.equal(outcome.code, 0, outcome.stderr);
+    assert.equal(outcome.stdout, document);
+    assert.deepEqual(fake.calls()[0]?.argv, ["issue", "note", "XTRM-685", "--file", "-"]);
+  });
+
   it("turns an unreachable server into an error envelope and creates no local state", () => {
     const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
     const env = remoteEnv(fake.clientConfigPath);

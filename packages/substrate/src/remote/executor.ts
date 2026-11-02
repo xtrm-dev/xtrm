@@ -12,6 +12,9 @@ export interface ForwardDeps {
   transport?: RemoteTransport;
   env?: NodeJS.ProcessEnv;
   schema?: string;
+  // Reads the client's stdin for an argument that names it (`--file -`).
+  // Injected so a test never depends on the runner's own fd 0.
+  readStdin?: () => string;
 }
 
 export interface CliOutcome {
@@ -33,9 +36,15 @@ const FORWARDED_ENV = [
   "TZ",
 ];
 
-// Flags whose value is a client-side path. They are uploaded to a server temp
-// path rather than silently read as a different file on the server.
-const LOCAL_FILE_FLAGS = new Set(["contract", "file", "edges-file"]);
+// Flags whose value is a client-side document. `sb` accepts inline JSON or a
+// path (readJsonArg / readJsonLines), so the decision is made the same way it
+// is made locally: a value that exists as a file here is uploaded, anything
+// else travels unchanged. A hand-maintained flag list drifts against the CLI's
+// `--file <path|->` surface, and the drift is silent: the server reads a
+// different file, or a path of the same name. A `-` value keeps its meaning
+// (stdin) and the bytes travel as the forwarded stdin.
+const JSON_FLAGS = new Set(["contract", "ownership", "context-refs", "mechanical", "semantic", "result", "refs"]);
+const FILE_FLAGS = new Set(["file", "edges-file"]);
 
 // Handled locally by design: help/version never open a store, doctor reports
 // this machine's mode, and `remote` configures it.
@@ -75,6 +84,8 @@ export function shouldForward(argv: string[], env: NodeJS.ProcessEnv): boolean {
 export interface PreparedFiles {
   argv: string[];
   uploads: RemoteUpload[];
+  // True when an argument names stdin; the caller forwards the client's stdin.
+  wantsStdin: boolean;
 }
 
 // A local path that the server must read is uploaded; anything else is refused
@@ -87,15 +98,26 @@ export interface PreparedFiles {
 export function prepareFiles(argv: string[]): PreparedFiles {
   const uploads: RemoteUpload[] = [];
   const rewritten: string[] = [];
+  let wantsStdin = false;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index]!;
     if (token.startsWith("--")) {
       const eq = token.indexOf("=");
       const flagName = eq === -1 ? token.slice(2) : token.slice(2, eq);
-      if (LOCAL_FILE_FLAGS.has(flagName)) {
+      if (JSON_FLAGS.has(flagName) || FILE_FLAGS.has(flagName)) {
         const value = eq === -1 ? (argv[index + 1] ?? "") : token.slice(eq + 1);
         rewritten.push("--" + flagName);
         if (eq === -1) index += 1;
+        if (value === "-") {
+          wantsStdin = true;
+          rewritten.push(value);
+          continue;
+        }
+        if (!existsSync(value)) {
+          // Inline JSON, or a path only the server can resolve: not ours to read.
+          rewritten.push(value);
+          continue;
+        }
         const argvIndex = rewritten.length;
         rewritten.push(value);
         uploads.push({ argvIndex, content: readLocalFile(flagName, value) });
@@ -104,17 +126,11 @@ export function prepareFiles(argv: string[]): PreparedFiles {
     }
     rewritten.push(token);
   }
-  return { argv: rewritten, uploads };
+  return { argv: rewritten, uploads, wantsStdin };
 }
 
 function readLocalFile(flagName: string, value: string): Buffer {
-  if (value === "-" || value === "") {
-    throw new RemoteError(
-      "unsupported",
-      "--" + flagName + " " + JSON.stringify(value) + " is not supported in remote mode: pass a file path",
-    );
-  }
-  if (!existsSync(value)) {
+  if (value === "" || !existsSync(value)) {
     throw new RemoteError("unsupported", "--" + flagName + " " + JSON.stringify(value) + ": file not found on this machine");
   }
   return readFileSync(value);
@@ -164,6 +180,7 @@ export function forwardCli(argv: string[], deps: ForwardDeps = {}): CliOutcome |
       cwd: mapping.root,
       env: forwardedEnv(env, prepared.argv, mapping.projectId),
       uploads: prepared.uploads,
+      stdin: prepared.wantsStdin ? (deps.readStdin ?? (() => readFileSync(0, "utf8")))() : null,
     });
     return { code: result.code, stdout: result.stdout, stderr: result.stderr };
   } catch (err) {

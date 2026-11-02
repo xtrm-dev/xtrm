@@ -8,8 +8,8 @@ import type { RemoteTransport } from "./ssh.ts";
 import { remoteConfigPath } from "./config.ts";
 
 export interface RemoteCapabilities {
-  // SUBSTRATE_HOLDER is read by 0.2.3+; 0.2.2 records a participant only from
-  // --participant, so worker identity needs that flag on an older server.
+  // SUBSTRATE_HOLDER is read by 0.2.2 as well (execution-context ambient
+  // identity); --participant on journal appends arrives in 0.2.3.
   holderEnv: string;
   // Client-workspace recording needs a server that accepts the override.
   workspaceOverride: string;
@@ -42,13 +42,16 @@ export interface RemoteDoctorDeps {
   clientVersion?: string | null;
 }
 
-// Verified against a live server, not assumed: sb 0.2.2 accepts
-// --participant/--workspace on `provenance dispatch` and on `journal
-// checkpoint`, but NOT on `journal append`, and its binary contains no
-// SUBSTRATE_HOLDER (so host identity never reaches a forwarded append).
-// 0.2.3 adds --participant to `journal.append` and reads SUBSTRATE_HOLDER.
-// The typed stdio service named in ADR-008 is not shipped on either side yet;
-// it stays a follow-up, and doctor says so instead of implying it exists.
+// Verified against a live server, not assumed. sb 0.2.2 rejects
+// --participant/--workspace on `journal append`, but its
+// src/domain/execution-context.js reads SUBSTRATE_HOLDER as the ambient
+// identity for a write that supplies none: a forwarded `issue note` with the
+// holder exported records that participant (measured 2026-11-02, journal
+// seq 7). 0.2.2 also accepts --participant/--workspace on `provenance
+// dispatch` and `--workspace` on `journal checkpoint`. 0.2.3 adds
+// --participant to `journal.append`. The typed stdio service named in ADR-008
+// is not shipped on either side yet; it stays a follow-up, and doctor says so
+// instead of implying it exists.
 const SERVER_SERVICE_VERSION = "0.2.3";
 
 function capabilitiesFor(server: string | null): RemoteCapabilities {
@@ -58,7 +61,7 @@ function capabilitiesFor(server: string | null): RemoteCapabilities {
     holderEnv: modern
       ? "server sb " + server + " reads SUBSTRATE_HOLDER and accepts --participant on journal appends"
       : known
-        ? "server sb " + server + " has no journal --participant flag and no SUBSTRATE_HOLDER: forwarded journal appends record no participant (needs server " + SERVER_SERVICE_VERSION + ")"
+        ? "server sb " + server + " reads SUBSTRATE_HOLDER (ambient identity) but rejects --participant on journal appends: an exported holder survives a forwarded write, an explicit --participant does not"
         : "unknown until the server answers",
     workspaceOverride: modern
       ? "client workspace is recordable on dispatch and checkpoint (--workspace/--participant)"

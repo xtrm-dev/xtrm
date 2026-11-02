@@ -75,12 +75,12 @@ Rejected as the primary transport, with reasons:
 
 ### What server 0.2.2 cannot do (verified 2026-11-02)
 
-Measured against the live server (`ssh server`, `zsh -lic 'command -v sb'` → `/home/dawid/.nvm/versions/node/v24.15.0/bin/sb`, `sb 0.2.2`), not inferred from the repository:
+Measured against the live server (`ssh server`, `zsh -lic 'command -v sb'` → `/home/dawid/.nvm/versions/node/v24.15.0/bin/sb`, `sb 0.2.2`), not inferred from the repository. An earlier revision of this table claimed 0.2.2 has no `SUBSTRATE_HOLDER`; that was wrong, and a forwarded probe disproved it (row 1).
 
 | Capability | 0.2.2 | 0.2.3 (this repo) |
 |---|---|---|
-| `journal append --participant` | rejected (`unknown flag`) | accepted |
-| `SUBSTRATE_HOLDER` in the server binary | absent (no occurrence in the installed dist) | read as `participantId` |
+| `SUBSTRATE_HOLDER` → recorded `participantId` | read as ambient identity (`dist/src/domain/execution-context.js`, `currentExecutionContext` → `ambientIdentityFallback`); **a forwarded write preserves the participant** (verified: `sb issue note XTRM-685` with the holder exported recorded journal seq 7 with that participant) | same, plus explicit `--participant` |
+| `journal append --participant` | rejected (`unknown flag --participant`) | accepted |
 | `journal checkpoint --workspace` | accepted | accepted |
 | `provenance dispatch --participant --workspace` | accepted | accepted |
 | `provenance bind <receipt> <sha>` | accepted | accepted |
@@ -88,7 +88,7 @@ Measured against the live server (`ssh server`, `zsh -lic 'command -v sb'` → `
 
 Consequences that Stage 2 must state rather than hide:
 
-1. **A forwarded `journal append` records no participant against 0.2.2.** The executor forwards `SUBSTRATE_HOLDER` in the environment, and a 0.2.2 server ignores it. Worker identity on Journal rows therefore needs server 0.2.3 (the flag or the env read). `sb doctor` reports this as a capability line instead of claiming identity survives the hop.
+1. **Participant identity survives a forwarded write.** The executor forwards `SUBSTRATE_HOLDER` in the environment and a 0.2.2 server reads it as the ambient identity, so a forwarded `issue note` / `journal append` records the holder as `participantId`. What 0.2.2 lacks is the explicit `--participant` *flag* on `journal append`; a caller that passes the flag gets `unknown flag` from the server, which is the correct fail-closed answer. The transport defect this exposed — a `--participant` value that cannot be expressed on the server must not be silently dropped — is why the capability is reported per server version in `sb doctor`.
 2. **Post-rewrite cannot be forwarded.** `sb 0.2.2` exposes no CLI verb for `reconcileRewrite`, so the remote `post-rewrite` adapter reports the unreconciled pairs on stderr and leaves the bindings alone. Claiming success would record a reconciliation that never happened.
 3. **The typed stdio service is not shipped on either side.** In-process consumers (Pi handlers, Claude hook scripts, specialists ports) keep their local behaviour until that follow-up lands.
 
