@@ -1,6 +1,7 @@
 # ADR-008 — One authoritative Substrate store, reached from a second machine
 
-> Status: PROPOSED (gate decision pending) · Date: 2026-11-02 · Issue: **XTRM-685** rev 2
+> Status: Stage 1 ACCEPTED 2026-11-02 · Stage 2 merged (`2d33ec76`) · Stage 3 proposed in **XTRM-690**
+> Date: 2026-11-02 · Issues: **XTRM-685** rev 2 (Stages 1–2), **XTRM-690** (Stage 3)
 > Scope: how every Substrate consumer reaches the one `~/.xtrm/state.db` when the operator works on a PC and the store lives on the server.
 > Evidence: `packages/substrate/cli/sb.ts`, `packages/substrate/src/store/{sqlite,database}.ts`, `packages/substrate/hooks/*.ts`, `packages/substrate/integrations/claude-code/{runtime,mcp-server}.ts`, `packages/substrate/integrations/pi/handlers.ts`, `packages/substrate/plugin/substrate/{.mcp.json,scripts/*.mjs}`, specialists `src/substrate/services.ts`, `src/activation/workitem-store.ts`, `src/activation/authority-store.ts`; measured SSH costs on 2026-11-02 (below).
 
@@ -90,7 +91,7 @@ Consequences that Stage 2 must state rather than hide:
 
 1. **Participant identity survives a forwarded write.** The executor forwards `SUBSTRATE_HOLDER` in the environment and a 0.2.2 server reads it as the ambient identity, so a forwarded `issue note` / `journal append` records the holder as `participantId`. What 0.2.2 lacks is the explicit `--participant` *flag* on `journal append`; a caller that passes the flag gets `unknown flag` from the server, which is the correct fail-closed answer. The transport defect this exposed — a `--participant` value that cannot be expressed on the server must not be silently dropped — is why the capability is reported per server version in `sb doctor`.
 2. **Post-rewrite cannot be forwarded.** `sb 0.2.2` exposes no CLI verb for `reconcileRewrite`, so the remote `post-rewrite` adapter reports the unreconciled pairs on stderr and leaves the bindings alone. Claiming success would record a reconciliation that never happened.
-3. **The typed stdio service is not shipped on either side.** In-process consumers (Pi handlers, Claude hook scripts, specialists ports) keep their local behaviour until that follow-up lands.
+3. **The typed stdio service now exists, but only where it is installed.** XTRM-690 ships `sb serve --stdio` in `packages/substrate` (protocol 1). It cannot help a server still on 0.2.2: the command must exist on the machine that owns the store, so that machine's `sb` has to reach a release carrying it. In-process consumers (Pi handlers, Claude hook scripts, specialists ports) keep their local behaviour until then, and `sb doctor` reports the service as unavailable by version rather than assuming it.
 
 ### Stage 2 does not unblock native dispatch
 
@@ -212,6 +213,77 @@ before assuming either.
 | Specialists native dispatch, activation authority (`src/activation/workitem-store.ts`, `src/activation/authority-store.ts`) | remote implementations of `IssueServicePort`/`IssueStorePort`; structured activation/authority operations instead of raw SQLite over the wire | `specialists` repo |
 | PC stale local store (`~/.xtrm/state.db`, 0 issues) | archive it with a marker and add a remote-mode guard so no consumer can silently open it | `packages/substrate` |
 
+## Stage 3 (XTRM-690): the typed stdio service
+
+Stage 2 gave the PC a correct argv path to the server-owned store. Stage 3 gives
+in-process consumers a typed one, because a consumer that runs inside a process
+cannot pipe a CLI: the specialists service reaches the store through
+`IssueServicePort`/`IssueStorePort`, the Pi extension and the Claude hooks call
+the domain services directly.
+
+**Transport.** One child process per client process, started as
+`ssh -T … <host> "cd '<root>' && '<sb>' serve --stdio"`, or as `sb serve --stdio`
+on this machine. Newline-delimited JSON frames: `{id, op, args}` →
+`{id, ok, result}` / `{id, ok: false, error: {code, message}}`. The first frame is
+`hello`, answered with the protocol number, the `sb` version and the sorted
+capability list. A protocol the server does not speak is refused as
+`unsupported` before any store operation, and a refusal does not open the door
+for later frames. A malformed frame is answered with `id: null` and the session
+continues. stdout carries frames only; diagnostics go to stderr. A server
+without the verb prints CLI help instead of a frame, so the client reports the
+missing capability by name (`sb serve --stdio` … 0.2.4 or newer) rather than a
+generic timeout.
+
+**Surface: structured operations, never SQL.** 48 operations across
+`issue.*`, `gate.*`, `store.*`, `journal.*`, `provenance.*`, `resume.capsule`
+and `authority.*`. Each one is a named domain operation with typed, validated
+arguments; there is no `sql`, `exec` or query-expression verb, and an unknown
+operation is refused by its own name. The handlers call the same
+`IssueService`/`JournalService`/`ProvenanceService`/`ResumeService` methods the
+local path calls, so a remote call and a local call cannot drift into different
+semantics.
+
+**Activation authority.** `authority.record`, `authority.remove` and
+`authority.list` are the only operations that name the `activations` table.
+They exist because the specialists' authority writer is deliberately small —
+one row per activation, written outside the issue store, read directly by the
+shipped SessionStart reader — and because the general instruction is that
+authority travels as structured operations. Their columns are copied from
+`specialists/src/activation/authority-store.ts` verbatim
+(`activation_id`, `specialist`, `state`, `bead_id`, `last_activity_at`) so the
+service cannot invent a shape the reader does not understand; the schema version
+constant is repeated rather than shared, and a change to either side must move
+both.
+
+**Local mode is the same surface.** `createLocalService` runs the identical
+operation table in-process. A consumer can therefore be written once against
+`SubstrateService` and remain fully local when `substrate.remote` is unset — the
+two-way rule, applied to code instead of commands.
+
+**Rollout order (the server runs `sb` 0.2.2 today).**
+
+1. Release `packages/substrate` with `sb serve --stdio` and `src/service/`.
+2. Upgrade the server's `sb` to that release and verify the handshake there:
+   `printf '%s\n' '{"id":0,"op":"hello","args":{"protocol":1}}' | sb serve --stdio`.
+3. Land the consumers — Pi handlers, Claude hooks and MCP server, specialists
+   ports (XTRM-691, XTRM-692, SPECIALISTS-4395). Each must treat a failed
+   handshake as "no remote service" and keep its local behaviour; none may assume
+   the service is present.
+4. Only then switch activation authority to the service on machines that own a
+   server store.
+
+Nothing in steps 3–4 is safe to land before step 2 in a repository whose store
+lives on the server: a consumer that assumes the service would lose its
+operations silently, which is the failure mode this order prevents.
+
+**Verification.** `packages/substrate/tests/service-protocol.test.ts` drives a
+real `sb serve --stdio` child over pipes with real frames, against a store the
+client process never opens: the authority row is read back from the server's file
+with `openSubstrate` directly, the client's file stays empty through the same
+operation table, an issue round trip runs through `sb init` on a throwaway
+repository, and an `ssh`-shaped shim proves the hop works over pipes. The CLI
+answers both `sb serve --stdio` and `sb serve stdio`.
+
 ## Open questions for the operator (the gate)
 
 1. **Transport:** accept the recommended `ssh`-exec design (no listener, no daemon), or prefer the tunneled store service (option C) because a resident service is wanted for a later multi-machine/multi-user tier? — **Answered 2026-11-02: accept `ssh`-exec, no listener, no daemon.**
@@ -233,3 +305,10 @@ the transport with their local bodies preserved. Validation lives in
 `packages/substrate/tests/remote-transport.test.ts` (fake transport, no
 network). Remaining consumers are listed above and are follow-up Issues, not
 gaps in Stage 2.
+
+Stage 3 is implemented on branch `xt/XTRM-690-stdio-service`:
+`packages/substrate/src/service/{protocol,ops,authority-service,serve,client}.ts`,
+the `sb serve --stdio` wiring in `cli/sb.ts`, and
+`packages/substrate/tests/service-protocol.test.ts` (real child process, real
+frames). It is not deployed: the rollout order above governs when a consumer may
+use it. The consumers stay follow-up Issues.
