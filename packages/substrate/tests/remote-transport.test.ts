@@ -80,7 +80,7 @@ if (cfg.mode === "file") {
   if (argv[0] === "provenance" && argv[1] === "trace") out("provenance.trace", cfg.trace || { receipts: [], bindings: [] });
   out("echo", { argv, cwd: process.cwd(), env });
 }
-if (cfg.mode === "envelope") { process.stdout.write(cfg.envelope || ""); process.exit(0); }
+if (cfg.mode === "envelope") { process.stdout.write(cfg.envelope || ""); process.exit(cfg.exit ?? 0); }
 process.stderr.write("fake sb: unhandled " + JSON.stringify(argv) + "\\n");
 process.exit(9);
 `;
@@ -834,6 +834,23 @@ describe("second-audit findings", () => {
     const mapping = resolveMapping(session, CLIENT_KEY!, { refresh: true });
     assert.equal(mapping.root, root);
     assert.deepEqual(readClientConfig(fake.clientConfigPath).checkouts, {}, "a one-off SUBSTRATE_REMOTE leaves no durable mapping");
+  });
+
+  it("reports a server refusal from its --json envelope, not an empty stderr", () => {
+    const fake = makeFake({
+      mode: "envelope",
+      exit: 1,
+      envelope: JSON.stringify({ schema: "substrate-cli/v1", command: "provenance.bind", ok: false, error: "receipt wr_probe is already finalized" }),
+      version: "sb 0.2.2\n",
+    });
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
+    const res = spawnSync(process.execPath, [hookPath("post-commit.ts")], {
+      encoding: "utf8",
+      cwd: process.cwd(),
+      env: hookEnv(fake, { XTRM_RECEIPT_ID: "wr_probe", XTRM_COMMIT_SHA: "e".repeat(40) }),
+    });
+    assert.equal(res.status, 0);
+    assert.match(res.stderr, /receipt wr_probe is already finalized/);
   });
 
   it("refuses a receipt id that looks like an option", () => {

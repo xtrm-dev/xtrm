@@ -151,6 +151,21 @@ function openReceiptId(session: RemoteSession, serverRoot: string, ref: string, 
   return open.length === 1 ? validReceiptId(open[0]!.id) : null;
 }
 
+// With `--json` a server-side refusal arrives as an envelope on stdout and an
+// empty stderr, so reporting only stderr printed "provenance bind failed" while
+// the server had said exactly what was wrong.
+function explain(result: { stdout: string; stderr: string }): string {
+  const direct = result.stderr.trim();
+  if (direct !== "") return direct;
+  try {
+    const envelope = JSON.parse(result.stdout) as { error?: unknown; ok?: unknown };
+    if (typeof envelope.error === "string" && envelope.error.trim() !== "") return envelope.error.trim();
+  } catch {
+    // Not an envelope: nothing better than the generic line below.
+  }
+  return "provenance bind failed";
+}
+
 function openSession(): RemoteSession | null {
   return hookSession(process.env, { deadlineMs: Date.now() + HOOK_BUDGET_MS });
 }
@@ -187,7 +202,7 @@ export function remotePostCommit(repoRoot: string): void {
       return;
     }
     const result = runRemote(session, ["provenance", "bind", receiptId, sha, "--json"], { cwd: root, env: ambientEnv() });
-    if (result.code !== 0) warn(result.stderr.trim() || "provenance bind failed");
+    if (result.code !== 0) warn(explain(result));
   } catch (err) {
     warn(err);
   }
