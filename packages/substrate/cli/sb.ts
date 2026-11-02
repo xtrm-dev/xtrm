@@ -24,6 +24,7 @@ import { assertSchemaHealthy } from "../src/store/migrations/runner.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { RepositoryService } from "../src/service/repository-service.ts";
 import { discoverGitRoot, discoverRepository, type RepositoryDiscovery } from "../src/domain/repository-discovery.ts";
+import { BOOLEAN_FLAGS, type FlagValue, type Flags, flag, flagList, parseArgs } from "../src/domain/argv.ts";
 import { forwardCli, localStoreRequested } from "../src/remote/executor.ts";
 import type { RemoteTransport } from "../src/remote/ssh.ts";
 import { remoteDoctor, type RemoteDoctorReport } from "../src/remote/doctor.ts";
@@ -237,57 +238,9 @@ function contractSections(contract: unknown): string[] {
 
 // -- argv --------------------------------------------------------------------
 
-const BOOLEAN_FLAGS = new Set(["json", "help", "version", "dry-run"]);
-
-// Repeated-flag semantics (XTRM-552): a non-boolean flag accumulates every
-// supplied value in caller order. Scalar readers use flag() and take the
-// last value (explicit last-wins); list readers use flagList() and take
-// every value. A boolean flag is presence-only and repeats idempotently.
-// A bare non-boolean flag (`--reason` with no value) is presence without a
-// value and never clobbers values already supplied.
-type FlagValue = true | string[];
-type Flags = Map<string, FlagValue>;
-
-function parseArgs(argv: string[]): { flags: Flags; positionals: string[] } {
-  const flags: Flags = new Map();
-  const positionals: string[] = [];
-  let i = 0;
-  while (i < argv.length) {
-    const a = argv[i] as string;
-    if (a.startsWith("--")) {
-      const key = a.slice(2);
-      const next = argv[i + 1];
-      if (!BOOLEAN_FLAGS.has(key) && next !== undefined && !next.startsWith("--")) {
-        const prev = flags.get(key);
-        if (Array.isArray(prev)) prev.push(next);
-        else flags.set(key, [next]);
-        i += 2;
-      } else if (!flags.has(key)) {
-        flags.set(key, true);
-        i += 1;
-      } else {
-        i += 1;
-      }
-    } else {
-      positionals.push(a);
-      i += 1;
-    }
-  }
-  return { flags, positionals };
-}
-
-function flag(flags: Flags, name: string): string | undefined {
-  const v = flags.get(name);
-  if (v === undefined || v === true) return undefined;
-  return v[v.length - 1];
-}
-
-// Every value supplied for a repeated flag, in caller order (XTRM-552).
-function flagList(flags: Flags, name: string): string[] | undefined {
-  const v = flags.get(name);
-  if (v === undefined || v === true) return undefined;
-  return v.slice();
-}
+// The parser is shared with the remote forwarder (src/domain/argv.ts), so the
+// two cannot disagree about which token is a flag's value: that disagreement
+// let `--project X export project --file out` look like an export of project X.
 
 function readJsonArg(value: string): unknown {
   // Distinguish the two inputs the flag accepts. The single try/catch this
@@ -801,10 +754,17 @@ function runRemoteDoctor(ctx: Ctx, report: RemoteDoctorReport): CliResult {
       stderr: "",
     };
   }
+  // The heading states what actually happened, not what was configured: a
+  // corrupt config is "remote configured, unusable", and a local override is
+  // "local because <reason>". Saying "remote" for either hid the reason.
   const heading =
     report.mode === "ssh"
-      ? "sb doctor: remote (no local store is opened in remote mode)\n"
-      : "sb doctor: local\n";
+      ? report.error === null
+        ? "sb doctor: remote (no local store is opened in remote mode)\n"
+        : "sb doctor: remote configured, unusable (no local store was opened)\n"
+      : report.note === null
+        ? "sb doctor: local\n"
+        : "sb doctor: local (" + report.note + ")\n";
   return {
     code: ok ? 0 : 1,
     stdout: heading + renderRemoteDoctor(report),

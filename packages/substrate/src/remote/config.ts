@@ -4,7 +4,7 @@
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { RemoteError, parseRemoteSpec, type RemoteSpec } from "./spec.ts";
 
 export interface CheckoutMapping {
@@ -35,6 +35,21 @@ function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
 
+// A cached server `sb` path is only useful as an absolute path: a relative one
+// would resolve against whatever directory the next invocation happens to be
+// in, on either side of the hop.
+function asAbsolutePath(value: unknown): string | null {
+  const text = asString(value);
+  return text !== null && isAbsolute(text) ? text : null;
+}
+
+// The cache key carries the host. A mapping observed on one host says nothing
+// about another, and `sb remote setup` may point the same repository at a
+// different server later.
+export function mappingKey(host: string, repositoryKey: string): string {
+  return host + " " + repositoryKey;
+}
+
 // A malformed config fails closed: silently falling back to local mode would
 // open the stale local store, which is the defect this feature removes.
 export function readRemoteConfig(env: NodeJS.ProcessEnv = process.env): RemoteConfig | null {
@@ -53,7 +68,16 @@ export function readRemoteConfig(env: NodeJS.ProcessEnv = process.env): RemoteCo
     throw new RemoteError("config", `invalid ${path}: expected a JSON object`);
   }
   const record = parsed as Record<string, unknown>;
-  const remote = asString(env["SUBSTRATE_REMOTE"]) ?? asString(record["remote"]);
+  const envRemote = asString(env["SUBSTRATE_REMOTE"]);
+  // A present but unusable value is a mistake, not "no remote": `{"remote": 5}`
+  // used to read as local mode and silently open the stale local store.
+  if (envRemote === null && record["remote"] !== undefined && asString(record["remote"]) === null) {
+    throw new RemoteError(
+      "config",
+      `invalid ${path}: "remote" must be a non-empty string such as "ssh:host" (found ${JSON.stringify(record["remote"])})`,
+    );
+  }
+  const remote = envRemote ?? asString(record["remote"]);
   if (remote === null) return null;
   const rawCheckouts = record["checkouts"];
   const checkouts: Record<string, CheckoutMapping> = {};
@@ -70,7 +94,7 @@ export function readRemoteConfig(env: NodeJS.ProcessEnv = process.env): RemoteCo
       };
     }
   }
-  return { remote, remoteSb: asString(record["remoteSb"]), serverVersion: asString(record["serverVersion"]), checkouts };
+  return { remote, remoteSb: asAbsolutePath(record["remoteSb"]), serverVersion: asString(record["serverVersion"]), checkouts };
 }
 
 export function writeRemoteConfig(config: RemoteConfig, env: NodeJS.ProcessEnv = process.env): string {
@@ -91,6 +115,9 @@ export interface RemoteSelection {
   spec: RemoteSpec;
   config: RemoteConfig;
   configPath: string;
+  // True when SUBSTRATE_REMOTE chose the host. A one-off env override is never
+  // written back: a shell variable must not silently become durable state.
+  envOverride: boolean;
 }
 
 // Remote mode is opt-in and reversible (ADR-008: every setting works both
@@ -132,5 +159,5 @@ export function selectRemote(env: NodeJS.ProcessEnv = process.env): RemoteSelect
   if (config === null) return null;
   const spec = parseRemoteSpec(config.remote);
   if (spec === null) return null;
-  return { spec, config, configPath: remoteConfigPath(env) };
+  return { spec, config, configPath: remoteConfigPath(env), envOverride: asString(env["SUBSTRATE_REMOTE"]) !== null };
 }

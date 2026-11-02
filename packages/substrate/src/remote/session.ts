@@ -6,12 +6,16 @@
 import { isAbsolute } from "node:path";
 import { discoverRepository } from "../domain/repository-discovery.ts";
 import { RemoteError, buildRemoteCommand, shellQuote, type RemoteSpec, type RemoteUpload } from "./spec.ts";
-import { selectRemote, writeRemoteConfig, type CheckoutMapping, type RemoteConfig } from "./config.ts";
+import { mappingKey, selectRemote, writeRemoteConfig, type CheckoutMapping, type RemoteConfig } from "./config.ts";
 import { firstLine, sshTransport, type RemoteRunResult, type RemoteTransport } from "./ssh.ts";
 
 export interface RemoteDeps {
   transport?: RemoteTransport;
   env?: NodeJS.ProcessEnv;
+  // Absolute epoch milliseconds after which the whole invocation gives up,
+  // discovery included. A hook uses this instead of a per-call timeout: three
+  // 15 s calls with a cold session are 45 s of `git commit`.
+  deadlineMs?: number | null;
 }
 
 export interface RemoteSession {
@@ -21,6 +25,8 @@ export interface RemoteSession {
   sbPath: string;
   transport: RemoteTransport;
   env: NodeJS.ProcessEnv;
+  envOverride: boolean;
+  deadlineMs?: number | null;
 }
 
 export interface RemoteRunOptions {
@@ -43,13 +49,39 @@ export function openRemoteSession(deps: RemoteDeps = {}): RemoteSession | null {
     sbPath: selection.config.remoteSb ?? "",
     transport: deps.transport ?? sshTransport,
     env,
+    envOverride: selection.envOverride,
+    deadlineMs: deps.deadlineMs ?? null,
   };
   if (session.sbPath === "") session.sbPath = resolveServerSb(session);
   return session;
 }
 
+// A host chosen by SUBSTRATE_REMOTE for one invocation stays in that
+// invocation: writing it back would turn a shell variable into durable state
+// that outlives the shell (review M2). Cache writes are best effort elsewhere
+// too, so a read-only config dir never blocks a command.
 function persist(session: RemoteSession): void {
+  if (session.envOverride) return;
   writeRemoteConfig(session.config, session.env);
+}
+
+// Milliseconds left in the session's budget, or null when the session has none.
+// A caller that passes an explicit timeout still gets the smaller of the two.
+function remaining(session: RemoteSession): number | null {
+  if (session.deadlineMs === undefined || session.deadlineMs === null) return null;
+  return session.deadlineMs - Date.now();
+}
+
+function timeoutFor(session: RemoteSession, requested?: number): number | undefined {
+  const left = remaining(session);
+  if (left === null) return requested;
+  if (left <= 0) {
+    throw new RemoteError(
+      "unreachable",
+      "substrate.remote=" + session.config.remote + ": the invocation budget expired before the command could be sent; nothing ran on " + session.spec.host,
+    );
+  }
+  return requested === undefined ? left : Math.min(requested, left);
 }
 
 // Discovery only: a login shell is required to find `sb` (it lives on an
@@ -61,7 +93,7 @@ export function resolveServerSb(session: RemoteSession): string {
   const failures: string[] = [];
   for (const shell of DISCOVERY_SHELLS) {
     const command = shell + " " + shellQuote("command -v sb");
-    const result = session.transport.run({ host: session.spec.host, command, timeoutMs: 30_000 });
+    const result = session.transport.run({ host: session.spec.host, command, timeoutMs: timeoutFor(session, 30_000) });
     if (result.code === 255) {
       throw new RemoteError("unreachable", unreachable(session.spec.host, result.stderr));
     }
@@ -112,7 +144,7 @@ export function runRemote(session: RemoteSession, argv: string[], options: Remot
     host: session.spec.host,
     command: plan.command,
     stdin: options.stdin ?? plan.stdin,
-    timeoutMs: options.timeoutMs,
+    timeoutMs: timeoutFor(session, options.timeoutMs),
   });
   if (result.code === 255) throw new RemoteError("unreachable", unreachable(session.spec.host, result.stderr));
   return result;
@@ -238,7 +270,7 @@ export interface ResolveMappingOptions {
 // Fail closed when the mapping is absent or ambiguous: a bash-identical path
 // guess is the one thing this must never do.
 export function resolveMapping(session: RemoteSession, repositoryKey: string, options: ResolveMappingOptions = {}): CheckoutMapping {
-  const cached = session.config.checkouts[repositoryKey];
+  const cached = session.config.checkouts[mappingKey(session.spec.host, repositoryKey)];
   if (cached !== undefined && options.refresh !== true && (options.serverRoot ?? null) === null) return cached;
 
   if (options.serverRoot !== undefined && options.serverRoot !== null) {
@@ -278,7 +310,7 @@ export function resolveMapping(session: RemoteSession, repositoryKey: string, op
 
 function remember(session: RemoteSession, repositoryKey: string, checkout: ServerCheckout): CheckoutMapping {
   const mapping: CheckoutMapping = { root: checkout.root, projectId: checkout.projectId, verifiedAt: Date.now() };
-  session.config.checkouts[repositoryKey] = mapping;
+  session.config.checkouts[mappingKey(session.spec.host, repositoryKey)] = mapping;
   try {
     persist(session);
   } catch {
@@ -288,5 +320,5 @@ function remember(session: RemoteSession, repositoryKey: string, checkout: Serve
 }
 
 export function storedMapping(session: RemoteSession, repositoryKey: string): CheckoutMapping | null {
-  return session.config.checkouts[repositoryKey] ?? null;
+  return session.config.checkouts[mappingKey(session.spec.host, repositoryKey)] ?? null;
 }

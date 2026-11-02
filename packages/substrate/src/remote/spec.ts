@@ -55,7 +55,10 @@ export interface RemoteUpload {
 
 export interface RemoteCommandPlan {
   command: string;
-  // Base64 payload when the plan carries one stdin-borne upload; null otherwise.
+  // The framed document stream for the uploads, or null when there are none.
+  // Every uploaded byte travels here, never in the command string: the remote
+  // argv and /proc/<pid>/cmdline are world-readable on a shared host, so a base64
+  // argument was a plaintext disclosure to any local user (review H1/M7).
   stdin: string | null;
 }
 
@@ -69,9 +72,29 @@ export interface RemoteCommandInput {
 }
 
 const TMP_TEMPLATE = "/tmp/sb-remote.XXXXXX";
-// Files above this size travel on stdin (base64) instead of inside the command
-// string, which would otherwise be truncated by the remote argv limit.
-const INLINE_LIMIT = 64 * 1024;
+// Splits the framed stream into <dir>/fN.b64 files. Written against POSIX awk:
+// no gawk extensions, no pipes, so quoting cannot be broken by a payload.
+const FRAME_AWK =
+  '/^@@sb-remote-file /{f=d"/"$2".b64";next} /^@@sb-remote-end$/{f="";next} f!=""{print >> f}';
+
+
+// Frame markers. Base64 cannot contain "@", so no payload line can imitate one.
+const FILE_MARKER = "@@sb-remote-file ";
+const END_MARKER = "@@sb-remote-end";
+
+// The stream the server unpacks: one framed, base64-coded document per upload.
+// stdin has no ARG_MAX, so any number and size of documents now travel (the old
+// inline-in-argv path reported E2BIG as "cannot reach host").
+export function frameUploads(uploads: RemoteUpload[]): string {
+  const lines: string[] = [];
+  for (const upload of uploads) {
+    lines.push(FILE_MARKER + `f${upload.argvIndex}`);
+    const body = upload.content.toString("base64");
+    if (body !== "") lines.push(body);
+  }
+  lines.push(END_MARKER, "");
+  return lines.join("\n");
+}
 
 // Builds the one command string `ssh` hands to the remote shell:
 //   [upload preamble] [cd <cwd>] env K=V ... <sb> <args...>
@@ -80,27 +103,27 @@ const INLINE_LIMIT = 64 * 1024;
 export function buildRemoteCommand(input: RemoteCommandInput): RemoteCommandPlan {
   const uploads = input.uploads ?? [];
   const lines: string[] = [];
-  let stdin: string | null = null;
   const substitutions = new Map<number, string>();
 
   if (uploads.length > 0) {
     const template = input.tmpTemplate ?? TMP_TEMPLATE;
     lines.push(`sb_remote_dir=$(mktemp -d ${shellQuote(template)}) || { echo "sb remote: cannot create a temp dir on the server" >&2; exit 70; }`);
     lines.push("trap 'sb_remote_rc=$?; rm -rf \"$sb_remote_dir\"; exit $sb_remote_rc' EXIT");
+    // Every target exists first, so a zero-byte document still reaches the
+    // server as a real, empty file instead of a missing path.
     for (const upload of uploads) {
       const path = `"$sb_remote_dir/f${upload.argvIndex}"`;
       substitutions.set(upload.argvIndex, path);
-      if (upload.content.length === 0) continue;
-      if (upload.content.length > INLINE_LIMIT) {
-        if (uploads.length > 1) {
-          throw new RemoteError("unsupported", "multiple large file arguments are not supported in remote mode: pass one file per invocation");
-        }
-        stdin = upload.content.toString("base64");
-        lines.push(`base64 -d > ${path} || exit 70`);
-        continue;
-      }
-      lines.push(`printf %s ${shellQuote(upload.content.toString("base64"))} | base64 -d > ${path} || exit 70`);
+      lines.push(`: > ${path}`);
     }
+    lines.push(
+      `awk -v d="$sb_remote_dir" '${FRAME_AWK}' || { echo "sb remote: cannot unpack the uploaded documents" >&2; exit 70; }`,
+    );
+    lines.push(`for b in "$sb_remote_dir"/*.b64; do`);
+    lines.push(`  [ -e "$b" ] || continue`);
+    lines.push(`  base64 -d "$b" > "\${b%.b64}" || { echo "sb remote: cannot decode an uploaded document" >&2; exit 70; }`);
+    lines.push(`  rm -f "$b"`);
+    lines.push(`done`);
   }
 
   const parts: string[] = [];
@@ -119,5 +142,5 @@ export function buildRemoteCommand(input: RemoteCommandInput): RemoteCommandPlan
     );
   }
   lines.push(invocation);
-  return { command: lines.join("\n"), stdin };
+  return { command: lines.join("\n"), stdin: uploads.length === 0 ? null : frameUploads(uploads) };
 }

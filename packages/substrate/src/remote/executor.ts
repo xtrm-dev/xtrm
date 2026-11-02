@@ -3,7 +3,10 @@
 // place that decides local versus remote, and it decides before the local store
 // is opened, so the stale local database can never be touched in remote mode.
 
-import { existsSync, readFileSync } from "node:fs";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve, sep } from "node:path";
+import { flag, parseArgs } from "../domain/argv.ts";
 import { RemoteError, type RemoteUpload } from "./spec.ts";
 import { clientRepositoryKey, openRemoteSession, resolveMapping, runRemote, storedMapping, type RemoteSession } from "./session.ts";
 import type { RemoteTransport } from "./ssh.ts";
@@ -18,6 +21,8 @@ export interface ForwardDeps {
   // The caller already decided this invocation is local (an embedded caller's
   // dbPath, for instance). A string states the reason; null means "decide".
   localStore?: string | null;
+  // Absolute epoch milliseconds for the whole invocation (hooks pass this).
+  deadlineMs?: number | null;
 }
 
 export interface CliOutcome {
@@ -39,6 +44,8 @@ const FORWARDED_ENV = [
   "TZ",
 ];
 
+const EMPTY_FLAGS: ReadonlySet<string> = new Set();
+
 // Flags whose value is a client-side document, per command. Scoping matters:
 // `--result` is a `<file|json>` document on `journal append` and an `<a,b>` ref
 // list on `issue close`, so one global set would upload a ref list and hand the
@@ -46,27 +53,45 @@ const FORWARDED_ENV = [
 // with readJsonArg, and every value is materialised on the server: a file is
 // uploaded, inline JSON is uploaded as its own bytes, and a bare path is
 // refused (the server would resolve a same-named file of its own).
-const EMPTY_FLAGS: ReadonlySet<string> = new Set();
 const DOCUMENT_FLAGS: Record<string, ReadonlySet<string>> = {
   "issue.create": new Set(["contract"]),
   "issue.edit": new Set(["contract", "ownership", "context-refs"]),
+  "issue.note": new Set(["result"]),
   "journal.append": new Set(["mechanical", "semantic", "result", "refs"]),
-  "journal.checkpoint": new Set(["mechanical", "semantic"]),
+  "journal.checkpoint": new Set(["mechanical", "semantic", "refs"]),
 };
 
-// Flags whose value is always a path the server must read.
-const FILE_FLAGS = new Set(["file", "edges-file"]);
+// Flags whose value is a text file the *server* reads from its disk. Scoped the
+// same way and for the same reason: `--file` exists only where the server
+// documents it, and an unlisted command may not pull a local file into the
+// shared store (review H1).
+const INPUT_FILE_FLAGS: Record<string, ReadonlySet<string>> = {
+  "issue.note": new Set(["file"]),
+  "plan.check": new Set(["file"]),
+  "plan.apply": new Set(["file"]),
+  "import.beads": new Set(["file", "edges-file"]),
+};
 
 // An output path is not an input: `sb export project --file` writes the
 // snapshot where the command runs, so in remote mode it would land on the
 // server while the client reports success with no file. Refused, not dropped.
-const OUTPUT_FLAGS: Record<string, ReadonlySet<string>> = { export: new Set(["file"]) };
+const OUTPUT_FLAGS: Record<string, ReadonlySet<string>> = {
+  export: new Set(["file"]),
+  "export.project": new Set(["file"]),
+};
 
 // Handled locally by design: help/version never open a store, doctor reports
 // this machine's mode, and `remote` configures it.
 const NEVER_FORWARDED = new Set(["help", "version", "doctor", "remote"]);
 
-const VALUE_FLAGS = new Set(["db"]);
+// One document, one bound. Large enough for a real contract or Journal result,
+// small enough that a forwarded invocation is not a bulk copy.
+export const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
+
+// Directories whose contents are secrets or kernel state, never documents: an
+// ssh key or a credentials file must not become a Journal entry because a caller
+// passed its path (review H1).
+const DENIED_ROOTS = [join(homedir(), ".ssh"), join(homedir(), ".secrets"), join(homedir(), ".gnupg"), "/proc", "/sys", "/dev"];
 
 export interface ParsedArgv {
   group: string | null;
@@ -74,17 +99,19 @@ export interface ParsedArgv {
   positionals: string[];
 }
 
+// The command a forwarded invocation names, from the parser the CLI itself
+// uses. Scanning for the first two non-flag tokens (the old approach) read a
+// flag's value as the command: `--project X export project --file out` looked
+// like `export.project` and skipped the write-direction refusal (review M5).
 export function parseArgv(argv: string[]): ParsedArgv {
-  const positionals: string[] = [];
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index]!;
-    if (!token.startsWith("-")) {
-      positionals.push(token);
-      continue;
-    }
-    if (token.startsWith("--") && VALUE_FLAGS.has(token.slice(2))) index += 1;
-  }
+  const { positionals } = parseArgs(argv);
   return { group: positionals[0] ?? null, verb: positionals[1] ?? null, positionals };
+}
+
+function commandOf(argv: string[]): { group: string | null; command: string } {
+  const { group, verb } = parseArgv(argv);
+  if (group === null) return { group, command: "" };
+  return { group, command: verb === null ? group : group + "." + verb };
 }
 
 // An explicit local store is a deliberate local invocation, and it wins over
@@ -94,8 +121,13 @@ export function parseArgv(argv: string[]): ParsedArgv {
 export function localStoreRequested(argv: string[], env: NodeJS.ProcessEnv = process.env): string | null {
   const fromEnv = (env["SUBSTRATE_DB"] ?? "").trim();
   if (fromEnv !== "") return "SUBSTRATE_DB=" + fromEnv;
-  const flagged = flagValue(argv, "db");
-  if (flagged !== null) return "--db " + flagged;
+  const flagged = flag(parseArgs(argv).flags, "db");
+  if (flagged !== undefined) return "--db " + flagged;
+  // The parser does not split `=` (the server's does not either), but a
+  // `--db=<path>` still names a store, and treating it as remote would write to
+  // the server while the caller asked for a file on this machine.
+  const equals = argv.find((token) => token.startsWith("--db="));
+  if (equals !== undefined) return "--db " + equals.slice("--db=".length);
   return null;
 }
 
@@ -114,47 +146,62 @@ export interface PreparedFiles {
   wantsStdin: boolean;
 }
 
-// A local path that the server must read is uploaded; anything else is refused
-// with the flag and the file named (ADR-008: silent substitution is a defect).
-//
-// `--flag=value` is rewritten to `--flag value` before uploads are numbered so
-// the substitution replaces the value alone: replacing the whole token would
-// send the temp path in place of the flag and drop the flag name from the
-// server's argv.
+function unsupported(message: string): RemoteError {
+  return new RemoteError("unsupported", message);
+}
+
+// Uploads are numbered by their argv index so the server-side substitution
+// replaces the value alone. `--flag=value` is refused for these flags rather
+// than split: the server's own parser does not split it, so splitting would ask
+// the server for something it never accepts (review H1).
 export function prepareFiles(argv: string[]): PreparedFiles {
-  const { group, command } = commandOf(argv);
+  const { command } = commandOf(argv);
   const documents = DOCUMENT_FLAGS[command] ?? EMPTY_FLAGS;
-  const outputs = (group === null ? EMPTY_FLAGS : OUTPUT_FLAGS[group]) ?? EMPTY_FLAGS;
+  const inputFiles = INPUT_FILE_FLAGS[command] ?? EMPTY_FLAGS;
+  const outputs = OUTPUT_FLAGS[command] ?? EMPTY_FLAGS;
   const uploads: RemoteUpload[] = [];
   const rewritten: string[] = [];
   let wantsStdin = false;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index]!;
-    if (token.startsWith("--")) {
-      const eq = token.indexOf("=");
-      const flagName = eq === -1 ? token.slice(2) : token.slice(2, eq);
-      const value = eq === -1 ? (argv[index + 1] ?? "") : token.slice(eq + 1);
-      if (outputs.has(flagName)) {
-        throw new RemoteError(
-          "unsupported",
-          "--" + flagName + " " + JSON.stringify(value) + " is an output path: the file would be written on the server, not on this machine. " +
-            "Omit --" + flagName + " and read the result from stdout (add --json), or run the command where the server store is local",
+    if (!token.startsWith("--")) {
+      rewritten.push(token);
+      continue;
+    }
+    const bare = token.slice(2);
+    const eq = bare.indexOf("=");
+    if (eq !== -1) {
+      const name = bare.slice(0, eq);
+      if (outputs.has(name) || documents.has(name) || inputFiles.has(name)) {
+        throw unsupported(
+          "--" + name + "=" + JSON.stringify(bare.slice(eq + 1)) + " is not accepted in remote mode: use `--" + name + " <value>` " +
+            "(sb does not split --flag=value for this flag, so the token would reach the server unchanged)",
         );
       }
-      if (documents.has(flagName) || FILE_FLAGS.has(flagName)) {
-        rewritten.push("--" + flagName);
-        if (eq === -1) index += 1;
-        if (value === "-") {
-          wantsStdin = true;
-          rewritten.push(value);
-          continue;
-        }
-        const argvIndex = rewritten.length;
-        const content = documentBytes(flagName, value, documents.has(flagName));
-        rewritten.push(value);
-        uploads.push({ argvIndex, content });
+      rewritten.push(token);
+      continue;
+    }
+    if (outputs.has(bare)) {
+      throw unsupported(
+        "--" + bare + " " + JSON.stringify(argv[index + 1] ?? "") + " is an output path: the file would be written on the server, not on this machine. " +
+          "Omit --" + bare + " and read the result from stdout (add --json), or run the command where the server store is local",
+      );
+    }
+    if (documents.has(bare) || inputFiles.has(bare)) {
+      const value = argv[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        throw unsupported("--" + bare + " needs a value in remote mode: the document or file is read on this machine and uploaded");
+      }
+      index += 1;
+      if (value === "-") {
+        wantsStdin = true;
+        rewritten.push("--" + bare, "-");
         continue;
       }
+      const content = inputFiles.has(bare) ? readInputFile(bare, value) : documentBytes(bare, value, documents.has(bare));
+      rewritten.push("--" + bare, value);
+      uploads.push({ argvIndex: rewritten.length - 1, content });
+      continue;
     }
     rewritten.push(token);
   }
@@ -162,52 +209,105 @@ export function prepareFiles(argv: string[]): PreparedFiles {
 }
 
 // The bytes to send for a document flag: the file when the value names one, the
-// inline JSON itself otherwise. Inline JSON travels as an uploaded file too, so
-// it never appears in the server's process list and reaches the server byte for
-// byte. A bare path that is not a file here is refused, never forwarded.
+// inline JSON itself otherwise. Both travel as one framed stream on stdin, so
+// the document is never an argv element and never visible in a process list on
+// either side. Base64 inside the argv would not have achieved that — a command
+// line stays readable in /proc below the kernel's argument limit (review M7).
 function documentBytes(flagName: string, value: string, inlineAllowed: boolean): Buffer {
-  if (value !== "" && existsSync(value)) return readFileSync(value);
-  if (inlineAllowed && /^\s*[[{]/.test(value)) return Buffer.from(value);
-  throw new RemoteError(
-    "unsupported",
+  if (looksLikePath(value)) return readInputFile(flagName, value);
+  if (inlineAllowed && /^\s*[[{]/.test(value)) {
+    const bytes = Buffer.from(value);
+    if (bytes.length > MAX_DOCUMENT_BYTES) {
+      throw unsupported("--" + flagName + " inline document is " + bytes.length + " bytes, above the " + MAX_DOCUMENT_BYTES + "-byte limit");
+    }
+    return bytes;
+  }
+  throw unsupported(
     inlineAllowed
       ? "--" + flagName + " " + JSON.stringify(value) + ": not a file on this machine and not inline JSON. sb remote uploads the document from here"
       : "--" + flagName + " " + JSON.stringify(value) + ": file not found on this machine (sb remote does not accept a server-side path)",
   );
 }
 
+// A value is a path when the file exists here. Existence, not shape: a JSON
+// document can start with "[" and a path can contain none of the JSON
+// punctuation, and `existsSync` is what the CLI's own readJsonArg checks first.
+function looksLikePath(value: string): boolean {
+  try {
+    lstatSync(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// A local file the server will read. Refused when it is not a regular file, a
+// symlink, inside a secret directory, or larger than the document bound (review
+// H1): a path that exists is not by itself a document.
+function readInputFile(flagName: string, value: string): Buffer {
+  const absolute = resolve(value);
+  let info;
+  try {
+    info = lstatSync(absolute);
+  } catch (err) {
+    throw unsupported(
+      "--" + flagName + " " + JSON.stringify(value) + ": not a readable file on this machine (" +
+        (err instanceof Error ? err.message : String(err)) + ")",
+    );
+  }
+  if (info.isSymbolicLink()) throw unsupported("--" + flagName + " " + JSON.stringify(value) + ": refusing a symlink; pass the file it points at");
+  if (!info.isFile()) throw unsupported("--" + flagName + " " + JSON.stringify(value) + ": not a regular file");
+  if (info.size > MAX_DOCUMENT_BYTES) {
+    throw unsupported(
+      "--" + flagName + " " + JSON.stringify(value) + ": " + info.size + " bytes, above the " + MAX_DOCUMENT_BYTES + "-byte limit",
+    );
+  }
+  const real = realpathSync(absolute);
+  for (const denied of DENIED_ROOTS) {
+    if (real === denied || real.startsWith(denied + sep)) {
+      throw unsupported("--" + flagName + " " + JSON.stringify(value) + ": " + denied + " holds secrets or kernel state, never a Substrate document");
+    }
+  }
+  return readFileSync(real);
+}
+
 function hasFlag(argv: string[], name: string): boolean {
   return argv.some((token) => token === "--" + name || token.startsWith("--" + name + "="));
 }
 
-// Both spellings of a value flag, so `--db=X` is not mistaken for an ordinary
-// token the way `argv.includes("--db")` mistook it.
-function flagValue(argv: string[], name: string): string | null {
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index]!;
-    if (token === "--" + name) return argv[index + 1] ?? "";
-    if (token.startsWith("--" + name + "=")) return token.slice(name.length + 3);
-  }
-  return null;
-}
-
-function commandOf(argv: string[]): { group: string | null; command: string } {
-  const { group, verb } = parseArgv(argv);
-  if (group === null) return { group, command: "" };
-  return { group, command: verb === null ? group : group + "." + verb };
-}
-
-function forwardedEnv(env: NodeJS.ProcessEnv, argv: string[], projectId: string | null): Record<string, string | undefined> {
+function forwardedEnv(
+  env: NodeJS.ProcessEnv,
+  argv: string[],
+  projectId: string | null,
+): Record<string, string | undefined> {
   const forwarded: Record<string, string | undefined> = {};
   for (const name of FORWARDED_ENV) {
     const value = env[name];
     if (value !== undefined && value !== "") forwarded[name] = value;
   }
+  const clientProject = (env["SUBSTRATE_PROJECT"] ?? "").trim();
   // The client resolves the project and passes it: on 0.2.2 this env is
   // precedence 2, identical to --project, and cwd on the server is then only a
   // convenience, never the authority. An explicit `--project`, in either form,
   // still wins.
-  if (projectId !== null && !hasFlag(argv, "project")) forwarded["SUBSTRATE_PROJECT"] = projectId;
+  if (hasFlag(argv, "project")) {
+    if (clientProject !== "") forwarded["SUBSTRATE_PROJECT"] = clientProject;
+    return forwarded;
+  }
+  if (clientProject === "") {
+    if (projectId !== null) forwarded["SUBSTRATE_PROJECT"] = projectId;
+    return forwarded;
+  }
+  // A client project that disagrees with the verified checkout is a mistake in
+  // one of the two, and choosing silently would write to the wrong project.
+  if (projectId !== null && clientProject !== projectId) {
+    throw new RemoteError(
+      "config",
+      "SUBSTRATE_PROJECT=" + clientProject + " contradicts the server checkout's project " + projectId +
+        ". Pass --project to choose deliberately, or unset SUBSTRATE_PROJECT",
+    );
+  }
+  forwarded["SUBSTRATE_PROJECT"] = clientProject;
   return forwarded;
 }
 
@@ -219,7 +319,7 @@ export function forwardCli(argv: string[], deps: ForwardDeps = {}): CliOutcome |
   const schema = deps.schema ?? "substrate-cli/v1";
   let session: RemoteSession | null;
   try {
-    session = openRemoteSession({ transport: deps.transport, env });
+    session = openRemoteSession({ transport: deps.transport, env, deadlineMs: deps.deadlineMs ?? null });
   } catch (err) {
     return failure(argv, err, schema);
   }
@@ -274,9 +374,25 @@ function failure(argv: string[], err: unknown, schema: string): CliOutcome {
 // Hooks that need structured data (post-commit's receipt lookup,
 // prepare-commit-msg's trailers) use the same session and the same transport.
 export function hookSession(env: NodeJS.ProcessEnv = process.env, deps: ForwardDeps = {}): RemoteSession | null {
-  return openRemoteSession({ transport: deps.transport, env });
+  return openRemoteSession({ transport: deps.transport, env, deadlineMs: deps.deadlineMs ?? null });
 }
 
+// The identity a hook carries, and nothing else: a hook has no argv to derive a
+// project from, and forwarding the whole environment would hand the server
+// whatever the operator happened to export.
+export function ambientEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> {
+  const forwarded: Record<string, string | undefined> = {};
+  for (const name of FORWARDED_ENV) {
+    const value = env[name];
+    if (value !== undefined && value !== "") forwarded[name] = value;
+  }
+  return forwarded;
+}
+
+// Hooks never pay for discovery. Enumerating the server's candidate checkouts
+// costs one round trip each (23 on the reference server), which is what turned
+// a commit into a 24 s stall (review M8). A hook uses a mapping that setup
+// already verified, and otherwise reports the miss and writes nothing.
 export function hookMapping(session: RemoteSession, repositoryKey: string) {
-  return resolveMapping(session, repositoryKey);
+  return storedMapping(session, repositoryKey);
 }

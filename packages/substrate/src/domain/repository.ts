@@ -103,6 +103,12 @@ export function normalizeRemote(raw: string): string | null {
     const at = authorityRaw.lastIndexOf("@");
     let authority = at >= 0 ? authorityRaw.slice(at + 1) : authorityRaw;
     if (authority === "") return null;
+    // A query, a fragment, a backslash or a control character in the authority
+    // means the URL is not the remote it appears to be: `http://127.0.0.1:1#@
+    // github.com/acme/app` has authority `127.0.0.1:1#@github.com` and would
+    // otherwise fold into another repository's key (review H2). Refuse the
+    // input instead of guessing which part was meant.
+    if (/[\s?#\\\u0000-\u001f\u007f]/.test(authorityRaw)) return null;
     const portMatch = /^(.*?):(\d+)$/.exec(authority);
     if (portMatch && DEFAULT_PORTS[scheme] === portMatch[2]) authority = portMatch[1]!;
     host = authority;
