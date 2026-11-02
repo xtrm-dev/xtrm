@@ -234,7 +234,7 @@ without the verb prints CLI help instead of a frame, so the client reports the
 missing capability by name (`sb serve --stdio` … 0.2.4 or newer) rather than a
 generic timeout.
 
-**Surface: structured operations, never SQL.** 48 operations across
+**Surface: structured operations, never SQL.** 47 operations across
 `issue.*`, `gate.*`, `store.*`, `journal.*`, `provenance.*`, `resume.capsule`
 and `authority.*`. Each one is a named domain operation with typed, validated
 arguments; there is no `sql`, `exec` or query-expression verb, and an unknown
@@ -254,6 +254,62 @@ authority travels as structured operations. Their columns are copied from
 service cannot invent a shape the reader does not understand; the schema version
 constant is repeated rather than shared, and a change to either side must move
 both.
+
+**What the surface refuses, and why.** The first delivery exposed more than a
+remote consumer needs, and the audit of it fixed the surface rather than
+documenting the risk:
+
+- *Frames are split before they are decoded.* Decoding each 64 KiB read on its
+  own turned a character split across a read into U+FFFD and answered `ok: true`
+  with corrupted text. The reader now finds `0x0A` in the byte stream and decodes
+  only complete frames (a newline byte cannot occur inside a UTF-8 sequence).
+- *A frame over `MAX_FRAME_BYTES` is discarded and refused*, not buffered: the
+  previous reader kept whatever a caller sent and rescanned it on every read,
+  which is a memory and CPU denial of service with one write.
+- *An async handler is awaited inside the answer's `try`.* `journal.checkpoint`
+  is async; without the await its promise was serialised as `{}` (an `ok: true`
+  answer for work that never ran) and its rejection killed the process holding
+  the store.
+- *`journal.enrichEntry` is not an operation.* It rewrites any existing entry;
+  the local CLI only enriches the entry it just created. A remote caller has no
+  business rewriting history, so the verb is absent from the surface and from
+  the advertised capabilities.
+- *Identity comes from the frame, not from the server's environment.* The
+  process serving the store removes the ambient identity variables
+  (`SUBSTRATE_HOLDER`, `SUBSTRATE_ISSUE_REF`, `SUBSTRATE_ACTIVATION_ID`, session
+  names) at startup, so a forwarded write is attributed to its caller or to
+  nobody — never to the harness that happens to have started the server. A
+  consumer therefore passes identity explicitly.
+- *Numbers are bounded.* `Number.isInteger` accepts `1e300`; every numeric
+  argument now has a bound (claim TTLs, priorities, revisions, cursors, list
+  limits) and `lastActivityAt` additionally refuses anything beyond a five-minute
+  clock skew, because a forged stamp at the top of the ordering pins a row first
+  forever.
+- *Activation rows are validated as identifiers, not text.* The SessionStart
+  reader prints `activation_id`, `specialist`, `state` and `bead_id` verbatim
+  into a model's context, so a newline in a field stored a line of instructions
+  that the next session read as its own. `activationId` and `specialist` must
+  match `^[A-Za-z0-9_.:-]{1,128}$`, `state` must be one of the seven values the
+  specialists host writes, `issueRef` must look like an issue reference, and a
+  row cannot be re-attributed to another specialist, cannot return from a
+  terminal state to a live one, and cannot be removed while live without the
+  caller naming the state it expects to delete. **Follow-up on the specialists
+  side:** that reader should strip control characters from what it prints, since
+  it reads rows written by older releases too.
+- *A client reads its configuration before it decides it is local.* Checking only
+  `SUBSTRATE_REMOTE` gave a machine configured with `sb remote setup` a stale
+  local store; the client now consults the same configuration the CLI uses and
+  fails closed when a configured remote cannot be used.
+- *Nothing is forwarded to the remote CLI twice.* `serve` is in the
+  never-forwarded set, so `sb serve` cannot recurse through the transport.
+
+**Costs and limits to record.** `journal.checkpoint` writes twice: the
+mechanical entry, then a stamp of its cursor on the same row, exactly as the
+local path does. A caller that repeats a checkpoint gets a second entry — there
+is no retry key on the wire, so idempotency is the caller's job (an
+`idempotencyKey` exists only on `issue.updateContract`'s options). And with a
+signature the caller can reproduce, the same request can be repeated; nothing
+in the service deduplicates frames.
 
 **Local mode is the same surface.** `createLocalService` runs the identical
 operation table in-process. A consumer can therefore be written once against
@@ -310,7 +366,11 @@ the transport with their local bodies preserved. Validation lives in
 network). Remaining consumers are listed above and are follow-up Issues, not
 gaps in Stage 2.
 
-Stage 3 is implemented on branch `xt/XTRM-690-stdio-service`:
+Stage 3 is implemented on branch `xt/XTRM-690-stdio-service` (PR #309), and the
+audit of the first delivery is folded into the same branch — frames split before
+decoding, a frame size cap, awaited async handlers, no `journal.enrichEntry`,
+identity from the frame, bounded numbers, identifier-validated authority rows,
+configuration-aware local/remote resolution, and an `ssh` program in the argv:
 `packages/substrate/src/service/{protocol,ops,authority-service,serve,client}.ts`,
 the `sb serve --stdio` wiring in `cli/sb.ts`, and
 `packages/substrate/tests/service-protocol.test.ts` (real child process, real

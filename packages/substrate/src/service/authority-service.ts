@@ -9,6 +9,15 @@
 // (`activation_id, specialist, state, bead_id, last_activity_at`) because that
 // reader is shipped and reads the table directly; changing the shape here would
 // break it silently.
+//
+// The reader prints those columns verbatim into a model's context, which makes
+// every free-text field an injection channel: a newline in `activationId` stored
+// "SYSTEM: obey" as a line of its own and the next session read it as an
+// instruction. So the free-text fields are restricted to an identifier shape,
+// `state` is an enum, and `lastActivityAt` cannot be far in the future (a forged
+// row with 1e300 sorts first forever). Existing rows are not silently
+// re-attributed to another specialist, and a terminal activation does not come
+// back to life: both would let one caller rewrite another's record.
 
 import type { SubstrateDatabase } from "../store/database.ts";
 import { ServiceCallError } from "./protocol.ts";
@@ -23,6 +32,20 @@ export const ACTIVATIONS_DDL = `CREATE TABLE IF NOT EXISTS activations (
   last_activity_at INTEGER NOT NULL
 )`;
 
+/** States the specialists host records. An unknown one is refused, not stored. */
+export const AUTHORITY_STATES = ["pending", "running", "waiting", "blocked", "settled", "failed", "stopped"] as const;
+export type AuthorityState = (typeof AUTHORITY_STATES)[number];
+
+const TERMINAL_STATES: readonly AuthorityState[] = ["settled", "failed", "stopped"];
+const LIVE_STATES: readonly AuthorityState[] = ["pending", "running", "waiting", "blocked"];
+
+/** Identifier shape for anything the SessionStart reader prints. */
+const IDENTIFIER = /^[A-Za-z0-9_.:-]{1,128}$/;
+/** Issue references look like `XTRM-690`, `CORE-2527` or a locator's leaf. */
+const ISSUE_REF = /^[A-Za-z][A-Za-z0-9._-]{0,127}$/;
+/** An activity stamp may run slightly ahead of this clock, not years ahead. */
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
 export interface AuthorityOperation {
   activationId: string;
   specialist: string;
@@ -31,9 +54,48 @@ export interface AuthorityOperation {
   lastActivityAt: number;
 }
 
-function requiredString(value: unknown, key: string): string {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new ServiceCallError("bad_request", `argument "${key}" must be a non-empty string`);
+export interface AuthorityRow {
+  activationId: string;
+  specialist: string;
+  state: string;
+  issueRef: string | null;
+  lastActivityAt: number;
+}
+
+function identifier(value: unknown, key: string): string {
+  if (typeof value !== "string" || !IDENTIFIER.test(value)) {
+    throw new ServiceCallError(
+      "bad_request",
+      `argument "${key}" must be 1-128 characters of A-Z a-z 0-9 _ . : - (it is printed into a session by the authority reader)`,
+    );
+  }
+  return value;
+}
+
+function state(value: unknown): AuthorityState {
+  if (typeof value !== "string" || !(AUTHORITY_STATES as readonly string[]).includes(value)) {
+    throw new ServiceCallError("bad_request", `argument "state" must be one of ${AUTHORITY_STATES.join(", ")}`);
+  }
+  return value as AuthorityState;
+}
+
+function activityTime(value: unknown, now: number): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new ServiceCallError("bad_request", 'argument "lastActivityAt" must be a positive integer (epoch ms)');
+  }
+  if (value > now + MAX_CLOCK_SKEW_MS) {
+    throw new ServiceCallError(
+      "bad_request",
+      `argument "lastActivityAt" is more than ${MAX_CLOCK_SKEW_MS / 60000} minutes in the future (epoch ms)`,
+    );
+  }
+  return value;
+}
+
+function issueReference(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || !ISSUE_REF.test(value)) {
+    throw new ServiceCallError("bad_request", 'argument "issueRef" must look like XTRM-690, or be null');
   }
   return value;
 }
@@ -42,57 +104,115 @@ export function ensureAuthorityTable(db: SubstrateDatabase): void {
   db.exec(ACTIVATIONS_DDL);
 }
 
-export function activateAuthority(db: SubstrateDatabase, input: AuthorityOperation): { activationId: string } {
-  const activationId = requiredString(input.activationId, "activationId");
-  const specialist = requiredString(input.specialist, "specialist");
-  const state = requiredString(input.state, "state");
-  const lastActivityAt = input.lastActivityAt;
-  if (typeof lastActivityAt !== "number" || !Number.isInteger(lastActivityAt) || lastActivityAt <= 0) {
-    throw new ServiceCallError("bad_request", 'argument "lastActivityAt" must be a positive integer (epoch ms)');
-  }
-  const issueRef = input.issueRef ?? null;
-  if (issueRef !== null && (typeof issueRef !== "string" || issueRef.trim() === "")) {
-    throw new ServiceCallError("bad_request", 'argument "issueRef" must be a non-empty string or null');
-  }
+function readRow(db: SubstrateDatabase, activationId: string): AuthorityRow | null {
+  const row = db
+    .prepare(
+      "SELECT activation_id, specialist, state, bead_id, last_activity_at FROM activations WHERE activation_id = ?",
+    )
+    .get(activationId) as
+    | { activation_id: string; specialist: string; state: string; bead_id: string | null; last_activity_at: number }
+    | undefined;
+  if (!row) return null;
+  return {
+    activationId: row.activation_id,
+    specialist: row.specialist,
+    state: row.state,
+    issueRef: row.bead_id,
+    lastActivityAt: row.last_activity_at,
+  };
+}
+
+export function activateAuthority(
+  db: SubstrateDatabase,
+  input: AuthorityOperation,
+  now: number = Date.now(),
+): { activationId: string } {
+  const activationId = identifier(input.activationId, "activationId");
+  const specialist = identifier(input.specialist, "specialist");
+  const nextState = state(input.state);
+  const lastActivityAt = activityTime(input.lastActivityAt, now);
+  const issueRef = issueReference(input.issueRef);
   ensureAuthorityTable(db);
+
+  const existing = readRow(db, activationId);
+  if (existing) {
+    if (existing.specialist !== specialist) {
+      throw new ServiceCallError(
+        "conflict",
+        `activation "${activationId}" already belongs to specialist "${existing.specialist}"; it cannot be re-attributed`,
+      );
+    }
+    if (TERMINAL_STATES.includes(existing.state as AuthorityState) && LIVE_STATES.includes(nextState)) {
+      throw new ServiceCallError(
+        "conflict",
+        `activation "${activationId}" is ${existing.state}; a finished activation does not become ${nextState} again`,
+      );
+    }
+  }
+
   db.prepare(
     `INSERT OR REPLACE INTO activations
        (activation_id, specialist, state, bead_id, last_activity_at)
      VALUES (?, ?, ?, ?, ?)`,
-  ).run(activationId, specialist, state, issueRef, lastActivityAt);
+  ).run(activationId, specialist, nextState, issueRef, lastActivityAt);
   return { activationId };
 }
 
-export function removeAuthority(db: SubstrateDatabase, activationId: string): { removed: boolean } {
-  if (typeof activationId !== "string" || activationId.trim() === "") {
-    throw new ServiceCallError("bad_request", 'argument "activationId" must be a non-empty string');
-  }
+export function removeAuthority(
+  db: SubstrateDatabase,
+  activationId: string,
+  expectState?: string | null,
+): { removed: boolean } {
+  const id = identifier(activationId, "activationId");
   ensureAuthorityTable(db);
-  const result = db.prepare("DELETE FROM activations WHERE activation_id = ?").run(activationId) as {
-    changes?: number;
-  };
-  return { removed: (result.changes ?? 0) > 0 };
+  // The state a caller names is validated even when the row is already terminal:
+  // an unknown value must not silently act as "no expectation".
+  const expected = expectState === undefined || expectState === null ? null : state(expectState);
+  const existing = readRow(db, id);
+  if (!existing) return { removed: false };
+  // A live row is someone's current work: removing it needs the state the caller
+  // believes it is deleting, so a stale or mistaken caller cannot end a session's
+  // record by guessing an id.
+  if (LIVE_STATES.includes(existing.state as AuthorityState)) {
+    if (expected === null) {
+      throw new ServiceCallError(
+        "conflict",
+        `activation "${id}" is ${existing.state}; pass "expectState": "${existing.state}" to remove a live activation`,
+      );
+    }
+    if (expected !== existing.state) {
+      throw new ServiceCallError(
+        "conflict",
+        `activation "${id}" is ${existing.state}, not ${expected}; nothing was removed`,
+      );
+    }
+  }
+  db.prepare("DELETE FROM activations WHERE activation_id = ?").run(id);
+  return { removed: true };
 }
 
-export function listAuthority(
-  db: SubstrateDatabase,
-  activationId?: string | null,
-): Array<{ activationId: string; specialist: string; state: string; issueRef: string | null; lastActivityAt: number }> {
+export function listAuthority(db: SubstrateDatabase, activationId?: string | null): AuthorityRow[] {
   ensureAuthorityTable(db);
   const rows = (
-    activationId
-      ? db.prepare(
-          "SELECT activation_id, specialist, state, bead_id, last_activity_at FROM activations WHERE activation_id = ?",
-        ).all(activationId)
-      : db.prepare(
-          "SELECT activation_id, specialist, state, bead_id, last_activity_at FROM activations ORDER BY last_activity_at DESC",
-        ).all()
-  ) as Array<Record<string, unknown>>;
+    activationId === undefined || activationId === null
+      ? db.prepare("SELECT activation_id, specialist, state, bead_id, last_activity_at FROM activations ORDER BY last_activity_at DESC").all()
+      : db
+          .prepare(
+            "SELECT activation_id, specialist, state, bead_id, last_activity_at FROM activations WHERE activation_id = ?",
+          )
+          .all(identifier(activationId, "activationId"))
+  ) as Array<{
+    activation_id: string;
+    specialist: string;
+    state: string;
+    bead_id: string | null;
+    last_activity_at: number;
+  }>;
   return rows.map((row) => ({
-    activationId: String(row["activation_id"]),
-    specialist: String(row["specialist"]),
-    state: String(row["state"]),
-    issueRef: row["bead_id"] === null || row["bead_id"] === undefined ? null : String(row["bead_id"]),
-    lastActivityAt: Number(row["last_activity_at"]),
+    activationId: row.activation_id,
+    specialist: row.specialist,
+    state: row.state,
+    issueRef: row.bead_id,
+    lastActivityAt: row.last_activity_at,
   }));
 }

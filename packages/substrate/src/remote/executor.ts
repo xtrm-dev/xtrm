@@ -82,7 +82,7 @@ const OUTPUT_FLAGS: Record<string, ReadonlySet<string>> = {
 
 // Handled locally by design: help/version never open a store, doctor reports
 // this machine's mode, and `remote` configures it.
-const NEVER_FORWARDED = new Set(["help", "version", "doctor", "remote"]);
+const NEVER_FORWARDED = new Set(["help", "version", "doctor", "remote", "serve"]);
 
 // One document, one bound. Large enough for a real contract or Journal result,
 // small enough that a forwarded invocation is not a bulk copy.

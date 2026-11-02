@@ -36,6 +36,9 @@ export interface ServiceRequest {
   args?: Record<string, unknown>;
 }
 
+/** The request shape a client hands to `encodeRequest`. */
+export type ServiceRequestLike = ServiceRequest;
+
 export type ServiceResponse =
   | { id: number | string | null; ok: true; result: unknown }
   | { id: number | string | null; ok: false; error: ServiceError };

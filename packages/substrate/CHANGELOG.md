@@ -11,9 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `sb serve --stdio`, the typed service for in-process consumers (XTRM-690, ADR-008 item 2). Newline-delimited JSON frames on stdout: `hello` first (protocol number, version, sorted capability list), then 48 named operations over issue, gate, store, journal, provenance, resume and authority. Structured operations only — no SQL, exec or query-expression verb, every argument validated, unknown operations refused by name. `authority.record`, `authority.remove` and `authority.list` are the only operations that name the `activations` table, with the columns the shipped specialists SessionStart reader already reads. The client (`createServiceClient`, `spawnLink`, `openSshService`) speaks the same protocol over a child process — `ssh -T … sb serve --stdio` for a server-owned store — and `createLocalService` runs the identical operation table in-process, so a consumer stays local when `substrate.remote` is unset. A server that does not speak the protocol is named as such, not reported as a timeout.
+- `sb serve --stdio`, the typed service for in-process consumers (XTRM-690, ADR-008 item 2). Newline-delimited JSON frames on stdout: `hello` first (protocol number, version, sorted capability list), then 47 named operations over issue, gate, store, journal, provenance, resume and authority. Structured operations only — no SQL, exec or query-expression verb, every argument validated, unknown operations refused by name. `authority.record`, `authority.remove` and `authority.list` are the only operations that name the `activations` table, with the columns the shipped specialists SessionStart reader already reads. The client (`createServiceClient`, `spawnLink`, `openSshService`) speaks the same protocol over a child process — `ssh -T … sb serve --stdio` for a server-owned store — and `createLocalService` runs the identical operation table in-process, so a consumer stays local when `substrate.remote` is unset. A server that does not speak the protocol is named as such, not reported as a timeout.
 
   Rollout order: release this package, upgrade the store-owning machine's `sb`, then land consumers that fall back to local behaviour when the handshake fails.
+
+### Fixed
+
+- The service protocol decodes complete frames instead of each read: a multibyte character split across a read boundary is no longer replaced by U+FFFD in a successful answer.
+- A frame above the 8 MiB limit is refused and discarded instead of buffered and rescanned.
+- Async operations are awaited, so `journal.checkpoint` reports its real result and a rejection cannot end a server holding the store.
+- `authority.*` validates identifiers and states, refuses a future `lastActivityAt`, and keeps a row with its owning specialist without reviving a finished activation.
+- `journal.enrichEntry` is not exposed over the service: a remote caller cannot rewrite an existing journal entry.
+- Numeric arguments are bounded; identity in a service session comes from the frame, never from the server's environment.
+- `localOrRemote()` reads the remote configuration, not only `SUBSTRATE_REMOTE`, and fails closed when a configured remote is unusable.
 
 ---
 

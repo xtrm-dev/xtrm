@@ -1114,8 +1114,20 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
       const stdio = flags.has("stdio") || verb === "stdio";
       assertKnownFlags(flags, "serve.stdio");
       if (!stdio || (verb !== undefined && verb !== "stdio")) throw new Error("usage: sb serve --stdio [--db PATH]");
-      const code = serveStdio({ dbPath: ctx.dbPath, version: cliVersion() });
-      return { code, stdout: "", stderr: "" };
+      // The service loop is async (an operation such as journal.checkpoint awaits
+      // a summarizer), so the command returns at once and the loop owns the
+      // process: it sets the exit code when it reaches EOF. No `process.exit`
+      // here: that would cut an answer that is still being written.
+      void serveStdio({ dbPath: ctx.dbPath, version: cliVersion() }).then(
+        (code) => {
+          process.exitCode = code;
+        },
+        (error: unknown) => {
+          process.stderr.write(`sb serve: ${error instanceof Error ? error.message : String(error)}\n`);
+          process.exitCode = 1;
+        },
+      );
+      return { code: 0, stdout: "", stderr: "" };
     }
     if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|import|export|remote|serve> <verb> [args...]");
     if (group && KNOWN_GROUPS.has(group)) assertKnownFlags(flags, `${group}.${verb ?? ""}`);

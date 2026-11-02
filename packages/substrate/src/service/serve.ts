@@ -12,13 +12,21 @@
 //     a file path or an expression, so the wire cannot be widened by a caller;
 //   - one store, opened here, on the machine that owns the file.
 //
-// The loop is synchronous on purpose: `sb` is a synchronous CLI, and a service
-// that needed an event loop would have to change the entrypoint of every command
-// to serve one verb. Reading fd 0 directly also means a closed ssh channel is an
-// ordinary EOF, not an error to classify.
+// Frames are split on 0x0A in the BYTE stream and decoded only once a frame is
+// complete. Decoding each 64 KiB read separately (what this did first) splits a
+// multibyte character at a read boundary into U+FFFD and answers `ok: true` with
+// corrupted text; a newline byte cannot occur inside a UTF-8 sequence, so
+// splitting on newline first is both correct and cheaper than a StringDecoder.
+//
+// A frame longer than MAX_FRAME_BYTES is discarded to its terminating newline and
+// answered with an error: without that cap the process buffers whatever a caller
+// sends, and the linear rescans made a 64 MB frame take seconds of CPU.
 //
 // A malformed frame is answered and the connection survives: a client that
 // writes a half line must not be able to kill a session that holds the store.
+// A handler that fails answers `ok: false`; a handler that throws asynchronously
+// (journal.checkpoint is async) is awaited here, so its failure is that answer
+// and not an unhandled rejection that ends the process.
 
 import { readSync, writeSync } from "node:fs";
 import type { SubstrateDatabase } from "../store/database.ts";
@@ -26,6 +34,7 @@ import { openSubstrate } from "../store/sqlite.ts";
 import { migrate } from "../store/migrations/runner.ts";
 import { CAPABILITIES, OPERATIONS, classifyError, createServices } from "./ops.ts";
 import {
+  MAX_FRAME_BYTES,
   PROTOCOL_VERSION,
   ServiceCallError,
   decodeRequest,
@@ -33,10 +42,13 @@ import {
   type ServiceResponse,
 } from "./protocol.ts";
 
-/** The three facts a frame can leave the service through. Injectable for tests. */
+/** Where frames come from. The production source reads fd 0 in 64 KiB buffers. */
+export interface FrameSource {
+  /** The next chunk of bytes, or null at end of file. */
+  next(): Promise<Buffer | null>;
+}
+
 export interface ServeIO {
-  /** The next chunk of input, or null at end of file. */
-  read(): string | null;
   /** One complete response line (the caller adds the newline). */
   write(line: string): void;
   /** Diagnostics: never protocol, always a different stream. */
@@ -48,17 +60,46 @@ export interface ServeOptions {
   /** The server package version, reported by the handshake. */
   version: string;
   io?: Partial<ServeIO>;
+  frames?: FrameSource;
   /** Forks the database handles for a caller that already has one (tests). */
   db?: SubstrateDatabase;
+  /** Ambient identity variables to drop before serving (defaults to all of them). */
+  stripAmbientIdentity?: boolean;
+}
+
+// A service answers identity from the wire, never from whoever started it: the
+// server process may itself run inside a harness session, and inheriting that
+// holder would attribute a remote caller's writes to the server's environment.
+const AMBIENT_IDENTITY_KEYS = [
+  "SUBSTRATE_HOLDER",
+  "SUBSTRATE_ISSUE_REF",
+  "SUBSTRATE_ISSUE",
+  "SUBSTRATE_ACTIVATION_ID",
+  "SUBSTRATE_SPECIALIST",
+  "XTRM_SESSION_ID",
+  "XTRM_SESSION_NAME",
+] as const;
+
+const NEWLINE = 0x0a;
+
+/** Reads bytes from fd 0 without decoding them. */
+function fdFrames(): FrameSource {
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  return {
+    next: () =>
+      new Promise<Buffer | null>((resolve, reject) => {
+        try {
+          const read = readSync(0, buffer, 0, buffer.length, null);
+          resolve(read === 0 ? null : Buffer.from(buffer.subarray(0, read)));
+        } catch (error) {
+          reject(error);
+        }
+      }),
+  };
 }
 
 function fdIO(): ServeIO {
-  const buffer = Buffer.allocUnsafe(64 * 1024);
   return {
-    read: () => {
-      const read = readSync(0, buffer, 0, buffer.length, null);
-      return read === 0 ? null : buffer.subarray(0, read).toString("utf8");
-    },
     write: (line) => {
       writeSync(1, line + "\n");
     },
@@ -68,97 +109,223 @@ function fdIO(): ServeIO {
   };
 }
 
+type Frame = { kind: "line"; text: string } | { kind: "oversize"; bytes: number };
+
+/**
+ * Splits a byte stream into newline-terminated frames.
+ *
+ * Keeps the chunks it has not yet delivered, scans each chunk once for the
+ * newline byte (so the cost is linear in the bytes received, not quadratic in
+ * the frame), and enforces MAX_FRAME_BYTES by discarding to the next newline.
+ */
+export class FrameReader {
+  private parts: Buffer[] = [];
+  private bytes = 0;
+  private discarding = false;
+  private discarded = 0;
+
+  private readonly source: FrameSource;
+
+  constructor(source: FrameSource) {
+    this.source = source;
+  }
+
+  async next(): Promise<Frame | null> {
+    for (;;) {
+      if (this.discarding) {
+        const found = this.findNewline();
+        if (found !== null) {
+          this.take(found);
+          this.discarding = false;
+          const bytes = this.discarded;
+          this.discarded = 0;
+          return { kind: "oversize", bytes };
+        }
+        this.discarded += this.bytes;
+        this.parts = [];
+        this.bytes = 0;
+        const chunk = await this.source.next();
+        if (chunk === null) {
+          this.discarding = false;
+          return { kind: "oversize", bytes: this.discarded };
+        }
+        this.parts.push(chunk);
+        this.bytes += chunk.length;
+        continue;
+      }
+
+      const found = this.findNewline();
+      if (found !== null) {
+        // A frame that arrives complete in the same read still has to pass the
+        // cap: checking only "no newline yet" let one 8 MB write through.
+        const size = this.sizeBefore(found);
+        const line = this.take(found);
+        if (size > MAX_FRAME_BYTES) return { kind: "oversize", bytes: size };
+        return { kind: "line", text: line.toString("utf8") };
+      }
+
+      if (this.bytes > MAX_FRAME_BYTES) {
+        this.discarding = true;
+        this.discarded = this.bytes;
+        this.parts = [];
+        this.bytes = 0;
+        continue;
+      }
+
+      const chunk = await this.source.next();
+      if (chunk === null) {
+        if (this.bytes === 0) return null;
+        const last = Buffer.concat(this.parts, this.bytes);
+        this.parts = [];
+        this.bytes = 0;
+        return { kind: "line", text: last.toString("utf8") };
+      }
+      this.parts.push(chunk);
+      this.bytes += chunk.length;
+    }
+  }
+
+  private sizeBefore(found: { part: number; index: number }): number {
+    let total = found.index;
+    for (let part = 0; part < found.part; part += 1) total += this.parts[part]!.length;
+    return total;
+  }
+
+  private findNewline(): { part: number; index: number } | null {
+    for (let part = 0; part < this.parts.length; part += 1) {
+      const index = this.parts[part]!.indexOf(NEWLINE);
+      if (index >= 0) return { part, index };
+    }
+    return null;
+  }
+
+  private take(found: { part: number; index: number }): Buffer {
+    const head = this.parts.slice(0, found.part);
+    head.push(this.parts[found.part]!.subarray(0, found.index));
+    const rest = this.parts[found.part]!.subarray(found.index + 1);
+    this.parts = rest.length > 0 ? [rest] : [];
+    this.bytes = rest.length;
+    return Buffer.concat(head);
+  }
+}
+
+/** A client label is echoed into a log line, so it is reduced to printable ASCII. */
+function label(value: unknown): string {
+  if (typeof value !== "string") return "unknown";
+  const printable = value.replace(/[^\x20-\x7e]/g, "").slice(0, 64);
+  return printable === "" ? "unknown" : printable;
+}
+
+function has(operation: string): boolean {
+  return Object.hasOwn(OPERATIONS, operation);
+}
+
 /** Serves until EOF. Returns the process exit code. */
-export function serveStdio(options: ServeOptions): number {
-  const defaults = fdIO();
-  const read = options.io?.read ?? defaults.read;
-  const write = options.io?.write ?? defaults.write;
-  const log = options.io?.log ?? defaults.log;
+export async function serveStdio(options: ServeOptions): Promise<number> {
+  const io = options.io ?? {};
+  const write = io.write ?? fdIO().write;
+  const log = io.log ?? fdIO().log;
+  const reader = new FrameReader(options.frames ?? fdFrames());
+
+  if (options.stripAmbientIdentity !== false) {
+    for (const key of AMBIENT_IDENTITY_KEYS) delete process.env[key];
+  }
 
   const db = options.db ?? openSubstrate(options.dbPath);
   if (options.db === undefined) migrate(db);
   const services = createServices(db);
 
-  const respond = (frame: ServiceResponse | { id: null; ok: false; error: { code: string; message: string } }): void => {
+  const respond = (
+    frame: ServiceResponse | { id: null; ok: false; error: { code: string; message: string } },
+  ): void => {
     write(JSON.stringify(frame));
   };
 
   let greeted = false;
-  let pending = "";
   let code = 0;
 
   try {
     for (;;) {
-      const chunk = read();
-      if (chunk === null) break;
-      pending += chunk;
-      for (;;) {
-        const newline = pending.indexOf("\n");
-        if (newline < 0) break;
-        const line = pending.slice(0, newline);
-        pending = pending.slice(newline + 1);
-        if (line.trim() === "") continue;
+      const frame = await reader.next();
+      if (frame === null) break;
+      if (frame.kind === "oversize") {
+        respond({
+          id: null,
+          ok: false,
+          error: {
+            code: "bad_request",
+            message: `the frame exceeded ${MAX_FRAME_BYTES} bytes and was discarded; send smaller operations`,
+          },
+        });
+        continue;
+      }
+      const line = frame.text;
+      if (line.trim() === "") continue;
 
-        const request = decodeRequest(line);
-        if ("code" in request) {
-          respond({ id: null, ok: false, error: { code: request.code, message: request.message } });
+      const request = decodeRequest(line);
+      if ("code" in request) {
+        respond({ id: null, ok: false, error: { code: request.code, message: request.message } });
+        continue;
+      }
+      const { id, op } = request;
+      const args = request.args ?? {};
+
+      if (op === "hello") {
+        const asked = args["protocol"];
+        if (typeof asked !== "number" || !Number.isInteger(asked)) {
+          respond({ id, ok: false, error: { code: "bad_request", message: 'hello needs a numeric "protocol"' } });
           continue;
         }
-        const { id, op } = request;
-        const args = request.args ?? {};
-
-        if (op === "hello") {
-          const asked = args["protocol"];
-          if (typeof asked !== "number" || !Number.isInteger(asked)) {
-            respond({ id, ok: false, error: { code: "bad_request", message: 'hello needs a numeric "protocol"' } });
-            continue;
-          }
-          if (asked !== PROTOCOL_VERSION) {
-            respond({
-              id,
-              ok: false,
-              error: {
-                code: "unsupported",
-                message: `protocol ${asked} is not supported by this server (it speaks ${PROTOCOL_VERSION})`,
-              },
-            });
-            continue;
-          }
-          greeted = true;
-          const hello: HelloResult = {
-            protocol: PROTOCOL_VERSION,
-            substrate: options.version,
-            dbPath: options.dbPath,
-            capabilities: CAPABILITIES,
-          };
-          respond({ id, ok: true, result: hello });
-          log(`sb serve: ${String(args["client"] ?? "unknown")} connected (${CAPABILITIES.length} operations)`);
+        if (asked !== PROTOCOL_VERSION) {
+          respond({
+            id,
+            ok: false,
+            error: {
+              code: "unsupported",
+              message: `protocol ${asked} is not supported by this server (it speaks ${PROTOCOL_VERSION})`,
+            },
+          });
           continue;
         }
+        greeted = true;
+        const hello: HelloResult = {
+          protocol: PROTOCOL_VERSION,
+          substrate: options.version,
+          dbPath: options.dbPath,
+          capabilities: CAPABILITIES,
+        };
+        respond({ id, ok: true, result: hello });
+        log(`sb serve: ${label(args["client"])} connected (${CAPABILITIES.length} operations)`);
+        continue;
+      }
 
-        if (!greeted) {
-          respond({ id, ok: false, error: { code: "bad_request", message: "send hello before any other operation" } });
-          continue;
-        }
+      if (!greeted) {
+        respond({ id, ok: false, error: { code: "bad_request", message: "send hello before any other operation" } });
+        continue;
+      }
 
-        const handler = OPERATIONS[op];
-        if (!handler) {
-          respond({ id, ok: false, error: { code: "unknown_op", message: `unknown operation "${op}"` } });
-          continue;
-        }
-        try {
-          respond({ id, ok: true, result: handler(services, args) });
-        } catch (error) {
-          const classified = classifyError(error);
-          log(`sb serve: ${op} failed: ${classified.message}`);
-          respond({ id, ok: false, error: classified });
-        }
+      if (!has(op)) {
+        respond({ id, ok: false, error: { code: "unknown_op", message: `unknown operation "${op}"` } });
+        continue;
+      }
+      try {
+        // A handler may be async (journal.checkpoint awaits a summarizer): awaiting
+        // it here turns its rejection into this frame's answer instead of an
+        // unhandled rejection that would end a process holding the store.
+        const answer = OPERATIONS[op]!(services, args);
+        const result = answer instanceof Promise ? await answer : answer;
+        respond({ id, ok: true, result });
+      } catch (error) {
+        const classified = classifyError(error);
+        log(`sb serve: ${op} failed: ${classified.message}`);
+        respond({ id, ok: false, error: classified });
       }
     }
     // A last line without a newline is still a frame: a client that writes one
     // request and closes must not be answered with silence.
-    if (pending.trim() !== "") {
-      const request = decodeRequest(pending);
+    const tail = await reader.next();
+    if (tail !== null && tail.kind === "line" && tail.text.trim() !== "") {
+      const request = decodeRequest(tail.text);
       respond(
         "code" in request
           ? { id: null, ok: false, error: { code: request.code, message: request.message } }
