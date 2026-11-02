@@ -113,21 +113,26 @@ export function normalizeRemote(raw: string): string | null {
     if (portMatch && DEFAULT_PORTS[scheme] === portMatch[2]) authority = portMatch[1]!;
     host = authority;
   } else {
-    // SCP-like form: [user@]host:owner/repo(.git)
+    // SCP-like form: [user@]host:path. Git splits at the FIRST ':' and takes
+    // everything before it as [user@]host, so `evil.com:path@github.com:acme/app`
+    // belongs to host `evil.com` and can never fold onto github.com (review H2).
+    // The path is not inspected: a legitimate remote may contain '@' or ':' in
+    // its path, and refusing it would silently re-key an existing repository
+    // (an `a@b` path, or a local-only repository whose key would change).
     if (input.includes("://")) return null;
-    // A ':' inside the user part is a second host: `evil.com:path@github.com:
-    // acme/app` is scp-form for host `evil.com`, path `path@github.com:acme/app`,
-    // while git would connect to evil.com. Folding it to github.com/acme/app
-    // would hand the caller another repository's key (final review H2).
-    const scp = /^(?:[^@:/\\]+@)?([^@/:\\]+):(.+)$/.exec(input);
-    if (!scp) return null;
-    host = scp[1]!;
-    rawPath = scp[2]!;
-    // A second ':' or an '@' in the path means the first token was not the
-    // host: `evil.com:path@github.com:acme/app` is git's host `evil.com` with a
-    // path that names another host. Refuse it rather than keying a repository
-    // under a host that never served it (final review H2).
-    if (rawPath.includes(":") || rawPath.includes("@")) return null;
+    const bracketed = /^(?:[^@/]+@)?\[([^\]\s]+)\]:(.+)$/.exec(input);
+    if (bracketed) {
+      host = `[${bracketed[1]}]`;
+      rawPath = bracketed[2]!;
+    } else {
+      const colon = input.indexOf(":");
+      if (colon < 0) return null;
+      const authority = input.slice(0, colon);
+      const at = authority.lastIndexOf("@");
+      host = at >= 0 ? authority.slice(at + 1) : authority;
+      rawPath = input.slice(colon + 1);
+    }
+    if (host === "" || rawPath === "") return null;
   }
 
   if (rawPath.includes("\\")) return null;

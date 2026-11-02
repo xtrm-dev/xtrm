@@ -94,9 +94,10 @@ const END_MARKER = "@@sb-remote-end";
 export function frameUploads(uploads: RemoteUpload[]): string {
   const lines: string[] = [];
   for (const upload of uploads) {
-    // The byte count travels in the header, so the server proves the decoded
-    // file is the whole document and not a prefix of it.
-    lines.push(FILE_MARKER + `f${upload.argvIndex} ` + String(upload.content.length));
+    // Marker and index only. The expected size is not in the header (the awk
+    // unpacker never read it); the check below compares the decoded file with
+    // the length the command carries.
+    lines.push(FILE_MARKER + `f${upload.argvIndex}`);
     const body = upload.content.toString("base64");
     if (body !== "") lines.push(body);
   }

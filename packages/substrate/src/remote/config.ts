@@ -16,6 +16,10 @@ export interface CheckoutMapping {
 
 export interface RemoteConfig {
   remote: string;
+  // The host named by the config FILE, kept apart from `remote`, which an env
+  // override replaces. Without it the scoping check compares the effective host
+  // with itself and never runs (final review, M2).
+  fileRemote?: string | null;
   // Absolute path of `sb` on the server. Resolved once; steady state never pays
   // a login-shell cost.
   remoteSb: string | null;
@@ -56,7 +60,9 @@ export function readRemoteConfig(env: NodeJS.ProcessEnv = process.env): RemoteCo
   const path = remoteConfigPath(env);
   if (!existsSync(path)) {
     const envRemote = asString(env["SUBSTRATE_REMOTE"]);
-    return envRemote === null ? null : { remote: envRemote, remoteSb: null, serverVersion: null, checkouts: {} };
+    return envRemote === null
+      ? null
+      : { remote: envRemote, fileRemote: null, remoteSb: null, serverVersion: null, checkouts: {} };
   }
   let parsed: unknown;
   try {
@@ -94,7 +100,13 @@ export function readRemoteConfig(env: NodeJS.ProcessEnv = process.env): RemoteCo
       };
     }
   }
-  return { remote, remoteSb: asAbsolutePath(record["remoteSb"]), serverVersion: asString(record["serverVersion"]), checkouts };
+  return {
+    remote,
+    fileRemote: asString(record["remote"]),
+    remoteSb: asAbsolutePath(record["remoteSb"]),
+    serverVersion: asString(record["serverVersion"]),
+    checkouts,
+  };
 }
 
 export function writeRemoteConfig(config: RemoteConfig, env: NodeJS.ProcessEnv = process.env): string {
@@ -165,7 +177,9 @@ export function selectRemote(env: NodeJS.ProcessEnv = process.env): RemoteSelect
   // An env-selected host that is a *different* host must resolve its own sb path
   // instead of running a binary path verified elsewhere (final review, M2); the
   // same host keeps them, so a one-off override still works.
-  const fileHost = parseRemoteSpec(config.remote)?.host ?? null;
+  // The FILE's host, not the effective one: `remote` already carries the env
+  // override, so comparing it with the spec compared a value with itself.
+  const fileHost = parseRemoteSpec(config.fileRemote ?? "")?.host ?? null;
   const scoped = envOverride && fileHost !== spec.host ? { ...config, remoteSb: null, serverVersion: null } : config;
   return { spec, config: scoped, configPath: remoteConfigPath(env), envOverride };
 }

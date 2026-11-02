@@ -1,16 +1,16 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RemoteError, buildRemoteCommand } from "../src/remote/spec.ts";
 import { clientRepositoryKey, openRemoteSession, resolveMapping, runRemote } from "../src/remote/session.ts";
-import { MAX_DOCUMENT_BYTES, forwardCli } from "../src/remote/executor.ts";
+import { MAX_DOCUMENT_BYTES, forwardCli, hookSession } from "../src/remote/executor.ts";
 import { HOOK_BUDGET_MS } from "../hooks/remote.ts";
 import { remoteSetup } from "../src/remote/setup.ts";
-import { mappingKey } from "../src/remote/config.ts";
+import { mappingKey, selectRemote } from "../src/remote/config.ts";
 import { DEFAULT_TIMEOUT_MS } from "../src/remote/ssh.ts";
 import { localRepositoryKey, normalizeRemote } from "../src/domain/repository.ts";
 import { renderRemoteStatus } from "../src/remote/render.ts";
@@ -904,18 +904,29 @@ describe("second-audit findings", () => {
   });
 
   it("bounds the hook to the remaining budget and never discovers", () => {
+    // The mapping is present, so the hook reaches the transport: a hang here is
+    // what the budget exists for. Without the mapping the test would exit early
+    // and never prove anything about the ssh timeout (final review).
     const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
-    writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    assert.ok(CLIENT_KEY);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
+    // hookEnv() writes the passthrough shim, so the hanging one comes after it.
+    const env = hookEnv(fake, { XTRM_RECEIPT_ID: "wr_probe", XTRM_COMMIT_SHA: "d".repeat(40) });
+    writeFileSync(join(sshShim(fake), "ssh"), "#!/bin/sh\nsleep 30\n", { mode: 0o755 });
     const started = Date.now();
     const res = spawnSync(process.execPath, [hookPath("post-commit.ts")], {
       encoding: "utf8",
       cwd: process.cwd(),
-      env: hookEnv(fake, { XTRM_RECEIPT_ID: "wr_probe", XTRM_COMMIT_SHA: "d".repeat(40) }),
+      env,
     });
-    assert.equal(res.status, 0);
-    assert.match(res.stderr, /no verified server checkout/);
+    const elapsed = Date.now() - started;
+    assert.equal(res.status, 0, "a slow server never fails the commit");
+    const budget = /timed out after (\d+) ms/.exec(res.stderr);
+    assert.ok(budget, `expected a timeout warning, got: ${res.stderr}`);
+    assert.ok(Number(budget![1]) > 0 && Number(budget![1]) <= HOOK_BUDGET_MS, `the transport got the remaining budget (${budget![1]} ms)`);
+    assert.equal(res.stdout, "");
+    assert.ok(elapsed >= 7_000 && elapsed < 20_000, `the hook gave up inside its budget, not at 120 s (took ${elapsed} ms)`);
     assert.equal(fake.calls().some((call) => call.argv[0] === "project"), false, "a hook never walks candidate checkouts");
-    assert.ok(Date.now() - started < 10_000, "the hook returns within its budget");
   });
 });
 
@@ -934,8 +945,8 @@ describe("final-review findings", () => {
     const body = Buffer.from('{"problem":"complete"}');
     const plan = buildRemoteCommand({ sbPath: "/bin/true", argv: ["issue", "create", "--contract", "x"], uploads: [{ argvIndex: 3, content: body }] });
     const honest = plan.stdin!;
-    // Keep every marker but drop half the payload: the header still claims the
-    // original size, so only the byte-count check can notice.
+    // Keep every marker but drop half the payload: only the byte-count check,
+    // which compares the decoded file with the length in the command, notices.
     const lines = honest.split("\n");
     const payloadIndex = lines.findIndex((line) => line.startsWith("@@sb-remote-file "));
     const payload = lines[payloadIndex + 1]!;
@@ -959,10 +970,15 @@ describe("final-review findings", () => {
     assert.deepEqual(Buffer.from(result.stdout), body);
   });
 
-  it("rejects an scp user part that hides the real host", () => {
-    assert.equal(normalizeRemote("evil.com:path@github.com:acme/app"), null);
+  it("keys an scp remote under the host git would connect to", () => {
+    // Git splits at the first ':'. Refusing such paths would silently re-key the
+    // repositories below onto local: keys (final review).
+    assert.equal(normalizeRemote("evil.com:path@github.com:acme/app"), "evil.com/path@github.com:acme/app");
     assert.equal(normalizeRemote("git@github.com:acme/app.git"), "github.com/acme/app");
+    assert.equal(normalizeRemote("git@host:/srv/git/a@b/repo.git"), "host/srv/git/a@b/repo");
+    assert.equal(normalizeRemote("git@github.com:acme/app@v1"), "github.com/acme/app@v1");
     assert.equal(normalizeRemote("ssh://git@github.com/acme/app"), "github.com/acme/app");
+    assert.equal(normalizeRemote("git@[2001:db8::1]:a/b.git"), "[2001:db8::1]/a/b");
   });
 
   it("binds only a receipt whose binding is this client workspace", () => {
@@ -1089,5 +1105,151 @@ describe("final-review findings", () => {
     };
     const text = renderRemoteStatus(report);
     assert.match(text, /verified 10 d ago/);
+  });
+});
+
+describe("closure review", () => {
+  it("scopes the cached sb path to the host the FILE names", () => {
+    const dir = mkdtempSync(join(tmpdir(), "sb-m2-"));
+    const path = join(dir, "substrate.json");
+    writeFileSync(
+      path,
+      JSON.stringify({ remote: "ssh:server", remoteSb: "/usr/bin/sb", serverVersion: "0.2.2", checkouts: {} }),
+    );
+    const base = { ...process.env, SUBSTRATE_REMOTE_CONFIG: path };
+    const other = selectRemote({ ...base, SUBSTRATE_REMOTE: "ssh:other" });
+    assert.equal(other?.spec.host, "other");
+    assert.equal(other?.config.remoteSb, null, "a path verified for ssh:server is not reused for ssh:other");
+    assert.equal(other?.config.serverVersion, null);
+    const same = selectRemote({ ...base, SUBSTRATE_REMOTE: "ssh:server" });
+    assert.equal(same?.config.remoteSb, "/usr/bin/sb", "the same host keeps what was verified for it");
+    assert.equal(same?.config.serverVersion, "0.2.2");
+    const fromFile = selectRemote(base);
+    assert.equal(fromFile?.config.remoteSb, "/usr/bin/sb");
+  });
+
+  it("sends the decoded bytes of --result and --refs, not the client path", () => {
+    // The client file is deleted before the server runs, and the server's fake
+    // reads the flag value: if the document were not uploaded, sb would be
+    // pointed at a path that no longer exists and exit 9 (final review 3).
+    const cases: Array<{ argv: (path: string) => string[]; flag: string; body: string }> = [
+      { flag: "--result", body: '{"summary":"done"}', argv: (path) => ["issue", "note", "XTRM-1", "--project", "prj_x", "--result", path] },
+      { flag: "--refs", body: '{"refs":["a"]}', argv: (path) => ["journal", "checkpoint", "XTRM-1", "--project", "prj_x", "--refs", path] },
+    ];
+    for (const testCase of cases) {
+      const fake = makeFake({ mode: "file", fileFlag: testCase.flag, receive: join(tmpdir(), `sb-closure-${testCase.flag.slice(2)}-${process.pid}`), version: "sb 0.2.2\n" });
+      const env = remoteEnv(fake.clientConfigPath);
+      writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
+      const document = join(fake.dir, `doc-${testCase.flag.slice(2)}.json`);
+      writeFileSync(document, testCase.body);
+      const inner = localTransport();
+      const transport: RemoteTransport = {
+        run: (request) => {
+          rmSync(document, { force: true });
+          return inner.run(request);
+        },
+      };
+      const result = forwardCli(testCase.argv(document), { env, transport });
+      assert.equal(result?.code, 0, `${testCase.flag}: ${result?.stderr}`);
+      assert.deepEqual(JSON.parse(readFileSync(join(tmpdir(), `sb-closure-${testCase.flag.slice(2)}-${process.pid}`), "utf8")), JSON.parse(testCase.body));
+    }
+  });
+
+  it("carries the frame marker without an unread byte count", () => {
+    const plan = buildRemoteCommand({
+      sbPath: "/usr/bin/sb",
+      argv: ["issue", "create", "--contract", "x"],
+      uploads: [{ argvIndex: 3, content: Buffer.from('{"a":1}') }],
+    });
+    const markers = (plan.stdin ?? "").split("\n").filter((line) => line.startsWith("@@sb-remote-file "));
+    assert.deepEqual(markers, ["@@sb-remote-file f3"]);
+  });
+
+  it("bounds every transport call by the remaining budget, and by a requested timeout", () => {
+    const seen: Array<number | undefined> = [];
+    const transport: RemoteTransport = {
+      run: (request) => {
+        seen.push(request.timeoutMs);
+        return { code: 0, stdout: "", stderr: "" };
+      },
+    };
+    const dir = mkdtempSync(join(tmpdir(), "sb-deadline-"));
+    const configPath = join(dir, "substrate.json");
+    writeClientConfig(configPath, "/usr/bin/sb", {});
+    const env = { ...process.env, SUBSTRATE_REMOTE_CONFIG: configPath, SUBSTRATE_REMOTE: "ssh:fake" };
+
+    const budgeted = openRemoteSession({ transport, env, deadlineMs: Date.now() + 80 });
+    assert.ok(budgeted);
+    runRemote(budgeted, ["issue", "list"], {});
+    assert.equal(typeof seen[0], "number", "a call without a timeout would hang until the ssh default");
+    assert.ok(seen[0]! > 0 && seen[0]! <= 200, `the remaining budget clipped the call (got ${seen[0]})`);
+
+    runRemote(budgeted, ["issue", "list"], { timeoutMs: 60_000 });
+    assert.ok((seen[1] ?? 0) <= 200, `a requested timeout never exceeds the budget (got ${seen[1]})`);
+
+    const unbudgeted = openRemoteSession({ transport, env });
+    assert.ok(unbudgeted);
+    runRemote(unbudgeted, ["issue", "list"], { timeoutMs: 5_000 });
+    assert.equal(seen[2], 5_000, "a requested timeout is honoured below the default");
+
+    // --project keeps the call from stopping at mapping resolution, so the
+    // assertion is about the timeout the transport received.
+    forwardCli(["issue", "list", "--project", "prj_x"], { env, transport, deadlineMs: Date.now() + 80 });
+    assert.ok((seen[3] ?? 0) > 0 && (seen[3] ?? 0) <= 200, `forwardCli passes the budget on (got ${seen[3]})`);
+
+    const hook = hookSession(env, { transport, deadlineMs: Date.now() + 80 });
+    assert.ok(hook);
+    runRemote(hook, ["issue", "list"], {});
+    assert.ok((seen[4] ?? DEFAULT_TIMEOUT_MS) <= 200, `hookSession passes the budget on (got ${seen[4]})`);
+  });
+
+  it("refuses a document reached through a symlinked directory or a symlinked HOME", () => {
+    const saved = { HOME: process.env["HOME"] };
+    try {
+      const home = mkdtempSync(join(tmpdir(), "sb-home-"));
+      mkdirSync(join(home, ".ssh"), { recursive: true });
+      writeFileSync(join(home, ".ssh", "id_ed25519"), "private key");
+      process.env["HOME"] = home;
+      const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+      const env = remoteEnv(fake.clientConfigPath);
+      writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
+
+      symlinkSync(join(home, ".ssh"), join(home, "alias"));
+      const viaDirectory = forwardCli(["issue", "create", "--project", "prj_x", "--contract", join(home, "alias", "id_ed25519")], { env, transport: localTransport() });
+      assert.equal(viaDirectory?.code, 1);
+      assert.match(viaDirectory.stderr, /holds secrets or kernel state/);
+
+      const realHome = mkdtempSync(join(tmpdir(), "sb-realhome-"));
+      mkdirSync(join(realHome, ".ssh"), { recursive: true });
+      writeFileSync(join(realHome, ".ssh", "id_ed25519"), "private key");
+      const linkHome = join(tmpdir(), `sb-homelink-${process.pid}`);
+      rmSync(linkHome, { force: true });
+      symlinkSync(realHome, linkHome);
+      process.env["HOME"] = linkHome;
+      const viaHome = forwardCli(["issue", "create", "--project", "prj_x", "--contract", join(linkHome, ".ssh", "id_ed25519")], { env, transport: localTransport() });
+      assert.equal(viaHome?.code, 1, "an unresolved $HOME must not defeat the denylist");
+      assert.match(viaHome.stderr, /holds secrets or kernel state/);
+      assert.equal(fake.calls().length, 0);
+    } finally {
+      if (saved.HOME === undefined) delete process.env["HOME"];
+      else process.env["HOME"] = saved.HOME;
+    }
+  });
+
+  it("reports a prologue failure as an error envelope in --json mode", () => {
+    const transport: RemoteTransport = {
+      run: () => ({ code: 72, stdout: "", stderr: "sb remote: the upload stream ended early; nothing ran on the server\n" }),
+    };
+    const dir = mkdtempSync(join(tmpdir(), "sb-envelope-"));
+    const configPath = join(dir, "substrate.json");
+    writeClientConfig(configPath, "/usr/bin/sb", {});
+    const env = { ...process.env, SUBSTRATE_REMOTE_CONFIG: configPath, SUBSTRATE_REMOTE: "ssh:fake" };
+    const result = forwardCli(["issue", "list", "--json", "--project", "prj_x"], { env, transport });
+    assert.equal(result?.code, 72, "the exit code survives, so the caller can tell which step failed");
+    assert.equal(result.stderr, "");
+    const envelope = JSON.parse(result.stdout) as { ok: boolean; error: string; command: string };
+    assert.equal(envelope.ok, false);
+    assert.equal(envelope.command, "issue.list");
+    assert.match(envelope.error, /ended early/);
   });
 });

@@ -386,6 +386,15 @@ export function forwardCli(argv: string[], deps: ForwardDeps = {}): CliOutcome |
       uploads: prepared.uploads,
       stdin: prepared.wantsStdin ? (deps.readStdin ?? (() => readFileSync(0, "utf8")))() : null,
     });
+    // Exits 70-73 come from the generated prologue (cd refused, frame ended
+    // early, decode failed, wrong size). They are the transport's own failures,
+    // so --json callers get an error envelope rather than an empty success.
+    if (result.code >= 70 && result.code <= 73 && prepared.argv.includes("--json")) {
+      const { group, verb } = parseArgv(prepared.argv);
+      const command = group === null ? "" : verb === null ? group : group + "." + verb;
+      const message = result.stderr.trim() || result.stdout.trim() || `the remote run exited ${result.code} on ${session.spec.host}`;
+      return { code: result.code, stdout: JSON.stringify({ schema, command, ok: false, error: message }) + "\n", stderr: "" };
+    }
     return { code: result.code, stdout: result.stdout, stderr: result.stderr };
   } catch (err) {
     return failure(argv, err, schema);
