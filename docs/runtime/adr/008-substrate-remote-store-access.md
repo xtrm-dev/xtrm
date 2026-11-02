@@ -46,13 +46,19 @@ Required comparison, from the Issue contract. "Covers" counts consumers 1–5.
 
 A and B each solve a subset. C solves everything through one abstraction at the price of a resident process and a forwarded port. D avoids a transport but relocates the work.
 
-## Decision (recommended for the gate)
+## Decision (accepted 2026-11-02)
 
 **Use `ssh` process execution as the single transport, with two protocols on it and no listener and no daemon.**
 
-1. **CLI and hooks — argv forwarding (Stage 2, contracted).** `substrate.remote = "ssh:<host>"` makes a plain `sb` invocation run the *remote* `sb` with the same argv, stdin, stdout, stderr and exit code. Hooks stop opening the file themselves and call the same transport. The remote needs no new Substrate code: it runs whatever `sb` it already has.
-2. **In-process consumers — one JSON-RPC stdio service (`sb serve --stdio`) launched over `ssh`, one connection per client process.** Pi handlers, the Claude hook scripts and the specialists service ports call typed operations over that connection instead of `openSubstrate`. This reuses the specialists' existing structural ports (`IssueServicePort`, `IssueStorePort` in `src/activation/workitem-store.ts`) rather than changing dispatch semantics: the remote client implements the same interfaces.
-3. **Claude tools — the existing MCP server, executed on the server over `ssh` stdio** (`plugin/substrate/.mcp.json` points at an `ssh` command instead of a local `node`). Its tool handlers then construct services against the authoritative file on the host that owns it. This is option B, used as one adapter over the same transport, not as the answer to the whole problem.
+The operator accepted this decision on 2026-11-02. Stage 2 (item 1 below) is
+implementation, not a proposal. Items 2 and 3 remain open and are follow-up
+scope; neither is a precondition for Stage 2.
+
+1. **CLI and hooks — argv forwarding (Stage 2, contracted).** `substrate.remote = "ssh:<host>"` makes a plain `sb` invocation run the *remote* `sb` with the same argv, stdin, stdout, stderr and exit code. Hooks stop opening the file themselves and call the same transport. **The remote needs no new Substrate code to serve CLI work** — it runs whatever `sb` it already has (measured against server `sb 0.2.2`) — **but two behaviours do need a newer server** (see “What server 0.2.2 cannot do” below). The client therefore resolves the project and the path mapping itself and passes `--project`; a capability the older server lacks is reported by `sb doctor`, never assumed and never worked around by a server upgrade.
+2. **In-process consumers — one JSON-RPC stdio service (`sb serve --stdio`) launched over `ssh`, one connection per client process.** Pi handlers, the Claude hook scripts and the specialists service ports call typed operations over that connection instead of `openSubstrate`. This reuses the specialists' existing structural ports (`IssueServicePort`, `IssueStorePort` in `src/activation/workitem-store.ts`) rather than changing dispatch semantics: the remote client implements the same interfaces. This verb does not exist yet on either side; it is the follow-up that carries the largest share of the remaining work (see “Stage 2 does not unblock native dispatch”).
+3. **Claude tools — the existing MCP server, executed on the server over `ssh` stdio.** Its tool handlers then construct services against the authoritative file on the host that owns it. This is option B, used as one adapter over the same transport, not as the answer to the whole problem.
+
+   **The `ssh` command does not belong in `plugin/substrate/.mcp.json`.** That file is shared with the server checkout (the plugin is consumed on both machines), so an `ssh` command written there would turn a local session into a remote one by accident, and it would hard-code a host into a distributed artifact. The Stage 2 follow-up is a *launcher* that reads `substrate.remote` and chooses: local `node` when the setting is absent, `ssh <host> <server node> <server script>` when it is present. Placement of that launcher is decision 2; the transport is not.
 
 Rejected as the primary transport, with reasons:
 
@@ -66,6 +72,29 @@ Rejected as the primary transport, with reasons:
 - The PC's stale local store must never be opened in remote mode. Remote mode dispatches before `openSubstrate` and before the db-path default is resolved; an explicit `--db` or `SUBSTRATE_DB` forces local mode.
 - Version skew is explicit: the *client* is the newer `sb`, the server may be older. `sb doctor` reports both versions and warns on mismatch; unknown flags fail verbatim from the remote.
 - Option C is not foreclosed: the JSON-RPC surface is defined transport-neutrally, so a future tunneled daemon can serve the same protocol without touching consumers.
+
+### What server 0.2.2 cannot do (verified 2026-11-02)
+
+Measured against the live server (`ssh server`, `zsh -lic 'command -v sb'` → `/home/dawid/.nvm/versions/node/v24.15.0/bin/sb`, `sb 0.2.2`), not inferred from the repository:
+
+| Capability | 0.2.2 | 0.2.3 (this repo) |
+|---|---|---|
+| `journal append --participant` | rejected (`unknown flag`) | accepted |
+| `SUBSTRATE_HOLDER` in the server binary | absent (no occurrence in the installed dist) | read as `participantId` |
+| `journal checkpoint --workspace` | accepted | accepted |
+| `provenance dispatch --participant --workspace` | accepted | accepted |
+| `provenance bind <receipt> <sha>` | accepted | accepted |
+| rewrite reconciliation verb (`reconcileRewrite`) | none | none (hook-internal only) |
+
+Consequences that Stage 2 must state rather than hide:
+
+1. **A forwarded `journal append` records no participant against 0.2.2.** The executor forwards `SUBSTRATE_HOLDER` in the environment, and a 0.2.2 server ignores it. Worker identity on Journal rows therefore needs server 0.2.3 (the flag or the env read). `sb doctor` reports this as a capability line instead of claiming identity survives the hop.
+2. **Post-rewrite cannot be forwarded.** `sb 0.2.2` exposes no CLI verb for `reconcileRewrite`, so the remote `post-rewrite` adapter reports the unreconciled pairs on stderr and leaves the bindings alone. Claiming success would record a reconciliation that never happened.
+3. **The typed stdio service is not shipped on either side.** In-process consumers (Pi handlers, Claude hook scripts, specialists ports) keep their local behaviour until that follow-up lands.
+
+### Stage 2 does not unblock native dispatch
+
+Stage 2 gives the PC a correct CLI and hook path to the server-owned store. It does **not** unblock native specialist dispatch: dispatch runs inside the specialists service, which reaches the store through `IssueServicePort`/`IssueStorePort` rather than through `sb` argv, so it needs the typed stdio service (item 2). That follow-up — a structured store operation surface plus the specialists client — is the largest remaining piece of the remote-store work, and Stage 2 neither implements it nor shortens it. Reporting Stage 2 as “remote is done” would misstate the remaining work by that whole piece.
 
 ## Correctness constraints the transport must preserve
 
@@ -90,10 +119,11 @@ Non-interactive `ssh` does not find `sb` (verified empty for `command -v sb`; `s
 
 ### Path mapping (cwd, workspaces, files)
 - The client resolves its `repositoryKey` from the Git origin URL (`src/domain/repository-discovery.ts`, `deriveRepositoryIdentity`), which is identical on both machines for the same repository.
-- The server resolves that key against the store's `repository_bindings` and `checkout_links` rows to a **server** checkout root, then applies the client's repository-relative subdirectory. Worktrees map to their repository, not to their own toplevel.
-- No mapping → fail closed, naming the remote host and the remedy (`sb project link` on the server). Never fall back to a bash-identical path guess.
-- `--project` is portable and passes through unchanged.
-- **Workspace identity stays the client path.** Journal entries and execution bindings record the worktree the operator edits in (`journal-service.ts:471`, `execution-binding.ts:26`), not the server cwd the process happens to run in. The transport sends the client workspace explicitly; the server-side process must not substitute its own.
+- **The server does not resolve that key from its store, and Stage 2 does not need it to.** Verified on `sb 0.2.2`: `sb project links --json` returns server `.git` roots only (no repository key) and `sb doctor --json` returns `repository.repositoryKey` for the directory it runs in. So the client probes each candidate server root with `sb doctor --json` and compares keys. `sb project show --json` additionally exposes `bindings[].repositoryKey` when the mapping must be cross-checked.
+- Worktrees map to their repository, not to their own toplevel: the client sends the client's repository-relative subdirectory, resolved against the mapped server root.
+- No mapping, or more than one match → fail closed, naming the remote host and the remedy (`--server-root` for an ambiguous case, `sb remote setup` after cloning there). Never fall back to a bash-identical path guess.
+- `--project` is portable and passes through; when the caller did not pass it, the client injects the project it already resolved from the mapping.
+- **Workspace identity stays the client path** where the server can record it. Journal entries and execution bindings record the worktree the operator edits in (`journal-service.ts:471`, `execution-binding.ts:26`). On `sb 0.2.2` only `provenance dispatch` and `journal checkpoint` accept the explicit `--workspace`/`--participant`; `journal append` does not, so an append issued through the transport records no participant until the server is 0.2.3. The rule is unchanged, the coverage is partial, and `sb doctor` states which case applies.
 
 ### Local-file arguments
 `--contract <file>` names a PC path. Two acceptable outcomes: stream the file to a remote temp path and rewrite the argument, or fail closed with a message that names the flag and the file. Silent reading of a different server file is a defect. `--file` in the write direction (e.g. `export --file`) is not supported in Stage 2: fail closed and name the follow-up.
@@ -108,16 +138,26 @@ Unreachable host → non-zero exit, message naming the remote (`substrate.remote
 Every write executes on the server host, so SQLite WAL, `PRAGMA busy_timeout = 5000`, `synchronous = FULL` and `BEGIN IMMEDIATE` serialization behave exactly as they do for a local caller (`src/store/sqlite.ts`). Claims carry `holder`, `expiresAt` and `activationId` and no pid or host field (`src/domain/claim.ts`), so cross-host claims need no schema change. A PC session that dies leaves its claim live until the TTL (`DEFAULT_CLAIM_TTL_MS = 15 * 60 * 1000`, `src/domain/claim.ts:47`); this is unchanged behaviour and is accepted. No network filesystem is ever placed under SQLite.
 
 ### Hook latency
-With ControlMaster/ControlPersist configured, a forwarded hook call costs 0.13–0.18 s (measured). Without it, 0.5 s cold. Requirements: `sb remote setup` configures multiplexing on the client, and `sb doctor` reports whether the master is live together with the round-trip time. Hooks must stay best-effort in the sense they already are: a transport failure is reported, never turned into a blocked commit.
+With ControlMaster/ControlPersist configured, a forwarded hook call costs 0.13–0.18 s (measured). Without it, 0.5 s cold. Stage 2 does **not** write ssh configuration: `sb remote setup` measures and reports the round trip, and `sb doctor` shows it; configuring multiplexing stays an operator action (a client-side ssh config decision, not a Substrate decision), and automating it is follow-up scope. Hooks stay best-effort: a transport failure is reported on stderr and git proceeds — a down network is weather, not corrupt state, so it must not block a commit.
 
 ### Configuration
-Client-side only, under `~/.xtrm/config/`:
+Client-side only: `~/.xtrm/config/substrate.json` (`SUBSTRATE_REMOTE_CONFIG`
+overrides the path). Written by `sb remote setup`, read on every invocation;
+a malformed file fails closed rather than degrading to local mode.
 
 ```json
-{ "remote": "ssh:server", "remoteSb": "/home/dawid/.nvm/versions/node/v24.15.0/bin/sb" }
+{
+  "remote": "ssh:server",
+  "remoteSb": "/home/dawid/.nvm/versions/node/v24.15.0/bin/sb",
+  "serverVersion": "0.2.2",
+  "checkouts": {
+    "github.com/xtrm-dev/xtrm": { "root": "/home/dawid/dev/xtrm", "projectId": "prj_xtrm", "verifiedAt": 1762100000000 }
+  }
+}
 ```
 
-`SUBSTRATE_REMOTE` overrides it for tests and one-off runs. Absent the setting, `sb` runs locally exactly as today.
+`SUBSTRATE_REMOTE` overrides the host for tests and one-off runs. Absent the
+setting, `sb` runs locally exactly as today.
 
 ## Stage 2 shape (the PR)
 
@@ -134,10 +174,18 @@ Client-side only, under `~/.xtrm/config/`:
 
 ## Open questions for the operator (the gate)
 
-1. **Transport:** accept the recommended `ssh`-exec design (no listener, no daemon), or prefer the tunneled store service (option C) because a resident service is wanted for a later multi-machine/multi-user tier?
-2. **Claude plugin placement:** may its MCP server run from the server checkout (version-pinned, tools follow the server package), or must the PC keep its own copy and act as a client of the JSON-RPC service?
-3. **Server-side dispatch:** is running specialist sessions on the server ever intended for this workflow? If yes, it is an operating mode to document, not a transport.
+1. **Transport:** accept the recommended `ssh`-exec design (no listener, no daemon), or prefer the tunneled store service (option C) because a resident service is wanted for a later multi-machine/multi-user tier? — **Answered 2026-11-02: accept `ssh`-exec, no listener, no daemon.**
+2. **Claude plugin placement:** may its MCP server run from the server checkout (version-pinned, tools follow the server package), or must the PC keep its own copy and act as a client of the JSON-RPC service? — **Open; affects the follow-up launcher only.**
+3. **Server-side dispatch:** is running specialist sessions on the server ever intended for this workflow? If yes, it is an operating mode to document, not a transport. — **Open; affects the follow-up only, not Stage 2.**
 
 ## Status
 
-No implementation has started. Stage 2 begins only after the coordinator relays the operator's transport decision.
+Stage 1 (this decision, accepted 2026-11-02) is recorded. Stage 2 is implemented
+on branch `xt/XTRM-685-sb-remote`: `packages/substrate/src/remote/` (spec,
+config, ssh, session, executor, setup, doctor, render), the `remote` CLI group
+(`sb remote setup`, `sb remote status`), forwarding inside `runCli` before the
+local store opens, and the three git hooks routed through the transport with
+their local bodies preserved. Validation lives in
+`packages/substrate/tests/remote-transport.test.ts` (fake transport, no
+network). Remaining consumers are listed above and are follow-up Issues, not
+gaps in Stage 2.

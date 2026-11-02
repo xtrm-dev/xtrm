@@ -24,6 +24,11 @@ import { assertSchemaHealthy } from "../src/store/migrations/runner.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { RepositoryService } from "../src/service/repository-service.ts";
 import { discoverGitRoot, discoverRepository, type RepositoryDiscovery } from "../src/domain/repository-discovery.ts";
+import { forwardCli } from "../src/remote/executor.ts";
+import type { RemoteTransport } from "../src/remote/ssh.ts";
+import { remoteDoctor, type RemoteDoctorReport } from "../src/remote/doctor.ts";
+import { renderRemoteDoctor, renderRemoteSetup, renderRemoteStatus } from "../src/remote/render.ts";
+import { remoteSetup } from "../src/remote/setup.ts";
 // Compat re-export (XTRM-337): discoverRepository/discoverGitRoot moved to the
 // shared domain module; re-exported here so existing `../cli/sb.ts` importers
 // keep working while new code imports the shared module directly.
@@ -369,6 +374,7 @@ usage:
   sb --version
   sb init [--db PATH] [--json]
   sb doctor [--db PATH] [--json]
+  sb remote setup ssh:<host> [--server-root PATH] [--refresh] [--json]
 
 groups:
   init        initialize this repository (bind it to a Project; idempotent)
@@ -377,6 +383,7 @@ groups:
   plan        check|apply
   journal     append|checkpoint|show|since|latest|timeline|render
   provenance  dispatch|allocate|bind|trace|commit|receipt|pr|session|activation|bundle
+  remote      setup|status
   import      beads
   export      project
 
@@ -389,6 +396,33 @@ per-verb help: sb issue create --help  |  sb help issue create`;
 
 const COMMAND_HELP: Record<string, string> = {
   top: HELP_TOP,
+  remote: `usage: sb remote <setup|status> [--json]
+
+  setup ssh:<host> [--server-root PATH] [--refresh]
+  status
+
+remote mode runs every sb invocation on the server over ssh, with the same
+argv, stdin, stdout and exit code (ADR-008): no listener and no daemon. The
+client resolves its own repository key from Git and maps it to the server
+checkout that reports the same key; a path that merely looks identical is
+never used as evidence. --db and SUBSTRATE_DB name a local store, so those
+invocations are not forwarded. help, version and doctor never open a store
+and are answered here. Configuration lives in ~/.xtrm/config/substrate.json
+(override the path with SUBSTRATE_REMOTE_CONFIG).`,
+  "remote.setup": `usage: sb remote setup ssh:<host> [--server-root PATH] [--refresh] [--json]
+
+verifies the connection, resolves sb on the server once through a login
+shell, records the server version and round-trip latency, and maps this
+repository to its server checkout by repository key. Fails when the server
+has no checkout of this repository, or when several match and --server-root
+does not choose one. --refresh re-verifies a cached mapping.`,
+  "remote.status": `usage: sb remote status [--json]
+
+reports the mode (local or ssh), the resolved server sb path and version,
+the round-trip latency, the mapped server checkout, and the capabilities the
+server version actually supports — including the ones it does not, so a
+0.2.2 server reports the missing holder environment and stdio service
+instead of pretending they work.`,
   help: `usage: sb help [group [verb]] [--json]  |  sb <group> [<verb>] --help
 
 prints this help without opening the database. With --json, emits the same
@@ -744,6 +778,50 @@ function renderVersion(ctx: Ctx): CliResult {
 // and the explicit override are three separate facts. `repository.initialized`
 // is a repository_bindings fact — never a successful resolveProject and never
 // true because of an override or a checkout alias.
+// In remote mode the local store is out of scope: doctor reports the
+// connection, the mapping and the capabilities the server actually has, and
+// opens nothing (ADR-008: remote mode never touches the stale local database).
+function runRemoteDoctor(ctx: Ctx, report: RemoteDoctorReport): CliResult {
+  const ok = report.error === null;
+  if (ctx.json) {
+    return {
+      code: ok ? 0 : 1,
+      stdout: JSON.stringify({ schema: SCHEMA_VERSION, command: "doctor", ok, ...(ok ? {} : { error: report.error }), data: { mode: "remote", remote: report } }) + "\n",
+      stderr: "",
+    };
+  }
+  return {
+    code: ok ? 0 : 1,
+    stdout: "sb doctor: remote (no local store is opened in remote mode)\n" + renderRemoteDoctor(report),
+    stderr: ok ? "" : `sb: doctor: ${report.error}\n`,
+  };
+}
+
+// `sb remote <setup|status>`: configuration, not work. Neither verb opens the
+// local store; setup observes the server and writes the client config.
+function runRemoteGroup(ctx: Ctx, verb: string | undefined, flags: Flags, rest: string[], deps: { env: NodeJS.ProcessEnv; transport?: RemoteTransport }): CliResult {
+  if (verb === "status") {
+    if (rest.length > 0) throw new Error("usage: sb remote status [--json]");
+    const report = remoteDoctor({ clientVersion: cliVersion(), env: deps.env, transport: deps.transport });
+    if (ctx.json && report.error !== null) return fail(ctx, "remote.status", new Error(report.error));
+    if (ctx.json) return emit(ctx, "remote.status", report);
+    return {
+      code: report.error === null ? 0 : 1,
+      stdout: renderRemoteStatus(report),
+      stderr: report.error === null ? "" : `sb: remote status: ${report.error}\n`,
+    };
+  }
+  if (verb === "setup") {
+    const spec = rest[0];
+    if (spec === undefined) throw new Error("usage: sb remote setup ssh:<host> [--server-root PATH] [--refresh] [--json]");
+    if (rest.length > 1) throw new Error(`usage: sb remote setup ssh:<host> [--server-root PATH] [--refresh] [--json] (unexpected: ${rest.slice(1).join(" ")})`);
+    const result = remoteSetup(spec, { serverRoot: flag(flags, "server-root") ?? null, refresh: flags.has("refresh"), env: deps.env, transport: deps.transport });
+    if (ctx.json) return emit(ctx, "remote.setup", result);
+    return { code: 0, stdout: renderRemoteSetup(result, result.configPath), stderr: "" };
+  }
+  throw new Error("usage: sb remote <setup|status> [--json]");
+}
+
 function runDoctor(ctx: Ctx): CliResult {
   const repo = discoverRepository();
   const effectiveOverride = (process.env["SUBSTRATE_PROJECT"] ?? "").trim() === "" ? null : process.env["SUBSTRATE_PROJECT"]!.trim();
@@ -951,12 +1029,14 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "provenance.bundle": ["project", "repo-root"],
   "init.": [],
   "doctor": [],
+  "remote.setup": ["server-root", "refresh"],
+  "remote.status": [],
   "import.beads": ["file", "project", "edges-file", "create-project", "dry-run"],
   "export.": ["project", "file"],
   "export.project": ["project", "file"],
 };
 
-const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export"]);
+const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export", "remote"]);
 
 function assertKnownFlags(flags: Flags, command: string): void {
   const allowed = new Set([...GLOBAL_FLAGS, ...(FLAG_ALLOWLIST[command] ?? [])]);
@@ -965,7 +1045,10 @@ function assertKnownFlags(flags: Flags, command: string): void {
   }
 }
 
-export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
+export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.ProcessEnv; transport?: RemoteTransport }): CliResult {
+  // env/transport are injection seams for tests and embedding; production
+  // callers pass neither.
+  const remoteDeps = { env: opts?.env ?? process.env, transport: opts?.transport };
   const { flags, positionals } = parseArgs(argv);
   const ctx: Ctx = {
     dbPath: flag(flags, "db") ?? opts?.dbPath ?? process.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db"),
@@ -976,14 +1059,22 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
   // Side-effect-free surface (§28): help/version never open SQLite.
   if (flags.has("help") || group === "help") return renderHelp(ctx, flags.has("help") ? positionals : positionals.slice(1));
   if (flags.has("version") || group === "version") return renderVersion(ctx);
+  // Remote mode (ADR-008): the invocation runs on the server, and this is
+  // decided before the local store is opened, so a stale local database can
+  // never absorb a remote-mode write.
+  const forwarded = forwardCli(argv, remoteDeps);
+  if (forwarded !== null) return forwarded;
   let db: ReturnType<typeof openSubstrate> | null = null;
   try {
     if (group === "doctor") {
       assertKnownFlags(flags, "doctor");
       if (verb !== undefined) throw new Error("usage: sb doctor [--db PATH] [--json] (doctor takes no verbs)");
+      const remote = remoteDoctor({ clientVersion: cliVersion(), env: remoteDeps.env, transport: remoteDeps.transport });
+      if (remote.mode === "ssh") return runRemoteDoctor(ctx, remote);
       return runDoctor(ctx);
     }
-    if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|import|export> <verb> [args...]");
+    if (group === "remote") return runRemoteGroup(ctx, verb, flags, rest, remoteDeps);
+    if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|import|export|remote> <verb> [args...]");
     if (group && KNOWN_GROUPS.has(group)) assertKnownFlags(flags, `${group}.${verb ?? ""}`);
     db = openSubstrate(ctx.dbPath);
     const svc = new IssueService(db);
@@ -1008,7 +1099,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string }): CliResult {
     }
     if (group === "import") return runImport(db, svc, ctx, command, verb, flags);
     if (group === "export") return runExport(db, svc, ctx, command, verb, flags);
-    throw new Error(`unknown group: ${group} (want issue|project|plan|journal|provenance|import|export)`);
+    throw new Error(`unknown group: ${group} (want issue|project|plan|journal|provenance|import|export|remote)`);
   } catch (err) {
     return fail(ctx, command, err);
   } finally {

@@ -8,6 +8,8 @@
 // one, is a quiet no-op: a missing link is reported, never guessed.
 // Fails closed on corrupt state. XTRM_COMMIT_SHA overrides
 // `git rev-parse HEAD` (tests, bound-hook determinism).
+// In remote mode (ADR-008) the server owns the store: the same decision is
+// forwarded as `sb provenance bind`, best effort.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -18,6 +20,7 @@ import { IssueService } from "../src/service/issue-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { normalizeWorkspace } from "../src/domain/claim.ts";
 import { armPipeDrain } from "../integrations/write-and-exit.ts";
+import { remoteHookMode, remotePostCommit } from "./remote.ts";
 
 function dbPath(): string {
   return process.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db");
@@ -72,37 +75,50 @@ function openReceiptId(issues: IssueService, provenance: ProvenanceService, repo
 // armPipeDrain() keeps a closed reader from surfacing as an EPIPE crash.
 armPipeDrain();
 const repoRoot = process.env["XTRM_REPO_ROOT"] ?? process.cwd();
-
-// An absent XTRM_RECEIPT_ID is not "nothing to do" (XTRM-415), but recovery
-// must stay side-effect free for the untracked-commit path: it only runs when
-// this checkout carries a host-owned Issue ref and the store already exists.
 const envReceiptId = process.env["XTRM_RECEIPT_ID"] || null;
-if (envReceiptId === null && !(discoverIssueRef(repoRoot) !== null && existsSync(dbPath()))) process.exit(0);
 
-let db: ReturnType<typeof openSubstrate> | null = null;
-try {
-  db = openSubstrate(dbPath());
-  const svc = new IssueService(db);
-  const provenance = new ProvenanceService(db, svc);
-  const receiptId = envReceiptId ?? openReceiptId(svc, provenance, repoRoot);
-  // No open receipt for this checkout is a quiet no-op, not an error: a
-  // guessed bind would be worse than a reported absence.
-  if (receiptId !== null) {
-    const sha = process.env["XTRM_COMMIT_SHA"] ?? headSha(repoRoot);
-    if (!sha) {
-      process.stderr.write("xtrm post-commit: cannot resolve HEAD SHA\n");
-      process.exitCode = 1;
-    } else {
-      provenance.bindCommit(receiptId, sha);
-    }
-  }
-} catch (err) {
-  process.stderr.write(`xtrm post-commit: ${err instanceof Error ? err.message : String(err)}\n`);
-  process.exitCode = 1;
-} finally {
+// Quiet guard (zero-byte, before any write): an explicit receipt, or a tracked
+// checkout with its Issue ref and an existing store. Everything else, including
+// remote mode with nothing to forward, is a no-op.
+if (envReceiptId === null && !(discoverIssueRef(repoRoot) !== null && (remoteHookMode() || existsSync(dbPath())))) process.exit(0);
+
+if (remoteHookMode()) {
+  remotePostCommit(repoRoot);
+} else {
+  localPostCommit(repoRoot, envReceiptId);
+}
+
+function localPostCommit(root: string, receiptFromEnv: string | null): void {
+  // An absent XTRM_RECEIPT_ID is not "nothing to do" (XTRM-415), but recovery
+  // must stay side-effect free for the untracked-commit path: it only runs when
+  // this checkout carries a host-owned Issue ref and the store already exists.
+  if (receiptFromEnv === null && !(discoverIssueRef(root) !== null && existsSync(dbPath()))) return;
+
+  let db: ReturnType<typeof openSubstrate> | null = null;
   try {
-    db?.close();
-  } catch {
-    /* close must not mask the result */
+    db = openSubstrate(dbPath());
+    const svc = new IssueService(db);
+    const provenance = new ProvenanceService(db, svc);
+    const receiptId = receiptFromEnv ?? openReceiptId(svc, provenance, root);
+    // No open receipt for this checkout is a quiet no-op, not an error: a
+    // guessed bind would be worse than a reported absence.
+    if (receiptId !== null) {
+      const sha = process.env["XTRM_COMMIT_SHA"] ?? headSha(root);
+      if (!sha) {
+        process.stderr.write("xtrm post-commit: cannot resolve HEAD SHA\n");
+        process.exitCode = 1;
+      } else {
+        provenance.bindCommit(receiptId, sha);
+      }
+    }
+  } catch (err) {
+    process.stderr.write(`xtrm post-commit: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exitCode = 1;
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      /* close must not mask the result */
+    }
   }
 }
