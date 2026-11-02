@@ -902,6 +902,10 @@ describe("second-audit findings", () => {
   });
 
   it("bounds the whole hook well below the transport timeout and never discovers", () => {
+    // Pinned, not merely ordered: a mutation of either constant must fail here
+    // rather than quietly survive (review M8 — 120 s survived a mutation).
+    assert.equal(DEFAULT_TIMEOUT_MS, 120_000);
+    assert.equal(HOOK_BUDGET_MS, 8_000);
     assert.ok(HOOK_BUDGET_MS < DEFAULT_TIMEOUT_MS, "the hook budget must be the smaller bound");
     assert.ok(HOOK_BUDGET_MS <= 30_000, "a commit must not wait on the network for a minute");
     const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
