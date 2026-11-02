@@ -1181,26 +1181,34 @@ describe("closure review", () => {
     const budgeted = openRemoteSession({ transport, env, deadlineMs: Date.now() + 80 });
     assert.ok(budgeted);
     runRemote(budgeted, ["issue", "list"], {});
-    assert.equal(typeof seen[0], "number", "a call without a timeout would hang until the ssh default");
-    assert.ok(seen[0]! > 0 && seen[0]! <= 200, `the remaining budget clipped the call (got ${seen[0]})`);
+    assert.equal(typeof seen.at(-1), "number", "a call without a timeout would hang until the ssh default");
+    assert.ok(seen.at(-1)! > 0 && seen.at(-1)! <= 200, `the remaining budget clipped the call (got ${seen.at(-1)})`);
 
     runRemote(budgeted, ["issue", "list"], { timeoutMs: 60_000 });
-    assert.ok((seen[1] ?? 0) <= 200, `a requested timeout never exceeds the budget (got ${seen[1]})`);
+    assert.ok((seen.at(-1) ?? 0) <= 200, `a requested timeout never exceeds the budget (got ${seen.at(-1)})`);
 
     const unbudgeted = openRemoteSession({ transport, env });
     assert.ok(unbudgeted);
     runRemote(unbudgeted, ["issue", "list"], { timeoutMs: 5_000 });
-    assert.equal(seen[2], 5_000, "a requested timeout is honoured below the default");
+    assert.equal(seen.at(-1), 5_000, "a requested timeout is honoured below the default");
+
+    // A request shorter than the remaining budget is the only case that proves
+    // the two are combined, not replaced: 5 s must beat a 60 s deadline
+    // (final review; without Math.min the transport would get 60 s).
+    const roomy = openRemoteSession({ transport, env, deadlineMs: Date.now() + 60_000 });
+    assert.ok(roomy);
+    runRemote(roomy, ["issue", "list"], { timeoutMs: 5_000 });
+    assert.equal(seen.at(-1), 5_000, `a requested timeout below the budget wins (got ${seen.at(-1)})`);
 
     // --project keeps the call from stopping at mapping resolution, so the
     // assertion is about the timeout the transport received.
     forwardCli(["issue", "list", "--project", "prj_x"], { env, transport, deadlineMs: Date.now() + 80 });
-    assert.ok((seen[3] ?? 0) > 0 && (seen[3] ?? 0) <= 200, `forwardCli passes the budget on (got ${seen[3]})`);
+    assert.ok((seen.at(-1) ?? 0) > 0 && (seen.at(-1) ?? 0) <= 200, `forwardCli passes the budget on (got ${seen.at(-1)})`);
 
     const hook = hookSession(env, { transport, deadlineMs: Date.now() + 80 });
     assert.ok(hook);
     runRemote(hook, ["issue", "list"], {});
-    assert.ok((seen[4] ?? DEFAULT_TIMEOUT_MS) <= 200, `hookSession passes the budget on (got ${seen[4]})`);
+    assert.ok((seen.at(-1) ?? DEFAULT_TIMEOUT_MS) <= 200, `hookSession passes the budget on (got ${seen.at(-1)})`);
   });
 
   it("refuses a document reached through a symlinked directory or a symlinked HOME", () => {
