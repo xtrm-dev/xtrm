@@ -155,6 +155,16 @@ describe("remote command encoding", () => {
     assert.deepEqual(call?.argv, argv);
   });
 
+  it("never expands a hostile environment value", () => {
+    const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+    const marker = join(fake.dir, "env-proof");
+    const hostile = `a' ; touch ${marker} ; echo '$(id)`;
+    const built = buildRemoteCommand({ sbPath: "/usr/bin/sb", argv: ["issue", "note", "X-1"], cwd: null, env: { SUBSTRATE_HOLDER: hostile } });
+    const res = spawnSync("sh", ["-c", built.command], { encoding: "utf8" });
+    assert.notEqual(res.status, 0, "the command fails on the missing sb, not on the injection");
+    assert.equal(existsSync(marker), false, "an env value is data, never shell code");
+  });
+
   it("quotes the working directory and keeps it as one argument", () => {
     const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
     const cwd = `${fake.dir}/a dir with spaces`;
