@@ -388,4 +388,34 @@ describe("remote setup", () => {
     assert.equal(result.remote, "ssh:fake");
     assert.equal(readClientConfig(configPath).checkouts[CLIENT_KEY!]?.root, root);
   });
+
+  it("returns every consumer to local mode on disable", () => {
+    const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+    assert.ok(CLIENT_KEY);
+    const configPath = join(fake.dir, "client.json");
+    writeClientConfig(configPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
+    const env = remoteEnv(configPath);
+    assert.ok(forwardCli(["issue", "list", "--json"], { env, transport: localTransport() }), "remote before disable");
+
+    const result = runCli(["remote", "disable", "--json"], { env, transport: localTransport() });
+    assert.equal(result.code, 0);
+    const disabled = (JSON.parse(result.stdout) as { data: { cleared: boolean; mode: string; envOverride: string | null } }).data;
+    assert.equal(disabled.cleared, true);
+    // The environment variable outranks the file and the reply says so.
+    assert.equal(disabled.mode, "remote");
+    assert.equal(disabled.envOverride, "ssh:fake");
+
+    // With no remote setting anywhere, there is no forwarding and no ssh: the
+    // local fallback the two-way rule requires.
+    const localOnlyEnv = { ...env, SUBSTRATE_REMOTE: undefined };
+    assert.equal(forwardCli(["issue", "list", "--json"], { env: localOnlyEnv, transport: localTransport() }), null);
+    const config = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
+    assert.equal("remote" in config, false);
+    for (const stale of ["remoteSb", "serverVersion", "checkouts"]) assert.equal(stale in config, false, stale);
+
+    const again = runCli(["remote", "disable", "--json"], { env: localOnlyEnv, transport: localTransport() });
+    assert.equal(again.code, 0);
+    assert.equal((JSON.parse(again.stdout) as { data: { cleared: boolean; mode: string } }).data.mode, "local");
+    assert.equal((JSON.parse(again.stdout) as { data: { cleared: boolean } }).data.cleared, false);
+  });
 });

@@ -38,6 +38,12 @@ host over ssh, and the local store is never opened. `--db` or
 - `sb remote status` — the configured remote, resolved `sb` path, server
   version, latency, repository key and cached checkout, plus the
   capabilities the server's version actually has. Read-only.
+- `sb remote disable` — remove the setting so every consumer (CLI, hooks,
+  in-process callers, the MCP launcher) runs locally again, and drop the
+  server `sb` path, version and checkout cache. Nothing on the server is
+  touched. Remote mode is opt-in and reversible: with no setting there is no
+  ssh requirement at all. Precedence is stated, not implied — `disable`
+  reports an active `SUBSTRATE_REMOTE`, which outranks the file.
 
 Not yet covered: native dispatch against the server (the stdio server mode
 needs server 0.2.3) and `post-rewrite` reconciliation (no CLI verb before

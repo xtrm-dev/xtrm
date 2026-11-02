@@ -159,6 +159,35 @@ a malformed file fails closed rather than degrading to local mode.
 `SUBSTRATE_REMOTE` overrides the host for tests and one-off runs. Absent the
 setting, `sb` runs locally exactly as today.
 
+### Every setting works both ways (operator rule, 2026-11-02)
+
+A local-only user with no server must get today's behaviour, with no ssh
+requirement. Remote mode is therefore opt-in, per client, and reversible:
+
+- **Unset means fully local.** No `remote` key in the client config and no
+  `SUBSTRATE_REMOTE` in the environment means every consumer runs locally: the
+  CLI, the git hooks, the Pi extension, the Claude plugin hooks, and the
+  launcher that starts the Claude MCP server. None of them may require ssh, or
+  probe for a server, when the setting is absent. The preference is local
+  first: a machine without a server configured behaves exactly as it does
+  today.
+- **Both ways, not one way.** `sb remote setup ssh:<host>` turns it on;
+  `sb remote disable` turns it off and drops the server `sb` path, version and
+  checkout cache, because those facts belonged to a server that is no longer
+  configured. Nothing on the server is touched: its store stays complete and
+  available to the next client that configures it, and no server state records
+  which clients point at it.
+- **Precedence, stated in the output.** The environment outranks the file, so
+  `disable` reports an active `SUBSTRATE_REMOTE` instead of claiming a mode the
+  next invocation will not use.
+- **No hidden state.** The setting lives in one client-side file that a user
+  can read and delete; deleting it is equivalent to `disable`. There is no
+  server-side flag, no user-level default, and no consumer that infers remote
+  mode from anything other than this setting.
+
+`sb remote status` is the way to see which of the two modes is in effect
+before assuming either.
+
 ## Stage 2 shape (the PR)
 
 `packages/substrate/src/remote/`: config read, host/version resolution, encoder, executor (argv + stdin + streams + exit code), repository-key → server-cwd mapping, error model, `doctor` transport report. `cli/sb.ts` dispatches at the top of `runCli` before `ctx.dbPath` is resolved and before `openSubstrate`. Hooks (`hooks/*.ts`) route through the same executor. Tests use a fake transport (no network): byte-identical argv round-trip, exit-code and stdin passthrough, stdout equality against a local `--json` run, cwd mapping by origin URL, missing mapping error, `--contract` behaviour, offline error with no store created.
@@ -168,7 +197,7 @@ setting, `sb` runs locally exactly as today.
 | Consumer | Follow-up | Owner |
 |---|---|---|
 | Pi extension (`integrations/pi/handlers.ts`) | remote client for the typed services; handlers keep their current domain logic | `packages/substrate` (this repo) |
-| Claude plugin hooks (SessionStart, PreCompact, PostCompact, stop-gate, edit-gate) + MCP server execution | hooks use the JSON-RPC client; `.mcp.json` points at the server-side MCP server with a version handshake | `packages/substrate` + plugin config |
+| Claude plugin hooks (SessionStart, PreCompact, PostCompact, stop-gate, edit-gate) + MCP server execution | hooks use the JSON-RPC client; `.mcp.json` points at the server-side MCP server with a version handshake. The launcher must read `substrate.remote` and start nothing remote when it is unset (two-way rule above) | `packages/substrate` + plugin config |
 | Specialists native dispatch, activation authority (`src/activation/workitem-store.ts`, `src/activation/authority-store.ts`) | remote implementations of `IssueServicePort`/`IssueStorePort`; structured activation/authority operations instead of raw SQLite over the wire | `specialists` repo |
 | PC stale local store (`~/.xtrm/state.db`, 0 issues) | archive it with a marker and add a remote-mode guard so no consumer can silently open it | `packages/substrate` |
 
@@ -183,9 +212,9 @@ setting, `sb` runs locally exactly as today.
 Stage 1 (this decision, accepted 2026-11-02) is recorded. Stage 2 is implemented
 on branch `xt/XTRM-685-sb-remote`: `packages/substrate/src/remote/` (spec,
 config, ssh, session, executor, setup, doctor, render), the `remote` CLI group
-(`sb remote setup`, `sb remote status`), forwarding inside `runCli` before the
-local store opens, and the three git hooks routed through the transport with
-their local bodies preserved. Validation lives in
+(`sb remote setup`, `sb remote status`, `sb remote disable`), forwarding inside
+`runCli` before the local store opens, and the three git hooks routed through
+the transport with their local bodies preserved. Validation lives in
 `packages/substrate/tests/remote-transport.test.ts` (fake transport, no
 network). Remaining consumers are listed above and are follow-up Issues, not
 gaps in Stage 2.

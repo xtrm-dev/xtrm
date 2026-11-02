@@ -29,6 +29,7 @@ import type { RemoteTransport } from "../src/remote/ssh.ts";
 import { remoteDoctor, type RemoteDoctorReport } from "../src/remote/doctor.ts";
 import { renderRemoteDoctor, renderRemoteSetup, renderRemoteStatus } from "../src/remote/render.ts";
 import { remoteSetup } from "../src/remote/setup.ts";
+import { clearRemoteConfig, remoteConfigPath } from "../src/remote/config.ts";
 // Compat re-export (XTRM-337): discoverRepository/discoverGitRoot moved to the
 // shared domain module; re-exported here so existing `../cli/sb.ts` importers
 // keep working while new code imports the shared module directly.
@@ -375,6 +376,7 @@ usage:
   sb init [--db PATH] [--json]
   sb doctor [--db PATH] [--json]
   sb remote setup ssh:<host> [--server-root PATH] [--refresh] [--json]
+  sb remote disable [--json]
 
 groups:
   init        initialize this repository (bind it to a Project; idempotent)
@@ -383,7 +385,7 @@ groups:
   plan        check|apply
   journal     append|checkpoint|show|since|latest|timeline|render
   provenance  dispatch|allocate|bind|trace|commit|receipt|pr|session|activation|bundle
-  remote      setup|status
+  remote      setup|status|disable
   import      beads
   export      project
 
@@ -396,10 +398,11 @@ per-verb help: sb issue create --help  |  sb help issue create`;
 
 const COMMAND_HELP: Record<string, string> = {
   top: HELP_TOP,
-  remote: `usage: sb remote <setup|status> [--json]
+  remote: `usage: sb remote <setup|status|disable> [--json]
 
   setup ssh:<host> [--server-root PATH] [--refresh]
   status
+  disable
 
 remote mode runs every sb invocation on the server over ssh, with the same
 argv, stdin, stdout and exit code (ADR-008): no listener and no daemon. The
@@ -408,7 +411,9 @@ checkout that reports the same key; a path that merely looks identical is
 never used as evidence. --db and SUBSTRATE_DB name a local store, so those
 invocations are not forwarded. help, version and doctor never open a store
 and are answered here. Configuration lives in ~/.xtrm/config/substrate.json
-(override the path with SUBSTRATE_REMOTE_CONFIG).`,
+(override the path with SUBSTRATE_REMOTE_CONFIG). Remote mode is opt-in:
+without a remote setting every consumer runs locally and needs no ssh.
+Disable with \`sb remote disable\`, or delete the file.`,
   "remote.setup": `usage: sb remote setup ssh:<host> [--server-root PATH] [--refresh] [--json]
 
 verifies the connection, resolves sb on the server once through a login
@@ -416,6 +421,12 @@ shell, records the server version and round-trip latency, and maps this
 repository to its server checkout by repository key. Fails when the server
 has no checkout of this repository, or when several match and --server-root
 does not choose one. --refresh re-verifies a cached mapping.`,
+  "remote.disable": `usage: sb remote disable [--json]
+
+removes the remote setting so every consumer runs locally again, and drops
+the server sb path, version and checkout cache recorded from that server.
+Nothing on the server is touched: the store there is untouched and stays
+available to the next client that configures it.`,
   "remote.status": `usage: sb remote status [--json]
 
 reports the mode (local or ssh), the resolved server sb path and version,
@@ -800,6 +811,29 @@ function runRemoteDoctor(ctx: Ctx, report: RemoteDoctorReport): CliResult {
 // `sb remote <setup|status>`: configuration, not work. Neither verb opens the
 // local store; setup observes the server and writes the client config.
 function runRemoteGroup(ctx: Ctx, verb: string | undefined, flags: Flags, rest: string[], deps: { env: NodeJS.ProcessEnv; transport?: RemoteTransport }): CliResult {
+  if (verb === "disable") {
+    if (rest.length > 0) throw new Error("usage: sb remote disable [--json]");
+    const result = clearRemoteConfig(deps.env);
+    // The environment variable outranks the file, so a disable must say so
+    // instead of claiming a mode the next invocation will not use.
+    const envOverride = (deps.env["SUBSTRATE_REMOTE"] ?? "").trim();
+    const payload = {
+      configPath: result.configPath,
+      cleared: result.cleared,
+      mode: envOverride === "" ? ("local" as const) : ("remote" as const),
+      envOverride: envOverride === "" ? null : envOverride,
+    };
+    const note = envOverride === "" ? "" : `SUBSTRATE_REMOTE=${envOverride} overrides the file, so this process stays remote.`;
+    if (ctx.json) return emit(ctx, "remote.disable", { ...payload, warning: note === "" ? null : note });
+    return {
+      code: 0,
+      stdout:
+        (result.cleared
+          ? `sb remote: disabled (${result.configPath}). Every consumer runs locally again.\n`
+          : `sb remote: already local (no remote setting in ${remoteConfigPath(deps.env)}).\n`) + (note === "" ? "" : `sb remote: ${note}\n`),
+      stderr: "",
+    };
+  }
   if (verb === "status") {
     if (rest.length > 0) throw new Error("usage: sb remote status [--json]");
     const report = remoteDoctor({ clientVersion: cliVersion(), env: deps.env, transport: deps.transport });
@@ -1030,6 +1064,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "init.": [],
   "doctor": [],
   "remote.setup": ["server-root", "refresh"],
+  "remote.disable": [],
   "remote.status": [],
   "import.beads": ["file", "project", "edges-file", "create-project", "dry-run"],
   "export.": ["project", "file"],
