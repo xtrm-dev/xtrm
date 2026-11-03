@@ -115,16 +115,23 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
 
       <InspectorSection title={`Reviews${p.reviews.length ? ` · ${p.reviews.length}` : ""}`}>
         {p.reviews.length ? (
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-3">
             {p.reviews.map((r) => (
-              <li key={r.id} className="flex items-center gap-2 text-sm">
-                <Icon name="comment" size="xs" className="shrink-0 text-ink-faint" />
-                <AuthorInline login={r.author} />
-                <span className="text-ink-faint">{reviewLabel(r.state)}</span>
-                {r.submittedAt && (
-                  <span className="ml-auto text-xs text-ink-faint tabular" title={new Date(r.submittedAt).toLocaleString()}>
-                    {ago(r.submittedAt)}
-                  </span>
+              <li key={r.id} className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 text-sm">
+                  <Icon name="comment" size="xs" className="shrink-0 text-ink-faint" />
+                  <AuthorInline login={r.author} />
+                  <span className="text-ink-faint">{reviewLabel(r.state)}</span>
+                  {r.submittedAt && (
+                    <span className="ml-auto text-xs text-ink-faint tabular" title={new Date(r.submittedAt).toLocaleString()}>
+                      {ago(r.submittedAt)}
+                    </span>
+                  )}
+                </div>
+                {r.body?.trim() && (
+                  <div className="ml-5 rounded-md border border-border-muted px-3 py-2">
+                    <Markdown html>{r.body}</Markdown>
+                  </div>
                 )}
               </li>
             ))}
