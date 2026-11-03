@@ -21,7 +21,7 @@ export function GithubIssuePanel({ refValue, follow }: { refValue: string; follo
 
   return (
     <ReferenceActionsProvider open={(r) => inspect(r)}>
-      <div className="flex flex-col gap-1.5 px-5 pt-4 pb-3">
+      <div data-testid="github-issue-header" className="flex flex-col gap-1.5 px-5 pt-4 pb-3">
         <div className="flex items-center gap-2 text-xs text-ink-faint">
           <StatusDot tone={issueStateTone(i.state)} label={issueStateLabel(i.state)} />
           <span className="font-mono">#{i.number}</span>
@@ -29,7 +29,10 @@ export function GithubIssuePanel({ refValue, follow }: { refValue: string; follo
           <span>{issueStateLabel(i.state)}</span>
           <span className="ml-auto">{ago(i.updatedAt)}</span>
         </div>
-        <h2 className="text-base leading-snug font-medium text-pretty text-ink">{i.title}</h2>
+        <div className="flex items-start gap-3">
+          <h2 className="min-w-0 flex-1 text-base leading-snug font-medium text-pretty text-ink">{i.title}</h2>
+          <GithubPill href={i.url} size="sm" />
+        </div>
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
           <AuthorInline login={i.author} />
           <span className="truncate">· {parsed.fullName}</span>
@@ -61,10 +64,6 @@ export function GithubIssuePanel({ refValue, follow }: { refValue: string; follo
         <p className="text-sm text-ink-faint">
           {i.comments === 0 ? "No comments." : `${i.comments} on GitHub; the backend stores the count only.`}
         </p>
-      </InspectorSection>
-
-      <InspectorSection title="Links">
-        <GithubPill href={i.url} />
       </InspectorSection>
     </ReferenceActionsProvider>
   );

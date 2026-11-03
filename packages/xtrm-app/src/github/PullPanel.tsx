@@ -48,7 +48,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
 
   return (
     <ReferenceActionsProvider open={(r) => inspect(r)}>
-      <div className="flex flex-col gap-1.5 px-5 pt-4 pb-3">
+      <div data-testid="pull-header" className="flex flex-col gap-1.5 px-5 pt-4 pb-3">
         <div className="flex items-center gap-2 text-xs text-ink-faint">
           <StatusDot tone={pullStateTone(p.state)} label={pullStateLabel(p.state, p.draft)} />
           <span className="font-mono">#{p.number}</span>
@@ -62,7 +62,10 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
           )}
           <span className="ml-auto">{ago(p.updatedAt)}</span>
         </div>
-        <h2 className="text-base leading-snug font-medium text-pretty text-ink">{p.title}</h2>
+        <div className="flex items-start gap-3">
+          <h2 className="min-w-0 flex-1 text-base leading-snug font-medium text-pretty text-ink">{p.title}</h2>
+          <GithubPill href={p.url} size="sm" />
+        </div>
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
           <AuthorInline login={p.author} />
           <span className="truncate">· {p.headBranch} → {p.baseBranch}</span>
@@ -152,10 +155,6 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
         ) : (
           <p className="text-sm text-ink-faint">No file summary for this pull request.</p>
         )}
-      </InspectorSection>
-
-      <InspectorSection title="Links">
-        <GithubPill href={p.url} />
       </InspectorSection>
     </ReferenceActionsProvider>
   );
