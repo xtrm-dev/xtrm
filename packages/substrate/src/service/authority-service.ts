@@ -16,8 +16,16 @@
 // instruction. So the free-text fields are restricted to an identifier shape,
 // `state` is an enum, and `lastActivityAt` cannot be far in the future (a forged
 // row with 1e300 sorts first forever). Existing rows are not silently
-// re-attributed to another specialist, and a terminal activation does not come
-// back to life: both would let one caller rewrite another's record.
+// re-attributed to another specialist, which would let one caller rewrite
+// another's record.
+//
+// A terminal row MAY become live again: the host writes `settled` and then
+// `running` when a settled activation is woken for another turn, so refusing
+// that transition would break the wake path. What remains outside this
+// operation's reach is intent — a caller holding the store can rewrite another
+// activation's row of the same specialist, and can remove a row by id without
+// naming its owner (the shape the host's `stop()` uses). Both are recorded in
+// ADR-008 as limits of the trust boundary, not as validation gaps.
 
 import type { SubstrateDatabase } from "../store/database.ts";
 import { ServiceCallError } from "./protocol.ts";

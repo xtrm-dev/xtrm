@@ -405,6 +405,36 @@ operation table, an issue round trip runs through `sb init` on a throwaway
 repository, and an `ssh`-shaped shim proves the hop works over pipes. The CLI
 answers both `sb serve --stdio` and `sb serve stdio`.
 
+### Limits of the service's trust boundary (measured, not assumed)
+
+An independent security pass attacked the service over its own protocol. These
+are the limits it found that are **design**, recorded so nobody mistakes them for
+guards:
+
+- **Identity is asserted by the caller.** `issue.claimIssue`, `issue.releaseClaim`,
+  `journal.appendEntry` and `store.addJournal` take `participantId`, `holder`,
+  `activationId` and `sessionId` from the caller. The server validates their
+  *shape* (a shell-safe label, a canonical session id) but does not authenticate
+  them, because ADR-008 makes ssh access the trust boundary: whoever can run the
+  service can run `sb` on that machine anyway. The client resolves these values
+  from its own environment; a caller that lies about them is indistinguishable
+  from one that does not.
+- **A caller with the store can rewrite another activation's row of the same
+  specialist.** `authority.record` keys on `activationId`, and `specialist` names
+  a group, not an activation. `authority.remove` drops the ownership check when
+  the caller omits `specialist`, because the specialists host forgets a row by id
+  alone on `stop()`; requiring the owner would break that path.
+- **Rows can bury each other.** The shipped reader asks for `LIMIT 10` ordered by
+  `last_activity_at`, and `authority.record` accepts a stamp up to five minutes
+  ahead (clock tolerance for a writer on another machine). Ten rows stamped
+  inside that window therefore sort above real live rows. The fix belongs with
+  the reader's query or the host's row lifecycle, not with input validation.
+- **`linkCheckout` records any absolute path** as a checkout root, including `/`
+  and paths inside `~/.ssh`. It is a bookkeeping operation, not a sandbox check.
+- **Error redaction is name-based**: a store path ending in `state.db` is replaced
+  with `<store>`; another store file name would pass through. Startup failures
+  never reach the wire.
+
 ## Open questions for the operator (the gate)
 
 1. **Transport:** accept the recommended `ssh`-exec design (no listener, no daemon), or prefer the tunneled store service (option C) because a resident service is wanted for a later multi-machine/multi-user tier? — **Answered 2026-11-02: accept `ssh`-exec, no listener, no daemon.**
