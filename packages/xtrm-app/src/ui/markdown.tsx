@@ -26,8 +26,16 @@ function remarkSoftBreaks() {
  * with a light and a dark SVG, sized by `width`. Everything else (script, style, iframe, inline
  * `svg`, `on*`, `javascript:`) stays stripped: comment bodies are third-party input.
  */
-const githubHtmlSchema: Parameters<typeof rehypeSanitize>[0] = {
+export const githubHtmlSchema: Parameters<typeof rehypeSanitize>[0] = {
   ...defaultSchema,
+  // `remarkReferences` turns bare issue keys into `xtrm-ref:issue:…` links. The sanitizer would
+  // otherwise drop the href because `xtrm-ref` is not a known protocol, and the chip would never
+  // render in GitHub bodies/comments. Issue keys become clickable chips that open the issue in
+  // the inspector (see src/refs/references.tsx).
+  protocols: {
+    ...defaultSchema.protocols,
+    href: [...(defaultSchema.protocols?.href ?? []), "xtrm-ref"],
+  },
   attributes: {
     ...defaultSchema.attributes,
     img: [...(defaultSchema.attributes?.img ?? []), "alt", "width", "height"],
