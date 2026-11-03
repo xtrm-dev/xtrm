@@ -43,11 +43,17 @@ test("the PR drawer renders pr-lens HTML: diagrams, both comments, bot mark and 
   await expect(drawer.getByText("app", { exact: true })).toHaveCount(2);
   expect(await drawer.locator("span[aria-hidden='true'] svg").count()).toBeGreaterThanOrEqual(2);
 
-  const pill = drawer.getByTestId("github-pill");
+  // The affordance sits on the title line, not at the bottom of a long panel.
+  const header = drawer.getByTestId("pull-header");
+  const pill = header.getByTestId("github-pill");
   await expect(pill).toBeVisible();
   await expect(pill).toContainText("Open on GitHub");
+  const box = (await pill.boundingBox())!;
+  expect(Math.round(box.height)).toBe(28);
   const background = await pill.evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(background).toBe("rgb(36, 41, 47)");
+  // Nothing repeats the pill at the bottom.
+  await expect(drawer.getByTestId("github-pill")).toHaveCount(1);
 });
 
 test("the diagram follows the app theme, not the OS scheme", async ({ page }) => {
