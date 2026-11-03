@@ -14,7 +14,6 @@
 // is the server's own text, which the caller cannot trust to be one line).
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { openSubstrate } from "../store/sqlite.ts";
@@ -47,7 +46,7 @@ export interface SubstrateService {
  * different answers from the caller, so the transport says which happened instead
  * of leaving the client to guess from an exit code.
  */
-export type LinkExitKind = "exit" | "spawn_failed" | "stdin_broken";
+export type LinkExitKind = "exit" | "spawn_failed" | "stdin_broken" | "line_too_long";
 
 /** The transport a client needs: write a frame, hear frames, hear the end. */
 export interface ServiceLink {
@@ -56,6 +55,8 @@ export interface ServiceLink {
   onExit(handler: (code: number | null, signal: NodeJS.Signals | null, reason?: string, kind?: LinkExitKind) => void): void;
   /** Diagnostics from the far side, for a caller that wants to log them. */
   diagnostics(): string;
+  /** The child's pid when this link owns a process, so a test can prove it exited. */
+  pid: number | null;
   close(): Promise<void>;
 }
 
@@ -71,17 +72,68 @@ const MAX_LINE_BYTES = MAX_FRAME_BYTES + 1024;
  * reach it, and an unexpected name is refused instead of silently dropped (the
  * caller then knows its identity did not travel).
  */
-const FORWARDED_ENV_KEYS = new Set([
-  "SUBSTRATE_HOLDER",
-  "SUBSTRATE_ISSUE_REF",
-  "SUBSTRATE_ISSUE",
-  "SUBSTRATE_ACTIVATION_ID",
-  "SUBSTRATE_SPECIALIST",
-  "XTRM_SESSION_ID",
-  "XTRM_SESSION_NAME",
-  "LANG",
-  "TZ",
-]);
+// Identity is not here. The server strips its own ambient identity, and a
+// forwarded variable would be read by the server process rather than declared by
+// the caller: the client resolves identity from its own environment and sends it
+// in the operation arguments, where the operation can validate it.
+const FORWARDED_ENV_KEYS = new Set(["LANG", "TZ"]);
+
+/** Identity fields an operation accepts, and where in its arguments they live. */
+const IDENTITY_ARGS: Record<string, "args" | "input"> = {
+  "journal.appendEntry": "input",
+  "journal.checkpoint": "input",
+  "journal.compactionCheckpoint": "input",
+  "journal.collectMechanical": "input",
+  "store.addJournal": "args",
+  "issue.claimIssue": "args",
+  "issue.claimReady": "args",
+  "issue.renewClaim": "args",
+  "issue.releaseClaim": "args",
+};
+
+export interface ClientIdentity {
+  participantId?: string | null;
+  activationId?: string | null;
+  sessionId?: string | null;
+  runId?: string | null;
+}
+
+/** The caller's identity, from the same variables the CLI reads. */
+export function resolveIdentity(env: NodeJS.ProcessEnv = process.env): ClientIdentity {
+  const pick = (key: string): string | undefined => {
+    const value = env[key];
+    return value === undefined || value === "" ? undefined : value;
+  };
+  const identity: ClientIdentity = {
+    participantId: pick("SUBSTRATE_HOLDER"),
+    activationId: pick("SUBSTRATE_ACTIVATION_ID"),
+    sessionId: pick("XTRM_SESSION_ID"),
+  };
+  return identity;
+}
+
+/**
+ * Adds the caller's identity to an operation that records it, without overriding
+ * a value the caller set explicitly.
+ */
+export function applyIdentity(op: string, args: Record<string, unknown>, identity: ClientIdentity): Record<string, unknown> {
+  const target = IDENTITY_ARGS[op];
+  if (target === undefined) return args;
+  const fields: Array<[string, string | null | undefined]> = [
+    ["participantId", identity.participantId],
+    ["activationId", identity.activationId],
+    ["sessionId", identity.sessionId],
+  ];
+  if (target === "args") {
+    const merged = { ...args };
+    for (const [key, value] of fields) if (value != null && merged[key] === undefined) merged[key] = value;
+    return merged;
+  }
+  const input = args["input"];
+  const base = input !== null && typeof input === "object" && !Array.isArray(input) ? { ...(input as Record<string, unknown>) } : {};
+  for (const [key, value] of fields) if (value != null && base[key] === undefined) base[key] = value;
+  return { ...args, input: base };
+}
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function sanitizeDiagnostic(text: string): string {
@@ -89,24 +141,24 @@ function sanitizeDiagnostic(text: string): string {
 }
 
 /** Runs the operation table in this process. */
-export function createLocalService(dbPath: string, version: string): SubstrateService {
+export function createLocalService(
+  dbPath: string,
+  version: string,
+  identity: ClientIdentity = resolveIdentity(),
+): SubstrateService {
   const db = openSubstrate(dbPath);
   migrate(db);
   const services = createServices(db);
   return {
-    ready: async () => ({
-      protocol: PROTOCOL_VERSION,
-      substrate: version,
-      dbPath,
-      capabilities: CAPABILITIES,
-    }),
+    ready: async () => ({ protocol: PROTOCOL_VERSION, substrate: version, capabilities: CAPABILITIES }),
     call: async <T>(op: string, args: Record<string, unknown> = {}): Promise<T> => {
       if (!Object.hasOwn(OPERATIONS, op)) {
         throw new ServiceCallError("unknown_op", `unknown operation "${op}"`);
       }
       try {
-        assertKnownArgs(op, args);
-        const answer = OPERATIONS[op]!(services, args);
+        const withIdentity = applyIdentity(op, args, identity);
+        assertKnownArgs(op, withIdentity);
+        const answer = OPERATIONS[op]!(services, withIdentity);
         return (answer instanceof Promise ? await answer : answer) as T;
       } catch (error) {
         const classified = classifyError(error);
@@ -126,6 +178,8 @@ export interface RemoteServiceOptions {
   protocol?: number;
   /** How errors name the far side, e.g. `ssh:server`. */
   remoteLabel?: string;
+  /** The caller's identity; resolved from `process.env` when absent. */
+  identity?: ClientIdentity;
 }
 
 interface Pending {
@@ -137,6 +191,7 @@ interface Pending {
 /** Speaks the protocol over a link. */
 export function createServiceClient(link: ServiceLink, options: RemoteServiceOptions = {}): SubstrateService {
   const timeoutMs = options.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS;
+  const identity = options.identity ?? resolveIdentity();
   const where = options.remoteLabel ?? "the server";
   const pending = new Map<number | string, Pending>();
   let nextId = 1;
@@ -224,6 +279,15 @@ export function createServiceClient(link: ServiceLink, options: RemoteServiceOpt
       failAll(new ServiceCallError("spawn_failed", `${where}: ${reason ?? "the connection program could not be started"}`));
       return;
     }
+    if (kind === "line_too_long") {
+      failAll(
+        new ServiceCallError(
+          "connection_lost",
+          `${where}: the service sent a line longer than ${MAX_LINE_BYTES} bytes and it was dropped (${reason ?? "no detail"}); the connection cannot be trusted after that`,
+        ),
+      );
+      return;
+    }
     if (kind === "stdin_broken") {
       failAll(
         new ServiceCallError(
@@ -304,7 +368,7 @@ export function createServiceClient(link: ServiceLink, options: RemoteServiceOpt
     },
     call: async <T>(op: string, args: Record<string, unknown> = {}): Promise<T> => {
       await (hello ??= handshake());
-      return send<T>({ id: nextId++, op, args });
+      return send<T>({ id: nextId++, op, args: applyIdentity(op, args, identity) });
     },
     close: async () => {
       closed = true;
@@ -312,6 +376,86 @@ export function createServiceClient(link: ServiceLink, options: RemoteServiceOpt
       await link.close();
     },
   };
+}
+
+const NEWLINE = 0x0a;
+
+/**
+ * Splits a byte stream into lines with a cap.
+ *
+ * `readline` buffers a whole line before emitting it: a peer that never sends a
+ * newline made the client grow with the server's output (150 MB of output took
+ * the client to 309 MB). This drops an over-long line to its next newline and
+ * reports the size instead.
+ */
+export class FrameLines {
+  private parts: Buffer[] = [];
+  private bytes = 0;
+  private dropping = false;
+  private dropped = 0;
+  private reported = false;
+  private readonly onLine: (line: string) => void;
+  private readonly onOverflow: (bytes: number) => void;
+
+  constructor(onLine: (line: string) => void, onOverflow: (bytes: number) => void) {
+    this.onLine = onLine;
+    this.onOverflow = onOverflow;
+  }
+
+  push(chunk: Buffer): void {
+    let offset = 0;
+    while (offset < chunk.length) {
+      if (this.dropping) {
+        const end = chunk.indexOf(NEWLINE, offset);
+        if (end < 0) {
+          this.dropped += chunk.length - offset;
+          return;
+        }
+        this.dropped += end - offset;
+        this.dropped = 0;
+        this.dropping = false;
+        this.reported = false;
+        offset = end + 1;
+        continue;
+      }
+      const end = chunk.indexOf(NEWLINE, offset);
+      const piece = end < 0 ? chunk.subarray(offset) : chunk.subarray(offset, end);
+      this.parts.push(piece);
+      this.bytes += piece.length;
+      if (this.bytes > MAX_LINE_BYTES) {
+        const bytes = this.bytes;
+        this.parts = [];
+        this.bytes = 0;
+        // Report the moment the cap is crossed: a line that never ends must not
+        // wait for a newline that will never arrive.
+        const report = !this.reported;
+        this.reported = true;
+        if (end < 0) {
+          this.dropping = true;
+          this.dropped = 0;
+        } else {
+          offset = end + 1;
+        }
+        if (report) this.onOverflow(bytes);
+        continue;
+      }
+      if (end < 0) return;
+      const line = Buffer.concat(this.parts, this.bytes).toString("utf8");
+      this.parts = [];
+      this.bytes = 0;
+      offset = end + 1;
+      this.onLine(line);
+    }
+  }
+
+  /** A final line without a newline is still delivered: the frame reader decides. */
+  flush(): void {
+    if (this.bytes === 0) return;
+    const line = Buffer.concat(this.parts, this.bytes).toString("utf8");
+    this.parts = [];
+    this.bytes = 0;
+    this.onLine(line);
+  }
 }
 
 /** A link over a child process's pipes. */
@@ -326,12 +470,41 @@ export function spawnLink(argv: string[], env: NodeJS.ProcessEnv = process.env):
     | null = null;
   let queued: string[] = [];
   let stderrTail = "";
+  // One exit report per link, and a typed failure wins over the plain close that
+  // follows it: the reason is what the caller acts on.
+  type Exit = { code: number | null; signal: NodeJS.Signals | null; reason?: string; kind: LinkExitKind };
+  let stashed: Exit | null = null;
+  let delivered = false;
+  const report = (exit: Exit): void => {
+    // One report per link, first one wins: a typed failure outranks the plain
+    // close that follows it, and an end that happens before anyone listens is
+    // kept until a listener arrives rather than lost.
+    if (delivered || stashed !== null) return;
+    stashed = exit;
+    if (exits !== null) {
+      delivered = true;
+      exits(exit.code, exit.signal, exit.reason, exit.kind);
+    }
+  };
 
-  const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
-  lines.on("line", (line) => {
-    if (frames) frames(line);
-    else queued.push(line);
-  });
+  const lines = new FrameLines(
+    (line) => {
+      if (frames) frames(line);
+      else queued.push(line);
+    },
+    (bytes) => {
+      report({
+        code: null,
+        signal: null,
+        reason: `a line of ${bytes} bytes exceeds the ${MAX_LINE_BYTES}-byte cap`,
+        kind: "line_too_long",
+      });
+      // The far side keeps writing; the connection is unusable, so end it.
+      child.kill("SIGKILL");
+    },
+  );
+  child.stdout.on("data", (chunk: Buffer) => lines.push(chunk));
+  child.stdout.on("end", () => lines.flush());
   child.stderr.on("data", (chunk: Buffer) => {
     stderrTail = (stderrTail + chunk.toString("utf8")).slice(-8192);
   });
@@ -340,7 +513,7 @@ export function spawnLink(argv: string[], env: NodeJS.ProcessEnv = process.env):
     // reason travels with the exit, or the caller sees "it ended (exit none)".
     const reason = `cannot run ${argv[0]}: ${error.message}`;
     stderrTail = (stderrTail + "\n" + reason).trim();
-    exits?.(null, null, reason, "spawn_failed");
+    report({ code: null, signal: null, reason, kind: "spawn_failed" });
   });
   // A child that answers the handshake and then closes fd 0 leaves a pipe that
   // reports EPIPE on the next write. Without this listener that error is
@@ -349,23 +522,28 @@ export function spawnLink(argv: string[], env: NodeJS.ProcessEnv = process.env):
   child.stdin.on("error", (error) => {
     const reason = error.message;
     stderrTail = (stderrTail + "\nstdin: " + reason).trim();
-    exits?.(null, null, reason, "stdin_broken");
+    report({ code: null, signal: null, reason, kind: "stdin_broken" });
   });
   child.on("close", (code, signal) => {
-    exits?.(code, signal, undefined, "exit");
+    report({ code, signal, kind: "exit" });
   });
 
   return {
     write: (frame) => {
       if (child.stdin.destroyed || child.stdin.writableEnded) {
-        exits?.(null, null, "the pipe to the service is already closed", "stdin_broken");
+        report({ code: null, signal: null, reason: "the pipe to the service is already closed", kind: "stdin_broken" });
         return;
       }
       try {
         child.stdin.write(frame + "\n");
       } catch (error) {
         // A synchronous EPIPE is the same condition as the async one above.
-        exits?.(null, null, error instanceof Error ? error.message : String(error), "stdin_broken");
+        report({
+          code: null,
+          signal: null,
+          reason: error instanceof Error ? error.message : String(error),
+          kind: "stdin_broken",
+        });
       }
     },
     onFrame: (handler) => {
@@ -376,8 +554,13 @@ export function spawnLink(argv: string[], env: NodeJS.ProcessEnv = process.env):
     },
     onExit: (handler) => {
       exits = handler;
+      if (stashed !== null && !delivered) {
+        delivered = true;
+        handler(stashed.code, stashed.signal, stashed.reason, stashed.kind);
+      }
     },
     diagnostics: () => sanitizeDiagnostic(stderrTail),
+    pid: child.pid ?? null,
     close: async () => {
       await new Promise<void>((resolve) => {
         if (child.exitCode !== null || child.signalCode !== null) {

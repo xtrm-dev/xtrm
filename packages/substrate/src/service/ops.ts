@@ -118,6 +118,13 @@ function optionalRecord(args: Args, key: string): Record<string, unknown> | unde
  * operation), and anything absent from this table is refused with `unknown_op`
  * — the list is the capability set the handshake reports.
  */
+/**
+ * The event types a client may append. The MCP server records one thing this way:
+ * that a checkpoint came back degraded. Anything else is written by the operation
+ * that causes it, so a remote caller cannot plant a closure or a reopen.
+ */
+export const CLIENT_EVENT_TYPES = ["journal.checkpoint_degraded"] as const;
+
 export const OPERATIONS: Record<string, Handler> = {
   // ---- issues (IssueService) ----
   "issue.resolveRef": (s, a) => s.issues.resolveRef(text(a, "ref")),
@@ -162,8 +169,34 @@ export const OPERATIONS: Record<string, Handler> = {
   // Pi handlers read the attestation that made an issue claimable, and the MCP
   // server appends an event when it degrades a checkpoint.
   "issue.latestAttestation": (s, a) => s.issues.latestAttestation(text(a, "issueId")),
-  "issue.appendEvent": (s, a) =>
-    s.issues.appendEvent(text(a, "issueId"), text(a, "type"), a["payload"], optionalInteger(a, "at")),
+  // The CLI's `issue attest` verb: a consumer that prepares a dispatch needs it,
+  // and readiness is derived from the attestation it writes.
+  "issue.attestReadiness": (s, a) =>
+    s.issues.attestReadiness(text(a, "issueId"), {
+      outcome: text(a, "outcome") as never,
+      policy: text(a, "policy"),
+      attestedBy: text(a, "attestedBy"),
+      evidenceRefs: a["evidenceRefs"] as never,
+      blockingGaps: a["blockingGaps"] as never,
+    }),
+  // Project identity as the specialists' sp tools use it (issue.tool.ts):
+  // create a project, link a checkout to one, list the links.
+  "issue.createProject": (s, a) =>
+    s.issues.createProject({ id: optionalText(a, "projectId"), prefix: text(a, "prefix"), name: text(a, "name") }),
+  "issue.linkCheckout": (s, a) => s.issues.linkCheckout(text(a, "gitRoot"), optionalText(a, "projectId")),
+  "issue.listLinks": (s) => s.issues.listLinks(),
+  "issue.appendEvent": (s, a) => {
+    const type = text(a, "type");
+    // Events are the record's own vocabulary: `issue.closed` here would be a
+    // second, unrecorded closure written by whoever holds the socket.
+    if (!(CLIENT_EVENT_TYPES as readonly string[]).includes(type)) {
+      throw new ServiceCallError(
+        "bad_request",
+        `argument "type" must be one of ${CLIENT_EVENT_TYPES.join(", ")}; lifecycle events belong to the operations that cause them`,
+      );
+    }
+    return s.issues.appendEvent(text(a, "issueId"), type as never, a["payload"], optionalInteger(a, "at"));
+  },
 
   // ---- dispatch gate (check, then the binding mutation) ----
   "gate.check": (s, a) => checkDispatch(s.issues, record(a, "request") as unknown as SpecialistDispatchRequest),
@@ -209,10 +242,29 @@ export const OPERATIONS: Record<string, Handler> = {
   // a storage error.
   "journal.compactionCheckpoint": (s, a) =>
     s.journal.compactionCheckpoint(text(a, "issueId"), record(a, "input") as never),
-  // Enrichment writes only `semantic_json` on an existing entry plus an audit
-  // event: it cannot change the entry's id, issue, kind or sequence.
-  "journal.enrichEntry": (s, a) =>
-    s.journal.enrichEntry(text(a, "entryId"), record(a, "semantic") as never),
+  // Enrichment fills the semantic layer of a checkpoint that has none yet. The
+  // service method updates `semantic_json` on any row, so the entry's kind and its
+  // current semantic state are checked here: a note must never be rewritten, and a
+  // second enrichment must not overwrite the first (the audit event keeps no old
+  // value, so an overwritten summary is gone).
+  "journal.enrichEntry": (s, a) => {
+    const entryId = text(a, "entryId");
+    const semantic = record(a, "semantic") as never;
+    const entry = s.journal.getEntry(entryId);
+    if (entry.kind !== "checkpoint" && entry.kind !== "compaction") {
+      throw new ServiceCallError(
+        "conflict",
+        `journal entry ${entryId} is a ${entry.kind}; only a checkpoint or compaction carries a semantic layer`,
+      );
+    }
+    if (entry.semantic !== null) {
+      throw new ServiceCallError(
+        "conflict",
+        `journal entry ${entryId} is already enriched; enrichment does not overwrite an existing summary`,
+      );
+    }
+    return s.journal.enrichEntry(entryId, semantic);
+  },
 
   // ---- provenance (ProvenanceService) ----
   "provenance.dispatch": (s, a) => s.provenance.dispatch(text(a, "issueId"), record(a, "input") as never),
@@ -224,6 +276,11 @@ export const OPERATIONS: Record<string, Handler> = {
   "provenance.listBindings": (s, a) => s.provenance.listBindings(text(a, "issueId")),
   "provenance.trace": (s, a) => s.provenance.trace(text(a, "issueId")),
   "provenance.findByCommit": (s, a) => s.provenance.findByCommit(text(a, "sha")),
+  "provenance.findByPr": (s, a) => s.provenance.findByPr(text(a, "ref")),
+  "provenance.listArtifacts": (s, a) =>
+    s.provenance.listArtifacts(text(a, "receiptId"), {
+      liveOnly: a["liveOnly"] === undefined ? undefined : a["liveOnly"] === true,
+    }),
   "provenance.sessionDetail": (s, a) => s.provenance.sessionDetail(text(a, "sessionId")),
   "provenance.activationDetail": (s, a) => s.provenance.activationDetail(text(a, "activationId")),
 
@@ -234,7 +291,10 @@ export const OPERATIONS: Record<string, Handler> = {
   // ---- activation authority: structured rows, never SQL ----
   "authority.record": (s, a) => activateAuthority(s.db, a as unknown as AuthorityOperation),
   "authority.remove": (s, a) =>
-    removeAuthority(s.db, text(a, "activationId"), optionalText(a, "expectState")),
+    removeAuthority(s.db, text(a, "activationId"), {
+      specialist: optionalText(a, "specialist"),
+      expectState: optionalText(a, "expectState"),
+    }),
   "authority.list": (s, a) =>
     a["activeOnly"] === true
       ? { rows: listActiveAuthority(s.db, optionalBounded(a, "limit", 1, MAX_LIMIT) ?? READER_LIMIT) }
@@ -277,6 +337,10 @@ export const ARGS: Record<string, readonly string[]> = {
   "issue.renewClaim": ["issueId", "holder", "activationId", "ttlMs"],
   "issue.releaseClaim": ["issueId", "holder", "activationId"],
   "issue.latestAttestation": ["issueId"],
+  "issue.attestReadiness": ["issueId", "outcome", "policy", "attestedBy", "evidenceRefs", "blockingGaps"],
+  "issue.createProject": ["projectId", "prefix", "name"],
+  "issue.linkCheckout": ["gitRoot", "projectId"],
+  "issue.listLinks": [],
   "issue.appendEvent": ["issueId", "type", "payload", "at"],
   "gate.check": ["request"],
   "gate.dispatch": ["request"],
@@ -302,12 +366,14 @@ export const ARGS: Record<string, readonly string[]> = {
   "provenance.listBindings": ["issueId"],
   "provenance.trace": ["issueId"],
   "provenance.findByCommit": ["sha"],
+  "provenance.findByPr": ["ref"],
+  "provenance.listArtifacts": ["receiptId", "liveOnly"],
   "provenance.sessionDetail": ["sessionId"],
   "provenance.activationDetail": ["activationId"],
   "resume.buildCapsule": ["issueId"],
   "resume.renderCapsule": ["capsule"],
   "authority.record": ["activationId", "specialist", "state", "issueRef", "lastActivityAt"],
-  "authority.remove": ["activationId", "expectState"],
+  "authority.remove": ["activationId", "specialist", "expectState"],
   "authority.list": ["activationId", "activeOnly", "limit"],
 };
 
@@ -347,16 +413,26 @@ export function classifyError(error: unknown): { code: ServiceErrorCode; message
   const message = sanitize(error instanceof Error ? error.message : String(error));
   // Validation the service performs on a document it was handed is a bad request,
   // not a server fault: the caller can fix it and resend.
-  if (/^invalid (mechanical|semantic|contract|checkpoint|attestation|claim|input)/i.test(message)) {
+  if (/^invalid (mechanical|semantic|contract|checkpoint|attestation|claim|input|sessionId|activationId|participantId|holder|receipt|artifact)/i.test(message)) {
     return { code: "bad_request", message };
   }
   if (/^unknown (journal )?kind\b/i.test(message)) {
     return { code: "bad_request", message };
   }
-  if (/^(not found|no such|unknown\b.*\b(issue|entry|ref|project|receipt|binding|artifact|commit)\b)/i.test(message)) {
+  // A TypeError out of a domain call is a request that was not shaped like the
+  // operation expects (`gate.check` with `request: {}` read a field of undefined).
+  // On a wire boundary that is the caller's mistake, not a server fault.
+  if (error instanceof TypeError) {
+    return { code: "bad_request", message: `the arguments were not shaped as the operation expects: ${message}` };
+  }
+  if (
+    /^(not found|no such|unknown\b.*\b(issue|entry|ref|project|receipt|binding|artifact|commit|session|activation|revision|claim|journal)\b)/i.test(
+      message,
+    )
+  ) {
     return { code: "not_found", message };
   }
-  if (/cannot be claimed|not claimable|not dispatchable|not ready|is not open|already (finalized|claimed)/i.test(message)) {
+  if (/cannot be claimed|not[\s-]?claimable|not dispatchable|not ready|is not open|already (finalized|claimed)/i.test(message)) {
     return { code: "conflict", message };
   }
   if (/no active claim|holds no claim|claim is held/i.test(message)) {

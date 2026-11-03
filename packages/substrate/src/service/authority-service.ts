@@ -40,23 +40,24 @@ export const ACTIVATIONS_DDL = `CREATE TABLE IF NOT EXISTS activations (
 )`;
 
 /** States the specialists host records. An unknown one is refused, not stored. */
-// `disposed` is in the shipped reader's filter, not in the host's own transition
-// table: a stream that reports it directly must still be accepted, or a disposed
-// activation could not be recorded at all.
+// Exactly the states the specialists host writes (its `ActivationState` union,
+// ~/dev/specialists/src/activation/types.ts at the commit recorded in
+// tests/service-authority-states.test.ts). A state the host never writes would be
+// an invention here; a state the host does write must not be refused, or the first
+// record of every activation (`starting`) is rejected.
 export const AUTHORITY_STATES = [
-  "pending",
+  "starting",
   "running",
   "waiting",
-  "blocked",
+  "needs_reply",
+  "escalated",
   "settled",
-  "failed",
+  "stopping",
   "stopped",
-  "disposed",
+  "failed",
+  "uncertain",
 ] as const;
 export type AuthorityState = (typeof AUTHORITY_STATES)[number];
-
-const TERMINAL_STATES: readonly AuthorityState[] = ["settled", "failed", "stopped", "disposed"];
-const LIVE_STATES: readonly AuthorityState[] = ["pending", "running", "waiting", "blocked"];
 
 /** Identifier shape for anything the SessionStart reader prints. */
 const IDENTIFIER = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -165,12 +166,6 @@ export function activateAuthority(
         `activation "${activationId}" already belongs to specialist "${existing.specialist}"; it cannot be re-attributed`,
       );
     }
-    if (TERMINAL_STATES.includes(existing.state as AuthorityState) && LIVE_STATES.includes(nextState)) {
-      throw new ServiceCallError(
-        "conflict",
-        `activation "${activationId}" is ${existing.state}; a finished activation does not become ${nextState} again`,
-      );
-    }
   }
 
   db.prepare(
@@ -184,31 +179,30 @@ export function activateAuthority(
 export function removeAuthority(
   db: SubstrateDatabase,
   activationId: string,
-  expectState?: string | null,
+  opts: { specialist?: string | null; expectState?: string | null } = {},
 ): { removed: boolean } {
   const id = identifier(activationId, "activationId");
   ensureAuthorityTable(db);
-  // The state a caller names is validated even when the row is already terminal:
-  // an unknown value must not silently act as "no expectation".
-  const expected = expectState === undefined || expectState === null ? null : state(expectState);
+  // An expectation that is named is validated even when the row is already gone:
+  // an unknown state must not silently act as "no expectation".
+  const expected = opts.expectState === undefined || opts.expectState === null ? null : state(opts.expectState);
+  const specialist = opts.specialist === undefined || opts.specialist === null ? null : identifier(opts.specialist, "specialist");
   const existing = readRow(db, id);
   if (!existing) return { removed: false };
-  // A live row is someone's current work: removing it needs the state the caller
-  // believes it is deleting, so a stale or mistaken caller cannot end a session's
-  // record by guessing an id.
-  if (LIVE_STATES.includes(existing.state as AuthorityState)) {
-    if (expected === null) {
-      throw new ServiceCallError(
-        "conflict",
-        `activation "${id}" is ${existing.state}; pass "expectState": "${existing.state}" to remove a live activation`,
-      );
-    }
-    if (expected !== existing.state) {
-      throw new ServiceCallError(
-        "conflict",
-        `activation "${id}" is ${existing.state}, not ${expected}; nothing was removed`,
-      );
-    }
+  // Deletion is how the host forgets an activation it just stopped, and it asks by
+  // id alone. A caller that names another specialist is refused here rather than
+  // left to the writer's own re-attribution check.
+  if (specialist !== null && specialist !== existing.specialist) {
+    throw new ServiceCallError(
+      "conflict",
+      `activation "${id}" belongs to specialist "${existing.specialist}", not "${specialist}"; nothing was removed`,
+    );
+  }
+  if (expected !== null && expected !== existing.state) {
+    throw new ServiceCallError(
+      "conflict",
+      `activation "${id}" is ${existing.state}, not ${expected}; nothing was removed`,
+    );
   }
   db.prepare("DELETE FROM activations WHERE activation_id = ?").run(id);
   return { removed: true };

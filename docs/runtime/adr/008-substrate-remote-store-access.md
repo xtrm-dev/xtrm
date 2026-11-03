@@ -270,19 +270,23 @@ documenting the risk:
   is async; without the await its promise was serialised as `{}` (an `ok: true`
   answer for work that never ran) and its rejection killed the process holding
   the store.
-- *`journal.enrichEntry` is an operation, and it can only touch one column.* An
-  audit first read it as "rewrites any existing entry" and it was removed; the
-  service method it calls updates `semantic_json` on that entry and appends an
-  audit event, leaving the entry's id, issue, kind, body and sequence untouched.
-  Consumers call it (the Claude MCP server enriches a degraded checkpoint), so it
-  is exposed — with that limit, which is the method's own and not the surface's
-  invention.
-- *Identity comes from the frame, not from the server's environment.* The
-  process serving the store removes the ambient identity variables
-  (`SUBSTRATE_HOLDER`, `SUBSTRATE_ISSUE_REF`, `SUBSTRATE_ACTIVATION_ID`, session
-  names) at startup, so a forwarded write is attributed to its caller or to
-  nobody — never to the harness that happens to have started the server. A
-  consumer therefore passes identity explicitly.
+- *`journal.enrichEntry` is exposed, and only for a checkpoint that has no
+  semantic layer yet.* The service method updates `semantic_json` and appends an
+  audit event, which looks harmless until it is measured: enriching a `note`
+  twice overwrote the first summary with the second and the entry kept no copy of
+  the original. The operation therefore checks the entry before it writes —
+  `kind` must be `checkpoint` or `compaction` and `semantic` must be `null`,
+  otherwise it refuses with `conflict` — and the audit event is the only trace of
+  the change.
+- *Identity travels in the operation's arguments, from the client's own
+  environment.* The serving process strips ambient identity at startup (so a
+  forwarded write is never attributed to the harness that started the server),
+  and the client resolves `SUBSTRATE_HOLDER`, `SUBSTRATE_ACTIVATION_ID`,
+  `XTRM_SESSION_ID` and `XTRM_RUN_ID` from its own environment and sets the same
+  fields a CLI flag would. Forwarding those variables over the connection was
+  wrong in a way that only showed in the store: the server strips them, so a
+  remote append recorded no participant where the local call recorded the
+  holder. The same call now stores the same actor on both paths.
 - *Numbers are bounded.* `Number.isInteger` accepts `1e300`; every numeric
   argument now has a bound (claim TTLs, priorities, revisions, cursors, list
   limits) and `lastActivityAt` additionally refuses anything beyond a five-minute
@@ -296,26 +300,40 @@ documenting the risk:
   `provenance.generateBundle`, `provenance.closureOutcomes` and the audit
   queries (`closuresLackingProvenance`, `resultsLackingReceipts`,
   `issuesForSession`) — reporting tools that read a whole store, not operations a
-  consumer performs mid-task.
+  consumer performs mid-task. `issue.trailersForCommit`, `provenance.getBinding`,
+  `provenance.reconcileRewrite` and `provenance.generateBundle` likewise stay
+  out. Five operations exist for the specialists' own tools
+  (`issue.createProject`, `issue.linkCheckout`, `issue.listLinks`,
+  `provenance.findByPr`, `provenance.listArtifacts`), which is what makes the
+  `sp` tools usable over the connection.
+- *`issue.appendEvent` accepts only the events the client raises.* It was a way
+  to write a lifecycle event by hand — a remote caller planted `issue.closed` at
+  `at: 1` and the journal showed a closure nobody performed. The allowlist is
+  `journal.checkpoint_degraded`, the one event a client has a reason to raise.
 - *`authority.list` answers the SessionStart reader's query when asked to.* With
   `{"activeOnly": true}` it runs the same statement the shipped reader runs —
   `state NOT IN ('settled','disposed')`, newest activity first, `LIMIT ?` — so a
   remote client sees the same rows in the same order. `authority.record` accepts
   what the specialists writer accepts (an empty `issueRef`, a stamp of 0 for a
   row not touched yet) and refuses only what would poison a listing: a
-  non-integer or far-future stamp, a non-identifier id, an invented state, a
-  re-attributed row or a live row deleted without `expectState`.
+  non-integer or far-future stamp, a non-identifier id, an invented state or a
+  re-attributed row. Deletion is by `activationId` and, when the caller names it,
+  the owning specialist — which is what the host's `stop()` needs, because it
+  forgets a row it last saved as `running` or `waiting`.
 - *Activation rows are validated as identifiers, not text.* The SessionStart
   reader prints `activation_id`, `specialist`, `state` and `bead_id` verbatim
   into a model's context, so a newline in a field stored a line of instructions
   that the next session read as its own. `activationId` and `specialist` must
-  match `^[A-Za-z0-9_.:-]{1,128}$`, `state` must be one of the seven values the
-  specialists host writes, `issueRef` must look like an issue reference, and a
-  row cannot be re-attributed to another specialist, cannot return from a
-  terminal state to a live one, and cannot be removed while live without the
-  caller naming the state it expects to delete. **Follow-up on the specialists
-  side:** that reader should strip control characters from what it prints, since
-  it reads rows written by older releases too.
+  match `^[A-Za-z0-9_.:-]{1,128}$`, `state` must be one of the ten values the
+  specialists host writes (`starting`, `running`, `waiting`, `needs_reply`,
+  `escalated`, `settled`, `stopping`, `stopped`, `failed`, `uncertain` — read
+  from `specialists/src/activation/types.ts` and asserted against it in a test),
+  and `issueRef` must look like an issue reference. The forgery defence is the
+  charset, the bounds and the rule that a row cannot be re-attributed to another
+  specialist; the lifecycle itself is the host's, so a woken turn that writes
+  `settled` then `running` is accepted rather than fought. **Follow-up on the
+  specialists side:** the reader should strip control characters from what it
+  prints, since it reads rows written by older releases too.
 - *A client reads its configuration before it decides it is local.* Checking only
   `SUBSTRATE_REMOTE` gave a machine configured with `sb remote setup` a stale
   local store; the client now consults the same configuration the CLI uses and

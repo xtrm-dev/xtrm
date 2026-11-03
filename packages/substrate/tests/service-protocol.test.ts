@@ -13,8 +13,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
@@ -121,6 +121,11 @@ describe("sb serve --stdio", () => {
       assert.ok(capabilities.includes("issue.getActiveClaim"), "the claim read a consumer needs is advertised");
       assert.ok(capabilities.includes("authority.record"), "activation authority is advertised");
       assert.ok(!capabilities.some((op) => /sql|exec|expression/i.test(op)), "no operation widens the surface to SQL");
+      assert.deepEqual(
+        Object.keys(hello.result ?? {}).sort(),
+        ["capabilities", "protocol", "substrate"],
+        "hello carries no store path and nothing else the caller does not need",
+      );
     } finally {
       await server.close();
     }
@@ -578,6 +583,22 @@ exec sh -c "$last"
 
 // The audit that followed the first delivery. Each test here fails without the
 // fix it names; the commit message records the mutation run that proves it.
+// Copy of the host union in ~/dev/specialists/src/activation/types.ts:148
+// (npm package @xtrm/specialists @ 4f6c1a2), kept here because that repository is
+// not a dependency of this package; the test above compares the two when it can.
+const HOST_STATES = [
+  "starting",
+  "running",
+  "waiting",
+  "needs_reply",
+  "escalated",
+  "settled",
+  "stopping",
+  "stopped",
+  "failed",
+  "uncertain",
+] as const;
+
 describe("audit findings", () => {
   it("decodes a frame whose multibyte character straddles a read boundary (H1)", async () => {
     const server = spawnServer(tempDb("utf8"));
@@ -666,7 +687,7 @@ describe("audit findings", () => {
     }
   });
 
-  it("keeps one activation's record with its owner, and a finished one finished (H3)", async () => {
+  it("keeps one activation's record with its owner, and lets the host's own states through (H3)", async () => {
     const server = spawnServer(tempDb("immutable"));
     try {
       await handshake(server);
@@ -674,9 +695,9 @@ describe("audit findings", () => {
       server.send({
         id: 50,
         op: "authority.record",
-        args: { activationId: "act_owned", specialist: "worker", state: "running", lastActivityAt: now },
+        args: { activationId: "act_owned", specialist: "worker", state: "starting", lastActivityAt: now },
       });
-      assert.equal((await server.next()).ok, true);
+      assert.equal((await server.next()).ok, true, "starting is the first record of every activation");
 
       server.send({
         id: 51,
@@ -687,12 +708,12 @@ describe("audit findings", () => {
       assert.equal(stolen.error?.code, "conflict");
       assert.match(String(stolen.error?.message), /already belongs to specialist "worker"/);
 
-      // A live activation cannot be deleted by guessing its id.
-      server.send({ id: 52, op: "authority.remove", args: { activationId: "act_owned" } });
-      const guessed = await server.next();
-      assert.equal(guessed.error?.code, "conflict");
-      assert.match(String(guessed.error?.message), /expectState/);
+      // A different specialist cannot forget someone else's row either.
+      server.send({ id: 52, op: "authority.remove", args: { activationId: "act_owned", specialist: "impostor" } });
+      const intruder = await server.next();
+      assert.equal(intruder.error?.code, "conflict");
 
+      // A woken turn writes settled -> running; that is the host's lifecycle, not a forgery.
       server.send({
         id: 53,
         op: "authority.record",
@@ -705,21 +726,39 @@ describe("audit findings", () => {
         op: "authority.record",
         args: { activationId: "act_owned", specialist: "worker", state: "running", lastActivityAt: now },
       });
-      const revived = await server.next();
-      assert.equal(revived.error?.code, "conflict", "a settled activation does not become live again");
-      assert.match(String(revived.error?.message), /does not become running/);
+      assert.equal((await server.next()).ok, true, "a settled activation is revived by its host");
 
       server.send({ id: 55, op: "authority.remove", args: { activationId: "act_owned", expectState: "fi" + "nal" } });
       const absent = await server.next();
       assert.equal(absent.error?.code, "bad_request", "expectState must be a known state");
 
-      server.send({ id: 56, op: "authority.remove", args: { activationId: "act_owned", expectState: "settled" } });
+      // The host's stop() forgets a row it last saved as running: id + owner is enough.
+      server.send({ id: 56, op: "authority.remove", args: { activationId: "act_owned", specialist: "worker" } });
       const removed = await server.next();
       assert.equal(removed.result?.["removed"], true);
     } finally {
       await server.close();
     }
   });
+
+  it("takes the host's activation states from the specialists' own union", async () => {
+    // The authority table is read by the specialists host, so its states are the
+    // host's, not ours. Read them from that repository when it is present.
+    const types = join(homedir(), "dev", "specialists", "src", "activation", "types.ts");
+    if (!existsSync(types)) {
+      console.log(`skipped: ${types} is absent; the fixture below names its source`);
+    } else {
+      const source = readFileSync(types, "utf8");
+      const match = /ActivationState\s*=\s*([^;]+);/.exec(source);
+      const union =
+        match === null
+          ? []
+          : [...match[1]!.matchAll(/["']([a-z_]+)["']/g)].map((one) => one[1]!).filter((value) => value !== undefined);
+      assert.ok(union.length >= 8, `could not read the host union from ${types}`);
+      assert.deepEqual([...union].sort(), [...HOST_STATES].sort(), "the service accepts exactly the host's states");
+    }
+  });
+
 
   it("exposes enrichment, which can only change an entry's semantic layer (M1)", async () => {
     // The audit's M1 said enrichment rewrites an entry. It does not: the service
@@ -797,6 +836,7 @@ describe("audit findings", () => {
       },
       onExit: () => undefined,
       diagnostics: () => "",
+      pid: null,
       close: async () => undefined,
     };
     const client = createServiceClient(link, { timeoutMs: 5_000 });

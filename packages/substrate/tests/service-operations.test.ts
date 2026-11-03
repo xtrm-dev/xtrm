@@ -9,12 +9,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ARGS, CAPABILITIES, OPERATIONS } from "../src/service/ops.ts";
-import { ServiceCallError } from "../src/service/protocol.ts";
+import { ARGS, CAPABILITIES, OPERATIONS, classifyError } from "../src/service/ops.ts";
+import { MAX_FRAME_BYTES, ServiceCallError } from "../src/service/protocol.ts";
 import {
   createLocalService,
   createServiceClient,
@@ -53,10 +53,16 @@ function remoteService(db: string): SubstrateService {
 
 interface Ctx {
   gitRoot: string;
+  otherRoot: string;
   projectId: string;
   issueId: string;
   ref: string;
-  entryId: string;
+  noteEntryId: string;
+  checkpointEntryId: string;
+  receiptId: string;
+  commitReceiptId: string;
+  freshBindingId: string;
+  capsule: Record<string, unknown>;
 }
 
 const CONTRACT = {
@@ -69,7 +75,17 @@ const CONTRACT = {
   output: [{ artifact: "a row" }],
 };
 
-async function seed(service: SubstrateService, gitRoot: string): Promise<Ctx> {
+const SHA = "0123456789abcdef0123456789abcdef01234567";
+
+/**
+ * Builds the state every fixture needs, once, identically on both paths.
+ *
+ * The issue is attested ready, because claim, gate and dispatch all refuse an
+ * unattested Issue; a receipt exists so artifact and commit operations have one;
+ * a second binding stays unallocated so receipt allocation can be exercised; and
+ * two authority rows exist so one can be removed while the other is listed.
+ */
+async function seed(service: SubstrateService, gitRoot: string, otherRoot: string): Promise<Ctx> {
   const project = await service.call<{ projectId: string }>("issue.resolveProject", { gitRoot });
   const created = await service.call<{ id: string; humanRef: string }>("issue.create", {
     input: {
@@ -81,11 +97,35 @@ async function seed(service: SubstrateService, gitRoot: string): Promise<Ctx> {
       authoredBy: "test",
     },
   });
-  await service.call("journal.appendEntry", {
+  await service.call("issue.attestReadiness", {
+    issueId: created.id,
+    outcome: "ready",
+    policy: "default",
+    attestedBy: "test",
+  });
+  const note = await service.call<{ id: string }>("journal.appendEntry", {
     issueId: created.id,
     input: { kind: "note", mechanical: { issueId: created.id, issueRevision: 1, contractHash: "0000", summary: "seed" } },
   });
-  const entries = await service.call<Array<{ id: string }>>("journal.listEntries", { issueId: created.id });
+  const checkpoint = await service.call<{ entry: { id: string } }>("journal.checkpoint", {
+    issueId: created.id,
+    input: {
+      mechanical: { issueId: created.id, issueRevision: 1, contractHash: "0000", summary: "seed checkpoint" },
+    },
+  });
+  const dispatch = async (workspace: string): Promise<string> => {
+    const binding = await service.call<{ id: string }>("provenance.dispatch", {
+      issueId: created.id,
+      input: { workspace, participantId: "seed" },
+    });
+    return binding.id;
+  };
+  const bindingId = await dispatch(gitRoot);
+  const receipt = await service.call<{ id: string }>("provenance.allocateReceipt", { bindingId });
+  const commitBindingId = await dispatch(otherRoot);
+  const commitReceipt = await service.call<{ id: string }>("provenance.allocateReceipt", { bindingId: commitBindingId });
+  const freshBindingId = await dispatch(join(otherRoot, "fresh"));
+  const capsule = await service.call<Record<string, unknown>>("resume.buildCapsule", { issueId: created.id });
   await service.call("authority.record", {
     activationId: "act_seed",
     specialist: "seed",
@@ -93,12 +133,25 @@ async function seed(service: SubstrateService, gitRoot: string): Promise<Ctx> {
     issueRef: created.humanRef,
     lastActivityAt: 1,
   });
+  await service.call("authority.record", {
+    activationId: "act_remove",
+    specialist: "ops",
+    state: "running",
+    issueRef: created.humanRef,
+    lastActivityAt: 2,
+  });
   return {
     gitRoot,
+    otherRoot,
     projectId: project.projectId,
     issueId: created.id,
     ref: created.humanRef,
-    entryId: entries[0]!.id,
+    noteEntryId: note.id,
+    checkpointEntryId: checkpoint.entry.id,
+    receiptId: receipt.id,
+    commitReceiptId: commitReceipt.id,
+    freshBindingId,
+    capsule,
   };
 }
 
@@ -115,7 +168,7 @@ const FIXTURES: Record<string, (ctx: Ctx) => Record<string, unknown>> = {
   "issue.getParent": (c) => ({ issueId: c.issueId }),
   "issue.getResolvedContext": (c) => ({ issueId: c.issueId }),
   "issue.resolveProject": (c) => ({ gitRoot: c.gitRoot }),
-  "issue.queryAllIssues": () => ({ query: {} }),
+  "issue.queryAllIssues": (c) => ({ query: { project: c.projectId } }),
   "issue.create": (c) => ({
     input: {
       projectId: c.projectId,
@@ -126,9 +179,12 @@ const FIXTURES: Record<string, (ctx: Ctx) => Record<string, unknown>> = {
       authoredBy: "test",
     },
   }),
+  "issue.createProject": () => ({ prefix: "SECOND", name: "second project" }),
+  "issue.linkCheckout": (c) => ({ gitRoot: join(c.otherRoot, "linked"), projectId: c.projectId }),
+  "issue.listLinks": () => ({}),
   "issue.updateContract": (c) => ({
     issueId: c.issueId,
-    contract: CONTRACT,
+    contract: { ...CONTRACT, problem: "a consumer needs a revised contract" },
     authoredBy: "test",
     opts: { expectedRevision: 1 },
   }),
@@ -141,12 +197,22 @@ const FIXTURES: Record<string, (ctx: Ctx) => Record<string, unknown>> = {
     holder: "holder-b",
     attestation: { outcome: "ready", policy: "default", attestedBy: "test" },
   }),
-  "issue.renewClaim": (c) => ({ issueId: c.issueId, holder: "holder-b" }),
-  "issue.releaseClaim": (c) => ({ issueId: c.issueId, holder: "holder-b" }),
+  "issue.renewClaim": (c) => ({ issueId: c.issueId, holder: "holder-a", ttlMs: 120_000 }),
+  "issue.releaseClaim": (c) => ({ issueId: c.issueId, holder: "holder-a" }),
   "issue.latestAttestation": (c) => ({ issueId: c.issueId }),
-  "issue.appendEvent": (c) => ({ issueId: c.issueId, type: "test.event", payload: { a: 1 } }),
-  "gate.check": (c) => ({ request: { issueRef: c.ref, specialist: "worker" } }),
-  "gate.dispatch": (c) => ({ request: { issueRef: c.ref, specialist: "worker" } }),
+  "issue.attestReadiness": (c) => ({
+    issueId: c.issueId,
+    outcome: "ready",
+    policy: "default",
+    attestedBy: "test",
+  }),
+  "issue.appendEvent": (c) => ({
+    issueId: c.issueId,
+    type: "journal.checkpoint_degraded",
+    payload: { entry: c.noteEntryId, sequence: 2, reason: "no summarizer" },
+  }),
+  "gate.check": (c) => ({ request: { ref: c.ref, specialist: "worker", holder: "holder-a", workspace: c.gitRoot } }),
+  "gate.dispatch": (c) => ({ request: { ref: c.ref, specialist: "worker", holder: "holder-a", workspace: c.gitRoot } }),
   "store.get": (c) => ({ ref: c.ref }),
   "store.addJournal": (c) => ({ ref: c.ref, kind: "note" }),
   "journal.appendEntry": (c) => ({
@@ -154,9 +220,9 @@ const FIXTURES: Record<string, (ctx: Ctx) => Record<string, unknown>> = {
     input: { kind: "finding", mechanical: { issueId: c.issueId, issueRevision: 1, contractHash: "0000", summary: "second" } },
   }),
   "journal.listEntries": (c) => ({ issueId: c.issueId, limit: 5 }),
-  "journal.latest": (c) => ({ issueId: c.issueId }),
+  "journal.latest": (c) => ({ issueId: c.issueId, kind: "note" }),
   "journal.latestCheckpoint": (c) => ({ issueId: c.issueId }),
-  "journal.since": (c) => ({ issueId: c.issueId, cursor: 0 }),
+  "journal.since": (c) => ({ issueId: c.issueId, cursor: 1 }),
   "journal.checkpoint": (c) => ({
     issueId: c.issueId,
     input: { mechanical: { issueId: c.issueId, issueRevision: 1, contractHash: "0000", summary: "checkpoint" } },
@@ -166,22 +232,24 @@ const FIXTURES: Record<string, (ctx: Ctx) => Record<string, unknown>> = {
     input: { mechanical: { issueId: c.issueId, issueRevision: 1, contractHash: "0000", summary: "compaction" } },
   }),
   "journal.collectMechanical": (c) => ({ issueId: c.issueId, input: {} }),
-  "journal.renderCheckpoint": () => ({ entry: { sequence: 1, kind: "note", createdAt: 1 } }),
-  "journal.getEntry": (c) => ({ entryId: c.entryId }),
+  "journal.renderCheckpoint": (c) => ({ entry: { sequence: 1, kind: "note", createdAt: 1, issueRevision: 1 } }),
+  "journal.getEntry": (c) => ({ entryId: c.noteEntryId }),
   "journal.timeline": (c) => ({ issueId: c.issueId, limit: 5 }),
-  "journal.enrichEntry": (c) => ({ entryId: c.entryId, semantic: { summary: "enriched" } }),
-  "provenance.dispatch": (c) => ({ issueId: c.issueId, input: {} }),
-  "provenance.allocateReceipt": () => ({ bindingId: "wr_ops" }),
-  "provenance.attachArtifact": () => ({ receiptId: "wr_ops", kind: "note", value: "v" }),
-  "provenance.bindCommit": () => ({ receiptId: "wr_ops", sha: "0123456" }),
+  "journal.enrichEntry": (c) => ({ entryId: c.checkpointEntryId, semantic: { summary: "enriched" } }),
+  "provenance.dispatch": (c) => ({ issueId: c.issueId, input: { workspace: join(c.otherRoot, "third"), participantId: "test" } }),
+  "provenance.allocateReceipt": (c) => ({ bindingId: c.freshBindingId }),
+  "provenance.attachArtifact": (c) => ({ receiptId: c.receiptId, kind: "validation", value: "npx tsc --noEmit: clean" }),
+  "provenance.bindCommit": (c) => ({ receiptId: c.commitReceiptId, sha: SHA }),
   "provenance.listReceipts": (c) => ({ issueId: c.issueId }),
   "provenance.listBindings": (c) => ({ issueId: c.issueId }),
   "provenance.trace": (c) => ({ issueId: c.issueId }),
-  "provenance.findByCommit": () => ({ sha: "0123456" }),
+  "provenance.findByCommit": () => ({ sha: SHA }),
+  "provenance.findByPr": () => ({ ref: "https://github.com/xtrm-dev/ops/pull/1" }),
+  "provenance.listArtifacts": (c) => ({ receiptId: c.receiptId, liveOnly: true }),
   "provenance.sessionDetail": () => ({ sessionId: "session-x" }),
   "provenance.activationDetail": () => ({ activationId: "act-x" }),
   "resume.buildCapsule": (c) => ({ issueId: c.issueId }),
-  "resume.renderCapsule": () => ({ capsule: { issue: null, checkpoint: null, entries: [] } }),
+  "resume.renderCapsule": (c) => ({ capsule: c.capsule }),
   "authority.record": (c) => ({
     activationId: "act_ops",
     specialist: "ops",
@@ -189,9 +257,52 @@ const FIXTURES: Record<string, (ctx: Ctx) => Record<string, unknown>> = {
     issueRef: c.ref,
     lastActivityAt: 2,
   }),
-  "authority.remove": () => ({ activationId: "act_ops" }),
+  "authority.remove": () => ({ activationId: "act_remove", specialist: "ops" }),
   "authority.list": () => ({ activeOnly: true, limit: 5 }),
 };
+
+/**
+ * Preconditions for operations that need a state the seed does not leave behind.
+ * Run on the store under test before the fixture, so both paths start alike.
+ */
+const PREPARE: Record<string, (service: SubstrateService, ctx: Ctx) => Promise<unknown>> = {
+  "issue.renewClaim": (service, ctx) =>
+    service.call("issue.claimIssue", { issueId: ctx.issueId, holder: "holder-a", ttlMs: 60_000 }),
+  "issue.releaseClaim": (service, ctx) =>
+    service.call("issue.claimIssue", { issueId: ctx.issueId, holder: "holder-a", ttlMs: 60_000 }),
+  // Dispatch needs the work claimable: the gate refuses an unclaimed Issue.
+  "gate.dispatch": (service, ctx) =>
+    service.call("issue.claimIssue", { issueId: ctx.issueId, holder: "holder-a", ttlMs: 60_000 }),
+};
+
+/** Operations that change the store: each runs on its own copy of the seed. */
+const MUTATING = new Set([
+  "issue.create",
+  "issue.createProject",
+  "issue.linkCheckout",
+  "issue.updateContract",
+  "issue.setTitle",
+  "issue.setPriority",
+  "issue.setScrutiny",
+  "issue.claimIssue",
+  "issue.claimReady",
+  "issue.renewClaim",
+  "issue.releaseClaim",
+  "issue.attestReadiness",
+  "issue.appendEvent",
+  "gate.dispatch",
+  "store.addJournal",
+  "journal.appendEntry",
+  "journal.checkpoint",
+  "journal.compactionCheckpoint",
+  "journal.enrichEntry",
+  "provenance.dispatch",
+  "provenance.allocateReceipt",
+  "provenance.attachArtifact",
+  "provenance.bindCommit",
+  "authority.record",
+  "authority.remove",
+]);
 
 /** Key shape of a result, so two stores can be compared without their ids. */
 function shape(value: unknown, depth = 0): unknown {
@@ -207,16 +318,74 @@ function shape(value: unknown, depth = 0): unknown {
   return typeof value;
 }
 
+/** Values a consumer compares, with the wall-clock fields masked. */
+// Anything that differs only because the two paths ran milliseconds apart, plus
+// generated identifiers: what must match is the content a consumer reads.
+const VOLATILE = /^(?:[a-z]+Id|[a-z]+At|timestamp|cursor|nextCursor|contractHash|hash|sequence|id|ref|humanRef|path|workspace|version)$/;
+
+function normalise(value: unknown, depth = 0): unknown {
+  if (depth > 6) return typeof value;
+  if (Array.isArray(value)) return value.map((entry) => normalise(entry, depth + 1));
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      out[key] = VOLATILE.test(key) ? "<masked>" : normalise((value as Record<string, unknown>)[key], depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * What a consumer would notice after an operation: issue rows, journal entries,
+ * receipts, bindings and the live authority rows. Two stores that answer alike but
+ * differ here took different actions.
+ */
+async function fingerprint(service: SubstrateService, ctx: Ctx): Promise<Record<string, unknown>> {
+  const issues = await service.call<Array<{ title: string; lifecycleState: string; currentRevision: number }>>(
+    "issue.queryAllIssues",
+    { query: { project: ctx.projectId } },
+  );
+  const entries = await service.call<Array<{ kind: string; sequence: number; participantId: string | null }>>(
+    "journal.listEntries",
+    { issueId: ctx.issueId, limit: 100 },
+  );
+  const receipts = await service.call<unknown[]>("provenance.listReceipts", { issueId: ctx.issueId });
+  const bindings = await service.call<unknown[]>("provenance.listBindings", { issueId: ctx.issueId });
+  const authority = await service.call<{ rows: Array<{ activationId: string; state: string; specialist: string }> }>(
+    "authority.list",
+    { limit: 100 },
+  );
+  return {
+    issues: issues.map((issue) => [issue.title, issue.lifecycleState, issue.currentRevision]),
+    entries: entries.map((entry) => [entry.kind, entry.sequence, entry.participantId]),
+    receipts: receipts.length,
+    bindings: bindings.length,
+    authority: authority.rows.map((row) => [row.activationId, row.state, row.specialist]),
+  };
+}
+
+function copyStore(from: string, label: string): string {
+  const dir = mkdtempSync(join(tmpdir(), `sb-ops-${label}-`));
+  const to = join(dir, "state.db");
+  // The WAL is checkpointed by closing the seeder, so the main file is the state.
+  copyFileSync(from, to);
+  for (const suffix of ["-wal", "-shm"]) {
+    if (existsSync(from + suffix)) copyFileSync(from + suffix, to + suffix);
+  }
+  return to;
+}
+
 interface Outcome {
   ok: boolean;
   code?: string;
-  shape?: unknown;
+  value?: unknown;
 }
 
 async function attempt(service: SubstrateService, op: string, args: Record<string, unknown>): Promise<Outcome> {
   try {
     const result = await service.call(op, args);
-    return { ok: true, shape: shape(result) };
+    return { ok: true, value: result };
   } catch (error) {
     assert.ok(error instanceof ServiceCallError, `a call failure must be a ServiceCallError, got ${String(error)}`);
     return { ok: false, code: error.code };
@@ -264,37 +433,71 @@ describe("the operation table, both ways", () => {
 
   async function compareEveryOperation(): Promise<void> {
     const root = makeRepo("operations");
-    const localDb = makeStore(root, "local");
-    const remoteDb = makeStore(root, "remote");
-    const local = createLocalService(localDb, "test");
-    const remote = remoteService(remoteDb);
+    const otherRoot = makeRepo("operations-other");
+    // One seeded store, then a copy per operation: a mutating fixture would
+    // otherwise change the state the next operation sees, and identical starting
+    // states are what make a value comparison meaningful.
+    const seedDb = makeStore(root, "seed");
+    const seeder = createLocalService(seedDb, "test");
+    let ctx: Ctx;
     try {
-      const localCtx = await seed(local, root);
-      const remoteCtx = await seed(remote, root);
-      const divergences: string[] = [];
-      for (const op of Object.keys(OPERATIONS).sort()) {
-        const build = FIXTURES[op]!;
-        const viaWire = await attempt(remote, op, build(remoteCtx));
-        const inProcess = await attempt(local, op, build(localCtx));
-        if (viaWire.ok !== inProcess.ok || viaWire.code !== inProcess.code) {
-          divergences.push(
-            `${op}: wire ${viaWire.ok ? "ok" : viaWire.code} vs local ${inProcess.ok ? "ok" : inProcess.code}`,
-          );
+      ctx = await seed(seeder, root, otherRoot);
+    } finally {
+      await seeder.close();
+    }
+    const divergences: string[] = [];
+    for (const op of Object.keys(OPERATIONS).sort()) {
+      const wireDb = copyStore(seedDb, "wire");
+      const localDb = copyStore(seedDb, "local");
+      const wire = remoteService(wireDb);
+      const local = createLocalService(localDb, "test");
+      try {
+        try {
+          if (PREPARE[op]) await PREPARE[op]!(wire, ctx);
+          if (PREPARE[op]) await PREPARE[op]!(local, ctx);
+        } catch (error) {
+          divergences.push(`${op} prepare: ${(error as Error).message}`);
+          await wire.close();
+          await local.close();
           continue;
         }
-        if (viaWire.ok) {
-          assert.deepEqual(
-            shape(viaWire.shape),
-            shape(inProcess.shape),
-            `${op} answers a different result shape over the wire`,
-          );
+        const args = FIXTURES[op]!(ctx);
+        const viaWire = await attempt(wire, op, args);
+        const inProcess = await attempt(local, op, args);
+        if (viaWire.ok !== inProcess.ok || viaWire.code !== inProcess.code) {
+          divergences.push(`${op}: wire ${viaWire.ok ? "ok" : viaWire.code} vs local ${inProcess.ok ? "ok" : inProcess.code}`);
+          continue;
         }
+        // Same answer, not merely the same shape: the values are what a consumer
+        // reads, and a fixture that fails on both sides proves nothing.
+        try {
+          assert.deepEqual(normalise(viaWire.value), normalise(inProcess.value), `${op} answers differently over the wire`);
+        } catch (error) {
+          divergences.push(`${op}: ${(error as Error).message.split("\n")[0]}`);
+          if (process.env["SB_OPS_DEBUG"]) {
+            console.error(op, "WIRE", JSON.stringify(normalise(viaWire.value)).slice(0, 900));
+            console.error(op, "LOCAL", JSON.stringify(normalise(inProcess.value)).slice(0, 900));
+          }
+          continue;
+        }
+        if (!viaWire.ok) divergences.push(`${op}: fixture fails on both paths (${viaWire.code}) — it proves nothing`);
+        if (MUTATING.has(op)) {
+          const afterWire = await fingerprint(wire, ctx);
+          const afterLocal = await fingerprint(local, ctx);
+          try {
+            assert.deepEqual(afterWire, afterLocal, `${op} left a different store behind`);
+          } catch (error) {
+            divergences.push(`${op} side effects: ${(error as Error).message.split("\n")[0]}`);
+          }
+        }
+      } catch (error) {
+        divergences.push(`${op} threw: ${(error as Error).message}`);
+      } finally {
+        await wire.close();
+        await local.close();
       }
-      assert.deepEqual(divergences, [], "every operation must answer alike on both paths");
-    } finally {
-      await remote.close();
-      await local.close();
     }
+    assert.deepEqual(divergences, [], "every operation must answer, and change the store, alike on both paths");
   }
 
   it("refuses an argument name no operation reads", async () => {
@@ -302,7 +505,7 @@ describe("the operation table, both ways", () => {
     const db = makeStore(root, "one");
     const service = createLocalService(db, "test");
     try {
-      const ctx = await seed(service, root);
+      const ctx = await seed(service, root, makeRepo("other"));
       const refusals: string[] = [];
       for (const op of Object.keys(OPERATIONS).sort()) {
         const args = { ...FIXTURES[op]!(ctx), notAnArgument: 1 };
@@ -320,7 +523,7 @@ describe("the operation table, both ways", () => {
     const db = makeStore(root, "one");
     const service = createLocalService(db, "test");
     try {
-      const ctx = await seed(service, root);
+      const ctx = await seed(service, root, makeRepo("other"));
       const cases: Array<[string, Record<string, unknown>]> = [
         ["issue.get", { issueId: "" }],
         ["issue.getRevision", { issueId: ctx.issueId, revision: 1.5 }],
@@ -332,6 +535,7 @@ describe("the operation table, both ways", () => {
         ["authority.record", { activationId: "act_x", specialist: "ops", state: "invented", lastActivityAt: 1 }],
         ["provenance.attachArtifact", { receiptId: "wr_x", kind: "invented", value: "v" }],
         ["issue.claimIssue", { issueId: ctx.issueId, holder: "h", ttlMs: 0 }],
+        ["journal.since", { issueId: ctx.issueId, cursor: 5_000_000_000 }],
       ];
       for (const [op, args] of cases) {
         const outcome = await attempt(service, op, args);
@@ -525,16 +729,16 @@ describe("openSshService", () => {
 });
 
 describe("activation authority", () => {
-  it("lists live rows the way the SessionStart reader does", async () => {
+  it("lists the rows the SessionStart reader lists", async () => {
     const db = makeStore(makeRepo("authority-parity"), "one");
     const service = createLocalService(db, "test");
     try {
       const rows: Array<[string, string, number]> = [
         ["act_old", "running", 10],
         ["act_new", "waiting", 30],
-        ["act_mid", "blocked", 20],
+        ["act_mid", "needs_reply", 20],
         ["act_done", "settled", 40],
-        ["act_stopped", "disposed", 50],
+        ["act_stopped", "stopped", 50],
       ];
       for (const [activationId, state, lastActivityAt] of rows) {
         await service.call("authority.record", {
@@ -549,10 +753,13 @@ describe("activation authority", () => {
         activeOnly: true,
         limit: 2,
       });
+      // "Live" is the reader's own definition: everything except the two states it
+      // filters. A stopped row therefore still lists until its host forgets it,
+      // which is what the host's stop() does.
       assert.deepEqual(
         answer.rows.map((row) => row.activationId),
-        ["act_new", "act_mid"],
-        "live rows only, newest first, limited",
+        ["act_stopped", "act_new"],
+        "the reader's rows only, newest first, limited",
       );
       // The same query the specialists SessionStart reader runs, against the file.
       const store = openSubstrate(db);
@@ -581,7 +788,7 @@ describe("activation authority", () => {
       await service.call("authority.record", {
         activationId: "act_untouched",
         specialist: "writer",
-        state: "pending",
+        state: "starting",
         issueRef: "",
         lastActivityAt: 0,
       });
@@ -590,6 +797,45 @@ describe("activation authority", () => {
         { activationId: "act_untouched" },
       );
       assert.equal(listed.rows[0]?.issueRef, null, "an empty issue ref is no issue ref");
+
+      // The host woken turn writes settled -> running; the authority follows it.
+      await service.call("authority.record", {
+        activationId: "act_untouched",
+        specialist: "writer",
+        state: "settled",
+        issueRef: null,
+        lastActivityAt: 10,
+      });
+      await service.call("authority.record", {
+        activationId: "act_untouched",
+        specialist: "writer",
+        state: "running",
+        issueRef: null,
+        lastActivityAt: 20,
+      });
+      // Its stop() forgets a row it last saved as running, by id and specialist.
+      const removal = await service.call<{ removed: boolean }>("authority.remove", {
+        activationId: "act_untouched",
+        specialist: "writer",
+      });
+      assert.equal(removal.removed, true, "a stopped activation can be forgotten by its own specialist");
+      // A different specialist may not touch the row at all.
+      await service.call("authority.record", {
+        activationId: "act_owned",
+        specialist: "owner",
+        state: "running",
+        issueRef: null,
+        lastActivityAt: 30,
+      });
+      await assert.rejects(
+        async () =>
+          service.call("authority.remove", { activationId: "act_owned", specialist: "intruder" }),
+        (error: unknown) => {
+          assert.ok(error instanceof ServiceCallError);
+          assert.equal(error.code, "conflict");
+          return true;
+        },
+      );
 
       await assert.rejects(
         async () =>
@@ -608,6 +854,257 @@ describe("activation authority", () => {
       );
     } finally {
       await service.close();
+    }
+  });
+});
+
+describe("identity, refusals and the transport's own edges", () => {
+  it("stores the same participant and execution context local and remote (MEDIUM identity)", async () => {
+    const repo = makeRepo("identity-parity");
+    const db = makeStore(repo, "one");
+    const well = createLocalService(db, "test");
+    const ctx = await seed(well, repo, makeRepo("identity-other"));
+    await well.close();
+
+    const saved = Object.fromEntries(
+      ["SUBSTRATE_HOLDER", "XTRM_SESSION_ID", "SUBSTRATE_ACTIVATION_ID"].map((key) => [key, process.env[key]]),
+    );
+    process.env["SUBSTRATE_HOLDER"] = "identity-holder";
+    process.env["XTRM_SESSION_ID"] = "0f7b9e34-6a1e-4b8e-9d95-0d1e6f2f0a11";
+    process.env["SUBSTRATE_ACTIVATION_ID"] = "identity-activation";
+    try {
+      const wireDb = copyStore(db, "identity-wire");
+      const localDb = copyStore(db, "identity-local");
+      const wire = createServiceClient(spawnLink([NODE, CLI, "serve", "--stdio", "--db", wireDb]));
+      const local = createLocalService(localDb, "test");
+      try {
+        const args = {
+          issueId: ctx.issueId,
+          input: { kind: "note", note: "identity probe" },
+        };
+        const sent = await attempt(wire, "journal.appendEntry", args);
+        assert.deepEqual(sent, { ok: true, value: sent.ok ? sent.value : undefined }, JSON.stringify(sent));
+        const stored = await attempt(local, "journal.appendEntry", args);
+        assert.deepEqual(stored, { ok: true, value: stored.ok ? stored.value : undefined }, JSON.stringify(stored));
+
+        const read = (path: string): Array<Record<string, unknown>> => {
+          const store = openSubstrate(path);
+          try {
+            return store
+              .prepare(
+                "SELECT participant_id, activation_id, session_id FROM issue_journal WHERE issue_id = ? ORDER BY sequence DESC LIMIT 1",
+              )
+              .all(ctx.issueId) as unknown as Array<Record<string, unknown>>;
+          } finally {
+            store.close();
+          }
+        };
+        const remoteRow = read(wireDb);
+        assert.deepEqual(remoteRow, read(localDb), "the same call must store the same actor on both paths");
+        assert.equal(remoteRow[0]?.["participant_id"], "identity-holder");
+        assert.equal(remoteRow[0]?.["activation_id"], "identity-activation");
+        assert.equal(remoteRow[0]?.["session_id"], "0f7b9e34-6a1e-4b8e-9d95-0d1e6f2f0a11");
+      } finally {
+        await wire.close();
+        await local.close();
+      }
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  it("refuses to enrich anything but a checkpoint with a null semantic layer (HIGH enrichEntry)", async () => {
+    const repo = makeRepo("enrich-guard");
+    const db = makeStore(repo, "one");
+    const service = createLocalService(db, "test");
+    try {
+      const ctx = await seed(service, repo, makeRepo("enrich-other"));
+      const refused = await attempt(service, "journal.enrichEntry", {
+        entryId: ctx.noteEntryId,
+        semantic: { summary: "x" },
+      });
+      assert.equal(refused.ok, false);
+      assert.equal(refused.code, "conflict", "a note is not a checkpoint");
+
+      const fresh = await attempt(service, "journal.enrichEntry", {
+        entryId: ctx.checkpointEntryId,
+        semantic: { summary: "first" },
+      });
+      assert.equal(fresh.ok, true, "a fresh checkpoint may be enriched once");
+
+      const again = await attempt(service, "journal.enrichEntry", {
+        entryId: ctx.checkpointEntryId,
+        semantic: { summary: "second" },
+      });
+      assert.equal(again.ok, false, "an enriched checkpoint is not overwritten");
+      assert.equal(again.code, "conflict");
+
+      const stored = await service.call<Record<string, Record<string, unknown>>>("journal.getEntry", {
+        entryId: ctx.checkpointEntryId,
+      });
+      assert.deepEqual(stored["semantic"], { summary: "first" }, "the first value survives");
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("refuses event types a remote caller could use to forge a closure (appendEvent)", async () => {
+    const repo = makeRepo("append-guard");
+    const db = makeStore(repo, "one");
+    const service = createLocalService(db, "test");
+    try {
+      const ctx = await seed(service, repo, makeRepo("append-other"));
+      const forged = await attempt(service, "issue.appendEvent", {
+        issueId: ctx.issueId,
+        type: "issue.closed",
+        payload: { at: 1 },
+      });
+      assert.equal(forged.ok, false);
+      assert.equal(forged.code, "bad_request");
+
+      const journaled = await attempt(service, "issue.appendEvent", {
+        issueId: ctx.issueId,
+        type: "journal.checkpoint_degraded",
+        payload: { reason: "storage" },
+      });
+      assert.equal(journaled.ok, true, "the event the MCP server raises must pass");
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("returns the values the operations are for, not just a success", async () => {
+    const repo = makeRepo("values");
+    const db = makeStore(repo, "one");
+    const service = createLocalService(db, "test");
+    try {
+      const ctx = await seed(service, repo, makeRepo("values-other"));
+      await service.call("issue.setTitle", { issueId: ctx.issueId, title: "service title" });
+      const issue = await service.call<{ title: string }>("issue.get", { issueId: ctx.issueId });
+      assert.equal(issue.title, "service title", "setTitle must store the title it was given");
+
+      const note = await service.call<{ id: string; kind: string }>("journal.latest", {
+        issueId: ctx.issueId,
+        kind: "note",
+      });
+      assert.equal(note.kind, "note", "journal.latest must honour the kind it was asked for");
+      assert.equal(note.id, ctx.noteEntryId);
+
+      const checkpoint = await service.call<{ kind: string }>("journal.latestCheckpoint", { issueId: ctx.issueId });
+      assert.equal(checkpoint.kind, "checkpoint");
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("gives a domain refusal a stable code instead of internal", async () => {
+    const cases: Array<[string, string]> = [
+      ["issue ABC-1 is not-claimable while a claim is active", "conflict"],
+      ["session ABC-1 cannot be claimed in this state", "conflict"],
+      ["unknown journal kind: mechanical", "bad_request"],
+      ["invalid sessionId \"nope\": session identity must be a canonical lowercase UUID", "bad_request"],
+      ["store is locked", "internal"],
+    ];
+    for (const [message, code] of cases) {
+      assert.equal(classifyError(new Error(message)).code, code, message);
+    }
+    const leaky = classifyError(new Error("cannot open /home/dawid/.xtrm/state.db (code: 5)"));
+    assert.equal(leaky.code, "internal");
+    assert.doesNotMatch(leaky.message, /\/home\/dawid/, "a refusal must not carry the store's path");
+  });
+
+  it("answers a malformed gate request as a client error, not as an internal one", async () => {
+    const repo = makeRepo("gate-guard");
+    const db = makeStore(repo, "one");
+    const service = createLocalService(db, "test");
+    try {
+      await seed(service, repo, makeRepo("gate-other"));
+      const answer = await attempt(service, "gate.check", { request: {} });
+      assert.equal(answer.ok, false);
+      assert.equal(answer.code, "bad_request");
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("kills a child that ignores SIGTERM", async () => {
+    const link = spawnLink([
+      NODE,
+      "-e",
+      "process.on('SIGTERM',()=>{}); process.stdin.resume(); setInterval(()=>{}, 1000);",
+    ]);
+    const pid = link.pid;
+    if (pid === null) throw new Error("no child to signal");
+    try {
+      const closed = await Promise.race([
+        link.close().then(() => true),
+        new Promise<boolean>((resolve) => {
+          setTimeout(() => resolve(false), 10_000).unref();
+        }),
+      ]);
+      assert.equal(closed, true, "close must return once the escalation has fired");
+      assert.throws(
+        () => process.kill(pid, 0),
+        "the child must be gone when close() returns, not merely signalled",
+      );
+    } finally {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // already gone: that is the point of the test
+      }
+    }
+  });
+
+  it("reports the end once, even when it happens before a listener is attached", async () => {
+    const link = spawnLink([NODE, "-e", "process.exit(3);"]);
+    const events: Array<{ code: number | null; kind?: string }> = [];
+    try {
+      // The child is gone before anyone listens; the report must wait for the listener.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      link.onExit((code, _signal, _reason, kind) => events.push({ code, kind }));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert.equal(events.length, 1, "one report per link");
+      assert.equal(events[0]?.kind, "exit");
+      assert.equal(events[0]?.code, 3);
+    } finally {
+      if (link.pid !== null) {
+        try {
+          process.kill(link.pid, "SIGKILL");
+        } catch {
+          // already gone
+        }
+      }
+    }
+  });
+
+  it("drops a line that never ends instead of buffering it (MEDIUM line cap)", async () => {
+    const link = spawnLink([
+      NODE,
+      "-e",
+      `process.stdin.resume(); process.stdout.write('x'.repeat(${MAX_FRAME_BYTES + 4096}));`,
+    ]);
+    try {
+      const refused = await Promise.race([
+        new Promise<string>((resolve) => {
+          link.onExit((_code, _signal, reason) => resolve(reason ?? "no reason"));
+        }),
+        new Promise<string>((resolve) => {
+          setTimeout(() => resolve("nothing was reported"), 5000).unref();
+        }),
+      ]);
+      assert.match(refused, /exceeds|exceeded/);
+    } finally {
+      if (link.pid !== null) {
+        try {
+          process.kill(link.pid, "SIGKILL");
+        } catch {
+          // already gone: that is the point of the test
+        }
+      }
     }
   });
 });

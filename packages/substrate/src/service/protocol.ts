@@ -66,8 +66,6 @@ export interface HelloResult {
   protocol: number;
   /** The server package version, so the client can name the skew instead of guessing. */
   substrate: string;
-  /** The store the server actually opened: the client never sends a path. */
-  dbPath: string;
   /** The closed set of ops this server implements. */
   capabilities: string[];
 }

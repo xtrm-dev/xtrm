@@ -109,13 +109,13 @@ function fdIO(): ServeIO {
   };
 }
 
-type Frame = { kind: "line"; text: string } | { kind: "oversize"; bytes: number };
+type Frame = { kind: "line"; text: string; terminated: boolean } | { kind: "oversize"; bytes: number };
 
 /**
  * Splits a byte stream into newline-terminated frames.
  *
  * Keeps the chunks it has not yet delivered, scans each chunk once for the
- * newline byte (so the cost is linear in the bytes received, not quadratic in
+ * newline byte (so the cost is bounded by the byte cap, not quadratic in
  * the frame), and enforces MAX_FRAME_BYTES by discarding to the next newline.
  */
 export class FrameReader {
@@ -161,7 +161,7 @@ export class FrameReader {
         const size = this.sizeBefore(found);
         const line = this.take(found);
         if (size > MAX_FRAME_BYTES) return { kind: "oversize", bytes: size };
-        return { kind: "line", text: line.toString("utf8") };
+        return { kind: "line", text: line.toString("utf8"), terminated: true };
       }
 
       if (this.bytes > MAX_FRAME_BYTES) {
@@ -178,7 +178,9 @@ export class FrameReader {
         const last = Buffer.concat(this.parts, this.bytes);
         this.parts = [];
         this.bytes = 0;
-        return { kind: "line", text: last.toString("utf8") };
+        // A writer that closes mid-frame must be told, not answered as if its
+        // request were complete.
+        return { kind: "line", text: last.toString("utf8"), terminated: false };
       }
       this.parts.push(chunk);
       this.bytes += chunk.length;
@@ -262,6 +264,18 @@ export async function serveStdio(options: ServeOptions): Promise<number> {
       const line = frame.text;
       if (line.trim() === "") continue;
 
+      if (!frame.terminated) {
+        // The writer closed mid-frame: answer with what it can correlate, and do
+        // not run an operation whose request is only partly known.
+        const partial = decodeRequest(line);
+        respond(
+          "code" in partial
+            ? { id: null, ok: false, error: { code: "bad_request", message: "the frame was not newline-terminated" } }
+            : { id: partial.id, ok: false, error: { code: "bad_request", message: "the frame was not newline-terminated" } },
+        );
+        continue;
+      }
+
       const request = decodeRequest(line);
       if ("code" in request) {
         respond({ id: null, ok: false, error: { code: request.code, message: request.message } });
@@ -291,7 +305,6 @@ export async function serveStdio(options: ServeOptions): Promise<number> {
         const hello: HelloResult = {
           protocol: PROTOCOL_VERSION,
           substrate: options.version,
-          dbPath: options.dbPath,
           capabilities: CAPABILITIES,
         };
         respond({ id, ok: true, result: hello });
@@ -321,17 +334,6 @@ export async function serveStdio(options: ServeOptions): Promise<number> {
         log(`sb serve: ${op} failed: ${classified.message}`);
         respond({ id, ok: false, error: classified });
       }
-    }
-    // A last line without a newline is still a frame: a client that writes one
-    // request and closes must not be answered with silence.
-    const tail = await reader.next();
-    if (tail !== null && tail.kind === "line" && tail.text.trim() !== "") {
-      const request = decodeRequest(tail.text);
-      respond(
-        "code" in request
-          ? { id: null, ok: false, error: { code: request.code, message: request.message } }
-          : { id: request.id, ok: false, error: { code: "bad_request", message: "the frame was not newline-terminated" } },
-      );
     }
   } catch (error) {
     const classified = error instanceof ServiceCallError ? classifyError(error) : classifyError(error);
