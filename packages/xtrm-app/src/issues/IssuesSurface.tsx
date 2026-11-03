@@ -40,7 +40,7 @@ const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "righ
   { key: "updated", label: "Updated", width: "5.25rem", align: "right" },
 ];
 const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
-const CELL_EDGE = "flex h-full min-w-0 items-center border-r border-border-muted last:border-r-0";
+const CELL_EDGE = "flex h-full min-w-0 items-center border-r border-border-subtle last:border-r-0";
 const CELL = `${CELL_EDGE} px-2`;
 
 export function IssuesSurface() {
@@ -111,7 +111,7 @@ export function IssuesSurface() {
         minWidth={`calc(${keyCol} + 51rem)`}
         getKey={(r) => r.issue.id}
         header={
-          <div role="row" className="sticky top-0 z-10 grid h-8 border-b border-border bg-deep" style={{ ...tableVars, ...GRID }}>
+          <div role="row" data-testid="issues-table-head" className="grid h-8 shrink-0 rounded-t-lg border-b border-border bg-deep" style={{ ...tableVars, ...GRID }}>
             {COLUMNS.map((c) => (
               <div key={c.key} role="columnheader" aria-sort={sort.key === c.key ? (sort.desc ? "descending" : "ascending") : "none"} className={CELL_EDGE}>
                 <button
@@ -207,7 +207,7 @@ function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: T
   const status = issueStatus(issue);
   const own = rollup.events !== issue.eventCount || rollup.pointers !== issue.pointerCount;
   return (
-    <Row density="table" selected={selected} onActivate={onInspect} onDoubleClick={onOpen} className="border-b border-border-muted">
+    <Row density="table" selected={selected} onActivate={onInspect} onDoubleClick={onOpen} className="border-b border-border-subtle">
       <div className="grid h-full w-full" style={{ ...vars, ...GRID }}>
         <div className={CELL}>
           <IssueKey locator={issue.locator} humanRef={issue.ref} />

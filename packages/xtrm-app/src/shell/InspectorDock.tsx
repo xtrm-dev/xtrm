@@ -110,12 +110,14 @@ export function InspectorDock() {
       maxSize={5000}
       className="relative self-stretch"
     >
+      {/* The frame starts at the top bar's edge and the top bar centres its 32 px pill in 44 px, so a
+          6 px inset at the bottom (bottom-1.5) mirrors that gap at every viewport height. */}
       <div
         ref={frame}
         data-testid="inspector-frame"
         style={{ "--frame-min": `${initialMinWidth}px`, minWidth: "var(--frame-min)" } as React.CSSProperties}
         className={cx(
-          "absolute top-0 bottom-[max(1rem,4vh)] z-30 flex min-h-0 overflow-hidden rounded-lg border bg-raised",
+          "absolute top-0 bottom-1.5 z-30 flex min-h-0 overflow-hidden rounded-lg border bg-raised",
           maximized ? "inset-x-2" : "right-0 w-full",
           !open ? "border-border-muted bg-transparent" : pinned ? "border-border-muted" : "border-border shadow-float",
         )}
