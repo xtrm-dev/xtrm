@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { PullRequestReviewComment } from "../adapters/types.ts";
+import type { PullRequestComment, PullRequestReviewComment } from "../adapters/types.ts";
 import { PullConversation, buildConversation, groupReviewThreads } from "./PullConversation.tsx";
 
 const rc = (over: Partial<PullRequestReviewComment> & { id: string }): PullRequestReviewComment => ({
@@ -99,5 +99,44 @@ describe("PullConversation", () => {
   it("renders an empty state when there is no conversation", () => {
     render(<PullConversation comments={[]} reviews={[]} reviewComments={[]} />);
     expect(screen.getByText("No conversation yet.")).toBeTruthy();
+  });
+});
+
+// XTRM-697: pr-lens posts pure HTML (headings, <details>, <picture> with a light and a dark SVG),
+// several times per PR, from an app account. All of it must render, every time.
+const prLensComment = (id: string, title: string, minutes: number): PullRequestComment => ({
+  id,
+  author: "github-actions[bot]",
+  body: `<!-- pr-lens -->\n\n<h3>${title}</h3>\n\n<details open>\n<summary><b>${title}</b></summary>\n<a href="https://example.invalid/${id}-light.svg"><picture>\n  <source media="(prefers-color-scheme: dark)" srcset="https://example.invalid/${id}-dark.svg">\n  <img alt="${title}" src="https://example.invalid/${id}-light.svg" width="1318">\n</picture></a>\n</details>`,
+  url: `https://github.com/xtrm-dev/xtrm/pull/212#issuecomment-${id}`,
+  createdAt: new Date(Date.UTC(2026, 8, 16, 17, 0 - minutes)).toISOString(),
+  updatedAt: null,
+});
+
+describe("PullConversation GitHub HTML", () => {
+  const human: PullRequestComment = { id: "h1", author: "Jaggerxtrm", body: "Heads up: this needs the Mod+I tooltip.", url: null, createdAt: new Date(Date.UTC(2026, 8, 16, 16, 20)).toISOString(), updatedAt: null };
+  const comments = [human, prLensComment("c2", "Review package", 15), prLensComment("c3", "Review package (2)", 10)];
+
+  it("renders every comment, including two from the same app account", () => {
+    const { container } = render(<PullConversation comments={comments} reviews={[]} reviewComments={[]} />);
+    expect(container.querySelectorAll("li")).toHaveLength(3);
+    expect(screen.getAllByText("Review package").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Review package (2)").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders each pr-lens diagram as an image", () => {
+    const { container } = render(<PullConversation comments={comments} reviews={[]} reviewComments={[]} />);
+    expect(container.querySelectorAll("img")).toHaveLength(2);
+    expect(container.querySelectorAll("details")).toHaveLength(2);
+    expect(container.querySelectorAll("img")[0]!.getAttribute("src")).toBe("https://example.invalid/c2-light.svg");
+  });
+
+  it("marks app accounts with the GitHub mark and people with an initial", () => {
+    const { container } = render(<PullConversation comments={comments} reviews={[]} reviewComments={[]} />);
+    const avatars = [...container.querySelectorAll("[aria-hidden='true']")];
+    expect(avatars.filter((a) => a.querySelector("svg"))).toHaveLength(2);
+    expect([...container.querySelectorAll("span")].filter((s) => s.textContent === "app")).toHaveLength(2);
+    expect(screen.getAllByText("github-actions[bot]")).toHaveLength(2);
+    expect(container.textContent).toContain("J");
   });
 });

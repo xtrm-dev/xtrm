@@ -6,7 +6,9 @@ import { useShell } from "../shell/context.tsx";
 import { Markdown } from "../ui/markdown.tsx";
 import { EmptyState, ErrorState, LoadingState, StatusDot, ago } from "../ui/primitives.tsx";
 import { Fields, InspectorSection } from "../ui/drawer.tsx";
+import { GithubPill } from "../ui/github-pill.tsx";
 import { Icon } from "../ui/icon.tsx";
+import { AuthorInline } from "./identity.tsx";
 import { PullConversation } from "./PullConversation.tsx";
 
 function LinkedIssues({ title, branch, body }: { title: string; branch: string; body: string | null }) {
@@ -61,15 +63,16 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
           <span className="ml-auto">{ago(p.updatedAt)}</span>
         </div>
         <h2 className="text-base leading-snug font-medium text-pretty text-ink">{p.title}</h2>
-        <p className="text-xs text-ink-faint">
-          {p.author} · {p.headBranch} → {p.baseBranch}
+        <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
+          <AuthorInline login={p.author} />
+          <span className="truncate">· {p.headBranch} → {p.baseBranch}</span>
         </p>
       </div>
 
       <InspectorSection title="Overview">
         <Fields
           rows={[
-            ["Author", p.author],
+            ["Author", <AuthorInline key="author" login={p.author} />],
             ["Branch", `${p.headBranch} → ${p.baseBranch}`],
             [
               "Checks",
@@ -102,7 +105,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
       {p.body && (
         <InspectorSection title="Description">
           <div className="rounded-md border border-border-muted px-3 py-2">
-            <Markdown>{p.body}</Markdown>
+            <Markdown html>{p.body}</Markdown>
           </div>
         </InspectorSection>
       )}
@@ -113,7 +116,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
             {p.reviews.map((r) => (
               <li key={r.id} className="flex items-center gap-2 text-sm">
                 <Icon name="comment" size="xs" className="shrink-0 text-ink-faint" />
-                <span className="text-ink">{r.author}</span>
+                <AuthorInline login={r.author} />
                 <span className="text-ink-faint">{reviewLabel(r.state)}</span>
                 {r.submittedAt && (
                   <span className="ml-auto text-xs text-ink-faint tabular" title={new Date(r.submittedAt).toLocaleString()}>
@@ -152,9 +155,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
       </InspectorSection>
 
       <InspectorSection title="Links">
-        <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-accent-ink hover:underline">
-          Open on GitHub <Icon name="external" size="xs" />
-        </a>
+        <GithubPill href={p.url} />
       </InspectorSection>
     </ReferenceActionsProvider>
   );

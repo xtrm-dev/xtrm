@@ -28,6 +28,10 @@
   --x-border-subtle: rgb(15 15 20 / 0.04);
   --x-border: rgb(15 15 20 / 0.11);
   --x-border-strong: rgb(15 15 20 / 0.2);
+  /* GitHub's own button pair: near-black in light, near-white in dark, as on github.com. */
+  --x-github: #24292f;
+  --x-github-hover: #32383f;
+  --x-github-ink: #ffffff;
   --x-accent: #833cf0;
   --x-accent-ink: #6d28d9;
   --x-accent-soft: rgb(131 60 240 / 0.1);
@@ -54,6 +58,9 @@
   --x-border-subtle: rgb(255 255 255 / 0.045);
   --x-border: rgb(255 255 255 / 0.09);
   --x-border-strong: rgb(255 255 255 / 0.16);
+  --x-github: #f0f6fc;
+  --x-github-hover: #ffffff;
+  --x-github-ink: #24292f;
   /* dark surfaces use the accessible light violet role for small text/markers */
   --x-accent: #a979ff;
   --x-accent-ink: #bf9bff;
@@ -83,6 +90,9 @@
   --color-border-subtle: var(--x-border-subtle);
   --color-border: var(--x-border);
   --color-border-strong: var(--x-border-strong);
+  --color-github: var(--x-github);
+  --color-github-hover: var(--x-github-hover);
+  --color-github-ink: var(--x-github-ink);
   --color-accent: var(--x-accent);
   --color-accent-ink: var(--x-accent-ink);
   --color-accent-soft: var(--x-accent-soft);
@@ -234,6 +244,29 @@
     margin: 1rem 0;
     border: 0;
     border-top: 1px solid var(--color-border-muted);
+  }
+  /* GitHub bodies carry their own HTML: pr-lens ships diagrams as <img> inside <details>, with a
+     second SVG for dark. The image scales to the panel because the SVG declares a large width. */
+  .xtrm-prose img {
+    max-width: 100%;
+    height: auto;
+    margin: 0.2rem 0;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-muted);
+    background: var(--color-surface);
+  }
+  .xtrm-prose details {
+    margin: 0 0 0.7rem;
+  }
+  .xtrm-prose details[open] > summary {
+    margin-bottom: 0.4rem;
+  }
+  .xtrm-prose summary {
+    cursor: pointer;
+    color: var(--color-ink-muted);
+  }
+  .xtrm-prose summary:hover {
+    color: var(--color-ink);
   }
   .xtrm-prose table {
     border-collapse: collapse;

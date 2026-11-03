@@ -1,0 +1,58 @@
+import { expect, test, type Page } from "@playwright/test";
+
+// XTRM-697: the Inspector renders GitHub HTML bodies the way GitHub does. pr-lens posts pure HTML
+// with <details> blocks holding a <picture> (light SVG plus a dark <source>), so the diagram must
+// load, both bot comments must appear, and the bot identity must carry the GitHub mark.
+const SVG = (label: string) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="1318" height="220" viewBox="0 0 1318 220"><rect width="1318" height="220" fill="#f4f4f5"/><text x="32" y="128" font-family="monospace" font-size="56" fill="#18181b">${label}</text></svg>`;
+
+async function openPull(page: Page) {
+  await page.goto("/rep/xtrm-dev/xtrm/code/pulls");
+  await page.getByTestId("pull-row").filter({ hasText: "#212" }).click();
+  await expect(page.getByTestId("inspector-drawer")).toBeVisible();
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.route("https://example.invalid/pr-lens-fixture/**", (route) => {
+    const name = route.request().url().split("/").pop() ?? "diagram";
+    return route.fulfill({ status: 200, contentType: "image/svg+xml", body: SVG(name.replace(/\.svg$/, "")) });
+  });
+});
+
+test("the PR drawer renders pr-lens HTML: diagrams, both comments, bot mark and the GitHub pill", async ({ page }) => {
+  await openPull(page);
+  const drawer = page.getByTestId("inspector-drawer");
+  await expect(drawer.locator("h3").filter({ hasText: "Rail keyboard model review package" })).toHaveCount(2);
+
+  const images = drawer.locator("img");
+  await expect(images).toHaveCount(3);
+  // A collapsed <details> hides its diagram, as on GitHub: open it, then let the lazy images load.
+  const details = drawer.locator("details");
+  await expect(details.locator("summary")).toHaveCount(3);
+  await details.nth(1).locator("summary").click();
+  await expect(details.nth(1)).toHaveAttribute("open", "");
+  for (let i = 0; i < 3; i += 1) await images.nth(i).scrollIntoViewIfNeeded();
+  await expect
+    .poll(async () => images.evaluateAll((els) => els.map((e) => (e as HTMLImageElement).naturalWidth > 0)))
+    .toEqual([true, true, true]);
+  // Light theme picks the light source, not `prefers-color-scheme`.
+  await expect(images.first()).toHaveAttribute("src", /rail-light-a\.svg$/);
+
+  // Two comments from the same bot, each with the octocat mark and the app chip.
+  await expect(drawer.getByText("github-actions[bot]")).toHaveCount(2);
+  await expect(drawer.getByText("app", { exact: true })).toHaveCount(2);
+  expect(await drawer.locator("span[aria-hidden='true'] svg").count()).toBeGreaterThanOrEqual(2);
+
+  const pill = drawer.getByTestId("github-pill");
+  await expect(pill).toBeVisible();
+  await expect(pill).toContainText("Open on GitHub");
+  const background = await pill.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(background).toBe("rgb(36, 41, 47)");
+});
+
+test("the diagram follows the app theme, not the OS scheme", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("xtrm.console.theme.v1", "dark"));
+  await openPull(page);
+  const first = page.getByTestId("inspector-drawer").locator("img").first();
+  await expect(first).toHaveAttribute("src", /rail-dark-a\.svg$/);
+});
