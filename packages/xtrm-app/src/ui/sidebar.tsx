@@ -58,7 +58,7 @@ export function SidebarRow({
       className={cx("h-8", selected ? "bg-pressed text-ink" : "text-ink-muted")}
     >
       <Icon name={icon} size="xs" className={selected ? "text-ink" : "text-ink-faint"} />
-      <span className={cx("truncate", deferred && "text-ink-faint")}>{label}</span>
+      <span className={cx("truncate font-medium", deferred && "text-ink-faint")}>{label}</span>
       {status && <StatusDot tone={status.tone} label={status.label} />}
       {count != null && <span className="ml-auto text-xs text-ink-faint tabular group-hover/row:hidden group-focus-within/row:hidden">{count}</span>}
     </Row>
