@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/figtree";
 @import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -73,7 +73,7 @@
 }
 
 @theme inline {
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
 
   --color-deep: var(--x-deep);
@@ -129,7 +129,6 @@
     font-size: var(--text-sm);
     line-height: var(--text-sm--line-height);
     -webkit-font-smoothing: antialiased;
-    font-feature-settings: "ss01", "cv11";
   }
   *,
   ::before,
