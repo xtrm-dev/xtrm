@@ -13,8 +13,10 @@ async function openPull(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.route("https://example.invalid/pr-lens-fixture/**", (route) => {
-    const name = route.request().url().split("/").pop() ?? "diagram";
+  // Diagrams are served by the console backend (the browser cannot load github.com raw URLs on a
+  // private repository), so the same-origin proxy route is what the page requests.
+  await page.route("**/api/github/repo/xtrm-dev/xtrm/raw-svg?**", (route) => {
+    const name = new URL(route.request().url()).searchParams.get("path")?.split("/").pop() ?? "diagram.svg";
     return route.fulfill({ status: 200, contentType: "image/svg+xml", body: SVG(name.replace(/\.svg$/, "")) });
   });
 });
@@ -36,7 +38,7 @@ test("the PR drawer renders pr-lens HTML: diagrams, both comments, bot mark and 
     .poll(async () => images.evaluateAll((els) => els.map((e) => (e as HTMLImageElement).naturalWidth > 0)))
     .toEqual([true, true, true]);
   // Light theme picks the light source, not `prefers-color-scheme`.
-  await expect(images.first()).toHaveAttribute("src", /rail-light-a\.svg$/);
+  await expect(images.first()).toHaveAttribute("src", /raw-svg\?path=.*rail-light-a\.svg&ref=pr-lens$/);
 
   // Two comments from the same bot, each with the octocat mark and the app chip.
   await expect(drawer.getByText("github-actions[bot]")).toHaveCount(2);
@@ -60,5 +62,5 @@ test("the diagram follows the app theme, not the OS scheme", async ({ page }) =>
   await page.addInitScript(() => localStorage.setItem("xtrm.console.theme.v1", "dark"));
   await openPull(page);
   const first = page.getByTestId("inspector-drawer").locator("img").first();
-  await expect(first).toHaveAttribute("src", /rail-dark-a\.svg$/);
+  await expect(first).toHaveAttribute("src", /raw-svg\?path=.*rail-dark-a\.svg&ref=pr-lens$/);
 });
