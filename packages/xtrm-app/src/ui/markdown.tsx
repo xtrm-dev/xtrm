@@ -50,12 +50,29 @@ const num = (value: unknown): number | undefined => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+const GITHUB_RAW = [/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/raw\/([^/]+)\/(.+)$/, /^https?:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/];
+
+/** A diagram links `github.com/<repo>/raw/<ref>/<path>`. The browser cannot load that from another
+ * origin on a private repository: github.com sets its session cookies SameSite=Lax, so the request
+ * arrives unauthenticated and answers 404. The console serves the bytes with its own token instead.
+ * Returns the address unchanged when it is not a repository SVG. */
+export function proxyGithubAsset(src: string): string {
+  for (const pattern of GITHUB_RAW) {
+    const match = pattern.exec(src);
+    if (!match) continue;
+    const [, owner, repo, ref, path] = match;
+    if (!path?.endsWith(".svg")) return src;
+    return `/api/github/repo/${owner}/${repo}/raw-svg?path=${encodeURIComponent(path)}&ref=${encodeURIComponent(ref!)}`;
+  }
+  return src;
+}
+
 /** A body image: follows the app theme when the author supplied a dark counterpart. */
 function GithubImage({ src, darkSrc, alt, width, height }: { src: string | null; darkSrc: string | null; alt: string; width?: number; height?: number }) {
   const theme = useThemeAttribute();
   const chosen = theme === "dark" && darkSrc ? darkSrc : src;
   if (!chosen) return null;
-  return <img src={chosen} alt={alt} width={width} height={height} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="xtrm-prose-image" />;
+  return <img src={proxyGithubAsset(chosen)} alt={alt} width={width} height={height} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="xtrm-prose-image" />;
 }
 
 /** Read-only GitHub-flavoured markdown. Links open in a new tab; issue references render as chips.

@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { Markdown } from "./markdown.tsx";
+import { Markdown, proxyGithubAsset } from "./markdown.tsx";
 
 // Assistant replies keep single newlines (XTRM-615); every other markdown surface keeps GFM soft breaks.
 const lines = (el: HTMLElement) => el.querySelectorAll("br").length;
@@ -92,5 +92,30 @@ describe("Markdown html", () => {
     const { container } = render(<Markdown>{PR_LENS}</Markdown>);
     expect(container.querySelector("details")).toBeNull();
     expect(container.querySelector("img")).toBeNull();
+  });
+});
+
+describe("proxyGithubAsset", () => {
+  it("routes a repository SVG through the console instead of github.com", () => {
+    expect(proxyGithubAsset("https://github.com/o/r/raw/pr-lens/pr/7/abc/diagram-light-1a2b.svg")).toBe(
+      "/api/github/repo/o/r/raw-svg?path=pr%2F7%2Fabc%2Fdiagram-light-1a2b.svg&ref=pr-lens",
+    );
+    expect(proxyGithubAsset("https://raw.githubusercontent.com/o/r/pr-lens/diagram.svg")).toBe("/api/github/repo/o/r/raw-svg?path=diagram.svg&ref=pr-lens");
+  });
+
+  it("leaves other addresses alone", () => {
+    for (const url of [
+      "https://github.com/o/r/raw/pr-lens/notes.md",
+      "https://avatars.githubusercontent.com/u/1?v=4",
+      "https://example.invalid/diagram.svg",
+      "/api/github/repo/o/r/raw-svg?path=a.svg&ref=main",
+    ]) {
+      expect(proxyGithubAsset(url)).toBe(url);
+    }
+  });
+
+  it("renders a comment diagram with the proxied address", () => {
+    const { container } = render(<Markdown html>{'<img src="https://github.com/o/r/raw/pr-lens/pr/7/abc/d.svg" alt="d">'}</Markdown>);
+    expect(container.querySelector("img")!.getAttribute("src")).toBe("/api/github/repo/o/r/raw-svg?path=pr%2F7%2Fabc%2Fd.svg&ref=pr-lens");
   });
 });
