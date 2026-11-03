@@ -98,13 +98,34 @@ function fdFrames(): FrameSource {
   };
 }
 
+// A pipe is non-blocking, so writeSync takes what fits and reports the count. Ignoring
+// that count truncated every answer above the pipe buffer (~140 KiB observed): the tail
+// and its newline were lost, and the caller saw a timeout followed by peer_noise.
+const SLEEP = new Int32Array(new SharedArrayBuffer(4));
+
+function writeAll(fd: number, line: string): void {
+  const payload = Buffer.from(line + "\n", "utf8");
+  let offset = 0;
+  while (offset < payload.length) {
+    try {
+      offset += writeSync(fd, payload, offset, payload.length - offset);
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      // The reader has not drained the pipe yet. Waiting is the whole point of a
+      // synchronous server: a frame either arrives complete or the server fails loudly.
+      if (code !== "EAGAIN" && code !== "EWOULDBLOCK") throw error;
+      Atomics.wait(SLEEP, 0, 0, 2);
+    }
+  }
+}
+
 function fdIO(): ServeIO {
   return {
     write: (line) => {
-      writeSync(1, line + "\n");
+      writeAll(1, line);
     },
     log: (line) => {
-      writeSync(2, line + "\n");
+      writeAll(2, line);
     },
   };
 }

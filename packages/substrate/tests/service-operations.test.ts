@@ -1108,3 +1108,61 @@ describe("identity, refusals and the transport's own edges", () => {
     }
   });
 });
+
+describe("blockers the security pass found", () => {
+  it("delivers a response larger than the pipe buffer, newline included", async () => {
+    const repo = makeRepo("big-response");
+    const db = makeStore(repo, "big");
+    const service = remoteService(db);
+    try {
+      const ctx = await seed(service, repo, makeRepo("big-other"));
+      // ~1 MB: far past the 64 KiB pipe buffer, where a single writeSync takes only
+      // the part that fits and drops the rest together with its newline.
+      const big = "T".repeat(1_000_000);
+      await service.call("issue.setTitle", { issueId: ctx.issueId, title: big });
+      const read = await service.call<Record<string, unknown>>("issue.get", { issueId: ctx.issueId });
+      assert.equal(read["title"], big, "the whole title arrives; a short write truncates it");
+      await service.call("issue.listLinks", {});
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("lets exactly one of two processes enrich a checkpoint (atomic precondition)", async () => {
+    const repo = makeRepo("enrich-race");
+    const db = makeStore(repo, "race");
+    const first = remoteService(db);
+    const second = remoteService(db);
+    try {
+      const ctx = await seed(first, repo, makeRepo("race-other"));
+      const issue = await first.call<{ currentRevision: number; currentContractHash: string }>("issue.get", {
+        issueId: ctx.issueId,
+      });
+      for (const trial of [0, 1, 2, 3, 4]) {
+        const appended = await first.call<{ id: string }>("journal.appendEntry", {
+          issueId: ctx.issueId,
+          input: {
+            kind: "checkpoint",
+            mechanical: {
+              issueId: ctx.issueId,
+              issueRevision: issue.currentRevision,
+              contractHash: issue.currentContractHash,
+            },
+          },
+        });
+        const outcomes = await Promise.allSettled([
+          first.call("journal.enrichEntry", { entryId: appended.id, semantic: { summary: `A-${trial}` } }),
+          second.call("journal.enrichEntry", { entryId: appended.id, semantic: { summary: `B-${trial}` } }),
+        ]);
+        const accepted = outcomes.filter((o) => o.status === "fulfilled");
+        assert.equal(accepted.length, 1, `trial ${trial}: exactly one writer may win, got ${accepted.length}`);
+        const stored = await first.call<Record<string, unknown>>("journal.getEntry", { entryId: appended.id });
+        const winner = accepted[0] as PromiseFulfilledResult<Record<string, unknown>>;
+        assert.deepEqual(stored["semantic"], winner.value["semantic"], `trial ${trial}: the winner's summary is the one stored`);
+      }
+    } finally {
+      await first.close();
+      await second.close();
+    }
+  });
+});

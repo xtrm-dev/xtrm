@@ -494,7 +494,25 @@ export class JournalService {
     assertSemanticCheckpoint(semantic);
     return withTransaction(this.db, () => {
       const current = this.requireEntry(entryId);
-      this.db.prepare("UPDATE issue_journal SET semantic_json = ? WHERE id = ?").run(JSON.stringify(semantic), entryId);
+      if (current.kind !== "checkpoint" && current.kind !== "compaction") {
+        throw new Error(
+          `already inadmissible: journal entry ${entryId} is a ${current.kind}; only a checkpoint or compaction carries a semantic layer`,
+        );
+      }
+      // The precondition is part of the write. A read-then-update let two callers
+      // both see "no summary yet" and overwrite each other (60 of 60 racing trials),
+      // losing the first summary with no copy anywhere.
+      const updated = this.db
+        .prepare(
+          `UPDATE issue_journal SET semantic_json = ?
+            WHERE id = ? AND semantic_json IS NULL AND kind IN ('checkpoint','compaction')`,
+        )
+        .run(JSON.stringify(semantic), entryId);
+      if (Number(updated.changes) === 0) {
+        throw new Error(
+          `already enriched: journal entry ${entryId} carries a summary; the first summary stands and is never overwritten`,
+        );
+      }
       this.issues.appendEvent(current.issueId, "journal.checkpoint_enriched", { entry: entryId, sequence: current.sequence });
       return this.requireEntry(entryId);
     });
