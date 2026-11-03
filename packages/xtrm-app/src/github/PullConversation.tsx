@@ -2,6 +2,7 @@ import type { PullRequestComment, PullRequestReview, PullRequestReviewComment, R
 import { reviewLabel } from "./pr.ts";
 import { Markdown } from "../ui/markdown.tsx";
 import { Icon } from "../ui/icon.tsx";
+import { AuthorAvatar, AuthorName } from "./identity.tsx";
 import { ago } from "../ui/primitives.tsx";
 
 // --- grouping ---------------------------------------------------------------
@@ -87,14 +88,6 @@ export function buildConversation(comments: PullRequestComment[], reviews: PullR
 
 // --- presentation -----------------------------------------------------------
 
-function Avatar({ login }: { login: string }) {
-  return (
-    <span aria-hidden className="flex size-6 shrink-0 items-center justify-center rounded-full bg-control text-xs font-medium text-ink-muted">
-      {(login.slice(0, 1) || "—").toUpperCase()}
-    </span>
-  );
-}
-
 function When({ at, url }: { at: string; url: string | null }) {
   const label = at ? ago(at) : "—";
   const title = at ? new Date(at).toLocaleString() : undefined;
@@ -116,15 +109,15 @@ function Message({ author, at, url, badge, body }: { author: string; at: string;
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex min-w-0 items-center gap-2">
-        <Avatar login={author} />
-        <span className="truncate text-sm text-ink">{author}</span>
+        <AuthorAvatar login={author} />
+        <AuthorName login={author} className="text-sm text-ink" />
         {badge && <span className="shrink-0 rounded-sm border border-border-muted px-1 text-xs text-ink-faint">{badge}</span>}
         <span className="ml-auto">
           <When at={at} url={url} />
         </span>
       </div>
       <div className="rounded-md border border-border-muted px-3 py-2">
-        <Markdown>{body}</Markdown>
+        <Markdown html>{body}</Markdown>
       </div>
     </div>
   );

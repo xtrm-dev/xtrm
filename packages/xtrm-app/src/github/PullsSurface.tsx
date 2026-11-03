@@ -51,7 +51,7 @@ function IssueChips({ pull }: { pull: PullRequestSummary }) {
 
 function PullRow({ pull, selected, onOpen }: { pull: PullRequestSummary; selected: boolean; onOpen: () => void }) {
   return (
-    <Row className="h-11" selected={selected} onActivate={onOpen}>
+    <Row className="h-11" data-testid="pull-row" selected={selected} onActivate={onOpen}>
       <StatusDot tone={pullStateTone(pull.state)} label={pullStateLabel(pull.state, pull.draft)} />
       <div className="flex min-w-0 flex-1 flex-col leading-tight">
         <span className="flex min-w-0 items-baseline gap-2">

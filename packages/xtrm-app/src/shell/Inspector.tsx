@@ -11,6 +11,7 @@ import { DevicePanel } from "../github/auth.tsx";
 import { useCanWrite } from "../issues/actions.ts";
 import { IssueView } from "../issues/IssueView.tsx";
 import { Drawer, Fields, InspectorSection } from "../ui/drawer.tsx";
+import { GithubPill } from "../ui/github-pill.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { ContentPanel, EmptyState, ErrorState, IconButton, LoadingState, Row, ago } from "../ui/primitives.tsx";
@@ -178,9 +179,7 @@ function ActivityPanel({ refValue, follow }: { refValue: string; follow: boolean
       )}
       {e.url && (
         <InspectorSection title="Links">
-          <a href={e.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-accent-ink hover:underline">
-            Open on GitHub <Icon name="external" size="xs" />
-          </a>
+          <GithubPill href={e.url} />
         </InspectorSection>
       )}
     </>

@@ -3,9 +3,10 @@ import { parseGithubIssueRef, issueStateLabel, issueStateTone } from "./issues.t
 import { ReferenceActionsProvider } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Fields, InspectorSection } from "../ui/drawer.tsx";
-import { Icon } from "../ui/icon.tsx";
+import { GithubPill } from "../ui/github-pill.tsx";
 import { Markdown } from "../ui/markdown.tsx";
 import { EmptyState, ErrorState, LoadingState, StatusDot, ago } from "../ui/primitives.tsx";
+import { AuthorInline } from "./identity.tsx";
 
 /** GitHub issue drawer: the repository's own tracker item, never an XTRM work contract. */
 export function GithubIssuePanel({ refValue, follow }: { refValue: string; follow: boolean }) {
@@ -29,15 +30,16 @@ export function GithubIssuePanel({ refValue, follow }: { refValue: string; follo
           <span className="ml-auto">{ago(i.updatedAt)}</span>
         </div>
         <h2 className="text-base leading-snug font-medium text-pretty text-ink">{i.title}</h2>
-        <p className="text-xs text-ink-faint">
-          {i.author} · {parsed.fullName}
+        <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
+          <AuthorInline login={i.author} />
+          <span className="truncate">· {parsed.fullName}</span>
         </p>
       </div>
 
       <InspectorSection title="Overview">
         <Fields
           rows={[
-            ["Author", i.author],
+            ["Author", <AuthorInline key="author" login={i.author} />],
             ["State", issueStateLabel(i.state)],
             ["Labels", i.labels.length ? <span className="flex flex-wrap gap-1">{i.labels.map((l) => <span key={l} className="rounded-sm bg-control px-1.5 py-px text-xs text-ink-muted">{l}</span>)}</span> : <span className="text-ink-faint">None</span>],
             ["Comments", <span className="tabular">{i.comments}</span>],
@@ -50,7 +52,7 @@ export function GithubIssuePanel({ refValue, follow }: { refValue: string; follo
       {i.body && (
         <InspectorSection title="Description">
           <div className="rounded-md border border-border-muted px-3 py-2">
-            <Markdown>{i.body}</Markdown>
+            <Markdown html>{i.body}</Markdown>
           </div>
         </InspectorSection>
       )}
@@ -62,9 +64,7 @@ export function GithubIssuePanel({ refValue, follow }: { refValue: string; follo
       </InspectorSection>
 
       <InspectorSection title="Links">
-        <a href={i.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-accent-ink hover:underline">
-          Open on GitHub <Icon name="external" size="xs" />
-        </a>
+        <GithubPill href={i.url} />
       </InspectorSection>
     </ReferenceActionsProvider>
   );
