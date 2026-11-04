@@ -44,20 +44,22 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --x-deep: #141416;
-  --x-sidebar: #212124;
-  --x-surface: #1a1a1c;
-  --x-raised: #242427;
-  --x-control: #2b2b2f;
-  --x-hover: rgb(255 255 255 / 0.05);
-  --x-pressed: rgb(255 255 255 / 0.1);
+  /* Dark ladder: the sidebar and the raised plane share #1e1e1e, so separation comes from the
+     hairlines below rather than from a fourth background step. */
+  --x-deep: #0d0d0d;
+  --x-sidebar: #1e1e1e;
+  --x-surface: #151515;
+  --x-raised: #1e1e1e;
+  --x-control: #262626;
+  --x-hover: rgb(255 255 255 / 0.03);
+  --x-pressed: rgb(255 255 255 / 0.06);
   --x-ink: #ececef;
   --x-ink-muted: #a0a0a8;
   --x-ink-faint: #6a6a72;
-  --x-border-muted: rgb(255 255 255 / 0.06);
-  --x-border-subtle: rgb(255 255 255 / 0.045);
-  --x-border: rgb(255 255 255 / 0.09);
-  --x-border-strong: rgb(255 255 255 / 0.16);
+  --x-border-muted: rgb(255 255 255 / 0.08);
+  --x-border-subtle: rgb(255 255 255 / 0.06);
+  --x-border: rgb(255 255 255 / 0.12);
+  --x-border-strong: rgb(255 255 255 / 0.18);
   --x-github: #f0f6fc;
   --x-github-hover: #ffffff;
   --x-github-ink: #24292f;
@@ -69,7 +71,7 @@
   --x-success: #5ccb8a;
   --x-diff-add: #5ccb8a;
   --x-diff-del: #f07171;
-  --x-shadow-float: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.07);
+  --x-shadow-float: 0 18px 44px -12px rgb(0 0 0 / 0.72), 0 0 0 1px rgb(255 255 255 / 0.08);
 }
 
 @theme inline {
