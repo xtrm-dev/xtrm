@@ -59,7 +59,7 @@ export function CommandMenu({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/20 dark:bg-black/40" />
+        <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/20 dark:bg-black/50" />
         <Dialog.Popup
           aria-label="Search and commands"
           className="fixed top-[14vh] left-1/2 z-50 w-[min(640px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-lg bg-raised shadow-float outline-none"
