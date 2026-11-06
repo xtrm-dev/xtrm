@@ -41,6 +41,7 @@ import {
 } from "./handlers.ts";
 import type { SemanticCheckpoint } from "../../src/domain/journal.ts";
 import { SessionBacking, openBacking, type Backing, type StoreCall } from "./backing.ts";
+import { isTransportFailure, transportCode } from "../../src/service/operations.ts";
 import {
   noopFeedback,
   successFeedback,
@@ -188,16 +189,32 @@ export default function registerSubstrate(pi: ExtensionAPI, options: { openBacki
   for (const t of tools) pi.registerTool(t);
 
   // A session bound to an Issue may mutate only under its own live claim
-  // (holder + activation). Fail-open on unreadable state so a corrupt gate
-  // never bricks Pi.
+  // (holder + activation).
   pi.on("tool_call", async (event, ctx) => {
     if (!isToolCallEventType("edit", event) && !isToolCallEventType("write", event)) return;
     try {
       const sessionId = ctx?.sessionManager?.getSessionId?.();
       const decision = await withBacking((backing) => decidePiEditCall(backing, bindings, { sessionId: sessionId ?? undefined, workspace: ctx?.cwd }));
       if (!decision.allow) return { block: true, reason: decision.reason ?? "no live claim" };
-    } catch {
-      return;
+    } catch (error) {
+      // A local failure keeps today's fail-open: a corrupt gate must not brick Pi.
+      // A configured remote that cannot be reached is a different situation —
+      // enforcement lives on the other machine, so allowing the edit would mean
+      // no claim check at all, while the tools in the same session already fail
+      // closed. Block, and name the transport code so an operator can act (XTRM-712).
+      if (!isTransportFailure(error)) return;
+      const code = transportCode(error) ?? "connection_lost";
+      const detail = error instanceof Error ? error.message : String(error);
+      // A timeout is not the same news as a dead connection: the check may still
+      // be running on the other machine, so the reason must not claim it did not.
+      const outcome =
+        code === "timeout"
+          ? "The edit was not applied, and no claim was confirmed: the check may still be running on the store-owning machine."
+          : "The edit was not applied and no claim was checked.";
+      return {
+        block: true,
+        reason: `Substrate is remote and the store did not answer reliably (${code}): ${detail}. ${outcome} Restore the connection, or run \`sb remote status\` on the store-owning machine.`,
+      };
     }
   });
 

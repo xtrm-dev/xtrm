@@ -113,6 +113,18 @@ describe("a dropped connection", () => {
     assert.equal(opened.length, 2, "one retry, not a loop");
   });
 
+  it("does not retry a timeout, because the call may still be running there", async () => {
+    const opened: Fake[] = [];
+    const timedOut = Object.assign(new Error("timed out"), { code: "timeout" });
+    const session = new SessionBacking(() => {
+      const f = fake(() => timedOut);
+      opened.push(f);
+      return f.backing;
+    });
+    await assert.rejects(() => session.call("issue.get", { ref: "XTRM-712" }), /timed out/);
+    assert.equal(opened.length, 1, "a timeout is not a retry trigger, even for a read");
+  });
+
   it("does not retry a failure that is not a lost connection", async () => {
     const opened: Fake[] = [];
     const refused = Object.assign(new Error("ref not found"), { code: "not_found" });
