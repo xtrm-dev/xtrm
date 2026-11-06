@@ -132,4 +132,66 @@ describe("the MCP launcher picks the transport from the configuration", () => {
     assert.equal(result.stdout.includes("should not run"), false);
     assert.equal(fx.shimArgv(), "", "ssh is never spawned without a remote");
   });
+
+  it("runs the script from the installed package, not from the store checkout (review HIGH)", () => {
+    // A server may hold a checkout of a DIFFERENT repository — core has no
+    // packages/substrate. The script ships with the installed package, so the
+    // checkout must only resolve the repository, never supply the script path.
+    const dir = mkdtempSync(join(tmpdir(), "mcp-script-dir-"));
+    const bin = join(dir, "bin");
+    const pkg = join(dir, "pkg");
+    const scripts = join(pkg, "plugin", "substrate", "scripts");
+    const checkout = join(dir, "checkout-of-another-repo");
+    for (const d of [bin, scripts, join(pkg, "bin"), checkout]) spawnSync("mkdir", ["-p", d]);
+    writeFileSync(join(pkg, "bin", "sb"), "#!/bin/sh\n");
+    const ready = `@@substrate-mcp-ready {"version":"${VERSION}"}`;
+    writeFileSync(
+      join(scripts, "substrate-mcp.mjs"),
+      `process.stdout.write(${JSON.stringify(ready + "\n")});\nprocess.stdout.write('{"jsonrpc":"2.0","id":1,"result":{}}\\n');\n`,
+    );
+    // The shim runs the far-side command locally, as a real login shell would.
+    writeFileSync(join(bin, "ssh"), '#!/bin/sh\nfor a in "$@"; do last="$a"; done\nexec sh -c "$last"\n');
+    chmodSync(join(bin, "ssh"), 0o755);
+    const configPath = join(dir, "substrate.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        remote: "ssh:probe",
+        remoteSb: join(pkg, "bin", "sb"),
+        checkouts: { "probe github.com/xtrm-dev/xtrm": { root: checkout } },
+      }),
+    );
+    const result = spawnSync(process.execPath, [LAUNCHER], {
+      encoding: "utf8",
+      timeout: 20000,
+      input: "",
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+        SUBSTRATE_REMOTE_CONFIG: configPath,
+        SUBSTRATE_MCP_SERVER_ROOT: undefined,
+      },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /"id":1/, "the installed package's script served the session");
+    assert.doesNotMatch(result.stderr, /Cannot find module|MODULE_NOT_FOUND/);
+  });
+
+  it("fails with a named code when the handshake is not JSON", () => {
+    const fx = fixture(`printf '@@substrate-mcp-ready not-json\n'\nexit 0`);
+    const result = fx.run();
+    assert.equal(result.status, 78);
+    assert.match(result.stderr, /protocol_mismatch/);
+    assert.doesNotMatch(result.stderr, /SyntaxError|at JSON\.parse/);
+    assert.equal(result.stdout, "");
+  });
+
+  it("refuses to serve when the far side could not parse the identity", () => {
+    const fx = fixture(`printf '@@substrate-mcp-ready {"version":"${VERSION}","identity":"unparsed"}\n'`);
+    const result = fx.run();
+    assert.equal(result.status, 78);
+    assert.match(result.stderr, /protocol_mismatch/);
+    assert.match(result.stderr, /identity/);
+    assert.equal(result.stdout, "");
+  });
 });

@@ -99,4 +99,13 @@ describe("hook entries follow the configured transport", () => {
     assert.equal(fx.argv(), "");
     assert.doesNotMatch(result.stdout, /from the server|must not run/);
   });
+
+  it("blocks when the far side's handshake is not JSON", () => {
+    const fx = fixture("printf '@@substrate-hook-ready not-json\\n'");
+    const result = fx.run("edit-gate.mjs", JSON.stringify({ tool_name: "Edit", tool_input: {}, cwd: "/pc/worktree" }));
+    const decision = JSON.parse(result.stdout.trim());
+    assert.equal(decision.decision, "block");
+    assert.match(decision.reason, /protocol_mismatch/);
+    assert.doesNotMatch(result.stdout, /SyntaxError/);
+  });
 });

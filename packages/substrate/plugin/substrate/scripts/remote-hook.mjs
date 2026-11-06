@@ -12,7 +12,18 @@
 // never a local answer.
 
 import { spawn } from "node:child_process";
-import { applyIdentityArguments, identityArgs, remoteSelection, serverRoot, shellQuote, sshArgs } from "./remote-config.mjs";
+import {
+  applyIdentityArguments,
+  handshakeFailure,
+  identityArgs,
+  parseHandshake,
+  remoteCommand,
+  remoteScriptCommand,
+  remoteSelection,
+  serverRoot,
+  shellQuote,
+  sshArgs,
+} from "./remote-config.mjs";
 
 const READY = "@@substrate-hook-ready ";
 const LOCAL_MARKER = "SUBSTRATE_MCP_LOCAL=1";
@@ -37,7 +48,14 @@ export function applyServerArguments() {
   const sentinelAt = process.argv.indexOf("--sentinel");
   const sentinel = sentinelAt < 0 ? READY : (process.argv[sentinelAt + 1] ?? READY);
   const version = process.argv[process.argv.indexOf("--version") + 1] ?? "unknown";
-  process.stdout.write(`${sentinel}${JSON.stringify({ version, participant: applied.holder, workspace: workspace || null })}\n`);
+  process.stdout.write(
+    `${sentinel}${JSON.stringify({
+      version,
+      participant: applied.holder,
+      workspace: workspace || null,
+      ...(applied.parsed ? {} : { identity: "unparsed" }),
+    })}\n`,
+  );
   return true;
 }
 
@@ -53,15 +71,16 @@ export async function proxyHook(scriptPath) {
   if (Array.isArray(selection.error)) throw new RemoteUnavailable(selection.error[0], selection.error[1]);
   const server = serverRoot(selection);
   if (Array.isArray(server.error)) throw new RemoteUnavailable(server.error[0], server.error[1]);
-  const remoteScript = `${server.root}/packages/substrate/plugin/substrate/scripts/${scriptPath}`;
-  const command = [
-    "cd", shellQuote(server.root), "&&",
-    LOCAL_MARKER,
-    ...(server.home ? [`SUBSTRATE_HOME=${shellQuote(server.home)}`] : []),
-    "node", shellQuote(remoteScript),
-    SERVER_FLAG, "--sentinel", shellQuote(READY), "--version", shellQuote(selection.version),
-    ...identityArgs(process.cwd()),
-  ].join(" ");
+  // Same rule as the MCP launcher: the script belongs to the installed package,
+  // never to the checkout that only resolves the repository.
+  const { prelude, script } = remoteScriptCommand(selection, scriptPath);
+  const command = remoteCommand(
+    { ...selection, home: server.home },
+    server.root,
+    script,
+    prelude,
+    [SERVER_FLAG, "--sentinel", shellQuote(READY), "--version", shellQuote(selection.version), ...identityArgs(process.cwd())],
+  );
 
   const child = spawn("ssh", sshArgs(selection.host, command), { stdio: ["pipe", "pipe", "pipe"] });
   let settled = false;
@@ -85,9 +104,10 @@ export async function proxyHook(scriptPath) {
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
         if (line.startsWith(READY.trim())) {
-          const handshake = JSON.parse(line.slice(READY.trim().length).trim() || "{}");
-          if (handshake.version !== selection.version) {
-            reject(new RemoteUnavailable("version_mismatch", `the server runs substrate ${handshake.version} and this plugin is ${selection.version}; install the matching version on ${selection.host}`));
+          const handshake = parseHandshake(line, READY.trim());
+          const problem = handshakeFailure(handshake, selection.version, selection.host);
+          if (problem !== null) {
+            reject(new RemoteUnavailable(problem[0], problem[1]));
             return;
           }
           ready = true;

@@ -22,8 +22,12 @@ import { spawn } from "node:child_process";
 import { resolveSubstrate } from "./resolve-substrate.mjs";
 import {
   applyIdentityArguments,
+  handshakeFailure,
   identityArgs,
+  parseHandshake,
   pluginVersion,
+  remoteCommand,
+  remoteScriptCommand,
   remoteSelection,
   serverRoot,
   shellQuote,
@@ -59,7 +63,14 @@ function applyRemoteArguments() {
   const applied = applyIdentityArguments();
   process.env["SUBSTRATE_MCP_REMOTE"] = "1";
   const version = pluginVersion(import.meta.url);
-  process.stdout.write(`${sentinel}${JSON.stringify({ version, participant: applied.holder, workspace: applied.workspace || null })}\n`);
+  process.stdout.write(
+    `${sentinel}${JSON.stringify({
+      version,
+      participant: applied.holder,
+      workspace: applied.workspace || null,
+      ...(applied.parsed ? {} : { identity: "unparsed" }),
+    })}\n`,
+  );
   return applied;
 }
 
@@ -70,16 +81,16 @@ function proxy(selection) {
     fail(server.error[0], server.error[1]);
     return;
   }
-  const script = `${server.root}/packages/substrate/plugin/substrate/scripts/substrate-mcp.mjs`;
-  const command = [
-    "cd", shellQuote(server.root), "&&",
-    LOCAL_MARKER,
-    ...(server.home ? [`SUBSTRATE_HOME=${shellQuote(server.home)}`] : []),
-    "node", shellQuote(script),
-    "--remote-ready", shellQuote(READY),
-    "--version", shellQuote(selection.version),
-    ...identityArgs(process.cwd()),
-  ].join(" ");
+  // The script ships with the installed package, not with the checkout: the
+  // checkout may be a different repository entirely (review, HIGH).
+  const { prelude, script } = remoteScriptCommand(selection, "substrate-mcp.mjs");
+  const command = remoteCommand(
+    { ...selection, home: server.home },
+    server.root,
+    script,
+    prelude,
+    ["--remote-ready", /* sentinel */ shellQuote(READY), "--version", shellQuote(selection.version), ...identityArgs(process.cwd())],
+  );
 
   child = spawn("ssh", sshArgs(selection.host, command), { stdio: ["pipe", "pipe", "pipe"] });
   child.on("error", (error) => fail("spawn_failed", `cannot run ssh: ${error.message}`));
@@ -106,12 +117,12 @@ function proxy(selection) {
       const line = buffer.slice(0, newline);
       buffer = buffer.slice(newline + 1);
       if (line.startsWith(prefix)) {
-        const handshake = JSON.parse(line.slice(prefix.length).trim() || "{}");
-        if (handshake.version !== selection.version) {
-          fail(
-            "version_mismatch",
-            `the server runs substrate ${handshake.version} and this plugin is ${selection.version}; install the matching version on ${selection.host}`,
-          );
+        // A sentinel that is not JSON is a protocol failure with a name, never a
+        // stack trace in the middle of an MCP session.
+        const handshake = parseHandshake(line, prefix);
+        const problem = handshakeFailure(handshake, selection.version, selection.host);
+        if (problem !== null) {
+          fail(problem[0], problem[1]);
           return;
         }
         ready = true;
