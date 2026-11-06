@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.2.5] - 2026-11-06
+
 ### Added
 
 - `sb serve --stdio`, the typed service for in-process consumers (XTRM-690, ADR-008 item 2). Newline-delimited JSON frames on stdout: `hello` first (protocol number, version, sorted capability list), then 60 named operations over issue, gate, store, journal, provenance, resume and authority. Structured operations only — no SQL, exec or query-expression verb, every argument validated, unknown operations refused by name. `authority.record`, `authority.remove` and `authority.list` are the only operations that name the `activations` table, with the columns the shipped specialists SessionStart reader already reads. The client (`createServiceClient`, `spawnLink`, `openSshService`) speaks the same protocol over a child process — `ssh -T … sb serve --stdio` for a server-owned store — and `createLocalService` runs the identical operation table in-process, so a consumer stays local when `substrate.remote` is unset. A server that does not speak the protocol is named as such, not reported as a timeout — and each transport failure has its own code (`not_installed`, `spawn_failed`, `connection_lost`, `protocol_mismatch`, `peer_noise`). When `substrate.remote` is set, a consumer fails closed and never substitutes the local store; local behaviour applies only when it is unset. `authority.list` with `{"activeOnly": true}` runs the SessionStart reader's own query so a remote client sees the rows that reader sees, and the authority states are exactly the ten the specialists host writes, read from its own union in a test. Identity travels in the operation arguments, resolved from the client's environment, so a remote write is attributed to the same actor as a local one. `journal.enrichEntry` refuses anything except a checkpoint with no semantic layer; `issue.appendEvent` accepts only the event a client has a reason to raise. A transport end is reported once, a requested timeout below the remaining budget wins, and a line that never ends is dropped and reported instead of buffered.
@@ -24,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `journal.enrichEntry` is exposed, and refuses anything but a checkpoint or compaction with no semantic layer: the precondition is part of the write, so two callers racing on one entry produce exactly one winner.
 - Numeric arguments are bounded; identity in a service session comes from the frame, never from the server's environment.
 - `localOrRemote()` reads the remote configuration, not only `SUBSTRATE_REMOTE`, and fails closed when a configured remote is unusable.
+
+---
 
 ---
 
