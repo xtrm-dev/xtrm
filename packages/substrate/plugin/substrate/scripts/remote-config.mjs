@@ -166,7 +166,11 @@ export function remoteCommand(selection, checkout, script, prelude, argv) {
   const segments = [`cd ${shellQuote(checkout)}`, ...prelude];
   const env = ["SUBSTRATE_MCP_LOCAL=1"];
   if (selection.home) env.push(`SUBSTRATE_HOME=${shellQuote(selection.home)}`);
-  segments.push(`${env.join(" ")} node ${script}${argv.length > 0 ? ` ${argv.join(" ")}` : ""}`);
+  // Every argument is quoted here, once: the identity is JSON, and an unquoted
+  // argument loses its quotes to the remote shell, which turned a valid identity
+  // into an unparsable one.
+  const quoted = argv.map(shellQuote).join(" ");
+  segments.push(`${env.join(" ")} node ${script}${quoted === "" ? "" : ` ${quoted}`}`);
   return segments.join(" && ");
 }
 

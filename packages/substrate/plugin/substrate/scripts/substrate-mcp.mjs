@@ -89,7 +89,7 @@ function proxy(selection) {
     server.root,
     script,
     prelude,
-    ["--remote-ready", /* sentinel */ shellQuote(READY), "--version", shellQuote(selection.version), ...identityArgs(process.cwd())],
+    ["--remote-ready", READY, "--version", selection.version, ...identityArgs(process.cwd())],
   );
 
   child = spawn("ssh", sshArgs(selection.host, command), { stdio: ["pipe", "pipe", "pipe"] });

@@ -225,4 +225,53 @@ describe("the MCP launcher picks the transport from the configuration", () => {
     assert.match(result.stderr, /not_installed/);
     assert.equal(result.stdout, "");
   });
+
+  it("passes the identity as JSON that survives the remote shell", () => {
+    // The identity is JSON; unquoted it loses its quotes to the remote shell and
+    // the far side cannot parse it — which is how identity vanished silently in
+    // a live run. This fixture runs the far-side command through a real shell.
+    const dir = mkdtempSync(join(tmpdir(), "mcp-identity-quote-"));
+    const bin = join(dir, "bin");
+    const scripts = join(dir, "pkg", "plugin", "substrate", "scripts");
+    const checkout = join(dir, "checkout");
+    for (const d of [bin, scripts, join(dir, "pkg", "bin"), checkout]) spawnSync("mkdir", ["-p", d]);
+    writeFileSync(join(dir, "pkg", "bin", "sb"), "#!/bin/sh\n");
+    writeFileSync(
+      join(scripts, "substrate-mcp.mjs"),
+      [
+        "import { writeFileSync as fsWriteFileSync } from 'node:fs';",
+        "const at = process.argv.indexOf('--identity');",
+        "let participant = null;",
+        "try { participant = JSON.parse(process.argv[at + 1]).SUBSTRATE_HOLDER; } catch { participant = 'unparsable'; }",
+        "fsWriteFileSync(" + JSON.stringify(join(dir, "participant")) + ", String(participant));",
+        "process.stdout.write('@@substrate-mcp-ready ' + JSON.stringify({ version: " + JSON.stringify(VERSION) + " }) + '\\n');",
+      ].join("\n"),
+    );
+    writeFileSync(join(bin, "ssh"), '#!/bin/sh\nfor a in "$@"; do last="$a"; done\nexec sh -c "$last"\n');
+    chmodSync(join(bin, "ssh"), 0o755);
+    const configPath = join(dir, "substrate.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        remote: "ssh:probe",
+        remoteSb: join(dir, "pkg", "bin", "sb"),
+        checkouts: { "probe github.com/xtrm-dev/xtrm": { root: checkout } },
+      }),
+    );
+    const result = spawnSync(process.execPath, [LAUNCHER], {
+      encoding: "utf8",
+      timeout: 20000,
+      input: "",
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+        SUBSTRATE_REMOTE_CONFIG: configPath,
+        SUBSTRATE_MCP_SERVER_ROOT: undefined,
+        SUBSTRATE_HOLDER: "pc-holder",
+        SUBSTRATE_ACTIVATION_ID: "",
+      },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readFileSync(join(dir, "participant"), "utf8"), "pc-holder", "the far side parsed the identity JSON");
+  });
 });

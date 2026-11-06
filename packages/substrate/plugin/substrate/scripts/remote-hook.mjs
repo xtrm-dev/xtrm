@@ -79,7 +79,7 @@ export async function proxyHook(scriptPath) {
     server.root,
     script,
     prelude,
-    [SERVER_FLAG, "--sentinel", shellQuote(READY), "--version", shellQuote(selection.version), ...identityArgs(process.cwd())],
+    [SERVER_FLAG, "--sentinel", READY, "--version", selection.version, ...identityArgs(process.cwd())],
   );
 
   const child = spawn("ssh", sshArgs(selection.host, command), { stdio: ["pipe", "pipe", "pipe"] });
