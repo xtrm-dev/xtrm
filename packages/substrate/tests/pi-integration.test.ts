@@ -1,15 +1,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
+import { ProvenanceService } from "../src/service/provenance-service.ts";
+import { openBacking, type Backing } from "../integrations/pi/backing.ts";
 import {
   SessionBindings,
-  openServices,
   resumeForSession,
   runBeforeCompact,
   toolIssueClaim,
@@ -25,15 +28,28 @@ import {
 import { discoverIssueRef } from "../integrations/claude-code/runtime.ts";
 import { contract } from "./helpers.ts";
 
+// A command the ssh shim below runs instead of a login: the same binary the
+// repository ships, pointed at a scratch store that stands in for a server's.
+const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "cli", "sb.ts");
+
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), "substrate-pi-"));
   const dbPath = join(dir, "state.db");
-  const svc = openServices(dbPath);
-  svc.issues.createProject({ id: "prj_pi", prefix: "PI", name: "pi" });
-  return { dir, dbPath, svc };
+  // Seeding stays on the concrete services: the handlers are what moves to the
+  // typed service, and a seeding helper that went through it would test itself.
+  const db = openSubstrate(dbPath);
+  const issues = new IssueService(db);
+  const journal = new JournalService(db, issues);
+  const resume = new ResumeService(db, issues, journal);
+  const provenance = new ProvenanceService(db, issues, journal);
+  issues.createProject({ id: "prj_pi", prefix: "PI", name: "pi" });
+  const svc = { db, issues, journal, resume, provenance, close: () => db.close() };
+  // SUBSTRATE_DB outranks a remote, so the handlers always reach this file.
+  const backing: Backing = openBacking({ env: { ...process.env, SUBSTRATE_DB: dbPath } });
+  return { dir, dbPath, svc, backing };
 }
 
-function readyIssue(svc: ReturnType<typeof openServices>, title = "Pi work"): string {
+function readyIssue(svc: { issues: IssueService }, title = "Pi work"): string {
   const issue = svc.issues.createIssue({ projectId: "prj_pi", title, kind: "task", contract: contract(), scrutiny: "LOW", authoredBy: "test" });
   svc.issues.attestReadiness(issue.id, { outcome: "ready", policy: "default", attestedBy: "test" });
   return issue.id;
@@ -41,7 +57,7 @@ function readyIssue(svc: ReturnType<typeof openServices>, title = "Pi work"): st
 
 describe("tool surface over the typed service", () => {
   it("session-only journal paths preserve ambient identity and explicit absence (XTRM-435)", async () => {
-    const { svc } = setup();
+    const { svc, backing } = setup();
     const keys = ["XTRM_SESSION_ID", "XTRM_SESSION_NAME", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"];
     const prior = keys.map((key) => process.env[key]);
     try {
@@ -55,8 +71,8 @@ describe("tool surface over the typed service", () => {
           delete process.env["SUBSTRATE_HOLDER"];
           delete process.env["SUBSTRATE_ACTIVATION_ID"];
         }
-        const append = toolJournalAppend(svc, { ref: id, kind: "finding", sessionId: "pi-session" });
-        const checkpoint = await toolJournalCheckpoint(svc, { ref: id, sessionId: "pi-session" });
+        const append = await toolJournalAppend(backing, { ref: id, kind: "finding", sessionId: "pi-session" });
+        const checkpoint = await toolJournalCheckpoint(backing, { ref: id, sessionId: "pi-session" });
         for (const entryId of [append.entryId, checkpoint.entryId]) {
           const row = svc.db.prepare("SELECT participant_id, activation_id, execution_context_json FROM issue_journal WHERE id = ?").get(entryId as string) as {
             participant_id: string | null; activation_id: string | null; execution_context_json: string;
@@ -69,12 +85,13 @@ describe("tool surface over the typed service", () => {
     } finally {
       keys.forEach((key, i) => { if (prior[i] === undefined) delete process.env[key]; else process.env[key] = prior[i]; });
       svc.close();
+      await backing.close();
     }
   });
 
   for (const facet of ["specialist", "coordinator"] as const) {
-    it(`preserves trusted ${facet} while filling unstated activation (XTRM-435)`, () => {
-      const { svc } = setup();
+    it(`preserves trusted ${facet} while filling unstated activation (XTRM-435)`, async () => {
+      const { svc, backing } = setup();
       const keys = ["XTRM_SESSION_ID", "XTRM_SESSION_NAME", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"];
       const prior = keys.map((key) => process.env[key]);
       try {
@@ -85,7 +102,7 @@ describe("tool surface over the typed service", () => {
           ? { specialist: { name: "probe" } }
           : { coordinator: { participantId: "parent" } };
         for (const activationId of [undefined, "act:abcdef12-345"]) {
-          const appended = toolJournalAppend(svc, { ref: id, kind: "finding", sessionId: "pi-session", activationId, executionContext: base });
+          const appended = await toolJournalAppend(backing, { ref: id, kind: "finding", sessionId: "pi-session", activationId, executionContext: base });
           const raw = svc.db.prepare("SELECT activation_id, execution_context_json FROM issue_journal WHERE id = ?").get(appended.entryId as string) as { activation_id: string; execution_context_json: string };
           const ctx = JSON.parse(raw.execution_context_json);
           assert.equal(raw.activation_id, activationId ?? "act:23b2212a-c44");
@@ -93,7 +110,7 @@ describe("tool surface over the typed service", () => {
           else assert.deepEqual(ctx.coordinator, { participantId: "parent" });
         }
         const before = svc.journal.listEntries(id).length;
-        assert.throws(() => toolJournalAppend(svc, {
+        await assert.rejects(toolJournalAppend(backing, {
           ref: id, kind: "finding", sessionId: "pi-session", activationId: "act:abcdef12-345",
           executionContext: { specialist: { activationId: "act:23b2212a-c44" } },
         }));
@@ -101,47 +118,53 @@ describe("tool surface over the typed service", () => {
       } finally {
         keys.forEach((key, i) => { if (prior[i] === undefined) delete process.env[key]; else process.env[key] = prior[i]; });
         svc.close();
+        await backing.close();
       }
     });
   }
 
-  it("get/search/claim/update/append/resume/trace round-trip without SQL in the caller", () => {
-    const { svc } = setup();
+  it("get/search/claim/update/append/resume/trace round-trip without SQL in the caller", async () => {
+    const { svc, backing } = setup();
     try {
       const id = readyIssue(svc);
       const bindings = new SessionBindings();
-      const got = toolIssueGet(svc, { ref: "PI-1" });
+      const got = await toolIssueGet(backing, { ref: "PI-1" });
       assert.equal(got["humanRef"], "PI-1");
       assert.equal(got["dispatchable"], true);
-      const found = toolIssueSearch(svc, { project: "prj_pi", query: "pi work" });
+      const found = await toolIssueSearch(backing, { project: "prj_pi", query: "pi work" });
       assert.equal(found.length, 1);
-      const claim = toolIssueClaim(svc, bindings, { ref: id, holder: "pi-holder", sessionId: "sess-1" });
+      const claim = await toolIssueClaim(backing, bindings, { ref: id, holder: "pi-holder", sessionId: "sess-1" });
       assert.equal(claim["holder"], "pi-holder");
       assert.equal(bindings.boundRef("sess-1"), id);
-      const updated = toolIssueUpdate(svc, { ref: "PI-1", contract: { ...contract(), problem: "v2" } });
+      const updated = await toolIssueUpdate(backing, { ref: "PI-1", contract: { ...contract(), problem: "v2" } });
       assert.equal(updated["revisionCreated"], true);
-      const appended = toolJournalAppend(svc, { ref: "PI-1", kind: "finding", sessionId: "sess-1" });
+      const appended = await toolJournalAppend(backing, { ref: "PI-1", kind: "finding", sessionId: "sess-1" });
       assert.equal(appended["kind"], "finding");
-      const capsule = toolIssueResume(svc, { ref: "PI-1" });
+      const capsule = await toolIssueResume(backing, { ref: "PI-1" });
       assert.match(capsule, /PI-1/);
-      const trace = toolProvenanceTrace(svc, { ref: "PI-1" });
+      const trace = (await toolProvenanceTrace(backing, { ref: "PI-1" })) as Record<string, unknown>;
       assert.equal(trace.revision, 2);
       assert.ok(Array.isArray(trace.bindings));
       assert.ok(Array.isArray(trace.receipts));
     } finally {
       svc.close();
+      await backing.close();
     }
   });
 
-  it("Pi provenance is the canonical receipt/artifact trace", () => {
-    const { dir, svc } = setup();
+  it("Pi provenance is the canonical receipt/artifact trace", async () => {
+    const { dir, svc, backing } = setup();
     try {
       const id = readyIssue(svc, "Receipt work");
       svc.issues.claimIssue(id, "pi-holder");
       const binding = svc.provenance.dispatch(id, { workspace: dir, participantId: "pi-holder" });
       const receipt = svc.provenance.allocateReceipt(binding.id);
       svc.provenance.bindCommit(receipt.id, "a".repeat(40));
-      const trace = toolProvenanceTrace(svc, { ref: "PI-1" });
+      const trace = (await toolProvenanceTrace(backing, { ref: "PI-1" })) as {
+        bindings: Array<{ id: string }>;
+        receipts: Array<{ id: string; artifacts: Array<{ kind: string; value: string }> }>;
+        commits: string[];
+      };
       assert.equal(trace.bindings.length, 1);
       assert.equal(trace.receipts.length, 1);
       assert.equal(trace.receipts[0]?.id, receipt.id);
@@ -149,10 +172,11 @@ describe("tool surface over the typed service", () => {
       assert.ok(trace.receipts[0]?.artifacts.some((a) => a.kind === "commit" && a.value === "a".repeat(40)));
     } finally {
       svc.close();
+      await backing.close();
     }
   });
 
-  it("env fallback rebinds a fresh process", () => {
+  it("env fallback rebinds a fresh process", async () => {
     const bindings = new SessionBindings();
     assert.equal(bindings.boundRef("nope"), null);
     process.env["SUBSTRATE_ISSUE"] = "PI-9";
@@ -185,37 +209,37 @@ describe("issue-ref env alias", () => {
     }
   }
 
-  it("Pi: _REF wins over the legacy name", () => {
+  it("Pi: _REF wins over the legacy name", async () => {
     withEnv({ SUBSTRATE_ISSUE_REF: "PI-REF", SUBSTRATE_ISSUE: "PI-OLD" }, () => {
       assert.equal(new SessionBindings().boundRef("nope"), "PI-REF");
     });
   });
 
-  it("Pi: legacy name still binds when _REF is unset", () => {
+  it("Pi: legacy name still binds when _REF is unset", async () => {
     withEnv({ SUBSTRATE_ISSUE_REF: undefined, SUBSTRATE_ISSUE: "PI-OLD" }, () => {
       assert.equal(new SessionBindings().boundRef("nope"), "PI-OLD");
     });
   });
 
-  it("Pi: neither name binds nothing", () => {
+  it("Pi: neither name binds nothing", async () => {
     withEnv({ SUBSTRATE_ISSUE_REF: undefined, SUBSTRATE_ISSUE: undefined }, () => {
       assert.equal(new SessionBindings().boundRef("nope"), null);
     });
   });
 
-  it("Claude: _REF wins over the legacy name", () => {
+  it("Claude: _REF wins over the legacy name", async () => {
     withEnv({ SUBSTRATE_ISSUE_REF: "C-REF", SUBSTRATE_ISSUE: "C-OLD" }, () => {
       assert.equal(discoverIssueRef(), "C-REF");
     });
   });
 
-  it("Claude: legacy name still resolves when _REF is unset", () => {
+  it("Claude: legacy name still resolves when _REF is unset", async () => {
     withEnv({ SUBSTRATE_ISSUE_REF: undefined, SUBSTRATE_ISSUE: "C-OLD" }, () => {
       assert.equal(discoverIssueRef(), "C-OLD");
     });
   });
 
-  it("Claude: neither name resolves nothing", () => {
+  it("Claude: neither name resolves nothing", async () => {
     withEnv({ SUBSTRATE_ISSUE_REF: undefined, SUBSTRATE_ISSUE: undefined }, () => {
       assert.equal(discoverIssueRef(), null);
     });
@@ -224,11 +248,11 @@ describe("issue-ref env alias", () => {
 
 describe("D26: compaction failure falls back with the durable checkpoint intact", () => {
   it("summarizer failure degrades to host default; mechanical row stays resumable", async () => {
-    const { svc } = setup();
+    const { svc, backing } = setup();
     try {
       const id = readyIssue(svc);
       svc.issues.claimIssue(id, "pi-holder");
-      const result = await runBeforeCompact(svc, {
+      const result = await runBeforeCompact(backing, {
         issueRef: id,
         sessionId: "sess-1",
         summarizer: async () => {
@@ -248,14 +272,16 @@ describe("D26: compaction failure falls back with the durable checkpoint intact"
       assert.equal(svc.journal.listEntries(id, { kind: "note" }).length, 0);
     } finally {
       svc.close();
+      await backing.close();
     }
   });
 
   it("SQLite write failure never blocks: null entry, fallback, no throw", async () => {
-    const { svc } = setup();
+    const { svc, backing } = setup();
     const id = readyIssue(svc);
     svc.close();
-    const result = await runBeforeCompact(svc, { issueRef: id });
+      await backing.close();
+    const result = await runBeforeCompact(backing, { issueRef: id });
     assert.equal(result.entryId, null);
     assert.equal(result.fallbackToDefault, true);
     assert.equal(result.summary, null);
@@ -268,11 +294,11 @@ describe("XTRM-440: compaction usage rides alongside the checkpoint, never insid
   const usage = { input: 100, output: 20, cacheRead: 0, cacheWrite: 0, totalTokens: 120, cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 } };
 
   it("summarizer reporting usage: result carries it, host payload includes it, persisted checkpoint omits it", async () => {
-    const { svc } = setup();
+    const { svc, backing } = setup();
     try {
       const id = readyIssue(svc);
       svc.issues.claimIssue(id, "pi-holder");
-      const result = await runBeforeCompact(svc, {
+      const result = await runBeforeCompact(backing, {
         issueRef: id,
         sessionId: "sess-usage",
         summarizer: async () => ({ summary: "did work", usage }),
@@ -287,15 +313,16 @@ describe("XTRM-440: compaction usage rides alongside the checkpoint, never insid
       assert.equal(svc.journal.listEntries(id, { kind: "note" }).length, 0);
     } finally {
       svc.close();
+      await backing.close();
     }
   });
 
   it("summarizer without usage: result.usage is null, host payload omits usage, one absence note is recorded", async () => {
-    const { svc } = setup();
+    const { svc, backing } = setup();
     try {
       const id = readyIssue(svc);
       svc.issues.claimIssue(id, "pi-holder");
-      const result = await runBeforeCompact(svc, {
+      const result = await runBeforeCompact(backing, {
         issueRef: id,
         sessionId: "sess-no-usage",
         summarizer: async () => ({ summary: "did some unrelated work" }),
@@ -312,15 +339,16 @@ describe("XTRM-440: compaction usage rides alongside the checkpoint, never insid
       assert.match(notes[0]!.semantic!.summary, new RegExp(result.entryId as string));
     } finally {
       svc.close();
+      await backing.close();
     }
   });
 
   it("fallback (summarizer throws): usage null, toPiCompaction is undefined, no absence note", async () => {
-    const { svc } = setup();
+    const { svc, backing } = setup();
     try {
       const id = readyIssue(svc);
       svc.issues.claimIssue(id, "pi-holder");
-      const result = await runBeforeCompact(svc, {
+      const result = await runBeforeCompact(backing, {
         issueRef: id,
         sessionId: "sess-throws",
         summarizer: async () => {
@@ -333,15 +361,16 @@ describe("XTRM-440: compaction usage rides alongside the checkpoint, never insid
       assert.equal(svc.journal.listEntries(id, { kind: "note" }).length, 0);
     } finally {
       svc.close();
+      await backing.close();
     }
   });
 
   it("no summarizer: mechanical-only summary, usage null, host payload omits usage, no absence note", async () => {
-    const { svc } = setup();
+    const { svc, backing } = setup();
     try {
       const id = readyIssue(svc);
       svc.issues.claimIssue(id, "pi-holder");
-      const result = await runBeforeCompact(svc, { issueRef: id, sessionId: "sess-none" });
+      const result = await runBeforeCompact(backing, { issueRef: id, sessionId: "sess-none" });
       assert.equal(result.fallbackToDefault, false);
       assert.ok(result.summary);
       assert.equal(result.usage, null);
@@ -351,16 +380,17 @@ describe("XTRM-440: compaction usage rides alongside the checkpoint, never insid
       assert.equal(svc.journal.listEntries(id, { kind: "note" }).length, 0);
     } finally {
       svc.close();
+      await backing.close();
     }
   });
 
   it("checkpoint commits before a usage-reporting summarizer runs", async () => {
-    const { svc } = setup();
+    const { svc, backing } = setup();
     try {
       const id = readyIssue(svc);
       svc.issues.claimIssue(id, "pi-holder");
       let observed: string | null = null;
-      const result = await runBeforeCompact(svc, {
+      const result = await runBeforeCompact(backing, {
         issueRef: id,
         sessionId: "sess-order",
         summarizer: async (persisted) => {
@@ -374,11 +404,12 @@ describe("XTRM-440: compaction usage rides alongside the checkpoint, never insid
       assert.deepEqual(result.usage, usage);
     } finally {
       svc.close();
+      await backing.close();
     }
   });
 
   it("absence-note append failure never breaks compaction", async () => {
-    const { svc } = setup();
+    const { svc, backing } = setup();
     try {
       const id = readyIssue(svc);
       svc.issues.claimIssue(id, "pi-holder");
@@ -387,7 +418,7 @@ describe("XTRM-440: compaction usage rides alongside the checkpoint, never insid
         if (input.kind === "note") throw new Error("disk full");
         return original(issueId, input);
       };
-      const result = await runBeforeCompact(svc, {
+      const result = await runBeforeCompact(backing, {
         issueRef: id,
         sessionId: "sess-note-fails",
         summarizer: async () => ({ summary: "did work" }),
@@ -398,15 +429,16 @@ describe("XTRM-440: compaction usage rides alongside the checkpoint, never insid
       assert.ok(toPiCompaction({ firstKeptEntryId: "e1", tokensBefore: 500 }, result));
     } finally {
       svc.close();
+      await backing.close();
     }
   });
 
   it("synchronous summarizer reporting usage works", async () => {
-    const { svc } = setup();
+    const { svc, backing } = setup();
     try {
       const id = readyIssue(svc);
       svc.issues.claimIssue(id, "pi-holder");
-      const result = await runBeforeCompact(svc, {
+      const result = await runBeforeCompact(backing, {
         issueRef: id,
         sessionId: "sess-sync",
         summarizer: () => ({ summary: "sync work", usage }),
@@ -417,17 +449,18 @@ describe("XTRM-440: compaction usage rides alongside the checkpoint, never insid
       assert.equal(svc.journal.listEntries(id, { kind: "note" }).length, 0);
     } finally {
       svc.close();
+      await backing.close();
     }
   });
 });
 
 describe("lifecycle: compact mid-execution, resume restores contract + checkpoint", () => {
   it("checkpoint then capsule round-trip through the compaction handler", async () => {
-    const { svc } = setup();
+    const { svc, backing } = setup();
     try {
       const id = readyIssue(svc, "Lifecycle work");
       svc.issues.claimIssue(id, "pi-holder", { activationId: "act-1" });
-      const result = await runBeforeCompact(svc, {
+      const result = await runBeforeCompact(backing, {
         issueRef: id,
         sessionId: "sess-9",
         summarizer: async () => ({
@@ -447,13 +480,14 @@ describe("lifecycle: compact mid-execution, resume restores contract + checkpoin
       assert.ok(result.summary?.includes("halfway through lifecycle work"));
       const bindings = new SessionBindings();
       bindings.bind("sess-10", id);
-      const resumed = resumeForSession(svc, bindings, "sess-10");
+      const resumed = await resumeForSession(backing, bindings, "sess-10");
       assert.ok(resumed?.includes("PI-1"));
       assert.ok(resumed?.includes(result.entryId as string));
       assert.ok(resumed?.includes("scaffold"));
-      assert.equal(resumeForSession(svc, new SessionBindings(), "unbound"), null);
+      assert.equal(await resumeForSession(backing, new SessionBindings(), "unbound"), null);
     } finally {
       svc.close();
+      await backing.close();
     }
   });
 });
@@ -470,5 +504,87 @@ describe("journal service seam untouched", () => {
     assert.equal(r.fallbackToDefault, false);
     assert.ok(r.entry);
     db.close();
+  });
+});
+
+describe("the backing picks the store the configuration names (XTRM-691)", () => {
+  function remoteFixture(): { dir: string; dbPath: string; configPath: string; shimDir: string } {
+    const dir = mkdtempSync(join(tmpdir(), "pi-remote-"));
+    const dbPath = join(dir, "server.db");
+    const repo = join(dir, "repo");
+    spawnSync("git", ["init", "-q", repo]);
+    spawnSync("git", ["-C", repo, "remote", "add", "origin", "git@github.com:xtrm-dev/pi-probe.git"]);
+    spawnSync(process.execPath, [CLI, "init", "--db", dbPath], { cwd: repo });
+    const configPath = join(dir, "substrate.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({ remote: "ssh:probe", remoteSb: "/nonexistent/sb", serverVersion: "0.2.5", checkouts: {} }),
+    );
+    const shimDir = join(dir, "bin");
+    spawnSync("mkdir", ["-p", shimDir]);
+    return { dir, dbPath, configPath, shimDir };
+  }
+
+  it("resolves an issue on a configured remote instead of the local store", async () => {
+    const fixture = remoteFixture();
+    // The shim stands in for ssh: it serves the scratch store with the shipped CLI,
+    // so the handler exercises the real client, frames and handshake.
+    const shim = join(fixture.shimDir, "ssh");
+    writeFileSync(shim, `#!/bin/sh\nexec ${process.execPath} ${CLI} serve --stdio --db ${fixture.dbPath}\n`);
+    chmodSync(shim, 0o755);
+    const seed = openSubstrate(fixture.dbPath);
+    const issues = new IssueService(seed);
+    issues.createProject({ id: "prj_probe", prefix: "PROBE", name: "probe" });
+    const issue = issues.createIssue({
+      projectId: "prj_probe",
+      title: "on the server",
+      kind: "task",
+      contract: contract(),
+      scrutiny: "LOW",
+      authoredBy: "test",
+    });
+    seed.close();
+
+    const backing = openBacking({
+      env: {
+        ...process.env,
+        PATH: `${fixture.shimDir}:${process.env["PATH"] ?? ""}`,
+        SUBSTRATE_REMOTE_CONFIG: fixture.configPath,
+        SUBSTRATE_DB: undefined,
+        SUBSTRATE_LOCAL_DB: undefined,
+      },
+    });
+    try {
+      assert.equal(backing.kind, "remote");
+      const got = await toolIssueGet(backing, { ref: issue.id });
+      assert.equal(got["title"], "on the server");
+      assert.equal(got["humanRef"], "PROBE-1");
+    } finally {
+      await backing.close();
+    }
+  });
+
+  it("fails closed when the configured remote is unreachable, never reading the local store", async () => {
+    const fixture = remoteFixture();
+    const shim = join(fixture.shimDir, "ssh");
+    writeFileSync(shim, '#!/bin/sh\nprintf "ssh: connect to host probe port 22: Connection refused\\n" >&2\nexit 255\n');
+    chmodSync(shim, 0o755);
+    const backing = openBacking({
+      env: {
+        ...process.env,
+        PATH: `${fixture.shimDir}:${process.env["PATH"] ?? ""}`,
+        SUBSTRATE_REMOTE_CONFIG: fixture.configPath,
+        SUBSTRATE_DB: undefined,
+        SUBSTRATE_LOCAL_DB: undefined,
+      },
+    });
+    try {
+      await assert.rejects(toolIssueGet(backing, { ref: "PROBE-1" }), (error: Error & { code?: string }) => {
+        assert.equal(error.code, "connection_lost", "the transport's own code, not a local answer");
+        return true;
+      });
+    } finally {
+      await backing.close();
+    }
   });
 });

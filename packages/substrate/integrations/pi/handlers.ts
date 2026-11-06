@@ -6,11 +6,8 @@
 // execution; entries record what the host observed, and the service validates
 // shapes fail-closed.
 
-import { openSubstrate } from "../../src/store/sqlite.ts";
-import { IssueService } from "../../src/service/issue-service.ts";
-import { JournalService, type Summarizer } from "../../src/service/journal-service.ts";
-import { ResumeService } from "../../src/service/resume-service.ts";
-import { ProvenanceService } from "../../src/service/provenance-service.ts";
+import type { Summarizer } from "../../src/service/journal-service.ts";
+import type { Backing } from "./backing.ts";
 import { isJournalKind, type SemanticCheckpoint } from "../../src/domain/journal.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
 import { currentExecutionContext, enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
@@ -18,23 +15,7 @@ import type { ResolvedIssue } from "../../src/domain/issue.ts";
 // Type-only: erased at compile time, so this module stays free of runtime Pi imports.
 import type { Usage } from "@earendil-works/pi-ai";
 
-export interface SubstrateServices {
-  db: ReturnType<typeof openSubstrate>;
-  issues: IssueService;
-  journal: JournalService;
-  resume: ResumeService;
-  provenance: ProvenanceService;
-  close(): void;
-}
 
-export function openServices(dbPath: string): SubstrateServices {
-  const db = openSubstrate(dbPath);
-  const issues = new IssueService(db);
-  const journal = new JournalService(db, issues);
-  const resume = new ResumeService(db, issues, journal);
-  const provenance = new ProvenanceService(db, issues, journal);
-  return { db, issues, journal, resume, provenance, close: () => db.close() };
-}
 
 // -- session bindings ----------------------------------------------------------
 // In-session map (tool-recorded) with SUBSTRATE_ISSUE_REF env fallback so a
@@ -136,33 +117,49 @@ function summary(i: SummaryInput): Record<string, unknown> {
 }
 
 // -- model-facing tools (thin over the service) --------------------------------
+// Every tool answers through the typed service, so one handler serves a local
+// store and a server-owned one. The results keep the shapes the tools always
+// returned: the wire adds a transport, not a dialect.
 
-export function toolIssueGet(svc: SubstrateServices, params: { ref: string }): Record<string, unknown> {
-  const resolved = svc.issues.resolveRef(params.ref);
-  const readiness = svc.issues.getReadiness(resolved.id);
-  const revision = svc.issues.getRevision(resolved.id, resolved.currentRevision);
+export async function toolIssueGet(backing: Backing, params: { ref: string }): Promise<Record<string, unknown>> {
+  const resolved = await backing.call<{ id: string; currentRevision: number }>("issue.resolveRef", { ref: params.ref });
+  const issue = await backing.call<SummaryInput & { id: string }>("issue.get", { issueId: resolved.id });
+  const readiness = await backing.call<{ state: string; dispatchable: boolean; reasons: unknown }>("issue.getReadiness", {
+    issueId: resolved.id,
+  });
+  const revision = await backing.call<{ contract: unknown }>("issue.getRevision", {
+    issueId: resolved.id,
+    revision: resolved.currentRevision,
+  });
   return {
-    ...summary(resolved),
+    ...summary(issue),
     contract: revision.contract,
     readinessState: readiness.state,
     dispatchable: readiness.dispatchable,
     reasons: readiness.reasons,
-    attestation: svc.issues.latestAttestation(resolved.id),
-    claim: svc.issues.getActiveClaim(resolved.id),
+    attestation: await backing.call<unknown>("issue.latestAttestation", { issueId: resolved.id }),
+    claim: await backing.call<unknown>("issue.getActiveClaim", { issueId: resolved.id }),
   };
 }
 
-export function toolIssueSearch(
-  svc: SubstrateServices,
+export async function toolIssueSearch(
+  backing: Backing,
   params: { project: string; query?: string; kind?: string },
-): Array<Record<string, unknown>> {
-  // Bounded board read (XTRM-393): queryAllIssues walks every page of the
-  // board projection, so the result stays exhaustive while the per-issue
-  // reads disappear. Filter matches title, humanRef AND locator exactly as
-  // before; the summary shape below stays untouched.
+): Promise<Array<Record<string, unknown>>> {
+  // One bounded board read, filtered here exactly as before: title, humanRef and
+  // locator all match, and the summary shape stays untouched.
   const q = (params.query ?? "").toLowerCase();
-  return svc.issues
-    .queryAllIssues({ project: params.project })
+  const rows = await backing.call<
+    Array<{
+      locator: string;
+      humanRef: string;
+      title: string;
+      kind: string;
+      lifecycleState: string;
+      revision: number;
+    }>
+  >("issue.queryAllIssues", { query: { project: params.project } });
+  return rows
     .filter((r) => (params.kind ? r.kind === params.kind : true))
     .filter((r) => (q ? `${r.title} ${r.humanRef} ${r.locator}`.toLowerCase().includes(q) : true))
     .map((r) =>
@@ -170,83 +167,106 @@ export function toolIssueSearch(
         locator: r.locator,
         humanRef: r.humanRef,
         title: r.title,
-        kind: r.kind,
-        lifecycleState: r.lifecycleState,
+        kind: r.kind as SummaryInput["kind"],
+        lifecycleState: r.lifecycleState as SummaryInput["lifecycleState"],
         currentRevision: r.revision,
       }),
     );
 }
 
-export function toolIssueClaim(
-  svc: SubstrateServices,
+export async function toolIssueClaim(
+  backing: Backing,
   bindings: SessionBindings,
   params: { ref: string; holder: string; activationId?: string; ttlMs?: number; sessionId?: string },
-): Record<string, unknown> {
-  const resolved = svc.issues.resolveRef(params.ref);
-  const claim = svc.issues.claimIssue(resolved.id, params.holder, {
-    activationId: params.activationId,
-    ttlMs: params.ttlMs,
-  });
-  if (params.sessionId) bindings.bind(params.sessionId, resolved.id, { holder: params.holder, activationId: params.activationId });
+): Promise<Record<string, unknown>> {
+  const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
+  const claim = await backing.call<{ issueId: string; holder: string; expiresAt: number; generation: number }>(
+    "issue.claimIssue",
+    { issueId: resolved.id, holder: params.holder, activationId: params.activationId, ttlMs: params.ttlMs },
+  );
+  if (params.sessionId) {
+    bindings.bind(params.sessionId, resolved.id, { holder: params.holder, activationId: params.activationId });
+  }
   return { issueId: claim.issueId, holder: claim.holder, expiresAt: claim.expiresAt, generation: claim.generation };
 }
 
-export function toolIssueUpdate(
-  svc: SubstrateServices,
+export async function toolIssueUpdate(
+  backing: Backing,
   params: { ref: string; contract: unknown; expectedRevision?: number },
-): Record<string, unknown> {
-  const resolved = svc.issues.resolveRef(params.ref);
-  const { issue, created } = svc.issues.updateContract(resolved.id, params.contract as never, "pi-extension", {
-    expectedRevision: params.expectedRevision,
+): Promise<Record<string, unknown>> {
+  const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
+  const edited = await backing.call<{ issue: SummaryInput & { id: string }; created: number }>("issue.updateContract", {
+    issueId: resolved.id,
+    contract: params.contract,
+    authoredBy: "pi-extension",
+    opts: { expectedRevision: params.expectedRevision },
   });
-  return { ...summary(svc.issues.getIssue(issue.id)), revisionCreated: created };
+  return { ...summary(edited.issue), revisionCreated: edited.created };
 }
 
-export function toolJournalAppend(
-  svc: SubstrateServices,
-  params: { ref: string; kind: string; sessionId?: string; participantId?: string; activationId?: string; runId?: string; executionContext?: ExecutionContext | null },
-): Record<string, unknown> {
+export async function toolJournalAppend(
+  backing: Backing,
+  params: {
+    ref: string;
+    kind: string;
+    sessionId?: string;
+    participantId?: string;
+    activationId?: string;
+    runId?: string;
+    executionContext?: ExecutionContext | null;
+  },
+): Promise<Record<string, unknown>> {
   if (!isJournalKind(params.kind)) throw new Error(`unknown journal kind: ${params.kind}`);
-  const resolved = svc.issues.resolveRef(params.ref);
-  const entry = svc.journal.appendEntry(resolved.id, {
-    kind: params.kind,
-    sessionId: params.sessionId,
-    participantId: params.participantId,
-    activationId: params.activationId,
-    runId: params.runId,
-    executionContext: piExecutionContext({
-      sessionId: params.sessionId ?? null,
-      holder: params.participantId ?? null,
-      activationId: params.activationId ?? null,
-      executionContext: params.executionContext ?? null,
-    }),
+  const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
+  const entry = await backing.call<{ id: string; sequence: number; kind: string }>("journal.appendEntry", {
+    issueId: resolved.id,
+    input: {
+      kind: params.kind,
+      sessionId: params.sessionId,
+      participantId: params.participantId,
+      activationId: params.activationId,
+      runId: params.runId,
+      executionContext: piExecutionContext({
+        sessionId: params.sessionId ?? null,
+        holder: params.participantId ?? null,
+        activationId: params.activationId ?? null,
+        executionContext: params.executionContext ?? null,
+      }),
+    },
   });
   return { entryId: entry.id, sequence: entry.sequence, kind: entry.kind };
 }
 
 export async function toolJournalCheckpoint(
-  svc: SubstrateServices,
+  backing: Backing,
   params: { ref: string; sessionId?: string; headCommit?: string; changedFiles?: string[]; executionContext?: ExecutionContext | null },
 ): Promise<Record<string, unknown>> {
-  const resolved = svc.issues.resolveRef(params.ref);
-  const r = await svc.journal.checkpoint(resolved.id, {
-    sessionId: params.sessionId,
-    headCommit: params.headCommit,
-    changedFiles: params.changedFiles,
-    executionContext: piExecutionContext({ sessionId: params.sessionId ?? null, executionContext: params.executionContext ?? null }),
+  const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
+  const result = await backing.call<{ entry: { id: string; sequence: number }; degraded: boolean }>("journal.checkpoint", {
+    issueId: resolved.id,
+    input: {
+      sessionId: params.sessionId,
+      headCommit: params.headCommit,
+      changedFiles: params.changedFiles,
+      executionContext: piExecutionContext({
+        sessionId: params.sessionId ?? null,
+        executionContext: params.executionContext ?? null,
+      }),
+    },
   });
-  return { entryId: r.entry.id, sequence: r.entry.sequence, degraded: r.degraded };
+  return { entryId: result.entry.id, sequence: result.entry.sequence, degraded: result.degraded };
 }
 
-export function toolIssueResume(svc: SubstrateServices, params: { ref: string }): string {
-  const resolved = svc.issues.resolveRef(params.ref);
-  return svc.resume.renderCapsule(svc.resume.buildCapsule(resolved.id));
+export async function toolIssueResume(backing: Backing, params: { ref: string }): Promise<string> {
+  const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
+  const capsule = await backing.call<unknown>("resume.buildCapsule", { issueId: resolved.id });
+  return backing.call<string>("resume.renderCapsule", { capsule });
 }
 
-/** Full canonical evidence spine; Pi and Claude consume the same ProvenanceService. */
-export function toolProvenanceTrace(svc: SubstrateServices, params: { ref: string }) {
-  const resolved = svc.issues.resolveRef(params.ref);
-  return svc.provenance.trace(resolved.id);
+/** Full canonical evidence spine; Pi and Claude consume the same provenance. */
+export async function toolProvenanceTrace(backing: Backing, params: { ref: string }): Promise<unknown> {
+  const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
+  return backing.call<unknown>("provenance.trace", { issueId: resolved.id });
 }
 
 // -- compaction ---------------------------------------------------------------
@@ -280,34 +300,52 @@ export interface BeforeCompactResult {
   usage: Usage | null;
 }
 
-export async function runBeforeCompact(svc: SubstrateServices, input: BeforeCompactInput): Promise<BeforeCompactResult> {
+export async function runBeforeCompact(backing: Backing, input: BeforeCompactInput): Promise<BeforeCompactResult> {
   const fallback = { entryId: null, sequence: null, degraded: true, fallbackToDefault: true, summary: null, usage: null };
-  let resolved;
+  let resolved: { id: string };
   try {
-    resolved = svc.issues.resolveRef(input.issueRef);
+    resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: input.issueRef });
   } catch {
     return fallback;
   }
-  // Captured as a side effect of the wrapped summarizer, since the journal
-  // service only ever sees the stripped-down SemanticCheckpoint.
-  let usage: Usage | null = null;
-  const summarizer: Summarizer | undefined = input.summarizer
-    ? async (...args: Parameters<Summarizer>) => {
-        const { usage: reported, ...checkpoint } = await input.summarizer!(...args);
-        usage = reported ?? null;
-        return checkpoint;
-      }
-    : undefined;
-  const checkpoint = await svc.journal.compactionCheckpoint(resolved.id, {
-    kind: "compaction",
-    sessionId: input.sessionId,
-    summarizer,
-    executionContext: piExecutionContext({ sessionId: input.sessionId ?? null, executionContext: input.executionContext ?? null }),
+  const executionContext = piExecutionContext({
+    sessionId: input.sessionId ?? null,
+    executionContext: input.executionContext ?? null,
   });
-  if (!checkpoint.entry) {
-    return fallback;
+  // The mechanical row is written where the store lives. The summarizer cannot
+  // travel: a function does not cross a pipe, so it runs here and the semantic
+  // layer is attached afterwards — the same order the journal service uses.
+  const checkpoint = await backing.call<{
+    entry: { id: string; sequence: number } | null;
+    degraded: boolean;
+    fallbackToDefault: boolean;
+  }>("journal.compactionCheckpoint", {
+    issueId: resolved.id,
+    input: { kind: "compaction", sessionId: input.sessionId, executionContext },
+  });
+  if (!checkpoint.entry) return fallback;
+
+  let usage: Usage | null = null;
+  let degraded = checkpoint.degraded;
+  if (input.summarizer) {
+    try {
+      const entry = await backing.call<Record<string, unknown>>("journal.getEntry", { entryId: checkpoint.entry.id });
+      const summarizerAsService: Summarizer = input.summarizer as unknown as Summarizer;
+      const produced = (await summarizerAsService(entry as never, (entry as { mechanical?: unknown }).mechanical as never)) as
+        | (SemanticCheckpoint & { usage?: Usage })
+        | SemanticCheckpoint;
+      const { usage: reported, ...semantic } = produced as SemanticCheckpoint & { usage?: Usage };
+      usage = reported ?? null;
+      await backing.call("journal.enrichEntry", { entryId: checkpoint.entry.id, semantic });
+      degraded = false;
+    } catch {
+      // Enrichment failure degrades to the mechanical checkpoint: resumability is
+      // never lost because a summary failed.
+      degraded = true;
+    }
   }
-  if (checkpoint.fallbackToDefault) {
+
+  if (degraded) {
     return {
       entryId: checkpoint.entry.id,
       sequence: checkpoint.entry.sequence,
@@ -317,27 +355,49 @@ export async function runBeforeCompact(svc: SubstrateServices, input: BeforeComp
       usage: null,
     };
   }
-  const capsule = svc.resume.buildCapsule(resolved.id);
-  const summary = `${svc.journal.renderCheckpoint(checkpoint.entry)}\n\n${svc.resume.renderCapsule(capsule)}`;
-  // Recorded after the summary is built: the absence note must never leak
-  // into this compaction's summary content (non-goal: changing summary content).
+
+  const entry = await backing.call<Record<string, unknown>>("journal.getEntry", { entryId: checkpoint.entry.id });
+  const rendered = await backing.call<string>("journal.renderCheckpoint", { entry });
+  const capsule = await backing.call<unknown>("resume.buildCapsule", { issueId: resolved.id });
+  const renderedCapsule = await backing.call<string>("resume.renderCapsule", { capsule });
+  const summaryText = `${rendered}\n\n${renderedCapsule}`;
+  // Recorded after the summary is built: the absence note must never leak into
+  // this compaction's summary content.
   if (input.summarizer && usage === null) {
-    recordMissingUsage(svc, resolved.id, input, checkpoint.entry.id);
+    await recordMissingUsage(backing, resolved.id, input, checkpoint.entry.id);
   }
-  return { entryId: checkpoint.entry.id, sequence: checkpoint.entry.sequence, degraded: false, fallbackToDefault: false, summary, usage };
+  return {
+    entryId: checkpoint.entry.id,
+    sequence: checkpoint.entry.sequence,
+    degraded: false,
+    fallbackToDefault: false,
+    summary: summaryText,
+    usage,
+  };
 }
 
 // Best-effort note: a missing usage report must never block compaction, so a
 // failure here is swallowed (mirrors the degraded-checkpoint pattern above).
-function recordMissingUsage(svc: SubstrateServices, issueId: string, input: BeforeCompactInput, checkpointEntryId: string): void {
+async function recordMissingUsage(
+  backing: Backing,
+  issueId: string,
+  input: BeforeCompactInput,
+  checkpointEntryId: string,
+): Promise<void> {
   try {
-    svc.journal.appendEntry(issueId, {
-      kind: "note",
-      sessionId: input.sessionId,
-      semantic: {
-        summary: `compaction summarizer reported no usage; CompactionResult.usage omitted (checkpoint ${checkpointEntryId}, session ${input.sessionId ?? "unknown"})`,
+    await backing.call("journal.appendEntry", {
+      issueId,
+      input: {
+        kind: "note",
+        sessionId: input.sessionId,
+        semantic: {
+          summary: `compaction summarizer reported no usage; CompactionResult.usage omitted (checkpoint ${checkpointEntryId}, session ${input.sessionId ?? "unknown"})`,
+        },
+        executionContext: piExecutionContext({
+          sessionId: input.sessionId ?? null,
+          executionContext: input.executionContext ?? null,
+        }),
       },
-      executionContext: piExecutionContext({ sessionId: input.sessionId ?? null, executionContext: input.executionContext ?? null }),
     });
   } catch {
     // Absence-of-usage is informational; never lose the checkpoint over it.
@@ -388,21 +448,21 @@ export function evaluateEditGate(state: EditGateState): { allow: boolean; reason
   return { allow: true };
 }
 
-export function decidePiEditCall(
-  svc: SubstrateServices,
+export async function decidePiEditCall(
+  backing: Backing,
   bindings: SessionBindings,
   opts: { sessionId?: string; workspace?: string } = {},
-): { allow: boolean; reason?: string; issueRef: string | null } {
+): Promise<{ allow: boolean; reason?: string; issueRef: string | null }> {
   try {
     const identity = bindings.identityFor(opts.sessionId);
     if (!identity) return { allow: true, issueRef: null };
     let issueId: string;
     try {
-      issueId = svc.issues.resolveRef(identity.ref).id;
+      issueId = (await backing.call<{ id: string }>("issue.resolveRef", { ref: identity.ref })).id;
     } catch {
       return { allow: true, issueRef: identity.ref };
     }
-    const claim = svc.issues.getActiveClaim(issueId);
+    const claim = await backing.call<{ holder: string; activationId: string | null } | null>("issue.getActiveClaim", { issueId });
     const decision = evaluateEditGate({
       issueRef: identity.ref,
       claim: claim ? { holder: claim.holder, activationId: claim.activationId } : null,
@@ -459,8 +519,18 @@ export function evaluateStopContinuity(state: StopContinuityState): {
 // issue → capsule text for the host to surface (notify + resume command), never
 // a silent context edit. Returns null when unbound.
 
-export function resumeForSession(svc: SubstrateServices, bindings: SessionBindings, sessionId: string | undefined): string | null {
+export async function resumeForSession(
+  backing: Backing,
+  bindings: SessionBindings,
+  sessionId: string | undefined,
+): Promise<string | null> {
   const ref = bindings.boundRef(sessionId);
   if (!ref) return null;
-  return toolIssueResume(svc, { ref });
+  try {
+    return await toolIssueResume(backing, { ref });
+  } catch {
+    // An unreachable remote must not break a session-start hint; the error is
+    // raised when a tool is actually used, where the operator can act on it.
+    return null;
+  }
 }
