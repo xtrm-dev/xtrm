@@ -1,6 +1,8 @@
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve as resolvePath } from "node:path";
+import { selectRemote } from "../remote/config.ts";
 import { migrate } from "./migrations/runner.ts";
 import type { SQLInputValue, SubstrateDatabase, SubstrateStatement } from "./database.ts";
 
@@ -54,10 +56,44 @@ function ensurePrivateStore(dbPath: string): void {
   closeSync(openSync(dbPath, "a", 0o600));
 }
 
+/** The store an unconfigured process opens: one machine, one file. */
+export const CANONICAL_STORE_PATH = join(homedir(), ".xtrm", "state.db");
+
+/**
+ * Refuses to open the canonical local store when a remote is configured
+ * (XTRM-693, ADR-008).
+ *
+ * With `substrate.remote` set, the store lives on another machine. An in-process
+ * consumer that opens `~/.xtrm/state.db` anyway reads whatever stale file happens
+ * to be there — on the PC, a store with no bindings — and then reports the result
+ * as if it were the operator's data. The refusal names the remote and the path, so
+ * the remedy is visible; an earlier surface reported this as "run `sb init`",
+ * which points at the wrong store entirely.
+ *
+ * An explicit path is always honoured: `--db` or `SUBSTRATE_DB` is a deliberate
+ * decision to work on a local file, and this guard must not second-guess it.
+ */
+export function assertStoreIsChosen(dbPath: string, env: NodeJS.ProcessEnv = process.env): void {
+  if (resolvePath(dbPath) !== resolvePath(CANONICAL_STORE_PATH)) return;
+  const selection = selectRemote(env);
+  if (selection === null) return;
+  const spec = selection.config.remote;
+  const where = selection.configPath;
+  throw Object.assign(
+    new Error(
+      `substrate.remote is ${spec} (${where}): this process tried to open the local store at ${dbPath}, ` +
+        `which that remote does not name. Reach the store on ${spec} through the typed service ` +
+        `(sb serve --stdio / createServiceClient), or pass --db or SUBSTRATE_DB to work on a local file deliberately.`,
+    ),
+    { code: "remote_store_selected", remote: spec, dbPath, configPath: where },
+  );
+}
+
 // Canonical store opener: SQLite/WAL, fail-closed on corrupt schema or
 // unknown migration state (PRD §§7, 46). Committed transactions survive
 // restart via WAL (PRD §47).
 export function openSubstrate(dbPath: string): SubstrateDatabase {
+  assertStoreIsChosen(dbPath);
   ensurePrivateStore(dbPath);
   const db = adaptDatabase(new (loadDriver())(dbPath));
   db.exec("PRAGMA journal_mode = WAL");
