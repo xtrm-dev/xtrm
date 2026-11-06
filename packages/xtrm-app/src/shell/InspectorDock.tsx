@@ -48,8 +48,8 @@ function RailPill({ icon, iconClassName, ...props }: { icon: "back" | "forward";
  * v16 inspector. The dock Panel lives in the same ResizableGroup as the sidebar
  * and main fill (one motion-panels driver). The visible frame is absolutely
  * anchored to the dock's right edge and full height, so:
- * - CONTEXTUAL (default open) floats over the main column (border + shadow);
- * - PINNED matches its in-flow dock exactly (muted border, no shadow);
+ * - CONTEXTUAL (default open) floats over the main column on --shadow-panel, no border;
+ * - PINNED keeps the same borderless panel, so both states read as their own background;
  * - MAXIMIZED fills the group.
  * Only the frame's min-width animates (SHELL_MOTION, same curve as the panels);
  * everything else follows the panel motion, so maximize/restore stay in sync.
@@ -117,9 +117,11 @@ export function InspectorDock() {
         data-testid="inspector-frame"
         style={{ "--frame-min": `${initialMinWidth}px`, minWidth: "var(--frame-min)" } as React.CSSProperties}
         className={cx(
-          "absolute top-0 bottom-1.5 z-30 flex min-h-0 overflow-hidden rounded-lg border bg-raised",
+          // No border: the panel reads as its own background. --shadow-panel lifts it without the 1px
+          // ring that --shadow-float paints, so no hairline outlines the panel in another colour.
+          "absolute top-0 bottom-1.5 z-30 flex min-h-0 overflow-hidden rounded-lg bg-raised",
           maximized ? "inset-x-2" : "right-0 w-full",
-          !open ? "border-border-muted bg-transparent" : pinned ? "border-border-muted" : "border-border shadow-float",
+          !open ? "bg-transparent" : "shadow-panel",
         )}
       >
         <div className="flex shrink-0 flex-col items-center justify-center gap-1.5 py-2" style={{ width: RAIL }}>
