@@ -73,7 +73,7 @@ export async function proxyHook(scriptPath) {
   if (Array.isArray(server.error)) throw new RemoteUnavailable(server.error[0], server.error[1]);
   // Same rule as the MCP launcher: the script belongs to the installed package,
   // never to the checkout that only resolves the repository.
-  const { prelude, script } = remoteScriptCommand(selection, scriptPath);
+  const { prelude, script } = remoteScriptCommand(selection, scriptPath, READY);
   const command = remoteCommand(
     { ...selection, home: server.home },
     server.root,

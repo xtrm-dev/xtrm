@@ -83,7 +83,7 @@ function proxy(selection) {
   }
   // The script ships with the installed package, not with the checkout: the
   // checkout may be a different repository entirely (review, HIGH).
-  const { prelude, script } = remoteScriptCommand(selection, "substrate-mcp.mjs");
+  const { prelude, script } = remoteScriptCommand(selection, "substrate-mcp.mjs", READY);
   const command = remoteCommand(
     { ...selection, home: server.home },
     server.root,

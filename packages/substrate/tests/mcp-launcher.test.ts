@@ -194,4 +194,35 @@ describe("the MCP launcher picks the transport from the configuration", () => {
     assert.match(result.stderr, /identity/);
     assert.equal(result.stdout, "");
   });
+
+  it("names the missing plugin script as not_installed", () => {
+    // The package is there but does not ship the script (an older install): that
+    // is a named condition, not a lost connection.
+    const dir = mkdtempSync(join(tmpdir(), "mcp-not-installed-"));
+    const bin = join(dir, "bin");
+    const pkg = join(dir, "pkg");
+    const checkout = join(dir, "checkout");
+    for (const d of [bin, join(pkg, "bin"), checkout]) spawnSync("mkdir", ["-p", d]);
+    writeFileSync(join(pkg, "bin", "sb"), "#!/bin/sh\n");
+    writeFileSync(join(bin, "ssh"), '#!/bin/sh\nfor a in "$@"; do last="$a"; done\nexec sh -c "$last"\n');
+    chmodSync(join(bin, "ssh"), 0o755);
+    const configPath = join(dir, "substrate.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        remote: "ssh:probe",
+        remoteSb: join(pkg, "bin", "sb"),
+        checkouts: { "probe github.com/xtrm-dev/xtrm": { root: checkout } },
+      }),
+    );
+    const result = spawnSync(process.execPath, [LAUNCHER], {
+      encoding: "utf8",
+      timeout: 20000,
+      input: "",
+      env: { ...process.env, PATH: `${bin}:${process.env["PATH"] ?? ""}`, SUBSTRATE_REMOTE_CONFIG: configPath, SUBSTRATE_MCP_SERVER_ROOT: undefined },
+    });
+    assert.equal(result.status, 78);
+    assert.match(result.stderr, /not_installed/);
+    assert.equal(result.stdout, "");
+  });
 });

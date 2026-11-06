@@ -142,14 +142,22 @@ export function applyIdentityArguments(argv = process.argv) {
  * SUBSTRATE_MCP_SERVER_ROOT overrides the SCRIPT directory for tests and
  * development; it is not the checkout.
  */
-export function remoteScriptCommand(selection, scriptName) {
+export function remoteScriptCommand(selection, scriptName, sentinel) {
   const override = process.env["SUBSTRATE_MCP_SERVER_ROOT"];
   if (typeof override === "string" && override.startsWith("/")) {
     return { prelude: [], script: shellQuote(`${override}/${scriptName}`) };
   }
+  // `sb` resolves through dist/cli to a file inside the package, so the nearest
+  // ancestor that actually ships the script is the package root — not a fixed
+  // number of dirname() steps.
+  const scriptExpr = `"$PKG/plugin/substrate/scripts/${scriptName}"`;
   return {
-    prelude: [`PKG=$(dirname "$(dirname "$(readlink -f ${shellQuote(selection.sbPath)})")")`],
-    script: `"$PKG/plugin/substrate/scripts/${scriptName}"`,
+    prelude: [
+      `PKG=$(dirname "$(readlink -f ${shellQuote(selection.sbPath)})")`,
+      `while [ ! -f ${scriptExpr} ] && [ "$PKG" != "/" ]; do PKG=$(dirname "$PKG"); done`,
+      `if [ ! -f ${scriptExpr} ]; then printf '%s%s\\n' ${shellQuote(sentinel)} '{"error":"not_installed"}'; exit 78; fi`,
+    ],
+    script: scriptExpr,
   };
 }
 
@@ -170,6 +178,9 @@ export function remoteCommand(selection, checkout, script, prelude, argv) {
 export function handshakeFailure(handshake, expectedVersion, host) {
   if (handshake === null || typeof handshake !== "object" || Array.isArray(handshake)) {
     return ["protocol_mismatch", "the far side sent a handshake that is not an object"];
+  }
+  if (handshake["error"] === "not_installed") {
+    return ["not_installed", `the installed substrate package on ${host} does not ship the plugin script; install it there`];
   }
   if (handshake["identity"] === "unparsed") {
     return ["protocol_mismatch", "the far side could not parse the identity argument, so no row would record this participant"];
