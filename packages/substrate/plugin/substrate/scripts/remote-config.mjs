@@ -72,14 +72,19 @@ export function serverRoot(remote) {
       ],
     };
   }
-  return { root, key };
+  const home = remote.checkouts[`${remote.host} ${key}`]?.home ?? null;
+  return { root, key, home: typeof home === "string" && home.startsWith("/") ? home : null };
 }
 
 export function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-/** ssh arguments shared by every remote consumer: no pty, no prompts, keepalive. */
+/**
+ * ssh arguments shared by every remote consumer: no pty, no prompts, keepalive.
+ * ssh takes options, then the destination, then the command — nothing may sit
+ * between the options and the host, or ssh reads that token as the host.
+ */
 export function sshArgs(host, remoteCommand) {
   return [
     "-T",
@@ -88,7 +93,6 @@ export function sshArgs(host, remoteCommand) {
     "-o", "ServerAliveInterval=15",
     "-o", "ServerAliveCountMax=3",
     "-o", "LogLevel=ERROR",
-    "sh",
     host,
     remoteCommand,
   ];

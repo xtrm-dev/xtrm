@@ -64,7 +64,9 @@ export async function proxyHook(scriptPath) {
   const remoteScript = `${server.root}/packages/substrate/plugin/substrate/scripts/${scriptPath}`;
   const command = [
     "cd", shellQuote(server.root), "&&",
-    LOCAL_MARKER, "node", shellQuote(remoteScript),
+    LOCAL_MARKER,
+    ...(server.home ? [`SUBSTRATE_HOME=${shellQuote(server.home)}`] : []),
+    "node", shellQuote(remoteScript),
     SERVER_FLAG, "--sentinel", shellQuote(READY), "--version", shellQuote(selection.version),
     ...identityArgs(process.cwd()),
   ].join(" ");

@@ -80,7 +80,9 @@ function proxy(selection) {
   const script = `${server.root}/packages/substrate/plugin/substrate/scripts/substrate-mcp.mjs`;
   const command = [
     "cd", shellQuote(server.root), "&&",
-    LOCAL_MARKER, "node", shellQuote(script),
+    LOCAL_MARKER,
+    ...(server.home ? [`SUBSTRATE_HOME=${shellQuote(server.home)}`] : []),
+    "node", shellQuote(script),
     "--remote-ready", shellQuote(READY),
     "--version", shellQuote(selection.version),
     ...identityArgs(process.cwd()),

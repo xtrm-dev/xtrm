@@ -107,6 +107,12 @@ describe("the MCP launcher picks the transport from the configuration", () => {
     assert.match(argv, /0f7b9e34-6a1e-4b8e-9d95-0d1e6f2f0a11/);
     assert.match(argv, /act-pc/);
     assert.match(argv, /-T\n/, "ssh runs without a pty");
+    // ssh takes options, then destination, then command. A token between the
+    // options and the host is read as the host, which is how a live probe
+    // produced "Could not resolve hostname sh".
+    const args = argv.trimEnd().split("\n");
+    assert.equal(args[args.length - 2], "probe", "the destination is the last argument but one");
+    assert.equal(args.includes("sh"), false, "no shell token is passed where ssh expects the host");
     assert.match(argv, /BatchMode=yes/);
     assert.match(argv, /ServerAliveInterval=15/);
   });
