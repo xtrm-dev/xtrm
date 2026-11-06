@@ -503,7 +503,7 @@ describe("service client", () => {
         assert.equal(error.code, "not_installed");
         assert.match(error.message, /ssh:server/);
         assert.match(error.message, /no `sb serve --stdio`/);
-        assert.match(error.message, /release after 0\.2\.4/, "0.2.4 itself has no service");
+        assert.match(error.message, /ships in 0\.2\.5 and later/, "0.2.4 itself has no service");
         return true;
       });
     } finally {

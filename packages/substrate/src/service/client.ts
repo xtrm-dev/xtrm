@@ -309,7 +309,7 @@ export function createServiceClient(link: ServiceLink, options: RemoteServiceOpt
         new ServiceCallError(
           "not_installed",
           `${where} has no \`sb serve --stdio\`: its sb printed usage and exited ${code ?? "?"} ` +
-            "(the service ships in a release after 0.2.4)",
+            "(the service ships in 0.2.5 and later)",
         ),
       );
     };
