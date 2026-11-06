@@ -98,7 +98,33 @@ export function sshArgs(host, remoteCommand) {
   ];
 }
 
-/** Identity and workspace arguments the far side applies to itself. */
+/**
+ * Identity and workspace arguments the far side applies to itself.
+ * One JSON argument, not positional values: an empty identity component would be
+ * a zero-length word in the remote command, and a shell that drops it shifts
+ * every later value into the wrong slot.
+ */
 export function identityArgs(workspace) {
-  return ["--identity", ...IDENTITY_KEYS.map((name) => process.env[name] ?? ""), "--workspace", workspace];
+  const identity = Object.fromEntries(IDENTITY_KEYS.map((name) => [name, process.env[name] ?? ""]));
+  return ["--identity", JSON.stringify(identity), "--workspace", workspace];
+}
+
+/** Applies what identityArgs() carried. Returns the workspace the caller had. */
+export function applyIdentityArguments(argv = process.argv) {
+  const at = argv.indexOf("--identity");
+  const raw = at < 0 ? "" : (argv[at + 1] ?? "");
+  let identity = {};
+  try {
+    identity = raw === "" ? {} : JSON.parse(raw);
+  } catch {
+    identity = {};
+  }
+  for (const name of IDENTITY_KEYS) {
+    const value = identity[name];
+    if (typeof value === "string" && value !== "") process.env[name] = value;
+  }
+  const workspaceAt = argv.indexOf("--workspace");
+  const workspace = workspaceAt < 0 ? "" : (argv[workspaceAt + 1] ?? "");
+  if (workspace) process.env["SUBSTRATE_MCP_WORKSPACE"] = workspace;
+  return { identity, workspace, holder: identity["SUBSTRATE_HOLDER"] || null };
 }

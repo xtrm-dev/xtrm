@@ -21,7 +21,7 @@
 import { spawn } from "node:child_process";
 import { resolveSubstrate } from "./resolve-substrate.mjs";
 import {
-  IDENTITY_KEYS,
+  applyIdentityArguments,
   identityArgs,
   pluginVersion,
   remoteSelection,
@@ -56,18 +56,11 @@ function applyRemoteArguments() {
   const index = process.argv.indexOf("--remote-ready");
   if (index < 0) return null;
   const sentinel = process.argv[index + 1] ?? READY;
-  const identityAt = process.argv.indexOf("--identity");
-  const identity = identityAt < 0 ? [] : process.argv.slice(identityAt + 1, identityAt + 1 + IDENTITY_KEYS.length);
-  const workspaceAt = process.argv.indexOf("--workspace");
-  const workspace = workspaceAt < 0 ? "" : (process.argv[workspaceAt + 1] ?? "");
-  IDENTITY_KEYS.forEach((name, i) => {
-    if (identity[i]) process.env[name] = identity[i];
-  });
+  const applied = applyIdentityArguments();
   process.env["SUBSTRATE_MCP_REMOTE"] = "1";
-  if (workspace) process.env["SUBSTRATE_MCP_WORKSPACE"] = workspace;
   const version = pluginVersion(import.meta.url);
-  process.stdout.write(`${sentinel}${JSON.stringify({ version, participant: identity[0] || null, workspace: workspace || null })}\n`);
-  return { sentinel, identity, workspace };
+  process.stdout.write(`${sentinel}${JSON.stringify({ version, participant: applied.holder, workspace: applied.workspace || null })}\n`);
+  return applied;
 }
 
 // ---- client side ------------------------------------------------------------

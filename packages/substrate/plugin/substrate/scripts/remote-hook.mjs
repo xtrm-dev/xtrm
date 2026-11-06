@@ -12,12 +12,10 @@
 // never a local answer.
 
 import { spawn } from "node:child_process";
-import { identityArgs, remoteSelection, serverRoot, shellQuote, sshArgs, IDENTITY_KEYS } from "./remote-config.mjs";
+import { applyIdentityArguments, identityArgs, remoteSelection, serverRoot, shellQuote, sshArgs } from "./remote-config.mjs";
 
 const READY = "@@substrate-hook-ready ";
 const LOCAL_MARKER = "SUBSTRATE_MCP_LOCAL=1";
-const IDENTITY_AT = "--identity";
-const WORKSPACE_AT = "--workspace";
 const SERVER_FLAG = "--remote-hook";
 
 export class RemoteUnavailable extends Error {
@@ -33,19 +31,13 @@ export class RemoteUnavailable extends Error {
  */
 export function applyServerArguments() {
   if (!process.argv.includes(SERVER_FLAG)) return false;
-  const at = process.argv.indexOf(IDENTITY_AT);
-  const identity = at < 0 ? ["", "", ""] : process.argv.slice(at + 1, at + 1 + IDENTITY_KEYS.length);
-  const workspaceAt = process.argv.indexOf(WORKSPACE_AT);
-  const workspace = workspaceAt < 0 ? "" : (process.argv[workspaceAt + 1] ?? "");
-  IDENTITY_KEYS.forEach((name, i) => {
-    if (identity[i]) process.env[name] = identity[i];
-  });
+  const applied = applyIdentityArguments();
+  const workspace = applied.workspace;
   process.env["SUBSTRATE_MCP_REMOTE"] = "1";
-  if (workspace) process.env["SUBSTRATE_MCP_WORKSPACE"] = workspace;
   const sentinelAt = process.argv.indexOf("--sentinel");
   const sentinel = sentinelAt < 0 ? READY : (process.argv[sentinelAt + 1] ?? READY);
   const version = process.argv[process.argv.indexOf("--version") + 1] ?? "unknown";
-  process.stdout.write(`${sentinel}${JSON.stringify({ version, participant: identity[0] || null, workspace: workspace || null })}\n`);
+  process.stdout.write(`${sentinel}${JSON.stringify({ version, participant: applied.holder, workspace: workspace || null })}\n`);
   return true;
 }
 
