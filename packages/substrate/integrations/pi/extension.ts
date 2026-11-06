@@ -205,9 +205,15 @@ export default function registerSubstrate(pi: ExtensionAPI, options: { openBacki
       if (!isTransportFailure(error)) return;
       const code = transportCode(error) ?? "connection_lost";
       const detail = error instanceof Error ? error.message : String(error);
+      // A timeout is not the same news as a dead connection: the check may still
+      // be running on the other machine, so the reason must not claim it did not.
+      const outcome =
+        code === "timeout"
+          ? "The edit was not applied, and no claim was confirmed: the check may still be running on the store-owning machine."
+          : "The edit was not applied and no claim was checked.";
       return {
         block: true,
-        reason: `Substrate is remote and the store is unreachable (${code}): ${detail}. The edit was not applied and no claim was checked; restore the connection, or run \`sb remote status\` on the store-owning machine.`,
+        reason: `Substrate is remote and the store did not answer reliably (${code}): ${detail}. ${outcome} Restore the connection, or run \`sb remote status\` on the store-owning machine.`,
       };
     }
   });

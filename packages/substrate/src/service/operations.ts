@@ -61,13 +61,21 @@ export function readOperations(): string[] {
   return [...READ_OPERATIONS].sort();
 }
 
-/** The codes that mean the transport, not the operation, failed. */
+/**
+ * The codes that mean the transport, not the operation, failed.
+ *
+ * `timeout` belongs here: the ssh client raises it when the far side stalls —
+ * a frozen ssh, a VPN stall, a hung server sb — and only that client raises it.
+ * A connection that hangs is a more likely real-world failure than one that dies,
+ * so leaving it out would keep the gate open in the common case.
+ */
 const TRANSPORT_CODES: ReadonlySet<string> = new Set([
   "connection_lost",
   "not_installed",
   "protocol_mismatch",
   "peer_noise",
   "spawn_failed",
+  "timeout",
 ]);
 
 /**

@@ -50,7 +50,7 @@ process.env["SUBSTRATE_ISSUE_REF"] = "XTRM-712";
 process.env["SUBSTRATE_HOLDER"] = "core-xt-pi-6vnw";
 
 describe("the gate when the store is unreachable", () => {
-  for (const code of ["connection_lost", "not_installed", "protocol_mismatch", "peer_noise", "spawn_failed"]) {
+  for (const code of ["connection_lost", "not_installed", "protocol_mismatch", "peer_noise", "spawn_failed", "timeout"]) {
     it(`blocks an edit and names ${code}`, async () => {
       const gate = await gateWith(coded(code));
       const decision = await gate(edit());
@@ -69,6 +69,23 @@ describe("the gate when the store is unreachable", () => {
     const decision = await gate(edit());
     assert.equal(decision?.block, true);
     assert.match(decision.reason, /connection_lost/);
+  });
+
+  it("blocks when the ref lookup times out", async () => {
+    // A hung connection is the likelier real failure than a dead one; it must not
+    // read as "no claim, go ahead".
+    const gate = await gateWith(coded("timeout", "ssh:server did not answer \"issue.resolveRef\""), "resolveRef");
+    const decision = await gate(edit());
+    assert.equal(decision?.block, true);
+    assert.match(decision.reason, /timeout/);
+  });
+
+  it("says a timed-out check may still be running, instead of claiming it did not run", async () => {
+    const gate = await gateWith(coded("timeout"));
+    const decision = await gate(edit());
+    assert.equal(decision?.block, true);
+    assert.match(decision.reason, /may still be running/);
+    assert.doesNotMatch(decision.reason, /no claim was checked/, "a timeout is not proof the check never ran");
   });
 
   it("keeps fail-open for a local failure", async () => {
