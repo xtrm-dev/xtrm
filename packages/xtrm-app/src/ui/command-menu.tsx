@@ -46,7 +46,10 @@ export function CommandMenu({
   groups,
   toolbar,
   loading,
+  shouldFilter = true,
 }: {
+  /** false when the caller already filtered and ranked `groups`; cmdk then keeps their order. */
+  shouldFilter?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   query: string;
@@ -64,7 +67,7 @@ export function CommandMenu({
           aria-label="Search and commands"
           className="fixed top-[14vh] left-1/2 z-50 w-[min(640px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-lg bg-raised shadow-float outline-none"
         >
-          <Command label="Search and commands" loop shouldFilter filter={matchEntry}>
+          <Command label="Search and commands" loop shouldFilter={shouldFilter} filter={matchEntry}>
             <div className="flex h-12 items-center gap-2 border-b border-border-muted px-4">
               <Icon name={query.startsWith(">") ? "command" : "search"} className="text-ink-faint" />
               <Command.Input autoFocus value={query} onValueChange={onQueryChange} placeholder={placeholder} className="h-full min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-ink-faint" />

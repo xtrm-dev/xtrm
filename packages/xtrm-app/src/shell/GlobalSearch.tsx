@@ -5,6 +5,7 @@ import { CommandMenu, type CommandEntry, type CommandGroupData } from "../ui/com
 import { cx } from "../ui/primitives.tsx";
 import { useGo } from "./ContextSidebar.tsx";
 import { useShell } from "./context.tsx";
+import { issueKeyFromQuery, rankSearch } from "./search-rank.ts";
 
 const MAX_PER_GROUP = 40;
 
@@ -47,8 +48,14 @@ export function GlobalSearch() {
       ];
     }
 
+    // Filter and rank here, then cap (XTRM-713): capping first hid every issue past the first 2000 rows.
+    const query = palette.query;
+    const limit = query.trim() ? MAX_PER_GROUP : 6;
+    const rank = (entries: CommandEntry[]) => rankSearch(entries.map((e) => ({ ...e, keys: e.keywords })), query, limit);
+
     const issueSource = workspace ? allIssues.flatMap((q) => q.data ?? []) : repoIssues.data ?? [];
-    const issues: CommandEntry[] = issueSource.slice(0, 2000).map((i) => ({
+    const matched = rankSearch(issueSource.map((i) => ({ issue: i, label: i.title, keys: [i.ref, i.locator] })), query, limit).map((m) => m.issue);
+    const issues: CommandEntry[] = matched.map((i) => ({
       id: i.id,
       label: i.title,
       hint: `${i.locator !== i.ref ? `${i.locator} / ${i.ref}` : i.ref} · ${i.lifecycle.replace(/_/g, " ")}`,
@@ -72,12 +79,17 @@ export function GlobalSearch() {
       ...MODES.filter((m) => !m.deferred).map((m) => ({ id: m.id, label: m.label, icon: m.icon, onSelect: () => go(modeHref(m, repo)) })),
     ];
 
-    const cap = (entries: CommandEntry[]) => (palette.query ? entries : entries.slice(0, 6));
+    // A typed key opens that issue from any project, even when its board is not loaded in this scope.
+    const key = issueKeyFromQuery(query);
+    if (key && !matched.some((i) => i.ref.toUpperCase() === key || i.locator.toUpperCase() === key)) {
+      issues.unshift({ id: `open-${key}`, label: `Open ${key}`, hint: "issue key", keywords: [key], icon: "issues", onSelect: () => shell.inspect({ kind: "issue", ref: key }) });
+    }
+
     return [
-      { heading: "Go to", entries: cap(destinations) },
-      { heading: "Issues", entries: cap(issues) },
-      { heading: "Program", entries: cap(programItems) },
-      { heading: "Repositories", entries: cap(repositories).slice(0, MAX_PER_GROUP * 5) },
+      { heading: "Go to", entries: rank(destinations) },
+      { heading: "Issues", entries: issues },
+      { heading: "Program", entries: rank(programItems) },
+      { heading: "Repositories", entries: rank(repositories) },
     ];
   }, [commandMode, workspace, layout, repo, repoIssues.data, allIssues, program.data, repos.data, palette.query, shell, dispatch, go]);
 
@@ -106,6 +118,7 @@ export function GlobalSearch() {
       onQueryChange={(query) => setPalette({ query })}
       placeholder={commandMode ? "Run a command…" : workspace ? "Search issues, Program, and repositories across the workspace" : `Search ${repo.name}`}
       groups={groups}
+      shouldFilter={commandMode}
       toolbar={scopeToggle}
       loading={searching && (repoIssues.isFetching || allIssues.some((q) => q.isFetching))}
     />
