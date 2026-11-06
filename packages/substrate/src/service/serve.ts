@@ -266,8 +266,12 @@ export async function serveStdio(options: ServeOptions): Promise<number> {
   if (options.db === undefined) migrate(db);
   const services = createServices(db);
 
+  // The operation travels with the answer: a response frame carries no `op`, so the
+  // refusal for an oversized answer could not name what produced it — and an
+  // operator reads "the answer to X is too large" to know which call to narrow.
   const respond = (
     frame: ServiceResponse | { id: null; ok: false; error: { code: string; message: string } },
+    op?: string,
   ): void => {
     const line = JSON.stringify(frame);
     // The client drops a line past its cap and kills the connection, so an oversized
@@ -279,7 +283,7 @@ export async function serveStdio(options: ServeOptions): Promise<number> {
           ok: false,
           error: {
             code: "bad_request",
-            message: `the answer to "${"ok" in frame && frame.ok && "op" in frame ? String((frame as { op?: string }).op ?? "the operation") : "the operation"}" is larger than ${MAX_FRAME_BYTES} bytes; ask for less (fewer rows, a shorter contract, a smaller page)`,
+            message: `the answer to "${op ?? "the operation"}" is larger than ${MAX_FRAME_BYTES} bytes; ask for less (fewer rows, a shorter contract, a smaller page)`,
           },
         }),
       );
@@ -373,11 +377,11 @@ export async function serveStdio(options: ServeOptions): Promise<number> {
         assertKnownArgs(op, args);
         const answer = OPERATIONS[op]!(services, args);
         const result = answer instanceof Promise ? await answer : answer;
-        respond({ id, ok: true, result });
+        respond({ id, ok: true, result }, op);
       } catch (error) {
         const classified = classifyError(error);
         log(`sb serve: ${op} failed: ${classified.message}`);
-        respond({ id, ok: false, error: classified });
+        respond({ id, ok: false, error: classified }, op);
       }
     }
   } catch (error) {
