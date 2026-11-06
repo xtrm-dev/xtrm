@@ -187,20 +187,21 @@ export function activateAuthority(
 export function removeAuthority(
   db: SubstrateDatabase,
   activationId: string,
-  opts: { specialist?: string | null; expectState?: string | null } = {},
+  opts: { specialist: string; expectState?: string | null },
 ): { removed: boolean } {
   const id = identifier(activationId, "activationId");
+  // Ownership is not optional (XTRM-700, operator ruling option A, 2026-11-05).
+  // Removing by id alone let any caller holding the store delete another
+  // specialist's live row; there is no compatibility window and no warning-only
+  // shape, so an unnamed specialist is refused before the row is read.
+  const specialist = identifier(opts.specialist, "specialist");
   ensureAuthorityTable(db);
   // An expectation that is named is validated even when the row is already gone:
   // an unknown state must not silently act as "no expectation".
   const expected = opts.expectState === undefined || opts.expectState === null ? null : state(opts.expectState);
-  const specialist = opts.specialist === undefined || opts.specialist === null ? null : identifier(opts.specialist, "specialist");
   const existing = readRow(db, id);
   if (!existing) return { removed: false };
-  // Deletion is how the host forgets an activation it just stopped, and it asks by
-  // id alone. A caller that names another specialist is refused here rather than
-  // left to the writer's own re-attribution check.
-  if (specialist !== null && specialist !== existing.specialist) {
+  if (specialist !== existing.specialist) {
     throw new ServiceCallError(
       "conflict",
       `activation "${id}" belongs to specialist "${existing.specialist}", not "${specialist}"; nothing was removed`,

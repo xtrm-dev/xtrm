@@ -728,9 +728,17 @@ describe("audit findings", () => {
       });
       assert.equal((await server.next()).ok, true, "a settled activation is revived by its host");
 
-      server.send({ id: 55, op: "authority.remove", args: { activationId: "act_owned", expectState: "fi" + "nal" } });
+      // The owner is named, so the only thing wrong here is the state: without it
+      // this case would now pass because specialist is missing, and would stop
+      // proving that expectState is validated at all (review, #330).
+      server.send({
+        id: 55,
+        op: "authority.remove",
+        args: { activationId: "act_owned", specialist: "worker", expectState: "fi" + "nal" },
+      });
       const absent = await server.next();
       assert.equal(absent.error?.code, "bad_request", "expectState must be a known state");
+      assert.match(absent.error?.message ?? "", /state/, "refused for the state, not for a missing owner");
 
       // The host's stop() forgets a row it last saved as running: id + owner is enough.
       server.send({ id: 56, op: "authority.remove", args: { activationId: "act_owned", specialist: "worker" } });

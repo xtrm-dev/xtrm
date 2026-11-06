@@ -293,7 +293,9 @@ export const OPERATIONS: Record<string, Handler> = {
   "authority.record": (s, a) => activateAuthority(s.db, a as unknown as AuthorityOperation),
   "authority.remove": (s, a) =>
     removeAuthority(s.db, text(a, "activationId"), {
-      specialist: optionalText(a, "specialist"),
+      // Required, not optional: the operation is "remove MY activation", and an
+      // unnamed caller must not be able to delete a row it does not own.
+      specialist: text(a, "specialist"),
       expectState: optionalText(a, "expectState"),
     }),
   "authority.list": (s, a) => {

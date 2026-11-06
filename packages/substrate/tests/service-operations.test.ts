@@ -838,6 +838,35 @@ describe("activation authority", () => {
         },
       );
 
+      // Ownership is required, not optional (XTRM-700): an unnamed removal used to
+      // delete any row by id alone, including another specialist's live one.
+      await assert.rejects(
+        async () => service.call("authority.remove", { activationId: "act_owned" }),
+        (error: unknown) => {
+          assert.ok(error instanceof ServiceCallError);
+          assert.equal(error.code, "bad_request");
+          assert.match(error.message, /specialist/);
+          return true;
+        },
+      );
+      // The refused call must leave the row exactly where it was.
+      const stillThere = await service.call<{ rows: Array<{ activationId: string }> }>("authority.list", {
+        activationId: "act_owned",
+        limit: 5,
+      });
+      assert.deepEqual(
+        stillThere.rows.map((r) => r.activationId),
+        ["act_owned"],
+        "an unnamed removal must not delete a row it did not name an owner for",
+      );
+      // Naming the owner of a row that is already gone is an idempotent stop, not
+      // an error: the host forgets activations it has just stopped.
+      const gone = await service.call<{ removed: boolean }>("authority.remove", {
+        activationId: "act_never_recorded",
+        specialist: "writer",
+      });
+      assert.equal(gone.removed, false);
+
       await assert.rejects(
         async () =>
           service.call("authority.record", {
