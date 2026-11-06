@@ -14,7 +14,7 @@ export interface Searchable {
 
 /**
  * Filter, rank and cap in one pass. Every query token must appear in the label or a key.
- * Ranking: exact key, key prefix, label prefix, any match; ties keep source order.
+ * Ranking: exact key, key prefix, label prefix, whole words, any match; ties keep source order.
  * Capping happens after filtering, so a large board never hides a match.
  */
 export function rankSearch<T extends Searchable>(items: readonly T[], query: string, limit: number): T[] {
@@ -27,7 +27,16 @@ export function rankSearch<T extends Searchable>(items: readonly T[], query: str
     const label = item.label.toLowerCase();
     const haystack = `${label} ${keys.join(" ")}`;
     if (!tokens.every((t) => haystack.includes(t))) return;
-    const score = keys.includes(q) ? 3 : keys.some((k) => k.startsWith(q)) ? 2 : label.startsWith(q) ? 1 : 0;
+    const words = label.split(/[^a-z0-9]+/);
+    const score = keys.includes(q)
+      ? 4
+      : keys.some((k) => k.startsWith(q))
+        ? 3
+        : label.startsWith(q)
+          ? 2
+          : tokens.every((t) => words.includes(t))
+            ? 1
+            : 0;
     scored.push({ item, score, i });
   });
   scored.sort((a, b) => b.score - a.score || a.i - b.i);
