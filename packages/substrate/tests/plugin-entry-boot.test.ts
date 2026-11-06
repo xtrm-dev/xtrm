@@ -48,7 +48,10 @@ describe("packaged plugin entry boots (xtrm-iip.1)", () => {
     // The shipped entry, spawned exactly as .mcp.json does: a .ts here would
     // fail from an installed copy (XTRM-372.7).
     const child = spawn("node", [join(PLUGIN_ROOT, "scripts", "substrate-mcp.mjs")], {
-      env: { ...process.env, SUBSTRATE_HOME, SUBSTRATE_DB: dbPath },
+      // Local mode pinned: the launcher would otherwise follow a remote configured
+      // on the machine running the suite (XTRM-692) and this test is about the
+      // local entry.
+      env: { ...process.env, SUBSTRATE_HOME, SUBSTRATE_DB: dbPath, SUBSTRATE_MCP_LOCAL: "1" },
       stdio: ["pipe", "pipe", "pipe"],
     });
     try {
