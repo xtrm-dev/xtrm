@@ -52,6 +52,41 @@ Not yet covered: native dispatch against the server (the stdio server mode
 needs server 0.2.3) and `post-rewrite` reconciliation (no CLI verb before
 0.2.3).
 
+## serve — the typed service for in-process consumers
+
+Design and rollout: [`../runtime/adr/008-substrate-remote-store-access.md`](../runtime/adr/008-substrate-remote-store-access.md).
+A consumer (Pi, Claude Code, the specialists service) that needs typed
+operations rather than a command line speaks this protocol instead of opening
+`state.db`, which only works where the file is.
+
+- `sb serve --stdio` — read newline-delimited JSON requests on stdin, write one
+  JSON response per line on stdout. It is a protocol, not a UI: stdout carries
+  frames only and diagnostics go to stderr. The first frame is `hello`, which
+  answers with the protocol version, the server package version and the
+  operations this build supports; anything else before it is refused.
+- `sb serve stdio` — the same loop, named as a verb so the group reads like
+  every other one.
+
+Operations are named calls into the same services `sb` itself uses
+(`issue.get`, `issue.claimReady`, `journal.appendEntry`, `provenance.trace`,
+`authority.record`, …). There is no SQL operation, no path operation and no
+expression operation: a client on another machine can ask for a claim to be
+released and cannot ask for the statements that do it. Activation authority is
+the same rule — `authority.record` writes the `activations` projection row for
+an activation, `authority.remove` deletes it, `authority.list` reads it.
+
+A client reaches it over ssh (`ssh <host> sb serve --stdio`), one connection per
+client process, so the store stays on the machine that owns it. Unset
+`substrate.remote` and the same client library runs the same operations
+in-process, with no ssh requirement.
+
+The fallback is not automatic. When `substrate.remote` is set, a failed handshake,
+an `sb` without the verb, or a dropped connection ends the call with an error
+naming the remote — `not_installed`, `spawn_failed`, `connection_lost`,
+`protocol_mismatch` or `peer_noise` — and never opens a local store instead. A
+call that times out is not cancelled on the server, and the protocol carries no
+idempotency key, so a retried mutation may run twice.
+
 ## issue — 22 verbs
 
 - `issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--scrutiny <LOW|MEDIUM|HIGH|CRITICAL>]` — create; pins the

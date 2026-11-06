@@ -82,7 +82,7 @@ const OUTPUT_FLAGS: Record<string, ReadonlySet<string>> = {
 
 // Handled locally by design: help/version never open a store, doctor reports
 // this machine's mode, and `remote` configures it.
-const NEVER_FORWARDED = new Set(["help", "version", "doctor", "remote"]);
+const NEVER_FORWARDED = new Set(["help", "version", "doctor", "remote", "serve"]);
 
 // One document, one bound. Large enough for a real contract or Journal result,
 // small enough that a forwarded invocation is not a bulk copy.
@@ -141,7 +141,10 @@ function commandOf(argv: string[]): { group: string | null; command: string } {
 // this machine". Hooks and doctor ask the same question through this function,
 // so a hook with SUBSTRATE_DB set can never write to the server.
 export function localStoreRequested(argv: string[], env: NodeJS.ProcessEnv = process.env): string | null {
-  const fromEnv = (env["SUBSTRATE_DB"] ?? "").trim();
+  // The service client reads both names (SUBSTRATE_DB and SUBSTRATE_LOCAL_DB); the
+  // forwarder read only the first, so a worker configured with the second got its
+  // writes sent to the server while it believed it was local.
+  const fromEnv = (env["SUBSTRATE_DB"] ?? env["SUBSTRATE_LOCAL_DB"] ?? "").trim();
   if (fromEnv !== "") return "SUBSTRATE_DB=" + fromEnv;
   const flagged = flag(parseArgs(argv).flags, "db");
   if (flagged !== undefined) return "--db " + flagged;

@@ -1,6 +1,7 @@
 # ADR-008 — One authoritative Substrate store, reached from a second machine
 
-> Status: PROPOSED (gate decision pending) · Date: 2026-11-02 · Issue: **XTRM-685** rev 2
+> Status: Stage 1 ACCEPTED 2026-11-02 · Stage 2 merged (`2d33ec76`) · Stage 3 proposed in **XTRM-690**
+> Date: 2026-11-02 · Issues: **XTRM-685** rev 2 (Stages 1–2), **XTRM-690** (Stage 3)
 > Scope: how every Substrate consumer reaches the one `~/.xtrm/state.db` when the operator works on a PC and the store lives on the server.
 > Evidence: `packages/substrate/cli/sb.ts`, `packages/substrate/src/store/{sqlite,database}.ts`, `packages/substrate/hooks/*.ts`, `packages/substrate/integrations/claude-code/{runtime,mcp-server}.ts`, `packages/substrate/integrations/pi/handlers.ts`, `packages/substrate/plugin/substrate/{.mcp.json,scripts/*.mjs}`, specialists `src/substrate/services.ts`, `src/activation/workitem-store.ts`, `src/activation/authority-store.ts`; measured SSH costs on 2026-11-02 (below).
 
@@ -90,7 +91,7 @@ Consequences that Stage 2 must state rather than hide:
 
 1. **Participant identity survives a forwarded write.** The executor forwards `SUBSTRATE_HOLDER` in the environment and a 0.2.2 server reads it as the ambient identity, so a forwarded `issue note` / `journal append` records the holder as `participantId`. What 0.2.2 lacks is the explicit `--participant` *flag* on `journal append`; a caller that passes the flag gets `unknown flag` from the server, which is the correct fail-closed answer. The transport defect this exposed — a `--participant` value that cannot be expressed on the server must not be silently dropped — is why the capability is reported per server version in `sb doctor`.
 2. **Post-rewrite cannot be forwarded.** `sb 0.2.2` exposes no CLI verb for `reconcileRewrite`, so the remote `post-rewrite` adapter reports the unreconciled pairs on stderr and leaves the bindings alone. Claiming success would record a reconciliation that never happened.
-3. **The typed stdio service is not shipped on either side.** In-process consumers (Pi handlers, Claude hook scripts, specialists ports) keep their local behaviour until that follow-up lands.
+3. **The typed stdio service now exists, but only where it is installed.** XTRM-690 ships `sb serve --stdio` in `packages/substrate` (protocol 1). It cannot help a server still on 0.2.2: the command must exist on the machine that owns the store, so that machine's `sb` has to reach a release carrying it. In-process consumers (Pi handlers, Claude hook scripts, specialists ports) keep their local behaviour until then, and `sb doctor` reports the service as unavailable by version rather than assuming it.
 
 ### Stage 2 does not unblock native dispatch
 
@@ -212,6 +213,229 @@ before assuming either.
 | Specialists native dispatch, activation authority (`src/activation/workitem-store.ts`, `src/activation/authority-store.ts`) | remote implementations of `IssueServicePort`/`IssueStorePort`; structured activation/authority operations instead of raw SQLite over the wire | `specialists` repo |
 | PC stale local store (`~/.xtrm/state.db`, 0 issues) | archive it with a marker and add a remote-mode guard so no consumer can silently open it | `packages/substrate` |
 
+## Stage 3 (XTRM-690): the typed stdio service
+
+Stage 2 gave the PC a correct argv path to the server-owned store. Stage 3 gives
+in-process consumers a typed one, because a consumer that runs inside a process
+cannot pipe a CLI: the specialists service reaches the store through
+`IssueServicePort`/`IssueStorePort`, the Pi extension and the Claude hooks call
+the domain services directly.
+
+**Transport.** One child process per client process, started as
+`ssh -T … <host> "cd '<root>' && '<sb>' serve --stdio"`, or as `sb serve --stdio`
+on this machine. Newline-delimited JSON frames: `{id, op, args}` →
+`{id, ok, result}` / `{id, ok: false, error: {code, message}}`. The first frame is
+`hello`, answered with the protocol number, the `sb` version and the sorted
+capability list. A protocol the server does not speak is refused as
+`unsupported` before any store operation, and a refusal does not open the door
+for later frames. A malformed frame is answered with `id: null` and the session
+continues. stdout carries frames only; diagnostics go to stderr. A server
+without the verb prints CLI help instead of a frame, so the client reports the
+missing capability by name (`sb serve --stdio` … 0.2.4 or newer) rather than a
+generic timeout.
+
+**Surface: structured operations, never SQL.** 60 operations across
+`issue.*`, `gate.*`, `store.*`, `journal.*`, `provenance.*`, `authority.*`,
+`resume.buildCapsule`, `resume.renderCapsule`
+and `authority.*`. Each one is a named domain operation with typed, validated
+arguments; there is no `sql`, `exec` or query-expression verb, and an unknown
+operation is refused by its own name. The handlers call the same
+`IssueService`/`JournalService`/`ProvenanceService`/`ResumeService` methods the
+local path calls, so a remote call and a local call cannot drift into different
+semantics.
+
+**Activation authority.** `authority.record`, `authority.remove` and
+`authority.list` are the only operations that name the `activations` table.
+They exist because the specialists' authority writer is deliberately small —
+one row per activation, written outside the issue store, read directly by the
+shipped SessionStart reader — and because the general instruction is that
+authority travels as structured operations. Their columns are copied from
+`specialists/src/activation/authority-store.ts` verbatim
+(`activation_id`, `specialist`, `state`, `bead_id`, `last_activity_at`) so the
+service cannot invent a shape the reader does not understand; the schema version
+constant is repeated rather than shared, and a change to either side must move
+both.
+
+**What the surface refuses, and why.** The first delivery exposed more than a
+remote consumer needs, and the audit of it fixed the surface rather than
+documenting the risk:
+
+- *Frames are split before they are decoded.* Decoding each 64 KiB read on its
+  own turned a character split across a read into U+FFFD and answered `ok: true`
+  with corrupted text. The reader now finds `0x0A` in the byte stream and decodes
+  only complete frames (a newline byte cannot occur inside a UTF-8 sequence).
+- *A frame over `MAX_FRAME_BYTES` is discarded and refused*, not buffered: the
+  previous reader kept whatever a caller sent and rescanned it on every read,
+  which is a memory and CPU denial of service with one write.
+- *An async handler is awaited inside the answer's `try`.* `journal.checkpoint`
+  is async; without the await its promise was serialised as `{}` (an `ok: true`
+  answer for work that never ran) and its rejection killed the process holding
+  the store.
+- *`journal.enrichEntry` is exposed, and only for a checkpoint that has no
+  semantic layer yet.* The service method updates `semantic_json` and appends an
+  audit event, which looks harmless until it is measured: enriching a `note`
+  twice overwrote the first summary with the second and the entry kept no copy of
+  the original. The operation therefore checks the entry before it writes —
+  `kind` must be `checkpoint` or `compaction` and `semantic` must be `null`,
+  otherwise it refuses with `conflict` — and the audit event is the only trace of
+  the change.
+- *Identity travels in the operation's arguments, from the client's own
+  environment.* The serving process strips ambient identity at startup (so a
+  forwarded write is never attributed to the harness that started the server),
+  and the client resolves `SUBSTRATE_HOLDER`, `SUBSTRATE_ACTIVATION_ID`,
+  `XTRM_SESSION_ID` and `XTRM_RUN_ID` from its own environment and sets the same
+  fields a CLI flag would. Forwarding those variables over the connection was
+  wrong in a way that only showed in the store: the server strips them, so a
+  remote append recorded no participant where the local call recorded the
+  holder. The same call now stores the same actor on both paths.
+- *Numbers are bounded.* `Number.isInteger` accepts `1e300`; every numeric
+  argument now has a bound (claim TTLs, priorities, revisions, cursors, list
+  limits) and `lastActivityAt` additionally refuses anything beyond a five-minute
+  clock skew, because a forged stamp at the top of the ordering pins a row first
+  forever.
+- *The surface is derived from the consumers' call sites, not from the services'
+  method lists.* Every method Pi handlers, the Claude hook scripts and MCP server,
+  and the specialists ports actually call has an operation; methods they never
+  call are left out. Left out deliberately: `issue.trailersForCommit` (a hook on
+  the commit path, which has its own remote handling and an 8 s budget),
+  `provenance.generateBundle`, `provenance.closureOutcomes` and the audit
+  queries (`closuresLackingProvenance`, `resultsLackingReceipts`,
+  `issuesForSession`) — reporting tools that read a whole store, not operations a
+  consumer performs mid-task. `issue.trailersForCommit`, `provenance.getBinding`,
+  `provenance.reconcileRewrite` and `provenance.generateBundle` likewise stay
+  out. Five operations exist for the specialists' own tools
+  (`issue.createProject`, `issue.linkCheckout`, `issue.listLinks`,
+  `provenance.findByPr`, `provenance.listArtifacts`), which is what makes the
+  `sp` tools usable over the connection.
+- *`issue.appendEvent` accepts only the events the client raises.* It was a way
+  to write a lifecycle event by hand — a remote caller planted `issue.closed` at
+  `at: 1` and the journal showed a closure nobody performed. The allowlist is
+  `journal.checkpoint_degraded`, the one event a client has a reason to raise.
+- *`authority.list` answers the SessionStart reader's query when asked to.* With
+  `{"activeOnly": true}` it runs the same statement the shipped reader runs —
+  `state NOT IN ('settled','disposed')`, newest activity first, `LIMIT ?` — so a
+  remote client sees the same rows in the same order. `authority.record` accepts
+  what the specialists writer accepts (an empty `issueRef`, a stamp of 0 for a
+  row not touched yet) and refuses only what would poison a listing: a
+  non-integer or far-future stamp, a non-identifier id, an invented state or a
+  re-attributed row. Deletion is by `activationId` and, when the caller names it,
+  the owning specialist — which is what the host's `stop()` needs, because it
+  forgets a row it last saved as `running` or `waiting`.
+- *Activation rows are validated as identifiers, not text.* The SessionStart
+  reader prints `activation_id`, `specialist`, `state` and `bead_id` verbatim
+  into a model's context, so a newline in a field stored a line of instructions
+  that the next session read as its own. `activationId` and `specialist` must
+  match `^[A-Za-z0-9_.:-]{1,128}$`, `state` must be one of the ten values the
+  specialists host writes (`starting`, `running`, `waiting`, `needs_reply`,
+  `escalated`, `settled`, `stopping`, `stopped`, `failed`, `uncertain` — read
+  from `specialists/src/activation/types.ts` and asserted against it in a test),
+  and `issueRef` must look like an issue reference. The forgery defence is the
+  charset, the bounds and the rule that a row cannot be re-attributed to another
+  specialist; the lifecycle itself is the host's, so a woken turn that writes
+  `settled` then `running` is accepted rather than fought. **Follow-up on the
+  specialists side:** the reader should strip control characters from what it
+  prints, since it reads rows written by older releases too.
+- *A client reads its configuration before it decides it is local.* Checking only
+  `SUBSTRATE_REMOTE` gave a machine configured with `sb remote setup` a stale
+  local store; the client now consults the same configuration the CLI uses and
+  fails closed when a configured remote cannot be used.
+- *Nothing is forwarded to the remote CLI twice.* `serve` is in the
+  never-forwarded set, so `sb serve` cannot recurse through the transport.
+
+**Costs and limits to record.** `journal.checkpoint` writes twice: the
+mechanical entry, then a stamp of its cursor on the same row, exactly as the
+local path does. A caller that repeats a checkpoint gets a second entry — there
+is no retry key on the wire, so idempotency is the caller's job (an
+`idempotencyKey` exists only on `issue.updateContract`'s options). And with a
+signature the caller can reproduce, the same request can be repeated; nothing
+in the service deduplicates frames.
+
+**Local mode is the same surface.** `createLocalService` runs the identical
+operation table in-process. A consumer can therefore be written once against
+`SubstrateService` and remain fully local when `substrate.remote` is unset — the
+two-way rule, applied to code instead of commands.
+
+**Rollout order (the server runs `sb` 0.2.2 today).**
+
+1. Release `packages/substrate` with `sb serve --stdio` and `src/service/`.
+   `0.2.4` is published and does **not** carry it: the release that does is the
+   next one. Publishing first is still step one, because every later step
+   depends on a version number an operator can install.
+2. Upgrade the store-owning machine's `sb` to that release and verify the
+   handshake there:
+   `printf '%s\n' '{"id":0,"op":"hello","args":{"protocol":1}}' | sb serve --stdio`.
+3. Land the consumers — Pi handlers, Claude hooks and MCP server, specialists
+   ports (XTRM-691, XTRM-692, SPECIALISTS-4395). A consumer fails closed: when
+   `substrate.remote` is set, a failed handshake, an `sb` without the verb or a
+   dropped connection ends the call with an error naming the remote. It never
+   opens the local store as a substitute, because a stale local store answers
+   questions the operator did not ask. Local behaviour applies only when
+   `substrate.remote` is unset — the both-ways rule is a configuration choice,
+   not a runtime fallback.
+4. Only then switch activation authority to the service on machines that own a
+   server store.
+
+Nothing in steps 3–4 is safe to land before step 2 in a repository whose store
+lives on the server: a consumer that assumes the service would lose its
+operations silently, which is the failure mode this order prevents.
+
+**When the transport fails, it says which failure it is.** One code for every
+transport problem made an unanswering `ssh` look like a version skew. The client
+distinguishes `not_installed` (the far side ran an `sb` without the verb: usage on
+stderr, exit 1, nothing on stdout), `spawn_failed` (the command could not be
+started at all), `connection_lost` (the pipe closed or a write failed), 
+`protocol_mismatch` (the server refused the protocol number) and `peer_noise`
+(stdout carried something that is not a frame — a banner, a proxy, a login
+prompt), and each message names the remote (`ssh:<host>`). Two consequences are
+documented rather than fixed: a call that times out is **not cancelled** on the
+server, and the protocol carries **no idempotency key**, so a retried mutation can
+run twice.
+
+**Verification.** `packages/substrate/tests/service-operations.test.ts` runs
+every operation twice — once through a real child process with its own store, once
+in process — and requires the two answers to agree on the outcome, the error code
+and the result shape; it also refuses an unknown argument name on every
+operation, covers each invalid argument class, and pins the transport codes above
+(`not_installed`, `peer_noise`, `protocol_mismatch`, `spawn_failed`,
+`connection_lost` after an EPIPE, and a timeout that cannot hang the suite).
+`packages/substrate/tests/service-protocol.test.ts` drives a
+real `sb serve --stdio` child over pipes with real frames, against a store the
+client process never opens: the authority row is read back from the server's file
+with `openSubstrate` directly, the client's file stays empty through the same
+operation table, an issue round trip runs through `sb init` on a throwaway
+repository, and an `ssh`-shaped shim proves the hop works over pipes. The CLI
+answers both `sb serve --stdio` and `sb serve stdio`.
+
+### Limits of the service's trust boundary (measured, not assumed)
+
+An independent security pass attacked the service over its own protocol. These
+are the limits it found that are **design**, recorded so nobody mistakes them for
+guards:
+
+- **Identity is asserted by the caller.** `issue.claimIssue`, `issue.releaseClaim`,
+  `journal.appendEntry` and `store.addJournal` take `participantId`, `holder`,
+  `activationId` and `sessionId` from the caller. The server validates their
+  *shape* (a shell-safe label, a canonical session id) but does not authenticate
+  them, because ADR-008 makes ssh access the trust boundary: whoever can run the
+  service can run `sb` on that machine anyway. The client resolves these values
+  from its own environment; a caller that lies about them is indistinguishable
+  from one that does not.
+- **A caller with the store can rewrite another activation's row of the same
+  specialist.** `authority.record` keys on `activationId`, and `specialist` names
+  a group, not an activation. `authority.remove` drops the ownership check when
+  the caller omits `specialist`, because the specialists host forgets a row by id
+  alone on `stop()`; requiring the owner would break that path.
+- **Rows can bury each other.** The shipped reader asks for `LIMIT 10` ordered by
+  `last_activity_at`, and `authority.record` accepts a stamp up to five minutes
+  ahead (clock tolerance for a writer on another machine). Ten rows stamped
+  inside that window therefore sort above real live rows. The fix belongs with
+  the reader's query or the host's row lifecycle, not with input validation.
+- **`linkCheckout` records any absolute path** as a checkout root, including `/`
+  and paths inside `~/.ssh`. It is a bookkeeping operation, not a sandbox check.
+- **Error redaction is name-based**: a store path ending in `state.db` is replaced
+  with `<store>`; another store file name would pass through. Startup failures
+  never reach the wire.
+
 ## Open questions for the operator (the gate)
 
 1. **Transport:** accept the recommended `ssh`-exec design (no listener, no daemon), or prefer the tunneled store service (option C) because a resident service is wanted for a later multi-machine/multi-user tier? — **Answered 2026-11-02: accept `ssh`-exec, no listener, no daemon.**
@@ -233,3 +457,14 @@ the transport with their local bodies preserved. Validation lives in
 `packages/substrate/tests/remote-transport.test.ts` (fake transport, no
 network). Remaining consumers are listed above and are follow-up Issues, not
 gaps in Stage 2.
+
+Stage 3 is implemented on branch `xt/XTRM-690-stdio-service` (PR #309), and the
+audit of the first delivery is folded into the same branch — frames split before
+decoding, a frame size cap, awaited async handlers, `journal.enrichEntry` is present but refuses anything except an unenriched checkpoint or compaction,
+identity from the frame, bounded numbers, identifier-validated authority rows,
+configuration-aware local/remote resolution, and an `ssh` program in the argv:
+`packages/substrate/src/service/{protocol,ops,authority-service,serve,client}.ts`,
+the `sb serve --stdio` wiring in `cli/sb.ts`, and
+`packages/substrate/tests/service-protocol.test.ts` (real child process, real
+frames). It is not deployed: the rollout order above governs when a consumer may
+use it. The consumers stay follow-up Issues.

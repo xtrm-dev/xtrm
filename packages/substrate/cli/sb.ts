@@ -26,6 +26,7 @@ import { RepositoryService } from "../src/service/repository-service.ts";
 import { discoverGitRoot, discoverRepository, type RepositoryDiscovery } from "../src/domain/repository-discovery.ts";
 import { BOOLEAN_FLAGS, type FlagValue, type Flags, flag, flagList, parseArgs } from "../src/domain/argv.ts";
 import { forwardCli, localStoreRequested } from "../src/remote/executor.ts";
+import { serveStdio } from "../src/service/serve.ts";
 import type { RemoteTransport } from "../src/remote/ssh.ts";
 import { remoteDoctor, type RemoteDoctorReport } from "../src/remote/doctor.ts";
 import { renderRemoteDoctor, renderRemoteSetup, renderRemoteStatus } from "../src/remote/render.ts";
@@ -715,6 +716,21 @@ what did this activation produce: issues, bindings, receipts, artifacts.`,
   "import.beads": `usage: sb import beads --file <export.jsonl> --project <id> [--edges-file <f>] [--create-project <PREFIX:Name>] [--dry-run]
 
 one-way Beads migration; --dry-run reports counts without mutating.`,
+  serve: `usage: sb serve --stdio [--db PATH]
+
+runs the typed service that in-process consumers (Pi, Claude Code, the specialists
+service) call over one ssh connection per client process. It is not for people: it
+reads newline-delimited JSON requests on stdin and writes one JSON response per
+line on stdout, starting with a hello handshake that reports the protocol version,
+the server package version and the operations this build supports.
+
+A client on another machine reaches it through ssh, so the store stays on the
+machine that owns it. Operations are named calls (issue.get, journal.append,
+authority.record, ...); there is no SQL, path or expression operation, by design.`,
+  "serve.stdio": `usage: sb serve --stdio [--db PATH]
+
+the service loop: hello, then named operations, one JSON frame per line.
+stdout is protocol only; diagnostics go to stderr.`,
   export: `usage: sb export [project] --project <id> [--file <path>]
 
 writes the project snapshot (to --file when given) and prints it.`,
@@ -977,6 +993,7 @@ function runInit(db: ReturnType<typeof openSubstrate>, svc: IssueService, ctx: C
 const GLOBAL_FLAGS = ["db", "json"];
 
 const FLAG_ALLOWLIST: Record<string, string[]> = {
+  "serve.stdio": ["stdio"],
   "issue.create": ["project", "title", "kind", "contract", "parent", "priority", "scrutiny"],
   "issue.show": [],
   "issue.edit": ["project", "contract", "title", "priority", "scrutiny", "ownership", "context-refs", "expected-revision"],
@@ -1035,7 +1052,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "export.project": ["project", "file"],
 };
 
-const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export", "remote"]);
+const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export", "remote", "serve"]);
 
 function assertKnownFlags(flags: Flags, command: string): void {
   const allowed = new Set([...GLOBAL_FLAGS, ...(FLAG_ALLOWLIST[command] ?? [])]);
@@ -1092,7 +1109,27 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
         : { ...local, stdout: local.stdout + `note: ${remote.note}\n` };
     }
     if (group === "remote") return runRemoteGroup(ctx, verb, flags, rest, remoteDeps);
-    if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|import|export|remote> <verb> [args...]");
+    if (group === "serve") {
+      // `--stdio` is a flag, `stdio` is the verb form: both name the same loop.
+      const stdio = flags.has("stdio") || verb === "stdio";
+      assertKnownFlags(flags, "serve.stdio");
+      if (!stdio || (verb !== undefined && verb !== "stdio")) throw new Error("usage: sb serve --stdio [--db PATH]");
+      // The service loop is async (an operation such as journal.checkpoint awaits
+      // a summarizer), so the command returns at once and the loop owns the
+      // process: it sets the exit code when it reaches EOF. No `process.exit`
+      // here: that would cut an answer that is still being written.
+      void serveStdio({ dbPath: ctx.dbPath, version: cliVersion() }).then(
+        (code) => {
+          process.exitCode = code;
+        },
+        (error: unknown) => {
+          process.stderr.write(`sb serve: ${error instanceof Error ? error.message : String(error)}\n`);
+          process.exitCode = 1;
+        },
+      );
+      return { code: 0, stdout: "", stderr: "" };
+    }
+    if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|import|export|remote|serve> <verb> [args...]");
     if (group && KNOWN_GROUPS.has(group)) assertKnownFlags(flags, `${group}.${verb ?? ""}`);
     db = openSubstrate(ctx.dbPath);
     const svc = new IssueService(db);
