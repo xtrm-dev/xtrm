@@ -27,7 +27,6 @@ import {
 import {
   decidePiEditCall,
   SessionBindings,
-  openServices,
   resumeForSession,
   runBeforeCompact,
   toolIssueClaim,
@@ -41,6 +40,7 @@ import {
   toPiCompaction,
 } from "./handlers.ts";
 import type { SemanticCheckpoint } from "../../src/domain/journal.ts";
+import { openBacking, type Backing } from "./backing.ts";
 import {
   noopFeedback,
   successFeedback,
@@ -48,10 +48,6 @@ import {
   withFeedback,
   type OperationFeedback,
 } from "../../src/presentation/operation-feedback.ts";
-
-function dbPath(): string {
-  return process.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db");
-}
 
 function textResult(data: unknown): { content: Array<{ type: "text"; text: string }>; details: { ok: boolean } } {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], details: { ok: true } };
@@ -64,13 +60,14 @@ function feedbackResult(data: Record<string, unknown>, feedback: OperationFeedba
 export default function (pi: ExtensionAPI): void {
   const bindings = new SessionBindings();
 
-  const withServices = <T>(fn: (svc: ReturnType<typeof openServices>) => T | Promise<T>): Promise<T> => {
-    const svc = openServices(dbPath());
+  // One call surface, local or remote: the backing decides from the configuration
+  // and fails closed when a configured remote cannot be reached.
+  const withBacking = async <T>(fn: (backing: Backing) => Promise<T>): Promise<T> => {
+    const backing = openBacking();
     try {
-      return Promise.resolve(fn(svc)).finally(() => svc.close());
-    } catch (err) {
-      svc.close();
-      throw err;
+      return await fn(backing);
+    } finally {
+      await backing.close();
     }
   };
 
@@ -81,7 +78,7 @@ export default function (pi: ExtensionAPI): void {
       description: "Get a Substrate issue with contract, readiness, claim, and attestation. Ref accepts machine ID, durable reference, locator, historical locator, or alias.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }) }),
       async execute(_id: string, params: Record<string, unknown>) {
-        return textResult(await withServices((svc) => toolIssueGet(svc, { ref: params.ref as string })));
+        return textResult(await withBacking((backing) => toolIssueGet(backing, { ref: params.ref as string })));
       },
     }),
     defineTool({
@@ -91,8 +88,8 @@ export default function (pi: ExtensionAPI): void {
       parameters: Type.Object({ project: Type.String({ description: "Project id" }), query: Type.Optional(Type.String({ description: "Substring match" })), kind: Type.Optional(Type.String({ description: "Issue kind" })) }),
       async execute(_id: string, params: Record<string, unknown>) {
         return textResult(
-          await withServices((svc) =>
-            toolIssueSearch(svc, { project: params.project as string, query: params.query as string | undefined, kind: params.kind as string | undefined }),
+          await withBacking((backing) =>
+            toolIssueSearch(backing, { project: params.project as string, query: params.query as string | undefined, kind: params.kind as string | undefined }),
           ),
         );
       },
@@ -110,7 +107,7 @@ export default function (pi: ExtensionAPI): void {
         ctx: ExtensionContext,
       ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
-        const result = await withServices((svc) => toolIssueClaim(svc, bindings, { ref: params.ref as string, holder: params.holder as string, activationId: params.activationId as string | undefined, sessionId }));
+        const result = await withBacking((backing) => toolIssueClaim(backing, bindings, { ref: params.ref as string, holder: params.holder as string, activationId: params.activationId as string | undefined, sessionId }));
         return feedbackResult(result, successFeedback("issue_claimed", `Claimed ${params.ref as string}`, `holder ${params.holder as string}`));
       },
     }),
@@ -120,7 +117,7 @@ export default function (pi: ExtensionAPI): void {
       description: "Revise a Substrate issue contract (revision-on-change; identical contracts are a no-op). Results include structured success/no-op feedback so agents can distinguish a persisted revision from an idempotent repeat.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), contract: Type.Unknown({ description: "Seven-field work contract" }) }),
       async execute(_id: string, params: Record<string, unknown>) {
-        const result = await withServices((svc) => toolIssueUpdate(svc, { ref: params.ref as string, contract: params.contract }));
+        const result = await withBacking((backing) => toolIssueUpdate(backing, { ref: params.ref as string, contract: params.contract }));
         return feedbackResult(
           result,
           result.revisionCreated
@@ -142,7 +139,7 @@ export default function (pi: ExtensionAPI): void {
         ctx: ExtensionContext,
       ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
-        const result = await withServices((svc) => toolJournalAppend(svc, { ref: params.ref as string, kind: params.kind as string, sessionId }));
+        const result = await withBacking((backing) => toolJournalAppend(backing, { ref: params.ref as string, kind: params.kind as string, sessionId }));
         return feedbackResult(result, successFeedback("journal_written", `Added ${params.kind as string} to ${params.ref as string}`, `journal seq ${String(result.sequence)}`));
       },
     }),
@@ -159,7 +156,7 @@ export default function (pi: ExtensionAPI): void {
         ctx: ExtensionContext,
       ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
-        const result = await withServices((svc) => toolJournalCheckpoint(svc, { ref: params.ref as string, sessionId, headCommit: params.headCommit as string | undefined }));
+        const result = await withBacking((backing) => toolJournalCheckpoint(backing, { ref: params.ref as string, sessionId, headCommit: params.headCommit as string | undefined }));
         return feedbackResult(
           result,
           result.degraded
@@ -174,7 +171,7 @@ export default function (pi: ExtensionAPI): void {
       description: "Build the bounded resume capsule for an issue: current contract, latest checkpoint, Journal delta, blockers, claim, and provenance.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }) }),
       async execute(_id: string, params: Record<string, unknown>) {
-        const capsule = await withServices((svc) => toolIssueResume(svc, { ref: params.ref as string }));
+        const capsule = await withBacking((backing) => toolIssueResume(backing, { ref: params.ref as string }));
         return { content: [{ type: "text" as const, text: capsule }], details: { ok: true } };
       },
     }),
@@ -184,7 +181,7 @@ export default function (pi: ExtensionAPI): void {
       description: "Trace the full durable evidence spine for an issue: revision/hash, attestation, claims, execution bindings, WorkReceipts with artifacts, checkpoints, commits/PRs, external bindings, and closure revision.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }) }),
       async execute(_id: string, params: Record<string, unknown>) {
-        return textResult(await withServices((svc) => toolProvenanceTrace(svc, { ref: params.ref as string })));
+        return textResult(await withBacking((backing) => toolProvenanceTrace(backing, { ref: params.ref as string })));
       },
     }),
   ];
@@ -197,7 +194,7 @@ export default function (pi: ExtensionAPI): void {
     if (!isToolCallEventType("edit", event) && !isToolCallEventType("write", event)) return;
     try {
       const sessionId = ctx?.sessionManager?.getSessionId?.();
-      const decision = await withServices((svc) => decidePiEditCall(svc, bindings, { sessionId: sessionId ?? undefined, workspace: ctx?.cwd }));
+      const decision = await withBacking((backing) => decidePiEditCall(backing, bindings, { sessionId: sessionId ?? undefined, workspace: ctx?.cwd }));
       if (!decision.allow) return { block: true, reason: decision.reason ?? "no live claim" };
     } catch {
       return;
@@ -208,7 +205,7 @@ export default function (pi: ExtensionAPI): void {
     description: "Print the Substrate resume capsule for the session-bound issue",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
       const sessionId = ctx?.sessionManager?.getSessionId?.();
-      const capsule = await withServices((svc) => resumeForSession(svc, bindings, sessionId));
+      const capsule = await withBacking((backing) => resumeForSession(backing, bindings, sessionId));
       ctx.ui.notify(
         capsule ?? "No Substrate issue bound to this session (claim one, or set SUBSTRATE_ISSUE_REF; SUBSTRATE_ISSUE is the legacy alias).",
         capsule ? "info" : "warning",
@@ -219,7 +216,7 @@ export default function (pi: ExtensionAPI): void {
   pi.on("session_start", async (event: SessionStartEvent, ctx: ExtensionContext) => {
     if (event.reason !== "resume" && event.reason !== "new" && event.reason !== "fork") return;
     const sessionId = ctx?.sessionManager?.getSessionId?.() ?? event.previousSessionFile;
-    const capsule = await withServices((svc) => resumeForSession(svc, bindings, sessionId)).catch(() => null);
+    const capsule = await withBacking((backing) => resumeForSession(backing, bindings, sessionId)).catch(() => null);
     if (capsule) ctx.ui.notify(`Substrate resume available — run /substrate-resume for the full capsule.\n${capsule.split("\n").slice(0, 6).join("\n")}`, "info");
   });
 
@@ -262,7 +259,7 @@ export default function (pi: ExtensionAPI): void {
           return response.usage ? { ...checkpoint, usage: response.usage } : checkpoint;
         }
       : undefined;
-    const result = await withServices((svc) => runBeforeCompact(svc, { issueRef: ref, sessionId, summarizer })).catch(() => null);
+    const result = await withBacking((backing) => runBeforeCompact(backing, { issueRef: ref, sessionId, summarizer })).catch(() => null);
     if (!result) return;
     return toPiCompaction(event.preparation, result);
   });

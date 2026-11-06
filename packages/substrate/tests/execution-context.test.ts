@@ -27,7 +27,8 @@ import {
   XTRM_SESSION_NAME_ENV,
 } from "../src/domain/execution-context.ts";
 import { dispatchToSpecialist } from "../src/workitems/dispatch-gate.ts";
-import { openServices, toolJournalAppend, toolJournalCheckpoint, runBeforeCompact } from "../integrations/pi/handlers.ts";
+import { openBacking, type Backing } from "../integrations/pi/backing.ts";
+import { toolJournalAppend, toolJournalCheckpoint, runBeforeCompact } from "../integrations/pi/handlers.ts";
 import { handlePreCompact } from "../integrations/claude-code/precompact.ts";
 import { contract } from "./helpers.ts";
 
@@ -443,11 +444,14 @@ describe("X1 §97: R4 env → Pi/Claude → Journal carries equal session id/nam
     process.env[XTRM_SESSION_ID_ENV] = ENV_ID;
     process.env[XTRM_SESSION_NAME_ENV] = ENV_NAME;
     const s = scratch();
-    const svc = openServices(s.dbPath);
+    // Seeding reads through the concrete services; the handlers go through the
+    // typed service, which is what this test is about.
+    const backing: Backing = openBacking({ env: { ...process.env, SUBSTRATE_DB: s.dbPath } });
+    const journal = new JournalService(s.db, s.svc);
     try {
       const { issue } = readyIssue(s.svc);
-      const appended = toolJournalAppend(svc, { ref: issue.id, kind: "finding", sessionId: "pi-sess-9" });
-      const entry = svc.journal.getEntry(appended.entryId as string);
+      const appended = await toolJournalAppend(backing, { ref: issue.id, kind: "finding", sessionId: "pi-sess-9" });
+      const entry = journal.getEntry(appended.entryId as string);
       assert.equal(entry.executionContext?.xtrmSessionId, ENV_ID);
       assert.equal(entry.executionContext?.xtrmSessionName, ENV_NAME);
       assert.equal(entry.executionContext?.host?.type, "pi");
@@ -455,24 +459,24 @@ describe("X1 §97: R4 env → Pi/Claude → Journal carries equal session id/nam
       // Flat session follows the automatic R4 session first (finding 2),
       // while the provider session stays typed in the envelope.
       assert.equal(entry.sessionId, ENV_ID, "flat session column follows xtrmSessionId");
-      const cp = await toolJournalCheckpoint(svc, { ref: issue.id, sessionId: "pi-sess-9" });
-      const cpEntry = svc.journal.getEntry(cp.entryId as string);
+      const cp = await toolJournalCheckpoint(backing, { ref: issue.id, sessionId: "pi-sess-9" });
+      const cpEntry = journal.getEntry(cp.entryId as string);
       assert.equal(cpEntry.executionContext?.xtrmSessionId, ENV_ID);
       assert.equal(cpEntry.executionContext?.xtrmSessionName, ENV_NAME);
-      const compact = await runBeforeCompact(svc, { issueRef: issue.id, sessionId: "pi-sess-9" });
-      const compactEntry = svc.journal.getEntry(compact.entryId as string);
+      const compact = await runBeforeCompact(backing, { issueRef: issue.id, sessionId: "pi-sess-9" });
+      const compactEntry = journal.getEntry(compact.entryId as string);
       assert.equal(compactEntry.executionContext?.xtrmSessionId, ENV_ID);
       assert.equal(compactEntry.executionContext?.xtrmSessionName, ENV_NAME);
       // A known activation is recorded, not dropped (X1 review P2-1): the
       // envelope and the flat column agree on the same activation id.
-      const withActivation = toolJournalAppend(svc, {
+      const withActivation = await toolJournalAppend(backing, {
         ref: issue.id, kind: "finding", sessionId: "pi-sess-9", activationId: "act-pi-1",
       });
-      const activationEntry = svc.journal.getEntry(withActivation.entryId as string);
+      const activationEntry = journal.getEntry(withActivation.entryId as string);
       assert.equal(activationEntry.executionContext?.specialist?.activationId, "act-pi-1");
       assert.equal(activationEntry.activationId, "act-pi-1");
     } finally {
-      svc.close();
+      await backing.close();
       try { s.db.close(); } catch { /* closed */ }
       rmSync(s.dir, { recursive: true, force: true });
     }
