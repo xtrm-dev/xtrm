@@ -20,6 +20,11 @@ describe("rankSearch", () => {
     expect(rankSearch(items, "serve", 10).map((i) => i.keys[0])).toEqual(["SERVE-1", "A-2", "A-1"]);
   });
 
+  it("ranks whole words above matches inside a word", () => {
+    const items = [issue("A-1", "preserve gate classes"), issue("A-2", "sb serve --stdio over ssh")];
+    expect(rankSearch(items, "serve", 10).map((i) => i.keys[0])).toEqual(["A-2", "A-1"]);
+  });
+
   it("requires every token and ignores text outside label and keys", () => {
     const items = [{ label: "console dark palette", keys: ["X-1"], hint: "open" }, { label: "console light", keys: ["X-2"] }];
     expect(rankSearch(items, "console dark", 10)).toHaveLength(1);
