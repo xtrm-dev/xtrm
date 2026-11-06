@@ -40,7 +40,7 @@ import {
   toPiCompaction,
 } from "./handlers.ts";
 import type { SemanticCheckpoint } from "../../src/domain/journal.ts";
-import { openBacking, type Backing } from "./backing.ts";
+import { SessionBacking, openBacking, type Backing, type StoreCall } from "./backing.ts";
 import {
   noopFeedback,
   successFeedback,
@@ -57,19 +57,19 @@ function feedbackResult(data: Record<string, unknown>, feedback: OperationFeedba
   return textResult(withFeedback(data, feedback));
 }
 
-export default function (pi: ExtensionAPI): void {
+export default function registerSubstrate(pi: ExtensionAPI, options: { openBacking?: () => Backing } = {}): void {
   const bindings = new SessionBindings();
 
-  // One call surface, local or remote: the backing decides from the configuration
-  // and fails closed when a configured remote cannot be reached.
-  const withBacking = async <T>(fn: (backing: Backing) => Promise<T>): Promise<T> => {
-    const backing = openBacking();
-    try {
-      return await fn(backing);
-    } finally {
-      await backing.close();
-    }
-  };
+  // One call surface, local or remote, for the life of the session (XTRM-711).
+  // Opening per call paid an ssh handshake on every tool call and every edit.
+  const open = options.openBacking ?? (() => openBacking());
+  const session = new SessionBacking(open);
+  const withBacking = async <T>(fn: (backing: StoreCall) => Promise<T>): Promise<T> => fn(session);
+  // Closing it is the session's job, not each call's: a leaked connection keeps
+  // ssh alive on the store-owning machine.
+  pi.on("session_shutdown", async () => {
+    await session.close();
+  });
 
   const tools = [
     defineTool({

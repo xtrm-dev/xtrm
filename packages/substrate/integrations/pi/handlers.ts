@@ -7,7 +7,7 @@
 // shapes fail-closed.
 
 import type { Summarizer } from "../../src/service/journal-service.ts";
-import type { Backing } from "./backing.ts";
+import type { StoreCall } from "./backing.ts";
 import { isJournalKind, type SemanticCheckpoint } from "../../src/domain/journal.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
 import { currentExecutionContext, enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
@@ -121,7 +121,7 @@ function summary(i: SummaryInput): Record<string, unknown> {
 // store and a server-owned one. The results keep the shapes the tools always
 // returned: the wire adds a transport, not a dialect.
 
-export async function toolIssueGet(backing: Backing, params: { ref: string }): Promise<Record<string, unknown>> {
+export async function toolIssueGet(backing: StoreCall, params: { ref: string }): Promise<Record<string, unknown>> {
   const resolved = await backing.call<{ id: string; currentRevision: number }>("issue.resolveRef", { ref: params.ref });
   const issue = await backing.call<SummaryInput & { id: string }>("issue.get", { issueId: resolved.id });
   const readiness = await backing.call<{ state: string; dispatchable: boolean; reasons: unknown }>("issue.getReadiness", {
@@ -143,7 +143,7 @@ export async function toolIssueGet(backing: Backing, params: { ref: string }): P
 }
 
 export async function toolIssueSearch(
-  backing: Backing,
+  backing: StoreCall,
   params: { project: string; query?: string; kind?: string },
 ): Promise<Array<Record<string, unknown>>> {
   // One bounded board read, filtered here exactly as before: title, humanRef and
@@ -175,7 +175,7 @@ export async function toolIssueSearch(
 }
 
 export async function toolIssueClaim(
-  backing: Backing,
+  backing: StoreCall,
   bindings: SessionBindings,
   params: { ref: string; holder: string; activationId?: string; ttlMs?: number; sessionId?: string },
 ): Promise<Record<string, unknown>> {
@@ -191,7 +191,7 @@ export async function toolIssueClaim(
 }
 
 export async function toolIssueUpdate(
-  backing: Backing,
+  backing: StoreCall,
   params: { ref: string; contract: unknown; expectedRevision?: number },
 ): Promise<Record<string, unknown>> {
   const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
@@ -205,7 +205,7 @@ export async function toolIssueUpdate(
 }
 
 export async function toolJournalAppend(
-  backing: Backing,
+  backing: StoreCall,
   params: {
     ref: string;
     kind: string;
@@ -238,7 +238,7 @@ export async function toolJournalAppend(
 }
 
 export async function toolJournalCheckpoint(
-  backing: Backing,
+  backing: StoreCall,
   params: { ref: string; sessionId?: string; headCommit?: string; changedFiles?: string[]; executionContext?: ExecutionContext | null },
 ): Promise<Record<string, unknown>> {
   const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
@@ -257,14 +257,14 @@ export async function toolJournalCheckpoint(
   return { entryId: result.entry.id, sequence: result.entry.sequence, degraded: result.degraded };
 }
 
-export async function toolIssueResume(backing: Backing, params: { ref: string }): Promise<string> {
+export async function toolIssueResume(backing: StoreCall, params: { ref: string }): Promise<string> {
   const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
   const capsule = await backing.call<unknown>("resume.buildCapsule", { issueId: resolved.id });
   return backing.call<string>("resume.renderCapsule", { capsule });
 }
 
 /** Full canonical evidence spine; Pi and Claude consume the same provenance. */
-export async function toolProvenanceTrace(backing: Backing, params: { ref: string }): Promise<unknown> {
+export async function toolProvenanceTrace(backing: StoreCall, params: { ref: string }): Promise<unknown> {
   const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
   return backing.call<unknown>("provenance.trace", { issueId: resolved.id });
 }
@@ -300,7 +300,7 @@ export interface BeforeCompactResult {
   usage: Usage | null;
 }
 
-export async function runBeforeCompact(backing: Backing, input: BeforeCompactInput): Promise<BeforeCompactResult> {
+export async function runBeforeCompact(backing: StoreCall, input: BeforeCompactInput): Promise<BeforeCompactResult> {
   const fallback = { entryId: null, sequence: null, degraded: true, fallbackToDefault: true, summary: null, usage: null };
   let resolved: { id: string };
   try {
@@ -379,7 +379,7 @@ export async function runBeforeCompact(backing: Backing, input: BeforeCompactInp
 // Best-effort note: a missing usage report must never block compaction, so a
 // failure here is swallowed (mirrors the degraded-checkpoint pattern above).
 async function recordMissingUsage(
-  backing: Backing,
+  backing: StoreCall,
   issueId: string,
   input: BeforeCompactInput,
   checkpointEntryId: string,
@@ -449,7 +449,7 @@ export function evaluateEditGate(state: EditGateState): { allow: boolean; reason
 }
 
 export async function decidePiEditCall(
-  backing: Backing,
+  backing: StoreCall,
   bindings: SessionBindings,
   opts: { sessionId?: string; workspace?: string } = {},
 ): Promise<{ allow: boolean; reason?: string; issueRef: string | null }> {
@@ -520,7 +520,7 @@ export function evaluateStopContinuity(state: StopContinuityState): {
 // a silent context edit. Returns null when unbound.
 
 export async function resumeForSession(
-  backing: Backing,
+  backing: StoreCall,
   bindings: SessionBindings,
   sessionId: string | undefined,
 ): Promise<string | null> {
