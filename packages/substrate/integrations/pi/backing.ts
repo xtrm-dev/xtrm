@@ -9,14 +9,19 @@
 // silent fallback writes to a store the operator did not choose.
 
 import { localOrRemote, openService, type SubstrateService } from "../../src/service/client.ts";
+import { isConnectionLost, isReadOperation } from "../../src/service/operations.ts";
 
 export type BackingKind = "local" | "remote";
 
-export interface Backing {
+/** What a tool handler needs: one call surface, whichever transport answers. */
+export interface StoreCall {
+  call<T>(op: string, args?: Record<string, unknown>): Promise<T>;
+}
+
+export interface Backing extends StoreCall {
   kind: BackingKind;
   /** The transport's name for diagnostics: "local" or "ssh:<host>". */
   where: string;
-  call<T>(op: string, args?: Record<string, unknown>): Promise<T>;
   close(): Promise<void>;
 }
 
@@ -33,4 +38,61 @@ export function openBacking(options: { env?: NodeJS.ProcessEnv; version?: string
     call: <T>(op: string, args: Record<string, unknown> = {}) => opened.service.call<T>(op, args),
     close: () => opened.service.close(),
   };
+}
+
+/**
+ * One backing for the life of a session (XTRM-711).
+ *
+ * A Pi session makes many calls; opening ssh for each of them paid a handshake
+ * every time (639/658/633 ms measured). The connection is opened on first use,
+ * reused afterwards, and closed when the session ends.
+ *
+ * A connection that drops is not reused: the backing is discarded and, for a
+ * read only, the call is attempted once on a new connection. A mutation is never
+ * retried — the protocol carries no idempotency key, so a retry may run twice.
+ */
+export class SessionBacking implements StoreCall {
+  private backing: Backing | null = null;
+  private opens = 0;
+  private readonly open: () => Backing;
+
+  constructor(open: () => Backing = () => openBacking()) {
+    this.open = open;
+  }
+
+  /** How many connections this session has opened; a second one is a diagnostic, not a habit. */
+  get connectionCount(): number {
+    return this.opens;
+  }
+
+  private async current(): Promise<Backing> {
+    if (this.backing === null) {
+      this.backing = this.open();
+      this.opens += 1;
+    }
+    return this.backing;
+  }
+
+  async call<T>(op: string, args: Record<string, unknown> = {}): Promise<T> {
+    try {
+      return await (await this.current()).call<T>(op, args);
+    } catch (error) {
+      if (!isConnectionLost(error) || !isReadOperation(op)) throw error;
+      await this.close();
+      return await (await this.current()).call<T>(op, args);
+    }
+  }
+
+  async close(): Promise<void> {
+    const backing = this.backing;
+    this.backing = null;
+    if (backing !== null) {
+      try {
+        await backing.close();
+      } catch {
+        // A connection that already failed cannot be closed politely, and the
+        // failure is the caller's news, not this one's.
+      }
+    }
+  }
 }
