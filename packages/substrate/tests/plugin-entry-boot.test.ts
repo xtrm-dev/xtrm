@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
+import { JournalService } from "../src/service/journal-service.ts";
 import { contract } from "./helpers.ts";
 
 // Acceptance xtrm-iip.1 (closeout E1), third proof: the relocated plugin
@@ -48,7 +49,10 @@ describe("packaged plugin entry boots (xtrm-iip.1)", () => {
     // The shipped entry, spawned exactly as .mcp.json does: a .ts here would
     // fail from an installed copy (XTRM-372.7).
     const child = spawn("node", [join(PLUGIN_ROOT, "scripts", "substrate-mcp.mjs")], {
-      env: { ...process.env, SUBSTRATE_HOME, SUBSTRATE_DB: dbPath },
+      // Local mode pinned: the launcher would otherwise follow a remote configured
+      // on the machine running the suite (XTRM-692) and this test is about the
+      // local entry.
+      env: { ...process.env, SUBSTRATE_HOME, SUBSTRATE_DB: dbPath, SUBSTRATE_MCP_LOCAL: "1" },
       stdio: ["pipe", "pipe", "pipe"],
     });
     try {
@@ -82,6 +86,63 @@ describe("packaged plugin entry boots (xtrm-iip.1)", () => {
       assert.equal((JSON.parse(text) as { title: string }).title, "plugin boot");
     } finally {
       child.kill();
+    }
+  });
+
+  it("records the launcher's workspace, never the server's own checkout (XTRM-692)", async () => {
+    // On the store-owning machine the MCP process cwd is that machine's
+    // checkout. A checkpoint must record the caller's workspace, which the
+    // launcher passes as an argument and this process reads from the environment.
+    const workspace = "/pc/worktree";
+    const child = spawn("node", [join(PLUGIN_ROOT, "scripts", "substrate-mcp.mjs")], {
+      env: {
+        ...process.env,
+        SUBSTRATE_HOME,
+        SUBSTRATE_DB: dbPath,
+        SUBSTRATE_MCP_LOCAL: "1",
+        SUBSTRATE_MCP_REMOTE: "1",
+        SUBSTRATE_MCP_WORKSPACE: workspace,
+      },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    try {
+      let buf = "";
+      const responses = new Map<number, { result?: unknown; error?: unknown }>();
+      child.stdout.on("data", (chunk: Buffer) => {
+        buf += chunk.toString("utf8");
+        let nl: number;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          const msg = JSON.parse(line) as { id?: number };
+          if (msg.id !== undefined) responses.set(msg.id, msg as { result?: unknown; error?: unknown });
+        }
+      });
+      let id = 1;
+      const call = async (name: string, args: Record<string, unknown>) => {
+        const myId = id++;
+        child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: myId, method: "tools/call", params: { name, arguments: args, _meta: META } }) + "\n");
+        for (let i = 0; i < 400 && !responses.has(myId); i++) await new Promise((r) => setTimeout(r, 10));
+        assert.ok(responses.has(myId), `no response for ${name}`);
+        return responses.get(myId) as { result?: unknown; error?: unknown };
+      };
+      const checkpoint = await call("journal_checkpoint", { ref: humanRef, project: "prj_xtrm" });
+      const payload = checkpoint.result as { isError?: boolean; content?: Array<{ text: string }> } | undefined;
+      assert.ok(!checkpoint.error, JSON.stringify(checkpoint.error));
+      assert.ok(!payload?.isError, payload?.content?.[0]?.text ?? "tool reported an error");
+    } finally {
+      child.kill();
+    }
+    const db = openSubstrate(dbPath);
+    try {
+      const svc = new IssueService(db);
+      const issue = svc.resolveRef(humanRef);
+      const entry = new JournalService(db, svc).latestCheckpoint(issue.id);
+      assert.ok(entry?.mechanical, "the checkpoint must be readable");
+      assert.equal(entry.mechanical?.workspace, workspace);
+    } finally {
+      db.close();
     }
   });
 });

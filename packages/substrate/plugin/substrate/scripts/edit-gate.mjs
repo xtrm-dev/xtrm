@@ -7,6 +7,7 @@
 // process.argv[1].endsWith("edit-gate.ts"), so a .ts entry script here would
 // run the handler twice.
 
+import { applyServerArguments, proxyHook } from "./remote-hook.mjs";
 import { resolveSubstrate } from "./resolve-substrate.mjs";
 import { readHookInput } from "./read-hook-input.mjs";
 import { armPipeDrain } from "./write-and-exit.mjs";
@@ -14,6 +15,9 @@ import { armPipeDrain } from "./write-and-exit.mjs";
 // XTRM-335: write-then-terminate drains via exitCode; the allow path writes
 // nothing. armPipeDrain() swallows only EPIPE.
 armPipeDrain();
+
+async function main() {
+
 
 const { handleEditGate } = await resolveSubstrate("edit-gate.ts");
 const hook = await readHookInput();
@@ -31,4 +35,21 @@ const result = handleEditGate({
 if (!result.allow) {
   process.stdout.write(JSON.stringify({ decision: "block", reason: result.reason ?? "no live claim" }) + "\n");
 }
-process.exitCode = 0;
+// exit code is set by main()'s caller
+  return 0;
+}
+
+try {
+  // XTRM-692: with a remote configured the answer comes from the store-owning
+  // machine; the handler below runs only for a local deployment.
+  applyServerArguments();
+  const forwarded = await proxyHook("edit-gate.mjs");
+  process.exitCode = forwarded === false ? await main() : forwarded;
+} catch (err) {
+    // A configured remote that cannot be reached must not become "allowed":
+    // the gate fails closed and names the transport code (XTRM-712).
+    process.stdout.write(
+      JSON.stringify({ decision: "block", reason: `substrate remote unavailable: ${err.code}: ${err.message}` }) + "\n",
+    );
+    process.exitCode = 0;
+}

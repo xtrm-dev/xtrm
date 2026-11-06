@@ -79,6 +79,18 @@ function textPayload(value: unknown): { content: Array<{ type: "text"; text: str
   return { content: [{ type: "text", text: JSON.stringify(attachMutationFeedback(value)) }] };
 }
 
+/**
+ * The workspace a checkpoint records (XTRM-692). In remote mode this process runs
+ * on the store-owning machine, where the cwd is that machine's checkout — never
+ * the caller's worktree. The launcher passes the caller's workspace as an
+ * argument; an explicit tool argument still wins.
+ */
+function checkpointWorkspace(explicit?: string): string | undefined {
+  if (explicit !== undefined && explicit !== "") return explicit;
+  if (process.env["SUBSTRATE_MCP_REMOTE"] === "1") return process.env["SUBSTRATE_MCP_WORKSPACE"] || undefined;
+  return undefined;
+}
+
 function resolveProjectId(svc: IssueService, explicit?: string): string {
   const repo = discoverRepository();
   return svc.resolveProject({
@@ -636,7 +648,7 @@ const TOOL_DEFS: ToolDef[] = [
         });
         const mechanical = handles.journal.collectMechanical(issue.id, {
           ...identity,
-          workspace: (workspace as string | undefined) ?? undefined,
+          workspace: checkpointWorkspace(workspace as string | undefined),
           branch: (branch as string | undefined) ?? undefined,
           baseCommit: (baseCommit as string | undefined) ?? undefined,
           headCommit: (headCommit as string | undefined) ?? undefined,
