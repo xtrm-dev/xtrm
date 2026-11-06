@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { ARGS, CAPABILITIES, OPERATIONS, classifyError } from "../src/service/ops.ts";
 import { MAX_FRAME_BYTES, ServiceCallError } from "../src/service/protocol.ts";
 import {
+  classifyTransportEnd,
   createLocalService,
   createServiceClient,
   openService,
@@ -1163,6 +1164,193 @@ describe("blockers the security pass found", () => {
     } finally {
       await first.close();
       await second.close();
+    }
+  });
+});
+
+describe("round four: identity where it is listed, values that are not masked", () => {
+  it("adds identity only to the operations whose argument table names it (HIGH identity)", async () => {
+    const repo = makeRepo("identity-args");
+    const db = makeStore(repo, "one");
+    const saved = {
+      holder: process.env["SUBSTRATE_HOLDER"],
+      session: process.env["XTRM_SESSION_ID"],
+      activation: process.env["SUBSTRATE_ACTIVATION_ID"],
+    };
+    process.env["SUBSTRATE_HOLDER"] = "identity-holder";
+    process.env["XTRM_SESSION_ID"] = "0f7b9e34-6a1e-4b8e-9d95-0d1e6f2f0a11";
+    process.env["SUBSTRATE_ACTIVATION_ID"] = "identity-activation";
+    const wire = remoteService(db);
+    try {
+      const ctx = await seed(wire, repo, makeRepo("identity-args-other"));
+      // Each of these was refused before: applyIdentity merged participantId into
+      // operations whose ARGS never listed it, and every harness session sets it.
+      const claim = await attempt(wire, "issue.claimIssue", {
+        issueId: ctx.issueId,
+        holder: "identity-holder",
+        ttlMs: 60_000,
+      });
+      assert.equal(claim.ok, true, `claim must accept the identity it lists: ${claim.code ?? "ok"}`);
+
+      const renew = await attempt(wire, "issue.renewClaim", {
+        issueId: ctx.issueId,
+        holder: "identity-holder",
+        ttlMs: 60_000,
+      });
+      assert.equal(renew.ok, true, `renew must accept the identity it lists: ${renew.code ?? "ok"}`);
+
+      const addJournal = await attempt(wire, "store.addJournal", { ref: ctx.ref, kind: "note" });
+      assert.equal(addJournal.ok, true, `addJournal must accept the identity it lists: ${addJournal.code ?? "ok"}`);
+
+      const release = await attempt(wire, "issue.releaseClaim", { issueId: ctx.issueId, holder: "identity-holder" });
+      assert.equal(release.ok, true, `release must accept the identity it lists: ${release.code ?? "ok"}`);
+
+      // The identity the table does list is stored, not merely accepted.
+      const store = openSubstrate(db);
+      try {
+        const row = store
+          .prepare("SELECT participant_id FROM issue_journal ORDER BY sequence DESC LIMIT 1")
+          .get() as { participant_id: string | null } | undefined;
+        assert.equal(row?.participant_id, "identity-holder", "addJournal records the caller's holder");
+      } finally {
+        store.close();
+      }
+    } finally {
+      await wire.close();
+      for (const [key, value] of [
+        ["SUBSTRATE_HOLDER", saved.holder],
+        ["XTRM_SESSION_ID", saved.session],
+        ["SUBSTRATE_ACTIVATION_ID", saved.activation],
+      ] as Array<[string, string | undefined]>) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  it("opens a remote service while the harness identity is set (HIGH openService)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "sb-open-"));
+    const configPath = join(dir, "substrate.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({ remote: "ssh:nowhere.invalid", remoteSb: "/nonexistent/sb", serverVersion: "0.2.4", checkouts: {} }),
+    );
+    const opened = openService({
+      version: "test",
+      env: {
+        ...process.env,
+        SUBSTRATE_REMOTE_CONFIG: configPath,
+        SUBSTRATE_HOLDER: "identity-holder",
+        XTRM_SESSION_ID: "0f7b9e34-6a1e-4b8e-9d95-0d1e6f2f0a11",
+        SUBSTRATE_ACTIVATION_ID: "identity-activation",
+        SUBSTRATE_REMOTE: undefined,
+        SUBSTRATE_DB: undefined,
+      },
+    });
+    try {
+      assert.equal(opened.endpoint.kind, "remote");
+      assert.ok(opened.link !== undefined, "the link travels with the service so ssh stderr is reachable");
+      // The old default forwarded identity variables that its own allowlist refuses,
+      // so merely opening this connection threw before ssh ran.
+      const failure = await attempt(opened.service, "issue.listLinks", {});
+      assert.equal(failure.ok, false, "nothing listens on nowhere.invalid");
+      assert.notEqual(
+        failure.code,
+        "not_installed",
+        "a host that does not resolve is not an sb without the verb: the old pattern matched 'serve' inside 'server'",
+      );
+    } finally {
+      await opened.service.close();
+    }
+  });
+
+  it("stores the priority it was given, and keeps bindings distinct from receipts (MEDIUM values)", async () => {
+    const repo = makeRepo("values-two");
+    const db = makeStore(repo, "one");
+    const service = createLocalService(db, "test");
+    try {
+      const ctx = await seed(service, repo, makeRepo("values-two-other"));
+      await service.call("issue.setPriority", { issueId: ctx.issueId, priority: 3 });
+      const issue = await service.call<{ priority: number }>("issue.get", { issueId: ctx.issueId });
+      assert.equal(issue.priority, 3, "setPriority must store the number it was given, not a derivation of it");
+
+      const bindings = await service.call<Array<Record<string, unknown>>>("provenance.listBindings", {
+        issueId: ctx.issueId,
+      });
+      const receipts = await service.call<Array<Record<string, unknown>>>("provenance.listReceipts", {
+        issueId: ctx.issueId,
+      });
+      assert.ok(bindings.length > 0, "the seed binds at least one workspace");
+      assert.ok(Array.isArray(receipts), "listReceipts answers a list");
+      assert.notDeepEqual(
+        bindings.map((binding) => Object.keys(binding).sort()),
+        receipts.map((receipt) => Object.keys(receipt).sort()),
+        "bindings and receipts are different records, so one must not answer for the other",
+      );
+    } finally {
+      await service.close();
+    }
+  });
+
+it("refuses an answer past the frame cap with a typed error, and keeps the session", async () => {
+    const repo = makeRepo("big-answer");
+    const db = makeStore(repo, "one");
+    const local = createLocalService(db, "test");
+    const wire = remoteService(db);
+    try {
+      const ctx = await seed(local, repo, makeRepo("big-answer-other"));
+      // Written in process: a frame carrying this would itself be past the request cap.
+      await local.call("issue.setTitle", { issueId: ctx.issueId, title: "T".repeat(9 * 1024 * 1024) });
+      const failure = await attempt(wire, "issue.get", { issueId: ctx.issueId });
+      assert.equal(failure.ok, false, "an oversized answer must not be written half-way");
+      assert.equal(failure.code, "bad_request", "it is a typed refusal naming the operation");
+      await wire.call("issue.listLinks", {});
+    } finally {
+      await wire.close();
+      await local.close();
+    }
+  });
+
+it("does not read a host called server as an sb without the verb (MEDIUM code)", async () => {
+    // The old test for "no sb serve --stdio there" matched the bare word "serve",
+    // so a host named `server` that did not resolve was reported as not_installed.
+    const dir = mkdtempSync(join(tmpdir(), "sb-serve-host-"));
+    const shim = join(dir, "ssh");
+    writeFileSync(shim, '#!/bin/sh\nprintf "ssh: Could not resolve hostname server: Name or service not known\\n" >&2\nexit 255\n');
+    chmodSync(shim, 0o755);
+    const savedPath = process.env["PATH"];
+    process.env["PATH"] = `${dir}:${savedPath ?? ""}`;
+    const opened = openSshService({ host: "server", sbPath: "/nonexistent/sb", env: process.env });
+    try {
+      const failure = await attempt(opened.service, "issue.listLinks", {});
+      assert.equal(failure.ok, false);
+      assert.notEqual(failure.code, "not_installed", "an unresolvable host is a transport failure, not a missing verb");
+    } finally {
+      await opened.service.close();
+      if (savedPath === undefined) delete process.env["PATH"];
+      else process.env["PATH"] = savedPath;
+    }
+  });
+
+  it("validates activeOnly and bounds an authority listing (MEDIUM list)", async () => {
+    const repo = makeRepo("authority-list");
+    const db = makeStore(repo, "one");
+    const service = createLocalService(db, "test");
+    try {
+      assert.equal((await attempt(service, "authority.list", { activeOnly: "yes" })).code, "bad_request");
+      for (let index = 0; index < 6; index += 1) {
+        await service.call("authority.record", {
+          activationId: `act_${index}`,
+          specialist: "ops",
+          state: "running",
+          issueRef: null,
+          lastActivityAt: 100 + index,
+        });
+      }
+      const bounded = await service.call<{ rows: unknown[] }>("authority.list", { limit: 3 });
+      assert.equal(bounded.rows.length, 3, "an unbounded listing would answer past the client's line cap");
+    } finally {
+      await service.close();
     }
   });
 });

@@ -566,6 +566,12 @@ describe("local store override", () => {
     assert.equal(forwardCli(["issue", "list", "--json", "--db", join(fake.dir, "a.db")], { env, transport: localTransport() }), null);
     assert.equal(forwardCli(["issue", "list", "--json", `--db=${join(fake.dir, "b.db")}`], { env, transport: localTransport() }), null);
     assert.equal(forwardCli(["issue", "list", "--json"], { env: { ...env, SUBSTRATE_DB: join(fake.dir, "c.db") }, transport: localTransport() }), null);
+    // The service client reads SUBSTRATE_LOCAL_DB too; the forwarder read only the
+    // first name, so a worker configured with the second wrote to the server.
+    assert.equal(
+      forwardCli(["issue", "list", "--json"], { env: { ...env, SUBSTRATE_LOCAL_DB: join(fake.dir, "d.db") }, transport: localTransport() }),
+      null,
+    );
     assert.equal(fake.calls().length, 0, "no query reaches the server when the local store is named");
   });
 

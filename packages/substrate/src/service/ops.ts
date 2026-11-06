@@ -17,6 +17,7 @@ import { checkDispatch, dispatchToSpecialist } from "../workitems/dispatch-gate.
 import type { SpecialistDispatchRequest } from "../workitems/dispatch-gate.ts";
 import {
   ACTIVITY_READER_LIMIT,
+  LIST_LIMIT,
   activateAuthority,
   listActiveAuthority,
   listAuthority,
@@ -295,10 +296,17 @@ export const OPERATIONS: Record<string, Handler> = {
       specialist: optionalText(a, "specialist"),
       expectState: optionalText(a, "expectState"),
     }),
-  "authority.list": (s, a) =>
-    a["activeOnly"] === true
-      ? { rows: listActiveAuthority(s.db, optionalBounded(a, "limit", 1, MAX_LIMIT) ?? READER_LIMIT) }
-      : { rows: listAuthority(s.db, optionalText(a, "activationId")) },
+  "authority.list": (s, a) => {
+    // `activeOnly` is a boolean or absent; anything else used to fall through and
+    // return every row, which looked like a successful filtered call.
+    if (a["activeOnly"] !== undefined && typeof a["activeOnly"] !== "boolean") {
+      throw new ServiceCallError("bad_request", '"activeOnly" must be true or false');
+    }
+    const limit = optionalBounded(a, "limit", 1, MAX_LIMIT);
+    return a["activeOnly"] === true
+      ? { rows: listActiveAuthority(s.db, limit ?? READER_LIMIT) }
+      : { rows: listAuthority(s.db, optionalText(a, "activationId"), limit ?? LIST_LIMIT) };
+  },
 };
 
 function artifactKind(value: unknown): ArtifactKind {

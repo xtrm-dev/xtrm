@@ -49,8 +49,8 @@ export const ACTIVATIONS_DDL = `CREATE TABLE IF NOT EXISTS activations (
 
 /** States the specialists host records. An unknown one is refused, not stored. */
 // Exactly the states the specialists host writes (its `ActivationState` union,
-// ~/dev/specialists/src/activation/types.ts at the commit recorded in
-// tests/service-authority-states.test.ts). A state the host never writes would be
+// ~/dev/specialists/src/activation/types.ts; tests/service-operations.test.ts reads
+// that file directly when it is present). A state the host never writes would be
 // an invention here; a state the host does write must not be refused, or the first
 // record of every activation (`starting`) is rejected.
 export const AUTHORITY_STATES = [
@@ -247,11 +247,17 @@ export function listActiveAuthority(db: SubstrateDatabase, limit = ACTIVITY_READ
   }));
 }
 
-export function listAuthority(db: SubstrateDatabase, activationId?: string | null): AuthorityRow[] {
+export const LIST_LIMIT = 500;
+
+export function listAuthority(db: SubstrateDatabase, activationId?: string | null, limit = LIST_LIMIT): AuthorityRow[] {
   ensureAuthorityTable(db);
   const rows = (
     activationId === undefined || activationId === null
-      ? db.prepare("SELECT activation_id, specialist, state, bead_id, last_activity_at FROM activations ORDER BY last_activity_at DESC").all()
+      ? db
+          .prepare(
+            "SELECT activation_id, specialist, state, bead_id, last_activity_at FROM activations ORDER BY last_activity_at DESC LIMIT ?",
+          )
+          .all(Math.max(1, Math.min(limit, LIST_LIMIT)))
       : db
           .prepare(
             "SELECT activation_id, specialist, state, bead_id, last_activity_at FROM activations WHERE activation_id = ?",

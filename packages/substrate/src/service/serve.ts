@@ -103,10 +103,18 @@ function fdFrames(): FrameSource {
 // and its newline were lost, and the caller saw a timeout followed by peer_noise.
 const SLEEP = new Int32Array(new SharedArrayBuffer(4));
 
+// A reader that stops draining would otherwise pin the server forever, and the
+// hook budget or the caller's timeout would expire with nothing on the wire.
+const MAX_WRITE_WAIT_MS = 30_000;
+
 function writeAll(fd: number, line: string): void {
   const payload = Buffer.from(line + "\n", "utf8");
+  const deadline = Date.now() + MAX_WRITE_WAIT_MS;
   let offset = 0;
   while (offset < payload.length) {
+    if (Date.now() > deadline) {
+      throw new Error(`the peer has not read a response for ${MAX_WRITE_WAIT_MS} ms; giving up on this frame`);
+    }
     try {
       offset += writeSync(fd, payload, offset, payload.length - offset);
     } catch (error) {
@@ -261,7 +269,23 @@ export async function serveStdio(options: ServeOptions): Promise<number> {
   const respond = (
     frame: ServiceResponse | { id: null; ok: false; error: { code: string; message: string } },
   ): void => {
-    write(JSON.stringify(frame));
+    const line = JSON.stringify(frame);
+    // The client drops a line past its cap and kills the connection, so an oversized
+    // answer becomes a typed refusal naming the operation instead of a dead session.
+    if (Buffer.byteLength(line, "utf8") > MAX_FRAME_BYTES) {
+      write(
+        JSON.stringify({
+          id: frame.id,
+          ok: false,
+          error: {
+            code: "bad_request",
+            message: `the answer to "${"ok" in frame && frame.ok && "op" in frame ? String((frame as { op?: string }).op ?? "the operation") : "the operation"}" is larger than ${MAX_FRAME_BYTES} bytes; ask for less (fewer rows, a shorter contract, a smaller page)`,
+          },
+        }),
+      );
+      return;
+    }
+    write(line);
   };
 
   let greeted = false;

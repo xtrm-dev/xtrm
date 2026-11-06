@@ -234,8 +234,9 @@ without the verb prints CLI help instead of a frame, so the client reports the
 missing capability by name (`sb serve --stdio` … 0.2.4 or newer) rather than a
 generic timeout.
 
-**Surface: structured operations, never SQL.** 47 operations across
-`issue.*`, `gate.*`, `store.*`, `journal.*`, `provenance.*`, `resume.capsule`
+**Surface: structured operations, never SQL.** 60 operations across
+`issue.*`, `gate.*`, `store.*`, `journal.*`, `provenance.*`, `authority.*`,
+`resume.buildCapsule`, `resume.renderCapsule`
 and `authority.*`. Each one is a named domain operation with typed, validated
 arguments; there is no `sql`, `exec` or query-expression verb, and an unknown
 operation is refused by its own name. The handlers call the same
@@ -459,7 +460,7 @@ gaps in Stage 2.
 
 Stage 3 is implemented on branch `xt/XTRM-690-stdio-service` (PR #309), and the
 audit of the first delivery is folded into the same branch — frames split before
-decoding, a frame size cap, awaited async handlers, no `journal.enrichEntry`,
+decoding, a frame size cap, awaited async handlers, `journal.enrichEntry` is present but refuses anything except an unenriched checkpoint or compaction,
 identity from the frame, bounded numbers, identifier-validated authority rows,
 configuration-aware local/remote resolution, and an `ssh` program in the argv:
 `packages/substrate/src/service/{protocol,ops,authority-service,serve,client}.ts`,

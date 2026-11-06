@@ -23,7 +23,7 @@ import { sshArgv } from "../remote/ssh.ts";
 import { RemoteError } from "../remote/spec.ts";
 import { mappingKey, selectRemote, type RemoteConfig, type RemoteSelection } from "../remote/config.ts";
 import { discoverRepository } from "../domain/repository-discovery.ts";
-import { CAPABILITIES, OPERATIONS, assertKnownArgs, classifyError, createServices } from "./ops.ts";
+import { ARGS, CAPABILITIES, OPERATIONS, assertKnownArgs, classifyError, createServices } from "./ops.ts";
 import {
   MAX_FRAME_BYTES,
   PROTOCOL_VERSION,
@@ -119,11 +119,18 @@ export function resolveIdentity(env: NodeJS.ProcessEnv = process.env): ClientIde
 export function applyIdentity(op: string, args: Record<string, unknown>, identity: ClientIdentity): Record<string, unknown> {
   const target = IDENTITY_ARGS[op];
   if (target === undefined) return args;
-  const fields: Array<[string, string | null | undefined]> = [
-    ["participantId", identity.participantId],
-    ["activationId", identity.activationId],
-    ["sessionId", identity.sessionId],
-  ];
+  // An operation accepts an identity field only when its argument table names it.
+  // Merging `participantId` into issue.claimIssue, whose identity is `holder`,
+  // made every harness session fail with "argument participantId is not part of
+  // issue.claimIssue" — locally and remotely alike.
+  const accepted = target === "args" ? new Set(ARGS[op] ?? []) : null;
+  const fields: Array<[string, string | null | undefined]> = (
+    [
+      ["participantId", identity.participantId],
+      ["activationId", identity.activationId],
+      ["sessionId", identity.sessionId],
+    ] as Array<[string, string | null | undefined]>
+  ).filter(([key]) => accepted === null || accepted.has(key));
   if (target === "args") {
     const merged = { ...args };
     for (const [key, value] of fields) if (value != null && merged[key] === undefined) merged[key] = value;
@@ -135,6 +142,21 @@ export function applyIdentity(op: string, args: Record<string, unknown>, identit
   return { ...args, input: base };
 }
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * What a closed transport means, decided from what was read and what the far side
+ * printed. Pure, because this is the rule operators act on: "no sb serve --stdio
+ * there" sends them to install a release; "connection lost" sends them to ssh.
+ */
+export function classifyTransportEnd(
+  diagnostics: string,
+  sawFrame: boolean,
+): "not_installed" | "connection_lost" {
+  if (sawFrame) return "connection_lost";
+  // sb's own usage text only. A bare /serve/ matches the host name "server", which
+  // reported every DNS failure as a missing verb.
+  return /(?:usage: sb\b|^sb: unknown (command|verb)\b)/m.test(diagnostics) ? "not_installed" : "connection_lost";
+}
 
 function sanitizeDiagnostic(text: string): string {
   return text.replace(/[^\x20-\x7e\n]/g, "").slice(0, 400);
@@ -268,6 +290,29 @@ export function createServiceClient(link: ServiceLink, options: RemoteServiceOpt
 
   link.onExit((code, signal, reason, kind) => {
     closed = true;
+    // Nothing was read and the far side printed usage: that is an sb without the
+    // verb, not a dropped connection. Match sb's own usage text only — the old
+    // pattern included the bare word "serve", which matches the host name "server",
+    // so a DNS failure was reported as "no sb serve --stdio installed there".
+    const missingVerb = (): boolean => classifyTransportEnd(link.diagnostics(), sawFrame) === "not_installed";
+    const farSideTail = (): string => {
+      const tail = link
+        .diagnostics()
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .at(-1);
+      return tail === undefined ? "" : ` — the far side said: ${tail.slice(0, 300)}`;
+    };
+    const notInstalled = (): void => {
+      failAll(
+        new ServiceCallError(
+          "not_installed",
+          `${where} has no \`sb serve --stdio\`: its sb printed usage and exited ${code ?? "?"} ` +
+            "(the service ships in a release after 0.2.4)",
+        ),
+      );
+    };
     // The server's own stderr is not reproduced here: it is untrusted text from
     // the far side, and a caller logging it as an error line would make it look
     // like our own diagnostic. `link.diagnostics()` is the place to read it.
@@ -289,30 +334,29 @@ export function createServiceClient(link: ServiceLink, options: RemoteServiceOpt
       return;
     }
     if (kind === "stdin_broken") {
+      // A program that exits without reading its stdin breaks the pipe before the
+      // usage text is classified, which hid both "no such verb" and ssh's own
+      // refusal behind "the pipe closed mid-session".
+      if (missingVerb()) {
+        notInstalled();
+        return;
+      }
       failAll(
         new ServiceCallError(
           "connection_lost",
-          `${where}: the pipe to the service closed mid-session (${reason ?? "a write failed"}); calls already sent may or may not have run`,
+          `${where}: the pipe to the service closed mid-session (${reason ?? "a write failed"}); calls already sent may or may not have run${farSideTail()}`,
         ),
       );
       return;
     }
-    // Nothing was read and the far side printed usage: that is an sb without the
-    // verb, not a dropped connection.
-    if (!sawFrame && /usage|unknown (command|verb)|serve/i.test(link.diagnostics())) {
-      failAll(
-        new ServiceCallError(
-          "not_installed",
-          `${where} has no \`sb serve --stdio\`: its sb printed usage and exited ${code ?? "?"} ` +
-            "(the service ships in a release after 0.2.4)",
-        ),
-      );
+    if (missingVerb()) {
+      notInstalled();
       return;
     }
     failAll(
       new ServiceCallError(
         "connection_lost",
-        `${where}: the service connection ended (exit ${code ?? "none"}${signal ? `, ${signal}` : ""})`,
+        `${where}: the service connection ended (exit ${code ?? "none"}${signal ? `, ${signal}` : ""})${farSideTail()}`,
       ),
     );
   });
@@ -692,7 +736,7 @@ export function localOrRemote(env: NodeJS.ProcessEnv = process.env): ServiceEndp
  */
 export function openService(
   opts: { env?: NodeJS.ProcessEnv; version?: string; forwardedEnv?: Record<string, string | undefined> } = {},
-): { service: SubstrateService; endpoint: ServiceEndpoint } {
+): { service: SubstrateService; endpoint: ServiceEndpoint; link?: ServiceLink } {
   const env = opts.env ?? process.env;
   const endpoint = localOrRemote(env);
   if (endpoint.kind === "local") {
@@ -705,21 +749,19 @@ export function openService(
       `no absolute server sb path is recorded for ${endpoint.remote}; run \`sb remote setup ${endpoint.remote}\` on this machine first`,
     );
   }
+  // Only variables the far side may legitimately read reach it. Identity is sent
+  // in the operation arguments, so forwarding it would both duplicate it and be
+  // refused by sshServiceArgv's allowlist before ssh ever ran.
   const forwarded = opts.forwardedEnv ?? {
-    SUBSTRATE_HOLDER: env["SUBSTRATE_HOLDER"],
-    SUBSTRATE_ISSUE_REF: env["SUBSTRATE_ISSUE_REF"],
-    SUBSTRATE_ISSUE: env["SUBSTRATE_ISSUE"],
-    SUBSTRATE_ACTIVATION_ID: env["SUBSTRATE_ACTIVATION_ID"],
-    SUBSTRATE_SPECIALIST: env["SUBSTRATE_SPECIALIST"],
-    XTRM_SESSION_ID: env["XTRM_SESSION_ID"],
-    XTRM_SESSION_NAME: env["XTRM_SESSION_NAME"],
+    LANG: env["LANG"],
+    TZ: env["TZ"],
   };
   // The checkout for the repository this process is in, if setup verified one: the
   // server's `sb` has to run from a directory that resolves to a project.
   const repositoryKey = safeRepositoryKey();
   const root =
     repositoryKey === null ? null : (endpoint.config.checkouts[mappingKey(endpoint.host, repositoryKey)]?.root ?? null);
-  const { service } = openSshService({
+  const { service, link } = openSshService({
     host: endpoint.host,
     sbPath,
     root,
@@ -727,5 +769,7 @@ export function openService(
     forwardedEnv: forwarded,
     clientVersion: opts.version,
   });
-  return { service, endpoint };
+  // The link travels with the service: without it a caller cannot read ssh's own
+  // stderr (Permission denied, unknown host) when the handshake never happens.
+  return { service, endpoint, link };
 }

@@ -741,13 +741,16 @@ describe("audit findings", () => {
     }
   });
 
-  it("takes the host's activation states from the specialists' own union", async () => {
+  it("takes the host's activation states from the specialists' own union", async (context) => {
     // The authority table is read by the specialists host, so its states are the
     // host's, not ours. Read them from that repository when it is present.
     const types = join(homedir(), "dev", "specialists", "src", "activation", "types.ts");
     if (!existsSync(types)) {
-      console.log(`skipped: ${types} is absent; the fixture below names its source`);
-    } else {
+      // A console line is not a skip: the run still reports a pass that checked nothing.
+      context.skip(`${types} is absent; the fixture above names its source and commit`);
+      return;
+    }
+    {
       const source = readFileSync(types, "utf8");
       const match = /ActivationState\s*=\s*([^;]+);/.exec(source);
       const union =
