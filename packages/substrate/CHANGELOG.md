@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.6] - 2026-11-06
+
+### Added
+
+- The Pi tools reach the store through the typed service (XTRM-691). Every Pi tool call and every edit/write gate goes through one call surface — the in-process service for a local store, the ssh service for a server-owned one — instead of separate paths over the database. A configured remote that cannot be reached fails closed with a transport code (`connection_lost`, `not_installed`, `protocol_mismatch`, `peer_noise`, `spawn_failed`) rather than quietly using the local store; an unset `substrate.remote` behaves exactly as before.
+
+- The Claude plugin chooses its store at launch (XTRM-692, ADR-008). `.mcp.json` is unchanged: the entry it already names reads `substrate.remote` and either runs the local MCP server or the same script on the store-owning machine over ssh, with MCP proxied over the pipe. The hooks — SessionStart, PreCompact, PostCompact, stop gate, edit gate — follow the same decision, one short-lived forward per event. The far side announces itself with a handshake carrying its package version before any frame is forwarded, so a login-shell banner cannot corrupt the stream; anything printed before it is discarded, bounded and reported. Identity — holder, session, activation — travels as one quoted JSON argument and is applied before the server module loads, so a remote write records the caller's participant, and a checkpoint records the caller's workspace rather than the far side's checkout. The script is located in the installed package there, so the checkout only resolves the repository; a package that does not ship it is reported as `not_installed`.
+
+  **Version equality is strict.** The plugin and the server must run the same version: a mismatch fails with `version_mismatch` naming both, by design. Upgrade the server's `sb` and the plugin together. A half-upgraded pair refuses to serve rather than recording rows against a contract it does not know.
+
+### Fixed
+
+- The Claude edit gate fails closed when a configured remote is unreachable: it blocks and names the transport code instead of allowing an edit with no claim check.
+- A handshake line that is not JSON fails with `protocol_mismatch` rather than a stack trace, and a far side that cannot parse the identity argument says so in its handshake instead of serving with no participant.
+- Every far-side argument is quoted once, so a JSON identity survives the remote shell with its quotes and spaces intact.
+
+---
+
 ## [0.2.5] - 2026-11-06
 
 ### Added
@@ -28,8 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `journal.enrichEntry` is exposed, and refuses anything but a checkpoint or compaction with no semantic layer: the precondition is part of the write, so two callers racing on one entry produce exactly one winner.
 - Numeric arguments are bounded; identity in a service session comes from the frame, never from the server's environment.
 - `localOrRemote()` reads the remote configuration, not only `SUBSTRATE_REMOTE`, and fails closed when a configured remote is unusable.
-
----
 
 ---
 
