@@ -318,9 +318,24 @@ documenting the risk:
   what the specialists writer accepts (an empty `issueRef`, a stamp of 0 for a
   row not touched yet) and refuses only what would poison a listing: a
   non-integer or far-future stamp, a non-identifier id, an invented state or a
-  re-attributed row. Deletion is by `activationId` and, when the caller names it,
-  the owning specialist — which is what the host's `stop()` needs, because it
-  forgets a row it last saved as `running` or `waiting`.
+  re-attributed row. Deletion is by `activationId` **and the owning specialist,
+  which is required** (XTRM-700, operator ruling option A): an unnamed removal
+  returns `bad_request` and leaves the row, a foreign specialist returns
+  `conflict` and leaves the row, and a row that is already gone answers
+  `removed: false` so the host's `stop()` stays idempotent. The optional form was
+  a real hole — a caller holding the store could delete another specialist's live
+  row by id alone — and there is deliberately no compatibility window and no
+  warning-only shape, so the host must send its specialist or its `stop()` fails
+  loudly (tracked in `specialists`).
+- *Authority stays unused over the wire by schedule, not by a hidden gate.* The
+  three operations are reachable as soon as a caller speaks the protocol; what
+  keeps them unused is the sequencing rule that the remote host must be able to
+  reach the store (`SPECIALISTS-4398`), that removal names its owner (XTRM-700,
+  above), that a foreign *record* cannot rewrite a row (its sibling), and that the
+  row cap and TTL exist (XTRM-701) — with the consumer-side switch landed last
+  (the authority part of `SPECIALISTS-4395`). A default-off flag in the service
+  was considered and rejected: it would be a second switch in a second product,
+  which is exactly the drift the ownership rule removes.
 - *Activation rows are validated as identifiers, not text.* The SessionStart
   reader prints `activation_id`, `specialist`, `state` and `bead_id` verbatim
   into a model's context, so a newline in a field stored a line of instructions
