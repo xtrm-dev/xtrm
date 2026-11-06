@@ -1301,9 +1301,15 @@ it("refuses an answer past the frame cap with a typed error, and keeps the sessi
       const ctx = await seed(local, repo, makeRepo("big-answer-other"));
       // Written in process: a frame carrying this would itself be past the request cap.
       await local.call("issue.setTitle", { issueId: ctx.issueId, title: "T".repeat(9 * 1024 * 1024) });
-      const failure = await attempt(wire, "issue.get", { issueId: ctx.issueId });
-      assert.equal(failure.ok, false, "an oversized answer must not be written half-way");
-      assert.equal(failure.code, "bad_request", "it is a typed refusal naming the operation");
+      const failure = await wire.call("issue.get", { issueId: ctx.issueId }).then(
+        () => null,
+        (error: ServiceCallError) => error,
+      );
+      assert.ok(failure !== null, "an oversized answer must not be written half-way");
+      assert.equal(failure.code, "bad_request");
+      // A response frame carries no `op`, so the server has to be told which one it
+      // is answering: the refusal must name it, not say "the operation".
+      assert.match(failure.message, /the answer to "issue\.get" is larger than/);
       await wire.call("issue.listLinks", {});
     } finally {
       await wire.close();
