@@ -8,6 +8,7 @@
 
 import type { Summarizer } from "../../src/service/journal-service.ts";
 import type { StoreCall } from "./backing.ts";
+import { isTransportFailure } from "../../src/service/operations.ts";
 import { isJournalKind, type SemanticCheckpoint } from "../../src/domain/journal.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
 import { currentExecutionContext, enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
@@ -459,7 +460,10 @@ export async function decidePiEditCall(
     let issueId: string;
     try {
       issueId = (await backing.call<{ id: string }>("issue.resolveRef", { ref: identity.ref })).id;
-    } catch {
+    } catch (error) {
+      // The store answered "no such ref" -> allow, as before. The store could not
+      // be reached at all -> the caller must block (XTRM-712).
+      if (isTransportFailure(error)) throw error;
       return { allow: true, issueRef: identity.ref };
     }
     const claim = await backing.call<{ holder: string; activationId: string | null } | null>("issue.getActiveClaim", { issueId });
@@ -471,7 +475,10 @@ export async function decidePiEditCall(
       activationId: identity.activationId,
     });
     return { ...decision, issueRef: identity.ref };
-  } catch {
+  } catch (error) {
+    // Same rule at the outer boundary: a local failure stays fail-open, a
+    // transport failure reaches the gate so it can block and name the code.
+    if (isTransportFailure(error)) throw error;
     return { allow: true, issueRef: null };
   }
 }

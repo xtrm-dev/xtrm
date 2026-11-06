@@ -60,3 +60,29 @@ export function isConnectionLost(error: unknown): boolean {
 export function readOperations(): string[] {
   return [...READ_OPERATIONS].sort();
 }
+
+/** The codes that mean the transport, not the operation, failed. */
+const TRANSPORT_CODES: ReadonlySet<string> = new Set([
+  "connection_lost",
+  "not_installed",
+  "protocol_mismatch",
+  "peer_noise",
+  "spawn_failed",
+]);
+
+/**
+ * True when the failure came from reaching the store, not from the store's
+ * answer. Such a failure happens only on a configured remote, which is what lets
+ * the gate block on it while leaving local behaviour alone.
+ */
+export function isTransportFailure(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && TRANSPORT_CODES.has(code);
+}
+
+/** The transport code of a failure, for a message an operator can act on. */
+export function transportCode(error: unknown): string | null {
+  if (!isTransportFailure(error)) return null;
+  return (error as { code: string }).code;
+}
