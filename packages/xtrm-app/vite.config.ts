@@ -8,17 +8,23 @@ import { agentHostSshApi } from "./server/agent-host-ssh.ts";
 // Console v1 backend that still owns GitHub fetch/cache (shell architecture §9.3).
 const consoleUrl = process.env.XTRM_CONSOLE_URL ?? "http://127.0.0.1:3030";
 
+// Same /api proxies for `vite dev` and `vite preview`: the production serve mode
+// (`npm run research:serve`) is the same app without the dev server's per-module cost.
+const proxy = {
+  "/api/github": { target: consoleUrl, changeOrigin: true },
+  "/api/programme": { target: consoleUrl, changeOrigin: true },
+};
+// Tailnet access via MagicDNS; not public.
+const allowedHosts = [".ts.net"];
+
 export default defineConfig({
   plugins: [react(), tailwindcss(), substrateCliApi(), researchCliApi(), agentHostSshApi()],
   server: {
     port: 5178,
-    // Tailnet preview via MagicDNS (`vite --host <tailscale ip>`); not public.
-    allowedHosts: [".ts.net"],
-    proxy: {
-      "/api/github": { target: consoleUrl, changeOrigin: true },
-      "/api/programme": { target: consoleUrl, changeOrigin: true },
-    },
+    allowedHosts,
+    proxy,
   },
+  preview: { port: 5178, allowedHosts, proxy },
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],

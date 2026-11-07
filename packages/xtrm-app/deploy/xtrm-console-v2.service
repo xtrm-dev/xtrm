@@ -23,6 +23,10 @@
 # Node is pinned by absolute path on purpose: a systemd user unit has no nvm on
 # PATH. Changing the nvm version means editing PATH here.
 #
+# Production serve (XT-214): `research:serve` builds dist/ on start, then runs `vite preview`,
+# which hosts the same bridge plugins without the dev server's per-module cost.
+# The first start after an update takes the build time; a restart is still the deploy.
+#
 # The four research settings are resolved by scripts/research-dev.mjs for this
 # checkout and printed on start (release identity). It refuses to start if the
 # CLI does not belong to this checkout or lacks a read verb the UI calls.
@@ -35,7 +39,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/.xtrm/console-v2/packages/xtrm-app
-ExecStart=%h/.nvm/versions/node/v24.15.0/bin/npm run research:dev -- --host 127.0.0.1 --port 5178 --strictPort
+ExecStart=%h/.nvm/versions/node/v24.15.0/bin/npm run research:serve -- --host 127.0.0.1 --port 5178 --strictPort
 Environment=PATH=%h/.nvm/versions/node/v24.15.0/bin:/usr/local/bin:/usr/bin:/bin
 Environment=XTRM_SB_BIN=%h/.xtrm/console-v2/packages/substrate/cli/sb-ux.ts
 Environment=XTRM_CONSOLE_URL=http://127.0.0.1:3030
