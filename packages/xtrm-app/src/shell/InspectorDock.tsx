@@ -8,7 +8,7 @@ import { InspectorDrawer } from "./Inspector.tsx";
 import { useShell } from "./context.tsx";
 import { INSPECTOR, INSPECTOR_MAXIMIZE_KEY, SHELL_MOTION, modShortcut } from "./layout.ts";
 
-export const RAIL = 22;
+export const RAIL = 28;
 
 const ease = cubicBezier(...SHELL_MOTION.transition.ease);
 
@@ -134,7 +134,7 @@ export function InspectorDock() {
           style={{ width: RAIL }}
         >
           {followLive && <span className="size-1.5 rounded-full bg-accent" />}
-          <Icon name="sidebar" size="xs" className="text-ink-faint transition-colors group-hover/rail:text-ink group-focus-visible/rail:text-ink scale-x-[-1]" />
+          <Icon name="sidebar" size="sm" className="text-ink-faint transition-colors group-hover/rail:text-ink group-focus-visible/rail:text-ink scale-x-[-1]" />
         </button>
         {open && (
           <div className="relative min-h-0 min-w-0 flex-1">
