@@ -36,8 +36,8 @@ export function frameMinWidth(state: string, drawerWidth: number): number {
 /** Discreet vertical pill, same treatment as the sidebar edge handle. */
 function RailPill({ icon, iconClassName, ...props }: { icon: "back" | "forward"; iconClassName?: string } & React.ComponentProps<"button">) {
   return (
-    <button type="button" {...props} className="group/edge flex w-4 shrink-0 items-center justify-center outline-none">
-      <span className="flex h-10 w-1 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 motion-reduce:transition-none group-hover/edge:h-12 group-hover/edge:w-4 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-12 group-focus-visible/edge:w-4 group-focus-visible/edge:bg-hover">
+    <button type="button" {...props} className="group/edge flex w-5 shrink-0 items-center justify-center outline-none">
+      <span className="flex h-12 w-2 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 motion-reduce:transition-none group-hover/edge:h-14 group-hover/edge:w-5 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-14 group-focus-visible/edge:w-5 group-focus-visible/edge:bg-hover">
         <Icon name={icon} size="xs" className={cx("shrink-0 opacity-0 transition-opacity motion-reduce:transition-none group-hover/edge:opacity-100 group-focus-visible/edge:opacity-100", iconClassName)} />
       </span>
     </button>
@@ -121,10 +121,10 @@ export function InspectorDock() {
           // ring that --shadow-float paints, so no hairline outlines the panel in another colour.
           "absolute top-0 bottom-1.5 z-30 flex min-h-0 overflow-hidden rounded-lg bg-raised",
           maximized ? "inset-x-2" : "right-0 w-full",
-          !open ? "bg-transparent" : "shadow-panel",
+          !open ? "bg-sidebar" : "shadow-panel",
         )}
       >
-        <div className="flex shrink-0 flex-col items-center justify-center gap-1.5 py-2" style={{ width: RAIL }}>
+        <div className="flex shrink-0 flex-col items-stretch justify-between gap-1.5 py-2" style={{ width: RAIL }}>
           {followLive && <span className="size-1.5 rounded-full bg-accent" />}
           <Tip label={open ? "Close inspector" : "Open inspector"} shortcut={modShortcut("I")} side="left">
             <RailPill

@@ -116,7 +116,7 @@ export function IssuesSurface() {
         minWidth="20rem"
         getKey={(r) => r.issue.id}
         header={
-          <div role="row" data-testid="issues-table-head" className="grid h-8 shrink-0 rounded-t-lg border-b border-border bg-deep" style={{ ...tableVars, ...GRID }}>
+          <div role="row" data-testid="issues-table-head" className="grid h-8 shrink-0 rounded-t-lg bg-deep" style={{ ...tableVars, ...GRID }}>
             {COLUMNS.map((c) => (
               <div key={c.key} role="columnheader" aria-sort={sort.key === c.key ? (sort.desc ? "descending" : "ascending") : "none"} className={CELL_EDGE}>
                 <button
@@ -236,7 +236,7 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
   const terminal = TERMINAL.has(issue.lifecycle);
   const status = issueStatus(issue);
   return (
-    <Row density="table" selected={selected} onActivate={onInspect} onDoubleClick={onOpen} className="border-b border-border-subtle">
+    <Row density="table" selected={selected} onActivate={onInspect} onDoubleClick={onOpen} className="">
       <div className="grid h-full w-full items-center" style={GRID}>
         <div className={cx(CELL, "relative gap-1.5")} style={{ paddingLeft: `${0.5 + depth * 1.25}rem` }}>
           {hasChildren ? (
