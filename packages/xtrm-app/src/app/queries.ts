@@ -1,6 +1,9 @@
 // One query layer for all adapters (§9.2): no module-singleton caches.
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAdapters, type GithubAuthStatus, type PullListState, type Repo, type SubstrateProject } from "../adapters/index.tsx";
+import { useCallback } from "react";
+import { useAdapters, type GithubAuthStatus, type IssueDetail, type PullListState, type Repo, type SubstrateProject } from "../adapters/index.tsx";
+// Pure board merge; fixture details pass through it unchanged (it is idempotent).
+import { applyBoard } from "../adapters/substrate/live.ts";
 
 const LIVE_MS = 10_000;
 
@@ -183,13 +186,14 @@ export function projectForRepo(projects: SubstrateProject[] | undefined, repo: P
   );
 }
 
-export function useIssues(projectId: string | null | undefined) {
+export function useIssues(projectId: string | null | undefined, refetchMs: number | false = false) {
   const { substrate } = useAdapters();
   return useQuery({
     queryKey: ["substrate", "issues", projectId],
     queryFn: () => substrate.listIssues(projectId!),
     enabled: !!projectId,
     staleTime: 30_000,
+    refetchInterval: refetchMs,
   });
 }
 
@@ -205,11 +209,26 @@ export function useIssuesForProjects(projectIds: string[], enabled: boolean) {
   });
 }
 
+/** With follow on, the board behind an open detail refetches this often (the detail's own reads use LIVE_MS). */
+const DETAIL_BOARD_MS = 60_000;
+
+/**
+ * The detail paints from the four per-issue reads. Board-derived fields (priority, dates, parent,
+ * blockers) come from the project board query the Issues table already shares (same key and
+ * staleTime), merged in `select`, so a board refetch or a write's invalidation updates them
+ * without refetching the detail.
+ */
 export function useIssue(ref: string, follow = false, projectId?: string | null) {
   const { substrate } = useAdapters();
+  const projects = useProjects();
+  const prefix = ref.split("-")[0]?.toUpperCase();
+  const boardProject = projectId ?? projects.data?.find((p) => p.prefix.toUpperCase() === prefix)?.id ?? null;
+  const board = useIssues(boardProject, follow ? DETAIL_BOARD_MS : false).data;
+  const select = useCallback((detail: IssueDetail) => (board ? applyBoard(detail, board) : detail), [board]);
   return useQuery({
     queryKey: ["substrate", "issue", ref],
-    queryFn: () => substrate.getIssue(ref, projectId ?? undefined),
+    queryFn: () => substrate.getIssue(ref, boardProject ?? undefined, { withBoard: false }),
+    select,
     staleTime: 15_000,
     refetchInterval: follow ? LIVE_MS : false,
   });

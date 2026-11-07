@@ -262,40 +262,37 @@ export function mapClosure(c: Obj | null | undefined): Closure {
   };
 }
 
-export function mapIssueDetail(
-  d: WireIssueDetail,
-  ctx: { projectId: string | null; board: IssueSummary[]; resume: WireResume | null; trace: WireTrace | null; journal: WireJournalEntry[] },
-): IssueDetail {
-  const row = ctx.board.find((r) => r.id === d.id);
-  const byRef = new Map(ctx.board.map((r) => [r.ref, r]));
-  const byId = new Map(ctx.board.map((r) => [r.id, r]));
-  const parentRow = row?.parentRef ? byRef.get(row.parentRef) : undefined;
-  const children: IssueLink[] = ctx.resume?.children?.length
-    ? ctx.resume.children.map((c) => ({ id: c.issueId, ref: c.humanRef, locator: c.locator ?? byId.get(c.issueId)?.locator, title: c.title, lifecycle: c.lifecycleState }))
-    : ctx.board.filter((r) => r.parentRef === d.humanRef).map(link);
+type IssueDetailCtx = { projectId: string | null; resume: WireResume | null; trace: WireTrace | null; journal: WireJournalEntry[] };
+
+/**
+ * The detail as the four per-issue reads describe it. Fields that only the project board carries
+ * (priority, scrutiny, dates, parent, blockers) are neutral here; `applyBoard` fills them in.
+ */
+export function mapIssueCore(d: WireIssueDetail, ctx: IssueDetailCtx): IssueDetail {
+  const children: IssueLink[] = (ctx.resume?.children ?? []).map((c) => ({ id: c.issueId, ref: c.humanRef, locator: c.locator, title: c.title, lifecycle: c.lifecycleState }));
   const journal = ctx.journal.map(mapJournalEntry).sort((a, b) => b.sequence - a.sequence);
   return {
     id: d.id,
     ref: d.humanRef,
-    locator: d.locator ?? row?.locator ?? d.humanRef,
+    locator: d.locator ?? d.humanRef,
     title: d.title,
     kind: d.kind,
     lifecycle: d.lifecycleState,
     revision: d.revision,
-    priority: row?.priority ?? null,
-    scrutiny: row?.scrutiny ?? null,
-    createdAt: row?.createdAt ?? null,
-    lastActivityAt: row?.lastActivityAt ?? null,
-    eventCount: row?.eventCount ?? journal.length,
-    pointerCount: row?.pointerCount ?? 0,
-    attestation: row?.attestation ?? null,
-    contractComplete: row?.contractComplete ?? null,
-    updatedAt: row?.updatedAt ?? null,
-    parentRef: row?.parentRef ?? null,
-    parentLocator: row?.parentLocator ?? null,
+    priority: null,
+    scrutiny: null,
+    createdAt: null,
+    lastActivityAt: null,
+    eventCount: journal.length,
+    pointerCount: 0,
+    attestation: null,
+    contractComplete: null,
+    updatedAt: null,
+    parentRef: null,
+    parentLocator: null,
     childCount: children.length,
     childrenDone: children.filter((c) => TERMINAL.has(c.lifecycle)).length,
-    blockedBy: row?.blockedBy ?? [],
+    blockedBy: [],
     readiness: d.dispatchable ? "ready" : "not_ready",
     projectId: ctx.projectId,
     readinessState: d.readinessState,
@@ -304,14 +301,56 @@ export function mapIssueDetail(
     contract: parseContract(d.contract),
     claim: d.claim ? { holder: d.claim.holder, expiresAt: d.claim.expiresAt } : null,
     closure: mapClosure(d.closure),
-    parent: parentRow ? link(parentRow) : null,
+    parent: null,
     children,
-    blockers: (row?.blockedBy ?? []).map((ref) => byRef.get(ref)).filter((r): r is IssueSummary => !!r).map(link),
+    blockers: [],
     release: ctx.resume?.release ? { childrenDone: ctx.resume.release.childrenDone, childrenTotal: ctx.resume.release.childrenTotal } : null,
     journal,
     journalTotal: Math.max(journal.length, d.operationalContext?.total ?? 0),
     provenance: mapTrace(ctx.trace, journal),
   };
+}
+
+/**
+ * Fill the board-derived fields of a detail from the project board. Pure and idempotent: the board
+ * row wins where it exists, the detail's own value stays otherwise, so applying a newer board to
+ * the same core detail always recomputes the result from scratch.
+ */
+export function applyBoard(detail: IssueDetail, board: IssueSummary[]): IssueDetail {
+  const row = board.find((r) => r.id === detail.id);
+  const byRef = new Map(board.map((r) => [r.ref, r]));
+  const byId = new Map(board.map((r) => [r.id, r]));
+  const parentRef = row?.parentRef ?? detail.parentRef;
+  const parentRow = parentRef ? byRef.get(parentRef) : undefined;
+  const children: IssueLink[] = detail.children.length
+    ? detail.children.map((c) => ({ ...c, locator: c.locator ?? byId.get(c.id)?.locator }))
+    : board.filter((r) => r.parentRef === detail.ref).map(link);
+  const blockedBy = row?.blockedBy ?? detail.blockedBy;
+  return {
+    ...detail,
+    locator: detail.locator === detail.ref && row?.locator ? row.locator : detail.locator,
+    priority: row?.priority ?? detail.priority,
+    scrutiny: row?.scrutiny ?? detail.scrutiny,
+    createdAt: row?.createdAt ?? detail.createdAt,
+    lastActivityAt: row?.lastActivityAt ?? detail.lastActivityAt,
+    eventCount: row?.eventCount ?? detail.eventCount,
+    pointerCount: row?.pointerCount ?? detail.pointerCount,
+    attestation: row?.attestation ?? detail.attestation,
+    contractComplete: row?.contractComplete ?? detail.contractComplete,
+    updatedAt: row?.updatedAt ?? detail.updatedAt,
+    parentRef,
+    parentLocator: row?.parentLocator ?? detail.parentLocator,
+    childCount: children.length,
+    childrenDone: children.filter((c) => TERMINAL.has(c.lifecycle)).length,
+    blockedBy,
+    parent: parentRow ? link(parentRow) : detail.parent,
+    children,
+    blockers: blockedBy.map((ref) => byRef.get(ref)).filter((r): r is IssueSummary => !!r).map(link),
+  };
+}
+
+export function mapIssueDetail(d: WireIssueDetail, ctx: IssueDetailCtx & { board: IssueSummary[] }): IssueDetail {
+  return applyBoard(mapIssueCore(d, ctx), ctx.board);
 }
 
 async function read<T>(path: string): Promise<T> {
@@ -367,17 +406,25 @@ export const liveSubstrate: SubstrateAdapter = {
     }
     return mapBoard(rows);
   },
-  async getIssue(ref, projectId) {
+  async getIssue(ref, projectId, opts) {
     const r = `?ref=${encodeURIComponent(ref)}`;
-    const resolvedProject = projectId ?? (await this.listProjects()).find((p) => p.prefix === projectOf(ref))?.id ?? null;
-    const [detail, resume, trace, journal, board] = await Promise.all([
+    // Default: the full detail, board included (the agent reference resolver has no query cache).
+    // `withBoard: false` returns the core detail and leaves the board to the caller (applyBoard).
+    const withBoard = opts?.withBoard !== false;
+    // The project is resolved beside the detail reads, never before them.
+    const project: Promise<string | null> = projectId
+      ? Promise.resolve(projectId)
+      : this.listProjects().then((ps) => ps.find((p) => p.prefix === projectOf(ref))?.id ?? null);
+    const board = withBoard ? project.then((id) => (id ? this.listIssues(id).catch(() => []) : [])) : Promise.resolve([] as IssueSummary[]);
+    const [detail, resume, trace, journal, resolvedProject, rows] = await Promise.all([
       read<WireIssueDetail>(`/issue${r}`),
       read<WireResume>(`/resume${r}`).catch(() => null),
       read<WireTrace>(`/trace${r}`).catch(() => null),
       read<WireJournalEntry[]>(`/journal${r}&limit=${JOURNAL_READ_LIMIT}`).catch(() => []),
-      resolvedProject ? this.listIssues(resolvedProject).catch(() => []) : Promise.resolve([]),
+      project,
+      board,
     ]);
-    return mapIssueDetail(detail, { projectId: resolvedProject, board, resume, trace, journal });
+    return mapIssueDetail(detail, { projectId: resolvedProject, board: rows, resume, trace, journal });
   },
   async editIssue(projectId, ref, expectedRevision, edit) {
     await write("/edit", { project: projectId, ref, expectedRevision, ...edit });

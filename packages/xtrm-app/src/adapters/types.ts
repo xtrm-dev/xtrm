@@ -501,7 +501,11 @@ export interface SubstrateAdapter {
   canWrite(): Promise<boolean>;
   listProjects(): Promise<SubstrateProject[]>;
   listIssues(projectId: string): Promise<IssueSummary[]>;
-  getIssue(ref: string, projectId?: string): Promise<IssueDetail>;
+  /**
+   * `withBoard: false` skips the project board walk and returns board-derived fields neutral;
+   * the caller fills them from a cached board (the live adapter's `applyBoard`).
+   */
+  getIssue(ref: string, projectId?: string, opts?: { withBoard?: boolean }): Promise<IssueDetail>;
   editIssue(projectId: string, ref: string, expectedRevision: number, edit: IssueEdit): Promise<void>;
   setLifecycle(projectId: string, ref: string, state: Lifecycle): Promise<void>;
   addNote(projectId: string, ref: string, text: string, kind: string): Promise<void>;
