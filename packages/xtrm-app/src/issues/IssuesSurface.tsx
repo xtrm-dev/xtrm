@@ -178,6 +178,7 @@ export function IssuesSurface() {
           />
           <OptionsMenu
             label="Order by"
+            trigger={<button type="button" className="flex h-8 items-center gap-1 rounded-md bg-hover px-2.5 text-sm text-ink outline-none hover:bg-pressed">Order by <Icon name="chevronDown" size="xs" className="text-ink-faint" /></button>}
             items={[
               { label: "Updated", icon: "chevronDown", onSelect: () => setSort({ key: "updated", desc: true }) },
               { label: "Priority", icon: "chevronDown", onSelect: () => setSort({ key: "priority", desc: false }) },
