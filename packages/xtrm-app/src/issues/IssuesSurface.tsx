@@ -31,6 +31,8 @@ const copy = (text: string) => void navigator.clipboard?.writeText(text).catch((
 /** Summary takes the spare width; the key column is sized from the data, see `keyColumnRem`. */
 const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "right" }> = [
   { key: "title", label: "Title", width: "minmax(0,1fr)" },
+  { key: "children", label: "Children", width: "5rem", align: "right" },
+  { key: "updated", label: "Updated", width: "5.5rem", align: "right" },
 ];
 const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
 const CELL_EDGE = "flex h-full min-w-0 items-center border-r border-border-subtle last:border-r-0";
@@ -232,8 +234,8 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
   const status = issueStatus(issue);
   return (
     <Row density="table" selected={selected} onActivate={onInspect} onDoubleClick={onOpen} className="border-b border-border-subtle">
-      <div className="flex h-full w-full items-center gap-2 px-2">
-        <span style={{ paddingLeft: `${depth * 1.25}rem` }} className="flex shrink-0 items-center gap-1.5">
+      <div className="grid h-full w-full items-center" style={GRID}>
+        <div className={cx(CELL, "relative gap-1.5")} style={{ paddingLeft: `${0.5 + depth * 1.25}rem` }}>
           {hasChildren ? (
             <button
               type="button"
@@ -254,32 +256,32 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
             <Icon name={kindIcon(issue.kind)} size="xs" className="text-ink-faint" />
           </span>
           <PriorityGlyph priority={issue.priority} />
-        </span>
-        <span title={status.hint} className={cx("shrink-0 rounded-sm py-px text-center text-[0.68rem] leading-4", STATUS_CHIP[status.tone])}>
-          {status.label}
-        </span>
-        <span className="min-w-0 flex-1 truncate">
-          <span className="mr-2 shrink-0 text-xs text-ink-faint">{issue.locator}</span>
-          {issue.locator !== issue.ref && <span className="mr-1.5 shrink-0 text-xs text-ink-faint opacity-60">/ {issue.ref}</span>}
-          <span title={issue.title} className={cx(terminal ? "text-ink-muted" : issue.kind === "epic" ? "font-medium text-ink" : "text-ink")}>
-            {issue.title}
+          <span title={status.hint} className={cx("shrink-0 rounded-sm py-px text-center text-[0.68rem] leading-4", STATUS_CHIP[status.tone])}>
+            {status.label}
           </span>
-          {issue.childCount > 0 && (
-            <span className="ml-2 shrink-0 text-xs text-ink-faint tabular">{issue.childrenDone}/{issue.childCount}</span>
-          )}
-        </span>
+          <span className="min-w-0 truncate">
+            <span className="mr-2 shrink-0 text-xs text-ink-faint">{issue.locator}</span>
+            {issue.locator !== issue.ref && <span className="mr-1.5 shrink-0 text-xs text-ink-faint opacity-60">/ {issue.ref}</span>}
+            <span title={issue.title} className={cx(terminal ? "text-ink-muted" : issue.kind === "epic" ? "font-medium text-ink" : "text-ink")}>
+              {issue.title}
+            </span>
+          </span>
+          <span className="pointer-events-none absolute inset-y-0 right-1 flex items-center bg-surface pl-1 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100" onClick={(e) => e.stopPropagation()}>
+            <IconButton icon="open" label={`Open ${issue.ref}`} onClick={onOpen} />
+            <IconButton icon="copy" label={`Copy ${issue.ref}`} onClick={() => copy(issue.ref)} />
+          </span>
+        </div>
+        <div className={cx(CELL, "justify-end")}>
+          {issue.childCount > 0 ? `${issue.childrenDone}/${issue.childCount}` : ""}
+        </div>
+        <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")} title={`Created ${relativeTime(issue.createdAt)} · Updated ${relativeTime(rollup.activityAt)}`}>
+          {relativeTime(rollup.activityAt)}
+        </div>
         {detached && issue.parentRef && (
           <span className="flex shrink-0 items-center text-xs text-ink-faint">
             ↑<ReferenceChip reference={{ kind: "issue", ref: issue.parentRef }} fallback={issue.parentLocator ?? issue.parentRef} />
           </span>
         )}
-        <span className="shrink-0 text-xs text-ink-muted tabular" title={`Created ${relativeTime(issue.createdAt)} · Updated ${relativeTime(rollup.activityAt)}`}>
-          {relativeTime(rollup.activityAt)}
-        </span>
-        <span className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100" onClick={(e) => e.stopPropagation()}>
-          <IconButton icon="open" label={`Open ${issue.ref}`} onClick={onOpen} />
-          <IconButton icon="copy" label={`Copy ${issue.ref}`} onClick={() => copy(issue.ref)} />
-        </span>
       </div>
     </Row>
   );
