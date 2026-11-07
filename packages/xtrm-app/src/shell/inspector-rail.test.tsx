@@ -134,40 +134,6 @@ describe("inspector push", () => {
   });
 });
 
-describe("inspector maximize pill", () => {
-  it("toggles MAXIMIZED and restores, with edge-handle pill styling", async () => {
-    renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-301");
-    await screen.findByTestId("inspector-drawer");
-    const pill = await screen.findByTestId("inspector-maximize-rail");
-    expect(pill.getAttribute("aria-label")).toBe("Maximize inspector");
-    // Same discreet vertical oblong pill as the sidebar edge handle.
-    expect(pill.className).toContain("group/edge");
-    expect(pill.querySelector("span")?.className).toContain("rounded-full");
-
-    fireEvent.click(pill);
-    await waitFor(() => expect(screen.getByTestId("inspector-dock").dataset.state).toBe("maximized"));
-    expect(screen.getByTestId("inspector-maximize-rail").getAttribute("aria-label")).toBe("Restore inspector");
-
-    fireEvent.click(screen.getByTestId("inspector-maximize-rail"));
-    await waitFor(() => expect(screen.getByTestId("inspector-dock").dataset.state).toBe("contextual"));
-  });
-
-  it("shows the maximize shortcut in a Kbd tooltip", async () => {
-    renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-301");
-    const pill = await screen.findByTestId("inspector-maximize-rail");
-    fireEvent.focus(pill);
-    // Base UI tooltip (delay 350ms) renders label + Kbd shortcut.
-    const tip = await screen.findByText("Maximize inspector", {}, { timeout: 2000 }).catch(() => null);
-    if (tip) {
-      const popup = tip.closest("[data-slot]") ?? tip.parentElement;
-      expect(popup?.querySelector("kbd")?.textContent).toBe(modShortcut(INSPECTOR_MAXIMIZE_KEY));
-    } else {
-      // Tooltip timing is environment-sensitive; at minimum the shortcut must be Kbd-renderable.
-      expect(isShortcutHint(modShortcut(INSPECTOR_MAXIMIZE_KEY))).toBe(true);
-    }
-  });
-});
-
 describe("inspector shortcuts", () => {
   it("Mod+Shift+Enter maximizes and restores; suppressed in editable fields", async () => {
     renderAt("/rep/xtrm-dev/xtrm/work/issues?inspect=issue:XTRM-301");

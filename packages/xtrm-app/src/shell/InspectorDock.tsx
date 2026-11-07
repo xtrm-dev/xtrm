@@ -34,7 +34,7 @@ export function frameMinWidth(state: string, drawerWidth: number): number {
 }
 
 /** Discreet vertical pill, same treatment as the sidebar edge handle. */
-function RailPill({ icon, iconClassName, ...props }: { icon: "back" | "forward"; iconClassName?: string } & React.ComponentProps<"button">) {
+function RailPill({ icon, iconClassName, ...props }: { icon: "back" | "forward" | "sidebar"; iconClassName?: string } & React.ComponentProps<"button">) {
   return (
     <button type="button" {...props} className="group/edge flex w-5 shrink-0 items-center justify-center outline-none">
       <span className="flex h-12 w-2 items-center justify-center overflow-hidden rounded-full bg-border-muted text-ink-faint transition-all duration-200 motion-reduce:transition-none group-hover/edge:h-14 group-hover/edge:w-5 group-hover/edge:bg-hover group-hover/edge:text-ink group-focus-visible/edge:h-14 group-focus-visible/edge:w-5 group-focus-visible/edge:bg-hover">
@@ -124,30 +124,18 @@ export function InspectorDock() {
           !open ? "bg-sidebar" : "shadow-panel",
         )}
       >
-        <div className="flex shrink-0 flex-col items-stretch justify-between gap-1.5 py-2" style={{ width: RAIL }}>
+        <button
+          type="button"
+          data-testid="inspector-rail"
+          aria-label={open ? "Close inspector" : "Open inspector"}
+          aria-expanded={open}
+          onClick={() => dispatch({ type: open ? "drawer/close" : "drawer/open" })}
+          className="group/rail flex shrink-0 flex-col items-center justify-end gap-1.5 py-2 transition-colors hover:bg-hover focus-visible:bg-hover"
+          style={{ width: RAIL }}
+        >
           {followLive && <span className="size-1.5 rounded-full bg-accent" />}
-          <Tip label={open ? "Close inspector" : "Open inspector"} shortcut={modShortcut("I")} side="left">
-            <RailPill
-              data-testid="inspector-rail"
-              aria-label={open ? "Close inspector" : "Open inspector"}
-              aria-expanded={open}
-              onClick={() => dispatch({ type: open ? "drawer/close" : "drawer/open" })}
-              icon="back"
-              iconClassName={cx(open && "rotate-180")}
-            />
-          </Tip>
-          {open && (
-            <Tip label={maximized ? "Restore inspector" : "Maximize inspector"} shortcut={modShortcut(INSPECTOR_MAXIMIZE_KEY)} side="left">
-              <RailPill
-                data-testid="inspector-maximize-rail"
-                aria-label={maximized ? "Restore inspector" : "Maximize inspector"}
-                aria-pressed={maximized}
-                onClick={() => dispatch({ type: maximized ? "drawer/restore" : "drawer/maximize" })}
-                icon={maximized ? "forward" : "back"}
-              />
-            </Tip>
-          )}
-        </div>
+          <Icon name="sidebar" size="xs" className="text-ink-faint transition-colors group-hover/rail:text-ink group-focus-visible/rail:text-ink scale-x-[-1]" />
+        </button>
         {open && (
           <div className="relative min-h-0 min-w-0 flex-1">
             {!maximized && (

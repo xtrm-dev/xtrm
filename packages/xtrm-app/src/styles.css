@@ -32,9 +32,9 @@
   --x-github: #24292f;
   --x-github-hover: #32383f;
   --x-github-ink: #ffffff;
-  --x-accent: #833cf0;
-  --x-accent-ink: #6d28d9;
-  --x-accent-soft: rgb(131 60 240 / 0.1);
+  --x-accent: #4f46e5;
+  --x-accent-ink: #4338ca;
+  --x-accent-soft: rgb(79 70 229 / 0.1);
   --x-danger: #c42b2b;
   --x-success: #1f8a4c;
   --x-diff-add: #1f8a4c;
@@ -67,9 +67,9 @@
   --x-github-hover: #ffffff;
   --x-github-ink: #24292f;
   /* dark surfaces use the accessible light violet role for small text/markers */
-  --x-accent: #a979ff;
-  --x-accent-ink: #bf9bff;
-  --x-accent-soft: rgb(169 121 255 / 0.12);
+  --x-accent: #818cf8;
+  --x-accent-ink: #a5b4fc;
+  --x-accent-soft: rgb(129 140 248 / 0.12);
   --x-danger: #f07171;
   --x-success: #5ccb8a;
   --x-diff-add: #5ccb8a;

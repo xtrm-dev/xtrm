@@ -259,7 +259,7 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
             <Icon name={kindIcon(issue.kind)} size="xs" className="text-ink-faint" />
           </span>
           <PriorityGlyph priority={issue.priority} />
-          <span title={status.hint} className={cx("shrink-0 rounded-sm py-px text-center text-[0.68rem] leading-4", STATUS_CHIP[status.tone])}>
+          <span title={status.hint} className={cx("shrink-0 rounded px-1.5 py-0.5 text-center text-[0.68rem] leading-4", STATUS_CHIP[status.tone])}>
             {status.label}
           </span>
           <span className="min-w-0 truncate">
