@@ -114,6 +114,26 @@
   --shadow-float: var(--x-shadow-float);
   --shadow-panel: var(--x-shadow-panel);
 
+  /* shadcn alias layer (XT-215): names only, values stay --x-* authoritative. */
+  --color-background: var(--x-deep);
+  --color-foreground: var(--x-ink);
+  --color-card: var(--x-surface);
+  --color-card-foreground: var(--x-ink);
+  --color-popover: var(--x-raised);
+  --color-popover-foreground: var(--x-ink);
+  --color-primary: var(--x-accent);
+  --color-primary-foreground: var(--x-accent-ink);
+  --color-secondary: var(--x-control);
+  --color-secondary-foreground: var(--x-ink);
+  --color-muted: var(--x-control);
+  --color-muted-foreground: var(--x-ink-muted);
+  --color-accent-foreground: var(--x-ink);
+  --color-destructive: var(--x-danger);
+  --color-destructive-foreground: var(--x-ink);
+  --color-border-input: var(--x-border);
+  --color-input: var(--x-control);
+  --color-ring: var(--x-accent);
+
   --text-xs: 0.72rem;
   --text-xs--line-height: 1rem;
   --text-sm: 0.8125rem;

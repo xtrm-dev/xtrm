@@ -19,6 +19,7 @@
   },
   "registries": {
     "@spectrumui": "https://ui.spectrumhq.in/r/{name}.json",
-    "@agents-ui": "https://livekit.io/ui/r/{name}.json"
+    "@agents-ui": "https://livekit.io/ui/r/{name}.json",
+    "@reui": "https://reui.io/r/{name}.json"
   }
 }
