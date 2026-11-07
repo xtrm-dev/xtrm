@@ -162,6 +162,7 @@ export function IssuesSurface() {
           </div>
           <OptionsMenu
             label={priorityFilter === null ? "Priority" : `P${priorityFilter}`}
+            trigger={<button type="button" className="flex h-8 items-center gap-1 rounded-md bg-hover px-2.5 text-sm text-ink outline-none hover:bg-pressed">{priorityFilter === null ? "Priority" : `P${priorityFilter}`} <Icon name="chevronDown" size="xs" className="text-ink-faint" /></button>}
             items={[
               { label: "All priorities", onSelect: () => setPriorityFilter(null) },
               ...[0, 1, 2, 3, 4].map((p) => ({ label: `P${p}`, onSelect: () => setPriorityFilter(p) })),
@@ -169,6 +170,7 @@ export function IssuesSurface() {
           />
           <OptionsMenu
             label={typeFilter === null ? "Type" : typeFilter}
+            trigger={<button type="button" className="flex h-8 items-center gap-1 rounded-md bg-hover px-2.5 text-sm text-ink outline-none hover:bg-pressed">{typeFilter === null ? "Type" : typeFilter} <Icon name="chevronDown" size="xs" className="text-ink-faint" /></button>}
             items={[
               { label: "All types", onSelect: () => setTypeFilter(null) },
               ...["task", "bug", "feature", "epic", "chore", "decision"].map((t) => ({ label: t, onSelect: () => setTypeFilter(t) })),
@@ -261,13 +263,18 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
           <span title={issue.title} className={cx(terminal ? "text-ink-muted" : issue.kind === "epic" ? "font-medium text-ink" : "text-ink")}>
             {issue.title}
           </span>
+          {issue.childCount > 0 && (
+            <span className="ml-2 shrink-0 text-xs text-ink-faint tabular">{issue.childrenDone}/{issue.childCount}</span>
+          )}
         </span>
         {detached && issue.parentRef && (
           <span className="flex shrink-0 items-center text-xs text-ink-faint">
             ↑<ReferenceChip reference={{ kind: "issue", ref: issue.parentRef }} fallback={issue.parentLocator ?? issue.parentRef} />
           </span>
         )}
-        <span className="shrink-0 text-xs text-ink-muted tabular">{relativeTime(rollup.activityAt)}</span>
+        <span className="shrink-0 text-xs text-ink-muted tabular" title={`Created ${relativeTime(issue.createdAt)} · Updated ${relativeTime(rollup.activityAt)}`}>
+          {relativeTime(rollup.activityAt)}
+        </span>
         <span className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100" onClick={(e) => e.stopPropagation()}>
           <IconButton icon="open" label={`Open ${issue.ref}`} onClick={onOpen} />
           <IconButton icon="copy" label={`Copy ${issue.ref}`} onClick={() => copy(issue.ref)} />
