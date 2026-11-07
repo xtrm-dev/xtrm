@@ -1,4 +1,4 @@
-import { Dialog } from "@base-ui/react/dialog";
+import { Dialog } from "./dialog.tsx";
 import { Command } from "cmdk";
 import type { ReactNode } from "react";
 import { Icon, type IconName } from "./icon.tsx";

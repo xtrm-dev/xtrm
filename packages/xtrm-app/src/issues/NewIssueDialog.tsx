@@ -1,4 +1,4 @@
-import { Dialog } from "@base-ui/react/dialog";
+import { Dialog } from "../ui/dialog.tsx";
 import { useState } from "react";
 import type { Scrutiny } from "../adapters/index.tsx";
 import { SelectField } from "../ui/fields.tsx";

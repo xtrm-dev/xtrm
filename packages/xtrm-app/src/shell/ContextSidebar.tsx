@@ -1,4 +1,4 @@
-import { Popover } from "@base-ui/react/popover";
+import { Popover } from "../ui/popover.tsx";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useAdapters } from "../adapters/index.tsx";

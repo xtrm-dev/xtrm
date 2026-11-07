@@ -1,4 +1,4 @@
-import { Popover } from "@base-ui/react/popover";
+import { Popover } from "../ui/popover.tsx";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AgentSessionDetail, InteractionFrame } from "../adapters/index.tsx";

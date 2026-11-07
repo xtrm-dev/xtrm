@@ -1,3 +1,4 @@
+export * from "@base-ui/react/menu";
 import { Menu } from "@base-ui/react/menu";
 import type { ReactNode } from "react";
 import { Icon, type IconName } from "./icon.tsx";

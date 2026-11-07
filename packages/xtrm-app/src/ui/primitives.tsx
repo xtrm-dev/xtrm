@@ -1,4 +1,4 @@
-import { Tooltip } from "@base-ui/react/tooltip";
+import { Tooltip } from "./tooltip.tsx";
 import type { ComponentProps, ReactNode } from "react";
 import type { DataSource } from "../adapters/types.ts";
 import { Icon, type IconName } from "./icon.tsx";

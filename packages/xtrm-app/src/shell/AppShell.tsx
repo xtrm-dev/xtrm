@@ -1,4 +1,4 @@
-import { Tooltip } from "@base-ui/react/tooltip";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { AgentWorkspaceProvider } from "../agent/workspace.tsx";

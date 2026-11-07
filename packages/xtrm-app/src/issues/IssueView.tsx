@@ -1,4 +1,4 @@
-import { Dialog } from "@base-ui/react/dialog";
+import { Dialog } from "../ui/dialog.tsx";
 import { useMemo, useState, type ReactNode } from "react";
 import type { IssueDetail, IssueLink } from "../adapters/index.tsx";
 import { planNormalization, type NormalizationPlan } from "../adapters/substrate/contract.ts";

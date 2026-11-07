@@ -1,4 +1,4 @@
-import { Menu } from "@base-ui/react/menu";
+import { Menu } from "./menu.tsx";
 import { useState, type ReactNode } from "react";
 import { Icon } from "./icon.tsx";
 import { Markdown } from "./markdown.tsx";
