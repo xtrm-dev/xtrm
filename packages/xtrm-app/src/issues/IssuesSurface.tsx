@@ -32,6 +32,9 @@ const copy = (text: string) => void navigator.clipboard?.writeText(text).catch((
 const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "right" }> = [
   { key: "title", label: "Title", width: "minmax(0,1fr)" },
   { key: "children", label: "Children", width: "5rem", align: "right" },
+  { key: "events", label: "Events", width: "4.5rem", align: "right" },
+  { key: "pointers", label: "Pointers", width: "5.25rem", align: "right" },
+  { key: "created", label: "Created", width: "5rem", align: "right" },
   { key: "updated", label: "Updated", width: "5.5rem", align: "right" },
 ];
 const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
@@ -273,6 +276,15 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
         </div>
         <div className={cx(CELL, "justify-end")}>
           {issue.childCount > 0 ? `${issue.childrenDone}/${issue.childCount}` : ""}
+        </div>
+        <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")} title={`${issue.eventCount} on this issue, ${rollup.events} with children`}>
+          {rollup.events || ""}
+        </div>
+        <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")} title={`${issue.pointerCount} on this issue, ${rollup.pointers} with children`}>
+          {rollup.pointers || ""}
+        </div>
+        <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")}>
+          {relativeTime(issue.createdAt)}
         </div>
         <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")} title={`Created ${relativeTime(issue.createdAt)} · Updated ${relativeTime(rollup.activityAt)}`}>
           {relativeTime(rollup.activityAt)}
