@@ -49,7 +49,7 @@ export function IssuesSurface() {
   const projects = useProjects();
   const project = projectForRepo(projects.data, repo);
   const issues = useIssues(project?.id);
-  const [view, setView] = useState<View>("open");
+  const [view, setView] = useState<View>("all");
   const [layout, setLayout] = useState<"list" | "board">("list");
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<Sort>({ key: "updated", desc: true });
@@ -147,22 +147,7 @@ export function IssuesSurface() {
         <h1 className="text-base font-medium text-ink">Issues</h1>
         {project && <span className="text-xs text-ink-faint">{project.prefix}</span>}
         <SourceBadge source={substrate.source} />
-        <div role="tablist" aria-label="Issue views" hidden={layout === "board"} className="flex items-center gap-0.5">
-          {VIEWS.map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              role="tab"
-              aria-selected={view === v}
-              onClick={() => setView(v)}
-              className={cx("flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm outline-none focus-visible:bg-hover", view === v ? "bg-hover text-ink" : "text-ink-faint hover:text-ink-muted")}
-            >
-              {label}
-              <span className="text-xs text-ink-faint tabular">{counts[v]}</span>
-            </button>
-          ))}
-        </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2">
           {canWrite && project && (
             <button
               type="button"
