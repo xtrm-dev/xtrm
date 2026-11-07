@@ -237,7 +237,7 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
   const status = issueStatus(issue);
   return (
     <Row density="table" selected={selected} onActivate={onInspect} onDoubleClick={onOpen} className="">
-      <div className="grid h-full w-full items-center" style={GRID}>
+      <div className="grid h-full w-full items-center overflow-hidden" style={GRID}>
         <div className={cx(CELL, "relative gap-1.5")} style={{ paddingLeft: `${0.5 + depth * 1.25}rem` }}>
           {hasChildren ? (
             <button
@@ -268,10 +268,15 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
             <span title={issue.title} className={cx(terminal ? "text-ink-muted" : issue.kind === "epic" ? "font-medium text-ink" : "text-ink")}>
               {issue.title}
             </span>
+            {detached && issue.parentRef && (
+              <span className="ml-1.5 shrink-0 text-xs text-ink-faint">
+                ↑<ReferenceChip reference={{ kind: "issue", ref: issue.parentRef }} fallback={issue.parentLocator ?? issue.parentRef} />
+              </span>
+            )}
           </span>
           <span className="pointer-events-none absolute inset-y-0 right-1 flex items-center bg-surface pl-1 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100" onClick={(e) => e.stopPropagation()}>
-            <IconButton icon="open" label={`Open ${issue.ref}`} onClick={onOpen} />
-            <IconButton icon="copy" label={`Copy ${issue.ref}`} onClick={() => copy(issue.ref)} />
+            <IconButton icon="open" label={`Open ${issue.ref}`} onClick={onOpen} className="size-5" />
+            <IconButton icon="copy" label={`Copy ${issue.ref}`} onClick={() => copy(issue.ref)} className="size-5" />
           </span>
         </div>
         <div className={cx(CELL, "justify-end")}>
@@ -289,11 +294,6 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
         <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")} title={`Created ${relativeTime(issue.createdAt)} · Updated ${relativeTime(rollup.activityAt)}`}>
           {relativeTime(rollup.activityAt)}
         </div>
-        {detached && issue.parentRef && (
-          <span className="flex shrink-0 items-center text-xs text-ink-faint">
-            ↑<ReferenceChip reference={{ kind: "issue", ref: issue.parentRef }} fallback={issue.parentLocator ?? issue.parentRef} />
-          </span>
-        )}
       </div>
     </Row>
   );
