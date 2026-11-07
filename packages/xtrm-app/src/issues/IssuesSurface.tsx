@@ -54,6 +54,7 @@ export function IssuesSurface() {
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<Sort>({ key: "updated", desc: true });
   const [priorityFilter, setPriorityFilter] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [creating, setCreating] = useState(false);
@@ -68,9 +69,10 @@ export function IssuesSurface() {
       if (q && !i.title.toLowerCase().includes(q) && !i.ref.toLowerCase().includes(q) && !i.locator.toLowerCase().includes(q) && !(i.parentLocator ?? "").toLowerCase().includes(q)) return false;
       if (priorityFilter !== null && i.priority !== priorityFilter) return false;
       if (typeFilter !== null && i.kind !== typeFilter) return false;
+      if (statusFilter !== null && i.lifecycle !== statusFilter) return false;
       return true;
     });
-  }, [issues.data, filter, priorityFilter, typeFilter]);
+  }, [issues.data, filter, priorityFilter, typeFilter, statusFilter]);
 
   const rollups = useMemo(() => rollupActivity(issues.data ?? []), [issues.data]);
   const visible = useMemo(() => matching.filter(VIEWS.find(([v]) => v === view)![2]), [matching, view]);
@@ -161,10 +163,26 @@ export function IssuesSurface() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <div className="flex h-8 items-center gap-1.5 rounded-md bg-hover px-2.5 focus-within:bg-pressed">
-            <Icon name="search" size="xs" className="text-ink-faint" />
-            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search" aria-label="Search issues" className="w-32 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint" />
-          </div>
+          {canWrite && project && (
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="flex h-8 items-center gap-1.5 rounded-md bg-accent-soft px-3 text-sm font-medium text-accent-ink outline-none hover:bg-accent/20 focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              <Icon name="plus" size="xs" /> New issue
+            </button>
+          )}
+          <OptionsMenu
+            label={statusFilter === null ? "Status" : statusFilter}
+            trigger={<button type="button" className="flex h-8 items-center gap-1 rounded-md bg-hover px-2.5 text-sm text-ink outline-none hover:bg-pressed">{statusFilter === null ? "Status" : statusFilter} <Icon name="chevronDown" size="xs" className="text-ink-faint" /></button>}
+            items={[
+              { label: "All statuses", onSelect: () => setStatusFilter(null) },
+              { label: "open", onSelect: () => setStatusFilter("open") },
+              { label: "claimed", onSelect: () => setStatusFilter("claimed") },
+              { label: "deferred", onSelect: () => setStatusFilter("deferred") },
+              { label: "done", onSelect: () => setStatusFilter("done") },
+            ]}
+          />
           <OptionsMenu
             label={priorityFilter === null ? "Priority" : `P${priorityFilter}`}
             trigger={<button type="button" className="flex h-8 items-center gap-1 rounded-md bg-hover px-2.5 text-sm text-ink outline-none hover:bg-pressed">{priorityFilter === null ? "Priority" : `P${priorityFilter}`} <Icon name="chevronDown" size="xs" className="text-ink-faint" /></button>}
@@ -190,6 +208,10 @@ export function IssuesSurface() {
               { label: "Key", icon: "chevronDown", onSelect: () => setSort({ key: "key", desc: false }) },
             ]}
           />
+          <div className="flex h-8 items-center gap-1.5 rounded-md bg-hover px-2.5 focus-within:bg-pressed">
+            <Icon name="search" size="xs" className="text-ink-faint" />
+            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search" aria-label="Search issues" className="w-32 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint" />
+          </div>
           <div role="radiogroup" aria-label="Layout" className="flex h-8 items-center rounded-md bg-hover p-0.5">
             {(["list", "board"] as const).map((l) => (
               <IconButton key={l} icon={l} label={l === "list" ? "List" : "Board"} role="radio" aria-checked={layout === l} active={layout === l} onClick={() => setLayout(l)} className="size-7" />
@@ -204,15 +226,6 @@ export function IssuesSurface() {
               { label: "Collapse all", icon: "restore", onSelect: () => setCollapsed(new Set(tree.filter((r) => r.hasChildren).map((r) => r.issue.ref))) },
             ]}
           />
-          {canWrite && project && (
-            <button
-              type="button"
-              onClick={() => setCreating(true)}
-              className="flex h-8 items-center gap-1.5 rounded-md bg-accent-soft px-3 text-sm font-medium text-accent-ink outline-none hover:bg-accent/20 focus-visible:ring-2 focus-visible:ring-accent/40"
-            >
-              <Icon name="plus" size="xs" /> New issue
-            </button>
-          )}
         </div>
       </div>
       {body}
