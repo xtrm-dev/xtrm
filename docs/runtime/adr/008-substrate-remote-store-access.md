@@ -210,8 +210,43 @@ before assuming either.
 |---|---|---|
 | Pi extension (`integrations/pi/handlers.ts`) | remote client for the typed services; handlers keep their current domain logic | `packages/substrate` (this repo) |
 | Claude plugin hooks (SessionStart, PreCompact, PostCompact, stop-gate, edit-gate) + MCP server execution | hooks use the JSON-RPC client; `.mcp.json` points at the server-side MCP server with a version handshake. The launcher must read `substrate.remote` and start nothing remote when it is unset (two-way rule above) | `packages/substrate` + plugin config |
-| Specialists native dispatch, activation authority (`src/activation/workitem-store.ts`, `src/activation/authority-store.ts`) | remote implementations of `IssueServicePort`/`IssueStorePort`; structured activation/authority operations instead of raw SQLite over the wire | `specialists` repo |
+| Specialists native dispatch (work-item ports) | **landed**: `src/activation/workitem-store.ts` selects the store and reaches it through `SubstrateService`; the wire properties are recorded below | `specialists` repo |
+| Specialists activation authority (`src/activation/authority-store.ts`) | structured `authority.*` operations instead of raw SQLite over the wire; the consumer switch is the authority part of SPECIALISTS-4395 | `specialists` repo |
 | PC stale local store (`~/.xtrm/state.db`, 0 issues) | archive it with a marker and add a remote-mode guard so no consumer can silently open it | `packages/substrate` |
+
+## Consumer landing: specialists work-item ports (SPECIALISTS-4398)
+
+With `substrate.remote` configured, `openWorkItemBoundary` decides the store before
+it opens anything and builds the `IssueServicePort`, `IssueStorePort`, gate,
+journal and provenance ports over one `SubstrateService` connection instead of
+`~/.xtrm/state.db`; with it unset the local path is unchanged
+(`selectWorkItemStore`, `specialists/src/activation/workitem-store.ts`). Four
+properties of this consumer are load-bearing and pinned by its tests:
+
+- *Fail closed, with the transport code.* An unreachable server ends the call
+  with `connection_lost`, `not_installed`, `spawn_failed` or `timeout` promoted
+  into the message the dispatch refusal renders, and no local store is opened on
+  that path: the remote adapter has no sqlite opener at all. One call is one
+  attempt — the wire has no retry key, so a mutation (claim, dispatch binding,
+  journal append) is never replayed by the client, and a settlement retry
+  re-reads first and republishes through its own pass.
+- *`store.addJournal` is one round trip.* The server resolves the ref and
+  appends in a single operation, so the remote path costs one call where the
+  local path costs a resolve, a read and a write.
+- *`completedBlockers` answers `[]` over the wire.* No operation returns active
+  `blocks` edges (XTRM-715 is the unscheduled parity draft), so the remote port
+  has no `getBlockers` and the boundary reports "no blocker information" rather
+  than "no blockers". The local port still walks the edges, so a remote dispatch
+  renders an empty dependency context instead of a false one.
+- *Project resolution sends the verified server checkout root.*
+  `issue.resolveProject` matches `gitRoot` against the links of the store it
+  RUNS ON, where a PC path is not evidence even when both machines use the same
+  layout. The host derives the repository key locally, reads the checkout that
+  `sb remote setup` verified (`checkouts[<host> <repositoryKey>]`) and sends that
+  server root. A repository with no verified mapping refuses and names
+  `sb remote setup <remote>` instead of guessing a project; reads still work
+  without a mapping, because inline creation is the only operation that needs
+  one.
 
 ## Stage 3 (XTRM-690): the typed stdio service
 
@@ -380,7 +415,8 @@ two-way rule, applied to code instead of commands.
    handshake there:
    `printf '%s\n' '{"id":0,"op":"hello","args":{"protocol":1}}' | sb serve --stdio`.
 3. Land the consumers — Pi handlers, Claude hooks and MCP server, specialists
-   ports (XTRM-691, XTRM-692, SPECIALISTS-4395). A consumer fails closed: when
+   ports (XTRM-691, XTRM-692, SPECIALISTS-4398 for the work-item ports — landed —
+   and the authority part of SPECIALISTS-4395). A consumer fails closed: when
    `substrate.remote` is set, a failed handshake, an `sb` without the verb or a
    dropped connection ends the call with an error naming the remote. It never
    opens the local store as a substitute, because a stale local store answers
