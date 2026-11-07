@@ -30,14 +30,7 @@ const copy = (text: string) => void navigator.clipboard?.writeText(text).catch((
 
 /** Summary takes the spare width; the key column is sized from the data, see `keyColumnRem`. */
 const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "right" }> = [
-  { key: "key", label: "Key", width: "var(--key-col)" },
-  { key: "title", label: "Summary", width: "minmax(20rem,1fr)" },
-  { key: "priority", label: "Priority", width: "5.25rem" },
-  { key: "children", label: "Children", width: "5.25rem", align: "right" },
-  { key: "events", label: "Events", width: "4.5rem", align: "right" },
-  { key: "pointers", label: "Pointers", width: "5.25rem", align: "right" },
-  { key: "created", label: "Created", width: "5rem", align: "right" },
-  { key: "updated", label: "Updated", width: "5.25rem", align: "right" },
+  { key: "title", label: "Title", width: "minmax(0,1fr)" },
 ];
 const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
 const CELL_EDGE = "flex h-full min-w-0 items-center border-r border-border-subtle last:border-r-0";
@@ -55,6 +48,8 @@ export function IssuesSurface() {
   const [layout, setLayout] = useState<"list" | "board">("list");
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<Sort>({ key: "updated", desc: true });
+  const [priorityFilter, setPriorityFilter] = useState<number | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [creating, setCreating] = useState(false);
 
@@ -64,8 +59,13 @@ export function IssuesSurface() {
 
   const matching = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    return (issues.data ?? []).filter((i) => !q || i.title.toLowerCase().includes(q) || i.ref.toLowerCase().includes(q) || i.locator.toLowerCase().includes(q) || (i.parentLocator ?? "").toLowerCase().includes(q));
-  }, [issues.data, filter]);
+    return (issues.data ?? []).filter((i) => {
+      if (q && !i.title.toLowerCase().includes(q) && !i.ref.toLowerCase().includes(q) && !i.locator.toLowerCase().includes(q) && !(i.parentLocator ?? "").toLowerCase().includes(q)) return false;
+      if (priorityFilter !== null && i.priority !== priorityFilter) return false;
+      if (typeFilter !== null && i.kind !== typeFilter) return false;
+      return true;
+    });
+  }, [issues.data, filter, priorityFilter, typeFilter]);
 
   const rollups = useMemo(() => rollupActivity(issues.data ?? []), [issues.data]);
   const visible = useMemo(() => matching.filter(VIEWS.find(([v]) => v === view)![2]), [matching, view]);
@@ -108,7 +108,7 @@ export function IssuesSurface() {
         items={tree}
         rowHeight={32}
         flush
-        minWidth={`calc(${keyCol} + 51rem)`}
+        minWidth="20rem"
         getKey={(r) => r.issue.id}
         header={
           <div role="row" data-testid="issues-table-head" className="grid h-8 shrink-0 rounded-t-lg border-b border-border bg-deep" style={{ ...tableVars, ...GRID }}>
@@ -129,7 +129,7 @@ export function IssuesSurface() {
           </div>
         }
         renderRow={(r) => (
-          <IssueRow row={r} vars={tableVars} selected={inspected?.kind === "issue" && inspected.ref === r.issue.ref} onToggle={() => toggle(r.issue.ref)} onInspect={() => inspect({ kind: "issue", ref: r.issue.ref })} onOpen={() => openPage(r.issue.ref)} />
+          <IssueRow row={r} selected={inspected?.kind === "issue" && inspected.ref === r.issue.ref} onToggle={() => toggle(r.issue.ref)} onInspect={() => inspect({ kind: "issue", ref: r.issue.ref })} onOpen={() => openPage(r.issue.ref)} />
         )}
       />
     );
@@ -138,7 +138,7 @@ export function IssuesSurface() {
     <section className="flex min-h-0 flex-1 flex-col" aria-label="XTRM Issues">
       <div className="flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-border-muted px-2 py-2">
         <h1 className="text-base font-medium text-ink">Issues</h1>
-        {project && <span className="font-mono text-xs text-ink-faint">{project.prefix}</span>}
+        {project && <span className="text-xs text-ink-faint">{project.prefix}</span>}
         <SourceBadge source={substrate.source} />
         <div role="tablist" aria-label="Issue views" hidden={layout === "board"} className="flex items-center gap-0.5">
           {VIEWS.map(([v, label]) => (
@@ -158,8 +158,30 @@ export function IssuesSurface() {
         <div className="ml-auto flex items-center gap-2">
           <div className="flex h-8 items-center gap-1.5 rounded-md bg-hover px-2.5 focus-within:bg-pressed">
             <Icon name="search" size="xs" className="text-ink-faint" />
-            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter issues" aria-label="Filter issues" className="w-24 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint" />
+            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search" aria-label="Search issues" className="w-32 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint" />
           </div>
+          <OptionsMenu
+            label={priorityFilter === null ? "Priority" : `P${priorityFilter}`}
+            items={[
+              { label: "All priorities", onSelect: () => setPriorityFilter(null) },
+              ...[0, 1, 2, 3, 4].map((p) => ({ label: `P${p}`, onSelect: () => setPriorityFilter(p) })),
+            ]}
+          />
+          <OptionsMenu
+            label={typeFilter === null ? "Type" : typeFilter}
+            items={[
+              { label: "All types", onSelect: () => setTypeFilter(null) },
+              ...["task", "bug", "feature", "epic", "chore", "decision"].map((t) => ({ label: t, onSelect: () => setTypeFilter(t) })),
+            ]}
+          />
+          <OptionsMenu
+            label="Order by"
+            items={[
+              { label: "Updated", icon: "chevronDown", onSelect: () => setSort({ key: "updated", desc: true }) },
+              { label: "Priority", icon: "chevronDown", onSelect: () => setSort({ key: "priority", desc: false }) },
+              { label: "Key", icon: "chevronDown", onSelect: () => setSort({ key: "key", desc: false }) },
+            ]}
+          />
           <div role="radiogroup" aria-label="Layout" className="flex h-8 items-center rounded-md bg-hover p-0.5">
             {(["list", "board"] as const).map((l) => (
               <IconButton key={l} icon={l} label={l === "list" ? "List" : "Board"} role="radio" aria-checked={layout === l} active={layout === l} onClick={() => setLayout(l)} className="size-7" />
@@ -201,18 +223,14 @@ const STATUS_CHIP: Record<StatusTone, string> = {
   muted: "bg-hover text-ink-faint",
 };
 
-function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: TreeRow; vars: CSSProperties; selected: boolean; onToggle: () => void; onInspect: () => void; onOpen: () => void }) {
+function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow; selected: boolean; onToggle: () => void; onInspect: () => void; onOpen: () => void }) {
   const { issue, depth, rollup, hasChildren, collapsed, detached } = row;
   const terminal = TERMINAL.has(issue.lifecycle);
   const status = issueStatus(issue);
-  const own = rollup.events !== issue.eventCount || rollup.pointers !== issue.pointerCount;
   return (
     <Row density="table" selected={selected} onActivate={onInspect} onDoubleClick={onOpen} className="border-b border-border-subtle">
-      <div className="grid h-full w-full" style={{ ...vars, ...GRID }}>
-        <div className={CELL}>
-          <IssueKey locator={issue.locator} humanRef={issue.ref} />
-        </div>
-        <div className={cx(CELL, "relative gap-1.5")} style={{ paddingLeft: `${0.5 + depth * 1.25}rem` }}>
+      <div className="flex h-full w-full items-center gap-2 px-2">
+        <span style={{ paddingLeft: `${depth * 1.25}rem` }} className="flex shrink-0 items-center gap-1.5">
           {hasChildren ? (
             <button
               type="button"
@@ -232,35 +250,28 @@ function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: T
           <span title={issue.kind} className="flex shrink-0">
             <Icon name={kindIcon(issue.kind)} size="xs" className="text-ink-faint" />
           </span>
-          <span title={status.hint} className={cx("w-[4.75rem] shrink-0 rounded-sm py-px text-center text-[0.68rem] leading-4", STATUS_CHIP[status.tone])}>
-            {status.label}
-          </span>
-          <span title={issue.title} className={cx("min-w-0 truncate", terminal ? "text-ink-muted" : issue.kind === "epic" ? "font-medium text-ink" : "text-ink")}>
+          <PriorityGlyph priority={issue.priority} />
+        </span>
+        <span title={status.hint} className={cx("shrink-0 rounded-sm py-px text-center text-[0.68rem] leading-4", STATUS_CHIP[status.tone])}>
+          {status.label}
+        </span>
+        <span className="min-w-0 flex-1 truncate">
+          <span className="mr-2 shrink-0 text-xs text-ink-faint">{issue.locator}</span>
+          {issue.locator !== issue.ref && <span className="mr-1.5 shrink-0 text-xs text-ink-faint opacity-60">/ {issue.ref}</span>}
+          <span title={issue.title} className={cx(terminal ? "text-ink-muted" : issue.kind === "epic" ? "font-medium text-ink" : "text-ink")}>
             {issue.title}
           </span>
-          {detached && issue.parentRef && (
-            <span className="flex shrink-0 items-center text-xs text-ink-faint">
-              ↑<ReferenceChip reference={{ kind: "issue", ref: issue.parentRef }} fallback={issue.parentLocator ?? issue.parentRef} />
-            </span>
-          )}
-          <span className="pointer-events-none absolute inset-y-0 right-1 flex items-center bg-surface pl-1 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100" onClick={(e) => e.stopPropagation()}>
-            <IconButton icon="open" label={`Open ${issue.ref}`} onClick={onOpen} />
-            <IconButton icon="copy" label={`Copy ${issue.ref}`} onClick={() => copy(issue.ref)} />
+        </span>
+        {detached && issue.parentRef && (
+          <span className="flex shrink-0 items-center text-xs text-ink-faint">
+            ↑<ReferenceChip reference={{ kind: "issue", ref: issue.parentRef }} fallback={issue.parentLocator ?? issue.parentRef} />
           </span>
-        </div>
-        <div className={cx(CELL, "gap-1.5 text-xs text-ink-muted")}>
-          <PriorityGlyph priority={issue.priority} />
-          {issue.priority !== null && <span>P{issue.priority}</span>}
-        </div>
-        <div className={cx(CELL, NUMBER, "justify-end")}>{issue.childCount ? `${issue.childrenDone}/${issue.childCount}` : ""}</div>
-        <div className={cx(CELL, NUMBER, "justify-end")} title={own ? `${issue.eventCount} on this issue, ${rollup.events} with its children` : undefined}>
-          {rollup.events || ""}
-        </div>
-        <div className={cx(CELL, NUMBER, "justify-end")} title={own ? `${issue.pointerCount} on this issue, ${rollup.pointers} with its children` : undefined}>
-          {rollup.pointers || ""}
-        </div>
-        <div className={cx(CELL, NUMBER, "justify-end")}>{relativeTime(issue.createdAt)}</div>
-        <div className={cx(CELL, NUMBER, "justify-end")}>{relativeTime(rollup.activityAt)}</div>
+        )}
+        <span className="shrink-0 text-xs text-ink-muted tabular">{relativeTime(rollup.activityAt)}</span>
+        <span className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100" onClick={(e) => e.stopPropagation()}>
+          <IconButton icon="open" label={`Open ${issue.ref}`} onClick={onOpen} />
+          <IconButton icon="copy" label={`Copy ${issue.ref}`} onClick={() => copy(issue.ref)} />
+        </span>
       </div>
     </Row>
   );
