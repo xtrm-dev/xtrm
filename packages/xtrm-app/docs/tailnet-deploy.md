@@ -10,9 +10,25 @@ state, not architecture: read `docs/README.md` first for the app itself.
 | route | `https://<host>.ts.net:8446` → `tailscale serve` → `http://127.0.0.1:5178` |
 | supervisor | systemd user unit `xtrm-console-v2.service` (`Restart=always`, enabled, `Linger=yes`) |
 | source tree | `~/.xtrm/console-v2` — a git **clone**, pinned to a detached commit on `origin/main` |
-| UI revision | the clone's `HEAD`; `npm run research:dev` prints it on start |
+| process | `npm run research:serve`: `vite build` on start, then `vite preview` on `127.0.0.1:5178` (XT-214) |
+| UI revision | the clone's `HEAD`; the start banner prints it |
 | `sb` | the clone's own CLI, `packages/substrate/cli/sb-ux.ts` |
 | research CLI | the clone's venv, `packages/research/.venv/bin/xtrm-research` |
+
+## Why a production build, not the dev server
+
+The unit used to run `npm run research:dev` (Vite dev server). The dev server
+sends hundreds of unbundled modules with no caching headers, so the Issues page
+needed about 6 s to reach networkidle (XT-214). `npm run research:serve` runs
+`vite build` and then `vite preview`. The Substrate, research and agent-host
+bridges are Vite plugins that also hook the preview server, so they work
+unchanged, and `/api/github` and `/api/programme` use the same proxy as in dev.
+`npm run research:dev` is unchanged for local development.
+
+The build runs inside `research:serve` on every start, because
+`VITE_XTRM_RESEARCH` is inlined at build time. A restart therefore takes the
+build time (a few seconds) before the port opens. A failed build stops the unit
+with `research:dev cannot start` and the unit restarts until the build passes.
 
 ## Why a pinned clone outside `~/dev`
 
@@ -100,6 +116,7 @@ bridge ran (`sb failed (bin=...)`).
 
 | symptom | cause | action |
 |---|---|---|
+| unit restarts in a loop, `vite build` failed | build error in the pinned revision | `journalctl --user -u xtrm-console-v2.service`; fix on `main` or re-pin to a green commit |
 | unit restarts in a loop, `--strictPort` error | port 5178 already held | find and stop the other dev server; the unit must own the port |
 | `research:dev cannot start` | missing venv, missing registry, or CLI from another checkout | run the install step for `packages/research` |
 | `"ok":false` + `unknown flag --project` | bridge running the npm-published `sb` instead of the clone's CLI | check `XTRM_SB_BIN` in the unit |

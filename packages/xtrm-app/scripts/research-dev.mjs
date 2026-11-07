@@ -46,10 +46,13 @@ const value = (name) => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 const fixture = argv.includes("--fixture");
+// --serve: build once with this env, then serve dist/ through `vite preview`. The bridges
+// (substrate, research, agent-host) are plugins that also hook the preview server.
+const serve = argv.includes("--serve");
 const passthrough = argv.filter((arg, i) => {
   if (OWN_WITH_VALUE.has(arg)) return false;
   if (i > 0 && OWN_WITH_VALUE.has(argv[i - 1])) return false;
-  return arg !== "--fixture" && arg !== "--";
+  return arg !== "--fixture" && arg !== "--serve" && arg !== "--";
 });
 
 const bin = process.env.XTRM_RESEARCH_BIN ?? resolve(researchDir, ".venv", "bin", "xtrm-research");
@@ -187,6 +190,12 @@ if (fixture) {
 `);
 }
 
-const child = spawn("npx", ["vite", ...passthrough], { cwd: appDir, env, stdio: "inherit", shell: false });
+if (serve) {
+  // VITE_XTRM_RESEARCH is inlined at build time, so the build runs with the resolved env.
+  const build = spawnSync("npx", ["vite", "build"], { cwd: appDir, env, stdio: "inherit" });
+  if (build.status !== 0) fail(["`vite build` failed; see the output above"]);
+}
+
+const child = spawn("npx", ["vite", serve ? "preview" : "dev", ...passthrough], { cwd: appDir, env, stdio: "inherit", shell: false });
 child.on("exit", (code) => process.exit(code ?? 0));
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => child.kill(signal));
