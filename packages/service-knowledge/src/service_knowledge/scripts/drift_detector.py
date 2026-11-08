@@ -3,6 +3,7 @@ import fnmatch
 import json
 import os
 import sys
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -245,14 +246,15 @@ def _ref_changed_in_territory(project_root: str, ref: str, territory: list[str])
         return None
     try:
         result = subprocess.run(
-            ["git", "-C", project_root, "diff", "--name-only", f"{ref}..HEAD"],
+            # Include both endpoints of renames, including moves out of a territory.
+            ["git", "-C", project_root, "diff", "--no-renames", "--name-only", "-z", f"{ref}..HEAD"],
             capture_output=True, text=True, check=False, timeout=15,
         )
     except Exception:
         return None
     if result.returncode != 0:
         return None
-    changed = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    changed = [path for path in result.stdout.split("\0") if path]
     return [f for f in changed if _path_in_territory(f, patterns)]
 
 
@@ -316,6 +318,18 @@ def territory_gitignore_report(project_root: str | None = None) -> list[dict]:
     return report
 
 
+def _territory_files(root: Path, patterns: list[str]) -> Iterator[Path]:
+    for pattern in patterns:
+        # Python 3.12 pathlib globs ending in ** or / yield directories, not files.
+        if pattern.endswith("/"):
+            pattern += "**/*"
+        elif pattern == "**" or pattern.endswith("/**"):
+            pattern += "/*"
+        for path in root.glob(pattern):
+            if path.is_file():
+                yield path
+
+
 def scan_drift(project_root: str | None = None, enrich_with_gitnexus: bool = False, use_gitnexus: bool = True) -> list[dict]:
     if project_root is None:
         try:
@@ -347,10 +361,9 @@ def scan_drift(project_root: str | None = None, enrich_with_gitnexus: bool = Fal
         ref = _service_last_sync_ref(service)
         if never_synced:
             floor = datetime.fromtimestamp(0, tz=timezone.utc)
-            for pattern in territory:
-                for fp in root.glob(pattern):
-                    if fp.is_file() and datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
-                        drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": True, "reason": REASON_INITIAL_SYNC})
+            for fp in _territory_files(root, territory):
+                if datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
+                    drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": True, "reason": REASON_INITIAL_SYNC})
             continue
         # B4 ref-vs-timestamp precedence (pairs with Layer 1): when a valid ref exists,
         # committed drift is decided by ref..HEAD — never by wall-clock. mtime lies under
@@ -373,35 +386,32 @@ def scan_drift(project_root: str | None = None, enrich_with_gitnexus: bool = Fal
                     # Git could not report working-tree state: mtime fallback for
                     # uncommitted edits only (committed drift already covered by the ref).
                     floor = sync_time if sync_time is not None else datetime.fromtimestamp(0, tz=timezone.utc)
-                    for pattern in territory:
-                        for fp in root.glob(pattern):
-                            rel = str(fp.relative_to(root))
-                            if rel in committed_set:
-                                continue
-                            if fp.is_file() and datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
-                                drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": rel, "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_MTIME})
+                    for fp in _territory_files(root, territory):
+                        rel = str(fp.relative_to(root))
+                        if rel in committed_set:
+                            continue
+                        if datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
+                            drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": rel, "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_MTIME})
                 continue
             # Invalid/unresolvable ref: mtime fallback, tagged range-unknown (B4) so the
             # marker never claims a precise ref range it could not compute.
             floor = sync_time if sync_time is not None else datetime.fromtimestamp(0, tz=timezone.utc)
-            for pattern in territory:
-                for fp in root.glob(pattern):
-                    if fp.is_file() and datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
-                        drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_RANGE_UNKNOWN})
+            for fp in _territory_files(root, territory):
+                if datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
+                    drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_RANGE_UNKNOWN})
             continue
         floor = sync_time if sync_time is not None else datetime.fromtimestamp(0, tz=timezone.utc)
-        for pattern in territory:
-            for fp in root.glob(pattern):
-                if fp.is_file() and datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
-                    drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_MTIME})
+        for fp in _territory_files(root, territory):
+            if datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
+                drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_MTIME})
     if not drifted:
         return []
-    # Respect .gitignore: drop candidates that are not git-tracked (build/vendor/cache trees
-    # swept in by filesystem globs) before any gitnexus enrichment (xtrm-08i0b).
+    # Ref-range paths were tracked in history, including deletions absent from ls-files.
+    # Filter filesystem candidates to tracked files before enrichment (xtrm-08i0b).
     tracked = _git_tracked_files(project_root)
     if tracked is not None:
         before = len(drifted)
-        drifted = [d for d in drifted if d["file_path"] in tracked]
+        drifted = [d for d in drifted if d["reason"] == REASON_REF_RANGE or d["file_path"] in tracked]
         dropped = before - len(drifted)
         if dropped:
             # Advisory: a territory glob is matching gitignored build/vendor/cache files. They are
