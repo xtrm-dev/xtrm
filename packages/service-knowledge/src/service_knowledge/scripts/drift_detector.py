@@ -235,7 +235,7 @@ def _ref_changed_in_territory(project_root: str, ref: str, territory: list[str])
     """Committed files in ``ref..HEAD`` that match the service territory.
 
     Returns None when git cannot answer (bad ref / git failure) so the caller
-    falls back to mtime with ``range-unknown`` instead of trusting a timestamp.
+    fails closed instead of trusting a timestamp.
     """
     import subprocess
 
@@ -369,8 +369,8 @@ def scan_drift(project_root: str | None = None, enrich_with_gitnexus: bool = Fal
         # committed drift is decided by ref..HEAD — never by wall-clock. mtime lies under
         # clock skew and cherry-picks (rewritten committer dates, preserved mtimes), but
         # the ref range is the source of truth. Working-tree edits are decided by git
-        # working-tree state, also without mtime. mtime survives only as the fallback
-        # when git cannot answer (bad ref -> range-unknown) or when no ref was recorded.
+        # working-tree state, also without mtime. Only uncommitted-state failures may
+        # fall back to mtime; missing or unavailable required history must fail closed.
         if ref:
             committed = _ref_changed_in_territory(str(project_root), ref, territory)
             if committed is not None:
@@ -393,17 +393,10 @@ def scan_drift(project_root: str | None = None, enrich_with_gitnexus: bool = Fal
                         if datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
                             drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": rel, "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_MTIME})
                 continue
-            # Invalid/unresolvable ref: mtime fallback, tagged range-unknown (B4) so the
-            # marker never claims a precise ref range it could not compute.
-            floor = sync_time if sync_time is not None else datetime.fromtimestamp(0, tz=timezone.utc)
-            for fp in _territory_files(root, territory):
-                if datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
-                    drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_RANGE_UNKNOWN})
-            continue
-        floor = sync_time if sync_time is not None else datetime.fromtimestamp(0, tz=timezone.utc)
-        for fp in _territory_files(root, territory):
-            if datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
-                drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": str(fp.relative_to(root)), "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_MTIME})
+        raise RuntimeError(
+            f"Cannot verify required history for service '{service_id}' "
+            f"(last_sync_ref={ref!r}); restore history or reconcile to record a verified ref."
+        )
     if not drifted:
         return []
     # Ref-range paths were tracked in history, including deletions absent from ls-files.
