@@ -2,7 +2,9 @@
 import json
 from pathlib import Path
 
-from verifier import load_canonical_headings, verify_candidate
+import pytest
+from verifier import compute_gate, load_canonical_headings, verify_candidate
+from verifier.gate import GateVerdict
 from verifier.structural_validator import (
     SEMANTIC_END,
     SEMANTIC_START,
@@ -111,3 +113,82 @@ def test_default_contract_verifies_missing_heading():
         emit_telemetry=False,
     )
     assert not any(issue["code"] == "missing_heading" for issue in explicit.structural_issues)
+
+
+def _semantic_preservation_doc(interiors: tuple[str, ...]) -> str:
+    _, headings = _contract_headings()
+    semantic_heading = "## Semantic Deep Dive (Human/Agent Refined)\n\n"
+    original = f"{SEMANTIC_START}\n{semantic_heading}Context.\n{SEMANTIC_END}\n"
+    blocks = "\n".join(f"{SEMANTIC_START}{interior}{SEMANTIC_END}" for interior in interiors)
+    return _contract_doc(headings).replace(original, f"{semantic_heading}{blocks}\n")
+
+
+@pytest.mark.parametrize(
+    ("current_interiors", "candidate_interiors"),
+    [
+        (("\nCurated text.\n",), ("\n\n",)),
+        (("\nCurated text.\n",), ("\nCurated text!\n",)),
+        (("\nCurated text.\n",), ("",)),
+        (("\nCurated text.\n",), ()),
+        (("\nFirst.\n", "\nSecond.\n"), ("\nFirst.\n",)),
+        (("\nFirst.\n",), ("\nFirst.\n", "\nSecond.\n")),
+        (("\nFirst.\n",), ("\nFirst.\n", "\nFirst.\n")),
+        (("\nFirst.\n", "\nSecond.\n"), ("\nSecond.\n", "\nFirst.\n")),
+        (("\nCurated text.\n",), ("\nCurated text. \n",)),
+        (("\nCurated text.\n",), ("\r\nCurated text.\r\n",)),
+        (("\nCaf\u00e9.\n",), ("\nCafe\u0301.\n",)),
+    ],
+    ids=[
+        "balanced-marker-deletion", "one-byte-edit", "empty-interior", "only-block-removed",
+        "one-of-two-removed", "block-added", "duplicate-block-added", "blocks-reordered",
+        "whitespace-edit", "line-ending-edit", "unicode-normalization",
+    ],
+)
+def test_semantic_preservation_rejects_changed_interiors(current_interiors, candidate_interiors):
+    current = _semantic_preservation_doc(current_interiors)
+    candidate = _semantic_preservation_doc(candidate_interiors)
+    manifest = verify_candidate(candidate, current, service_id="svc", emit_telemetry=False)
+    assert any(
+        issue["code"] == "semantic_block_modified" and issue["severity"] == "error"
+        for issue in manifest.structural_issues
+    )
+    assert not any(issue["code"] == "missing_heading" for issue in manifest.structural_issues)
+    decision = compute_gate(manifest)
+    assert decision.verdict is GateVerdict.INVALID
+    assert decision.is_writable is False
+
+
+@pytest.mark.parametrize("interiors", [("\nCurated text.\n",), ("",), ("\nFirst.\n", "\nSecond.\n")])
+def test_semantic_preservation_allows_identical_interiors_with_outside_edits(interiors):
+    current = _semantic_preservation_doc(interiors)
+    candidate = current.replace("# Svc\n", "# Updated Svc\n")
+    manifest = verify_candidate(candidate, current, service_id="svc", emit_telemetry=False)
+    assert manifest.structural_issues == []
+    assert compute_gate(manifest).verdict is GateVerdict.PASS
+    assert compute_gate(manifest).is_writable is True
+
+
+@pytest.mark.parametrize("current", ["", _semantic_preservation_doc(())], ids=["new-guide", "no-current-block"])
+def test_semantic_preservation_allows_creation_without_current_blocks(current):
+    candidate = _semantic_preservation_doc(("\nNew curated text.\n",))
+    manifest = verify_candidate(candidate, current, service_id="svc", emit_telemetry=False)
+    assert manifest.structural_issues == []
+    assert compute_gate(manifest).verdict is GateVerdict.PASS
+    assert compute_gate(manifest).is_writable is True
+
+
+@pytest.mark.parametrize(
+    ("markers", "expected_code"),
+    [
+        ("", "semantic_block_deleted"),
+        (SEMANTIC_START, "semantic_block_unbalanced"),
+        (SEMANTIC_END + SEMANTIC_START, "semantic_block_order"),
+    ],
+)
+def test_semantic_preservation_keeps_candidate_marker_errors(markers, expected_code):
+    current = _semantic_preservation_doc(("\nCurated text.\n",))
+    candidate = _semantic_preservation_doc(()) + markers
+    manifest = verify_candidate(candidate, current, service_id="svc", emit_telemetry=False)
+    codes = {issue["code"] for issue in manifest.structural_issues if issue["severity"] == "error"}
+    assert expected_code in codes
+    assert "semantic_block_modified" in codes

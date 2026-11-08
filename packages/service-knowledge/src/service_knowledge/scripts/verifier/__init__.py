@@ -85,7 +85,7 @@ def verify_candidate(
     headings = canonical_headings if canonical_headings is not None else load_canonical_headings()
 
     diff = parse_diff(candidate_text, current_text)
-    structural = validate_structure(candidate_text, canonical_headings=headings)
+    structural = validate_structure(candidate_text, canonical_headings=headings, current_text=current_text)
     claims = extract_claims(
         candidate_text,
         diff.changed_line_numbers,
