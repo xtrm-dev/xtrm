@@ -49,8 +49,8 @@ from .telemetry import Timer, emit_run
 
 __version__ = VERIFIER_VERSION
 
-# service-skills/references/service_skill_contract.json — two levels up from this package.
-_CONTRACT_PATH = Path(__file__).resolve().parents[2] / "references" / "service_skill_contract.json"
+# service_knowledge/contracts/service_skill_contract.json — two levels up from this package.
+_CONTRACT_PATH = Path(__file__).resolve().parents[2] / "contracts" / "service_skill_contract.json"
 
 
 def load_canonical_headings(contract_path: Path | None = None) -> list[str]:

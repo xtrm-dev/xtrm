@@ -218,12 +218,14 @@ def test_directory_territory_fallback_finds_files(
     artifact.parent.mkdir()
     artifact.write_text("generated\n", encoding="utf-8")
     os.utime(source, (978307200, 978307200))
-    expected_reason = "initial-sync-needed" if sync_ref == "initial" else (
-        "range-unknown" if sync_ref else "mtime-heuristic"
-    )
+    if sync_ref != "initial":
+        with pytest.raises(RuntimeError, match="history.*db"):
+            scan_drift(str(repo), use_gitnexus=False)
+        assert ci_main(["--path", str(repo)]) != 0
+        return
     drifted = scan_drift(str(repo), use_gitnexus=False)
     assert [(item["file_path"], item["reason"]) for item in drifted] == [
-        (file_path, expected_reason),
+        (file_path, "initial-sync-needed"),
     ]
     assert ci_main(["--path", str(repo)]) == 1
 
@@ -245,6 +247,11 @@ def test_gitignored_artifacts_do_not_create_drift(tmp_path: Path, sync_ref: str 
         service["last_sync_ref"] = _head(repo) if sync_ref == "valid" else sync_ref
     _write_convergent_registry(repo, reg_path, data)
     os.utime(repo / "db/schema.sql", (1, 1))
+    if sync_ref != "valid":
+        with pytest.raises(RuntimeError, match="history.*db"):
+            scan_drift(str(repo), use_gitnexus=False)
+        assert ci_main(["--path", str(repo)]) != 0
+        return
     assert scan_drift(str(repo), use_gitnexus=False) == []
     assert ci_main(["--path", str(repo)]) == 0
 
@@ -268,3 +275,74 @@ def test_directory_territory_working_tree_fallback(tmp_path: Path, monkeypatch) 
         ("db/schema.sql", "mtime-heuristic"),
     ]
     assert ci_main(["--path", str(repo)]) == 1
+
+
+def _assert_unknown_history_blocks(repo: Path, capsys) -> None:
+    capsys.readouterr()
+    try:
+        drifted = scan_drift(str(repo), use_gitnexus=False)
+    except RuntimeError as exc:
+        assert "history" in str(exc).lower()
+        assert "db" in str(exc)
+    else:
+        assert any(
+            item["service_id"] == "db" and item["reason"] == "range-unknown"
+            for item in drifted
+        ), "unknown required history must stay actionable"
+        assert all(item["file_path"] != "db/cache/generated.sql" for item in drifted)
+    assert ci_main(["--path", str(repo)]) != 0
+    output = capsys.readouterr()
+    assert "clean" not in output.out.lower()
+    assert "db" in output.out + output.err
+
+
+@pytest.mark.parametrize("sync_ref", [None, "0" * 40], ids=["missing-ref", "invalid-ref"])
+@pytest.mark.parametrize("state", ["old-survivor", "deleted-territory", "ignored-newer"])
+def test_unknown_history_never_trusts_mtimes(
+    tmp_path: Path, capsys, sync_ref: str | None, state: str,
+) -> None:
+    repo, reg_path = _make_repo(tmp_path)
+    source = repo / "db/schema.sql"
+    if state == "deleted-territory":
+        source.unlink()
+        _git(["add", "--all", "--", "db"], repo)
+        _git(["commit", "-qm", "delete last territory file"], repo)
+        assert not any((repo / "db").rglob("*"))
+    else:
+        os.utime(source, (1, 1))
+    if state == "ignored-newer":
+        (repo / ".gitignore").write_text("db/cache/\n", encoding="utf-8")
+        _git(["add", "--", ".gitignore"], repo)
+        _git(["commit", "-qm", "ignore generated artifacts"], repo)
+        artifact = repo / "db/cache/generated.sql"
+        artifact.parent.mkdir()
+        artifact.write_text("generated\n", encoding="utf-8")
+        os.utime(artifact, (4102444800, 4102444800))
+    data = json.loads(reg_path.read_text(encoding="utf-8"))
+    service = data["services"]["db"]
+    service["last_sync"] = "2000-01-01T00:00:00Z"
+    service.pop("last_sync_ref", None)
+    if sync_ref is not None:
+        service["last_sync_ref"] = sync_ref
+    _write_convergent_registry(repo, reg_path, data)
+    _assert_unknown_history_blocks(repo, capsys)
+
+
+def test_unknown_history_failed_required_diff_blocks(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    repo, reg_path = _make_repo(tmp_path)
+    os.utime(repo / "db/schema.sql", (1, 1))
+    ref = json.loads(reg_path.read_text(encoding="utf-8"))["services"]["db"]["last_sync_ref"]
+    run_subprocess = subprocess.run
+    failures: list[list[str]] = []
+
+    def fail_required_diff(command, **kwargs):
+        if command[:4] == ["git", "-C", str(repo), "diff"] and f"{ref}..HEAD" in command:
+            failures.append(command)
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="history unavailable")
+        return run_subprocess(command, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", fail_required_diff)
+    _assert_unknown_history_blocks(repo, capsys)
+    assert len(failures) >= 2, "scan and CI must both attempt required history"

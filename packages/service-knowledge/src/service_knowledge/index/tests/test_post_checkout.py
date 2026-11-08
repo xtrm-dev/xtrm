@@ -228,3 +228,93 @@ def test_no_auto_reconcile_subprocess_path(checkout_hook) -> None:
     assert not hasattr(checkout_hook, "RUNLOG_REL")
     assert checkout_hook.TRIGGER == "post-checkout"
     assert checkout_hook.MARKER_REL == Path(".xtrm/.service-knowledge-drift-pending")
+
+
+def _head(repo: Path) -> str:
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def _retained_endpoints_commits(repo: Path, change: str, filename: str) -> tuple[str, str]:
+    source = repo / "db" / filename
+    (repo / "db/schema.sql").rename(source)
+    if change == "rename-in":
+        source.rename(repo / filename)
+    (repo / ".gitignore").write_text("db/cache/\n", encoding="utf-8")
+    _git(["add", "--all"], repo)
+    _git(["commit", "-qm", "prepare endpoint"], repo)
+    old = _head(repo)
+    if change == "delete":
+        source.unlink()
+    elif change == "rename-out":
+        source.rename(repo / filename)
+    elif change == "rename-within":
+        source.rename(repo / "db" / ("renamed " + filename))
+    elif change == "rename-in":
+        (repo / filename).rename(source)
+    elif change == "unrelated":
+        (repo / "README.md").write_text("unrelated\n", encoding="utf-8")
+    if change != "unchanged":
+        _git(["add", "--all"], repo)
+        _git(["commit", "-qm", change], repo)
+    cache = repo / "db/cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache / "generated.sql").write_text("ignored\n", encoding="utf-8")
+    (repo / "db/scratch.sql").write_text("untracked\n", encoding="utf-8")
+    return old, _head(repo)
+
+
+def _run_retained_endpoints(hook, repo: Path, old: str, new: str) -> int:
+    return hook.main(["post-checkout", old, new, "1"])
+
+
+@pytest.mark.parametrize("filename", ["schema.sql", " spaced schema\tname\n.sql "],
+                         ids=["plain", "spaced-control-path"])
+@pytest.mark.parametrize("change", [
+    "delete", "rename-out", "rename-within", "rename-in", "unrelated", "unchanged",
+])
+def test_retained_endpoints_actual_main(
+    checkout_hook, tmp_path: Path, monkeypatch, capsys, change: str, filename: str,
+) -> None:
+    hook = checkout_hook
+    repo = _make_repo(tmp_path)
+    old, new = _retained_endpoints_commits(repo, change, filename)
+    monkeypatch.setattr(hook, "_project_root", lambda: repo)
+    assert _run_retained_endpoints(hook, repo, old, new) == 0
+    marker = repo / hook.MARKER_REL
+    output = capsys.readouterr().out
+    if change in {"unrelated", "unchanged"}:
+        assert not marker.exists()
+        assert output == ""
+        return
+    assert marker.exists(), "historically tracked territory endpoint was discarded"
+    content = marker.read_text(encoding="utf-8")
+    assert "trigger: post-checkout" in content
+    assert "reason: ref-range" in content
+    assert "services: db" in content
+    assert f"range: {old[:7]}..{new[:7]}" in content
+    assert "timestamp:" in content
+    assert "service-knowledge" in output.lower()
+    assert len([line for line in output.splitlines() if line.strip()]) <= 7
+    endpoints = hook._diff_files(repo, old, new)
+    assert endpoints is not None
+    assert "db/" + filename in endpoints
+    if change == "rename-within":
+        assert "db/renamed " + filename in endpoints
+
+
+def test_retained_endpoints_preserves_existing_range(
+    checkout_hook, tmp_path: Path, monkeypatch,
+) -> None:
+    hook = checkout_hook
+    repo = _make_repo(tmp_path)
+    earliest = _head(repo)
+    old, new = _retained_endpoints_commits(repo, "rename-out", "schema name.sql")
+    marker = repo / hook.MARKER_REL
+    marker.write_text(
+        f"range: {earliest[:7]}..{old[:7]}\nreason: ref-range\nservices: db\n", encoding="utf-8",
+    )
+    monkeypatch.setattr(hook, "_project_root", lambda: repo)
+    assert _run_retained_endpoints(hook, repo, old, new) == 0
+    assert f"range: {earliest[:7]}..{new[:7]}" in marker.read_text(encoding="utf-8")
