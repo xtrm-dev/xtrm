@@ -153,7 +153,7 @@ export function ReferenceChip({
 
 /**
  * A reference chip is an inline group: the chip itself inspects (the app convention), and the
- * faint GitHub arrow reveals on hover or focus so the same reference can open on github.com
+ * GitHub arrow beside the chip opens the same reference on github.com
  * without leaving the reader without an in-app route. `Ctrl`/`⌘`-click and middle-click open
  * github.com directly, matching browser link habits.
  */
@@ -166,7 +166,7 @@ function GithubOpen({ href, label }: { href: string; label: string }) {
       aria-label={label}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
-      className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-ink-faint opacity-0 outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover focus-visible:opacity-100 group-hover/ref:opacity-100"
+      className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-ink-faint outline-none hover:bg-hover hover:text-accent-ink focus-visible:bg-hover"
     >
       <Icon name="external" size="xs" />
     </a>
@@ -272,7 +272,7 @@ function PullReferenceChip({ reference, showTitle, fallback, className }: { refe
           <span className="text-ink-faint"> {parsed.fullName}</span>
         </span>
         {title && (
-          <span className={cx("truncate text-ink", showTitle ? "text-sm" : "max-w-[36ch] text-xs text-ink-muted")} data-testid="pr-chip-title">
+          <span className={cx("text-ink", showTitle ? "text-sm" : "text-xs text-ink-muted")} data-testid="pr-chip-title">
             {title}
           </span>
         )}
