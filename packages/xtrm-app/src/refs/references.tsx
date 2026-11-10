@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, type MouseEvent, type ReactNode } from "react";
 import type { IssueSummary } from "../adapters/index.tsx";
 import { projectForRepo, useGithubIssue, useIssues, useProjects, usePull } from "../app/queries.ts";
-import { pullStateLabel, pullStateTone, pullUrl, resolvePullReference } from "../github/pr.ts";
+import { pullStateLabel, pullUrl, resolvePullReference } from "../github/pr.ts";
 import { githubIssueUrl, issueStateLabel, issueStateTone, parseGithubIssueRef } from "../github/issues.ts";
 import { IssueKey, lifecycleLabel, lifecycleTone } from "../issues/meta.tsx";
 import { useShell } from "../shell/context.tsx";
@@ -267,11 +267,6 @@ function PullReferenceChip({ reference, showTitle, fallback, className }: { refe
         onDoubleClick={(e) => e.stopPropagation()}
         className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm px-1 align-baseline leading-5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/40"
       >
-        {state ? (
-          <StatusDot tone={pullStateTone(state)} label={pullStateLabel(state, pull.data?.draft ?? false)} />
-        ) : (
-          <Icon name="pull" size="xs" className="shrink-0 text-ink-faint" />
-        )}
         <span className="truncate font-mono text-xs text-accent-ink">
           {short}
           <span className="text-ink-faint"> {parsed.fullName}</span>
