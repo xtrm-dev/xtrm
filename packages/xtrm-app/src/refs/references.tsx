@@ -276,7 +276,11 @@ function PullReferenceChip({ reference, showTitle, fallback, className }: { refe
           {short}
           <span className="text-ink-faint"> {parsed.fullName}</span>
         </span>
-        {showTitle && title && <span className="truncate text-sm text-ink">{title}</span>}
+        {title && (
+          <span className={cx("truncate text-ink", showTitle ? "text-sm" : "max-w-[36ch] text-xs text-ink-muted")} data-testid="pr-chip-title">
+            {title}
+          </span>
+        )}
       </button>
       <GithubOpen href={href} label={`Open ${parsed.fullName}#${parsed.number} on GitHub`} />
     </span>

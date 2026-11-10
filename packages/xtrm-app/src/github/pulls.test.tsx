@@ -119,6 +119,8 @@ describe("Pull requests surface", () => {
     // resolved against the shell would carry that repository and this assertion would fail.
     const chip = await within(el).findByRole("button", { name: /#211/ });
     expect(chip.getAttribute("data-reference")).toBe("@pr:Jaggerxtrm/console#211");
+    // The title renders inline, not only in the accessible name.
+    expect(within(chip).getByText("fix(XTRM-305): silence virtual-bead spam")).toBeTruthy();
     expect(within(el).getByRole("link", { name: /Open Jaggerxtrm\/console#211 on GitHub/ }).getAttribute("href"))
       .toBe("https://github.com/Jaggerxtrm/console/pull/211");
   });
