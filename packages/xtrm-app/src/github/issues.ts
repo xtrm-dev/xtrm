@@ -9,6 +9,9 @@ export const issueStateLabel = (state: GithubIssueSummary["state"]) => (state ==
 /** `owner/repo#N`, the same shape PR references use. Kept distinct from XTRM issue keys. */
 export const githubIssueRef = (repo: string, number: number) => `${repo}#${number}`;
 
+/** github.com address for a GitHub-tracker issue; the chip's explicit "open outside" action. */
+export const githubIssueUrl = (fullName: string, number: number) => `https://github.com/${fullName}/issues/${number}`;
+
 const GH_ISSUE_REF = /^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#(\d+)$/;
 
 export function parseGithubIssueRef(value: string): { fullName: string; number: number } | null {

@@ -44,7 +44,7 @@ const pullSeed: Array<Omit<FixturePull, "url" | "createdAt" | "updatedAt"> & { a
   {
     number: 212, title: "feat(XTRM-301): rail keyboard model v2", author: "Jaggerxtrm", headBranch: "xt/o8h2", baseBranch: "main",
     state: "open", draft: false, checks: "passing", review: "approved", additions: 412, deletions: 88, changedFiles: 3, comments: 6,
-    body: "Implements XTRM-301. Follow-up to XTRM-300.1.", mergeable: true, mergeableState: "clean", commits: 3,
+    body: "Implements XTRM-301. Follow-up to XTRM-300.1. Related: #211.", mergeable: true, mergeableState: "clean", commits: 3,
     reviews: [{ id: "r212-1", author: "reviewer-xtrm", state: "approved", submittedAt: ago(120), body: "Looks good — rail toggle reads well.", url: null }],
     conversationComments: [
       { id: "c212-1", author: "Jaggerxtrm", body: "Heads up: this needs the Mod+I tooltip before merge.", url: null, createdAt: ago(140), updatedAt: null },
