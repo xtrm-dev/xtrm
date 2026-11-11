@@ -8,6 +8,7 @@ import { CANDIDATE_LIMIT, rankingWeights, weightsHash } from "./constants.ts";
 import { recall } from "./query.ts";
 import type {
   EvalCaseResult,
+  ConfidenceInterval,
   EvalMetrics,
   EvalReport,
   ReplayCase,
@@ -64,9 +65,34 @@ function rankOf(expected: ReplayExpected[], hits: Array<{ ref: string; seq: numb
   return null;
 }
 
+/**
+ * Wilson score interval for a binomial proportion (95%, z = 1.96). Used for
+ * the pre-registered hit-rate gate: 17/20 and 19/20 are the pass thresholds.
+ */
+export function wilson95(successes: number, n: number): ConfidenceInterval {
+  if (n === 0) return { low: 0, high: 0 };
+  const z = 1.959963984540054;
+  const p = successes / n;
+  const denominator = 1 + (z * z) / n;
+  const centre = (p + (z * z) / (2 * n)) / denominator;
+  const margin = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / denominator;
+  return { low: Math.max(0, centre - margin), high: Math.min(1, centre + margin) };
+}
+
 export function metricsFor(results: EvalCaseResult[]): EvalMetrics {
   const n = results.length;
-  if (n === 0) return { cases: 0, hitAt1: 0, hitAt5: 0, hitAt10: 0, mrr: 0, misses: 0 };
+  if (n === 0) {
+    return {
+      cases: 0,
+      hitAt1: 0,
+      hitAt5: 0,
+      hitAt10: 0,
+      mrr: 0,
+      misses: 0,
+      hitAt5Interval: { low: 0, high: 0 },
+      hitAt10Interval: { low: 0, high: 0 },
+    };
+  }
   const within = (k: number): number => results.filter((r) => r.rank !== null && r.rank <= k).length / n;
   const mrr = results.reduce((sum, r) => sum + (r.rank === null ? 0 : 1 / r.rank), 0) / n;
   return {
@@ -76,6 +102,8 @@ export function metricsFor(results: EvalCaseResult[]): EvalMetrics {
     hitAt10: within(10),
     mrr,
     misses: results.filter((r) => r.rank === null).length,
+    hitAt5Interval: wilson95(results.filter((r) => r.rank !== null && r.rank <= 5).length, n),
+    hitAt10Interval: wilson95(results.filter((r) => r.rank !== null && r.rank <= 10).length, n),
   };
 }
 

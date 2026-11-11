@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { evaluateReplay, filterBySplit } from "../src/recall/eval.ts";
-import type { ReplaySet } from "../src/recall/types.ts";
+import type { EvalMetrics, ReplaySet } from "../src/recall/types.ts";
 
 interface Args {
   index: string | null;
@@ -75,9 +75,10 @@ function percent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function printMetrics(label: string, m: { cases: number; hitAt1: number; hitAt5: number; hitAt10: number; mrr: number; misses: number }): void {
+function printMetrics(label: string, m: EvalMetrics): void {
+  const interval = (ci: { low: number; high: number }): string => `[${percent(ci.low)}, ${percent(ci.high)}]`;
   console.log(
-    `${label.padEnd(10)} n=${String(m.cases).padStart(3)}  hit@1 ${percent(m.hitAt1)}  hit@5 ${percent(m.hitAt5)}  hit@10 ${percent(m.hitAt10)}  MRR ${m.mrr.toFixed(3)}  misses ${m.misses}`,
+    `${label.padEnd(10)} n=${String(m.cases).padStart(3)}  hit@1 ${percent(m.hitAt1)}  hit@5 ${percent(m.hitAt5)} ${interval(m.hitAt5Interval)}  hit@10 ${percent(m.hitAt10)} ${interval(m.hitAt10Interval)}  MRR ${m.mrr.toFixed(3)}  misses ${m.misses}`,
   );
 }
 

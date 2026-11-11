@@ -4,9 +4,10 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { runCli } from "../cli/sb.ts";
-import { evaluateReplay, metricsFor, verifyFrozenWeights } from "../src/recall/eval.ts";
+import { evaluateReplay, metricsFor, verifyFrozenWeights, wilson95 } from "../src/recall/eval.ts";
 import { buildRecallIndex } from "../src/recall/indexer.ts";
 import { rankingWeights, weightsHash, SNIPPET_MAX_CHARS } from "../src/recall/constants.ts";
 import { createFixtureStore, type FixtureStore } from "./recall-fixtures.ts";
@@ -154,6 +155,48 @@ describe("recall eval harness: fixed weights and held-out gate", () => {
 
   it("refuses a set with no frozen weights", () => {
     assert.throws(() => verifyFrozenWeights({ ...set, weights: undefined }), /no fixed weights/);
+  });
+
+  it("reports Wilson 95% intervals and the pre-registered counts", () => {
+    const at17 = wilson95(17, 20);
+    const at19 = wilson95(19, 20);
+    assert.ok(at17.low > 0.62 && at17.low < 0.66, `17/20 low ${at17.low}`);
+    assert.ok(at17.high > 0.93 && at17.high < 0.96, `17/20 high ${at17.high}`);
+    assert.ok(at19.low > 0.74 && at19.low < 0.78, `19/20 low ${at19.low}`);
+    assert.ok(at19.high > 0.98, `19/20 high ${at19.high}`);
+    const metrics = metricsFor([
+      { id: 1, name: "a", split: "heldout", rank: 1, expected: [] },
+      { id: 2, name: "b", split: "heldout", rank: 6, expected: [] },
+    ]);
+    assert.equal(metrics.hitAt5Interval.low, wilson95(1, 2).low);
+    assert.equal(metrics.hitAt10Interval.high, wilson95(2, 2).high);
+  });
+
+  it("a tuning-only runner never emits held-out metrics (CORE-2602)", () => {
+    const setPath = join(store.dir, "tuning-only-set.json");
+    const frozen = rankingWeights();
+    writeFileSync(
+      setPath,
+      JSON.stringify({
+        version: 1,
+        created: "2026-11-11",
+        weights: frozen,
+        weightsHash: weightsHash(frozen),
+        cases: [
+          { id: 1, name: "tuning", query: "sentinel field", expected: [{ ref: "CORE-1", seq: 1 }], split: "tuning" },
+          { id: 2, name: "heldout", query: "sentinel field", expected: [{ ref: "CORE-2", seq: 1 }], split: "heldout" },
+        ],
+      }),
+    );
+    const output = execFileSync(
+      process.execPath,
+      [join(PACKAGE, "scripts", "recall-eval.ts"), "--index", store.indexPath, "--set", setPath, "--split", "tuning", "--json"],
+      { encoding: "utf8" },
+    );
+    const payload = JSON.parse(output) as Record<string, unknown>;
+    assert.equal("heldout" in payload, false, "tuning JSON must not carry held-out metrics");
+    assert.equal("overall" in payload, false, "tuning JSON must not carry the overall aggregate");
+    assert.ok("tuning" in payload);
   });
 
   it("computes hit@k and MRR from ranks", () => {

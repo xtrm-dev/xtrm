@@ -114,6 +114,11 @@ export interface EvalCaseResult {
   expected: ReplayExpected[];
 }
 
+export interface ConfidenceInterval {
+  low: number;
+  high: number;
+}
+
 export interface EvalMetrics {
   cases: number;
   hitAt1: number;
@@ -121,6 +126,8 @@ export interface EvalMetrics {
   hitAt10: number;
   mrr: number;
   misses: number;
+  hitAt5Interval: ConfidenceInterval;
+  hitAt10Interval: ConfidenceInterval;
 }
 
 export interface EvalReport {
