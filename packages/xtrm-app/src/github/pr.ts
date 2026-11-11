@@ -10,7 +10,10 @@ export interface ParsedPullRef {
   number: number;
 }
 
-const PULL_REF_RE = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(\d+)$/;
+// A segment may not start with a dot: `.`, `..` and `.hidden` would turn
+// untrusted prose into path-like API reads (`/api/github/../../5`).
+const PULL_SEGMENT = "[A-Za-z0-9_-][A-Za-z0-9_.-]*";
+const PULL_REF_RE = new RegExp(`^(${PULL_SEGMENT})/(${PULL_SEGMENT})#(\\d+)$`);
 
 export function parsePullRef(ref: string): ParsedPullRef | null {
   const m = PULL_REF_RE.exec(ref.trim());

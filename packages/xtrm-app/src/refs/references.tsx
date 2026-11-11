@@ -20,7 +20,10 @@ export type ContextReference = { kind: "issue"; ref: string } | { kind: "pr"; re
 export const formatReference = (r: ContextReference) => `@${r.kind}:${r.ref}`;
 
 const ISSUE_REF = "[A-Za-z][A-Za-z0-9]*-\\d+(?:\\.\\d+)*";
-const REPO_REF = "[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+";
+// No segment may start with a dot: `../..#5` must stay prose (same-origin
+// path traversal through the PR API).
+const REPO_SEGMENT = "[A-Za-z0-9_-][A-Za-z0-9_.-]*";
+const REPO_REF = `${REPO_SEGMENT}/${REPO_SEGMENT}`;
 const PR_REF = `${REPO_REF}#\\d+`;
 
 /**
@@ -30,7 +33,7 @@ const PR_REF = `${REPO_REF}#\\d+`;
  * tried before the bare issue key so a repository named like an issue key stays one reference.
  */
 export const REFERENCE_PATTERN = new RegExp(
-  `@issue:(?<issue>${ISSUE_REF})|@pr:(?<pr>${PR_REF})|(?<![\\w/])(?<canonicalPr>${PR_REF})(?![0-9A-Za-z])|\\b(?<bareIssue>${ISSUE_REF})\\b|(?<![\\w/])(?<barePr>#\\d+)(?![0-9A-Za-z])`,
+  `@issue:(?<issue>${ISSUE_REF})|@pr:(?<pr>${PR_REF})|(?<![\\w/.])(?<canonicalPr>${PR_REF})(?![0-9A-Za-z])|\\b(?<bareIssue>${ISSUE_REF})\\b|(?<![\\w/.])(?<barePr>#\\d+)(?![0-9A-Za-z])`,
   "g",
 );
 

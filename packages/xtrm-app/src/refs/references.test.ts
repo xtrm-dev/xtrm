@@ -31,6 +31,12 @@ describe("context references", () => {
     expect(para[3]!.url).toBe("xtrm-ref:pr:xtrm-dev/xtrm#206");
   });
 
+  it("leaves path-like repos alone: . and .. segments are never chips", () => {
+    const text = "traversal ../..#5 and ./x#1 and .owner/repo#2 stay prose";
+    const out = run(tree([{ type: "text", value: text }]));
+    expect(out.children?.[0]?.children).toEqual([{ type: "text", value: text }]);
+  });
+
   it("leaves lookalikes alone: a bare number glued to a word, a single-segment repo ref", () => {
     const t = run(tree([{ type: "text", value: "not #1000abc and not repo#12." }]));
     expect(t.children![0]!.children!.map((n) => n.type)).toEqual(["text"]);

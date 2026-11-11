@@ -26,6 +26,12 @@ describe("PR linkage helpers", () => {
     expect(parsePullRef("nope")).toBeNull();
   });
 
+  it("rejects path-like repository segments", () => {
+    expect(parsePullRef("../..#5")).toBeNull();
+    expect(parsePullRef("./x#1")).toBeNull();
+    expect(parsePullRef(".owner/repo#2")).toBeNull();
+  });
+
   it("resolves a bare #N against the surface repository, never across repositories", () => {
     expect(resolvePullReference("#212", "xtrm-dev/xtrm")).toEqual({ owner: "xtrm-dev", repo: "xtrm", fullName: "xtrm-dev/xtrm", number: 212 });
     expect(resolvePullReference("#83", "Jaggerxtrm/console")).toEqual({ owner: "Jaggerxtrm", repo: "console", fullName: "Jaggerxtrm/console", number: 83 });
