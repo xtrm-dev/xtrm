@@ -56,7 +56,7 @@ export interface MentionInput {
   number: number;
   url?: string | null;
   actor: string;
-  source?: Extract<PrLinkSource, "explicit" | "trailer">;
+  source?: Exclude<PrLinkSource, "provenance">;
   now?: number;
 }
 
@@ -183,6 +183,7 @@ export class PullRequestService {
           repository: input.repository,
           number: input.number,
           source,
+          actor: input.actor,
         }, now);
       }
     });
@@ -267,20 +268,20 @@ export class PullRequestService {
         const revision = trailers.issues[0]?.issueRevision ?? null;
         const receiptId = trailers.receipts[0] ?? null;
         if (trailers.receipts.length === 0) {
-          this.mentionFromTrailer(input, now);
+          this.mentionFromTrailer(input, now, commit.sha);
           mentioned += 1;
           finding("trailer_receipt_missing", commit.sha, "no XTRM-Receipt trailer");
           continue;
         }
         if (trailers.receipts.length > 1) {
-          this.mentionFromTrailer(input, now);
+          this.mentionFromTrailer(input, now, commit.sha);
           mentioned += 1;
           finding("trailer_receipt_ambiguous", commit.sha, `receipts: ${trailers.receipts.join(", ")}`);
           continue;
         }
         const verdict = this.classifyReceipt(receiptId!, input.issueId);
         if (!verdict.ok) {
-          this.mentionFromTrailer(input, now);
+          this.mentionFromTrailer(input, now, commit.sha);
           mentioned += 1;
           // Trailer path keeps its own code namespace; stale stays shared.
           const code = verdict.code === "receipt_unknown"
@@ -309,6 +310,7 @@ export class PullRequestService {
               receipt: receiptId,
               relation: "created_from",
               sha: commit.sha,
+              actor: input.actor,
             }, now);
           }
         }
@@ -394,8 +396,16 @@ export class PullRequestService {
     return Number(info.changes ?? 0) > 0;
   }
 
-  private mentionFromTrailer(input: CommitLinkInput, now: number): void {
-    this.insertLink(input.issueId, input.repository, input.number, "mentioned", "trailer", null, input.actor, now);
+  private mentionFromTrailer(input: CommitLinkInput, now: number, sha: string): void {
+    if (this.insertLink(input.issueId, input.repository, input.number, "mentioned", "trailer", null, input.actor, now)) {
+      this.issues!.appendEvent(input.issueId, "provenance.link_mentioned", {
+        repository: input.repository,
+        number: input.number,
+        source: "trailer",
+        sha,
+        actor: input.actor,
+      }, now);
+    }
   }
 
   private classifyReceipt(receiptId: string, issueId: string): { ok: true; receipt: WorkReceipt } | { ok: false; code: string; detail: string } {

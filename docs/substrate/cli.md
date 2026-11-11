@@ -255,13 +255,19 @@ description inventory LANDED, owner M1.
 `substrate_provenance_trace`, plus the `substrate-resume` command and the
 claim-gated edit/write `tool_call` gate.
 
-## links — read-only candidate check
+## links — read-only candidate check and reconciler
 
-`sb links check [--project <id>] [--repo owner/name] [--limit <n>] [--dry-run]`
-lists T2 candidates: pull-request commits whose `XTRM-Issue` trailer names an
-Issue in the current Project, read through `gh`. Slice 1 is read-only; the
-command writes no rows. `created_from` versus `mentioned`, the two tables and
-the close gate are specified in the issue-to-PR design note.
+- `links sync [<pr>] [--project <id>] [--repo <owner/name>] [--limit <n>] [--since <ISO>] [--dry-run]` —
+  the one-shot reconciler. Reads PR state through conditional `gh api`
+  requests and upserts `pull_requests`; commits go through the 727 writers
+  (trailer first), then title, branch and body become `mentioned` with their
+  source; a merged PR lands `issue_pr_commits.landed_sha`; `--since` scans
+  history and records `source=backfill`; `--dry-run` writes nothing.
+- `links check [--project <id>] [--repo owner/name] [--limit <n>] [--dry-run]` —
+  read-only T2 candidate scan: pull-request commits whose `XTRM-Issue` trailer
+  names an Issue in the current Project, read through `gh`. It writes no rows.
+  `created_from` versus `mentioned`, the tables and the close gate are
+  specified in the issue-to-PR design note.
 
 ## Help is methodology
 

@@ -14,6 +14,7 @@ import { version as v11, name as n11, sql as sql11 } from "./011_closure.ts";
 import { version as v12, name as n12, sql as sql12 } from "./012_drop_workspace_leases.ts";
 import { version as v13, name as n13, sql as sql13 } from "./013_issue_pull_requests.ts";
 import { version as v14, name as n14, sql as sql14 } from "./014_issue_pull_request_supersession.ts";
+import { version as v15, name as n15, sql as sql15 } from "./015_pull_requests.ts";
 
 // Append-only migration runner. Landed migrations are never edited: a
 // checksum mismatch or an unknown DB version fails closed (PRD §46).
@@ -39,6 +40,7 @@ const MIGRATIONS: Migration[] = [
   { version: v12, name: n12, sql: sql12 },
   { version: v13, name: n13, sql: sql13 },
   { version: v14, name: n14, sql: sql14 },
+  { version: v15, name: n15, sql: sql15 },
 ];
 
 const REQUIRED_TABLES = [
