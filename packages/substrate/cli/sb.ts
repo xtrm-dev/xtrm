@@ -708,6 +708,7 @@ and activation answer what one session touched or one activation produced.
 Record what happened in the Journal and close with cited refs; never edit
 the contract to narrate history.`,
   "provenance.dispatch": `usage: sb provenance dispatch <ref> [--workspace <dir>] [--participant/--activation/--attempt/--session/--base-commit <v>] [--claim-id <n>] [--project <id>]`,
+  "links": `usage: sb links <check> [args...]\n\ncheck lists T2 candidates (PR commits whose XTRM-Issue trailer names an Issue); slice 1 is read-only.`,
   "links.check": `usage: sb links check [--project <id>] [--repo owner/name] [--limit <n>] [--dry-run]\n\nlists T2 candidates: PR commits whose XTRM-Issue trailer names an Issue in this project. Slice 1 is read-only; --dry-run is the only mode and writes nothing.`,
   "provenance.trace": `usage: sb provenance trace <ref>
 
@@ -1255,7 +1256,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
       );
       return { code: 0, stdout: "", stderr: "" };
     }
-    if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|import|export|remote|serve> <verb> [args...]");
+    if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|links|import|export|remote|serve> <verb> [args...]");
     if (group && KNOWN_GROUPS.has(group)) assertKnownFlags(flags, `${group}.${verb ?? ""}`);
     db = openSubstrate(ctx.dbPath);
     const svc = new IssueService(db);

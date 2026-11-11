@@ -12,6 +12,7 @@ import {
 } from "../domain/pull-request.ts";
 
 interface PullRow {
+  id: number;
   issue_id: string;
   repository: string;
   number: number;
@@ -41,16 +42,17 @@ export class PullRequestService {
     this.db = db;
   }
 
-  /** Every PR linked to the issue, strongest relation first, ordered by
-   * `created_at, rowid` as the design's tie-break requires. */
+  /** Every PR linked to the issue: `created_from` first, then `created_at`,
+   * with `rowid` as the tie-break the design requires. */
   listForIssue(issueId: string): IssuePullRequestView[] {
     const rows = all<PullRow>(
       this.db,
-      `SELECT issue_id, repository, number, relation, source, url, actor, created_at
+      `SELECT rowid AS id, issue_id, repository, number, relation, source, url, actor, created_at
          FROM issue_pull_requests WHERE issue_id = ? ORDER BY created_at, rowid`,
       issueId,
     ).map(
       (r): IssuePullRequestRow => ({
+        id: r.id,
         issueId: r.issue_id,
         repository: r.repository,
         number: r.number,

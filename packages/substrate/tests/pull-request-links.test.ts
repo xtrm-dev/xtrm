@@ -139,14 +139,49 @@ describe("read model", () => {
 
     const view = new PullRequestService(s.db).listForIssue(s.issue.id);
     assert.equal(view.length, 2);
-    assert.equal(view[0]!.number, 8);
-    assert.equal(view[1]!.number, 7);
-    assert.equal(view[1]!.relation, "created_from");
-    assert.deepEqual(view[1]!.sources, ["provenance"]);
-    assert.equal(view[1]!.alsoMentioned, true);
-    assert.equal(view[1]!.url, "https://github.com/o/r/pull/7");
-    assert.deepEqual(view[1]!.commits.map((c) => c.sha), ["aaaa", "bbbb"]);
-    assert.equal(view[1]!.commits[0]!.landedSha, "landed");
+    // created_from outranks a mention that was created earlier.
+    assert.equal(view[0]!.number, 7);
+    assert.equal(view[1]!.number, 8);
+    assert.equal(view[0]!.relation, "created_from");
+    assert.deepEqual(view[0]!.sources, ["provenance"]);
+    assert.equal(view[0]!.alsoMentioned, true);
+    assert.equal(view[0]!.url, "https://github.com/o/r/pull/7");
+    assert.deepEqual(view[0]!.commits.map((c) => c.sha), ["aaaa", "bbbb"]);
+    assert.equal(view[0]!.commits[0]!.landedSha, "landed");
+  });
+
+  it("orders mentions by created_at ascending, not descending", () => {
+    const insert = s.db.prepare(
+      "INSERT INTO issue_pull_requests (issue_id, repository, number, relation, source, url, actor, created_at) VALUES (?,?,?,?,?,?,?,?)",
+    );
+    insert.run(s.issue.id, "o/r", 8, "mentioned", "title", null, "a", 9);
+    insert.run(s.issue.id, "o/r", 9, "mentioned", "title", null, "a", 1);
+    const view = new PullRequestService(s.db).listForIssue(s.issue.id);
+    assert.deepEqual(view.map((v) => v.number), [9, 8]);
+  });
+
+  it("orders an equal created_at by insertion (rowid), not descending", () => {
+    const insert = s.db.prepare(
+      "INSERT INTO issue_pull_requests (issue_id, repository, number, relation, source, url, actor, created_at) VALUES (?,?,?,?,?,?,?,?)",
+    );
+    insert.run(s.issue.id, "o/r", 9, "mentioned", "title", null, "a", 5);
+    insert.run(s.issue.id, "o/r", 8, "mentioned", "title", null, "a", 5);
+    const view = new PullRequestService(s.db).listForIssue(s.issue.id);
+    assert.deepEqual(view.map((v) => v.number), [9, 8]);
+  });
+
+  it("inserts every declared source, and one source under both relations", () => {
+    const insert = s.db.prepare(
+      "INSERT INTO issue_pull_requests (issue_id, repository, number, relation, source, url, actor, created_at) VALUES (?,?,?,?,?,?,?,?)",
+    );
+    const sources = ["provenance", "explicit", "trailer", "title", "branch", "prose", "backfill"];
+    sources.forEach((source, i) => insert.run(s.issue.id, "o/r", 20 + i, "mentioned", source, null, "a", i));
+    assert.equal(sources.length, 7);
+    // The same source under both relations is two rows: relation is in the PK.
+    insert.run(s.issue.id, "o/r", 7, "created_from", "explicit", null, "a", 8);
+    insert.run(s.issue.id, "o/r", 7, "mentioned", "explicit", null, "a", 9);
+    const n = s.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests").get() as { n: number };
+    assert.equal(n.n, 9);
   });
 
   it("issue show carries pullRequests in JSON and a bounded block in text", () => {
@@ -222,5 +257,23 @@ fi
     assert.equal(candidates[0]!["number"], 7);
     const count = s.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests").get() as { n: number };
     assert.equal(count.n, 0);
+    const commits = s.db.prepare("SELECT COUNT(*) AS n FROM issue_pr_commits").get() as { n: number };
+    assert.equal(commits.n, 0);
+  });
+});
+
+describe("links help", () => {
+  it("answers sb links --help, sb help links, and lists links in the bare usage", () => {
+    const direct = runCli(["links", "--help"]);
+    assert.equal(direct.code, 0);
+    assert.match(direct.stdout, /usage: sb links/);
+
+    const viaHelp = runCli(["help", "links"]);
+    assert.equal(viaHelp.code, 0);
+    assert.match(viaHelp.stdout, /usage: sb links/);
+
+    const bare = runCli(["links"]);
+    assert.notEqual(bare.code, 0);
+    assert.match(bare.stderr, /links/);
   });
 });

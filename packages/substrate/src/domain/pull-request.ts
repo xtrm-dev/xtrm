@@ -16,6 +16,8 @@ export const PR_LINK_SOURCES = [
 export type PrLinkSource = (typeof PR_LINK_SOURCES)[number];
 
 export interface IssuePullRequestRow {
+  /** SQLite rowid: the `id` in the design's `created_at, id` tie-break. */
+  id: number;
   issueId: string;
   repository: string;
   number: number;
@@ -38,6 +40,8 @@ export interface IssuePrCommitRow {
 /** One PR as the read model shows it: the strongest relation, every source
  * that produced it, and the T2 commit evidence. */
 export interface IssuePullRequestView {
+  /** rowid of the winning row. */
+  id: number;
   repository: string;
   number: number;
   relation: PrLinkRelation;
@@ -50,13 +54,10 @@ export interface IssuePullRequestView {
   commits: IssuePrCommitRow[];
 }
 
-export function strongestRelation(a: PrLinkRelation, b: PrLinkRelation): PrLinkRelation {
-  return a === "created_from" || b === "created_from" ? "created_from" : "mentioned";
-}
-
 /**
  * Every `XTRM-Issue:` value in a commit message, in order and deduped.
  * `parseTrailers` returns the last value only; T2 needs all of them.
+ * XTRM-727 replaces this with `parseAllTrailers` once XTRM-734 merges.
  */
 export function trailerIssueRefs(message: string): string[] {
   const refs: string[] = [];
@@ -84,6 +85,7 @@ export function groupIssuePullRequests(
     const existing = byPr.get(key);
     if (existing === undefined) {
       byPr.set(key, {
+        id: row.id,
         repository: row.repository,
         number: row.number,
         relation: row.relation,
@@ -97,11 +99,18 @@ export function groupIssuePullRequests(
       continue;
     }
     if (row.relation === "created_from" && existing.relation === "mentioned") {
-      existing.relation = "created_from";
-      existing.sources = [row.source];
-      existing.url = row.url;
-      existing.actor = row.actor;
-      existing.createdAt = row.createdAt;
+      // Re-place the view at this row's position: the input is ordered by
+      // created_at, rowid, and the final sort is a stable rank sort.
+      byPr.delete(key);
+      byPr.set(key, {
+        ...existing,
+        relation: "created_from",
+        id: row.id,
+        sources: [row.source],
+        url: row.url,
+        actor: row.actor,
+        createdAt: row.createdAt,
+      });
       continue;
     }
     if (row.relation === "mentioned" && existing.relation === "created_from") {
@@ -118,7 +127,9 @@ export function groupIssuePullRequests(
   for (const view of byPr.values()) {
     view.commits.sort((a, b) => (a.sha < b.sha ? -1 : a.sha > b.sha ? 1 : 0));
   }
-  return [...byPr.values()].sort(
-    (a, b) => a.createdAt - b.createdAt || `${a.repository}#${a.number}`.localeCompare(`${b.repository}#${b.number}`),
-  );
+  // The rows arrive ordered by created_at, rowid; the Map keeps that order,
+  // so the stable rank sort leaves the design tie-break intact. Sorting by
+  // createdAt/id again here would mask a wrong SQL order in tests.
+  const rank = (relation: PrLinkRelation): number => (relation === "created_from" ? 0 : 1);
+  return [...byPr.values()].sort((a, b) => rank(a.relation) - rank(b.relation));
 }
