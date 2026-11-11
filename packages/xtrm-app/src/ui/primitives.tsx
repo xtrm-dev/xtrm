@@ -196,6 +196,16 @@ export function SourceBadge({ source }: { source: DataSource }) {
 
 // --- Surface header -------------------------------------------------------
 
+/** Console toolbar: one row of 28px controls above a surface. The surface below owns its rule. */
+export function SurfaceToolbar({ children }: { children: ReactNode }) {
+  return <div className="flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1.5 px-1.5 py-1.5">{children}</div>;
+}
+
+/** 28px toolbar control. `TOOLBAR_REST` carries a resting surface; `TOOLBAR_GHOST` is for tabs. */
+export const TOOLBAR_CONTROL = "flex h-7 items-center gap-1 rounded-md px-1.5 text-xs outline-none transition-colors";
+export const TOOLBAR_REST = "bg-pressed text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
+export const TOOLBAR_GHOST = "text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
+
 export function SurfaceHeader({ title, meta, children }: { title: ReactNode; meta?: ReactNode; children?: ReactNode }) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border-muted px-4">
