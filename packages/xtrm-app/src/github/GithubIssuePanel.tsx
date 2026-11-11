@@ -20,7 +20,7 @@ export function GithubIssuePanel({ refValue, follow }: { refValue: string; follo
   const i = issue.data;
 
   return (
-    <ReferenceActionsProvider open={(r) => inspect(r)}>
+    <ReferenceActionsProvider open={(r) => inspect(r)} repo={parsed.fullName}>
       <div data-testid="github-issue-header" className="flex flex-col gap-1.5 px-5 pt-4 pb-3">
         <div className="flex items-center gap-2 text-xs text-ink-faint">
           <StatusDot tone={issueStateTone(i.state)} label={issueStateLabel(i.state)} />

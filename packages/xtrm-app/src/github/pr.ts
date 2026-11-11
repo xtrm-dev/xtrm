@@ -10,7 +10,10 @@ export interface ParsedPullRef {
   number: number;
 }
 
-const PULL_REF_RE = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(\d+)$/;
+// A segment may not start with a dot: `.`, `..` and `.hidden` would turn
+// untrusted prose into path-like API reads (`/api/github/../../5`).
+const PULL_SEGMENT = "[A-Za-z0-9_-][A-Za-z0-9_.-]*";
+const PULL_REF_RE = new RegExp(`^(${PULL_SEGMENT})/(${PULL_SEGMENT})#(\\d+)$`);
 
 export function parsePullRef(ref: string): ParsedPullRef | null {
   const m = PULL_REF_RE.exec(ref.trim());
@@ -19,6 +22,27 @@ export function parsePullRef(ref: string): ParsedPullRef | null {
 }
 
 export const formatPullRef = (owner: string, repo: string, number: number) => `${owner}/${repo}#${number}`;
+
+/** github.com address for a pull request; the chip's explicit "open outside the app" action. */
+export const pullUrl = (fullName: string, number: number) => `https://github.com/${fullName}/pull/${number}`;
+
+/** A bare `#N` in prose. It names no repository; the reading surface supplies one. */
+export function parseBarePullNumber(ref: string): number | null {
+  const m = /^#(\d+)$/.exec(ref.trim());
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * A `pr` reference read from prose. A canonical `owner/repo#N` resolves as written; a bare
+ * `#N` resolves against the repository that owns the reading surface, so the same number in
+ * two surfaces never crosses repositories. Null when the text is not a pull-request reference.
+ */
+export function resolvePullReference(ref: string, ambientRepo: string): ParsedPullRef | null {
+  const canonical = parsePullRef(ref);
+  if (canonical) return canonical;
+  const number = parseBarePullNumber(ref);
+  return number === null ? null : parsePullRef(`${ambientRepo}#${number}`);
+}
 
 export const pullReference = (owner: string, repo: string, number: number): ContextReference => ({
   kind: "pr",

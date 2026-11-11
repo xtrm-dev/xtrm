@@ -6,7 +6,7 @@ import { fixtureAdapters } from "../adapters/index.tsx";
 import { createFixtureSubstrate } from "../adapters/substrate/fixture.ts";
 import { createAppRouter } from "../app/router.tsx";
 import { fixturePulls } from "../adapters/github/fixture.ts";
-import { extractIssueKeys, filterPulls, parseProvenancePr, parsePullRef, sortPulls } from "./pr.ts";
+import { extractIssueKeys, filterPulls, parseProvenancePr, parsePullRef, pullUrl, resolvePullReference, sortPulls } from "./pr.ts";
 
 function renderAt(url: string) {
   const history = createMemoryHistory({ initialEntries: [url] });
@@ -24,6 +24,22 @@ describe("PR linkage helpers", () => {
   it("parses canonical owner/repo#N refs", () => {
     expect(parsePullRef("xtrm-dev/xtrm#206")).toEqual({ owner: "xtrm-dev", repo: "xtrm", fullName: "xtrm-dev/xtrm", number: 206 });
     expect(parsePullRef("nope")).toBeNull();
+  });
+
+  it("rejects path-like repository segments", () => {
+    expect(parsePullRef("../..#5")).toBeNull();
+    expect(parsePullRef("./x#1")).toBeNull();
+    expect(parsePullRef(".owner/repo#2")).toBeNull();
+  });
+
+  it("resolves a bare #N against the surface repository, never across repositories", () => {
+    expect(resolvePullReference("#212", "xtrm-dev/xtrm")).toEqual({ owner: "xtrm-dev", repo: "xtrm", fullName: "xtrm-dev/xtrm", number: 212 });
+    expect(resolvePullReference("#83", "Jaggerxtrm/console")).toEqual({ owner: "Jaggerxtrm", repo: "console", fullName: "Jaggerxtrm/console", number: 83 });
+    // A canonical reference keeps its own repository even when the surface is another one.
+    expect(resolvePullReference("Jaggerxtrm/console#83", "xtrm-dev/xtrm"))
+      .toEqual({ owner: "Jaggerxtrm", repo: "console", fullName: "Jaggerxtrm/console", number: 83 });
+    expect(resolvePullReference("#212", "")).toBeNull();
+    expect(pullUrl("xtrm-dev/xtrm", 212)).toBe("https://github.com/xtrm-dev/xtrm/pull/212");
   });
 
   it("extracts issue keys from PR title/branch/body and skips UTF-8", () => {
@@ -100,5 +116,18 @@ describe("Pull requests surface", () => {
     const el = await screen.findByTestId("inspector-drawer");
     expect(await within(el).findByText("feat(XTRM-301): rail keyboard model v2")).toBeTruthy();
     expect(search(router).inspect).toBe("pr:xtrm-dev/xtrm#212");
+  });
+
+  it("scopes a bare #N inside the drawer to the drawer's repository, not the shell repository", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls?inspect=pr:Jaggerxtrm/console%23212");
+    const el = await screen.findByTestId("inspector-drawer");
+    // The fixture body of PR 212 mentions #211. The shell route is xtrm-dev/xtrm, so a chip
+    // resolved against the shell would carry that repository and this assertion would fail.
+    const chip = await within(el).findByRole("button", { name: /#211/ });
+    expect(chip.getAttribute("data-reference")).toBe("@pr:Jaggerxtrm/console#211");
+    // The title renders inline, not only in the accessible name.
+    expect(within(chip).getByText("fix(XTRM-305): silence virtual-bead spam")).toBeTruthy();
+    expect(within(el).getByRole("link", { name: /Open Jaggerxtrm\/console#211 on GitHub/ }).getAttribute("href"))
+      .toBe("https://github.com/Jaggerxtrm/console/pull/211");
   });
 });

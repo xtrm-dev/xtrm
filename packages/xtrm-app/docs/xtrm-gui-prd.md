@@ -1951,6 +1951,7 @@ Rules:
 4. **References do not send messages.** `@session` and `@agent` attach context. They do not deliver a message to that session. Delivery uses `/message @session:<x>` (§10, §14). Provider messaging does not grant workflow authority (§14).
 5. **Fail before submit.** An unresolvable reference is marked in the composer. Submit is blocked until the operator removes or fixes it.
 6. **Picker.** Typing `@` opens a `cmdk` picker with kind filters. The default scope is the session's repository. One control widens the scope to the workspace (§34.4).
+7. **Bare `#N` shorthand.** In rendered prose, `#N` is the `@pr:` shorthand for the reading surface's repository (`@pr:<surface repo>#N`), never a global number; a canonical `owner/repo#N` names its repository explicitly. A prose reference becomes a chip only after its adapter read succeeds, so an unresolved number stays plain text.
 
 ### 36.7 Tool taxonomy and rendering
 
