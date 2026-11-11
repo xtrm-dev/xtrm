@@ -46,17 +46,92 @@ export function remoteSelection(scriptUrl) {
 }
 
 /** The repository this process serves, so the server checkout can be found. */
-export function repositoryKey() {
+export function repositoryKey(remote) {
   try {
-    const remote = execFileSync("git", ["config", "--get", "remote.origin.url"], { encoding: "utf8" }).trim();
-    const scp = /^(?:[^@:/\s]+@)?([^@:/\s]+):(.+)$/.exec(remote);
-    if (scp) return `${scp[1]}/${scp[2].replace(/\.git$/, "")}`;
-    const url = /^[a-z+]+:\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/(.+)$/.exec(remote);
-    if (url) return `${url[1]}/${url[2].replace(/\.git$/, "")}`;
+    const origin = remote ?? execFileSync("git", ["config", "--get", "remote.origin.url"], { encoding: "utf8" }).trim();
+    return parseRemoteKey(origin);
   } catch {
     // not a git checkout: the caller must pass a root explicitly
+    return null;
   }
-  return null;
+}
+
+// The key rules live in `normalizeRemote` (src/domain/repository.ts). This
+// script ships inside the package and must stay import-free, so the rules are
+// mirrored here; tests/remote-config.test.ts asserts parity on a table, and a
+// divergence there is the signal to change both.
+const ACCEPTED_SCHEMES = new Set(["ssh", "git", "git+ssh", "ssh+git", "https", "http"]);
+const DEFAULT_PORTS = { http: "80", https: "443", ssh: "22", git: "9418" };
+
+/**
+ * One key per repository, whatever form the remote takes (XTRM-733). The URL
+ * form is parsed FIRST: the scp pattern `host:path` also matches `https://…`,
+ * which derived `https///github.com/owner/repo` and never matched the key a
+ * checkout was recorded under.
+ *
+ * The refusals matter as much as the normalizations: a scheme outside
+ * ACCEPTED_SCHEMES, a backslash, or a query/fragment/backslash/control
+ * character in the authority means the input can be read as a different remote
+ * than it appears (`http://127.0.0.1:1#@github.com/acme/app`), and folding it
+ * into another repository's key would let the launcher pick that repository's
+ * recorded checkout.
+ */
+export function parseRemoteKey(raw) {
+  const input = String(raw ?? "").trim();
+  if (input === "") return null;
+  // Absolute or home-relative paths are local checkouts, not remotes.
+  if (input.startsWith("/") || input.startsWith(".") || input.startsWith("~")) return null;
+
+  let host;
+  let rawPath;
+  const schemeMatch = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(input);
+  if (schemeMatch !== null) {
+    const scheme = schemeMatch[1].toLowerCase();
+    if (!ACCEPTED_SCHEMES.has(scheme)) return null;
+    const rest = input.slice(schemeMatch[0].length);
+    const slash = rest.indexOf("/");
+    if (slash < 0) return null;
+    const authorityRaw = rest.slice(0, slash);
+    rawPath = rest.slice(slash + 1);
+    // Credentials live in userinfo; the last '@' keeps a password containing
+    // '@' from leaking the host into the key.
+    const at = authorityRaw.lastIndexOf("@");
+    let authority = at >= 0 ? authorityRaw.slice(at + 1) : authorityRaw;
+    if (authority === "") return null;
+    if (/[\s?#\\\u0000-\u001f\u007f]/.test(authorityRaw)) return null;
+    const portMatch = /^(.*?):(\d+)$/.exec(authority);
+    if (portMatch !== null && DEFAULT_PORTS[scheme] === portMatch[2]) authority = portMatch[1];
+    host = authority;
+  } else {
+    // SCP-like form: [user@]host:path. Git splits at the FIRST ':', so
+    // `evil.com:path@github.com:acme/app` belongs to host `evil.com` and can
+    // never fold onto github.com.
+    if (input.includes("://")) return null;
+    const bracketed = /^(?:[^@/]+@)?\[([^\]\s]+)\]:(.+)$/.exec(input);
+    if (bracketed !== null) {
+      host = `[${bracketed[1]}]`;
+      rawPath = bracketed[2];
+    } else {
+      const colon = input.indexOf(":");
+      if (colon < 0) return null;
+      const authority = input.slice(0, colon);
+      const at = authority.lastIndexOf("@");
+      host = at >= 0 ? authority.slice(at + 1) : authority;
+      rawPath = input.slice(colon + 1);
+    }
+    if (host === "" || rawPath === "") return null;
+  }
+
+  if (rawPath.includes("\\")) return null;
+  rawPath = rawPath.split("?")[0].split("#")[0];
+  let path = rawPath.replace(/\/+/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+  if (path.toLowerCase().endsWith(".git")) path = path.slice(0, -4);
+  path = path.replace(/\/+$/, "");
+  if (host === "" || /\s/.test(host) || path === "") return null;
+  // A single-token host without a dot is text, not a remote ("origin:thing").
+  if (!host.startsWith("[") && !host.includes(".") && !path.includes("/")) return null;
+
+  return `${host.toLowerCase()}/${path}`;
 }
 
 /** The server checkout for this repository, or an error naming how to record one. */
