@@ -18,7 +18,7 @@ export interface Mode {
 export const MODES: Mode[] = [
   { id: "work", label: "Work", icon: "work", path: null },
   { id: "agents", label: "Agents", icon: "agents", path: "/agents", deferred: "Fleet presence arrives with the Agent/Frames tranche (wave H)" },
-  { id: "program", label: "Program", icon: "program", path: "/program" },
+  { id: "program", label: "Project", icon: "program", path: "/program" },
   { id: "research", label: "Research", icon: "research", path: "/research" },
   { id: "observability", label: "Observability", icon: "observability", path: "/observability", deferred: "Fleet-level analysis (wave G)" },
 ];
@@ -63,37 +63,46 @@ export interface Destination {
   id: string;
   label: string;
   icon: IconName;
-  /** Relative to `/rep/:owner/:repo`. */
-  repoPath: string;
+  /** Relative to `/rep/:owner/:repo`; absent when the destination is not repository-scoped. */
+  repoPath?: string;
+  /** Absolute route for mode-level or global surfaces. */
+  path?: string;
   deferred?: string;
 }
 
 export interface RepoSection {
-  label: "Work" | "Code" | "System";
+  label: "Workspace" | "GitHub" | "System";
   items: Destination[];
 }
 
-/** Work-mode sidebar: repository context only. */
+/** Work-half sidebar: the operator's groups, in their approved order. */
 export const REPO_SECTIONS: RepoSection[] = [
   {
-    label: "Work",
-    items: [{ id: "issues", label: "Issues", icon: "issues", repoPath: "/work/issues" }],
-  },
-  {
-    label: "Code",
+    label: "Workspace",
     items: [
       { id: "activity", label: "Activity", icon: "activity", repoPath: "/code/activity" },
+      { id: "issues", label: "Issues", icon: "issues", repoPath: "/work/issues" },
+      { id: "project", label: "Project", icon: "program", path: "/program" },
+      { id: "agents", label: "Agents", icon: "agents", path: "/agents", deferred: "Fleet presence arrives with the Agent/Frames tranche (wave H)" },
+      { id: "observability", label: "Observability", icon: "observability", path: "/observability", deferred: "Fleet-level analysis (wave G)" },
+      { id: "research", label: "Research", icon: "research", path: "/research" },
+    ],
+  },
+  {
+    label: "GitHub",
+    items: [
       { id: "pulls", label: "Pull requests", icon: "pull", repoPath: "/code/pulls" },
       { id: "github-issues", label: "GitHub Issues", icon: "comment", repoPath: "/code/issues" },
       { id: "releases", label: "Releases", icon: "release", repoPath: "/code/releases" },
-      { id: "content", label: "Repository content", icon: "file", repoPath: "/code/content" },
+      { id: "content", label: "Repository content", icon: "content", repoPath: "/code/content" },
+      { id: "ci", label: "CI/CD", icon: "ci", repoPath: "/code/ci", deferred: "Pipeline surfaces arrive with the CI tranche" },
     ],
   },
   {
     label: "System",
     items: [
-      { id: "graph", label: "Graph", icon: "graph", repoPath: "/system/graph", deferred: "Graph shell integration (wave G)" },
-      { id: "repo-observability", label: "Repository observability", icon: "observability", repoPath: "/system/observability", deferred: "Observability shell integration (wave G)" },
+      { id: "specialists", label: "Specialists", icon: "specialists", path: "/specialists", deferred: "Specialist fleet surfaces are not built yet" },
+      { id: "skills", label: "Skills", icon: "skills", path: "/skills", deferred: "Skill catalogue surfaces are not built yet" },
     ],
   },
 ];
@@ -101,3 +110,7 @@ export const REPO_SECTIONS: RepoSection[] = [
 export const repoHref = (repo: { owner: string; name: string }, repoPath: string) => `/rep/${repo.owner}/${repo.name}${repoPath}`;
 
 export const modeHref = (mode: Mode, repo: { owner: string; name: string }) => mode.path ?? repoHref(repo, "/work/issues");
+
+/** Absolute route for a destination: repository-scoped first, then mode-level, else none. */
+export const destinationHref = (repo: { owner: string; name: string }, item: Destination): string | null =>
+  item.repoPath ? repoHref(repo, item.repoPath) : (item.path ?? null);

@@ -17,7 +17,7 @@ import { ProgramSurface } from "../surfaces/ProgramSurface.tsx";
 import { ExperimentDetailSurface, ExperimentListSurface, RunAnalysisSurface, RunComparisonSurface, RunListSurface } from "../surfaces/ResearchSurface.tsx";
 import { DeferredSurface, RepositoriesSurface } from "../surfaces/other.tsx";
 import { SettingsSurface } from "../settings/SettingsSurface.tsx";
-import { MODES, REPO_SECTIONS, RESEARCH_SECTIONS } from "./destinations.ts";
+import { MODES, REPO_SECTIONS, RESEARCH_SECTIONS, type Destination } from "./destinations.ts";
 import { validateCompareSearch } from "./research-compare-search.ts";
 
 // URL contract: docs/console-v2-shell-architecture.md §9.1.
@@ -53,6 +53,10 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
   const deferredModes = MODES.filter((m) => m.deferred && m.path).map((m) =>
     createRoute({ getParentRoute: () => rootRoute, path: m.path!, component: () => <DeferredSurface title={m.label} icon={m.icon} reason={m.deferred!} /> }),
   );
+  // System destinations are not repository-scoped: one deferred root route each (XTRM-632).
+  const systemRoutes = (REPO_SECTIONS.find((s) => s.label === "System")?.items ?? [])
+    .filter((i): i is Destination & { path: string; deferred: string } => !!i.path && !!i.deferred)
+    .map((i) => createRoute({ getParentRoute: () => rootRoute, path: i.path, component: () => <DeferredSurface title={i.label} icon={i.icon} reason={i.deferred} /> }));
 
   // Agent half (PRD §36.2): `/agent` reopens the last or most recent session.
   const agentIndexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/agent", component: AgentIndexSurface });
@@ -111,8 +115,8 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     createRoute({ getParentRoute: () => repoRoute, path: "/code/content", component: ContentSurface }),
     createRoute({ getParentRoute: () => repoRoute, path: "/governance/program", component: () => <ProgramSurface repoScoped /> }),
     ...REPO_SECTIONS.flatMap((s) => s.items)
-      .filter((i) => i.deferred)
-      .map((i) => createRoute({ getParentRoute: () => repoRoute, path: i.repoPath, component: () => <DeferredSurface title={i.label} icon={i.icon} reason={i.deferred!} /> })),
+      .filter((i): i is Destination & { repoPath: string; deferred: string } => !!i.deferred && !!i.repoPath)
+      .map((i) => createRoute({ getParentRoute: () => repoRoute, path: i.repoPath, component: () => <DeferredSurface title={i.label} icon={i.icon} reason={i.deferred} /> })),
     // Retired reservation: sessions are not repository-scoped routes (PRD §36.3 scope control).
     createRoute({
       getParentRoute: () => repoRoute,
@@ -137,6 +141,7 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     researchCompareRoute,
     settingsRoute,
     ...deferredModes,
+    ...systemRoutes,
     repoRoute.addChildren(repoChildren),
   ]);
   return createRouter({ routeTree, history, defaultPreload: false });

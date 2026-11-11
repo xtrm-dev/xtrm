@@ -32,17 +32,25 @@ describe("Console v2 shell", () => {
     expect(screen.getAllByText("/ XTRM-301").length).toBeGreaterThan(0);
   });
 
-  it("lists every mode in one sidebar and nests the active mode's rows under it", async () => {
+  it("groups destinations as Workspace, GitHub and System, with Project's rows nested", async () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
     const sidebar = await screen.findByTestId("context-sidebar");
-    expect(within(sidebar).getByText("Issues")).toBeTruthy();
-    expect(within(sidebar).getByText("GitHub Issues")).toBeTruthy();
-    expect(within(sidebar).getByRole("button", { name: "Agents" })).toBeTruthy();
-    expect(within(sidebar).queryByText("Workstreams")).toBeNull();
+    for (const header of ["Workspace", "GitHub", "System"]) {
+      expect(within(sidebar).getByRole("button", { name: new RegExp(`^${header}$`) })).toBeTruthy();
+    }
+    for (const label of ["Activity", "Issues", "Project", "Agents", "Observability", "Research", "Pull requests", "GitHub Issues", "Releases", "Repository content", "CI/CD", "Specialists", "Skills"]) {
+      expect(within(sidebar).getAllByText(label).length).toBeGreaterThan(0);
+    }
+    // Graph and Repository observability left navigation; Project's own rows are visible immediately.
+    expect(within(sidebar).queryByText("Repository observability")).toBeNull();
+    expect(within(sidebar).getByText("Workstreams")).toBeTruthy();
 
-    fireEvent.click(within(sidebar).getByRole("button", { name: "Program" }));
+    // The disclosure chevron collapses the nested rows without navigating.
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Collapse Project" }));
+    await waitFor(() => expect(within(sidebar).queryByText("Workstreams")).toBeNull());
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: /^Project/ }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/program"));
-    expect(await within(screen.getByTestId("context-sidebar")).findByText("Workstreams")).toBeTruthy();
   });
 
   it("renders deferred modes as explicit placeholders, not broken routes", async () => {
