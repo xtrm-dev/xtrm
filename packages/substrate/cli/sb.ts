@@ -48,7 +48,7 @@ import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
 import { LinkGateService, gateModeFromEnv } from "../src/service/link-gate-service.ts";
-import { GhCliPullRequestSource, PullRequestSyncService } from "../src/service/pull-request-sync-service.ts";
+import { GhCliPullRequestSource, PullRequestSyncService, syncReportText } from "../src/service/pull-request-sync-service.ts";
 import { canonicalPullReference, pullUrl, type IssuePullRequestView } from "../src/domain/pull-request.ts";
 import { parseAllTrailers } from "../src/domain/provenance.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
@@ -574,7 +574,7 @@ evidence flag accepts a comma-separated list and may be repeated; repeated
 values accumulate in caller order, never silently drop a value. Closure
 rows are immutable history -- a mistaken close reopens, it never rewrites.
 Stopping one execution is NOT a close: release the claim instead.`,
-  "issue.state": `usage: sb issue state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>] [--project <id>]
+  "issue.state": `usage: sb issue state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>] [--project <id>] [--link-gate warn|enforce|off] [--gate-override <reason>]
 
 sets the lifecycle state; every transition emits a durable issue.lifecycle event.
 --until sets/clears the deferral timestamp (meaningful with deferred).`,
@@ -1119,10 +1119,8 @@ function runLinks(
       onlyPr,
     });
     if (ctx.json) return emit(ctx, command, report);
-    const lines = [
-      `LINKS SYNC — ${report.repositories} repo(s) · ${report.scanned} PR(s) · ${report.dryRun ? "dry run" : "written"}`,
-      `created_from ${report.created} · mentioned ${report.mentioned} · findings ${report.findingCount} · skipped ${report.skipped} · failures ${report.failures} · truncated ${report.truncated}`,
-    ];
+    const text = syncReportText(report);
+    const lines = [text.summary, text.detail];
     return { code: report.failures > 0 && report.repositories === report.failures ? 1 : 0, stdout: lines.join("\n") + "\n", stderr: "" };
   }
 
@@ -1247,7 +1245,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.claim": ["project", "holder", "ttl-ms", "activation"],
   "issue.release": ["project", "holder", "activation"],
   "issue.close": ["project", "outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact", "link-gate", "gate-override"],
-  "issue.state": ["project", "until"],
+  "issue.state": ["project", "until", "actor", "link-gate", "gate-override"],
   "issue.reopen": ["project", "reason", "actor", "participant", "run", "activation", "attempt"],
   "issue.defer": ["project", "until"],
   "issue.cancel": ["project", "outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact"],
@@ -1924,14 +1922,11 @@ function runIssue(
         throw new Error(`unknown lifecycle state: ${rest[1]} (want open|deferred|done|cancelled|archived)`);
       }
       const resolved = refInContext(svc, flags, ref);
-      if (to === "done") {
-        new LinkGateService(db, svc).enforce(resolved.id, {
-          mode: (flag(flags, "link-gate") as never) ?? undefined,
-          override: flag(flags, "gate-override") ?? null,
-          actor: flag(flags, "actor") ?? "sb-cli",
-        });
-      }
-      const moved = svc.setLifecycleState(resolved.id, to as (typeof STATES)[number]);
+      const moved = svc.setLifecycleState(resolved.id, to as (typeof STATES)[number], undefined, {
+        actor: flag(flags, "actor") ?? "sb-cli",
+        linkGate: (flag(flags, "link-gate") as never) ?? undefined,
+        gateOverride: flag(flags, "gate-override") ?? undefined,
+      });
       applyDeferUntil(svc, moved.id, flag(flags, "until"));
       return emit(ctx, command, issueSummary(svc.getIssue(moved.id)));
     }
@@ -1944,12 +1939,11 @@ function runIssue(
       const ref = needRef(rest);
       const resolved = refInContext(svc, flags, ref);
       if (!hasClosureFlags(flags)) {
-        new LinkGateService(db, svc).enforce(resolved.id, {
-          mode: (flag(flags, "link-gate") as never) ?? undefined,
-          override: flag(flags, "gate-override") ?? null,
+        const closed = svc.setLifecycleState(resolved.id, "done", undefined, {
           actor: flag(flags, "actor") ?? "sb-cli",
+          linkGate: (flag(flags, "link-gate") as never) ?? undefined,
+          gateOverride: flag(flags, "gate-override") ?? undefined,
         });
-        const closed = svc.setLifecycleState(resolved.id, "done");
         return emit(ctx, command, issueSummary(closed));
       }
       const outcomeRaw = flag(flags, "outcome") ?? (() => { throw new Error(`--outcome is required (want ${CLOSURE_OUTCOMES.join("|")})`); })();

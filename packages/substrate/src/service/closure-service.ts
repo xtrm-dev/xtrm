@@ -173,9 +173,9 @@ export class ClosureService {
     if ((TERMINAL_STATES as readonly string[]).includes(issue.lifecycleState)) {
       throw new Error(`already terminal: ${issueId} is ${issue.lifecycleState}; reopen before closing again (history is immutable)`);
     }
-    if (kind === "close") {
-      // Before any closure row: warn (event, proceed), enforce (throw, write
-      // nothing) or off. The override writes its Journal decision here too.
+    if (kind === "close" && input.outcome === "completed") {
+      // Only a delivery close is gated. Before any closure row: warn (event,
+      // proceed), enforce (throw, write nothing) or off.
       this.gate.enforce(issueId, {
         mode: input.linkGate,
         override: input.gateOverride ?? null,

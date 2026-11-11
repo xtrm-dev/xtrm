@@ -62,10 +62,19 @@ interface LinkRow {
   source: string;
 }
 
+const GATE_MODES: readonly GateMode[] = ["warn", "enforce", "off"];
+
+/** Explicit flag, then the env, then `warn`. A present but unknown value is
+ * an error: a typo must never silently strengthen the gate to enforce. */
 export function gateModeFromEnv(explicit?: string | null): GateMode {
-  const raw = (explicit ?? process.env["XTRM_LINK_GATE"] ?? "warn").trim().toLowerCase();
-  if (raw === "warn" || raw === "enforce" || raw === "off") return raw;
-  return "warn";
+  if (explicit !== undefined && explicit !== null) {
+    if ((GATE_MODES as readonly string[]).includes(explicit)) return explicit as GateMode;
+    throw new Error(`unknown gate mode: ${explicit} (want warn|enforce|off)`);
+  }
+  const env = process.env["XTRM_LINK_GATE"];
+  if (env === undefined) return "warn";
+  if ((GATE_MODES as readonly string[]).includes(env)) return env as GateMode;
+  throw new Error(`unknown XTRM_LINK_GATE: ${env} (want warn|enforce|off)`);
 }
 
 export class LinkGateService {
@@ -131,30 +140,37 @@ export class LinkGateService {
     issueId: string,
     opts: { mode?: GateMode; override?: string | null; actor: string; now?: number } = { actor: "sb-cli" },
   ): GateEnforcement {
-    const mode = opts.mode ?? gateModeFromEnv();
+    const mode = gateModeFromEnv(opts.mode ?? null);
     if (mode === "off") return { mode, codes: [], warned: false, overridden: false };
-    const evaluation = this.evaluate(issueId, { mode: "manual", now: opts.now });
+    const now = opts.now ?? Date.now();
+    const evaluation = this.evaluate(issueId, { mode: "manual", now });
     if (evaluation.codes.length === 0) return { mode, codes: [], warned: false, overridden: false };
     const issues = this.issues;
-    const now = opts.now ?? Date.now();
+    const reason = opts.override?.trim() ?? "";
+    const overridable = reason !== "" && evaluation.codes.every((code) => OVERRIDABLE.has(code));
     if (mode === "warn") {
       issues.appendEvent(issueId, "provenance.link_gate_warned", {
         codes: evaluation.codes,
         mode: "warn",
         actor: opts.actor,
       }, now);
-      return { mode, codes: evaluation.codes, warned: true, overridden: false };
+      // An override given in warn mode is still an operator decision.
+      if (overridable) this.recordOverride(issueId, evaluation.codes, reason, opts.actor);
+      return { mode, codes: evaluation.codes, warned: true, overridden: overridable };
     }
-    const reason = opts.override?.trim() ?? "";
-    if (reason !== "" && evaluation.codes.every((code) => OVERRIDABLE.has(code))) {
-      new JournalService(this.db, issues).appendEntry(issueId, {
-        kind: "decision",
-        participantId: opts.actor,
-        semantic: { summary: `close-gate override: ${evaluation.codes.join(", ")} — ${reason}` },
-      });
+    if (overridable) {
+      this.recordOverride(issueId, evaluation.codes, reason, opts.actor);
       return { mode, codes: evaluation.codes, warned: false, overridden: true };
     }
     throw new Error(`close gate refused: ${evaluation.codes.join(", ")}`);
+  }
+
+  private recordOverride(issueId: string, codes: string[], reason: string, actor: string): void {
+    new JournalService(this.db, this.issues).appendEntry(issueId, {
+      kind: "decision",
+      participantId: actor,
+      semantic: { summary: `close-gate override: ${codes.join(", ")} — ${reason}` },
+    });
   }
 
   private autoCodes(
@@ -168,12 +184,12 @@ export class LinkGateService {
     const defaults = new Map<string, string | null>();
     for (const link of qualifying) {
       if (defaults.has(link.repository)) continue;
-      defaults.set(link.repository, this.defaultBranch(link.repository, projectId, codes));
+      defaults.set(link.repository, this.defaultBranch(link.repository, projectId, codes, now));
     }
     for (const link of qualifying) {
       let state: { state: string; baseRef: string | null } | null;
       try {
-        state = this.prState(link.repository, link.number);
+        state = this.prState(link.repository, link.number, now);
       } catch {
         if (!codes.includes(GATE_CODES.unreachable)) codes.push(GATE_CODES.unreachable);
         continue;
@@ -193,7 +209,7 @@ export class LinkGateService {
       .filter((row) => !qualifying.some((q) => q.repository === row.repository && q.number === row.number));
     for (const other of others) {
       try {
-        const state = this.prState(other.repository, other.number);
+        const state = this.prState(other.repository, other.number, now);
         if (state === null || state.state === "open") codes.push(GATE_CODES.otherOpenPr);
       } catch {
         if (!codes.includes(GATE_CODES.unreachable)) codes.push(GATE_CODES.unreachable);
@@ -213,7 +229,7 @@ export class LinkGateService {
     return row !== undefined;
   }
 
-  private defaultBranch(repository: string, projectId: string, codes: string[]): string | null {
+  private defaultBranch(repository: string, projectId: string, codes: string[], _now: number): string | null {
     const binding = this.db
       .prepare(
         `SELECT base_branch FROM repository_bindings
@@ -231,14 +247,14 @@ export class LinkGateService {
     }
   }
 
-  private prState(repository: string, number: number): { state: string; baseRef: string | null } | null {
+  private prState(repository: string, number: number, now: number): { state: string; baseRef: string | null } | null {
     const row = this.db
       .prepare(
         `SELECT state, base_ref, last_synced_at FROM pull_requests WHERE repository = ? AND number = ?`,
       )
       .get(repository, number) as { state: string; base_ref: string | null; last_synced_at: number } | undefined;
     // Trust a row synced in the last 24h; otherwise read live.
-    if (row !== undefined && Date.now() - row.last_synced_at < 24 * 60 * 60 * 1000) {
+    if (row !== undefined && now - row.last_synced_at < 24 * 60 * 60 * 1000) {
       return { state: row.state, baseRef: row.base_ref };
     }
     return this.reader.state(repository, number);

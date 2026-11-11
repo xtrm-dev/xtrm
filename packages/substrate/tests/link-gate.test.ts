@@ -11,16 +11,21 @@ import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
 import { ClosureService } from "../src/service/closure-service.ts";
 import { GATE_CODES, LinkGateService, type PullRequestStateReader } from "../src/service/link-gate-service.ts";
+import { syncReportText } from "../src/service/pull-request-sync-service.ts";
 
 class FakeReader implements PullRequestStateReader {
   states = new Map<string, { state: string; baseRef: string | null }>();
   defaultBranchValue: string | null = "main";
   fail = false;
+  stateCalls = 0;
+  defaultCalls = 0;
   state(repository: string, number: number) {
+    this.stateCalls += 1;
     if (this.fail) throw new Error("gh unreachable");
     return this.states.get(`${repository}#${number}`) ?? null;
   }
   defaultBranch() {
+    this.defaultCalls += 1;
     if (this.fail) throw new Error("gh unreachable");
     return this.defaultBranchValue;
   }
@@ -174,6 +179,113 @@ describe("close gate", () => {
     assert.ok(w.gate.evaluate(w.issue.id, { mode: "auto" }).codes.includes(GATE_CODES.liveClaim));
   });
 
+  it("an auto PR merged into a non-default branch refuses gate_pr_not_merged", () => {
+    t2(w);
+    w.svc.releaseClaim(w.issue.id, "w");
+    mergeState(w, 7, "merged", "release");
+    baseBranch(w, "main");
+    assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "auto" }).codes, [GATE_CODES.notMerged]);
+  });
+
+  it("the binding's base_branch is tried before the reader", () => {
+    t2(w);
+    w.svc.releaseClaim(w.issue.id, "w");
+    mergeState(w, 7, "merged", "trunk");
+    baseBranch(w, "trunk");
+    w.reader.defaultBranchValue = "main";
+    assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "auto" }).codes, []);
+    assert.equal(w.reader.defaultCalls, 0);
+  });
+
+  it("a failing PR-state read and a failing default-branch read fail separately", () => {
+    t2(w);
+    w.svc.releaseClaim(w.issue.id, "w");
+    mergeState(w, 7, "merged", "main", Date.now() - 48 * 60 * 60 * 1000);
+    baseBranch(w, "main");
+    w.reader.fail = true;
+    assert.ok(w.gate.evaluate(w.issue.id, { mode: "auto" }).codes.includes(GATE_CODES.unreachable));
+    const fresh = world();
+    try {
+      t2(fresh);
+      fresh.svc.releaseClaim(fresh.issue.id, "w");
+      mergeState(fresh, 7, "merged", "main");
+      fresh.reader.fail = true;
+      assert.ok(fresh.gate.evaluate(fresh.issue.id, { mode: "auto" }).codes.includes(GATE_CODES.unreachable));
+    } finally {
+      fresh.db.close();
+      rmSync(fresh.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("the 24h trust window uses the injected clock", () => {
+    t2(w);
+    w.svc.releaseClaim(w.issue.id, "w");
+    baseBranch(w, "main");
+    const now = 1_000_000_000;
+    mergeState(w, 7, "merged", "main", now - 23 * 60 * 60 * 1000);
+    assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "auto", now }).codes, []);
+    assert.equal(w.reader.stateCalls, 0);
+    mergeState(w, 7, "merged", "main", now - 25 * 60 * 60 * 1000);
+    w.gate.evaluate(w.issue.id, { mode: "auto", now });
+    assert.equal(w.reader.stateCalls, 1);
+  });
+
+  it("non-delivery outcomes skip the gate and emit no warn event", () => {
+    w.closures.closeIssue(w.issue.id, { outcome: "wont_fix", reason: "not doing it", actor: "closer", linkGate: "enforce" });
+    assert.equal(w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.link_gate_warned").length, 0);
+  });
+
+  it("the done transition itself is gated once, and an exemption skips it", () => {
+    assert.throws(() => w.svc.setLifecycleState(w.issue.id, "done", undefined, { linkGate: "enforce" }), /gate_no_evidence/);
+    assert.equal(w.svc.getIssue(w.issue.id).lifecycleState, "open");
+    w.svc.setLifecycleState(w.issue.id, "done", undefined, { exemption: "beads-import", linkGate: "enforce" });
+    assert.equal(w.svc.getIssue(w.issue.id).lifecycleState, "done");
+  });
+
+  it("re-closing a done issue adds no gate event", () => {
+    close(w, { linkGate: "warn" });
+    const before = w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.link_gate_warned").length;
+    assert.throws(() => close(w, { linkGate: "warn" }));
+    assert.equal(w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.link_gate_warned").length, before);
+  });
+
+  it("an unknown gate value is an error, never enforce", () => {
+    assert.throws(() => w.gate.enforce(w.issue.id, { mode: "Enforce" as never, actor: "a" }), /unknown gate mode/);
+    process.env["XTRM_LINK_GATE"] = "ENFORCE";
+    try {
+      assert.throws(() => w.gate.enforce(w.issue.id, { actor: "a" }), /unknown XTRM_LINK_GATE/);
+    } finally {
+      delete process.env["XTRM_LINK_GATE"];
+    }
+  });
+
+  it("an override in warn mode is still recorded, with the actor", () => {
+    w.closures.closeIssue(w.issue.id, { outcome: "completed", reason: "done", actor: "operator", linkGate: "warn", gateOverride: "docs only" });
+    const decisions = w.journal.timeline(w.issue.id, { kind: "decision" });
+    assert.equal(decisions.at(-1)?.participantId, "operator");
+  });
+
+  it("state done accepts --link-gate and --gate-override", () => {
+    const enforced = runCli(["--db", join(w.dir, "state.db"), "issue", "state", w.issue.humanRef, "done", "--project", "prj_xtrm", "--link-gate", "enforce"]);
+    assert.equal(enforced.code, 1);
+    assert.equal(w.svc.getIssue(w.issue.id).lifecycleState, "open");
+    const overridden = runCli([
+      "--db", join(w.dir, "state.db"), "issue", "state", w.issue.humanRef, "done", "--project", "prj_xtrm",
+      "--link-gate", "enforce", "--gate-override", "no PR for this close", "--actor", "operator",
+    ]);
+    assert.equal(overridden.code, 0, JSON.stringify(overridden));
+    assert.equal(w.svc.getIssue(w.issue.id).lifecycleState, "done");
+  });
+
+  it("the sync text line uses findingCount", () => {
+    const text = syncReportText({
+      dryRun: false, repositories: 1, scanned: 1, created: 0, mentioned: 0,
+      findings: [{ repository: "o/r", number: 99, code: "pr_unavailable", detail: "x" }],
+      findingCount: 2, failures: 1, skipped: 0, truncated: 0,
+    });
+    assert.match(text.detail, /findings 2/);
+  });
+
   it("warn records the event and closes; off skips; override writes a Journal decision", () => {
     close(w, { linkGate: "warn" });
     assert.ok(w.svc.listEvents(w.issue.id).some((e) => e.type === "provenance.link_gate_warned"));
@@ -202,6 +314,12 @@ describe("close gate", () => {
       third.db.close();
       rmSync(third.dir, { recursive: true, force: true });
     }
+  });
+
+  it("with no mode passed the env default is warn", () => {
+    delete process.env["XTRM_LINK_GATE"];
+    close(w);
+    assert.ok(w.svc.listEvents(w.issue.id).some((e) => e.type === "provenance.link_gate_warned"));
   });
 
   it("the legacy bare close is gated too", () => {
