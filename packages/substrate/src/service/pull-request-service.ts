@@ -155,7 +155,7 @@ export class PullRequestService {
     const { issues, provenance } = this.requireWriters();
     const now = input.now ?? Date.now();
     const receipt = this.resolveReceipt(input.issueId, input.receiptId, input.holder, now);
-    withTransaction(this.db, () => {
+    return withTransaction(this.db, () => {
       // attachArtifact owns a nested savepoint; the link row shares the outcome.
       provenance.attachArtifact(receipt.id, "pr", canonical.canonical, { provider: "github", now });
       if (this.insertLink(input.issueId, canonical.repository, canonical.number, "created_from", "provenance", canonical.url, input.actor, now)) {
@@ -166,8 +166,9 @@ export class PullRequestService {
           relation: "created_from",
         }, now);
       }
+      // Reading inside the transaction makes a failure roll the attach back.
+      return this.requireView(input.issueId, canonical.repository, canonical.number);
     });
-    return this.requireView(input.issueId, canonical.repository, canonical.number);
   }
 
   /** A persisted mention (source explicit in this slice). Idempotent. */
@@ -222,6 +223,16 @@ export class PullRequestService {
     let mentioned = 0;
     let findings = 0;
     const finding = (code: string, sha: string, detail: string): void => {
+      const duplicate = this.db
+        .prepare(
+          `SELECT 1 FROM issue_events
+            WHERE issue_id = ? AND type = 'provenance.link_finding'
+              AND json_extract(payload_json, '$.code') = ?
+              AND json_extract(payload_json, '$.sha') = ?
+            LIMIT 1`,
+        )
+        .get(input.issueId, code, sha);
+      if (duplicate) return;
       findings += 1;
       issues.appendEvent(input.issueId, "provenance.link_finding", {
         code,
@@ -268,7 +279,15 @@ export class PullRequestService {
         if (!verdict.ok) {
           this.mentionFromTrailer(input, now);
           mentioned += 1;
-          finding(verdict.code, commit.sha, verdict.detail);
+          // Trailer path keeps its own code namespace; stale stays shared.
+          const code = verdict.code === "receipt_unknown"
+            ? "trailer_receipt_unknown"
+            : verdict.code === "receipt_foreign_issue"
+              ? "trailer_receipt_foreign_issue"
+              : verdict.code === "receipt_superseded"
+                ? "trailer_receipt_superseded"
+                : verdict.code;
+          finding(code, commit.sha, verdict.detail);
           continue;
         }
         const existing = this.db
@@ -339,11 +358,23 @@ export class PullRequestService {
     actor: string | null,
     now: number,
   ): boolean {
+    const live = this.db
+      .prepare(
+        `SELECT 1 FROM issue_pull_requests
+          WHERE issue_id = ? AND repository = ? AND number = ? AND relation = ? AND source = ?
+            AND superseded_at IS NULL`,
+      )
+      .get(issueId, repository, number, relation, source);
+    if (live) return false;
+    // A superseded row is restored, never duplicated: the PK is fixed, so
+    // insert-or-ignore would silently do nothing and the caller would fail.
     const info = this.db
       .prepare(
-        `INSERT OR IGNORE INTO issue_pull_requests
+        `INSERT INTO issue_pull_requests
            (issue_id, repository, number, relation, source, url, actor, created_at, superseded_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+         ON CONFLICT (issue_id, repository, number, relation, source)
+         DO UPDATE SET superseded_at = NULL, url = excluded.url, actor = excluded.actor, created_at = excluded.created_at`,
       )
       .run(issueId, repository, number, relation, source, url, actor, now);
     return Number(info.changes ?? 0) > 0;
@@ -370,13 +401,22 @@ export class PullRequestService {
     try {
       receipt = provenance.getReceipt(receiptId);
     } catch {
-      return { ok: false, code: "trailer_receipt_unknown", detail: `unknown receipt ${receiptId}` };
+      return { ok: false, code: "receipt_unknown", detail: `unknown receipt ${receiptId}` };
     }
     if (receipt.issueId !== issueId) {
-      return { ok: false, code: "trailer_receipt_foreign_issue", detail: `receipt belongs to ${receipt.issueId}` };
+      return { ok: false, code: "receipt_foreign_issue", detail: `receipt belongs to ${receipt.issueId}` };
     }
     if (this.receiptSuperseded(receipt)) {
-      return { ok: false, code: "trailer_receipt_superseded", detail: `a newer receipt exists on ${receipt.executionBindingId}` };
+      return { ok: false, code: "receipt_superseded", detail: `a newer receipt exists on ${receipt.executionBindingId}` };
+    }
+    const binding = provenance.getBinding(receipt.executionBindingId);
+    const currentRevision = this.issues!.getIssue(issueId).currentRevision;
+    if (binding.issueRevision !== currentRevision) {
+      return {
+        ok: false,
+        code: "receipt_stale_revision",
+        detail: `receipt is bound to revision ${binding.issueRevision}, issue is at ${currentRevision}`,
+      };
     }
     return { ok: true, receipt };
   }
@@ -393,27 +433,26 @@ export class PullRequestService {
   /** b1 explicit -> b2 live claim binding -> b3 latest live binding. */
   private resolveReceipt(issueId: string, explicit: string | undefined, holder: string | undefined, now: number): WorkReceipt {
     const { issues, provenance } = this.requireWriters();
+    let chosen: WorkReceipt | undefined;
     if (explicit !== undefined) {
-      const verdict = this.classifyReceipt(explicit, issueId);
-      if (!verdict.ok) throw new Error(`${verdict.code}: ${verdict.detail}`);
-      return verdict.receipt;
-    }
-    if (holder !== undefined) {
+      chosen = provenance.getReceipt(explicit);
+    } else if (holder !== undefined) {
       const claim = issues.getActiveClaim(issueId, { now });
       if (claim && claim.holder === holder) {
         const binding = provenance.listBindings(issueId).filter((b) => b.claimId === claim.id).at(-1);
         if (binding) {
-          const receipt = provenance
+          chosen = provenance
             .listReceipts(issueId)
             .filter((r) => r.executionBindingId === binding.id)
             .at(-1);
-          if (receipt) return receipt;
         }
       }
     }
-    const latest = provenance.listReceipts(issueId).at(-1);
-    if (latest) return latest;
-    throw new Error(`no_receipt: no receipt for this issue; run \`sb provenance dispatch <ref>\` first`);
+    if (chosen === undefined) chosen = provenance.listReceipts(issueId).at(-1);
+    if (chosen === undefined) throw new Error(`no_receipt: no receipt for this issue; run \`sb provenance dispatch <ref>\` first`);
+    const verdict = this.classifyReceipt(chosen.id, issueId);
+    if (!verdict.ok) throw new Error(`${verdict.code}: ${verdict.detail}`);
+    return verdict.receipt;
   }
 
   private requireView(issueId: string, repository: string, number: number): IssuePullRequestView {

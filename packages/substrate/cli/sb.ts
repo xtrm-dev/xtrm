@@ -1123,7 +1123,7 @@ function runLinks(
     lines.push("", "findings (provenance.link_finding):");
     for (const f of findings) lines.push(`- ${f.code}  ${f.repository ?? ""}#${f.number ?? ""}  ${(f.sha ?? "").slice(0, 12)}  ${f.detail ?? ""}`);
   }
-  lines.push("slice 1: no rows written");
+  lines.push("read-only: no rows written");
   return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
 }
 
@@ -1420,13 +1420,15 @@ function tryHolder(flags: Flags): string | null {
 /** Bare `#N` scope: the ambient checkout's remote, else the project's single
  * github repository binding. Null means "no ambient repository". */
 function ambientRepository(db: ReturnType<typeof openSubstrate>, projectId: string): string | null {
-  const disc = discoverRepository();
-  const key = disc.identity?.repositoryKey ?? null;
-  if (key !== null && key.startsWith("github.com/")) return key.slice("github.com/".length);
+  // The issue's repository (its Project's single binding) wins over whatever
+  // checkout the command happens to run in.
   const rows = db
     .prepare("SELECT DISTINCT canonical_remote FROM repository_bindings WHERE project_id = ? AND canonical_remote LIKE 'github.com/%'")
     .all(projectId) as Array<{ canonical_remote: string }>;
   if (rows.length === 1) return rows[0]!.canonical_remote.slice("github.com/".length);
+  const disc = discoverRepository();
+  const key = disc.identity?.repositoryKey ?? null;
+  if (key !== null && key.startsWith("github.com/")) return key.slice("github.com/".length);
   return null;
 }
 

@@ -39,6 +39,10 @@ function dispatchWithClaim(w: ReturnType<typeof world>, holder = "w") {
 
 const PR = { repository: "o/r", number: 7, canonical: "o/r#7", url: "https://github.com/o/r/pull/7" };
 
+function throwsCode(fn: () => unknown, code: string): void {
+  assert.throws(fn, (error: unknown) => error instanceof Error && error.message.startsWith(`${code}:`));
+}
+
 describe("pull-request writers", () => {
   let w: ReturnType<typeof world>;
   beforeEach(() => {
@@ -122,10 +126,7 @@ describe("pull-request writers", () => {
     const claim = w.svc.claimIssue(other.id, "w", { ttlMs: 60_000 });
     const binding = w.prov.dispatch(other.id, { workspace: "/tmp/ws", participantId: "w", claimId: claim.id });
     const foreign = w.prov.allocateReceipt(binding.id);
-    assert.throws(
-      () => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: foreign.id }, PR),
-      /receipt_foreign_issue/,
-    );
+    throwsCode(() => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: foreign.id }, PR), "receipt_foreign_issue");
     assert.equal(w.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests").get()!.n, 0);
     assert.equal(w.prov.listArtifacts(foreign.id).length, 0);
   });
@@ -133,10 +134,38 @@ describe("pull-request writers", () => {
   it("a superseded receipt (newer receipt on the binding) is refused", () => {
     const { binding, receipt } = dispatchWithClaim(w);
     w.prov.allocateReceipt(binding.id);
-    assert.throws(
-      () => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR),
-      /receipt_superseded/,
-    );
+    throwsCode(() => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR), "receipt_superseded");
+  });
+
+  it("a failing attach commits nothing: no artifact, no event, no row", () => {
+    const before = w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.artifact_attached").length;
+    const other = w.svc.createIssue({ projectId: "prj_xtrm", title: "other", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    w.svc.attestReadiness(other.id, { outcome: "ready", policy: "default", attestedBy: "tester" });
+    const claim = w.svc.claimIssue(other.id, "w", { ttlMs: 60_000 });
+    const binding = w.prov.dispatch(other.id, { workspace: "/tmp/ws", participantId: "w", claimId: claim.id });
+    const foreign = w.prov.allocateReceipt(binding.id);
+    throwsCode(() => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: foreign.id }, PR), "receipt_foreign_issue");
+    const after = w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.artifact_attached").length;
+    assert.equal(after, before);
+    assert.equal(w.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests").get()!.n, 0);
+    assert.equal(w.prov.listArtifacts(foreign.id).length, 0);
+  });
+
+  it("re-attach restores a row after unlink, with one artifact event", () => {
+    const { receipt } = dispatchWithClaim(w);
+    w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR);
+    w.links.unlink({ issueId: w.issue.id, repository: "o/r", number: 7 });
+    const restored = w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR);
+    assert.equal(restored.relation, "created_from");
+    const artifactEvents = w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.artifact_attached");
+    assert.equal(artifactEvents.length, 1);
+    assert.equal(w.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests").get()!.n, 1);
+  });
+
+  it("a receipt from an older revision is refused as stale", () => {
+    const { receipt } = dispatchWithClaim(w);
+    w.svc.updateContract(w.issue.id, contract({ problem: "P2" }), "t");
+    throwsCode(() => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR), "receipt_stale_revision");
   });
 
   it("mention is persisted, idempotent, and unlink supersedes without deleting", () => {
@@ -144,7 +173,9 @@ describe("pull-request writers", () => {
     w.links.linkMention({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w" });
     assert.equal(w.links.listForIssue(w.issue.id).length, 1);
     assert.equal(w.links.listForIssue(w.issue.id)[0]!.relation, "mentioned");
+    assert.equal(w.links.listForIssue(w.issue.id)[0]!.sources[0], "explicit");
     assert.equal(w.links.unlink({ issueId: w.issue.id, repository: "o/r", number: 7 }), 1);
+    assert.equal(w.links.unlink({ issueId: w.issue.id, repository: "o/r", number: 7 }), 0);
     assert.equal(w.links.listForIssue(w.issue.id).length, 0);
     const row = w.db.prepare("SELECT superseded_at FROM issue_pull_requests").get() as { superseded_at: number | null };
     assert.notEqual(row.superseded_at, null);
@@ -199,6 +230,67 @@ describe("pull-request writers", () => {
     assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["trailer_receipt_missing"]);
   });
 
+  it("b3 chooses the latest receipt", () => {
+    const { receipt: first } = dispatchWithClaim(w);
+    const second = (() => {
+      const claim = w.svc.getActiveClaim(w.issue.id)!;
+      const binding = w.prov.dispatch(w.issue.id, { workspace: "/tmp/ws2", participantId: "w", claimId: claim.id });
+      return { binding, receipt: w.prov.allocateReceipt(binding.id) };
+    })();
+    w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w" }, PR);
+    assert.equal(w.prov.listArtifacts(first.id).length, 0);
+    assert.equal(w.prov.listArtifacts(second.receipt.id).length, 1);
+  });
+
+  it("T2 records an ambiguous receipt, an unknown issue and a foreign trailer", () => {
+    const { receipt } = dispatchWithClaim(w);
+    const ambiguous = `XTRM-Issue: ${w.issue.humanRef}\nXTRM-Receipt: ${receipt.id}\nXTRM-Receipt: rec_second`;
+    const r1 = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "f".repeat(40), message: ambiguous }] });
+    assert.equal(r1.mentioned, 1);
+    const unknown = `XTRM-Issue: XTRM-404\nXTRM-Receipt: ${receipt.id}`;
+    const r2 = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "1".repeat(40), message: unknown }] });
+    assert.equal(r2.created, 0);
+    const other = w.svc.createIssue({ projectId: "prj_xtrm", title: "other", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    const foreignTrailer = `XTRM-Issue: ${other.humanRef}\nXTRM-Receipt: ${receipt.id}`;
+    const before = w.links.listForIssue(w.issue.id).length;
+    const r3 = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "2".repeat(40), message: foreignTrailer }] });
+    assert.deepEqual({ created: r3.created, mentioned: r3.mentioned, findings: r3.findings }, { created: 0, mentioned: 0, findings: 0 });
+    // A foreign trailer is skipped entirely: no new row appears for the target.
+    assert.equal(w.links.listForIssue(w.issue.id).length, before);
+    assert.deepEqual(
+      w.links.listFindings("prj_xtrm").map((f) => f.code).sort(),
+      ["trailer_issue_unknown", "trailer_receipt_ambiguous"],
+    );
+  });
+
+  it("T2 ignores a commit with no XTRM-Issue trailer", () => {
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "5".repeat(40), message: "chore: no trailer" }] });
+    assert.deepEqual(result, { created: 0, mentioned: 0, findings: 0 });
+    assert.equal(w.links.listForIssue(w.issue.id).length, 0);
+    assert.equal(w.links.listFindings("prj_xtrm").length, 0);
+  });
+
+  it("T2 a rerun does not duplicate findings", () => {
+    const message = `XTRM-Issue: ${w.issue.humanRef}`;
+    const run = () => w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "3".repeat(40), message }] });
+    assert.equal(run().findings, 1);
+    assert.equal(run().findings, 0);
+    assert.equal(w.links.listFindings("prj_xtrm").length, 1);
+  });
+
+  it("T2 a foreign trailer receipt is a mention with the exact code", () => {
+    const other = w.svc.createIssue({ projectId: "prj_xtrm", title: "other", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    w.svc.attestReadiness(other.id, { outcome: "ready", policy: "default", attestedBy: "tester" });
+    const claim = w.svc.claimIssue(other.id, "w", { ttlMs: 60_000 });
+    const binding = w.prov.dispatch(other.id, { workspace: "/tmp/ws", participantId: "w", claimId: claim.id });
+    const foreign = w.prov.allocateReceipt(binding.id);
+    const message = `XTRM-Issue: ${w.issue.humanRef}\nXTRM-Receipt: ${foreign.id}`;
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "4".repeat(40), message }] });
+    assert.equal(result.mentioned, 1);
+    assert.equal(w.links.listForIssue(w.issue.id)[0]!.relation, "mentioned");
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["trailer_receipt_foreign_issue"]);
+  });
+
   it("T2 keeps the first claim and records a conflict, never throws", () => {
     const { receipt } = dispatchWithClaim(w);
     const other = w.svc.createIssue({ projectId: "prj_xtrm", title: "other", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
@@ -236,6 +328,37 @@ describe("pull-request writers", () => {
       assert.equal(view.repository, "o/r");
       assert.equal(view.number, 7);
       assert.equal(view.relation, "created_from");
+    } finally {
+      process.chdir(saved);
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("CLI: an issue's repository binding wins over the checkout origin for a bare #N", () => {
+    const { receipt } = dispatchWithClaim(w);
+    w.db
+      .prepare("INSERT INTO repository_bindings (repository_key, project_id, base_branch, canonical_remote, created_at, updated_at) VALUES (?,?,?,?,?,?)")
+      .run("github.com/o/r-proj", "prj_xtrm", "main", "github.com/o/r-proj", 1, 1);
+    const repo = mkdtempSync(join(tmpdir(), "sb-pr-cli-"));
+    const saved = process.cwd();
+    try {
+      const git = (args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+      git(["init", "-q"]);
+      git(["config", "user.email", "t@example.com"]);
+      git(["config", "user.name", "t"]);
+      git(["remote", "add", "origin", "git@github.com:o/r.git"]);
+      writeFileSync(join(repo, "a.txt"), "a");
+      git(["add", "a.txt"]);
+      git(["commit", "-q", "-m", "init"]);
+      process.chdir(repo);
+      const res = runCli([
+        "--db", join(w.dir, "state.db"), "--json",
+        "provenance", "attach", w.issue.humanRef, "pr", "#7", "--project", "prj_xtrm", "--receipt", receipt.id, "--holder", "w",
+      ]);
+      assert.equal(res.code, 0, res.stderr);
+      const view = (JSON.parse(res.stdout) as { data: { link: { repository: string; number: number } } }).data.link;
+      assert.equal(view.repository, "o/r-proj");
+      assert.equal(view.number, 7);
     } finally {
       process.chdir(saved);
       rmSync(repo, { recursive: true, force: true });
