@@ -1,7 +1,7 @@
 import type { IssueSummary } from "../adapters/index.tsx";
 import { TERMINAL, lifecycleLabel } from "./meta.tsx";
 
-export type SortKey = "key" | "title" | "priority" | "children" | "events" | "pointers" | "created" | "updated";
+export type SortKey = "key" | "title" | "priority" | "children" | "events" | "pointers" | "pr" | "created" | "updated";
 export type Sort = { key: SortKey; desc: boolean };
 
 /** Direction a column sorts in on its first click. */
@@ -92,6 +92,7 @@ function comparator({ key, desc }: Sort, rollups: Map<string, Rollup>) {
     children: (i) => i.childCount,
     events: (i) => roll(i).events,
     pointers: (i) => roll(i).pointers,
+    pr: (i) => i.primaryPr?.number ?? null,
     created: (i) => i.createdAt,
     updated: (i) => roll(i).activityAt,
   };

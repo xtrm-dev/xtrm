@@ -398,7 +398,7 @@ const COMMAND_HELP: Record<string, string> = {
   "issue.link": `usage: sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>]... [--commits-range <base>..<head>] [--holder <name>]
 
   Writes a persisted mention (source=explicit) or, with --commit/--commits-range, the T2 evidence from the commits' XTRM-Issue trailers. Never deletes; never claims created_from without a valid receipt.`,
-  "issue.unlink": `usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>]
+  "issue.unlink": `usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>] [--actor <name>]
 
   Sets superseded_at on the matching live row(s). The evidence row stays.`,
   "provenance.attach": `usage: sb provenance attach <ref> pr <github:org/repo#n|org/repo#n|url|#n> [--receipt <id>] [--holder <name>]
@@ -1151,6 +1151,34 @@ function ghJson<T>(args: string[]): T {
   }
 }
 
+function linkEventsFor(db: ReturnType<typeof openSubstrate>, issueId: string): Array<Record<string, unknown>> {
+  const rows = db
+    .prepare(
+      `SELECT id, type, payload_json, created_at FROM issue_events
+        WHERE issue_id = ? AND type GLOB 'provenance.link_*'
+        ORDER BY id DESC LIMIT 20`,
+    )
+    .all(issueId) as unknown as Array<{ id: number; type: string; payload_json: string; created_at: number }>;
+  return rows
+    .reverse()
+    .map((row) => ({ eventId: row.id, type: row.type, payload: JSON.parse(row.payload_json), createdAt: row.created_at }));
+}
+
+function primaryPrFor(db: ReturnType<typeof openSubstrate>, issueId: string): Record<string, unknown> | null {
+  const link = db
+    .prepare(
+      `SELECT repository, number, relation, url FROM issue_pull_requests
+        WHERE issue_id = ? AND superseded_at IS NULL
+        ORDER BY CASE relation WHEN 'created_from' THEN 0 ELSE 1 END, created_at, rowid LIMIT 1`,
+    )
+    .get(issueId) as { repository: string; number: number; relation: string; url: string | null } | undefined;
+  if (link === undefined) return null;
+  const state = db
+    .prepare("SELECT state FROM pull_requests WHERE repository = ? AND number = ?")
+    .get(link.repository, link.number) as { state: string } | undefined;
+  return { repository: link.repository, number: link.number, relation: link.relation, url: link.url, state: state?.state ?? null };
+}
+
 function runLinks(
   db: ReturnType<typeof openSubstrate>,
   svc: IssueService,
@@ -1325,7 +1353,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.tree": ["project", "root"],
   "issue.children": [],
   "issue.link": ["project", "repo", "number", "url", "commit", "commits-range", "holder"],
-  "issue.unlink": ["project", "repo", "number", "relation"],
+  "issue.unlink": ["project", "repo", "number", "relation", "actor"],
   "issue.relate": ["project", "from", "to", "kind"],
   "issue.unrelate": ["project", "from", "to", "kind"],
   "issue.claim": ["project", "holder", "ttl-ms", "activation"],
@@ -1735,7 +1763,7 @@ function runIssue(
       return emit(ctx, command, result);
     }
     case "unlink": {
-      if (rest[0] !== "pr") throw new Error("usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>]");
+      if (rest[0] !== "pr") throw new Error("usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>] [--actor <name>]");
       const ref = rest[1];
       if (ref === undefined) throw new Error("usage: sb issue unlink pr <ref> --repo <owner/name> --number <n>");
       const resolved = refInContext(svc, flags, ref);
@@ -1747,7 +1775,8 @@ function runIssue(
       if (relation !== undefined && relation !== "created_from" && relation !== "mentioned") {
         throw new Error("--relation must be created_from or mentioned");
       }
-      const removed = prLinkService(db, svc).unlink({ issueId: resolved.id, repository: repo, number, relation: relation as never });
+      const actor = flag(flags, "actor") ?? tryHolder(flags) ?? "sb-cli";
+      const removed = prLinkService(db, svc).unlink({ issueId: resolved.id, repository: repo, number, relation: relation as never, actor });
       return emit(ctx, command, { superseded: removed });
     }
     case "create": {
@@ -1796,6 +1825,7 @@ function runIssue(
       // large journal never enlarges the default show output.
       const operationalContext = new JournalService(db, svc).operationalContext(resolved.id);
       const pullRequests = new PullRequestService(db).listForIssue(resolved.id);
+      const gateEvaluation = new LinkGateService(db, svc).evaluate(resolved.id, { mode: "manual" });
       const payload = {
         ...issueSummary(resolved),
         contractHash: resolved.currentContractHash,
@@ -1809,6 +1839,9 @@ function runIssue(
         closure: closureSummary(db, svc, resolved),
         operationalContext,
         pullRequests,
+        primaryPr: primaryPrFor(db, resolved.id),
+        linkEvents: linkEventsFor(db, resolved.id),
+        linkGate: { mode: "manual", manual: { verdict: gateEvaluation.verdict, codes: gateEvaluation.codes } },
       };
       if (ctx.json) return emit(ctx, command, payload);
       return {
@@ -2010,8 +2043,12 @@ function runIssue(
         readiness: (list("readiness") ?? undefined) as OperationalState[] | undefined,
         search: flag(flags, "search") ?? undefined,
       });
-      if (ctx.json) return emit(ctx, command, page);
-      return emit(ctx, command, page.rows.map((r) => readySummary(boardRowSummaryInput(r), r.readinessState, r.dispatchable)));
+      const enriched = {
+        ...page,
+        rows: page.rows.map((row) => ({ ...row, primaryPr: primaryPrFor(db, row.id) })),
+      };
+      if (ctx.json) return emit(ctx, command, enriched);
+      return emit(ctx, command, enriched.rows.map((r) => readySummary(boardRowSummaryInput(r), r.readinessState, r.dispatchable)));
     }
     case "tree": {
       const root = flag(flags, "root");

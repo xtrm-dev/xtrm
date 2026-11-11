@@ -1,5 +1,5 @@
 import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
-import { LinkGateService, type GateMode } from "./link-gate-service.ts";
+import { LinkGateService, type GateExemption, type GateMode } from "./link-gate-service.ts";
 import {
   ISSUE_KINDS,
   LIFECYCLE_STATES,
@@ -2024,7 +2024,7 @@ export class IssueService {
     issueId: string,
     state: LifecycleState,
     at?: number,
-    gate?: { actor?: string; linkGate?: GateMode; gateOverride?: string; exemption?: string },
+    gate?: { actor?: string; linkGate?: GateMode; gateOverride?: string; exemption?: GateExemption },
   ): ResolvedIssue {
     if (!(LIFECYCLE_STATES as readonly string[]).includes(state)) throw new Error(`unknown lifecycle state: ${state}`);
     return withTransaction(this.db, () => {

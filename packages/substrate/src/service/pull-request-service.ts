@@ -65,6 +65,7 @@ export interface UnlinkInput {
   repository: string;
   number: number;
   relation?: PrLinkRelation;
+  actor?: string;
   now?: number;
 }
 
@@ -206,11 +207,12 @@ export class PullRequestService {
         .run(now, ...params);
       const changed = Number(info.changes ?? 0);
       if (changed > 0) {
-        issues.appendEvent(input.issueId, "provenance.link_removed", {
+        issues.appendEvent(input.issueId, "provenance.link_unlinked", {
           repository: input.repository,
           number: input.number,
           relation: input.relation ?? null,
           rows: changed,
+          actor: input.actor,
         }, now);
       }
       return changed;
