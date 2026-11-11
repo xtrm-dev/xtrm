@@ -24,6 +24,8 @@
 // A claim answers "who owns this work". Readers always coexist; a live
 // claim fences mutation to its holder (+ activation when set).
 
+import { SUBSTRATE_HOLDER_ENV } from "./execution-context.ts";
+
 export interface IssueClaim {
   id: number;
   issueId: string;
@@ -57,6 +59,33 @@ export function normalizeWorkspace(input: string | WorkspaceIdentity): string {
   const key = raw.trim().replace(/\/+$/, "");
   if (!key) throw new Error("workspace must be a non-empty path");
   return key;
+}
+
+// Claim holder resolution (XTRM-722). A launched session already carries its
+// identity in SUBSTRATE_HOLDER, so the holder no longer has to be restated on
+// every claim. The flag/tool argument still wins, and resolution is the ONLY
+// place that pairing is decided: the CLI, the MCP tools and the Pi extension all
+// call it, so the surfaces cannot drift. Nothing else is ever a holder source —
+// not the unix user, not tmux, not the branch.
+export type ClaimHolderSource = "flag" | "env";
+
+export interface ClaimHolderResolution {
+  holder: string;
+  source: ClaimHolderSource;
+}
+
+export function resolveClaimHolder(
+  explicit?: string | null,
+  env: Record<string, string | undefined> = process.env,
+): ClaimHolderResolution {
+  const fromFlag = typeof explicit === "string" ? explicit.trim() : "";
+  if (fromFlag !== "") return { holder: fromFlag, source: "flag" };
+  const fromEnv = (env[SUBSTRATE_HOLDER_ENV] ?? "").trim();
+  if (fromEnv !== "") return { holder: fromEnv, source: "env" };
+  throw new Error(
+    "claim holder is required: pass the holder explicitly (--holder <name> on the CLI, holder on the MCP/Pi tools), " +
+      `or run inside an xt session that exports ${SUBSTRATE_HOLDER_ENV} (xt pi|claude|codex <name> sets it)`,
+  );
 }
 
 // Holder identity is holder + activation: the same holder under a different

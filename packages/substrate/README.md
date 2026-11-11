@@ -92,6 +92,13 @@ Mutations give explicit post-operation feedback: success, no-op, warning or
 error with remediation where the command can name one. Routine mutations do not
 ask for confirmation; destructive/batch flows may.
 
+A claim or release takes its holder from `--holder`, else from
+`SUBSTRATE_HOLDER`, which the xt launcher exports for the session. Inside an xt
+session, `sb issue claim <ref>` is enough; `--holder` is only for claiming or
+releasing on someone else's behalf. With neither set the command fails closed,
+and the output names the holder and its source. The Claude MCP and Pi claim
+tools apply the same rule.
+
 Run `sb --help` or `sb <group> <verb> --help`. Help is part of the product
 contract and is side-effect-free.
 

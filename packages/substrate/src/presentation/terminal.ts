@@ -450,7 +450,13 @@ export function feedbackForCommand(command: string, args: string[], data: Record
     case "issue.attest":
       return successFeedback("issue_attested", `Attested ${issueRefFromArgs(args) ?? ref} as ${String(data.outcome ?? "unknown")}`, data.policy ? `policy ${String(data.policy)}` : undefined);
     case "issue.claim":
-      return successFeedback("issue_claimed", `Claimed ${issueRefFromArgs(args) ?? ref}`, data.holder ? `holder ${String(data.holder)}` : undefined);
+      return successFeedback(
+        "issue_claimed",
+        `Claimed ${issueRefFromArgs(args) ?? ref}`,
+        data.holder
+          ? `holder ${String(data.holder)} (${data.holderSource === "env" ? "from SUBSTRATE_HOLDER" : "from --holder"})`
+          : undefined,
+      );
     case "issue.release":
       return data.released === false
         ? noopFeedback("claim_absent", `No live claim was released for ${issueRefFromArgs(args) ?? ref}`)

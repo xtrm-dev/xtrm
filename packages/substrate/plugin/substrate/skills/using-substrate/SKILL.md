@@ -50,7 +50,12 @@ resume_capsule
 Important grouped semantics:
 
 - `issue_claim` is op-discriminated (`claim|release`). A claim says who owns the
-  work; it does not create readiness or narrate progress.
+  work; it does not create readiness or narrate progress. `holder` defaults to
+  `SUBSTRATE_HOLDER`, which the xt launcher exports for the session: inside an
+  xt session `sb issue claim <ref>` (or the tool without `holder`) is enough, and
+  an explicit holder is only for claiming or releasing on someone else's behalf.
+  With neither set the claim fails closed; there is no implicit unix-user
+  holder. The same default applies on the CLI and the Pi surface.
 - `issue_update` changes authorized Issue fields. Revision-bearing changes stale
   readiness; never use it for progress/findings/results.
 - `issue_note`, `journal_append`, and `journal_checkpoint` write continuity.

@@ -99,6 +99,12 @@ not from the compacted chat transcript.
 ## Mutation authority
 
 A Pi session bound to an Issue may edit/write only under its own live claim.
+`substrate_issue_claim` takes its holder from the explicit `holder` argument,
+else from `SUBSTRATE_HOLDER`, which the xt launcher exports for the session:
+inside an xt session the argument is optional, and an explicit holder is only for
+claiming on someone else's behalf. With neither set the claim fails closed; there
+is no implicit unix-user holder. The CLI `sb issue claim <ref>` follows the same
+rule.
 Substrate provides no workspace-exclusion guarantee (XTRM-414): per-issue claim
 fencing is the only mutation authority here; workspace exclusion is owned by
 the specialists activation layer. Unbound sessions are not implicitly bound to

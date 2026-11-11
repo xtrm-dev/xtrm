@@ -10,7 +10,7 @@ import type { Summarizer } from "../../src/service/journal-service.ts";
 import type { StoreCall } from "./backing.ts";
 import { isTransportFailure } from "../../src/service/operations.ts";
 import { isJournalKind, type SemanticCheckpoint } from "../../src/domain/journal.ts";
-import { sameHolder } from "../../src/domain/claim.ts";
+import { resolveClaimHolder, sameHolder } from "../../src/domain/claim.ts";
 import { currentExecutionContext, enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
 import type { ResolvedIssue } from "../../src/domain/issue.ts";
 // Type-only: erased at compile time, so this module stays free of runtime Pi imports.
@@ -178,17 +178,26 @@ export async function toolIssueSearch(
 export async function toolIssueClaim(
   backing: StoreCall,
   bindings: SessionBindings,
-  params: { ref: string; holder: string; activationId?: string; ttlMs?: number; sessionId?: string },
+  params: { ref: string; holder?: string; activationId?: string; ttlMs?: number; sessionId?: string },
 ): Promise<Record<string, unknown>> {
   const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
+  // Same resolver as the CLI and MCP (XTRM-722): an explicit holder wins, else
+  // the session's own SUBSTRATE_HOLDER, else fail closed.
+  const resolvedHolder = resolveClaimHolder(params.holder);
   const claim = await backing.call<{ issueId: string; holder: string; expiresAt: number; generation: number }>(
     "issue.claimIssue",
-    { issueId: resolved.id, holder: params.holder, activationId: params.activationId, ttlMs: params.ttlMs },
+    { issueId: resolved.id, holder: resolvedHolder.holder, activationId: params.activationId, ttlMs: params.ttlMs },
   );
   if (params.sessionId) {
-    bindings.bind(params.sessionId, resolved.id, { holder: params.holder, activationId: params.activationId });
+    bindings.bind(params.sessionId, resolved.id, { holder: resolvedHolder.holder, activationId: params.activationId });
   }
-  return { issueId: claim.issueId, holder: claim.holder, expiresAt: claim.expiresAt, generation: claim.generation };
+  return {
+    issueId: claim.issueId,
+    holder: claim.holder,
+    holderSource: resolvedHolder.source,
+    expiresAt: claim.expiresAt,
+    generation: claim.generation,
+  };
 }
 
 export async function toolIssueUpdate(

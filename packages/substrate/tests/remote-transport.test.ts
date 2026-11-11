@@ -323,6 +323,25 @@ describe("remote execution passthrough", () => {
     assert.equal(fake.calls()[0]?.env.holder, "holder-probe-pc");
   });
 
+  it("carries SUBSTRATE_HOLDER to a remote claim that states no holder", () => {
+    // The CLI resolves the holder from the environment on whichever side runs
+    // it: a forwarded claim crosses with no --holder argument, and the remote
+    // executor forwards SUBSTRATE_HOLDER to the server process, so the same
+    // resolver there claims as the session (XTRM-722).
+    const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+    assert.ok(CLIENT_KEY);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
+    const outcome = forwardCli(["issue", "claim", "XTRM-722", "--json"], {
+      env: remoteEnv(fake.clientConfigPath, { SUBSTRATE_HOLDER: "holder-remote" }),
+      transport: localTransport(),
+    });
+    assert.ok(outcome);
+    assert.equal(outcome.code, 0, outcome.stderr);
+    const call = fake.calls()[0];
+    assert.equal(call?.env.holder, "holder-remote", "the session holder reaches the server process");
+    assert.equal(call?.argv.includes("--holder"), false, "no holder argument is needed on the wire");
+  });
+
   it("uploads every document flag, whether its value is a file or inline JSON", () => {
     // The live probe caught this: --mechanical was not in the upload list, so
     // the server read a path that does not exist there and reported it as bad

@@ -97,6 +97,26 @@ sb provenance --help
 `edit` help teaches Issue-vs-Journal methodology; `close` names outcomes/reason
 and evidence refs; list/browser help teaches the human-only filtering model.
 
+## Claim holder
+
+`sb issue claim` and `sb issue release` take their holder from `--holder` when it
+is given, and otherwise from `SUBSTRATE_HOLDER`, which the xt launcher already
+exports for the session (`xt pi|claude|codex <name>`). Inside an xt session,
+
+```bash
+sb issue claim XTRM-123
+```
+
+is enough. Pass `--holder` only to claim or release on someone else's behalf;
+releasing another holder's claim still requires it. With neither `--holder` nor
+a non-empty `SUBSTRATE_HOLDER` the command fails closed with a message naming
+both ways to supply the holder — there is no implicit unix-user holder. The
+claim output names the holder it used and whether it came from the flag or the
+environment. The same rule applies to the Claude MCP `issue_claim` tools, the Pi
+`substrate_issue_claim` tool, and a remotely forwarded claim (the remote
+executor forwards `SUBSTRATE_HOLDER`, so the server-side claim resolves it the
+same way).
+
 ## Session precedence
 
 Journal `append`/`checkpoint` and provenance `dispatch` accept `--session`.

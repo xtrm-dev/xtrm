@@ -42,6 +42,7 @@ import { JournalService } from "../src/service/journal-service.ts";
 import type { JournalOperationalContext } from "../src/service/journal-service.ts";
 import { ClosureService } from "../src/service/closure-service.ts";
 import { CLOSURE_OUTCOMES, isClosureOutcome } from "../src/domain/closure.ts";
+import { resolveClaimHolder } from "../src/domain/claim.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
@@ -503,8 +504,17 @@ parent_child is structural and not exposed here.`,
   "issue.unrelate": `usage: sb issue unrelate --from <ref> --to <ref> --kind <blocks|relates_to|discovered_from|supersedes|duplicates> [--project <id>]
 
 deactivates the active edge between the endpoints for the given kind.`,
-  "issue.claim": `usage: sb issue claim <ref> --holder <who> [--ttl-ms <n>] [--activation <id>] [--project <id>]`,
-  "issue.release": `usage: sb issue release <ref> --holder <who> [--activation <id>] [--project <id>]`,
+  "issue.claim": `usage: sb issue claim <ref> [--holder <who>] [--ttl-ms <n>] [--activation <id>] [--project <id>]
+
+--holder defaults to SUBSTRATE_HOLDER, the holder an xt session exports for
+itself (xt pi|claude|codex <name> sets it). Pass --holder only to claim on
+someone else's behalf. With neither --holder nor a non-empty SUBSTRATE_HOLDER
+the claim fails closed; there is no implicit unix-user holder.`,
+  "issue.release": `usage: sb issue release <ref> [--holder <who>] [--activation <id>] [--project <id>]
+
+--holder defaults to SUBSTRATE_HOLDER, so a session releases its own claim
+without restating the name. Releasing another holder's claim still requires
+the explicit flag, and the same fail-closed rule applies when neither is set.`,
   "issue.close": `usage: sb issue close <ref> --outcome <completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned> --reason <r> [--actor <who>] [--participant <id>] [--run <id>] [--activation <id>] [--attempt <id>] [--result <a,b>] [--receipt <a,b>] [--validation <a,b>] [--artifact <a,b>] [--project <id>]
 
 writes an immutable Closure row (outcome, reason, actor, session, revision/hash, refs) and rests on done (cancelled for the cancelled outcome). Bare \`sb issue close <ref>\` stays the legacy lifecycle alias (no Closure invented).
@@ -1555,21 +1565,33 @@ function runIssue(
     }
     case "claim": {
       const ref = needRef(rest);
-      const holder = flag(flags, "holder") ?? (() => { throw new Error("--holder is required"); })();
+      // The holder comes from --holder, else the ambient SUBSTRATE_HOLDER the
+      // xt launcher exported for this session (XTRM-722); neither is a silent
+      // default, so a session without identity still fails closed.
+      const holder = resolveClaimHolder(flag(flags, "holder"));
       const ttl = flag(flags, "ttl-ms");
       const resolved = refInContext(svc, flags, ref);
-      const claim = svc.claimIssue(resolved.id, holder, {
+      const claim = svc.claimIssue(resolved.id, holder.holder, {
         activationId: flag(flags, "activation"),
         ttlMs: ttl !== undefined ? Number(ttl) : undefined,
       });
-      return emit(ctx, command, { issueId: claim.issueId, holder: claim.holder, expiresAt: claim.expiresAt, generation: claim.generation });
+      return emit(ctx, command, {
+        issueId: claim.issueId,
+        holder: claim.holder,
+        holderSource: holder.source,
+        expiresAt: claim.expiresAt,
+        generation: claim.generation,
+      });
     }
     case "release": {
       const ref = needRef(rest);
-      const holder = flag(flags, "holder") ?? (() => { throw new Error("--holder is required"); })();
+      // Same rule as claim: a session releases its own lease without restating
+      // the name. Releasing another holder's claim still needs it, and the
+      // service keeps today's checks either way.
+      const holder = resolveClaimHolder(flag(flags, "holder"));
       const resolved = refInContext(svc, flags, ref);
-      const released = svc.releaseClaim(resolved.id, holder, { activationId: flag(flags, "activation") });
-      return emit(ctx, command, { released: released !== null });
+      const released = svc.releaseClaim(resolved.id, holder.holder, { activationId: flag(flags, "activation") });
+      return emit(ctx, command, { released: released !== null, holder: holder.holder, holderSource: holder.source });
     }
     case "state": {
       // §26 canonical lifecycle operation. --until sets/clears the
