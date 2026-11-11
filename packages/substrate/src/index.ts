@@ -21,6 +21,7 @@ export * from "./service/journal-service.ts";
 export * from "./service/resume-service.ts";
 export * from "./service/provenance-service.ts";
 export * from "./service/closure-service.ts";
+export * from "./presentation/advisories.ts";
 export * from "./projections/types.ts";
 export * as githubProjection from "./projections/github/mapping.ts";
 export * as jiraProjection from "./projections/jira/mapping.ts";

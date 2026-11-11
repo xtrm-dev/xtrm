@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Journal entry quality is checked at the write seam (XTRM-670, XTRM-724). A `note`, `finding`, `decision`, `blocker`, `milestone` or `handoff` entry with no semantic, mechanical or result payload is rejected instead of occupying a sequence number; a placeholder or under-eight-word summary is accepted with a warning naming the template, and `sb journal append` prints that warning on stderr (and returns it as `warnings` under `--json`). An unknown journal kind names the valid kinds.
 
+- Deterministic advisory catalogue (XTRM-671, XTRM-724 A2). `src/presentation/advisories.ts` is one rule set over plain Issue snapshots, so the same Substrate state yields the same nudge wherever it is shown: `evaluateIssue` for a live issue, `evaluateOperation` for a write that just happened, `selectAdvisory` for cooldowns with an injected clock, and `snapshotIssue` to build the snapshot from the services. Identity is a diagnostic only — `resolveIdentity` reads `SUBSTRATE_HOLDER` and otherwise reports nobody, and `resolveClaimHolder` (XTRM-722) remains the only holder source; worktree-name derivation is deliberately absent. Catalogue only: no hook, extension or plugin imports it yet, and wiring it up is step-12 work. Documented in `docs/advisories.md`.
+
 ---
 
 
