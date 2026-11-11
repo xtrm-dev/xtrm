@@ -143,7 +143,7 @@ closed in auto mode, and only an evidence/transport code is overridable.
 The link rows are written by the `gh` shim after `gh pr create`, from the PR body's
 `<!-- xtrm issue=<REF> ... -->` marker, fail-open. Reconcile or backfill them from the
 operator surface — `sb links check`, `sb links sync`, `sb provenance attach` and
-`sb issue link pr` (needs substrate >= 0.2.7; absent from 0.2.6). Exact flags, gate codes and
+`sb issue link pr` (needs substrate >= 0.3.0; absent from 0.2.6). Exact flags, gate codes and
 the Journal summary limit: `sb <group> <verb> --help`, and the Pi half of this skill in the
 package (`packages/substrate/skills/using-substrate/SKILL.md`).
 

@@ -113,7 +113,7 @@ database cardinality is never project context.
 
 ## Issue-to-PR links and the close gate
 
-Post-0.2.6 surface: these verbs need substrate >= 0.2.7 and are absent from 0.2.6.
+Post-0.2.6 surface: these verbs need substrate >= 0.3.0 and are absent from 0.2.6.
 `sb <group> <verb> --help` wins on drift.
 
 ```bash
