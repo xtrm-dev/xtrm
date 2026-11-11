@@ -62,6 +62,23 @@ describe("parseAllTrailers", () => {
     assert.deepEqual(parseAllTrailers(msg).issues, [{ issueId: "XTRM-1", issueRevision: null }]);
   });
 
+  it("a blank issue after a revision resets and keeps the first pair", () => {
+    const msg = ["XTRM-Issue: A", "XTRM-Issue-Revision: 1", "XTRM-Issue:", "XTRM-Issue-Revision: 9"].join("\n");
+    assert.deepEqual(parseAllTrailers(msg).issues, [{ issueId: "A", issueRevision: 1 }]);
+  });
+
+  it("a second revision for one issue keeps the first and ignores the later line", () => {
+    const msg = ["XTRM-Issue: A", "XTRM-Issue-Revision: 1", "XTRM-Issue-Revision: 2"].join("\n");
+    assert.deepEqual(parseAllTrailers(msg).issues, [{ issueId: "A", issueRevision: 1 }]);
+  });
+
+  it("rejects a revision that is not plain decimal digits", () => {
+    for (const bad of ["0x10", "-2", "1.5", "+3"]) {
+      const msg = `XTRM-Issue: A\nXTRM-Issue-Revision: ${bad}`;
+      assert.deepEqual(parseAllTrailers(msg).issues, [{ issueId: "A", issueRevision: null }], bad);
+    }
+  });
+
   it("pins the single-value parser's legacy last-wins result", () => {
     assert.equal(parseTrailers("XTRM-Issue: A\nXTRM-Issue: B\n").issueId, "B");
   });

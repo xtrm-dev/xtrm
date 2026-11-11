@@ -141,9 +141,12 @@ export function parseAllTrailers(message: string): AllTrailers {
       current = { issueId, issueRevision: null };
       raw.push(current);
     } else if (m[1] === TRAILER_REVISION) {
-      const n = Number(m[2]);
-      if (current === null || !Number.isInteger(n)) continue;
-      current.issueRevision = n;
+      // A second revision never overwrites the first; a revision that is not
+      // plain decimal digits (0x10, -2) is malformed and ignored.
+      if (current === null || current.issueRevision !== null) continue;
+      const text = m[2]!.trim();
+      if (!/^\d+$/.test(text)) continue;
+      current.issueRevision = Number(text);
     } else if (m[1] === TRAILER_RECEIPT) {
       const receipt = m[2]!.trim();
       if (receipt !== "" && !receipts.includes(receipt)) receipts.push(receipt);
