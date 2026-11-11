@@ -9,27 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Strict CLI surface and `issue renew` (XTRM-668, XTRM-724 A3). An unknown flag now fails closed and names the flag, a flag and its value glued into one argument is explained (`--parent XTRM-1` must be two arguments), a value flag given no value says so instead of reading back as absent, and extra positional text is refused instead of dropped. `sb issue renew <ref> [--holder <who>] [--ttl-ms <n>]` extends a live lease: the expiry moves, the generation does not, an expired lease must be claimed again, and `--holder` resolves through `resolveClaimHolder` (XTRM-722) exactly as claim and release do. `sb help contract`, `sb help kinds` and `sb help identity` answer the three questions operators ask most. Claim and renew confirmations print an ISO expiry with the minutes left, and a renewal reports `alreadyHeld: true` because the caller already owns the lease. `sb issue validate` reports `shapeHints` when `validation` or `output` holds a plain string instead of the expected object, and a contract nested under a `"contract"` key is refused with the fix.
-
-- One journal summary limit (XTRM-678, XTRM-724). `semantic.summary` is limited to 20,000 characters (`JOURNAL_SUMMARY_MAX`) on the CLI and on the Pi `substrate_journal_append` tool: a longer summary fails with its size and the limit and writes nothing, so supplied text is never cut. `sb journal append --summary-file <path|->` supplies long text from a file or stdin while the other `--semantic` fields still apply. Text views end a cut preview with `… (+N chars, …)` and `--json` always carries the full stored text. Host-generated text that must fit — imported provider comments, Beads history — is either stored with an explicit `[cut: N more chars of … not stored]` marker or imported as `[part i/n]` entries, with the parts of one note written in one transaction; an import that fails between creating an issue and writing its history is repaired by the next import instead of losing the notes behind the alias skip. The Claude MCP append path is unchanged: it still cuts to 2,000 characters with no marker and has no `summaryFile` equivalent; aligning it is step-12 work on the shared tool surface (XTRM-724 part B).
-
-- Journal entry quality is checked at the write seam (XTRM-670, XTRM-724). A `note`, `finding`, `decision`, `blocker`, `milestone` or `handoff` entry with no semantic, mechanical or result payload is rejected instead of occupying a sequence number; a placeholder or under-eight-word summary is accepted with a warning naming the template, and `sb journal append` prints that warning on stderr (and returns it as `warnings` under `--json`). An unknown journal kind names the valid kinds.
-
-- Deterministic advisory catalogue (XTRM-671, XTRM-724 A2). `src/presentation/advisories.ts` is one rule set over plain Issue snapshots, so the same Substrate state yields the same nudge wherever it is shown: `evaluateIssue` for a live issue, `evaluateOperation` for a write that just happened, `selectAdvisory` for cooldowns with an injected clock, and `snapshotIssue` to build the snapshot from the services. Identity is a diagnostic only — `resolveIdentity` reads `SUBSTRATE_HOLDER` and otherwise reports nobody, and `resolveClaimHolder` (XTRM-722) remains the only holder source; worktree-name derivation is deliberately absent. An instruction names only the ambient holder: with none it emits no `--holder`, and when the lease belongs to someone else it emits no re-claim or renew command at all. Catalogue only: no hook, extension or plugin imports it yet, and wiring it up is step-12 work. Documented in `docs/advisories.md`.
-
-### Changed
-
-- Beads import receipt (XTRM-724). History keys that are already stored are reported in a new `historyAlreadyStored` list instead of `notesSkipped` / `commentsSkipped`. Those two lists keep their meaning — a shape that was not ingested, because no journal was supplied or the notes field is unusable — so a clean rerun of an import no longer reads as content loss.
-
-### Fixed
-
-- `sb --db <p> issue browse` reaches the browser, and the list rewrite touches only the verb (XTRM-741). The wrapper chose the browse path from the first two argv tokens, so a global flag before the group fell through to the mutation path and the engine reported `unknown issue verb: browse`; it now dispatches on the command, like every other branch. The same rewrite scanned argv for the first `list`/`browse` token, so a kept value spelling either word (`sb issue list --project list`) was rewritten instead of the verb; it now rewrites exactly the verb position it identified.
-- A `sb issue list` failure names `issue.list` (XTRM-740). The interactive wrapper renders list and browse through the tree engine, so the engine's fail-closed flag message named `issue tree` — a command the operator never typed. The wrapper maps the substituted verb back before showing the message; the hierarchical rendering, the browse mode and the engine's allowlist are unchanged.
-
 ---
 
+## [0.3.0] - 2026-11-11
+
+> **Breaking.** `authority.remove` requires the owning `specialist` (XTRM-700, #330): an unnamed removal is refused with `bad_request` and a foreign one with `conflict`, so a service-protocol client must send it and a host that does not fails loudly on `stop()`.
+
+### Added
+- Claim and release default the holder to SUBSTRATE_HOLDER (XTRM-722) (#336) ([08e9ee9](https://github.com/xtrm-dev/xtrm/commit/08e9ee998604b2bbbdbb2a576be17eaeb73e7762))
+- Issue-to-PR links — schema, read model, dry-run scan (XTRM-726) (#340) ([a7618c0](https://github.com/xtrm-dev/xtrm/commit/a7618c09592dbfc1d68c7b0a0603f5f73fcf55c3))
+- PR-link writers — T1, mentions, T2 evidence, findings (XTRM-727) (#344) ([f5aee0d](https://github.com/xtrm-dev/xtrm/commit/f5aee0d288409adfa56c3fd9f8684d641d50a280))
+- One journal summary limit and entry quality at the write seam (XTRM-724 A1) (#338) ([b38296d](https://github.com/xtrm-dev/xtrm/commit/b38296d1299dec9f6289e5ad00c8c4c5c1eebeef))
+- One-shot PR reconciler with conditional reads (XTRM-728) (#345) ([5eeeb9b](https://github.com/xtrm-dev/xtrm/commit/5eeeb9b7de591b153763fb5b9cfc954a55285530))
+- Deterministic advisory catalogue (XTRM-724 A2) (#346) ([4300683](https://github.com/xtrm-dev/xtrm/commit/4300683926f47f49c19ece25ad96e38030d24726))
+- Strict CLI surface, issue renew and help groups (XTRM-738) (#348) ([a200e56](https://github.com/xtrm-dev/xtrm/commit/a200e565cdbe008f33433af3ffd5830aaaeab09d))
+- Close gate joins T1/T2 and links check shows verdicts (XTRM-729) (#347) ([50e21f0](https://github.com/xtrm-dev/xtrm/commit/50e21f02abd71eb7159a39b4ad622b7c95106cdc))
+- PR block, link timeline and board column (XTRM-730) (#353) ([6cbf97a](https://github.com/xtrm-dev/xtrm/commit/6cbf97a4885991369bc4da840ca84f000a2eb4dc))
+
+### Fixed
+- The Pi gate fails closed when the remote store is unreachable (XTRM-712) (#328) ([eae827d](https://github.com/xtrm-dev/xtrm/commit/eae827d8a8eaecbae9424e1ca19fd8a36844b0ea))
+- Refuse the stale local store when a remote is configured (XTRM-693) (#329) ([7f5ff35](https://github.com/xtrm-dev/xtrm/commit/7f5ff355537d312708403fab9d02bfe5135192ca))
+- Authority.remove requires the owning specialist (XTRM-700) (#330) ([7afbf79](https://github.com/xtrm-dev/xtrm/commit/7afbf79e383ff3be7cda90b944b190fea9583105))
+- Read every XTRM-Issue trailer, not only the last (XTRM-734) (#341) ([f7135b7](https://github.com/xtrm-dev/xtrm/commit/f7135b714bbe2506239def9cd6d27dd15b94df17))
+- Parse URL-form remotes in repositoryKey (XTRM-733) (#343) ([46dd2d0](https://github.com/xtrm-dev/xtrm/commit/46dd2d0bea481cda05526942cc513884f45dae10))
+- A list failure names the verb the operator typed (XTRM-740) (#352) ([c745a72](https://github.com/xtrm-dev/xtrm/commit/c745a720925f84e7446bdb5bb161da5b3c8b3ccd))
+- Browse dispatch and the list rewrite use one command notion (XTRM-741) (#354) ([3f76ca3](https://github.com/xtrm-dev/xtrm/commit/3f76ca38fcbd9d357a1cb9fad76c7bba7f4e9392))
+- Align pi-dependent packages with pi 1.5.2 (XTRM-743) (#358) ([420f57f](https://github.com/xtrm-dev/xtrm/commit/420f57fd5a8fafe7296ccea46badc6837c2a6d59))
+
+### Other changes
+- The Pi journal tool carries the entry text (#339) ([4701efb](https://github.com/xtrm-dev/xtrm/commit/4701efbb9b52b2e69edb3a3513e595a61dea19f7))
+
+### Performance
+- One store connection per Pi session (XTRM-711) (#327) ([c375d1b](https://github.com/xtrm-dev/xtrm/commit/c375d1b5995d196196373df91ebe0ea0cdce00d9))
+
+### Project maintenance
+- README describes what actually landed (XTRM-739) (#351) ([8ab3a7d](https://github.com/xtrm-dev/xtrm/commit/8ab3a7d834397da208f7ac14993f13c5ccaed690))
+- The rewrite examples use values that reach the rewrite (XTRM-741) (#355) ([7b214aa](https://github.com/xtrm-dev/xtrm/commit/7b214aae06b96e4dd6ca38771f684dc76b2bfeaa))
+- Register temp dirs and remove them after the suite (CORE-2612) (#356) ([714fc4a](https://github.com/xtrm-dev/xtrm/commit/714fc4ab1d0440e9917d1a184af874c5646e56f3))
+
+---
 
 ## [0.2.6] - 2026-11-06
 
