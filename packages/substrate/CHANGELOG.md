@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Deterministic advisory catalogue (XTRM-671, XTRM-724 A2). `src/presentation/advisories.ts` is one rule set over plain Issue snapshots, so the same Substrate state yields the same nudge wherever it is shown: `evaluateIssue` for a live issue, `evaluateOperation` for a write that just happened, `selectAdvisory` for cooldowns with an injected clock, and `snapshotIssue` to build the snapshot from the services. Identity is a diagnostic only — `resolveIdentity` reads `SUBSTRATE_HOLDER` and otherwise reports nobody, and `resolveClaimHolder` (XTRM-722) remains the only holder source; worktree-name derivation is deliberately absent. Catalogue only: no hook, extension or plugin imports it yet, and wiring it up is step-12 work. Documented in `docs/advisories.md`.
 
+### Changed
+
+- Beads import receipt (XTRM-724). History keys that are already stored are reported in a new `historyAlreadyStored` list instead of `notesSkipped` / `commentsSkipped`. Those two lists keep their meaning — a shape that was not ingested, because no journal was supplied or the notes field is unusable — so a clean rerun of an import no longer reads as content loss.
+
 ---
 
 

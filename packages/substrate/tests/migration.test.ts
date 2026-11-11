@@ -61,7 +61,7 @@ type ReceiptV3 = {
     created: string[]; skippedPresent: string[]; edgeErrors: string[]; unready: string[];
     hierarchyApplied: Array<{ parent: string; child: string }>; hierarchyErrors: string[]; depFailures: string[];
     edgesFromInline: number; edgesFromFile: number;
-    notesApplied: string[]; notesSkipped: string[]; commentsApplied: string[]; commentsSkipped: string[];
+    notesApplied: string[]; notesSkipped: string[]; commentsApplied: string[]; commentsSkipped: string[]; historyAlreadyStored: string[];
     closeReasonCarried: string[]; closeReasonMissing: string[];
   };
   counts: { created: number; skipped: number; edgeRowsBefore: number; edgeRowsAfter: number };
@@ -822,9 +822,14 @@ describe("XTRM-678 Beads history limit: parts are one batch and a failed batch r
       assert.match(rows[0]!.semantic!.summary, /^\[part 1\/2\] /);
       assert.match(rows[1]!.semantic!.summary, /^\[part 2\/2\] /);
       // The same note on a rerun appends nothing and is not half-skipped.
-      importBeads(svc, "prj_parts", [record], [], { journal: spy });
+      const rerun = importBeads(svc, "prj_parts", [record], [], { journal: spy });
       assert.deepEqual(calls, [2], "a rerun finds every part present and appends none");
       assert.equal(real.listEntries(issueId, { kind: "note" }).length, 2);
+      // "Already stored" is its own receipt field: a clean rerun must not look
+      // like it failed to ingest a shape (6pgu LOW on #338).
+      assert.deepEqual(rerun.notesSkipped, [], "a stored note is not a skipped shape");
+      assert.deepEqual(rerun.commentsSkipped, []);
+      assert.deepEqual(rerun.historyAlreadyStored, ["beads-note:b-long"], "the key is reported as already stored");
     } finally {
       db.close();
     }

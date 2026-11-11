@@ -84,6 +84,10 @@ export interface ImportResult {
   notesSkipped: string[];
   commentsApplied: string[];
   commentsSkipped: string[];
+  // History keys that are already stored (a bead whose notes were imported by
+  // an earlier run). Kept apart from `*Skipped`, which means "this shape was not
+  // ingested" — a clean rerun must not look like it lost content.
+  historyAlreadyStored: string[];
   closeReasonCarried: string[];
   closeReasonMissing: string[];
   // -- XTRM-405 fidelity fields (all additive; the receipt schema version and
@@ -491,6 +495,7 @@ export function importBeads(
     notesSkipped: [],
     commentsApplied: [],
     commentsSkipped: [],
+    historyAlreadyStored: [],
     closeReasonCarried: [],
     closeReasonMissing: [],
     unmappedSections: [],
@@ -514,16 +519,13 @@ export function importBeads(
     if (d.source === "inline") result.depFailures.push(msg);
   }
 
+  const journal = opts?.journal;
   // Historical intake: notes + comments -> journal kind "note" with beads
   // provenance refs. Contract text is never polluted. Dedup by existence check
   // on the beads marker so a rerun never doubles entries, and a failed batch
   // that left the issue without its history is repaired by the next import
   // instead of being lost behind the alias skip (XTRM-678).
-  const journal = opts?.journal;
   function writeHistory(beadsId: string, issueId: string, r: BeadsIssueRecord): void {
-    // Historical intake: notes + comments -> journal kind "note" with beads
-    // provenance refs. Contract text is never polluted. Dedup by existence
-    // check on the beads marker so a rerun never doubles entries.
     const noteTexts: Array<{ key: string; text: string; author: string | null; createdAt: string | null }> = [];
     // notes is a string in real `bd export` output; array-form (or any other
     // present-but-unhandled shape) must never vanish silently — ingest what
@@ -582,8 +584,7 @@ export function importBeads(
     }
     for (const n of noteTexts) {
       if (existing.has(n.key)) {
-        if (n.key.startsWith("beads-note:")) result.notesSkipped.push(beadsId);
-        else result.commentsSkipped.push(n.key);
+        result.historyAlreadyStored.push(n.key);
         continue;
       }
       // XTRM-678: history longer than the summary limit is split into parts,
