@@ -9,7 +9,7 @@
 import type { Summarizer } from "../../src/service/journal-service.ts";
 import type { StoreCall } from "./backing.ts";
 import { isTransportFailure } from "../../src/service/operations.ts";
-import { isJournalKind, type SemanticCheckpoint } from "../../src/domain/journal.ts";
+import { JOURNAL_SUMMARY_MAX, isJournalKind, type SemanticCheckpoint } from "../../src/domain/journal.ts";
 import { resolveClaimHolder, sameHolder } from "../../src/domain/claim.ts";
 import { currentExecutionContext, enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
 import type { ResolvedIssue } from "../../src/domain/issue.ts";
@@ -214,11 +214,28 @@ export async function toolIssueUpdate(
   return { ...summary(edited.issue), revisionCreated: edited.created };
 }
 
+// XTRM-720: a caller-supplied body travels the same path as `sb issue note`.
+// A non-result kind carries the text as its semantic summary; a result kind
+// carries the same text as its bounded result summary. Absent means an
+// explicitly text-less entry, never a silently dropped one.
+function journalSummaryText(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") throw new Error("journal summary must be a string");
+  if (value.trim() === "") {
+    throw new Error("journal summary must not be blank (omit it for a text-less entry)");
+  }
+  if (value.length > JOURNAL_SUMMARY_MAX) {
+    throw new Error(`journal summary must be at most ${JOURNAL_SUMMARY_MAX} characters (got ${value.length})`);
+  }
+  return value;
+}
+
 export async function toolJournalAppend(
   backing: StoreCall,
   params: {
     ref: string;
     kind: string;
+    summary?: string;
     sessionId?: string;
     participantId?: string;
     activationId?: string;
@@ -227,11 +244,19 @@ export async function toolJournalAppend(
   },
 ): Promise<Record<string, unknown>> {
   if (!isJournalKind(params.kind)) throw new Error(`unknown journal kind: ${params.kind}`);
+  const summary = journalSummaryText(params.summary);
+  const body =
+    summary === undefined
+      ? {}
+      : params.kind === "result"
+        ? { result: { summary } }
+        : { semantic: { summary } };
   const resolved = await backing.call<{ id: string }>("issue.resolveRef", { ref: params.ref });
   const entry = await backing.call<{ id: string; sequence: number; kind: string }>("journal.appendEntry", {
     issueId: resolved.id,
     input: {
       kind: params.kind,
+      ...body,
       sessionId: params.sessionId,
       participantId: params.participantId,
       activationId: params.activationId,
@@ -244,7 +269,7 @@ export async function toolJournalAppend(
       }),
     },
   });
-  return { entryId: entry.id, sequence: entry.sequence, kind: entry.kind };
+  return { entryId: entry.id, sequence: entry.sequence, kind: entry.kind, summary: summary ?? null };
 }
 
 export async function toolJournalCheckpoint(

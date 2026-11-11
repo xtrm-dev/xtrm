@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
+import { JOURNAL_SUMMARY_MAX } from "../src/domain/journal.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { openBacking, type Backing } from "../integrations/pi/backing.ts";
@@ -146,6 +147,45 @@ describe("tool surface over the typed service", () => {
       assert.equal(trace.revision, 2);
       assert.ok(Array.isArray(trace.bindings));
       assert.ok(Array.isArray(trace.receipts));
+    } finally {
+      svc.close();
+      await backing.close();
+    }
+  });
+
+  it("journal append persists supplied text end-to-end (XTRM-720)", async () => {
+    const { dbPath, svc, backing } = setup();
+    try {
+      const id = readyIssue(svc);
+      const text = "handoff: the Pi journal tool now carries entry text\nline two stays verbatim";
+      const appended = await toolJournalAppend(backing, { ref: "PI-1", kind: "handoff", summary: text, sessionId: "sess-1" });
+      assert.equal(appended["summary"], text);
+      const stored = svc.journal.getEntry(appended["entryId"] as string);
+      assert.deepEqual(stored.semantic, { summary: text }, "same storage as sb issue note");
+
+      // A kind-only append stays valid and is explicitly text-less, not silently empty.
+      const kindOnly = await toolJournalAppend(backing, { ref: "PI-1", kind: "milestone", sessionId: "sess-1" });
+      assert.equal(kindOnly["summary"], null);
+      assert.equal(svc.journal.getEntry(kindOnly["entryId"] as string).semantic, null);
+
+      // A result kind carries the text in its bounded result payload.
+      const resultAppend = await toolJournalAppend(backing, { ref: "PI-1", kind: "result", summary: "shipped the field", sessionId: "sess-1" });
+      assert.equal(svc.journal.getEntry(resultAppend["entryId"] as string).result?.summary, "shipped the field");
+
+      // No silent data loss: blank and oversize text fail the call and write nothing.
+      const before = svc.journal.listEntries(id).length;
+      await assert.rejects(toolJournalAppend(backing, { ref: "PI-1", kind: "note", summary: "   ", sessionId: "sess-1" }), /must not be blank/);
+      await assert.rejects(
+        toolJournalAppend(backing, { ref: "PI-1", kind: "note", summary: "x".repeat(JOURNAL_SUMMARY_MAX + 1), sessionId: "sess-1" }),
+        /at most \d+ characters/,
+      );
+      assert.equal(svc.journal.listEntries(id).length, before, "a rejected append writes nothing");
+
+      // sb journal show renders the persisted line (the operator-facing surface).
+      const shown = spawnSync(process.execPath, [CLI, "--db", dbPath, "journal", "show", "PI-1"], { encoding: "utf8" });
+      assert.equal(shown.status, 0, shown.stderr);
+      assert.match(shown.stdout, /summary: handoff: the Pi journal tool now carries entry text/);
+      assert.doesNotMatch(shown.stdout, /summary: milestone/, "a text-less entry renders no summary line");
     } finally {
       svc.close();
       await backing.close();
