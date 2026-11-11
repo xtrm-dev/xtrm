@@ -194,27 +194,17 @@ export function SourceBadge({ source }: { source: DataSource }) {
   );
 }
 
-// --- Surface header -------------------------------------------------------
+// --- Surface toolbar ------------------------------------------------------
 
 /** Console toolbar: one row of 28px controls above a surface. The surface below owns its rule. */
-export function SurfaceToolbar({ children }: { children: ReactNode }) {
-  return <div className="flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1.5 px-1.5 py-1.5">{children}</div>;
+export function SurfaceToolbar({ children }: { children?: ReactNode }) {
+  return <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1.5 px-1.5 py-1.5">{children}</div>;
 }
 
 /** 28px toolbar control. `TOOLBAR_REST` carries a resting surface; `TOOLBAR_GHOST` is for tabs. */
 export const TOOLBAR_CONTROL = "flex h-7 items-center gap-1 rounded-md px-1.5 text-xs outline-none transition-colors";
 export const TOOLBAR_REST = "bg-pressed text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
 export const TOOLBAR_GHOST = "text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
-
-export function SurfaceHeader({ title, meta, children }: { title: ReactNode; meta?: ReactNode; children?: ReactNode }) {
-  return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border-muted px-4">
-      <h1 className="truncate text-base font-medium text-ink">{title}</h1>
-      {meta && <div className="flex min-w-0 items-center gap-2 text-sm text-ink-faint">{meta}</div>}
-      <div className="ml-auto flex items-center gap-1">{children}</div>
-    </header>
-  );
-}
 
 /** "just now" / "4d ago"; absolute dates stay as-is. */
 export function ago(iso: string | number | null): string {

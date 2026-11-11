@@ -5,7 +5,7 @@ import { activityRef, eventTitle } from "../shell/Inspector.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, SurfaceHeader, relativeTime } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, SurfaceToolbar, relativeTime } from "../ui/primitives.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 
 const ICON: Record<RepoEvent["kind"], IconName> = {
@@ -63,16 +63,11 @@ export function ActivitySurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Repository activity">
-      <SurfaceHeader
-        title="Activity"
-        meta={
-          <>
-            <span>{repo.fullName}</span>
-            <SourceBadge source={github.source} />
-            {events.data && <span className="tabular">{events.data.length} events</span>}
-          </>
-        }
-      >
+      <SurfaceToolbar>
+        <span className="truncate text-[11px] text-ink-faint">{repo.fullName}</span>
+        <SourceBadge source={github.source} />
+        {events.data && <span className="text-[11px] text-ink-faint tabular">{events.data.length} events</span>}
+        <div className="ml-auto" />
         <OptionsMenu
           label="Activity options"
           items={[
@@ -80,7 +75,7 @@ export function ActivitySurface() {
             { label: "Open on GitHub", icon: "external", onSelect: () => void window.open(`https://github.com/${repo.fullName}`, "_blank", "noreferrer") },
           ]}
         />
-      </SurfaceHeader>
+      </SurfaceToolbar>
       <GithubNotice repo={repo.fullName} />
       {body}
     </section>

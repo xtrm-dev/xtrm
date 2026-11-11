@@ -217,3 +217,9 @@ Grocery list of deviations from the plan above:
 - **Research is not deferred.** Its Experiments and Recent Runs surfaces are implemented (`src/surfaces/ResearchSurface.tsx`), so the row renders enabled and reveals its four section rows while the route is active — contrary to the brief's "non developed yet" note.
 - **CI/CD, Specialists and Skills** are deferred rows that navigate to `DeferredSurface` placeholders (`/code/ci`, `/specialists`, `/skills`), matching the existing deferred convention.
 - **`RepoSection.label`** is now `"Workspace" | "GitHub" | "System"`; `Destination` gained an optional `path` so a row can be mode-level (`/program`, `/agents`) or repository-scoped, with `destinationHref()` resolving either.
+
+## 11. Console chrome is one band (XTRM-636, XTRM-637)
+
+Every surface now opens with the same 40px band: `SurfaceToolbar` renders one row of 28px controls at `px-1.5 py-1.5` with `min-h-10`, so a toolbar with a `SourceBadge` and one without measure the same. Tables keep a 32px header row with a single rule beneath it and flush 32px rows; `SurfaceHeader` (the 48 px title band) is deleted, so the old chrome cannot return by accident.
+
+Toolbar tokens live in `src/ui/primitives.tsx`: `TOOLBAR_CONTROL` (28px geometry), `TOOLBAR_REST` (resting `bg-pressed` fill, brighter on hover), `TOOLBAR_GHOST` (tabs and secondary actions). A surface title no longer repeats in the body — the sidebar row that opened it names it.
