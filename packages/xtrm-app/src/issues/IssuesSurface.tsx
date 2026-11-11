@@ -39,8 +39,19 @@ const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "righ
   { key: "updated", label: "Updated", width: "5.5rem", align: "right" },
 ];
 const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
-const CELL_EDGE = "flex h-full min-w-0 items-center border-r border-border-subtle last:border-r-0";
+const CELL_EDGE = "flex h-full min-w-0 items-center";
 const CELL = `${CELL_EDGE} px-2`;
+/** Toolbar controls: 28px tall, 12px text, ghost until they carry a value. */
+const CONTROL = "flex h-7 items-center gap-1 rounded-md px-1.5 text-xs outline-none transition-colors";
+const GHOST = "text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
+
+function filterTrigger(value: string | null, label: string) {
+  return (
+    <button type="button" className={cx(CONTROL, GHOST, value !== null && "bg-hover text-ink")}>
+      {value ?? label} <Icon name="chevronDown" size="xs" className="text-ink-faint" />
+    </button>
+  );
+}
 
 export function IssuesSurface() {
   const { repo, inspect, inspected } = useShell();
@@ -119,13 +130,13 @@ export function IssuesSurface() {
         minWidth="20rem"
         getKey={(r) => r.issue.id}
         header={
-          <div role="row" data-testid="issues-table-head" className="grid h-8 shrink-0 rounded-t-lg bg-deep" style={{ ...tableVars, ...GRID }}>
+          <div role="row" data-testid="issues-table-head" className="grid h-8 shrink-0 border-b border-border-subtle" style={{ ...tableVars, ...GRID }}>
             {COLUMNS.map((c) => (
               <div key={c.key} role="columnheader" aria-sort={sort.key === c.key ? (sort.desc ? "descending" : "ascending") : "none"} className={CELL_EDGE}>
                 <button
                   type="button"
                   onClick={() => setSort((s) => ({ key: c.key, desc: s.key === c.key ? !s.desc : defaultDesc(c.key) }))}
-                  className={cx("flex h-full w-full items-center gap-0.5 overflow-hidden px-2 text-xs font-medium outline-none hover:text-ink focus-visible:bg-hover", sort.key === c.key ? "text-ink" : "text-ink-faint", c.align === "right" && "justify-end")}
+                  className={cx("flex h-full w-full items-center gap-1 overflow-hidden px-2 text-[11px] font-normal outline-none hover:text-ink focus-visible:bg-hover", sort.key === c.key ? "text-ink" : "text-ink-faint", c.align === "right" && "justify-end")}
                 >
                   <span className={cx("flex w-3.5 shrink-0", c.align === "right" && "order-first")}>
                     {sort.key === c.key && <Icon name="chevronDown" size="xs" className={cx("transition-transform", !sort.desc && "rotate-180")} />}
@@ -144,73 +155,71 @@ export function IssuesSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="XTRM Issues">
-      <div className="flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 px-2 py-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1.5 px-1.5 py-1.5">
         <SourceBadge source={substrate.source} />
-        <div className="flex items-center gap-2">
-          {canWrite && project && (
-            <button
-              type="button"
-              onClick={() => setCreating(true)}
-              className="flex h-8 items-center gap-1.5 rounded-md bg-accent-soft px-3 text-sm font-medium text-accent-ink outline-none hover:bg-accent/20 focus-visible:ring-2 focus-visible:ring-accent/40"
-            >
-              <Icon name="plus" size="xs" /> New issue
-            </button>
-          )}
-          <OptionsMenu
-            label={statusFilter === null ? "Status" : statusFilter}
-            trigger={<button type="button" className="flex h-8 items-center gap-1 rounded-md bg-hover px-2.5 text-sm text-ink outline-none hover:bg-pressed">{statusFilter === null ? "Status" : statusFilter} <Icon name="chevronDown" size="xs" className="text-ink-faint" /></button>}
-            items={[
-              { label: "All statuses", onSelect: () => setStatusFilter(null) },
-              { label: "open", onSelect: () => setStatusFilter("open") },
-              { label: "claimed", onSelect: () => setStatusFilter("claimed") },
-              { label: "deferred", onSelect: () => setStatusFilter("deferred") },
-              { label: "done", onSelect: () => setStatusFilter("done") },
-            ]}
-          />
-          <OptionsMenu
-            label={priorityFilter === null ? "Priority" : `P${priorityFilter}`}
-            trigger={<button type="button" className="flex h-8 items-center gap-1 rounded-md bg-hover px-2.5 text-sm text-ink outline-none hover:bg-pressed">{priorityFilter === null ? "Priority" : `P${priorityFilter}`} <Icon name="chevronDown" size="xs" className="text-ink-faint" /></button>}
-            items={[
-              { label: "All priorities", onSelect: () => setPriorityFilter(null) },
-              ...[0, 1, 2, 3, 4].map((p) => ({ label: `P${p}`, onSelect: () => setPriorityFilter(p) })),
-            ]}
-          />
-          <OptionsMenu
-            label={typeFilter === null ? "Type" : typeFilter}
-            trigger={<button type="button" className="flex h-8 items-center gap-1 rounded-md bg-hover px-2.5 text-sm text-ink outline-none hover:bg-pressed">{typeFilter === null ? "Type" : typeFilter} <Icon name="chevronDown" size="xs" className="text-ink-faint" /></button>}
-            items={[
-              { label: "All types", onSelect: () => setTypeFilter(null) },
-              ...["task", "bug", "feature", "epic", "chore", "decision"].map((t) => ({ label: t, onSelect: () => setTypeFilter(t) })),
-            ]}
-          />
-          <OptionsMenu
-            label="Order by"
-            trigger={<button type="button" className="flex h-8 items-center gap-1 rounded-md bg-hover px-2.5 text-sm text-ink outline-none hover:bg-pressed">Order by <Icon name="chevronDown" size="xs" className="text-ink-faint" /></button>}
-            items={[
-              { label: "Updated", icon: "chevronDown", onSelect: () => setSort({ key: "updated", desc: true }) },
-              { label: "Priority", icon: "chevronDown", onSelect: () => setSort({ key: "priority", desc: false }) },
-              { label: "Key", icon: "chevronDown", onSelect: () => setSort({ key: "key", desc: false }) },
-            ]}
-          />
-          <div className="flex h-8 items-center gap-1.5 rounded-md bg-hover px-2.5 focus-within:bg-pressed">
-            <Icon name="search" size="xs" className="text-ink-faint" />
-            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search" aria-label="Search issues" className="w-32 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint" />
-          </div>
-          <div role="radiogroup" aria-label="Layout" className="flex h-8 items-center rounded-md bg-hover p-0.5">
-            {(["list", "board"] as const).map((l) => (
-              <IconButton key={l} icon={l} label={l === "list" ? "List" : "Board"} role="radio" aria-checked={layout === l} active={layout === l} onClick={() => setLayout(l)} className="size-7" />
-            ))}
-          </div>
-          <OptionsMenu
-            label="Issue list options"
-            items={[
-              { label: "Refresh", icon: "live", onSelect: () => void issues.refetch() },
-              { label: "Copy link", icon: "link", onSelect: () => copy(window.location.href) },
-              { label: "Expand all", icon: "maximize", onSelect: () => setCollapsed(new Set()) },
-              { label: "Collapse all", icon: "restore", onSelect: () => setCollapsed(new Set(tree.filter((r) => r.hasChildren).map((r) => r.issue.ref))) },
-            ]}
-          />
+        {canWrite && project && (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-ink outline-none transition-colors hover:bg-hover focus-visible:bg-hover"
+          >
+            <Icon name="plus" size="xs" /> New issue
+          </button>
+        )}
+        <OptionsMenu
+          label={statusFilter === null ? "Status" : statusFilter}
+          trigger={filterTrigger(statusFilter, "Status")}
+          items={[
+            { label: "All statuses", onSelect: () => setStatusFilter(null) },
+            { label: "open", onSelect: () => setStatusFilter("open") },
+            { label: "claimed", onSelect: () => setStatusFilter("claimed") },
+            { label: "deferred", onSelect: () => setStatusFilter("deferred") },
+            { label: "done", onSelect: () => setStatusFilter("done") },
+          ]}
+        />
+        <OptionsMenu
+          label={priorityFilter === null ? "Priority" : `P${priorityFilter}`}
+          trigger={filterTrigger(priorityFilter === null ? null : `P${priorityFilter}`, "Priority")}
+          items={[
+            { label: "All priorities", onSelect: () => setPriorityFilter(null) },
+            ...[0, 1, 2, 3, 4].map((p) => ({ label: `P${p}`, onSelect: () => setPriorityFilter(p) })),
+          ]}
+        />
+        <OptionsMenu
+          label={typeFilter === null ? "Type" : typeFilter}
+          trigger={filterTrigger(typeFilter, "Type")}
+          items={[
+            { label: "All types", onSelect: () => setTypeFilter(null) },
+            ...["task", "bug", "feature", "epic", "chore", "decision"].map((t) => ({ label: t, onSelect: () => setTypeFilter(t) })),
+          ]}
+        />
+        <OptionsMenu
+          label="Order by"
+          trigger={filterTrigger(null, "Order by")}
+          items={[
+            { label: "Updated", icon: "chevronDown", onSelect: () => setSort({ key: "updated", desc: true }) },
+            { label: "Priority", icon: "chevronDown", onSelect: () => setSort({ key: "priority", desc: false }) },
+            { label: "Key", icon: "chevronDown", onSelect: () => setSort({ key: "key", desc: false }) },
+          ]}
+        />
+        <div className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-ink-faint transition-colors hover:bg-hover focus-within:bg-hover">
+          <Icon name="search" size="xs" className="text-ink-faint" />
+          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search" aria-label="Search issues" className="w-36 bg-transparent text-xs text-ink outline-none placeholder:text-ink-faint" />
         </div>
+        <div role="radiogroup" aria-label="Layout" className="ml-auto flex h-7 items-center rounded-sm p-0.5">
+          {(["list", "board"] as const).map((l) => (
+            <IconButton key={l} icon={l} label={l === "list" ? "List" : "Board"} role="radio" aria-checked={layout === l} active={layout === l} onClick={() => setLayout(l)} className="size-6" />
+          ))}
+        </div>
+        <OptionsMenu
+          label="Issue list options"
+          items={[
+            { label: "Refresh", icon: "live", onSelect: () => void issues.refetch() },
+            { label: "Copy link", icon: "link", onSelect: () => copy(window.location.href) },
+            { label: "Expand all", icon: "maximize", onSelect: () => setCollapsed(new Set()) },
+            { label: "Collapse all", icon: "restore", onSelect: () => setCollapsed(new Set(tree.filter((r) => r.hasChildren).map((r) => r.issue.ref))) },
+          ]}
+        />
       </div>
       {body}
       {project && <NewIssueDialog open={creating} onOpenChange={setCreating} projectId={project.id} onCreated={(ref) => inspect({ kind: "issue", ref })} />}
