@@ -15,16 +15,23 @@ import { runCli } from "../cli/sb.ts";
 import { engineArgsForList, runUxCli } from "../cli/sb-ux.ts";
 import { contract } from "./helpers.ts";
 
-function board(): { dir: string; dbPath: string; db: ReturnType<typeof openSubstrate>; svc: IssueService; parent: string; child: string } {
+function board(...titles: string[]): { dir: string; dbPath: string; db: ReturnType<typeof openSubstrate>; svc: IssueService; parent: string; child: string } {
   const dir = mkdtempSync(join(tmpdir(), "sb-list-verb-"));
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);
   svc.createProject({ id: "prj_xtrm", prefix: "XTRM", name: "t" });
-  const parent = svc.createIssue({ projectId: "prj_xtrm", title: "parent", kind: "epic", contract: contract(), scrutiny: "LOW", authoredBy: "t" });
+  const parent = svc.createIssue({
+    projectId: "prj_xtrm",
+    title: titles[0] ?? "parent",
+    kind: "epic",
+    contract: contract(),
+    scrutiny: "LOW",
+    authoredBy: "t",
+  });
   const child = svc.createIssue({
     projectId: "prj_xtrm",
-    title: "child",
+    title: titles[1] ?? "child",
     kind: "task",
     contract: contract(),
     scrutiny: "LOW",
@@ -136,10 +143,16 @@ describe("XTRM-741: the rewrite moves the verb and nothing else", () => {
   // Only the verb is rewritten. Scanning for the first `list`/`browse` token
   // anywhere in argv rewrote flag values: `sb issue browse --search list`
   // searched for "tree".
+  // The values that can still be in argv are the ones parseWrapperArgs keeps:
+  // --db and --project. It consumes --search, --status, --all and --flat before
+  // the rewrite runs, so an example using --search would describe a path that
+  // does not exist. `--project list` is the real hazard: the old rewrite took
+  // the first "list" token, which was the value, and renamed it.
   const cases: Array<[string[], string[], string]> = [
-    [["issue", "browse", "--search", "list"], ["issue", "tree", "--search", "list"], "a search term spelling a verb is left alone"],
-    [["issue", "browse", "--search", "browse"], ["issue", "tree", "--search", "browse"], "even when the term is the other verb"],
-    [["--db", "/tmp/x", "issue", "list", "--search", "browse"], ["--db", "/tmp/x", "issue", "tree", "--search", "browse"], "a leading global flag does not shift the rewrite"],
+    [["issue", "browse", "--project", "list"], ["issue", "tree", "--project", "list"], "a kept --project value spelling a verb is left alone"],
+    [["issue", "list", "--project", "browse"], ["issue", "tree", "--project", "browse"], "even when the value is the other verb"],
+    [["--db", "/tmp/list", "issue", "list"], ["--db", "/tmp/list", "issue", "tree"], "a --db path spelling a verb is left alone"],
+    [["--project", "list", "issue", "browse"], ["--project", "list", "issue", "tree"], "a leading kept value does not shift the rewrite"],
     [["issue", "list", "--status", "ready"], ["issue", "tree", "--status", "ready"], "filters pass through unchanged"],
     [["issue", "show", "XTRM-1"], ["issue", "show", "XTRM-1"], "a verb that is not list/browse is never rewritten"],
     [["project", "list"], ["project", "tree"], "the rewrite is positional, not verb-name based"],
@@ -149,6 +162,25 @@ describe("XTRM-741: the rewrite moves the verb and nothing else", () => {
       assert.deepEqual(engineArgsForList(input), expected);
     });
   }
+});
+
+describe("XTRM-741: --search is consumed by the wrapper, not rewritten", () => {
+  it("still filters the board by the term the operator typed", async () => {
+    const w = board("list renderer", "other");
+    const held = process.env["SUBSTRATE_PROJECT"];
+    process.env["SUBSTRATE_PROJECT"] = "prj_xtrm";
+    try {
+      const res = await runUxCli(["--db", w.dbPath, "--plain", "issue", "list", "--search", "list"], { isTTY: false });
+      assert.equal(res.code, 0, res.stderr);
+      assert.match(res.stdout, /list renderer/, "the matching issue is listed");
+      assert.ok(!res.stdout.includes("other"), `the filter still applies: ${res.stdout}`);
+    } finally {
+      if (held === undefined) delete process.env["SUBSTRATE_PROJECT"];
+      else process.env["SUBSTRATE_PROJECT"] = held;
+      w.db.close();
+      rmSync(w.dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("XTRM-741: a global flag before the group still reaches the browser", () => {
