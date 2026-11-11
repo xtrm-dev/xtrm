@@ -122,6 +122,14 @@ export function applyIdentityArguments(argv = process.argv) {
     identity = {};
     parsed = false;
   }
+  // XTRM-722: the caller's session is the only identity source. Delete what this
+  // process inherited before applying the wire values — the rule `sb serve`
+  // already follows (src/service/serve.ts:261-263): a server login shell that
+  // exports SUBSTRATE_HOLDER must never decide a holder, so a client with no
+  // holder leaves the key absent and a claim fails closed with the local message
+  // instead of claiming as the server. Absence is a real value here: the other
+  // identity keys behave the same way.
+  for (const name of IDENTITY_KEYS) delete process.env[name];
   for (const name of IDENTITY_KEYS) {
     const value = identity[name];
     if (typeof value === "string" && value !== "") process.env[name] = value;

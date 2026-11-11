@@ -112,10 +112,19 @@ releasing another holder's claim still requires it. With neither `--holder` nor
 a non-empty `SUBSTRATE_HOLDER` the command fails closed with a message naming
 both ways to supply the holder — there is no implicit unix-user holder. The
 claim output names the holder it used and whether it came from the flag or the
-environment. The same rule applies to the Claude MCP `issue_claim` tools, the Pi
-`substrate_issue_claim` tool, and a remotely forwarded claim (the remote
-executor forwards `SUBSTRATE_HOLDER`, so the server-side claim resolves it the
-same way).
+environment: `issue claim` adds `holder` and `holderSource` (`"flag"` or `"env"`)
+to its `data`, and a release answer carries `released` plus the resolved `holder`
+and `holderSource`. The Claude MCP `issue_claim` tools and the Pi
+`substrate_issue_claim` tool resolve the same way and report `holderSource` too.
+
+A remotely forwarded `issue claim` or `issue release` resolves on the client
+before anything is sent: with neither the flag nor the client's
+`SUBSTRATE_HOLDER` the client fails closed with the message above, otherwise the
+explicit flag crosses as the flag or the client's `SUBSTRATE_HOLDER` crosses and
+overrides the server's. The remote MCP server applies the same rule at launch —
+it deletes any identity it inherited from the server's own environment before it
+applies the caller's `--identity` — so a server-side `SUBSTRATE_HOLDER` cannot
+decide a holder on either remote path.
 
 ## Session precedence
 

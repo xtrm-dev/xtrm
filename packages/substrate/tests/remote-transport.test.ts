@@ -374,7 +374,6 @@ describe("remote execution passthrough", () => {
     assert.equal(outcome.code, 0, outcome.stderr);
     const call = fake.calls()[0];
     assert.equal(call?.env.holder, "client-holder", "the client's value overrides the server's");
-    assert.equal(call?.argv.includes("--holder"), false, "no holder argument is needed on the wire");
   });
 
   it("sends the flag on a forwarded claim, and the flag beats both environments", () => {

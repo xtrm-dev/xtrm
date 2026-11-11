@@ -12,6 +12,7 @@ import { runCli } from "../cli/sb.ts";
 import { resolveClaimHolder } from "../src/domain/claim.ts";
 import { buildServer } from "../integrations/claude-code/mcp-server.ts";
 import { SessionBindings, toolIssueClaim } from "../integrations/pi/handlers.ts";
+import type { StoreCall } from "../integrations/pi/backing.ts";
 import { contract } from "./helpers.ts";
 
 // XTRM-722: the claim holder defaults to the session's own SUBSTRATE_HOLDER.
@@ -323,6 +324,31 @@ describe("Pi substrate_issue_claim holder default (XTRM-722)", () => {
       } finally {
         await backing.close();
       }
+    });
+    assert.equal(storedHolder(s.dbPath, s.humanRef), "pi-session-holder");
+  });
+
+  it("resolves in the Pi process and sends the holder explicitly over the backing", async () => {
+    // The remote Pi path is a typed-service call, and the far side strips its own
+    // ambient identity (sb serve). The holder must therefore be resolved HERE and
+    // travel as a claim argument, never as something the server could invent.
+    await withEnvAsync("pi-session-holder", async () => {
+      const local = createLocalService(s.dbPath, "test");
+      const sent: Array<{ op: string; args: Record<string, unknown> }> = [];
+      const backing: StoreCall = {
+        async call<T>(op: string, args: Record<string, unknown> = {}): Promise<T> {
+          sent.push({ op, args });
+          return local.call<T>(op, args);
+        },
+      };
+      try {
+        await toolIssueClaim(backing, new SessionBindings(), { ref: s.humanRef, sessionId: "sess-remote" });
+      } finally {
+        await local.close();
+      }
+      const claim = sent.find((entry) => entry.op === "issue.claimIssue");
+      assert.ok(claim, "the claim travels as a typed-service call");
+      assert.equal(claim.args["holder"], "pi-session-holder", "the resolved holder is an explicit argument, not server-side state");
     });
     assert.equal(storedHolder(s.dbPath, s.humanRef), "pi-session-holder");
   });
