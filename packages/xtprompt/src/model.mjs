@@ -5,7 +5,7 @@
  * and interactive state; every call into the Pi SDK lives here so the CLI and
  * future adapters share one runtime surface.
  *
- * Pin: @earendil-works/pi-coding-agent ^1.0.0. Verified against pi 1.0.0:
+ * Pin: @earendil-works/pi-coding-agent ^1.5.2. Verified against pi 1.5.2:
  * ModelRuntime.create/getModel/getAvailable/hasConfiguredAuth/completeSimple,
  * SettingsManager.create/getDefaultProvider/getDefaultModel, resolveCliModel.
  */

@@ -1,7 +1,7 @@
 /**
  * Live binding: one AgentSessionRuntime driving the FrameShell.
  *
- * Event law (Pi 1.3.0): `agent_end` is informational (retries/queue may
+ * Event law (Pi 1.5.2): `agent_end` is informational (retries/queue may
  * follow); `agent_settled` is the final notification-only boundary and the
  * SOLE frame-close signal. `prompt()` while streaming is rejected by Pi, so
  * the shell only submits new frames when idle.
