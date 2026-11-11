@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.1] - 2026-11-11
+
+### Fixed
+- Delivery-close wording and links check help (CORE-2623 follow-up) (#365) ([d80b9cf](https://github.com/xtrm-dev/xtrm/commit/d80b9cf5cd375cd5828f95e40c0d20a894ce9e04))
+- Typebox is a peer dependency the pi host supplies (XTRM-749) ([3cd06dc](https://github.com/xtrm-dev/xtrm/commit/3cd06dc6acde716b6b249982d20cf95b75a53d0e))
+- Links check --json exits like text mode (XTRM-749) ([7bf758e](https://github.com/xtrm-dev/xtrm/commit/7bf758e6e4d01952efb4c884716301b562d7b7ae))
+- Links help matches the code it describes (XTRM-749) ([43041ad](https://github.com/xtrm-dev/xtrm/commit/43041adeac7ad67509eab7c2f940d6c2083ff4ad))
+
+### Project maintenance
+- Links, close gate, holder default, journal limits (CORE-2623) (#364) ([a96ee0b](https://github.com/xtrm-dev/xtrm/commit/a96ee0b4a82f7ce6a37105e1ca8139628a7e5b50))
+
+---
+
 ## [0.3.0] - 2026-11-11
 
 > **Breaking.** `authority.remove` requires the owning `specialist` (XTRM-700, #330): an unnamed removal is refused with `bad_request` and a foreign one with `conflict`, so a service-protocol client must send it and a host that does not fails loudly on `stop()`.

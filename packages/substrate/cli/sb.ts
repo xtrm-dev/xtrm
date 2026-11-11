@@ -392,9 +392,9 @@ per-verb help: sb issue create --help  |  sb help issue create`;
 
 const COMMAND_HELP: Record<string, string> = {
   top: HELP_TOP,
-  "links.sync": `usage: sb links sync [<pr>] [--project <id>] [--repo <owner/name>] [--limit <n>] [--since <ISO>] [--dry-run]
+  "links.sync": `usage: sb links sync [<pr>] [--project <id>] [--repo <owner/name>] [--limit <n>] [--since <ISO>] [--dry-run] [--holder <name>]
 
-  One-shot reconciler: conditional gh reads, pull_requests state, trailer-first links (727 writers), title/branch/body mentions. --since records source=backfill. Writes nothing with --dry-run.`,
+  One-shot reconciler: conditional gh reads, pull_requests state, trailer-first links (727 writers), title/branch/body mentions. --since records source=backfill. Writes nothing with --dry-run. --holder defaults to SUBSTRATE_HOLDER and is the actor recorded on what the run changes.`,
   "issue.link": `usage: sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>]... [--commits-range <base>..<head>] [--holder <name>]
 
   Writes a persisted mention (source=explicit) or, with --commit/--commits-range, the T2 evidence from the commits' XTRM-Issue trailers. Never deletes; never claims created_from without a valid receipt.`,
@@ -830,7 +830,8 @@ the contract to narrate history.`,
   "links.check": `usage: sb links check [--issue <ref>] [--project <id>] [--repo owner/name] [--limit <n>] [--link-gate warn|enforce|off] [--dry-run]
 
 Read-only. Without --issue, lists T2 candidates: PR commits whose XTRM-Issue
-trailer names an Issue in this project (requires --repo). With --issue, prints
+trailer names an Issue in this project. The scan uses --repo, or the current gh
+repository when --repo is absent. With --issue, prints
 the manual and auto gate verdicts and their codes, and exits 1 only when the
 mode is enforce and the manual verdict is not pass. --dry-run is accepted and
 writes nothing.`,
@@ -1261,11 +1262,16 @@ function runLinks(
     auto: gate.evaluate(issue.id, { mode: "auto" }),
   }));
   if (issueFlag !== undefined) {
-    const payload = { issue: verdicts[0], gateMode };
-    if (ctx.json) return emit(ctx, command, payload);
     const v = verdicts[0]!;
+    // XTRM-749: the exit status is the whole point of `--link-gate enforce`, so
+    // it is computed before the output branch. emit() hard-codes code 0 for the
+    // JSON envelope, which used to swallow the failure and let an enforcing
+    // pipeline pass on a refusing verdict.
+    const code = gateMode === "enforce" && v.manual.verdict !== "pass" ? 1 : 0;
+    const payload = { issue: v, gateMode };
+    if (ctx.json) return { ...emit(ctx, command, payload), code };
     return {
-      code: gateMode === "enforce" && v.manual.verdict !== "pass" ? 1 : 0,
+      code,
       stdout: [
         `LINKS CHECK — ${v.issue}`,
         `manual: ${v.manual.verdict}${v.manual.codes.length ? " " + v.manual.codes.join(", ") : ""}`,
@@ -1345,7 +1351,7 @@ function runLinks(
 // names the offender instead of silently dropping operator intent.
 const GLOBAL_FLAGS = ["db", "json"];
 
-const FLAG_ALLOWLIST: Record<string, string[]> = {
+export const FLAG_ALLOWLIST: Record<string, string[]> = {
   "serve.stdio": ["stdio"],
   "issue.create": ["project", "title", "kind", "contract", "parent", "priority", "scrutiny"],
   "issue.show": [],

@@ -4,7 +4,7 @@ Substrate is XTRM's durable work authority: a library-first Issue graph over
 SQLite/WAL with a terminal-native `sb` CLI plus first-party Pi and Claude
 integrations.
 
-Current package version: **0.3.0**. Published copies ship JavaScript and support
+Current package version: **0.3.1**. Published copies ship JavaScript and support
 Node ≥24 and Bun ≥1.3; a source checkout runs the TypeScript entrypoints
 directly.
 

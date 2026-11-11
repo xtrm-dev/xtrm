@@ -1,6 +1,7 @@
-// Issue-to-PR links, slice 1 (XTRM-726): migration 013, the read model and
-// the `sb links check --dry-run` candidate scan. No writers exist yet, so the
-// tests insert rows directly and prove the constraints and the read order.
+// Issue-to-PR links (XTRM-726, XTRM-727, XTRM-730): migration 013, the read
+// model, the `sb links check` scan and the link gate. Writers arrived with
+// XTRM-727, so these tests use the services directly for the write paths and
+// still insert rows directly where the storage constraint is the subject.
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -13,7 +14,7 @@ import { PullRequestService } from "../src/service/pull-request-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { parseAllTrailers } from "../src/domain/provenance.ts";
-import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
+import { runCli, SCHEMA_VERSION, FLAG_ALLOWLIST } from "../cli/sb.ts";
 import { contract, tempDir } from "./helpers.ts";
 
 function scratch() {
@@ -295,6 +296,33 @@ describe("links help", () => {
     assert.notEqual(bare.code, 0);
     assert.match(bare.stderr, /\|links\|/);
     rmSync(helpDir, { recursive: true, force: true });
+  });
+
+  // XTRM-749: the shipped help described the first slice of this feature long
+  // after the gate and the writers landed, so an operator read "--dry-run is the
+  // only mode" while `--issue` and `--link-gate` were the flags that mattered.
+  // The allowlist is the authority for what a command accepts; every flag it
+  // permits must appear in that command's help.
+  it("documents every flag the strict allowlist accepts", () => {
+    const dir = tempDir("substrate-pr-links-help-");
+    const db = join(dir, "state.db");
+    for (const command of ["check", "sync"] as const) {
+      const allowed = FLAG_ALLOWLIST[`links.${command}`];
+      assert.ok(allowed !== undefined && allowed.length > 0, `no allowlist entry for links.${command}`);
+      const res = runCli(["--db", db, "links", command, "--help"]);
+      assert.equal(res.code, 0, res.stderr);
+      for (const flag of allowed) {
+        assert.match(res.stdout, new RegExp(`--${flag}(?![a-z-])`), `sb links ${command} --help omits --${flag}`);
+      }
+    }
+    const check = runCli(["--db", db, "links", "check", "--help"]);
+    assert.doesNotMatch(check.stdout, /Slice 1|slice 1/, "the slice-1 wording outlived the implementation");
+    assert.doesNotMatch(check.stdout, /--dry-run is the only mode/, "check is read-only with or without --dry-run");
+    // sb.ts resolves the repository from `gh repo view` when --repo is absent, so
+    // the help must not claim --repo is required.
+    assert.doesNotMatch(check.stdout, /\(requires --repo\)/, "--repo is a fallback, not a requirement");
+    assert.match(check.stdout, /or the current gh\s+repository/, "the gh fallback is what the code does");
+    rmSync(dir, { recursive: true, force: true });
   });
 });
 
