@@ -1,8 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
@@ -27,14 +26,14 @@ import {
   toPiCompaction,
 } from "../integrations/pi/handlers.ts";
 import { discoverIssueRef } from "../integrations/claude-code/runtime.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 // A command the ssh shim below runs instead of a login: the same binary the
 // repository ships, pointed at a scratch store that stands in for a server's.
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "cli", "sb.ts");
 
 function setup() {
-  const dir = mkdtempSync(join(tmpdir(), "substrate-pi-"));
+  const dir = tempDir("substrate-pi-");
   const dbPath = join(dir, "state.db");
   // Seeding stays on the concrete services: the handlers are what moves to the
   // typed service, and a seeding helper that went through it would test itself.
@@ -545,7 +544,7 @@ describe("lifecycle: compact mid-execution, resume restores contract + checkpoin
 
 describe("journal service seam untouched", () => {
   it("compactionCheckpoint fallback contract still holds", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-pi-"));
+    const dir = tempDir("substrate-pi-");
     const db = openSubstrate(join(dir, "s.db"));
     const issues = new IssueService(db);
     issues.createProject({ id: "prj_x", prefix: "X", name: "x" });
@@ -560,7 +559,7 @@ describe("journal service seam untouched", () => {
 
 describe("the backing picks the store the configuration names (XTRM-691)", () => {
   function remoteFixture(): { dir: string; dbPath: string; configPath: string; shimDir: string } {
-    const dir = mkdtempSync(join(tmpdir(), "pi-remote-"));
+    const dir = tempDir("pi-remote-");
     const dbPath = join(dir, "server.db");
     const repo = join(dir, "repo");
     spawnSync("git", ["init", "-q", repo]);

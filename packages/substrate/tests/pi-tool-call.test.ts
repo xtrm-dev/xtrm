@@ -5,14 +5,13 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import registerSubstrate from "../integrations/pi/extension.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 const ENV_KEYS = ["SUBSTRATE_DB", "SUBSTRATE_ISSUE_REF", "SUBSTRATE_ISSUE", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"];
 
@@ -63,7 +62,7 @@ describe("Pi tool_call edit/write gate (live wired handler)", () => {
       prior[k] = process.env[k];
       delete process.env[k];
     }
-    dir = mkdtempSync(join(tmpdir(), "substrate-pi-gate-"));
+    dir = tempDir("substrate-pi-gate-");
     dbPath = join(dir, "state.db");
     const db = openSubstrate(dbPath);
     try {

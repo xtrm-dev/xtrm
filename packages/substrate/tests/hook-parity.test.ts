@@ -4,15 +4,14 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 import { evaluateEditState, handleCommitCheck, handleEditGate, handleStopGate, isGitCommit } from "../integrations/claude-code/index.ts";
 import { handlePreCompact } from "../integrations/claude-code/precompact.ts";
 import { handleSessionStart } from "../integrations/claude-code/session-start.ts";
@@ -20,7 +19,7 @@ import { SessionBindings, evaluateEditGate as piEditGate, evaluateStopContinuity
 import { discoverIssueRef } from "../integrations/claude-code/runtime.ts";
 
 function scratch() {
-  const dir = mkdtempSync(join(tmpdir(), "substrate-parity-"));
+  const dir = tempDir("substrate-parity-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);

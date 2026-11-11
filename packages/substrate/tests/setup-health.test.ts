@@ -4,9 +4,9 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tempDir } from "./helpers.ts";
 import { checkClaudePlugin, checkPiExtension, fullCheck, installPlan, probeInstalledPlugins } from "../integrations/setup.ts";
 
 const PKG_ROOT = new URL("..", import.meta.url).pathname;
@@ -27,14 +27,14 @@ describe("integration setup contract (xtrm-6qu.6)", () => {
   });
 
   it("claude check fails closed on an empty dir", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-setup-"));
+    const dir = tempDir("sb-setup-");
     const checks = checkClaudePlugin(dir);
     assert.ok(checks.some((c) => !c.ok), "empty dir must fail");
     assert.ok(checks.every((c) => typeof c.name === "string" && typeof c.ok === "boolean"));
   });
 
   it("pi check fails closed on an empty dir", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-setup-pi-"));
+    const dir = tempDir("sb-setup-pi-");
     assert.ok(checkPiExtension(dir).some((c) => !c.ok), "empty dir must fail");
   });
 
@@ -46,7 +46,7 @@ describe("integration setup contract (xtrm-6qu.6)", () => {
   });
 
   it("§7 naming probe flags duplicate substrate plugins", () => {
-    const home = mkdtempSync(join(tmpdir(), "sb-naming-"));
+    const home = tempDir("sb-naming-");
     mkdirSync(join(home, ".claude", "plugins"), { recursive: true });
     writeFileSync(
       join(home, ".claude", "plugins", "installed_plugins.json"),
@@ -61,7 +61,7 @@ describe("integration setup contract (xtrm-6qu.6)", () => {
   });
 
   it("naming probe surfaces stale beads marketplaces", () => {
-    const home = mkdtempSync(join(tmpdir(), "sb-naming-mkt-"));
+    const home = tempDir("sb-naming-mkt-");
     mkdirSync(join(home, ".claude", "plugins"), { recursive: true });
     writeFileSync(
       join(home, ".claude", "plugins", "known_marketplaces.json"),

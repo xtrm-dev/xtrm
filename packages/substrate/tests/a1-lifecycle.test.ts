@@ -4,14 +4,13 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 function setupDb(): string {
-  const dir = mkdtempSync(join(tmpdir(), "sb-a1-"));
+  const dir = tempDir("sb-a1-");
   return join(dir, "state.db");
 }
 
@@ -43,7 +42,7 @@ function mutFail(dbPath: string, argv: string[]): string {
 }
 
 function seed(dbPath: string): { a: string; b: string } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-a1c-"));
+  const dir = tempDir("sb-a1c-");
   const c = join(dir, "c.json");
   writeFileSync(
     c,

@@ -1,14 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { runUxCli } from "../cli/sb-ux.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 const uuid = "01a0ac95-0000-4000-8000-0000000000ab";
 const cases = [
@@ -26,7 +25,7 @@ for (const command of [["journal", "append"], ["journal", "checkpoint"], ["prove
       test(`XTRM-450 ${command.join(" ")} ${json ? "JSON" : "human"}: ${c.name}`, async () => {
         const keys = ["SUBSTRATE_PROJECT", "XTRM_SESSION_ID", "XTRM_SESSION_NAME", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID"];
         const saved = new Map(keys.map((key) => [key, process.env[key]]));
-        const dir = mkdtempSync(join(tmpdir(), "session-precedence-"));
+        const dir = tempDir("session-precedence-");
         const dbPath = join(dir, "state.db");
         const db = openSubstrate(dbPath);
         try {

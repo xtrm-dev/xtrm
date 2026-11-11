@@ -9,8 +9,6 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
@@ -23,18 +21,18 @@ import {
   type IssueQuery,
 } from "../src/domain/board.ts";
 import { runCli } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 // -- harness ----------------------------------------------------------------
 
 function tempService(): { db: DatabaseSync; svc: IssueService } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-adversarial-"));
+  const dir = tempDir("sb-adversarial-");
   const db = openSubstrate(join(dir, "state.db"));
   return { db, svc: new IssueService(db) };
 }
 
 function tempDbPath(): { dir: string; dbPath: string } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-adv-cli-"));
+  const dir = tempDir("sb-adv-cli-");
   return { dir, dbPath: join(dir, "state.db") };
 }
 

@@ -4,11 +4,9 @@
 // behavior, adoption of existing/Beads-era Projects, and fail-closed conflict
 // handling.
 
-import { describe, it, afterEach } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { openSubstrate } from "../src/store/sqlite.ts";
@@ -16,7 +14,7 @@ import { IssueService } from "../src/service/issue-service.ts";
 import { RepositoryService, RepositoryBindingConflictError } from "../src/service/repository-service.ts";
 import { deriveRepositoryIdentity, localRepositoryKey, type RepositoryIdentity } from "../src/domain/repository.ts";
 import { importBeads } from "../src/compatibility/beads/import.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 import * as m1 from "../src/store/migrations/001_baseline.ts";
 import * as m2 from "../src/store/migrations/002_projections_sync.ts";
 import * as m3 from "../src/store/migrations/003_readiness.ts";
@@ -143,18 +141,6 @@ function onPreMigrationColumns(after: Record<string, unknown[]>, before: Record<
   }
   return out;
 }
-
-const dirs: string[] = [];
-
-function tempDir(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  dirs.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
-});
 
 function setup(): { dir: string; db: ReturnType<typeof openSubstrate>; svc: IssueService; repos: RepositoryService } {
   const dir = tempDir("sb-repobind-");

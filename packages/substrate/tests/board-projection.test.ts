@@ -11,8 +11,6 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
@@ -20,7 +18,7 @@ import { JournalService } from "../src/service/journal-service.ts";
 import type { DatabaseSync } from "../src/store/database.ts";
 import { TERMINAL_LIFECYCLE, registerScrutinyPolicy } from "../src/domain/readiness.ts";
 import { BOARD_ROW_FIELDS, DEFAULT_PAGE_LIMIT, type IssueBoardRow } from "../src/domain/board.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 // -- harness ----------------------------------------------------------------
 
@@ -43,7 +41,7 @@ function countingDb(db: DatabaseSync): { db: DatabaseSync; statements: () => num
 }
 
 function tempService(): { db: DatabaseSync; svc: IssueService; dir: string } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-board-"));
+  const dir = tempDir("sb-board-");
   const db = openSubstrate(join(dir, "state.db"));
   return { db, svc: new IssueService(db), dir };
 }

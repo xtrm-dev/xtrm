@@ -4,8 +4,7 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
@@ -15,12 +14,12 @@ import { ClosureService } from "../src/service/closure-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { JOURNAL_SUMMARY_MAX } from "../src/domain/journal.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 const SHA_A = "a".repeat(40);
 
 function scratch() {
-  const dir = mkdtempSync(join(tmpdir(), "substrate-p1-"));
+  const dir = tempDir("substrate-p1-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);

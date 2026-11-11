@@ -1,20 +1,19 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SB = join(here, "..", "cli", "sb.ts");
 
 function setupDb(): { dir: string; dbPath: string; svc: IssueService } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-smoke-"));
+  const dir = tempDir("sb-smoke-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);
@@ -88,7 +87,7 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
   });
 
   it("creates a project through the CLI", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-smoke-"));
+    const dir = tempDir("sb-smoke-");
     const dbPath = join(dir, "state.db");
     const project = cli(dbPath, ["project", "create", "--prefix", "NEW", "--name", "fresh"]).data as {
       id: string; prefix: string; name: string;
@@ -301,7 +300,7 @@ describe("sb CLI smoke: create -> contract -> attest -> claim -> close", () => {
     // ends with sb.ts. Mirror npm link exactly: symlink named `sb` at the
     // real CLI (a byte copy loses the .ts target Node strips types by).
     const { dbPath } = setupDb();
-    const dir = mkdtempSync(join(tmpdir(), "sb-bin-"));
+    const dir = tempDir("sb-bin-");
     const link = join(dir, "sb");
     symlinkSync(SB, link);
     const out = execFileSync(link, ["--db", dbPath, "--json", "issue", "list", "--project", "prj_demo"], { encoding: "utf8" });

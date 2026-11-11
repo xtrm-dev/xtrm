@@ -1,13 +1,12 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 // Repository-relative project resolution (xtrm-7wc.5.6, corrected by
 // XTRM-252.2 / ADR §§4-5): precedence flag > env > repository binding >
@@ -17,7 +16,7 @@ import { contract } from "./helpers.ts";
 // real-checkout CLI test, and a freshness probe (service write -> CLI read).
 
 function setup(): { dir: string; dbPath: string; svc: IssueService; db: ReturnType<typeof openSubstrate> } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-resolve-"));
+  const dir = tempDir("sb-resolve-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   return { dir, dbPath, svc: new IssueService(db), db };
@@ -104,7 +103,7 @@ describe("project resolution (xtrm-7wc.5.6)", () => {
   });
 
   it("CLI: real git checkout links, then flagless list/show/tree/ready resolve (freshness probe)", () => {
-    const repo = mkdtempSync(join(tmpdir(), "sb-linked-"));
+    const repo = tempDir("sb-linked-");
     try {
       execFileSync("git", ["init", "-q"], { cwd: repo });
       const cli = (argv: string[]): unknown => {

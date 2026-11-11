@@ -1,14 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JOURNAL_KINDS } from "../src/domain/journal.ts";
 import { runCli } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 import {
   MCP_TOOL_DESCRIPTIONS,
   MCP_TOOL_NAMES,
@@ -57,7 +56,7 @@ describe("m1 inventory: help, descriptions, documented set", () => {
   it("every registered sb command is reachable through help", () => {
     for (const key of cliHelpKeys()) {
       if (key === "top") continue;
-      const dbPath = join(mkdtempSync(join(tmpdir(), "sb-m1-help-")), "never-created.db");
+      const dbPath = join(tempDir("sb-m1-help-"), "never-created.db");
       const res = runCli(["help", ...key.split(".")], { dbPath });
       assert.equal(res.code, 0, `sb help ${key} failed: ${res.stderr}`);
       assert.match(res.stdout, /usage:/, `sb help ${key} printed no usage`);
@@ -178,7 +177,7 @@ describe("m1 docstrings: named public durable-work APIs", () => {
 // --- Clause 4: inlineCreate project-hint parity and refusal -------------------
 
 function setupDb(): { dir: string; dbPath: string } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-m1-create-"));
+  const dir = tempDir("sb-m1-create-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);

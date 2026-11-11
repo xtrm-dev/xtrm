@@ -7,14 +7,13 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 import { handlePreCompact } from "../integrations/claude-code/precompact.ts";
 import { handlePostCompact } from "../integrations/claude-code/postcompact.ts";
 import { handleSessionStart } from "../integrations/claude-code/session-start.ts";
@@ -22,7 +21,7 @@ import { collectGitContext } from "../integrations/claude-code/git-provenance.ts
 import { summarizeMechanical } from "../integrations/claude-code/semantic-service.ts";
 
 function scratch(): { dir: string; dbPath: string; issueId: string; humanRef: string } {
-  const dir = mkdtempSync(join(tmpdir(), "substrate-claude-"));
+  const dir = tempDir("substrate-claude-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);
@@ -179,7 +178,7 @@ describe("MCP server calls the library directly (exec sb forbidden)", () => {
 
 describe("git provenance + semantic bounds", () => {
   it("collectGitContext is total on non-repos; semantic output is bounded", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-git-"));
+    const dir = tempDir("substrate-git-");
     try {
       const ctx = collectGitContext(dir);
       assert.equal(ctx.workspace, dir);

@@ -8,7 +8,7 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
@@ -16,7 +16,7 @@ import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { runCli } from "../cli/sb.ts";
 import { clipWithMarker, previewText, JOURNAL_SUMMARY_MAX } from "../src/domain/journal.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 const ENV_KEYS = ["SUBSTRATE_DB", "SUBSTRATE_PROJECT", "SUBSTRATE_ISSUE_REF", "SUBSTRATE_ISSUE", "SUBSTRATE_HOLDER", "SUBSTRATE_ACTIVATION_ID", "XTRM_SESSION_ID", "XTRM_SESSION_NAME"];
 
@@ -33,7 +33,7 @@ describe("XTRM-678 journal text limit", () => {
   beforeEach(() => {
     prior = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
     for (const k of ENV_KEYS) delete process.env[k];
-    dir = mkdtempSync(join(tmpdir(), "substrate-limit-"));
+    dir = tempDir("substrate-limit-");
     dbPath = join(dir, "state.db");
     const db = openSubstrate(dbPath);
     try {

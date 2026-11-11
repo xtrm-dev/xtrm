@@ -1,8 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { tempDir } from "./helpers.ts";
 import { runCli } from "../cli/sb.ts";
 import { CLOSURE_OUTCOMES } from "../src/domain/closure.ts";
 
@@ -12,7 +11,7 @@ import { CLOSURE_OUTCOMES } from "../src/domain/closure.ts";
 //  - `issue close` help must name the bounded --outcome vocabulary.
 
 function helpText(args: string[]): string {
-  const dbPath = join(mkdtempSync(join(tmpdir(), "sb-m1-help-")), "never-created.db");
+  const dbPath = join(tempDir("sb-m1-help-"), "never-created.db");
   const res = runCli(args, { dbPath });
   assert.equal(res.code, 0, `${args.join(" ")} failed: ${res.stderr}`);
   return res.stdout;

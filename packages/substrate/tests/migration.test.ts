@@ -1,8 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
@@ -12,7 +11,7 @@ import { ClosureService } from "../src/service/closure-service.ts";
 import { extractSectionsDetailed, importBeads } from "../src/compatibility/beads/import.ts";
 import { JOURNAL_SUMMARY_MAX } from "../src/domain/journal.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SB = join(here, "..", "cli", "sb.ts");
@@ -30,7 +29,7 @@ const EDGE_BATCH = [
 ];
 
 function setup() {
-  const dir = mkdtempSync(join(tmpdir(), "substrate-mig-"));
+  const dir = tempDir("substrate-mig-");
   const dbPath = join(dir, "state.db");
   const exportPath = join(dir, "beads.jsonl");
   writeFileSync(exportPath, EXPORT_LINES.map((l) => JSON.stringify(l)).join("\n"));
@@ -139,7 +138,7 @@ describe("G47 regression: export/import preserves revisions + graph", () => {
     assert.equal(snap.issues.length, 3);
     for (const e of snap.issues) assert.equal((e.revisions as unknown[]).length, 1);
     // Second database rebuilt from the snapshot is graph-equivalent.
-    const dir = mkdtempSync(join(tmpdir(), "substrate-mig2-"));
+    const dir = tempDir("substrate-mig2-");
     const db2Path = join(dir, "s.db");
     const db2 = openSubstrate(db2Path);
     const svc2 = new IssueService(db2);
@@ -163,7 +162,7 @@ describe("G49: the sb workflow needs no bd binary", () => {
       assert.equal(env.ok, true);
       return env.data;
     };
-    const dir = mkdtempSync(join(tmpdir(), "substrate-mig3-"));
+    const dir = tempDir("substrate-mig3-");
     const c = join(dir, "c.json");
     writeFileSync(c, JSON.stringify(contract()));
     const created = run(["issue", "create", "--project", "prj_mig", "--title", "T", "--kind", "task", "--contract", c, "--scrutiny", "LOW"]) as { humanRef: string };
@@ -175,7 +174,7 @@ describe("G49: the sb workflow needs no bd binary", () => {
 
 describe("G45: human-shaped beads IDs resolve as aliases, not dead human refs", () => {
   it("xtrm-401 style ids fall through to alias lookup", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-mig5-"));
+    const dir = tempDir("substrate-mig5-");
     const db = openSubstrate(join(dir, "s.db"));
     const svc = new IssueService(db);
     svc.createProject({ id: "prj_h", prefix: "H", name: "h" });
@@ -213,7 +212,7 @@ describe("A9 receipt parity: dry-run and apply share inputs + envelope", () => {
 describe("A9 verdict: FAIL exits nonzero with the receipt attached", () => {
   it("unknown edge endpoint fails closed with ok:false + data", () => {
     const { exportPath } = setup();
-    const dir = mkdtempSync(join(tmpdir(), "substrate-migf-"));
+    const dir = tempDir("substrate-migf-");
     const badEdges = join(dir, "bad.json");
     writeFileSync(badEdges, JSON.stringify([{ issue_id: "bd-thin", depends_on_id: "ghost", type: "blocks" }]));
     const dbPath2 = join(dir, "s.db");
@@ -230,7 +229,7 @@ describe("A9 verdict: FAIL exits nonzero with the receipt attached", () => {
 
 describe("A9 intake: inline deps authoritative; notes/comments to journal", () => {
   it("inline dependencies[] apply without --edges-file; history lands in journal", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-migi-"));
+    const dir = tempDir("substrate-migi-");
     const dbPath = join(dir, "s.db");
     const exportPath = join(dir, "beads.jsonl");
     const lines = [
@@ -285,7 +284,7 @@ describe("A9 intake: inline deps authoritative; notes/comments to journal", () =
   });
 
   it("array-form notes ingest with indexed keys; unhandled shapes count skipped", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-migi-arr-"));
+    const dir = tempDir("substrate-migi-arr-");
     const dbPath = join(dir, "s.db");
     const exportPath = join(dir, "beads.jsonl");
     const lines = [
@@ -324,7 +323,7 @@ describe("A9 intake: inline deps authoritative; notes/comments to journal", () =
 
 describe("importer unit: section mapping without the CLI", () => {
   it("PROBLEM/SUCCESS sections map; unknown edge endpoints collect errors", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-mig4-"));
+    const dir = tempDir("substrate-mig4-");
     const db = openSubstrate(join(dir, "s.db"));
     const svc = new IssueService(db);
     svc.createProject({ id: "prj_u", prefix: "U", name: "u" });
@@ -444,7 +443,7 @@ describe("XTRM-405: section extraction handles the real markdown convention", ()
 
 describe("XTRM-405: parse-blind dependency export fails the receipt", () => {
   it("a rewritten depends_on_id key produces FAIL with named unreconciled entries", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-drift-"));
+    const dir = tempDir("substrate-drift-");
     const dbPath = join(dir, "state.db");
     const fixture = join(here, "fixtures", "beads-parse-blind-dependencies.jsonl");
     const raw = readFileSync(fixture, "utf8");
@@ -478,7 +477,7 @@ describe("XTRM-405: parse-blind dependency export fails the receipt", () => {
 
 describe("XTRM-405: edge kinds are faithful and lossy mappings are declared", () => {
   it("duplicates/related map; waits-for and conditional-blocks are named unrepresentable", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-ek-"));
+    const dir = tempDir("substrate-ek-");
     const db = openSubstrate(join(dir, "state.db"));
     const svc = new IssueService(db);
     svc.createProject({ id: "prj_ek", prefix: "EK", name: "ek" });
@@ -525,7 +524,7 @@ describe("XTRM-405: edge kinds are faithful and lossy mappings are declared", ()
 
 describe("XTRM-405: source fields are recoverable without leaking into planning input", () => {
   it("labels/external_ref/assignee/started_at land in provenance, not contextRefs or ownership", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-sf-"));
+    const dir = tempDir("substrate-sf-");
     const db = openSubstrate(join(dir, "state.db"));
     const svc = new IssueService(db);
     svc.createProject({ id: "prj_sf", prefix: "SF", name: "sf" });
@@ -575,7 +574,7 @@ describe("XTRM-405: the real export structures and reconciles", () => {
       t.skip("committed board-audit export not present");
       return;
     }
-    const dir = mkdtempSync(join(tmpdir(), "substrate-real-"));
+    const dir = tempDir("substrate-real-");
     const dbPath = join(dir, "state.db");
     const env = (() => {
       const res = runCli([
@@ -643,7 +642,7 @@ describe("XTRM-406: source timestamps survive import", () => {
   const T_CLOSED = Date.parse("2026-07-02T09:15:00Z");
 
   it("pins source created/updated/closed time on the row, the spine and the Closure", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-ts-"));
+    const dir = tempDir("substrate-ts-");
     const db = openSubstrate(join(dir, "state.db"));
     const svc = new IssueService(db);
     const closures = new ClosureService(db, svc);
@@ -701,7 +700,7 @@ describe("XTRM-406: source timestamps survive import", () => {
   });
 
   it("treats a missing or malformed timestamp as absent, never as import time", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-ts2-"));
+    const dir = tempDir("substrate-ts2-");
     const db = openSubstrate(join(dir, "state.db"));
     const svc = new IssueService(db);
     svc.createProject({ id: "prj_ts2", prefix: "T2", name: "t2" });
@@ -728,7 +727,7 @@ describe("XTRM-406: source timestamps survive import", () => {
   });
 
   it("normalises a contradictory source record and reports the correction", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-ts3-"));
+    const dir = tempDir("substrate-ts3-");
     const db = openSubstrate(join(dir, "state.db"));
     const svc = new IssueService(db);
     const closures = new ClosureService(db, svc);
@@ -762,7 +761,7 @@ describe("XTRM-406: source timestamps survive import", () => {
   });
 
   it("does not expose backdating on the generic creation path", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-ts4-"));
+    const dir = tempDir("substrate-ts4-");
     const db = openSubstrate(join(dir, "state.db"));
     const svc = new IssueService(db);
     svc.createProject({ id: "prj_ts4", prefix: "T4", name: "t4" });
@@ -790,7 +789,7 @@ describe("XTRM-678 Beads history limit: parts are one batch and a failed batch r
   const LONG_NOTES = `history line\n${"x".repeat(JOURNAL_SUMMARY_MAX)}`;
 
   function ready(): { db: ReturnType<typeof openSubstrate>; svc: IssueService; real: JournalService } {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-mig-parts-"));
+    const dir = tempDir("substrate-mig-parts-");
     const db = openSubstrate(join(dir, "s.db"));
     const svc = new IssueService(db);
     svc.createProject({ id: "prj_parts", prefix: "PART", name: "p" });

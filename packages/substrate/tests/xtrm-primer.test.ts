@@ -1,9 +1,9 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tempDir } from "./helpers.ts";
 
 // XTRM-637: the matcher-free primer entry injects a condensed excerpt of the
 // GLOBAL using-xtrm and multiplexing skills, ignores any project copy, and
@@ -39,8 +39,8 @@ describe("SessionStart XTRM primer entry (XTRM-637)", () => {
   let home: string;
   let project: string;
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), "primer-home-"));
-    project = mkdtempSync(join(tmpdir(), "primer-proj-"));
+    home = tempDir("primer-home-");
+    project = tempDir("primer-proj-");
   });
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });

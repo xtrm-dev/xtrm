@@ -1,10 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tempDir } from "./helpers.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -16,7 +16,7 @@ function jsonEnv(res: { stdout: string }): { command: string; ok: boolean; data:
 
 describe("sb help/version/doctor (§28): side-effect-free surface", () => {
   it("--help exits 0 without creating a database", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-help-"));
+    const dir = tempDir("sb-help-");
     const dbPath = join(dir, "never-created.db");
     const res = runCli(["--help"], { dbPath });
     assert.equal(res.code, 0, res.stderr);
@@ -40,14 +40,14 @@ describe("sb help/version/doctor (§28): side-effect-free surface", () => {
       ["init", "--help"],
       ["help", "issue", "create"],
     ]) {
-      const res = runCli(argv, { dbPath: join(mkdtempSync(join(tmpdir(), "sb-help-")), "x.db") });
+      const res = runCli(argv, { dbPath: join(tempDir("sb-help-"), "x.db") });
       assert.equal(res.code, 0, `sb ${argv.join(" ")} failed: ${res.stderr}`);
       assert.match(res.stdout, /usage:/, `sb ${argv.join(" ")} printed no usage`);
     }
   });
 
   it("--version is parseable and side-effect free", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-ver-"));
+    const dir = tempDir("sb-ver-");
     const dbPath = join(dir, "never-created.db");
     const res = runCli(["--version"], { dbPath });
     assert.equal(res.code, 0, res.stderr);
@@ -76,7 +76,7 @@ describe("sb help/version/doctor (§28): side-effect-free surface", () => {
   });
 
   it("doctor reports healthy with parseable JSON fields", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-doc-"));
+    const dir = tempDir("sb-doc-");
     const dbPath = join(dir, "state.db");
     const savedProject = process.env["SUBSTRATE_PROJECT"];
     delete process.env["SUBSTRATE_PROJECT"];
@@ -119,7 +119,7 @@ describe("sb help/version/doctor (§28): side-effect-free surface", () => {
   });
 
   it("doctor exits nonzero with parseable JSON on corrupt state.db", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-doc-"));
+    const dir = tempDir("sb-doc-");
     const dbPath = join(dir, "corrupt.db");
     writeFileSync(dbPath, "not a database");
     const res = runCli(["--db", dbPath, "doctor", "--json"]);
@@ -130,7 +130,7 @@ describe("sb help/version/doctor (§28): side-effect-free surface", () => {
   });
 
   it("HOME=/empty real process: --help exits 0 and creates nothing", () => {
-    const parent = mkdtempSync(join(tmpdir(), "sb-empty-home-"));
+    const parent = tempDir("sb-empty-home-");
     const emptyHome = join(parent, "empty");
     assert.equal(existsSync(emptyHome), false);
     const env: Record<string, string> = { ...(process.env as Record<string, string>), HOME: emptyHome };
@@ -145,7 +145,7 @@ describe("sb help/version/doctor (§28): side-effect-free surface", () => {
   // XTRM-409: the documented `issue show` contract must name every section the
   // renderer emits, so the help text cannot drift from the rendered output again.
   it("issue show help text documents the bounded journal view the renderer emits", () => {
-    const res = runCli(["help", "issue", "show"], { dbPath: join(mkdtempSync(join(tmpdir(), "sb-help-")), "x.db") });
+    const res = runCli(["help", "issue", "show"], { dbPath: join(tempDir("sb-help-"), "x.db") });
     assert.equal(res.code, 0, res.stderr);
     for (const phrase of [
       "most recent journal entries",

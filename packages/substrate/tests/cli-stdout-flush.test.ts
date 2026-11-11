@@ -12,14 +12,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { runCli } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SB = process.env["SB_UNDER_TEST"] ?? join(here, "..", "cli", "sb.ts");
@@ -38,7 +37,7 @@ const cli = (argv: string[]): string => [process.execPath, SB, ...argv].map(quot
 let fixture: { dbPath: string; expected: string; issues: number } | null = null;
 function bigFixture(): { dbPath: string; expected: string; issues: number } {
   if (fixture) return fixture;
-  const dir = mkdtempSync(join(tmpdir(), "sb-flush-"));
+  const dir = tempDir("sb-flush-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);
@@ -83,7 +82,7 @@ describe("sb piped stdout is not truncated (XTRM-331)", () => {
 
   it("piped and file-redirected output are byte-identical", () => {
     const { dbPath, expected } = bigFixture();
-    const file = join(tmpdir(), `sb-flush-redirect-${process.pid}.json`);
+    const file = join(tempDir("sb-flush-"), "redirect.json");
     execFileSync("/bin/sh", ["-c", `${cli(LIST(dbPath))} > '${file}'`]);
     const redirected = readFileSync(file, "utf8");
     assert.equal(redirected, expected);
@@ -117,8 +116,9 @@ describe("sb piped stdout is not truncated (XTRM-331)", () => {
 
   it("an early-closing consumer does not crash the CLI or change its exit code", () => {
     const { dbPath } = bigFixture();
-    const out = join(tmpdir(), `sb-flush-head-${process.pid}.out`);
-    const err = join(tmpdir(), `sb-flush-head-${process.pid}.err`);
+    const flushDir = tempDir("sb-flush-");
+    const out = join(flushDir, "head.out");
+    const err = join(flushDir, "head.err");
     // `head -c 10` closes the read end after ten bytes, so the CLI sees EPIPE.
     // bash exposes the CLI's own status through PIPESTATUS.
     const res = spawnSync("/bin/bash", ["-c", `set -o pipefail; ${cli(LIST(dbPath))} 2>'${err}' | head -c 10 > '${out}'; echo "\${PIPESTATUS[0]}"`], {

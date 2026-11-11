@@ -1,8 +1,8 @@
 import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tempDir } from "./helpers.ts";
 import { openSubstrate } from "../src/store/sqlite.ts";
 
 const mode = (path: string): number => statSync(path).mode & 0o777;
@@ -10,7 +10,7 @@ const mode = (path: string): number => statSync(path).mode & 0o777;
 describe("openSubstrate store permissions (CORE-2381)", () => {
   const roots: string[] = [];
   const freshRoot = (): string => {
-    const root = mkdtempSync(join(tmpdir(), "sb-perm-"));
+    const root = tempDir("sb-perm-");
     roots.push(root);
     return root;
   };

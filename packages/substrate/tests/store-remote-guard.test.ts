@@ -4,13 +4,13 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tempDir } from "./helpers.ts";
 import { CANONICAL_STORE_PATH, assertStoreIsChosen, openSubstrate } from "../src/store/sqlite.ts";
 
 function withConfig(remote: string | null): { env: NodeJS.ProcessEnv; dir: string } {
-  const dir = mkdtempSync(join(tmpdir(), "store-guard-"));
+  const dir = tempDir("store-guard-");
   const configPath = join(dir, "substrate.json");
   if (remote !== null) {
     writeFileSync(configPath, JSON.stringify({ remote, remoteSb: "/usr/local/bin/sb", checkouts: {} }));

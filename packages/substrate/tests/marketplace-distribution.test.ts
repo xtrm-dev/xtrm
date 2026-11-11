@@ -1,9 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tempDir } from "./helpers.ts";
 
 // XTRM-640: the plugin is installable from GitHub through a marketplace at the
 // repository root, and Claude Code can see an update. It detects updates by the
@@ -54,7 +54,7 @@ describe("GitHub marketplace distribution (XTRM-640)", () => {
   });
 
   it("sync-plugin-version writes the package version and keeps the manifest formatting", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sync-plugin-version-"));
+    const dir = tempDir("sync-plugin-version-");
     try {
       mkdirSync(join(dir, "scripts"), { recursive: true });
       mkdirSync(join(dir, "plugin", "substrate", ".claude-plugin"), { recursive: true });

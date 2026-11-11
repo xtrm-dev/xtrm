@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
@@ -13,7 +13,7 @@ import { resolveClaimHolder } from "../src/domain/claim.ts";
 import { buildServer } from "../integrations/claude-code/mcp-server.ts";
 import { SessionBindings, toolIssueClaim } from "../integrations/pi/handlers.ts";
 import type { StoreCall } from "../integrations/pi/backing.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 // XTRM-722: the claim holder defaults to the session's own SUBSTRATE_HOLDER.
 // One resolver serves the CLI, the MCP tools and the Pi extension, so an
@@ -92,7 +92,7 @@ interface Scratch {
 }
 
 function scratch(): Scratch {
-  const dir = mkdtempSync(join(tmpdir(), "sb-holder-"));
+  const dir = tempDir("sb-holder-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);

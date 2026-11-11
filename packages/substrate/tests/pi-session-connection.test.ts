@@ -4,14 +4,13 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import registerSubstrate from "../integrations/pi/extension.ts";
 import { openBacking, type Backing } from "../integrations/pi/backing.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 interface Tool {
   name: string;
@@ -37,7 +36,7 @@ describe("one connection per Pi session", () => {
   let ref = "";
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "sb-pi-session-"));
+    dir = tempDir("sb-pi-session-");
     dbPath = join(dir, "state.db");
     const db = openSubstrate(dbPath);
     const svc = new IssueService(db);
