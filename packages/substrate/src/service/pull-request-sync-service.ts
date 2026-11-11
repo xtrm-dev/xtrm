@@ -7,6 +7,7 @@
 
 import { execFileSync } from "node:child_process";
 import type { DatabaseSync } from "../store/database.ts";
+import { withTransaction } from "../store/transactions.ts";
 import { parseAllTrailers } from "../domain/provenance.ts";
 import {
   issueRefsIn,
@@ -37,10 +38,18 @@ export interface SyncReport {
   scanned: number;
   created: number;
   mentioned: number;
-  findings: number;
+  findings: SyncFinding[];
+  findingCount: number;
   failures: number;
   skipped: number;
   truncated: number;
+}
+
+export interface SyncFinding {
+  repository: string;
+  number: number;
+  code: string;
+  detail: string;
 }
 
 interface PullRow {
@@ -77,7 +86,8 @@ export class PullRequestSyncService {
       scanned: 0,
       created: 0,
       mentioned: 0,
-      findings: 0,
+      findings: [],
+      findingCount: 0,
       failures: 0,
       skipped: 0,
       truncated: 0,
@@ -91,7 +101,9 @@ export class PullRequestSyncService {
           : this.source.list(repository, { limit });
       } catch (error) {
         report.failures += 1;
-        this.recordPrFinding(repository, input.onlyPr?.number ?? 0, "pr_unavailable", messageOf(error), now);
+        if (input.dryRun !== true) {
+          this.recordPrFinding(report, repository, input.onlyPr?.number ?? 0, "pr_unavailable", messageOf(error), now);
+        }
         continue;
       }
       for (const item of listed) {
@@ -114,7 +126,7 @@ export class PullRequestSyncService {
       });
     } catch (error) {
       report.failures += 1;
-      this.recordPrFinding(repository, number, "pr_unavailable", messageOf(error), now);
+      if (input.dryRun !== true) this.recordPrFinding(report, repository, number, "pr_unavailable", messageOf(error), now);
       return;
     }
     if (observation === "not-modified") {
@@ -123,75 +135,109 @@ export class PullRequestSyncService {
     }
     report.scanned += 1;
     let commits: PullRequestCommit[] = [];
+    let commitsOk = true;
     try {
       commits = this.source.commits(repository, number);
     } catch (error) {
+      commitsOk = false;
       report.failures += 1;
-      this.recordPrFinding(repository, number, "pr_unavailable", messageOf(error), now);
+      if (input.dryRun !== true) this.recordPrFinding(report, repository, number, "pr_unavailable", messageOf(error), now);
     }
     if (commits.length >= 250) {
       report.truncated += 1;
-      this.recordPrFinding(repository, number, "pr_commits_truncated", "PR exceeds 250 commits", now);
+      if (input.dryRun !== true) this.recordPrFinding(report, repository, number, "pr_commits_truncated", "PR exceeds 250 commits", now);
     }
     if (input.dryRun === true) {
       report.created += this.plannedTrailers(commits, input.projectId);
       report.mentioned += this.plannedMentions(observation, input.projectId);
       return;
     }
-    this.upsert(observation, now);
-    // Trailer path: group the PR's commits by the issue each one names and
-    // let 727 decide created_from versus mention+findings.
-    const byIssue = new Map<string, PullRequestCommit[]>();
-    for (const commit of commits) {
-      for (const ref of new Set(parseAllTrailers(commit.message).issues.map((i) => i.issueId))) {
-        let issueId: string;
-        try {
-          issueId = this.issues.resolveRef(ref).id;
-        } catch {
-          continue;
+    // A commit read failure leaves no etag behind: the next run must retry
+    // instead of being told 304 and skipping the links forever.
+    if (!commitsOk) return;
+    let created = 0;
+    let mentioned = 0;
+    let trailerFindings = 0;
+    try {
+      withTransaction(this.db, () => {
+        // Trailer path: group the PR's commits by the issue each one names and
+        // let 727 decide created_from versus mention+findings.
+        const byIssue = new Map<string, PullRequestCommit[]>();
+        for (const commit of commits) {
+          for (const ref of new Set(parseAllTrailers(commit.message).issues.map((i) => i.issueId))) {
+            let issueId: string;
+            try {
+              issueId = this.issues.resolveRefInProject(ref, input.projectId).id;
+            } catch {
+              continue;
+            }
+            const group = byIssue.get(issueId) ?? [];
+            group.push(commit);
+            byIssue.set(issueId, group);
+          }
         }
-        const group = byIssue.get(issueId) ?? [];
-        group.push(commit);
-        byIssue.set(issueId, group);
-      }
-    }
-    for (const [issueId, group] of byIssue) {
-      const result = this.links.linkCommits({ issueId, repository, number, commits: group, actor: input.actor, now });
-      report.created += result.created;
-      report.mentioned += result.mentioned;
-      report.findings += result.findings;
-    }
-    // Weak paths: title, branch, body. A backfill scan records source=backfill.
-    const weak = input.since ? "backfill" : null;
-    for (const [text, source] of [
-      [observation.title, "title"],
-      [observation.headRef, "branch"],
-      [observation.body, "prose"],
-    ] as Array<[string | null, Extract<PrLinkSource, "title" | "branch" | "prose">]>) {
-      for (const ref of issueRefsIn(text)) {
-        let issueId: string;
-        try {
-          issueId = this.issues.resolveRef(ref).id;
-        } catch {
-          continue;
+        for (const [issueId, group] of byIssue) {
+          const result = this.links.linkCommits({ issueId, repository, number, commits: group, actor: input.actor, now });
+          created += result.created;
+          mentioned += result.mentioned;
+          trailerFindings += result.findings;
         }
-        this.links.linkMention({
-          issueId,
-          repository,
-          number,
-          url: observation.url,
-          actor: input.actor,
-          source: (weak ?? source) as Exclude<PrLinkSource, "provenance">,
-          now,
-        });
-        report.mentioned += 1;
-      }
+        // Weak paths: title, branch, body. A backfill scan records source=backfill.
+        const weak = input.since ? "backfill" : null;
+        for (const [text, source] of [
+          [observation.title, "title"],
+          [observation.headRef, "branch"],
+          [observation.body, "prose"],
+        ] as Array<[string | null, Extract<PrLinkSource, "title" | "branch" | "prose">]>) {
+          for (const ref of issueRefsIn(text)) {
+            let issueId: string;
+            try {
+              issueId = this.issues.resolveRefInProject(ref, input.projectId).id;
+            } catch {
+              continue;
+            }
+            const mentionSource = (weak ?? source) as Exclude<PrLinkSource, "provenance">;
+            if (this.hasLiveMention(issueId, repository, number, mentionSource)) continue;
+            this.links.linkMention({
+              issueId,
+              repository,
+              number,
+              url: observation.url,
+              actor: input.actor,
+              source: mentionSource,
+              now,
+            });
+            mentioned += 1;
+          }
+        }
+        if (observation.state === "merged" && observation.mergeCommitSha !== null) {
+          this.db
+            .prepare("UPDATE issue_pr_commits SET landed_sha = ? WHERE repository = ? AND number = ? AND (landed_sha IS NULL OR landed_sha <> ?)")
+            .run(observation.mergeCommitSha, repository, number, observation.mergeCommitSha);
+        }
+        // Last: the state row carries the etag, so a 304 can only happen after
+        // the links for this observation were committed.
+        this.upsert(observation, now);
+      });
+    } catch (error) {
+      report.failures += 1;
+      this.recordPrFinding(report, repository, number, "pr_link_write_failed", messageOf(error), now);
+      return;
     }
-    if (observation.state === "merged" && observation.mergeCommitSha !== null) {
-      this.db
-        .prepare("UPDATE issue_pr_commits SET landed_sha = ? WHERE repository = ? AND number = ? AND (landed_sha IS NULL OR landed_sha <> ?)")
-        .run(observation.mergeCommitSha, repository, number, observation.mergeCommitSha);
-    }
+    report.created += created;
+    report.mentioned += mentioned;
+    report.findingCount += trailerFindings;
+  }
+
+  private hasLiveMention(issueId: string, repository: string, number: number, source: PrLinkSource): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT 1 FROM issue_pull_requests
+          WHERE issue_id = ? AND repository = ? AND number = ? AND relation = 'mentioned'
+            AND source = ? AND superseded_at IS NULL LIMIT 1`,
+      )
+      .get(issueId, repository, number, source);
+    return row !== undefined;
   }
 
   private upsert(observation: PullRequestObservation, now: number): void {
@@ -264,13 +310,14 @@ export class PullRequestSyncService {
   }
 
   /** PR-level findings live on every issue already linked to the PR. */
-  private recordPrFinding(repository: string, number: number, code: string, detail: string, now: number): void {
+  private recordPrFinding(report: SyncReport, repository: string, number: number, code: string, detail: string, now: number): void {
     const linked = this.db
       .prepare(
         `SELECT DISTINCT issue_id FROM issue_pull_requests
           WHERE repository = ? AND number = ? AND superseded_at IS NULL`,
       )
       .all(repository, number) as Array<{ issue_id: string }>;
+    report.findings.push({ repository, number, code, detail });
     for (const row of linked) {
       const duplicate = this.db
         .prepare(
@@ -284,6 +331,7 @@ export class PullRequestSyncService {
         )
         .get(row.issue_id, code, repository, number);
       if (duplicate) continue;
+      report.findingCount += 1;
       this.issues.appendEvent(row.issue_id, "provenance.link_finding", {
         code,
         repository,
@@ -297,12 +345,18 @@ export class PullRequestSyncService {
 
 export class GhCliPullRequestSource implements PullRequestSource {
   list(repository: string, opts: { limit: number }): Array<{ number: number; updatedAt: string | null }> {
-    const raw = this.run([
-      "api",
-      `repos/${repository}/pulls?state=all&sort=updated&direction=desc&per_page=${opts.limit}`,
-    ]);
-    const parsed = JSON.parse(raw) as Array<{ number: number; updated_at?: string }>;
-    return parsed.map((pr) => ({ number: pr.number, updatedAt: pr.updated_at ?? null }));
+    const out: Array<{ number: number; updatedAt: string | null }> = [];
+    for (let page = 1; out.length < opts.limit; page += 1) {
+      const perPage = Math.min(100, opts.limit - out.length);
+      const raw = this.run([
+        "api",
+        `repos/${repository}/pulls?state=all&sort=updated&direction=desc&per_page=${perPage}&page=${page}`,
+      ]);
+      const parsed = JSON.parse(raw) as Array<{ number: number; updated_at?: string }>;
+      for (const pr of parsed) out.push({ number: pr.number, updatedAt: pr.updated_at ?? null });
+      if (parsed.length < perPage) break;
+    }
+    return out;
   }
 
   get(repository: string, number: number, cache: { etag: string | null; lastModified: string | null }): PullRequestObservation | "not-modified" {

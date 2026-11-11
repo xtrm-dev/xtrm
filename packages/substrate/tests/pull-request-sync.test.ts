@@ -18,7 +18,7 @@ import type {
 class FakeSource implements PullRequestSource {
   listCalls = 0;
   getCalls = 0;
-  entries = new Map<string, { observation: PullRequestObservation; commits: PullRequestCommit[]; notModified?: boolean; fail?: boolean }>();
+  entries = new Map<string, { observation: PullRequestObservation; commits: PullRequestCommit[]; notModified?: boolean; fail?: boolean; commitsFail?: number }>();
   key(repository: string, number: number): string {
     return `${repository}#${number}`;
   }
@@ -40,7 +40,12 @@ class FakeSource implements PullRequestSource {
     return entry.observation;
   }
   commits(repository: string, number: number): PullRequestCommit[] {
-    return this.entries.get(this.key(repository, number))?.commits ?? [];
+    const entry = this.entries.get(this.key(repository, number));
+    if (entry && entry.commitsFail !== undefined && entry.commitsFail > 0) {
+      entry.commitsFail -= 1;
+      throw new Error("commits read failed");
+    }
+    return entry?.commits ?? [];
   }
 }
 
@@ -212,6 +217,67 @@ describe("pull-request reconciler", () => {
     const report = run(w);
     assert.equal(report.truncated, 1);
     assert.ok(w.links.listFindings("prj_xtrm").some((f) => f.code === "pr_commits_truncated"));
+  });
+
+  it("a commits() failure leaves no etag, and the next run recovers the links", () => {
+    const receipt = receiptFor(w);
+    w.source.put(observation(), [{ sha: "8".repeat(40), message: `XTRM-Issue: ${w.issue.humanRef}\nXTRM-Receipt: ${receipt.id}` }]);
+    w.source.entries.get("o/r#7")!.commitsFail = 1;
+    const first = run(w);
+    assert.equal(first.failures, 1);
+    assert.equal((w.db.prepare("SELECT COUNT(*) AS n FROM pull_requests").get() as { n: number }).n, 0);
+    assert.equal((w.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests").get() as { n: number }).n, 0);
+    const second = run(w);
+    assert.equal(second.created, 1);
+    assert.equal((w.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests").get() as { n: number }).n, 1);
+  });
+
+  it("a dry run writes zero events even on failures and on a 250-commit PR", () => {
+    const receipt = receiptFor(w);
+    w.source.put(observation(), [{ sha: "9".repeat(40), message: `XTRM-Issue: ${w.issue.humanRef}\nXTRM-Receipt: ${receipt.id}` }]);
+    run(w);
+    const before = w.svc.listEvents(w.issue.id).length;
+    w.source.entries.get("o/r#7")!.notModified = false;
+    w.source.entries.get("o/r#7")!.fail = true;
+    run(w, { dryRun: true });
+    assert.equal(w.svc.listEvents(w.issue.id).length, before);
+    w.source.entries.get("o/r#7")!.fail = false;
+    w.source.put(observation(), Array.from({ length: 250 }, (_, i) => ({ sha: i.toString(16).padStart(40, "0"), message: "chore" })));
+    run(w, { dryRun: true });
+    assert.equal(w.svc.listEvents(w.issue.id).length, before);
+  });
+
+  it("PR-level findings dedupe with a NULL SHA across reruns", () => {
+    const receipt = receiptFor(w);
+    w.source.put(observation(), [{ sha: "a1".repeat(20), message: `XTRM-Issue: ${w.issue.humanRef}\nXTRM-Receipt: ${receipt.id}` }]);
+    run(w);
+    w.source.entries.get("o/r#7")!.fail = true;
+    run(w);
+    run(w);
+    const findings = w.links.listFindings("prj_xtrm").filter((f) => f.code === "pr_unavailable");
+    assert.equal(findings.length, 1);
+  });
+
+  it("the trailer-path mention event carries the actor", () => {
+    w.source.put(observation(), [{ sha: "a2".repeat(20), message: `XTRM-Issue: ${w.issue.humanRef}` }]);
+    run(w);
+    const events = w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.link_mentioned");
+    assert.equal(events.length, 1);
+    assert.equal((events[0]!.payload as { actor?: string }).actor, "w");
+  });
+
+  it("report.findings names the PR even when it has no link yet", () => {
+    w.source.put(observation({ number: 99 }), []);
+    w.source.entries.get("o/r#99")!.fail = true;
+    const report = run(w);
+    assert.deepEqual(report.findings.map((f) => [f.repository, f.number, f.code]), [["o/r", 99, "pr_unavailable"]]);
+    assert.equal(report.findingCount, 0);
+  });
+
+  it("a second run does not count already-present mentions", () => {
+    w.source.put(observation({ title: "works on XTRM-1" }));
+    assert.equal(run(w).mentioned, 1);
+    assert.equal(run(w).mentioned, 0);
   });
 
   it("one-shot <pr> does not list the repository", () => {
