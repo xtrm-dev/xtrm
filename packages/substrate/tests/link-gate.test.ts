@@ -354,5 +354,14 @@ describe("close gate", () => {
     assert.deepEqual(payload.data.issue.manual.codes, [GATE_CODES.noEvidence]);
     const enforce = runCli(["--db", join(w.dir, "state.db"), "links", "check", "--issue", w.issue.humanRef, "--project", "prj_xtrm", "--link-gate", "enforce"]);
     assert.equal(enforce.code, 1);
+    // XTRM-749: the JSON envelope called emit(), which hard-codes code 0, so an
+    // enforcing pipeline read "ok" and passed on a refusing verdict while the
+    // text mode exited 1 for the same issue. Both modes must agree.
+    const enforceJson = runCli(["--db", join(w.dir, "state.db"), "--json", "links", "check", "--issue", w.issue.humanRef, "--project", "prj_xtrm", "--link-gate", "enforce"]);
+    assert.equal(enforceJson.code, 1, `JSON mode must exit like text mode: ${JSON.stringify(enforceJson)}`);
+    const enforcedPayload = JSON.parse(enforceJson.stdout) as { ok: boolean; data: { gateMode: string; issue: { manual: { verdict: string } } } };
+    assert.equal(enforcedPayload.data.gateMode, "enforce", "the envelope still carries the verdict");
+    assert.equal(enforcedPayload.data.issue.manual.verdict, "refuse");
+    assert.equal(enforcedPayload.ok, true, "a refusing verdict is a gate result, not an sb failure");
   });
 });

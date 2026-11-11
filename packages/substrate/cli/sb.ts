@@ -1261,11 +1261,16 @@ function runLinks(
     auto: gate.evaluate(issue.id, { mode: "auto" }),
   }));
   if (issueFlag !== undefined) {
-    const payload = { issue: verdicts[0], gateMode };
-    if (ctx.json) return emit(ctx, command, payload);
     const v = verdicts[0]!;
+    // XTRM-749: the exit status is the whole point of `--link-gate enforce`, so
+    // it is computed before the output branch. emit() hard-codes code 0 for the
+    // JSON envelope, which used to swallow the failure and let an enforcing
+    // pipeline pass on a refusing verdict.
+    const code = gateMode === "enforce" && v.manual.verdict !== "pass" ? 1 : 0;
+    const payload = { issue: v, gateMode };
+    if (ctx.json) return { ...emit(ctx, command, payload), code };
     return {
-      code: gateMode === "enforce" && v.manual.verdict !== "pass" ? 1 : 0,
+      code,
       stdout: [
         `LINKS CHECK — ${v.issue}`,
         `manual: ${v.manual.verdict}${v.manual.codes.length ? " " + v.manual.codes.join(", ") : ""}`,
@@ -1345,7 +1350,7 @@ function runLinks(
 // names the offender instead of silently dropping operator intent.
 const GLOBAL_FLAGS = ["db", "json"];
 
-const FLAG_ALLOWLIST: Record<string, string[]> = {
+export const FLAG_ALLOWLIST: Record<string, string[]> = {
   "serve.stdio": ["stdio"],
   "issue.create": ["project", "title", "kind", "contract", "parent", "priority", "scrutiny"],
   "issue.show": [],
