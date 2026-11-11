@@ -8,7 +8,7 @@ import { contract, setup } from "./helpers.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
-import { PullRequestSyncService } from "../src/service/pull-request-sync-service.ts";
+import { GhCliPullRequestSource, PullRequestSyncService } from "../src/service/pull-request-sync-service.ts";
 import type {
   PullRequestCommit,
   PullRequestObservation,
@@ -278,6 +278,60 @@ describe("pull-request reconciler", () => {
     w.source.put(observation({ title: "works on XTRM-1" }));
     assert.equal(run(w).mentioned, 1);
     assert.equal(run(w).mentioned, 0);
+  });
+
+  it("pages with a constant per_page and returns unique PRs up to --limit", () => {
+    const pages = (limit: number) => {
+      const source = new GhCliPullRequestSource((args) => {
+        const url = new URL(`https://x/${args[1]}`);
+        const perPage = Number(url.searchParams.get("per_page"));
+        const page = Number(url.searchParams.get("page"));
+        const start = (page - 1) * perPage;
+        return JSON.stringify(Array.from({ length: perPage }, (_, i) => ({ number: start + i + 1, updated_at: "2026-11-11T00:00:00Z" })));
+      });
+      return source.list("o/r", { limit });
+    };
+    for (const limit of [150, 250]) {
+      const list = pages(limit);
+      assert.equal(list.length, limit);
+      assert.equal(new Set(list.map((p) => p.number)).size, limit);
+      assert.equal(list[0]!.number, 1);
+      assert.equal(list[list.length - 1]!.number, limit);
+    }
+  });
+
+  it("a linkMention throw rolls that PR back and the others still succeed", () => {
+    const receipt = receiptFor(w);
+    // Pre-link #7 so the failure has an issue to attach its finding to.
+    w.links.linkMention({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w" });
+    const rowsBefore = (w.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests").get() as { n: number }).n;
+    w.source.put(observation({ number: 7, title: "work XTRM-1" }), []);
+    w.source.put(observation({ number: 9, title: "work XTRM-1" }), []);
+    const original = w.links.linkMention.bind(w.links);
+    let calls = 0;
+    (w.links as unknown as { linkMention: (input: { number: number }) => unknown }).linkMention = (input) => {
+      calls += 1;
+      if (input.number === 7) throw new Error("forced mention failure");
+      return original(input as never);
+    };
+    const report = run(w);
+    assert.equal(calls >= 1, true);
+    assert.equal((w.db.prepare("SELECT COUNT(*) AS n FROM pull_requests WHERE number = 7").get() as { n: number }).n, 0);
+    assert.equal((w.db.prepare("SELECT COUNT(*) AS n FROM pull_requests WHERE number = 9").get() as { n: number }).n, 1);
+    assert.equal((w.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests WHERE number = 7").get() as { n: number }).n, rowsBefore);
+    assert.equal((w.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests WHERE number = 9").get() as { n: number }).n, 1);
+    assert.equal(report.failures, 1);
+    assert.deepEqual(report.findings.map((f) => [f.number, f.code]), [[7, "pr_link_write_failed"]]);
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["pr_link_write_failed"]);
+  });
+
+  it("a dry run still attributes findings in the report", () => {
+    w.links.linkMention({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w" });
+    w.source.put(observation({ number: 7 }), []);
+    w.source.entries.get("o/r#7")!.fail = true;
+    const report = run(w, { dryRun: true });
+    assert.deepEqual(report.findings.map((f) => [f.repository, f.number, f.code]), [["o/r", 7, "pr_unavailable"]]);
+    assert.equal(report.findingCount, 0);
   });
 
   it("one-shot <pr> does not list the repository", () => {

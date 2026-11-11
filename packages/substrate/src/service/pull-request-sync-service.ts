@@ -101,9 +101,7 @@ export class PullRequestSyncService {
           : this.source.list(repository, { limit });
       } catch (error) {
         report.failures += 1;
-        if (input.dryRun !== true) {
-          this.recordPrFinding(report, repository, input.onlyPr?.number ?? 0, "pr_unavailable", messageOf(error), now);
-        }
+        this.recordPrFinding(report, repository, input.onlyPr?.number ?? 0, "pr_unavailable", messageOf(error), now, input.dryRun !== true);
         continue;
       }
       for (const item of listed) {
@@ -126,7 +124,7 @@ export class PullRequestSyncService {
       });
     } catch (error) {
       report.failures += 1;
-      if (input.dryRun !== true) this.recordPrFinding(report, repository, number, "pr_unavailable", messageOf(error), now);
+      this.recordPrFinding(report, repository, number, "pr_unavailable", messageOf(error), now, input.dryRun !== true);
       return;
     }
     if (observation === "not-modified") {
@@ -141,11 +139,11 @@ export class PullRequestSyncService {
     } catch (error) {
       commitsOk = false;
       report.failures += 1;
-      if (input.dryRun !== true) this.recordPrFinding(report, repository, number, "pr_unavailable", messageOf(error), now);
+      this.recordPrFinding(report, repository, number, "pr_unavailable", messageOf(error), now, input.dryRun !== true);
     }
     if (commits.length >= 250) {
       report.truncated += 1;
-      if (input.dryRun !== true) this.recordPrFinding(report, repository, number, "pr_commits_truncated", "PR exceeds 250 commits", now);
+      this.recordPrFinding(report, repository, number, "pr_commits_truncated", "PR exceeds 250 commits", now, input.dryRun !== true);
     }
     if (input.dryRun === true) {
       report.created += this.plannedTrailers(commits, input.projectId);
@@ -310,7 +308,7 @@ export class PullRequestSyncService {
   }
 
   /** PR-level findings live on every issue already linked to the PR. */
-  private recordPrFinding(report: SyncReport, repository: string, number: number, code: string, detail: string, now: number): void {
+  private recordPrFinding(report: SyncReport, repository: string, number: number, code: string, detail: string, now: number, write = true): void {
     const linked = this.db
       .prepare(
         `SELECT DISTINCT issue_id FROM issue_pull_requests
@@ -318,6 +316,7 @@ export class PullRequestSyncService {
       )
       .all(repository, number) as Array<{ issue_id: string }>;
     report.findings.push({ repository, number, code, detail });
+    if (!write) return;
     for (const row of linked) {
       const duplicate = this.db
         .prepare(
@@ -344,10 +343,16 @@ export class PullRequestSyncService {
 }
 
 export class GhCliPullRequestSource implements PullRequestSource {
+  private readonly runGh: (args: string[]) => string;
+  constructor(runGh?: (args: string[]) => string) {
+    this.runGh = runGh ?? ((args) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
+  }
   list(repository: string, opts: { limit: number }): Array<{ number: number; updatedAt: string | null }> {
     const out: Array<{ number: number; updatedAt: string | null }> = [];
+    // A constant page size across pages; a shrinking per_page on the last
+    // page would overlap the previous page and silently skip the tail.
+    const perPage = Math.max(1, Math.min(100, opts.limit));
     for (let page = 1; out.length < opts.limit; page += 1) {
-      const perPage = Math.min(100, opts.limit - out.length);
       const raw = this.run([
         "api",
         `repos/${repository}/pulls?state=all&sort=updated&direction=desc&per_page=${perPage}&page=${page}`,
@@ -356,7 +361,7 @@ export class GhCliPullRequestSource implements PullRequestSource {
       for (const pr of parsed) out.push({ number: pr.number, updatedAt: pr.updated_at ?? null });
       if (parsed.length < perPage) break;
     }
-    return out;
+    return out.slice(0, opts.limit);
   }
 
   get(repository: string, number: number, cache: { etag: string | null; lastModified: string | null }): PullRequestObservation | "not-modified" {
@@ -422,7 +427,7 @@ export class GhCliPullRequestSource implements PullRequestSource {
   }
 
   private run(args: string[]): string {
-    return execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    return this.runGh(args);
   }
 }
 

@@ -1103,7 +1103,7 @@ function runLinks(
     if (ctx.json) return emit(ctx, command, report);
     const lines = [
       `LINKS SYNC — ${report.repositories} repo(s) · ${report.scanned} PR(s) · ${report.dryRun ? "dry run" : "written"}`,
-      `created_from ${report.created} · mentioned ${report.mentioned} · findings ${report.findingCount} · skipped ${report.skipped} · failures ${report.failures} · truncated ${report.truncated}`,
+      `created_from ${report.created} · mentioned ${report.mentioned} · findings ${report.findings.length} · skipped ${report.skipped} · failures ${report.failures} · truncated ${report.truncated}`,
     ];
     return { code: report.failures > 0 && report.repositories === report.failures ? 1 : 0, stdout: lines.join("\n") + "\n", stderr: "" };
   }
