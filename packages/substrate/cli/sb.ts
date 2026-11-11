@@ -392,9 +392,9 @@ per-verb help: sb issue create --help  |  sb help issue create`;
 
 const COMMAND_HELP: Record<string, string> = {
   top: HELP_TOP,
-  "links.sync": `usage: sb links sync [<pr>] [--project <id>] [--repo <owner/name>] [--limit <n>] [--since <ISO>] [--dry-run]
+  "links.sync": `usage: sb links sync [<pr>] [--project <id>] [--repo <owner/name>] [--limit <n>] [--since <ISO>] [--dry-run] [--holder <name>]
 
-  One-shot reconciler: conditional gh reads, pull_requests state, trailer-first links (727 writers), title/branch/body mentions. --since records source=backfill. Writes nothing with --dry-run.`,
+  One-shot reconciler: conditional gh reads, pull_requests state, trailer-first links (727 writers), title/branch/body mentions. --since records source=backfill. Writes nothing with --dry-run. --holder defaults to SUBSTRATE_HOLDER and is the actor recorded on what the run changes.`,
   "issue.link": `usage: sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>]... [--commits-range <base>..<head>] [--holder <name>]
 
   Writes a persisted mention (source=explicit) or, with --commit/--commits-range, the T2 evidence from the commits' XTRM-Issue trailers. Never deletes; never claims created_from without a valid receipt.`,
@@ -830,7 +830,8 @@ the contract to narrate history.`,
   "links.check": `usage: sb links check [--issue <ref>] [--project <id>] [--repo owner/name] [--limit <n>] [--link-gate warn|enforce|off] [--dry-run]
 
 Read-only. Without --issue, lists T2 candidates: PR commits whose XTRM-Issue
-trailer names an Issue in this project (requires --repo). With --issue, prints
+trailer names an Issue in this project. The scan uses --repo, or the current gh
+repository when --repo is absent. With --issue, prints
 the manual and auto gate verdicts and their codes, and exits 1 only when the
 mode is enforce and the manual verdict is not pass. --dry-run is accepted and
 writes nothing.`,
