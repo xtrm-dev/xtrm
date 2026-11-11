@@ -7,6 +7,7 @@ import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { flag, parseArgs } from "../domain/argv.ts";
+import { resolveClaimHolder } from "../domain/claim.ts";
 import { RemoteError, type RemoteUpload } from "./spec.ts";
 import { clientRepositoryKey, openRemoteSession, resolveMapping, runRemote, storedMapping, type RemoteSession } from "./session.ts";
 import type { RemoteTransport } from "./ssh.ts";
@@ -309,6 +310,12 @@ function hasFlag(argv: string[], name: string): boolean {
   return argv.some((token) => token === "--" + name || token.startsWith("--" + name + "="));
 }
 
+// The verbs whose holder the client must resolve before forwarding (XTRM-722).
+function isClaimVerb(argv: string[]): boolean {
+  const { group, verb } = parseArgv(argv);
+  return group === "issue" && (verb === "claim" || verb === "release");
+}
+
 function forwardedEnv(
   env: NodeJS.ProcessEnv,
   argv: string[],
@@ -351,6 +358,19 @@ export function forwardCli(argv: string[], deps: ForwardDeps = {}): CliOutcome |
   if (localStore !== null) return null;
   if (!shouldForward(argv, env)) return null;
   const schema = deps.schema ?? "substrate-cli/v1";
+  // XTRM-722: a forwarded claim resolves its holder on the CLIENT. The client
+  // refuses here when neither its flag nor its own environment supplies one, so
+  // nothing is sent. Every forwarded claim that does leave therefore carries
+  // either the explicit flag (which wins on the server) or the client's own
+  // SUBSTRATE_HOLDER (which overrides the server's), so a server-side holder can
+  // never decide the outcome of a reachable claim.
+  if (isClaimVerb(argv)) {
+    try {
+      resolveClaimHolder(flag(parseArgs(argv).flags, "holder"), env);
+    } catch (err) {
+      return failure(argv, err, schema);
+    }
+  }
   let session: RemoteSession | null;
   try {
     session = openRemoteSession({ transport: deps.transport, env, deadlineMs: deps.deadlineMs ?? null });

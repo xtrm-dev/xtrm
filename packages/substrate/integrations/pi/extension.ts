@@ -98,8 +98,8 @@ export default function registerSubstrate(pi: ExtensionAPI, options: { openBacki
     defineTool({
       name: "substrate_issue_claim",
       label: "Substrate issue claim",
-      description: "Claim a dispatchable Substrate issue for a holder. Binds the Pi session to the issue for checkpoints and resume. Successful mutations include structured feedback.",
-      parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), holder: Type.String({ description: "Claim holder" }), activationId: Type.Optional(Type.String({ description: "Activation id" })), sessionId: Type.Optional(Type.String({ description: "Pi session id" })) }),
+      description: "Claim a dispatchable Substrate issue for a holder. Binds the Pi session to the issue for checkpoints and resume. holder defaults to SUBSTRATE_HOLDER, so a launched session claims as itself. Successful mutations include structured feedback.",
+      parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), holder: Type.Optional(Type.String({ description: "Claim holder (defaults to SUBSTRATE_HOLDER)" })), activationId: Type.Optional(Type.String({ description: "Activation id" })), sessionId: Type.Optional(Type.String({ description: "Pi session id" })) }),
       async execute(
         _id: string,
         params: Record<string, unknown>,
@@ -108,8 +108,10 @@ export default function registerSubstrate(pi: ExtensionAPI, options: { openBacki
         ctx: ExtensionContext,
       ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
-        const result = await withBacking((backing) => toolIssueClaim(backing, bindings, { ref: params.ref as string, holder: params.holder as string, activationId: params.activationId as string | undefined, sessionId }));
-        return feedbackResult(result, successFeedback("issue_claimed", `Claimed ${params.ref as string}`, `holder ${params.holder as string}`));
+        const result = await withBacking((backing) => toolIssueClaim(backing, bindings, { ref: params.ref as string, holder: params.holder as string | undefined, activationId: params.activationId as string | undefined, sessionId }));
+        const holder = String((result as { holder?: unknown }).holder ?? "session");
+        const source = (result as { holderSource?: unknown }).holderSource === "env" ? "from SUBSTRATE_HOLDER" : "explicit";
+        return feedbackResult(result, successFeedback("issue_claimed", `Claimed ${params.ref as string}`, `holder ${holder} (${source})`));
       },
     }),
     defineTool({

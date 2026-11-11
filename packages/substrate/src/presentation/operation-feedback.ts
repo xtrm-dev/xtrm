@@ -77,7 +77,11 @@ export function attachMutationFeedback(value: unknown): unknown {
 
   if ((data.op === "claim" || data.op === "release") && typeof data.issueId === "string") {
     if (data.op === "claim") {
-      return withFeedback(data, successFeedback("issue_claimed", `Claimed ${data.issueId}`));
+      const source = data.holderSource === "env" ? "from SUBSTRATE_HOLDER" : "from the explicit holder";
+      return withFeedback(
+        data,
+        successFeedback("issue_claimed", `Claimed ${data.issueId}`, data.holder ? `holder ${String(data.holder)} (${source})` : undefined),
+      );
     }
     return data.claim == null
       ? withFeedback(data, noopFeedback("claim_absent", `No live claim was released for ${data.issueId}`))

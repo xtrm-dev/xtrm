@@ -33,6 +33,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { isJournalKind, JOURNAL_KINDS } from "../../src/domain/journal.ts";
 import { CLOSURE_OUTCOMES } from "../../src/domain/closure.ts";
+import { resolveClaimHolder } from "../../src/domain/claim.ts";
 import { currentExecutionContext, enrichExecutionContext } from "../../src/domain/execution-context.ts";
 import type { IssueService } from "../../src/service/issue-service.ts";
 import type { JournalEntry } from "../../src/domain/journal.ts";
@@ -313,11 +314,12 @@ const TOOL_DEFS: ToolDef[] = [
       "Use the Journal instead: for progress, findings, decisions, handoffs and results — the claim only says who owns the work, " +
       "the Journal says what happened. " +
       "Automatic context: the claim row records holder, activation id, generation and expiry automatically; " +
+      "holder defaults to SUBSTRATE_HOLDER when omitted (the xt launcher exports it), so a launched session claims as itself; " +
       "same-holder reclaim is idempotent, stealing another live holder fails closed, and expiry closes the old generation first.",
     schema: z.object({
       op: z.enum(["claim", "release"]),
       ref: z.string().min(1),
-      holder: z.string().min(1),
+      holder: z.string().min(1).optional(),
       activationId: z.string().optional(),
       ttlMs: z.number().int().positive().optional(),
       project: z.string().optional(),
@@ -328,17 +330,20 @@ const TOOL_DEFS: ToolDef[] = [
       try {
         const projectId = resolveProjectId(handles.svc, project as string | undefined);
         const issue = handles.svc.resolveRefInProject(ref as string, projectId);
+        // One resolver for every surface (XTRM-722): explicit holder wins, else
+        // the ambient SUBSTRATE_HOLDER, else fail closed naming both.
+        const resolvedHolder = resolveClaimHolder(holder as string | undefined);
         if (op === "claim") {
-          const claim = handles.svc.claimIssue(issue.id, holder as string, {
+          const claim = handles.svc.claimIssue(issue.id, resolvedHolder.holder, {
             activationId: (activationId as string | undefined) ?? undefined,
             ttlMs: (ttlMs as number | undefined) ?? undefined,
           });
-          return textPayload({ op, issueId: issue.id, claim });
+          return textPayload({ op, issueId: issue.id, claim, holderSource: resolvedHolder.source });
         }
-        const claim = handles.svc.releaseClaim(issue.id, holder as string, {
+        const claim = handles.svc.releaseClaim(issue.id, resolvedHolder.holder, {
           activationId: (activationId as string | undefined) ?? undefined,
         });
-        return textPayload({ op, issueId: issue.id, claim });
+        return textPayload({ op, issueId: issue.id, claim, holderSource: resolvedHolder.source });
       } finally {
         handles.db.close();
       }
