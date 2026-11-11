@@ -160,6 +160,21 @@ describe("read model", () => {
     assert.deepEqual(view.map((v) => v.number), [9, 8]);
   });
 
+  it("re-places an upgraded mention at its created_from row", () => {
+    const insert = s.db.prepare(
+      "INSERT INTO issue_pull_requests (issue_id, repository, number, relation, source, url, actor, created_at) VALUES (?,?,?,?,?,?,?,?)",
+    );
+    // Mentions: A then B. Upgrades: B then A. The created_from rows decide
+    // the order, so the view must move each PR when it upgrades.
+    insert.run(s.issue.id, "o/r", 1, "mentioned", "title", null, "a", 1);
+    insert.run(s.issue.id, "o/r", 2, "mentioned", "title", null, "a", 2);
+    insert.run(s.issue.id, "o/r", 2, "created_from", "provenance", "https://github.com/o/r/pull/2", "a", 3);
+    insert.run(s.issue.id, "o/r", 1, "created_from", "provenance", "https://github.com/o/r/pull/1", "a", 4);
+    const view = new PullRequestService(s.db).listForIssue(s.issue.id);
+    assert.deepEqual(view.map((v) => v.number), [2, 1]);
+    assert.ok(view.every((v) => v.relation === "created_from"));
+  });
+
   it("orders an equal created_at by insertion (rowid), not descending", () => {
     const insert = s.db.prepare(
       "INSERT INTO issue_pull_requests (issue_id, repository, number, relation, source, url, actor, created_at) VALUES (?,?,?,?,?,?,?,?)",
@@ -264,16 +279,17 @@ fi
 
 describe("links help", () => {
   it("answers sb links --help, sb help links, and lists links in the bare usage", () => {
-    const direct = runCli(["links", "--help"]);
+    const db = join(mkdtempSync(join(tmpdir(), "substrate-pr-links-help-")), "state.db");
+    const direct = runCli(["--db", db, "links", "--help"]);
     assert.equal(direct.code, 0);
     assert.match(direct.stdout, /usage: sb links/);
 
-    const viaHelp = runCli(["help", "links"]);
+    const viaHelp = runCli(["--db", db, "help", "links"]);
     assert.equal(viaHelp.code, 0);
     assert.match(viaHelp.stdout, /usage: sb links/);
 
-    const bare = runCli(["links"]);
+    const bare = runCli(["--db", db, "links"]);
     assert.notEqual(bare.code, 0);
-    assert.match(bare.stderr, /links/);
+    assert.match(bare.stderr, /\|links\|/);
   });
 });
