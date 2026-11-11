@@ -371,6 +371,43 @@ describe("advisories: snapshot and formatting against real services", () => {
     }
   });
 
+  it("labels a child issue with its locator and the durable ref, a root with just the ref", () => {
+    // displayRef is the single definition of that shape; the snapshot must use
+    // it rather than an inline copy, so this pins the label the messages carry.
+    const ctx = setup();
+    const journal = new JournalService(ctx.db, ctx.svc);
+    try {
+      const parent = ctx.svc.createIssue({
+        projectId: "prj_xtrm",
+        title: "parent",
+        kind: "epic",
+        contract: contract(),
+        scrutiny: "LOW",
+        authoredBy: "tester",
+      });
+      const child = ctx.svc.createIssue({
+        projectId: "prj_xtrm",
+        title: "child",
+        kind: "task",
+        contract: contract(),
+        scrutiny: "LOW",
+        authoredBy: "tester",
+        parentId: parent.id,
+      });
+      const childSnapshot = snapshotIssue(ctx.svc, journal, child.id, T0);
+      const rootSnapshot = snapshotIssue(ctx.svc, journal, parent.id, T0);
+      assert.match(childSnapshot.label ?? "", /^XTRM-1\.1 \(XTRM-\d+\)$/, `got: ${childSnapshot.label}`);
+      assert.equal(rootSnapshot.label, rootSnapshot.ref, "a root issue needs no parenthetical");
+      assert.notEqual(childSnapshot.label, childSnapshot.ref, "the locator leads for a child");
+      // The rule texts use the label; a child advisory therefore names both.
+      const [advisory] = evaluateIssue({ ...childSnapshot, readinessState: "ready" }, ME);
+      assert.ok((advisory?.message ?? "").includes(childSnapshot.label!), "messages carry the label");
+    } finally {
+      ctx.db.close();
+      rmSync(ctx.dir, { recursive: true, force: true });
+    }
+  });
+
   it("formatAdvisory keeps the operator line short and the agent line actionable", () => {
     const [a] = evaluateIssue(snap({ readinessState: "ready" }), ME);
     const formatted = formatAdvisory(a!);

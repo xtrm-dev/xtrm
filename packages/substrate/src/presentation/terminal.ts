@@ -453,14 +453,21 @@ export function feedbackForCommand(command: string, args: string[], data: Record
       return successFeedback("journal_written", `Added ${String(data.kind ?? "note")} to ${issueRefFromArgs(args) ?? ref}`, data.sequence ? `journal seq ${String(data.sequence)}` : undefined);
     case "issue.attest":
       return successFeedback("issue_attested", `Attested ${issueRefFromArgs(args) ?? ref} as ${String(data.outcome ?? "unknown")}`, data.policy ? `policy ${String(data.policy)}` : undefined);
-    case "issue.claim":
-      return successFeedback(
-        "issue_claimed",
-        `Claimed ${issueRefFromArgs(args) ?? ref}`,
-        data.holder
-          ? `holder ${String(data.holder)} (${data.holderSource === "env" ? "from SUBSTRATE_HOLDER" : "from --holder"})`
-          : undefined,
-      );
+    case "issue.claim": {
+      const bits: string[] = [];
+      if (data.holder) bits.push(`holder ${String(data.holder)} (${data.holderSource === "env" ? "from SUBSTRATE_HOLDER" : "from --holder"})`);
+      const expiry = claimExpiry(data);
+      if (expiry) bits.push(expiry);
+      if (data.alreadyHeld === true) bits.push("already held");
+      return successFeedback("issue_claimed", `Claimed ${issueRefFromArgs(args) ?? ref}`, bits.length > 0 ? bits.join(" · ") : undefined);
+    }
+    case "issue.renew": {
+      const bits: string[] = [];
+      if (data.holder) bits.push(`holder ${String(data.holder)} (${data.holderSource === "env" ? "from SUBSTRATE_HOLDER" : "from --holder"})`);
+      const expiry = claimExpiry(data);
+      if (expiry) bits.push(expiry);
+      return successFeedback("issue_renewed", `Renewed ${issueRefFromArgs(args) ?? ref}`, bits.length > 0 ? bits.join(" · ") : undefined);
+    }
     case "issue.release":
       return data.released === false
         ? noopFeedback("claim_absent", `No live claim was released for ${issueRefFromArgs(args) ?? ref}`)
@@ -493,6 +500,15 @@ export function feedbackForCommand(command: string, args: string[], data: Record
     default:
       return successFeedback("operation_completed", `${command.replace(/\./g, " ")} completed`);
   }
+}
+
+// "expires 2026-11-11T12:34:56Z (45 min)": an ISO instant and the minutes left,
+// never raw epoch milliseconds.
+function claimExpiry(data: Record<string, unknown>): string | null {
+  const iso = typeof data["expiresAtIso"] === "string" ? data["expiresAtIso"] : null;
+  if (iso === null) return null;
+  const minutesLeft = typeof data["expiresInMinutes"] === "number" ? data["expiresInMinutes"] : null;
+  return minutesLeft === null ? `expires ${iso}` : `expires ${iso} (${minutesLeft} min)`;
 }
 
 export function renderFeedback(feedback: OperationFeedback, opts: TerminalStyleOptions): string {

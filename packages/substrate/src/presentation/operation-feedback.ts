@@ -75,7 +75,15 @@ export function attachMutationFeedback(value: unknown): unknown {
   const data = value as Record<string, unknown>;
   if (data.feedback !== undefined) return value;
 
-  if ((data.op === "claim" || data.op === "release") && typeof data.issueId === "string") {
+  if ((data.op === "claim" || data.op === "renew" || data.op === "release") && typeof data.issueId === "string") {
+    if (data.op === "renew") {
+      const source = data.holderSource === "env" ? "from SUBSTRATE_HOLDER" : "from the explicit holder";
+      const expiry = typeof data.expiresAtIso === "string" ? `expires ${data.expiresAtIso}` : undefined;
+      return withFeedback(
+        data,
+        successFeedback("issue_renewed", `Renewed ${data.issueId}`, [data.holder ? `holder ${String(data.holder)} (${source})` : null, expiry].filter(Boolean).join(" · ") || undefined),
+      );
+    }
     if (data.op === "claim") {
       const source = data.holderSource === "env" ? "from SUBSTRATE_HOLDER" : "from the explicit holder";
       return withFeedback(

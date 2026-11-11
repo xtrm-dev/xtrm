@@ -32,6 +32,8 @@ const READ_ONLY = new Set([
   "issue.show", "issue.list", "issue.ready", "issue.tree", "issue.children", "issue.validate", "issue.resume",
   "project.list", "project.show", "project.links", "journal.show", "journal.since", "journal.latest", "journal.timeline",
   "journal.render", "provenance.trace", "provenance.commit", "provenance.receipt", "provenance.pr", "doctor", "help", "version",
+  // Reads that were routed through the mutation path printed only "✓ … completed" and dropped their data.
+  "issue.query", "plan.check", "provenance.session", "provenance.activation",
 ]);
 
 interface UxOptions { isTTY?: boolean; width?: number; env?: NodeJS.ProcessEnv; }

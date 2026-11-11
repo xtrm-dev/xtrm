@@ -55,11 +55,31 @@ export function assertContractShape(contract: unknown): asserts contract is Work
   };
   if (contract === null || typeof contract !== "object" || Array.isArray(contract)) fail("must be an object");
   const c = contract as Record<string, unknown>;
+  const nested = c["contract"];
+  if (nested !== null && typeof nested === "object") {
+    fail('the contract is nested under a "contract" key; pass the inner object itself (problem, success, scope, nonGoals, constraints, validation, output at top level)');
+  }
   if (typeof c["problem"] !== "string" || c["problem"].trim() === "") fail("problem must be a non-empty string");
   if (typeof c["success"] !== "string" || c["success"].trim() === "") fail("success must be a non-empty string");
   for (const f of ["scope", "nonGoals", "constraints", "validation", "output"]) {
     if (!Array.isArray(c[f])) fail(`${f} must be an array`);
   }
+}
+
+// Entry-shape hints for the two object-array fields: a plain string where
+// {check}/{artifact} is expected leaves the issue draft, so name the expected
+// shape next to the structural finding instead of leaving the author to guess.
+export function contractShapeHints(contract: unknown): string[] {
+  if (contract === null || typeof contract !== "object" || Array.isArray(contract)) return [];
+  const c = contract as Record<string, unknown>;
+  const hints: string[] = [];
+  for (const [field, key] of [["validation", "check"], ["output", "artifact"]] as const) {
+    const entries = c[field];
+    if (!Array.isArray(entries)) continue;
+    const bad = entries.findIndex((e) => typeof e !== "object" || e === null || Array.isArray(e));
+    if (bad >= 0) hints.push(`${field}[${bad}] is ${typeof entries[bad] === "string" ? "a plain string" : "not an object"}; expected ${field}: [{"${key}": "…"}]`);
+  }
+  return hints;
 }
 
 // -- structural validation (PRD §12.1) --------------------------------------
