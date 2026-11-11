@@ -224,20 +224,8 @@ Every surface now opens with the same 40px band: `SurfaceToolbar` renders one ro
 
 Toolbar tokens live in `src/ui/primitives.tsx`: `TOOLBAR_CONTROL` (28px geometry), `TOOLBAR_REST` (resting `bg-pressed` fill, brighter on hover), `TOOLBAR_GHOST` (tabs and secondary actions). A surface title no longer repeats in the body — the sidebar row that opened it names it.
 
-## 12. Tree indent is one primitive (XTRM-638, XTRM-639)
+## 12. Tree guides were removed (XTRM-638 → XTRM-640)
 
-Nested issue rows indent on a **20px grid** and draw their hierarchy instead of only shifting it. `src/ui/tree.tsx` owns the three parts — indent, guides, disclosure — and nothing else, so a surface keeps its own cell classes and row content.
+Nested issue rows keep their 20px-per-level indent and their disclosure chevron. The drawn hierarchy — spine lines hung under the type icon, the earlier elbow variant, and the shared `TreeCell` primitive — was tried and then removed: at 32px rows with a chevron *and* a type icon in front of the title, a vertical guide competes with both and does not read as structure. The feature is parked, not designed away; when it comes back it needs a different row anatomy first.
 
-| Token | Value | Rule |
-|---|---|---|
-| `TREE_STEP` | `20px` | Chevrons sit on this grid; the guides align to the icons by construction |
-| guide x | `8 + 20 + 6 + 7` = `41px`, then `+20px` per level | Hangs under the ancestor's type icon, not under its chevron — the line continues the icon, so it reads as that row's spine |
-| `--x-tree-guide` | light `rgb(15 15 20 / 0.14)`, dark `rgb(255 255 255 / 0.13)` | One colour for every guide, chosen to survive both the resting and the selected row fill |
-
-The guide is a single straight 1px vertical line spanning the whole row. There is **no elbow and no half-height spine**: an elbow plus a mid-row stop was the first version and it read as decoration, not as structure.
-
-Guides start at the first child: a depth-0 row draws nothing. Depth is unbounded — five levels are covered by the unit test.
-
-Keyboard matches the disclosure: `ArrowLeft` collapses an expanded parent, `ArrowRight` expands a collapsed one. `Row` merges a caller's `onKeyDown` with its own Enter/Space activation — before this, passing a handler silently disabled activation.
-
-Not adopted: TanStack Table, react-arborist and headless-tree. The rows are already a flattened `TreeRow[]` behind our own virtualizer at a fixed 32px height; a tree library would add a second virtualizer, its own row markup and a drag layer nobody asked for.
+What survives from the attempt: `Row` merges a caller's `onKeyDown` with its own Enter/Space activation. Before that, passing a handler silently disabled activation; `ArrowLeft`/`ArrowRight` on an issue row now collapse and expand it.
