@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Beads import receipt (XTRM-724). History keys that are already stored are reported in a new `historyAlreadyStored` list instead of `notesSkipped` / `commentsSkipped`. Those two lists keep their meaning — a shape that was not ingested, because no journal was supplied or the notes field is unusable — so a clean rerun of an import no longer reads as content loss.
 
+### Fixed
+
+- A `sb issue list` failure names `issue.list` (XTRM-740). The interactive wrapper renders list and browse through the tree engine, so the engine's fail-closed flag message named `issue tree` — a command the operator never typed. The wrapper maps the substituted verb back before showing the message; the hierarchical rendering, the browse mode and the engine's allowlist are unchanged.
+
 ---
 
 

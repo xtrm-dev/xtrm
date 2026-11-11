@@ -152,6 +152,25 @@ function browseHelp(): CliResult {
   return { code: 0, stdout, stderr: "" };
 }
 
+// The list and browse renderers call the tree engine, so an engine error names
+// the verb the wrapper substituted (`issue.tree`) rather than the one the
+// operator typed. This maps it back, using the same token search as
+// listEngineArgs so the two cannot disagree about which word was rewritten.
+function typedVerbPair(base: string[]): { engine: string; typed: string } | null {
+  const verb = ["list", "browse"].find((candidate) => base.includes(candidate));
+  if (verb === undefined) return null;
+  const index = base.indexOf(verb);
+  const group = base.slice(0, index).reverse().find((token) => GROUPS.has(token));
+  if (group === undefined) return null;
+  return { engine: `${group}.tree`, typed: `${group}.${verb}` };
+}
+
+function withTypedVerb(base: string[], message: string): string {
+  const pair = typedVerbPair(base);
+  if (pair === null) return message;
+  return message.split(`\`${pair.engine}\``).join(`\`${pair.typed}\``);
+}
+
 function listEngineArgs(base: string[]): string[] {
   const out = [...base];
   const listIndex = out.indexOf("list");
@@ -186,7 +205,10 @@ function enrichRows(rows: IssueTreeRow[], base: string[], statuses: string[]): I
 }
 function filteredRows(parsed: WrapperArgs): { rows: IssueTreeRow[]; error?: string } {
   const call = jsonCall(listEngineArgs(parsed.base));
-  if (call.result.code !== 0 || call.envelope.ok === false) return { rows: [], error: call.envelope.error ?? (call.result.stderr.trim() || "list failed") };
+  if (call.result.code !== 0 || call.envelope.ok === false) {
+    const raw = call.envelope.error ?? (call.result.stderr.trim() || "list failed");
+    return { rows: [], error: withTypedVerb(parsed.base, raw) };
+  }
   let rows = flattenIssueTree(call.envelope.data);
   rows = enrichRows(rows, parsed.base, parsed.statuses);
   rows = filterTreeWithAncestors(rows, parsed.statuses, parsed.all, parsed.search);
