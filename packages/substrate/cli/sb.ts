@@ -827,7 +827,13 @@ Record what happened in the Journal and close with cited refs; never edit
 the contract to narrate history.`,
   "provenance.dispatch": `usage: sb provenance dispatch <ref> [--workspace <dir>] [--participant/--activation/--attempt/--session/--base-commit <v>] [--claim-id <n>] [--project <id>]`,
   "links": `usage: sb links <check> [args...]\n\ncheck lists T2 candidates (PR commits whose XTRM-Issue trailer names an Issue); slice 1 is read-only.`,
-  "links.check": `usage: sb links check [--project <id>] [--repo owner/name] [--limit <n>] [--dry-run]\n\nlists T2 candidates: PR commits whose XTRM-Issue trailer names an Issue in this project. Slice 1 is read-only; --dry-run is the only mode and writes nothing.`,
+  "links.check": `usage: sb links check [--issue <ref>] [--project <id>] [--repo owner/name] [--limit <n>] [--link-gate warn|enforce|off] [--dry-run]
+
+Read-only. Without --issue, lists T2 candidates: PR commits whose XTRM-Issue
+trailer names an Issue in this project (requires --repo). With --issue, prints
+the manual and auto gate verdicts and their codes, and exits 1 only when the
+mode is enforce and the manual verdict is not pass. --dry-run is accepted and
+writes nothing.`,
   "provenance.trace": `usage: sb provenance trace <ref>
 
 reads the full lineage spine: execution bindings with their pinned
