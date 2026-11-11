@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `sb --db <p> issue browse` reaches the browser, and the list rewrite touches only the verb (XTRM-741). The wrapper chose the browse path from the first two argv tokens, so a global flag before the group fell through to the mutation path and the engine reported `unknown issue verb: browse`; it now dispatches on the command, like every other branch. The same rewrite scanned argv for the first `list`/`browse` token, so `sb issue browse --search list` searched for `tree`; it now rewrites exactly the verb position it identified.
+- `sb --db <p> issue browse` reaches the browser, and the list rewrite touches only the verb (XTRM-741). The wrapper chose the browse path from the first two argv tokens, so a global flag before the group fell through to the mutation path and the engine reported `unknown issue verb: browse`; it now dispatches on the command, like every other branch. The same rewrite scanned argv for the first `list`/`browse` token, so a kept value spelling either word (`sb issue list --project list`) was rewritten instead of the verb; it now rewrites exactly the verb position it identified.
 - A `sb issue list` failure names `issue.list` (XTRM-740). The interactive wrapper renders list and browse through the tree engine, so the engine's fail-closed flag message named `issue tree` — a command the operator never typed. The wrapper maps the substituted verb back before showing the message; the hierarchical rendering, the browse mode and the engine's allowlist are unchanged.
 
 ---
