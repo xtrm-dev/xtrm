@@ -109,8 +109,27 @@ function minutes(ms: number): number {
   return Math.round(ms / 60000);
 }
 
-function holderArg(identity: Identity, s: IssueSnapshot): string {
-  return identity.holder ?? s.claim?.holder ?? "<name>";
+// The holder an instruction may name: the ambient one, or a placeholder for the
+// operator to fill in. It is never the holder named on the claim (XTRM-724 A2
+// non-goal): telling a session to act as someone else's name is the failure the
+// identity rules exist to prevent.
+function holderArg(identity: Identity): string {
+  return identity.holder ?? "<your name>";
+}
+
+/**
+ * A claim/renew command for the operator, or null when none may be emitted.
+ *
+ * - with no ambient holder the command carries no `--holder` at all;
+ * - with an ambient holder it names that holder;
+ * - when the claim belongs to someone else there is no command: re-claiming or
+ *   renewing under another holder's lease contradicts holder_mismatch.
+ */
+function claimCommand(identity: Identity, s: IssueSnapshot, verb: "claim" | "renew"): string | null {
+  const claimHolder = s.claim?.holder;
+  if (claimHolder && identity.holder && identity.holder !== claimHolder) return null;
+  const holderFlag = identity.holder ? ` --holder ${identity.holder}` : "";
+  return `sb issue ${verb} ${s.ref}${holderFlag} --ttl-ms <ms>`;
 }
 
 /**
@@ -130,7 +149,9 @@ export function evaluateIssue(s: IssueSnapshot, identity: Identity, opts: { phas
       "identity_missing",
       "warning",
       `${tag}: no SUBSTRATE_HOLDER in this session; journal entries record no author and edits are refused`,
-      `Set the holder before writing: \`export SUBSTRATE_HOLDER=${s.claim.holder}\` if you are ${s.claim.holder}.`,
+      // The session sets its OWN name. Naming the claim holder here would invite
+      // it to impersonate whoever owns the lease.
+      `Set the holder this session acts as before writing: \`export SUBSTRATE_HOLDER=${holderArg(identity)}\`.`,
     );
   } else if (s.claim && identity.holder && identity.holder !== s.claim.holder) {
     add(
@@ -143,9 +164,9 @@ export function evaluateIssue(s: IssueSnapshot, identity: Identity, opts: { phas
 
   if (!s.claim) {
     if (s.readinessState === "draft") {
-      add("attest_ready", "info", `${tag}: contract is draft, so it cannot be claimed`, `Repair the contract, then \`sb issue attest ${ref} --outcome ready --policy default --attested-by ${holderArg(identity, s)}\`.`);
+      add("attest_ready", "info", `${tag}: contract is draft, so it cannot be claimed`, `Repair the contract, then \`sb issue attest ${ref} --outcome ready --policy default --attested-by ${holderArg(identity)}\`.`);
     } else if (s.readinessState === "ready") {
-      add("claim_start", "info", `${tag}: work is happening without a claim`, `\`sb issue claim ${ref} --holder ${holderArg(identity, s)} --ttl-ms <ms>\` before editing.`);
+      add("claim_start", "info", `${tag}: work is happening without a claim`, `\`sb issue claim ${ref}${identity.holder ? ` --holder ${identity.holder}` : ""} --ttl-ms <ms>\` before editing.`);
     }
     return out;
   }
@@ -153,9 +174,25 @@ export function evaluateIssue(s: IssueSnapshot, identity: Identity, opts: { phas
   const left = s.claim.expiresAt - s.now;
   const ttl = s.claim.expiresAt - s.claim.acquiredAt;
   if (left <= 0) {
-    add("claim_expired", "warning", `${tag}: claim by ${s.claim.holder} expired ${minutes(-left)} min ago`, `Re-claim now: \`sb issue claim ${ref} --holder ${s.claim.holder} --ttl-ms <ms>\`.`);
+    const cmd = claimCommand(identity, s, "claim");
+    add(
+      "claim_expired",
+      "warning",
+      `${tag}: claim by ${s.claim.holder} expired ${minutes(-left)} min ago`,
+      cmd === null
+        ? `Do not re-claim under ${s.claim.holder}'s lease: coordinate with ${s.claim.holder}, or claim work of your own.`
+        : `Re-claim now: \`${cmd}\`.`,
+    );
   } else if (left < Math.max(ADVISORY_TUNING.renewFloorMs, ttl * ADVISORY_TUNING.renewFraction)) {
-    add("claim_renew", "warning", `${tag}: claim expires in ${minutes(left)} min`, `Renew: \`sb issue renew ${ref} --holder ${s.claim.holder} --ttl-ms <ms>\`.`);
+    const cmd = claimCommand(identity, s, "renew");
+    add(
+      "claim_renew",
+      "warning",
+      `${tag}: claim expires in ${minutes(left)} min`,
+      cmd === null
+        ? `Do not renew ${s.claim.holder}'s lease: coordinate with ${s.claim.holder}.`
+        : `Renew: \`${cmd}\`.`,
+    );
   }
 
   if (s.latestKind === "result") {

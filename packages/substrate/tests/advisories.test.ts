@@ -92,6 +92,10 @@ describe("advisories: identity rules come first and read the claim", () => {
     assert.equal(list[0]?.code, "identity_missing", "the identity diagnostic leads the list");
     assert.equal(list[0]?.severity, "warning");
     assert.match(list[0]?.message ?? "", /no SUBSTRATE_HOLDER/);
+    // The session sets its own name. Naming the claim holder would invite it to
+    // act as whoever owns the lease (XTRM-724 A2 non-goal).
+    assert.match(list[0]?.instruction ?? "", /export SUBSTRATE_HOLDER=<your name>/);
+    assert.ok(!(list[0]?.instruction ?? "").includes("=adopt-302"), "never proposes the claim holder's name");
   });
 
   it("identity_missing stays silent when a holder is known or nothing is claimed", () => {
@@ -159,6 +163,44 @@ describe("advisories: claim rules sit on their boundaries", () => {
     const list = codes(evaluateIssue(claimed({ ttlMs: 2 * HOUR, leftMs: -5 * MIN }), ME));
     assert.ok(list.includes("claim_expired"));
     assert.ok(!list.includes("claim_renew"), "expiry and renewal are alternatives, not a pair");
+  });
+});
+
+describe("advisories: an instruction never names another holder", () => {
+  const mismatched = (opts: { ttlMs?: number; leftMs?: number } = {}) => claimed({ holder: "other", ...opts });
+
+  it("a mismatched session gets no re-claim command and no --holder", () => {
+    const expired = evaluateIssue(mismatched({ leftMs: -60_000 }), ME);
+    const renew = evaluateIssue(mismatched({ ttlMs: 10 * MIN, leftMs: 4 * MIN }), ME);
+    assert.equal(expired[0]?.code, "holder_mismatch", "a mismatch leads, not a missing holder");
+    assert.ok(expired.find((a) => a.code === "claim_expired"), "the expiry is still reported");
+    for (const a of [...expired, ...renew]) {
+      assert.ok(!a.instruction.includes("--holder other"), `no instruction may name the claim holder: ${a.instruction}`);
+      assert.ok(!/sb issue (claim|renew) /.test(a.instruction) || !a.instruction.includes("other"), `no command under another lease: ${a.instruction}`);
+    }
+    const expiredAdvisory = expired.find((a) => a.code === "claim_expired");
+    assert.ok(expiredAdvisory, "the expiry is still reported");
+    assert.doesNotMatch(expiredAdvisory!.instruction, /sb issue claim/, "re-claiming another holder's lease is not proposed");
+    assert.match(expiredAdvisory!.instruction, /coordinate with other/);
+  });
+
+  it("a session with no holder gets the command without any --holder argument", () => {
+    const expired = evaluateIssue(claimed({ leftMs: -60_000 }), NOBODY);
+    const advisory = expired.find((a) => a.code === "claim_expired");
+    assert.ok(advisory);
+    assert.match(advisory!.instruction, /sb issue claim XTRM-1 --ttl-ms <ms>/);
+    assert.ok(!advisory!.instruction.includes("--holder"), "no --holder when the session has no holder");
+    const renew = evaluateIssue(claimed({ ttlMs: 10 * MIN, leftMs: 4 * MIN }), NOBODY).find((a) => a.code === "claim_renew");
+    assert.ok(renew);
+    assert.match(renew!.instruction, /sb issue renew XTRM-1 --ttl-ms <ms>/);
+    assert.ok(!renew!.instruction.includes("--holder"));
+  });
+
+  it("the ambient holder is the only name a command may carry", () => {
+    const expired = evaluateIssue(claimed({ leftMs: -60_000 }), ME).find((a) => a.code === "claim_expired");
+    assert.match(expired!.instruction, /--holder adopt-302/);
+    const renew = evaluateIssue(claimed({ ttlMs: 10 * MIN, leftMs: 4 * MIN }), ME).find((a) => a.code === "claim_renew");
+    assert.match(renew!.instruction, /--holder adopt-302/);
   });
 });
 
@@ -244,6 +286,46 @@ describe("advisories: cooldowns are per code and per issue", () => {
     selectAdvisory(list, cooldowns, T0);
     const other = list.map((a) => ({ ...a, issueRef: "XTRM-2" }));
     assert.equal(selectAdvisory(other, cooldowns, T0)?.code, "identity_missing", "a different issue has its own cooldown");
+  });
+
+  // The published windows are restated here on purpose. A test that reads its
+  // expectation from the table it is testing cannot fail when a value changes;
+  // this literal is the contract, so retuning a code is a deliberate two-place
+  // edit and an accidental one turns the suite red.
+  const PUBLISHED_MINUTES: Record<string, number> = {
+    identity_missing: 30,
+    holder_mismatch: 30,
+    attest_ready: 30,
+    claim_start: 30,
+    claim_expired: 10,
+    claim_renew: 10,
+    close_due: 20,
+    revise_contract: 30,
+    checkpoint_due: 20,
+    handoff_due: 60,
+    close_without_result: 0,
+  };
+
+  it("the shipped cooldown table matches the published windows", () => {
+    assert.deepEqual(ADVISORY_COOLDOWN_MIN, PUBLISHED_MINUTES);
+  });
+
+  it("every code is suppressed inside its window and allowed at the edge", () => {
+    // Table-driven over the published windows: changing one value in the module
+    // turns the deep-equal above red, and shifting a window turns this one red.
+    for (const [code, minutes] of Object.entries(PUBLISHED_MINUTES)) {
+      const cooldowns: Record<string, number> = {};
+      const one = [{ code: code as keyof typeof ADVISORY_COOLDOWN_MIN, severity: "info" as const, issueRef: "XTRM-1", message: "m", instruction: "i" }];
+      const window = minutes * MIN;
+      assert.equal(selectAdvisory(one, cooldowns, T0)?.code, code, `${code} is selectable when nothing is cooling down`);
+      if (window > 0) {
+        assert.equal(selectAdvisory(one, cooldowns, T0 + window - 1), null, `${code} stays suppressed one millisecond before its window ends`);
+        assert.equal(selectAdvisory(one, cooldowns, T0 + window)?.code, code, `${code} is reusable at ${minutes} min`);
+      } else {
+        // A zero cooldown describes a write: it is always selectable.
+        assert.equal(selectAdvisory(one, cooldowns, T0)?.code, code, `${code} has no window`);
+      }
+    }
   });
 
   it("every code has a cooldown entry, and an operation rule never cools down", () => {
