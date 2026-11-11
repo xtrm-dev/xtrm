@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useAdapters } from "../adapters/index.tsx";
 import { AgentSidebar } from "../agent/AgentSidebar.tsx";
 import { useAgentStore } from "../agent/workspace.tsx";
-import { AGENT_MODE, MODES, REPO_SECTIONS, RESEARCH_SECTIONS, halfForPath, modeForPath, modeHref, repoHref, type Half } from "../app/destinations.ts";
+import { AGENT_MODE, MODES, REPO_SECTIONS, RESEARCH_SECTIONS, destinationHref, halfForPath, modeForPath, repoHref, type Half } from "../app/destinations.ts";
 import { isInvalidManifestRow } from "../adapters/research/types.ts";
 import { projectForRepo, useIssues, useProgram, useProjects, useRepoStats, useRepos, useResearchRuns } from "../app/queries.ts";
 import { Icon } from "../ui/icon.tsx";
@@ -136,16 +136,17 @@ function SourceFooter() {
   );
 }
 
-function ProgramRows() {
+/** Project's own rows: in-page sections of the Project surface, nested under its sidebar row. */
+function ProjectRows() {
   const program = useProgram();
   const counts = (kind: string) => program.data?.items.filter((i) => i.kind === kind).length ?? null;
   const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "smooth" });
   return (
     <>
       <SidebarRow indent icon="target" label="Workstreams" count={counts("workstream")} onActivate={() => jump("program-workstream")} />
-      <SidebarRow indent icon="agents" label="Assignments" count={counts("assignment")} onActivate={() => jump("program-assignment")} />
-      <SidebarRow indent icon="done" label="Decisions" count={counts("decision")} onActivate={() => jump("program-decision")} />
-      <SidebarRow indent icon="commit" label="Recent changes" onActivate={() => jump("program-activity")} />
+      <SidebarRow indent icon="assignment" label="Assignments" count={counts("assignment")} onActivate={() => jump("program-assignment")} />
+      <SidebarRow indent icon="decision" label="Decisions" count={counts("decision")} onActivate={() => jump("program-decision")} />
+      <SidebarRow indent icon="changes" label="Recent changes" onActivate={() => jump("program-activity")} />
     </>
   );
 }
@@ -170,7 +171,7 @@ function ResearchRows({ pathname }: { pathname: string }) {
   ));
 }
 
-/** Every Work-half destination in one list: repository rows, then the workspace modes under Work. */
+/** Work-half destinations in three groups; Project carries its own rows, Research reveals its sections. */
 function WorkSidebar({ pathname }: { pathname: string }) {
   const { repo } = useShell();
   const go = useGo();
@@ -179,6 +180,7 @@ function WorkSidebar({ pathname }: { pathname: string }) {
   const issues = useIssues(project?.id);
   const openCount = issues.data?.filter((i) => i.lifecycle === "open").length;
   const active = modeForPath(pathname);
+  const [projectOpen, setProjectOpen] = useState(true);
   return (
     <>
       <div className="px-2">
@@ -188,27 +190,25 @@ function WorkSidebar({ pathname }: { pathname: string }) {
         {REPO_SECTIONS.map((section) => (
           <SidebarSection key={section.label} label={section.label}>
             {section.items.map((item) => {
-              const href = repoHref(repo, item.repoPath);
+              const href = destinationHref(repo, item);
+              const nested = item.id === "project";
               return (
-                <SidebarRow
-                  key={item.id}
-                  icon={item.icon}
-                  label={item.label}
-                  selected={pathname === href || pathname.startsWith(`${href}/`)}
-                  deferred={!!item.deferred}
-                  count={item.id === "issues" ? (openCount ?? null) : null}
-                  onActivate={() => go(href)}
-                />
+                <Fragment key={item.id}>
+                  <SidebarRow
+                    icon={item.icon}
+                    label={item.label}
+                    selected={href != null && (pathname === href || pathname.startsWith(`${href}/`))}
+                    deferred={!!item.deferred}
+                    count={item.id === "issues" ? (openCount ?? null) : null}
+                    expanded={nested ? projectOpen : undefined}
+                    onToggle={nested ? () => setProjectOpen((v) => !v) : undefined}
+                    onActivate={href ? () => go(href) : undefined}
+                  />
+                  {nested && projectOpen && <ProjectRows />}
+                  {item.id === "research" && active === "research" && <ResearchRows pathname={pathname} />}
+                </Fragment>
               );
             })}
-            {section.label === "Work" &&
-              MODES.filter((m) => m.id !== "work").map((m) => (
-                <Fragment key={m.id}>
-                  <SidebarRow icon={m.icon} label={m.label} selected={m.id === active} deferred={!!m.deferred} onActivate={() => go(modeHref(m, repo))} />
-                  {m.id === active && m.id === "program" && <ProgramRows />}
-                  {m.id === active && m.id === "research" && <ResearchRows pathname={pathname} />}
-                </Fragment>
-              ))}
           </SidebarSection>
         ))}
       </div>

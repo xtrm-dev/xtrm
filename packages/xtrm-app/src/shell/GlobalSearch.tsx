@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { MODES, REPO_SECTIONS, modeHref, repoHref } from "../app/destinations.ts";
+import { REPO_SECTIONS, destinationHref, repoHref } from "../app/destinations.ts";
 import { projectForRepo, useIssues, useIssuesForProjects, useProgram, useProjects, useRepos } from "../app/queries.ts";
 import { CommandMenu, type CommandEntry, type CommandGroupData } from "../ui/command-menu.tsx";
 import { cx } from "../ui/primitives.tsx";
@@ -38,8 +38,12 @@ export function GlobalSearch() {
         { id: "theme", label: `Switch to ${shell.theme === "dark" ? "light" : "dark"} theme`, icon: shell.theme === "dark" ? "sun" : "moon", onSelect: shell.toggleTheme },
       ];
       const navigation: CommandEntry[] = [
-        ...MODES.map((m) => ({ id: `go-${m.id}`, label: `Go to ${m.label}`, icon: m.icon, hint: m.deferred ? "deferred" : undefined, onSelect: () => go(modeHref(m, repo)) })),
-        ...REPO_SECTIONS.flatMap((s) => s.items.map((i) => ({ id: `go-${i.id}`, label: `Go to ${i.label}`, hint: `${repo.name} · ${s.label}`, icon: i.icon, onSelect: () => go(repoHref(repo, i.repoPath)) }))),
+        ...REPO_SECTIONS.flatMap((s) =>
+          s.items.flatMap((i) => {
+            const href = destinationHref(repo, i);
+            return href ? [{ id: `go-${i.id}`, label: `Go to ${i.label}`, hint: `${repo.name} · ${s.label}`, icon: i.icon, onSelect: () => go(href) }] : [];
+          }),
+        ),
         { id: "go-repositories", label: "Go to All repositories", icon: "repositories" as const, onSelect: () => go("/repositories") },
       ];
       return [
@@ -74,10 +78,12 @@ export function GlobalSearch() {
     const repositories: CommandEntry[] = (repos.data ?? [])
       .filter((r) => workspace || r.fullName === repo.fullName || r.owner === repo.owner)
       .map((r) => ({ id: r.fullName, label: r.fullName, icon: "repositories", onSelect: () => go(repoHref(r, "/work/issues")) }));
-    const destinations: CommandEntry[] = [
-      ...REPO_SECTIONS.flatMap((s) => s.items.filter((i) => !i.deferred).map((i) => ({ id: i.id, label: i.label, hint: repo.name, icon: i.icon, onSelect: () => go(repoHref(repo, i.repoPath)) }))),
-      ...MODES.filter((m) => !m.deferred).map((m) => ({ id: m.id, label: m.label, icon: m.icon, onSelect: () => go(modeHref(m, repo)) })),
-    ];
+    const destinations: CommandEntry[] = REPO_SECTIONS.flatMap((s) =>
+      s.items.filter((i) => !i.deferred).flatMap((i) => {
+        const href = destinationHref(repo, i);
+        return href ? [{ id: i.id, label: i.label, hint: repo.name, icon: i.icon, onSelect: () => go(href) }] : [];
+      }),
+    );
 
     // A typed key opens that issue from any project, even when its board is not loaded in this scope.
     const key = issueKeyFromQuery(query);

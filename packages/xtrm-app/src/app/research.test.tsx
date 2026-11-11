@@ -92,8 +92,9 @@ describe("Research destination", () => {
     expect(within(sidebar).getByText("Recent Runs")).toBeTruthy();
     expect(within(sidebar).getByText("Saved Comparisons")).toBeTruthy();
     expect(within(sidebar).getByText("Workloads")).toBeTruthy();
-    expect(await within(sidebar).findByText("2")).toBeTruthy();
-    expect(within(sidebar).getByText("3")).toBeTruthy();
+    const row = (label: string) => within(sidebar).getByText(label).closest('[role="button"]') as HTMLElement;
+    expect(await within(row("Experiments")).findByText("2")).toBeTruthy();
+    expect(within(row("Recent Runs")).getByText("3")).toBeTruthy();
   });
 
   it("navigating to a deferred sidebar group renders the shared deferred placeholder, not invented UI", async () => {

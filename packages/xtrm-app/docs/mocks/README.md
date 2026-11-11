@@ -41,6 +41,21 @@ The operator's v14 "Final GUI Simulation", added for the Agent experience epic (
 
 The only change from the operator's original file is the removal of the Google Fonts `@import` on line 7, so the file loads without network access; fonts fall back to the local stacks. Inspiration, not authority.
 
+### `sidebar-restyle-proposals.html`
+
+Status: decided (XTRM-632) — variant B, `Box` for Project, `SquareStack` for Issues, `MousePointer2` for Agents, trailing always-visible stroke chevron. The mock stays as the reference for alternates.
+
+Sidebar restyle and icon-system comparison for the Workspace / Github / System information architecture. One information architecture rendered four times so only the tokens differ:
+
+- a `Ref` column reproducing Linear's shipped sidebar as measured from the operator's screenshot (30 px rows, 16 px icons at stroke 1.5, 13 px labels at weight 500, 20 px nested indent, muted icons, filled section carets);
+- baseline (today's 32 px rows, 14 px icons at stroke 1.6, 13 px labels at weight 500);
+- A Compact, B Linear (recommended), C Heavy — row height, icon size and stroke, label and header weight, and nested indent all vary;
+- live `--x-*` palette values for both themes, with a light/dark toggle;
+- every icon slot with its recommendation and linked lucide alternates;
+- an icon weight × size matrix and a Figtree text-weight strip.
+
+The companion scope document is [`../design/sidebar-restyle.md`](../design/sidebar-restyle.md). Icons are lucide 1.70.0 geometry inlined at the stroke widths under test; the file needs network access only for the Figtree and Geist Mono webfonts.
+
 ## How to use these files
 
 Use them to compare interaction geometry, density, search/navigation placement, collapse behavior and visual direction while implementing `packages/xtrm-app`.

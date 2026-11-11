@@ -7,7 +7,7 @@ const MAIN = "acc-main";
 const TERM = "acc-term";
 const NOEXT_PROMPT = "NOEXT-601: reply with the single word ok";
 const MOD = process.platform === "darwin" ? "Meta" : "Control";
-const CONSOLE_MODES = ["Issues", "Agents", "Program", "Research", "Observability"];
+const CONSOLE_MODES = ["Issues", "Project", "Agents", "Research", "Observability"];
 
 let main = "";
 let term = "";
@@ -42,7 +42,7 @@ test("§36.11-1 the Console/Agent switch is visible in every mode and restores e
     await expect(sw).toBeVisible();
     log(s, `§36.11-1 Console mode ${mode}: ${page.url()} switch visible`);
   }
-  await page.getByTestId("context-sidebar").getByRole("button", { name: "Program", exact: true }).click();
+  await page.getByTestId("context-sidebar").getByRole("button", { name: "Project", exact: true }).click();
   await expect(page).toHaveURL(/\/program/);
   const consoleRoute = new URL(page.url()).pathname;
   // Agent restores the last Agent route; Console restores the last Console route; Mod+. toggles.
