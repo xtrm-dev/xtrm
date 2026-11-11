@@ -271,7 +271,7 @@ describe("pull-request reconciler", () => {
     w.source.entries.get("o/r#99")!.fail = true;
     const report = run(w);
     assert.deepEqual(report.findings.map((f) => [f.repository, f.number, f.code]), [["o/r", 99, "pr_unavailable"]]);
-    assert.equal(report.findingCount, 0);
+    assert.equal(report.findingCount, 1);
   });
 
   it("a second run does not count already-present mentions", () => {

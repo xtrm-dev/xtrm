@@ -63,6 +63,15 @@ function numberOrNull(value: unknown): number | null {
   return Number.isNaN(time) ? null : time;
 }
 
+/** One-line run summary; the findings number is `findingCount`, so a
+ * PR-level finding on an unlinked PR is visible in text, not only JSON. */
+export function syncReportText(report: SyncReport): { summary: string; detail: string } {
+  return {
+    summary: `LINKS SYNC — ${report.repositories} repo(s) · ${report.scanned} PR(s) · ${report.dryRun ? "dry run" : "written"}`,
+    detail: `created_from ${report.created} · mentioned ${report.mentioned} · findings ${report.findingCount} · skipped ${report.skipped} · failures ${report.failures} · truncated ${report.truncated}`,
+  };
+}
+
 export class PullRequestSyncService {
   private readonly db: DatabaseSync;
   private readonly issues: IssueService;
@@ -317,6 +326,9 @@ export class PullRequestSyncService {
       .all(repository, number) as Array<{ issue_id: string }>;
     report.findings.push({ repository, number, code, detail });
     if (!write) return;
+    // A PR-level finding with no linked issue still counts: it is a real
+    // finding, it only has no event row to hang on yet.
+    if (linked.length === 0) report.findingCount += 1;
     for (const row of linked) {
       const duplicate = this.db
         .prepare(

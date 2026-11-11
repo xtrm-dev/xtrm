@@ -1,4 +1,5 @@
 import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
+import { LinkGateService, type GateMode } from "./link-gate-service.ts";
 import {
   ISSUE_KINDS,
   LIFECYCLE_STATES,
@@ -2019,10 +2020,26 @@ export class IssueService {
     });
   }
 
-  setLifecycleState(issueId: string, state: LifecycleState, at?: number): ResolvedIssue {
+  setLifecycleState(
+    issueId: string,
+    state: LifecycleState,
+    at?: number,
+    gate?: { actor?: string; linkGate?: GateMode; gateOverride?: string; exemption?: string },
+  ): ResolvedIssue {
     if (!(LIFECYCLE_STATES as readonly string[]).includes(state)) throw new Error(`unknown lifecycle state: ${state}`);
     return withTransaction(this.db, () => {
       const before = this.requireIssue(issueId);
+      // The done transition is gated here, so every path (ClosureService's
+      // direct update excepted and gated there) is covered exactly once.
+      // Migration/import paths pass a named exemption.
+      if (state === "done" && before.lifecycleState !== "done" && gate?.exemption === undefined) {
+        new LinkGateService(this.db, this).enforce(issueId, {
+          actor: gate?.actor ?? "sb-cli",
+          mode: gate?.linkGate,
+          override: gate?.gateOverride ?? null,
+          now: at,
+        });
+      }
       // `at` lets the import path land a terminal transition on source time, so
       // the lifecycle event agrees with the Closure row rather than
       // contradicting it (XTRM-406). All other callers keep wall-clock.

@@ -773,7 +773,7 @@ export function importBeads(
     }
     // Land the terminal transition on source time when the export carries it,
     // so it agrees with the Closure row instead of contradicting it (XTRM-406).
-    svc.setLifecycleState(issueId, target, terminalAt.get(r.id));
+    svc.setLifecycleState(issueId, target, terminalAt.get(r.id), { exemption: "beads-import" });
   }
 
   // Edges second pass (both endpoints must exist). Verified live semantics:
