@@ -62,7 +62,7 @@ export function LinkEvents({ events }: { events: LinkEvent[] }) {
         const repository = typeof event.payload["repository"] === "string" ? event.payload["repository"] : null;
         const number = typeof event.payload["number"] === "number" ? event.payload["number"] : null;
         return (
-          <li key={event.eventId} className={cx("flex flex-wrap items-center gap-1.5 text-xs", warning ? "text-danger" : "text-ink-muted")}>
+          <li key={event.eventId} className={cx("flex flex-wrap items-center gap-1.5 text-xs", warning ? "text-accent-ink" : "text-ink-muted")}>
             <span className="tabular text-ink-faint">{new Date(event.createdAt).toLocaleDateString()}</span>
             <span>{event.type.replace("provenance.", "").replaceAll("_", " ")}</span>
             {repository && number !== null && <span className="text-ink-faint">{repository}#{number}</span>}

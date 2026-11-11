@@ -339,3 +339,52 @@ describe("link read surfaces (XTRM-730)", () => {
     assert.deepEqual(row.primaryPr, { repository: "o/r", number: 7, relation: "mentioned", url: null, state: "merged" });
   });
 });
+
+describe("link surfaces round 2 (XTRM-730)", () => {
+  let w: ReturnType<typeof scratch>;
+  let prs: PullRequestService;
+  beforeEach(() => {
+    w = scratch();
+    prs = new PullRequestService(w.db, w.svc, new ProvenanceService(w.db, w.svc, new JournalService(w.db, w.svc)));
+  });
+  afterEach(() => { w.db.close(); rmSync(w.dir, { recursive: true, force: true }); });
+
+  const insert = (number: number, relation: string, createdAt: number, superseded: number | null = null) =>
+    w.db.prepare(
+      "INSERT INTO issue_pull_requests (issue_id, repository, number, relation, source, url, actor, created_at, superseded_at) VALUES (?,?,?,?,?,NULL,NULL,?,?)",
+    ).run(w.issue.id, "o/r", number, relation, "explicit", createdAt, superseded);
+
+  it("linkEvents is bounded to the last 20, oldest first", () => {
+    for (let n = 1; n <= 25; n++) prs.linkMention({ issueId: w.issue.id, repository: "o/r", number: n, actor: "w" });
+    const events = cli(w.dbPath, ["issue", "show", w.issue.humanRef]).linkEvents as Array<{ payload: { number: number } }>;
+    assert.equal(events.length, 20);
+    assert.equal(events[0]!.payload.number, 6);
+    assert.equal(events.at(-1)!.payload.number, 25);
+  });
+
+  it("primaryPr prefers created_from over an older mention and hides superseded rows", () => {
+    insert(7, "mentioned", 100);
+    insert(8, "created_from", 200);
+    const data = cli(w.dbPath, ["issue", "query", "--project", "prj_xtrm"]);
+    const row = (data.rows as Array<{ primaryPr: { number: number } | null }>)[0]!;
+    assert.equal(row.primaryPr!.number, 8);
+    insert(9, "created_from", 50, 400);
+    const after = cli(w.dbPath, ["issue", "query", "--project", "prj_xtrm"]);
+    assert.equal((after.rows as Array<{ primaryPr: { number: number } | null }>)[0]!.primaryPr!.number, 8);
+  });
+
+  it("issue show carries primaryPr", () => {
+    insert(7, "created_from", 100);
+    const data = cli(w.dbPath, ["issue", "show", w.issue.humanRef]);
+    assert.deepEqual((data.primaryPr as { number: number }).number, 7);
+  });
+
+  it("CLI unlink records the actor flag", () => {
+    prs.linkMention({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w" });
+    const res = runCli(["--db", w.dbPath, "issue", "unlink", "pr", w.issue.humanRef, "--repo", "o/r", "--number", "7", "--project", "prj_xtrm", "--actor", "operator"]);
+    assert.equal(res.code, 0, res.stderr || res.stdout);
+    const last = (cli(w.dbPath, ["issue", "show", w.issue.humanRef]).linkEvents as Array<{ type: string; payload: { actor?: string } }>).at(-1)!;
+    assert.equal(last.type, "provenance.link_unlinked");
+    assert.equal(last.payload.actor, "operator");
+  });
+});

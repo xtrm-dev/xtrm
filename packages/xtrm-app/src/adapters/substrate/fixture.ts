@@ -54,7 +54,7 @@ function seed(): Map<string, Record_> {
         lastActivityAt: NOW - (i % 9) * 1_800_000,
         eventCount: (i * 7) % 23,
         pointerCount: (i * 3) % 11,
-        primaryPr: null,
+        primaryPr: i === 1 ? { repository: "Jaggerxtrm/console", number: 211, relation: "created_from", url: "https://github.com/Jaggerxtrm/console/pull/211", state: "merged" } : null,
         attestation: lifecycle === "open" && i % 3 === 1 ? "current" : (["none", "stale", "rejected"] as const)[i % 3]!,
         contractComplete: i % 5 !== 0,
         dispatchable: lifecycle === "open" && i % 3 === 1 && i % 7 !== 0,
@@ -139,6 +139,7 @@ export function createFixtureSubstrate(): SubstrateAdapter {
           ? [
               { eventId: 1, type: "provenance.link_created", payload: { repository: "Jaggerxtrm/console", number: 211, relation: "created_from" }, createdAt: NOW },
               { eventId: 2, type: "provenance.link_finding", payload: { code: "trailer_issue_unknown", sha: "f".repeat(40) }, createdAt: NOW },
+              { eventId: 3, type: "provenance.link_gate_warned", payload: { codes: ["gate_mentioned_only"] }, createdAt: NOW },
             ]
           : [],
         linkGate: ref === "XTRM-301"
@@ -211,8 +212,8 @@ export function createFixtureSubstrate(): SubstrateAdapter {
           locator: ref,
           lastActivityAt: null,
           eventCount: 0,
-          pointerCount: 0,
-    primaryPr: null,
+            pointerCount: 0,
+            primaryPr: null,
           attestation: "none",
           contractComplete: false,
           dispatchable: false,

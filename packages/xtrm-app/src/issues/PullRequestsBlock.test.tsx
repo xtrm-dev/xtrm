@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fixtureAdapters } from "../adapters/index.tsx";
 import { createFixtureSubstrate } from "../adapters/substrate/fixture.ts";
@@ -29,6 +29,21 @@ describe("issue page pull-request surface", () => {
     const timeline = await screen.findByRole("list", { name: "Pull-request events" });
     expect(within(timeline).getByText("link created")).toBeTruthy();
     const finding = within(timeline).getByText("link finding");
-    expect(finding.closest("li")!.className).toContain("text-danger");
+    expect(finding.closest("li")!.className).toContain("text-accent-ink");
+  });
+});
+
+describe("board PR column", () => {
+  it("renders the header, the cell and sorts by the linked number", async () => {
+    const history = createMemoryHistory({ initialEntries: ["/rep/xtrm-dev/xtrm/work/issues"] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const router = createAppRouter({ adapters: { ...fixtureAdapters, substrate: createFixtureSubstrate() }, history, queryClient });
+    render(<RouterProvider router={router} />);
+    const header = await screen.findByRole("columnheader", { name: /PR/ });
+    expect(header).toBeTruthy();
+    const cell = await screen.findByText("#211");
+    expect(cell).toBeTruthy();
+    fireEvent.click(within(header).getByRole("button"));
+    expect(header.getAttribute("aria-sort")).not.toBe("none");
   });
 });

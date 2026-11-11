@@ -398,7 +398,7 @@ const COMMAND_HELP: Record<string, string> = {
   "issue.link": `usage: sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>]... [--commits-range <base>..<head>] [--holder <name>]
 
   Writes a persisted mention (source=explicit) or, with --commit/--commits-range, the T2 evidence from the commits' XTRM-Issue trailers. Never deletes; never claims created_from without a valid receipt.`,
-  "issue.unlink": `usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>]
+  "issue.unlink": `usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>] [--actor <name>]
 
   Sets superseded_at on the matching live row(s). The evidence row stays.`,
   "provenance.attach": `usage: sb provenance attach <ref> pr <github:org/repo#n|org/repo#n|url|#n> [--receipt <id>] [--holder <name>]
@@ -1155,7 +1155,7 @@ function linkEventsFor(db: ReturnType<typeof openSubstrate>, issueId: string): A
   const rows = db
     .prepare(
       `SELECT id, type, payload_json, created_at FROM issue_events
-        WHERE issue_id = ? AND type LIKE 'provenance.link_%'
+        WHERE issue_id = ? AND type GLOB 'provenance.link_*'
         ORDER BY id DESC LIMIT 20`,
     )
     .all(issueId) as unknown as Array<{ id: number; type: string; payload_json: string; created_at: number }>;
@@ -1353,7 +1353,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.tree": ["project", "root"],
   "issue.children": [],
   "issue.link": ["project", "repo", "number", "url", "commit", "commits-range", "holder"],
-  "issue.unlink": ["project", "repo", "number", "relation"],
+  "issue.unlink": ["project", "repo", "number", "relation", "actor"],
   "issue.relate": ["project", "from", "to", "kind"],
   "issue.unrelate": ["project", "from", "to", "kind"],
   "issue.claim": ["project", "holder", "ttl-ms", "activation"],
@@ -1763,7 +1763,7 @@ function runIssue(
       return emit(ctx, command, result);
     }
     case "unlink": {
-      if (rest[0] !== "pr") throw new Error("usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>]");
+      if (rest[0] !== "pr") throw new Error("usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>] [--actor <name>]");
       const ref = rest[1];
       if (ref === undefined) throw new Error("usage: sb issue unlink pr <ref> --repo <owner/name> --number <n>");
       const resolved = refInContext(svc, flags, ref);
@@ -1775,7 +1775,8 @@ function runIssue(
       if (relation !== undefined && relation !== "created_from" && relation !== "mentioned") {
         throw new Error("--relation must be created_from or mentioned");
       }
-      const removed = prLinkService(db, svc).unlink({ issueId: resolved.id, repository: repo, number, relation: relation as never });
+      const actor = flag(flags, "actor") ?? tryHolder(flags) ?? "sb-cli";
+      const removed = prLinkService(db, svc).unlink({ issueId: resolved.id, repository: repo, number, relation: relation as never, actor });
       return emit(ctx, command, { superseded: removed });
     }
     case "create": {
@@ -1838,6 +1839,7 @@ function runIssue(
         closure: closureSummary(db, svc, resolved),
         operationalContext,
         pullRequests,
+        primaryPr: primaryPrFor(db, resolved.id),
         linkEvents: linkEventsFor(db, resolved.id),
         linkGate: { mode: "manual", manual: { verdict: gateEvaluation.verdict, codes: gateEvaluation.codes } },
       };
