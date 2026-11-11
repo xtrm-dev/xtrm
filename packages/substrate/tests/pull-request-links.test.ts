@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
-import { trailerIssueRefs } from "../src/domain/pull-request.ts";
+import { parseAllTrailers } from "../src/domain/provenance.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
 import { contract } from "./helpers.ts";
 
@@ -45,13 +45,13 @@ describe("migration 013", () => {
   beforeEach(() => { s = scratch(); });
   afterEach(() => { try { s.db.close(); } catch { /* closed */ } rmSync(s.dir, { recursive: true, force: true }); });
 
-  it("creates both tables and records version 13", () => {
+  it("creates both tables and records version 14", () => {
     const tables = s.db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('issue_pull_requests','issue_pr_commits') ORDER BY name")
       .all() as Array<{ name: string }>;
     assert.deepEqual(tables.map((t) => t.name), ["issue_pr_commits", "issue_pull_requests"]);
     const v = s.db.prepare("SELECT MAX(version) AS v FROM schema_migrations").get() as { v: number };
-    assert.equal(v.v, 13);
+    assert.equal(v.v, 14);
   });
 
   it("rejects a duplicate relation row and a duplicate commit", () => {
@@ -230,7 +230,7 @@ describe("trailer reads", () => {
       " XTRM-Issue: XTRM-3",
       "XTRM-Issue:",
     ].join("\n");
-    assert.deepEqual(trailerIssueRefs(msg), ["XTRM-1", "XTRM-2"]);
+    assert.deepEqual(parseAllTrailers(msg).issues.map((i) => i.issueId), ["XTRM-1", "XTRM-2"]);
   });
 });
 
@@ -279,7 +279,8 @@ fi
 
 describe("links help", () => {
   it("answers sb links --help, sb help links, and lists links in the bare usage", () => {
-    const db = join(mkdtempSync(join(tmpdir(), "substrate-pr-links-help-")), "state.db");
+    const helpDir = mkdtempSync(join(tmpdir(), "substrate-pr-links-help-"));
+    const db = join(helpDir, "state.db");
     const direct = runCli(["--db", db, "links", "--help"]);
     assert.equal(direct.code, 0);
     assert.match(direct.stdout, /usage: sb links/);
@@ -291,5 +292,6 @@ describe("links help", () => {
     const bare = runCli(["--db", db, "links"]);
     assert.notEqual(bare.code, 0);
     assert.match(bare.stderr, /\|links\|/);
+    rmSync(helpDir, { recursive: true, force: true });
   });
 });

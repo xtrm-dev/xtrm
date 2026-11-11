@@ -1,6 +1,12 @@
-// Read model for issue-to-PR links (design note 11-11, XTRM-726).
-// Slice 1 is read-only: writers arrive in XTRM-727.
+// Issue-to-PR links: the read model (XTRM-726) and the writers (XTRM-727).
+//
+// Writers never delete: a mention is a row, an unlink sets `superseded_at`,
+// and every read filters superseded rows out. A T2 row is evidence that a
+// commit carries the trailer; a finding is an `issue_events` row of type
+// `provenance.link_finding` and is reported, never thrown.
 
+import { parseAllTrailers } from "../domain/provenance.ts";
+import { withTransaction } from "../store/transactions.ts";
 import type { DatabaseSync } from "../store/database.ts";
 import {
   groupIssuePullRequests,
@@ -10,6 +16,9 @@ import {
   type PrLinkRelation,
   type PrLinkSource,
 } from "../domain/pull-request.ts";
+import type { WorkReceipt } from "../domain/provenance.ts";
+import type { IssueService } from "./issue-service.ts";
+import type { ProvenanceService } from "./provenance-service.ts";
 
 interface PullRow {
   id: number;
@@ -32,23 +41,81 @@ interface CommitRow {
   trailer_revision: number | null;
 }
 
+export interface CreateFromInput {
+  issueId: string;
+  ambientRepo: string | null;
+  actor: string;
+  receiptId?: string;
+  holder?: string;
+  now?: number;
+}
+
+export interface MentionInput {
+  issueId: string;
+  repository: string;
+  number: number;
+  url?: string | null;
+  actor: string;
+  source?: Extract<PrLinkSource, "explicit" | "trailer">;
+  now?: number;
+}
+
+export interface UnlinkInput {
+  issueId: string;
+  repository: string;
+  number: number;
+  relation?: PrLinkRelation;
+  now?: number;
+}
+
+export interface CommitEvidence {
+  sha: string;
+  message: string;
+}
+
+export interface CommitLinkInput {
+  issueId: string;
+  repository: string;
+  number: number;
+  commits: CommitEvidence[];
+  actor: string;
+  now?: number;
+}
+
+export interface LinkFinding {
+  id: number;
+  issueId: string;
+  code: string;
+  repository: string | null;
+  number: number | null;
+  sha: string | null;
+  detail: string | null;
+  createdAt: number;
+}
+
 function all<T>(db: DatabaseSync, sql: string, ...params: Array<string | number | null>): T[] {
   return db.prepare(sql).all(...params) as T[];
 }
 
 export class PullRequestService {
   private readonly db: DatabaseSync;
-  constructor(db: DatabaseSync) {
+  private readonly issues: IssueService | null;
+  private readonly provenance: ProvenanceService | null;
+
+  constructor(db: DatabaseSync, issues?: IssueService, provenance?: ProvenanceService) {
     this.db = db;
+    this.issues = issues ?? null;
+    this.provenance = provenance ?? null;
   }
 
   /** Every PR linked to the issue: `created_from` first, then `created_at`,
-   * with `rowid` as the tie-break the design requires. */
+   * with `rowid` as the tie-break the design requires. Superseded rows are
+   * invisible. */
   listForIssue(issueId: string): IssuePullRequestView[] {
     const rows = all<PullRow>(
       this.db,
       `SELECT rowid AS id, issue_id, repository, number, relation, source, url, actor, created_at
-         FROM issue_pull_requests WHERE issue_id = ? ORDER BY created_at, rowid`,
+         FROM issue_pull_requests WHERE issue_id = ? AND superseded_at IS NULL ORDER BY created_at, rowid`,
       issueId,
     ).map(
       (r): IssuePullRequestRow => ({
@@ -79,5 +146,279 @@ export class PullRequestService {
       }),
     );
     return groupIssuePullRequests(rows, commits);
+  }
+
+  // -- writers (XTRM-727) ----------------------------------------------------
+
+  /** T1: the PR is the outcome of this issue's work. Requires a receipt. */
+  attachCreatedFrom(input: CreateFromInput, canonical: { repository: string; number: number; canonical: string; url: string }): IssuePullRequestView {
+    const { issues, provenance } = this.requireWriters();
+    const now = input.now ?? Date.now();
+    const receipt = this.resolveReceipt(input.issueId, input.receiptId, input.holder, now);
+    withTransaction(this.db, () => {
+      // attachArtifact owns a nested savepoint; the link row shares the outcome.
+      provenance.attachArtifact(receipt.id, "pr", canonical.canonical, { provider: "github", now });
+      if (this.insertLink(input.issueId, canonical.repository, canonical.number, "created_from", "provenance", canonical.url, input.actor, now)) {
+        issues.appendEvent(input.issueId, "provenance.link_created", {
+          repository: canonical.repository,
+          number: canonical.number,
+          receipt: receipt.id,
+          relation: "created_from",
+        }, now);
+      }
+    });
+    return this.requireView(input.issueId, canonical.repository, canonical.number);
+  }
+
+  /** A persisted mention (source explicit in this slice). Idempotent. */
+  linkMention(input: MentionInput): IssuePullRequestView {
+    const { issues } = this.requireWriters();
+    const now = input.now ?? Date.now();
+    const source = input.source ?? "explicit";
+    withTransaction(this.db, () => {
+      if (this.insertLink(input.issueId, input.repository, input.number, "mentioned", source, input.url ?? null, input.actor, now)) {
+        issues.appendEvent(input.issueId, "provenance.link_mentioned", {
+          repository: input.repository,
+          number: input.number,
+          source,
+        }, now);
+      }
+    });
+    return this.requireView(input.issueId, input.repository, input.number);
+  }
+
+  /** Unlink supersedes; it never deletes. Returns the number of live rows closed. */
+  unlink(input: UnlinkInput): number {
+    const { issues } = this.requireWriters();
+    const now = input.now ?? Date.now();
+    const conditions = ["issue_id = ?", "repository = ?", "number = ?", "superseded_at IS NULL"];
+    const params: Array<string | number> = [input.issueId, input.repository, input.number];
+    if (input.relation) {
+      conditions.push("relation = ?");
+      params.push(input.relation);
+    }
+    return withTransaction(this.db, () => {
+      const info = this.db
+        .prepare(`UPDATE issue_pull_requests SET superseded_at = ? WHERE ${conditions.join(" AND ")}`)
+        .run(now, ...params);
+      const changed = Number(info.changes ?? 0);
+      if (changed > 0) {
+        issues.appendEvent(input.issueId, "provenance.link_removed", {
+          repository: input.repository,
+          number: input.number,
+          relation: input.relation ?? null,
+          rows: changed,
+        }, now);
+      }
+      return changed;
+    });
+  }
+
+  /** T2: every commit whose XTRM-Issue trailer names this issue. */
+  linkCommits(input: CommitLinkInput): { created: number; mentioned: number; findings: number } {
+    const { issues } = this.requireWriters();
+    const now = input.now ?? Date.now();
+    let created = 0;
+    let mentioned = 0;
+    let findings = 0;
+    const finding = (code: string, sha: string, detail: string): void => {
+      findings += 1;
+      issues.appendEvent(input.issueId, "provenance.link_finding", {
+        code,
+        repository: input.repository,
+        number: input.number,
+        sha,
+        detail,
+      }, now);
+    };
+    withTransaction(this.db, () => {
+      for (const commit of input.commits) {
+        const trailers = parseAllTrailers(commit.message);
+        const named = [...new Set(trailers.issues.map((i) => i.issueId))];
+        // Two distinct trailer names are a multi-issue commit even when one
+        // of them does not resolve in this Project.
+        if (named.length > 1) {
+          finding("commit_multi_issue", commit.sha, `commit names ${named.join(", ")}`);
+          continue;
+        }
+        if (named.length === 0) continue;
+        let resolvedId: string;
+        try {
+          resolvedId = issues.resolveRef(named[0]!).id;
+        } catch {
+          finding("trailer_issue_unknown", commit.sha, `no issue matches ${named[0]}`);
+          continue;
+        }
+        if (resolvedId !== input.issueId) continue;
+        const revision = trailers.issues[0]?.issueRevision ?? null;
+        const receiptId = trailers.receipts[0] ?? null;
+        if (trailers.receipts.length === 0) {
+          this.mentionFromTrailer(input, now);
+          mentioned += 1;
+          finding("trailer_receipt_missing", commit.sha, "no XTRM-Receipt trailer");
+          continue;
+        }
+        if (trailers.receipts.length > 1) {
+          this.mentionFromTrailer(input, now);
+          mentioned += 1;
+          finding("trailer_receipt_ambiguous", commit.sha, `receipts: ${trailers.receipts.join(", ")}`);
+          continue;
+        }
+        const verdict = this.classifyReceipt(receiptId!, input.issueId);
+        if (!verdict.ok) {
+          this.mentionFromTrailer(input, now);
+          mentioned += 1;
+          finding(verdict.code, commit.sha, verdict.detail);
+          continue;
+        }
+        const existing = this.db
+          .prepare("SELECT issue_id FROM issue_pr_commits WHERE repository = ? AND number = ? AND sha = ?")
+          .get(input.repository, input.number, commit.sha) as { issue_id: string } | undefined;
+        if (existing && existing.issue_id !== input.issueId) {
+          finding("commit_claimed_twice", commit.sha, `already claimed by ${existing.issue_id}`);
+          continue;
+        }
+        if (this.insertCommit(input.issueId, input.repository, input.number, commit.sha, revision)) {
+          if (this.insertLink(input.issueId, input.repository, input.number, "created_from", "trailer", null, input.actor, now)) {
+            created += 1;
+            issues.appendEvent(input.issueId, "provenance.link_created", {
+              repository: input.repository,
+              number: input.number,
+              receipt: receiptId,
+              relation: "created_from",
+              sha: commit.sha,
+            }, now);
+          }
+        }
+      }
+    });
+    return { created, mentioned, findings };
+  }
+
+  /** Findings are events, not a table; they are reported, never thrown. */
+  listFindings(projectId: string, limit = 20): LinkFinding[] {
+    return all<{ id: number; issue_id: string; payload_json: string; created_at: number }>(
+      this.db,
+      `SELECT e.id, e.issue_id, e.payload_json, e.created_at
+         FROM issue_events e JOIN issues i ON i.id = e.issue_id
+        WHERE i.project_id = ? AND e.type = 'provenance.link_finding'
+        ORDER BY e.id DESC LIMIT ?`,
+      projectId,
+      limit,
+    ).map((r) => {
+      const payload = JSON.parse(r.payload_json) as Record<string, unknown>;
+      return {
+        id: r.id,
+        issueId: r.issue_id,
+        code: String(payload["code"] ?? "unknown"),
+        repository: (payload["repository"] as string | null) ?? null,
+        number: typeof payload["number"] === "number" ? payload["number"] : null,
+        sha: (payload["sha"] as string | null) ?? null,
+        detail: (payload["detail"] as string | null) ?? null,
+        createdAt: r.created_at,
+      };
+    });
+  }
+
+  // -- internals -------------------------------------------------------------
+
+  private requireWriters(): { issues: IssueService; provenance: ProvenanceService } {
+    if (this.issues === null || this.provenance === null) {
+      throw new Error("PR link writers need IssueService and ProvenanceService");
+    }
+    return { issues: this.issues, provenance: this.provenance };
+  }
+
+  private insertLink(
+    issueId: string,
+    repository: string,
+    number: number,
+    relation: PrLinkRelation,
+    source: PrLinkSource,
+    url: string | null,
+    actor: string | null,
+    now: number,
+  ): boolean {
+    const info = this.db
+      .prepare(
+        `INSERT OR IGNORE INTO issue_pull_requests
+           (issue_id, repository, number, relation, source, url, actor, created_at, superseded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      )
+      .run(issueId, repository, number, relation, source, url, actor, now);
+    return Number(info.changes ?? 0) > 0;
+  }
+
+  private insertCommit(issueId: string, repository: string, number: number, sha: string, revision: number | null): boolean {
+    const info = this.db
+      .prepare(
+        `INSERT OR IGNORE INTO issue_pr_commits
+           (issue_id, repository, number, sha, landed_sha, trailer_revision)
+         VALUES (?, ?, ?, ?, NULL, ?)`,
+      )
+      .run(issueId, repository, number, sha, revision);
+    return Number(info.changes ?? 0) > 0;
+  }
+
+  private mentionFromTrailer(input: CommitLinkInput, now: number): void {
+    this.insertLink(input.issueId, input.repository, input.number, "mentioned", "trailer", null, input.actor, now);
+  }
+
+  private classifyReceipt(receiptId: string, issueId: string): { ok: true; receipt: WorkReceipt } | { ok: false; code: string; detail: string } {
+    const { provenance } = this.requireWriters();
+    let receipt: WorkReceipt;
+    try {
+      receipt = provenance.getReceipt(receiptId);
+    } catch {
+      return { ok: false, code: "trailer_receipt_unknown", detail: `unknown receipt ${receiptId}` };
+    }
+    if (receipt.issueId !== issueId) {
+      return { ok: false, code: "trailer_receipt_foreign_issue", detail: `receipt belongs to ${receipt.issueId}` };
+    }
+    if (this.receiptSuperseded(receipt)) {
+      return { ok: false, code: "trailer_receipt_superseded", detail: `a newer receipt exists on ${receipt.executionBindingId}` };
+    }
+    return { ok: true, receipt };
+  }
+
+  private receiptSuperseded(receipt: WorkReceipt): boolean {
+    const { provenance } = this.requireWriters();
+    const same = provenance
+      .listReceipts(receipt.issueId)
+      .filter((r) => r.executionBindingId === receipt.executionBindingId);
+    const latest = same[same.length - 1];
+    return latest !== undefined && latest.id !== receipt.id;
+  }
+
+  /** b1 explicit -> b2 live claim binding -> b3 latest live binding. */
+  private resolveReceipt(issueId: string, explicit: string | undefined, holder: string | undefined, now: number): WorkReceipt {
+    const { issues, provenance } = this.requireWriters();
+    if (explicit !== undefined) {
+      const verdict = this.classifyReceipt(explicit, issueId);
+      if (!verdict.ok) throw new Error(`${verdict.code}: ${verdict.detail}`);
+      return verdict.receipt;
+    }
+    if (holder !== undefined) {
+      const claim = issues.getActiveClaim(issueId, { now });
+      if (claim && claim.holder === holder) {
+        const binding = provenance.listBindings(issueId).filter((b) => b.claimId === claim.id).at(-1);
+        if (binding) {
+          const receipt = provenance
+            .listReceipts(issueId)
+            .filter((r) => r.executionBindingId === binding.id)
+            .at(-1);
+          if (receipt) return receipt;
+        }
+      }
+    }
+    const latest = provenance.listReceipts(issueId).at(-1);
+    if (latest) return latest;
+    throw new Error(`no_receipt: no receipt for this issue; run \`sb provenance dispatch <ref>\` first`);
+  }
+
+  private requireView(issueId: string, repository: string, number: number): IssuePullRequestView {
+    const view = this.listForIssue(issueId).find((v) => v.repository === repository && v.number === number);
+    if (!view) throw new Error(`link not found: ${repository}#${number}`);
+    return view;
   }
 }
