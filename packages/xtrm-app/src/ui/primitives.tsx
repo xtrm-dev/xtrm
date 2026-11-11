@@ -77,7 +77,7 @@ type RowProps = Omit<ComponentProps<"div">, "onClick"> & {
 };
 
 /** The single collection row. Sidebar and list rows share anatomy, differ by density. */
-export function Row({ density = "list", selected, onActivate, actions, className, children, ...props }: RowProps) {
+export function Row({ density = "list", selected, onActivate, actions, className, children, onKeyDown, ...props }: RowProps) {
   return (
     <div
       role={onActivate ? "button" : undefined}
@@ -89,6 +89,7 @@ export function Row({ density = "list", selected, onActivate, actions, className
           e.preventDefault();
           onActivate();
         }
+        onKeyDown?.(e);
       }}
       {...props}
       className={cx(
