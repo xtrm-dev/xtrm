@@ -47,6 +47,7 @@ import { resolveClaimHolder } from "../src/domain/claim.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
+import { GhCliPullRequestSource, PullRequestSyncService } from "../src/service/pull-request-sync-service.ts";
 import { canonicalPullReference, pullUrl, type IssuePullRequestView } from "../src/domain/pull-request.ts";
 import { parseAllTrailers } from "../src/domain/provenance.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
@@ -373,6 +374,9 @@ per-verb help: sb issue create --help  |  sb help issue create`;
 
 const COMMAND_HELP: Record<string, string> = {
   top: HELP_TOP,
+  "links.sync": `usage: sb links sync [<pr>] [--project <id>] [--repo <owner/name>] [--limit <n>] [--since <ISO>] [--dry-run]
+
+  One-shot reconciler: conditional gh reads, pull_requests state, trailer-first links (727 writers), title/branch/body mentions. --since records source=backfill. Writes nothing with --dry-run.`,
   "issue.link": `usage: sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>]... [--commits-range <base>..<head>] [--holder <name>]
 
   Writes a persisted mention (source=explicit) or, with --commit/--commits-range, the T2 evidence from the commits' XTRM-Issue trailers. Never deletes; never claims created_from without a valid receipt.`,
@@ -1050,9 +1054,10 @@ function runLinks(
   command: string,
   verb: string | undefined,
   flags: Flags,
+  rest: string[],
 ): CliResult {
-  if (verb !== "check") {
-    throw new Error("usage: sb links check [--project <id>] [--repo owner/name] [--limit <n>] [--dry-run]");
+  if (verb !== "check" && verb !== "sync") {
+    throw new Error("usage: sb links <check|sync> [options]");
   }
   const dryRun = flags.has("dry-run");
   const repoDisc = discoverRepository();
@@ -1063,7 +1068,7 @@ function runLinks(
     repositoryKey: repoDisc.identity?.repositoryKey ?? null,
   });
   let repo = flag(flags, "repo");
-  if (repo === undefined) {
+  if (repo === undefined && verb !== "sync") {
     const view = spawnSync("gh", ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"], { encoding: "utf8" });
     if (view.status !== 0) throw new Error("sb links check: pass --repo owner/name (gh repo view failed)");
     repo = view.stdout.trim();
@@ -1071,6 +1076,39 @@ function runLinks(
   const limit = Number(flag(flags, "limit") ?? 30);
   if (!Number.isInteger(limit) || limit <= 0) throw new Error("--limit must be a positive integer");
 
+  if (verb === "sync") {
+    const since = flag(flags, "since") ?? null;
+    if (since !== null && Number.isNaN(Date.parse(since))) throw new Error("--since must be an ISO timestamp");
+    const repositoryRows = db
+      .prepare("SELECT DISTINCT canonical_remote FROM repository_bindings WHERE project_id = ? AND canonical_remote LIKE 'github.com/%'")
+      .all(resolved.projectId) as Array<{ canonical_remote: string }>;
+    let repositories = repo !== undefined ? [repo] : repositoryRows.map((r) => r.canonical_remote.slice("github.com/".length));
+    let onlyPr: { repository: string; number: number } | null = null;
+    if (rest[0] !== undefined) {
+      const canonical = canonicalPullReference(rest[0], ambientRepository(db, resolved.projectId));
+      if (canonical === null) throw new Error(`invalid pull reference: ${rest[0]}`);
+      onlyPr = { repository: canonical.repository, number: canonical.number };
+      repositories = [canonical.repository];
+    }
+    if (repositories.length === 0) throw new Error("sb links sync: no github repository binding for this project; pass --repo owner/name");
+    const report = new PullRequestSyncService(db, svc, prLinkService(db, svc), new GhCliPullRequestSource()).sync({
+      projectId: resolved.projectId,
+      repositories,
+      limit,
+      since,
+      dryRun: flags.has("dry-run"),
+      actor: tryHolder(flags) ?? "sb-cli",
+      onlyPr,
+    });
+    if (ctx.json) return emit(ctx, command, report);
+    const lines = [
+      `LINKS SYNC — ${report.repositories} repo(s) · ${report.scanned} PR(s) · ${report.dryRun ? "dry run" : "written"}`,
+      `created_from ${report.created} · mentioned ${report.mentioned} · findings ${report.findings} · skipped ${report.skipped} · failures ${report.failures} · truncated ${report.truncated}`,
+    ];
+    return { code: report.failures > 0 && report.repositories === report.failures ? 1 : 0, stdout: lines.join("\n") + "\n", stderr: "" };
+  }
+
+  if (repo === undefined) throw new Error("--repo <owner/name> is required");
   const prs = ghJson<GhPrListRow[]>([
     "pr", "list", "--repo", repo, "--state", "all", "--limit", String(limit), "--json", "number,title,url",
   ]);
@@ -1182,6 +1220,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "provenance.bind": [],
   "provenance.trace": [],
   "links.check": ["project", "repo", "limit", "dry-run"],
+  "links.sync": ["project", "repo", "limit", "since", "dry-run", "holder"],
   "provenance.commit": [],
   "provenance.receipt": [],
   "provenance.pr": [],
@@ -1286,7 +1325,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
     if (group === "issue") return runIssue(db, svc, ctx, command, verb, flags, rest);
     if (group === "project") return runProject(db, svc, ctx, command, verb, flags);
     if (group === "plan") return runPlan(db, svc, ctx, command, verb, flags);
-    if (group === "links") return runLinks(db, svc, ctx, command, verb, flags);
+    if (group === "links") return runLinks(db, svc, ctx, command, verb, flags, rest);
     if (group === "journal" || group === "provenance") {
       const result = group === "journal"
         ? runJournal(db, svc, ctx, command, verb, flags, rest)

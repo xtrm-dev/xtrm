@@ -45,13 +45,13 @@ describe("migration 013", () => {
   beforeEach(() => { s = scratch(); });
   afterEach(() => { try { s.db.close(); } catch { /* closed */ } rmSync(s.dir, { recursive: true, force: true }); });
 
-  it("creates both tables and records version 14", () => {
+  it("creates both tables and records version 15", () => {
     const tables = s.db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('issue_pull_requests','issue_pr_commits') ORDER BY name")
       .all() as Array<{ name: string }>;
     assert.deepEqual(tables.map((t) => t.name), ["issue_pr_commits", "issue_pull_requests"]);
     const v = s.db.prepare("SELECT MAX(version) AS v FROM schema_migrations").get() as { v: number };
-    assert.equal(v.v, 14);
+    assert.equal(v.v, 15);
   });
 
   it("rejects a duplicate relation row and a duplicate commit", () => {
