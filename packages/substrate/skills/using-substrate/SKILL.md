@@ -111,6 +111,59 @@ the specialists activation layer. Unbound sessions are not implicitly bound to
 a random Project or Issue. Repository/project initialization is `sb init`; global
 database cardinality is never project context.
 
+## Issue-to-PR links and the close gate
+
+Post-0.2.6 surface: these verbs need substrate >= 0.2.7 and are absent from 0.2.6.
+`sb <group> <verb> --help` wins on drift.
+
+```bash
+sb links check [--issue <ref>] [--repo <owner/name>] [--limit <n>] [--dry-run]
+sb links sync [<pr>] [--repo <owner/name>] [--since <ISO>] [--dry-run]
+sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>]... [--commits-range <a>..<b>]
+sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation created_from|mentioned]
+sb provenance attach <ref> pr <owner/repo#n|url|#n> [--receipt <id>]
+```
+
+- `links check` lists T2 candidates — PR commits whose `XTRM-Issue` trailer names an Issue
+  in this project. With `--issue` it prints the manual and auto verdicts and their codes;
+  the default check adds verdicts and exits 1 only under `enforce`. `--dry-run` writes
+  nothing.
+- `links sync` is the one-shot reconciler: conditional `gh` reads, PR state, trailer-first
+  links, then title/branch/body mentions. `--since` records `source=backfill`.
+- `provenance attach` is the T1 outcome link: the PR is the Issue's work. `issue link pr`
+  writes an explicit mention or, with commits, the T2 evidence from their trailers.
+  `unlink` supersedes rows; evidence is never deleted.
+- The `gh` shim runs attach then link after `gh pr create`, from the PR body's
+  `<!-- xtrm issue=<REF> ... -->` marker. It is fail-open: two different refs or none warn
+  and skip, and the create still succeeds.
+
+### Close gate
+
+`sb issue close` and `sb issue state <ref> done` join the stored rows before the closure:
+T1 (a live `created_from` PR artifact on the receipt) or T2 (a `created_from` trailer plus
+linked commits). Mode comes from `--link-gate`, then `XTRM_LINK_GATE`, then `warn`:
+`enforce` refuses, `warn` appends `provenance.link_gate_warned` and proceeds, `off` skips.
+Codes: `gate_orphan_link`, `gate_mentioned_only`, `gate_no_evidence`,
+`gate_pr_not_merged`, `gate_other_open_pr`, `gate_live_claim`,
+`gate_default_branch_unknown`, `gate_github_unreachable`. `--gate-override <reason>`
+journals a decision and bypasses only evidence/transport codes — never a live claim or
+another open PR. In auto mode an unknown or unreachable GitHub fails closed.
+
+### Claim and Journal limits
+
+`--holder` on claim, renew and release defaults to `SUBSTRATE_HOLDER`; renewal
+(`sb issue renew <ref> [--ttl-ms <n>]`) moves only the expiry and keeps the generation.
+`semantic.summary` is capped at 20,000 characters: a longer one fails and writes nothing,
+so put long text in a file and use `--summary-file <path|->`. A note, finding, decision,
+blocker, milestone or handoff with no payload is rejected; a placeholder or under-eight-word
+summary returns a warning; `--kind result` requires a bounded `--result` payload.
+
+### Strict CLI
+
+An unknown flag fails closed and names the flag; `--parent X` must be two arguments; extra
+positional text is refused. `sb help contract`, `sb help kinds` and `sb help identity` answer
+the three questions operators ask most.
+
 ## Where to read more
 
 - `packages/substrate/docs/pi.md` — provider reference
