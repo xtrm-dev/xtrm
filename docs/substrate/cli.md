@@ -237,11 +237,19 @@ description inventory LANDED, owner M1.
 `substrate_provenance_trace`, plus the `substrate-resume` command and the
 claim-gated edit/write `tool_call` gate.
 
+## links — read-only candidate check
+
+`sb links check [--project <id>] [--repo owner/name] [--limit <n>] [--dry-run]`
+lists T2 candidates: pull-request commits whose `XTRM-Issue` trailer names an
+Issue in the current Project, read through `gh`. Slice 1 is read-only; the
+command writes no rows. `created_from` versus `mentioned`, the two tables and
+the close gate are specified in the issue-to-PR design note.
+
 ## Help is methodology
 
 `sb help init`, `sb issue edit --help` (says: not for progress),
 `sb issue note --help`, `sb issue close --help`
-(outcomes/reason/provenance), `sb journal --help`, `sb provenance --help`
+(outcomes/reason/provenance), `sb journal --help`, `sb provenance --help`, `sb links check --help`
 — help teaches the model, not only flags. Skills must teach the same
 model; any skill teaching a retired command or bypassing Journal
 methodology fails the gate.

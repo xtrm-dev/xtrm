@@ -181,8 +181,9 @@ describe("migrations 008-009 on the live prj_xtrm store shape (§90)", () => {
     const version = db.prepare("SELECT MAX(version) AS v FROM schema_migrations").get() as { v: number };
     // Head advances with every landed migration; 008/009 are proven applied
     // below, and X1 lands 010 plus C1 lands 011 on top without touching
-    // existing rows. XTRM-414 lands 012 (workspace-leases withdrawal).
-    assert.equal(version.v, 12);
+    // existing rows. XTRM-414 lands 012 (workspace-leases withdrawal);
+    // XTRM-726 lands 013 (issue-to-PR links).
+    assert.equal(version.v, 13);
     const applied = db.prepare("SELECT name FROM schema_migrations WHERE version = 8").get() as { name: string };
     assert.equal(applied.name, "repository-bindings");
     const head9 = db.prepare("SELECT name FROM schema_migrations WHERE version = 9").get() as { name: string };
@@ -193,6 +194,8 @@ describe("migrations 008-009 on the live prj_xtrm store shape (§90)", () => {
     assert.equal(head11.name, "issue-closure");
     const head12 = db.prepare("SELECT name FROM schema_migrations WHERE version = 12").get() as { name: string };
     assert.equal(head12.name, "drop-workspace-leases");
+    const head13 = db.prepare("SELECT name FROM schema_migrations WHERE version = 13").get() as { name: string };
+    assert.equal(head13.name, "issue-pull-requests");
     for (const t of ["execution_bindings", "issue_journal"]) {
       const cols = db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>;
       assert.ok(cols.some((c) => c.name === "execution_context_json"), `${t} carries the envelope column`);
