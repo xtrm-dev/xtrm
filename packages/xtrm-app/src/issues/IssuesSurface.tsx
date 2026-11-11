@@ -6,6 +6,7 @@ import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_REST, cx, relativeTime } from "../ui/primitives.tsx";
+import { TreeCell } from "../ui/tree.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
@@ -86,6 +87,16 @@ export function IssuesSurface() {
   const rollups = useMemo(() => rollupActivity(issues.data ?? []), [issues.data]);
   const visible = useMemo(() => matching.filter(VIEWS.find(([v]) => v === view)![2]), [matching, view]);
   const tree = useMemo(() => buildTree(visible, rollups, sort, collapsed), [visible, rollups, sort, collapsed]);
+  /** A row is its parent's last child when the tree stops nesting after it (no row, or a shallower one). */
+  const lastChild = useMemo(() => {
+    const last = new Set<string>();
+    for (let i = 0; i < tree.length; i++) {
+      const row = tree[i]!;
+      const next = tree[i + 1];
+      if (!next || next.depth < row.depth) last.add(row.issue.id);
+    }
+    return last;
+  }, [tree]);
   const toggle = (ref: string) =>
     setCollapsed((c) => {
       const next = new Set(c);
@@ -145,7 +156,14 @@ export function IssuesSurface() {
           </div>
         }
         renderRow={(r) => (
-          <IssueRow row={r} selected={inspected?.kind === "issue" && inspected.ref === r.issue.ref} onToggle={() => toggle(r.issue.ref)} onInspect={() => inspect({ kind: "issue", ref: r.issue.ref })} onOpen={() => openPage(r.issue.ref)} />
+          <IssueRow
+            row={r}
+            selected={inspected?.kind === "issue" && inspected.ref === r.issue.ref}
+            last={lastChild.has(r.issue.id)}
+            onToggle={() => toggle(r.issue.ref)}
+            onInspect={() => inspect({ kind: "issue", ref: r.issue.ref })}
+            onOpen={() => openPage(r.issue.ref)}
+          />
         )}
       />
     );
@@ -234,30 +252,31 @@ const STATUS_CHIP: Record<StatusTone, string> = {
   muted: "bg-hover text-ink-faint",
 };
 
-function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow; selected: boolean; onToggle: () => void; onInspect: () => void; onOpen: () => void }) {
+function IssueRow({ row, selected, last, onToggle, onInspect, onOpen }: { row: TreeRow; selected: boolean; last: boolean; onToggle: () => void; onInspect: () => void; onOpen: () => void }) {
   const { issue, depth, rollup, hasChildren, collapsed, detached } = row;
   const terminal = TERMINAL.has(issue.lifecycle);
   const status = issueStatus(issue);
   return (
-    <Row density="table" selected={selected} onActivate={onInspect} onDoubleClick={onOpen} className="">
+    <Row
+      density="table"
+      selected={selected}
+      onActivate={onInspect}
+      onDoubleClick={onOpen}
+      className=""
+      onKeyDown={(e) => {
+        if (!hasChildren) return;
+        if (e.key === "ArrowRight" && collapsed) {
+          e.preventDefault();
+          onToggle();
+        }
+        if (e.key === "ArrowLeft" && !collapsed) {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
+    >
       <div className="grid h-full w-full items-center overflow-hidden" style={GRID}>
-        <div className={cx(CELL, "relative gap-1.5")} style={{ paddingLeft: `${0.5 + depth * 1.25}rem` }}>
-          {hasChildren ? (
-            <button
-              type="button"
-              aria-expanded={!collapsed}
-              aria-label={`${collapsed ? "Expand" : "Collapse"} ${issue.ref}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggle();
-              }}
-              className="flex size-5 shrink-0 items-center justify-center rounded text-ink-faint outline-none hover:bg-pressed hover:text-ink focus-visible:bg-pressed"
-            >
-              <Icon name="chevronDown" size="xs" className={cx("transition-transform", collapsed && "-rotate-90")} />
-            </button>
-          ) : (
-            <span className="w-5 shrink-0" />
-          )}
+        <TreeCell depth={depth} hasChildren={hasChildren} expanded={!collapsed} onToggle={onToggle} last={last} label={issue.ref} className={cx(CELL, "gap-1.5")}>
           <span title={issue.kind} className="flex shrink-0">
             <Icon name={kindIcon(issue.kind)} size="xs" className="text-ink-faint" />
           </span>
@@ -281,7 +300,7 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
             <IconButton icon="open" label={`Open ${issue.ref}`} onClick={onOpen} className="size-5" />
             <IconButton icon="copy" label={`Copy ${issue.ref}`} onClick={() => copy(issue.ref)} className="size-5" />
           </span>
-        </div>
+        </TreeCell>
         <div className={cx(CELL, "justify-end")}>
           {issue.childCount > 0 ? `${issue.childrenDone}/${issue.childCount}` : ""}
         </div>
