@@ -7,6 +7,7 @@
 // machine ID appears only in --json output).
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import {
   BEADS_TBD_MARKER,
   expectedProblemHead,
@@ -45,6 +46,8 @@ import { CLOSURE_OUTCOMES, isClosureOutcome } from "../src/domain/closure.ts";
 import { resolveClaimHolder } from "../src/domain/claim.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
+import { PullRequestService } from "../src/service/pull-request-service.ts";
+import { trailerIssueRefs, type IssuePullRequestView } from "../src/domain/pull-request.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
 import { renderProvenanceTrace } from "../src/presentation/terminal.ts";
@@ -202,6 +205,21 @@ function renderOperationalContext(ctx: JournalOperationalContext): string[] {
   return lines;
 }
 
+function renderPullRequests(views: IssuePullRequestView[]): string[] {
+  if (views.length === 0) return [];
+  const MAX = 20;
+  const lines = ["", "PULL REQUESTS"];
+  for (const v of views.slice(0, MAX)) {
+    const bits = [`${v.relation} ${v.repository}#${v.number}`];
+    bits.push(`sources: ${v.sources.join(",")}`);
+    if (v.commits.length > 0) bits.push(`${v.commits.length} commit(s)`);
+    if (v.alsoMentioned) bits.push("also mentioned");
+    lines.push(`- ${bits.join(" · ")}`);
+  }
+  if (views.length > MAX) lines.push(`(+${views.length - MAX} more)`);
+  return lines;
+}
+
 function treeSummary(svc: IssueService, id: string): Record<string, unknown> {
   const issue = svc.getIssue(id);
   return {
@@ -340,6 +358,7 @@ groups:
   plan        check|apply
   journal     append|checkpoint|show|since|latest|timeline|render
   provenance  dispatch|allocate|bind|trace|commit|receipt|pr|session|activation|bundle
+  links       check (slice 1: read-only dry run)
   remote      setup|status|disable
   import      beads
   export      project
@@ -689,6 +708,7 @@ and activation answer what one session touched or one activation produced.
 Record what happened in the Journal and close with cited refs; never edit
 the contract to narrate history.`,
   "provenance.dispatch": `usage: sb provenance dispatch <ref> [--workspace <dir>] [--participant/--activation/--attempt/--session/--base-commit <v>] [--claim-id <n>] [--project <id>]`,
+  "links.check": `usage: sb links check [--project <id>] [--repo owner/name] [--limit <n>] [--dry-run]\n\nlists T2 candidates: PR commits whose XTRM-Issue trailer names an Issue in this project. Slice 1 is read-only; --dry-run is the only mode and writes nothing.`,
   "provenance.trace": `usage: sb provenance trace <ref>
 
 reads the full lineage spine: execution bindings with their pinned
@@ -995,6 +1015,101 @@ function runInit(db: ReturnType<typeof openSubstrate>, svc: IssueService, ctx: C
   return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
 }
 
+interface GhPrListRow { number: number; title: string; url: string }
+interface GhPrCommit { oid: string; messageHeadline: string; messageBody?: string | null }
+interface GhPrView { url: string; commits: GhPrCommit[] }
+
+function ghJson<T>(args: string[]): T {
+  const res = spawnSync("gh", args, { encoding: "utf8" });
+  if (res.status !== 0) {
+    const detail = (res.stderr || res.stdout || "").trim();
+    throw new Error(`gh ${args.join(" ")} failed: ${detail || `exit ${res.status}`}`);
+  }
+  try {
+    return JSON.parse(res.stdout) as T;
+  } catch {
+    throw new Error(`gh ${args.join(" ")} returned invalid JSON`);
+  }
+}
+
+function runLinks(
+  _db: ReturnType<typeof openSubstrate>,
+  svc: IssueService,
+  ctx: Ctx,
+  command: string,
+  verb: string | undefined,
+  flags: Flags,
+): CliResult {
+  if (verb !== "check") {
+    throw new Error("usage: sb links check [--project <id>] [--repo owner/name] [--limit <n>] [--dry-run]");
+  }
+  const dryRun = flags.has("dry-run");
+  const repoDisc = discoverRepository();
+  const resolved = svc.resolveProject({
+    explicit: flag(flags, "project") ?? undefined,
+    env: process.env["SUBSTRATE_PROJECT"],
+    gitRoot: repoDisc.gitRoot,
+    repositoryKey: repoDisc.identity?.repositoryKey ?? null,
+  });
+  let repo = flag(flags, "repo");
+  if (repo === undefined) {
+    const view = spawnSync("gh", ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"], { encoding: "utf8" });
+    if (view.status !== 0) throw new Error("sb links check: pass --repo owner/name (gh repo view failed)");
+    repo = view.stdout.trim();
+  }
+  const limit = Number(flag(flags, "limit") ?? 30);
+  if (!Number.isInteger(limit) || limit <= 0) throw new Error("--limit must be a positive integer");
+
+  const prs = ghJson<GhPrListRow[]>([
+    "pr", "list", "--repo", repo, "--state", "all", "--limit", String(limit), "--json", "number,title,url",
+  ]);
+  const candidates: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
+  for (const pr of prs) {
+    const detail = ghJson<GhPrView>(["pr", "view", String(pr.number), "--repo", repo, "--json", "url,commits"]);
+    for (const commit of detail.commits ?? []) {
+      const message = `${commit.messageHeadline}\n${commit.messageBody ?? ""}`;
+      for (const ref of trailerIssueRefs(message)) {
+        let issue;
+        try {
+          issue = svc.resolveRefInProject(ref, resolved.projectId);
+        } catch {
+          continue;
+        }
+        const key = `${issue.id}|${repo}#${pr.number}|${commit.oid}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        candidates.push({
+          issue: issue.humanRef,
+          title: pr.title,
+          repository: repo,
+          number: pr.number,
+          url: detail.url,
+          sha: commit.oid,
+        });
+      }
+    }
+  }
+  const payload = {
+    dryRun,
+    readOnly: true,
+    project: resolved.projectId,
+    repository: repo,
+    scanned: prs.length,
+    candidates,
+  };
+  if (ctx.json) return emit(ctx, command, payload);
+  const lines = [`LINKS CHECK — ${repo} · ${prs.length} PR(s) scanned · ${dryRun ? "dry run" : "read-only"}`];
+  if (candidates.length === 0) lines.push("(no XTRM-Issue trailer candidate)");
+  else {
+    for (const c of candidates) {
+      lines.push(`- ${String(c["issue"])}  ${String(c["repository"])}#${String(c["number"])}  ${String(c["sha"]).slice(0, 12)}  ${String(c["url"])}`);
+    }
+  }
+  lines.push("slice 1: no rows written");
+  return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
+}
+
 // -- entry -------------------------------------------------------------------
 
 // Fail-closed flag validation (xtrm-7wc.5.4): parseArgs accepts any --flag
@@ -1046,6 +1161,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "provenance.allocate": ["project", "checkpoint"],
   "provenance.bind": [],
   "provenance.trace": [],
+  "links.check": ["project", "repo", "limit", "dry-run"],
   "provenance.commit": [],
   "provenance.receipt": [],
   "provenance.pr": [],
@@ -1062,7 +1178,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "export.project": ["project", "file"],
 };
 
-const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export", "remote", "serve"]);
+const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "links", "import", "export", "remote", "serve"]);
 
 function assertKnownFlags(flags: Flags, command: string): void {
   const allowed = new Set([...GLOBAL_FLAGS, ...(FLAG_ALLOWLIST[command] ?? [])]);
@@ -1150,6 +1266,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
     if (group === "issue") return runIssue(db, svc, ctx, command, verb, flags, rest);
     if (group === "project") return runProject(db, svc, ctx, command, verb, flags);
     if (group === "plan") return runPlan(db, svc, ctx, command, verb, flags);
+    if (group === "links") return runLinks(db, svc, ctx, command, verb, flags);
     if (group === "journal" || group === "provenance") {
       const result = group === "journal"
         ? runJournal(db, svc, ctx, command, verb, flags, rest)
@@ -1164,7 +1281,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
     }
     if (group === "import") return runImport(db, svc, ctx, command, verb, flags);
     if (group === "export") return runExport(db, svc, ctx, command, verb, flags);
-    throw new Error(`unknown group: ${group} (want issue|project|plan|journal|provenance|import|export|remote)`);
+    throw new Error(`unknown group: ${group} (want issue|project|plan|journal|provenance|links|import|export|remote)`);
   } catch (err) {
     return fail(ctx, command, err);
   } finally {
@@ -1327,6 +1444,7 @@ function runIssue(
       // Bounded operational context (ADR §50): every read is bounded, so a
       // large journal never enlarges the default show output.
       const operationalContext = new JournalService(db, svc).operationalContext(resolved.id);
+      const pullRequests = new PullRequestService(db).listForIssue(resolved.id);
       const payload = {
         ...issueSummary(resolved),
         contractHash: resolved.currentContractHash,
@@ -1339,12 +1457,18 @@ function runIssue(
         provenance: provenanceSummary(svc, resolved.id),
         closure: closureSummary(db, svc, resolved),
         operationalContext,
+        pullRequests,
       };
       if (ctx.json) return emit(ctx, command, payload);
       return {
         code: 0,
         stdout:
-          [human(issueSummary(resolved)), ...contractSections(contract), ...renderOperationalContext(operationalContext)].join("\n") +
+          [
+            human(issueSummary(resolved)),
+            ...contractSections(contract),
+            ...renderPullRequests(pullRequests),
+            ...renderOperationalContext(operationalContext),
+          ].join("\n") +
           "\n",
         stderr: "",
       };
