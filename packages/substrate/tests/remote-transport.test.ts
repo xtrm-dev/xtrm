@@ -15,6 +15,7 @@ import { DEFAULT_TIMEOUT_MS } from "../src/remote/ssh.ts";
 import { localRepositoryKey, normalizeRemote } from "../src/domain/repository.ts";
 import { renderRemoteStatus } from "../src/remote/render.ts";
 import { runCli } from "../cli/sb.ts";
+import { resolveClaimHolder } from "../src/domain/claim.ts";
 import type { RemoteTransport } from "../src/remote/ssh.ts";
 
 // Remote transport tests (ADR-008). The "server" is this machine: a fake `sb`
@@ -323,23 +324,73 @@ describe("remote execution passthrough", () => {
     assert.equal(fake.calls()[0]?.env.holder, "holder-probe-pc");
   });
 
-  it("carries SUBSTRATE_HOLDER to a remote claim that states no holder", () => {
-    // The CLI resolves the holder from the environment on whichever side runs
-    // it: a forwarded claim crosses with no --holder argument, and the remote
-    // executor forwards SUBSTRATE_HOLDER to the server process, so the same
-    // resolver there claims as the session (XTRM-722).
+  // XTRM-722 forwarding property: the client resolves the claim holder before
+  // it forwards anything. The server's own SUBSTRATE_HOLDER is therefore never
+  // the deciding value — either the flag wins there, or the client's value
+  // overrides it, and a client with neither fails closed without a request.
+  function serverWithHolder(holder: string | undefined): RemoteTransport {
+    return {
+      run(request) {
+        const env: NodeJS.ProcessEnv = { ...process.env };
+        if (holder === undefined) delete env["SUBSTRATE_HOLDER"];
+        else env["SUBSTRATE_HOLDER"] = holder;
+        const result = spawnSync("sh", ["-c", request.command], {
+          input: request.stdin ?? undefined,
+          encoding: "utf8",
+          timeout: 60_000,
+          env,
+        });
+        return { code: result.status ?? 255, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+      },
+    };
+  }
+
+  function remoteClaim(argv: string[], clientHolder: string | undefined, serverHolder: string | undefined) {
     const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
     assert.ok(CLIENT_KEY);
     writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
-    const outcome = forwardCli(["issue", "claim", "XTRM-722", "--json"], {
-      env: remoteEnv(fake.clientConfigPath, { SUBSTRATE_HOLDER: "holder-remote" }),
-      transport: localTransport(),
+    const outcome = forwardCli(argv, {
+      env: remoteEnv(fake.clientConfigPath, { SUBSTRATE_HOLDER: clientHolder }),
+      transport: serverWithHolder(serverHolder),
     });
-    assert.ok(outcome);
+    assert.ok(outcome, "remote mode forwards the invocation");
+    return { fake, outcome };
+  }
+
+  it("refuses a forwarded claim with no holder on the client, and sends nothing", () => {
+    for (const verb of ["claim", "release"]) {
+      const { fake, outcome } = remoteClaim(["issue", verb, "XTRM-722", "--json"], undefined, "server-holder");
+      assert.equal(outcome.code, 1, `${verb}: the client fails closed`);
+      const envelope = JSON.parse(outcome.stdout) as { ok: boolean; error: string };
+      assert.equal(envelope.ok, false);
+      assert.match(envelope.error, /--holder/, `${verb}: names the flag`);
+      assert.match(envelope.error, /SUBSTRATE_HOLDER/, `${verb}: names the environment`);
+      assert.equal(fake.calls().length, 0, `${verb}: the executor was never invoked`);
+    }
+  });
+
+  it("uses the client's holder, never the server's, on a forwarded claim", () => {
+    const { fake, outcome } = remoteClaim(["issue", "claim", "XTRM-722", "--json"], "client-holder", "server-holder");
     assert.equal(outcome.code, 0, outcome.stderr);
     const call = fake.calls()[0];
-    assert.equal(call?.env.holder, "holder-remote", "the session holder reaches the server process");
+    assert.equal(call?.env.holder, "client-holder", "the client's value overrides the server's");
     assert.equal(call?.argv.includes("--holder"), false, "no holder argument is needed on the wire");
+  });
+
+  it("sends the flag on a forwarded claim, and the flag beats both environments", () => {
+    const { fake, outcome } = remoteClaim(
+      ["issue", "claim", "XTRM-722", "--holder", "flag-holder", "--json"],
+      "client-holder",
+      "server-holder",
+    );
+    assert.equal(outcome.code, 0, outcome.stderr);
+    const call = fake.calls()[0];
+    const index = call?.argv.indexOf("--holder") ?? -1;
+    assert.ok(index >= 0, "the flag is on the wire");
+    assert.equal(call?.argv[index + 1], "flag-holder");
+    // The server resolves exactly this pair: the flag wins over its own env.
+    assert.equal(resolveClaimHolder("flag-holder", { SUBSTRATE_HOLDER: "client-holder" }).holder, "flag-holder");
+    assert.equal(resolveClaimHolder("flag-holder", { SUBSTRATE_HOLDER: "server-holder" }).holder, "flag-holder");
   });
 
   it("uploads every document flag, whether its value is a file or inline JSON", () => {
