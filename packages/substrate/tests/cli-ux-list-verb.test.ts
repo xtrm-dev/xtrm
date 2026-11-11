@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { runCli } from "../cli/sb.ts";
-import { runUxCli } from "../cli/sb-ux.ts";
+import { engineArgsForList, runUxCli } from "../cli/sb-ux.ts";
 import { contract } from "./helpers.ts";
 
 function board(): { dir: string; dbPath: string; db: ReturnType<typeof openSubstrate>; svc: IssueService; parent: string; child: string } {
@@ -125,6 +125,64 @@ describe("XTRM-740: the hierarchical rendering the rewrite exists for is unchang
       const res = await runUxCli(["issue", "browse", "--db", w.dbPath, "--plain", "--bogus", "x"], { isTTY: false });
       assert.equal(res.code, 1);
       assert.match(res.stderr, /interactive browser requires a TTY/, "browse keeps its own early failure");
+    } finally {
+      w.db.close();
+      rmSync(w.dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("XTRM-741: the rewrite moves the verb and nothing else", () => {
+  // Only the verb is rewritten. Scanning for the first `list`/`browse` token
+  // anywhere in argv rewrote flag values: `sb issue browse --search list`
+  // searched for "tree".
+  const cases: Array<[string[], string[], string]> = [
+    [["issue", "browse", "--search", "list"], ["issue", "tree", "--search", "list"], "a search term spelling a verb is left alone"],
+    [["issue", "browse", "--search", "browse"], ["issue", "tree", "--search", "browse"], "even when the term is the other verb"],
+    [["--db", "/tmp/x", "issue", "list", "--search", "browse"], ["--db", "/tmp/x", "issue", "tree", "--search", "browse"], "a leading global flag does not shift the rewrite"],
+    [["issue", "list", "--status", "ready"], ["issue", "tree", "--status", "ready"], "filters pass through unchanged"],
+    [["issue", "show", "XTRM-1"], ["issue", "show", "XTRM-1"], "a verb that is not list/browse is never rewritten"],
+    [["project", "list"], ["project", "tree"], "the rewrite is positional, not verb-name based"],
+  ];
+  for (const [input, expected, why] of cases) {
+    it(`${why}: ${input.join(" ")}`, () => {
+      assert.deepEqual(engineArgsForList(input), expected);
+    });
+  }
+});
+
+describe("XTRM-741: a global flag before the group still reaches the browser", () => {
+  for (const argv of [
+    ["--db", ":db:", "issue", "browse"],
+    ["issue", "browse", "--db", ":db:"],
+    ["--project", "prj_xtrm", "issue", "browse"],
+  ]) {
+    it(`sb ${argv.join(" ").replace(":db:", "<db>")} answers the TTY check, not an unknown verb`, async () => {
+      const w = board();
+      const substituted = argv.map((token) => (token === ":db:" ? w.dbPath : token));
+      try {
+        const res = await runUxCli(substituted, { isTTY: false });
+        assert.equal(res.code, 1);
+        assert.match(res.stderr, /interactive browser requires a TTY/, `got: ${res.stderr}`);
+        assert.ok(!res.stderr.includes("unknown issue verb"), "the browser path is entered");
+      } finally {
+        w.db.close();
+        rmSync(w.dir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  it("browse fails on the TTY before it validates flags", async () => {
+    // Ordering, pinned deliberately: the browser refuses a non-interactive run
+    // before any flag is examined, so a bad flag on browse never produces a
+    // flag message. XTRM-740's verb mapping still covers the list path, where
+    // the engine is what fails.
+    const w = board();
+    try {
+      const res = await runUxCli(["issue", "browse", "--db", w.dbPath, "--bogus", "x"], { isTTY: false });
+      assert.equal(res.code, 1);
+      assert.match(res.stderr, /interactive browser requires a TTY/);
+      assert.ok(!res.stderr.includes("unknown flag"), `got: ${res.stderr}`);
     } finally {
       w.db.close();
       rmSync(w.dir, { recursive: true, force: true });
