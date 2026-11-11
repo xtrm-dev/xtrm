@@ -132,6 +132,21 @@ the same durable service result, not a second authority model.
 Plugin scripts resolve through `${CLAUDE_PLUGIN_ROOT}`, never the consumer
 project path. `${CLAUDE_PROJECT_DIR}` is user-project state, not package code.
 
+## Issue-to-PR links and the close gate
+
+`issue_close` runs the same close gate as the CLI before any Closure row: a delivery close
+needs T1 evidence (a live `created_from` PR artifact on the receipt) or T2 evidence (a
+`created_from` trailer plus linked commits). The MCP schema has no gate flag; the mode comes
+from `XTRM_LINK_GATE` (`warn` default, `enforce`, `off`). A Substrate or GitHub outage fails
+closed in auto mode, and only an evidence/transport code is overridable.
+
+The link rows are written by the `gh` shim after `gh pr create`, from the PR body's
+`<!-- xtrm issue=<REF> ... -->` marker, fail-open. Reconcile or backfill them from the
+operator surface — `sb links check`, `sb links sync`, `sb provenance attach` and
+`sb issue link pr` (needs substrate >= 0.3.0; absent from 0.2.6). Exact flags, gate codes and
+the Journal summary limit: `sb <group> <verb> --help`, and the Pi half of this skill in the
+package (`packages/substrate/skills/using-substrate/SKILL.md`).
+
 ## Where to read more
 
 - `packages/substrate/docs/claude.md` — exact provider lifecycle and tool map
