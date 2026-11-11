@@ -241,7 +241,7 @@ export function useHalfNavigation() {
 function HalfSwitch() {
   const { half, switchTo } = useHalfNavigation();
   return (
-    <div role="radiogroup" aria-label="Workspace" data-testid="half-switch" className="flex h-7 min-w-0 flex-1 items-center gap-0.5 rounded-lg bg-pressed p-0.5">
+    <div role="radiogroup" aria-label="Workspace" data-testid="half-switch" className="flex h-7 min-w-0 flex-1 items-center gap-0.5 rounded-sm bg-pressed p-0.5">
       {HALVES.map((h) => {
         const on = h.id === half;
         return (
@@ -253,8 +253,8 @@ function HalfSwitch() {
               aria-label={h.label}
               onClick={() => switchTo(h.id)}
               className={cx(
-                "flex h-6 min-w-0 flex-1 items-center justify-center rounded-md text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
-                on ? "bg-control text-ink shadow-[0_0_0_1px_var(--x-border-muted)]" : "text-ink-faint hover:text-ink-muted",
+                "flex h-6 min-w-0 flex-1 items-center justify-center rounded-[4px] text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
+                on ? "bg-control text-ink" : "text-ink-faint hover:text-ink-muted",
               )}
             >
               {h.label}

@@ -93,9 +93,9 @@ function ShellLayout() {
         <ResizeHandle label="Resize sidebar" hidden={!sidebar.open} />
         <FillPanel className="flex flex-col overflow-hidden">
           <TopBar />
-          <ResizableGroup className="min-h-0 pr-2">
-            <FillPanel data-testid="main-panel" className="flex justify-center overflow-hidden">
-              <main data-testid="primary-region" className="relative flex min-h-0 w-[90%] min-w-0 flex-col">
+          <ResizableGroup className="min-h-0 pr-1">
+            <FillPanel data-testid="main-panel" className="flex overflow-hidden">
+              <main data-testid="primary-region" className="relative mx-auto flex min-h-0 w-[96%] min-w-0 flex-col">
                 <Outlet />
               </main>
             </FillPanel>
