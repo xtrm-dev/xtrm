@@ -1,5 +1,5 @@
 import { Dialog } from "../ui/dialog.tsx";
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { IssueDetail, IssueLink } from "../adapters/index.tsx";
 import { planNormalization, type NormalizationPlan } from "../adapters/substrate/contract.ts";
 import { FieldLabel, InlineTitle, ListField, ProseField, SelectField } from "../ui/fields.tsx";
@@ -11,6 +11,7 @@ import { JournalTab } from "./IssueJournal.tsx";
 import { PullRequestsBlock } from "./PullRequestsBlock.tsx";
 import { ClosureCard, ProvenanceTab } from "./IssueProvenance.tsx";
 import { useIssueActions } from "./actions.ts";
+import { useAdapters } from "../adapters/index.tsx";
 import {
   LIFECYCLES,
   TERMINAL,
@@ -37,6 +38,8 @@ interface Nav {
 
 export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetail; canWrite: boolean; variant: Variant; nav: Nav }) {
   const actions = useIssueActions(issue);
+  const { substrate } = useAdapters();
+  const loadOlderJournal = useCallback((before: number) => substrate.readJournal(issue.ref, { before }), [substrate, issue.ref]);
   const [tab, setTab] = useState<"journal" | "lineage" | "provenance">("journal");
   const [focusSequence, setFocusSequence] = useState<number | null>(null);
   const plan = useMemo(() => planNormalization(issue.contract), [issue.contract]);
@@ -91,7 +94,7 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
             </button>
           ))}
         </div>
-        {tab === "journal" && <JournalTab issue={issue} canWrite={canWrite} onAdd={actions.addNote} focusSequence={focusSequence} />}
+        {tab === "journal" && <JournalTab issue={issue} canWrite={canWrite} onAdd={actions.addNote} focusSequence={focusSequence} onLoadOlder={loadOlderJournal} />}
         {tab === "lineage" && <LineageTab issue={issue} nav={nav} />}
         {tab === "provenance" && (
           <ProvenanceTab

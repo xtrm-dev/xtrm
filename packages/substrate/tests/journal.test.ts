@@ -225,6 +225,33 @@ describe("journal cursors (D24)", () => {
     assert.throws(() => journal.since(issue.id, -1), /cursor must be a non-negative integer/);
     assert.throws(() => journal.since(issue.id, 1.5), /cursor must be a non-negative integer/);
   });
+
+  it("before pages backwards and still returns entries in chronological order", async () => {
+    const { journal } = services(ctx);
+    const issue = workIssue(ctx);
+    for (let i = 1; i <= 5; i += 1) {
+      journal.appendEntry(issue.id, { kind: i % 2 === 0 ? "finding" : "decision", semantic: { summary: `e${i}` } });
+    }
+    // The window ends below the cursor: entries 1-2 of a journal that holds 5.
+    assert.deepEqual(
+      journal.listEntries(issue.id, { before: 3, limit: 2 }).map((e) => e.sequence),
+      [1, 2],
+    );
+    // A forward LIMIT would have kept the newest entries out of reach.
+    assert.deepEqual(
+      journal.listEntries(issue.id, { before: 6, limit: 2 }).map((e) => e.sequence),
+      [4, 5],
+    );
+    // Kind filtering composes with the cursor.
+    assert.deepEqual(
+      journal.listEntries(issue.id, { before: 6, limit: 2, kind: "decision" }).map((e) => e.sequence),
+      [3, 5],
+    );
+    assert.deepEqual(journal.listEntries(issue.id, { before: 1, limit: 2 }), []);
+    assert.throws(() => journal.listEntries(issue.id, { before: 3 }), /a limit is required with before/);
+    assert.throws(() => journal.listEntries(issue.id, { before: 0, limit: 1 }), /before must be a positive integer/);
+    assert.throws(() => journal.listEntries(issue.id, { before: 1.5, limit: 1 }), /before must be a positive integer/);
+  });
 });
 
 describe("resume capsules (D25, D29)", () => {
@@ -333,6 +360,11 @@ describe("sb journal verbs + issue resume", () => {
       assert.equal(cp.degraded, false);
       const shown = cli(["journal", "show", created.humanRef]) as Array<{ sequence: number }>;
       assert.equal(shown.length, 2);
+      const tail = cli(["journal", "show", created.humanRef, "--tail", "1"]) as Array<{ sequence: number }>;
+      assert.deepEqual(tail.map((e) => e.sequence), [2]);
+      const before = cli(["journal", "show", created.humanRef, "--before", "2", "--limit", "1"]) as Array<{ sequence: number }>;
+      assert.deepEqual(before.map((e) => e.sequence), [1]);
+      assert.throws(() => cli(["journal", "show", created.humanRef, "--tail", "1", "--limit", "1"]), /cannot be combined/);
       const delta = cli(["journal", "since", created.humanRef, "1"]) as {
         nextCursor: number; entries: Array<{ sequence: number }>;
       };

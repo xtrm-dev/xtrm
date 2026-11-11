@@ -265,7 +265,7 @@ export function mapClosure(c: Obj | null | undefined): Closure {
   };
 }
 
-type IssueDetailCtx = { projectId: string | null; resume: WireResume | null; trace: WireTrace | null; journal: WireJournalEntry[] };
+type IssueDetailCtx = { projectId: string | null; resume: WireResume | null; trace: WireTrace | null; journal: WireJournalEntry[]; journalError?: string | null };
 
 /**
  * The detail as the four per-issue reads describe it. Fields that only the project board carries
@@ -274,6 +274,7 @@ type IssueDetailCtx = { projectId: string | null; resume: WireResume | null; tra
 export function mapIssueCore(d: WireIssueDetail, ctx: IssueDetailCtx): IssueDetail {
   const children: IssueLink[] = (ctx.resume?.children ?? []).map((c) => ({ id: c.issueId, ref: c.humanRef, locator: c.locator, title: c.title, lifecycle: c.lifecycleState }));
   const journal = ctx.journal.map(mapJournalEntry).sort((a, b) => b.sequence - a.sequence);
+  const journalError = ctx.journalError ?? null;
   return {
     id: d.id,
     ref: d.humanRef,
@@ -309,6 +310,7 @@ export function mapIssueCore(d: WireIssueDetail, ctx: IssueDetailCtx): IssueDeta
     blockers: [],
     release: ctx.resume?.release ? { childrenDone: ctx.resume.release.childrenDone, childrenTotal: ctx.resume.release.childrenTotal } : null,
     journal,
+    journalError,
     journalTotal: Math.max(journal.length, d.operationalContext?.total ?? 0),
     provenance: mapTrace(ctx.trace, journal),
     pullRequests: ((d as { pullRequests?: unknown }).pullRequests as IssueDetail["pullRequests"] | undefined) ?? [],
@@ -380,8 +382,9 @@ async function write(path: string, body: Record<string, unknown>): Promise<unkno
   throw new SubstrateReadError(json.error);
 }
 
-// ponytail: one bounded read of full bodies; `sb journal show` has no offset. Page server-side if journals outgrow it.
-export const JOURNAL_READ_LIMIT = 2000;
+// First journal page: the newest N entries with bodies. Older pages come from
+// `readJournal({ before })`, so a large journal is never read in one payload.
+export const JOURNAL_TAIL = 200;
 // Page size for the board projection walk (`sb issue query`, MAX_PAGE_LIMIT 500).
 export const BOARD_PAGE_LIMIT = 500;
 
@@ -427,11 +430,24 @@ export const liveSubstrate: SubstrateAdapter = {
       read<WireIssueDetail>(`/issue${r}`),
       read<WireResume>(`/resume${r}`).catch(() => null),
       read<WireTrace>(`/trace${r}`).catch(() => null),
-      read<WireJournalEntry[]>(`/journal${r}&limit=${JOURNAL_READ_LIMIT}`).catch(() => []),
+      // A failed journal read must not empty the tab silently, and must not take
+      // the whole detail down with it: carry the error alongside the entries.
+      read<WireJournalEntry[]>(`/journal${r}&tail=${JOURNAL_TAIL}`)
+        .then((entries) => ({ entries, error: null as string | null }))
+        .catch((e: unknown) => ({ entries: [] as WireJournalEntry[], error: e instanceof Error ? e.message : "journal read failed" })),
       project,
       board,
     ]);
-    return mapIssueDetail(detail, { projectId: resolvedProject, board: rows, resume, trace, journal });
+    return mapIssueDetail(detail, { projectId: resolvedProject, board: rows, resume, trace, journal: journal.entries, journalError: journal.error });
+  },
+  async readJournal(ref, opts) {
+    const query = opts?.tail
+      ? `&tail=${opts.tail}`
+      : opts?.before
+        ? `&before=${opts.before}&limit=${opts.limit ?? JOURNAL_TAIL}`
+        : `&tail=${JOURNAL_TAIL}`;
+    const entries = await read<WireJournalEntry[]>(`/journal?ref=${encodeURIComponent(ref)}${query}`);
+    return entries.map(mapJournalEntry).sort((a, b) => b.sequence - a.sequence);
   },
   async editIssue(projectId, ref, expectedRevision, edit) {
     await write("/edit", { project: projectId, ref, expectedRevision, ...edit });

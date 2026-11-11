@@ -180,6 +180,14 @@ export function createFixtureSubstrate(): SubstrateAdapter {
       };
       return structuredClone(detail);
     },
+    async readJournal(ref, opts) {
+      const r = get(ref);
+      const all = [...r.journal].sort((a, b) => b.sequence - a.sequence);
+      if (opts?.tail !== undefined) return structuredClone(all.slice(0, opts.tail));
+      const limit = opts?.limit ?? 200;
+      const window = opts?.before !== undefined ? all.filter((e) => e.sequence < opts.before!) : all;
+      return structuredClone(window.slice(0, limit));
+    },
     async editIssue(_project, ref, expectedRevision, edit) {
       const r = get(ref);
       if (edit.title !== undefined) r.summary = { ...r.summary, title: edit.title };

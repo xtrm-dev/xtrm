@@ -37,6 +37,18 @@ describe("substrate CLI bridge reads", () => {
     expect(readArgv("/query", q("project=prj_xtrm&limit=200&cursor=abc123"))).toEqual(["issue", "query", "--project", "prj_xtrm", "--limit", "200", "--cursor", "abc123"]);
     expect(readArgv("/issue", q("ref=XTRM-94.2"))).toEqual(["issue", "show", "XTRM-94.2"]);
     expect(readArgv("/journal", q("ref=XTRM-1&limit=20"))).toEqual(["journal", "show", "XTRM-1", "--limit", "20"]);
+    expect(readArgv("/journal", q("ref=XTRM-1&tail=200"))).toEqual(["journal", "show", "XTRM-1", "--tail", "200"]);
+    expect(readArgv("/journal", q("ref=XTRM-1&before=900&limit=200"))).toEqual(["journal", "show", "XTRM-1", "--before", "900", "--limit", "200"]);
+  });
+
+  it("bounds the paged journal read and keeps the per-page ceiling", () => {
+    expect(readArgv("/journal", q("ref=XTRM-1&tail=0"))).toBeNull();
+    expect(readArgv("/journal", q("ref=XTRM-1&tail=abc"))).toBeNull();
+    expect(readArgv("/journal", q("ref=XTRM-1&tail=2001"))).toBeNull();
+    expect(readArgv("/journal", q("ref=XTRM-1&before=0&limit=100"))).toBeNull();
+    expect(readArgv("/journal", q("ref=XTRM-1&before=abc&limit=100"))).toBeNull();
+    expect(readArgv("/journal", q("ref=XTRM-1&before=900&limit=2001"))).toBeNull();
+    expect(readArgv("/journal", q("before=900&limit=100"))).toBeNull();
   });
 
   it("refuses an out-of-range limit and a malformed cursor on /query", () => {
