@@ -3,6 +3,7 @@ import type { IssueDetail, JournalEntry, JournalIdentity } from "../adapters/ind
 import { Icon } from "../ui/icon.tsx";
 import { Markdown } from "../ui/markdown.tsx";
 import { MarkdownEditor } from "../ui/markdown-editor.tsx";
+import { LinkEvents } from "./PullRequestsBlock.tsx";
 import { ago, cx } from "../ui/primitives.tsx";
 
 const NOTE_KINDS = ["note", "finding", "decision", "blocker", "milestone", "handoff", "result"] as const;
@@ -180,6 +181,7 @@ export function JournalTab({
 
   return (
     <div className="flex flex-col gap-4">
+      <LinkEvents events={issue.linkEvents} />
       {canWrite &&
         (composing ? (
           <div className="flex flex-col gap-2">

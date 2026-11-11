@@ -11,6 +11,8 @@ import { JournalService } from "./journal-service.ts";
 import type { IssueService } from "./issue-service.ts";
 
 export type GateMode = "warn" | "enforce" | "off";
+/** Migration paths that move historical rows to terminal without delivery evidence. */
+export type GateExemption = "beads-import" | "beads-repair";
 export type GateVerdict = "pass" | "refuse" | "fail";
 
 export const GATE_CODES = {

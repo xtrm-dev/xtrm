@@ -8,6 +8,7 @@ import { Markdown } from "../ui/markdown.tsx";
 import { EditActions } from "../ui/markdown-editor.tsx";
 import { Row, StatusDot, ago, cx } from "../ui/primitives.tsx";
 import { JournalTab } from "./IssueJournal.tsx";
+import { PullRequestsBlock } from "./PullRequestsBlock.tsx";
 import { ClosureCard, ProvenanceTab } from "./IssueProvenance.tsx";
 import { useIssueActions } from "./actions.ts";
 import {
@@ -60,6 +61,8 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
       <ListField label="Validation" numbered items={c.validation.map((v) => v.text)} canEdit={canWrite} placeholder="Add a validation check" onSave={(validation) => actions.patchContract({ validation })} />
       <ListField label="Output" items={c.output.map((o) => o.text)} canEdit={canWrite} placeholder="Add an expected artifact" onSave={(output) => actions.patchContract({ output })} />
       <ListField label="References" items={c.references} canEdit={canWrite} placeholder="Add a reference" onSave={(references) => actions.patchContract({ references })} />
+
+      <PullRequestsBlock links={issue.pullRequests} gate={issue.linkGate} />
 
       <ClosureCard closure={issue.closure} issue={issue} />
 

@@ -34,6 +34,7 @@ const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "righ
   { key: "children", label: "Children", width: "5rem", align: "right" },
   { key: "events", label: "Events", width: "4.5rem", align: "right" },
   { key: "pointers", label: "Pointers", width: "5.25rem", align: "right" },
+  { key: "pr", label: "PR", width: "5rem", align: "right" },
   { key: "created", label: "Created", width: "5rem", align: "right" },
   { key: "updated", label: "Updated", width: "5.5rem", align: "right" },
 ];
@@ -283,6 +284,13 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
         </div>
         <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")} title={`${issue.pointerCount} on this issue, ${rollup.pointers} with children`}>
           {rollup.pointers || ""}
+        </div>
+        <div className={cx(CELL, "justify-end")}>
+          {issue.primaryPr && (
+            <span title={`${issue.primaryPr.relation} ${issue.primaryPr.state ?? "state unknown"}`} className="truncate text-xs text-ink-muted tabular">
+              #{issue.primaryPr.number}
+            </span>
+          )}
         </div>
         <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")}>
           {relativeTime(issue.createdAt)}

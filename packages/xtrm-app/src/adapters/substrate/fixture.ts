@@ -54,6 +54,7 @@ function seed(): Map<string, Record_> {
         lastActivityAt: NOW - (i % 9) * 1_800_000,
         eventCount: (i * 7) % 23,
         pointerCount: (i * 3) % 11,
+        primaryPr: null,
         attestation: lifecycle === "open" && i % 3 === 1 ? "current" : (["none", "stale", "rejected"] as const)[i % 3]!,
         contractComplete: i % 5 !== 0,
         dispatchable: lifecycle === "open" && i % 3 === 1 && i % 7 !== 0,
@@ -125,8 +126,24 @@ export function createFixtureSubstrate(): SubstrateAdapter {
       const children = [...rows.values()].filter((x) => x.summary.parentRef === ref).map((x) => ({ id: x.summary.id, ref: x.summary.ref, locator: x.summary.locator, title: x.summary.title, lifecycle: x.summary.lifecycle, kind: x.summary.kind }));
       const parent = s.parentRef ? get(s.parentRef).summary : null;
       const terminal = ["done", "cancelled", "archived"].includes(s.lifecycle);
+      const demoLinks: IssueDetail["pullRequests"] = ref === "XTRM-301"
+        ? [
+            { id: 1, repository: "Jaggerxtrm/console", number: 211, relation: "created_from", sources: ["provenance"], alsoMentioned: false, url: "https://github.com/Jaggerxtrm/console/pull/211", actor: "t0a7", createdAt: NOW, commits: [{ sha: "abc123", landedSha: null }] },
+            { id: 2, repository: "Jaggerxtrm/console", number: 213, relation: "mentioned", sources: ["title"], alsoMentioned: false, url: "https://github.com/Jaggerxtrm/console/pull/213", actor: null, createdAt: NOW, commits: [] },
+          ]
+        : [];
       const detail: IssueDetail = {
         ...s,
+        pullRequests: demoLinks,
+        linkEvents: ref === "XTRM-301"
+          ? [
+              { eventId: 1, type: "provenance.link_created", payload: { repository: "Jaggerxtrm/console", number: 211, relation: "created_from" }, createdAt: NOW },
+              { eventId: 2, type: "provenance.link_finding", payload: { code: "trailer_issue_unknown", sha: "f".repeat(40) }, createdAt: NOW },
+            ]
+          : [],
+        linkGate: ref === "XTRM-301"
+          ? { mode: "manual", manual: { verdict: "refuse", codes: ["gate_mentioned_only"] } }
+          : { mode: "manual", manual: { verdict: "pass", codes: [] } },
         readiness: s.readiness === "ready" ? "ready" : "not_ready",
         projectId: "prj_xtrm",
         readinessState: terminal ? "terminal" : s.readiness === "ready" ? "ready" : "draft",
@@ -195,6 +212,7 @@ export function createFixtureSubstrate(): SubstrateAdapter {
           lastActivityAt: null,
           eventCount: 0,
           pointerCount: 0,
+    primaryPr: null,
           attestation: "none",
           contractComplete: false,
           dispatchable: false,

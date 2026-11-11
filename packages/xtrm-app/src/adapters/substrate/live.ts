@@ -60,6 +60,8 @@ export interface WireProjectionRow {
   blockedBy: string[];
   createdAt: number;
   updatedAt: number;
+  /** XTRM-730 additive field; absent on older `sb` builds. */
+  primaryPr?: unknown;
   // Absent from `sb` builds older than the journal aggregates.
   journalCount?: number;
   pointerCount?: number;
@@ -138,6 +140,7 @@ export function mapBoard(rows: WireProjectionRow[]): IssueSummary[] {
     lastActivityAt: i.lastActivityAt ?? i.updatedAt,
     eventCount: i.journalCount ?? 0,
     pointerCount: i.pointerCount ?? 0,
+    primaryPr: (i.primaryPr as IssueSummary["primaryPr"] | undefined) ?? null,
     attestation: i.attestationState ?? null,
     contractComplete: i.structurallyValid ?? null,
     dispatchable: i.dispatchable,
@@ -308,6 +311,10 @@ export function mapIssueCore(d: WireIssueDetail, ctx: IssueDetailCtx): IssueDeta
     journal,
     journalTotal: Math.max(journal.length, d.operationalContext?.total ?? 0),
     provenance: mapTrace(ctx.trace, journal),
+    pullRequests: ((d as { pullRequests?: unknown }).pullRequests as IssueDetail["pullRequests"] | undefined) ?? [],
+    linkEvents: ((d as { linkEvents?: unknown }).linkEvents as IssueDetail["linkEvents"] | undefined) ?? [],
+    linkGate: ((d as { linkGate?: unknown }).linkGate as IssueDetail["linkGate"] | undefined) ?? { mode: "manual", manual: { verdict: "pass", codes: [] } },
+    primaryPr: ((d as { primaryPr?: unknown }).primaryPr as IssueDetail["primaryPr"] | undefined) ?? null,
   };
 }
 

@@ -274,6 +274,26 @@ export type Lifecycle = "open" | "deferred" | "done" | "cancelled" | "archived";
 export type Scrutiny = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type EdgeKind = "parent_child" | "blocks" | "relates_to" | "discovered_from" | "supersedes" | "duplicates";
 
+export interface PullLink {
+  id: number;
+  repository: string;
+  number: number;
+  relation: "created_from" | "mentioned";
+  sources: string[];
+  alsoMentioned: boolean;
+  url: string | null;
+  actor: string | null;
+  createdAt: number;
+  commits: Array<{ sha: string; landedSha: string | null }>;
+}
+
+export interface LinkEvent {
+  eventId: number;
+  type: string;
+  payload: Record<string, unknown>;
+  createdAt: number;
+}
+
 export interface IssueSummary {
   id: string;
   /** Flat human ref (XTRM-58): stable identity for URLs and writes. */
@@ -295,6 +315,8 @@ export interface IssueSummary {
   eventCount: number;
   /** Evidence refs carried by those journal entries. */
   pointerCount: number;
+  /** Strongest live PR link, from Substrate; state from the 728 cache. */
+  primaryPr: { repository: string; number: number; relation: string; url: string | null; state: string | null } | null;
   /** Latest attestation against the current revision; null when the source does not expose it. */
   attestation: "none" | "current" | "stale" | "rejected" | null;
   /** False when the work contract fails structural validation; null when unknown. */
@@ -477,6 +499,9 @@ export interface IssueDetail extends IssueSummary {
   /** Entries Substrate holds; greater than `journal.length` when the read was capped. */
   journalTotal: number;
   provenance: ProvenanceSummary;
+  pullRequests: PullLink[];
+  linkEvents: LinkEvent[];
+  linkGate: { mode: string; manual: { verdict: string; codes: string[] } };
 }
 
 export interface IssueEdit {

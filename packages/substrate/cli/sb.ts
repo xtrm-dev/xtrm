@@ -1151,6 +1151,34 @@ function ghJson<T>(args: string[]): T {
   }
 }
 
+function linkEventsFor(db: ReturnType<typeof openSubstrate>, issueId: string): Array<Record<string, unknown>> {
+  const rows = db
+    .prepare(
+      `SELECT id, type, payload_json, created_at FROM issue_events
+        WHERE issue_id = ? AND type LIKE 'provenance.link_%'
+        ORDER BY id DESC LIMIT 20`,
+    )
+    .all(issueId) as unknown as Array<{ id: number; type: string; payload_json: string; created_at: number }>;
+  return rows
+    .reverse()
+    .map((row) => ({ eventId: row.id, type: row.type, payload: JSON.parse(row.payload_json), createdAt: row.created_at }));
+}
+
+function primaryPrFor(db: ReturnType<typeof openSubstrate>, issueId: string): Record<string, unknown> | null {
+  const link = db
+    .prepare(
+      `SELECT repository, number, relation, url FROM issue_pull_requests
+        WHERE issue_id = ? AND superseded_at IS NULL
+        ORDER BY CASE relation WHEN 'created_from' THEN 0 ELSE 1 END, created_at, rowid LIMIT 1`,
+    )
+    .get(issueId) as { repository: string; number: number; relation: string; url: string | null } | undefined;
+  if (link === undefined) return null;
+  const state = db
+    .prepare("SELECT state FROM pull_requests WHERE repository = ? AND number = ?")
+    .get(link.repository, link.number) as { state: string } | undefined;
+  return { repository: link.repository, number: link.number, relation: link.relation, url: link.url, state: state?.state ?? null };
+}
+
 function runLinks(
   db: ReturnType<typeof openSubstrate>,
   svc: IssueService,
@@ -1796,6 +1824,7 @@ function runIssue(
       // large journal never enlarges the default show output.
       const operationalContext = new JournalService(db, svc).operationalContext(resolved.id);
       const pullRequests = new PullRequestService(db).listForIssue(resolved.id);
+      const gateEvaluation = new LinkGateService(db, svc).evaluate(resolved.id, { mode: "manual" });
       const payload = {
         ...issueSummary(resolved),
         contractHash: resolved.currentContractHash,
@@ -1809,6 +1838,8 @@ function runIssue(
         closure: closureSummary(db, svc, resolved),
         operationalContext,
         pullRequests,
+        linkEvents: linkEventsFor(db, resolved.id),
+        linkGate: { mode: "manual", manual: { verdict: gateEvaluation.verdict, codes: gateEvaluation.codes } },
       };
       if (ctx.json) return emit(ctx, command, payload);
       return {
@@ -2010,8 +2041,12 @@ function runIssue(
         readiness: (list("readiness") ?? undefined) as OperationalState[] | undefined,
         search: flag(flags, "search") ?? undefined,
       });
-      if (ctx.json) return emit(ctx, command, page);
-      return emit(ctx, command, page.rows.map((r) => readySummary(boardRowSummaryInput(r), r.readinessState, r.dispatchable)));
+      const enriched = {
+        ...page,
+        rows: page.rows.map((row) => ({ ...row, primaryPr: primaryPrFor(db, row.id) })),
+      };
+      if (ctx.json) return emit(ctx, command, enriched);
+      return emit(ctx, command, enriched.rows.map((r) => readySummary(boardRowSummaryInput(r), r.readinessState, r.dispatchable)));
     }
     case "tree": {
       const root = flag(flags, "root");

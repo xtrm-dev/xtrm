@@ -10,6 +10,8 @@ import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
+import { ProvenanceService } from "../src/service/provenance-service.ts";
+import { JournalService } from "../src/service/journal-service.ts";
 import { parseAllTrailers } from "../src/domain/provenance.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
 import { contract } from "./helpers.ts";
@@ -293,5 +295,47 @@ describe("links help", () => {
     assert.notEqual(bare.code, 0);
     assert.match(bare.stderr, /\|links\|/);
     rmSync(helpDir, { recursive: true, force: true });
+  });
+});
+
+describe("link read surfaces (XTRM-730)", () => {
+  let w: ReturnType<typeof scratch>;
+  let prs: PullRequestService;
+  beforeEach(() => {
+    w = scratch();
+    prs = new PullRequestService(w.db, w.svc, new ProvenanceService(w.db, w.svc, new JournalService(w.db, w.svc)));
+  });
+  afterEach(() => { w.db.close(); rmSync(w.dir, { recursive: true, force: true }); });
+
+  it("issue show carries linkEvents oldest-first and the manual gate verdict", () => {
+    prs.linkMention({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w" });
+    prs.linkMention({ issueId: w.issue.id, repository: "o/r", number: 8, actor: "w" });
+    const data = cli(w.dbPath, ["issue", "show", w.issue.humanRef]);
+    const events = data.linkEvents as Array<{ type: string }>;
+    assert.deepEqual(events.map((e) => e.type), ["provenance.link_mentioned", "provenance.link_mentioned"]);
+    const gate = data.linkGate as { mode: string; manual: { verdict: string; codes: string[] } };
+    assert.equal(gate.mode, "manual");
+    assert.equal(gate.manual.verdict, "refuse");
+    assert.deepEqual(gate.manual.codes, ["gate_mentioned_only"]);
+    assert.equal((data.pullRequests as unknown[]).length, 2);
+  });
+
+  it("unlink appends provenance.link_unlinked with its actor", () => {
+    prs.linkMention({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w" });
+    prs.unlink({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "operator" });
+    const data = cli(w.dbPath, ["issue", "show", w.issue.humanRef]);
+    const last = (data.linkEvents as Array<{ type: string; payload: { actor?: string } }>).at(-1)!;
+    assert.equal(last.type, "provenance.link_unlinked");
+    assert.equal(last.payload.actor, "operator");
+  });
+
+  it("issue query rows carry primaryPr with the cached state", () => {
+    prs.linkMention({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w" });
+    w.db.prepare(
+      "INSERT INTO pull_requests (repository, number, state, draft, head_sha, merge_commit_sha, title, url, base_ref, merged_at, closed_at, etag, last_modified, last_synced_at) VALUES (?,?,?,0,NULL,NULL,NULL,NULL,?,NULL,NULL,NULL,NULL,?)",
+    ).run("o/r", 7, "merged", "main", Date.now());
+    const page = cli(w.dbPath, ["issue", "query", "--project", "prj_xtrm"]);
+    const row = (page.rows as Array<{ primaryPr: Record<string, unknown> | null }>)[0]!;
+    assert.deepEqual(row.primaryPr, { repository: "o/r", number: 7, relation: "mentioned", url: null, state: "merged" });
   });
 });
