@@ -204,9 +204,9 @@ describe("links check --dry-run", () => {
     const gh = join(bin, "gh");
     writeFileSync(gh, `#!/bin/sh
 if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
-  echo '[{"number":7,"title":"work","url":"https://github.com/o/r/pull/7"}]'
+  printf '%s\n' '[{"number":7,"title":"work","url":"https://github.com/o/r/pull/7"}]'
 elif [ "$1" = "pr" ] && [ "$2" = "view" ]; then
-  echo '{"url":"https://github.com/o/r/pull/7","commits":[{"oid":"abc123","messageHeadline":"feat: work","messageBody":"XTRM-Issue: ${s.issue.humanRef}\\nXTRM-Issue: NOPE-9"}]}'
+  printf '%s\n' '{"url":"https://github.com/o/r/pull/7","commits":[{"oid":"abc123","messageHeadline":"feat: work","messageBody":"XTRM-Issue: ${s.issue.humanRef}\\nXTRM-Issue: NOPE-9"}]}'
 else
   echo "unexpected: $*" >&2; exit 1
 fi
