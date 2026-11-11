@@ -46,17 +46,56 @@ export function remoteSelection(scriptUrl) {
 }
 
 /** The repository this process serves, so the server checkout can be found. */
-export function repositoryKey() {
+export function repositoryKey(remote) {
   try {
-    const remote = execFileSync("git", ["config", "--get", "remote.origin.url"], { encoding: "utf8" }).trim();
-    const scp = /^(?:[^@:/\s]+@)?([^@:/\s]+):(.+)$/.exec(remote);
-    if (scp) return `${scp[1]}/${scp[2].replace(/\.git$/, "")}`;
-    const url = /^[a-z+]+:\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/(.+)$/.exec(remote);
-    if (url) return `${url[1]}/${url[2].replace(/\.git$/, "")}`;
+    const origin = remote ?? execFileSync("git", ["config", "--get", "remote.origin.url"], { encoding: "utf8" }).trim();
+    return parseRemoteKey(origin);
   } catch {
     // not a git checkout: the caller must pass a root explicitly
+    return null;
   }
-  return null;
+}
+
+const DEFAULT_PORTS = { http: "80", https: "443", ssh: "22", git: "9418" };
+
+/**
+ * One key per repository, whatever form the remote takes (XTRM-733). The URL
+ * form is parsed FIRST: the scp pattern `host:path` also matches `https://…`,
+ * which derived `https///github.com/owner/repo` and never matched the key a
+ * checkout was recorded under. Host case, a default port and the `.git` suffix
+ * do not name different repositories, so they do not produce different keys
+ * (this agrees with `normalizeRemote` in src/domain/repository.ts).
+ */
+export function parseRemoteKey(remote) {
+  const input = String(remote ?? "").trim();
+  if (input === "") return null;
+  let host;
+  let rawPath;
+  const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(input);
+  if (scheme !== null) {
+    const rest = input.slice(scheme[0].length);
+    const slash = rest.indexOf("/");
+    if (slash < 0) return null;
+    const authorityRaw = rest.slice(0, slash);
+    // Credentials live in userinfo; the last '@' keeps a password containing
+    // '@' from leaking into the key.
+    const at = authorityRaw.lastIndexOf("@");
+    let authority = at >= 0 ? authorityRaw.slice(at + 1) : authorityRaw;
+    if (authority === "") return null;
+    const port = /^(.*?):(\d+)$/.exec(authority);
+    if (port !== null && DEFAULT_PORTS[scheme[1].toLowerCase()] === port[2]) authority = port[1];
+    host = authority;
+    rawPath = rest.slice(slash + 1);
+  } else {
+    const scp = /^(?:[^@:/\s]+@)?([^@:/\s]+):(.+)$/.exec(input);
+    if (scp === null) return null;
+    host = scp[1];
+    rawPath = scp[2];
+  }
+  let path = rawPath.split("?")[0].split("#")[0].replace(/\/+/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+  if (path.toLowerCase().endsWith(".git")) path = path.slice(0, -4);
+  if (host === "" || path === "") return null;
+  return `${host.toLowerCase()}/${path}`;
 }
 
 /** The server checkout for this repository, or an error naming how to record one. */
