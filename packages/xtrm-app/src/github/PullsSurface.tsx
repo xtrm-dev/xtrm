@@ -8,7 +8,7 @@ import { useShell } from "../shell/context.tsx";
 import { useAdapters } from "../adapters/index.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceHeader, ago, cx } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, ago, cx } from "../ui/primitives.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 
 const VIEWS: Array<{ id: PullView; label: string }> = [
@@ -22,6 +22,25 @@ const SORTS: Array<{ id: PullSort; label: string }> = [
   { id: "created", label: "Newest" },
   { id: "comments", label: "Most commented" },
 ];
+
+/** The row grid: one line per PR, same column rhythm as the issues table. */
+const COLUMNS: Array<{ key: string; label: string; width: string; align?: "right"; sort?: PullSort }> = [
+  { key: "state", label: "", width: "1.75rem" },
+  { key: "pull", label: "Pull request", width: "minmax(0,1fr)" },
+  { key: "author", label: "Author", width: "6.5rem" },
+  { key: "diff", label: "Diff", width: "5.5rem", align: "right" },
+  { key: "checks", label: "Checks", width: "6.5rem" },
+  { key: "review", label: "Review", width: "6rem" },
+  { key: "comments", label: "Comments", width: "5rem", align: "right", sort: "comments" },
+  { key: "updated", label: "Updated", width: "4.5rem", align: "right", sort: "updated" },
+];
+const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
+const CELL = "flex h-full min-w-0 items-center px-2";
+/** Toolbar controls: 28px tall, 11.5px text, ghost until they carry a value. */
+const CONTROL = "flex h-7 items-center gap-1 rounded-md px-1.5 text-xs outline-none transition-colors";
+const GHOST = "bg-pressed text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
+/** View tabs sit inside their own segmented row, so they stay ghost until selected. */
+const TAB = "text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
 
 function IssueChips({ pull }: { pull: PullRequestSummary }) {
   const index = useIssueIndex();
@@ -51,30 +70,40 @@ function IssueChips({ pull }: { pull: PullRequestSummary }) {
 
 function PullRow({ pull, selected, onOpen }: { pull: PullRequestSummary; selected: boolean; onOpen: () => void }) {
   return (
-    <Row className="h-11" data-testid="pull-row" selected={selected} onActivate={onOpen}>
-      <StatusDot tone={pullStateTone(pull.state)} label={pullStateLabel(pull.state, pull.draft)} />
-      <div className="flex min-w-0 flex-1 flex-col leading-tight">
-        <span className="flex min-w-0 items-baseline gap-2">
+    <Row density="table" data-testid="pull-row" selected={selected} onActivate={onOpen}>
+      <div className="grid h-full w-full items-center overflow-hidden" style={GRID}>
+        <div className={CELL}>
+          <StatusDot tone={pullStateTone(pull.state)} label={pullStateLabel(pull.state, pull.draft)} />
+        </div>
+        <div className={cx(CELL, "gap-2")}>
           <span className="shrink-0 font-mono text-xs text-ink-faint">#{pull.number}</span>
-          <span className="truncate text-ink">{pull.title}</span>
-        </span>
-        <span className="flex min-w-0 items-center gap-2 truncate text-xs text-ink-faint">
-          <span className="truncate">
-            {pull.author} · {pull.headBranch} → {pull.baseBranch}
+          <span className="truncate text-ink" title={`${pull.headBranch} → ${pull.baseBranch}`}>
+            {pull.title}
           </span>
           <IssueChips pull={pull} />
-        </span>
+        </div>
+        <div className={cx(CELL, "text-xs text-ink-faint")}>
+          <span className="truncate">{pull.author}</span>
+        </div>
+        <div className={cx(CELL, "justify-end gap-1.5 text-xs tabular")}>
+          <span className="text-success">+{pull.additions}</span>
+          <span className="text-danger">−{pull.deletions}</span>
+        </div>
+        <div className={cx(CELL, "gap-1.5 text-xs text-ink-faint")} title={checkLabel(pull.checks)}>
+          <StatusDot tone={checkTone(pull.checks)} label={checkLabel(pull.checks)} />
+          <span className="truncate">{pull.checks === "none" ? "—" : checkLabel(pull.checks).replace("checks ", "")}</span>
+        </div>
+        <div className={cx(CELL, "text-xs text-ink-faint")} title={reviewLabel(pull.review)}>
+          <span className="truncate">{reviewLabel(pull.review)}</span>
+        </div>
+        <div className={cx(CELL, "justify-end gap-1 text-xs text-ink-faint tabular")} title={`${pull.comments} comments`}>
+          <Icon name="comment" size="xs" />
+          {pull.comments}
+        </div>
+        <div className={cx(CELL, "justify-end text-xs text-ink-faint tabular")} title={new Date(pull.updatedAt).toLocaleString()}>
+          {ago(pull.updatedAt)}
+        </div>
       </div>
-      <span className="hidden shrink-0 items-center gap-1 text-xs text-ink-faint tabular md:inline-flex" title={checkLabel(pull.checks)}>
-        <StatusDot tone={checkTone(pull.checks)} label={checkLabel(pull.checks)} />
-        {pull.checks === "none" ? "—" : checkLabel(pull.checks).replace("checks ", "")}
-      </span>
-      <span className="hidden w-24 shrink-0 truncate text-right text-xs text-ink-faint lg:inline" title={reviewLabel(pull.review)}>
-        {reviewLabel(pull.review)}
-      </span>
-      <span className="w-10 shrink-0 text-right text-xs text-ink-faint tabular" title={new Date(pull.updatedAt).toLocaleString()}>
-        {ago(pull.updatedAt)}
-      </span>
     </Row>
   );
 }
@@ -101,6 +130,8 @@ export function PullsSurface() {
     };
   }, [pulls.data]);
 
+  const sortLabel = SORTS.find((s) => s.id === sort)?.label ?? "Recently updated";
+
   let body;
   if (pulls.isPending) body = <LoadingState label="Loading pull requests" />;
   else if (pulls.isError) body = <ErrorState title="GitHub backend is unavailable" error={pulls.error} />;
@@ -116,8 +147,33 @@ export function PullsSurface() {
         <VirtualList
           label="Pull requests"
           items={rows}
-          rowHeight={44}
+          rowHeight={32}
+          flush
+          minWidth="28rem"
           getKey={(p) => `${p.number}`}
+          header={
+            <div role="row" data-testid="pulls-table-head" className="grid h-8 shrink-0 border-b border-border-subtle" style={GRID}>
+              {COLUMNS.map((c) => (
+                <div key={c.key} role="columnheader" aria-sort={c.sort && sort === c.sort ? "descending" : "none"} className={CELL}>
+                  {c.sort ? (
+                    <button
+                      type="button"
+                      onClick={() => setSort(c.sort!)}
+                      className={cx(
+                        "flex h-full w-full items-center overflow-hidden text-[11px] font-normal outline-none hover:text-ink focus-visible:bg-hover",
+                        c.align === "right" && "justify-end",
+                        sort === c.sort ? "text-ink" : "text-ink-faint",
+                      )}
+                    >
+                      {c.label}
+                    </button>
+                  ) : (
+                    <span className={cx("truncate text-[11px] font-normal text-ink-faint", c.align === "right" && "w-full text-right")}>{c.label}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          }
           renderRow={(p) => (
             <PullRow
               pull={p}
@@ -131,26 +187,9 @@ export function PullsSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Pull requests">
-      <SurfaceHeader
-        title="Pull requests"
-        meta={
-          <>
-            <span>{repo.fullName}</span>
-            <SourceBadge source={github.source} />
-            {pulls.data && <span className="tabular">{rows.length} of {pulls.data.length}</span>}
-          </>
-        }
-      >
-        <OptionsMenu
-          label="Pull request options"
-          items={[
-            { label: "Refresh", icon: "live", onSelect: () => void pulls.refetch() },
-            { label: "Open on GitHub", icon: "external", onSelect: () => void window.open(`https://github.com/${repo.fullName}/pulls`, "_blank", "noreferrer") },
-          ]}
-        />
-      </SurfaceHeader>
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-muted px-4 py-2">
-        <div role="tablist" aria-label="Pull request state" className="flex items-center gap-1">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1.5 px-1.5 py-1.5">
+        <SourceBadge source={github.source} />
+        <div role="tablist" aria-label="Pull request state" className="flex items-center gap-0.5">
           {VIEWS.map((v) => (
             <button
               key={v.id}
@@ -158,41 +197,41 @@ export function PullsSurface() {
               role="tab"
               aria-selected={view === v.id}
               onClick={() => setView(v.id)}
-              className={cx(
-                "flex h-7 items-center gap-1.5 rounded-md px-2 text-sm outline-none focus-visible:bg-hover",
-                view === v.id ? "bg-hover text-ink" : "text-ink-faint hover:text-ink-muted",
-              )}
+              className={cx(CONTROL, view === v.id ? "bg-pressed text-ink" : TAB)}
             >
               {v.label}
-              <span className="text-xs text-ink-faint tabular">{visibleCounts[v.id]}</span>
+              <span className="text-ink-faint tabular">{visibleCounts[v.id]}</span>
             </button>
           ))}
         </div>
-        <label className="flex h-7 min-w-40 flex-1 items-center gap-2 rounded-md border border-border-muted px-2 text-sm text-ink-faint focus-within:border-border-strong sm:max-w-64">
-          <Icon name="search" size="xs" />
+        <div className="flex h-7 items-center gap-1.5 rounded-md bg-pressed px-1.5 text-ink-faint transition-colors focus-within:bg-hover">
+          <Icon name="search" size="xs" className="text-ink-faint" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter by title, author, branch…"
             aria-label="Filter pull requests"
-            className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-faint"
+            className="w-52 bg-transparent text-xs text-ink outline-none placeholder:text-ink-faint"
           />
-        </label>
-        <label className="flex h-7 items-center gap-1.5 text-xs text-ink-faint">
-          Sort
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as PullSort)}
-            aria-label="Sort pull requests"
-            className="h-7 rounded-md border border-border-muted bg-surface px-1.5 text-xs text-ink outline-none focus:border-border-strong"
-          >
-            {SORTS.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        </div>
+        <OptionsMenu
+          label="Sort pull requests"
+          trigger={
+            <button type="button" className={cx(CONTROL, GHOST)}>
+              {sortLabel} <Icon name="chevronDown" size="xs" className="text-ink-faint" />
+            </button>
+          }
+          items={SORTS.map((s) => ({ label: s.label, onSelect: () => setSort(s.id) }))}
+        />
+        <div className="ml-auto">
+          <OptionsMenu
+            label="Pull request options"
+            items={[
+              { label: "Refresh", icon: "live", onSelect: () => void pulls.refetch() },
+              { label: "Open on GitHub", icon: "external", onSelect: () => void window.open(`https://github.com/${repo.fullName}/pulls`, "_blank", "noreferrer") },
+            ]}
+          />
+        </div>
       </div>
       <GithubNotice repo={repo.fullName} />
       {body}

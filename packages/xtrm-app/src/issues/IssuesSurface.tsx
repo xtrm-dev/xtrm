@@ -43,7 +43,7 @@ const CELL_EDGE = "flex h-full min-w-0 items-center";
 const CELL = `${CELL_EDGE} px-2`;
 /** Toolbar controls: 28px tall, 12px text, ghost until they carry a value. */
 const CONTROL = "flex h-7 items-center gap-1 rounded-md px-1.5 text-xs outline-none transition-colors";
-const GHOST = "text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
+const GHOST = "bg-pressed text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
 
 function filterTrigger(value: string | null, label: string) {
   return (
@@ -202,7 +202,7 @@ export function IssuesSurface() {
             { label: "Key", icon: "chevronDown", onSelect: () => setSort({ key: "key", desc: false }) },
           ]}
         />
-        <div className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-ink-faint transition-colors hover:bg-hover focus-within:bg-hover">
+        <div className="flex h-7 items-center gap-1.5 rounded-md bg-pressed px-1.5 text-ink-faint transition-colors focus-within:bg-hover">
           <Icon name="search" size="xs" className="text-ink-faint" />
           <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search" aria-label="Search issues" className="w-36 bg-transparent text-xs text-ink outline-none placeholder:text-ink-faint" />
         </div>
