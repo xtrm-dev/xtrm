@@ -205,16 +205,14 @@ describe("close gate", () => {
   });
 
   it("the legacy bare close is gated too", () => {
-    process.env["XTRM_LINK_GATE"] = "enforce";
-    const res = runCli(["--db", join(w.dir, "state.db"), "issue", "close", w.issue.humanRef, "--project", "prj_xtrm"]);
+    const res = runCli(["--db", join(w.dir, "state.db"), "issue", "close", w.issue.humanRef, "--project", "prj_xtrm", "--link-gate", "enforce"]);
     assert.equal(res.code, 1);
     assert.match(res.stderr + res.stdout, /gate_no_evidence/, JSON.stringify(res));
     assert.equal(w.svc.getIssue(w.issue.id).lifecycleState, "open");
   });
 
   it("links check --issue reports the verdict and exits on enforce", () => {
-    const warn = runCli(["--db", join(w.dir, "state.db"), "--json", "links", "check", "--issue", w.issue.humanRef, "--project", "prj_xtrm"]);
-    assert.equal(warn.code, 0);
+    const warn = runCli(["--db", join(w.dir, "state.db"), "--json", "links", "check", "--issue", w.issue.humanRef, "--project", "prj_xtrm", "--link-gate", "warn"]);
     assert.equal(warn.code, 0, JSON.stringify(warn));
     const payload = JSON.parse(warn.stdout) as { data: { issue: { manual: { codes: string[] } } } };
     assert.deepEqual(payload.data.issue.manual.codes, [GATE_CODES.noEvidence]);
