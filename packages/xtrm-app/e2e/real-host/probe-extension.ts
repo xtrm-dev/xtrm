@@ -1,7 +1,7 @@
 // Test-only Pi extension for the real-host write-path run (XTRM-597): one tool that asks the
 // operator a ctx.ui.confirm question. The xtrm-agent-host extension proxies that dialog to the host
 // as extension_ui_request, so the same question can be answered in the GUI or in the terminal.
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const probeConfirm = defineTool({
