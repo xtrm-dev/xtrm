@@ -8,7 +8,7 @@ import { compareRunIds, validateCompareSearch } from "../app/research-compare-se
 import { useResearchCompare, useResearchExperiment, useResearchExperiments, useResearchMetrics, useResearchRun, useResearchRuns, useResearchSamples, useResearchTail, useResearchWorkloadForRun } from "../app/queries.ts";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceHeader, type Tone } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_REST, cx, type Tone } from "../ui/primitives.tsx";
 import { MetricFields, UsageFields } from "./research-format.tsx";
 import { ResearchCharts, chartSpecs } from "./research-charts.tsx";
 import { DecisionCriteriaSection, GlossaryMetricRow, MethodSection, ResearchQuestionSection, ResultSummarySection } from "./research-semantic.tsx";
@@ -84,7 +84,9 @@ export function ExperimentListSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Experiments">
-      <SurfaceHeader title="Experiments" meta={<SourceBadge source={research.source} />} />
+      <SurfaceToolbar>
+        <SourceBadge source={research.source} />
+      </SurfaceToolbar>
       {body}
     </section>
   );
@@ -311,13 +313,15 @@ export function RunListSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Runs">
-      <SurfaceHeader title="Runs" meta={<SourceBadge source={research.source} />}>
+      <SurfaceToolbar>
+        <SourceBadge source={research.source} />
+        <div className="ml-auto" />
         {selected.length >= 2 && (
-          <button type="button" onClick={compare} className="flex h-7 items-center gap-1.5 rounded-md border border-border-muted px-2 text-xs text-ink-muted hover:bg-hover hover:text-ink">
+          <button type="button" onClick={compare} className={cx(TOOLBAR_CONTROL, TOOLBAR_REST)}>
             Compare {selected.length} runs
           </button>
         )}
-      </SurfaceHeader>
+      </SurfaceToolbar>
       {body}
     </section>
   );
@@ -673,7 +677,9 @@ export function RunComparisonSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Comparison">
-      <SurfaceHeader title="Comparison" meta={<SourceBadge source={research.source} />} />
+      <SurfaceToolbar>
+        <SourceBadge source={research.source} />
+      </SurfaceToolbar>
       {body}
     </section>
   );

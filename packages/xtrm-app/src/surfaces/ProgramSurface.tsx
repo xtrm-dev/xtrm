@@ -2,7 +2,7 @@ import { useAdapters, type ProgramItem, type ProgramItemKind } from "../adapters
 import { useProgram } from "../app/queries.ts";
 import { useShell } from "../shell/context.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceHeader, relativeTime, type Tone } from "../ui/primitives.tsx";
+import { ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, relativeTime, type Tone } from "../ui/primitives.tsx";
 
 const SECTIONS: Array<[ProgramItemKind, string]> = [
   ["workstream", "Workstreams"],
@@ -75,21 +75,16 @@ export function ProgramSurface({ repoScoped }: { repoScoped?: boolean }) {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Program">
-      <SurfaceHeader
-        title="Program"
-        meta={
-          <>
-            {q.data && (
-              <span className="truncate">
-                {q.data.source.repository}@<span className="font-mono text-xs">{q.data.source.shortSha ?? "?"}</span> · {q.data.freshness}
-              </span>
-            )}
-            <SourceBadge source={program.source} />
-          </>
-        }
-      >
+      <SurfaceToolbar>
+        {q.data && (
+          <span className="truncate text-[11px] text-ink-faint">
+            {q.data.source.repository}@<span className="font-mono">{q.data.source.shortSha ?? "?"}</span> · {q.data.freshness}
+          </span>
+        )}
+        <SourceBadge source={program.source} />
+        <div className="ml-auto" />
         <OptionsMenu label="Program options" items={[{ label: "Refresh snapshot", icon: "live", onSelect: () => void q.refetch() }]} />
-      </SurfaceHeader>
+      </SurfaceToolbar>
       {body}
     </section>
   );

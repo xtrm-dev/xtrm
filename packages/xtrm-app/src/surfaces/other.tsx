@@ -5,14 +5,17 @@ import { useRepoStats, useRepos } from "../app/queries.ts";
 import { GithubNotice } from "../github/auth.tsx";
 import { useGo } from "../shell/ContextSidebar.tsx";
 import type { IconName } from "../ui/icon.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, SurfaceHeader, relativeTime } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, SurfaceToolbar, relativeTime } from "../ui/primitives.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 
 /** Explicit deferred placeholder: the route is real, the surface is not built in this vertical. */
 export function DeferredSurface({ title, icon, reason }: { title: string; icon: IconName; reason: string }) {
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label={title}>
-      <SurfaceHeader title={title} meta={<span className="rounded-sm border border-border-muted px-1.5 text-xs">deferred</span>} />
+      <SurfaceToolbar>
+        <span className="text-[11px] text-ink-faint">{title}</span>
+        <span className="rounded-sm bg-control px-1.5 text-xs text-ink-faint">deferred</span>
+      </SurfaceToolbar>
       <EmptyState icon={icon} title={`${title} is not part of this vertical`} className="flex-1">
         {reason}
       </EmptyState>
@@ -35,7 +38,10 @@ export function RepositoriesSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Repositories">
-      <SurfaceHeader title="Repositories" meta={<><span className="tabular">{ordered.length}</span><SourceBadge source={github.source} /></>} />
+      <SurfaceToolbar>
+        <span className="text-[11px] text-ink-faint tabular">{ordered.length}</span>
+        <SourceBadge source={github.source} />
+      </SurfaceToolbar>
       <GithubNotice />
       {repos.isPending ? (
         <LoadingState label="Loading repositories" />

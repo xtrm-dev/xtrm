@@ -2,7 +2,7 @@ import { useGithubAuthStatus, useGithubInstallations, useGithubSignOut, useStart
 import { useShell } from "../shell/context.tsx";
 import { Fields } from "../ui/drawer.tsx";
 import { Icon } from "../ui/icon.tsx";
-import { EmptyState, LoadingState, SourceBadge, StatusDot, SurfaceHeader } from "../ui/primitives.tsx";
+import { EmptyState, LoadingState, SourceBadge, StatusDot, SurfaceToolbar } from "../ui/primitives.tsx";
 import { useAdapters } from "../adapters/index.tsx";
 
 // Settings destination (XTRM-400): today a single GitHub section. Connection
@@ -34,7 +34,7 @@ export function SettingsSurface() {
   if (auth.isError || !auth.data)
     return (
       <section className="flex min-h-0 flex-1 flex-col" aria-label="Settings">
-        <SurfaceHeader title="Settings" />
+        <SurfaceToolbar />
         <EmptyState icon="alert" title="Settings are unavailable" />
       </section>
     );
@@ -42,15 +42,10 @@ export function SettingsSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Settings">
-      <SurfaceHeader
-        title="Settings"
-        meta={
-          <>
-            <span>GitHub</span>
-            <SourceBadge source={githubAuth.source} />
-          </>
-        }
-      />
+      <SurfaceToolbar>
+        <span className="text-[11px] text-ink-faint">GitHub</span>
+        <SourceBadge source={githubAuth.source} />
+      </SurfaceToolbar>
       <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl">
           <Section title="Connection">
