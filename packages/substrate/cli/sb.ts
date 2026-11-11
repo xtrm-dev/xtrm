@@ -43,7 +43,7 @@ import { JournalService } from "../src/service/journal-service.ts";
 import type { JournalOperationalContext } from "../src/service/journal-service.ts";
 import { ClosureService } from "../src/service/closure-service.ts";
 import { CLOSURE_OUTCOMES, isClosureOutcome } from "../src/domain/closure.ts";
-import { resolveClaimHolder } from "../src/domain/claim.ts";
+import { isoTime, resolveClaimHolder } from "../src/domain/claim.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
@@ -53,7 +53,7 @@ import { parseAllTrailers } from "../src/domain/provenance.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { assessJournalEntry, assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
 import { renderProvenanceTrace } from "../src/presentation/terminal.ts";
-import { assertContractShape, isValidScrutiny, SCRUTINY_LEVELS } from "../src/domain/contract.ts";
+import { assertContractShape, contractShapeHints, isValidScrutiny, SCRUTINY_LEVELS } from "../src/domain/contract.ts";
 import { enrichExecutionContext } from "../src/domain/execution-context.ts";
 import type { JournalEntry, JournalKind, ResultPayload } from "../src/domain/journal.ts";
 import type { IssueKind, LifecycleState, ResolvedIssue } from "../src/domain/issue.ts";
@@ -230,9 +230,14 @@ function treeSummary(svc: IssueService, id: string): Record<string, unknown> {
   };
 }
 
+// "locator · ref" (PRD §8.4); one value when they coincide (root issues).
+function idPair(locator: unknown, humanRef: unknown): string {
+  return locator === humanRef ? String(humanRef) : `${String(locator)} · ${String(humanRef)}`;
+}
+
 function human(summary: Record<string, unknown>): string {
   const state = (summary["readinessState"] as string | undefined) ?? (summary["lifecycleState"] as string);
-  return `${summary["locator"]} · ${summary["humanRef"]} · ${summary["title"]} [${state} rev${summary["revision"]}]`;
+  return `${idPair(summary["locator"], summary["humanRef"])} · ${summary["title"]} [${state} rev${summary["revision"]}]`;
 }
 
 // Contract sections for human show (bead xtrm-7wc.5.9): the contract is the
@@ -472,6 +477,83 @@ project, projectError, effectiveOverride, link, linkError}.
 repository.initialized is a repository_bindings fact (never a resolveProject
 success and never true because of an override); link is the effective cwd ->
 project mapping (informational; never flips health).`,
+  contract: `usage: sb help contract
+
+the work contract JSON (sb issue create --contract <file|json>):
+
+    {
+      "problem":     "why this work exists (non-empty string)",
+      "success":     "observable end state (non-empty string)",
+      "scope":       ["paths/surfaces the work may touch"],
+      "nonGoals":    ["what must NOT change"],
+      "constraints": ["rules the work must respect"],
+      "validation":  [{"check": "how success is proven"}],
+      "output":      [{"artifact": "what the work delivers"}],
+      "scrutiny":    "LOW|MEDIUM|HIGH|CRITICAL"
+    }
+
+- Pass the object itself; do not nest it under a "contract" key.
+- validation and output hold objects, not plain strings: {"check": "…"}, {"artifact": "…"}.
+- scope, nonGoals and constraints are non-empty arrays of non-empty strings.
+- TBD/TODO/XXX/FIXME anywhere keeps the issue draft ("unresolved marker").
+- scrutiny is the contract key or --scrutiny; the flag wins.
+- A valid contract is still draft until attested:
+    sb issue validate <ref>
+    sb issue attest <ref> --outcome ready --policy default --attested-by <you>
+- Changing the contract creates a new revision and invalidates the attestation.`,
+  kinds: `usage: sb help kinds
+
+journal kinds (sb journal append <ref> --kind <kind> ...):
+
+note        progress that is not a finding or decision
+finding     something learned that others need (evidence, not opinion)
+decision    a choice made and why; alternatives rejected
+blocker     work cannot proceed; name what unblocks it
+milestone   a meaningful step completed
+handoff     state for the next worker: done, open, next step
+result      the settled outcome; requires --result; cite it when closing
+checkpoint  mechanical-first snapshot (sb journal checkpoint); requires --mechanical
+compaction  host-written record of a context compaction; requires --mechanical
+
+--semantic '{"summary":"what changed / evidence / next step", "next":["…"]}'
+  summary is required; optional completed, current, next, blocked, openQuestions,
+  keyDecisions, materialFindings (string arrays; current is a string).
+--result '{"summary":"…"}'
+  optional attempted, outcome (strings); completed, validation, findings,
+  artifactRefs, receiptRefs, provenanceRefs (string arrays). No other keys.
+
+- Text after the ref is rejected: put prose in --semantic.
+- An entry with no payload is rejected for note, finding, decision, blocker, milestone, handoff.
+- A summary under 8 words, or done/wip/ok/todo/tbd/.../-, is accepted with a warning.
+- Summary text is limited to 20,000 characters on the CLI and on the Pi tool; a longer one
+  fails and nothing is written (it is never cut). The Claude MCP append path still cuts at
+  2,000 characters. Long text: --summary-file <path|->, or split it.
+- Text views cut long summaries with a "… (+N chars, …)" marker; --json always has the full text.
+- Close with evidence: sb issue close <ref> --outcome completed --reason … --result <entry id>
+- Reads: journal latest/since print headers; journal show or --json print bodies.`,
+  identity: `usage: sb help identity
+
+holder, SUBSTRATE_HOLDER and participant:
+
+--holder        who owns a claim lease (sb issue claim|renew|release). Required unless
+                SUBSTRATE_HOLDER is set.
+SUBSTRATE_HOLDER  environment default for the acting name. Export it once per session:
+                  export SUBSTRATE_HOLDER=<name>
+                It defaults --holder, and fills the participant on journal entries and closures.
+--participant   who authored one journal entry or closure; overrides SUBSTRATE_HOLDER.
+                With neither, the entry records "(none recorded)" and the CLI warns.
+--attested-by   who attested readiness (sb issue attest); independent of the claim holder.
+--actor         closure actor label (sb issue close); defaults to sb-cli.
+
+- A claim says who owns the work; it does not narrate progress and is not readiness.
+- The edit gate allows edits only for the live holder: SUBSTRATE_HOLDER must equal the
+  claim holder.
+- Session identity is runtime-known (XTRM_SESSION_ID); the CLI never invents it.
+- xt claude|pi|codex <name> exports SUBSTRATE_HOLDER, which is why an xt session claims
+  without restating its name. resolveClaimHolder (XTRM-722) is the only holder source:
+  the flag wins, then the variable, then the command fails closed.
+- XTRM_SESSION_NAME is shared by every pane of a tmux session and is never an identity.
+- The holder is never derived from a worktree path, a branch, or the unix user.`,
   issue: `usage: sb issue <verb> [args...]
 
   create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--parent <ref>] [--priority <n>] [--scrutiny <s>]
@@ -555,6 +637,10 @@ deactivates the active edge between the endpoints for the given kind.`,
 itself (xt pi|claude|codex <name> sets it). Pass --holder only to claim on
 someone else's behalf. With neither --holder nor a non-empty SUBSTRATE_HOLDER
 the claim fails closed; there is no implicit unix-user holder.`,
+  "issue.renew": `usage: sb issue renew <ref> [--holder <who>] [--ttl-ms <n>] [--activation <id>] [--project <id>]
+
+--holder defaults to SUBSTRATE_HOLDER, exactly as for claim and release. The
+lease keeps its generation; only its expiry moves.`,
   "issue.release": `usage: sb issue release <ref> [--holder <who>] [--activation <id>] [--project <id>]
 
 --holder defaults to SUBSTRATE_HOLDER, so a session releases its own claim
@@ -1207,6 +1293,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.relate": ["project", "from", "to", "kind"],
   "issue.unrelate": ["project", "from", "to", "kind"],
   "issue.claim": ["project", "holder", "ttl-ms", "activation"],
+  "issue.renew": ["project", "holder", "ttl-ms", "activation"],
   "issue.release": ["project", "holder", "activation"],
   "issue.close": ["project", "outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact"],
   "issue.state": ["project", "until"],
@@ -1259,8 +1346,52 @@ const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "pr
 function assertKnownFlags(flags: Flags, command: string): void {
   const allowed = new Set([...GLOBAL_FLAGS, ...(FLAG_ALLOWLIST[command] ?? [])]);
   for (const name of flags.keys()) {
-    if (!allowed.has(name)) throw new Error(`unknown flag --${name} for \`${command}\` (see usage)`);
+    if (allowed.has(name)) continue;
+    // A flag and its value glued into one argv token ("--parent XTRM-1").
+    const merged = /^(\S+)\s+(.+)$/.exec(name);
+    const hint = merged ? `; flag and value must be separate arguments (--${merged[1]} ${JSON.stringify(merged[2])})` : "";
+    throw new Error(`unknown flag --${name} for \`${command}\` (see usage)${hint}`);
   }
+  assertFlagValues(flags, command);
+}
+
+// Flags that are presence-only for one command but not globally (the shared
+// parser must not treat them as boolean everywhere: `--stdio` only exists for
+// `serve`, and the remote forwarder decides value tokens by the global set).
+const PRESENCE_FLAGS: Record<string, string[]> = { "serve.stdio": ["stdio"] };
+
+// A value flag with no value used to become `true` and read back as absent,
+// silently dropping operator intent.
+function assertFlagValues(flags: Flags, command: string): void {
+  const presenceOnly = new Set(PRESENCE_FLAGS[command] ?? []);
+  for (const [name, value] of flags) {
+    if (value !== true) continue;
+    if (BOOLEAN_FLAGS.has(name) || presenceOnly.has(name)) continue;
+    throw new Error(`--${name} requires a value`);
+  }
+}
+
+// Verbs take one ref. Extra positional text used to be dropped silently, so a
+// wrong invocation looked like a success.
+const MAX_POSITIONALS: Record<string, number> = {
+  "issue.state": 2,
+  "issue.link": 3,
+  "issue.unlink": 3,
+  "journal.since": 2,
+  "provenance.attach": 3,
+  "provenance.bind": 2,
+  "remote.setup": 2,
+};
+
+function assertArity(command: string, rest: string[]): void {
+  if (command === "issue.note") return; // positional text is the note body
+  const max = MAX_POSITIONALS[command] ?? 1;
+  if (rest.length <= max) return;
+  const extra = rest.slice(max).join(" ");
+  const hint = command === "journal.append" ? `; put the text in --semantic '{"summary":"…"}'` : "";
+  throw new Error(
+    `unexpected extra argument${rest.length - max === 1 ? "" : "s"}: ${JSON.stringify(extra)} (${command} takes ${max === 1 ? "one ref" : `${max} arguments`})${hint}`,
+  );
 }
 
 export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.ProcessEnv; transport?: RemoteTransport; readStdin?: () => string }): CliResult {
@@ -1332,7 +1463,11 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
       return { code: 0, stdout: "", stderr: "" };
     }
     if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|links|import|export|remote|serve> <verb> [args...]");
-    if (group && KNOWN_GROUPS.has(group)) assertKnownFlags(flags, `${group}.${verb ?? ""}`);
+    if (group && KNOWN_GROUPS.has(group)) {
+      const declared = `${group}.${verb ?? ""}`;
+      assertKnownFlags(flags, declared);
+      assertArity(declared, rest);
+    }
     db = openSubstrate(ctx.dbPath);
     const svc = new IssueService(db);
     if (group === "init") {
@@ -1386,6 +1521,27 @@ function projectOf(svc: IssueService, flags: Flags): string {
 // cross-project work possible (ADR §16).
 function refInContext(svc: IssueService, flags: Flags, ref: string): ResolvedIssue {
   return svc.resolveRefInProject(ref, projectOf(svc, flags));
+}
+
+// Claim/renew payload: ids stay for compatibility; the human ref and the ISO
+// expiry are added so a confirmation never prints epoch milliseconds.
+function claimData(
+  humanRef: string,
+  claim: { issueId: string; holder: string; expiresAt: number; generation: number },
+  alreadyHeld: boolean,
+  holderSource: string,
+): Record<string, unknown> {
+  return {
+    issueId: claim.issueId,
+    humanRef,
+    holder: claim.holder,
+    holderSource,
+    expiresAt: claim.expiresAt,
+    expiresAtIso: isoTime(claim.expiresAt),
+    expiresInMinutes: Math.max(0, Math.round((claim.expiresAt - Date.now()) / 60000)),
+    generation: claim.generation,
+    alreadyHeld,
+  };
 }
 
 function needRef(rest: string[]): string {
@@ -1733,6 +1889,11 @@ function runIssue(
       const ref = needRef(rest);
       const resolved = svc.resolveRef(ref);
       const r = svc.getReadiness(resolved.id);
+      // Shape hints sit beside the structural verdict: a validation entry written
+      // as a plain string is the most common reason a contract stays draft, and
+      // naming the expected shape saves a round trip.
+      const revision = svc.getRevision(resolved.id, r.revision);
+      const hints = contractShapeHints(revision.contract);
       return emit(ctx, command, {
         issueId: r.issueId,
         revision: r.revision,
@@ -1742,6 +1903,7 @@ function runIssue(
         structurallyValid: r.structurallyValid,
         attestationCurrent: r.attestationCurrent,
         unsatisfiedBlockers: r.unsatisfiedBlockers,
+        ...(hints.length > 0 ? { shapeHints: hints } : {}),
       });
     }
     case "attest": {
@@ -1854,17 +2016,29 @@ function runIssue(
       const holder = resolveClaimHolder(flag(flags, "holder"));
       const ttl = flag(flags, "ttl-ms");
       const resolved = refInContext(svc, flags, ref);
+      const prior = svc.getActiveClaim(resolved.id);
       const claim = svc.claimIssue(resolved.id, holder.holder, {
         activationId: flag(flags, "activation"),
         ttlMs: ttl !== undefined ? Number(ttl) : undefined,
       });
-      return emit(ctx, command, {
-        issueId: claim.issueId,
-        holder: claim.holder,
-        holderSource: holder.source,
-        expiresAt: claim.expiresAt,
-        generation: claim.generation,
+      // alreadyHeld: the caller already owned the live lease, so nothing was
+      // stolen and the confirmation should say so.
+      return emit(ctx, command, claimData(resolved.humanRef, claim, prior?.id === claim.id, holder.source));
+    }
+    case "renew": {
+      const ref = needRef(rest);
+      // Same holder rule as claim: --holder, else the ambient SUBSTRATE_HOLDER,
+      // else fail closed. Renewing keeps the generation and moves the expiry.
+      const holder = resolveClaimHolder(flag(flags, "holder"));
+      const ttl = flag(flags, "ttl-ms");
+      const resolved = refInContext(svc, flags, ref);
+      const claim = svc.renewClaim(resolved.id, holder.holder, {
+        activationId: flag(flags, "activation"),
+        ttlMs: ttl !== undefined ? Number(ttl) : undefined,
       });
+      // A renewal always finds the caller already holding the lease; that is what
+      // renewing means, and the flag says so instead of implying a fresh claim.
+      return emit(ctx, command, claimData(resolved.humanRef, claim, true, holder.source));
     }
     case "release": {
       const ref = needRef(rest);

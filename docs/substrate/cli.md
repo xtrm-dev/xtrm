@@ -87,7 +87,7 @@ naming the remote — `not_installed`, `spawn_failed`, `connection_lost`,
 call that times out is not cancelled on the server, and the protocol carries no
 idempotency key, so a retried mutation may run twice.
 
-## issue — 22 verbs
+## issue — 23 verbs
 
 - `issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--scrutiny <LOW|MEDIUM|HIGH|CRITICAL>]` — create; pins the
   seven-field contract at write time. --scrutiny wins when present, otherwise the contract's own scrutiny applies; a missing or invalid value is refused at create naming the accepted levels.
@@ -112,7 +112,13 @@ idempotency key, so a retried mutation may run twice.
   affect readiness.
 - `issue claim <ref> --holder <who>` / `issue release <ref> --holder <who>` —
   atomic lease, exactly one live holder; anti-steal, expiry closes the old
-  generation first.
+  generation first. `--holder` defaults to `SUBSTRATE_HOLDER`, so an xt session
+  claims and releases without restating its name; with neither the command fails
+  closed.
+- `issue renew <ref> [--holder <who>] [--ttl-ms <n>]` — extend a lease that is
+  still live. The expiry moves and the generation does not, so a renewal never
+  looks like a re-claim; an expired lease is not renewable and must be claimed
+  again, which records the new generation.
 - `issue state <ref> <open|deferred|done|cancelled|archived>` — set the
   lifecycle state; every transition emits a durable event.
 - `issue close|reopen|cancel|archive <ref>` — lifecycle aliases:

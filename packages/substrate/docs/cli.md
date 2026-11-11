@@ -135,7 +135,18 @@ to its `data`, and a release answer carries `released` plus the resolved `holder
 and `holderSource`. The Claude MCP `issue_claim` tools and the Pi
 `substrate_issue_claim` tool resolve the same way and report `holderSource` too.
 
-A remotely forwarded `issue claim` or `issue release` resolves on the client
+`sb issue renew` extends a lease that is still live and resolves `--holder` by
+the same rule. The expiry moves; the generation does not, so a renewal cannot
+look like a re-claim:
+
+```bash
+sb issue renew XTRM-123 --ttl-ms 3600000
+```
+
+A lease that has already expired is not renewable — claim it again, which
+records a new generation and is the honest signal that ownership lapsed.
+
+A remotely forwarded `issue claim`, `issue renew` or `issue release` resolves on the client
 before anything is sent: with neither the flag nor the client's
 `SUBSTRATE_HOLDER` the client fails closed with the message above, otherwise the
 explicit flag crosses as the flag or the client's `SUBSTRATE_HOLDER` crosses and

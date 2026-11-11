@@ -14,6 +14,7 @@
 import type { IssueService } from "../service/issue-service.ts";
 import type { JournalService } from "../service/journal-service.ts";
 import { SUBSTRATE_HOLDER_ENV } from "../domain/execution-context.ts";
+import { displayRef } from "../domain/issue.ts";
 import { TERMINAL_LIFECYCLE } from "../domain/readiness.ts";
 
 export type AdvisoryCode =
@@ -278,7 +279,7 @@ export function snapshotIssue(issues: IssueService, journal: JournalService, iss
     ref: issue.humanRef,
     // Locator first, durable ref in parentheses, one value for a root issue —
     // the same shape the human surfaces use (`XTRM-668.9 (XTRM-677)`).
-    label: issue.locator === issue.humanRef ? issue.humanRef : `${issue.locator} (${issue.humanRef})`,
+    label: displayRef(issue.locator, issue.humanRef),
     lifecycleState: issue.lifecycleState,
     readinessState: readiness.state,
     claim: claim ? { holder: claim.holder, activationId: claim.activationId, acquiredAt: claim.acquiredAt, expiresAt: claim.expiresAt } : null,
