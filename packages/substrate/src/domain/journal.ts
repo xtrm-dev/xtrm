@@ -102,6 +102,12 @@ export interface EvidenceRef {
 // ponytail: whole result text is bounded per field; raise if a real body
 // needs it, but keep the reference-not-dump rule (ADR §39).
 const RESULT_MAX_TEXT = 4000;
+
+// A host-supplied note body (`sb issue note`, and the Pi journal tool) is
+// bounded at the write seam so one entry cannot bloat the Journal or the
+// resume capsule. Over the bound the write fails; it is never truncated,
+// because a silently shortened handoff is worse than a refused one.
+export const JOURNAL_SUMMARY_MAX = 20_000;
 const RESULT_MAX_ITEMS = 100;
 const RESULT_MAX_ITEM_TEXT = 1000;
 

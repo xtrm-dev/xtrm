@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
+import { JournalService } from "../src/service/journal-service.ts";
 import registerSubstrate from "../integrations/pi/extension.ts";
 import { contract } from "./helpers.ts";
 
@@ -151,6 +152,21 @@ describe("Pi tool_call edit/write gate (live wired handler)", () => {
     // while an unknown session is fail-closed on the same live claim.
     assert.equal(await toolCall(editEvent(), fakeCtx("sess-1")), undefined);
     assert.equal((await toolCall(editEvent(), fakeCtx("sess-2")))?.block, true);
+  });
+
+  it("substrate_journal_append exposes and persists the entry text (XTRM-720)", async () => {
+    const appendTool = tools.find((t) => t.name === "substrate_journal_append") as CapturedTool & { parameters?: unknown };
+    assert.ok(appendTool, "extension registers substrate_journal_append");
+    assert.match(JSON.stringify(appendTool.parameters ?? {}), /summary/, "the tool schema names the text field");
+    const text = "handoff: text survives the registered tool surface";
+    await appendTool.execute("id", { ref: humanRef, kind: "handoff", summary: text }, undefined, undefined, fakeCtx("sess-1"));
+    const db = openSubstrate(dbPath);
+    try {
+      const entry = new JournalService(db, new IssueService(db)).listEntries(issueId)[0];
+      assert.deepEqual(entry.semantic, { summary: text });
+    } finally {
+      db.close();
+    }
   });
 
   it("unreadable database fails open so Pi is never bricked", async () => {

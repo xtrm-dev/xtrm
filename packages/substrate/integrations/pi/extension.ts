@@ -40,6 +40,7 @@ import {
   toPiCompaction,
 } from "./handlers.ts";
 import type { SemanticCheckpoint } from "../../src/domain/journal.ts";
+import { JOURNAL_SUMMARY_MAX } from "../../src/domain/journal.ts";
 import { SessionBacking, openBacking, type Backing, type StoreCall } from "./backing.ts";
 import { isTransportFailure, transportCode } from "../../src/service/operations.ts";
 import {
@@ -132,8 +133,13 @@ export default function registerSubstrate(pi: ExtensionAPI, options: { openBacki
     defineTool({
       name: "substrate_journal_append",
       label: "Substrate journal append",
-      description: "Append a journal entry (note, finding, decision, blocker, milestone, handoff, result, checkpoint, compaction) to an issue. Results include a structured persistence confirmation.",
-      parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), kind: Type.String({ description: "Entry kind" }), sessionId: Type.Optional(Type.String({ description: "Pi session id" })) }),
+      description: "Append a journal entry (note, finding, decision, blocker, milestone, handoff, result, checkpoint, compaction) to an issue. Pass summary to persist the entry text; omitting it writes an explicitly text-less entry. Results include a structured persistence confirmation.",
+      parameters: Type.Object({
+        ref: Type.String({ description: "Issue ref" }),
+        kind: Type.String({ description: "Entry kind" }),
+        summary: Type.Optional(Type.String({ description: `Entry text, persisted as the semantic summary (non-result kinds) or the result summary (kind result). Max ${JOURNAL_SUMMARY_MAX} characters; a longer or blank value fails the call.` })),
+        sessionId: Type.Optional(Type.String({ description: "Pi session id" })),
+      }),
       async execute(
         _id: string,
         params: Record<string, unknown>,
@@ -142,8 +148,18 @@ export default function registerSubstrate(pi: ExtensionAPI, options: { openBacki
         ctx: ExtensionContext,
       ) {
         const sessionId = (params.sessionId as string | undefined) ?? ctx?.sessionManager?.getSessionId?.();
-        const result = await withBacking((backing) => toolJournalAppend(backing, { ref: params.ref as string, kind: params.kind as string, sessionId }));
-        return feedbackResult(result, successFeedback("journal_written", `Added ${params.kind as string} to ${params.ref as string}`, `journal seq ${String(result.sequence)}`));
+        const result = await withBacking((backing) => toolJournalAppend(backing, { ref: params.ref as string, kind: params.kind as string, summary: params.summary as string | undefined, sessionId }));
+        const persisted = result.summary as string | null;
+        return feedbackResult(
+          result,
+          successFeedback(
+            "journal_written",
+            `Added ${params.kind as string} to ${params.ref as string}`,
+            persisted === null
+              ? `journal seq ${String(result.sequence)} · no entry text (kind-only append)`
+              : `journal seq ${String(result.sequence)} · summary persisted (${persisted.length} chars)`,
+          ),
+        );
       },
     }),
     defineTool({
