@@ -1417,8 +1417,8 @@ function tryHolder(flags: Flags): string | null {
   }
 }
 
-/** Bare `#N` scope: the ambient checkout's remote, else the project's single
- * github repository binding. Null means "no ambient repository". */
+/** Bare `#N` scope: the Issue's Project repository binding first, then the
+ * checkout's github remote. Null means "no ambient repository". */
 function ambientRepository(db: ReturnType<typeof openSubstrate>, projectId: string): string | null {
   // The issue's repository (its Project's single binding) wins over whatever
   // checkout the command happens to run in.

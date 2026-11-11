@@ -164,6 +164,7 @@ export class PullRequestService {
           number: canonical.number,
           receipt: receipt.id,
           relation: "created_from",
+          actor: input.actor,
         }, now);
       }
       // Reading inside the transaction makes a failure roll the attach back.
@@ -229,9 +230,11 @@ export class PullRequestService {
             WHERE issue_id = ? AND type = 'provenance.link_finding'
               AND json_extract(payload_json, '$.code') = ?
               AND json_extract(payload_json, '$.sha') = ?
+              AND json_extract(payload_json, '$.repository') = ?
+              AND json_extract(payload_json, '$.number') = ?
             LIMIT 1`,
         )
-        .get(input.issueId, code, sha);
+        .get(input.issueId, code, sha, input.repository, input.number);
       if (duplicate) return;
       findings += 1;
       issues.appendEvent(input.issueId, "provenance.link_finding", {
@@ -374,7 +377,7 @@ export class PullRequestService {
            (issue_id, repository, number, relation, source, url, actor, created_at, superseded_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
          ON CONFLICT (issue_id, repository, number, relation, source)
-         DO UPDATE SET superseded_at = NULL, url = excluded.url, actor = excluded.actor, created_at = excluded.created_at`,
+         DO UPDATE SET superseded_at = NULL`,
       )
       .run(issueId, repository, number, relation, source, url, actor, now);
     return Number(info.changes ?? 0) > 0;
@@ -433,10 +436,13 @@ export class PullRequestService {
   /** b1 explicit -> b2 live claim binding -> b3 latest live binding. */
   private resolveReceipt(issueId: string, explicit: string | undefined, holder: string | undefined, now: number): WorkReceipt {
     const { issues, provenance } = this.requireWriters();
-    let chosen: WorkReceipt | undefined;
     if (explicit !== undefined) {
-      chosen = provenance.getReceipt(explicit);
-    } else if (holder !== undefined) {
+      const verdict = this.classifyReceipt(explicit, issueId);
+      if (!verdict.ok) throw new Error(`${verdict.code}: ${verdict.detail}`);
+      return verdict.receipt;
+    }
+    let chosen: WorkReceipt | undefined;
+    if (holder !== undefined) {
       const claim = issues.getActiveClaim(issueId, { now });
       if (claim && claim.holder === holder) {
         const binding = provenance.listBindings(issueId).filter((b) => b.claimId === claim.id).at(-1);

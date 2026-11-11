@@ -137,28 +137,40 @@ describe("pull-request writers", () => {
     throwsCode(() => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR), "receipt_superseded");
   });
 
-  it("a failing attach commits nothing: no artifact, no event, no row", () => {
-    const before = w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.artifact_attached").length;
-    const other = w.svc.createIssue({ projectId: "prj_xtrm", title: "other", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
-    w.svc.attestReadiness(other.id, { outcome: "ready", policy: "default", attestedBy: "tester" });
-    const claim = w.svc.claimIssue(other.id, "w", { ttlMs: 60_000 });
-    const binding = w.prov.dispatch(other.id, { workspace: "/tmp/ws", participantId: "w", claimId: claim.id });
-    const foreign = w.prov.allocateReceipt(binding.id);
-    throwsCode(() => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: foreign.id }, PR), "receipt_foreign_issue");
-    const after = w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.artifact_attached").length;
-    assert.equal(after, before);
+  it("a failing attach inside the transaction commits nothing", () => {
+    const { receipt } = dispatchWithClaim(w);
+    w.db.exec("CREATE TRIGGER fail_link BEFORE INSERT ON issue_pull_requests BEGIN SELECT RAISE(ABORT, 'forced link failure'); END");
+    assert.throws(
+      () => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR),
+      /forced link failure/,
+    );
+    assert.equal(w.prov.listArtifacts(receipt.id).length, 0);
+    assert.equal(w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.artifact_attached").length, 0);
     assert.equal(w.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests").get()!.n, 0);
-    assert.equal(w.prov.listArtifacts(foreign.id).length, 0);
+  });
+
+  it("an unknown explicit receipt fails with receipt_unknown", () => {
+    throwsCode(
+      () => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: "rec_does_not_exist" }, PR),
+      "receipt_unknown",
+    );
   });
 
   it("re-attach restores a row after unlink, with one artifact event", () => {
     const { receipt } = dispatchWithClaim(w);
     w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR);
+    const before = w.db.prepare("SELECT created_at, url, actor FROM issue_pull_requests").get() as { created_at: number; url: string; actor: string };
     w.links.unlink({ issueId: w.issue.id, repository: "o/r", number: 7 });
-    const restored = w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR);
+    const restored = w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "restorer", receiptId: receipt.id }, PR);
     assert.equal(restored.relation, "created_from");
+    const after = w.db.prepare("SELECT created_at, url, actor FROM issue_pull_requests").get() as { created_at: number; url: string; actor: string };
+    // Restore clears superseded_at only: identity and time are the original link's.
+    assert.deepEqual(after, before);
     const artifactEvents = w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.artifact_attached");
     assert.equal(artifactEvents.length, 1);
+    const linkEvents = w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.link_created");
+    const last = linkEvents[linkEvents.length - 1]!.payload as { actor?: string };
+    assert.equal(last.actor, "restorer");
     assert.equal(w.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests").get()!.n, 1);
   });
 
@@ -166,6 +178,29 @@ describe("pull-request writers", () => {
     const { receipt } = dispatchWithClaim(w);
     w.svc.updateContract(w.issue.id, contract({ problem: "P2" }), "t");
     throwsCode(() => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR), "receipt_stale_revision");
+  });
+
+  it("b3 refuses a stale receipt too", () => {
+    dispatchWithClaim(w);
+    w.svc.updateContract(w.issue.id, contract({ problem: "P2" }), "t");
+    throwsCode(() => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w" }, PR), "receipt_stale_revision");
+  });
+
+  it("T2 records a stale receipt as a mention plus receipt_stale_revision", () => {
+    const { receipt } = dispatchWithClaim(w);
+    w.svc.updateContract(w.issue.id, contract({ problem: "P2" }), "t");
+    const message = `XTRM-Issue: ${w.issue.humanRef}\nXTRM-Receipt: ${receipt.id}`;
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "6".repeat(40), message }] });
+    assert.equal(result.mentioned, 1);
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["receipt_stale_revision"]);
+  });
+
+  it("finding dedupe is scoped to the PR as well as the commit", () => {
+    const message = `XTRM-Issue: ${w.issue.humanRef}`;
+    w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "7".repeat(40), message }] });
+    w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 8, actor: "w", commits: [{ sha: "7".repeat(40), message }] });
+    const findings = w.links.listFindings("prj_xtrm");
+    assert.deepEqual(findings.map((f) => [f.code, f.number]).sort(), [["trailer_receipt_missing", 7], ["trailer_receipt_missing", 8]]);
   });
 
   it("mention is persisted, idempotent, and unlink supersedes without deleting", () => {
