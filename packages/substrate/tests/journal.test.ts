@@ -5,15 +5,14 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { rmSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { runCli } from "../cli/sb.ts";
-import { contract, setup } from "./helpers.ts";
+import { contract, setup, tempDir } from "./helpers.ts";
 
 function services(ctx: ReturnType<typeof setup>) {
   const journal = new JournalService(ctx.db, ctx.svc);
@@ -301,7 +300,7 @@ describe("resume capsules (D25, D29)", () => {
 
 describe("sb journal verbs + issue resume", () => {
   it("append/checkpoint/show/since/render/resume round-trip through the CLI", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-journal-"));
+    const dir = tempDir("sb-journal-");
     const dbPath = join(dir, "state.db");
     // runCli opens the DB per invocation, so seed with one short-lived handle.
     const seed = openSubstrate(dbPath);

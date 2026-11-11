@@ -1,13 +1,12 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { runCli, discoverRepository, SCHEMA_VERSION } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 // Low-level project administration (ADR sbcloseout4 §18, R3): `sb project`
 // is an advanced/recovery surface, never the normal onboarding workflow
@@ -16,7 +15,7 @@ import { contract } from "./helpers.ts";
 // the alias-corruption recovery round-trip without renumbering Issues.
 
 function setup(): { dir: string; dbPath: string; svc: IssueService; db: ReturnType<typeof openSubstrate> } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-projadmin-"));
+  const dir = tempDir("sb-projadmin-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   return { dir, dbPath, svc: new IssueService(db), db };
@@ -40,7 +39,7 @@ function fails(dbPath: string, argv: string[]): string {
 }
 
 function withGitRepo(fn: (repo: string) => void): void {
-  const repo = mkdtempSync(join(tmpdir(), "sb-projadmin-repo-"));
+  const repo = tempDir("sb-projadmin-repo-");
   try {
     execFileSync("git", ["init", "-q"], { cwd: repo });
     execFileSync("git", ["remote", "add", "origin", "https://github.com/test/projadmin-recovery.git"], { cwd: repo });
@@ -147,7 +146,7 @@ describe("sb project administration (R3)", () => {
       ["help", "project", "links"],
       ["help", "project", "repair"],
     ]) {
-      const res = runCli(argv, { dbPath: join(mkdtempSync(join(tmpdir(), "sb-help-")), "x.db") });
+      const res = runCli(argv, { dbPath: join(tempDir("sb-help-"), "x.db") });
       assert.equal(res.code, 0, `sb ${argv.join(" ")} failed: ${res.stderr}`);
       const text = res.stdout.replace(/\s+/g, " ");
       assert.match(text, /Advanced\/recovery/, `sb ${argv.join(" ")} must be marked advanced/recovery`);

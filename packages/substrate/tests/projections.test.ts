@@ -1,10 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { setup, contract } from "./helpers.ts";
+import { contract, setup, tempDir } from "./helpers.ts";
 import { GITHUB_ISSUE_OPENED, JIRA_WEBHOOK_CREATED, remoteEdit } from "./fixtures.ts";
 import { IntegrationService, type ProjectionSender, type SendResult } from "../src/service/integration-service.ts";
 import { IssueService } from "../src/service/issue-service.ts";
@@ -264,7 +263,7 @@ describe("filesystem projection", () => {
     const { svc } = integ();
     const root = svc.createIssue({ projectId: "prj_xtrm", title: "Root", kind: "epic", contract: contract() });
     svc.createIssue({ projectId: "prj_xtrm", title: "Leaf", kind: "task", contract: contract(), parentId: root.id });
-    const dir = mkdtempSync(join(tmpdir(), "substrate-proj-"));
+    const dir = tempDir("substrate-proj-");
     const { treePath, snapshotPath } = writeFilesystemProjection(svc, "prj_xtrm", dir);
     assert.ok(existsSync(treePath));
     assert.ok(existsSync(snapshotPath));

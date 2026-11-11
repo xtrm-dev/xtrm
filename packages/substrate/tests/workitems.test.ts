@@ -1,7 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
@@ -11,10 +10,10 @@ import { SubstrateIssueStore } from "../src/workitems/substrate-store.ts";
 import { BeadsWorkItemStore } from "../src/workitems/beads-store.ts";
 import { checkDispatch, dispatchToSpecialist, scopeExpansion } from "../src/workitems/dispatch-gate.ts";
 import type { WorkItemStore } from "../src/workitems/store.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 function setup() {
-  const dir = mkdtempSync(join(tmpdir(), "substrate-wi-"));
+  const dir = tempDir("substrate-wi-");
   const db = openSubstrate(join(dir, "state.db"));
   const issues = new IssueService(db);
   issues.createProject({ id: "prj_wi", prefix: "WI", name: "w" });
@@ -198,7 +197,7 @@ describe("beads compat backend: reads pass, writes fail closed with parity notes
   }
 
   it("get/search/validate read the export; ready is empty; mutations refuse", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-beads-"));
+    const dir = tempDir("substrate-beads-");
     const store = new BeadsWorkItemStore(fixture(dir));
     assert.equal(store.backend, "beads");
     assert.equal(store.get("xtrm-abc").issue.title, "Old bead");

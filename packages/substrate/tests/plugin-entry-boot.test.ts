@@ -1,13 +1,12 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 // Acceptance xtrm-iip.1 (closeout E1), third proof: the relocated plugin
 // entry (scripts/substrate-mcp.mjs) boots a live modern-only server over
@@ -26,7 +25,7 @@ describe("packaged plugin entry boots (xtrm-iip.1)", () => {
   let dbPath = "";
   let humanRef = "";
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "sb-plugin-boot-"));
+    dir = tempDir("sb-plugin-boot-");
     dbPath = join(dir, "state.db");
     const db = openSubstrate(dbPath);
     const svc = new IssueService(db);

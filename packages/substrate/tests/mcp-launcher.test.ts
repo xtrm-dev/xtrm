@@ -4,11 +4,11 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tempDir } from "./helpers.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LAUNCHER = join(ROOT, "plugin", "substrate", "scripts", "substrate-mcp.mjs");
@@ -20,8 +20,19 @@ interface Fixture {
   shimArgv: () => string;
 }
 
+// The launcher derives the repository key from the git remote of its cwd. A
+// clone's URL form is the runner's business (https on some checkouts, ssh on
+// others), so these fixtures run from a repo whose remote is fixed.
+function pinnedRepo(dir: string): string {
+  const repo = join(dir, "repo");
+  spawnSync("mkdir", ["-p", repo]);
+  spawnSync("git", ["init", "-q"], { cwd: repo });
+  spawnSync("git", ["remote", "add", "origin", "git@github.com:xtrm-dev/xtrm.git"], { cwd: repo });
+  return repo;
+}
+
 function fixture(remoteBody: string, configRemote = "ssh:probe"): Fixture {
-  const dir = mkdtempSync(join(tmpdir(), "mcp-launcher-"));
+  const dir = tempDir("mcp-launcher-");
   const bin = join(dir, "bin");
   spawnSync("mkdir", ["-p", bin]);
   const log = join(dir, "ssh-argv");
@@ -137,7 +148,7 @@ describe("the MCP launcher picks the transport from the configuration", () => {
     // A server may hold a checkout of a DIFFERENT repository — core has no
     // packages/substrate. The script ships with the installed package, so the
     // checkout must only resolve the repository, never supply the script path.
-    const dir = mkdtempSync(join(tmpdir(), "mcp-script-dir-"));
+    const dir = tempDir("mcp-script-dir-");
     const bin = join(dir, "bin");
     const pkg = join(dir, "pkg");
     const scripts = join(pkg, "plugin", "substrate", "scripts");
@@ -162,6 +173,7 @@ describe("the MCP launcher picks the transport from the configuration", () => {
       }),
     );
     const result = spawnSync(process.execPath, [LAUNCHER], {
+      cwd: pinnedRepo(dir),
       encoding: "utf8",
       timeout: 20000,
       input: "",
@@ -198,7 +210,7 @@ describe("the MCP launcher picks the transport from the configuration", () => {
   it("names the missing plugin script as not_installed", () => {
     // The package is there but does not ship the script (an older install): that
     // is a named condition, not a lost connection.
-    const dir = mkdtempSync(join(tmpdir(), "mcp-not-installed-"));
+    const dir = tempDir("mcp-not-installed-");
     const bin = join(dir, "bin");
     const pkg = join(dir, "pkg");
     const checkout = join(dir, "checkout");
@@ -216,6 +228,7 @@ describe("the MCP launcher picks the transport from the configuration", () => {
       }),
     );
     const result = spawnSync(process.execPath, [LAUNCHER], {
+      cwd: pinnedRepo(dir),
       encoding: "utf8",
       timeout: 20000,
       input: "",
@@ -230,7 +243,7 @@ describe("the MCP launcher picks the transport from the configuration", () => {
     // The identity is JSON; unquoted it loses its quotes to the remote shell and
     // the far side cannot parse it — which is how identity vanished silently in
     // a live run. This fixture runs the far-side command through a real shell.
-    const dir = mkdtempSync(join(tmpdir(), "mcp-identity-quote-"));
+    const dir = tempDir("mcp-identity-quote-");
     const bin = join(dir, "bin");
     const scripts = join(dir, "pkg", "plugin", "substrate", "scripts");
     const checkout = join(dir, "checkout");
@@ -262,6 +275,7 @@ describe("the MCP launcher picks the transport from the configuration", () => {
       encoding: "utf8",
       timeout: 20000,
       input: "",
+      cwd: pinnedRepo(dir),
       env: {
         ...process.env,
         PATH: `${bin}:${process.env["PATH"] ?? ""}`,

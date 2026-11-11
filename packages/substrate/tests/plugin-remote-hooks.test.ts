@@ -5,18 +5,18 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tempDir } from "./helpers.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPTS = join(ROOT, "plugin", "substrate", "scripts");
 const VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version as string;
 
 function fixture(remoteBody: string) {
-  const dir = mkdtempSync(join(tmpdir(), "hook-remote-"));
+  const dir = tempDir("hook-remote-");
   const bin = join(dir, "bin");
   spawnSync("mkdir", ["-p", bin]);
   const log = join(dir, "ssh-argv");

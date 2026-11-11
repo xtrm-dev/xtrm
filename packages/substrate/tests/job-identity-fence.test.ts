@@ -17,15 +17,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { runUxCli } from "../cli/sb-ux.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 const JOB_ID = "122c14";
 const JOB_ACTIVATION = "job-122c14";
@@ -45,7 +44,7 @@ async function withScratchEnv(body: (ctx: {
   issueRef: string;
 }) => Promise<void>): Promise<void> {
   const saved = new Map(IDENTITY_ENV.map((key) => [key, process.env[key]]));
-  const dir = mkdtempSync(join(tmpdir(), "job-identity-"));
+  const dir = tempDir("job-identity-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   try {

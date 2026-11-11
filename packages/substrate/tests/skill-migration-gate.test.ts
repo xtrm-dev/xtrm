@@ -1,13 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 // Mechanical conformance for SKILL-MIGRATION-GATE
 // (docs/substrate/skill-migration-gate.md, bead xtrm-6qu.4).
@@ -495,7 +494,7 @@ describe("skill-migration-gate matchers fail on regressed content", () => {
 // --- Live evidence (scratch databases via runCli) ---------------------------
 
 function setupDb(): { dir: string; dbPath: string } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-gate-"));
+  const dir = tempDir("sb-gate-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);

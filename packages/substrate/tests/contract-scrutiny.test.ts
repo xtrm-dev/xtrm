@@ -1,19 +1,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
 import { runUxCli } from "../cli/sb-ux.ts";
 import { feedbackForCommand, feedbackForError, renderFeedback } from "../src/presentation/terminal.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 const plain = { color: false, width: 88 };
 
 function setupDb(): { dir: string; dbPath: string } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-contract-scrutiny-"));
+  const dir = tempDir("sb-contract-scrutiny-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   new IssueService(db).createProject({ id: "prj_demo", prefix: "DEMO", name: "scrutiny" });

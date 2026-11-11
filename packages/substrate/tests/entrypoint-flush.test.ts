@@ -15,10 +15,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tempDir } from "./helpers.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PKG = join(here, "..");
@@ -55,7 +55,7 @@ function bash(cmd: string, env: Record<string, string> = {}): string {
 let bigHome: string | null = null;
 function largeHome(): string {
   if (bigHome) return bigHome;
-  const home = mkdtempSync(join(tmpdir(), "x335-bighome-"));
+  const home = tempDir("x335-bighome-");
   mkdirSync(join(home, ".claude", "plugins"), { recursive: true });
   const plugins: Record<string, Array<{ installPath: string }>> = {};
   for (let i = 0; i < 4000; i += 1) plugins[`beads-fake-${String(i).padStart(5, "0")}@mkt`] = [{ installPath: `/x/${i}` }];
@@ -183,7 +183,7 @@ describe("XTRM-335 exit-code matrix", () => {
     assert.equal(q2.status, 0);
     assert.equal(q2.stdout, "", "quiet no-arg path must emit zero bytes");
     assert.equal(q2.stderr, "", "quiet no-arg path must emit zero bytes on stderr");
-    const msgDir = mkdtempSync(join(tmpdir(), "x335-msg-"));
+    const msgDir = tempDir("x335-msg-");
     const msgFile = join(msgDir, "COMMIT_EDITMSG");
     writeFileSync(msgFile, "subject\n\nbody\n");
     const q2b = spawnSync(process.execPath, [join(HOOKS, "prepare-commit-msg.ts"), msgFile], { encoding: "utf8", env: envNoReceipt });
@@ -213,7 +213,7 @@ describe("XTRM-335 exit-code matrix", () => {
   });
 
   it("claude-code adapters: exit 0 with byte-identical output over a pipe, quiet paths zero-byte", () => {
-    const emptyCwd = mkdtempSync(join(tmpdir(), "x335-unbound-"));
+    const emptyCwd = tempDir("x335-unbound-");
     const cases: Array<{ script: string; stdin: string }> = [
       { script: join(CLAUDE, "commit-check.ts"), stdin: JSON.stringify({ tool_name: "Write", tool_input: { command: "ls" } }) },
       { script: join(CLAUDE, "edit-gate.ts"), stdin: "{}" },
@@ -258,7 +258,7 @@ describe("XTRM-335 exit-code matrix", () => {
   });
 
   it("plugin .mjs adapters: exit 0 with byte-identical output over a pipe, quiet paths zero-byte", () => {
-    const emptyCwd = mkdtempSync(join(tmpdir(), "x335-mjs-"));
+    const emptyCwd = tempDir("x335-mjs-");
     const env = { SUBSTRATE_HOME: PKG };
     const cases: Array<{ script: string; stdin: string }> = [
       { script: join(SCRIPTS, "commit-check.mjs"), stdin: JSON.stringify({ tool_name: "Write" }) },
@@ -331,7 +331,7 @@ describe("XTRM-335 exit-code matrix", () => {
   });
 
   it(".mjs adapters survive an early-closing consumer", () => {
-    const emptyCwd = mkdtempSync(join(tmpdir(), "x335-mjs-head-"));
+    const emptyCwd = tempDir("x335-mjs-head-");
     const env = { ...process.env, SUBSTRATE_HOME: PKG };
     const err = `/var/tmp/x335-t335-mjs-head-${process.pid}.err`;
     const res = spawnSync(
@@ -347,7 +347,7 @@ describe("XTRM-335 exit-code matrix", () => {
 
 describe("XTRM-335 shared pattern delivers >64 KiB on stdout and stderr", () => {
   it("a synthetic fixture child using armPipeDrain + exitCode delivers both streams fully with its exit code", () => {
-    const dir = mkdtempSync(join(tmpdir(), "x335-synth-"));
+    const dir = tempDir("x335-synth-");
     const child = join(dir, "big-writer.ts");
     writeFileSync(
       child,
@@ -366,7 +366,7 @@ describe("XTRM-335 shared pattern delivers >64 KiB on stdout and stderr", () => 
   });
 
   it("the .mjs helper pattern delivers a >64 KiB payload with its exit code", () => {
-    const dir = mkdtempSync(join(tmpdir(), "x335-synth-mjs-"));
+    const dir = tempDir("x335-synth-mjs-");
     const child = join(dir, "big-writer.mjs");
     writeFileSync(
       child,
@@ -509,7 +509,7 @@ describe("XTRM-335 structural detector", () => {
   });
 
   it("mutants prove the detector discriminates: TS and .mjs writers fail, quiet guards pass", () => {
-    const dir = mkdtempSync(join(tmpdir(), "x335-mutant-"));
+    const dir = tempDir("x335-mutant-");
     // Mutant 1: TS write-then-exit must fail.
     mkdirSync(join(dir, "hooks"), { recursive: true });
     writeFileSync(join(dir, "hooks", "evil.ts"), `process.stdout.write("x");\nprocess.exit(0);\n`);

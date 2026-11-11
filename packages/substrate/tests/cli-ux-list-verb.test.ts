@@ -6,17 +6,17 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { runCli } from "../cli/sb.ts";
 import { engineArgsForList, runUxCli } from "../cli/sb-ux.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 function board(...titles: string[]): { dir: string; dbPath: string; db: ReturnType<typeof openSubstrate>; svc: IssueService; parent: string; child: string } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-list-verb-"));
+  const dir = tempDir("sb-list-verb-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);

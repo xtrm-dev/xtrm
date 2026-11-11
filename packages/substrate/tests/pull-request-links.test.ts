@@ -4,7 +4,7 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
@@ -14,10 +14,10 @@ import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { parseAllTrailers } from "../src/domain/provenance.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 function scratch() {
-  const dir = mkdtempSync(join(tmpdir(), "substrate-pr-links-"));
+  const dir = tempDir("substrate-pr-links-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);
@@ -242,7 +242,7 @@ describe("links check --dry-run", () => {
   let oldPath: string | undefined;
   beforeEach(() => {
     s = scratch();
-    bin = mkdtempSync(join(tmpdir(), "substrate-gh-"));
+    bin = tempDir("substrate-gh-");
     oldPath = process.env["PATH"];
   });
   afterEach(() => {
@@ -281,7 +281,7 @@ fi
 
 describe("links help", () => {
   it("answers sb links --help, sb help links, and lists links in the bare usage", () => {
-    const helpDir = mkdtempSync(join(tmpdir(), "substrate-pr-links-help-"));
+    const helpDir = tempDir("substrate-pr-links-help-");
     const db = join(helpDir, "state.db");
     const direct = runCli(["--db", db, "links", "--help"]);
     assert.equal(direct.code, 0);

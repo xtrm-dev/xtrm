@@ -9,10 +9,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tempDir } from "./helpers.ts";
 import { ARGS, CAPABILITIES, OPERATIONS, classifyError } from "../src/service/ops.ts";
 import { MAX_FRAME_BYTES, ServiceCallError } from "../src/service/protocol.ts";
 import {
@@ -30,7 +30,7 @@ const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "cli", "sb.ts");
 const NODE = process.execPath;
 
 function makeRepo(label: string): string {
-  const root = mkdtempSync(join(tmpdir(), `sb-ops-${label}-`));
+  const root = tempDir(`sb-ops-${label}-`);
   const git = (args: string[]): void => {
     const done = spawnSync("git", args, { cwd: root, encoding: "utf8" });
     assert.equal(done.status, 0, done.stderr);
@@ -41,7 +41,7 @@ function makeRepo(label: string): string {
 }
 
 function makeStore(root: string, label: string): string {
-  const db = join(mkdtempSync(join(tmpdir(), `sb-ops-db-${label}-`)), "state.db");
+  const db = join(tempDir(`sb-ops-db-${label}-`), "state.db");
   const done = spawnSync(NODE, [CLI, "init", "--db", db], { cwd: root, encoding: "utf8" });
   assert.equal(done.status, 0, done.stdout + done.stderr);
   return db;
@@ -367,7 +367,7 @@ async function fingerprint(service: SubstrateService, ctx: Ctx): Promise<Record<
 }
 
 function copyStore(from: string, label: string): string {
-  const dir = mkdtempSync(join(tmpdir(), `sb-ops-${label}-`));
+  const dir = tempDir(`sb-ops-${label}-`);
   const to = join(dir, "state.db");
   // The WAL is checkpointed by closing the seeder, so the main file is the state.
   copyFileSync(from, to);
@@ -692,7 +692,7 @@ describe("the transport fails closed and by name", () => {
   });
 
   it("fails closed when the remote is configured but unusable", () => {
-    const config = join(mkdtempSync(join(tmpdir(), "sb-ops-config-")), "substrate.json");
+    const config = join(tempDir("sb-ops-config-"), "substrate.json");
     writeFileSync(config, JSON.stringify({ remote: "ssh:server", remoteSb: null, serverVersion: null, checkouts: {} }));
     assert.throws(
       () => openService({ env: { ...process.env, SUBSTRATE_REMOTE_CONFIG: config, SUBSTRATE_DB: undefined } }),
@@ -703,7 +703,7 @@ describe("the transport fails closed and by name", () => {
 
 describe("openSshService", () => {
   it("runs ssh with the options, host and command it documents", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-ops-ssh-"));
+    const dir = tempDir("sb-ops-ssh-");
     const log = join(dir, "argv.json");
     const shim = join(dir, "ssh");
     writeFileSync(
@@ -1258,7 +1258,7 @@ describe("round four: identity where it is listed, values that are not masked", 
   });
 
   it("opens a remote service while the harness identity is set (HIGH openService)", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-open-"));
+    const dir = tempDir("sb-open-");
     const configPath = join(dir, "substrate.json");
     writeFileSync(
       configPath,
@@ -1349,7 +1349,7 @@ it("refuses an answer past the frame cap with a typed error, and keeps the sessi
 it("does not read a host called server as an sb without the verb (MEDIUM code)", async () => {
     // The old test for "no sb serve --stdio there" matched the bare word "serve",
     // so a host named `server` that did not resolve was reported as not_installed.
-    const dir = mkdtempSync(join(tmpdir(), "sb-serve-host-"));
+    const dir = tempDir("sb-serve-host-");
     const shim = join(dir, "ssh");
     writeFileSync(shim, '#!/bin/sh\nprintf "ssh: Could not resolve hostname server: Name or service not known\\n" >&2\nexit 255\n');
     chmodSync(shim, 0o755);

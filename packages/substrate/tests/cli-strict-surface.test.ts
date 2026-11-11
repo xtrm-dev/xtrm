@@ -6,16 +6,16 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { runCli } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 function world(): { dir: string; dbPath: string; svc: IssueService; db: ReturnType<typeof openSubstrate> } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-cli-a3-"));
+  const dir = tempDir("sb-cli-a3-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);
@@ -294,7 +294,7 @@ describe("A3: a malformed contract is diagnosed, not just refused", () => {
   it("validate names the expected entry shape", () => {
     const w = world();
     try {
-      const dir = mkdtempSync(join(tmpdir(), "sb-cli-a3-contract-"));
+      const dir = tempDir("sb-cli-a3-contract-");
       const file = join(dir, "contract.json");
       writeFileSync(file, JSON.stringify({ ...contract(), validation: ["run the tests"] }));
       const created = cli(w, ["--json", "issue", "create", "--project", "prj_xtrm", "--title", "shape", "--kind", "task", "--contract", file, "--scrutiny", "LOW"]);
@@ -314,7 +314,7 @@ describe("A3: a malformed contract is diagnosed, not just refused", () => {
   it("a contract nested under a contract key is refused with the fix", () => {
     const w = world();
     try {
-      const dir = mkdtempSync(join(tmpdir(), "sb-cli-a3-nested-"));
+      const dir = tempDir("sb-cli-a3-nested-");
       const file = join(dir, "contract.json");
       writeFileSync(file, JSON.stringify({ contract: contract() }));
       const res = cli(w, ["issue", "create", "--project", "prj_xtrm", "--title", "nested", "--kind", "task", "--contract", file, "--scrutiny", "LOW"]);

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { after } from "node:test";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { runCli } from "../cli/sb.ts";
@@ -20,8 +21,30 @@ export function contract(overrides: Partial<WorkContract> = {}): WorkContract {
   };
 }
 
+// CORE-2612: every temp directory this suite creates is registered here and
+// removed by the root `after` hook below, so a run leaves zero entries in the OS
+// temp dir even when a test fails before its own cleanup.
+const tempDirs = new Set<string>();
+
+// The guard wrapper (scripts/test-tmp-guard.mjs) sets SUBSTRATE_TEST_TMP, so a
+// run's scratch dirs live in one directory the wrapper owns and can count.
+const suiteTmp = process.env["SUBSTRATE_TEST_TMP"] ?? null;
+
+export function tempDir(prefix = "substrate-"): string {
+  const dir = mkdtempSync(join(suiteTmp ?? tmpdir(), prefix));
+  tempDirs.add(dir);
+  return dir;
+}
+
+export function cleanupTempDirs(): void {
+  for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
+  tempDirs.clear();
+}
+
+after(() => cleanupTempDirs());
+
 export function setup() {
-  const dir = mkdtempSync(join(tmpdir(), "substrate-"));
+  const dir = tempDir("substrate-");
   const db = openSubstrate(join(dir, "state.db"));
   const svc = new IssueService(db);
   svc.createProject({ id: "prj_xtrm", prefix: "XTRM", name: "t" });
@@ -63,7 +86,7 @@ export function repoEnv(prefix = "sb-repo-"): RepoEnv {
   };
   const dirs: string[] = [];
   const temp = (p = prefix): string => {
-    const d = mkdtempSync(join(tmpdir(), p));
+    const d = tempDir(p);
     dirs.push(d);
     return d;
   };

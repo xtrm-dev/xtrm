@@ -1,14 +1,13 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
-import { contract, repoEnv } from "./helpers.ts";
+import { contract, repoEnv, tempDir } from "./helpers.ts";
 import { buildServer, SUBSTRATE_PROTOCOL_REVISION, SUBSTRATE_SERVER_NAME } from "../integrations/claude-code/mcp-server.ts";
 
 // Acceptance xtrm-iip.3 (closeout E3): SDK v2, strict 2026-07-28,
@@ -56,7 +55,7 @@ async function linkedServer(): Promise<Wire> {
 }
 
 function scratchDb(): { dir: string; dbPath: string; humanRef: string } {
-  const dir = mkdtempSync(join(tmpdir(), "sb-mcp-"));
+  const dir = tempDir("sb-mcp-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);
@@ -253,7 +252,7 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
   });
 
   it("unknown tool fails closed without touching the filesystem (xtrm-7wc.8.1 wire form)", async () => {
-    const emptyHome = mkdtempSync(join(tmpdir(), "sb-mcp-nohome-"));
+    const emptyHome = tempDir("sb-mcp-nohome-");
     const priorHome = process.env["HOME"];
     process.env["HOME"] = emptyHome;
     try {

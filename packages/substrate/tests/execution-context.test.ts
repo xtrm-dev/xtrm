@@ -6,8 +6,7 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { migrate } from "../src/store/migrations/runner.ts";
@@ -30,13 +29,13 @@ import { dispatchToSpecialist } from "../src/workitems/dispatch-gate.ts";
 import { openBacking, type Backing } from "../integrations/pi/backing.ts";
 import { toolJournalAppend, toolJournalCheckpoint, runBeforeCompact } from "../integrations/pi/handlers.ts";
 import { handlePreCompact } from "../integrations/claude-code/precompact.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 const ENV_ID = "01a0ac95-8370-74c5-9081-4490653e7e92";
 const ENV_NAME = "x1-r4-session";
 
 function scratch() {
-  const dir = mkdtempSync(join(tmpdir(), "substrate-x1-"));
+  const dir = tempDir("substrate-x1-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);
@@ -150,7 +149,7 @@ describe("X1 enrich: R4 env only, null when nothing known", () => {
 
 describe("X1 migration 010: forward, idempotent, legacy rows", () => {
   it("fresh migrate lands v10 with both envelope columns; re-migrate is idempotent", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-x1-mig-"));
+    const dir = tempDir("substrate-x1-mig-");
     try {
       const dbPath = join(dir, "state.db");
       const db = openSubstrate(dbPath);
@@ -171,7 +170,7 @@ describe("X1 migration 010: forward, idempotent, legacy rows", () => {
   });
 
   it("applies forward onto a v9-schema database", () => {
-    const dir = mkdtempSync(join(tmpdir(), "substrate-x1-mig9-"));
+    const dir = tempDir("substrate-x1-mig9-");
     try {
       const dbPath = join(dir, "state.db");
       const db = openSubstrate(dbPath);

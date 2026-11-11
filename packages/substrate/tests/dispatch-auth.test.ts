@@ -5,18 +5,17 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { checkDispatch, dispatchToSpecialist } from "../src/workitems/dispatch-gate.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 function scratch() {
-  const dir = mkdtempSync(join(tmpdir(), "substrate-dauth-"));
+  const dir = tempDir("substrate-dauth-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);

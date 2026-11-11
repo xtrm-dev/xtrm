@@ -1,11 +1,10 @@
 import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 // G47: export/import preserves revisions + graph equivalence.
 describe("export/import graph equivalence (G47)", () => {
@@ -15,8 +14,8 @@ describe("export/import graph equivalence (G47)", () => {
   });
 
   it("round-trips issues, revisions, edges, aliases, locator history", () => {
-    const dirA = mkdtempSync(join(tmpdir(), "sub-a-"));
-    const dirB = mkdtempSync(join(tmpdir(), "sub-b-"));
+    const dirA = tempDir("sub-a-");
+    const dirB = tempDir("sub-b-");
     dirs.push(dirA, dirB);
     const dbA = openSubstrate(join(dirA, "s.db"));
     const a = new IssueService(dbA);

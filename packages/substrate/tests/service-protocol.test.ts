@@ -13,10 +13,11 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tempDir } from "./helpers.ts";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { migrate } from "../src/store/migrations/runner.ts";
 import { CAPABILITIES } from "../src/service/ops.ts";
@@ -99,7 +100,7 @@ function spawnServer(dbPath: string, env: NodeJS.ProcessEnv = process.env): {
 }
 
 function tempDb(label: string): string {
-  return join(mkdtempSync(join(tmpdir(), `sb-service-${label}-`)), "state.db");
+  return join(tempDir(`sb-service-${label}-`), "state.db");
 }
 
 async function handshake(server: ReturnType<typeof spawnServer>, protocol = PROTOCOL_VERSION): Promise<Frame> {
@@ -264,7 +265,7 @@ describe("sb serve --stdio", () => {
       // A real binding: `sb init` in a throwaway repository, against the same
       // store the service owns. A consumer's project resolution is a lookup of
       // an existing binding, not something the service invents.
-      const gitRoot = mkdtempSync(join(tmpdir(), "sb-service-repo-"));
+      const gitRoot = tempDir("sb-service-repo-");
       const init = spawnSync(NODE, ["-e", "0"], { encoding: "utf8" });
       assert.equal(init.status, 0);
       const git = (args: string[]): void => {
@@ -514,7 +515,7 @@ describe("service client", () => {
   it("relays a protocol refusal as protocol_mismatch", async () => {
     // A file, not `-e`: nested quoting through a shell-less spawn is a trap, and the
     // fake's own source stays readable.
-    const dir = mkdtempSync(join(tmpdir(), "sb-service-skew-"));
+    const dir = tempDir("sb-service-skew-");
     const file = join(dir, "fake.mjs");
     writeFileSync(
       file,
@@ -546,7 +547,7 @@ describe("service client", () => {
     // The shim stands in for ssh: it drops the options and runs the command the
     // client built. The service it reaches uses a different file from the one
     // this process would open, which is the whole point of the hop.
-    const dir = mkdtempSync(join(tmpdir(), "sb-service-ssh-"));
+    const dir = tempDir("sb-service-ssh-");
     const bin = join(dir, "bin");
     mkdirSync(bin, { recursive: true });
     writeFileSync(
@@ -904,7 +905,7 @@ describe("audit findings", () => {
   });
 
   it("reads the remote from the config file, and fails closed when it cannot use it (M4)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-service-endpoint-"));
+    const dir = tempDir("sb-service-endpoint-");
     const configPath = join(dir, "substrate.json");
     writeFileSync(
       configPath,
@@ -933,7 +934,7 @@ describe("audit findings", () => {
   });
 
   it("never forwards `sb serve` to the remote CLI (low)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-service-forward-"));
+    const dir = tempDir("sb-service-forward-");
     const configPath = join(dir, "substrate.json");
     writeFileSync(
       configPath,

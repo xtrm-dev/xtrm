@@ -5,8 +5,7 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
@@ -15,7 +14,7 @@ import { JournalService } from "../src/service/journal-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { parseTrailers } from "../src/domain/provenance.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
-import { contract } from "./helpers.ts";
+import { contract, tempDir } from "./helpers.ts";
 
 const SHA_A = "a".repeat(40);
 const SHA_B = "b".repeat(40);
@@ -24,7 +23,7 @@ const SHA_C = "c".repeat(40);
 const POST_COMMIT_HOOK = fileURLToPath(new URL("../hooks/post-commit.ts", import.meta.url));
 
 function scratch() {
-  const dir = mkdtempSync(join(tmpdir(), "substrate-prov-"));
+  const dir = tempDir("substrate-prov-");
   const dbPath = join(dir, "state.db");
   const db = openSubstrate(dbPath);
   const svc = new IssueService(db);

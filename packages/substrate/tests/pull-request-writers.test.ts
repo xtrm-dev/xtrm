@@ -4,10 +4,10 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { contract, setup } from "./helpers.ts";
+import { contract, setup, tempDir } from "./helpers.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
@@ -342,7 +342,7 @@ describe("pull-request writers", () => {
 
   it("CLI: a bare #N scopes to the checkout origin and attaches T1", () => {
     const { receipt } = dispatchWithClaim(w);
-    const repo = mkdtempSync(join(tmpdir(), "sb-pr-cli-"));
+    const repo = tempDir("sb-pr-cli-");
     const saved = process.cwd();
     try {
       const git = (args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
@@ -374,7 +374,7 @@ describe("pull-request writers", () => {
     w.db
       .prepare("INSERT INTO repository_bindings (repository_key, project_id, base_branch, canonical_remote, created_at, updated_at) VALUES (?,?,?,?,?,?)")
       .run("github.com/o/r-proj", "prj_xtrm", "main", "github.com/o/r-proj", 1, 1);
-    const repo = mkdtempSync(join(tmpdir(), "sb-pr-cli-"));
+    const repo = tempDir("sb-pr-cli-");
     const saved = process.cwd();
     try {
       const git = (args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
@@ -402,7 +402,7 @@ describe("pull-request writers", () => {
 
   it("CLI: --commits-range reads git and writes the T2 evidence", () => {
     const { receipt } = dispatchWithClaim(w);
-    const repo = mkdtempSync(join(tmpdir(), "sb-pr-cli-"));
+    const repo = tempDir("sb-pr-cli-");
     const saved = process.cwd();
     try {
       const git = (args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });

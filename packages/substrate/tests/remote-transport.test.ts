@@ -1,10 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, linkSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tempDir } from "./helpers.ts";
 import { RemoteError, buildRemoteCommand } from "../src/remote/spec.ts";
 import { clientRepositoryKey, openRemoteSession, resolveMapping, runRemote } from "../src/remote/session.ts";
 import { MAX_DOCUMENT_BYTES, forwardCli, hookSession } from "../src/remote/executor.ts";
@@ -89,7 +89,7 @@ process.exit(9);
 `;
 
 function makeFake(config: FakeConfig): Fake {
-  const dir = mkdtempSync(join(tmpdir(), "sb-remote-"));
+  const dir = tempDir("sb-remote-");
   const serverConfigPath = join(dir, "fake.json");
   const clientConfigPath = join(dir, "client-config.json");
   const log = join(dir, "calls.jsonl");
@@ -211,7 +211,7 @@ describe("remote command encoding", () => {
   });
 
   it("materialises an uploaded file into a server temp path", () => {
-    const receive = join(tmpdir(), `sb-remote-receive-${process.pid}-${Date.now()}`);
+    const receive = join(tempDir("sb-remote-receive-"), "contract.md");
     const fake = makeFake({ mode: "file", fileFlag: "--contract", receive, version: "sb 0.2.2\n" });
     const body = Buffer.from("## PROBLEM\nquoted 'text' and $dollars and\nnewlines\n");
     const plan = buildRemoteCommand({
@@ -397,7 +397,7 @@ describe("remote execution passthrough", () => {
     // the server read a path that does not exist there and reported it as bad
     // inline JSON. The rule is the CLI's own: a value that exists as a file
     // here is uploaded, anything else travels untouched.
-    const receive = join(tmpdir(), `sb-remote-mech-${process.pid}-${Date.now()}`);
+    const receive = join(tempDir("sb-remote-mech-"), "mechanical.json");
     const fake = makeFake({ mode: "file", fileFlag: "--mechanical", receive, version: "sb 0.2.2\n" });
     const mechanicalPath = join(fake.dir, "mechanical.json");
     const body = '{"summary":"transport probe"}';
@@ -674,7 +674,7 @@ describe("explicit project without a checkout", () => {
     const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
     const env = remoteEnv(fake.clientConfigPath);
     writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
-    const outside = mkdtempSync(join(tmpdir(), "sb-outside-"));
+    const outside = tempDir("sb-outside-");
     const before = process.cwd();
     try {
       process.chdir(outside);
@@ -895,7 +895,7 @@ describe("second-audit findings", () => {
   });
 
   it("does not persist a host that came from the environment", () => {
-    const root = mkdtempSync(join(tmpdir(), "sb-remote-root-"));
+    const root = tempDir("sb-remote-root-");
     const fake = makeFake({
       mode: "echo",
       version: "sb 0.2.2\n",
@@ -962,7 +962,7 @@ describe("second-audit findings", () => {
   });
 
   it("carries a large document over stdin and keeps its bytes out of the command line", () => {
-    const receive = join(tmpdir(), `sb-remote-large-${process.pid}-${Date.now()}`);
+    const receive = join(tempDir("sb-remote-large-"), "mechanical.json");
     const fake = makeFake({ mode: "file", fileFlag: "--mechanical", receive, version: "sb 0.2.2\n" });
     const env = remoteEnv(fake.clientConfigPath);
     writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
@@ -1073,7 +1073,7 @@ describe("final-review findings", () => {
   });
 
   it("ignores a .substrate-issue that is tracked in the repository", () => {
-    const repo = mkdtempSync(join(tmpdir(), "sb-tracked-"));
+    const repo = tempDir("sb-tracked-");
     const git = (args: string[]) => spawnSync("git", args, { cwd: repo, encoding: "utf8" });
     git(["init", "-q"]);
     git(["config", "user.email", "t@example.com"]);
@@ -1094,15 +1094,16 @@ describe("final-review findings", () => {
   });
 
   it("uploads --result for issue.note and --refs for journal.checkpoint", () => {
-    const fake = makeFake({ mode: "file", fileFlag: "--refs", receive: join(tmpdir(), `sb-refs-${process.pid}`), version: "sb 0.2.2\n" });
+    const refsReceive = join(tempDir("sb-refs-"), "refs.json");
+    const fake = makeFake({ mode: "file", fileFlag: "--refs", receive: refsReceive, version: "sb 0.2.2\n" });
     const env = remoteEnv(fake.clientConfigPath);
     writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
     const refs = join(fake.dir, "refs.json");
     writeFileSync(refs, '{"refs":["a"]}');
     const forwarded = forwardCli(["journal", "checkpoint", "XTRM-1", "--project", "prj_x", "--refs", refs], { env, transport: localTransport() });
     assert.equal(forwarded?.code ?? 0, 0, forwarded?.stderr);
-    assert.deepEqual(JSON.parse(readFileSync(join(tmpdir(), `sb-refs-${process.pid}`), "utf8")), { refs: ["a"] });
-    const noteFake = makeFake({ mode: "file", fileFlag: "--result", receive: join(tmpdir(), `sb-result-${process.pid}`), version: "sb 0.2.2\n" });
+    assert.deepEqual(JSON.parse(readFileSync(refsReceive, "utf8")), { refs: ["a"] });
+    const noteFake = makeFake({ mode: "file", fileFlag: "--result", receive: join(tempDir("sb-result-"), "result.json"), version: "sb 0.2.2\n" });
     const noteEnv = remoteEnv(noteFake.clientConfigPath);
     writeClientConfig(noteFake.clientConfigPath, noteFake.sbPath, { [CLIENT_KEY ?? "k"]: { root: noteFake.dir, projectId: "prj_x" } });
     assert.ok(forwardCli(["issue", "note", "XTRM-1", "--project", "prj_x", "--result", refs], { env: noteEnv, transport: localTransport() }));
@@ -1185,7 +1186,7 @@ describe("final-review findings", () => {
 
 describe("closure review", () => {
   it("scopes the cached sb path to the host the FILE names", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-m2-"));
+    const dir = tempDir("sb-m2-");
     const path = join(dir, "substrate.json");
     writeFileSync(
       path,
@@ -1212,7 +1213,8 @@ describe("closure review", () => {
       { flag: "--refs", body: '{"refs":["a"]}', argv: (path) => ["journal", "checkpoint", "XTRM-1", "--project", "prj_x", "--refs", path] },
     ];
     for (const testCase of cases) {
-      const fake = makeFake({ mode: "file", fileFlag: testCase.flag, receive: join(tmpdir(), `sb-closure-${testCase.flag.slice(2)}-${process.pid}`), version: "sb 0.2.2\n" });
+      const closureReceive = join(tempDir("sb-closure-"), `${testCase.flag.slice(2)}.json`);
+      const fake = makeFake({ mode: "file", fileFlag: testCase.flag, receive: closureReceive, version: "sb 0.2.2\n" });
       const env = remoteEnv(fake.clientConfigPath);
       writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY ?? "k"]: { root: fake.dir, projectId: "prj_x" } });
       const document = join(fake.dir, `doc-${testCase.flag.slice(2)}.json`);
@@ -1226,7 +1228,7 @@ describe("closure review", () => {
       };
       const result = forwardCli(testCase.argv(document), { env, transport });
       assert.equal(result?.code, 0, `${testCase.flag}: ${result?.stderr}`);
-      assert.deepEqual(JSON.parse(readFileSync(join(tmpdir(), `sb-closure-${testCase.flag.slice(2)}-${process.pid}`), "utf8")), JSON.parse(testCase.body));
+      assert.deepEqual(JSON.parse(readFileSync(closureReceive, "utf8")), JSON.parse(testCase.body));
     }
   });
 
@@ -1248,7 +1250,7 @@ describe("closure review", () => {
         return { code: 0, stdout: "", stderr: "" };
       },
     };
-    const dir = mkdtempSync(join(tmpdir(), "sb-deadline-"));
+    const dir = tempDir("sb-deadline-");
     const configPath = join(dir, "substrate.json");
     writeClientConfig(configPath, "/usr/bin/sb", {});
     const env = { ...process.env, SUBSTRATE_REMOTE_CONFIG: configPath, SUBSTRATE_REMOTE: "ssh:fake" };
@@ -1289,7 +1291,7 @@ describe("closure review", () => {
   it("refuses a document reached through a symlinked directory or a symlinked HOME", () => {
     const saved = { HOME: process.env["HOME"] };
     try {
-      const home = mkdtempSync(join(tmpdir(), "sb-home-"));
+      const home = tempDir("sb-home-");
       mkdirSync(join(home, ".ssh"), { recursive: true });
       writeFileSync(join(home, ".ssh", "id_ed25519"), "private key");
       process.env["HOME"] = home;
@@ -1302,10 +1304,10 @@ describe("closure review", () => {
       assert.equal(viaDirectory?.code, 1);
       assert.match(viaDirectory.stderr, /holds secrets or kernel state/);
 
-      const realHome = mkdtempSync(join(tmpdir(), "sb-realhome-"));
+      const realHome = tempDir("sb-realhome-");
       mkdirSync(join(realHome, ".ssh"), { recursive: true });
       writeFileSync(join(realHome, ".ssh", "id_ed25519"), "private key");
-      const linkHome = join(tmpdir(), `sb-homelink-${process.pid}`);
+      const linkHome = join(tempDir("sb-homelink-"), "home");
       rmSync(linkHome, { force: true });
       symlinkSync(realHome, linkHome);
       process.env["HOME"] = linkHome;
@@ -1323,7 +1325,7 @@ describe("closure review", () => {
     const transport: RemoteTransport = {
       run: () => ({ code: 72, stdout: "", stderr: "sb remote: the upload stream ended early; nothing ran on the server\n" }),
     };
-    const dir = mkdtempSync(join(tmpdir(), "sb-envelope-"));
+    const dir = tempDir("sb-envelope-");
     const configPath = join(dir, "substrate.json");
     writeClientConfig(configPath, "/usr/bin/sb", {});
     const env = { ...process.env, SUBSTRATE_REMOTE_CONFIG: configPath, SUBSTRATE_REMOTE: "ssh:fake" };

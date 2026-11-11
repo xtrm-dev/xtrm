@@ -7,8 +7,7 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
@@ -19,7 +18,7 @@ import { ResumeService } from "../src/service/resume-service.ts";
 import { JOURNAL_KINDS, validateResultPayload } from "../src/domain/journal.ts";
 import { XTRM_SESSION_ID_ENV, XTRM_SESSION_NAME_ENV, SUBSTRATE_HOLDER_ENV, SUBSTRATE_ACTIVATION_ID_ENV } from "../src/domain/execution-context.ts";
 import { runCli } from "../cli/sb.ts";
-import { contract, setup } from "./helpers.ts";
+import { contract, setup, tempDir } from "./helpers.ts";
 
 function services(ctx: ReturnType<typeof setup>) {
   const journal = new JournalService(ctx.db, ctx.svc);
@@ -87,7 +86,7 @@ describe("Journal kind vocabulary (ADR §22)", () => {
   });
 
   it("a+b: CLI accepts `journal append --kind note` and `issue note --kind result`", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-jk-"));
+    const dir = tempDir("sb-jk-");
     const dbPath = join(dir, "state.db");
     const seed = openSubstrate(dbPath);
     new IssueService(seed).createProject({ id: "prj_xtrm", prefix: "XTRM", name: "t" });
@@ -218,7 +217,7 @@ describe("Journal identity projection to reads (XTRM-410)", () => {
   }
 
   function seedDb(): { dir: string; dbPath: string; cli: (argv: string[]) => unknown } {
-    const dir = mkdtempSync(join(tmpdir(), "sb-j410-"));
+    const dir = tempDir("sb-j410-");
     const dbPath = join(dir, "state.db");
     const seed = openSubstrate(dbPath);
     new IssueService(seed).createProject({ id: "prj_xtrm", prefix: "XTRM", name: "t" });
@@ -421,7 +420,7 @@ describe("Journal identity projection to reads (XTRM-410)", () => {
 
 describe("sb issue note file surfaces (ADR §48)", () => {
   it("c: --file <path> and --file - (stdin) both append bounded notes", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-note-"));
+    const dir = tempDir("sb-note-");
     const dbPath = join(dir, "state.db");
     const seed = openSubstrate(dbPath);
     new IssueService(seed).createProject({ id: "prj_xtrm", prefix: "XTRM", name: "t" });
@@ -460,7 +459,7 @@ describe("sb issue note file surfaces (ADR §48)", () => {
 
 describe("ADR §92 three-session acceptance", () => {
   it("d: session C reconstructs the whole lineage without old transcripts", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-adr92-"));
+    const dir = tempDir("sb-adr92-");
     const dbPath = join(dir, "state.db");
     let db = openSubstrate(dbPath);
     try {
@@ -678,7 +677,7 @@ describe("Issue-versus-Journal boundary and bounded show (ADR §54, §50)", () =
   });
 
   it("f: default show stays bounded for a large journal", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sb-bound-"));
+    const dir = tempDir("sb-bound-");
     const dbPath = join(dir, "state.db");
     try {
       const seed = openSubstrate(dbPath);
