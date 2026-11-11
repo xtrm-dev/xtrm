@@ -214,6 +214,8 @@ export const OPERATIONS: Record<string, Handler> = {
     s.store.addJournal(text(a, "ref"), text(a, "kind"), {
       participantId: optionalText(a, "participantId"),
       activationId: optionalText(a, "activationId"),
+      semantic: a["semantic"] as never,
+      result: a["result"] as never,
     });
     return { ok: true };
   },
@@ -355,7 +357,7 @@ export const ARGS: Record<string, readonly string[]> = {
   "gate.check": ["request"],
   "gate.dispatch": ["request"],
   "store.get": ["ref"],
-  "store.addJournal": ["ref", "kind", "participantId", "activationId"],
+  "store.addJournal": ["ref", "kind", "participantId", "activationId", "semantic", "result"],
   "journal.appendEntry": ["issueId", "input"],
   "journal.listEntries": ["issueId", "kind", "limit"],
   "journal.latest": ["issueId", "kind"],

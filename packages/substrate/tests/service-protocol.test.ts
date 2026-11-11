@@ -314,7 +314,7 @@ describe("sb serve --stdio", () => {
       assert.equal(fetched.ok, true);
       assert.equal((fetched.result as unknown as { title: string }).title, "service round trip");
 
-      server.send({ id: 13, op: "store.addJournal", args: { ref: issue.humanRef, kind: "finding" } });
+      server.send({ id: 13, op: "store.addJournal", args: { ref: issue.humanRef, kind: "finding", semantic: { summary: "round trip writes one finding through the wire" } } });
       const journal = await server.next();
       assert.equal(journal.ok, true, JSON.stringify(journal.error));
       server.send({ id: 14, op: "journal.listEntries", args: { issueId: issue.id } });

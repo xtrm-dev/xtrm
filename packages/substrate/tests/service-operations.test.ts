@@ -215,7 +215,7 @@ const FIXTURES: Record<string, (ctx: Ctx) => Record<string, unknown>> = {
   "gate.check": (c) => ({ request: { ref: c.ref, specialist: "worker", holder: "holder-a", workspace: c.gitRoot } }),
   "gate.dispatch": (c) => ({ request: { ref: c.ref, specialist: "worker", holder: "holder-a", workspace: c.gitRoot } }),
   "store.get": (c) => ({ ref: c.ref }),
-  "store.addJournal": (c) => ({ ref: c.ref, kind: "note" }),
+  "store.addJournal": (c) => ({ ref: c.ref, kind: "note", semantic: { summary: "the same journal write on both paths" } }),
   "journal.appendEntry": (c) => ({
     issueId: c.issueId,
     input: { kind: "finding", mechanical: { issueId: c.issueId, issueRevision: 1, contractHash: "0000", summary: "second" } },
@@ -910,7 +910,7 @@ describe("identity, refusals and the transport's own edges", () => {
       try {
         const args = {
           issueId: ctx.issueId,
-          input: { kind: "note", note: "identity probe" },
+          input: { kind: "note", semantic: { summary: "identity probe runs the same on both paths" } },
         };
         const sent = await attempt(wire, "journal.appendEntry", args);
         assert.deepEqual(sent, { ok: true, value: sent.ok ? sent.value : undefined }, JSON.stringify(sent));
@@ -1228,7 +1228,7 @@ describe("round four: identity where it is listed, values that are not masked", 
       });
       assert.equal(renew.ok, true, `renew must accept the identity it lists: ${renew.code ?? "ok"}`);
 
-      const addJournal = await attempt(wire, "store.addJournal", { ref: ctx.ref, kind: "note" });
+      const addJournal = await attempt(wire, "store.addJournal", { ref: ctx.ref, kind: "note", semantic: { summary: "addJournal accepts the identity it lists" } });
       assert.equal(addJournal.ok, true, `addJournal must accept the identity it lists: ${addJournal.code ?? "ok"}`);
 
       const release = await attempt(wire, "issue.releaseClaim", { issueId: ctx.issueId, holder: "identity-holder" });

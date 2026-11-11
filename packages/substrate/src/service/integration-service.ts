@@ -1,7 +1,7 @@
 import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
 import { IssueService } from "./issue-service.ts";
 import { JournalService } from "./journal-service.ts";
-import type { JournalEntry } from "../domain/journal.ts";
+import { clipWithMarker, JOURNAL_SUMMARY_MAX, type JournalEntry } from "../domain/journal.ts";
 import { mutateOnce, withTransaction } from "../store/transactions.ts";
 import { hashMappedContent } from "../projections/types.ts";
 import {
@@ -534,7 +534,7 @@ export class IntegrationService {
       const before = this.issues.getIssue(issueId);
       const entry = journal.appendEntry(issueId, {
         kind: "note",
-        semantic: { summary: comment.body.slice(0, 2000) },
+        semantic: { summary: clipWithMarker(comment.body, JOURNAL_SUMMARY_MAX, "comment") },
         refs: [{
           kind: "external-comment",
           key: `${provider}:${comment.remoteScope}#${comment.remoteId}`,

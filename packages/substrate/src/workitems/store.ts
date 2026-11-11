@@ -10,6 +10,7 @@
 // changesSince. Only checkpoint is async (the secondary summarizer may be).
 
 import type { ResolvedIssue } from "../domain/issue.ts";
+import type { ResultPayload, SemanticCheckpoint } from "../domain/journal.ts";
 
 export interface IssueView {
   issue: ResolvedIssue;
@@ -80,7 +81,11 @@ export interface WorkItemStore {
   release(ref: string, holder: string, opts?: { activationId?: string }): boolean;
   update(ref: string, contract: unknown, opts?: { expectedRevision?: number; authoredBy?: string }): { view: IssueView; revisionCreated: boolean };
   addEdge(fromRef: string, toRef: string, kind: string): { edgeId: number | null; kind: string };
-  addJournal(ref: string, kind: string, opts?: { sessionId?: string; participantId?: string; activationId?: string }): JournalEntryView;
+  addJournal(
+    ref: string,
+    kind: string,
+    opts?: { sessionId?: string; participantId?: string; activationId?: string; semantic?: SemanticCheckpoint; result?: ResultPayload },
+  ): JournalEntryView;
   checkpoint(ref: string, input?: CheckpointInput): Promise<JournalEntryView>;
   close(ref: string): IssueView;
   changesSince(ref: string, afterEventId: number): ChangeBatch;

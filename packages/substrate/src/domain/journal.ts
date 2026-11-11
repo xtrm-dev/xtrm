@@ -32,6 +32,11 @@ export function isJournalKind(value: unknown): value is JournalKind {
   return typeof value === "string" && (JOURNAL_KINDS as readonly string[]).includes(value);
 }
 
+// Actionable list for the unknown-kind error: names every legal kind.
+export function unknownJournalKindMessage(kind: unknown): string {
+  return `unknown journal kind: ${String(kind)} (want ${JOURNAL_KINDS.join("|")}; see \`sb help kinds\`)`;
+}
+
 export function newJournalEntryId(): string {
   return `jrn_${uuidv7()}`;
 }
@@ -103,10 +108,16 @@ export interface EvidenceRef {
 // needs it, but keep the reference-not-dump rule (ADR §39).
 const RESULT_MAX_TEXT = 4000;
 
-// A host-supplied note body (`sb issue note`, and the Pi journal tool) is
-// bounded at the write seam so one entry cannot bloat the Journal or the
-// resume capsule. Over the bound the write fails; it is never truncated,
-// because a silently shortened handoff is worse than a refused one.
+// A host-supplied note body is bounded at the write seam so one entry cannot
+// bloat the Journal or the resume capsule. Over the bound the write fails; it
+// is never truncated, because a silently shortened handoff is worse than a
+// refused one. One constant, one number, and every surface that writes
+// `semantic.summary` uses it: `sb journal append`, `sb issue note`, checkpoint
+// enrichment and the Pi `substrate_journal_append` tool (whose handler checks
+// this constant before the service checks it again). The Claude MCP append path
+// is not covered: it cuts a longer summary to 2,000 characters with no marker and
+// has no summaryFile equivalent, and aligning it is step-12 work on the shared
+// tool surface (XTRM-724 part B).
 export const JOURNAL_SUMMARY_MAX = 20_000;
 const RESULT_MAX_ITEMS = 100;
 const RESULT_MAX_ITEM_TEXT = 1000;
@@ -168,7 +179,7 @@ export function validateResultPayload(value: unknown): string[] {
   if (typeof summary !== "string" || summary.trim() === "") {
     problems.push("result.summary must be a non-empty string");
   } else if (summary.length > RESULT_MAX_TEXT) {
-    problems.push(`result.summary must be at most ${RESULT_MAX_TEXT} characters`);
+    problems.push(`result.summary must be at most ${RESULT_MAX_TEXT} characters (got ${summary.length})`);
   }
   for (const f of ["attempted", "outcome"] as const) {
     const v = r[f];
@@ -240,9 +251,39 @@ export function validateSemanticCheckpoint(value: unknown): string[] {
   return problems;
 }
 
+export function summaryLimitProblem(summary: unknown, field = "semantic.summary"): string | null {
+  if (typeof summary !== "string" || summary.length <= JOURNAL_SUMMARY_MAX) return null;
+  const bytes = Buffer.byteLength(summary, "utf8");
+  return (
+    `${field} is ${summary.length} characters (${bytes} bytes); the limit is ${JOURNAL_SUMMARY_MAX} characters. ` +
+    "Nothing was written: split the text into several entries, or put it in a file and cite the path"
+  );
+}
+
+/** Write-path check: shape plus the summary limit. */
 export function assertSemanticCheckpoint(value: unknown): asserts value is SemanticCheckpoint {
   const problems = validateSemanticCheckpoint(value);
   if (problems.length > 0) throw new Error(`invalid semantic checkpoint: ${problems[0]}`);
+  const tooLong = summaryLimitProblem((value as SemanticCheckpoint).summary);
+  if (tooLong) throw new Error(tooLong);
+}
+
+/** Display preview: a cut always says how much is missing and where the full text is. */
+export function previewText(text: string, max: number, hint = "use --json"): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}… (+${text.length - max} chars, ${hint})`;
+}
+
+/**
+ * Host-generated text (compaction summaries, imported comments) that must fit
+ * the limit is cut explicitly: the stored text ends with a marker naming the
+ * dropped length. Never used for text an agent or operator supplied.
+ */
+export function clipWithMarker(text: string, max = JOURNAL_SUMMARY_MAX, what = "text"): string {
+  if (text.length <= max) return text;
+  const marker = (n: number) => `\n[cut: ${n} more chars of ${what} not stored]`;
+  const keep = max - marker(text.length).length;
+  return `${text.slice(0, keep)}${marker(text.length - keep)}`;
 }
 
 export function validateMechanicalCheckpoint(value: unknown): string[] {
@@ -275,4 +316,49 @@ export function validateEvidenceRefs(refs: unknown): string[] {
     if (typeof e["key"] !== "string" || (e["key"] as string).trim() === "") return [`refs[${i}].key must be non-empty`];
   }
   return [];
+}
+
+// -- entry quality (XTRM-670) -------------------------------------------------
+// Pure, deterministic check shared by the CLI, the service and advisory
+// surfaces. Errors reject the append; warnings accept it and tell the author
+// how to make the entry useful to the next reader.
+
+// Kinds whose whole value is the author's prose: an entry with no payload is
+// noise that still occupies a sequence number.
+export const CONTENT_REQUIRED_KINDS = ["note", "finding", "decision", "blocker", "milestone", "handoff"] as const;
+
+export const ENTRY_SUMMARY_TEMPLATE = "what changed / evidence / next step";
+export const MIN_SUMMARY_WORDS = 8;
+export const PLACEHOLDER_SUMMARIES = ["done", "wip", "ok", "todo", "tbd", "...", "\u2026", "-"] as const;
+
+export interface JournalEntryQuality {
+  errors: string[];
+  warnings: string[];
+}
+
+export function assessJournalEntry(input: {
+  kind: string;
+  semantic?: unknown;
+  mechanical?: unknown;
+  result?: unknown;
+}): JournalEntryQuality {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const present = (v: unknown): boolean => v !== undefined && v !== null;
+  if ((CONTENT_REQUIRED_KINDS as readonly string[]).includes(input.kind) && !present(input.semantic) && !present(input.mechanical) && !present(input.result)) {
+    errors.push(
+      `empty journal entry: kind "${input.kind}" needs content; pass --semantic '{"summary":"${ENTRY_SUMMARY_TEMPLATE}"}'`,
+    );
+  }
+  const summary = (input.semantic as { summary?: unknown } | null | undefined)?.summary;
+  if (typeof summary === "string" && summary.trim() !== "") {
+    const trimmed = summary.trim();
+    const words = trimmed.split(/\s+/).length;
+    if ((PLACEHOLDER_SUMMARIES as readonly string[]).includes(trimmed.toLowerCase())) {
+      warnings.push(`summary "${trimmed}" is a placeholder; write ${ENTRY_SUMMARY_TEMPLATE}`);
+    } else if (words < MIN_SUMMARY_WORDS) {
+      warnings.push(`summary has ${words} word${words === 1 ? "" : "s"} (under ${MIN_SUMMARY_WORDS}); write ${ENTRY_SUMMARY_TEMPLATE}`);
+    }
+  }
+  return { errors, warnings };
 }

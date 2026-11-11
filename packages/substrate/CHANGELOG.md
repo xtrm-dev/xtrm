@@ -9,7 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- One journal summary limit (XTRM-678, XTRM-724). `semantic.summary` is limited to 20,000 characters (`JOURNAL_SUMMARY_MAX`) on the CLI and on the Pi `substrate_journal_append` tool: a longer summary fails with its size and the limit and writes nothing, so supplied text is never cut. `sb journal append --summary-file <path|->` supplies long text from a file or stdin while the other `--semantic` fields still apply. Text views end a cut preview with `… (+N chars, …)` and `--json` always carries the full stored text. Host-generated text that must fit — imported provider comments, Beads history — is either stored with an explicit `[cut: N more chars of … not stored]` marker or imported as `[part i/n]` entries, with the parts of one note written in one transaction; an import that fails between creating an issue and writing its history is repaired by the next import instead of losing the notes behind the alias skip. The Claude MCP append path is unchanged: it still cuts to 2,000 characters with no marker and has no `summaryFile` equivalent; aligning it is step-12 work on the shared tool surface (XTRM-724 part B).
+
+- Journal entry quality is checked at the write seam (XTRM-670, XTRM-724). A `note`, `finding`, `decision`, `blocker`, `milestone` or `handoff` entry with no semantic, mechanical or result payload is rejected instead of occupying a sequence number; a placeholder or under-eight-word summary is accepted with a warning naming the template, and `sb journal append` prints that warning on stderr (and returns it as `warnings` under `--json`). An unknown journal kind names the valid kinds.
+
 ---
+
 
 ## [0.2.6] - 2026-11-06
 

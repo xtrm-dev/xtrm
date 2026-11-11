@@ -5,7 +5,7 @@
 
 import { IssueService } from "../service/issue-service.ts";
 import { JournalService } from "../service/journal-service.ts";
-import { isJournalKind } from "../domain/journal.ts";
+import { isJournalKind, type ResultPayload, type SemanticCheckpoint } from "../domain/journal.ts";
 import type {
   AttestationInput,
   ChangeBatch,
@@ -127,12 +127,15 @@ export class SubstrateIssueStore implements WorkItemStore {
   addJournal(
     ref: string,
     kind: string,
-    opts?: { sessionId?: string; participantId?: string; activationId?: string },
+    opts?: { sessionId?: string; participantId?: string; activationId?: string; semantic?: SemanticCheckpoint; result?: ResultPayload },
   ): JournalEntryView {
     if (!isJournalKind(kind)) throw new Error(`unknown journal kind: ${kind}`);
     const id = this.issues.resolveRef(ref).id;
+    // Content kinds need a body since XTRM-670 rejects empty entries.
     const entry = this.journal.appendEntry(id, {
       kind,
+      semantic: opts?.semantic,
+      result: opts?.result,
       sessionId: opts?.sessionId,
       participantId: opts?.participantId,
       activationId: opts?.activationId,
