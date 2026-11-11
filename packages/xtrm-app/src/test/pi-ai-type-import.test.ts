@@ -5,39 +5,84 @@
 // `SyntaxError: The requested module '@earendil-works/pi-ai' does not provide
 // an export named 'Type'`. TypeBox is imported from `typebox` instead.
 //
+// The scan parses each file with the TypeScript compiler API, so a match is one
+// import/export declaration and never spans statements. Scope: named bindings in
+// static `import ... from` and `export ... from` declarations, including type-only
+// and aliased forms. Not covered: namespace imports (`import * as`) and member
+// access (`X.Type`), `export * from`, CommonJS `require()`, and dynamic
+// `import()`. Those do not appear in the repository today; add a shape here
+// before introducing one.
+//
 // The scan covers the repository except experiments/, which is out of scope.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { extname, join, relative, resolve } from "node:path";
 
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 // Vitest runs from packages/xtrm-app; two levels up is the repository root.
 const REPO_ROOT = resolve(process.cwd(), "..", "..");
-const SCANNED_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
+const SCANNED_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 const SKIPPED_DIRECTORIES = new Set(["node_modules", ".git", "experiments", "dist", "build"]);
+const PI_AI_PACKAGE = "@earendil-works/pi-ai";
 
-/** Matches an import or re-export whose module specifier is pi-ai. */
-const PI_AI_STATEMENT = /(?:^|\n)[ \t]*(?:import|export)\b[\s\S]*?from\s*["'](@earendil-works\/pi-ai(?:\/[^"']*)?)["']/g;
+const SCRIPT_KINDS: Record<string, ts.ScriptKind> = {
+  ".ts": ts.ScriptKind.TS,
+  ".tsx": ts.ScriptKind.TSX,
+  ".mts": ts.ScriptKind.TS,
+  ".cts": ts.ScriptKind.TS,
+  ".js": ts.ScriptKind.JS,
+  ".jsx": ts.ScriptKind.JSX,
+  ".mjs": ts.ScriptKind.JS,
+  ".cjs": ts.ScriptKind.JS,
+};
 
-/** Whether a statement's named binding list includes `Type`. */
-function bindsType(statement: string): boolean {
-  const named = /\{([\s\S]*?)\}/.exec(statement);
-  if (!named?.[1]) return false;
-  return named[1]
-    .split(",")
-    .map((binding) => binding.trim().replace(/^type\s+/, ""))
-    .some((binding) => /^Type\b/.test(binding));
+function isPiAiSpecifier(specifier: string): boolean {
+  return specifier === PI_AI_PACKAGE || specifier.startsWith(`${PI_AI_PACKAGE}/`);
 }
 
-/** Every pi-ai `Type` binding in one file, as `line: statement` findings. */
-export function findPiAiTypeImports(source: string): string[] {
+/** The imported name of a named binding: `Type` and `Type as T` both yield `Type`. */
+function importedName(element: ts.ImportSpecifier | ts.ExportSpecifier): string {
+  return (element.propertyName ?? element.name).text;
+}
+
+function firstLine(text: string): string {
+  return text.trim().split("\n")[0] ?? "";
+}
+
+/**
+ * Every pi-ai `Type` binding in one file, as `line N: statement` findings.
+ * `fileName` only selects the parser mode; it is not read.
+ */
+export function findPiAiTypeImports(fileName: string, source: string): string[] {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ true,
+    SCRIPT_KINDS[extname(fileName)] ?? ts.ScriptKind.TS,
+  );
   const findings: string[] = [];
-  for (const match of source.matchAll(PI_AI_STATEMENT)) {
-    if (!bindsType(match[0])) continue;
-    const line = source.slice(0, match.index ?? 0).split("\n").length;
-    findings.push(`line ${line}: ${match[0].trim().split("\n")[0]}`);
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement)) continue;
+    const specifier = statement.moduleSpecifier;
+    if (!specifier || !ts.isStringLiteral(specifier) || !isPiAiSpecifier(specifier.text)) continue;
+
+    const named = ts.isImportDeclaration(statement)
+      ? statement.importClause?.namedBindings
+      : statement.exportClause;
+    if (!named || !ts.isNamedImports(named) && !ts.isNamedExports(named)) continue;
+
+    for (const element of named.elements) {
+      if (importedName(element) !== "Type") continue;
+      const line = sourceFile.getLineAndCharacterOfPosition(statement.getStart(sourceFile)).line + 1;
+      findings.push(`line ${line}: ${firstLine(statement.getText(sourceFile))}`);
+      break;
+    }
   }
+
   return findings;
 }
 
@@ -46,7 +91,7 @@ function sourceFiles(dir: string, files: string[] = []): string[] {
     if (entry.isDirectory()) {
       if (SKIPPED_DIRECTORIES.has(entry.name)) continue;
       sourceFiles(join(dir, entry.name), files);
-    } else if (SCANNED_EXTENSIONS.some((extension) => entry.name.endsWith(extension))) {
+    } else if (SCANNED_EXTENSIONS.has(extname(entry.name))) {
       files.push(join(dir, entry.name));
     }
   }
@@ -54,21 +99,61 @@ function sourceFiles(dir: string, files: string[] = []): string[] {
 }
 
 describe("pi-ai Type import guard (XTRM-745)", () => {
-  it("detects the import form it forbids", () => {
-    const oldImport = 'import { Type } from "@earendil-works/pi-ai";';
-    expect(findPiAiTypeImports(oldImport)).toHaveLength(1);
-
-    const aliased = 'import { Type as TSchema } from "@earendil-works/pi-ai";';
-    expect(findPiAiTypeImports(aliased)).toHaveLength(1);
-
-    const reExport = 'export { Type } from "@earendil-works/pi-ai";';
-    expect(findPiAiTypeImports(reExport)).toHaveLength(1);
+  it("detects the forbidden import after other imports (pre-#358 substrate block)", () => {
+    const preSubstrateFix = [
+      'import { homedir } from "node:os";',
+      'import { join } from "node:path";',
+      'import { Type, type Usage } from "@earendil-works/pi-ai";',
+      "",
+      "export const root = join(homedir(), \"x\");",
+    ].join("\n");
+    expect(findPiAiTypeImports("extension.ts", preSubstrateFix)).toEqual([
+      'line 3: import { Type, type Usage } from "@earendil-works/pi-ai";',
+    ]);
   });
 
-  it("accepts the typebox import and type-only pi-ai imports", () => {
-    expect(findPiAiTypeImports('import { Type } from "typebox";')).toEqual([]);
-    expect(findPiAiTypeImports('import type { Usage } from "@earendil-works/pi-ai";')).toEqual([]);
-    expect(findPiAiTypeImports('import { StringEnum } from "@earendil-works/pi-ai";')).toEqual([]);
+  it("detects the forbidden import directly after another import statement", () => {
+    const source = [
+      'import { join } from "node:path";',
+      'import { Type } from "@earendil-works/pi-ai";',
+    ].join("\n");
+    expect(findPiAiTypeImports("probe.ts", source)).toEqual([
+      'line 2: import { Type } from "@earendil-works/pi-ai";',
+    ]);
+  });
+
+  it("detects aliased, type-only and re-exported bindings", () => {
+    expect(findPiAiTypeImports("a.ts", 'import { Type as TSchema } from "@earendil-works/pi-ai";'))
+      .toHaveLength(1);
+    expect(findPiAiTypeImports("a.ts", 'import { type Type } from "@earendil-works/pi-ai";'))
+      .toHaveLength(1);
+    expect(findPiAiTypeImports("a.ts", 'export { Type } from "@earendil-works/pi-ai";'))
+      .toHaveLength(1);
+    expect(findPiAiTypeImports("a.ts", 'export { type Type } from "@earendil-works/pi-ai/esm";'))
+      .toHaveLength(1);
+  });
+
+  it("accepts the typebox import followed by a type-only pi-ai import", () => {
+    const falsePositivePair = [
+      'import { Type } from "typebox";',
+      'import type { Usage } from "@earendil-works/pi-ai";',
+      "",
+      "export type Cost = Usage;",
+    ].join("\n");
+    expect(findPiAiTypeImports("a.ts", falsePositivePair)).toEqual([]);
+  });
+
+  it("accepts other pi-ai bindings and code-adjacent text", () => {
+    expect(findPiAiTypeImports("a.ts", 'import { StringEnum } from "@earendil-works/pi-ai";')).toEqual([]);
+    expect(
+      findPiAiTypeImports(
+        "a.ts",
+        [
+          "// import { Type } from \"@earendil-works/pi-ai\";",
+          'const s = "import { Type } from \\"@earendil-works/pi-ai\\"";',
+        ].join("\n"),
+      ),
+    ).toEqual([]);
   });
 
   it("finds no pi-ai Type import outside experiments/", () => {
@@ -78,7 +163,7 @@ describe("pi-ai Type import guard (XTRM-745)", () => {
     expect(files.length).toBeGreaterThan(100);
 
     const violations = files.flatMap((file) =>
-      findPiAiTypeImports(readFileSync(file, "utf8")).map(
+      findPiAiTypeImports(file, readFileSync(file, "utf8")).map(
         (finding) => `${relative(REPO_ROOT, file)} ${finding}`,
       ),
     );
@@ -88,7 +173,7 @@ describe("pi-ai Type import guard (XTRM-745)", () => {
   it("scans the real-host probe extension that XTRM-745 fixed", () => {
     const probe = join(REPO_ROOT, "packages", "xtrm-app", "e2e", "real-host", "probe-extension.ts");
     const source = readFileSync(probe, "utf8");
-    expect(findPiAiTypeImports(source)).toEqual([]);
+    expect(findPiAiTypeImports(probe, source)).toEqual([]);
     expect(source).toMatch(/import \{ Type \} from "typebox";/);
   });
 });
