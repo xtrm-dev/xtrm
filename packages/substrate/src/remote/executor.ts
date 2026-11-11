@@ -62,15 +62,24 @@ const DOCUMENT_FLAGS: Record<string, ReadonlySet<string>> = {
   "journal.checkpoint": new Set(["mechanical", "semantic", "refs"]),
 };
 
-// Flags whose value is a text file the *server* reads from its disk. Scoped the
-// same way and for the same reason: `--file` exists only where the server
-// documents it, and an unlisted command may not pull a local file into the
-// shared store (review H1).
+// Flags whose value is plain text the CLI reads here and the server then reads
+// from its own disk (the uploaded temp file). Scoped the same way and for the
+// same reason: `--file` exists only where the server documents it, and an
+// unlisted command may not pull a local file into the shared store (review H1).
+// The class also exists because a text file has no inline form: unlike a
+// document, a value that is not a file here is an error, never JSON to upload.
+//
+// `--summary-file` is the journal case (XTRM-751): the CLI reads it with
+// readFileSync in semanticArg, not readJsonArg, so it never qualified as a
+// document — and while it was unlisted the caller's path crossed ssh verbatim
+// and the server answered "--summary-file not found: <caller path>" for a file
+// that existed here, or "is empty" for "-" because no stdin was forwarded.
 const INPUT_FILE_FLAGS: Record<string, ReadonlySet<string>> = {
   "issue.note": new Set(["file"]),
   "plan.check": new Set(["file"]),
   "plan.apply": new Set(["file"]),
   "import.beads": new Set(["file", "edges-file"]),
+  "journal.append": new Set(["summary-file"]),
 };
 
 // An output path is not an input: `sb export project --file` writes the
@@ -269,7 +278,9 @@ function looksLikePath(value: string): boolean {
 
 // A local file the server will read. Refused when it is not a regular file, a
 // symlink, inside a secret directory, or larger than the document bound (review
-// H1): a path that exists is not by itself a document.
+// H1): a path that exists is not by itself a document. A "-" value never
+// reaches here: prepareFiles marks the invocation as wanting the caller's
+// stdin, which the server reads as the flag's value.
 function readInputFile(flagName: string, value: string): Buffer {
   const absolute = resolve(value);
   let info;

@@ -426,6 +426,68 @@ describe("remote execution passthrough", () => {
     assert.notEqual(argv[argv.indexOf("--mechanical") + 1], inlineBody, "the inline document is not passed as argv");
   });
 
+  it("uploads --summary-file instead of sending this machine's path (XTRM-751)", () => {
+    // Reported from a forwarded checkout: `sb journal append --summary-file
+    // <path>` answered "--summary-file not found: <path>" while the file
+    // existed on the caller, and `--summary-file -` answered "is empty". The
+    // flag is a client-side document the CLI reads itself (cli/sb.ts
+    // semanticArg), so it crosses like --mechanical: uploaded bytes, never the
+    // caller's path.
+    const receive = join(tempDir("sb-remote-summary-"), "summary.md");
+    const fake = makeFake({ mode: "file", fileFlag: "--summary-file", receive, version: "sb 0.3.1\n" });
+    assert.ok(CLIENT_KEY);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
+    const summaryPath = join(fake.dir, "summary.md");
+    const summary = "## SUMMARY\nsummary-file transport probe; this file exists only on the caller.\n";
+    writeFileSync(summaryPath, summary);
+    const inner = localTransport();
+    const transport: RemoteTransport = {
+      run: (request) => {
+        // The caller's copy is gone before the server runs: a run handed the
+        // path instead of the bytes fails on the server, not here.
+        rmSync(summaryPath, { force: true });
+        return inner.run(request);
+      },
+    };
+    const result = forwardCli(
+      ["journal", "append", "XTRM-751", "--kind", "note", "--project", "prj_x", "--summary-file", summaryPath],
+      { env: remoteEnv(fake.clientConfigPath), transport },
+    );
+    assert.ok(result);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(readFileSync(receive, "utf8"), summary);
+    const argv = fake.calls().at(-1)?.argv ?? [];
+    assert.notEqual(argv[argv.indexOf("--summary-file") + 1], summaryPath, "the server never receives this machine's path");
+  });
+
+  it("forwards --summary-file - as the client's stdin (XTRM-751)", () => {
+    const fake = makeFake({ mode: "cat", version: "sb 0.3.1\n" });
+    assert.ok(CLIENT_KEY);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
+    const summary = "## SUMMARY\npiped into the caller, not the server\n";
+    const result = forwardCli(
+      ["journal", "append", "XTRM-751", "--kind", "note", "--project", "prj_x", "--summary-file", "-"],
+      { env: remoteEnv(fake.clientConfigPath), transport: localTransport(), readStdin: () => summary },
+    );
+    assert.ok(result);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.stdout, summary, "the server reads the caller's stdin, not an empty stream");
+  });
+
+  it("refuses a --summary-file that does not exist on this machine (XTRM-751)", () => {
+    const fake = makeFake({ mode: "echo", version: "sb 0.3.1\n" });
+    assert.ok(CLIENT_KEY);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
+    const result = forwardCli(
+      ["journal", "append", "XTRM-751", "--kind", "note", "--project", "prj_x", "--summary-file", "only-on-the-server.md", "--json"],
+      { env: remoteEnv(fake.clientConfigPath), transport: localTransport() },
+    );
+    assert.ok(result);
+    assert.equal(result.code, 1);
+    assert.match((JSON.parse(result.stdout) as { error: string }).error, /not a readable file on this machine/);
+    assert.equal(fake.calls().length, 0, "a path this machine does not have never reaches the server");
+  });
+
   it("refuses a document value that is neither a file here nor inline JSON", () => {
     const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
     assert.ok(CLIENT_KEY);
