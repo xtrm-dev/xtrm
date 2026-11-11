@@ -50,7 +50,7 @@ import { PullRequestService } from "../src/service/pull-request-service.ts";
 import { canonicalPullReference, pullUrl, type IssuePullRequestView } from "../src/domain/pull-request.ts";
 import { parseAllTrailers } from "../src/domain/provenance.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
-import { assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
+import { assessJournalEntry, assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
 import { renderProvenanceTrace } from "../src/presentation/terminal.ts";
 import { assertContractShape, isValidScrutiny, SCRUTINY_LEVELS } from "../src/domain/contract.ts";
 import { enrichExecutionContext } from "../src/domain/execution-context.ts";
@@ -197,7 +197,7 @@ function renderOperationalContext(ctx: JournalOperationalContext): string[] {
   if (ctx.latestByKind.length > 0) {
     lines.push("latest by kind:");
     for (const e of ctx.latestByKind) {
-      const bit = e.summary ? ` ${e.summary.slice(0, 200)}` : "";
+      const bit = e.summary ? ` ${e.summary}` : ""; // already a marked preview (XTRM-678)
       lines.push(`- seq${e.sequence} ${e.kind}:${bit}`);
     }
   } else {
@@ -280,6 +280,18 @@ function readJsonArg(value: string): unknown {
   } catch (err) {
     throw new Error(`${value.slice(0, 40)}: not a readable file and not valid inline JSON (${err instanceof Error ? err.message : String(err)})`);
   }
+}
+
+// --summary-file (XTRM-678): the summary text comes from a file or stdin, and
+// the other --semantic fields still apply. Long text is supplied this way
+// because an over-limit summary is refused, never cut.
+function semanticArg(semRaw: string | undefined, summaryFile: string | undefined): unknown {
+  const semantic = semRaw !== undefined ? (readJsonArg(semRaw) as Record<string, unknown>) : undefined;
+  if (summaryFile === undefined) return semantic;
+  if (summaryFile !== "-" && !existsSync(summaryFile)) throw new Error(`--summary-file not found: ${summaryFile}`);
+  const text = readFileSync(summaryFile === "-" ? 0 : summaryFile, "utf8");
+  if (text.trim() === "") throw new Error(`--summary-file is empty: ${summaryFile}`);
+  return { ...(semantic ?? {}), summary: text };
 }
 
 function emit(ctx: Ctx, command: string, data: unknown): CliResult {
@@ -670,7 +682,12 @@ be appended as a plain note. Reads are bounded: show for bodies, since for
 the delta after a cursor, latest/timeline for windows.
 
 Every verb runs over one JournalService; latest/timeline are bounded reads.`,
-  "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--result <file|json>] [--refs <file|json>] [--project <id>]
+  "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--summary-file <path|->] [--result <file|json>] [--refs <file|json>] [--project <id>]
+
+--summary-file reads the summary text from a file (- = stdin); other --semantic
+fields still apply. Summary text is limited to 16000 characters: a longer one
+fails and writes nothing (it is never cut). Put longer material in a file and
+cite the path.
 
 --kind result requires a bounded --result payload (summary required).
 
@@ -1169,7 +1186,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "project.repair": [],
   "plan.check": ["project", "file"],
   "plan.apply": ["project", "file"],
-  "journal.append": ["project", "kind", "run", "participant", "activation", "session", "mechanical", "semantic", "result", "refs"],
+  "journal.append": ["project", "kind", "run", "participant", "activation", "session", "mechanical", "semantic", "summary-file", "result", "refs"],
   "journal.checkpoint": ["project", "run", "participant", "activation", "session", "mechanical", "semantic", "refs", "workspace", "branch", "base-commit", "head-commit"],
   "journal.show": ["kind", "limit"],
   "journal.since": [],
@@ -2054,17 +2071,23 @@ function runJournal(
       const semRaw = flag(flags, "semantic");
       const resRaw = flag(flags, "result");
       const refsRaw = flag(flags, "refs");
-      const entry = journal.appendEntry(resolved.id, {
+      const input = {
         kind: kindRaw,
         ...contextFlags,
         mechanical: mechRaw !== undefined ? (mechanicalArg(svc, resolved.id, mechRaw) as never) : undefined,
-        semantic: semRaw !== undefined ? (readJsonArg(semRaw) as never) : undefined,
+        semantic: semanticArg(semRaw, flag(flags, "summary-file")) as never,
         result: resRaw !== undefined ? (readJsonArg(resRaw) as ResultPayload) : undefined,
         refs: refsRaw !== undefined ? (readJsonArg(refsRaw) as never) : undefined,
         executionContext: undefined,
-      });
-      if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), result: entry.result });
-      return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
+      };
+      // The seam owns the rule and refuses an empty entry; the CLI only reports
+      // the warnings it accepts the entry with, so a weak summary is visible
+      // instead of silently occupying a sequence number.
+      const warnings = assessJournalEntry(input).warnings;
+      const entry = journal.appendEntry(resolved.id, input);
+      const stderr = warnings.map((w) => `warning: ${w}\n`).join("");
+      if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), result: entry.result, warnings });
+      return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr };
     }
     case "checkpoint": {
       // Mechanical-first (§20.4): the mechanical row commits before the

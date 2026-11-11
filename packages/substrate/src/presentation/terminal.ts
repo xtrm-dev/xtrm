@@ -2,6 +2,7 @@
 // Sparse by design: data semantics stay in services/JSON; this module only
 // projects them for human TTY/plain surfaces.
 
+import { previewText } from "../domain/journal.ts";
 import {
   errorFeedback,
   noopFeedback,
@@ -154,7 +155,10 @@ function renderContractValue(value: unknown, opts: TerminalStyleOptions): string
 // XTRM-409: legacy journal rows carry the semantic checkpoint double-encoded
 // as `{"summary":"…"}` inside `summary`. Unwrap it so the human journal view
 // prints prose, never a JSON object, without changing the `--json` payload.
-const JOURNAL_SUMMARY_MAX = 200;
+// Above the service's marked 280-char context preview, so its marker survives.
+// Module-local display width; the write bound is JOURNAL_SUMMARY_MAX in
+// src/domain/journal.ts, a different number for a different purpose.
+const ENTRY_PREVIEW_MAX = 360;
 const JOURNAL_SUMMARY_ENVELOPE = /^\{\s*"summary"\s*:\s*"([\s\S]*)$/;
 
 // The producer's bounded truncation can cut the envelope mid-string, so the
@@ -192,7 +196,7 @@ function journalSummaryText(raw: unknown): string {
     if (!match || !match[1]) break;
     text = decodeJournalProse(match[1]);
   }
-  return text.replace(/\s+/g, " ").trim().slice(0, JOURNAL_SUMMARY_MAX);
+  return previewText(text.replace(/\s+/g, " ").trim(), ENTRY_PREVIEW_MAX, "full text: sb journal show --json");
 }
 
 function formatState(value: string, color: boolean): string {

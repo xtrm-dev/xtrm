@@ -7,6 +7,7 @@
 // edges/hierarchy under per-edge idempotency keys, so resume is just re-run
 // with zero row growth. No writes ever go back to Beads: no dual-write (§42).
 
+import { JOURNAL_SUMMARY_MAX } from "../../domain/journal.ts";
 import type { IssueService } from "../../service/issue-service.ts";
 import type { JournalService } from "../../service/journal-service.ts";
 import type { ClosureService } from "../../service/closure-service.ts";
@@ -713,18 +714,26 @@ export function importBeads(
         else result.commentsSkipped.push(n.key);
         continue;
       }
-      journal.appendEntry(created.id, {
-        kind: "note",
-        participantId: "beads-import",
-        semantic: { summary: n.text },
-        refs: [
-          {
-            kind: "beads-history",
-            key: n.key,
-            value: { beadsIssue: beadsId, author: n.author, createdAt: n.createdAt },
-          },
-        ],
-      });
+      // XTRM-678: history longer than the summary limit is split into parts,
+      // never cut. Every part carries the same key, and the parts of one note
+      // are written in one transaction, so a rerun sees the whole note or none
+      // of it — never a stored prefix that the key-match would then skip.
+      const parts = splitForJournal(n.text);
+      journal.appendEntries(
+        created.id,
+        parts.map((part, i) => ({
+          kind: "note" as const,
+          participantId: "beads-import",
+          semantic: { summary: parts.length > 1 ? `[part ${i + 1}/${parts.length}] ${part}` : part },
+          refs: [
+            {
+              kind: "beads-history",
+              key: n.key,
+              value: { beadsIssue: beadsId, author: n.author, createdAt: n.createdAt, ...(parts.length > 1 ? { part: i + 1, parts: parts.length } : {}) },
+            },
+          ],
+        })),
+      );
       existing.add(n.key);
       // notesApplied counts issues with notes ingested (once per issue);
       // commentsApplied counts ingested comment keys.
@@ -885,4 +894,13 @@ export function importBeads(
     }
   }
   return result;
+}
+
+// Room for the "[part i/n] " prefix inside JOURNAL_SUMMARY_MAX.
+function splitForJournal(text: string): string[] {
+  const size = JOURNAL_SUMMARY_MAX - 32;
+  if (text.length <= JOURNAL_SUMMARY_MAX) return [text];
+  const parts: string[] = [];
+  for (let i = 0; i < text.length; i += size) parts.push(text.slice(i, i + size));
+  return parts;
 }

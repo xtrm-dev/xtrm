@@ -51,7 +51,7 @@ describe("seam: full method circuit on the Substrate backend", () => {
       const edge = w.addEdge(id, other.id, "blocks");
       assert.equal(edge.kind, "blocks");
       assert.ok(edge.edgeId);
-      const j = w.addJournal(id, "finding", { participantId: "human:worker" });
+      const j = w.addJournal(id, "finding", { participantId: "human:worker", semantic: { summary: "found the loader stalls on large partitions" } });
       assert.equal(j.kind, "finding");
       const cp = await w.checkpoint(id, { headCommit: "a".repeat(40) });
       assert.ok(cp.entryId);

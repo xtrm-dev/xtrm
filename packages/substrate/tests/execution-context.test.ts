@@ -273,6 +273,7 @@ describe("X1 storage: envelope write/read with flat projection agreement", () =>
       const journal = new JournalService(s.db, s.svc);
       const e = journal.appendEntry(issue.id, {
         kind: "finding",
+        semantic: { summary: "envelope and legacy identity agree on one participant" },
         participantId: "p1",
         executionContext: { participantId: "p1", xtrmSessionId: ENV_ID },
       });
@@ -285,6 +286,7 @@ describe("X1 storage: envelope write/read with flat projection agreement", () =>
       assert.throws(
         () => journal.appendEntry(issue.id, {
           kind: "finding",
+          semantic: { summary: "conflicting identities must fail closed, never diverge" },
           participantId: "legacy-p",
           executionContext: { participantId: "env-p" },
         }),
@@ -311,7 +313,7 @@ describe("X1 storage: envelope write/read with flat projection agreement", () =>
         { participantId: " " },
       ]) {
         assert.throws(
-          () => journal.appendEntry(issue.id, { kind: "note", executionContext: bad as never }),
+          () => journal.appendEntry(issue.id, { kind: "note", semantic: { summary: "rejects an invalid execution context" }, executionContext: bad as never }),
           /invalid execution context|unknown|non-empty/,
           `journal append rejects ${JSON.stringify(bad)}`,
         );
@@ -450,7 +452,7 @@ describe("X1 §97: R4 env → Pi/Claude → Journal carries equal session id/nam
     const journal = new JournalService(s.db, s.svc);
     try {
       const { issue } = readyIssue(s.svc);
-      const appended = await toolJournalAppend(backing, { ref: issue.id, kind: "finding", sessionId: "pi-sess-9" });
+      const appended = await toolJournalAppend(backing, { ref: issue.id, kind: "finding", summary: "pi adapter carries the env session", sessionId: "pi-sess-9" });
       const entry = journal.getEntry(appended.entryId as string);
       assert.equal(entry.executionContext?.xtrmSessionId, ENV_ID);
       assert.equal(entry.executionContext?.xtrmSessionName, ENV_NAME);
@@ -470,7 +472,7 @@ describe("X1 §97: R4 env → Pi/Claude → Journal carries equal session id/nam
       // A known activation is recorded, not dropped (X1 review P2-1): the
       // envelope and the flat column agree on the same activation id.
       const withActivation = await toolJournalAppend(backing, {
-        ref: issue.id, kind: "finding", sessionId: "pi-sess-9", activationId: "act-pi-1",
+        ref: issue.id, kind: "finding", summary: "pi adapter records the activation", sessionId: "pi-sess-9", activationId: "act-pi-1",
       });
       const activationEntry = journal.getEntry(withActivation.entryId as string);
       assert.equal(activationEntry.executionContext?.specialist?.activationId, "act-pi-1");
@@ -650,7 +652,7 @@ describe("X1 joint §98 with R1: unavailable identity stays absent/null", () => 
       const { issue } = readyIssue(s.svc, "unknown work", "coord-holder");
       const journal = new JournalService(s.db, s.svc);
       const prov = new ProvenanceService(s.db, s.svc, journal);
-      const e = journal.appendEntry(issue.id, { kind: "note" });
+      const e = journal.appendEntry(issue.id, { kind: "note", semantic: { summary: "no fabricated identity on a plain note" } });
       assert.equal(e.executionContext, null);
       const b = prov.dispatch(issue.id, { workspace: s.dir, participantId: "coord-holder" });
       const bRaw = s.db.prepare("SELECT execution_context_json AS j FROM execution_bindings WHERE id = ?").get(b.id) as { j: string | null };
@@ -685,7 +687,7 @@ describe("X1 joint §98 with R1: unavailable identity stays absent/null", () => 
       const { issue } = readyIssue(s.svc, "flat session work", "coord-holder");
       const journal = new JournalService(s.db, s.svc);
       // Legacy manual flag with no envelope and no provider knowledge.
-      const e = journal.appendEntry(issue.id, { kind: "note", sessionId: "01a0ac95-8370-74c5-9081-4490653e7e94" });
+      const e = journal.appendEntry(issue.id, { kind: "note", semantic: { summary: "legacy flat session stays queryable" }, sessionId: "01a0ac95-8370-74c5-9081-4490653e7e94" });
       assert.equal(e.sessionId, "01a0ac95-8370-74c5-9081-4490653e7e94", "flat session column stays queryable");
       const reread = journal.getEntry(e.id);
       assert.equal(reread.sessionId, "01a0ac95-8370-74c5-9081-4490653e7e94");
@@ -770,7 +772,7 @@ describe("XTRM-412: canonical identity at the write seam", () => {
     try {
       const { issue } = readyIssue(s.svc, "write gate");
       const journal = new JournalService(s.db, s.svc);
-      assert.throws(() => journal.appendEntry(issue.id, { kind: "note", sessionId: "not a session!!" }), IdentityFormatError);
+      assert.throws(() => journal.appendEntry(issue.id, { kind: "note", semantic: { summary: "junk session must be refused" }, sessionId: "not a session!!" }), IdentityFormatError);
       assert.equal(journal.listEntries(issue.id).length, 0, "nothing is stored on rejection");
       // The launcher-surfaced tmux session is derived, not refused.
       process.env[XTRM_SESSION_ID_ENV] = "$2";

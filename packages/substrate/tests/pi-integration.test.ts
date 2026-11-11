@@ -72,7 +72,7 @@ describe("tool surface over the typed service", () => {
           delete process.env["SUBSTRATE_HOLDER"];
           delete process.env["SUBSTRATE_ACTIVATION_ID"];
         }
-        const append = await toolJournalAppend(backing, { ref: id, kind: "finding", sessionId: "pi-session" });
+        const append = await toolJournalAppend(backing, { ref: id, kind: "finding", summary: "pi appends a finding through the typed service", sessionId: "pi-session" });
         const checkpoint = await toolJournalCheckpoint(backing, { ref: id, sessionId: "pi-session" });
         for (const entryId of [append.entryId, checkpoint.entryId]) {
           const row = svc.db.prepare("SELECT participant_id, activation_id, execution_context_json FROM issue_journal WHERE id = ?").get(entryId as string) as {
@@ -103,7 +103,7 @@ describe("tool surface over the typed service", () => {
           ? { specialist: { name: "probe" } }
           : { coordinator: { participantId: "parent" } };
         for (const activationId of [undefined, "act:abcdef12-345"]) {
-          const appended = await toolJournalAppend(backing, { ref: id, kind: "finding", sessionId: "pi-session", activationId, executionContext: base });
+          const appended = await toolJournalAppend(backing, { ref: id, kind: "finding", summary: "pi carries the trusted identity facets", sessionId: "pi-session", activationId, executionContext: base });
           const raw = svc.db.prepare("SELECT activation_id, execution_context_json FROM issue_journal WHERE id = ?").get(appended.entryId as string) as { activation_id: string; execution_context_json: string };
           const ctx = JSON.parse(raw.execution_context_json);
           assert.equal(raw.activation_id, activationId ?? "act:23b2212a-c44");
@@ -111,10 +111,13 @@ describe("tool surface over the typed service", () => {
           else assert.deepEqual(ctx.coordinator, { participantId: "parent" });
         }
         const before = svc.journal.listEntries(id).length;
-        await assert.rejects(toolJournalAppend(backing, {
-          ref: id, kind: "finding", sessionId: "pi-session", activationId: "act:abcdef12-345",
-          executionContext: { specialist: { activationId: "act:23b2212a-c44" } },
-        }));
+        await assert.rejects(
+          toolJournalAppend(backing, {
+            ref: id, kind: "finding", summary: "an activation conflict must write nothing", sessionId: "pi-session", activationId: "act:abcdef12-345",
+            executionContext: { specialist: { activationId: "act:23b2212a-c44" } },
+          }),
+          /conflict|activation/i,
+        );
         assert.equal(svc.journal.listEntries(id).length, before, "conflict must write nothing");
       } finally {
         keys.forEach((key, i) => { if (prior[i] === undefined) delete process.env[key]; else process.env[key] = prior[i]; });
@@ -139,7 +142,7 @@ describe("tool surface over the typed service", () => {
       assert.equal(bindings.boundRef("sess-1"), id);
       const updated = await toolIssueUpdate(backing, { ref: "PI-1", contract: { ...contract(), problem: "v2" } });
       assert.equal(updated["revisionCreated"], true);
-      const appended = await toolJournalAppend(backing, { ref: "PI-1", kind: "finding", sessionId: "sess-1" });
+      const appended = await toolJournalAppend(backing, { ref: "PI-1", kind: "finding", summary: "round trip appends one finding with no SQL in the caller", sessionId: "sess-1" });
       assert.equal(appended["kind"], "finding");
       const capsule = await toolIssueResume(backing, { ref: "PI-1" });
       assert.match(capsule, /PI-1/);
@@ -163,10 +166,18 @@ describe("tool surface over the typed service", () => {
       const stored = svc.journal.getEntry(appended["entryId"] as string);
       assert.deepEqual(stored.semantic, { summary: text }, "same storage as sb issue note");
 
-      // A kind-only append stays valid and is explicitly text-less, not silently empty.
-      const kindOnly = await toolJournalAppend(backing, { ref: "PI-1", kind: "milestone", sessionId: "sess-1" });
-      assert.equal(kindOnly["summary"], null);
-      assert.equal(svc.journal.getEntry(kindOnly["entryId"] as string).semantic, null);
+      // A content kind with no text is refused at the write seam (XTRM-670):
+      // the tool may omit the text, but then the entry fails closed instead of
+      // occupying a sequence number with nothing in it. The XTRM-720 contract's
+      // "kind-only append stays valid" narrows to the response shape — an
+      // explicit `summary: null` is only reachable for a kind that carries its
+      // own payload, which this tool cannot build.
+      const beforeKindOnly = svc.journal.listEntries(id).length;
+      await assert.rejects(
+        toolJournalAppend(backing, { ref: "PI-1", kind: "milestone", sessionId: "sess-1" }),
+        /empty journal entry: kind "milestone" needs content/,
+      );
+      assert.equal(svc.journal.listEntries(id).length, beforeKindOnly, "the refused entry is not stored");
 
       // A result kind carries the text in its bounded result payload.
       const resultAppend = await toolJournalAppend(backing, { ref: "PI-1", kind: "result", summary: "shipped the field", sessionId: "sess-1" });

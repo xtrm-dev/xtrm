@@ -80,6 +80,24 @@ Destructive/batch flows may require confirmation separately. Pi and Claude
 mutations use the same structured feedback vocabulary without making feedback a
 second authority model.
 
+## Journal text limit (XTRM-678)
+
+- Summary text (`semantic.summary`) is limited to 20,000 characters
+  (`JOURNAL_SUMMARY_MAX`, `src/domain/journal.ts`). The CLI applies the limit on
+  every one of its append paths (`journal append`, `issue note`, checkpoint
+  enrichment); the Pi `substrate_journal_append` tool applies the same bound. A
+  longer summary fails with its size and the limit, and no row is written:
+  supplied text is never cut. The Claude MCP append path still cuts to 2,000
+  characters with no marker; aligning it is step-12 work (XTRM-724 part B).
+- Long text: `sb journal append <ref> --kind handoff --summary-file <path|->`
+  (`-` reads stdin; other `--semantic` fields still apply).
+- Host-generated text that must fit — imported provider comments — is stored with
+  an explicit `[cut: N more chars of … not stored]` marker. Beads history above
+  the limit is imported as `[part i/n]` entries.
+- Text views end a cut preview with `… (+N chars, …)`; `--json` always carries the
+  full stored text. `result.summary` keeps its 4,000-character limit and the error
+  now reports the received length.
+
 ## Help surfaces
 
 Help is side-effect-free and is part of the product contract:

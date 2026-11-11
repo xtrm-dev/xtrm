@@ -320,7 +320,7 @@ describe("sb journal verbs + issue resume", () => {
       const created = cli(["issue", "create", "--project", "prj_demo", "--title", "J", "--kind", "task", "--contract", c1, "--scrutiny", "LOW"]) as {
         humanRef: string;
       };
-      const appended = cli(["journal", "append", created.humanRef, "--kind", "finding", "--project", "prj_demo"]) as {
+      const appended = cli(["journal", "append", created.humanRef, "--kind", "finding", "--semantic", '{"summary":"finding recorded to prove the cli append round trip"}', "--project", "prj_demo"]) as {
         sequence: number; kind: string;
       };
       assert.equal(appended.sequence, 1);
@@ -414,7 +414,7 @@ describe("XTRM-410 / XTRM-412 / XTRM-417: journal identity is captured and read 
       // $N is the launcher-surfaced tmux session id, a legitimate session form.
       const res = runCli([
         "--db", dbPath, "journal", "append", issue.humanRef,
-        "--kind", "note", "--session", "$2", "--project", "prj_xtrm",
+        "--kind", "note", "--semantic", '{"summary":"note recorded to prove tmux session ids are accepted"}', "--session", "$2", "--project", "prj_xtrm",
       ]);
       assert.equal(res.code, 0, `the write is accepted: ${res.stderr}`);
       const journal = new JournalService(ctx.db, ctx.svc);

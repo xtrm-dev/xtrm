@@ -103,7 +103,7 @@ describe("Journal kind vocabulary (ADR §22)", () => {
       const created = cli(["issue", "create", "--project", "prj_xtrm", "--title", "K", "--kind", "task", "--contract", c, "--scrutiny", "LOW"]) as {
         humanRef: string;
       };
-      const note = cli(["journal", "append", created.humanRef, "--kind", "note", "--project", "prj_xtrm"]) as { kind: string };
+      const note = cli(["journal", "append", created.humanRef, "--kind", "note", "--semantic", '{"summary":"note recorded to prove the cli accepts the note kind"}', "--project", "prj_xtrm"]) as { kind: string };
       assert.equal(note.kind, "note");
       const result = cli(["issue", "note", created.humanRef, "specialist finished", "--kind", "result", "--project", "prj_xtrm"]) as {
         kind: string;
@@ -769,5 +769,75 @@ describe("journal latest/timeline and fail-closed result reads", () => {
     assert.throws(() => journal.getEntry(entry.id), /fail-closed: invalid result payload/);
     ctx.db.prepare("UPDATE issue_journal SET result_json = ? WHERE id = ?").run("{not json", entry.id);
     assert.throws(() => journal.getEntry(entry.id), /fail-closed: corrupt result payload/);
+  });
+});
+
+// ---- XTRM-670 / XTRM-678: quality and atomic parts at the write seam ------
+
+describe("Journal entry quality and atomic parts (XTRM-670, XTRM-678)", () => {
+  let ctx: ReturnType<typeof setup>;
+  beforeEach(() => {
+    ctx = setup();
+  });
+  afterEach(() => {
+    ctx.db.close();
+    rmSync(ctx.dir, { recursive: true, force: true });
+  });
+
+  const cli = (args: string[]) => runCli(["--db", join(ctx.dir, "state.db"), "--project", "prj_xtrm", ...args]);
+
+  function issueRef(): string {
+    const file = join(ctx.dir, "contract.json");
+    writeFileSync(file, JSON.stringify(contract()));
+    const created = runCli([
+      "--db", join(ctx.dir, "state.db"), "--json",
+      "issue", "create", "--project", "prj_xtrm", "--title", "Q", "--kind", "task", "--contract", file, "--scrutiny", "LOW",
+    ]);
+    assert.equal(created.code, 0, created.stderr);
+    return (JSON.parse(created.stdout) as { data: { humanRef: string } }).data.humanRef;
+  }
+
+  it("a content kind with no payload is rejected and consumes no sequence number", () => {
+    const journal = new JournalService(ctx.db, ctx.svc);
+    const issue = workIssue(ctx);
+    assert.throws(() => journal.appendEntry(issue.id, { kind: "note" }), /empty journal entry: kind "note" needs content/);
+    assert.deepEqual(journal.listEntries(issue.id), [], "nothing is stored and no sequence number is taken");
+    const stored = journal.appendEntry(issue.id, {
+      kind: "note",
+      semantic: { summary: "retry queue depth stayed at zero across the restart window" },
+    });
+    assert.equal(stored.sequence, 1, "the rejected entry left the sequence untouched");
+  });
+
+  it("the CLI prints the quality warning, exits 0 and returns it under --json", () => {
+    const ref = issueRef();
+    const human = cli(["journal", "append", ref, "--kind", "note", "--semantic", '{"summary":"done"}']);
+    assert.equal(human.code, 0, human.stderr);
+    assert.match(human.stderr, /warning: summary "done" is a placeholder/);
+    assert.match(human.stderr, /what changed \/ evidence \/ next step/);
+    const json = cli(["--json", "journal", "append", ref, "--kind", "note", "--semantic", '{"summary":"queue depth zero"}']);
+    assert.equal(json.code, 0, json.stderr);
+    const warnings = (JSON.parse(json.stdout) as { data: { warnings: string[] } }).data.warnings;
+    assert.equal(warnings.length, 1, "one warning for the short summary");
+    assert.match(warnings[0] ?? "", /summary has 3 words \(under 8\)/);
+  });
+
+  it("appendEntries writes every part or none, so a split note never lands as a prefix", () => {
+    const journal = new JournalService(ctx.db, ctx.svc);
+    const issue = workIssue(ctx);
+    assert.throws(
+      () =>
+        journal.appendEntries(issue.id, [
+          { kind: "note", semantic: { summary: "first part of a split note that must not survive alone" } },
+          { kind: "note" },
+        ]),
+      /empty journal entry/,
+    );
+    assert.deepEqual(journal.listEntries(issue.id), [], "a failed part rolls the whole note back");
+    const written = journal.appendEntries(issue.id, [
+      { kind: "note", semantic: { summary: "first half of one long history note, stored in one unit" } },
+      { kind: "note", semantic: { summary: "second half of one long history note, stored in one unit" } },
+    ]);
+    assert.deepEqual(written.map((e) => e.sequence), [1, 2]);
   });
 });
