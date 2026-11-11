@@ -6,7 +6,7 @@ import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { Markdown } from "../ui/markdown.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, SurfaceHeader, ago, cx } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, SurfaceToolbar, ago, cx } from "../ui/primitives.tsx";
 
 /** The backend serves only these two repository paths; anything else is rejected there. */
 const DOCS = [
@@ -78,35 +78,34 @@ export function ContentSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Repository content">
-      <SurfaceHeader
-        title="Repository content"
-        meta={
-          <>
-            <span>{repo.fullName}</span>
-            <SourceBadge source={github.source} />
-            {active.data?.lastModified && <span title={new Date(active.data.lastModified).toLocaleString()}>updated {ago(active.data.lastModified)}</span>}
-          </>
-        }
-      >
-        <OptionsMenu
-          label="Content options"
-          items={[
-            { label: "Refresh", icon: "live", onSelect: () => void active.refetch() },
-            {
-              label: "Open on GitHub",
-              icon: "external",
-              onSelect: () =>
-                void window.open(
-                  selection.kind === "doc" ? `https://github.com/${repo.fullName}/blob/HEAD/${selection.path}` : `https://github.com/${repo.fullName}/blob/HEAD/.xtrm/reports/${selection.name}`,
-                  "_blank",
-                  "noreferrer",
-                ),
-            },
-          ]}
-        />
-      </SurfaceHeader>
+      <SurfaceToolbar>
+        <SourceBadge source={github.source} />
+        {active.data?.lastModified && (
+          <span className="px-1 text-xs text-ink-faint" title={new Date(active.data.lastModified).toLocaleString()}>
+            updated {ago(active.data.lastModified)}
+          </span>
+        )}
+        <div className="ml-auto">
+          <OptionsMenu
+            label="Content options"
+            items={[
+              { label: "Refresh", icon: "live", onSelect: () => void active.refetch() },
+              {
+                label: "Open on GitHub",
+                icon: "external",
+                onSelect: () =>
+                  void window.open(
+                    selection.kind === "doc" ? `https://github.com/${repo.fullName}/blob/HEAD/${selection.path}` : `https://github.com/${repo.fullName}/blob/HEAD/.xtrm/reports/${selection.name}`,
+                    "_blank",
+                    "noreferrer",
+                  ),
+              },
+            ]}
+          />
+        </div>
+      </SurfaceToolbar>
       <div className="flex min-h-0 flex-1">
-        <nav aria-label="Documents" className="flex w-56 shrink-0 flex-col border-r border-border-muted">
+        <nav aria-label="Documents" className="flex w-56 shrink-0 flex-col border-r border-border-subtle">
           <div className="flex flex-col p-1.5">
             {DOCS.map((d) => (
               <Row

@@ -8,7 +8,7 @@ import { useShell } from "../shell/context.tsx";
 import { useAdapters } from "../adapters/index.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, ago, cx } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_GHOST, TOOLBAR_REST, ago, cx } from "../ui/primitives.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 
 const VIEWS: Array<{ id: PullView; label: string }> = [
@@ -36,11 +36,6 @@ const COLUMNS: Array<{ key: string; label: string; width: string; align?: "right
 ];
 const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
 const CELL = "flex h-full min-w-0 items-center px-2";
-/** Toolbar controls: 28px tall, 11.5px text, ghost until they carry a value. */
-const CONTROL = "flex h-7 items-center gap-1 rounded-md px-1.5 text-xs outline-none transition-colors";
-const GHOST = "bg-pressed text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
-/** View tabs sit inside their own segmented row, so they stay ghost until selected. */
-const TAB = "text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
 
 function IssueChips({ pull }: { pull: PullRequestSummary }) {
   const index = useIssueIndex();
@@ -187,7 +182,7 @@ export function PullsSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Pull requests">
-      <div className="flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1.5 px-1.5 py-1.5">
+      <SurfaceToolbar>
         <SourceBadge source={github.source} />
         <div role="tablist" aria-label="Pull request state" className="flex items-center gap-0.5">
           {VIEWS.map((v) => (
@@ -197,7 +192,7 @@ export function PullsSurface() {
               role="tab"
               aria-selected={view === v.id}
               onClick={() => setView(v.id)}
-              className={cx(CONTROL, view === v.id ? "bg-pressed text-ink" : TAB)}
+              className={cx(TOOLBAR_CONTROL, view === v.id ? "bg-pressed text-ink" : TOOLBAR_GHOST)}
             >
               {v.label}
               <span className="text-ink-faint tabular">{visibleCounts[v.id]}</span>
@@ -217,7 +212,7 @@ export function PullsSurface() {
         <OptionsMenu
           label="Sort pull requests"
           trigger={
-            <button type="button" className={cx(CONTROL, GHOST)}>
+            <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_REST)}>
               {sortLabel} <Icon name="chevronDown" size="xs" className="text-ink-faint" />
             </button>
           }
@@ -232,7 +227,7 @@ export function PullsSurface() {
             ]}
           />
         </div>
-      </div>
+      </SurfaceToolbar>
       <GithubNotice repo={repo.fullName} />
       {body}
     </section>

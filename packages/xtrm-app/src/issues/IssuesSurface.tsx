@@ -5,7 +5,7 @@ import { projectForRepo, useIssues, useProjects } from "../app/queries.ts";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, cx, relativeTime } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_REST, cx, relativeTime } from "../ui/primitives.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
@@ -41,13 +41,10 @@ const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "righ
 const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
 const CELL_EDGE = "flex h-full min-w-0 items-center";
 const CELL = `${CELL_EDGE} px-2`;
-/** Toolbar controls: 28px tall, 12px text, ghost until they carry a value. */
-const CONTROL = "flex h-7 items-center gap-1 rounded-md px-1.5 text-xs outline-none transition-colors";
-const GHOST = "bg-pressed text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
 
 function filterTrigger(value: string | null, label: string) {
   return (
-    <button type="button" className={cx(CONTROL, GHOST, value !== null && "bg-hover text-ink")}>
+    <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_REST, value !== null && "bg-hover text-ink")}>
       {value ?? label} <Icon name="chevronDown" size="xs" className="text-ink-faint" />
     </button>
   );
@@ -155,7 +152,7 @@ export function IssuesSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="XTRM Issues">
-      <div className="flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1.5 px-1.5 py-1.5">
+      <SurfaceToolbar>
         <SourceBadge source={substrate.source} />
         {canWrite && project && (
           <button
@@ -220,7 +217,7 @@ export function IssuesSurface() {
             { label: "Collapse all", icon: "restore", onSelect: () => setCollapsed(new Set(tree.filter((r) => r.hasChildren).map((r) => r.issue.ref))) },
           ]}
         />
-      </div>
+      </SurfaceToolbar>
       {body}
       {project && <NewIssueDialog open={creating} onOpenChange={setCreating} projectId={project.id} onCreated={(ref) => inspect({ kind: "issue", ref })} />}
     </section>
