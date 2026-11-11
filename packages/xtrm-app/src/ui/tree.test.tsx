@@ -5,9 +5,9 @@ import { TREE_STEP, TreeCell, TreeGuides } from "./tree.tsx";
 afterEach(cleanup);
 
 /** The guides are decorative spans; nothing else in the cell renders aria-hidden spans. */
-const guides = (root: HTMLElement) => [...root.querySelectorAll("span[aria-hidden]")];
+const guides = (root: HTMLElement) => [...root.querySelectorAll("span[aria-hidden]")] as HTMLElement[];
 
-describe("tree indent (XTRM-638)", () => {
+describe("tree indent (XTRM-639)", () => {
   it("starts a root row at the base padding with no guides", () => {
     const { container } = render(
       <TreeCell depth={0} hasChildren={false} expanded label="XTRM-1" onToggle={() => {}} className="flex items-center">
@@ -19,40 +19,30 @@ describe("tree indent (XTRM-638)", () => {
     expect(guides(cell)).toHaveLength(0);
   });
 
-  it("indents by one step per level and draws one spine per level plus an elbow", () => {
+  it("indents by one step per level and hangs one guide under each ancestor's icon", () => {
     const { container } = render(
       <div>
         <TreeGuides depth={2} />
       </div>,
     );
     const drawn = guides(container);
-    expect(drawn).toHaveLength(3);
-    const spines = drawn.slice(0, 2);
-    expect(spines.map((s) => (s as HTMLElement).style.left)).toEqual([`${TREE_STEP / 2}px`, `${TREE_STEP * 1.5}px`]);
-    const elbow = drawn[2] as HTMLElement;
-    expect(elbow.style.left).toBe(`${TREE_STEP * 1.5}px`);
-    expect(elbow.style.width).toBe("6px");
+    expect(drawn).toHaveLength(2);
+    // 8px padding + 20px disclosure slot + 6px gap + half of the 14px icon.
+    expect(drawn.map((s) => s.style.left)).toEqual(["41px", `${41 + TREE_STEP}px`]);
   });
 
-  it("stops the row's own spine at mid-row when it is the last child", () => {
-    const middle = render(
+  it("draws a straight line: full row height, one pixel wide, no elbow", () => {
+    const { container } = render(
       <div>
         <TreeGuides depth={1} />
       </div>,
     );
-    const middleSpine = guides(middle.container)[0] as HTMLElement;
-    expect(middleSpine.style.top).toBe("0px");
-    expect(middleSpine.style.bottom).toBe("0px");
-    middle.unmount();
-
-    const last = render(
-      <div>
-        <TreeGuides depth={1} last />
-      </div>,
-    );
-    const lastSpine = guides(last.container)[0] as HTMLElement;
-    expect(lastSpine.style.top).toBe("50%");
-    expect(lastSpine.style.bottom).toBe("50%");
+    const [spine] = guides(container);
+    expect(spine!.style.top).toBe("");
+    expect(spine!.style.bottom).toBe("");
+    expect(spine!.className).toContain("inset-y-0");
+    expect(spine!.className).toContain("w-px");
+    expect(guides(container)).toHaveLength(1);
   });
 
   it("supports five levels", () => {
@@ -61,8 +51,9 @@ describe("tree indent (XTRM-638)", () => {
         <TreeGuides depth={5} />
       </div>,
     );
-    expect(guides(container)).toHaveLength(6);
-    expect((guides(container)[4] as HTMLElement).style.left).toBe(`${TREE_STEP * 4.5}px`);
+    const drawn = guides(container);
+    expect(drawn).toHaveLength(5);
+    expect(drawn[4]!.style.left).toBe(`${41 + TREE_STEP * 4}px`);
   });
 
   it("shows a disclosure for parents and toggles without activating the row", () => {

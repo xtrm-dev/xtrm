@@ -224,20 +224,20 @@ Every surface now opens with the same 40px band: `SurfaceToolbar` renders one ro
 
 Toolbar tokens live in `src/ui/primitives.tsx`: `TOOLBAR_CONTROL` (28px geometry), `TOOLBAR_REST` (resting `bg-pressed` fill, brighter on hover), `TOOLBAR_GHOST` (tabs and secondary actions). A surface title no longer repeats in the body — the sidebar row that opened it names it.
 
-## 12. Tree indent is one primitive (XTRM-638)
+## 12. Tree indent is one primitive (XTRM-638, XTRM-639)
 
 Nested issue rows indent on a **20px grid** and draw their hierarchy instead of only shifting it. `src/ui/tree.tsx` owns the three parts — indent, guides, disclosure — and nothing else, so a surface keeps its own cell classes and row content.
 
 | Token | Value | Rule |
 |---|---|---|
-| `TREE_STEP` | `20px` | Chevrons sit on this grid; the guides align to them by construction |
-| `--x-tree-guide` | light `rgb(15 15 20 / 0.14)`, dark `rgb(255 255 255 / 0.13)` | One colour for spine and elbow, chosen to survive both the resting and the selected row fill |
-| elbow | `6px` horizontal at mid-row | The only mark that says "child of the row above" |
+| `TREE_STEP` | `20px` | Chevrons sit on this grid; the guides align to the icons by construction |
+| guide x | `8 + 20 + 6 + 7` = `41px`, then `+20px` per level | Hangs under the ancestor's type icon, not under its chevron — the line continues the icon, so it reads as that row's spine |
+| `--x-tree-guide` | light `rgb(15 15 20 / 0.14)`, dark `rgb(255 255 255 / 0.13)` | One colour for every guide, chosen to survive both the resting and the selected row fill |
 
-Guides start at the first child: a depth-0 row draws nothing. Each ancestor level draws a full-height 1px spine at `level · 20 − 10`; the row's own level draws a spine that stops at mid-row when the row is its parent's last child, joined to the row by the elbow. Depth is unbounded — five levels are covered by the unit test.
+The guide is a single straight 1px vertical line spanning the whole row. There is **no elbow and no half-height spine**: an elbow plus a mid-row stop was the first version and it read as decoration, not as structure.
 
-"Last child" is a property of the flattened tree, not of the backend: a row is last when the tree stops nesting after it (no following row, or a shallower one). `IssuesSurface` precomputes that set because `VirtualList` renders rows without an index.
+Guides start at the first child: a depth-0 row draws nothing. Depth is unbounded — five levels are covered by the unit test.
 
-Keyboard matches the disclosure: `ArrowLeft` collapses an expanded parent, `ArrowRight` expands a collapsed one. `Row` now merges a caller's `onKeyDown` with its own Enter/Space activation — before this, passing a handler silently disabled activation.
+Keyboard matches the disclosure: `ArrowLeft` collapses an expanded parent, `ArrowRight` expands a collapsed one. `Row` merges a caller's `onKeyDown` with its own Enter/Space activation — before this, passing a handler silently disabled activation.
 
 Not adopted: TanStack Table, react-arborist and headless-tree. The rows are already a flattened `TreeRow[]` behind our own virtualizer at a fixed 32px height; a tree library would add a second virtualizer, its own row markup and a drag layer nobody asked for.
