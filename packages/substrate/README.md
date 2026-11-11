@@ -4,7 +4,7 @@ Substrate is XTRM's durable work authority: a library-first Issue graph over
 SQLite/WAL with a terminal-native `sb` CLI plus first-party Pi and Claude
 integrations.
 
-Current package version: **0.2.0**. Published copies ship JavaScript and support
+Current package version: **0.2.6**. Published copies ship JavaScript and support
 Node ≥24 and Bun ≥1.3; a source checkout runs the TypeScript entrypoints
 directly.
 
@@ -38,6 +38,10 @@ flowchart LR
 - **Claim** — who currently owns the work.
 - **Journal** — append-only execution continuity: notes, findings, decisions,
   blockers, milestones, handoffs, results, checkpoints and compaction records.
+  One entry's summary text is limited to 20,000 characters on the CLI and on the
+  Pi tool, and a longer one is refused with its size rather than cut;
+  `--summary-file` supplies long text from a file or stdin. The Claude MCP append
+  path is not covered yet: it cuts at 2,000 characters.
 - **Resume Capsule** — bounded reconstruction from durable state, not a second
   source of truth.
 - **Provenance** — execution bindings, WorkReceipts, commits/PRs/artifacts,
@@ -92,12 +96,20 @@ Mutations give explicit post-operation feedback: success, no-op, warning or
 error with remediation where the command can name one. Routine mutations do not
 ask for confirmation; destructive/batch flows may.
 
-A claim or release takes its holder from `--holder`, else from
+A claim, renewal or release takes its holder from `--holder`, else from
 `SUBSTRATE_HOLDER`, which the xt launcher exports for the session. Inside an xt
-session, `sb issue claim <ref>` is enough; `--holder` is only for claiming or
-releasing on someone else's behalf. With neither set the command fails closed,
-and the output names the holder and its source. The Claude MCP and Pi claim
-tools apply the same rule.
+session, `sb issue claim <ref>` is enough; `--holder` is only for claiming,
+renewing or releasing on someone else's behalf. With neither set the command
+fails closed, and the output names the holder and its source. `resolveClaimHolder`
+is the only place that pairing is decided — the holder is never taken from the
+unix user, a worktree path or a branch — and the Claude MCP and Pi claim tools
+apply the same rule. `sb issue renew` extends a live lease: the expiry moves and
+the generation does not.
+
+Argument handling fails closed: an unknown flag, a value flag with no value, or
+surplus positional text is an error naming the offender, so a wrong invocation
+cannot succeed quietly. `sb help contract`, `sb help kinds` and `sb help identity`
+answer the three questions authors ask most.
 
 Run `sb --help` or `sb <group> <verb> --help`. Help is part of the product
 contract and is side-effect-free.
