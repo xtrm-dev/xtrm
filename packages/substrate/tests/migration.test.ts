@@ -10,6 +10,7 @@ import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ClosureService } from "../src/service/closure-service.ts";
 import { extractSectionsDetailed, importBeads } from "../src/compatibility/beads/import.ts";
+import { JOURNAL_SUMMARY_MAX } from "../src/domain/journal.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
 import { contract } from "./helpers.ts";
 
@@ -779,6 +780,71 @@ describe("XTRM-406: source timestamps survive import", () => {
       } as never);
       assert.ok(created.createdAt >= before, "generic createIssue must not backdate");
       assert.ok(svc.getRevision(created.id, 1).createdAt >= before);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe("XTRM-678 Beads history limit: parts are one batch and a failed batch retries whole", () => {
+  const LONG_NOTES = `history line\n${"x".repeat(JOURNAL_SUMMARY_MAX)}`;
+
+  function ready(): { db: ReturnType<typeof openSubstrate>; svc: IssueService; real: JournalService } {
+    const dir = mkdtempSync(join(tmpdir(), "substrate-mig-parts-"));
+    const db = openSubstrate(join(dir, "s.db"));
+    const svc = new IssueService(db);
+    svc.createProject({ id: "prj_parts", prefix: "PART", name: "p" });
+    return { db, svc, real: new JournalService(db, svc) };
+  }
+
+  const record = { id: "b-long", title: "Long history", status: "open", issue_type: "task", notes: LONG_NOTES };
+
+  it("writes every part through ONE appendEntries call, never one append per part", () => {
+    const { db, svc, real } = ready();
+    const calls: number[] = [];
+    const spy = {
+      listEntries: (id: string, opts?: never) => real.listEntries(id, opts),
+      appendEntries: (id: string, inputs: never[]) => {
+        calls.push(inputs.length);
+        return real.appendEntries(id, inputs);
+      },
+      appendEntry: () => {
+        calls.push(-1);
+        throw new Error("importBeads must batch the parts, not append them one by one");
+      },
+    } as unknown as JournalService;
+    try {
+      importBeads(svc, "prj_parts", [record], [], { journal: spy });
+      assert.deepEqual(calls, [2], "both parts travel in one call, so one transaction covers them");
+      const issueId = svc.resolveRef("b-long").id;
+      const rows = real.listEntries(issueId, { kind: "note" });
+      assert.equal(rows.length, 2);
+      assert.match(rows[0]!.semantic!.summary, /^\[part 1\/2\] /);
+      assert.match(rows[1]!.semantic!.summary, /^\[part 2\/2\] /);
+      // The same note on a rerun appends nothing and is not half-skipped.
+      importBeads(svc, "prj_parts", [record], [], { journal: spy });
+      assert.deepEqual(calls, [2], "a rerun finds every part present and appends none");
+      assert.equal(real.listEntries(issueId, { kind: "note" }).length, 2);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("stores no part when the batch fails, and a retry imports all of them", () => {
+    const { db, svc, real } = ready();
+    const failing = {
+      listEntries: (id: string, opts?: never) => real.listEntries(id, opts),
+      appendEntries: () => {
+        throw new Error("batch failed");
+      },
+    } as unknown as JournalService;
+    try {
+      assert.throws(() => importBeads(svc, "prj_parts", [record], [], { journal: failing }), /batch failed/);
+      const issueId = svc.resolveRef("b-long").id;
+      assert.deepEqual(real.listEntries(issueId, { kind: "note" }), [], "a failed batch stores no prefix");
+      importBeads(svc, "prj_parts", [record], [], { journal: real });
+      const rows = real.listEntries(issueId, { kind: "note" });
+      assert.equal(rows.length, 2, "the retry imports every part, not only the missing tail");
     } finally {
       db.close();
     }

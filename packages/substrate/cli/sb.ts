@@ -685,7 +685,7 @@ Every verb runs over one JournalService; latest/timeline are bounded reads.`,
   "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--summary-file <path|->] [--result <file|json>] [--refs <file|json>] [--project <id>]
 
 --summary-file reads the summary text from a file (- = stdin); other --semantic
-fields still apply. Summary text is limited to 16000 characters: a longer one
+fields still apply. Summary text is limited to 20,000 characters: a longer one
 fails and writes nothing (it is never cut). Put longer material in a file and
 cite the path.
 

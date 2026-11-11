@@ -514,6 +514,107 @@ export function importBeads(
     if (d.source === "inline") result.depFailures.push(msg);
   }
 
+  // Historical intake: notes + comments -> journal kind "note" with beads
+  // provenance refs. Contract text is never polluted. Dedup by existence check
+  // on the beads marker so a rerun never doubles entries, and a failed batch
+  // that left the issue without its history is repaired by the next import
+  // instead of being lost behind the alias skip (XTRM-678).
+  const journal = opts?.journal;
+  function writeHistory(beadsId: string, issueId: string, r: BeadsIssueRecord): void {
+    // Historical intake: notes + comments -> journal kind "note" with beads
+    // provenance refs. Contract text is never polluted. Dedup by existence
+    // check on the beads marker so a rerun never doubles entries.
+    const noteTexts: Array<{ key: string; text: string; author: string | null; createdAt: string | null }> = [];
+    // notes is a string in real `bd export` output; array-form (or any other
+    // present-but-unhandled shape) must never vanish silently — ingest what
+    // has text, count the rest as skipped so the receipt stays loud.
+    const notesRaw = (r as { notes?: unknown }).notes;
+    if (typeof notesRaw === "string" && notesRaw.trim()) {
+      noteTexts.push({ key: `beads-note:${beadsId}`, text: notesRaw, author: str(r.created_by), createdAt: null });
+    } else if (Array.isArray(notesRaw)) {
+      let idx = 0;
+      for (const n of notesRaw) {
+        if (!n || typeof n !== "object") continue;
+        const rec = n as Record<string, unknown>;
+        const text = str(rec["text"]);
+        if (!text) continue;
+        noteTexts.push({
+          key: `beads-note:${beadsId}:${str(rec["id"]) ?? `index:${idx}`}`,
+          text,
+          author: str(rec["author"]) ?? str(r.created_by),
+          createdAt: str(rec["created_at"]) ?? str(rec["created"]),
+        });
+        idx += 1;
+      }
+      if (idx === 0) result.notesSkipped.push(beadsId);
+    } else if (notesRaw !== undefined && notesRaw !== null) {
+      result.notesSkipped.push(beadsId);
+    }
+    const comments = (r as { comments?: unknown }).comments;
+    if (Array.isArray(comments)) {
+      for (const c of comments) {
+        if (!c || typeof c !== "object") continue;
+        const rec = c as Record<string, unknown>;
+        const text = str(rec["text"]);
+        const cid = str(rec["id"]) ?? `index:${comments.indexOf(c)}`;
+        if (!text) continue;
+        noteTexts.push({
+          key: `beads-comment:${cid}`,
+          text,
+          author: str(rec["author"]),
+          createdAt: str(rec["created_at"]),
+        });
+      }
+    }
+    if (noteTexts.length === 0) return;
+    if (!journal) {
+      for (const n of noteTexts) {
+        if (n.key.startsWith("beads-note:")) result.notesSkipped.push(beadsId);
+        else result.commentsSkipped.push(n.key);
+      }
+      return;
+    }
+    const existing = new Set<string>();
+    for (const e of journal.listEntries(issueId, { kind: "note", limit: 10000 })) {
+      for (const ref of e.refs ?? []) {
+        if (ref.kind === "beads-history") existing.add(ref.key);
+      }
+    }
+    for (const n of noteTexts) {
+      if (existing.has(n.key)) {
+        if (n.key.startsWith("beads-note:")) result.notesSkipped.push(beadsId);
+        else result.commentsSkipped.push(n.key);
+        continue;
+      }
+      // XTRM-678: history longer than the summary limit is split into parts,
+      // never cut. Every part carries the same key, and the parts of one note
+      // are written in one transaction, so a rerun sees the whole note or none
+      // of it — never a stored prefix that the key-match would then skip.
+      const parts = splitForJournal(n.text);
+      journal.appendEntries(
+        issueId,
+        parts.map((part, i) => ({
+          kind: "note" as const,
+          participantId: "beads-import",
+          semantic: { summary: parts.length > 1 ? `[part ${i + 1}/${parts.length}] ${part}` : part },
+          refs: [
+            {
+              kind: "beads-history",
+              key: n.key,
+              value: { beadsIssue: beadsId, author: n.author, createdAt: n.createdAt, ...(parts.length > 1 ? { part: i + 1, parts: parts.length } : {}) },
+            },
+          ],
+        })),
+      );
+      existing.add(n.key);
+      // notesApplied counts issues with notes ingested (once per issue);
+      // commentsApplied counts ingested comment keys.
+      if (n.key.startsWith("beads-note:")) {
+        if (!result.notesApplied.includes(beadsId)) result.notesApplied.push(beadsId);
+      } else result.commentsApplied.push(n.key);
+    }
+  }
+
   for (const r of records) {
     if (!r || typeof r.id !== "string" || !r.id.trim()) continue;
     const beadsId = r.id;
@@ -525,6 +626,10 @@ export function importBeads(
     if (imported !== null) {
       beadToIssue.set(beadsId, imported);
       result.skippedPresent.push(beadsId);
+      // A previous run can fail after the issue exists and before its history
+      // lands. Repair that here: the alias skip would otherwise drop the notes
+      // for good. The marker check keeps a complete import a no-op.
+      writeHistory(beadsId, imported, r);
       continue;
     }
     const title = str(r.title) ?? "(untitled beads import)";
@@ -647,100 +752,7 @@ export function importBeads(
     if (!readiness.dispatchable) result.unready.push(beadsId);
     else throw new Error(`import refused: ${beadsId} would land dispatchable (fail-closed, G46)`);
 
-    // Historical intake: notes + comments -> journal kind "note" with beads
-    // provenance refs. Contract text is never polluted. Dedup by existence
-    // check on the beads marker so partial-failure resume never doubles
-    // entries (reruns skip created issues entirely).
-    const journal = opts?.journal;
-    const noteTexts: Array<{ key: string; text: string; author: string | null; createdAt: string | null }> = [];
-    // notes is a string in real `bd export` output; array-form (or any other
-    // present-but-unhandled shape) must never vanish silently — ingest what
-    // has text, count the rest as skipped so the receipt stays loud.
-    const notesRaw = (r as { notes?: unknown }).notes;
-    if (typeof notesRaw === "string" && notesRaw.trim()) {
-      noteTexts.push({ key: `beads-note:${beadsId}`, text: notesRaw, author: str(r.created_by), createdAt: null });
-    } else if (Array.isArray(notesRaw)) {
-      let idx = 0;
-      for (const n of notesRaw) {
-        if (!n || typeof n !== "object") continue;
-        const rec = n as Record<string, unknown>;
-        const text = str(rec["text"]);
-        if (!text) continue;
-        noteTexts.push({
-          key: `beads-note:${beadsId}:${str(rec["id"]) ?? `index:${idx}`}`,
-          text,
-          author: str(rec["author"]) ?? str(r.created_by),
-          createdAt: str(rec["created_at"]) ?? str(rec["created"]),
-        });
-        idx += 1;
-      }
-      if (idx === 0) result.notesSkipped.push(beadsId);
-    } else if (notesRaw !== undefined && notesRaw !== null) {
-      result.notesSkipped.push(beadsId);
-    }
-    const comments = (r as { comments?: unknown }).comments;
-    if (Array.isArray(comments)) {
-      for (const c of comments) {
-        if (!c || typeof c !== "object") continue;
-        const rec = c as Record<string, unknown>;
-        const text = str(rec["text"]);
-        const cid = str(rec["id"]) ?? `index:${comments.indexOf(c)}`;
-        if (!text) continue;
-        noteTexts.push({
-          key: `beads-comment:${cid}`,
-          text,
-          author: str(rec["author"]),
-          createdAt: str(rec["created_at"]),
-        });
-      }
-    }
-    if (noteTexts.length === 0) continue;
-    if (!journal) {
-      for (const n of noteTexts) {
-        if (n.key.startsWith("beads-note:")) result.notesSkipped.push(beadsId);
-        else result.commentsSkipped.push(n.key);
-      }
-      continue;
-    }
-    const existing = new Set<string>();
-    for (const e of journal.listEntries(created.id, { kind: "note", limit: 10000 })) {
-      for (const ref of e.refs ?? []) {
-        if (ref.kind === "beads-history") existing.add(ref.key);
-      }
-    }
-    for (const n of noteTexts) {
-      if (existing.has(n.key)) {
-        if (n.key.startsWith("beads-note:")) result.notesSkipped.push(beadsId);
-        else result.commentsSkipped.push(n.key);
-        continue;
-      }
-      // XTRM-678: history longer than the summary limit is split into parts,
-      // never cut. Every part carries the same key, and the parts of one note
-      // are written in one transaction, so a rerun sees the whole note or none
-      // of it — never a stored prefix that the key-match would then skip.
-      const parts = splitForJournal(n.text);
-      journal.appendEntries(
-        created.id,
-        parts.map((part, i) => ({
-          kind: "note" as const,
-          participantId: "beads-import",
-          semantic: { summary: parts.length > 1 ? `[part ${i + 1}/${parts.length}] ${part}` : part },
-          refs: [
-            {
-              kind: "beads-history",
-              key: n.key,
-              value: { beadsIssue: beadsId, author: n.author, createdAt: n.createdAt, ...(parts.length > 1 ? { part: i + 1, parts: parts.length } : {}) },
-            },
-          ],
-        })),
-      );
-      existing.add(n.key);
-      // notesApplied counts issues with notes ingested (once per issue);
-      // commentsApplied counts ingested comment keys.
-      if (n.key.startsWith("beads-note:")) {
-        if (!result.notesApplied.includes(beadsId)) result.notesApplied.push(beadsId);
-      } else result.commentsApplied.push(n.key);
-    }
+    writeHistory(beadsId, created.id, r);
   }
 
   // Lifecycle after creation: closed beads rest as done, the rest stay open.

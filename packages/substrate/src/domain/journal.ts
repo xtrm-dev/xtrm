@@ -115,7 +115,8 @@ const RESULT_MAX_TEXT = 4000;
 // `semantic.summary` uses it: `sb journal append`, `sb issue note`, checkpoint
 // enrichment and the Pi `substrate_journal_append` tool (whose handler checks
 // this constant before the service checks it again). The Claude MCP append path
-// still cuts to RESULT_MAX_TEXT-sized previews and is step-12 work on the shared
+// is not covered: it cuts a longer summary to 2,000 characters with no marker and
+// has no summaryFile equivalent, and aligning it is step-12 work on the shared
 // tool surface (XTRM-724 part B).
 export const JOURNAL_SUMMARY_MAX = 20_000;
 const RESULT_MAX_ITEMS = 100;

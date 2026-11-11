@@ -173,7 +173,7 @@ populated where available.
 ## Manual metadata
 
 `--refs` binds explicit references (receipts, commits, PRs, external
-bindings) to an entry. Summary text is limited to 16,000 characters on the
+bindings) to an entry. Summary text is limited to 20,000 characters on the
 CLI and on the Pi `substrate_journal_append` tool; a longer summary fails and
 writes nothing (it is never cut). The CLI supplies long text with
 `--summary-file <path|->`, or you split it into several entries. Text views

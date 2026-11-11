@@ -13,6 +13,7 @@ import { JournalService } from "../src/service/journal-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { ClosureService } from "../src/service/closure-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
+import { JOURNAL_SUMMARY_MAX } from "../src/domain/journal.ts";
 import { runCli, SCHEMA_VERSION } from "../cli/sb.ts";
 import { contract } from "./helpers.ts";
 
@@ -376,6 +377,28 @@ describe("P1 §61 inbound external comment trust boundary", () => {
       s.svc.getRevision(issue.id, after.currentRevision).contract,
       s.svc.getRevision(issue.id, before.currentRevision).contract,
     );
+  });
+
+  it("cuts a comment above the limit with an explicit marker instead of storing it whole", () => {
+    const { issue } = readyIssue(s.svc, "commented-big");
+    const ix = new IntegrationService(s.db, s.svc);
+    // Untrusted text is host-generated for our purposes: it is cut with a
+    // marker naming what was dropped, never silently truncated (XTRM-678).
+    const body = `external reviewer line\n${"y".repeat(JOURNAL_SUMMARY_MAX)}`;
+    const { entry } = ix.receiveComment(issue.id, "github", {
+      remoteScope: "xtrm-dev/xtrm",
+      remoteId: "c-big",
+      remoteAuthor: "external-reviewer",
+      remoteTimestamp: 1_784_000_000_000,
+      body,
+    });
+    const summary = entry.semantic?.summary ?? "";
+    assert.ok(summary.length <= JOURNAL_SUMMARY_MAX, `stored text respects the limit (was ${summary.length})`);
+    const marker = /\n\[cut: (\d+) more chars of comment not stored\]$/.exec(summary);
+    assert.ok(marker, `stored text ends with the cut marker, got: …${summary.slice(-60)}`);
+    const dropped = body.length - (summary.length - marker![0].length);
+    assert.equal(Number(marker![1]), dropped, "the marker names exactly what was dropped");
+    assert.equal(body.slice(0, summary.indexOf("\n[cut:")), summary.slice(0, summary.indexOf("\n[cut:")), "the stored text is a prefix of the body");
   });
 
   it("rejects comment payloads missing the trust-boundary fields before any mutation", () => {
