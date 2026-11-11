@@ -141,6 +141,7 @@ export function evaluateReplay(set: ReplaySet, options: EvaluateOptions): EvalRe
     heldoutMeetsThreshold:
       heldoutMetrics.cases > 0 && heldoutMetrics.hitAt5 >= HELDOUT_HIT5_MIN && heldoutMetrics.hitAt10 >= HELDOUT_HIT10_MIN,
     weightsHash: currentHash,
+    weightsOverridden: set.weightsHash !== currentHash,
   };
 }
 

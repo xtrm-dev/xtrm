@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sb recall` and `sb recall-build`: a local SQLite FTS5 index over every project's
+  Substrate Journal, with pre-write secret scrubbing (including secrets under JSON
+  object keys), a systemd user oneshot timer, fail-open replies and an evaluation
+  harness (CORE-2595).
+
 ---
 
 ## [0.2.6] - 2026-11-06

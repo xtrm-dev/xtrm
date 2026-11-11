@@ -418,7 +418,8 @@ What it returns:
   Up to --limit hits (default 3, maximum 5), highest fixed-rerank score first.
   Each hit is at most 240 characters and cites ref#seq, the date, the kind,
   the authority level (0 checkpoint .. 3 decision; 4 is reserved for an
-  explicit operator ruling in R3), the project, and a superseded flag.
+  explicit operator ruling in R3), the project, and a superseded flag (reserved;
+  false until R3 adds supersession).
   Authority and recency are fixed weights, fixed before measurement; the
   current project (SUBSTRATE_PROJECT, when set) ranks higher.
   The reply always reports the index age and watermark age and sets

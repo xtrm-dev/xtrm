@@ -28,7 +28,8 @@
     ".claude-plugin/marketplace.json",
     "README.md",
     "CHANGELOG.md",
-    "contrib"
+    "contrib",
+    "scripts/install-recall-timer.sh"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

@@ -3,7 +3,7 @@
 #
 # Conditions:
 #   - The caller is an unprivileged user with a working systemd user session.
-#   - `sb` on PATH is version 0.2.7 or later and supports `recall-build`.
+#   - `sb` on PATH is version 0.2.6 or later and supports `recall-build`.
 #
 # Result:
 #   - ~/.config/systemd/user/substrate-recall-index.{service,timer} exist.
@@ -26,7 +26,7 @@ if [[ ! -x "${SB_BIN}" ]]; then
   exit 2
 fi
 if ! "${SB_BIN}" recall-build --help >/dev/null 2>&1; then
-  echo "error: ${SB_BIN} does not support recall-build (need sb >= 0.2.7)" >&2
+  echo "error: ${SB_BIN} does not support recall-build (need sb >= 0.2.6)" >&2
   exit 2
 fi
 

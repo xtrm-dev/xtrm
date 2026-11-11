@@ -5,7 +5,7 @@
 // source store is opened read-only; the raw journal text never leaves this
 // function unscrubbed.
 
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
 import { dirname } from "node:path";
 import { loadavg } from "node:os";
 import type { SubstrateDatabase } from "../store/database.ts";
@@ -19,7 +19,7 @@ import {
   defaultRecallIndexPath,
 } from "./constants.ts";
 import { ensureIndexSchema, isCompatibleState, readIndexState } from "./schema.ts";
-import { SCRUB_VERSION, scrubText } from "./scrub.ts";
+import { SCRUB_VERSION, scrubJsonValue, scrubText } from "./scrub.ts";
 import type { RecallBuildOptions, RecallBuildResult } from "./types.ts";
 
 export const JOURNAL_SOURCE = "substrate-journal";
@@ -112,12 +112,23 @@ export interface RecallDocument {
   scrubVersion: string;
 }
 
+function scrubJournalPart(raw: string | null): string {
+  if (raw === null || raw.trim() === "") return "";
+  let value: unknown = raw;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    // plain text part
+  }
+  return flattenJournalValue(scrubJsonValue(value));
+}
+
 export function journalDocument(row: JournalSourceRow): RecallDocument | null {
   const rawBody = [
-    flattenJournalValue(row.semantic_json),
-    flattenJournalValue(row.result_json),
-    flattenJournalValue(row.mechanical_json),
-    flattenJournalValue(row.refs_json),
+    scrubJournalPart(row.semantic_json),
+    scrubJournalPart(row.result_json),
+    scrubJournalPart(row.mechanical_json),
+    scrubJournalPart(row.refs_json),
   ]
     .filter((part) => part.trim() !== "")
     .join(" ")
@@ -154,12 +165,22 @@ interface LockHandle {
 }
 
 function acquireLock(lockPath: string, now: number): LockHandle | null {
+  const nonce = `${process.pid}:${now}:${Math.random().toString(36).slice(2)}`;
   const attempt = (): LockHandle | null => {
     try {
       const fd = openSync(lockPath, "wx", 0o600);
-      writeSync(fd, JSON.stringify({ pid: process.pid, startedAt: now }));
+      writeSync(fd, JSON.stringify({ pid: process.pid, startedAt: now, nonce }));
       closeSync(fd);
-      return { release: () => rmSync(lockPath, { force: true }) };
+      return {
+        release: () => {
+          try {
+            const held = JSON.parse(readFileSync(lockPath, "utf8")) as { nonce?: unknown };
+            if (held.nonce === nonce) rmSync(lockPath, { force: true });
+          } catch {
+            // a missing or replaced lock is not ours to delete
+          }
+        },
+      };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
       return null;
@@ -282,16 +303,30 @@ export function buildRecallIndex(options: RecallBuildOptions): RecallBuildResult
     return { ...empty, status: "skipped", reason: `locked${holder === null ? "" : ` by pid ${holder}`}` };
   }
 
-  const targetPath = options.rebuild ? `${indexPath}.tmp-${process.pid}` : indexPath;
+  let rebuild = options.rebuild === true;
+  let targetPath = rebuild ? `${indexPath}.tmp-${process.pid}` : indexPath;
   let index: SubstrateDatabase | null = null;
   let source: SubstrateDatabase | null = null;
   try {
-    if (options.rebuild) rmSync(targetPath, { force: true });
+    if (rebuild) rmSync(targetPath, { force: true });
     index = openBareSqlite(targetPath);
     index.exec("PRAGMA synchronous = NORMAL");
     ensureIndexSchema(index);
-    const previous = readIndexState(index);
-    const reset = options.rebuild === true || !isCompatibleState(previous);
+    let previous = readIndexState(index);
+    if (!rebuild && !isCompatibleState(previous)) {
+      // A schema or scrub change must not keep old text in freelist pages:
+      // rebuild into a fresh file and rename it over the old one.
+      index.close();
+      index = null;
+      rebuild = true;
+      targetPath = `${indexPath}.tmp-${process.pid}`;
+      rmSync(targetPath, { force: true });
+      index = openBareSqlite(targetPath);
+      index.exec("PRAGMA synchronous = NORMAL");
+      ensureIndexSchema(index);
+      previous = readIndexState(index);
+    }
+    const reset = rebuild || !isCompatibleState(previous);
     if (reset) clearIndex(index);
     let watermark = reset ? 0 : (previous?.watermark_ts ?? 0);
 
@@ -328,7 +363,8 @@ export function buildRecallIndex(options: RecallBuildOptions): RecallBuildResult
     source = null;
     index.close();
     index = null;
-    if (options.rebuild) renameSync(targetPath, indexPath);
+    if (rebuild) renameSync(targetPath, indexPath);
+    chmodSync(indexPath, 0o600);
     return {
       status: "built",
       reason: null,
@@ -351,7 +387,7 @@ export function buildRecallIndex(options: RecallBuildOptions): RecallBuildResult
     } catch {
       /* index close must not mask the build result */
     }
-    if (options.rebuild) rmSync(targetPath, { force: true });
+    if (rebuild) rmSync(targetPath, { force: true });
     lock.release();
   }
 }

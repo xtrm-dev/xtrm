@@ -11,4 +11,4 @@ Nice=10
 IOSchedulingClass=idle
 MemoryMax=150M
 TimeoutStartSec=15min
-ExecStart=@SB_BIN@ recall-build --load-gate
+ExecStart=@SB_BIN@ recall-build --load-gate 20

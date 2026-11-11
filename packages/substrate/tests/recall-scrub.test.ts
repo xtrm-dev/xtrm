@@ -104,6 +104,9 @@ describe("recall scrub: seeded secret shapes", () => {
     assert.equal(isSensitiveName("ANTHROPIC_API_KEY"), true);
     assert.equal(isSensitiveName("apiKey"), true);
     assert.equal(isSensitiveName("client-secret"), true);
+    assert.equal(isSensitiveName("keyDecisions"), false);
+    assert.equal(isSensitiveName("key_facts"), false);
+    assert.equal(isSensitiveName("secrets_files"), false);
     assert.equal(isSensitiveName("keyboard"), false);
     assert.equal(isSensitiveName("monkey"), false);
     assert.equal(isHighEntropySecret("7Qm2Zp4Xr6Tv8Yb0Nc1Ld3Hf5Jg7Kk9"), true);

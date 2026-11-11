@@ -154,7 +154,11 @@ function nameSegments(name: string): string[] {
 }
 
 export function isSensitiveName(name: string): boolean {
-  return nameSegments(name).some((part) => SENSITIVE_SEGMENTS.has(part));
+  // The LAST segment carries the noun's meaning: apiKey/DB_SECRET are
+  // sensitive, while keyDecisions, key_facts and secrets_files are metadata
+  // collections that happen to start with a sensitive word.
+  const parts = nameSegments(name);
+  return parts.length > 0 && SENSITIVE_SEGMENTS.has(parts[parts.length - 1]!);
 }
 
 const PLACEHOLDER_VALUE =
@@ -335,6 +339,37 @@ export function scanSecrets(input: string): SecretFinding[] {
   return findings;
 }
 
-const REVISION_SOURCE = SHAPE_RULES.map((rule) => `${rule.id}:${rule.pattern.source}:${rule.pattern.flags}`).join("\n");
+// The structured-JSON policy changes what is redacted, so it is part of the
+// revision: an index built before it must be rebuilt, not reused.
+const REVISION_SOURCE = `${SHAPE_RULES.map((rule) => `${rule.id}:${rule.pattern.source}:${rule.pattern.flags}`).join("\n")}\npolicy:structured-json-v2`;
+/**
+ * Scrub a parsed journal payload recursively. Object keys are the context that
+ * name-value rules need: flattening first drops them, so {"password":"x"}
+ * would otherwise store x verbatim. Keys are used for matching, never emitted.
+ */
+export function scrubJsonValue(value: unknown, depth = 0): unknown {
+  if (depth > 30) return "[REDACTED:depth]";
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        return scrubJsonValue(JSON.parse(trimmed), depth + 1);
+      } catch {
+        // not JSON: fall through to text scrubbing
+      }
+    }
+    return scrubText(value).text;
+  }
+  if (Array.isArray(value)) return value.map((item) => scrubJsonValue(item, depth + 1));
+  if (value !== null && typeof value === "object") {
+    const output: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      output[key] = isSensitiveName(key) && typeof item === "string" ? "[REDACTED:value]" : scrubJsonValue(item, depth + 1);
+    }
+    return output;
+  }
+  return value;
+}
+
 export const SCRUB_VERSION = `scrub-${createHash("sha256").update(REVISION_SOURCE).digest("hex").slice(0, 12)}`;
 export const SCRUB_RULE_IDS = SHAPE_RULES.map((rule) => rule.id);

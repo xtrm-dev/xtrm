@@ -115,6 +115,7 @@ if (args.json) {
 } else {
   console.log(`replay set: ${args.set}`);
   console.log(`weights: ${report.weightsHash}`);
+  if (report.weightsOverridden) console.log("WARNING: --allow-weight-change overrode the frozen set; this run is not a held-out measurement");
   for (const result of filterBySplit(report.results, args.split)) {
     console.log(`  ${String(result.rank ?? "miss").padStart(4)}  ${result.split.padEnd(7)}  #${result.id}  ${result.name}`);
   }

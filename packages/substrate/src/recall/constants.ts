@@ -37,7 +37,8 @@ export const BODY_MAX_CHARS = 4096;
 
 /** The timer runs every five minutes; three missed cycles mean stale. */
 export const STALE_AFTER_MS = 15 * 60 * 1000;
-export const LOCK_STALE_MS = 10 * 60 * 1000;
+// The systemd unit allows 15 minutes; a live build must not be stealable inside it.
+export const LOCK_STALE_MS = 20 * 60 * 1000;
 
 export const MIN_LOAD_GATE = 4;
 export const LOAD_GATE_PER_CPU = 2;

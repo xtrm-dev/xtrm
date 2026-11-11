@@ -27,6 +27,32 @@ describe("recall indexer: build, watermark, lock, load gate", () => {
   });
   afterEach(() => store.cleanup());
 
+  it("scrubs secrets under JSON keys before flattening and never writes them", () => {
+    const secrets = ["correct-horse-battery-staple", "nested-token-value-123", "array-secret-value-456"];
+    appendFixtureEntry(store, {
+      ref: "CORE-101",
+      seq: 1,
+      kind: "result",
+      semantic: {
+        password: secrets[0]!,
+        nested: { token: secrets[1]! },
+        list: [{ secret: secrets[2]! }],
+      },
+      result: { summary: "credentials handling verified" },
+    });
+    const build = buildRecallIndex({ storePath: store.storePath, indexPath: store.indexPath, loadGate: 0 });
+    assert.equal(build.status, "built");
+    const db = new DatabaseSync(store.indexPath, { readOnly: true });
+    const body = String(
+      db.prepare("SELECT d.body FROM docs d JOIN meta m ON m.doc_id = d.rowid WHERE m.ref = ? AND m.seq = ?").get("CORE-101", 1)?.["body"] ?? "",
+    );
+    db.close();
+    for (const secret of secrets) assert.equal(body.includes(secret), false, `body leaked ${secret}`);
+    assert.match(body, /\[REDACTED:value\]/);
+    const bytes = readFileSync(store.indexPath).toString("latin1");
+    for (const secret of secrets) assert.equal(bytes.includes(secret), false, `index bytes leaked ${secret}`);
+  });
+
   it("builds every journal row and records the watermark", () => {
     const build = buildRecallIndex({ storePath: store.storePath, indexPath: store.indexPath, loadGate: 0 });
     assert.equal(build.status, "built");

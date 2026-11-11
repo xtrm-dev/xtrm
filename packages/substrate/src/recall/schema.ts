@@ -88,6 +88,7 @@ function missingStatus(path: string): RecallIndexStatus {
     docCount: null,
     scrubVersion: null,
     compatible: false,
+    failure: "missing",
   };
 }
 
@@ -107,6 +108,7 @@ export function readIndexStatus(path: string, now = Date.now()): RecallIndexStat
     // meaningless, so report absence instead of a 55-year-old watermark.
     const watermark = state.watermark_ts > 0 ? state.watermark_ts : null;
     const watermarkAgeMs = watermark === null ? null : Math.max(0, now - watermark);
+    const compatible = isCompatibleState(state);
     return {
       path,
       exists: true,
@@ -117,10 +119,12 @@ export function readIndexStatus(path: string, now = Date.now()): RecallIndexStat
       stale: ageMs > STALE_AFTER_MS,
       docCount: state.doc_count,
       scrubVersion: state.scrub_version,
-      compatible: isCompatibleState(state),
+      compatible,
+      failure: compatible ? undefined : "incompatible",
     };
   } catch {
-    return { ...missingStatus(path), exists: true };
+    const lockPath = `${path}.lock`;
+    return { ...missingStatus(path), exists: true, failure: existsSync(lockPath) ? "locked" : "corrupt" };
   } finally {
     try {
       db?.close();

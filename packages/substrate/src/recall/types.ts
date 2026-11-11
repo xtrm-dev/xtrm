@@ -14,6 +14,8 @@ export interface RecallIndexStatus {
   scrubVersion: string | null;
   /** False when the stored schema or scrub revision cannot answer safely. */
   compatible: boolean;
+  /** Why the index cannot answer; drives the fail-open note. */
+  failure?: "missing" | "corrupt" | "locked" | "incompatible";
 }
 
 export type RecallSource = "substrate-journal";
@@ -137,4 +139,6 @@ export interface EvalReport {
   results: EvalCaseResult[];
   heldoutMeetsThreshold: boolean;
   weightsHash: string;
+  /** True only when --allow-weight-change overrode a frozen set. */
+  weightsOverridden: boolean;
 }

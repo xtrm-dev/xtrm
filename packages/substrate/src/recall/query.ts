@@ -180,6 +180,8 @@ export function recall(options: RecallQueryOptions): RecallResult {
     return emptyResult(options.terms, status, "recall index not built yet; run `sb recall-build` once or enable the timer");
   }
   if (!status.compatible) {
+    if (status.failure === "locked") return emptyResult(options.terms, status, "recall index is busy; retry after the current build finishes");
+    if (status.failure === "corrupt") return emptyResult(options.terms, status, "recall index is unreadable; run `sb recall-build --rebuild`");
     return emptyResult(options.terms, status, "recall index needs a rebuild (schema or scrub rules changed); run `sb recall-build --rebuild`");
   }
   const tokens = queryTokens(options.terms);
