@@ -128,11 +128,16 @@ export function parseAllTrailers(message: string): AllTrailers {
   const receipts: string[] = [];
   let current: TrailerIssue | null = null;
   for (const line of message.split("\n")) {
-    const m = /^([A-Za-z-]+):\s*(.+?)\s*$/.exec(line);
+    const m = /^([A-Za-z-]+):\s*(.*?)\s*$/.exec(line);
     if (!m) continue;
     if (m[1] === TRAILER_ISSUE) {
       const issueId = m[2]!.trim();
-      if (issueId === "") continue;
+      // An empty issue line is a reset: a following revision attaches to
+      // nothing, never to the previous issue.
+      if (issueId === "") {
+        current = null;
+        continue;
+      }
       current = { issueId, issueRevision: null };
       raw.push(current);
     } else if (m[1] === TRAILER_REVISION) {
