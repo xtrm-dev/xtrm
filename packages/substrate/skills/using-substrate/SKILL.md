@@ -139,9 +139,10 @@ sb provenance attach <ref> pr <owner/repo#n|url|#n> [--receipt <id>]
 
 ### Close gate
 
-`sb issue close` and `sb issue state <ref> done` join the stored rows before the closure:
-T1 (a live `created_from` PR artifact on the receipt) or T2 (a `created_from` trailer plus
-linked commits). Mode comes from `--link-gate`, then `XTRM_LINK_GATE`, then `warn`:
+A delivery close — `sb issue close --outcome completed`, or `sb issue state <ref> done` —
+joins the stored rows before the closure: T1 (a live `created_from` PR artifact on the
+receipt) or T2 (a `created_from` trailer plus linked commits). Mode comes from `--link-gate`,
+then `XTRM_LINK_GATE`, then `warn`:
 `enforce` refuses, `warn` appends `provenance.link_gate_warned` and proceeds, `off` skips.
 Codes: `gate_orphan_link`, `gate_mentioned_only`, `gate_no_evidence`,
 `gate_pr_not_merged`, `gate_other_open_pr`, `gate_live_claim`,
