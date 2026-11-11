@@ -1,0 +1,218 @@
+{
+  "v": 2,
+  "name": "recall-case-author",
+  "schemas": {
+    "Target": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "date": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 40
+        }
+      },
+      "required": [
+        "ref",
+        "seq",
+        "date",
+        "project",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "Input": {
+      "type": "object",
+      "properties": {
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 30,
+          "items": {
+            "$ref": "#/definitions/Target"
+          }
+        }
+      },
+      "required": [
+        "targets"
+      ],
+      "additionalProperties": false
+    },
+    "Question": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "additionalProperties": false
+    },
+    "CaseCheck": {
+      "type": "object",
+      "properties": {
+        "answers": {
+          "type": "boolean",
+          "description": "The question is a search a coding agent typed to find a recorded fact. The entry is one journal entry from the project's work log. Does this entry itself state the fact the question asks for, so that an agent who found this entry would have its answer without reading anything else?"
+        },
+        "standalone": {
+          "type": "boolean",
+          "description": "Could a coding agent who has never read this entry, but works on the same project, plausibly type this question? Answer no if the question depends on wording, identifiers or details that only someone who had already read the entry would know."
+        }
+      },
+      "required": [
+        "answers",
+        "standalone"
+      ],
+      "additionalProperties": false
+    },
+    "Case": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "question": {
+          "type": "string"
+        },
+        "copied_trigrams": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "answers_p": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "standalone_p": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "accepted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ref",
+        "seq",
+        "question",
+        "copied_trigrams",
+        "answers_p",
+        "standalone_p",
+        "accepted"
+      ],
+      "additionalProperties": false
+    },
+    "Output": {
+      "type": "object",
+      "properties": {
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Case"
+          }
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "cases",
+        "failed"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "input": {
+    "schemaId": "Input"
+  },
+  "output": {
+    "schemaId": "Output",
+    "path": "result"
+  },
+  "root": {
+    "node": "chain",
+    "steps": [
+      {
+        "node": "map",
+        "label": "author-each-case",
+        "itemsPath": "targets",
+        "as": "cases",
+        "resultPath": "case",
+        "maxConcurrency": 4,
+        "onItemFailure": "collect",
+        "failedAs": "caseFailures",
+        "body": {
+          "node": "chain",
+          "steps": [
+            {
+              "node": "agent",
+              "label": "write-question",
+              "instructions": "You see one entry from a project's work journal. Write the search a coding agent would type into a project-memory search tool when it needs the fact this entry records but has not read the entry. Write it the way an agent asks mid-task: a short question or keyword phrase, at most 14 words. Do not copy any run of three or more words from the entry. Do not include issue refs, sequence numbers, dates, commit SHAs, PR numbers or other identifiers unless an agent who had not read the entry would already know them. Ask about the decision, result or fact, not about the entry.",
+              "state": {
+                "entry": "{item.text}",
+                "project": "{item.project}"
+              },
+              "requires": [
+                "item.text"
+              ],
+              "tools": [],
+              "out": "Question",
+              "as": "q"
+            },
+            {
+              "node": "judge",
+              "label": "check-case",
+              "state": {
+                "question": "{q.question}",
+                "entry": "{item.text}"
+              },
+              "requires": [
+                "q.question"
+              ],
+              "out": "CaseCheck",
+              "as": "chk"
+            },
+            {
+              "node": "code",
+              "label": "gate-case",
+              "as": "case",
+              "code": "(s) => { const words = (x) => String(x).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean); const t = words(s.item.text); const q = words(s.q.question); const tri = new Set(); for (let i = 0; i + 2 < t.length; i++) tri.add(t[i] + ' ' + t[i + 1] + ' ' + t[i + 2]); let copied = 0; for (let i = 0; i + 2 < q.length; i++) if (tri.has(q[i] + ' ' + q[i + 1] + ' ' + q[i + 2])) copied++; const a = (s['chk$answers'] && s['chk$answers'].answers) || {}; const num = (p) => (typeof p === 'number' && Number.isFinite(p) && p >= 0 && p <= 1) ? p : null; const pa = num(a.answers && a.answers.noul); const ps = num(a.standalone && a.standalone.noul); const ok = (p) => p !== null && p >= 0.8; return { ref: s.item.ref, seq: s.item.seq, question: s.q.question, copied_trigrams: copied, answers_p: pa, standalone_p: ps, accepted: copied === 0 && ok(pa) && ok(ps) }; }"
+            }
+          ]
+        }
+      },
+      {
+        "node": "code",
+        "label": "assemble",
+        "as": "result",
+        "code": "(s) => ({ cases: (s.cases || []).filter(Boolean), failed: (s.caseFailures || []).length })"
+      }
+    ]
+  }
+}
