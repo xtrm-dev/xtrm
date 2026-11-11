@@ -38,6 +38,7 @@ import {
   type ClosureOutcome,
 } from "../domain/closure.ts";
 import type { IssueService } from "./issue-service.ts";
+import { LinkGateService, type GateMode } from "./link-gate-service.ts";
 import { TERMINAL_STATES } from "../domain/issue.ts";
 
 interface Row {
@@ -61,6 +62,8 @@ export interface CloseIssueInput {
   journalResultRefs?: string[];
   receiptRefs?: string[];
   artifactRefs?: string[];
+  linkGate?: GateMode;
+  gateOverride?: string;
   now?: number;
 }
 
@@ -106,9 +109,12 @@ export class ClosureService {
   private readonly db: DatabaseSync;
   private readonly issues: IssueService;
 
-  constructor(db: DatabaseSync, issues: IssueService) {
+  private readonly gate: LinkGateService;
+
+  constructor(db: DatabaseSync, issues: IssueService, gate?: LinkGateService) {
     this.db = db;
     this.issues = issues;
+    this.gate = gate ?? new LinkGateService(db, issues);
   }
 
   // -- close (canonical: sb issue close <ref> --outcome <o> --reason <r>) ---
@@ -166,6 +172,16 @@ export class ClosureService {
     }
     if ((TERMINAL_STATES as readonly string[]).includes(issue.lifecycleState)) {
       throw new Error(`already terminal: ${issueId} is ${issue.lifecycleState}; reopen before closing again (history is immutable)`);
+    }
+    if (kind === "close") {
+      // Before any closure row: warn (event, proceed), enforce (throw, write
+      // nothing) or off. The override writes its Journal decision here too.
+      this.gate.enforce(issueId, {
+        mode: input.linkGate,
+        override: input.gateOverride ?? null,
+        actor: input.actor,
+        now: input.now,
+      });
     }
     // XTRM-447: closure identity passes through the SAME canonical write seam
     // as the journal (XTRM-412) — canonicalise, then fail closed before any row

@@ -115,6 +115,11 @@ idempotency key, so a retried mutation may run twice.
   generation first.
 - `issue state <ref> <open|deferred|done|cancelled|archived>` — set the
   lifecycle state; every transition emits a durable event.
+- `issue close <ref> [--outcome ... --reason ...] [--link-gate warn|enforce|off] [--gate-override <reason>]` —
+  the close gate reads T1/T2 links; warn (default) records
+  `provenance.link_gate_warned` and proceeds, enforce refuses with
+  `gate_*` codes, off skips; an override is a reason that writes a Journal
+  decision. The same gate covers the bare close and `state done`.
 - `issue close|reopen|cancel|archive <ref>` — lifecycle aliases:
   `issue close` (= state `done`), `issue reopen` (= `open`),
   `issue cancel` (= `cancelled`), `issue archive` (= `archived`);
@@ -263,7 +268,8 @@ claim-gated edit/write `tool_call` gate.
   (trailer first), then title, branch and body become `mentioned` with their
   source; a merged PR lands `issue_pr_commits.landed_sha`; `--since` scans
   history and records `source=backfill`; `--dry-run` writes nothing.
-- `links check [--project <id>] [--repo owner/name] [--limit <n>] [--dry-run]` —
+- `links check [--issue <ref>] [--project <id>] [--repo owner/name] [--limit <n>] [--dry-run] [--link-gate warn|enforce|off]` —
+  `--issue` prints the manual and auto gate verdicts and codes; otherwise a
   read-only T2 candidate scan: pull-request commits whose `XTRM-Issue` trailer
   names an Issue in the current Project, read through `gh`. It writes no rows.
   `created_from` versus `mentioned`, the tables and the close gate are

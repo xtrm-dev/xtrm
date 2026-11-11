@@ -317,6 +317,9 @@ export class PullRequestSyncService {
       .all(repository, number) as Array<{ issue_id: string }>;
     report.findings.push({ repository, number, code, detail });
     if (!write) return;
+    // A PR-level finding with no linked issue still counts: it is a real
+    // finding, it only has no event row to hang on yet.
+    if (linked.length === 0) report.findingCount += 1;
     for (const row of linked) {
       const duplicate = this.db
         .prepare(

@@ -47,6 +47,7 @@ import { resolveClaimHolder } from "../src/domain/claim.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
+import { LinkGateService, gateModeFromEnv } from "../src/service/link-gate-service.ts";
 import { GhCliPullRequestSource, PullRequestSyncService } from "../src/service/pull-request-sync-service.ts";
 import { canonicalPullReference, pullUrl, type IssuePullRequestView } from "../src/domain/pull-request.ts";
 import { parseAllTrailers } from "../src/domain/provenance.ts";
@@ -1120,9 +1121,40 @@ function runLinks(
     if (ctx.json) return emit(ctx, command, report);
     const lines = [
       `LINKS SYNC — ${report.repositories} repo(s) · ${report.scanned} PR(s) · ${report.dryRun ? "dry run" : "written"}`,
-      `created_from ${report.created} · mentioned ${report.mentioned} · findings ${report.findings.length} · skipped ${report.skipped} · failures ${report.failures} · truncated ${report.truncated}`,
+      `created_from ${report.created} · mentioned ${report.mentioned} · findings ${report.findingCount} · skipped ${report.skipped} · failures ${report.failures} · truncated ${report.truncated}`,
     ];
     return { code: report.failures > 0 && report.repositories === report.failures ? 1 : 0, stdout: lines.join("\n") + "\n", stderr: "" };
+  }
+
+  const gate = new LinkGateService(db, svc);
+  const gateMode = gateModeFromEnv(flag(flags, "link-gate"));
+  const issueFlag = flag(flags, "issue");
+  const issuesWithLinks = issueFlag !== undefined
+    ? [svc.resolveRef(issueFlag)]
+    : (db
+        .prepare(
+          `SELECT DISTINCT i.id FROM issue_pull_requests l JOIN issues i ON i.id = l.issue_id
+            WHERE i.project_id = ? AND l.superseded_at IS NULL LIMIT ?`,
+        )
+        .all(resolved.projectId, limit) as unknown as Array<{ id: string }>).map((r) => ({ id: r.id, humanRef: svc.getIssue(r.id).humanRef }));
+  const verdicts = issuesWithLinks.map((issue) => ({
+    issue: issue.humanRef,
+    manual: gate.evaluate(issue.id, { mode: "manual" }),
+    auto: gate.evaluate(issue.id, { mode: "auto" }),
+  }));
+  if (issueFlag !== undefined) {
+    const payload = { issue: verdicts[0], gateMode };
+    if (ctx.json) return emit(ctx, command, payload);
+    const v = verdicts[0]!;
+    return {
+      code: gateMode === "enforce" && v.manual.verdict !== "pass" ? 1 : 0,
+      stdout: [
+        `LINKS CHECK — ${v.issue}`,
+        `manual: ${v.manual.verdict}${v.manual.codes.length ? " " + v.manual.codes.join(", ") : ""}`,
+        `auto:   ${v.auto.verdict}${v.auto.codes.length ? " " + v.auto.codes.join(", ") : ""}`,
+      ].join("\n") + "\n",
+      stderr: "",
+    };
   }
 
   if (repo === undefined) throw new Error("--repo <owner/name> is required");
@@ -1165,6 +1197,8 @@ function runLinks(
     scanned: prs.length,
     candidates,
     findings,
+    gateMode,
+    verdicts: verdicts.map((v) => ({ issue: v.issue, manual: v.manual.verdict, manualCodes: v.manual.codes, auto: v.auto.verdict, autoCodes: v.auto.codes })),
   };
   if (ctx.json) return emit(ctx, command, payload);
   const lines = [`LINKS CHECK — ${repo} · ${prs.length} PR(s) scanned · ${dryRun ? "dry run" : "read-only"}`];
@@ -1178,8 +1212,12 @@ function runLinks(
     lines.push("", "findings (provenance.link_finding):");
     for (const f of findings) lines.push(`- ${f.code}  ${f.repository ?? ""}#${f.number ?? ""}  ${(f.sha ?? "").slice(0, 12)}  ${f.detail ?? ""}`);
   }
+  for (const v of verdicts) {
+    lines.push(`- ${v.issue}  manual=${v.manual.verdict}${v.manual.codes.length ? "(" + v.manual.codes.join(",") + ")" : ""}  auto=${v.auto.verdict}${v.auto.codes.length ? "(" + v.auto.codes.join(",") + ")" : ""}`);
+  }
   lines.push("read-only: no rows written");
-  return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
+  const refused = verdicts.some((v) => v.manual.verdict !== "pass");
+  return { code: gateMode === "enforce" && refused ? 1 : 0, stdout: lines.join("\n") + "\n", stderr: "" };
 }
 
 // -- entry -------------------------------------------------------------------
@@ -1208,7 +1246,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.unrelate": ["project", "from", "to", "kind"],
   "issue.claim": ["project", "holder", "ttl-ms", "activation"],
   "issue.release": ["project", "holder", "activation"],
-  "issue.close": ["project", "outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact"],
+  "issue.close": ["project", "outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact", "link-gate", "gate-override"],
   "issue.state": ["project", "until"],
   "issue.reopen": ["project", "reason", "actor", "participant", "run", "activation", "attempt"],
   "issue.defer": ["project", "until"],
@@ -1236,7 +1274,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "provenance.allocate": ["project", "checkpoint"],
   "provenance.bind": [],
   "provenance.trace": [],
-  "links.check": ["project", "repo", "limit", "dry-run"],
+  "links.check": ["project", "repo", "limit", "dry-run", "issue", "link-gate"],
   "links.sync": ["project", "repo", "limit", "since", "dry-run", "holder"],
   "provenance.commit": [],
   "provenance.receipt": [],
@@ -1886,6 +1924,13 @@ function runIssue(
         throw new Error(`unknown lifecycle state: ${rest[1]} (want open|deferred|done|cancelled|archived)`);
       }
       const resolved = refInContext(svc, flags, ref);
+      if (to === "done") {
+        new LinkGateService(db, svc).enforce(resolved.id, {
+          mode: (flag(flags, "link-gate") as never) ?? undefined,
+          override: flag(flags, "gate-override") ?? null,
+          actor: flag(flags, "actor") ?? "sb-cli",
+        });
+      }
       const moved = svc.setLifecycleState(resolved.id, to as (typeof STATES)[number]);
       applyDeferUntil(svc, moved.id, flag(flags, "until"));
       return emit(ctx, command, issueSummary(svc.getIssue(moved.id)));
@@ -1899,6 +1944,11 @@ function runIssue(
       const ref = needRef(rest);
       const resolved = refInContext(svc, flags, ref);
       if (!hasClosureFlags(flags)) {
+        new LinkGateService(db, svc).enforce(resolved.id, {
+          mode: (flag(flags, "link-gate") as never) ?? undefined,
+          override: flag(flags, "gate-override") ?? null,
+          actor: flag(flags, "actor") ?? "sb-cli",
+        });
         const closed = svc.setLifecycleState(resolved.id, "done");
         return emit(ctx, command, issueSummary(closed));
       }
@@ -1915,6 +1965,8 @@ function runIssue(
         journalResultRefs: splitList(flagList(flags, "result")),
         receiptRefs: splitList(flagList(flags, "receipt")),
         artifactRefs: splitList(flagList(flags, "artifact")),
+        linkGate: (flag(flags, "link-gate") as never) ?? undefined,
+        gateOverride: flag(flags, "gate-override") ?? undefined,
       });
       return emit(ctx, command, { ...issueSummary(svc.getIssue(resolved.id)), closure: closurePayload(closure) });
     }
