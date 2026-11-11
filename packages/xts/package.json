@@ -18,11 +18,14 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^1.0.0",
-    "@earendil-works/pi-tui": "^1.0.0"
+    "@earendil-works/pi-coding-agent": "^1.5.2",
+    "@earendil-works/pi-tui": "^1.5.2"
   },
   "license": "MIT",
   "publishConfig": {
     "access": "restricted"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-schema": "^1.5.2"
   }
 }

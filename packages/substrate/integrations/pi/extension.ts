@@ -11,7 +11,10 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Type, type Usage } from "@earendil-works/pi-ai";
+import type { Usage } from "@earendil-works/pi-ai";
+// pi-ai no longer re-exports TypeBox; pi 1.5 validates tool arguments with
+// pi-schema, so the schema is built with the TypeBox package pi bundles.
+import { Type } from "typebox";
 import {
   convertToLlm,
   defineTool,

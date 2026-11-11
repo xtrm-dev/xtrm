@@ -1,8 +1,9 @@
-# xtrm-tui reuse map — Pi 1.3.0 (spike, TUI-SPIKE-1/2 reduced)
+# xtrm-tui reuse map — Pi 1.5.2 (spike, TUI-SPIKE-1/2 reduced)
 
-Source: `/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-works/pi-coding-agent`
-(`@earendil-works/pi-coding-agent 1.3.0`), pi-tui bundled at the same version
-(verified in `packages/xtrm-tui/node_modules`, single deduped `pi-tui@1.3.0`).
+Source: `@earendil-works/pi-coding-agent 1.5.2`, pi-tui bundled at the same
+version (verified in `packages/xtrm-tui/node_modules`, single deduped
+`pi-tui@1.5.2`). Written against 1.3.0 and revalidated on 1.5.2 (XTRM-743):
+every surface below is still exported with the same shape.
 
 ## Runtime / session (all DEPEND — public SDK)
 
@@ -16,7 +17,7 @@ Source: `/home/dawid/.nvm/versions/node/v24.15.0/lib/node_modules/@earendil-work
 | `DefaultResourceLoader` | public export | DEPEND — standard discovery, no parallel system |
 | `getAgentDir` | public export (used by example 13) | DEPEND |
 
-## Interactive components (all present in 1.3.0 `dist/modes/interactive/components/`)
+## Interactive components (all present in 1.5.2 `dist/modes/interactive/components/`)
 
 | Component | File | Disposition |
 |---|---|---|
