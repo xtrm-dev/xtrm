@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readArgv, resolveSbBin, writeArgv } from "./substrate-cli.ts";
+import { interpretJournalProbe, readArgv, resolveSbBin, writeArgv } from "./substrate-cli.ts";
 
 const q = (s: string) => new URLSearchParams(s);
 
@@ -39,6 +39,17 @@ describe("substrate CLI bridge reads", () => {
     expect(readArgv("/journal", q("ref=XTRM-1&limit=20"))).toEqual(["journal", "show", "XTRM-1", "--limit", "20"]);
     expect(readArgv("/journal", q("ref=XTRM-1&tail=200"))).toEqual(["journal", "show", "XTRM-1", "--tail", "200"]);
     expect(readArgv("/journal", q("ref=XTRM-1&before=900&limit=200"))).toEqual(["journal", "show", "XTRM-1", "--before", "900", "--limit", "200"]);
+  });
+
+  it("downgrades only on an unknown-flag failure, never on another error", () => {
+    const envelope = (ok: boolean, extra: string) => `{"schema":"substrate-cli/v1","command":"journal.show","ok":${ok}${extra}}`;
+    expect(interpretJournalProbe(envelope(false, ',"error":"unknown flag --tail for `journal.show` (see usage)"'))).toBe(false);
+    // The flag was accepted; the run failed later for another reason.
+    expect(interpretJournalProbe(envelope(false, ',"error":"unresolvable ref: XTRM-9"'))).toBe(true);
+    expect(interpretJournalProbe(envelope(true, ',"data":[]'))).toBe(true);
+    // The binary never ran, so the probe proves nothing and must not be cached.
+    expect(interpretJournalProbe('{"ok":false,"error":"sb failed (bin=/missing/sb): spawn ENOENT"}')).toBeNull();
+    expect(interpretJournalProbe("not json at all")).toBeNull();
   });
 
   it("bounds the paged journal read and keeps the per-page ceiling", () => {

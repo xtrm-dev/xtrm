@@ -373,6 +373,9 @@ export interface JournalIdentity {
   runId: string | null;
 }
 
+/** Which journal read the backend actually served: paged, or one legacy ascending read. */
+export type JournalPaging = "cursor" | "legacy";
+
 export interface JournalEntry {
   id: string;
   sequence: number;
@@ -498,6 +501,8 @@ export interface IssueDetail extends IssueSummary {
   journal: JournalEntry[];
   /** Set when the journal read itself failed, so the tab can say so instead of looking empty. */
   journalError?: string | null;
+  /** `legacy` means the loaded entries are an ascending read that cannot page further. */
+  journalPaging?: JournalPaging | null;
   /** Entries Substrate holds; greater than `journal.length` when the read was capped. */
   journalTotal: number;
   provenance: ProvenanceSummary;

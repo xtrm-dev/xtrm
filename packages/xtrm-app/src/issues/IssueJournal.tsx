@@ -185,10 +185,10 @@ export function JournalTab({
   }, [issue.journal, older]);
   const oldest = entries.length > 0 ? entries[entries.length - 1]!.sequence : 0;
   const missing = Math.max(0, issue.journalTotal - entries.length);
-  // A newest-first page starts above sequence 1 whenever the journal is bigger
-  // than one page; an ascending read starts exactly at 1. That is the only
-  // observable difference, and it decides whether paging can continue.
-  const legacyRead = missing > 0 && oldest === 1;
+  // The bridge names the mode it served. Without that signal (fixtures, an older
+  // bridge) a newest-first page starts above sequence 1 whenever the journal is
+  // bigger than one page, while an ascending read starts exactly at 1.
+  const legacyRead = missing > 0 && (issue.journalPaging === "legacy" || (issue.journalPaging == null && oldest === 1));
   const index = focusSequence == null ? -1 : entries.findIndex((j) => j.sequence === focusSequence);
   const shown = Math.max(visible, index + 1);
 
@@ -276,7 +276,7 @@ export function JournalTab({
                 {loadingOlder ? "Loading older entries…" : `Load ${Math.min(JOURNAL_PAGE * 4, missing)} older`}
               </button>
             )}
-            {legacyRead && <span>Unread entries 1–{entries.length} of {issue.journalTotal}; paging needs substrate 0.3.1 or newer.</span>}
+            {legacyRead && <span role="status">Showing the oldest {entries.length} of {issue.journalTotal} entries; paging needs substrate 0.3.1 or newer.</span>}
             {pagingError && <span role="alert" className="text-danger">could not load older entries: {pagingError}</span>}
           </div>
         </>

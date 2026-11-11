@@ -51,6 +51,12 @@ describe("journal paging", () => {
     expect(screen.getByText(/Showing 50 of 2500 entries/)).toBeTruthy();
   });
 
+  it("trusts the backend's legacy mode even when the read looks pageable", () => {
+    renderTab({ ...issue(page(1, 100), 900), journalPaging: "legacy" } as IssueDetail, () => Promise.resolve([]));
+    expect(screen.getByRole("status").textContent).toContain("Showing the oldest 100 of 900 entries");
+    expect(screen.queryByRole("button", { name: /Load \d+ older/ })).toBeNull();
+  });
+
   it("reports a failed journal read instead of looking empty", () => {
     renderTab({ ...issue([], 12), journalError: "substrate bridge returned 500" } as IssueDetail);
     const status = screen.getByRole("status");

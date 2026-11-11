@@ -25,6 +25,20 @@ const NOTE_KINDS = new Set(["note", "finding", "decision", "blocker", "milestone
 const SCRUTINY = new Set(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
 const TTL_MS = 5_000;
 const MAX_TEXT = 200_000;
+/**
+ * What a probe of `journal show --tail` proves. `false` only when the CLI names
+ * the flag as unknown — a locked DB, an unknown ref or a missing binary must
+ * not downgrade the console for its whole lifetime.
+ */
+export function interpretJournalProbe(body: string): boolean | null {
+  if (/unknown flag --tail/.test(body)) return false;
+  if (/"schema"\s*:\s*"substrate-cli\/v1"/.test(body)) return true;
+  return null;
+}
+
+/** A downgrade is re-probed after this long, so an sb upgrade needs no restart. */
+export const JOURNAL_PROBE_MS = 10 * 60_000;
+
 /** Per-page ceiling for the journal read, paged or not. */
 const JOURNAL_PAGE_MAX = 2000;
 /** What a legacy CLI returns in one read; the fallback matches the old tab. */
@@ -222,14 +236,16 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
   const prefix = opts.prefix ?? "/xtrm-api/substrate";
   // ponytail: in-process TTL cache cleared on every write; a real host needs a shared read model + change feed (XTRM-393).
   const cache = new Map<string, { at: number; value: Promise<{ status: number; body: string }> }>();
-  let pagingSupport: boolean | null = null;
-  // Unknown flags are reported before argument validation, so this probe needs
-  // no real ref. One probe per process; the answer cannot change at runtime.
-  const journalPaging = async (): Promise<boolean> => {
-    if (pagingSupport !== null) return pagingSupport;
+  let pagingSupport: { value: boolean; at: number } | null = null;
+  // Flags are validated before arguments, so this probe needs no real ref. The
+  // answer is time-boxed, not process-lifetime: after an sb upgrade a restart
+  // would otherwise be the only way back to the paged read.
+  const journalPaging = async (): Promise<boolean | null> => {
+    if (pagingSupport && Date.now() - pagingSupport.at < JOURNAL_PROBE_MS) return pagingSupport.value;
     const { body } = await runSb(bin, db, ["journal", "show", "--tail", "1"]);
-    pagingSupport = !body.includes("unknown flag --tail");
-    return pagingSupport;
+    const value = interpretJournalProbe(body);
+    if (value !== null) pagingSupport = { value, at: Date.now() };
+    return value;
   };
 
   const handle = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
@@ -245,11 +261,15 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
         res.statusCode = 400;
         return res.end(JSON.stringify({ ok: false, error: "unsupported substrate read" }));
       }
-      // An installed sb older than 0.3.1 rejects `--tail`/`--before`. Probe once,
+      // An installed sb older than 0.3.1 rejects `--tail`/`--before`. Probe it,
       // then serve the legacy read so the tab degrades to its previous content
-      // instead of failing or silently emptying.
+      // instead of failing. An inconclusive probe (null) leaves the request
+      // alone so the caller sees the real error rather than a silent downgrade.
       const paged = argv[0] === "journal" && (argv.includes("--tail") || argv.includes("--before"));
-      const effective = paged && path === "/journal" && !(await journalPaging()) ? ["journal", "show", argv[2]!, "--limit", String(JOURNAL_LEGACY_LIMIT)] : argv;
+      const support = paged && path === "/journal" ? await journalPaging() : null;
+      const effective = support === false ? ["journal", "show", argv[2]!, "--limit", String(JOURNAL_LEGACY_LIMIT)] : argv;
+      // Tell the app which read it actually got: legacy cannot page at all.
+      if (path === "/journal" && argv[0] === "journal") res.setHeader("x-xtrm-journal-paging", effective === argv ? "cursor" : "legacy");
       const key = effective.join(" ");
       let hit = cache.get(key);
       if (!hit || Date.now() - hit.at > TTL_MS) {
