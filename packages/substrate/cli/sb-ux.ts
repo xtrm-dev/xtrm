@@ -40,6 +40,22 @@ interface UxOptions { isTTY?: boolean; width?: number; env?: NodeJS.ProcessEnv; 
 interface WrapperArgs { base: string[]; plain: boolean; noColor: boolean; all: boolean; flat: boolean; statuses: string[]; search: string; }
 interface Envelope { schema?: string; command?: string; ok?: boolean; data?: unknown; error?: string; }
 
+// Where the group and the verb sit in argv. This is the single positional
+// notion in the wrapper: `commandOf` names the command from it, and the argv
+// rewrite below moves exactly the token it identifies. Scanning for the first
+// `list`/`browse` token anywhere instead rewrote flag values — `sb issue browse
+// --search list` became `--search tree`.
+function commandPositions(args: string[]): { groupIndex: number; verbIndex: number | null } | null {
+  const groupIndex = args.findIndex((arg) => GROUPS.has(arg));
+  if (groupIndex < 0) return null;
+  if (["init", "doctor", "help", "version"].includes(args[groupIndex]!)) return { groupIndex, verbIndex: null };
+  for (let i = groupIndex + 1; i < args.length; i += 1) {
+    if (!args[i]!.startsWith("--")) return { groupIndex, verbIndex: i };
+    if (args[i] === "--db" || args[i] === "--project") i += 1;
+  }
+  return { groupIndex, verbIndex: null };
+}
+
 function commandOf(args: string[]): string {
   const index = args.findIndex((arg) => GROUPS.has(arg));
   if (index < 0) return "";
@@ -157,11 +173,11 @@ function browseHelp(): CliResult {
 // operator typed. This maps it back, using the same token search as
 // listEngineArgs so the two cannot disagree about which word was rewritten.
 function typedVerbPair(base: string[]): { engine: string; typed: string } | null {
-  const verb = ["list", "browse"].find((candidate) => base.includes(candidate));
-  if (verb === undefined) return null;
-  const index = base.indexOf(verb);
-  const group = base.slice(0, index).reverse().find((token) => GROUPS.has(token));
-  if (group === undefined) return null;
+  const positions = commandPositions(base);
+  if (positions === null || positions.verbIndex === null) return null;
+  const verb = base[positions.verbIndex]!;
+  if (verb !== "list" && verb !== "browse") return null;
+  const group = base[positions.groupIndex]!;
   return { engine: `${group}.tree`, typed: `${group}.${verb}` };
 }
 
@@ -171,14 +187,22 @@ function withTypedVerb(base: string[], message: string): string {
   return message.split(`\`${pair.engine}\``).join(`\`${pair.typed}\``);
 }
 
-function listEngineArgs(base: string[]): string[] {
+/**
+ * The engine invocation for a list/browse request: the verb becomes `tree`, and
+ * nothing else moves. Exported so the rewrite can be asserted directly — a
+ * wrong rewrite is only observable on a TTY, which is exactly how the
+ * flag-value regression survived.
+ */
+export function engineArgsForList(base: string[]): string[] {
   const out = [...base];
-  const listIndex = out.indexOf("list");
-  const browseIndex = out.indexOf("browse");
-  if (listIndex >= 0) out[listIndex] = "tree";
-  else if (browseIndex >= 0) out[browseIndex] = "tree";
+  const positions = commandPositions(base);
+  if (positions === null || positions.verbIndex === null) return out;
+  const verb = out[positions.verbIndex]!;
+  if (verb === "list" || verb === "browse") out[positions.verbIndex] = "tree";
   return out;
 }
+
+const listEngineArgs = engineArgsForList;
 function showEngineArgs(base: string[], ref: string): string[] {
   const prefix: string[] = [];
   for (let i = 0; i < base.length; i += 1) {
@@ -354,7 +378,9 @@ export async function runUxCli(argv: string[], opts: UxOptions = {}): Promise<Cl
     if (command === "issue.browse") return browseHelp();
     return uxHelp(runCli(parsed.base), parsed.base);
   }
-  if (parsed.base[0] === "issue" && parsed.base[1] === "browse") return browse(parsed, style, opts);
+  // Command-based, like every other branch here: a leading global flag
+  // (`sb --db <p> issue browse`) must not skip the browser.
+  if (command === "issue.browse") return browse(parsed, style, opts);
   if (command === "issue.list") return renderList(parsed, style);
   if (command === "issue.show") return renderShow(parsed, style);
   if (!READ_ONLY.has(command) && command !== "") return mutationResult(parsed, style);
