@@ -301,7 +301,7 @@ export class JournalService {
     return this.requireEntry(id);
   }
 
-  listEntries(issueId: string, opts?: { kind?: JournalKind; limit?: number }): JournalEntry[] {
+  listEntries(issueId: string, opts?: { kind?: JournalKind; limit?: number; before?: number }): JournalEntry[] {
     this.issues.getIssue(issueId);
     let sql = "SELECT * FROM issue_journal WHERE issue_id = ?";
     const params: SQLInputValue[] = [issueId];
@@ -309,6 +309,20 @@ export class JournalService {
       if (!isJournalKind(opts.kind)) throw new Error(unknownJournalKindMessage(opts.kind));
       sql += " AND kind = ?";
       params.push(opts.kind);
+    }
+    // Backwards cursor (§49 paging): the window that ENDS before `before`.
+    // A forward LIMIT over a large journal drops the newest entries, so a
+    // caller that needs bodies from the tail pages backwards from a sequence
+    // it already holds. Desktop order is restored before returning.
+    if (opts?.before !== undefined) {
+      if (!Number.isInteger(opts.before) || opts.before <= 0) throw new Error("before must be a positive integer sequence");
+      if (opts.limit === undefined) throw new Error("a limit is required with before");
+      if (!Number.isInteger(opts.limit) || opts.limit <= 0) throw new Error("limit must be a positive integer");
+      sql += " AND sequence < ? ORDER BY sequence DESC LIMIT ?";
+      params.push(opts.before, opts.limit);
+      return rows<Row>(this.db, sql, ...params)
+        .map((r) => this.toEntry(r))
+        .reverse();
     }
     sql += " ORDER BY sequence";
     if (opts?.limit !== undefined) {

@@ -226,6 +226,7 @@ export const OPERATIONS: Record<string, Handler> = {
     s.journal.listEntries(text(a, "issueId"), {
       kind: optionalText(a, "kind") as never,
       limit: optionalBounded(a, "limit", 1, MAX_LIMIT),
+      before: optionalBounded(a, "before", 1, Number.MAX_SAFE_INTEGER),
     }),
   "journal.latest": (s, a) => s.journal.latest(text(a, "issueId"), { kind: optionalText(a, "kind") as never }),
   "journal.latestCheckpoint": (s, a) => s.journal.latestCheckpoint(text(a, "issueId")),
@@ -359,7 +360,7 @@ export const ARGS: Record<string, readonly string[]> = {
   "store.get": ["ref"],
   "store.addJournal": ["ref", "kind", "participantId", "activationId", "semantic", "result"],
   "journal.appendEntry": ["issueId", "input"],
-  "journal.listEntries": ["issueId", "kind", "limit"],
+  "journal.listEntries": ["issueId", "kind", "limit", "before"],
   "journal.latest": ["issueId", "kind"],
   "journal.latestCheckpoint": ["issueId"],
   "journal.since": ["issueId", "cursor"],

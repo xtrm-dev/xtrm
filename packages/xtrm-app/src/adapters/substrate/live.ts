@@ -5,6 +5,7 @@ import type {
   IssueLink,
   IssueSummary,
   JournalEntry,
+  JournalPaging,
   Lifecycle,
   ProvenanceSummary,
   SubstrateAdapter,
@@ -265,7 +266,7 @@ export function mapClosure(c: Obj | null | undefined): Closure {
   };
 }
 
-type IssueDetailCtx = { projectId: string | null; resume: WireResume | null; trace: WireTrace | null; journal: WireJournalEntry[] };
+type IssueDetailCtx = { projectId: string | null; resume: WireResume | null; trace: WireTrace | null; journal: WireJournalEntry[]; journalError?: string | null; journalPaging?: JournalPaging | null };
 
 /**
  * The detail as the four per-issue reads describe it. Fields that only the project board carries
@@ -274,6 +275,8 @@ type IssueDetailCtx = { projectId: string | null; resume: WireResume | null; tra
 export function mapIssueCore(d: WireIssueDetail, ctx: IssueDetailCtx): IssueDetail {
   const children: IssueLink[] = (ctx.resume?.children ?? []).map((c) => ({ id: c.issueId, ref: c.humanRef, locator: c.locator, title: c.title, lifecycle: c.lifecycleState }));
   const journal = ctx.journal.map(mapJournalEntry).sort((a, b) => b.sequence - a.sequence);
+  const journalError = ctx.journalError ?? null;
+  const journalPaging = ctx.journalPaging ?? null;
   return {
     id: d.id,
     ref: d.humanRef,
@@ -309,6 +312,8 @@ export function mapIssueCore(d: WireIssueDetail, ctx: IssueDetailCtx): IssueDeta
     blockers: [],
     release: ctx.resume?.release ? { childrenDone: ctx.resume.release.childrenDone, childrenTotal: ctx.resume.release.childrenTotal } : null,
     journal,
+    journalError,
+    journalPaging,
     journalTotal: Math.max(journal.length, d.operationalContext?.total ?? 0),
     provenance: mapTrace(ctx.trace, journal),
     pullRequests: ((d as { pullRequests?: unknown }).pullRequests as IssueDetail["pullRequests"] | undefined) ?? [],
@@ -360,7 +365,7 @@ export function mapIssueDetail(d: WireIssueDetail, ctx: IssueDetailCtx & { board
   return applyBoard(mapIssueCore(d, ctx), ctx.board);
 }
 
-async function read<T>(path: string): Promise<T> {
+async function readWithMeta<T>(path: string): Promise<{ data: T; paging: JournalPaging | null }> {
   const res = await fetch(`/xtrm-api/substrate${path}`);
   let body: Envelope<T>;
   try {
@@ -369,7 +374,13 @@ async function read<T>(path: string): Promise<T> {
     throw new SubstrateReadError(`substrate bridge returned ${res.status}`);
   }
   if (!("schema" in body)) throw new SubstrateReadError((body as { error?: string }).error ?? `substrate bridge returned ${res.status}`);
-  return unwrap(body);
+  // Test doubles stub only json(); be tolerant of a response without headers.
+  const header = res.headers?.get?.("x-xtrm-journal-paging") ?? null;
+  return { data: unwrap(body), paging: header === "legacy" || header === "cursor" ? header : null };
+}
+
+async function read<T>(path: string): Promise<T> {
+  return (await readWithMeta<T>(path)).data;
 }
 
 async function write(path: string, body: Record<string, unknown>): Promise<unknown> {
@@ -380,8 +391,11 @@ async function write(path: string, body: Record<string, unknown>): Promise<unkno
   throw new SubstrateReadError(json.error);
 }
 
-// ponytail: one bounded read of full bodies; `sb journal show` has no offset. Page server-side if journals outgrow it.
-export const JOURNAL_READ_LIMIT = 2000;
+// First journal page: the newest N entries with bodies. Older pages come from
+// `readJournal({ before })`, so a large journal is never read in one payload.
+export const JOURNAL_TAIL = 200;
+/** The bridge's per-page ceiling (`JOURNAL_PAGE_MAX` in server/substrate-cli.ts). */
+export const JOURNAL_TAIL_MAX = 2000;
 // Page size for the board projection walk (`sb issue query`, MAX_PAGE_LIMIT 500).
 export const BOARD_PAGE_LIMIT = 500;
 
@@ -427,11 +441,26 @@ export const liveSubstrate: SubstrateAdapter = {
       read<WireIssueDetail>(`/issue${r}`),
       read<WireResume>(`/resume${r}`).catch(() => null),
       read<WireTrace>(`/trace${r}`).catch(() => null),
-      read<WireJournalEntry[]>(`/journal${r}&limit=${JOURNAL_READ_LIMIT}`).catch(() => []),
+      // A failed journal read must not empty the tab silently, and must not take
+      // the whole detail down with it: carry the error alongside the entries.
+      readWithMeta<WireJournalEntry[]>(`/journal${r}&tail=${JOURNAL_TAIL}`)
+        .then(({ data, paging }) => ({ entries: data, error: null as string | null, paging }))
+        .catch((e: unknown) => ({ entries: [] as WireJournalEntry[], error: e instanceof Error ? e.message : "journal read failed", paging: null as JournalPaging | null })),
       project,
       board,
     ]);
-    return mapIssueDetail(detail, { projectId: resolvedProject, board: rows, resume, trace, journal });
+    return mapIssueDetail(detail, { projectId: resolvedProject, board: rows, resume, trace, journal: journal.entries, journalError: journal.error, journalPaging: journal.paging });
+  },
+  async readJournal(ref, opts) {
+    // The bridge refuses anything above its per-page ceiling, so clamp here.
+    const page = Math.min(opts?.limit ?? JOURNAL_TAIL, JOURNAL_TAIL_MAX);
+    const query = opts?.tail
+      ? `&tail=${Math.min(opts.tail, JOURNAL_TAIL_MAX)}`
+      : opts?.before
+        ? `&before=${opts.before}&limit=${page}`
+        : `&tail=${page}`;
+    const entries = await read<WireJournalEntry[]>(`/journal?ref=${encodeURIComponent(ref)}${query}`);
+    return entries.map(mapJournalEntry).sort((a, b) => b.sequence - a.sequence);
   },
   async editIssue(projectId, ref, expectedRevision, edit) {
     await write("/edit", { project: projectId, ref, expectedRevision, ...edit });

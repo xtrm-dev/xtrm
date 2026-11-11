@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { IssueDetail, JournalEntry, JournalIdentity } from "../adapters/index.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { Markdown } from "../ui/markdown.tsx";
@@ -158,12 +158,15 @@ export function JournalTab({
   canWrite,
   onAdd,
   focusSequence,
+  onLoadOlder,
 }: {
   issue: IssueDetail;
   canWrite: boolean;
   onAdd: (text: string, kind: string) => Promise<void>;
   /** Sequence to reveal and highlight (set by a provenance jump). */
   focusSequence: number | null;
+  /** Fetch the page that ends before this sequence; omitted when the backend cannot page. */
+  onLoadOlder?: (before: number) => Promise<JournalEntry[]>;
 }) {
   const [composing, setComposing] = useState(false);
   const [kind, setKind] = useState<(typeof NOTE_KINDS)[number]>("note");
@@ -171,8 +174,33 @@ export function JournalTab({
   const [error, setError] = useState<string | null>(null);
   // ponytail: paging, not virtualization; entries render lazily 50 at a time.
   const [visible, setVisible] = useState(JOURNAL_PAGE);
-  const index = focusSequence == null ? -1 : issue.journal.findIndex((j) => j.sequence === focusSequence);
+  const [older, setOlder] = useState<JournalEntry[]>([]);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [pagingError, setPagingError] = useState<string | null>(null);
+  // Read pages arrive newest-first and are appended at the bottom, so loading
+  // older entries never moves what the reader is looking at.
+  const entries = useMemo(() => {
+    const seen = new Set(issue.journal.map((j) => j.id));
+    return [...issue.journal, ...older.filter((o) => !seen.has(o.id))].sort((a, b) => b.sequence - a.sequence);
+  }, [issue.journal, older]);
+  const oldest = entries.length > 0 ? entries[entries.length - 1]!.sequence : 0;
+  const missing = Math.max(0, issue.journalTotal - entries.length);
+  // The bridge names the mode it served. Without that signal (fixtures, an older
+  // bridge) a newest-first page starts above sequence 1 whenever the journal is
+  // bigger than one page, while an ascending read starts exactly at 1.
+  const legacyRead = missing > 0 && (issue.journalPaging === "legacy" || (issue.journalPaging == null && oldest === 1));
+  const index = focusSequence == null ? -1 : entries.findIndex((j) => j.sequence === focusSequence);
   const shown = Math.max(visible, index + 1);
+
+  const loadOlder = () => {
+    if (!onLoadOlder || loadingOlder) return;
+    setLoadingOlder(true);
+    setPagingError(null);
+    onLoadOlder(oldest)
+      .then((page) => setOlder((prev) => [...prev, ...page]))
+      .catch((e: unknown) => setPagingError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoadingOlder(false));
+  };
 
   useEffect(() => {
     if (index < 0) return;
@@ -221,25 +249,35 @@ export function JournalTab({
             Add a journal entry…
           </button>
         ))}
-      {issue.journal.length === 0 ? (
+      {issue.journalError ? (
+        <p role="status" className="text-sm text-danger">
+          Could not read the journal: {issue.journalError}
+        </p>
+      ) : entries.length === 0 ? (
         <p className="text-sm text-ink-faint">No journal entries yet.</p>
       ) : (
         <>
           <ol className="flex flex-col">
-            {issue.journal.slice(0, shown).map((j) => (
+            {entries.slice(0, shown).map((j) => (
               <JournalItem key={j.id} entry={j} highlighted={j.sequence === focusSequence} />
             ))}
           </ol>
           <div className="flex items-center gap-3 text-xs text-ink-faint">
             <span className="tabular">
-              Showing {Math.min(shown, issue.journal.length)} of {issue.journalTotal} entries
+              Showing {Math.min(shown, entries.length)} of {issue.journalTotal} entries
             </span>
-            {shown < issue.journal.length && (
+            {shown < entries.length && (
               <button type="button" onClick={() => setVisible(shown + JOURNAL_PAGE)} className="rounded-sm text-ink-muted outline-none hover:text-ink focus-visible:text-ink">
-                Show {Math.min(JOURNAL_PAGE, issue.journal.length - shown)} older
+                Show {Math.min(JOURNAL_PAGE, entries.length - shown)} older
               </button>
             )}
-            {issue.journalTotal > issue.journal.length && <span>Read capped at the first {issue.journal.length}; newer entries are in sb journal since.</span>}
+            {missing > 0 && !legacyRead && onLoadOlder && (
+              <button type="button" onClick={loadOlder} disabled={loadingOlder} className="rounded-sm text-ink-muted outline-none hover:text-ink focus-visible:text-ink disabled:text-ink-faint">
+                {loadingOlder ? "Loading older entries…" : `Load ${Math.min(JOURNAL_PAGE * 4, missing)} older`}
+              </button>
+            )}
+            {legacyRead && <span role="status">Showing the oldest {entries.length} of {issue.journalTotal} entries; paging needs substrate 0.3.1 or newer.</span>}
+            {pagingError && <span role="alert" className="text-danger">could not load older entries: {pagingError}</span>}
           </div>
         </>
       )}

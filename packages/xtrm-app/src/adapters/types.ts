@@ -373,6 +373,9 @@ export interface JournalIdentity {
   runId: string | null;
 }
 
+/** Which journal read the backend actually served: paged, or one legacy ascending read. */
+export type JournalPaging = "cursor" | "legacy";
+
 export interface JournalEntry {
   id: string;
   sequence: number;
@@ -496,6 +499,10 @@ export interface IssueDetail extends IssueSummary {
   blockers: IssueLink[];
   release: { childrenDone: number; childrenTotal: number } | null;
   journal: JournalEntry[];
+  /** Set when the journal read itself failed, so the tab can say so instead of looking empty. */
+  journalError?: string | null;
+  /** `legacy` means the loaded entries are an ascending read that cannot page further. */
+  journalPaging?: JournalPaging | null;
   /** Entries Substrate holds; greater than `journal.length` when the read was capped. */
   journalTotal: number;
   provenance: ProvenanceSummary;
@@ -531,6 +538,12 @@ export interface SubstrateAdapter {
    * the caller fills them from a cached board (the live adapter's `applyBoard`).
    */
   getIssue(ref: string, projectId?: string, opts?: { withBoard?: boolean }): Promise<IssueDetail>;
+  /**
+   * Paged journal read of full bodies. `tail` is the newest window; `before` is
+   * the backwards cursor for older pages. A journal bigger than one page is
+   * only fully reachable through this call.
+   */
+  readJournal(ref: string, opts?: { tail?: number; before?: number; limit?: number }): Promise<JournalEntry[]>;
   editIssue(projectId: string, ref: string, expectedRevision: number, edit: IssueEdit): Promise<void>;
   setLifecycle(projectId: string, ref: string, state: Lifecycle): Promise<void>;
   addNote(projectId: string, ref: string, text: string, kind: string): Promise<void>;

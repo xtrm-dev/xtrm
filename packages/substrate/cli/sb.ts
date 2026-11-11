@@ -790,7 +790,7 @@ in place of a result. checkpoint/compaction require the mechanical row;
 query with show/since/latest/timeline, and resume from the capsule, not
 from a full dump.`,
   "journal.checkpoint": `usage: sb journal checkpoint <ref> [--mechanical <file|json>] [--semantic <file|json>] [--workspace/--branch/--base-commit/--head-commit <v>] [--project <id>]`,
-  "journal.show": `usage: sb journal show <ref> [--kind <k>] [--limit <n>]
+  "journal.show": `usage: sb journal show <ref> [--kind <k>] [--limit <n> | --before <seq> --limit <n> | --tail <n>]
 
 returns full entry bodies (human prints semantic text; since stays compact).`,
   "journal.since": `usage: sb journal since <ref> <cursor>
@@ -1389,7 +1389,7 @@ export const FLAG_ALLOWLIST: Record<string, string[]> = {
   "plan.apply": ["project", "file"],
   "journal.append": ["project", "kind", "run", "participant", "activation", "session", "mechanical", "semantic", "summary-file", "result", "refs"],
   "journal.checkpoint": ["project", "run", "participant", "activation", "session", "mechanical", "semantic", "refs", "workspace", "branch", "base-commit", "head-commit"],
-  "journal.show": ["kind", "limit"],
+  "journal.show": ["kind", "limit", "before", "tail"],
   "journal.since": [],
   "journal.latest": ["kind"],
   "journal.timeline": ["kind", "limit"],
@@ -2444,10 +2444,26 @@ function runJournal(
       const kindRaw = flag(flags, "kind");
       if (kindRaw !== undefined && !isJournalKind(kindRaw)) throw new Error(`unknown journal kind: ${kindRaw}`);
       const limitRaw = flag(flags, "limit");
-      const entries = journal.listEntries(resolved.id, {
-        kind: kindRaw as never,
-        limit: limitRaw !== undefined ? Number(limitRaw) : undefined,
-      });
+      const beforeRaw = flag(flags, "before");
+      const tailRaw = flag(flags, "tail");
+      if (tailRaw !== undefined && (beforeRaw !== undefined || limitRaw !== undefined)) {
+        throw new Error("--tail cannot be combined with --before or --limit");
+      }
+      const limit = limitRaw !== undefined ? Number(limitRaw) : undefined;
+      if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) throw new Error("--limit must be a positive integer");
+      const before = beforeRaw !== undefined ? Number(beforeRaw) : undefined;
+      if (before !== undefined && (!Number.isInteger(before) || before <= 0)) {
+        throw new Error("--before must be a positive integer sequence");
+      }
+      const tail = tailRaw !== undefined ? Number(tailRaw) : undefined;
+      if (tail !== undefined && (!Number.isInteger(tail) || tail <= 0)) throw new Error("--tail must be a positive integer");
+      // --tail is the newest window (paging starts at the end); --before is the
+      // backwards cursor for older pages. --limit alone keeps its oldest-first
+      // meaning so existing callers are unaffected.
+      const entries =
+        tail !== undefined
+          ? journal.timeline(resolved.id, { kind: kindRaw as never, limit: tail })
+          : journal.listEntries(resolved.id, { kind: kindRaw as never, limit, before });
       // show returns full entry bodies (semantic + mechanical payloads in
       // JSON; semantic text under the header line in human). since stays
       // compact: deltas carry journalSummary only.
