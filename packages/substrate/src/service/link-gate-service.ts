@@ -210,7 +210,12 @@ export class LinkGateService {
     for (const other of others) {
       try {
         const state = this.prState(other.repository, other.number, now);
-        if (state === null || state.state === "open") codes.push(GATE_CODES.otherOpenPr);
+        // Unknown state is not "closed": it fails closed.
+        if (state === null) {
+          if (!codes.includes(GATE_CODES.unreachable)) codes.push(GATE_CODES.unreachable);
+        } else if (state.state === "open") {
+          codes.push(GATE_CODES.otherOpenPr);
+        }
       } catch {
         if (!codes.includes(GATE_CODES.unreachable)) codes.push(GATE_CODES.unreachable);
       }

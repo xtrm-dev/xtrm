@@ -191,7 +191,7 @@ function main(): number {
         // The terminal instant never falls back to wall-clock while the source
         // carries a usable value, so the Closure cannot contradict the row.
         const terminalAt = closedAt ?? updatedAt ?? createdAt;
-        svc.setLifecycleState(issue.id, target, terminalAt ?? undefined);
+        svc.setLifecycleState(issue.id, target, terminalAt ?? undefined, { exemption: "beads-repair" });
         closures.recordBeadsClosure(issue.id, {
           reason,
           actor: str(rec["created_by"]) ?? "beads-repair",

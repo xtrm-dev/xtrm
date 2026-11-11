@@ -171,6 +171,20 @@ describe("close gate", () => {
     assert.ok(w.gate.evaluate(w.issue.id, { mode: "auto" }).codes.includes(GATE_CODES.otherOpenPr));
   });
 
+  it("an unreadable other open PR fails closed instead of refusing as open", () => {
+    t2(w);
+    w.svc.releaseClaim(w.issue.id, "w");
+    mergeState(w, 7, "merged");
+    baseBranch(w, "main");
+    w.db
+      .prepare("INSERT INTO issue_pull_requests (issue_id, repository, number, relation, source, url, actor, created_at, superseded_at) VALUES (?,?,?,?,?,NULL,NULL,?,NULL)")
+      .run(w.issue.id, "o/r", 8, "created_from", "trailer", Date.now());
+    const evaluation = w.gate.evaluate(w.issue.id, { mode: "auto" });
+    assert.equal(evaluation.verdict, "fail");
+    assert.ok(evaluation.codes.includes(GATE_CODES.unreachable));
+    assert.ok(!evaluation.codes.includes(GATE_CODES.otherOpenPr));
+  });
+
   it("auto refuses a live claim", () => {
     t2(w);
     mergeState(w, 7, "merged");
@@ -203,7 +217,9 @@ describe("close gate", () => {
     mergeState(w, 7, "merged", "main", Date.now() - 48 * 60 * 60 * 1000);
     baseBranch(w, "main");
     w.reader.fail = true;
-    assert.ok(w.gate.evaluate(w.issue.id, { mode: "auto" }).codes.includes(GATE_CODES.unreachable));
+    const unreachable = w.gate.evaluate(w.issue.id, { mode: "auto" });
+    assert.ok(unreachable.codes.includes(GATE_CODES.unreachable));
+    assert.equal(unreachable.verdict, "fail");
     const fresh = world();
     try {
       t2(fresh);
@@ -243,9 +259,11 @@ describe("close gate", () => {
   });
 
   it("re-closing a done issue adds no gate event", () => {
-    close(w, { linkGate: "warn" });
+    // Bare close twice: the second pass must reach the before===done guard,
+    // not fail earlier in ClosureService's terminal check.
+    w.svc.setLifecycleState(w.issue.id, "done", undefined, { linkGate: "warn" });
     const before = w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.link_gate_warned").length;
-    assert.throws(() => close(w, { linkGate: "warn" }));
+    w.svc.setLifecycleState(w.issue.id, "done", undefined, { linkGate: "warn" });
     assert.equal(w.svc.listEvents(w.issue.id).filter((e) => e.type === "provenance.link_gate_warned").length, before);
   });
 
