@@ -1086,7 +1086,7 @@ function runLinks(
     repositoryKey: repoDisc.identity?.repositoryKey ?? null,
   });
   let repo = flag(flags, "repo");
-  if (repo === undefined && verb !== "sync") {
+  if (repo === undefined && verb !== "sync" && flag(flags, "issue") === undefined) {
     const view = spawnSync("gh", ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"], { encoding: "utf8" });
     if (view.status !== 0) throw new Error("sb links check: pass --repo owner/name (gh repo view failed)");
     repo = view.stdout.trim();
