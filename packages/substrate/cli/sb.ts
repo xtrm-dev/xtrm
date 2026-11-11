@@ -47,7 +47,8 @@ import { resolveClaimHolder } from "../src/domain/claim.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
-import { trailerIssueRefs, type IssuePullRequestView } from "../src/domain/pull-request.ts";
+import { canonicalPullReference, pullUrl, type IssuePullRequestView } from "../src/domain/pull-request.ts";
+import { parseAllTrailers } from "../src/domain/provenance.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
 import { renderProvenanceTrace } from "../src/presentation/terminal.ts";
@@ -372,6 +373,15 @@ per-verb help: sb issue create --help  |  sb help issue create`;
 
 const COMMAND_HELP: Record<string, string> = {
   top: HELP_TOP,
+  "issue.link": `usage: sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>]... [--commits-range <base>..<head>] [--holder <name>]
+
+  Writes a persisted mention (source=explicit) or, with --commit/--commits-range, the T2 evidence from the commits' XTRM-Issue trailers. Never deletes; never claims created_from without a valid receipt.`,
+  "issue.unlink": `usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>]
+
+  Sets superseded_at on the matching live row(s). The evidence row stays.`,
+  "provenance.attach": `usage: sb provenance attach <ref> pr <github:org/repo#n|org/repo#n|url|#n> [--receipt <id>] [--holder <name>]
+
+  T1: the PR is the outcome of the issue's work. Resolves the receipt b1 --receipt, b2 the holder's live claim, b3 the latest receipt, then attaches the artifact and the created_from row in one transaction.`,
   remote: `usage: sb remote <setup|status|disable> [--json]
 
   setup ssh:<host> [--server-root PATH] [--refresh]
@@ -1034,7 +1044,7 @@ function ghJson<T>(args: string[]): T {
 }
 
 function runLinks(
-  _db: ReturnType<typeof openSubstrate>,
+  db: ReturnType<typeof openSubstrate>,
   svc: IssueService,
   ctx: Ctx,
   command: string,
@@ -1070,7 +1080,7 @@ function runLinks(
     const detail = ghJson<GhPrView>(["pr", "view", String(pr.number), "--repo", repo, "--json", "url,commits"]);
     for (const commit of detail.commits ?? []) {
       const message = `${commit.messageHeadline}\n${commit.messageBody ?? ""}`;
-      for (const ref of trailerIssueRefs(message)) {
+      for (const ref of [...new Set(parseAllTrailers(message).issues.map((i) => i.issueId))]) {
         let issue;
         try {
           issue = svc.resolveRefInProject(ref, resolved.projectId);
@@ -1091,6 +1101,7 @@ function runLinks(
       }
     }
   }
+  const findings = new PullRequestService(db).listFindings(resolved.projectId, 10);
   const payload = {
     dryRun,
     readOnly: true,
@@ -1098,6 +1109,7 @@ function runLinks(
     repository: repo,
     scanned: prs.length,
     candidates,
+    findings,
   };
   if (ctx.json) return emit(ctx, command, payload);
   const lines = [`LINKS CHECK — ${repo} · ${prs.length} PR(s) scanned · ${dryRun ? "dry run" : "read-only"}`];
@@ -1107,7 +1119,11 @@ function runLinks(
       lines.push(`- ${String(c["issue"])}  ${String(c["repository"])}#${String(c["number"])}  ${String(c["sha"]).slice(0, 12)}  ${String(c["url"])}`);
     }
   }
-  lines.push("slice 1: no rows written");
+  if (findings.length > 0) {
+    lines.push("", "findings (provenance.link_finding):");
+    for (const f of findings) lines.push(`- ${f.code}  ${f.repository ?? ""}#${f.number ?? ""}  ${(f.sha ?? "").slice(0, 12)}  ${f.detail ?? ""}`);
+  }
+  lines.push("read-only: no rows written");
   return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
 }
 
@@ -1131,6 +1147,8 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.query": ["project", "limit", "cursor", "lifecycle", "kind", "readiness", "search"],
   "issue.tree": ["project", "root"],
   "issue.children": [],
+  "issue.link": ["project", "repo", "number", "url", "commit", "commits-range", "holder"],
+  "issue.unlink": ["project", "repo", "number", "relation"],
   "issue.relate": ["project", "from", "to", "kind"],
   "issue.unrelate": ["project", "from", "to", "kind"],
   "issue.claim": ["project", "holder", "ttl-ms", "activation"],
@@ -1158,6 +1176,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "journal.latest": ["kind"],
   "journal.timeline": ["kind", "limit"],
   "journal.render": ["sequence"],
+  "provenance.attach": ["project", "receipt", "holder"],
   "provenance.dispatch": ["project", "claim-id", "workspace", "participant", "activation", "attempt", "session", "base-commit"],
   "provenance.allocate": ["project", "checkpoint"],
   "provenance.bind": [],
@@ -1390,6 +1409,56 @@ function closurePayload(c: {
   };
 }
 
+function tryHolder(flags: Flags): string | null {
+  try {
+    return resolveClaimHolder(flag(flags, "holder") ?? undefined).holder;
+  } catch {
+    return null;
+  }
+}
+
+/** Bare `#N` scope: the Issue's Project repository binding first, then the
+ * checkout's github remote. Null means "no ambient repository". */
+function ambientRepository(db: ReturnType<typeof openSubstrate>, projectId: string): string | null {
+  // The issue's repository (its Project's single binding) wins over whatever
+  // checkout the command happens to run in.
+  const rows = db
+    .prepare("SELECT DISTINCT canonical_remote FROM repository_bindings WHERE project_id = ? AND canonical_remote LIKE 'github.com/%'")
+    .all(projectId) as Array<{ canonical_remote: string }>;
+  if (rows.length === 1) return rows[0]!.canonical_remote.slice("github.com/".length);
+  const disc = discoverRepository();
+  const key = disc.identity?.repositoryKey ?? null;
+  if (key !== null && key.startsWith("github.com/")) return key.slice("github.com/".length);
+  return null;
+}
+
+function readCommitEvidence(flags: Flags): Array<{ sha: string; message: string }> {
+  const out: Array<{ sha: string; message: string }> = [];
+  const range = flag(flags, "commits-range");
+  if (range !== undefined) {
+    if (!/^[0-9A-Za-z^~.]+\.\.[0-9A-Za-z^~.]+$/.test(range)) throw new Error("--commits-range must be <base>..<head>");
+    const res = spawnSync("git", ["log", "--format=%H%x1f%B%x1e", range], { encoding: "utf8" });
+    if (res.status !== 0) throw new Error(`git log ${range} failed: ${(res.stderr ?? "").trim()}`);
+    for (const record of res.stdout.split("\u001e")) {
+      const text = record.trim();
+      const cut = text.indexOf("\u001f");
+      if (text === "" || cut < 0) continue;
+      out.push({ sha: text.slice(0, cut).trim(), message: text.slice(cut + 1) });
+    }
+  }
+  for (const sha of flagList(flags, "commit") ?? []) {
+    if (!/^[0-9a-fA-F]{7,40}$/.test(sha)) throw new Error(`--commit is not a SHA: ${sha}`);
+    const res = spawnSync("git", ["show", "-s", "--format=%B", sha], { encoding: "utf8" });
+    if (res.status !== 0) throw new Error(`git show ${sha} failed: ${(res.stderr ?? "").trim()}`);
+    out.push({ sha, message: res.stdout });
+  }
+  return out;
+}
+
+function prLinkService(db: ReturnType<typeof openSubstrate>, svc: IssueService): PullRequestService {
+  return new PullRequestService(db, svc, new ProvenanceService(db, svc, new JournalService(db, svc)));
+}
+
 function runIssue(
   db: ReturnType<typeof openSubstrate>,
   svc: IssueService,
@@ -1400,6 +1469,39 @@ function runIssue(
   rest: string[],
 ): CliResult {
   switch (verb) {
+    case "link": {
+      if (rest[0] !== "pr") throw new Error("usage: sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>] [--commits-range <base>..<head>]");
+      const ref = rest[1];
+      if (ref === undefined) throw new Error("usage: sb issue link pr <ref> --repo <owner/name> --number <n>");
+      const resolved = refInContext(svc, flags, ref);
+      const repo = flag(flags, "repo");
+      const number = Number(flag(flags, "number"));
+      if (repo === undefined || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) throw new Error("--repo <owner/name> is required");
+      if (!Number.isSafeInteger(number) || number < 1) throw new Error("--number <n> is required");
+      const actor = tryHolder(flags) ?? "sb-cli";
+      const service = prLinkService(db, svc);
+      const commits = readCommitEvidence(flags);
+      const result = commits.length > 0
+        ? service.linkCommits({ issueId: resolved.id, repository: repo, number, commits, actor })
+        : service.linkMention({ issueId: resolved.id, repository: repo, number, url: flag(flags, "url") ?? pullUrl(repo, number), actor });
+      return emit(ctx, command, result);
+    }
+    case "unlink": {
+      if (rest[0] !== "pr") throw new Error("usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>]");
+      const ref = rest[1];
+      if (ref === undefined) throw new Error("usage: sb issue unlink pr <ref> --repo <owner/name> --number <n>");
+      const resolved = refInContext(svc, flags, ref);
+      const repo = flag(flags, "repo");
+      const number = Number(flag(flags, "number"));
+      if (repo === undefined) throw new Error("--repo <owner/name> is required");
+      if (!Number.isSafeInteger(number) || number < 1) throw new Error("--number <n> is required");
+      const relation = flag(flags, "relation");
+      if (relation !== undefined && relation !== "created_from" && relation !== "mentioned") {
+        throw new Error("--relation must be created_from or mentioned");
+      }
+      const removed = prLinkService(db, svc).unlink({ issueId: resolved.id, repository: repo, number, relation: relation as never });
+      return emit(ctx, command, { superseded: removed });
+    }
     case "create": {
       const project = projectOf(svc, flags);
       const title = flag(flags, "title") ?? (() => { throw new Error("--title is required"); })();
@@ -2123,6 +2225,31 @@ function runProvenance(
   const journal = new JournalService(db, svc);
   const provenance = new ProvenanceService(db, svc, journal);
   switch (verb) {
+    case "attach": {
+      const ref = needRef(rest);
+      if (rest[1] !== "pr") throw new Error("usage: sb provenance attach <ref> pr <github:org/repo#n|org/repo#n|url|#n> [--receipt <id>]");
+      const value = rest[2];
+      if (value === undefined) throw new Error("usage: sb provenance attach <ref> pr <value> [--receipt <id>]");
+      const resolved = refInContext(svc, flags, ref);
+      const ambient = ambientRepository(db, resolved.projectId);
+      const canonical = canonicalPullReference(value, ambient);
+      if (canonical === null) {
+        throw new Error(
+          ambient === null
+            ? `cannot resolve a bare ${value}: no ambient repository; use github:org/repo#n`
+            : `invalid pull reference: ${value}`,
+        );
+      }
+      const holder = tryHolder(flags);
+      const view = new PullRequestService(db, svc, provenance).attachCreatedFrom({
+        issueId: resolved.id,
+        ambientRepo: ambient,
+        actor: holder ?? "sb-cli",
+        receiptId: flag(flags, "receipt"),
+        holder: holder ?? undefined,
+      }, canonical);
+      return emit(ctx, command, { link: view });
+    }
     case "dispatch": {
       const ref = needRef(rest);
       const resolved = refInContext(svc, flags, ref);

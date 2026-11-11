@@ -169,8 +169,26 @@ onboarding workflow. New repositories start with `sb init`.
 
 Kind doctrine and examples: [`journal.md`](./journal.md).
 
+## issue links
+
+- `issue link pr <ref> --repo <owner/name> --number <n> [--url <url>]` — a
+  persisted mention (`source=explicit`).
+- `issue link pr <ref> --repo <owner/name> --number <n> --commit <sha>` (repeatable)
+  or `--commits-range <base>..<head>` — T2: read each commit's `XTRM-Issue`
+  trailer in the current repository and write the commit evidence. A trailer
+  without a valid receipt becomes a mention plus a finding; a commit naming
+  two issues, or one already claimed by another issue, writes no second row
+  and records a finding instead of throwing.
+- `issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <r>]` —
+  sets `superseded_at`; the evidence row stays, reads filter it out.
+
 ## provenance
 
+- `provenance attach <ref> pr <github:org/repo#n|org/repo#n|url|#n> [--receipt <id>]` —
+  T1: the pull request is the outcome of this Issue's work. Resolves the
+  receipt (explicit, the holder's live claim, then the latest receipt) and
+  writes the `kind=pr` artifact plus the `created_from` link in one
+  transaction. A foreign or superseded receipt is refused.
 - `provenance dispatch <ref>` — bind an execution to the Issue revision.
 - `provenance allocate <binding-id|ref> [--checkpoint <entry-id>]` — create the
   host-owned receipt for that binding; `--checkpoint` links the Journal

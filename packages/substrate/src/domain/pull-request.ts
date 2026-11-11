@@ -54,27 +54,53 @@ export interface IssuePullRequestView {
   commits: IssuePrCommitRow[];
 }
 
-/**
- * Every `XTRM-Issue:` value in a commit message, in order and deduped.
- * `parseTrailers` returns the last value only; T2 needs all of them.
- * XTRM-727 replaces this with `parseAllTrailers` once XTRM-734 merges.
- */
-export function trailerIssueRefs(message: string): string[] {
-  const refs: string[] = [];
-  for (const line of message.split("\n")) {
-    const m = /^XTRM-Issue:\s*(.+?)\s*$/.exec(line);
-    if (!m) continue;
-    const ref = m[1]!.trim();
-    if (ref !== "" && !refs.includes(ref)) refs.push(ref);
-  }
-  return refs;
+export interface CanonicalPullReference {
+  repository: string;
+  number: number;
+  canonical: string;
+  url: string;
 }
 
+export function pullUrl(repository: string, number: number): string {
+  return `https://github.com/${repository}/pull/${number}`;
+}
+
+const PULL_URL = /^https?:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/(\d+)\/?$/;
+const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
 /**
- * Collapse rows to one view per PR: `created_from` outranks `mentioned`;
- * repeated rows are already ordered by `created_at, rowid`, so the first row
- * of the winning relation supplies url/actor/createdAt.
+ * The four accepted spellings, normalized to `org/repo#n`:
+ * `github:org/repo#n`, `org/repo#n`, a github.com PR URL, and a bare `#n`
+ * scoped to the ambient repository. Returns null when malformed or when a
+ * bare reference has no ambient repository to scope it to.
  */
+export function canonicalPullReference(input: string, ambientRepo: string | null): CanonicalPullReference | null {
+  const text = input.trim();
+  if (text === "") return null;
+  let repository: string | null = null;
+  let number: number | null = null;
+  const url = PULL_URL.exec(text);
+  if (url) {
+    repository = `${url[1]}/${url[2]}`;
+    number = Number(url[3]);
+  } else {
+    const canonical = /^(?:github:)?([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#(\d+)$/.exec(text);
+    if (canonical) {
+      repository = canonical[1]!;
+      number = Number(canonical[2]);
+    } else {
+      const bare = /^#(\d+)$/.exec(text);
+      if (bare && ambientRepo !== null && REPO.test(ambientRepo)) {
+        repository = ambientRepo;
+        number = Number(bare[1]);
+      }
+    }
+  }
+  if (repository === null || number === null || !Number.isSafeInteger(number) || number < 1) return null;
+  const canonical = `${repository}#${number}`;
+  return { repository, number, canonical, url: pullUrl(repository, number) };
+}
+
 export function groupIssuePullRequests(
   rows: IssuePullRequestRow[],
   commits: IssuePrCommitRow[],
@@ -122,7 +148,7 @@ export function groupIssuePullRequests(
   }
   for (const commit of commits) {
     const view = byPr.get(`${commit.repository}#${commit.number}`);
-    if (view !== undefined) view.commits.push(commit);
+    if (view !== undefined && view.relation === "created_from") view.commits.push(commit);
   }
   for (const view of byPr.values()) {
     view.commits.sort((a, b) => (a.sha < b.sha ? -1 : a.sha > b.sha ? 1 : 0));

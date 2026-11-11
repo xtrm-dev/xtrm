@@ -397,12 +397,15 @@ export class ProvenanceService {
     const now = opts?.now ?? Date.now();
     return withTransaction(this.db, () => {
       const receipt = this.requireReceipt(receiptId);
-      this.db
+      const inserted = this.db
         .prepare(
           "INSERT OR IGNORE INTO artifact_bindings (receipt_id, kind, value, provider, created_at, superseded_at) VALUES (?, ?, ?, ?, ?, NULL)",
         )
         .run(receiptId, kind, value, opts?.provider ?? null, now);
-      this.issues.appendEvent(receipt.issueId, "provenance.artifact_attached", { receipt: receiptId, kind, value });
+      // A retry is a true no-op: no second event for the artifact that existed.
+      if (Number(inserted.changes ?? 0) > 0) {
+        this.issues.appendEvent(receipt.issueId, "provenance.artifact_attached", { receipt: receiptId, kind, value });
+      }
       return this.toArtifact(
         row<Row>(this.db, "SELECT * FROM artifact_bindings WHERE receipt_id = ? AND kind = ? AND value = ?", receiptId, kind, value) as Row,
       );
