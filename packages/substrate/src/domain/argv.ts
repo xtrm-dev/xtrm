@@ -10,7 +10,7 @@
 // A boolean flag is presence-only; every other flag consumes the next token as
 // its value unless that token is another flag. `--dry-run` is a command flag,
 // not a global one, but it is boolean everywhere it exists.
-export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["json", "help", "version", "dry-run"]);
+export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["json", "help", "version", "dry-run", "rebuild"]);
 
 export type FlagValue = true | string[];
 export type Flags = Map<string, FlagValue>;

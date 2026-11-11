@@ -27,11 +27,11 @@ const { runCli } = await import("./sb.ts");
 if (importingThroughBinAlias) process.argv[1] = originalArgv1;
 
 const ESC = "\u001b[";
-const GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export", "doctor", "help", "version"]);
+const GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export", "recall", "recall-build", "doctor", "help", "version"]);
 const READ_ONLY = new Set([
   "issue.show", "issue.list", "issue.ready", "issue.tree", "issue.children", "issue.validate", "issue.resume",
   "project.list", "project.show", "project.links", "journal.show", "journal.since", "journal.latest", "journal.timeline",
-  "journal.render", "provenance.trace", "provenance.commit", "provenance.receipt", "provenance.pr", "doctor", "help", "version",
+  "journal.render", "provenance.trace", "provenance.commit", "provenance.receipt", "provenance.pr", "recall", "recall-build", "doctor", "help", "version",
 ]);
 
 interface UxOptions { isTTY?: boolean; width?: number; env?: NodeJS.ProcessEnv; }
@@ -42,7 +42,7 @@ function commandOf(args: string[]): string {
   const index = args.findIndex((arg) => GROUPS.has(arg));
   if (index < 0) return "";
   const group = args[index]!;
-  if (["init", "doctor", "help", "version"].includes(group)) return group;
+  if (["init", "doctor", "help", "version", "recall", "recall-build"].includes(group)) return group;
   for (let i = index + 1; i < args.length; i += 1) {
     if (!args[i]!.startsWith("--")) return `${group}.${args[i]}`;
     if (args[i] === "--db" || args[i] === "--project") i += 1;

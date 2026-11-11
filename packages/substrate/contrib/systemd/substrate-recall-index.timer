@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh the Substrate recall index every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=substrate-recall-index.service
+
+[Install]
+WantedBy=timers.target

@@ -169,6 +169,22 @@ onboarding workflow. New repositories start with `sb init`.
 
 Kind doctrine and examples: [`journal.md`](./journal.md).
 
+## recall — journal memory search
+
+- `sb recall "<terms>" [--source <s>] [--since <d>] [--limit <n<=5>] [--json]` —
+  search the local FTS5 index over every project's Journal. Each hit cites
+  ref#seq, date, kind, authority and the superseded flag; snippets are at most
+  240 characters. The reply reports the index age and watermark age and marks a
+  stale index. Fail-open: a missing, corrupt or locked index returns no hits and
+  exits 0. `--since` accepts `YYYY-MM-DD`, an ISO timestamp, epoch milliseconds
+  or a window such as `7d`/`24h`. Index path: `~/.xtrm/recall/index.sqlite`
+  (`SUBSTRATE_RECALL_INDEX` or `--index` overrides it).
+- `sb recall-build [--db <path>] [--index <path>] [--rebuild] [--load-gate <n>]` —
+  the indexer the user systemd timer runs as a oneshot (Nice=10,
+  MemoryMax=150M, load gate, single-writer lock). Incremental by watermark;
+  `--rebuild` is required after a schema or scrub-rule change. There is no
+  daemon.
+
 ## provenance
 
 - `provenance dispatch <ref>` — bind an execution to the Issue revision.

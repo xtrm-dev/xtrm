@@ -47,6 +47,10 @@ import { ResumeService } from "../src/service/resume-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
+import { DEFAULT_LIMIT, MAX_LIMIT } from "../src/recall/constants.ts";
+import { buildRecallIndex } from "../src/recall/indexer.ts";
+import { parseSince, recall } from "../src/recall/query.ts";
+import type { RecallResult } from "../src/recall/types.ts";
 import { renderProvenanceTrace } from "../src/presentation/terminal.ts";
 import { assertContractShape, isValidScrutiny, SCRUTINY_LEVELS } from "../src/domain/contract.ts";
 import { enrichExecutionContext } from "../src/domain/execution-context.ts";
@@ -332,6 +336,8 @@ usage:
   sb doctor [--db PATH] [--json]
   sb remote setup ssh:<host> [--server-root PATH] [--refresh] [--json]
   sb remote disable [--json]
+  sb recall "<terms>" [--source S] [--since D] [--limit N<=5] [--json]
+  sb recall-build [--db PATH] [--index PATH] [--rebuild] [--load-gate N] [--json]
 
 groups:
   init        initialize this repository (bind it to a Project; idempotent)
@@ -343,6 +349,11 @@ groups:
   remote      setup|status|disable
   import      beads
   export      project
+
+memory:
+  recall      search every project's journal through a local FTS5 index
+              (built by a user systemd timer, read-only per call, fail-open)
+  recall-build run the indexer once (the timer oneshot invokes this verb)
 
 flags:
   --db PATH   state.db path (default $SUBSTRATE_DB or ~/.xtrm/state.db)
@@ -389,6 +400,69 @@ the round-trip latency, the mapped server checkout, and the capabilities the
 server version actually supports — including the ones it does not, so a
 0.2.2 server reports the missing holder environment and stdio service
 instead of pretending they work.`,
+  recall: `usage: sb recall "<terms>" [--source S] [--since D] [--limit N] [--json]
+
+Searches the local Substrate memory index: every journal entry of every
+project (decisions, findings, results, notes, handoffs, checkpoints) through
+SQLite FTS5. Each hit is a cited pointer, not a transcript.
+
+When to call it:
+  - Before re-deriving a decision, a finding, or a handoff. A fact recorded
+    once is cheaper to reuse than to rediscover.
+  - When a previous turn mentioned an Issue ref, a date, or a decision and the
+    current context no longer carries the detail.
+  - When an operator ruling, a measured number, or a stated constraint is
+    missing and it may already be written down.
+
+What it returns:
+  Up to --limit hits (default 3, maximum 5), highest fixed-rerank score first.
+  Each hit is at most 240 characters and cites ref#seq, the date, the kind,
+  the authority level (0 checkpoint .. 3 decision; 4 is reserved for an
+  explicit operator ruling in R3), the project, and a superseded flag.
+  Authority and recency are fixed weights, fixed before measurement; the
+  current project (SUBSTRATE_PROJECT, when set) ranks higher.
+  The reply always reports the index age and watermark age and sets
+  index.stale when the timer has not refreshed the index for 15 minutes.
+
+Limits:
+  R1 indexes Substrate journals only. Jira comments, PRs, reviews, commits and
+  transcripts are not indexed. There are no embeddings. A result body is
+  capped at 4 KB before indexing, so a very long result is searchable only by
+  its first 4 KB. A hit is a pointer: open the cited ref#seq for the full text.
+
+Freshness and safety:
+  A user systemd timer runs \`sb recall-build\` as a oneshot (nice, MemoryMax,
+  load gate, single writer). There is no daemon. This verb opens the index
+  read-only per call and never opens state.db. Raw journal text is scrubbed
+  before it is stored; secrets never reach the index or the snippet.
+  Fail-open: a missing, corrupt, incompatible or locked index returns no hits
+  and exits 0, with a note. It never blocks the caller.
+
+Index path: ~/.xtrm/recall/index.sqlite (override with SUBSTRATE_RECALL_INDEX
+or --index). --source selects a source (journal; R2 adds more). --since takes
+YYYY-MM-DD, an ISO timestamp, epoch milliseconds, or a window such as 7d/24h.
+--json returns {query, hits[], index, note}.
+
+Examples:
+  sb recall "SCID sentinel doc error"
+  sb recall "operator cost review rules" --since 2026-11-01 --limit 5
+  sb recall "CORE-2595" --json`,
+  "recall-build": `usage: sb recall-build [--db PATH] [--index PATH] [--rebuild] [--load-gate N] [--json]
+
+Runs the recall indexer once. This is the command the user systemd timer
+invokes (Type=oneshot, Nice=10, MemoryMax=150M); it is not a daemon. The
+source state.db is opened read-only and the index is written by this single
+writer under a lock file.
+
+Incremental by watermark: rows with created_at at or after the stored
+watermark are re-scrubbed and upserted. --rebuild writes a fresh index into a
+temporary file and renames it into place, which is also what a schema or
+scrub-rule change requires. --load-gate N sets an absolute load1 ceiling
+(0 disables); when the host is above it the run reports deferred and exits 0
+so the timer tries again. A second concurrent writer reports skipped.
+
+--json data: {status, reason, docsIndexed, docsTotal, watermark, builtAt,
+durationMs, indexBytes, peakRssBytes}.`,
   help: `usage: sb help [group [verb]] [--json]  |  sb <group> [<verb>] --help
 
 prints this help without opening the database. With --json, emits the same
@@ -1053,6 +1127,8 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "provenance.activation": [],
   "provenance.bundle": ["project", "repo-root"],
   "init.": [],
+  "recall": ["source", "since", "limit", "index"],
+  "recall-build": ["index", "rebuild", "load-gate"],
   "doctor": [],
   "remote.setup": ["server-root", "refresh"],
   "remote.disable": [],
@@ -1062,7 +1138,7 @@ const FLAG_ALLOWLIST: Record<string, string[]> = {
   "export.project": ["project", "file"],
 };
 
-const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export", "remote", "serve"]);
+const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "import", "export", "recall", "recall-build", "remote", "serve"]);
 
 function assertKnownFlags(flags: Flags, command: string): void {
   const allowed = new Set([...GLOBAL_FLAGS, ...(FLAG_ALLOWLIST[command] ?? [])]);
@@ -1095,6 +1171,20 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
   const localStore = opts?.dbPath !== undefined ? "--db " + opts.dbPath + " (caller)" : localStoreRequested(argv, remoteDeps.env);
   const forwarded = forwardCli(argv, { ...remoteDeps, readStdin: opts?.readStdin, localStore });
   if (forwarded !== null) return forwarded;
+  // Recall never opens state.db: the query path opens only the FTS file
+  // read-only, and the indexer opens the store read-only itself.
+  if (group === "recall" || group === "recall-build") {
+    try {
+      if (group === "recall") {
+        return runRecall(ctx, flags, [verb, ...rest].filter((part): part is string => part !== undefined));
+      }
+      if (verb !== undefined) throw new Error("usage: sb recall-build [--db PATH] [--index PATH] [--rebuild] [--load-gate N] [--json]");
+      assertKnownFlags(flags, "recall-build");
+      return runRecallBuild(ctx, flags);
+    } catch (err) {
+      return fail(ctx, group, err);
+    }
+  }
   let db: ReturnType<typeof openSubstrate> | null = null;
   try {
     if (group === "doctor") {
@@ -1710,6 +1800,104 @@ function runIssue(
     default:
       throw new Error(`unknown issue verb: ${verb}`);
   }
+}
+
+// -- recall (CORE-2595): journal memory search, no state.db open --------------
+
+function relativeAge(ms: number | null): string {
+  if (ms === null) return "unknown";
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 90) return `${seconds}s`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
+}
+
+function recallIndexLine(result: RecallResult): string {
+  const index = result.index;
+  if (!index.exists) return "index: not built (run `sb recall-build`, or enable the user timer)";
+  const docs = index.docCount === null ? "?" : String(index.docCount);
+  const stale = index.stale ? " [STALE: results may miss recent entries]" : "";
+  return `index: ${docs} docs · built ${relativeAge(index.ageMs)} ago · watermark ${relativeAge(index.watermarkAgeMs)} old${stale}`;
+}
+
+function renderRecall(result: RecallResult): string {
+  const lines: string[] = [];
+  if (result.hits.length === 0) {
+    lines.push(`recall: no hits for ${JSON.stringify(result.query)}`);
+  } else {
+    for (const hit of result.hits) {
+      const seq = hit.seq === null ? "" : `#${hit.seq}`;
+      const project = hit.project ? ` · ${hit.project}` : "";
+      const superseded = hit.superseded ? " · superseded" : "";
+      lines.push(`${hit.ref}${seq} · ${hit.date} · ${hit.kind} · auth ${hit.authority}${project}${superseded}`);
+      lines.push(`  ${hit.snippet}`);
+    }
+  }
+  lines.push(recallIndexLine(result));
+  return lines.join("\n");
+}
+
+function runRecall(ctx: Ctx, flags: Flags, terms: string[]): CliResult {
+  assertKnownFlags(flags, "recall");
+  const query = terms.join(" ").trim();
+  if (query === "") throw new Error('usage: sb recall "<terms>" [--source S] [--since D] [--limit N<=5] [--json]');
+  const limitRaw = flag(flags, "limit");
+  const limit = limitRaw === undefined ? DEFAULT_LIMIT : Number(limitRaw);
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+    throw new Error(`--limit must be an integer from 1 to ${MAX_LIMIT}`);
+  }
+  const sinceRaw = flag(flags, "since");
+  const since = sinceRaw === undefined ? undefined : parseSince(sinceRaw);
+  const sourceRaw = flag(flags, "source");
+  const source = sourceRaw === "journal" ? "substrate-journal" : sourceRaw;
+  const result = recall({
+    terms: query,
+    source,
+    since,
+    limit,
+    indexPath: flag(flags, "index"),
+    env: process.env,
+  });
+  if (ctx.json) return emit(ctx, "recall", { ...result, note: result.note });
+  const staleWarning = result.index.stale && result.index.exists
+    ? `warning: recall index is stale (built ${relativeAge(result.index.ageMs)} ago); recent entries may be missing\n`
+    : "";
+  return {
+    code: 0,
+    stdout: renderRecall(result) + "\n",
+    stderr: (result.note === null ? "" : `note: ${result.note}\n`) + staleWarning,
+  };
+}
+
+function runRecallBuild(ctx: Ctx, flags: Flags): CliResult {
+  const loadGateRaw = flag(flags, "load-gate");
+  const loadGate = loadGateRaw === undefined ? undefined : Number(loadGateRaw);
+  if (loadGate !== undefined && (!Number.isFinite(loadGate) || loadGate < 0)) {
+    throw new Error("--load-gate must be a non-negative number (0 disables the gate)");
+  }
+  if (flags.has("rebuild") && flag(flags, "rebuild") !== undefined) {
+    throw new Error("--rebuild is a boolean flag (pass --rebuild, not --rebuild <value>)");
+  }
+  const result = buildRecallIndex({
+    storePath: ctx.dbPath,
+    indexPath: flag(flags, "index"),
+    rebuild: flags.has("rebuild"),
+    loadGate,
+  });
+  if (ctx.json) return emit(ctx, "recall-build", result);
+  const action = result.status === "built"
+    ? `indexed ${result.docsIndexed} journal row(s)`
+    : result.status === "deferred"
+      ? `deferred (${result.reason ?? "load gate"})`
+      : `skipped (${result.reason ?? "another writer"})`;
+  return {
+    code: 0,
+    stdout: `recall-build: ${action} · ${result.docsTotal} docs · ${(result.indexBytes / 1_048_576).toFixed(1)} MB · ${result.durationMs} ms\n`,
+    stderr: "",
+  };
 }
 
 // -- journal verbs (Phase 5, bead xtrm-7wc.6) ----------------------------------

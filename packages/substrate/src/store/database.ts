@@ -13,6 +13,7 @@ export interface SubstrateStatement {
   get(...params: SQLInputValue[]): Record<string, unknown> | undefined;
   all(...params: SQLInputValue[]): Array<Record<string, unknown>>;
   run(...params: SQLInputValue[]): { changes: number | bigint; lastInsertRowid: number | bigint };
+  iterate(...params: SQLInputValue[]): Iterable<Record<string, unknown>>;
 }
 
 export interface SubstrateDatabase {

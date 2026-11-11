@@ -1,0 +1,14 @@
+[Unit]
+Description=Substrate recall index build (oneshot, single writer)
+Documentation=file://@DOC_PATH@
+After=default.target
+
+[Service]
+Type=oneshot
+# One historian only: the indexer takes its own lock file as well, so a manual
+# run and a timer run cannot write at the same time.
+Nice=10
+IOSchedulingClass=idle
+MemoryMax=150M
+TimeoutStartSec=15min
+ExecStart=@SB_BIN@ recall-build --load-gate
