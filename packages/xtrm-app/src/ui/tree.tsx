@@ -2,35 +2,28 @@ import type { ReactNode } from "react";
 import { Icon } from "./icon.tsx";
 import { cx } from "./primitives.tsx";
 
-/** Indent per tree level. Disclosure chevrons sit on this grid, so the guides align with them. */
+/** Indent per tree level. Disclosure chevrons sit on this grid. */
 export const TREE_STEP = 20;
-/** Left padding before the first level's chevron. */
+/** Left padding before the first level's disclosure slot. */
 const TREE_PAD = 8;
-/** Reach of the horizontal elbow that joins a child row to its parent's spine. */
-const ELBOW = 6;
+/** Disclosure slot, then the gap and icon that follow it in a row's flex line. */
+const CHEVRON = 20;
+const GAP = 6;
+const ICON = 14;
+/** The guide hangs under the parent's type icon, so it reads as that row's spine. */
+const GUIDE_X = TREE_PAD + CHEVRON + GAP + ICON / 2;
 
 /**
- * Guides for one nested row: a spine per ancestor level, then the current level's spine
- * plus the elbow that points at the row. The current spine stops at mid-row when the row
- * is its parent's last child, which is what makes the tree readable at 32px.
+ * One straight guide per ancestor level, hanging under the ancestor's type icon.
+ * Each level steps by `step`, so the guides line up with the row's own icons.
  */
-export function TreeGuides({ depth, last, step = TREE_STEP }: { depth: number; last?: boolean; step?: number }) {
+export function TreeGuides({ depth, step = TREE_STEP }: { depth: number; step?: number }) {
   if (depth < 1) return null;
   return (
     <>
-      {Array.from({ length: depth }, (_, i) => i + 1).map((level) => {
-        const own = level === depth;
-        const stop = own && last;
-        return (
-          <span
-            key={level}
-            aria-hidden
-            className="pointer-events-none absolute w-px bg-tree-guide"
-            style={{ left: level * step - step / 2, top: stop ? "50%" : 0, bottom: stop ? "50%" : 0 }}
-          />
-        );
-      })}
-      <span aria-hidden className="pointer-events-none absolute h-px bg-tree-guide" style={{ left: depth * step - step / 2, top: "50%", width: ELBOW }} />
+      {Array.from({ length: depth }, (_, i) => i + 1).map((level) => (
+        <span key={level} aria-hidden className="pointer-events-none absolute inset-y-0 w-px bg-tree-guide" style={{ left: GUIDE_X + (level - 1) * step }} />
+      ))}
     </>
   );
 }
@@ -44,7 +37,6 @@ export function TreeCell({
   hasChildren,
   expanded,
   onToggle,
-  last,
   label,
   step = TREE_STEP,
   className,
@@ -54,8 +46,6 @@ export function TreeCell({
   hasChildren: boolean;
   expanded: boolean;
   onToggle: () => void;
-  /** The row is the last child of its parent: its own spine stops at mid-row. */
-  last?: boolean;
   /** Accessible name for the disclosure button, usually the issue ref. */
   label: string;
   step?: number;
@@ -64,7 +54,7 @@ export function TreeCell({
 }) {
   return (
     <div className={cx("relative", className)} style={{ paddingLeft: TREE_PAD + depth * step }}>
-      <TreeGuides depth={depth} last={last} step={step} />
+      <TreeGuides depth={depth} step={step} />
       {hasChildren ? (
         <button
           type="button"

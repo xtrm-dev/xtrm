@@ -87,16 +87,6 @@ export function IssuesSurface() {
   const rollups = useMemo(() => rollupActivity(issues.data ?? []), [issues.data]);
   const visible = useMemo(() => matching.filter(VIEWS.find(([v]) => v === view)![2]), [matching, view]);
   const tree = useMemo(() => buildTree(visible, rollups, sort, collapsed), [visible, rollups, sort, collapsed]);
-  /** A row is its parent's last child when the tree stops nesting after it (no row, or a shallower one). */
-  const lastChild = useMemo(() => {
-    const last = new Set<string>();
-    for (let i = 0; i < tree.length; i++) {
-      const row = tree[i]!;
-      const next = tree[i + 1];
-      if (!next || next.depth < row.depth) last.add(row.issue.id);
-    }
-    return last;
-  }, [tree]);
   const toggle = (ref: string) =>
     setCollapsed((c) => {
       const next = new Set(c);
@@ -159,7 +149,7 @@ export function IssuesSurface() {
           <IssueRow
             row={r}
             selected={inspected?.kind === "issue" && inspected.ref === r.issue.ref}
-            last={lastChild.has(r.issue.id)}
+           
             onToggle={() => toggle(r.issue.ref)}
             onInspect={() => inspect({ kind: "issue", ref: r.issue.ref })}
             onOpen={() => openPage(r.issue.ref)}
@@ -252,7 +242,7 @@ const STATUS_CHIP: Record<StatusTone, string> = {
   muted: "bg-hover text-ink-faint",
 };
 
-function IssueRow({ row, selected, last, onToggle, onInspect, onOpen }: { row: TreeRow; selected: boolean; last: boolean; onToggle: () => void; onInspect: () => void; onOpen: () => void }) {
+function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow; selected: boolean; onToggle: () => void; onInspect: () => void; onOpen: () => void }) {
   const { issue, depth, rollup, hasChildren, collapsed, detached } = row;
   const terminal = TERMINAL.has(issue.lifecycle);
   const status = issueStatus(issue);
@@ -276,7 +266,7 @@ function IssueRow({ row, selected, last, onToggle, onInspect, onOpen }: { row: T
       }}
     >
       <div className="grid h-full w-full items-center overflow-hidden" style={GRID}>
-        <TreeCell depth={depth} hasChildren={hasChildren} expanded={!collapsed} onToggle={onToggle} last={last} label={issue.ref} className={cx(CELL, "gap-1.5")}>
+        <TreeCell depth={depth} hasChildren={hasChildren} expanded={!collapsed} onToggle={onToggle} label={issue.ref} className={cx(CELL, "gap-1.5")}>
           <span title={issue.kind} className="flex shrink-0">
             <Icon name={kindIcon(issue.kind)} size="xs" className="text-ink-faint" />
           </span>
