@@ -106,6 +106,67 @@ export interface ParsedTrailers {
   receiptId: string | null;
 }
 
+export interface TrailerIssue {
+  issueId: string;
+  issueRevision: number | null;
+}
+
+export interface AllTrailers {
+  /** Every XTRM-Issue pair in message order, distinct by issue+revision. */
+  issues: TrailerIssue[];
+  /** Every XTRM-Receipt value in message order, deduped. */
+  receipts: string[];
+}
+
+/**
+ * Read every issue trailer, not only the last. T2 link writing and the
+ * trailer guard need all values: a commit may name one issue and a
+ * coordinator a second, or a squash commit may carry several issues.
+ */
+export function parseAllTrailers(message: string): AllTrailers {
+  const raw: TrailerIssue[] = [];
+  const receipts: string[] = [];
+  let current: TrailerIssue | null = null;
+  for (const line of message.split("\n")) {
+    const m = /^([A-Za-z-]+):\s*(.*?)\s*$/.exec(line);
+    if (!m) continue;
+    if (m[1] === TRAILER_ISSUE) {
+      const issueId = m[2]!.trim();
+      // An empty issue line is a reset: a following revision attaches to
+      // nothing, never to the previous issue.
+      if (issueId === "") {
+        current = null;
+        continue;
+      }
+      current = { issueId, issueRevision: null };
+      raw.push(current);
+    } else if (m[1] === TRAILER_REVISION) {
+      // A second revision never overwrites the first; a revision that is not
+      // plain decimal digits (0x10, -2) is malformed and ignored.
+      if (current === null || current.issueRevision !== null) continue;
+      const text = m[2]!.trim();
+      if (!/^\d+$/.test(text)) continue;
+      current.issueRevision = Number(text);
+    } else if (m[1] === TRAILER_RECEIPT) {
+      const receipt = m[2]!.trim();
+      if (receipt !== "" && !receipts.includes(receipt)) receipts.push(receipt);
+    }
+  }
+  const revised = new Set(raw.filter((t) => t.issueRevision !== null).map((t) => t.issueId));
+  const seen = new Set<string>();
+  const issues: TrailerIssue[] = [];
+  for (const t of raw) {
+    if (t.issueRevision === null && revised.has(t.issueId)) continue;
+    const key = `${t.issueId}|${t.issueRevision ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    issues.push(t);
+  }
+  return { issues, receipts };
+}
+
+// Single-value view for existing callers. It keeps the last value, which is
+// why it must not be used for issue resolution: use parseAllTrailers.
 export function parseTrailers(message: string): ParsedTrailers {
   const out: ParsedTrailers = { issueId: null, issueRevision: null, receiptId: null };
   for (const line of message.split("\n")) {
