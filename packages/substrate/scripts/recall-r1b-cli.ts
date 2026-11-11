@@ -287,8 +287,8 @@ interface CasefileCase {
   projectId: string;
   date: string;
   query: string;
-  answers_p: number;
-  standalone_p: number;
+  answers_p: number | null;
+  standalone_p: number | null;
   copied_trigrams: number;
   token_df: Array<{ token: string; df: number }>;
   min_df: number;
@@ -322,7 +322,11 @@ function commandCasefile(args: Args): void {
   const byDocKey = new Map<string, IndexDoc>();
   for (const doc of docs) byDocKey.set(docKey(doc.ref, doc.seq), doc);
 
-  const stats = { authored: authored.length, unknownTarget: 0, copied: 0, lowProbability: 0, lowDf: 0, templated: 0, accepted: 0, nullProbability: 0 };
+  // Rev 4 (CORE-2603 seq 6): acceptance is the mechanical rule plus coordinator
+  // hand review. Jev probabilities are shadow data and reject nothing unless
+  // the caller asks for the pre-ruling rule with --accept-rule jev.
+  const requireJev = flagString(args, "accept-rule", "mechanical") === "jev";
+  const stats = { authored: authored.length, unknownTarget: 0, copied: 0, lowProbability: 0, lowDf: 0, templated: 0, accepted: 0, nullProbability: 0, rejectedForProbability: 0 };
   const accepted: CasefileCase[] = [];
   const seen = new Set<string>();
   for (const testCase of authored) {
@@ -341,14 +345,16 @@ function commandCasefile(args: Args): void {
     const standaloneP = typeof testCase.standalone_p === "number" ? testCase.standalone_p : null;
     const copies = copiesOf(docs, doc);
     let reason: string | null = null;
-    if (answersP === null || standaloneP === null) {
-      stats.nullProbability += 1;
+    if (answersP === null || standaloneP === null) stats.nullProbability += 1;
+    if (answersP !== null && standaloneP !== null && (answersP < ACCEPT_P || standaloneP < ACCEPT_P)) stats.lowProbability += 1;
+    if (requireJev && (answersP === null || standaloneP === null)) {
+      stats.rejectedForProbability += 1;
       reason = "no_probability";
     } else if (testCase.copied_trigrams > 0) {
       stats.copied += 1;
       reason = "copied_trigrams";
-    } else if (answersP < ACCEPT_P || standaloneP < ACCEPT_P) {
-      stats.lowProbability += 1;
+    } else if (requireJev && answersP !== null && standaloneP !== null && (answersP < ACCEPT_P || standaloneP < ACCEPT_P)) {
+      stats.rejectedForProbability += 1;
       reason = "low_probability";
     } else if (tokenDf.length === 0 || minDf <= MIN_TOKEN_DF) {
       stats.lowDf += 1;
@@ -357,7 +363,7 @@ function commandCasefile(args: Args): void {
       stats.templated += 1;
       reason = "templated";
     }
-    if (reason !== null || answersP === null || standaloneP === null) continue;
+    if (reason !== null) continue;
     stats.accepted += 1;
     accepted.push({
       id: accepted.length + 1,
@@ -405,13 +411,14 @@ function commandCasefile(args: Args): void {
     weightsHash: weightsHash(),
     select,
     shareCap,
+    acceptRule: requireJev ? "jev" : "mechanical",
     stats,
     byProject: Object.fromEntries(perProject),
     cases: selected,
   });
   console.log(
     `casefile: authored ${stats.authored}, accepted ${stats.accepted}, selected ${selected.length}/${select} ` +
-      `(null-probability ${stats.nullProbability}, copied ${stats.copied}, low-probability ${stats.lowProbability}, rare-token ${stats.lowDf}, templated ${stats.templated}, unknown ${stats.unknownTarget})`,
+      `(copy-trigrams ${stats.copied}, rare-token ${stats.lowDf}, templated ${stats.templated}, unknown ${stats.unknownTarget}; shadow: null-probability ${stats.nullProbability}, low-probability ${stats.lowProbability})`,
   );
   if (select > 0 && selected.length < select) process.exitCode = 2;
 }
