@@ -47,3 +47,17 @@ describe("board PR column", () => {
     expect(header.getAttribute("aria-sort")).not.toBe("none");
   });
 });
+
+describe("pull request live state", () => {
+  it("renders live state, merge date, title and source labels", async () => {
+    const history = createMemoryHistory({ initialEntries: ["/rep/xtrm-dev/xtrm/work/issues/XTRM-301"] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const router = createAppRouter({ adapters: { ...fixtureAdapters, substrate: createFixtureSubstrate() }, history, queryClient });
+    render(<RouterProvider router={router} />);
+    const section = await screen.findByRole("region", { name: "Pull requests" });
+    expect(within(section).getByText("Add console feature")).toBeTruthy();
+    expect(within(section).getByText("merged")).toBeTruthy();
+    expect(within(section).getByText(/state unknown/)).toBeTruthy();
+    expect(within(section).getByText(/provenance/)).toBeTruthy();
+  });
+});
