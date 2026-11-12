@@ -38,7 +38,10 @@
     "test:suite": "node --import ./tests/hermetic-env.ts --test tests/*.test.ts",
     "test:bun": "bun tests/bun-acceptance.ts",
     "typecheck": "tsc --noEmit",
-    "version": "node scripts/sync-plugin-version.mjs && git add plugin/substrate/.claude-plugin/plugin.json"
+    "version": "node scripts/changelog-update.mjs --tag v$npm_package_version && node scripts/sync-plugin-version.mjs && git add CHANGELOG.md plugin/substrate/.claude-plugin/plugin.json",
+    "changelog": "node scripts/changelog-update.mjs",
+    "changelog:check": "node scripts/changelog-update.mjs --check",
+    "preversion": "node scripts/changelog-update.mjs"
   },
   "engines": {
     "node": ">=24.0.0",
