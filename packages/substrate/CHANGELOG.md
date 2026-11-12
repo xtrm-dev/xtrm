@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strict CLI surface, issue renew and help groups (XTRM-738) (#348) ([a200e56](https://github.com/xtrm-dev/xtrm/commit/a200e565cdbe008f33433af3ffd5830aaaeab09d))
 - Close gate joins T1/T2 and links check shows verdicts (XTRM-729) (#347) ([50e21f0](https://github.com/xtrm-dev/xtrm/commit/50e21f02abd71eb7159a39b4ad622b7c95106cdc))
 - PR block, link timeline and board column (XTRM-730) (#353) ([6cbf97a](https://github.com/xtrm-dev/xtrm/commit/6cbf97a4885991369bc4da840ca84f000a2eb4dc))
+- Generate CHANGELOG via git-cliff preversion hook (XTRM-748) ([47d7e58](https://github.com/xtrm-dev/xtrm/commit/47d7e58b0eb8feff01306af4509a7dcd2fc3113b))
 
 ### Fixed
 - RenderCapsule emits semantic SUMMARY (xtrm-7wc.6.1) (#130) ([69fb51b](https://github.com/xtrm-dev/xtrm/commit/69fb51bad5308ca5db5c1d2823d22e52b760ded3))
