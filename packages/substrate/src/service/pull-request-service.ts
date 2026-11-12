@@ -146,7 +146,18 @@ export class PullRequestService {
         trailerRevision: r.trailer_revision,
       }),
     );
-    return groupIssuePullRequests(rows, commits);
+    const views = groupIssuePullRequests(rows, commits);
+    for (const view of views) {
+      const stateRow = this.db
+        .prepare("SELECT state, title, merged_at FROM pull_requests WHERE repository = ? AND number = ?")
+        .get(view.repository, view.number) as { state: string; title: string | null; merged_at: number | null } | undefined;
+      if (stateRow) {
+        view.state = stateRow.state;
+        view.title = stateRow.title;
+        view.mergedAt = stateRow.merged_at;
+      }
+    }
+    return views;
   }
 
   // -- writers (XTRM-727) ----------------------------------------------------

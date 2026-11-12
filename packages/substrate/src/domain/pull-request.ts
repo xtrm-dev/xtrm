@@ -52,6 +52,10 @@ export interface IssuePullRequestView {
   actor: string | null;
   createdAt: number;
   commits: IssuePrCommitRow[];
+  /** Live state from pull_requests (null if not yet populated). */
+  state: string | null;
+  title: string | null;
+  mergedAt: number | null;
 }
 
 export interface CanonicalPullReference {
@@ -121,6 +125,9 @@ export function groupIssuePullRequests(
         actor: row.actor,
         createdAt: row.createdAt,
         commits: [],
+        state: null,
+        title: null,
+        mergedAt: null,
       });
       continue;
     }
