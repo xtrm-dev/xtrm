@@ -41,7 +41,7 @@ describe("board PR column", () => {
     render(<RouterProvider router={router} />);
     const header = await screen.findByRole("columnheader", { name: /PR/ });
     expect(header).toBeTruthy();
-    const cell = await screen.findByText("#211");
+    const cell = await screen.findByText("#211 merged");
     expect(cell).toBeTruthy();
     fireEvent.click(within(header).getByRole("button"));
     expect(header.getAttribute("aria-sort")).not.toBe("none");
