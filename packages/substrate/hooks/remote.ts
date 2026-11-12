@@ -119,17 +119,6 @@ export function resolveIssueRef(repoRoot: string): string | null {
   } catch {
     /* no worktree config */
   }
-  const file = join(repoRoot, ".substrate-issue");
-  if (existsSync(file)) {
-    try {
-      if (!isTracked(repoRoot, ".substrate-issue")) {
-        const text = readFileSync(file, "utf8").trim().split("\n")[0]?.trim();
-        if (text) return text;
-      }
-    } catch {
-      /* ignore */
-    }
-  }
   try {
     const branch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
       cwd: repoRoot,
@@ -138,7 +127,7 @@ export function resolveIssueRef(repoRoot: string): string | null {
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
     if (branch && branch !== "HEAD") {
-      const match = branch.match(/[A-Z][A-Z0-9]*-\d+(?:\.\d+)*/);
+      const match = branch.match(/(?<![A-Za-z0-9])([A-Z][A-Z0-9]*)-(\d+(?:\.\d+)*)(?![A-Za-z0-9])/);
       if (match) return match[0];
     }
   } catch {
