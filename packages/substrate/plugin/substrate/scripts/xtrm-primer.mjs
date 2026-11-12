@@ -89,9 +89,13 @@ function launchIdentity(env) {
   return lines.length ? `### Launch identity\n\n${lines.join("\n")}` : null;
 }
 
+const ALWAYS_ON = `XTRM always-on rules (primer-injected; excerpt — load the full skill before relying on it).
+
+- Run identity: a PR marker's run= takes the worker's own runtime session id — PI_SESSION_ID in Pi, the Claude session id in Claude — never XTRM_SESSION_ID or XTRM_PARENT_SESSION_ID, which are tmux session ids ($N) that every window in one tmux session shares (CORE-2619; the gh shim refuses a $N run=).`;
+
 let context = null;
 try {
-  context = [launchIdentity(process.env), buildPrimer()].filter(Boolean).join("\n\n") || null;
+  context = [launchIdentity(process.env), ALWAYS_ON, buildPrimer()].filter(Boolean).join("\n\n") || null;
 } catch {
   context = null;
 }
