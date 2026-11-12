@@ -46,7 +46,7 @@ describe("journal paging", () => {
   it("keeps the newest page and says so when the CLI cannot page", () => {
     // An ascending read starts at sequence 1 and still leaves entries unread.
     renderTab(issue(page(1, 2000), 2500), () => Promise.resolve([]));
-    expect(screen.getByText(/paging needs substrate 0\.3\.1 or newer/)).toBeTruthy();
+    expect(screen.getByText(/paging needs a substrate CLI with the journal cursor/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Load \d+ older/ })).toBeNull();
     expect(screen.getByText(/Showing 50 of 2500 entries/)).toBeTruthy();
   });

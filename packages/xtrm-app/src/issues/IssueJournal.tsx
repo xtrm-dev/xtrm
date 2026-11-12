@@ -276,7 +276,7 @@ export function JournalTab({
                 {loadingOlder ? "Loading older entries…" : `Load ${Math.min(JOURNAL_PAGE * 4, missing)} older`}
               </button>
             )}
-            {legacyRead && <span role="status">Showing the oldest {entries.length} of {issue.journalTotal} entries; paging needs substrate 0.3.1 or newer.</span>}
+            {legacyRead && <span role="status">Showing the oldest {entries.length} of {issue.journalTotal} entries; paging needs a substrate CLI with the journal cursor.</span>}
             {pagingError && <span role="alert" className="text-danger">could not load older entries: {pagingError}</span>}
           </div>
         </>
