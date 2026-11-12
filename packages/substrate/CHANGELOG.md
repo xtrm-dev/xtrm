@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.2] - 2026-11-12
+
+### Added
+- `sb journal show <ref> --tail <n>` returns the newest window of full bodies, and `--before <seq> --limit <n>` pages backwards from a cursor, so a journal larger than one page is fully reachable (XTRM-641).
+- `journal.listEntries` accepts `before`; `journal show` accepts `--tail` and `--before`. Both are additive: `--limit` keeps its ascending meaning.
+
+### Fixed
+- `sb journal show` no longer silently drops the newest entries when a journal exceeds the limit. The truncation was an ascending `LIMIT`, which kept the oldest rows.
+
+---
+
 ## [0.3.1] - 2026-11-11
 
 ### Fixed
