@@ -103,6 +103,17 @@ describe("pull-request reconciler", () => {
     rmSync(w.dir, { recursive: true, force: true });
   });
 
+  it("a single PR sync upserts pull_requests state (PR-open path)", () => {
+    const receipt = receiptFor(w);
+    const message = `XTRM-Issue: ${w.issue.humanRef}\nXTRM-Receipt: ${receipt.id}`;
+    w.source.put(observation(), [{ sha: "b".repeat(40), message }]);
+    const report = w.sync.sync({ projectId: "prj_xtrm", repositories: ["o/r"], actor: "w", onlyPr: { repository: "o/r", number: 7 } });
+    assert.equal(report.failures, 0);
+    const row = w.db.prepare("SELECT state FROM pull_requests WHERE repository = ? AND number = ?").get("o/r", 7) as { state: string } | undefined;
+    assert.ok(row, "pull_requests row missing");
+    assert.equal(row.state, "open");
+  });
+
   it("migration 015 stores live state with the conditional cache", () => {
     const cols = w.db.prepare("PRAGMA table_info(pull_requests)").all() as Array<{ name: string }>;
     for (const name of ["state", "draft", "head_sha", "merge_commit_sha", "title", "url", "base_ref", "merged_at", "closed_at", "etag", "last_modified", "last_synced_at"]) {
