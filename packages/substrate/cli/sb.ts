@@ -378,7 +378,7 @@ groups:
   plan        check|apply
   journal     append|checkpoint|show|since|latest|timeline|render
   provenance  dispatch|allocate|bind|trace|commit|receipt|pr|session|activation|bundle
-  links       check (slice 1: read-only dry run)
+  links       check|sync
   remote      setup|status|disable
   import      beads
   export      project
