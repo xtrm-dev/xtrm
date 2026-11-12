@@ -28,6 +28,8 @@ import {
 import {
   ARTIFACT_KINDS,
   attachTrailers,
+  attachIssueTrailers,
+  formatIssueTrailers,
   formatTrailers,
   isArtifactKind,
   isValidReceiptId,
@@ -764,6 +766,30 @@ export class ProvenanceService {
       issueRevision: receipt.issueRevision,
       receiptId: receipt.id,
     }));
+  }
+
+  // XTRM-684: trailers derived from an Issue without a receipt. Resolves the
+  // Issue, reads its current revision and any Jira binding, and formats the
+  // host-owned trailer block. Throws when the ref cannot be resolved; the hook
+  // turns that into a stderr note and leaves the message untouched.
+  trailersForIssue(issueRef: string, message: string, agent?: string | null): string {
+    const issue = this.issues.resolveRef(issueRef);
+    const jiraKey = this.jiraKeyForIssue(issue.id);
+    return attachIssueTrailers(message, formatIssueTrailers({
+      issueId: issue.id,
+      issueRevision: issue.currentRevision,
+      jiraKey,
+      agent: agent ?? null,
+    }));
+  }
+
+  private jiraKeyForIssue(issueId: string): string | null {
+    const rows = this.db.prepare(
+      "SELECT remote_key, remote_id FROM external_bindings WHERE issue_id = ? AND provider = 'jira' ORDER BY created_at LIMIT 1",
+    ).all(issueId) as Array<{ remote_key: string | null; remote_id: string | null }>;
+    const row = rows[0];
+    if (!row) return null;
+    return row.remote_key ?? row.remote_id ?? null;
   }
 
   private buildBundle(issueId: string, now: number): ProvenanceBundle {

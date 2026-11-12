@@ -101,6 +101,13 @@ describe("E31-E33: trailers, SHA binding, rewrite reconciliation", () => {
     assert.match(msg, new RegExp(`XTRM-Receipt: ${receipt.id}`));
     assert.equal(prov.trailersForCommit(receipt.id, msg), msg, "re-attach is a no-op");
 
+    const issueOnly = prov.trailersForIssue(issue.id, "issue work\n", "holder-1");
+    assert.match(issueOnly, new RegExp(`XTRM-Issue: ${issue.id}`));
+    assert.match(issueOnly, /XTRM-Issue-Revision: 1/);
+    assert.match(issueOnly, /Agent: holder-1/);
+    assert.equal(prov.trailersForIssue(issue.id, issueOnly, "holder-1"), issueOnly, "issue trailers are idempotent");
+    assert.throws(() => prov.trailersForIssue("XTRM-999999", "x\n"), /unresolvable ref/);
+
     const bound = prov.bindCommit(receipt.id, SHA_A);
     assert.equal(bound.commitSha, SHA_A);
     assert.ok(bound.finalizedAt !== null);

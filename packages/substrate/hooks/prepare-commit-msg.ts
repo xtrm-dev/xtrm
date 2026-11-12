@@ -16,7 +16,7 @@ import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { armPipeDrain } from "../integrations/write-and-exit.ts";
-import { remoteHookMode, remotePrepareCommitMsg } from "./remote.ts";
+import { remoteHookMode, remotePrepareCommitMsg, resolveIssueRef } from "./remote.ts";
 
 function dbPath(): string {
   return process.env["SUBSTRATE_DB"] ?? join(homedir(), ".xtrm", "state.db");
@@ -33,12 +33,21 @@ if (!messageFile) process.exit(0);
 // the mode decision so a remote checkout with no active execution pays no ssh
 // round trip on every commit, and a quiet exit stays a quiet exit.
 const receiptId = process.env["XTRM_RECEIPT_ID"];
-if (!receiptId) process.exit(0);
 
-if (remoteHookMode()) {
-  remotePrepareCommitMsg(messageFile);
+if (receiptId) {
+  if (remoteHookMode()) {
+    remotePrepareCommitMsg(messageFile);
+  } else {
+    localPrepareCommitMsg(messageFile, receiptId);
+  }
 } else {
-  localPrepareCommitMsg(messageFile, receiptId);
+  const issueRef = resolveIssueRef(process.cwd());
+  if (!issueRef) process.exit(0);
+  if (remoteHookMode()) {
+    remotePrepareCommitMsg(messageFile, issueRef);
+  } else {
+    localPrepareCommitMsgForIssue(messageFile, issueRef);
+  }
 }
 
 function localPrepareCommitMsg(file: string, receipt: string): void {
@@ -51,6 +60,25 @@ function localPrepareCommitMsg(file: string, receipt: string): void {
   } catch (err) {
     process.stderr.write(`xtrm prepare-commit-msg: ${err instanceof Error ? err.message : String(err)}\n`);
     process.exitCode = 1;
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      /* close must not mask the result */
+    }
+  }
+}
+
+function localPrepareCommitMsgForIssue(file: string, issueRef: string): void {
+  let db: ReturnType<typeof openSubstrate> | null = null;
+  try {
+    db = openSubstrate(dbPath());
+    const svc = new ProvenanceService(db, new IssueService(db));
+    const message = readFileSync(file, "utf8");
+    const agent = process.env["SUBSTRATE_HOLDER"] ?? null;
+    writeFileSync(file, svc.trailersForIssue(issueRef, message, agent));
+  } catch (err) {
+    process.stderr.write(`xtrm prepare-commit-msg: ${err instanceof Error ? err.message : String(err)}\n`);
   } finally {
     try {
       db?.close();

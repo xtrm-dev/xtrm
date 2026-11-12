@@ -16,7 +16,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { normalizeWorkspace } from "../src/domain/claim.ts";
-import { attachTrailers, formatTrailers } from "../src/domain/provenance.ts";
+import { attachIssueTrailers, formatIssueTrailers, attachTrailers, formatTrailers } from "../src/domain/provenance.ts";
 import { selectRemote } from "../src/remote/config.ts";
 import { ambientEnv, hookMapping, hookSession, localStoreRequested } from "../src/remote/executor.ts";
 import { clientRepositoryKey, runRemote, runRemoteJson, type RemoteSession } from "../src/remote/session.ts";
@@ -103,6 +103,48 @@ function discoverIssueRef(repoRoot: string): string | null {
   } catch {
     return null;
   }
+}
+
+export function resolveIssueRef(repoRoot: string): string | null {
+  const env = process.env["SUBSTRATE_ISSUE_REF"]?.trim() || process.env["SUBSTRATE_ISSUE"]?.trim();
+  if (env) return env;
+  try {
+    const out = execFileSync("git", ["config", "--worktree", "--get", "xtrm.issue"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (out) return out;
+  } catch {
+    /* no worktree config */
+  }
+  const file = join(repoRoot, ".substrate-issue");
+  if (existsSync(file)) {
+    try {
+      if (!isTracked(repoRoot, ".substrate-issue")) {
+        const text = readFileSync(file, "utf8").trim().split("\n")[0]?.trim();
+        if (text) return text;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  try {
+    const branch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (branch && branch !== "HEAD") {
+      const match = branch.match(/[A-Z][A-Z0-9]*-\d+(?:\.\d+)*/);
+      if (match) return match[0];
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 function headSha(cwd: string): string | null {
@@ -208,26 +250,43 @@ export function remotePostCommit(repoRoot: string): void {
   }
 }
 
-export function remotePrepareCommitMsg(messageFile: string): void {
+export function remotePrepareCommitMsg(messageFile: string, issueRef?: string | null): void {
   try {
     const session = openSession();
     if (session === null) return;
     const receiptId = validReceiptId(process.env["XTRM_RECEIPT_ID"]);
-    if (receiptId === null) return;
     const root = cachedRoot(session);
     if (root === null) return;
-    // --json is not decoration: without it the server answers with a rendered
-    // line, the parse found no `receipt`, and the trailer was silently skipped
-    // while the commit looked healthy (review H3).
-    const data = (runRemoteJson(session, ["provenance", "receipt", receiptId, "--json"], { cwd: root, env: ambientEnv() })) as {
-      receipt?: { id?: string; issueId?: string; issueRevision?: number };
-    };
-    const receipt = data.receipt;
-    if (!receipt || typeof receipt.issueId !== "string" || typeof receipt.issueRevision !== "number") return;
     const message = readFileSync(messageFile, "utf8");
+    if (receiptId !== null) {
+      // --json is not decoration: without it the server answers with a rendered
+      // line, the parse found no `receipt`, and the trailer was silently skipped
+      // while the commit looked healthy (review H3).
+      const data = (runRemoteJson(session, ["provenance", "receipt", receiptId, "--json"], { cwd: root, env: ambientEnv() })) as {
+        receipt?: { id?: string; issueId?: string; issueRevision?: number };
+      };
+      const receipt = data.receipt;
+      if (!receipt || typeof receipt.issueId !== "string" || typeof receipt.issueRevision !== "number") return;
+      writeFileSync(
+        messageFile,
+        attachTrailers(message, formatTrailers({ issueId: receipt.issueId, issueRevision: receipt.issueRevision, receiptId: receipt.id ?? receiptId })),
+      );
+      return;
+    }
+    const resolved = validIssueRef(issueRef ?? resolveIssueRef(process.cwd()));
+    if (resolved === null) return;
+    const data = (runRemoteJson(session, ["provenance", "trace", resolved, "--json"], { cwd: root, env: ambientEnv() })) as {
+      issueId?: string;
+      revision?: number;
+      externalBindings?: Array<{ provider?: string; remoteKey?: string | null; remoteId?: string | null }>;
+    };
+    if (typeof data.issueId !== "string" || typeof data.revision !== "number") return;
+    const jira = (data.externalBindings ?? []).find((binding) => binding.provider === "jira");
+    const jiraKey = jira?.remoteKey ?? jira?.remoteId ?? null;
+    const agent = process.env["SUBSTRATE_HOLDER"] ?? null;
     writeFileSync(
       messageFile,
-      attachTrailers(message, formatTrailers({ issueId: receipt.issueId, issueRevision: receipt.issueRevision, receiptId: receipt.id ?? receiptId })),
+      attachIssueTrailers(message, formatIssueTrailers({ issueId: data.issueId, issueRevision: data.revision, jiraKey, agent })),
     );
   } catch (err) {
     warn(err);

@@ -100,6 +100,22 @@ export function attachTrailers(message: string, trailers: string): string {
   return `${trimmed}\n\n${trailers}\n`;
 }
 
+// Host-owned trailer block derived from an Issue without a receipt (XTRM-684).
+// Idempotent: a message that already names an Issue is left untouched, so an
+// amend or rebase that keeps the message never duplicates trailers.
+export function formatIssueTrailers(input: { issueId: string; issueRevision: number; jiraKey?: string | null; agent?: string | null }): string {
+  const lines = [`${TRAILER_ISSUE}: ${input.issueId}`, `${TRAILER_REVISION}: ${input.issueRevision}`];
+  if (input.jiraKey) lines.push(`Jira: ${input.jiraKey}`);
+  if (input.agent) lines.push(`Agent: ${input.agent}`);
+  return lines.join("\n");
+}
+
+export function attachIssueTrailers(message: string, trailers: string): string {
+  if (message.includes(`${TRAILER_ISSUE}:`)) return message;
+  const trimmed = message.replace(/\s+$/, "");
+  return `${trimmed}\n\n${trailers}\n`;
+}
+
 export interface ParsedTrailers {
   issueId: string | null;
   issueRevision: number | null;
