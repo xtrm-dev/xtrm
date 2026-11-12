@@ -284,7 +284,7 @@ Data sources (select with `VITE_XTRM_GITHUB|SUBSTRATE|PROGRAM|RESEARCH=live|fixt
 | surface | default | source |
 |---|---|---|
 | GitHub / repository Activity, repository list | live | Console v1 backend (`XTRM_CONSOLE_URL`, default `http://127.0.0.1:3030`) via Vite proxy |
-| Substrate Issues list, issue page, issue drawer, Jira-style editing | live | installed `sb` CLI envelope `substrate-cli/v1` through an allow-listed bridge; reads plus writes via `sb issue edit/state/note/create` (`XTRM_SUBSTRATE_WRITES=0` for read-only, `XTRM_SB_DB=<path>` for a dev database); never SQLite |
+| Substrate Issues list, issue page, issue drawer, Jira-style editing | live | installed `sb` CLI envelope `substrate-cli/v1` through an allow-listed bridge; reads plus writes via `sb issue edit/state/note/create` (`XTRM_SUBSTRATE_WRITES=0` for read-only, `XTRM_SB_DB=<path>` for a dev database); never SQLite. `sb` is resolved first-match along `PATH`, so an older install in any ancestor `node_modules/.bin` wins over a newer global one: set `XTRM_SB_BIN=<absolute path>` to pin it, and read the resolved path and version from `/xtrm-api/substrate/capabilities` (`sb`, `sbVersion`) |
 | Research runs, registry experiments, sample records, metrics, comparison | live | `xtrm-research --json` read verbs (`xtrm-research-cli/v1`) through an allow-listed bridge, pointed by `XTRM_RESEARCH_BIN`, `XTRM_RESEARCH_ROOT`, `XTRM_RESEARCH_REGISTRY_ROOT`; start it with `npm run research:dev` (below) or `npm run research:fixture` for the UI alone |
 | Program | fixture | Console backend `/api/programme` is disabled by deployment policy (404); fixture uses the same `ProgrammeSnapshotResponse` mapper |
 

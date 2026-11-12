@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { interpretJournalProbe, readArgv, resolveSbBin, writeArgv } from "./substrate-cli.ts";
+import { downgradeNotice, interpretJournalProbe, readArgv, resolveSbBin, shadowedBinHint, writeArgv } from "./substrate-cli.ts";
 
 const q = (s: string) => new URLSearchParams(s);
 
@@ -26,6 +26,20 @@ describe("sb binary resolution", () => {
       process.env.PATH = path;
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("sb binary diagnostics", () => {
+  it("flags an npm-prepended node_modules/.bin as the shadowing case", () => {
+    expect(shadowedBinHint("/home/u/dev/node_modules/.bin/sb")).toMatch(/shadowed/);
+    expect(shadowedBinHint("C:\\dev\\node_modules\\.bin\\sb")).toMatch(/shadowed/);
+    expect(shadowedBinHint("/home/u/.nvm/versions/node/v25/bin/sb")).toBeNull();
+  });
+
+  it("names the binary and version when journal paging downgrades", () => {
+    expect(downgradeNotice("/old/node_modules/.bin/sb", "0.2.2")).toContain("/old/node_modules/.bin/sb (sb 0.2.2)");
+    expect(downgradeNotice("sb", null)).toContain("(sb unknown)");
+    expect(downgradeNotice("sb", "0.2.2")).toContain("XTRM_SB_BIN");
   });
 });
 

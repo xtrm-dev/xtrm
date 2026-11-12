@@ -181,6 +181,22 @@ export function writeArgv(pathname: string, body: Record<string, unknown>): stri
  * `spawn sb ENOENT` while `sb` works fine in every interactive shell.
  * A name containing a path separator is taken as given.
  */
+/**
+ * A binary resolved from an npm-prepended `node_modules/.bin` is the usual way a
+ * newer `sb` gets shadowed: npm puts every ancestor `node_modules/.bin` first, so
+ * an old install in a parent folder silently wins over the global one (XTRM-644).
+ */
+export function shadowedBinHint(bin: string): string | null {
+  return /[\\/]node_modules[\\/]\.bin[\\/]/.test(bin)
+    ? "resolved from node_modules/.bin, which npm puts first on PATH: a newer global sb may be shadowed"
+    : null;
+}
+
+/** One line naming the binary a journal-paging downgrade came from. */
+export function downgradeNotice(bin: string, version: string | null): string {
+  return `[substrate bridge] ${bin} (sb ${version ?? "unknown"}) rejects \`journal show --tail\`: journal reads use one page. Set XTRM_SB_BIN to an sb >= 0.3.2 if this is a shadowed copy.`;
+}
+
 export function resolveSbBin(bin: string): string {
   if (bin.includes("/") || bin.includes("\\")) return bin;
   for (const dir of [...(process.env.PATH ?? "").split(delimiter), dirname(process.execPath)]) {
@@ -240,11 +256,30 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
   // Flags are validated before arguments, so this probe needs no real ref. The
   // answer is time-boxed, not process-lifetime: after an sb upgrade a restart
   // would otherwise be the only way back to the paged read.
+  const shadowed = shadowedBinHint(bin);
+  if (shadowed) console.log(`[substrate bridge] sb: ${bin} — ${shadowed}`);
+  let binVersion: string | null = null;
+  let versionRead = false;
+  const readBinVersion = async (): Promise<string | null> => {
+    if (versionRead) return binVersion;
+    versionRead = true;
+    try {
+      const { body } = await runSb(bin, undefined, ["--version"]);
+      const parsed = JSON.parse(body) as { data?: { version?: unknown } };
+      if (typeof parsed.data?.version === "string") binVersion = parsed.data.version;
+    } catch {
+      // keep null: the notice says "unknown"
+    }
+    return binVersion;
+  };
   const journalPaging = async (): Promise<boolean | null> => {
     if (pagingSupport && Date.now() - pagingSupport.at < JOURNAL_PROBE_MS) return pagingSupport.value;
     const { body } = await runSb(bin, db, ["journal", "show", "--tail", "1"]);
     const value = interpretJournalProbe(body);
-    if (value !== null) pagingSupport = { value, at: Date.now() };
+    if (value !== null) {
+      if (value === false && pagingSupport?.value !== false) console.warn(downgradeNotice(bin, await readBinVersion()));
+      pagingSupport = { value, at: Date.now() };
+    }
     return value;
   };
 
@@ -255,7 +290,11 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
     res.setHeader("content-type", "application/json");
 
     if (req.method === "GET") {
-      if (path === "/capabilities") return res.end(JSON.stringify({ writes, db: db ? "custom" : "default", journalPaging: await journalPaging() }));
+      if (path === "/capabilities") {
+        return res.end(
+          JSON.stringify({ writes, db: db ? "custom" : "default", journalPaging: await journalPaging(), sb: bin, sbVersion: await readBinVersion() }),
+        );
+      }
       const argv = readArgv(path, url.searchParams);
       if (!argv) {
         res.statusCode = 400;
