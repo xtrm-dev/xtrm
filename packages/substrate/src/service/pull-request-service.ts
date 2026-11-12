@@ -467,7 +467,7 @@ export class PullRequestService {
       }
     }
     if (chosen === undefined) chosen = provenance.listReceipts(issueId).at(-1);
-    if (chosen === undefined) throw new Error(`no_receipt: no receipt for this issue; run \`sb provenance dispatch <ref>\` first`);
+    if (chosen === undefined) throw new Error(`no_receipt: no receipt for this issue; run \`sb provenance dispatch <ref>\` then \`sb provenance allocate <ref>\` first`);
     const verdict = this.classifyReceipt(chosen.id, issueId);
     if (!verdict.ok) throw new Error(`${verdict.code}: ${verdict.detail}`);
     return verdict.receipt;

@@ -112,7 +112,7 @@ describe("pull-request writers", () => {
   it("b3 falls back to the latest receipt and refuses when there is none", () => {
     assert.throws(
       () => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w" }, PR),
-      /no_receipt/,
+      (err: Error) => /no_receipt/.test(err.message) && /dispatch/.test(err.message) && /allocate/.test(err.message),
     );
     const { receipt } = dispatchWithClaim(w);
     const view = w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w" }, PR);
