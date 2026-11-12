@@ -168,6 +168,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The rewrite examples use values that reach the rewrite (XTRM-741) (#355) ([7b214aa](https://github.com/xtrm-dev/xtrm/commit/7b214aae06b96e4dd6ca38771f684dc76b2bfeaa))
 - Register temp dirs and remove them after the suite (CORE-2612) (#356) ([714fc4a](https://github.com/xtrm-dev/xtrm/commit/714fc4ab1d0440e9917d1a184af874c5646e56f3))
 - Links, close gate, holder default, journal limits (CORE-2623) (#364) ([a96ee0b](https://github.com/xtrm-dev/xtrm/commit/a96ee0b4a82f7ce6a37105e1ca8139628a7e5b50))
+- Refresh changelog [Unreleased] (XTRM-748) ([fc556fd](https://github.com/xtrm-dev/xtrm/commit/fc556fd56aa86ab7b067a3c612b0cf7862d5614a))
 
 ## [0.3.2] - 2026-11-12
 
