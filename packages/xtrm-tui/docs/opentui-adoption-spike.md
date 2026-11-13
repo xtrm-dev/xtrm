@@ -2,7 +2,7 @@
 
 **Status:** bounded evaluation plan; no renderer decision made  
 **Owner:** `xtrm-dev/xtrm/packages/xtrm-tui`  
-**Tracking:** XTRM-112; implementation/product parent XTRM-86  
+**Tracking:** XTRM-779 (spike execution)  
 **Target runtime:** Bun + TypeScript  
 **Baseline:** `@earendil-works/pi-tui`  
 **Candidate:** `@opentui/core` + `@opentui/solid` + pinned `solid-js`
@@ -17,16 +17,16 @@ OpenCode is a reference implementation and evidence that OpenTUI is used in a su
 
 ## 2. Current repository baseline
 
-Verified on `xtrm-dev/xtrm` `main` at `6656c8e7aa6dbe0ac0ee035bf95b95db1144edf1`:
+Verified on `xtrm-dev/xtrm` `main` at `ba290220`:
 
 - Product contract: `packages/xtrm-tui/docs/xtrm-tui-prd.md`.
 - Adoption gate: `packages/xtrm-tui/docs/adoption-audit.md`, which explicitly retains `pi-tui` unless a local spike demonstrates a concrete blocker or advantage.
 - `packages/xtrm-tui/src/tool-view.ts` contains a pure, renderer-independent tri-state policy: `compressed`, `normal`, `expanded`.
-- `packages/xtrm-tui/src/agent-command-sketch.ts` is explicitly a structural sketch and throws rather than launching a TUI.
+- `packages/xtrm-tui/src/main.ts` is the runnable spike entry (`--fixture`, `--prove-render`, `--prove-live`, or an interactive live TUI); `src/shell.ts` is a minimal FrameShell over stock `pi-tui`, with `src/frame.ts` and `src/live.ts` carrying state and the live binding.
 - `packages/xtrm-tui/package.json` currently declares Node `>=24.0.0`, not Bun. This is metadata to reconcile before a runnable Bun entrypoint is merged; do not assume it proves Bun incompatibility or that the runtime has already been migrated.
 - The PRD requires Pi's runtime/resource/session machinery, extension compatibility, native session topology and `agent_settled` Frame completion semantics to remain authoritative.
 
-This spike therefore compares rendering/input libraries only. It must not conflate renderer choice with the separate runtime/fork discussion in XTRM-111.
+This spike therefore compares rendering/input libraries only. It must not conflate renderer choice with the separate runtime/fork discussion recorded in the PRD.
 
 ## 3. Source-backed candidate facts
 
