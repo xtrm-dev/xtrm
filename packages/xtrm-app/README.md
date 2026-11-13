@@ -271,7 +271,8 @@ src/shell/       AppShell, layout reducer (drawer states, restore rules, URL cod
                  context sidebar, inspector, global search/commands
 src/adapters/    github | substrate | program | research — interface + live + typed fixture each
 src/issues/      Jira-style Issues: list, issue page, shared IssueView, field editors, normalization, create dialog
-src/surfaces/    Activity, Program, Repositories, Research (runs, comparison, run analysis + semantic sections), deferred placeholders
+src/surfaces/    Activity (mixed feed, below), Program, Repositories, Research (runs, comparison, run analysis + semantic sections), deferred placeholders
+src/activity/    the mixed Activity feed: row contract, merge/counts, one loader per source
 src/app/         TanStack Router routes, one TanStack Query layer
 server/          dev-server bridge: read-only `sb … --json` allow-list, read-only `xtrm-research --json` allow-list,
                  agent host over SSH (bootstrap, forward, Open in terminal), agent host read routes (sessions, event stream)
@@ -283,7 +284,7 @@ Data sources (select with `VITE_XTRM_GITHUB|SUBSTRATE|PROGRAM|RESEARCH=live|fixt
 
 | surface | default | source |
 |---|---|---|
-| GitHub / repository Activity, repository list | live | Console v1 backend (`XTRM_CONSOLE_URL`, default `http://127.0.0.1:3030`) via Vite proxy |
+| GitHub / repository Activity, repository list | live | Console v1 backend (`XTRM_CONSOLE_URL`, default `http://127.0.0.1:3030`) via Vite proxy. Activity is a MIXED feed (XTRM-757): Substrate journal entries (`/xtrm-api/substrate/journal-feed`), GitHub pull requests, issues, reviews and comments, and the local git log (`/xtrm-api/substrate/git-log`, resolved from the checkouts `sb project links` reports — the request names a repository, never a path). GitHub never supplies commits, so a commit row has exactly one producer. Jira is absent from the filter row until it is connected, and the design mock lives at `docs/mocks/sidebar-weight-connection-activity.html` |
 | Substrate Issues list, issue page, issue drawer, Jira-style editing | live | installed `sb` CLI envelope `substrate-cli/v1` through an allow-listed bridge; reads plus writes via `sb issue edit/state/note/create` (`XTRM_SUBSTRATE_WRITES=0` for read-only, `XTRM_SB_DB=<path>` for a dev database); never SQLite. `sb` is resolved first-match along `PATH`, so an older install in any ancestor `node_modules/.bin` wins over a newer global one: set `XTRM_SB_BIN=<absolute path>` to pin it, and read the resolved path and version from `/xtrm-api/substrate/capabilities` (`sb`, `sbVersion`) |
 | Research runs, registry experiments, sample records, metrics, comparison | live | `xtrm-research --json` read verbs (`xtrm-research-cli/v1`) through an allow-listed bridge, pointed by `XTRM_RESEARCH_BIN`, `XTRM_RESEARCH_ROOT`, `XTRM_RESEARCH_REGISTRY_ROOT`; start it with `npm run research:dev` (below) or `npm run research:fixture` for the UI alone |
 | Program | fixture | Console backend `/api/programme` is disabled by deployment policy (404); fixture uses the same `ProgrammeSnapshotResponse` mapper |

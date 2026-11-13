@@ -315,6 +315,51 @@ function runSb(bin: string, db: string | undefined, argv: string[]): Promise<{ s
   });
 }
 
+/** A repository named `owner/name`; the only shape a URL may supply. */
+const GIT_REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+/** The git log window the Activity feed asks for. */
+export const GIT_LOG_MAX = 100;
+
+interface GitCommit {
+  sha: string;
+  author: string;
+  subject: string;
+  at: number;
+}
+
+/**
+ * Resolve the on-disk checkout for a repository by asking sb for the linked
+ * git roots and comparing each root's `origin` remote. The path never comes
+ * from the request: a URL supplies only `owner/name`, and an unmatched name
+ * fails closed instead of reading whatever directory happens to sit there.
+ */
+export function resolveCheckoutRoot(roots: string[], remotes: Map<string, string | null>, repo: string): string | null {
+  for (const root of roots) {
+    const remote = remotes.get(root) ?? null;
+    if (remote === null) continue;
+    const normalized = remote
+      .replace(/^git@github\.com:/, "")
+      .replace(/^https?:\/\/github\.com\//, "")
+      .replace(/\.git$/, "");
+    if (normalized.toLowerCase() === repo.toLowerCase()) return root;
+  }
+  return null;
+}
+
+/** One line per commit; the separators are unit/record separators so a subject with tabs survives. */
+export function parseGitLog(stdout: string): GitCommit[] {
+  const out: GitCommit[] = [];
+  for (const line of stdout.split("\n")) {
+    if (line.trim() === "") continue;
+    const [sha, author, at, subject] = line.split("\u001f");
+    if (!sha || !author || !at) continue;
+    const seconds = Number(at);
+    if (!Number.isFinite(seconds)) continue;
+    out.push({ sha, author, subject: subject ?? "", at: seconds * 1000 });
+  }
+  return out;
+}
+
 function readBody(req: IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve) => {
     let raw = "";
@@ -402,6 +447,46 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
     }
   };
 
+  // XTRM-757: the local git log behind the Activity feed's git source. The
+  // checkout is resolved from sb's own links, so a request can only name a
+  // repository the board already knows.
+  const readGitLog = async (repo: string, limit: number): Promise<{ status: number; body: string }> => {
+    const fail = (error: string) => ({ status: 200, body: JSON.stringify({ ok: false, error }) });
+    const links = await runSb(bin, db, ["project", "links"]);
+    let roots: string[] = [];
+    try {
+      const parsed = JSON.parse(links.body) as { ok?: boolean; data?: { links?: Array<{ gitRoot?: unknown }> } };
+      if (parsed.ok === false) return fail("sb project links failed");
+      roots = (parsed.data?.links ?? []).map((l) => l.gitRoot).filter((r): r is string => typeof r === "string" && r !== "");
+    } catch {
+      return fail("sb project links returned no JSON");
+    }
+    if (roots.length === 0) return fail("no linked git checkout to read");
+    const remotes = new Map<string, string | null>();
+    for (const root of roots) {
+      remotes.set(
+        root,
+        await new Promise<string | null>((resolve) => {
+          execFile("git", ["-C", root, "config", "--get", "remote.origin.url"], { timeout: 5_000 }, (err, stdout) =>
+            resolve(err ? null : stdout.trim() || null),
+          );
+        }),
+      );
+    }
+    const root = resolveCheckoutRoot(roots, remotes, repo);
+    if (root === null) return fail(`no linked checkout for ${repo}`);
+    const log = await new Promise<string | null>((resolve) => {
+      execFile(
+        "git",
+        ["-C", root, "log", `-${limit}`, "--date=unix", "--format=%H%x1f%an%x1f%at%x1f%s"],
+        { timeout: 20_000, maxBuffer: 16 * 1024 * 1024 },
+        (err, stdout) => resolve(err ? null : stdout),
+      );
+    });
+    if (log === null) return fail(`git log failed in ${root}`);
+    return { status: 200, body: JSON.stringify({ ok: true, repo, root, commits: parseGitLog(log) }) };
+  };
+
   const handle = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = new URL(req.url ?? "/", "http://local");
     if (!url.pathname.startsWith(prefix)) return next();
@@ -421,6 +506,28 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
             connection: await readConnection(),
           }),
         );
+      }
+      if (path === "/git-log") {
+        // XTRM-757: the git source. The bridge reads the checkout on disk; the
+        // request names a repository, never a path.
+        const repo = url.searchParams.get("repo") ?? "";
+        const rawLimit = Number(url.searchParams.get("limit") ?? "40");
+        if (!GIT_REPO_RE.test(repo)) {
+          res.statusCode = 400;
+          return res.end(JSON.stringify({ ok: false, error: "expected repo=owner/name" }));
+        }
+        if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > GIT_LOG_MAX) {
+          res.statusCode = 400;
+          return res.end(JSON.stringify({ ok: false, error: `limit must be 1..${GIT_LOG_MAX}` }));
+        }
+        const key = `git-log ${repo} ${rawLimit}`;
+        let hit = cache.get(key);
+        if (!hit || Date.now() - hit.at > TTL_MS) hit = { at: Date.now(), value: readGitLog(repo, rawLimit) };
+        cache.set(key, hit);
+        const { status, body } = await hit.value;
+        if (status !== 200) cache.delete(key);
+        res.statusCode = status;
+        return res.end(body);
       }
       const argv = readArgv(path, url.searchParams);
       if (!argv) {

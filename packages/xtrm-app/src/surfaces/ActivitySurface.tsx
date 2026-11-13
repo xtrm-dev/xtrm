@@ -1,83 +1,160 @@
-import { useAdapters, type RepoEvent } from "../adapters/index.tsx";
-import { useEvents } from "../app/queries.ts";
-import { GithubNotice } from "../github/auth.tsx";
-import { activityRef, eventTitle } from "../shell/Inspector.tsx";
+import { useMemo, useState } from "react";
+import { projectForRepo, useActivityFeed, useProjects } from "../app/queries.ts";
+import { ReferenceChip } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
-import { Icon, type IconName } from "../ui/icon.tsx";
-import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, SurfaceToolbar, relativeTime } from "../ui/primitives.tsx";
-import { VirtualList } from "../ui/virtual-list.tsx";
+import { Badge, type BadgeTone } from "../ui/badge.tsx";
+import { Icon } from "../ui/icon.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, TOOLBAR_CONTROL, TOOLBAR_GHOST, TOOLBAR_REST, SurfaceToolbar, cx, relativeTime } from "../ui/primitives.tsx";
+import { activityCounts, filterActivity } from "../activity/merge.ts";
+import type { ActivityRow, ActivitySource } from "../activity/types.ts";
 
-const ICON: Record<RepoEvent["kind"], IconName> = {
-  push: "commit",
-  pull_request: "pull",
-  issue_comment: "comment",
-  issue: "comment",
-  release: "release",
-  create: "branch",
-  delete: "delete",
-  other: "activity",
-};
+/** Source chip: the one new visual element, built from the badge tone set. */
+const SOURCE_LABEL: Record<ActivitySource, string> = { substrate: "substrate", github: "github", git: "git", jira: "jira" };
+const SOURCE_TONE: Record<ActivitySource, BadgeTone> = { substrate: "accent", github: "neutral", git: "muted", jira: "muted" };
+
+function SourceChip({ source }: { source: ActivitySource }) {
+  return (
+    <Badge tone={SOURCE_TONE[source]} size="xs" className="uppercase tracking-wide">
+      {SOURCE_LABEL[source]}
+    </Badge>
+  );
+}
+
+/** The filter row: counts, never bare toggles. Jira stays out until it is connected. */
+function Filters({ total, bySource, active, onPick }: { total: number; bySource: Record<ActivitySource, number>; active: ActivitySource | null; onPick: (s: ActivitySource | null) => void }) {
+  const chips: Array<{ source: ActivitySource | null; label: string; count: number }> = [
+    { source: null, label: "All", count: total },
+    { source: "substrate", label: "Substrate", count: bySource.substrate },
+    { source: "github", label: "GitHub", count: bySource.github },
+    { source: "git", label: "Git", count: bySource.git },
+  ];
+  return (
+    <SurfaceToolbar>
+      {chips.map((chip) => {
+        const on = active === chip.source;
+        return (
+          <button
+            key={chip.label}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onPick(chip.source)}
+            className={cx(TOOLBAR_CONTROL, on ? TOOLBAR_REST : TOOLBAR_GHOST, "gap-1.5")}
+          >
+            <span>{chip.label}</span>
+            <span className="tabular text-ink-faint">{chip.count}</span>
+          </button>
+        );
+      })}
+    </SurfaceToolbar>
+  );
+}
+
+/** One row: an accordion, so a glance never navigates away. */
+function ActivityRowView({ row, open, onToggle }: { row: ActivityRow; open: boolean; onToggle: () => void }) {
+  const { inspect } = useShell();
+  const ref = row.refs[0];
+  return (
+    <li className="border-b border-border-subtle last:border-0">
+      <Row className="min-h-11 items-start py-2" onActivate={onToggle} aria-expanded={open}>
+        <Icon name={open ? "open" : "forward"} size="xs" className="mt-1 shrink-0 text-ink-faint" />
+        <SourceChip source={row.source} />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 leading-tight">
+          <span className="min-w-0 truncate text-ink">
+            {row.actor !== null && <span className="text-ink-muted">{row.actor} </span>}
+            <span className="text-ink-muted">{row.verb} </span>
+            <span className="font-medium">{row.object}</span>
+          </span>
+          {row.refs.length > 0 && (
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
+              {row.refs.map((r) =>
+                r.kind === "issue" || r.kind === "pr" ? (
+                  // The console's own chip: same reference vocabulary as prose and the drawer.
+                  <ReferenceChip key={`${r.kind}:${r.ref}`} reference={{ kind: r.kind, ref: r.ref }} />
+                ) : (
+                  <span key={`${r.kind}:${r.ref}`} className="font-mono text-xs text-ink-faint">
+                    {r.ref}
+                  </span>
+                ),
+              )}
+            </div>
+          )}
+        </div>
+        <span className="w-10 shrink-0 text-right text-xs text-ink-faint tabular">{relativeTime(row.at)}</span>
+      </Row>
+      {open && (
+        <div className="flex flex-col gap-2 px-6 pb-3">
+          {row.meta.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[0.68rem] text-ink-faint">
+              {row.meta.map(([k, v], i) => (
+                <span key={k}>
+                  {i > 0 && <span aria-hidden> · </span>}
+                  {k} {v}
+                </span>
+              ))}
+            </div>
+          )}
+          {row.body !== null && (
+            <p className="max-h-64 overflow-auto border-l border-border-muted pl-2 text-xs whitespace-pre-wrap text-ink-muted">{row.body}</p>
+          )}
+          <div className="flex items-center gap-1.5">
+            {ref && (
+              <button
+                type="button"
+                className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)}
+                onClick={() => {
+                  if (ref.kind === "issue") inspect({ kind: "issue", ref: ref.ref });
+                  else if (ref.kind === "pr") inspect({ kind: "pr", ref: ref.ref });
+                }}
+              >
+                <Icon name="external" size="xs" /> Open {ref.kind === "pr" ? "pull request" : "issue"}
+              </button>
+            )}
+            <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)} onClick={() => void navigator.clipboard?.writeText(row.refs[0]?.ref ?? row.id)}>
+              <Icon name="copy" size="xs" /> Copy ref
+            </button>
+            <span className="ml-auto font-mono text-[0.68rem] text-ink-faint">{row.kind}</span>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
 
 export function ActivitySurface() {
-  const { repo, inspect, inspected, layout } = useShell();
-  const { github } = useAdapters();
+  const { repo, layout, inspected } = useShell();
+  const projects = useProjects();
+  const projectId = projectForRepo(projects.data, repo)?.id ?? null;
   const follow = layout.inspector.followLive && inspected?.kind === "activity";
-  const events = useEvents(repo.fullName, follow);
+  const { states } = useActivityFeed({ repo: repo.fullName, projectId, follow });
+  const [active, setActive] = useState<ActivitySource | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
 
-  let body;
-  if (events.isPending) body = <LoadingState label="Loading activity" />;
-  else if (events.isError) body = <ErrorState title="GitHub backend is unavailable" error={events.error} />;
-  else if (!events.data.length) body = <EmptyState icon="activity" title={`No recorded activity for ${repo.fullName}`} />;
-  else
-    body = (
-      <VirtualList
-        label="Repository activity"
-        items={events.data}
-        rowHeight={44}
-        getKey={(e) => e.id}
-        renderRow={(e) => {
-          const ref = activityRef(e);
-          return (
-            <Row className="h-11" selected={inspected?.kind === "activity" && inspected.ref === ref} onActivate={() => inspect({ kind: "activity", ref })}>
-              <Icon name={ICON[e.kind]} size="xs" className="shrink-0 text-ink-faint" />
-              <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                <span className="truncate text-ink">{eventTitle(e)}</span>
-                <span className="truncate text-xs text-ink-faint">
-                  {e.actor}
-                  {e.action && ` ${e.action}`}
-                  {e.branch && ` · ${e.branch}`}
-                </span>
-              </div>
-              {e.additions != null && (
-                <span className="shrink-0 text-xs tabular">
-                  <span className="text-diff-add">+{e.additions}</span> <span className="text-diff-del">−{e.deletions ?? 0}</span>
-                </span>
-              )}
-              <span className="w-10 shrink-0 text-right text-xs text-ink-faint tabular">{relativeTime(e.createdAt)}</span>
-            </Row>
-          );
-        }}
-      />
-    );
+  const counts = useMemo(() => activityCounts(states), [states]);
+  const rows = useMemo(() => filterActivity(states.flatMap((s) => s.rows), active), [states, active]);
+  const failed = states.filter((s) => s.error !== null);
+  const loading = states.every((s) => s.pending);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col" aria-label="Repository activity">
-      <SurfaceToolbar>
-        <span className="truncate text-[11px] text-ink-faint">{repo.fullName}</span>
-        <SourceBadge source={github.source} />
-        {events.data && <span className="text-[11px] text-ink-faint tabular">{events.data.length} events</span>}
-        <div className="ml-auto" />
-        <OptionsMenu
-          label="Activity options"
-          items={[
-            { label: "Refresh", icon: "live", onSelect: () => void events.refetch() },
-            { label: "Open on GitHub", icon: "external", onSelect: () => void window.open(`https://github.com/${repo.fullName}`, "_blank", "noreferrer") },
-          ]}
-        />
-      </SurfaceToolbar>
-      <GithubNotice repo={repo.fullName} />
-      {body}
-    </section>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <Filters total={counts.all} bySource={counts.bySource} active={active} onPick={setActive} />
+      <div className="min-h-0 flex-1 overflow-auto">
+        {failed.map((s) => (
+          <div key={s.source} className="border-b border-border-subtle px-3 py-2">
+            <ErrorState title={`${s.source} source unavailable`} error={s.error} />
+          </div>
+        ))}
+        {loading ? (
+          <LoadingState label="Loading activity" />
+        ) : rows.length === 0 ? (
+          <EmptyState icon="activity" title={active === null ? `No recorded activity for ${repo.fullName}` : `No ${active} activity for ${repo.fullName}`} />
+        ) : (
+          <ol aria-label="Activity feed" className="flex flex-col">
+            {rows.map((row) => (
+              <ActivityRowView key={row.id} row={row} open={openId === row.id} onToggle={() => setOpenId(openId === row.id ? null : row.id)} />
+            ))}
+          </ol>
+        )}
+      </div>
+    </div>
   );
 }

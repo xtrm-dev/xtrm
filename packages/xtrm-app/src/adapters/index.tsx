@@ -9,6 +9,8 @@ import { fixtureProgram } from "./program/fixture.ts";
 import { liveProgram } from "./program/live.ts";
 import { fixtureResearch } from "./research/fixture.ts";
 import { liveResearch } from "./research/live.ts";
+import { liveGitActivity } from "./git/live.ts";
+import { fixtureGitActivity } from "./git/fixture.ts";
 import { fixtureSubstrate } from "./substrate/fixture.ts";
 import { liveSubstrate } from "./substrate/live.ts";
 import type { Adapters, DataSource } from "./types.ts";
@@ -36,6 +38,8 @@ export function adaptersFromEnv(env: Record<string, string | undefined> = import
     substrate: pick("VITE_XTRM_SUBSTRATE", "live") === "live" ? liveSubstrate : fixtureSubstrate,
     program: pick("VITE_XTRM_PROGRAM", "fixture") === "live" ? liveProgram : fixtureProgram,
     research: pick("VITE_XTRM_RESEARCH", "live") === "live" ? liveResearch : fixtureResearch,
+    // The git source rides the same bridge as the board: one deployment decision.
+    gitActivity: pick("VITE_XTRM_SUBSTRATE", "live") === "live" ? liveGitActivity : fixtureGitActivity,
   };
 }
 
@@ -47,6 +51,7 @@ export const fixtureAdapters: Adapters = {
   substrate: fixtureSubstrate,
   program: fixtureProgram,
   research: fixtureResearch,
+  gitActivity: fixtureGitActivity,
 };
 
 const AdaptersContext = createContext<Adapters | null>(null);
