@@ -378,7 +378,7 @@ groups:
   plan        check|apply
   journal     append|checkpoint|show|since|latest|timeline|render
   provenance  dispatch|allocate|bind|trace|commit|receipt|pr|session|activation|bundle
-  links       check (slice 1: read-only dry run)
+  links       check|sync
   remote      setup|status|disable
   import      beads
   export      project
@@ -826,7 +826,7 @@ and activation answer what one session touched or one activation produced.
 Record what happened in the Journal and close with cited refs; never edit
 the contract to narrate history.`,
   "provenance.dispatch": `usage: sb provenance dispatch <ref> [--workspace <dir>] [--participant/--activation/--attempt/--session/--base-commit <v>] [--claim-id <n>] [--project <id>]`,
-  "links": `usage: sb links <check> [args...]\n\ncheck lists T2 candidates (PR commits whose XTRM-Issue trailer names an Issue); slice 1 is read-only.`,
+  "links": `usage: sb links <check|sync> [args...]\n\ncheck lists T2 candidates (PR commits whose XTRM-Issue trailer names an Issue); sync runs the one-shot reconciler.`,
   "links.check": `usage: sb links check [--issue <ref>] [--project <id>] [--repo owner/name] [--limit <n>] [--link-gate warn|enforce|off] [--dry-run]
 
 Read-only. Without --issue, lists T2 candidates: PR commits whose XTRM-Issue

@@ -287,10 +287,14 @@ describe("links help", () => {
     const direct = runCli(["--db", db, "links", "--help"]);
     assert.equal(direct.code, 0);
     assert.match(direct.stdout, /usage: sb links/);
+    assert.match(direct.stdout, /\bsync\b/);
+    assert.doesNotMatch(direct.stdout, /slice 1/i);
 
     const viaHelp = runCli(["--db", db, "help", "links"]);
     assert.equal(viaHelp.code, 0);
     assert.match(viaHelp.stdout, /usage: sb links/);
+    assert.match(viaHelp.stdout, /\bsync\b/);
+    assert.doesNotMatch(viaHelp.stdout, /slice 1/i);
 
     const bare = runCli(["--db", db, "links"]);
     assert.notEqual(bare.code, 0);
