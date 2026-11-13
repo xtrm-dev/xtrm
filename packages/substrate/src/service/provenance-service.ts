@@ -783,13 +783,11 @@ export class ProvenanceService {
     }));
   }
 
+  // One definition of "the Jira binding": the same ordered read the trace uses,
+  // so a trailer can never name a different key than `sb provenance trace` shows.
   private jiraKeyForIssue(issueId: string): string | null {
-    const rows = this.db.prepare(
-      "SELECT remote_key, remote_id FROM external_bindings WHERE issue_id = ? AND provider = 'jira' ORDER BY created_at LIMIT 1",
-    ).all(issueId) as Array<{ remote_key: string | null; remote_id: string | null }>;
-    const row = rows[0];
-    if (!row) return null;
-    return row.remote_key ?? row.remote_id ?? null;
+    const binding = this.listExternal(issueId).find((b) => b.provider === "jira");
+    return binding ? (binding.remoteKey ?? binding.remoteId) : null;
   }
 
   private buildBundle(issueId: string, now: number): ProvenanceBundle {

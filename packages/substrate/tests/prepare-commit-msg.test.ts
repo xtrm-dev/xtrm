@@ -74,8 +74,10 @@ describe("prepare-commit-msg issue trailers (XTRM-684)", () => {
     assert.match(r.message, /XTRM-Issue-Revision: 1/);
   });
 
-  it("resolves from git config --worktree xtrm.issue", () => {
-    execFileSync("git", ["config", "--worktree", "xtrm.issue", issueId], { cwd: repo });
+  it("resolves xtrm.issue from the repository config (the form a person types)", () => {
+    // `git config --worktree` is fatal without extensions.worktreeConfig, and this
+    // project always has several worktrees; the reader uses plain `--get`.
+    execFileSync("git", ["config", "xtrm.issue", issueRef], { cwd: repo });
     const r = runHook(repo, dbPath, {}, "work\n");
     assert.equal(r.code, 0);
     assert.match(r.message, new RegExp(`XTRM-Issue: ${issueId}`));
@@ -98,7 +100,7 @@ describe("prepare-commit-msg issue trailers (XTRM-684)", () => {
     const foreign = runHook(repo, dbPath, {}, "work\n");
     assert.equal(foreign.code, 0);
     assert.equal(foreign.message, "work\n", "a ref-shaped word that names no Issue adds no trailer");
-    assert.match(foreign.stderr, /unresolvable ref/);
+    assert.equal(foreign.stderr.trim(), "", "a branch-derived guess that misses stays silent: every commit on such a branch would otherwise warn");
   });
 
   it("names the Jira key when the Issue carries a jira binding", () => {
@@ -123,6 +125,7 @@ describe("prepare-commit-msg issue trailers (XTRM-684)", () => {
   });
 
   it("leaves the message unchanged and exits 0 for an unknown ref", () => {
+    // An explicit ref is a deliberate statement, so a miss is reported.
     const r = runHook(repo, dbPath, { SUBSTRATE_ISSUE_REF: "XTRM-999999" }, "work\n");
     assert.equal(r.code, 0);
     assert.equal(r.message, "work\n");
