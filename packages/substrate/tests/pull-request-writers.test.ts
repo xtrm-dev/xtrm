@@ -199,6 +199,20 @@ describe("pull-request writers", () => {
     assert.match(res.stdout, /created_from o\/r#7 merged 2026-11-12 the real title/);
   });
 
+  it("an assumed row renders as 'open (assumed)' in the human view (XTRM-754)", () => {
+    // Drop the ternary in renderPullRequests and this fails; the merged case above
+    // would not notice.
+    const { receipt } = dispatchWithClaim(w);
+    w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR);
+    const res = runCli(["--db", join(w.dir, "state.db"), "issue", "show", w.issue.humanRef]);
+    assert.equal(res.code, 0, res.stderr);
+    assert.match(res.stdout, /created_from o\/r#7 open \(assumed\)/);
+    // The JSON view carries the marker too.
+    const json = runCli(["--db", join(w.dir, "state.db"), "issue", "show", w.issue.humanRef, "--json"]);
+    const payload = JSON.parse(json.stdout) as { data?: { pullRequests?: Array<{ stateSource?: string | null }> } };
+    assert.equal(payload.data?.pullRequests?.[0]?.stateSource, "assumed");
+  });
+
   it("a foreign receipt is a hard refusal with nothing written", () => {
     const other = w.svc.createIssue({ projectId: "prj_xtrm", title: "other", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
     w.svc.attestReadiness(other.id, { outcome: "ready", policy: "default", attestedBy: "tester" });
