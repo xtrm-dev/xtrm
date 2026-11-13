@@ -311,7 +311,7 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
         <div className={cx(CELL, "justify-end")}>
           {issue.primaryPr && (
             <span title={`${issue.primaryPr.relation} ${issue.primaryPr.state ?? "state unknown"}`} className="truncate text-xs text-ink-muted tabular">
-              #{issue.primaryPr.number}
+              #{issue.primaryPr.number} {issue.primaryPr.state ?? "state unknown"}
             </span>
           )}
         </div>

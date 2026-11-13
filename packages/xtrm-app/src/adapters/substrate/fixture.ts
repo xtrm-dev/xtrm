@@ -132,8 +132,8 @@ export function createFixtureSubstrate(): SubstrateAdapter {
       const terminal = ["done", "cancelled", "archived"].includes(s.lifecycle);
       const demoLinks: IssueDetail["pullRequests"] = ref === "XTRM-301"
         ? [
-            { id: 1, repository: "Jaggerxtrm/console", number: 211, relation: "created_from", sources: ["provenance"], alsoMentioned: false, url: "https://github.com/Jaggerxtrm/console/pull/211", actor: "t0a7", createdAt: NOW, commits: [{ sha: "abc123", landedSha: null }] },
-            { id: 2, repository: "Jaggerxtrm/console", number: 213, relation: "mentioned", sources: ["title"], alsoMentioned: false, url: "https://github.com/Jaggerxtrm/console/pull/213", actor: null, createdAt: NOW, commits: [] },
+            { id: 1, repository: "Jaggerxtrm/console", number: 211, relation: "created_from", sources: ["provenance"], alsoMentioned: false, url: "https://github.com/Jaggerxtrm/console/pull/211", actor: "t0a7", createdAt: NOW, commits: [{ sha: "abc123", landedSha: null }], state: "merged", stateSource: "observed", title: "Add console feature", mergedAt: NOW },
+            { id: 2, repository: "Jaggerxtrm/console", number: 213, relation: "mentioned", sources: ["title"], alsoMentioned: false, url: "https://github.com/Jaggerxtrm/console/pull/213", actor: null, createdAt: NOW, commits: [], state: null, stateSource: null, title: null, mergedAt: null },
           ]
         : [];
       const detail: IssueDetail = {
