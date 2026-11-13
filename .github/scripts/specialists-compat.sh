@@ -32,7 +32,8 @@ cmd_guard_substrate() {
   # Neutral-import guard (xtrm-6qu.7.4 invariant, mirrored from
   # tests/sqlite-runtime.test.ts): no STATIC value import of
   # node:sqlite/bun:sqlite anywhere — the opener selects the driver lazily
-  # via conditional require() in src/store/sqlite.ts, so Bun 1.3.14 never
+  # via conditional require() in src/store/sqlite.ts, so the lane's Bun (1.4.4,
+  # pinned in .github/workflows/specialists-compat.yml) never
   # resolves its missing node:sqlite built-in. `import type` lines are
   # erased at runtime and safe.
   local offenders
