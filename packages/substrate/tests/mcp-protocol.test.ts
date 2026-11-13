@@ -318,6 +318,53 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     assert.equal(closed["terminalState"], "done");
   });
 
+  it("issue_update repairs only a SUPPLIED contract and reports it (XTRM-786 review)", async () => {
+    // The review found this surface unguarded: mutating repair:supplied to a
+    // literal true, or dropping contractNormalised, left every suite green. Both
+    // halves are pinned here — a supplied prose contract is repaired and
+    // reported, and a metadata-only edit leaves a legacy contract alone.
+    const call = async (extra: Record<string, unknown>) => {
+      const res = await wire.send("tools/call", {
+        name: "issue_update",
+        arguments: { dbPath: s.dbPath, project: "prj_xtrm", ref: s.humanRef, ...extra },
+        _meta: meta(),
+      });
+      assert.ok(!res.error, JSON.stringify(res.error));
+      return JSON.parse(((res.result as { content: Array<{ text: string }> }).content[0] as { text: string }).text) as Record<string, unknown>;
+    };
+
+    // A supplied prose contract is repaired, and the response says so.
+    const repaired = await call({ contract: { ...contract(), validation: ["mcp prose check"], output: ["mcp prose artifact"] } });
+    assert.deepEqual(repaired["contractNormalised"], [
+      { field: "validation", key: "check", count: 1 },
+      { field: "output", key: "artifact", count: 1 },
+    ]);
+
+    // A legacy contract written behind the service's back, then touched only
+    // through ownership: the stored bytes must survive untouched and the
+    // response must carry no repair note.
+    const db = openSubstrate(s.dbPath);
+    const svc = new IssueService(db);
+    const issue = svc.resolveRef(s.humanRef);
+    const legacy = { ...contract(), validation: ["legacy prose check"], output: ["legacy prose artifact"] };
+    db.prepare("UPDATE issue_revisions SET contract_json = ? WHERE issue_id = ? AND revision = ?").run(
+      JSON.stringify(legacy),
+      issue.id,
+      issue.currentRevision,
+    );
+    db.close();
+
+    const ownershipOnly = await call({ ownership: { paths: ["packages/substrate"] } });
+    assert.equal(ownershipOnly["contractNormalised"], undefined, "a metadata-only edit reports no contract repair");
+    const after = openSubstrate(s.dbPath);
+    try {
+      const read = new IssueService(after).getRevision(new IssueService(after).resolveRef(s.humanRef).id, new IssueService(after).getIssue(new IssueService(after).resolveRef(s.humanRef).id).currentRevision);
+      assert.deepEqual((read.contract as { validation: unknown }).validation, ["legacy prose check"], "MCP ownership edit must not normalise the stored contract");
+    } finally {
+      after.close();
+    }
+  });
+
   it("tool call over real stdio reads the same row sb wrote (tmp DB)", async () => {
     const entry = join(import.meta.dirname, "..", "integrations", "claude-code", "mcp-server.ts");
     const child = spawn("node", [entry], { env: { ...process.env, SUBSTRATE_DB: s.dbPath }, stdio: ["pipe", "pipe", "pipe"] });

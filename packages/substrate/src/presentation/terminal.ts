@@ -3,6 +3,7 @@
 // projects them for human TTY/plain surfaces.
 
 import { previewText } from "../domain/journal.ts";
+import { describeContractRepairs, type ContractRepair } from "../domain/contract.ts";
 import {
   errorFeedback,
   noopFeedback,
@@ -442,13 +443,30 @@ function issueRefFromArgs(args: string[]): string | null {
   return idx >= 0 && args[idx + 2] ? args[idx + 2]! : null;
 }
 
+// The write path repairs a prose validation/output entry and reports it
+// (XTRM-786): the one-line notice names each field and how many entries it
+// normalised, so the author sees what was stored instead of a silent rewrite.
+function contractRepairNote(data: Record<string, unknown>): string | undefined {
+  const repairs = data["contractNormalised"];
+  if (!Array.isArray(repairs) || repairs.length === 0) return undefined;
+  return describeContractRepairs(repairs as ContractRepair[]);
+}
+
 export function feedbackForCommand(command: string, args: string[], data: Record<string, unknown>): OperationFeedback {
   const ref = String(data.humanRef ?? data.locator ?? issueRefFromArgs(args) ?? data.issueId ?? "issue");
   switch (command) {
     case "issue.create":
-      return successFeedback("issue_created", `Created ${ref}${data.kind ? ` [${String(data.kind)}]` : ""}${data.title ? ` · ${String(data.title)}` : ""}`);
-    case "issue.edit":
-      return successFeedback("issue_updated", `Updated ${ref}`, data.revisionCreated ? "new revision created; readiness must be revalidated" : undefined);
+      return successFeedback(
+        "issue_created",
+        `Created ${ref}${data.kind ? ` [${String(data.kind)}]` : ""}${data.title ? ` · ${String(data.title)}` : ""}`,
+        contractRepairNote(data),
+      );
+    case "issue.edit": {
+      const detail = [contractRepairNote(data), data.revisionCreated ? "new revision created; readiness must be revalidated" : undefined]
+        .filter(Boolean)
+        .join(" · ");
+      return successFeedback("issue_updated", `Updated ${ref}`, detail || undefined);
+    }
     case "issue.note":
       return successFeedback("journal_written", `Added ${String(data.kind ?? "note")} to ${issueRefFromArgs(args) ?? ref}`, data.sequence ? `journal seq ${String(data.sequence)}` : undefined);
     case "issue.attest":

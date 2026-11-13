@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, linkSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tempDir } from "./helpers.ts";
 import { RemoteError, buildRemoteCommand } from "../src/remote/spec.ts";
@@ -465,6 +465,38 @@ describe("remote execution passthrough", () => {
     assert.equal(readFileSync(receive, "utf8"), summary);
     const argv = fake.calls().at(-1)?.argv ?? [];
     assert.notEqual(argv[argv.indexOf("--summary-file") + 1], summaryPath, "the server never receives this machine's path");
+  });
+
+  it("uploads a --summary-file given as a relative path (XTRM-786)", () => {
+    // The path is relative to the caller's cwd. It must be resolved here, never
+    // handed to the server: the server's cwd is a checkout that has no such
+    // file, which is exactly how the reported failure read.
+    const receive = join(tempDir("sb-remote-summary-rel-"), "summary.md");
+    const fake = makeFake({ mode: "file", fileFlag: "--summary-file", receive, version: "sb 0.3.2\n" });
+    assert.ok(CLIENT_KEY);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
+    const summaryPath = join(fake.dir, "summary-relative.md");
+    const summary = "## SUMMARY\nrelative-path probe; the server has no file under this name.\n";
+    writeFileSync(summaryPath, summary);
+    const relativePath = relative(process.cwd(), summaryPath);
+    assert.ok(!relativePath.startsWith("/"), "the probe must stay a relative path");
+    const inner = localTransport();
+    const transport: RemoteTransport = {
+      run: (request) => {
+        // The caller's copy is gone before the server runs.
+        rmSync(summaryPath, { force: true });
+        return inner.run(request);
+      },
+    };
+    const result = forwardCli(
+      ["journal", "append", "XTRM-786", "--kind", "note", "--project", "prj_x", "--summary-file", relativePath],
+      { env: remoteEnv(fake.clientConfigPath), transport },
+    );
+    assert.ok(result);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(readFileSync(receive, "utf8"), summary);
+    const argv = fake.calls().at(-1)?.argv ?? [];
+    assert.notEqual(argv[argv.indexOf("--summary-file") + 1], relativePath, "the server never receives this machine's relative path");
   });
 
   it("forwards --summary-file - as the client's stdin (XTRM-751)", () => {

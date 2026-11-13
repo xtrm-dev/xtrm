@@ -66,9 +66,109 @@ export function assertContractShape(contract: unknown): asserts contract is Work
   }
 }
 
+// -- normalisation (XTRM-786) -------------------------------------------------
+// A prose entry where {check}/{artifact} belongs is a slight shape error, not a
+// reason to lose the contract: the create/edit write path repairs it and says
+// so. The repair only rewrites a plain string; whether a stored entry is
+// ACCEPTABLE is readiness's verdict alone (validateContractStructure), so an
+// object that already carries the key — including {check: ""} — is stored as
+// written and judged there. The two deliberately differ: the write path owns
+// shape, readiness owns the draft verdict.
+
+export interface ContractRepair {
+  field: "validation" | "output";
+  key: "check" | "artifact";
+  count: number;
+}
+
+export interface NormalisedContract {
+  contract: WorkContract;
+  repairs: ContractRepair[];
+}
+
+const NORMALISABLE_FIELDS = [
+  { field: "validation", key: "check", example: '{"check": "…"}' },
+  { field: "output", key: "artifact", example: '{"artifact": "…"}' },
+] as const;
+
+// One entry of the two object-array fields. An array entry fails here because
+// it carries no named key, which is the same verdict readiness reached before
+// this predicate existed.
+function isValidContractEntry(entry: unknown, key: string): boolean {
+  if (typeof entry !== "object" || entry === null) return false;
+  const value = (entry as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() !== "";
+}
+
+// Normalisation only converts a plain string. An object that already carries
+// the key is left exactly as it is, even when the value is empty or of the
+// wrong type: that contract stays the draft it was (readiness still rejects it),
+// which is the behaviour a contract stored before this change had and keeps.
+// Refusing it here would newly reject input that creates today.
+function hasEntryKey(entry: unknown, key: string): boolean {
+  return typeof entry === "object" && entry !== null && !Array.isArray(entry) && key in (entry as Record<string, unknown>);
+}
+
+function describeEntry(entry: unknown): string {
+  if (entry === null) return "null";
+  if (typeof entry === "string") return `a string ${JSON.stringify(entry.length > 60 ? `${entry.slice(0, 57)}…` : entry)}`;
+  if (Array.isArray(entry)) return "an array";
+  if (typeof entry !== "object") return `${typeof entry} (${String(entry)})`;
+  const text = JSON.stringify(entry) ?? "";
+  return text.length > 80 ? `${text.slice(0, 77)}…` : text;
+}
+
+/**
+ * Repairs the two object-array fields on the create/edit write path: a string
+ * entry becomes `{check}` / `{artifact}`, an object that already carries the key
+ * is carried through untouched (extra keys included, empty value included — the
+ * draft verdict is readiness's to make, not this function's), and an entry that
+ * cannot be repaired unambiguously is refused with the field, the entry and the
+ * expected shape named. Idempotent: normalising a normalised contract reports no
+ * repairs.
+ */
+export function normaliseContract(contract: unknown): NormalisedContract {
+  if (contract === null || typeof contract !== "object" || Array.isArray(contract)) {
+    return { contract: contract as WorkContract, repairs: [] };
+  }
+  const out: Record<string, unknown> = { ...(contract as Record<string, unknown>) };
+  const repairs: ContractRepair[] = [];
+  for (const { field, key, example } of NORMALISABLE_FIELDS) {
+    const entries = out[field];
+    if (!Array.isArray(entries)) continue;
+    let count = 0;
+    out[field] = entries.map((entry, index) => {
+      if (typeof entry === "string") {
+        // An empty string is wrapped as-is rather than refused: the repair has
+        // one job (shape), and an empty check is readiness's finding, exactly as
+        // it was before this change.
+        count += 1;
+        return { [key]: entry };
+      }
+      if (hasEntryKey(entry, key)) return entry;
+      const reason =
+        typeof entry === "object" && entry !== null && !Array.isArray(entry)
+          ? `${describeEntry(entry)} has no "${key}" key`
+          : `the entry is ${describeEntry(entry)}`;
+      throw new Error(`invalid contract: ${field}[${index}] cannot be normalised: ${reason}; expected ${example} or a plain string`);
+    });
+    if (count > 0) repairs.push({ field, key, count });
+  }
+  return { contract: out as unknown as WorkContract, repairs };
+}
+
+/** One-line human notice for what the write path repaired. */
+export function describeContractRepairs(repairs: ContractRepair[]): string {
+  return repairs
+    .map((r) => `${r.field}: ${r.count} ${r.count === 1 ? "entry" : "entries"} normalised to {${r.key}}`)
+    .join(" · ");
+}
+
 // Entry-shape hints for the two object-array fields: a plain string where
 // {check}/{artifact} is expected leaves the issue draft, so name the expected
 // shape next to the structural finding instead of leaving the author to guess.
+// Contracts written before XTRM-786 are still stored this way, so the read-side
+// hint stays even though the write path now repairs them.
 export function contractShapeHints(contract: unknown): string[] {
   if (contract === null || typeof contract !== "object" || Array.isArray(contract)) return [];
   const c = contract as Record<string, unknown>;
@@ -170,21 +270,11 @@ export function validateContractStructure(subject: StructuralSubject): Structura
     }
   }
   const validation = c["validation"];
-  if (
-    !Array.isArray(validation) ||
-    validation.length === 0 ||
-    validation.some((e) => typeof e !== "object" || e === null || typeof (e as Record<string, unknown>)["check"] !== "string" ||
-      ((e as Record<string, unknown>)["check"] as string).trim() === "")
-  ) {
+  if (!Array.isArray(validation) || validation.length === 0 || validation.some((e) => !isValidContractEntry(e, "check"))) {
     findings.push({ field: "validation", code: "required-field", message: "validation must be a non-empty array of { check: non-empty string }" });
   }
   const output = c["output"];
-  if (
-    !Array.isArray(output) ||
-    output.length === 0 ||
-    output.some((e) => typeof e !== "object" || e === null || typeof (e as Record<string, unknown>)["artifact"] !== "string" ||
-      ((e as Record<string, unknown>)["artifact"] as string).trim() === "")
-  ) {
+  if (!Array.isArray(output) || output.length === 0 || output.some((e) => !isValidContractEntry(e, "artifact"))) {
     findings.push({ field: "output", code: "required-field", message: "output must be a non-empty array of { artifact: non-empty string }" });
   }
   checkPlaceholders(findings, "problem", [c["problem"]]);

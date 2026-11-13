@@ -391,20 +391,26 @@ const TOOL_DEFS: ToolDef[] = [
         const resolved = handles.svc.resolveRefInProject(ref as string, projectId);
         let id = resolved.id;
         let revisionCreated = false;
+        let normalised: Array<{ field: string; key: string; count: number }> = [];
         if (title !== undefined) id = handles.svc.setTitle(id, title as string).id;
         if (priority !== undefined) id = handles.svc.setPriority(id, priority as number).id;
         if (contract !== undefined || ownership !== undefined || contextRefs !== undefined) {
+          const supplied = contract !== undefined;
           const base =
-            contract !== undefined
+            supplied
               ? (contract as never)
               : (handles.svc.getRevision(id, handles.svc.getIssue(id).currentRevision).contract as never);
-          const { issue, created } = handles.svc.updateContract(id, base, "mcp", {
+          const { issue, created, repairs } = handles.svc.updateContract(id, base, "mcp", {
             expectedRevision: (expectedRevision as number | undefined) ?? undefined,
             ownership: ownership !== undefined ? ownership : undefined,
             contextRefs: contextRefs !== undefined ? (contextRefs as unknown[]) : undefined,
+            // Repair only a supplied contract; a metadata-only edit carries the
+            // stored one forward untouched (XTRM-786 review).
+            repair: supplied,
           });
           id = issue.id;
           revisionCreated = revisionCreated || created;
+          normalised = repairs;
         }
         if (scrutiny !== undefined) {
           const before = handles.svc.getIssue(id).currentRevision;
@@ -413,7 +419,11 @@ const TOOL_DEFS: ToolDef[] = [
           id = next.id;
         }
         const issue = handles.svc.getIssue(id);
-        return textPayload({ ...issueSummaryJson(issue), revisionCreated });
+        return textPayload({
+          ...issueSummaryJson(issue),
+          revisionCreated,
+          ...(normalised.length > 0 ? { contractNormalised: normalised } : {}),
+        });
       } finally {
         handles.db.close();
       }
