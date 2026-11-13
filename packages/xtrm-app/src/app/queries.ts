@@ -1,9 +1,11 @@
 // One query layer for all adapters (§9.2): no module-singleton caches.
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useAdapters, type GithubAuthStatus, type IssueDetail, type PullListState, type Repo, type SubstrateProject } from "../adapters/index.tsx";
 // Pure board merge; fixture details pass through it unchanged (it is idempotent).
 import { applyBoard } from "../adapters/substrate/live.ts";
+import { loadSourceState } from "../activity/feed.ts";
+import type { ActivityRow } from "../activity/types.ts";
 
 const LIVE_MS = 10_000;
 
@@ -26,6 +28,64 @@ export function useConnection() {
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
+}
+
+/**
+ * Mixed Activity feed (XTRM-757): one query per source so a failing source has
+ * its own state instead of taking the feed down with it. `enabled` lets the
+ * surface ask for only the sources it will render.
+ */
+export function useActivityFeed(opts: { repo: string; projectId: string | null; enabled?: Partial<Record<"substrate" | "github" | "git", boolean>> }) {
+  const { github, substrate, gitActivity } = useAdapters();
+  const sources = ["substrate", "github", "git"] as const;
+  const results = useQueries({
+    queries: sources.map((source) => ({
+      queryKey: ["activity", source, opts.repo, opts.projectId],
+      queryFn: () => loadSourceState(source, { repo: opts.repo, projectId: opts.projectId, github, substrate, gitActivity }),
+      staleTime: 30_000,
+      refetchInterval: false,
+      enabled: opts.enabled?.[source] ?? true,
+    })),
+  });
+  // A page per source is the default; "older" pages are appended on demand and
+  // kept per source, so one source's history never blocks another's.
+  const [older, setOlder] = useState<
+    Partial<Record<(typeof sources)[number], { rows: ActivityRow[]; cursor: string | null; olderError?: string }>>
+  >({});
+  const states = sources.map((source, i) => {
+    const r = results[i]!;
+    const extra = older[source];
+    return {
+      source,
+      rows: [...(r.data?.rows ?? []), ...(extra?.rows ?? [])],
+      cursor: extra?.cursor ?? r.data?.cursor ?? null,
+      error: r.isError ? String((r.error as Error)?.message ?? r.error) : (r.data?.error ?? null),
+      // A failed older page is reported separately: it must not flip the source
+      // into its error state while the rows it already returned stay on screen.
+      olderError: extra?.olderError ?? null,
+      pending: r.isPending && (opts.enabled?.[source] ?? true),
+    };
+  });
+  const loadOlder = async (source: (typeof sources)[number]): Promise<void> => {
+    const state = states.find((s) => s.source === source);
+    if (!state?.cursor) return;
+    const page = await loadSourceState(source, { repo: opts.repo, projectId: opts.projectId, github, substrate, gitActivity }, state.cursor);
+    setOlder((prev) => {
+      const previous = prev[source];
+      if (page.error !== null) {
+        // The older page failed, but the rows already on screen are still good:
+        // keep them, keep the cursor so the button can retry, and report the
+        // miss beside them instead of marking the whole source failed.
+        return { ...prev, [source]: { rows: previous?.rows ?? [], cursor: state.cursor, olderError: page.error } };
+      }
+      return { ...prev, [source]: { rows: [...(previous?.rows ?? []), ...page.rows], cursor: page.cursor } };
+    });
+  };
+  const refetch = (): void => {
+    setOlder({});
+    results.forEach((r) => void r.refetch());
+  };
+  return { states, loadOlder, refetch };
 }
 
 export function useEvents(repo: string, follow = false) {
