@@ -19,9 +19,10 @@ type RuntimeDatabase = {
 };
 
 // Bun exposes the SQLite driver as "bun:sqlite" (export name Database);
-// Node exposes it as "node:sqlite" (export name DatabaseSync). Selection is
-// lazy and conditional so Bun never resolves its missing "node:sqlite"
-// built-in and Node never touches "bun:sqlite".
+// Node exposes it as "node:sqlite" (export name DatabaseSync). The selection is
+// lazy and conditional: under Bun this function requires "bun:sqlite" and the
+// node:sqlite branch is never reached, so the specifier is never resolved at
+// all; under Node the mirror holds and "bun:sqlite" is never touched.
 function loadDriver(): new (path: string) => RuntimeDatabase {
   const require = createRequire(import.meta.url);
   if ((globalThis as { Bun?: unknown }).Bun !== undefined) {
