@@ -144,6 +144,53 @@ describe("pull-request writers", () => {
     assert.equal(view.relation, "created_from");
   });
 
+  // XTRM-754: the link view carries the PR's live state, and the T1 writer seeds
+  // the row the reconciler later refreshes. Both were untested; the sync-side
+  // case covered only the pre-existing upsert.
+  it("T1 attach seeds the pull_requests row and the view reads it", () => {
+    const { receipt } = dispatchWithClaim(w);
+    w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR);
+    const row = w.db
+      .prepare("SELECT state, title, merged_at, url, last_synced_at FROM pull_requests WHERE repository = ? AND number = ?")
+      .get(PR.repository, PR.number) as { state: string; title: string | null; merged_at: number | null; url: string | null; last_synced_at: number };
+    assert.equal(row.state, "open", "the opener knows the PR is open");
+    assert.equal(row.title, null, "the opener does not invent a title");
+    assert.equal(row.url, PR.url);
+    assert.ok(row.last_synced_at > 0);
+    const view = w.links.listForIssue(w.issue.id)[0]!;
+    assert.equal(view.state, "open");
+    assert.equal(view.title, null);
+    assert.equal(view.mergedAt, null);
+  });
+
+  it("a reconciled row wins and a later attach does not overwrite it", () => {
+    const { receipt } = dispatchWithClaim(w);
+    w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR);
+    const mergedAt = 1_760_000_000_000;
+    w.db
+      .prepare("UPDATE pull_requests SET state = 'merged', title = ?, merged_at = ? WHERE repository = ? AND number = ?")
+      .run("the real title", mergedAt, PR.repository, PR.number);
+    const view = w.links.listForIssue(w.issue.id)[0]!;
+    assert.equal(view.state, "merged");
+    assert.equal(view.title, "the real title");
+    assert.equal(view.mergedAt, mergedAt);
+    // INSERT OR IGNORE: re-attaching (a retry) must not reset the richer row.
+    w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR);
+    const after = w.links.listForIssue(w.issue.id)[0]!;
+    assert.equal(after.state, "merged", "a retry keeps the reconciled state");
+  });
+
+  it("the human issue view renders state, merge date and title (XTRM-754)", () => {
+    const { receipt } = dispatchWithClaim(w);
+    w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR);
+    w.db
+      .prepare("UPDATE pull_requests SET state = 'merged', title = ?, merged_at = ? WHERE repository = ? AND number = ?")
+      .run("the real title", Date.UTC(2026, 10, 12), PR.repository, PR.number);
+    const res = runCli(["--db", join(w.dir, "state.db"), "issue", "show", w.issue.humanRef]);
+    assert.equal(res.code, 0, res.stderr);
+    assert.match(res.stdout, /created_from o\/r#7 merged 2026-11-12 the real title/);
+  });
+
   it("a foreign receipt is a hard refusal with nothing written", () => {
     const other = w.svc.createIssue({ projectId: "prj_xtrm", title: "other", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
     w.svc.attestReadiness(other.id, { outcome: "ready", policy: "default", attestedBy: "tester" });

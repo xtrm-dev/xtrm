@@ -213,7 +213,19 @@ function renderPullRequests(views: IssuePullRequestView[]): string[] {
   const MAX = 20;
   const lines = ["", "PULL REQUESTS"];
   for (const v of views.slice(0, MAX)) {
-    const bits = [`${v.relation} ${v.repository}#${v.number}`];
+    // XTRM-754: state, merge date and title come from the pull_requests row the
+    // host writes at PR open and the reconciler refreshes. An absent row is
+    // "state unknown", never a guess.
+    const head = [`${v.relation} ${v.repository}#${v.number}`];
+    if (v.state === null) {
+      head.push("state unknown");
+    } else if (v.state === "merged" && v.mergedAt !== null) {
+      head.push(`merged ${new Date(v.mergedAt).toISOString().slice(0, 10)}`);
+    } else {
+      head.push(v.state);
+    }
+    if (v.title !== null) head.push(v.title);
+    const bits = [head.join(" ")];
     bits.push(`sources: ${v.sources.join(",")}`);
     if (v.commits.length > 0) bits.push(`${v.commits.length} commit(s)`);
     if (v.alsoMentioned) bits.push("also mentioned");

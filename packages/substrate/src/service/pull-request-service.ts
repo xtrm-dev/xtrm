@@ -181,6 +181,15 @@ export class PullRequestService {
       }
       // PR-open state row (XTRM-754): a minimal pull_requests row so the PR is not
       // "state unknown" until the reconciler (728) refreshes full state.
+      //
+      // 'open' is what the opener knows: the shim calls this immediately after a
+      // successful `gh pr create`, so the PR is open by construction. A LATE attach
+      // (a merged PR linked after the fact, with no prior reconciler row) inherits
+      // that assumption and reads "open" with no title until the next `sb links
+      // sync` corrects it through the upsert. The alternative — a GitHub read
+      // inside this transaction — would put the network in the write path and fail
+      // closed on an outage, so the wrong-positive is preferred, bounded, and
+      // healed by the same sync that backfills every other row.
       this.db.prepare(
         `INSERT OR IGNORE INTO pull_requests
            (repository, number, state, draft, head_sha, merge_commit_sha, title, url, base_ref,
