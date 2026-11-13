@@ -333,6 +333,12 @@ def scan_drift(project_root: str | None = None, enrich_with_gitnexus: bool = Fal
         last_sync_str = service.get("last_sync", "")
         try:
             sync_time = datetime.fromisoformat(last_sync_str.replace("Z", "+00:00")) if last_sync_str else None
+            # A date-only `last_sync` ("YYYY-MM-DD") parses to a TZ-NAIVE datetime, while every
+            # mtime comparison below uses `datetime.fromtimestamp(..., tz=timezone.utc)`. Comparing
+            # the two raised `TypeError: can't compare offset-naive and offset-aware datetimes`
+            # and took the whole scan (and the CI gate on it) down for every service (XTRM-772).
+            if sync_time is not None and sync_time.tzinfo is None:
+                sync_time = sync_time.replace(tzinfo=timezone.utc)
         except ValueError:
             sync_time = None
         # A service with no (or unparseable, e.g. the "never" sentinel) last_sync has been
