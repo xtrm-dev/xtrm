@@ -368,7 +368,19 @@ describe("link read surfaces (XTRM-730)", () => {
     ).run("o/r", 7, "merged", "main", Date.now());
     const page = cli(w.dbPath, ["issue", "query", "--project", "prj_xtrm"]);
     const row = (page.rows as Array<{ primaryPr: Record<string, unknown> | null }>)[0]!;
-    assert.deepEqual(row.primaryPr, { repository: "o/r", number: 7, relation: "mentioned", url: null, state: "merged" });
+    // XTRM-767: the projection carries the same field set as the view, so a
+    // caller never has to guess whether a missing field means "absent" or "not
+    // published". A raw row here has no state_source, hence null.
+    assert.deepEqual(row.primaryPr, {
+      repository: "o/r",
+      number: 7,
+      relation: "mentioned",
+      url: null,
+      state: "merged",
+      stateSource: null,
+      title: null,
+      mergedAt: null,
+    });
   });
 });
 
@@ -409,6 +421,44 @@ describe("link surfaces round 2 (XTRM-730)", () => {
     insert(7, "created_from", 100);
     const data = cli(w.dbPath, ["issue", "show", w.issue.humanRef]);
     assert.deepEqual((data.primaryPr as { number: number }).number, 7);
+  });
+
+  // XTRM-767: an opener-sourced row is published in full, with the unknown
+  // values null and state_source saying who wrote them.
+  it("primaryPr publishes the opener-sourced field set, nulls included", () => {
+    insert(7, "created_from", 100);
+    w.db.prepare(
+      "INSERT INTO pull_requests (repository, number, state, state_source, draft, url, last_synced_at) VALUES (?,?,?,?,0,NULL,?)",
+    ).run("o/r", 7, "open", "assumed", 1_760_000_000_000);
+    const data = cli(w.dbPath, ["issue", "show", w.issue.humanRef]);
+    assert.deepEqual(data.primaryPr, {
+      repository: "o/r",
+      number: 7,
+      relation: "created_from",
+      url: null,
+      state: "open",
+      stateSource: "assumed",
+      title: null,
+      mergedAt: null,
+    });
+  });
+
+  it("primaryPr publishes the observed field set once a reconciler row exists", () => {
+    insert(7, "created_from", 100);
+    w.db.prepare(
+      "INSERT INTO pull_requests (repository, number, state, state_source, draft, url, title, merged_at, last_synced_at) VALUES (?,?,?,?,0,NULL,?,?,?)",
+    ).run("o/r", 7, "merged", "observed", "the real title", 1_760_000_000_000, 1_760_000_000_000);
+    const data = cli(w.dbPath, ["issue", "show", w.issue.humanRef]);
+    assert.deepEqual(data.primaryPr, {
+      repository: "o/r",
+      number: 7,
+      relation: "created_from",
+      url: null,
+      state: "merged",
+      stateSource: "observed",
+      title: "the real title",
+      mergedAt: 1_760_000_000_000,
+    });
   });
 
   it("CLI unlink records the actor flag", () => {

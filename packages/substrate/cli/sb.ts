@@ -1185,6 +1185,12 @@ function linkEventsFor(db: ReturnType<typeof openSubstrate>, issueId: string): A
     .map((row) => ({ eventId: row.id, type: row.type, payload: JSON.parse(row.payload_json), createdAt: row.created_at }));
 }
 
+// XTRM-767: publish the same PR field set here as the reconciler-backed view
+// (IssuePullRequestView). `state` alone made a freshly opened PR look anonymous
+// in every payload that reads the link through this projection. `stateSource`
+// is what keeps it honest: 'assumed' means the opener wrote it, 'observed'
+// means a reconciler read refreshed it, and a field the row cannot carry
+// (title, mergedAt before any read) stays null rather than being invented.
 function primaryPrFor(db: ReturnType<typeof openSubstrate>, issueId: string): Record<string, unknown> | null {
   const link = db
     .prepare(
@@ -1194,10 +1200,21 @@ function primaryPrFor(db: ReturnType<typeof openSubstrate>, issueId: string): Re
     )
     .get(issueId) as { repository: string; number: number; relation: string; url: string | null } | undefined;
   if (link === undefined) return null;
-  const state = db
-    .prepare("SELECT state FROM pull_requests WHERE repository = ? AND number = ?")
-    .get(link.repository, link.number) as { state: string } | undefined;
-  return { repository: link.repository, number: link.number, relation: link.relation, url: link.url, state: state?.state ?? null };
+  const pr = db
+    .prepare("SELECT state, state_source, title, merged_at FROM pull_requests WHERE repository = ? AND number = ?")
+    .get(link.repository, link.number) as
+    | { state: string; state_source: string | null; title: string | null; merged_at: number | null }
+    | undefined;
+  return {
+    repository: link.repository,
+    number: link.number,
+    relation: link.relation,
+    url: link.url,
+    state: pr?.state ?? null,
+    stateSource: pr?.state_source ?? null,
+    title: pr?.title ?? null,
+    mergedAt: pr?.merged_at ?? null,
+  };
 }
 
 function runLinks(
