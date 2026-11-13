@@ -236,5 +236,7 @@ It needs **git-cliff >= 2.10** on PATH; without it the script fails closed and
 writes nothing. A wrong entry is fixed in its commit message, not in the file.
 
 `npm run changelog` refreshes `[Unreleased]` alone. `npm run changelog:check`
-writes nothing and exits 1 when the committed file would change, so CI can assert
-it matches the git log.
+writes nothing and exits 1 when the committed file would change; it is a
+release-time guard (run it after the refresh commit, before tagging). It cannot be
+green on the commit that adds an entry, because the file cannot contain its own
+commit.

@@ -4,13 +4,13 @@
 // the script's own flags (--changelog/--config/--cliff) exist so this test never
 // touches the tracked CHANGELOG.md and never needs git-cliff installed.
 
-import { describe, it, afterEach } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import os from "node:os";
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { tempDir } from "./helpers.ts";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPT = path.join(packageRoot, "scripts", "changelog-update.mjs");
@@ -28,7 +28,7 @@ All notable changes to the package are documented in this file.
 
 /** A stub that answers with canned markdown, so the assertions are exact.
  * It answers the --tag case with a versioned heading, as git-cliff does. */
-function stubCliff(dir, body, tagBody = body) {
+function stubCliff(dir: string, body: string, tagBody: string = body): string {
   const file = path.join(dir, "git-cliff-stub.sh");
   writeFileSync(file, [
     "#!/bin/sh",
@@ -50,10 +50,17 @@ function stubCliff(dir, body, tagBody = body) {
   return file;
 }
 
-const dirs = [];
-function world(cliffBody, tagBody = cliffBody) {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "xtrm-changelog-"));
-  dirs.push(dir);
+interface World {
+  dir: string;
+  changelog: string;
+  config: string;
+  cliff: string;
+}
+
+// The repo's own temp helper honours SUBSTRATE_TEST_TMP, so scripts/test-tmp-guard.mjs
+// sees anything this file leaves behind (CORE-2612).
+function world(cliffBody: string, tagBody: string = cliffBody): World {
+  const dir = tempDir("xtrm-changelog-");
   const changelog = path.join(dir, "CHANGELOG.md");
   writeFileSync(changelog, HEADER);
   const config = path.join(dir, "cliff.toml");
@@ -61,16 +68,14 @@ function world(cliffBody, tagBody = cliffBody) {
   return { dir, changelog, config, cliff: stubCliff(dir, cliffBody, tagBody) };
 }
 
-function run(w, args = []) {
-  return execFileSync("node", [SCRIPT, "--changelog", w.changelog, "--config", w.config, "--cliff", w.cliff, ...args], {
-    encoding: "utf8",
-    cwd: packageRoot,
-  });
+function run(w: World, args: string[] = []): string {
+  const options: ExecFileSyncOptionsWithStringEncoding = { encoding: "utf8", cwd: packageRoot };
+  return execFileSync(
+    "node",
+    [SCRIPT, "--changelog", w.changelog, "--config", w.config, "--cliff", w.cliff, ...args],
+    options,
+  );
 }
-
-afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
-});
 
 describe("changelog-update", () => {
   it("promotes nothing that is already released, and preserves every released section", () => {
@@ -124,7 +129,7 @@ describe("changelog-update", () => {
   it("fails closed with an actionable message when git-cliff is absent", () => {
     const w = world("## [Unreleased]\n\n- ignored\n");
     const before = readFileSync(w.changelog, "utf8");
-    let error;
+    let failure: { stderr?: string | Buffer; message?: string } | undefined;
     try {
       execFileSync("node", [SCRIPT, "--changelog", w.changelog, "--config", w.config, "--cliff", path.join(w.dir, "no-such-cliff")], {
         encoding: "utf8",
@@ -132,10 +137,10 @@ describe("changelog-update", () => {
         stdio: "pipe",
       });
     } catch (e) {
-      error = e;
+      failure = e as { stderr?: string | Buffer; message?: string };
     }
-    assert.ok(error, "a missing binary must fail the run");
-    const stderr = String(error.stderr ?? "") + String(error.message ?? "");
+    assert.ok(failure, "a missing binary must fail the run");
+    const stderr = String(failure.stderr ?? "") + String(failure.message ?? "");
     assert.match(stderr, /git-cliff >= 2\.10 is required/);
     assert.match(stderr, /Nothing was written/);
     assert.equal(readFileSync(w.changelog, "utf8"), before, "a failed run must not touch the file");

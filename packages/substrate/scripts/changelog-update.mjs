@@ -14,13 +14,17 @@
 // git log and would drop every hand-written line (measured: 362 lines in this repo).
 //
 //   node scripts/changelog-update.mjs [--check] [--tag vX.Y.Z]
-//     --check       exit 1 if the file would change (CI guard), write nothing
+//     --check       exit 1 if the file would change (release-time guard: run after
+//                   the refresh commit, before tagging), write nothing
 //     --tag vX.Y.Z  cut a versioned section (## [X.Y.Z] - YYYY-MM-DD) from the
 //                   current [Unreleased] entries, leaving an empty [Unreleased]
 //                   on top. Used by the npm `version` hook to promote entries.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 
+// Refusals are operator messages, not stack traces: every deliberate throw below
+// is printed as its message with exit 1 (the missing/old git-cliff case included).
+const main = () => {
 const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 process.chdir(REPO_ROOT);
 // Overridable so a test can run against a fixture file and a stub binary: the
@@ -68,7 +72,37 @@ if (!/^# /m.test(header)) {
 const cliffArgs = ['--config', CONFIG, '--unreleased', '--include-path', 'packages/substrate/**'];
 if (tag) cliffArgs.push('--tag', tag);
 
+// A missing binary and an OUTDATED one must both fail closed with the same
+// actionable message: a 2.9 release machine would otherwise die inside
+// git-cliff's own argument parsing with no floor and no install hint.
+const assertCliffVersion = () => {
+  let version;
+  try {
+    version = execFileSync(CLIFF, ['--version'], { encoding: 'utf8', maxBuffer: 1024 * 1024 });
+  } catch (error) {
+    if (error && (error.code === 'ENOENT' || String(error.message).includes('ENOENT'))) return false;
+    return true; // present but unreadable: let the render report the real problem
+  }
+  const match = /(\d+)\.(\d+)/.exec(version);
+  if (!match) return true; // a wrapper or stub we cannot read: do not guess
+  const [major, minor] = [Number(match[1]), Number(match[2])];
+  const [floorMajor, floorMinor] = MIN_CLIFF.split('.').map(Number);
+  if (major > floorMajor || (major === floorMajor && minor >= floorMinor)) return true;
+  throw new Error(
+    `${CHANGELOG}: git-cliff >= ${MIN_CLIFF} is required, found ${version.trim()}.\n` +
+    `Upgrade it (https://git-cliff.org/docs/installation), then re-run: node scripts/changelog-update.mjs\n` +
+    `Nothing was written.`,
+  );
+};
+
 const generated = (() => {
+  if (!assertCliffVersion()) {
+    throw new Error(
+      `${CHANGELOG}: git-cliff >= ${MIN_CLIFF} is required and was not found on PATH.\n` +
+      `Install it (https://git-cliff.org/docs/installation), then re-run: node scripts/changelog-update.mjs\n` +
+      `Nothing was written.`,
+    );
+  }
   try {
     return execFileSync(CLIFF, cliffArgs, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }).trim();
   } catch (error) {
@@ -153,3 +187,11 @@ console.log(
     ? `${CHANGELOG}: cut ${tag} section (${entries} entries)`
     : `${CHANGELOG}: [Unreleased] refreshed (${entries} entries)`,
 );
+};
+
+try {
+  main();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
