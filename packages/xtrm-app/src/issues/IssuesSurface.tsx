@@ -11,6 +11,7 @@ import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
 import { buildTree, defaultDesc, issueStatus, keyColumnRem, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
+import { PrStateBadge } from "./pr-state.tsx";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
 import { ReferenceChip } from "../refs/references.tsx";
@@ -35,7 +36,7 @@ const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "righ
   { key: "children", label: "Children", width: "5rem", align: "right" },
   { key: "events", label: "Events", width: "4.5rem", align: "right" },
   { key: "pointers", label: "Pointers", width: "5.25rem", align: "right" },
-  { key: "pr", label: "PR", width: "5rem", align: "right" },
+  { key: "pr", label: "PR", width: "6.5rem", align: "right" },
   { key: "created", label: "Created", width: "5rem", align: "right" },
   { key: "updated", label: "Updated", width: "5.5rem", align: "right" },
 ];
@@ -310,8 +311,9 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
         </div>
         <div className={cx(CELL, "justify-end")}>
           {issue.primaryPr && (
-            <span title={`${issue.primaryPr.relation} ${issue.primaryPr.state ?? "state unknown"}`} className="truncate text-xs text-ink-muted tabular">
-              #{issue.primaryPr.number} {issue.primaryPr.state ?? "state unknown"}
+            <span title={issue.primaryPr.relation} className="flex min-w-0 items-center justify-end gap-1.5">
+              <span className="truncate text-xs text-ink-muted tabular">#{issue.primaryPr.number}</span>
+              <PrStateBadge state={issue.primaryPr.state} size="xs" />
             </span>
           )}
         </div>

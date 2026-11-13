@@ -1,28 +1,26 @@
 import { ReferenceChip } from "../refs/references.tsx";
-import { cx } from "../ui/primitives.tsx";
 import type { IssueDetail, LinkEvent, PullLink } from "../adapters/types.ts";
+import { Badge } from "../ui/badge.tsx";
+import { cx } from "../ui/primitives.tsx";
+import { PrStateBadge } from "./pr-state.tsx";
 
 const HEADING = "text-[0.68rem] font-medium uppercase tracking-wide text-ink-faint";
 
 function GateBadge({ gate }: { gate: IssueDetail["linkGate"] }) {
   const pass = gate.manual.verdict === "pass";
   return (
-    <span
-      title={gate.manual.codes.length > 0 ? gate.manual.codes.join(", ") : "delivery evidence present"}
-      className={cx("rounded px-1.5 py-0.5 text-[0.68rem] leading-4", pass ? "bg-hover text-ink-muted" : "bg-danger/12 text-danger")}
-    >
+    <Badge tone={pass ? "muted" : "danger"} title={gate.manual.codes.length > 0 ? gate.manual.codes.join(", ") : "delivery evidence present"}>
       gate {gate.manual.verdict}
-    </span>
+    </Badge>
   );
 }
 
 function LinkRow({ link }: { link: PullLink }) {
-  const stateLabel = link.state ?? "state unknown";
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
       <ReferenceChip reference={{ kind: "pr", ref: `${link.repository}#${link.number}` }} fallback={`${link.repository}#${link.number}`} />
       {link.title && <span className="text-ink-muted">{link.title}</span>}
-      <span className="text-ink-faint">{stateLabel}</span>
+      <PrStateBadge state={link.state} stateSource={link.stateSource} showSource />
       {link.mergedAt != null && <span className="text-ink-faint">merged {new Date(link.mergedAt).toLocaleDateString()}</span>}
       <span className="text-ink-faint">{link.sources.join(" · ")}</span>
       {link.commits.length > 0 && <span className="text-ink-faint">{link.commits.length} commit{link.commits.length === 1 ? "" : "s"}</span>}
