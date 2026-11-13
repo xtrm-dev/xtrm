@@ -223,3 +223,20 @@ Release is fail-closed: `npm run release:verify` builds a staged JavaScript
 artifact and proves the packed layout under Node and Bun; `npm run release`
 publishes that verified artifact. A bare `npm publish` from the source tree is
 intentionally refused.
+
+CHANGELOG.md is generated, never hand-edited. `npm version <patch|minor|major>`
+runs `preversion` (`scripts/changelog-update.mjs`), which rewrites only the
+`[Unreleased]` section from the git log through git-cliff
+(`changelog/cliff.toml`, scoped to `packages/substrate/**`), and `version`, which
+cuts that section into `## [<version>]` and stages it. The step is idempotent and
+leaves every released section byte for byte. Entries already present under a
+released heading are dropped, because this package is not tagged per release.
+
+It needs **git-cliff >= 2.10** on PATH; without it the script fails closed and
+writes nothing. A wrong entry is fixed in its commit message, not in the file.
+
+`npm run changelog` refreshes `[Unreleased]` alone. `npm run changelog:check`
+writes nothing and exits 1 when the committed file would change; it is a
+release-time guard (run it after the refresh commit, before tagging). It cannot be
+green on the commit that adds an entry, because the file cannot contain its own
+commit.
