@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-13
+
 ### Added
 - P1 domain + SQLite kernel (xtrm-7wc.2) (#123) ([ef51f05](https://github.com/xtrm-dev/xtrm/commit/ef51f05a220809d2c21461ea1c609dcebc9fb7c0))
 - P10 GitHub/Jira projections + sync model (xtrm-7wc.11) (#124) ([16ba555](https://github.com/xtrm-dev/xtrm/commit/16ba555c5ffcd25d79b146072e0a886a1323eb87))
@@ -55,7 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remote store access over ssh for the CLI and git hooks (XTRM-685) (#307) ([2d33ec7](https://github.com/xtrm-dev/xtrm/commit/2d33ec76bc78e73fe67e393e4a0d70eefb41371e))
 - The Pi tools reach the store through the typed service (XTRM-691) (#322) ([8ff21b7](https://github.com/xtrm-dev/xtrm/commit/8ff21b7e4f3f1570880769c4c53fc7a284df3c30))
 - The Claude plugin picks its store at launch (XTRM-692) (#325) ([7ce172b](https://github.com/xtrm-dev/xtrm/commit/7ce172b2cece5cc300348120136075b717f6baa2))
-- Generate CHANGELOG via git-cliff preversion hook (XTRM-748) ([7184f57](https://github.com/xtrm-dev/xtrm/commit/7184f5740eb975597ede01c6744662fe986599e2))
+- Append issue trailers without a receipt (XTRM-684) (#380) ([a0165d2](https://github.com/xtrm-dev/xtrm/commit/a0165d2b5df7a8c1ce7eb5d4ba4dd5319f23ae54))
+- Generate CHANGELOG via git-cliff preversion hook (XTRM-748) (#385) ([fd0ab6a](https://github.com/xtrm-dev/xtrm/commit/fd0ab6afc590900cb529f0dfebc88ecac87bab82))
+- Sb journal feed, paged project-wide journal read (XTRM-764) (#390) ([dd8ccf7](https://github.com/xtrm-dev/xtrm/commit/dd8ccf7cf1efa27ecd67febbe8e31485a848b121))
+- Publish the full PR field set from primaryPrFor (XTRM-767) (#392) ([a9d55cc](https://github.com/xtrm-dev/xtrm/commit/a9d55cc80fbaac31ac157426fde71c404eebf448))
 
 ### Fixed
 - RenderCapsule emits semantic SUMMARY (xtrm-7wc.6.1) (#130) ([69fb51b](https://github.com/xtrm-dev/xtrm/commit/69fb51bad5308ca5db5c1d2823d22e52b760ded3))
@@ -88,6 +93,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Forward --summary-file as an uploaded file (XTRM-751) (#367) ([c19500c](https://github.com/xtrm-dev/xtrm/commit/c19500c17f2d5eeb6e96ec37bc741c57e4d1be8a))
 - Name the allocate step in the no_receipt refusal (XTRM-645) (#378) ([22b7fce](https://github.com/xtrm-dev/xtrm/commit/22b7fce8fa4a6490ee13e8849667fd704c43fe84))
 - List sync in sb links usage (XTRM-756) (#379) ([42efc10](https://github.com/xtrm-dev/xtrm/commit/42efc10ac624acca10a4b16c325f7b18d9bd9246))
+- Mirror run= identity line in xtrm primer (XTRM-746) (#384) ([01ae1e6](https://github.com/xtrm-dev/xtrm/commit/01ae1e63ee4aa82a69d519f7970049608a75a494))
+- Name allocate as missing step in no_receipt (XTRM-750) (#383) ([fe9a75a](https://github.com/xtrm-dev/xtrm/commit/fe9a75a941a53a9e0a04ea1ec3ccb9f8ffb89fad))
+- Ship hooks/ in the published package (XTRM-768) (#393) ([ba29022](https://github.com/xtrm-dev/xtrm/commit/ba2902205d205dab76fb6c2d2b3e294fef82238a))
 
 ### Other changes
 - [A7-auth] Fence claimed dispatch by holder + activation (xtrm-6qu.7.2) (#171) ([948e27a](https://github.com/xtrm-dev/xtrm/commit/948e27aac4c31d93fc39e3e0c9f578bb1a77c53e))
@@ -116,7 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Narrow the retired-verb window, tighten three d2 leniency spots, restate close flags, dedupe §73 ([d51e546](https://github.com/xtrm-dev/xtrm/commit/d51e54654a2e399c985acc12da9bea35ba4f5e9f))
 - Harden the five A1 acceptance assertions and regenerate the receipts ([082be98](https://github.com/xtrm-dev/xtrm/commit/082be988b79e26da693ed1c20cc402b4f8dcd0c5))
 - 0.2.5 — the typed service ships (XTRM-690) (#320) ([8709e0e](https://github.com/xtrm-dev/xtrm/commit/8709e0e53e85e2cb2e3571134dbbea3a7ef2107b))
-- Refresh changelog [Unreleased] (XTRM-748) ([7477697](https://github.com/xtrm-dev/xtrm/commit/74776973936e06e76bb6c150f164d30b3dea9e6f))
+- PR-open sync upserts pull_requests state (XTRM-754) (#382) ([55e160a](https://github.com/xtrm-dev/xtrm/commit/55e160ac3ad6f2d9ac73c32244a1e1f0f78aec12))
 
 ## [0.3.2] - 2026-11-12
 
