@@ -54,6 +54,8 @@ export interface IssuePullRequestView {
   commits: IssuePrCommitRow[];
   /** Live state from pull_requests (null if not yet populated). */
   state: string | null;
+  /** 'assumed' when only the opener wrote the row, 'observed' after a reconciler read. */
+  stateSource: string | null;
   title: string | null;
   mergedAt: number | null;
 }
@@ -126,6 +128,7 @@ export function groupIssuePullRequests(
         createdAt: row.createdAt,
         commits: [],
         state: null,
+        stateSource: null,
         title: null,
         mergedAt: null,
       });

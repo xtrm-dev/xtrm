@@ -149,10 +149,13 @@ export class PullRequestService {
     const views = groupIssuePullRequests(rows, commits);
     for (const view of views) {
       const stateRow = this.db
-        .prepare("SELECT state, title, merged_at FROM pull_requests WHERE repository = ? AND number = ?")
-        .get(view.repository, view.number) as { state: string; title: string | null; merged_at: number | null } | undefined;
+        .prepare("SELECT state, state_source, title, merged_at FROM pull_requests WHERE repository = ? AND number = ?")
+        .get(view.repository, view.number) as
+        | { state: string; state_source: string | null; title: string | null; merged_at: number | null }
+        | undefined;
       if (stateRow) {
         view.state = stateRow.state;
+        view.stateSource = stateRow.state_source;
         view.title = stateRow.title;
         view.mergedAt = stateRow.merged_at;
       }

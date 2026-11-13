@@ -257,11 +257,18 @@ export class LinkGateService {
   private prState(repository: string, number: number, now: number): { state: string; baseRef: string | null } | null {
     const row = this.db
       .prepare(
-        `SELECT state, base_ref, last_synced_at FROM pull_requests WHERE repository = ? AND number = ?`,
+        `SELECT state, base_ref, state_source, last_synced_at FROM pull_requests WHERE repository = ? AND number = ?`,
       )
-      .get(repository, number) as { state: string; base_ref: string | null; last_synced_at: number } | undefined;
-    // Trust a row synced in the last 24h; otherwise read live.
-    if (row !== undefined && now - row.last_synced_at < 24 * 60 * 60 * 1000) {
+      .get(repository, number) as
+      | { state: string; base_ref: string | null; state_source: string | null; last_synced_at: number }
+      | undefined;
+    // Trust a row the RECONCILER wrote in the last 24h; otherwise read live.
+    // The row the opener writes at PR open is 'assumed' (XTRM-754): it cannot know
+    // a later merge, so trusting it would report gate_pr_not_merged for a merged PR
+    // until some sync rewrote it. NULL means "written before 016", when only the
+    // reconciler wrote this table, so it keeps the cache working across upgrades.
+    const observed = row?.state_source === null || row?.state_source === "observed";
+    if (row !== undefined && observed && now - row.last_synced_at < 24 * 60 * 60 * 1000) {
       return { state: row.state, baseRef: row.base_ref };
     }
     return this.reader.state(repository, number);

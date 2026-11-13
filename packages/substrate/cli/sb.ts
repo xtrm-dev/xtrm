@@ -222,7 +222,9 @@ function renderPullRequests(views: IssuePullRequestView[]): string[] {
     } else if (v.state === "merged" && v.mergedAt !== null) {
       head.push(`merged ${new Date(v.mergedAt).toISOString().slice(0, 10)}`);
     } else {
-      head.push(v.state);
+      // 'assumed' is the opener's row, written before any GitHub read: say so
+      // rather than presenting it as an observation (XTRM-754 review).
+      head.push(v.stateSource === "assumed" ? `${v.state} (assumed)` : v.state);
     }
     if (v.title !== null) head.push(v.title);
     const bits = [head.join(" ")];

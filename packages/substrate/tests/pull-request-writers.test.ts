@@ -156,6 +156,8 @@ describe("pull-request writers", () => {
     assert.equal(row.state, "open", "the opener knows the PR is open");
     assert.equal(row.title, null, "the opener does not invent a title");
     assert.equal(row.url, PR.url);
+    // The row is written now, but it is an ASSUMPTION: the gate must re-read it
+    // (see link-gate.test.ts), and only a sync flips it to 'observed'.
     assert.ok(row.last_synced_at > 0);
     // The marker that separates an assumed state from an observed one.
     const marker = w.db
