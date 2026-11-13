@@ -62,7 +62,7 @@ export interface ProvenanceBundle {
   commitShas: string[];
   validationRefs: ArtifactRef[];
   reviewRefs: ArtifactRef[];
-  externalBindings: Array<{ provider: string; scope: string; remoteId: string; url?: string | null }>;
+  externalBindings: Array<{ provider: string; scope: string; remoteId: string; remoteKey?: string | null; url?: string | null }>;
   createdAt: number;
 }
 

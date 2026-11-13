@@ -105,6 +105,17 @@ function discoverIssueRef(repoRoot: string): string | null {
   }
 }
 
+/**
+ * The Issue this checkout is working on, for the commit trailer (XTRM-684).
+ *
+ * Order: `SUBSTRATE_ISSUE_REF`/`SUBSTRATE_ISSUE`, then the worktree config
+ * `xtrm.issue`, then a ref-shaped branch name. Deliberately WITHOUT the
+ * operator-state `.substrate-issue` file that `discoverIssueRef` above honours:
+ * the trailer path stamps an Issue onto every commit in the checkout, so it
+ * takes only the sources the host or the operator set for this run, not a file
+ * that can outlive the work it named. post-commit still resolves that file,
+ * because it binds an existing receipt rather than inventing evidence.
+ */
 export function resolveIssueRef(repoRoot: string): string | null {
   const env = process.env["SUBSTRATE_ISSUE_REF"]?.trim() || process.env["SUBSTRATE_ISSUE"]?.trim();
   if (env) return env;

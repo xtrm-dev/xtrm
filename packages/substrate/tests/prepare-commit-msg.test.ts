@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
+import { IntegrationService } from "../src/service/integration-service.ts";
 import { contract } from "./helpers.ts";
 
 const HOOK = fileURLToPath(new URL("../hooks/prepare-commit-msg.ts", import.meta.url));
@@ -35,11 +36,11 @@ function setupIssue(dbPath: string): { id: string; humanRef: string } {
 function runHook(repo: string, dbPath: string, env: Record<string, string>, message: string): { code: number; stderr: string; message: string } {
   const file = join(repo, "msg.txt");
   writeFileSync(file, message);
-  const res = spawnSync(process.execPath, [HOOK, file], {
-    cwd: repo,
-    encoding: "utf8",
-    env: { ...process.env, SUBSTRATE_DB: dbPath, ...env },
-  });
+  // Tests/hermetic-env.ts does not clear XTRM_RECEIPT_ID: every xt activation
+  // exports one, and the receipt path would win over the trailer path here.
+  const base: NodeJS.ProcessEnv = { ...process.env, SUBSTRATE_DB: dbPath };
+  delete base["XTRM_RECEIPT_ID"];
+  const res = spawnSync(process.execPath, [HOOK, file], { cwd: repo, encoding: "utf8", env: { ...base, ...env } });
   return { code: res.status ?? 1, stderr: res.stderr ?? "", message: readFileSync(file, "utf8") };
 }
 
@@ -87,6 +88,34 @@ describe("prepare-commit-msg issue trailers (XTRM-684)", () => {
     assert.match(r.message, new RegExp(`XTRM-Issue: ${issueId}`));
   });
 
+  it("reads a ref out of the branch name, not out of a word that merely contains one", () => {
+    git(repo, ["checkout", "-q", "-b", `xt/abc${issueRef}`]);
+    const embedded = runHook(repo, dbPath, {}, "work\n");
+    assert.equal(embedded.code, 0);
+    assert.equal(embedded.message, "work\n", "an embedded ref is not a branch ref");
+
+    git(repo, ["checkout", "-q", "-b", "fix/HTTP-200-check"]);
+    const foreign = runHook(repo, dbPath, {}, "work\n");
+    assert.equal(foreign.code, 0);
+    assert.equal(foreign.message, "work\n", "a ref-shaped word that names no Issue adds no trailer");
+    assert.match(foreign.stderr, /unresolvable ref/);
+  });
+
+  it("names the Jira key when the Issue carries a jira binding", () => {
+    const db = openSubstrate(dbPath);
+    new IntegrationService(db, new IssueService(db)).bindExternal(issueId, {
+      provider: "jira",
+      remoteScope: "PRG",
+      remoteId: "10042",
+      remoteKey: "PRG-7",
+      mode: "projection",
+    });
+    db.close();
+    const r = runHook(repo, dbPath, { SUBSTRATE_ISSUE_REF: issueRef }, "work\n");
+    assert.equal(r.code, 0);
+    assert.match(r.message, /Jira: PRG-7/, "the key, not the numeric id");
+  });
+
   it("leaves the message unchanged when there is no binding", () => {
     const r = runHook(repo, dbPath, {}, "work\n");
     assert.equal(r.code, 0);
@@ -102,6 +131,7 @@ describe("prepare-commit-msg issue trailers (XTRM-684)", () => {
 
   it("does not duplicate trailers on amend", () => {
     const first = runHook(repo, dbPath, { SUBSTRATE_ISSUE_REF: issueRef }, "work\n");
+    assert.match(first.message, /XTRM-Issue:/, "the first run must attach a trailer, or the comparison proves nothing");
     const second = runHook(repo, dbPath, { SUBSTRATE_ISSUE_REF: issueRef }, first.message);
     assert.equal(second.code, 0);
     assert.equal(second.message, first.message);

@@ -840,7 +840,7 @@ export class ProvenanceService {
       }));
   }
 
-  private listExternal(issueId: string): Array<{ provider: string; scope: string; remoteId: string; url?: string | null }> {
+  private listExternal(issueId: string): Array<{ provider: string; scope: string; remoteId: string; remoteKey?: string | null; url?: string | null }> {
     try {
       return rows<Row>(this.db, "SELECT provider, remote_scope, remote_id, remote_key, url FROM external_bindings WHERE issue_id = ? ORDER BY provider, remote_scope, remote_id", issueId)
         .map((r) => ({

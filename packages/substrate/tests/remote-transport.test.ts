@@ -857,20 +857,26 @@ describe("remote hooks", () => {
     assert.match(message, /XTRM-Receipt: wr_probe/);
   });
 
-  it("opens no ssh session for a commit with no receipt", () => {
+  it("opens no ssh session for a commit whose checkout names no Issue", () => {
     const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
     assert.ok(CLIENT_KEY);
     writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
-    const messageFile = join(fake.dir, "COMMIT_EDITMSG");
+    // The hook resolves the Issue from its own checkout, so the case needs a
+    // checkout whose branch names nothing: running in the package directory
+    // made this assertion depend on the developer's branch name.
+    const checkout = join(fake.dir, "checkout");
+    mkdirSync(checkout, { recursive: true });
+    spawnSync("git", ["init", "-q", "-b", "main"], { cwd: checkout, encoding: "utf8" });
+    const messageFile = join(checkout, "COMMIT_EDITMSG");
     writeFileSync(messageFile, "feat: untracked\n");
     const res = spawnSync(process.execPath, [hookPath("prepare-commit-msg.ts"), messageFile], {
       encoding: "utf8",
-      cwd: process.cwd(),
-      env: hookEnv(fake, { XTRM_RECEIPT_ID: undefined }),
+      cwd: checkout,
+      env: hookEnv(fake, { XTRM_RECEIPT_ID: undefined, SUBSTRATE_ISSUE_REF: undefined, SUBSTRATE_ISSUE: undefined }),
     });
     assert.equal(res.status, 0, res.stderr);
     assert.equal(readFileSync(messageFile, "utf8"), "feat: untracked\n");
-    assert.equal(fake.calls().length, 0);
+    assert.equal(fake.calls().length, 0, "no resolved Issue means no session, so no remote call");
   });
 
   it("never ssh's when the hook names a local store", () => {

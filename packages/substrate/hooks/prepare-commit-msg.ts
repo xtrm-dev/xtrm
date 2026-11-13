@@ -29,9 +29,13 @@ function dbPath(): string {
 armPipeDrain();
 const messageFile = process.argv[2];
 if (!messageFile) process.exit(0);
-// No receipt means nothing to attach, in either mode: the check comes before
-// the mode decision so a remote checkout with no active execution pays no ssh
-// round trip on every commit, and a quiet exit stays a quiet exit.
+// Two paths, in this order. A receipt (XTRM_RECEIPT_ID) is host-set at dispatch
+// and keeps the original behaviour. Without a receipt, XTRM-684 resolves the
+// Issue from the checkout and appends the host-owned trailers. The resolution
+// runs before the mode decision, so a local store pays one file read; a remote
+// checkout pays one bounded remote trace (HOOK_BUDGET_MS) per commit, and only
+// when a ref resolves. A checkout that names no Issue still exits quietly with
+// no session opened.
 const receiptId = process.env["XTRM_RECEIPT_ID"];
 
 if (receiptId) {
