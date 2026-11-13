@@ -36,8 +36,11 @@ describe("package emit (XTRM-372.7)", () => {
     assert.equal(o.noEmit, false, "the build config must emit");
     assert.equal(o.outDir, "dist");
     assert.equal(o.rewriteRelativeImportExtensions, true, "without this the emit keeps .ts specifiers and Node cannot load it");
-    // The shipped entry points: the CLI, the library and the plugin seam.
-    assert.deepEqual([...build.include].sort(), ["cli/**/*.ts", "integrations/**/*.ts", "src/**/*.ts"]);
+    // The shipped entry points: the CLI, the library, the git hooks and the
+    // plugin seam. hooks/ is emitted because core chains
+    // `<root>/dist/hooks/prepare-commit-msg.js` in the release layout
+    // (XTRM-768); without it an npm-only install cannot chain the hook at all.
+    assert.deepEqual([...build.include].sort(), ["cli/**/*.ts", "hooks/**/*.ts", "integrations/**/*.ts", "src/**/*.ts"]);
     assert.ok(build.exclude.includes("tests/**/*.ts"), "tests are not part of the artifact");
   });
 

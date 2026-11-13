@@ -21,6 +21,7 @@
   "files": [
     "src",
     "cli",
+    "hooks",
     "integrations",
     "skills",
     "plugin",
