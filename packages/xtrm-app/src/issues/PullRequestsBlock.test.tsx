@@ -41,8 +41,9 @@ describe("board PR column", () => {
     render(<RouterProvider router={router} />);
     const header = await screen.findByRole("columnheader", { name: /PR/ });
     expect(header).toBeTruthy();
-    const cell = await screen.findByText("#211 merged");
+    const cell = await screen.findByText("#211");
     expect(cell).toBeTruthy();
+    expect(within(cell.parentElement as HTMLElement).getByText("merged")).toBeTruthy();
     fireEvent.click(within(header).getByRole("button"));
     expect(header.getAttribute("aria-sort")).not.toBe("none");
   });
@@ -56,8 +57,10 @@ describe("pull request live state", () => {
     render(<RouterProvider router={router} />);
     const section = await screen.findByRole("region", { name: "Pull requests" });
     expect(within(section).getByText("Add console feature")).toBeTruthy();
-    expect(within(section).getByText("merged")).toBeTruthy();
-    expect(within(section).getByText(/state unknown/)).toBeTruthy();
+    const merged = within(section).getByText("merged");
+    expect(merged.getAttribute("data-slot")).toBe("badge");
+    expect(merged.className).toContain("bg-accent-soft");
+    expect(within(section).getByText("unknown")).toBeTruthy();
     expect(within(section).getByText(/provenance/)).toBeTruthy();
   });
 });
