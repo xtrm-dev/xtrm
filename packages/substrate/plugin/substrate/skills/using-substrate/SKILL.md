@@ -167,7 +167,8 @@ The CLI is strict and versioned, so look before you guess:
   Read bodies with `sb journal show <ref> --tail <n>` (newest) and page older with `--before <seq> --limit <n>`.
 - **Bind documents.** A document that defines the work goes into the contract with `sb issue edit <ref> --context-refs <file>`
   (a new revision: do it at planning time); a decision cites `path@sha` in a journal entry; deliverables go to `--artifact` at close.
-- **Deliver.** Open the PR with the issue marker (the `gh` shim links it), check `sb links check --issue <ref>`, then
+- **Deliver.** Before the PR, give the issue a receipt (`sb provenance dispatch <ref>`, then `sb provenance allocate <ref>`), or
+  the shim cannot link it. Open the PR with the issue marker (the `gh` shim links it), check `sb links check --issue <ref>`, then
   `sb issue close <ref> --outcome completed --reason ... --result <entry> --validation ... --artifact ...`, and audit with
   `sb provenance trace <ref>`.
 
