@@ -111,6 +111,24 @@ export function createFixtureSubstrate(): SubstrateAdapter {
 
   return {
     source: "fixture",
+    /** Canned project-wide journal page: every kind the feed can render, newest first. */
+    async journalFeed(_projectId, opts) {
+      const base = Date.parse("2026-11-12T11:00:00Z");
+      const kinds = ["note", "finding", "decision", "blocker", "milestone", "handoff", "result", "checkpoint", "compaction", "cancel"];
+      const entries = kinds.map((kind, i) => ({
+        id: `jrn_fixture_${i}`,
+        issueRef: `XTRM-${100 + i}`,
+        issueId: `iss_fixture_${i}`,
+        sequence: i + 1,
+        kind,
+        issueRevision: 1,
+        createdAt: base - i * 60_000,
+        participantId: "fixture-holder",
+        semantic: { summary: `fixture ${kind} entry` },
+      }));
+      const limit = opts?.limit ?? 50;
+      return { entries: entries.slice(0, limit), nextCursor: null };
+    },
     async canWrite() {
       return true;
     },

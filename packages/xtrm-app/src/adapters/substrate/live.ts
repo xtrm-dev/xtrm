@@ -6,6 +6,7 @@ import type {
   IssueLink,
   IssueSummary,
   JournalEntry,
+  JournalFeedEntryWire,
   JournalPaging,
   Lifecycle,
   ProvenanceSummary,
@@ -489,6 +490,14 @@ export const liveSubstrate: SubstrateAdapter = {
         : `&tail=${page}`;
     const entries = await read<WireJournalEntry[]>(`/journal?ref=${encodeURIComponent(ref)}${query}`);
     return entries.map(mapJournalEntry).sort((a, b) => b.sequence - a.sequence);
+  },
+  async journalFeed(projectId, opts) {
+    const page = Math.min(opts?.limit ?? 50, 500);
+    const cursor = opts?.cursor ? `&cursor=${encodeURIComponent(opts.cursor)}` : "";
+    const body = await read<{ entries: JournalFeedEntryWire[]; nextCursor: string | null }>(
+      `/journal-feed?project=${encodeURIComponent(projectId)}&limit=${page}${cursor}`,
+    );
+    return { entries: body.entries, nextCursor: body.nextCursor ?? null };
   },
   async editIssue(projectId, ref, expectedRevision, edit) {
     await write("/edit", { project: projectId, ref, expectedRevision, ...edit });

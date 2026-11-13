@@ -16,7 +16,9 @@ describe("git log bridge", () => {
     expect(gitLogRequest("xtrm-dev/xtrm", null)).toEqual({ repo: "xtrm-dev/xtrm", limit: 40 });
     expect(gitLogRequest("xtrm-dev/xtrm", "10")).toEqual({ repo: "xtrm-dev/xtrm", limit: 10 });
     // A path, a traversal, a bare name or an out-of-range page never reaches git.
-    for (const bad of [null, "", "/etc", "../../etc/passwd", "xtrm-dev", "xtrm-dev/xtrm/../x", "a b/c", "--upload-pack=x/y"]) {
+    // `a/..` passes GIT_REPO_RE (both segments are name-shaped), so only the
+    // traversal guard rejects it: without that case the guard is untested.
+    for (const bad of [null, "", "/etc", "../../etc/passwd", "xtrm-dev", "xtrm-dev/xtrm/../x", "a/..", "a b/c", "--upload-pack=x/y"]) {
       expect(gitLogRequest(bad, "10")).toBeNull();
     }
     for (const badLimit of ["0", String(GIT_LOG_MAX + 1), "1.5", "abc"]) {

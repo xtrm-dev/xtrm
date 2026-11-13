@@ -79,6 +79,7 @@ export function pullConversationRows(detail: PullRequestDetail, repo: string): A
       at,
       meta: [
         ["review", review.state],
+        ...(review.submittedAt === null ? [["dated by", "pr last update"] as [string, string]] : []),
         ["pr", `${repo}#${detail.number}`],
       ],
       body: review.body,

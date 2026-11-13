@@ -3,7 +3,7 @@
 // inline state instead of silently dropping its rows.
 
 import type { GithubAdapter, GithubIssueSummary, GitActivityAdapter, PullRequestSummary, SubstrateAdapter } from "../adapters/types.ts";
-import { journalFeedRows, type JournalFeedWire } from "./substrate.ts";
+import { journalFeedRows } from "./substrate.ts";
 import { githubIssueRow, pullConversationRows, pullRow } from "./github.ts";
 import { commitRows, type GitCommitWire } from "./git.ts";
 import type { ActivityPage, ActivityRow, ActivitySource } from "./types.ts";
@@ -34,20 +34,13 @@ async function bridgeJson<T>(path: string, fetchImpl: typeof fetch, bridge: stri
 /** Substrate: the project-wide journal feed plus one status row per issue. */
 export async function loadSubstrate(ctx: FeedContext, cursor: string | null): Promise<ActivityPage> {
   if (ctx.projectId === null) return { source: "substrate", rows: [], cursor: null, error: "no Substrate project is mapped to this repository" };
-  const fetchImpl = ctx.fetchImpl ?? fetch;
-  const bridge = ctx.bridge ?? "/xtrm-api/substrate";
-  const query = cursor === null ? "" : `&cursor=${encodeURIComponent(cursor)}`;
-  const feed = await bridgeJson<{ data: { entries: JournalFeedWire["entries"]; nextCursor: string | null } }>(
-    `/journal-feed?project=${encodeURIComponent(ctx.projectId)}&limit=${ACTIVITY_PAGE}${query}`,
-    fetchImpl,
-    bridge,
-  );
   // Journal entries only. A status row would have to stamp the board's
   // `updatedAt`, which is not a transition time, so it would read as a
   // transition Substrate never recorded; the project-wide event read that would
   // make it honest is a separate Issue.
-  const rows = journalFeedRows({ projectId: ctx.projectId, entries: feed.data.entries, nextCursor: feed.data.nextCursor });
-  return { source: "substrate", rows, cursor: feed.data.nextCursor };
+  const feed = await ctx.substrate.journalFeed(ctx.projectId, { limit: ACTIVITY_PAGE, cursor });
+  const rows = journalFeedRows({ projectId: ctx.projectId, entries: feed.entries, nextCursor: feed.nextCursor });
+  return { source: "substrate", rows, cursor: feed.nextCursor };
 }
 
 /** GitHub: pull requests, issues, then reviews and comments for the newest few PRs. */

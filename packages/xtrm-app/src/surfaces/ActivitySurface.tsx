@@ -58,7 +58,15 @@ function Filters({ total, bySource, active, failedSources, onPick }: { total: nu
 /** One row: an accordion, so a glance never navigates away. */
 function ActivityRowView({ row, open, onToggle }: { row: ActivityRow; open: boolean; onToggle: () => void }) {
   const { inspect } = useShell();
-  const ref = row.refs[0];
+  // Only a reference the console can actually open gets the action: a commit or
+  // branch row has no inspector destination, and a dead button is worse than none.
+  const first = row.refs[0];
+  const openable =
+    first === undefined
+      ? null
+      : first.kind === "issue" || first.kind === "pr" || first.kind === "gh-issue"
+        ? ({ kind: first.kind, ref: first.ref } as const)
+        : null;
   return (
     <li className="border-b border-border-subtle last:border-0">
       <Row className="min-h-11 items-start py-2" onActivate={onToggle} aria-expanded={open}>
@@ -103,16 +111,10 @@ function ActivityRowView({ row, open, onToggle }: { row: ActivityRow; open: bool
             <p className="max-h-64 overflow-auto border-l border-border-muted pl-2 text-xs whitespace-pre-wrap text-ink-muted">{row.body}</p>
           )}
           <div className="flex items-center gap-1.5">
-            {ref && (
-              <button
-                type="button"
-                className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)}
-                onClick={() => {
-                  if (ref.kind === "issue") inspect({ kind: "issue", ref: ref.ref });
-                  else if (ref.kind === "pr") inspect({ kind: "pr", ref: ref.ref });
-                }}
-              >
-                <Icon name="external" size="xs" /> Open {ref.kind === "pr" ? "pull request" : "issue"}
+            {openable !== null && (
+              <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)} onClick={() => inspect(openable)}>
+                <Icon name="external" size="xs" /> Open{" "}
+                {openable.kind === "pr" ? "pull request" : openable.kind === "gh-issue" ? "GitHub issue" : "issue"}
               </button>
             )}
             <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)} onClick={() => void navigator.clipboard?.writeText(row.refs[0]?.ref ?? row.id)}>
@@ -146,6 +148,7 @@ export function ActivitySurface() {
   // Older pages exist per source; with "All" selected the button says which
   // source it extends, so one source's history never masquerades as another's.
   const olderSources = states.filter((s) => s.cursor !== null && (active === null || s.source === active));
+  const olderFailures = states.filter((s) => s.olderError !== null && (active === null || s.source === active));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -156,6 +159,11 @@ export function ActivitySurface() {
         </button>
       </SurfaceToolbar>
       <div className="min-h-0 flex-1 overflow-auto">
+        {olderFailures.map((s) => (
+          <div key={`older-${s.source}`} className="border-b border-border-subtle px-3 py-2">
+            <ErrorState title={`older ${s.source} activity could not be loaded`} error={s.olderError} />
+          </div>
+        ))}
         {failed.map((s) => (
           <div key={s.source} className="border-b border-border-subtle px-3 py-2">
             <ErrorState title={`${s.source} source unavailable`} error={s.error} />

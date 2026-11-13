@@ -498,7 +498,9 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
         (err, stdout) => resolve(err ? null : stdout),
       );
     });
-    if (log === null) return fail(`git log failed in ${root}`);
+    // Never name the checkout path in a response: the caller supplied a
+    // repository, not a directory.
+    if (log === null) return fail(`git log failed for ${repo}`);
     // The checkout path stays server-side: the console needs commits, not the layout.
     return { status: 200, body: JSON.stringify({ ok: true, repo, commits: parseGitLog(log) }) };
   };

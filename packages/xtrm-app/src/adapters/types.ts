@@ -546,6 +546,20 @@ export interface BoardConnection {
   error?: string;
 }
 
+/** One project-wide journal row as the feed returns it (XTRM-764 / XTRM-757). */
+export interface JournalFeedEntryWire {
+  id: string;
+  kind: string;
+  issueRef: string;
+  issueId: string;
+  sequence: number;
+  issueRevision: number;
+  createdAt: number;
+  participantId?: string | null;
+  semantic?: { summary?: string } | null;
+  result?: { summary?: string } | null;
+}
+
 export interface SubstrateAdapter {
   readonly source: DataSource;
   /** Whether mutations are enabled for this source. */
@@ -565,6 +579,16 @@ export interface SubstrateAdapter {
    * only fully reachable through this call.
    */
   readJournal(ref: string, opts?: { tail?: number; before?: number; limit?: number }): Promise<JournalEntry[]>;
+  /**
+   * Project-wide journal page for the Activity feed (XTRM-757): newest first,
+   * every kind, one page per call. Live reads the bridge's /journal-feed; a
+   * fixture answers from canned entries so a fixture console is not a broken
+   * source.
+   */
+  journalFeed(
+    projectId: string,
+    opts?: { limit?: number; cursor?: string | null },
+  ): Promise<{ entries: JournalFeedEntryWire[]; nextCursor: string | null }>;
   editIssue(projectId: string, ref: string, expectedRevision: number, edit: IssueEdit): Promise<void>;
   setLifecycle(projectId: string, ref: string, state: Lifecycle): Promise<void>;
   addNote(projectId: string, ref: string, text: string, kind: string): Promise<void>;

@@ -35,7 +35,7 @@ export function useConnection() {
  * its own state instead of taking the feed down with it. `enabled` lets the
  * surface ask for only the sources it will render.
  */
-export function useActivityFeed(opts: { repo: string; projectId: string | null; follow?: boolean; enabled?: Partial<Record<"substrate" | "github" | "git", boolean>> }) {
+export function useActivityFeed(opts: { repo: string; projectId: string | null; enabled?: Partial<Record<"substrate" | "github" | "git", boolean>> }) {
   const { github, substrate, gitActivity } = useAdapters();
   const sources = ["substrate", "github", "git"] as const;
   const results = useQueries({
@@ -43,13 +43,15 @@ export function useActivityFeed(opts: { repo: string; projectId: string | null; 
       queryKey: ["activity", source, opts.repo, opts.projectId],
       queryFn: () => loadSourceState(source, { repo: opts.repo, projectId: opts.projectId, github, substrate, gitActivity }),
       staleTime: 30_000,
-      refetchInterval: opts.follow ? LIVE_MS : false,
+      refetchInterval: false,
       enabled: opts.enabled?.[source] ?? true,
     })),
   });
   // A page per source is the default; "older" pages are appended on demand and
   // kept per source, so one source's history never blocks another's.
-  const [older, setOlder] = useState<Partial<Record<(typeof sources)[number], { rows: ActivityRow[]; cursor: string | null; error?: string }>>>({});
+  const [older, setOlder] = useState<
+    Partial<Record<(typeof sources)[number], { rows: ActivityRow[]; cursor: string | null; olderError?: string }>>
+  >({});
   const states = sources.map((source, i) => {
     const r = results[i]!;
     const extra = older[source];
@@ -57,7 +59,10 @@ export function useActivityFeed(opts: { repo: string; projectId: string | null; 
       source,
       rows: [...(r.data?.rows ?? []), ...(extra?.rows ?? [])],
       cursor: extra?.cursor ?? r.data?.cursor ?? null,
-      error: r.isError ? String((r.error as Error)?.message ?? r.error) : (r.data?.error ?? extra?.error ?? null),
+      error: r.isError ? String((r.error as Error)?.message ?? r.error) : (r.data?.error ?? null),
+      // A failed older page is reported separately: it must not flip the source
+      // into its error state while the rows it already returned stay on screen.
+      olderError: extra?.olderError ?? null,
       pending: r.isPending && (opts.enabled?.[source] ?? true),
     };
   });
@@ -65,18 +70,22 @@ export function useActivityFeed(opts: { repo: string; projectId: string | null; 
     const state = states.find((s) => s.source === source);
     if (!state?.cursor) return;
     const page = await loadSourceState(source, { repo: opts.repo, projectId: opts.projectId, github, substrate, gitActivity }, state.cursor);
-    // A failed older page keeps the rows already shown and reports itself; it
-    // must not look like "there was nothing older".
-    setOlder((prev) => ({
-      ...prev,
-      [source]: {
-        rows: [...(prev[source]?.rows ?? []), ...page.rows],
-        cursor: page.cursor,
-        ...(page.error === null ? {} : { error: page.error }),
-      },
-    }));
+    setOlder((prev) => {
+      const previous = prev[source];
+      if (page.error !== null) {
+        // The older page failed, but the rows already on screen are still good:
+        // keep them, keep the cursor so the button can retry, and report the
+        // miss beside them instead of marking the whole source failed.
+        return { ...prev, [source]: { rows: previous?.rows ?? [], cursor: state.cursor, olderError: page.error } };
+      }
+      return { ...prev, [source]: { rows: [...(previous?.rows ?? []), ...page.rows], cursor: page.cursor } };
+    });
   };
-  return { states, loadOlder, refetch: () => results.forEach((r) => void r.refetch()) };
+  const refetch = (): void => {
+    setOlder({});
+    results.forEach((r) => void r.refetch());
+  };
+  return { states, loadOlder, refetch };
 }
 
 export function useEvents(repo: string, follow = false) {
