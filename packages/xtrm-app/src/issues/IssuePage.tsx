@@ -1,6 +1,7 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { projectForRepo, useIssue, useProjects } from "../app/queries.ts";
 import { useShell } from "../shell/context.tsx";
+import { Breadcrumbs } from "../ui/breadcrumbs.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { ErrorState, LoadingState } from "../ui/primitives.tsx";
@@ -24,11 +25,13 @@ export function IssuePage() {
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label={`Issue ${issueRef}`}>
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border-muted px-4">
-        <button type="button" onClick={() => void navigate({ to: listHref } as never)} className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-ink-faint outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover">
-          <Icon name="back" size="xs" /> Issues
-        </button>
-        <span className="text-ink-faint">/</span>
-        <IssueKey locator={q.data?.locator} humanRef={issueRef} />
+        <Breadcrumbs
+          className="text-sm"
+          items={[
+            { key: "issues", icon: "back", label: "Issues", onClick: () => void navigate({ to: listHref } as never) },
+            { key: "self", label: <IssueKey locator={null} humanRef={issueRef} />, title: q.data?.locator ?? issueRef },
+          ]}
+        />
         <div className="ml-auto flex items-center gap-1">
           <OptionsMenu
             label="Issue options"

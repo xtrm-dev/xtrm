@@ -1,3 +1,4 @@
+import { Breadcrumbs } from "../ui/breadcrumbs.tsx";
 import { Dialog } from "../ui/dialog.tsx";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { IssueDetail, IssueLink } from "../adapters/index.tsx";
@@ -131,17 +132,22 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
 function IssueBreadcrumb({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
-      {issue.parent && (
-        <>
-          <button type="button" onClick={() => nav.onOpenIssue(issue.parent!.ref)} className="flex min-w-0 items-center gap-1 rounded-sm outline-none hover:text-ink-muted focus-visible:text-ink">
-            <Icon name={kindIcon(issue.parent.kind ?? "epic")} size="xs" />
-            <IssueKey locator={issue.parent.locator} humanRef={issue.parent.ref} />
-          </button>
-          <span>/</span>
-        </>
-      )}
-      <Icon name={kindIcon(issue.kind)} size="xs" />
-      <IssueKey locator={issue.locator} humanRef={issue.ref} />
+      <Breadcrumbs
+        items={[
+          ...(issue.parent
+            ? [
+                {
+                  key: "parent",
+                  icon: kindIcon(issue.parent.kind ?? "epic"),
+                  label: <IssueKey locator={null} humanRef={issue.parent.ref} />,
+                  title: issue.parent.locator ?? issue.parent.ref,
+                  onClick: () => nav.onOpenIssue(issue.parent!.ref),
+                },
+              ]
+            : []),
+          { key: "self", icon: kindIcon(issue.kind), label: <IssueKey locator={null} humanRef={issue.ref} />, title: issue.locator ?? issue.ref },
+        ]}
+      />
       <span>·</span>
       <span>{issue.kind}</span>
       <span className="ml-auto tabular">rev {issue.revision}</span>

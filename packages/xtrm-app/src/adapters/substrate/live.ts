@@ -1,5 +1,6 @@
 import type {
   ArtifactRecord,
+  BoardConnection,
   Closure,
   IssueDetail,
   IssueLink,
@@ -406,6 +407,17 @@ export const liveSubstrate: SubstrateAdapter = {
   async canWrite() {
     const res = await fetch("/xtrm-api/substrate/capabilities");
     return res.ok ? ((await res.json()) as { writes: boolean }).writes : false;
+  },
+  /** The bridge knows the transport; a failed read is "unknown", never "local". */
+  async connection() {
+    try {
+      const res = await fetch("/xtrm-api/substrate/capabilities");
+      if (!res.ok) return null;
+      const body = (await res.json()) as { connection?: BoardConnection | null };
+      return body.connection ?? null;
+    } catch {
+      return null;
+    }
   },
   async listProjects() {
     const [projects, links] = await Promise.all([read<WireProject[]>("/projects"), read<WireLinks>("/links")]);

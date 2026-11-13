@@ -17,6 +17,17 @@ export function useRepoStats() {
   return useQuery({ queryKey: ["github", "stats"], queryFn: () => github.repoStats(), staleTime: 60_000 });
 }
 
+/** Where the Substrate board lives (local db or ssh forward) plus its round-trip time. */
+export function useConnection() {
+  const { substrate } = useAdapters();
+  return useQuery({
+    queryKey: ["substrate", "connection"],
+    queryFn: () => substrate.connection?.() ?? Promise.resolve(null),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
 export function useEvents(repo: string, follow = false) {
   const { github } = useAdapters();
   return useQuery({

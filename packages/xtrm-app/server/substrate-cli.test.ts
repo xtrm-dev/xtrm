@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { downgradeNotice, interpretJournalProbe, readArgv, resolveSbBin, shadowedBinHint, writeArgv } from "./substrate-cli.ts";
+import { downgradeNotice, interpretJournalProbe, interpretRemoteStatus, readArgv, resolveSbBin, shadowedBinHint, writeArgv } from "./substrate-cli.ts";
 
 const q = (s: string) => new URLSearchParams(s);
 
@@ -64,6 +64,22 @@ describe("substrate CLI bridge reads", () => {
     // The binary never ran, so the probe proves nothing and must not be cached.
     expect(interpretJournalProbe('{"ok":false,"error":"sb failed (bin=/missing/sb): spawn ENOENT"}')).toBeNull();
     expect(interpretJournalProbe("not json at all")).toBeNull();
+  });
+
+  it("reads the board transport, and a refusal is never reported as local", () => {
+    expect(
+      interpretRemoteStatus(
+        '{"schema":"substrate-cli/v1","command":"remote.status","ok":true,"data":{"mode":"ssh","host":"dawid@159.195.49.110","latencyMs":548,"serverVersion":"0.3.2"}}',
+      ),
+    ).toEqual({ ok: true, mode: "ssh", host: "dawid@159.195.49.110", latencyMs: 548, serverVersion: "0.3.2" });
+    expect(interpretRemoteStatus('{"ok":true,"data":{"mode":"local"}}')).toEqual({ ok: true, mode: "local", host: undefined, latencyMs: null, serverVersion: undefined });
+    // Unreachable ssh: the footer must say offline, not present local reads as canonical.
+    expect(interpretRemoteStatus('{"ok":false,"error":"ssh failed (host=dawid@x): connection refused"}')).toEqual({
+      ok: false,
+      mode: "unknown",
+      error: "ssh failed (host=dawid@x): connection refused",
+    });
+    expect(interpretRemoteStatus("not json at all")).toBeNull();
   });
 
   it("bounds the paged journal read and keeps the per-page ceiling", () => {

@@ -527,10 +527,23 @@ export interface IssueCreate {
   contract: Record<string, unknown>;
 }
 
+/** How the Substrate source reaches the board; `null` when the source cannot say (fixtures). */
+export interface BoardConnection {
+  /** `local` when the CLI reads its own database; `ssh` when it forwards to the server. */
+  mode: string;
+  host?: string;
+  latencyMs?: number | null;
+  serverVersion?: string;
+  ok: boolean;
+  error?: string;
+}
+
 export interface SubstrateAdapter {
   readonly source: DataSource;
   /** Whether mutations are enabled for this source. */
   canWrite(): Promise<boolean>;
+  /** Where the board lives. Optional: fixtures have no transport to report. */
+  connection?(): Promise<BoardConnection | null>;
   listProjects(): Promise<SubstrateProject[]>;
   listIssues(projectId: string): Promise<IssueSummary[]>;
   /**

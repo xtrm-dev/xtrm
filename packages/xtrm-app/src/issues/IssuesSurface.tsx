@@ -3,13 +3,14 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { useAdapters, type IssueSummary } from "../adapters/index.tsx";
 import { projectForRepo, useIssues, useProjects } from "../app/queries.ts";
 import { useShell } from "../shell/context.tsx";
+import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_REST, cx, relativeTime } from "../ui/primitives.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
-import { buildTree, defaultDesc, issueStatus, keyColumnRem, rollupActivity, type Sort, type SortKey, type StatusTone, type TreeRow } from "./issue-table.ts";
+import { buildTree, defaultDesc, issueStatus, keyColumnRem, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
 import { ReferenceChip } from "../refs/references.tsx";
@@ -233,14 +234,6 @@ export function IssuesSurface() {
 
 const NUMBER = "text-xs text-ink-muted tabular";
 
-const STATUS_CHIP: Record<StatusTone, string> = {
-  accent: "bg-accent-soft text-accent-ink",
-  active: "bg-accent-soft text-ink",
-  danger: "bg-danger/12 text-danger",
-  neutral: "bg-pressed text-ink-muted",
-  muted: "bg-hover text-ink-faint",
-};
-
 function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow; selected: boolean; onToggle: () => void; onInspect: () => void; onOpen: () => void }) {
   const { issue, depth, rollup, hasChildren, collapsed, detached } = row;
   const terminal = TERMINAL.has(issue.lifecycle);
@@ -286,9 +279,9 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
             <Icon name={kindIcon(issue.kind)} size="xs" className="text-ink-faint" />
           </span>
           <PriorityGlyph priority={issue.priority} />
-          <span title={status.hint} className={cx("shrink-0 rounded px-1.5 py-0.5 text-center text-[0.68rem] leading-4", STATUS_CHIP[status.tone])}>
+          <Badge tone={status.tone} title={status.hint} className="w-16 justify-center">
             {status.label}
-          </span>
+          </Badge>
           <span className="min-w-0 truncate">
             <span className="mr-2 shrink-0 text-xs text-ink-faint">{issue.locator}</span>
             {issue.locator !== issue.ref && <span className="mr-1.5 shrink-0 text-xs text-ink-faint opacity-60">/ {issue.ref}</span>}

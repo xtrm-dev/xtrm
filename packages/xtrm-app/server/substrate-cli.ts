@@ -39,6 +39,47 @@ export function interpretJournalProbe(body: string): boolean | null {
 /** A downgrade is re-probed after this long, so an sb upgrade needs no restart. */
 export const JOURNAL_PROBE_MS = 10 * 60_000;
 
+/** What `/capabilities` reports about how the CLI reaches the board. */
+export interface BridgeConnection {
+  /** `local` when the CLI reads its own database; `ssh` when it forwards to the server. */
+  mode: string;
+  host?: string;
+  latencyMs?: number | null;
+  serverVersion?: string;
+  ok: boolean;
+  error?: string;
+}
+
+/** The connection probe is cheap on a local db and ~0.5 s over ssh, so it is cached briefly. */
+export const CONNECTION_PROBE_MS = 15_000;
+
+/**
+ * Parse `sb remote status`. A refusal names its own failure, so the footer can show
+ * `offline` instead of silently presenting local reads as canonical.
+ */
+export function interpretRemoteStatus(body: string): BridgeConnection | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  const envelope = parsed as { ok?: unknown; error?: unknown; data?: Record<string, unknown> };
+  if (envelope.ok === false) {
+    return { ok: false, mode: "unknown", error: typeof envelope.error === "string" ? envelope.error : "remote status failed" };
+  }
+  const data = envelope.data;
+  if (!data || typeof data.mode !== "string") return null;
+  const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+  return {
+    ok: true,
+    mode: data.mode,
+    host: str(data.host),
+    latencyMs: typeof data.latencyMs === "number" ? data.latencyMs : null,
+    serverVersion: str(data.serverVersion),
+  };
+}
+
 /** Per-page ceiling for the journal read, paged or not. */
 const JOURNAL_PAGE_MAX = 2000;
 /** What a legacy CLI returns in one read; the fallback matches the old tab. */
@@ -282,6 +323,20 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
     }
     return value;
   };
+  // Where the board actually lives. Without this the footer cannot tell a canonical
+  // ssh read from a local one, which is how a shadowed binary looked like a regression.
+  let connection: { value: BridgeConnection; at: number } | null = null;
+  const readConnection = async (): Promise<BridgeConnection | null> => {
+    if (connection && Date.now() - connection.at < CONNECTION_PROBE_MS) return connection.value;
+    try {
+      const { body } = await runSb(bin, db, ["remote", "status"]);
+      const value = interpretRemoteStatus(body);
+      if (value) connection = { value, at: Date.now() };
+      return value;
+    } catch {
+      return null;
+    }
+  };
 
   const handle = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = new URL(req.url ?? "/", "http://local");
@@ -292,7 +347,14 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
     if (req.method === "GET") {
       if (path === "/capabilities") {
         return res.end(
-          JSON.stringify({ writes, db: db ? "custom" : "default", journalPaging: await journalPaging(), sb: bin, sbVersion: await readBinVersion() }),
+          JSON.stringify({
+            writes,
+            db: db ? "custom" : "default",
+            journalPaging: await journalPaging(),
+            sb: bin,
+            sbVersion: await readBinVersion(),
+            connection: await readConnection(),
+          }),
         );
       }
       const argv = readArgv(path, url.searchParams);

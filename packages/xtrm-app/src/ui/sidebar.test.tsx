@@ -33,7 +33,8 @@ describe("SidebarRow", () => {
 
     const icon = row.querySelector("svg")!;
     expect(icon.getAttribute("width")).toBe("16");
-    expect(icon.getAttribute("stroke-width")).toBe("2");
+    // 2.25 is the app weight (docs/mocks/sidebar-weight-connection-activity.html, A1).
+    expect(icon.getAttribute("stroke-width")).toBe("2.25");
 
     const label = screen.getByText("Project");
     expect(label.className).toContain("font-semibold");
