@@ -151,9 +151,12 @@ describe("pull-request writers", () => {
     const { receipt } = dispatchWithClaim(w);
     w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR);
     const row = w.db
-      .prepare("SELECT state, title, merged_at, url, last_synced_at FROM pull_requests WHERE repository = ? AND number = ?")
+      .prepare("SELECT state, state_source, title, merged_at, url, last_synced_at FROM pull_requests WHERE repository = ? AND number = ?")
       .get(PR.repository, PR.number) as { state: string; title: string | null; merged_at: number | null; url: string | null; last_synced_at: number };
     assert.equal(row.state, "open", "the opener knows the PR is open");
+    // XTRM-767: the row says WHO wrote it, so the nulls below are "unknown",
+    // not "the opener forgot". A reconciler read upgrades this to 'observed'.
+    assert.equal((row as { state_source?: string }).state_source, "assumed");
     assert.equal(row.title, null, "the opener does not invent a title");
     assert.equal(row.url, PR.url);
     // The row is written now, but it is an ASSUMPTION: the gate must re-read it
@@ -166,6 +169,7 @@ describe("pull-request writers", () => {
     assert.equal(marker.state_source, "assumed");
     const view = w.links.listForIssue(w.issue.id)[0]!;
     assert.equal(view.state, "open");
+    assert.equal(view.stateSource, "assumed", "the view names the source of the state");
     assert.equal(view.title, null);
     assert.equal(view.mergedAt, null);
   });
