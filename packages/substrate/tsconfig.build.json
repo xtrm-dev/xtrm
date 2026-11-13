@@ -8,6 +8,6 @@
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true
   },
-  "include": ["src/**/*.ts", "cli/**/*.ts", "integrations/**/*.ts"],
+  "include": ["src/**/*.ts", "cli/**/*.ts", "hooks/**/*.ts", "integrations/**/*.ts"],
   "exclude": ["tests/**/*.ts"]
 }
