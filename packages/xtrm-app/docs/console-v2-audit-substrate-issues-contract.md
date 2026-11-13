@@ -178,7 +178,7 @@ No surface defaults to a repo-local database. `plugin/substrate/.mcp.json:1-2` d
 | `:58` | `PRAGMA foreign_keys = ON` | Referential integrity enforced |
 | `:60-63` | `migrate(db)` then `db.close()` on throw | Fail-closed open; a corrupt DB never yields a usable handle |
 
-Write transactions use `BEGIN IMMEDIATE` (`src/store/transactions.ts:47`), nested calls use `SAVEPOINT xtrm_sp_<depth>` (`:29`), depth tracked per handle in a `WeakMap` (`:22`). Driver selection is lazy via `createRequire` so Bun never resolves `node:sqlite` (`src/store/sqlite.ts:21-27`); parameter `undefined`→`null` normalization at `:31-45`.
+Write transactions use `BEGIN IMMEDIATE` (`src/store/transactions.ts:47`), nested calls use `SAVEPOINT xtrm_sp_<depth>` (`:29`), depth tracked per handle in a `WeakMap` (`:22`). Driver selection is lazy via `createRequire`, and under Bun the `node:sqlite` branch is never reached so the specifier is never resolved (`src/store/sqlite.ts:21-29`); parameter `undefined`→`null` normalization at `:31-45`.
 
 ### 3.3 Schema + migrations — `VERIFIED`
 

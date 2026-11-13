@@ -32,14 +32,10 @@ cmd_guard_substrate() {
   # Neutral-import guard (xtrm-6qu.7.4 invariant, mirrored from
   # tests/sqlite-runtime.test.ts): no STATIC value import of
   # node:sqlite/bun:sqlite anywhere — the opener selects the driver lazily
-  # via conditional require() in src/store/sqlite.ts, so the module is only
-  # resolved on the runtime path that actually needs it, and a runtime whose
-  # node:sqlite is missing or partial never loads it at startup. `import type`
-  # lines are erased at runtime and safe.
-  #
-  # Deliberately does NOT claim which bun lacks node:sqlite: Bun 1.4.x does
-  # resolve require("node:sqlite") (verified locally on 1.4.0), so the guard is
-  # about static resolution, not about the lane's pinned version.
+  # via conditional require() in src/store/sqlite.ts, so each runtime resolves
+  # only its own specifier and the other one is never loaded. `import type`
+  # lines are erased at runtime and safe. This guard is about STATIC
+  # resolution, and makes no claim about what any runtime's built-ins contain.
   local offenders
   offenders="$(grep -rn --include='*.ts' -E "from ['\"](node|bun):sqlite['\"]" "$dir/src" "$dir/cli" "$dir/integrations" 2>/dev/null | grep -v 'import type' || true)"
   [ -z "$offenders" ] || fail "guard-substrate: static sqlite value import: $(printf '%s' "$offenders" | cut -d: -f1 | sort -u | tr '\n' ' ')"
