@@ -95,24 +95,21 @@ const assertCliffVersion = () => {
   );
 };
 
+// One refusal text, one place: the ENOENT path and the render path both use it.
+const refuseMissingCliff = () => {
+  throw new Error(
+    `${CHANGELOG}: git-cliff >= ${MIN_CLIFF} is required and was not found on PATH.\n` +
+    `Install it (https://git-cliff.org/docs/installation), then re-run: node scripts/changelog-update.mjs\n` +
+    `Nothing was written.`,
+  );
+};
+
 const generated = (() => {
-  if (!assertCliffVersion()) {
-    throw new Error(
-      `${CHANGELOG}: git-cliff >= ${MIN_CLIFF} is required and was not found on PATH.\n` +
-      `Install it (https://git-cliff.org/docs/installation), then re-run: node scripts/changelog-update.mjs\n` +
-      `Nothing was written.`,
-    );
-  }
+  if (!assertCliffVersion()) refuseMissingCliff();
   try {
     return execFileSync(CLIFF, cliffArgs, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }).trim();
   } catch (error) {
-    if (error && (error.code === 'ENOENT' || String(error.message).includes('ENOENT'))) {
-      throw new Error(
-        `${CHANGELOG}: git-cliff >= ${MIN_CLIFF} is required and was not found on PATH.\n` +
-        `Install it (https://git-cliff.org/docs/installation), then re-run: node scripts/changelog-update.mjs\n` +
-        `Nothing was written.`,
-      );
-    }
+    if (error && (error.code === 'ENOENT' || String(error.message).includes('ENOENT'))) refuseMissingCliff();
     throw error;
   }
 })();

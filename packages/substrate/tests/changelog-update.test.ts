@@ -28,11 +28,14 @@ All notable changes to the package are documented in this file.
 
 /** A stub that answers with canned markdown, so the assertions are exact.
  * It answers the --tag case with a versioned heading, as git-cliff does. */
-function stubCliff(dir: string, body: string, tagBody: string = body): string {
+function stubCliff(dir: string, body: string, tagBody: string = body, version = "git-cliff 2.14.2"): string {
   const file = path.join(dir, "git-cliff-stub.sh");
   writeFileSync(file, [
     "#!/bin/sh",
     'case "$*" in',
+    "  --version)",
+    `echo "${version}"`,
+    "    ;;",
     "  *--tag*)",
     "cat <<'BODY2'",
     tagBody,
@@ -59,13 +62,13 @@ interface World {
 
 // The repo's own temp helper honours SUBSTRATE_TEST_TMP, so scripts/test-tmp-guard.mjs
 // sees anything this file leaves behind (CORE-2612).
-function world(cliffBody: string, tagBody: string = cliffBody): World {
+function world(cliffBody: string, tagBody: string = cliffBody, version = "git-cliff 2.14.2"): World {
   const dir = tempDir("xtrm-changelog-");
   const changelog = path.join(dir, "CHANGELOG.md");
   writeFileSync(changelog, HEADER);
   const config = path.join(dir, "cliff.toml");
   writeFileSync(config, "[changelog]\nbody = \"\"\n");
-  return { dir, changelog, config, cliff: stubCliff(dir, cliffBody, tagBody) };
+  return { dir, changelog, config, cliff: stubCliff(dir, cliffBody, tagBody, version) };
 }
 
 function run(w: World, args: string[] = []): string {
@@ -124,6 +127,24 @@ describe("changelog-update", () => {
     assert.ok(after.includes("- released two"));
     // A second promotion has nothing to promote and refuses instead of duplicating.
     assert.throws(() => run(w, ["--tag", "v1.1.1"]), /no \[Unreleased\] entries to promote/);
+  });
+
+  it("refuses a git-cliff below the floor without writing", () => {
+    const w = world("## [Unreleased]\n\n### Added\n- brand new\n", undefined, "git-cliff 2.9.0");
+    const before = readFileSync(w.changelog, "utf8");
+    let code: number | undefined;
+    let stderr = "";
+    try {
+      run(w);
+    } catch (e) {
+      const failure = e as { status?: number; stderr?: string | Buffer; message?: string };
+      code = failure.status;
+      stderr = String(failure.stderr ?? "") + String(failure.message ?? "");
+    }
+    assert.equal(code, 1, "an outdated binary must exit 1");
+    assert.match(stderr, /git-cliff >= 2\.10 is required, found git-cliff 2\.9\.0/);
+    assert.match(stderr, /Nothing was written/);
+    assert.equal(readFileSync(w.changelog, "utf8"), before, "nothing may be written");
   });
 
   it("fails closed with an actionable message when git-cliff is absent", () => {
