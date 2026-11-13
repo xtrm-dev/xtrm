@@ -6,7 +6,8 @@ import { AgentSidebar } from "../agent/AgentSidebar.tsx";
 import { useAgentStore } from "../agent/workspace.tsx";
 import { AGENT_MODE, MODES, REPO_SECTIONS, RESEARCH_SECTIONS, destinationHref, halfForPath, modeForPath, repoHref, type Half } from "../app/destinations.ts";
 import { isInvalidManifestRow } from "../adapters/research/types.ts";
-import { projectForRepo, useIssues, useProgram, useProjects, useRepoStats, useRepos, useResearchRuns } from "../app/queries.ts";
+import { projectForRepo, useConnection, useIssues, useProgram, useProjects, useRepoStats, useRepos, useResearchRuns } from "../app/queries.ts";
+import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, Tip, cx, relativeTime } from "../ui/primitives.tsx";
 import { SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
@@ -108,6 +109,8 @@ function RepositorySelector() {
 
 function SourceFooter() {
   const adapters = useAdapters();
+  const connection = useConnection();
+  const [open, setOpen] = useState(false);
   const items = [
     ["Agent host", adapters.agent.source],
     ["GitHub", adapters.github.source],
@@ -116,23 +119,63 @@ function SourceFooter() {
     ["Research", adapters.research.source],
   ] as const;
   const live = items.filter(([, source]) => source === "live").length;
+  const conn = connection.data ?? null;
+  // Only an ssh forward is worth a footer line; a local db is the quiet default.
+  const remote = conn?.ok && conn.mode === "ssh" ? conn : null;
+  const state = conn == null ? "unverified" : conn.ok ? (remote ? "remote" : "local") : "offline";
+  const tone = conn == null ? "neutral" : conn.ok ? "done" : "danger";
   return (
-    <details aria-label="Data sources" className="group/src px-2 py-1.5 text-xs text-ink-faint">
-      <summary className="flex h-6 cursor-default list-none items-center gap-2 rounded-md px-1 outline-none hover:text-ink-muted [&::-webkit-details-marker]:hidden">
-        <StatusDot tone={live === items.length ? "done" : "muted"} label={`${live} of ${items.length} live`} />
-        <span>{live === items.length ? "All sources live" : `${live} of ${items.length} sources live`}</span>
-        <Icon name="chevronDown" size="xs" className="ml-auto transition-transform group-open/src:rotate-180" />
-      </summary>
-      <div className="flex flex-col gap-0.5 px-1 pt-1">
-        {items.map(([label, source]) => (
-          <div key={label} className="flex h-5 items-center gap-2">
-            <StatusDot tone={source === "live" ? "done" : "muted"} label={source} />
-            <span>{label}</span>
-            <span className="ml-auto">{source}</span>
-          </div>
-        ))}
-      </div>
-    </details>
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      {/* Same two-line block as the repository selector: an eyebrow, then the state line. */}
+      <Popover.Trigger
+        aria-label="Data sources"
+        className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left text-ink-faint outline-none hover:bg-hover hover:text-ink-muted focus-visible:bg-hover data-[popup-open]:bg-hover"
+      >
+        <span className="text-[0.65rem] font-medium tracking-wide uppercase">Sources</span>
+        <span className="flex w-full min-w-0 items-center gap-2">
+          <StatusDot tone={live === items.length ? "done" : "muted"} label={`${live} of ${items.length} live`} />
+          <span className="truncate text-xs">{live === items.length ? "All live" : `${live} of ${items.length} live`}</span>
+          {remote?.latencyMs != null && <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums">{remote.latencyMs} ms</span>}
+          {/* It opens upward, so the resting chevron points up and flips down when the panel is open. */}
+          <Icon name={open ? "chevronDown" : "chevronUp"} size="xs" className={cx("shrink-0", remote?.latencyMs != null ? "ml-1" : "ml-auto")} />
+        </span>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner side="top" align="start" sideOffset={4} className="z-50">
+          <Popover.Popup className="flex w-[var(--anchor-width)] flex-col gap-0.5 rounded-lg bg-raised p-1.5 text-xs text-ink-muted shadow-float outline-none">
+            <div className="flex items-baseline gap-2 px-1.5 pt-0.5 pb-1">
+              <span className="text-[0.65rem] font-medium tracking-wide text-ink-faint uppercase">Data sources</span>
+              <span className="ml-auto font-mono text-[10px] tabular-nums text-ink-faint">
+                {live}/{items.length} live
+              </span>
+            </div>
+            {conn && (
+              <div className="flex h-8 items-center gap-2 rounded-md px-1.5" data-testid="board-connection" title={remote ? `${remote.host ?? "ssh"} · ${remote.latencyMs ?? "?"} ms` : undefined}>
+                <StatusDot tone={tone} label={conn.ok ? "board reachable" : "board unreachable"} />
+                <span className="truncate">Board</span>
+                <Badge className="ml-auto" tone={conn.ok ? (remote ? "active" : "neutral") : "danger"} size="xs" mono={remote != null}>
+                  {conn.ok ? (remote ? `server · ${remote.latencyMs ?? "–"} ms` : "local db") : "offline"}
+                </Badge>
+              </div>
+            )}
+            {items.map(([label, source]) => (
+              <div key={label} className="flex h-8 items-center gap-2 rounded-md px-1.5">
+                <StatusDot tone={source === "live" ? "done" : "muted"} label={source} />
+                <span className="truncate">{label}</span>
+                <Badge className="ml-auto" tone={source === "live" ? "active" : "neutral"} size="xs">
+                  {source}
+                </Badge>
+              </div>
+            ))}
+            <div className="mt-0.5 border-t border-border-muted px-1.5 pt-1.5 pb-0.5 font-mono text-[10px] text-ink-faint" data-testid="board-transport">
+              {state === "remote" ? "ssh" : state === "local" ? "local db" : state === "offline" ? "unreachable" : "unknown"}
+              {remote?.host ? ` · ${remote.host}` : ""}
+              {conn?.serverVersion ? ` · sb ${conn.serverVersion}` : ""}
+            </div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 

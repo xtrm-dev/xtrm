@@ -114,6 +114,10 @@ export function createFixtureSubstrate(): SubstrateAdapter {
     async canWrite() {
       return true;
     },
+    /** Fixtures have no transport; the footer omits the board line instead of inventing one. */
+    async connection() {
+      return null;
+    },
     async listProjects() {
       return [{ id: "prj_xtrm", prefix: "XTRM", name: "xtrm", gitRoots: ["/home/dev/xtrm"] }];
     },

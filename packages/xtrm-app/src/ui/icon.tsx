@@ -9,6 +9,8 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
+  ChevronUp,
   Command,
   Copy,
   ExternalLink,
@@ -62,6 +64,8 @@ const registry = {
   agent: MousePointer2,
   alert: AlertTriangle,
   chevronDown: ChevronDown,
+  chevronRight: ChevronRight,
+  chevronUp: ChevronUp,
   back: ArrowLeft,
   forward: ArrowRight,
   external: ExternalLink,
@@ -117,7 +121,8 @@ const SIZES = { xs: 14, sm: 16, nav: 16, md: 18, lg: 20 } as const;
 export function Icon({
   name,
   size = "sm",
-  strokeWidth = 2,
+  /** Lucide ships 2; the sidebar and the tables read better at 2.25 (docs/mocks/sidebar-weight-connection-activity.html A1). */
+  strokeWidth = 2.25,
   className,
 }: {
   name: IconName;

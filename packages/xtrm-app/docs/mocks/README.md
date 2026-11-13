@@ -56,6 +56,17 @@ Sidebar restyle and icon-system comparison for the Workspace / Github / System i
 
 The companion scope document is [`../design/sidebar-restyle.md`](../design/sidebar-restyle.md). Icons are lucide 1.70.0 geometry inlined at the stroke widths under test; the file needs network access only for the Figtree and Geist Mono webfonts.
 
+### `sidebar-weight-connection-activity.html`
+
+Status: built (A1 weight, 2.25 stroke; B2 board line) — the source footer is now a drop-up popover, and the feed rows are accordions (XTRM-757 owns the data work).
+
+Three follow-ups to the restyle on one page, at real sidebar width, with lucide 1.70.0 geometry inlined:
+
+- **A · weight ladder** — stroke 2 / 2.25 / 2.5 crossed with label weight and row height, plus a 30 px zoom strip so the stroke difference is legible at a glance. A1 (stroke 2.25, 600 at 13 px) is what ships in `src/ui/icon.tsx`;
+- **B · connection indicator** — dot-only, dot + latency, two-line, degraded and offline states for an ssh-forwarded board. B2 is the shipped footer row; the host is in the row title, not in the visible line;
+- **C · activity feed** — a mixed git / GitHub / Substrate timeline with source chips and counts, then **C2** the same rows as accordions (expanded journal note, expanded review comment with the quoted hunk, collapsed rows) so the shape is settled before XTRM-757 implements merging;
+- a journal-kind legend covering every kind the feed must render, including the ones with no natural GitHub analogue.
+
 ## How to use these files
 
 Use them to compare interaction geometry, density, search/navigation placement, collapse behavior and visual direction while implementing `packages/xtrm-app`.

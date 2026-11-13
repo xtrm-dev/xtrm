@@ -167,16 +167,21 @@ describe("Research uses the shared shell, and nothing of its own", () => {
 
   it("reports the Research adapter's own source in the shared sidebar footer", async () => {
     renderAt("/research/runs");
-    const footer = await screen.findByLabelText("Data sources");
-    const row = (await within(footer).findByText("Research")).closest("div")!;
-    expect(row.querySelector(".ml-auto")?.textContent).toBe("fixture");
+    // The sources list lives in a drop-up popover: the trigger alone carries the live count.
+    const trigger = await screen.findByLabelText("Data sources");
+    fireEvent.click(trigger);
+    const panel = await screen.findByRole("dialog");
+    const row = within(panel).getByText("Research").closest("div")!;
+    expect(row.querySelector('[data-slot="badge"]')?.textContent).toBe("fixture");
   });
 
   it("follows the adapter's source rather than a hard-coded string", async () => {
     renderWithResearch("/research/runs", { source: "live" });
-    const footer = await screen.findByLabelText("Data sources");
-    const row = (await within(footer).findByText("Research")).closest("div")!;
-    expect(row.querySelector(".ml-auto")?.textContent).toBe("live");
+    const trigger = await screen.findByLabelText("Data sources");
+    fireEvent.click(trigger);
+    const panel = await screen.findByRole("dialog");
+    const row = within(panel).getByText("Research").closest("div")!;
+    expect(row.querySelector('[data-slot="badge"]')?.textContent).toBe("live");
   });
 });
 

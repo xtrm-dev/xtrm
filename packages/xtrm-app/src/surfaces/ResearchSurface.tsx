@@ -7,6 +7,7 @@ import { isInvalidManifestRow, type ExperimentRef, type RunListRow, type RunRow,
 import { compareRunIds, validateCompareSearch } from "../app/research-compare-search.ts";
 import { useResearchCompare, useResearchExperiment, useResearchExperiments, useResearchMetrics, useResearchRun, useResearchRuns, useResearchSamples, useResearchTail, useResearchWorkloadForRun } from "../app/queries.ts";
 import { useShell } from "../shell/context.tsx";
+import { Breadcrumbs } from "../ui/breadcrumbs.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_REST, cx, type Tone } from "../ui/primitives.tsx";
 import { MetricFields, UsageFields } from "./research-format.tsx";
@@ -141,11 +142,13 @@ export function ExperimentDetailSurface() {
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label={`Experiment ${experimentId}`}>
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border-muted px-4">
-        <button type="button" onClick={() => void navigate({ to: "/research/experiments" } as never)} className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-ink-faint hover:bg-hover hover:text-ink">
-          <Icon name="back" size="xs" /> Experiments
-        </button>
-        <span className="text-ink-faint">/</span>
-        <span className="font-mono text-sm text-ink">{experimentId}</span>
+        <Breadcrumbs
+          className="text-sm"
+          items={[
+            { key: "list", icon: "back", label: "Experiments", onClick: () => void navigate({ to: "/research/experiments" } as never) },
+            { key: "self", label: <span className="font-mono">{experimentId}</span> },
+          ]}
+        />
         {version && <span className="ml-auto font-mono text-xs text-ink-faint">{experimentId}@{version}</span>}
       </header>
       <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -399,11 +402,13 @@ export function RunAnalysisSurface() {
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label={`Run ${runId}`}>
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border-muted px-4">
-        <button type="button" onClick={() => void navigate({ to: "/research/runs" } as never)} className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-ink-faint hover:bg-hover hover:text-ink">
-          <Icon name="back" size="xs" /> Runs
-        </button>
-        <span className="text-ink-faint">/</span>
-        <span className="font-mono text-sm text-ink">{runId}</span>
+        <Breadcrumbs
+          className="text-sm"
+          items={[
+            { key: "list", icon: "back", label: "Runs", onClick: () => void navigate({ to: "/research/runs" } as never) },
+            { key: "self", label: <span className="font-mono">{runId}</span> },
+          ]}
+        />
         {run.data && <StatusDot tone={runStatusTone(run.data.status)} label={run.data.status} />}
         {manifest && readVersionRef(manifest.variant) && <span className="ml-auto font-mono text-xs text-ink-faint">{readVersionRef(manifest.variant)!.id}@{readVersionRef(manifest.variant)!.version}</span>}
       </header>
