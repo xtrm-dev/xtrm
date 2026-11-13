@@ -383,6 +383,15 @@ export function mapIssueDetail(d: WireIssueDetail, ctx: IssueDetailCtx & { board
   return applyBoard(mapIssueCore(d, ctx), ctx.board);
 }
 
+/**
+ * The bridge names the journal read it served. `unknown` is carried through as
+ * itself: the request was served as asked, but nothing proved paging, so it must
+ * not be read as `cursor` (a capability) nor as `legacy` (a downgrade).
+ */
+export function journalPagingFromHeader(header: string | null): JournalPaging | null {
+  return header === "legacy" || header === "cursor" || header === "unknown" ? header : null;
+}
+
 async function readWithMeta<T>(path: string): Promise<{ data: T; paging: JournalPaging | null }> {
   const res = await fetch(`/xtrm-api/substrate${path}`);
   let body: Envelope<T>;
@@ -393,8 +402,7 @@ async function readWithMeta<T>(path: string): Promise<{ data: T; paging: Journal
   }
   if (!("schema" in body)) throw new SubstrateReadError((body as { error?: string }).error ?? `substrate bridge returned ${res.status}`);
   // Test doubles stub only json(); be tolerant of a response without headers.
-  const header = res.headers?.get?.("x-xtrm-journal-paging") ?? null;
-  return { data: unwrap(body), paging: header === "legacy" || header === "cursor" ? header : null };
+  return { data: unwrap(body), paging: journalPagingFromHeader(res.headers?.get?.("x-xtrm-journal-paging") ?? null) };
 }
 
 async function read<T>(path: string): Promise<T> {

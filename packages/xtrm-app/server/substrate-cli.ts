@@ -49,6 +49,19 @@ export function interpretFeedProbe(body: string): boolean | null {
   return null;
 }
 
+/**
+ * The value of `x-xtrm-journal-paging` for a served journal read. Split out of the
+ * route so the decision is testable without an sb process: `legacy` means the
+ * request was rewritten to the old ascending read, `cursor` means paging was
+ * proven, and `unknown` means the request was served as asked but the probe could
+ * not prove the binary supports paging — which must not be reported as `cursor`.
+ */
+export function journalPagingHeader(input: { rewritten: boolean; probed: boolean | null; paged: boolean }): "legacy" | "cursor" | "unknown" {
+  if (input.rewritten) return "legacy";
+  if (input.paged && input.probed === null) return "unknown";
+  return "cursor";
+}
+
 /** A downgrade is re-probed after this long, so an sb upgrade needs no restart. */
 export const JOURNAL_PROBE_MS = 10 * 60_000;
 
@@ -557,8 +570,13 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
       const paged = argv[0] === "journal" && (argv.includes("--tail") || argv.includes("--before"));
       const support = paged && path === "/journal" ? await journalPaging() : null;
       const effective = support === false ? ["journal", "show", argv[2]!, "--limit", String(JOURNAL_LEGACY_LIMIT)] : argv;
-      // Tell the app which read it actually got: legacy cannot page at all.
-      if (path === "/journal" && argv[0] === "journal") res.setHeader("x-xtrm-journal-paging", effective === argv ? "cursor" : "legacy");
+      // Tell the app which read it actually got: legacy cannot page at all. An
+      // inconclusive probe is `unknown`, not `cursor`: the argv passed through
+      // unchanged, but nothing proved this binary supports paging, and a labelled
+      // cursor read would turn an unproven capability into a stated one.
+      if (path === "/journal" && argv[0] === "journal") {
+        res.setHeader("x-xtrm-journal-paging", journalPagingHeader({ rewritten: effective !== argv, probed: support, paged }));
+      }
       const key = effective.join(" ");
       let hit = cache.get(key);
       if (!hit || Date.now() - hit.at > TTL_MS) {
