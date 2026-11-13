@@ -143,7 +143,9 @@ export function readArgv(pathname: string, params: URLSearchParams): string[] | 
       // Project-wide feed (substrate >= 0.3.3): one page per call, newest
       // first. `cursor` is opaque and goes back as `--before` (older) or
       // `--since` (poll for newer); `since` also carries a time bound.
-      const prj = params.get("project");
+      // `prj` is the PROJECT_RE-validated value from the top of readArgv: this is
+      // the trust boundary between a URL and an argv, so a project id that fails
+      // the pattern must be refused here, not by the CLI's own parse downstream.
       if (!prj) return null;
       const feedLimit = Number(params.get("limit") ?? "50");
       if (!Number.isInteger(feedLimit) || feedLimit <= 0 || feedLimit > JOURNAL_PAGE_MAX) return null;
@@ -155,12 +157,16 @@ export function readArgv(pathname: string, params: URLSearchParams): string[] | 
         argv.push("--kind", kinds.join(","));
       }
       const cursorRaw = params.get("cursor");
+      const sinceRaw = params.get("since");
+      // Both name the same page bound and the CLI refuses the pair; refusing it
+      // here gives the caller one clear answer instead of a forwarded argv that
+      // is guaranteed to fail.
+      if (cursorRaw !== null && sinceRaw !== null) return null;
       if (cursorRaw !== null) {
         const cursor = str(cursorRaw);
         if (!cursor) return null;
         argv.push("--before", cursor);
       }
-      const sinceRaw = params.get("since");
       if (sinceRaw !== null) {
         const since = str(sinceRaw);
         if (!since) return null;

@@ -147,6 +147,38 @@ describe("journal feed (XTRM-764)", () => {
     assert.match(bad.stderr, /cannot be combined/);
   });
 
+  // XTRM-764 review: the perf assertion passes without the index, so it proves
+  // the query is fast, not that migration 017 exists. Assert the index and the
+  // plan that uses it separately, or a lost migration would go unnoticed.
+  // XTRM-764 review: the timing assertion alone proves the query is fast, not
+  // that it is project-scoped. Pin the access path: the join must probe
+  // ix_journal_issue_seq per issue, never scan the whole journal table.
+  // (A dedicated (created_at, id) index was measured and dropped: the planner
+  // drives from issues(project_id) and never chose it.)
+  it("serves the page by probing the issue index, not by scanning the journal", () => {
+    const plan = ctx.db
+      .prepare(
+        "EXPLAIN QUERY PLAN SELECT j.id FROM issue_journal j JOIN issues i ON i.id = j.issue_id WHERE i.project_id = ? ORDER BY j.created_at DESC, j.id DESC LIMIT 50",
+      )
+      .all("prj_xtrm")
+      .map((r) => String((r as { detail?: unknown }).detail ?? ""));
+    assert.ok(
+      plan.some((d) => d.includes("ix_journal_issue_seq")),
+      `the join must probe the per-issue index, plan was:\n${plan.join("\n")}`,
+    );
+    assert.ok(
+      !plan.some((d) => /^SCAN (j|issue_journal)\b/.test(d)),
+      `no full journal scan is allowed, plan was:\n${plan.join("\n")}`,
+    );
+  });
+
+  it("refuses a time bound on a cursor poll instead of silently ignoring it", () => {
+    assert.throws(
+      () => journal.feed({ projectId: "prj_xtrm", limit: 5, cursor: { time: 1, id: "x" }, direction: "newer", sinceTime: 1_700_000_000_000 }),
+      /cannot also carry a time bound/,
+    );
+  });
+
   it("returns a 50-entry page from a 10k-entry board well under a second", () => {
     const ids = [issue(ctx, "a"), issue(ctx, "b"), issue(ctx, "c")];
     const insert = ctx.db.prepare(

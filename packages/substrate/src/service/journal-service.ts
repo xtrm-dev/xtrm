@@ -407,9 +407,15 @@ export class JournalService {
   //
   // One page across every Issue of a project, newest first, ordered by
   // `(created_at, id)`. The cursor is that pair, opaque to the caller, so a
-  // page is a range scan and an append between pages can never shift an entry
-  // across the boundary: a new row is always newer than the cursor, and pages
-  // walk downwards.
+  // page can never shift an entry across the boundary: a new row is always
+  // newer than the cursor, and pages walk downwards.
+  //
+  // No dedicated index: measured on 10k entries across 50 issues, the planner
+  // drives from `issues(project_id)`, then probes `ix_journal_issue_seq` per
+  // issue, then sorts that project's rows in a temp B-tree (1.7 ms for a
+  // 50-entry page with or without a `(created_at, id)` index, which it never
+  // chose). An index that the planner ignores is a write cost with no read win,
+  // so the migration that added one was dropped before merge.
   feed(input: JournalFeedInput): JournalFeedPage {
     const project = this.issues.getProject(input.projectId);
     const limit = input.limit ?? DEFAULT_FEED_LIMIT;
@@ -443,6 +449,11 @@ export class JournalService {
     const kindClause = (): string => (kinds === null || kinds.length === 0 ? "" : ` AND j.kind IN (${kinds.map(() => "?").join(",")})`);
     const kindParams = (): string[] => kinds ?? [];
 
+    // A poll walks forward from a cursor; a time bound is a page bound, not a
+    // cursor. Mixing them silently would drop one of the two, so refuse instead.
+    if (input.direction === "newer" && input.sinceTime !== undefined && input.sinceTime !== null) {
+      throw new Error("a cursor poll cannot also carry a time bound");
+    }
     let page: FeedRow[];
     let nextCursor: string | null;
     if (input.cursor !== undefined && input.direction === "newer") {

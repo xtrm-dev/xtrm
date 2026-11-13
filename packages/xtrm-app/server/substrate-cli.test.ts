@@ -66,6 +66,11 @@ describe("substrate CLI bridge reads", () => {
     expect(readArgv("/journal-feed", q("project=prj_xtrm&limit=0"))).toBeNull();
     expect(readArgv("/journal-feed", q("project=prj_xtrm&kind=,"))).toBeNull();
     expect(readArgv("/journal-feed", q("project=prj_xtrm&cursor=-x"))).toBeNull();
+    // A project id that fails PROJECT_RE is refused at the boundary, not by the
+    // CLI downstream, and cursor+since is refused rather than forwarded as a
+    // pair the CLI is guaranteed to reject.
+    expect(readArgv("/journal-feed", q("project=not-a-project"))).toBeNull();
+    expect(readArgv("/journal-feed", q("project=prj_xtrm&cursor=cur123&since=cur123"))).toBeNull();
   });
 
   it("detects the project-wide feed by its refusal, not by the envelope (XTRM-764)", () => {
