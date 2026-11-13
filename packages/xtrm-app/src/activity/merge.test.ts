@@ -44,7 +44,10 @@ describe("activity merge (XTRM-757)", () => {
   it("counts per source, and a FAILED source is excluded rather than counted as zero activity", () => {
     const counts = activityCounts([
       state("substrate", [row("s1", "substrate", 1), row("s2", "substrate", 2)]),
-      state("github", [], "github unreachable"),
+      // The failed source carries rows on purpose: if `activityCounts` counted
+      // them, `github` would read 1 and `all` would read 4. Counting an empty
+      // failed source would make this assertion true either way.
+      state("github", [row("h1", "github", 9)], "github unreachable"),
       state("git", [row("g1", "git", 3)]),
     ]);
     expect(counts.bySource.substrate).toBe(2);

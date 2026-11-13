@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { journalFeedRows, journalRow, journalVerb, statusRow } from "./substrate.ts";
+import { journalFeedRows, journalRow, journalVerb } from "./substrate.ts";
 // The closed set the bridge enforces (substrate packages/substrate/src/domain/journal.ts).
 // Copied rather than imported: the console does not depend on the substrate
 // source tree, and an unknown kind still renders neutrally (next case).
@@ -43,13 +43,6 @@ describe("substrate activity rows (XTRM-757)", () => {
     expect(row.meta).toContainEqual(["rev", "2"]);
   });
 
-  it("states the recorded issue state without claiming a transition", () => {
-    const row = statusRow({ ref: "XTRM-9", title: "t", lifecycle: "done", updatedAt: 5 });
-    expect(row.kind).toBe("issue.status");
-    expect(row.verb).toBe("is");
-    expect(row.object).toContain("done");
-    expect(row.at).toBe(5);
-  });
 });
 
 describe("fixture feed (XTRM-757)", () => {

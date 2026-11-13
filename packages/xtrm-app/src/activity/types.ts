@@ -13,7 +13,7 @@ export type ActivitySource = "substrate" | "github" | "git" | "jira";
 /** Sources that exist today. Jira stays absent from the filter row until it is connected. */
 export const LIVE_ACTIVITY_SOURCES: readonly ActivitySource[] = ["substrate", "github", "git"];
 
-export type ActivityRefKind = "issue" | "pr" | "commit" | "branch" | "path";
+export type ActivityRefKind = "issue" | "pr" | "gh-issue" | "commit" | "branch" | "path";
 
 export interface ActivityRef {
   kind: ActivityRefKind;

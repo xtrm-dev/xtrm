@@ -7,9 +7,17 @@ import type { ActivityRow } from "./types.ts";
 
 const PR_VERB = { open: "opened", merged: "merged", closed: "closed" } as const;
 
-export function pullRow(pr: PullRequestSummary, repo: string): ActivityRow {
+/** A row needs a real timestamp: an unparsable date means no row, never "now". */
+function parseAt(value: string | null | undefined): number | null {
+  if (typeof value !== "string") return null;
+  const t = Date.parse(value);
+  return Number.isNaN(t) ? null : t;
+}
+
+export function pullRow(pr: PullRequestSummary, repo: string): ActivityRow | null {
   const verb = pr.state === "open" ? (pr.draft ? "opened a draft" : "opened") : PR_VERB[pr.state];
-  const at = Date.parse(pr.state === "open" ? pr.createdAt : pr.updatedAt);
+  const at = parseAt(pr.state === "open" ? pr.createdAt : pr.updatedAt);
+  if (at === null) return null;
   return {
     id: `github:${repo}#${pr.number}`,
     source: "github",
@@ -18,9 +26,12 @@ export function pullRow(pr: PullRequestSummary, repo: string): ActivityRow {
     verb,
     object: `${repo}#${pr.number} ${pr.title}`,
     refs: [{ kind: "pr", ref: `${repo}#${pr.number}` }],
-    at: Number.isNaN(at) ? Date.now() : at,
+    at,
     meta: [
       ["state", pr.state],
+      // A merged/closed PR is dated by its last update, not by a merge time the
+      // summary does not carry: say which clock the row uses.
+      ...(pr.state === "open" ? [] : [["dated by", "last update"] as [string, string]]),
       ["branch", `${pr.headBranch} → ${pr.baseBranch}`],
       ["review", pr.review],
       ["checks", pr.checks],
@@ -29,8 +40,9 @@ export function pullRow(pr: PullRequestSummary, repo: string): ActivityRow {
   };
 }
 
-export function githubIssueRow(issue: GithubIssueSummary, repo: string): ActivityRow {
-  const at = Date.parse(issue.closedAt ?? issue.createdAt);
+export function githubIssueRow(issue: GithubIssueSummary, repo: string): ActivityRow | null {
+  const at = parseAt(issue.closedAt ?? issue.createdAt);
+  if (at === null) return null;
   return {
     id: `github:issue:${repo}#${issue.number}`,
     source: "github",
@@ -38,8 +50,10 @@ export function githubIssueRow(issue: GithubIssueSummary, repo: string): Activit
     actor: issue.author,
     verb: issue.closedAt === null ? "opened" : "closed",
     object: `${repo}#${issue.number} ${issue.title}`,
-    refs: [{ kind: "pr", ref: `${repo}#${issue.number}` }],
-    at: Number.isNaN(at) ? Date.now() : at,
+    // A GitHub issue is not a Substrate issue and not a pull request: it has its
+    // own reference kind so the chip opens the GitHub issue, not the PR.
+    refs: [{ kind: "gh-issue", ref: `${repo}#${issue.number}` }],
+    at,
     meta: [
       ["state", issue.closedAt === null ? "open" : "closed"],
       ["labels", issue.labels.join(", ") || "none"],
@@ -52,7 +66,8 @@ export function githubIssueRow(issue: GithubIssueSummary, repo: string): Activit
 export function pullConversationRows(detail: PullRequestDetail, repo: string): ActivityRow[] {
   const rows: ActivityRow[] = [];
   for (const review of detail.reviews) {
-    const at = Date.parse(review.submittedAt ?? detail.updatedAt);
+    const at = parseAt(review.submittedAt ?? detail.updatedAt);
+    if (at === null) continue;
     rows.push({
       id: `github:review:${review.id}`,
       source: "github",
@@ -61,7 +76,7 @@ export function pullConversationRows(detail: PullRequestDetail, repo: string): A
       verb: review.state === "approved" ? "approved" : review.state === "changes_requested" ? "requested changes on" : "reviewed",
       object: `${repo}#${detail.number} ${detail.title}`,
       refs: [{ kind: "pr", ref: `${repo}#${detail.number}` }],
-      at: Number.isNaN(at) ? Date.now() : at,
+      at,
       meta: [
         ["review", review.state],
         ["pr", `${repo}#${detail.number}`],
@@ -70,7 +85,8 @@ export function pullConversationRows(detail: PullRequestDetail, repo: string): A
     });
   }
   for (const comment of detail.conversationComments) {
-    const at = Date.parse(comment.createdAt);
+    const at = parseAt(comment.createdAt);
+    if (at === null) continue;
     rows.push({
       id: `github:comment:${comment.id}`,
       source: "github",
@@ -79,7 +95,7 @@ export function pullConversationRows(detail: PullRequestDetail, repo: string): A
       verb: "commented on",
       object: `${repo}#${detail.number} ${detail.title}`,
       refs: [{ kind: "pr", ref: `${repo}#${detail.number}` }],
-      at: Number.isNaN(at) ? Date.now() : at,
+      at,
       meta: [
         ["pr", `${repo}#${detail.number}`],
         ["comment", comment.id],

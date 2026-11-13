@@ -5,7 +5,7 @@ import { useShell } from "../shell/context.tsx";
 import { Badge, type BadgeTone } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { EmptyState, ErrorState, LoadingState, Row, TOOLBAR_CONTROL, TOOLBAR_GHOST, TOOLBAR_REST, SurfaceToolbar, cx, relativeTime } from "../ui/primitives.tsx";
-import { activityCounts, filterActivity } from "../activity/merge.ts";
+import { activityCounts, filterActivity, mergeActivity } from "../activity/merge.ts";
 import type { ActivityRow, ActivitySource } from "../activity/types.ts";
 
 /** Source chip: the one new visual element, built from the badge tone set. */
@@ -20,8 +20,12 @@ function SourceChip({ source }: { source: ActivitySource }) {
   );
 }
 
-/** The filter row: counts, never bare toggles. Jira stays out until it is connected. */
-function Filters({ total, bySource, active, onPick }: { total: number; bySource: Record<ActivitySource, number>; active: ActivitySource | null; onPick: (s: ActivitySource | null) => void }) {
+/**
+ * The filter row: counts, never bare toggles. Jira stays out until it is
+ * connected. A source that FAILED shows an em dash instead of 0 — a failure is
+ * not "nothing happened", and the surface says so in words beside the chip.
+ */
+function Filters({ total, bySource, active, failedSources, onPick }: { total: number; bySource: Record<ActivitySource, number>; active: ActivitySource | null; failedSources: ReadonlySet<ActivitySource>; onPick: (s: ActivitySource | null) => void }) {
   const chips: Array<{ source: ActivitySource | null; label: string; count: number }> = [
     { source: null, label: "All", count: total },
     { source: "substrate", label: "Substrate", count: bySource.substrate },
@@ -41,7 +45,9 @@ function Filters({ total, bySource, active, onPick }: { total: number; bySource:
             className={cx(TOOLBAR_CONTROL, on ? TOOLBAR_REST : TOOLBAR_GHOST, "gap-1.5")}
           >
             <span>{chip.label}</span>
-            <span className="tabular text-ink-faint">{chip.count}</span>
+            <span className="tabular text-ink-faint">
+              {chip.source !== null && failedSources.has(chip.source) ? "—" : chip.count}
+            </span>
           </button>
         );
       })}
@@ -67,7 +73,7 @@ function ActivityRowView({ row, open, onToggle }: { row: ActivityRow; open: bool
           {row.refs.length > 0 && (
             <div className="flex min-w-0 flex-wrap items-center gap-1">
               {row.refs.map((r) =>
-                r.kind === "issue" || r.kind === "pr" ? (
+                r.kind === "issue" || r.kind === "pr" || r.kind === "gh-issue" ? (
                   // The console's own chip: same reference vocabulary as prose and the drawer.
                   <ReferenceChip key={`${r.kind}:${r.ref}`} reference={{ kind: r.kind, ref: r.ref }} />
                 ) : (
@@ -121,22 +127,34 @@ function ActivityRowView({ row, open, onToggle }: { row: ActivityRow; open: bool
 }
 
 export function ActivitySurface() {
-  const { repo, layout, inspected } = useShell();
+  const { repo } = useShell();
   const projects = useProjects();
   const projectId = projectForRepo(projects.data, repo)?.id ?? null;
-  const follow = layout.inspector.followLive && inspected?.kind === "activity";
-  const { states } = useActivityFeed({ repo: repo.fullName, projectId, follow });
+  // No activity inspector is opened from this surface, so a "follow the drawer"
+  // interval would be dead plumbing; Refresh is the explicit control instead.
+  const { states, loadOlder, refetch } = useActivityFeed({ repo: repo.fullName, projectId });
   const [active, setActive] = useState<ActivitySource | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
 
   const counts = useMemo(() => activityCounts(states), [states]);
-  const rows = useMemo(() => filterActivity(states.flatMap((s) => s.rows), active), [states, active]);
+  // One feed, not three stacked lists: merge (dedupe by row id) then sort
+  // newest-first, then filter. `mergeActivity` is the single ordering authority.
+  const rows = useMemo(() => filterActivity(mergeActivity(states.map((s) => s.rows)), active), [states, active]);
   const failed = states.filter((s) => s.error !== null);
+  const failedSources = new Set(failed.map((s) => s.source));
   const loading = states.every((s) => s.pending);
+  // Older pages exist per source; with "All" selected the button says which
+  // source it extends, so one source's history never masquerades as another's.
+  const olderSources = states.filter((s) => s.cursor !== null && (active === null || s.source === active));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <Filters total={counts.all} bySource={counts.bySource} active={active} onPick={setActive} />
+      <SurfaceToolbar>
+        <Filters total={counts.all} bySource={counts.bySource} active={active} failedSources={failedSources} onPick={setActive} />
+        <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST, "ml-auto")} onClick={() => refetch()}>
+          <Icon name="live" size="xs" /> Refresh
+        </button>
+      </SurfaceToolbar>
       <div className="min-h-0 flex-1 overflow-auto">
         {failed.map((s) => (
           <div key={s.source} className="border-b border-border-subtle px-3 py-2">
@@ -146,12 +164,32 @@ export function ActivitySurface() {
         {loading ? (
           <LoadingState label="Loading activity" />
         ) : rows.length === 0 ? (
-          <EmptyState icon="activity" title={active === null ? `No recorded activity for ${repo.fullName}` : `No ${active} activity for ${repo.fullName}`} />
+          failed.length > 0 ? (
+            <EmptyState icon="activity" title="Some sources could not be read">
+              The failing sources are named above. The ones that answered have nothing in this window — that is a real zero, not a hidden failure.
+            </EmptyState>
+          ) : (
+            <EmptyState icon="activity" title={active === null ? `No recorded activity for ${repo.fullName}` : `No ${active} activity for ${repo.fullName}`} />
+          )
         ) : (
           <ol aria-label="Activity feed" className="flex flex-col">
             {rows.map((row) => (
               <ActivityRowView key={row.id} row={row} open={openId === row.id} onToggle={() => setOpenId(openId === row.id ? null : row.id)} />
             ))}
+            {olderSources.length > 0 && (
+              <li className="flex flex-wrap gap-1.5 p-2">
+                {olderSources.map((s) => (
+                  <button
+                    key={s.source}
+                    type="button"
+                    className={cx(TOOLBAR_CONTROL, TOOLBAR_REST)}
+                    onClick={() => void loadOlder(s.source as Exclude<ActivitySource, "jira">)}
+                  >
+                    Load older {s.source} activity
+                  </button>
+                ))}
+              </li>
+            )}
           </ol>
         )}
       </div>

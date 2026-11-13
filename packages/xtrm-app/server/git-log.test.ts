@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseGitLog, resolveCheckoutRoot } from "/home/dawid/dev/xtrm/.xtrm/worktrees/xtrm-xt-pi-linksgap/packages/xtrm-app/server/substrate-cli.ts";
+import { GIT_LOG_MAX, gitLogRequest, parseGitLog, resolveCheckoutRoot } from "./substrate-cli.ts";
 
 describe("git log bridge", () => {
   it("resolves a checkout by remote, and fails closed for an unknown repository", () => {
@@ -10,6 +10,18 @@ describe("git log bridge", () => {
     ]);
     expect(resolveCheckoutRoot(["/c", "/a", "/b"], remotes, "xtrm-dev/core")).toBe("/b");
     expect(resolveCheckoutRoot(["/c"], remotes, "xtrm-dev/core")).toBeNull();
+  });
+
+  it("bounds the request: a repository name and a limit, nothing else", () => {
+    expect(gitLogRequest("xtrm-dev/xtrm", null)).toEqual({ repo: "xtrm-dev/xtrm", limit: 40 });
+    expect(gitLogRequest("xtrm-dev/xtrm", "10")).toEqual({ repo: "xtrm-dev/xtrm", limit: 10 });
+    // A path, a traversal, a bare name or an out-of-range page never reaches git.
+    for (const bad of [null, "", "/etc", "../../etc/passwd", "xtrm-dev", "xtrm-dev/xtrm/../x", "a b/c", "--upload-pack=x/y"]) {
+      expect(gitLogRequest(bad, "10")).toBeNull();
+    }
+    for (const badLimit of ["0", String(GIT_LOG_MAX + 1), "1.5", "abc"]) {
+      expect(gitLogRequest("xtrm-dev/xtrm", badLimit)).toBeNull();
+    }
   });
 
   it("parses one record per commit, subject separators intact", () => {

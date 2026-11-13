@@ -68,31 +68,6 @@ export function journalRow(entry: JournalFeedWireRow): ActivityRow {
   };
 }
 
-/**
- * An issue row as a status activity row. It states the state the board records
- * now, with the timestamp of the last change — not a claimed transition, which
- * Substrate exposes per Issue only (no project-wide event read yet).
- */
-export function statusRow(issue: { ref: string; title: string; lifecycle: string; updatedAt: number | null }): ActivityRow {
-  return {
-    id: `substrate:status:${issue.ref}:${issue.lifecycle}:${issue.updatedAt}`,
-    source: "substrate",
-    kind: "issue.status",
-    actor: null,
-    verb: "is",
-    object: `${issue.ref} ${issue.lifecycle} — ${issue.title}`,
-    refs: [{ kind: "issue", ref: issue.ref }],
-    // A row needs a time; a board row always carries one, and 0 keeps the
-    // ordering honest if an older board omits it (it sorts last, never first).
-    at: issue.updatedAt ?? 0,
-    meta: [
-      ["state", issue.lifecycle],
-      ["issue", issue.ref],
-    ],
-    body: null,
-  };
-}
-
 export function journalFeedRows(wire: JournalFeedWire): ActivityRow[] {
   return wire.entries.map(journalRow);
 }

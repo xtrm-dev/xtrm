@@ -3,7 +3,7 @@
 // inline state instead of silently dropping its rows.
 
 import type { GithubAdapter, GithubIssueSummary, GitActivityAdapter, PullRequestSummary, SubstrateAdapter } from "../adapters/types.ts";
-import { journalFeedRows, statusRow, type JournalFeedWire } from "./substrate.ts";
+import { journalFeedRows, type JournalFeedWire } from "./substrate.ts";
 import { githubIssueRow, pullConversationRows, pullRow } from "./github.ts";
 import { commitRows, type GitCommitWire } from "./git.ts";
 import type { ActivityPage, ActivityRow, ActivitySource } from "./types.ts";
@@ -42,15 +42,12 @@ export async function loadSubstrate(ctx: FeedContext, cursor: string | null): Pr
     fetchImpl,
     bridge,
   );
+  // Journal entries only. A status row would have to stamp the board's
+  // `updatedAt`, which is not a transition time, so it would read as a
+  // transition Substrate never recorded; the project-wide event read that would
+  // make it honest is a separate Issue.
   const rows = journalFeedRows({ projectId: ctx.projectId, entries: feed.data.entries, nextCursor: feed.data.nextCursor });
-  // Status rows come from the issue rows the console already reads; they state
-  // the recorded state, not a claimed transition.
-  const issues = await ctx.substrate.listIssues(ctx.projectId);
-  const statuses: ActivityRow[] = issues.map((issue) =>
-    statusRow({ ref: issue.ref, title: issue.title, lifecycle: issue.lifecycle, updatedAt: issue.updatedAt }),
-  );
-  const merged = [...rows, ...statuses];
-  return { source: "substrate", rows: merged, cursor: feed.data.nextCursor };
+  return { source: "substrate", rows, cursor: feed.data.nextCursor };
 }
 
 /** GitHub: pull requests, issues, then reviews and comments for the newest few PRs. */
@@ -58,8 +55,8 @@ export async function loadGithub(ctx: FeedContext): Promise<ActivityPage> {
   const pulls: PullRequestSummary[] = await ctx.github.listPulls(ctx.repo, "all");
   const issues: GithubIssueSummary[] = await ctx.github.listIssues(ctx.repo);
   const rows: ActivityRow[] = [
-    ...pulls.slice(0, ACTIVITY_PAGE).map((pr) => pullRow(pr, ctx.repo)),
-    ...issues.slice(0, ACTIVITY_PAGE).map((issue) => githubIssueRow(issue, ctx.repo)),
+    ...pulls.slice(0, ACTIVITY_PAGE).map((pr) => pullRow(pr, ctx.repo)).filter((r): r is ActivityRow => r !== null),
+    ...issues.slice(0, ACTIVITY_PAGE).map((issue) => githubIssueRow(issue, ctx.repo)).filter((r): r is ActivityRow => r !== null),
   ];
   const recent = [...pulls].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, REVIEWED_PRS);
   for (const pr of recent) {

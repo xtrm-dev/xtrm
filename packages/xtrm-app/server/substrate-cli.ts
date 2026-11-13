@@ -346,6 +346,21 @@ export function resolveCheckoutRoot(roots: string[], remotes: Map<string, string
   return null;
 }
 
+/**
+ * Validate a `/git-log` request. Returns the parsed pair or null; the handler
+ * turns null into one 400. Pure and exported so a test pins the boundary
+ * instead of trusting the handler by inspection.
+ */
+export function gitLogRequest(repo: unknown, limit: unknown): { repo: string; limit: number } | null {
+  if (typeof repo !== "string" || !GIT_REPO_RE.test(repo)) return null;
+  if (repo.includes("..") || repo.startsWith("/") || repo.endsWith("/")) return null;
+  const raw = limit === null || limit === undefined ? "40" : typeof limit === "string" ? limit : null;
+  if (raw === null) return null;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > GIT_LOG_MAX) return null;
+  return { repo, limit: parsed };
+}
+
 /** One line per commit; the separators are unit/record separators so a subject with tabs survives. */
 export function parseGitLog(stdout: string): GitCommit[] {
   const out: GitCommit[] = [];
@@ -484,7 +499,8 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
       );
     });
     if (log === null) return fail(`git log failed in ${root}`);
-    return { status: 200, body: JSON.stringify({ ok: true, repo, root, commits: parseGitLog(log) }) };
+    // The checkout path stays server-side: the console needs commits, not the layout.
+    return { status: 200, body: JSON.stringify({ ok: true, repo, commits: parseGitLog(log) }) };
   };
 
   const handle = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
@@ -510,17 +526,15 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
       if (path === "/git-log") {
         // XTRM-757: the git source. The bridge reads the checkout on disk; the
         // request names a repository, never a path.
-        const repo = url.searchParams.get("repo") ?? "";
-        const rawLimit = Number(url.searchParams.get("limit") ?? "40");
-        if (!GIT_REPO_RE.test(repo)) {
+        const requested = gitLogRequest(url.searchParams.get("repo"), url.searchParams.get("limit"));
+        if (requested === null) {
           res.statusCode = 400;
-          return res.end(JSON.stringify({ ok: false, error: "expected repo=owner/name" }));
+          return res.end(JSON.stringify({ ok: false, error: `expected repo=owner/name and limit=1..${GIT_LOG_MAX}` }));
         }
-        if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > GIT_LOG_MAX) {
-          res.statusCode = 400;
-          return res.end(JSON.stringify({ ok: false, error: `limit must be 1..${GIT_LOG_MAX}` }));
-        }
+        const { repo, limit: rawLimit } = requested;
         const key = `git-log ${repo} ${rawLimit}`;
+        // A dev server is long-lived; keep the key space bounded.
+        if (cache.size > 64) cache.clear();
         let hit = cache.get(key);
         if (!hit || Date.now() - hit.at > TTL_MS) hit = { at: Date.now(), value: readGitLog(repo, rawLimit) };
         cache.set(key, hit);
