@@ -8,8 +8,10 @@
 // and says when to load the full skill.
 //
 // Section headings are the interface: a renamed heading drops that section, a
-// missing skill drops that skill, no skill at all emits nothing. Any error
-// degrades to no context and exit 0, per hook discipline.
+// missing skill drops that skill. ALWAYS_ON (XTRM-746) is injected on every
+// session regardless: it is shipped doctrine that must survive a missing skill
+// tree. Only a failure before any of that code runs degrades to no context and
+// exit 0, per hook discipline.
 //
 // Self-contained on purpose (no resolveSubstrate): the installed substrate
 // package and the plugin cache can be older than the plugin, so a TypeScript
@@ -89,7 +91,13 @@ function launchIdentity(env) {
   return lines.length ? `### Launch identity\n\n${lines.join("\n")}` : null;
 }
 
-const ALWAYS_ON = `XTRM always-on rules (primer-injected; excerpt — load the full skill before relying on it).
+// XTRM-746: mirrored verbatim from the Pi primer's ALWAYS_ON block
+// (xtrm-dev/core: packages/pi-extensions/extensions/xtrm-primer/index.ts).
+// The two vehicles share no module, so a doctrine edit must change both
+// together. The heading is this file's own: it names the mirror rather than
+// pointing at a full skill, because this vehicle ships one bullet, not the
+// whole always-on set.
+const ALWAYS_ON = `XTRM always-on rules (mirrored from the Pi primer's ALWAYS_ON; change both together).
 
 - Run identity: a PR marker's run= takes the worker's own runtime session id — PI_SESSION_ID in Pi, the Claude session id in Claude — never XTRM_SESSION_ID or XTRM_PARENT_SESSION_ID, which are tmux session ids ($N) that every window in one tmux session shares (CORE-2619; the gh shim refuses a $N run=).`;
 
