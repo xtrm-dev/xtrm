@@ -129,6 +129,8 @@ describe("pull-request reconciler", () => {
     assert.deepEqual({ created: first.created, mentioned: first.mentioned }, { created: 1, mentioned: 0 });
     const row = w.db.prepare("SELECT state, etag, last_modified FROM pull_requests").get() as { state: string; etag: string; last_modified: string };
     assert.deepEqual({ ...row }, { state: "open", etag: '"e1"', last_modified: "Wed, 11 Nov 2026 01:00:00 GMT" });
+    // The reconciler's row is an OBSERVATION, not the opener's assumption.
+    assert.equal((w.db.prepare("SELECT state_source FROM pull_requests").get() as { state_source: string }).state_source, "observed");
 
     w.source.put(observation({ state: "merged", mergeCommitSha: "c".repeat(40), mergedAt: Date.parse("2026-11-11T02:00:00Z") }), [{ sha: "b".repeat(40), message }]);
     run(w);

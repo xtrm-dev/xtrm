@@ -180,7 +180,8 @@ export class PullRequestService {
         }, now);
       }
       // PR-open state row (XTRM-754): a minimal pull_requests row so the PR is not
-      // "state unknown" until the reconciler (728) refreshes full state.
+      // "state unknown" until the reconciler (728) refreshes full state. The row
+      // records state_source='assumed': the opener cannot know more than "open".
       //
       // 'open' is what the opener knows: the shim calls this immediately after a
       // successful `gh pr create`, so the PR is open by construction. A LATE attach
@@ -192,9 +193,9 @@ export class PullRequestService {
       // healed by the same sync that backfills every other row.
       this.db.prepare(
         `INSERT OR IGNORE INTO pull_requests
-           (repository, number, state, draft, head_sha, merge_commit_sha, title, url, base_ref,
-            merged_at, closed_at, etag, last_modified, last_synced_at)
-         VALUES (?, ?, 'open', 0, NULL, NULL, NULL, ?, NULL, NULL, NULL, NULL, NULL, ?)`,
+           (repository, number, state, state_source, draft, head_sha, merge_commit_sha, title, url,
+            base_ref, merged_at, closed_at, etag, last_modified, last_synced_at)
+         VALUES (?, ?, 'open', 'assumed', 0, NULL, NULL, NULL, ?, NULL, NULL, NULL, NULL, NULL, ?)`,
       ).run(canonical.repository, canonical.number, canonical.url, now);
       // Reading inside the transaction makes a failure roll the attach back.
       return this.requireView(input.issueId, canonical.repository, canonical.number);

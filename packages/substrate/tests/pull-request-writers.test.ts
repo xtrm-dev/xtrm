@@ -157,6 +157,11 @@ describe("pull-request writers", () => {
     assert.equal(row.title, null, "the opener does not invent a title");
     assert.equal(row.url, PR.url);
     assert.ok(row.last_synced_at > 0);
+    // The marker that separates an assumed state from an observed one.
+    const marker = w.db
+      .prepare("SELECT state_source FROM pull_requests WHERE repository = ? AND number = ?")
+      .get(PR.repository, PR.number) as { state_source: string };
+    assert.equal(marker.state_source, "assumed");
     const view = w.links.listForIssue(w.issue.id)[0]!;
     assert.equal(view.state, "open");
     assert.equal(view.title, null);
@@ -178,6 +183,7 @@ describe("pull-request writers", () => {
     w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id }, PR);
     const after = w.links.listForIssue(w.issue.id)[0]!;
     assert.equal(after.state, "merged", "a retry keeps the reconciled state");
+
   });
 
   it("the human issue view renders state, merge date and title (XTRM-754)", () => {
