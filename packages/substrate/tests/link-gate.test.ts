@@ -127,6 +127,31 @@ describe("close gate", () => {
     assert.equal(closure.outcome, "completed");
   });
 
+  it("an assumed row never suppresses the live read (XTRM-754)", () => {
+    // The auto close path is where the 24h cache decides; a live claim is
+    // released first so the only remaining code would be gate_pr_not_merged.
+    // The opener's row says 'open' and is dated now; the PR has merged since.
+    // Trusting that row would report gate_pr_not_merged for a merged PR.
+    t1(w);
+    w.svc.releaseClaim(w.issue.id, "w");
+    w.reader.states.set("o/r#7", { state: "merged", baseRef: "main" });
+    assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "auto" }).codes, []);
+    assert.equal(w.reader.stateCalls, 1, "an assumed row must be re-read, not trusted");
+    // Manual mode does not read PR state at all; the assumption is only visible
+    // where it matters (the auto close path).
+  });
+
+  it("a reconciler-written row is trusted inside the 24h window", () => {
+    t1(w);
+    w.svc.releaseClaim(w.issue.id, "w");
+    // What a sync would write: observed, fresh, and merged.
+    w.db
+      .prepare("UPDATE pull_requests SET state = 'merged', state_source = 'observed', base_ref = 'main', last_synced_at = ? WHERE repository = ? AND number = ?")
+      .run(Date.now(), "o/r", 7);
+    assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "auto" }).codes, []);
+    assert.equal(w.reader.stateCalls, 0, "an observed row inside the window avoids the gh call");
+  });
+
   it("a T2 PR that is still open passes manual", () => {
     t2(w);
     const closure = close(w, { linkGate: "enforce" });

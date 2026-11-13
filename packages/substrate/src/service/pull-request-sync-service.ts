@@ -251,11 +251,12 @@ export class PullRequestSyncService {
     this.db
       .prepare(
         `INSERT INTO pull_requests
-           (repository, number, state, draft, head_sha, merge_commit_sha, title, url, base_ref,
-            merged_at, closed_at, etag, last_modified, last_synced_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (repository, number, state, state_source, draft, head_sha, merge_commit_sha, title, url,
+            base_ref, merged_at, closed_at, etag, last_modified, last_synced_at)
+         VALUES (?, ?, ?, 'observed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (repository, number) DO UPDATE SET
            state = excluded.state,
+           state_source = excluded.state_source,
            draft = excluded.draft,
            head_sha = excluded.head_sha,
            merge_commit_sha = excluded.merge_commit_sha,

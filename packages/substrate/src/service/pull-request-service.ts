@@ -146,7 +146,21 @@ export class PullRequestService {
         trailerRevision: r.trailer_revision,
       }),
     );
-    return groupIssuePullRequests(rows, commits);
+    const views = groupIssuePullRequests(rows, commits);
+    for (const view of views) {
+      const stateRow = this.db
+        .prepare("SELECT state, state_source, title, merged_at FROM pull_requests WHERE repository = ? AND number = ?")
+        .get(view.repository, view.number) as
+        | { state: string; state_source: string | null; title: string | null; merged_at: number | null }
+        | undefined;
+      if (stateRow) {
+        view.state = stateRow.state;
+        view.stateSource = stateRow.state_source;
+        view.title = stateRow.title;
+        view.mergedAt = stateRow.merged_at;
+      }
+    }
+    return views;
   }
 
   // -- writers (XTRM-727) ----------------------------------------------------
@@ -168,6 +182,24 @@ export class PullRequestService {
           actor: input.actor,
         }, now);
       }
+      // PR-open state row (XTRM-754): a minimal pull_requests row so the PR is not
+      // "state unknown" until the reconciler (728) refreshes full state. The row
+      // records state_source='assumed': the opener cannot know more than "open".
+      //
+      // 'open' is what the opener knows: the shim calls this immediately after a
+      // successful `gh pr create`, so the PR is open by construction. A LATE attach
+      // (a merged PR linked after the fact, with no prior reconciler row) inherits
+      // that assumption and reads "open" with no title until the next `sb links
+      // sync` corrects it through the upsert. The alternative — a GitHub read
+      // inside this transaction — would put the network in the write path and fail
+      // closed on an outage, so the wrong-positive is preferred, bounded, and
+      // healed by the same sync that backfills every other row.
+      this.db.prepare(
+        `INSERT OR IGNORE INTO pull_requests
+           (repository, number, state, state_source, draft, head_sha, merge_commit_sha, title, url,
+            base_ref, merged_at, closed_at, etag, last_modified, last_synced_at)
+         VALUES (?, ?, 'open', 'assumed', 0, NULL, NULL, NULL, ?, NULL, NULL, NULL, NULL, NULL, ?)`,
+      ).run(canonical.repository, canonical.number, canonical.url, now);
       // Reading inside the transaction makes a failure roll the attach back.
       return this.requireView(input.issueId, canonical.repository, canonical.number);
     });

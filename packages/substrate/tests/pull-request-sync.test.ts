@@ -103,6 +103,39 @@ describe("pull-request reconciler", () => {
     rmSync(w.dir, { recursive: true, force: true });
   });
 
+  it("a single PR sync upserts pull_requests state (PR-open path)", () => {
+    const receipt = receiptFor(w);
+    const message = `XTRM-Issue: ${w.issue.humanRef}\nXTRM-Receipt: ${receipt.id}`;
+    w.source.put(observation(), [{ sha: "b".repeat(40), message }]);
+    const report = w.sync.sync({ projectId: "prj_xtrm", repositories: ["o/r"], actor: "w", onlyPr: { repository: "o/r", number: 7 } });
+    assert.equal(report.failures, 0);
+    const row = w.db.prepare("SELECT state FROM pull_requests WHERE repository = ? AND number = ?").get("o/r", 7) as { state: string } | undefined;
+    assert.ok(row, "pull_requests row missing");
+    assert.equal(row.state, "open");
+  });
+
+  it("heals an assumed row to observed through the real reconciler (XTRM-754)", () => {
+    // The opener writes state_source='assumed'; only this sync may flip it, so
+    // drop the ON CONFLICT clause and this test fails.
+    const receipt = receiptFor(w);
+    w.links.attachCreatedFrom(
+      { issueId: w.issue.id, ambientRepo: null, actor: "w", receiptId: receipt.id },
+      { repository: "o/r", number: 7, canonical: "o/r#7", url: "https://github.com/o/r/pull/7" },
+    );
+    const before = w.db.prepare("SELECT state, state_source FROM pull_requests WHERE repository = 'o/r' AND number = 7").get() as { state: string; state_source: string };
+    assert.deepEqual({ ...before }, { state: "open", state_source: "assumed" });
+
+    const message = `XTRM-Issue: ${w.issue.humanRef}\nXTRM-Receipt: ${receipt.id}`;
+    w.source.put({ ...observation(), state: "merged" }, [{ sha: "b".repeat(40), message }]);
+    const report = run(w, { onlyPr: { repository: "o/r", number: 7 } });
+    assert.equal(report.failures, 0);
+
+    const after = w.db.prepare("SELECT state, state_source FROM pull_requests WHERE repository = 'o/r' AND number = 7").get() as { state: string; state_source: string };
+    assert.deepEqual({ ...after }, { state: "merged", state_source: "observed" });
+    const view = w.links.listForIssue(w.issue.id).find((v) => v.number === 7)!;
+    assert.equal(view.stateSource, "observed", "the view carries the marker, not just the column");
+  });
+
   it("migration 015 stores live state with the conditional cache", () => {
     const cols = w.db.prepare("PRAGMA table_info(pull_requests)").all() as Array<{ name: string }>;
     for (const name of ["state", "draft", "head_sha", "merge_commit_sha", "title", "url", "base_ref", "merged_at", "closed_at", "etag", "last_modified", "last_synced_at"]) {
@@ -118,6 +151,8 @@ describe("pull-request reconciler", () => {
     assert.deepEqual({ created: first.created, mentioned: first.mentioned }, { created: 1, mentioned: 0 });
     const row = w.db.prepare("SELECT state, etag, last_modified FROM pull_requests").get() as { state: string; etag: string; last_modified: string };
     assert.deepEqual({ ...row }, { state: "open", etag: '"e1"', last_modified: "Wed, 11 Nov 2026 01:00:00 GMT" });
+    // The reconciler's row is an OBSERVATION, not the opener's assumption.
+    assert.equal((w.db.prepare("SELECT state_source FROM pull_requests").get() as { state_source: string }).state_source, "observed");
 
     w.source.put(observation({ state: "merged", mergeCommitSha: "c".repeat(40), mergedAt: Date.parse("2026-11-11T02:00:00Z") }), [{ sha: "b".repeat(40), message }]);
     run(w);
