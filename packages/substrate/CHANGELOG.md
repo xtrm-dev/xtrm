@@ -70,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strict CLI surface, issue renew and help groups (XTRM-738) (#348) ([a200e56](https://github.com/xtrm-dev/xtrm/commit/a200e565cdbe008f33433af3ffd5830aaaeab09d))
 - Close gate joins T1/T2 and links check shows verdicts (XTRM-729) (#347) ([50e21f0](https://github.com/xtrm-dev/xtrm/commit/50e21f02abd71eb7159a39b4ad622b7c95106cdc))
 - PR block, link timeline and board column (XTRM-730) (#353) ([6cbf97a](https://github.com/xtrm-dev/xtrm/commit/6cbf97a4885991369bc4da840ca84f000a2eb4dc))
-- Generate CHANGELOG via git-cliff preversion hook (XTRM-748) ([47d7e58](https://github.com/xtrm-dev/xtrm/commit/47d7e58b0eb8feff01306af4509a7dcd2fc3113b))
+- Generate CHANGELOG via git-cliff preversion hook (XTRM-748) ([7184f57](https://github.com/xtrm-dev/xtrm/commit/7184f5740eb975597ede01c6744662fe986599e2))
 
 ### Fixed
 - RenderCapsule emits semantic SUMMARY (xtrm-7wc.6.1) (#130) ([69fb51b](https://github.com/xtrm-dev/xtrm/commit/69fb51bad5308ca5db5c1d2823d22e52b760ded3))
@@ -130,6 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Delivery-close wording and links check help (CORE-2623 follow-up) (#365) ([d80b9cf](https://github.com/xtrm-dev/xtrm/commit/d80b9cf5cd375cd5828f95e40c0d20a894ce9e04))
 - Forward --summary-file as an uploaded file (XTRM-751) (#367) ([c19500c](https://github.com/xtrm-dev/xtrm/commit/c19500c17f2d5eeb6e96ec37bc741c57e4d1be8a))
 - Name the allocate step in the no_receipt refusal (XTRM-645) (#378) ([22b7fce](https://github.com/xtrm-dev/xtrm/commit/22b7fce8fa4a6490ee13e8849667fd704c43fe84))
+- List sync in sb links usage (XTRM-756) (#379) ([42efc10](https://github.com/xtrm-dev/xtrm/commit/42efc10ac624acca10a4b16c325f7b18d9bd9246))
 
 ### Other changes
 - [A7-auth] Fence claimed dispatch by holder + activation (xtrm-6qu.7.2) (#171) ([948e27a](https://github.com/xtrm-dev/xtrm/commit/948e27aac4c31d93fc39e3e0c9f578bb1a77c53e))
@@ -168,7 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The rewrite examples use values that reach the rewrite (XTRM-741) (#355) ([7b214aa](https://github.com/xtrm-dev/xtrm/commit/7b214aae06b96e4dd6ca38771f684dc76b2bfeaa))
 - Register temp dirs and remove them after the suite (CORE-2612) (#356) ([714fc4a](https://github.com/xtrm-dev/xtrm/commit/714fc4ab1d0440e9917d1a184af874c5646e56f3))
 - Links, close gate, holder default, journal limits (CORE-2623) (#364) ([a96ee0b](https://github.com/xtrm-dev/xtrm/commit/a96ee0b4a82f7ce6a37105e1ca8139628a7e5b50))
-- Refresh changelog [Unreleased] (XTRM-748) ([fc556fd](https://github.com/xtrm-dev/xtrm/commit/fc556fd56aa86ab7b067a3c612b0cf7862d5614a))
+- Refresh changelog [Unreleased] (XTRM-748) ([7477697](https://github.com/xtrm-dev/xtrm/commit/74776973936e06e76bb6c150f164d30b3dea9e6f))
 
 ## [0.3.2] - 2026-11-12
 
