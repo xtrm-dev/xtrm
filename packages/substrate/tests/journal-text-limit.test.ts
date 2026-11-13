@@ -10,7 +10,7 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
@@ -99,6 +99,21 @@ describe("XTRM-678 journal text limit", () => {
     assert.deepEqual(stored(), [text(9000)]);
     const missing = cli(["journal", "append", ref, "--kind", "handoff", "--summary-file", join(dir, "nope.md")]);
     assert.match(missing.stderr, /--summary-file not found/);
+  });
+
+  it("CLI --summary-file accepts a relative path (XTRM-786)", () => {
+    // The reported defect was "refuses every path"; the fix is per-path-form, so
+    // a path relative to the caller's cwd is covered as its own case. The value
+    // stays relative on the wire: nothing here resolves it against another cwd.
+    const file = join(dir, "handoff-relative.md");
+    writeFileSync(file, "relative path handoff summary text");
+    const relativePath = relative(process.cwd(), file);
+    assert.ok(!relativePath.startsWith("/"), "the probe must stay a relative path");
+    const r = cli(["journal", "append", ref, "--kind", "handoff", "--summary-file", relativePath]);
+    assert.equal(r.code, 0, r.stderr);
+    assert.deepEqual(stored(), ["relative path handoff summary text"]);
+    const missing = cli(["journal", "append", ref, "--kind", "handoff", "--summary-file", "handoff-absent.md"]);
+    assert.match(missing.stderr, /--summary-file not found: handoff-absent\.md/);
   });
 
   it("text views mark a cut preview; --json keeps the full text", () => {

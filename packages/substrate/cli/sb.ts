@@ -54,7 +54,7 @@ import { parseAllTrailers } from "../src/domain/provenance.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { assessJournalEntry, assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
 import { renderProvenanceTrace } from "../src/presentation/terminal.ts";
-import { assertContractShape, contractShapeHints, isValidScrutiny, SCRUTINY_LEVELS } from "../src/domain/contract.ts";
+import { assertContractShape, contractShapeHints, isValidScrutiny, normaliseContract, SCRUTINY_LEVELS, type ContractRepair } from "../src/domain/contract.ts";
 import { enrichExecutionContext } from "../src/domain/execution-context.ts";
 import type { JournalEntry, JournalKind, ResultPayload } from "../src/domain/journal.ts";
 import type { IssueKind, LifecycleState, ResolvedIssue } from "../src/domain/issue.ts";
@@ -508,7 +508,10 @@ the work contract JSON (sb issue create --contract <file|json>):
     }
 
 - Pass the object itself; do not nest it under a "contract" key.
-- validation and output hold objects, not plain strings: {"check": "…"}, {"artifact": "…"}.
+- validation and output hold objects: {"check": "…"}, {"artifact": "…"}. A plain
+  string entry is repaired to that shape on create/edit and reported in one line
+  ("validation: 1 entry normalised to {check}"); an entry that cannot be repaired
+  unambiguously is refused, naming the field, the entry and the expected shape.
 - scope, nonGoals and constraints are non-empty arrays of non-empty strings.
 - TBD/TODO/XXX/FIXME anywhere keeps the issue draft ("unresolved marker").
 - scrutiny is the contract key or --scrutiny; the flag wins.
@@ -599,7 +602,7 @@ a ref from another Project unless that Project is selected deliberately; run \`s
 once inside the repository to bind it.`,
   "issue.create": `usage: sb issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--parent <ref>] [--priority <n>] [--scrutiny <s>]
 
-creates an issue; --contract takes a JSON file path or inline JSON. Scrutiny is required: --scrutiny wins when present, otherwise the contract file's own scrutiny applies; a missing or invalid value fails closed.`,
+creates an issue; --contract takes a JSON file path or inline JSON. Scrutiny is required: --scrutiny wins when present, otherwise the contract file's own scrutiny applies; a missing or invalid value fails closed. A prose validation/output entry is normalised to {check}/{artifact} and reported, never rejected.`,
   "issue.show": `usage: sb issue show <ref>
 
 prints the issue header plus the contract body (human) or full payload (with --json), followed by a bounded operational context: the most recent journal entries (summaries truncated), the newest entry per kind, per-kind counts, the closure view and the provenance summary. An issue with no journal entries prints an explicit empty state. The full journal is never dumped; use "sb journal show" for bodies.`,
@@ -607,6 +610,8 @@ prints the issue header plus the contract body (human) or full payload (with --j
 
 --title/--priority are metadata (no revision, readiness retained); --contract/--ownership/
 --context-refs/--scrutiny are execution-relevant (new revision, readiness invalidated).
+A prose validation/output entry in --contract is normalised to {check}/{artifact}
+and reported, the same way creation normalises it.
 
 Do not use this tool for progress, findings, decisions, handoffs or results.
 Use the Journal for those (sb issue note, sb journal append, sb journal
@@ -792,9 +797,11 @@ Every verb runs over one JournalService; latest/timeline are bounded reads.`,
   "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--summary-file <path|->] [--result <file|json>] [--refs <file|json>] [--project <id>]
 
 --summary-file reads the summary text from a file (- = stdin); other --semantic
-fields still apply. Summary text is limited to 20,000 characters: a longer one
-fails and writes nothing (it is never cut). Put longer material in a file and
-cite the path.
+fields still apply. The file is read on this machine: in remote mode its bytes are
+uploaded, so an absolute path, a relative path and - all work, and a path that
+does not exist here is refused here. Summary text is limited to 20,000 characters:
+a longer one fails and writes nothing (it is never cut). Put longer material in a
+file and cite the path.
 
 --kind result requires a bounded --result payload (summary required).
 
@@ -1840,6 +1847,12 @@ function runIssue(
       const contractRaw = flag(flags, "contract") ?? (() => { throw new Error("--contract <file|json> is required"); })();
       const parent = flag(flags, "parent");
       const parsedContract = readJsonArg(contractRaw) as unknown;
+      // Slight shape errors are repaired, not rejected (XTRM-786): prose
+      // validation/output entries become {check}/{artifact} before the shape
+      // assertion, and the command reports what it repaired. An entry that
+      // cannot be repaired unambiguously throws here, naming the field, the
+      // entry and the expected shape.
+      const { contract, repairs } = normaliseContract(parsedContract);
       // SCRUTINY precedence (fail closed, never a silently-broken draft): an
       // explicit --scrutiny wins; otherwise the contract file's own scrutiny
       // applies as the default. Read the key before the shape assertion so a
@@ -1848,7 +1861,7 @@ function runIssue(
         typeof parsedContract === "object" && parsedContract !== null && !Array.isArray(parsedContract)
           ? (parsedContract as Record<string, unknown>)["scrutiny"]
           : undefined;
-      assertContractShape(parsedContract);
+      assertContractShape(contract);
       const flagScrutiny = flag(flags, "scrutiny");
       const scrutiny = flagScrutiny ?? (contractScrutiny === undefined ? undefined : contractScrutiny);
       if (!isValidScrutiny(scrutiny)) {
@@ -1862,13 +1875,16 @@ function runIssue(
         projectId: project,
         title,
         kind: kind as never,
-        contract: parsedContract,
+        contract,
         priority: flag(flags, "priority") !== undefined ? Number(flag(flags, "priority")) : undefined,
         scrutiny,
         parentId: parent ? svc.resolveRefInProject(parent, project).id : undefined,
         authoredBy: "sb-cli",
       });
-      return emit(ctx, command, issueSummary(svc.getIssue(issue.id)));
+      return emit(ctx, command, {
+        ...issueSummary(svc.getIssue(issue.id)),
+        ...(repairs.length > 0 ? { contractNormalised: repairs } : {}),
+      });
     }
     case "show": {
       const ref = needRef(rest);
@@ -1936,6 +1952,7 @@ function runIssue(
       const resolved = refInContext(svc, flags, ref);
       let id = resolved.id;
       let revisionCreated = false;
+      let repairs: ContractRepair[] = [];
       if (title !== undefined) {
         id = svc.setTitle(id, title).id;
       }
@@ -1950,7 +1967,11 @@ function runIssue(
           contractRaw !== undefined
             ? (readJsonArg(contractRaw) as never)
             : (svc.getRevision(id, svc.getIssue(id).currentRevision).contract as never);
-        const { issue, created } = svc.updateContract(id, base, "sb-cli", {
+        // A prose validation/output entry in an edited contract is repaired
+        // the same way creation repairs it (XTRM-786).
+        const { contract, repairs: normalised } = normaliseContract(base);
+        repairs = normalised;
+        const { issue, created } = svc.updateContract(id, contract, "sb-cli", {
           expectedRevision: expected !== undefined ? Number(expected) : undefined,
           ownership: ownershipRaw !== undefined ? readJsonArg(ownershipRaw) : undefined,
           contextRefs: contextRaw !== undefined ? (readJsonArg(contextRaw) as unknown[]) : undefined,
@@ -1964,7 +1985,11 @@ function runIssue(
         revisionCreated = revisionCreated || next.currentRevision !== before;
         id = next.id;
       }
-      return emit(ctx, command, { ...issueSummary(svc.getIssue(id)), revisionCreated });
+      return emit(ctx, command, {
+        ...issueSummary(svc.getIssue(id)),
+        revisionCreated,
+        ...(repairs.length > 0 ? { contractNormalised: repairs } : {}),
+      });
     }
     case "note": {
       // §22 convenience over JournalService: append-only, no revision bump.

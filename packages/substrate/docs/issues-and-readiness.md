@@ -23,6 +23,22 @@ Execution authority lives in the seven-field contract plus SCRUTINY. Title and
 priority are metadata; contract/ownership/context/scrutiny changes are
 revision-bearing. `expectedRevision` provides optimistic conflict protection.
 
+### Contract shape normalisation
+
+`validation` entries are objects `{"check": "…"}` and `output` entries are
+objects `{"artifact": "…"}`. `sb issue create` and `sb issue edit` repair a
+plain string entry to that shape before the revision is written, store the
+normalised contract, and report the repair in one line
+(`validation: 2 entries normalised to {check}`); `--json` carries the same facts
+as `contractNormalised`. An entry that cannot be repaired unambiguously — an
+object without the key, a number, an array, `null`, an empty string — is refused
+with the field, the entry and the expected shape named. The repair happens in
+the service write, so MCP, Pi and Beads-import callers get it too.
+
+The rule is a write-path repair, never a migration: a contract pinned before it
+existed keeps its stored bytes and its readiness verdict, and `sb issue validate`
+still reports the read-side shape hint for such a contract.
+
 ## Readiness states
 
 The durable lifecycle is separate from derived operational readiness. Human

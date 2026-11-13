@@ -291,19 +291,30 @@ describe("A3: the help groups answer without a database", () => {
 });
 
 describe("A3: a malformed contract is diagnosed, not just refused", () => {
-  it("validate names the expected entry shape", () => {
+  it("repairs a prose entry, and names the expected shape for one it cannot repair", () => {
     const w = world();
     try {
       const dir = tempDir("sb-cli-a3-contract-");
       const file = join(dir, "contract.json");
+      // XTRM-786: a prose entry is a slight shape error, so creation repairs it
+      // and says so; the contract it stores passes readiness.
       writeFileSync(file, JSON.stringify({ ...contract(), validation: ["run the tests"] }));
       const created = cli(w, ["--json", "issue", "create", "--project", "prj_xtrm", "--title", "shape", "--kind", "task", "--contract", file, "--scrutiny", "LOW"]);
       assert.equal(created.code, 0, created.stderr);
-      const ref = (JSON.parse(created.stdout) as { data: { humanRef: string } }).data.humanRef;
-      const res = cli(w, ["--json", "issue", "validate", ref]);
-      const data = (JSON.parse(res.stdout) as { data: { structurallyValid: boolean; shapeHints?: string[] } }).data;
-      assert.equal(data.structurallyValid, false);
-      assert.match((data.shapeHints ?? []).join("\n"), /validation\[0\] is a plain string; expected validation: \[\{"check": "…"\}\]/);
+      const createdData = (JSON.parse(created.stdout) as { data: { humanRef: string; contractNormalised?: unknown } }).data;
+      assert.deepEqual(createdData.contractNormalised, [{ field: "validation", key: "check", count: 1 }]);
+      const res = cli(w, ["--json", "issue", "validate", createdData.humanRef]);
+      const data = (JSON.parse(res.stdout) as { data: { structurallyValid: boolean } }).data;
+      assert.equal(data.structurallyValid, true);
+      // An entry the repair cannot make sense of is still diagnosed: the field,
+      // the entry and the expected shape, in the refusal itself.
+      writeFileSync(file, JSON.stringify({ ...contract(), validation: [{ run: "the tests" }] }));
+      const refused = cli(w, ["--json", "issue", "create", "--project", "prj_xtrm", "--title", "shape", "--kind", "task", "--contract", file, "--scrutiny", "LOW"]);
+      assert.equal(refused.code, 1);
+      assert.match(
+        (JSON.parse(refused.stdout) as { error: string }).error,
+        /invalid contract: validation\[0\] cannot be normalised: \{"run":"the tests"\} has no "check" string; expected \{"check": "…"\} or a plain string/,
+      );
       rmSync(dir, { recursive: true, force: true });
     } finally {
       w.db.close();

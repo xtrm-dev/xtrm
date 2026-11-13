@@ -176,7 +176,10 @@ populated where available.
 bindings) to an entry. Summary text is limited to 20,000 characters on the
 CLI and on the Pi `substrate_journal_append` tool; a longer summary fails and
 writes nothing (it is never cut). The CLI supplies long text with
-`--summary-file <path|->`, or you split it into several entries. Text views
+`--summary-file <path|->`, or you split it into several entries. The file is read
+on the machine that runs the command: an absolute path, a path relative to the
+current directory and `-` all work, and in remote mode the bytes are uploaded, so
+a path that does not exist locally is refused locally. Text views
 mark a cut preview with `… (+N chars, …)`; `--json` carries the full text.
 
 The Claude MCP append path is not covered by this limit yet: it still cuts an

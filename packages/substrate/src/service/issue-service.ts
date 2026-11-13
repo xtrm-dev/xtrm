@@ -18,6 +18,7 @@ import {
   assertContractShape,
   hashContract,
   isValidScrutiny,
+  normaliseContract,
   validateContextRefs,
   validateOwnership,
   type WorkContract,
@@ -342,16 +343,23 @@ export class IssueService {
     source: { createdAt?: number | null; updatedAt?: number | null },
     opts?: { idempotencyKey?: string },
   ): ResolvedIssue {
-    assertContractShape(input.contract);
+    // A prose validation/output entry is repaired here, once, below every
+    // caller (CLI, MCP, Pi, Beads import): the stored contract is the
+    // normalised one, so a contract that creates also passes readiness
+    // (XTRM-786). An entry that cannot be repaired unambiguously is refused
+    // with the field, the entry and the expected shape named.
+    const contract = normaliseContract(input.contract).contract;
+    assertContractShape(contract);
     if (!input.title.trim()) throw new Error("title must be non-empty");
     if (!(ISSUE_KINDS as readonly string[]).includes(input.kind)) throw new Error(`unknown kind: ${input.kind}`);
     const project = this.getProject(input.projectId);
     if (input.parentId) this.requireIssue(input.parentId);
+    const normalised = { ...input, contract };
     const key = opts?.idempotencyKey;
     return withTransaction(this.db, () =>
       key
-        ? mutateOnce(this.db, "command", key, () => this.insertIssue(project, input, source))
-        : this.insertIssue(project, input, source),
+        ? mutateOnce(this.db, "command", key, () => this.insertIssue(project, normalised, source))
+        : this.insertIssue(project, normalised, source),
     );
   }
 
@@ -410,14 +418,18 @@ export class IssueService {
     authoredBy: string,
     opts?: { expectedRevision?: number; idempotencyKey?: string; ownership?: unknown; contextRefs?: unknown[] },
   ): { issue: ResolvedIssue; created: boolean } {
-    assertContractShape(contract);
+    // Same repair as creation (XTRM-786): an edit that supplies prose entries
+    // stores the normalised contract, and an unrepairable entry is refused
+    // before any revision is written.
+    const normalisedContract = normaliseContract(contract).contract;
+    assertContractShape(normalisedContract);
     const key = opts?.idempotencyKey;
     return withTransaction(this.db, () =>
       key
         ? mutateOnce(this.db, "command", key, () =>
-            this.revise(issueId, contract, authoredBy, opts?.expectedRevision, opts?.ownership, opts?.contextRefs),
+            this.revise(issueId, normalisedContract, authoredBy, opts?.expectedRevision, opts?.ownership, opts?.contextRefs),
           )
-        : this.revise(issueId, contract, authoredBy, opts?.expectedRevision, opts?.ownership, opts?.contextRefs),
+        : this.revise(issueId, normalisedContract, authoredBy, opts?.expectedRevision, opts?.ownership, opts?.contextRefs),
     );
   }
 

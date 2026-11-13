@@ -90,12 +90,13 @@ idempotency key, so a retried mutation may run twice.
 ## issue — 23 verbs
 
 - `issue create --project <id> --title <t> --kind <epic|task|bug|decision|research|followup> --contract <file|json> [--scrutiny <LOW|MEDIUM|HIGH|CRITICAL>]` — create; pins the
-  seven-field contract at write time. --scrutiny wins when present, otherwise the contract's own scrutiny applies; a missing or invalid value is refused at create naming the accepted levels.
+  seven-field contract at write time. --scrutiny wins when present, otherwise the contract's own scrutiny applies; a missing or invalid value is refused at create naming the accepted levels. A plain string entry in `validation`/`output` is normalised to `{"check": "…"}`/`{"artifact": "…"}` and reported in one line; an entry that cannot be repaired is refused, naming the field, the entry and the expected shape.
 - `issue show <ref>` — header plus contract body (human) or full payload
   (`--json`).
 - `issue edit <ref> [--title/--priority | --contract/--ownership/--context-refs/--scrutiny]` —
   metadata (no revision) vs execution-bearing (new revision, attestation
-  invalidated). Never use for progress — journal instead.
+  invalidated). Never use for progress — journal instead. A contract edit
+  normalises prose `validation`/`output` entries the same way create does.
 - `issue note <ref> ["text"] --kind <note|finding|decision|blocker|milestone|handoff>` —
   append-only journal fast path, never bumps the revision.
 - `issue validate <ref>` — derived readiness: state, structural validity,

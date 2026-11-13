@@ -90,7 +90,10 @@ second authority model.
   supplied text is never cut. The Claude MCP append path still cuts to 2,000
   characters with no marker; aligning it is step-12 work (XTRM-724 part B).
 - Long text: `sb journal append <ref> --kind handoff --summary-file <path|->`
-  (`-` reads stdin; other `--semantic` fields still apply).
+  (`-` reads stdin; other `--semantic` fields still apply). The file is read on
+  the machine that runs the command: an absolute path, a path relative to the
+  current directory and `-` all work, and in remote mode the bytes are uploaded,
+  so a path that does not exist locally is refused locally.
 - Host-generated text that must fit — imported provider comments — is stored with
   an explicit `[cut: N more chars of … not stored]` marker. Beads history above
   the limit is imported as `[part i/n]` entries.
