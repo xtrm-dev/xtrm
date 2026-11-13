@@ -25,6 +25,11 @@ function install(home: string, name: string, text: string): void {
 
 const IDENTITY_VARS = ["XTRM_DISPATCHER_NAME", "XTRM_DISPATCHER_ADDRESS", "SUBSTRATE_HOLDER"];
 
+// XTRM-746: the CORE-2619 rule, verbatim. A drift in either direction fails here.
+const RUN_IDENTITY =
+  "- Run identity: a PR marker's run= takes the worker's own runtime session id — PI_SESSION_ID in Pi, the Claude session id in Claude — never XTRM_SESSION_ID or XTRM_PARENT_SESSION_ID, which are tmux session ids ($N) that every window in one tmux session shares (CORE-2619; the gh shim refuses a $N run=).";
+const ALWAYS_ON_HEADING = "XTRM always-on rules (mirrored from the Pi primer's ALWAYS_ON; change both together).";
+
 function run(home: string, cwd: string, extra: Record<string, string> = {}): { context: string; top: string | undefined; reason: unknown } {
   // The runner may itself be an xt worker; its identity must not leak into the case.
   const env: Record<string, string | undefined> = { ...process.env, HOME: home };
@@ -62,6 +67,12 @@ describe("SessionStart XTRM primer entry (XTRM-637)", () => {
     assert.equal(reason, undefined, "reason must be omitted, never null");
   });
 
+  it("carries the mirrored run= rule verbatim, with no skill installed (XTRM-746)", () => {
+    const { context } = run(home, project);
+    assert.ok(context.includes(RUN_IDENTITY), "the CORE-2619 rule is mirrored byte for byte");
+    assert.ok(context.includes(ALWAYS_ON_HEADING), "the block names its mirror so the next doctrine edit finds both vehicles");
+  });
+
   it("drops only the skill that is missing", () => {
     install(home, "multiplexing", skill("multiplexing", [["Native first", "KEEP-native"]]));
     const { context } = run(home, project);
@@ -69,10 +80,13 @@ describe("SessionStart XTRM primer entry (XTRM-637)", () => {
     assert.ok(!context.includes("using-xtrm"), "a missing skill leaves no trace");
   });
 
-  it("emits no context when no global skill exists, and still exits 0", () => {
+  it("ships the always-on block when no global skill exists, and still exits 0", () => {
     const { context, top } = run(home, project);
-    assert.equal(context, "");
-    assert.equal(top, undefined);
+    // XTRM-746: the always-on block is unconditional; only the skill excerpts
+    // drop with the skill tree. A session without skills still learns run=.
+    assert.ok(context.includes(RUN_IDENTITY), "run= doctrine ships without any skill");
+    assert.ok(!context.includes("/using-xtrm:"), "a missing skill leaves no load hint");
+    assert.equal(top, context, "top-level copy mirrors hookSpecificOutput");
   });
 
   it("names the dispatcher and the participant when xt exported them (CORE-2390)", () => {
@@ -91,12 +105,15 @@ describe("SessionStart XTRM primer entry (XTRM-637)", () => {
     const holderOnly = run(home, project, { SUBSTRATE_HOLDER: "worker-b", XTRM_DISPATCHER_NAME: "  " }).context;
     assert.ok(holderOnly.includes("participant is worker-b"));
     assert.ok(!holderOnly.includes("dispatched by"), "a blank dispatcher name is absent, not a line");
-    assert.equal(run(home, project).context, "", "no identity and no skill: no context");
+    const bare = run(home, project).context;
+    assert.ok(bare.includes(RUN_IDENTITY), "the always-on block survives an identity-free session");
+    assert.ok(!bare.includes("dispatched by") && !bare.includes("participant is"), "no identity lines when the variables are absent");
   });
 
   it("never reads the project copy of a skill (global load only)", () => {
     install(project, "using-xtrm", skill("using-xtrm", [["The system contract", "PROJECT-COPY"]]));
     const { context } = run(home, project);
-    assert.equal(context, "", "a project-vendored skill must not be injected when the global one is absent");
+    assert.ok(!context.includes("PROJECT-COPY"), "a project-vendored skill must not be injected");
+    assert.ok(context.includes(RUN_IDENTITY), "the always-on block is not conditional on a skill");
   });
 });
