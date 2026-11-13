@@ -313,7 +313,7 @@ describe("A3: a malformed contract is diagnosed, not just refused", () => {
       assert.equal(refused.code, 1);
       assert.match(
         (JSON.parse(refused.stdout) as { error: string }).error,
-        /invalid contract: validation\[0\] cannot be normalised: \{"run":"the tests"\} has no "check" string; expected \{"check": "…"\} or a plain string/,
+        /invalid contract: validation\[0\] cannot be normalised: \{"run":"the tests"\} has no "check" key; expected \{"check": "…"\} or a plain string/,
       );
       rmSync(dir, { recursive: true, force: true });
     } finally {

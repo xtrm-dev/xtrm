@@ -102,9 +102,12 @@ describe("XTRM-678 journal text limit", () => {
   });
 
   it("CLI --summary-file accepts a relative path (XTRM-786)", () => {
-    // The reported defect was "refuses every path"; the fix is per-path-form, so
-    // a path relative to the caller's cwd is covered as its own case. The value
-    // stays relative on the wire: nothing here resolves it against another cwd.
+    // Honest scope note: this case cannot fail against the pre-XTRM-751 transport
+    // either — it exercises the LOCAL read path, which always resolved relative
+    // paths. It is kept as a cheap local-mode guard for the relative-path form;
+    // the regression coverage for the forwarded case lives in
+    // remote-transport.test.ts ("uploads a --summary-file given as a relative
+    // path"), where the caller's file is deleted before the server runs.
     const file = join(dir, "handoff-relative.md");
     writeFileSync(file, "relative path handoff summary text");
     const relativePath = relative(process.cwd(), file);

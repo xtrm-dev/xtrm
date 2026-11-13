@@ -611,7 +611,8 @@ prints the issue header plus the contract body (human) or full payload (with --j
 --title/--priority are metadata (no revision, readiness retained); --contract/--ownership/
 --context-refs/--scrutiny are execution-relevant (new revision, readiness invalidated).
 A prose validation/output entry in --contract is normalised to {check}/{artifact}
-and reported, the same way creation normalises it.
+and reported, the same way creation normalises it. --ownership and --context-refs
+carry the stored contract forward untouched: they never repair it.
 
 Do not use this tool for progress, findings, decisions, handoffs or results.
 Use the Journal for those (sb issue note, sb journal append, sb journal
@@ -1963,19 +1964,22 @@ function runIssue(
       }
       const expected = flag(flags, "expected-revision");
       if (contractRaw !== undefined || ownershipRaw !== undefined || contextRaw !== undefined) {
+        const supplied = contractRaw !== undefined;
         const base =
-          contractRaw !== undefined
+          supplied
             ? (readJsonArg(contractRaw) as never)
             : (svc.getRevision(id, svc.getIssue(id).currentRevision).contract as never);
-        // A prose validation/output entry in an edited contract is repaired
-        // the same way creation repairs it (XTRM-786).
-        const { contract, repairs: normalised } = normaliseContract(base);
-        repairs = normalised;
-        const { issue, created } = svc.updateContract(id, contract, "sb-cli", {
+        // The service repairs a contract the caller SUPPLIED and reports what it
+        // repaired (XTRM-786). A metadata-only edit carries the stored contract
+        // forward unrepaired, so a contract pinned before this change is never
+        // rewritten by an ownership/context edit.
+        const { issue, created, repairs: normalised } = svc.updateContract(id, base, "sb-cli", {
           expectedRevision: expected !== undefined ? Number(expected) : undefined,
           ownership: ownershipRaw !== undefined ? readJsonArg(ownershipRaw) : undefined,
           contextRefs: contextRaw !== undefined ? (readJsonArg(contextRaw) as unknown[]) : undefined,
+          repair: supplied,
         });
+        repairs = normalised;
         id = issue.id;
         revisionCreated = revisionCreated || created;
       }

@@ -21,6 +21,7 @@ import {
   normaliseContract,
   validateContextRefs,
   validateOwnership,
+  type ContractRepair,
   type WorkContract,
 } from "../domain/contract.ts";
 import {
@@ -411,26 +412,35 @@ export class IssueService {
   // Revision-on-contract-change (PRD §10): identical contract is a no-op.
   // Revision metadata (ownership/contextRefs) carries forward unless the
   // caller overrides it; the new revision revalidates structurally at read.
-  /** Revision-bearing write: changed contracts mint a new revision and invalidate readiness; byte-identical contracts are a no-op. */
+  /**
+   * Revision-bearing write: changed contracts mint a new revision and invalidate
+   * readiness; byte-identical contracts are a no-op.
+   *
+   * `opts.repair` defaults to true and is what XTRM-786 added: a contract the
+   * caller SUPPLIED is normalised before it is stored. A metadata-only edit —
+   * ownership or contextRefs — carries the STORED contract forward and passes
+   * `repair: false`: repairing there would silently rewrite a contract pinned
+   * before XTRM-786 (or newly refuse one whose entries were already empty), which
+   * is neither the caller's intent nor the Issue's scope. `repairs` carries what
+   * was normalised so no caller has to do it silently.
+   */
   updateContract(
     issueId: string,
     contract: WorkContract,
     authoredBy: string,
-    opts?: { expectedRevision?: number; idempotencyKey?: string; ownership?: unknown; contextRefs?: unknown[] },
-  ): { issue: ResolvedIssue; created: boolean } {
-    // Same repair as creation (XTRM-786): an edit that supplies prose entries
-    // stores the normalised contract, and an unrepairable entry is refused
-    // before any revision is written.
-    const normalisedContract = normaliseContract(contract).contract;
-    assertContractShape(normalisedContract);
+    opts?: { expectedRevision?: number; idempotencyKey?: string; ownership?: unknown; contextRefs?: unknown[]; repair?: boolean },
+  ): { issue: ResolvedIssue; created: boolean; repairs: ContractRepair[] } {
+    const { contract: stored, repairs } = opts?.repair === false ? { contract, repairs: [] as ContractRepair[] } : normaliseContract(contract);
+    assertContractShape(stored);
     const key = opts?.idempotencyKey;
-    return withTransaction(this.db, () =>
+    const written = withTransaction(this.db, () =>
       key
         ? mutateOnce(this.db, "command", key, () =>
-            this.revise(issueId, normalisedContract, authoredBy, opts?.expectedRevision, opts?.ownership, opts?.contextRefs),
+            this.revise(issueId, stored, authoredBy, opts?.expectedRevision, opts?.ownership, opts?.contextRefs),
           )
-        : this.revise(issueId, normalisedContract, authoredBy, opts?.expectedRevision, opts?.ownership, opts?.contextRefs),
+        : this.revise(issueId, stored, authoredBy, opts?.expectedRevision, opts?.ownership, opts?.contextRefs),
     );
+    return { ...written, repairs };
   }
 
   private revise(
@@ -1576,7 +1586,9 @@ export class IssueService {
     const issue = this.requireIssue(issueId);
     const current = this.getRevision(issueId, issue.currentRevision);
     if (JSON.stringify(ownership ?? null) === JSON.stringify(current.ownership ?? null)) return this.view(issueId);
-    const { issue: next } = this.updateContract(issueId, current.contract as WorkContract, authoredBy, { ownership });
+    // The stored contract is carried forward, not supplied (XTRM-786 review):
+    // an ownership edit must not rewrite or newly refuse it.
+    const { issue: next } = this.updateContract(issueId, current.contract as WorkContract, authoredBy, { ownership, repair: false });
     return next;
   }
 
@@ -1590,7 +1602,8 @@ export class IssueService {
     const issue = this.requireIssue(issueId);
     const current = this.getRevision(issueId, issue.currentRevision);
     if (JSON.stringify(refs) === JSON.stringify(current.contextRefs)) return this.view(issueId);
-    const { issue: next } = this.updateContract(issueId, current.contract as WorkContract, authoredBy, { contextRefs: refs });
+    // Stored contract carried forward, not supplied: no repair (XTRM-786 review).
+    const { issue: next } = this.updateContract(issueId, current.contract as WorkContract, authoredBy, { contextRefs: refs, repair: false });
     return next;
   }
 

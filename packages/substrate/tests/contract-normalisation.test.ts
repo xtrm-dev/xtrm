@@ -161,12 +161,10 @@ describe("XTRM-786 contract normalisation on create/edit", () => {
 
   it("refuses an entry it cannot repair, naming the field, the entry and the expected shape", () => {
     const cases: Array<[unknown, RegExp]> = [
-      [{ foo: "bar" }, /invalid contract: validation\[0\] cannot be normalised: \{"foo":"bar"\} has no "check" string; expected \{"check": "…"\} or a plain string/],
+      [{ foo: "bar" }, /invalid contract: validation\[0\] cannot be normalised: \{"foo":"bar"\} has no "check" key; expected \{"check": "…"\} or a plain string/],
       [7, /validation\[0\] cannot be normalised: the entry is number \(7\); expected \{"check": "…"\}/],
       [["nested"], /validation\[0\] cannot be normalised: the entry is an array; expected \{"check": "…"\}/],
       [null, /validation\[0\] cannot be normalised: the entry is null; expected \{"check": "…"\}/],
-      ["   ", /validation\[0\] is an empty string; expected \{"check": "…"\}/],
-      [{ check: "" }, /validation\[0\] cannot be normalised: \{"check":""\} has no "check" string/],
     ];
     for (const [entry, expected] of cases) {
       const r = create(prose({ validation: [entry] }));
@@ -175,7 +173,19 @@ describe("XTRM-786 contract normalisation on create/edit", () => {
     }
     const badOutput = create(prose({ output: [{ artefact: "typo" }] }));
     assert.notEqual(badOutput.code, 0);
-    assert.match(badOutput.stderr, /invalid contract: output\[0\] cannot be normalised: \{"artefact":"typo"\} has no "artifact" string; expected \{"artifact": "…"\}/);
+    assert.match(badOutput.stderr, /invalid contract: output\[0\] cannot be normalised: \{"artefact":"typo"\} has no "artifact" key; expected \{"artifact": "…"\}/);
+  });
+
+  it("stores an object that already carries the key as written, empty value included", () => {
+    // The repair owns shape, readiness owns the draft verdict. An entry that
+    // already has the key must not be refused by the repair: before this change
+    // such a contract created and stayed draft, and it still does.
+    const r = create(prose({ validation: [{ check: "" }, { check: "   " }, { check: "ok", extra: true }], output: [{ artifact: "o" }] }));
+    assert.equal(r.code, 0, r.stderr);
+    assert.deepEqual(storedContract("NORM-1").validation, [{ check: "" }, { check: "   " }, { check: "ok", extra: true }]);
+    const readiness = json(["issue", "validate", "NORM-1"]);
+    assert.equal(readiness.data["structurallyValid"], false, "readiness, not the repair, judges an empty check");
+    assert.equal((readiness.data["reasons"] as string[])[0], "validation: validation must be a non-empty array of { check: non-empty string }");
   });
 
   it("repairs prose entries on edit, and readiness agrees with the stored contract", () => {
@@ -191,11 +201,33 @@ describe("XTRM-786 contract normalisation on create/edit", () => {
     const stored = storedContract("NORM-1");
     assert.deepEqual(stored.validation, [{ check: "edited check" }]);
     assert.deepEqual(stored.output, [{ artifact: "edited artifact" }]);
+    // The edit notice is its own surface: a create-only test would not catch it.
+    // It is rendered by the UX presentation layer from the payload, so assert
+    // that renderer for an edit that carried repairs (and below, one that didn't).
+    const notice = feedbackForCommand("issue.edit", ["issue", "edit", "NORM-1"], {
+      humanRef: "NORM-1",
+      revisionCreated: true,
+      contractNormalised: [{ field: "validation", key: "check", count: 1 }, { field: "output", key: "artifact", count: 1 }],
+    });
+    assert.match(notice.detail ?? "", /validation: 1 entry normalised to \{check\}/);
+    assert.match(notice.detail ?? "", /output: 1 entry normalised to \{artifact\}/);
     const readiness = json(["issue", "validate", "NORM-1"]);
     assert.equal(readiness.ok, true);
     assert.equal(readiness.data["structurallyValid"], true);
     assert.deepEqual(readiness.data["reasons"], ["no current semantic attestation for this revision + contract hash"]);
     assert.equal(readiness.data["shapeHints"], undefined, "nothing left for the read-side hint to explain");
+  });
+
+  it("reports the edit repair in the --json payload too", () => {
+    assert.equal(create(prose()).code, 0);
+    const edit = JSON.parse(
+      cli(["--json", "issue", "edit", "NORM-1", "--contract", JSON.stringify(prose({ validation: ["json edit check"] }))]).stdout,
+    ) as { ok: boolean; data: Record<string, unknown> };
+    assert.equal(edit.ok, true);
+    assert.deepEqual(edit.data["contractNormalised"], [
+      { field: "validation", key: "check", count: 1 },
+      { field: "output", key: "artifact", count: 1 },
+    ]);
   });
 
   it("refuses an unrepairable entry on edit before any revision is written", () => {
@@ -232,6 +264,55 @@ describe("XTRM-786 contract normalisation on create/edit", () => {
       "output: output must be a non-empty array of { artifact: non-empty string }",
     ]);
     assert.match((readiness.data["shapeHints"] as string[])[0] ?? "", /validation\[0\] is a plain string/);
+  });
+
+  it("leaves a pre-change contract untouched through an ownership or context-refs edit", () => {
+    // The review's finding: setOwnership/setContextRefs resubmit the STORED
+    // contract through updateContract, so a proactive repair there silently
+    // rewrote a legacy contract (or newly refused one whose entries were empty)
+    // on an edit that never mentioned the contract. Storing a legacy contract
+    // and editing metadata only must leave its bytes and its verdict alone.
+    assert.equal(create(prose({ validation: [{ check: "v" }], output: [{ artifact: "o" }] })).code, 0);
+    const db = openSubstrate(dbPath);
+    try {
+      const svc = new IssueService(db);
+      const issue = svc.resolveRef("NORM-1");
+      db.prepare("UPDATE issue_revisions SET contract_json = ? WHERE issue_id = ? AND revision = ?").run(
+        JSON.stringify(prose()),
+        issue.id,
+        issue.currentRevision,
+      );
+      // Service-level: the metadata-only paths carry it forward unrepaired.
+      svc.setOwnership(issue.id, { paths: ["packages/substrate"] });
+      const afterOwnership = svc.getRevision(issue.id, svc.getIssue(issue.id).currentRevision);
+      assert.deepEqual((afterOwnership.contract as WorkContract).validation, ["run the tests"], "setOwnership must not rewrite the stored contract");
+      assert.deepEqual((afterOwnership.ownership as Record<string, unknown>) ?? {}, { paths: ["packages/substrate"] });
+      svc.setContextRefs(issue.id, [{ key: "spec", value: "docs/x" }]);
+      const afterContext = svc.getRevision(issue.id, svc.getIssue(issue.id).currentRevision);
+      assert.deepEqual((afterContext.contract as WorkContract).validation, ["run the tests"], "setContextRefs must not rewrite the stored contract");
+    } finally {
+      db.close();
+    }
+    // CLI-level: --ownership alone keeps the stored bytes and stays silent.
+    const ownershipEdit = cli(["issue", "edit", "NORM-1", "--ownership", JSON.stringify({ paths: ["docs"] })]);
+    assert.equal(ownershipEdit.code, 0, ownershipEdit.stderr);
+    assert.deepEqual(storedContract("NORM-1").validation, ["run the tests"], "--ownership must not normalise the stored contract");
+    assert.doesNotMatch(ownershipEdit.stdout + ownershipEdit.stderr, /normalised to/, "a metadata-only edit reports no contract repair");
+    assert.equal(
+      feedbackForCommand("issue.edit", ["issue", "edit", "NORM-1"], { humanRef: "NORM-1", revisionCreated: true }).detail,
+      "new revision created; readiness must be revalidated",
+      "a metadata-only edit carries no repair note",
+    );
+  });
+
+  it("does not newly refuse a legacy contract whose entries had empty values", () => {
+    // The other half of the review's finding: a legacy draft with {check: ""}
+    // used to accept an ownership edit. The repair must not turn that into a
+    // refusal of a contract the caller never supplied.
+    assert.equal(create(prose({ validation: [{ check: "" }], output: [{ artifact: "" }] })).code, 0);
+    const ownership = cli(["issue", "edit", "NORM-1", "--ownership", JSON.stringify({ paths: ["a"] })]);
+    assert.equal(ownership.code, 0, `an ownership edit must still succeed: ${ownership.stderr}`);
+    assert.deepEqual(storedContract("NORM-1").validation, [{ check: "" }]);
   });
 
   it("normalises idempotently and reports no repair the second time", () => {

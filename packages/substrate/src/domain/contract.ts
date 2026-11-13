@@ -98,6 +98,15 @@ function isValidContractEntry(entry: unknown, key: string): boolean {
   return typeof value === "string" && value.trim() !== "";
 }
 
+// Normalisation only converts a plain string. An object that already carries
+// the key is left exactly as it is, even when the value is empty or of the
+// wrong type: that contract stays the draft it was (readiness still rejects it),
+// which is the behaviour a contract stored before this change had and keeps.
+// Refusing it here would newly reject input that creates today.
+function hasEntryKey(entry: unknown, key: string): boolean {
+  return typeof entry === "object" && entry !== null && !Array.isArray(entry) && key in (entry as Record<string, unknown>);
+}
+
 function describeEntry(entry: unknown): string {
   if (entry === null) return "null";
   if (typeof entry === "string") return `a string ${JSON.stringify(entry.length > 60 ? `${entry.slice(0, 57)}…` : entry)}`;
@@ -109,10 +118,12 @@ function describeEntry(entry: unknown): string {
 
 /**
  * Repairs the two object-array fields on the create/edit write path: a string
- * entry becomes `{check}` / `{artifact}`, well-shaped entries are carried
- * through untouched (extra keys included), and an entry that cannot be repaired
- * unambiguously is refused with the field, the entry and the expected shape
- * named. Idempotent: normalising a normalised contract reports no repairs.
+ * entry becomes `{check}` / `{artifact}`, an object that already carries the key
+ * is carried through untouched (extra keys included, empty value included — the
+ * draft verdict is readiness's to make, not this function's), and an entry that
+ * cannot be repaired unambiguously is refused with the field, the entry and the
+ * expected shape named. Idempotent: normalising a normalised contract reports no
+ * repairs.
  */
 export function normaliseContract(contract: unknown): NormalisedContract {
   if (contract === null || typeof contract !== "object" || Array.isArray(contract)) {
@@ -126,16 +137,16 @@ export function normaliseContract(contract: unknown): NormalisedContract {
     let count = 0;
     out[field] = entries.map((entry, index) => {
       if (typeof entry === "string") {
-        if (entry.trim() === "") {
-          throw new Error(`invalid contract: ${field}[${index}] is an empty string; expected ${example}`);
-        }
+        // An empty string is wrapped as-is rather than refused: the repair has
+        // one job (shape), and an empty check is readiness's finding, exactly as
+        // it was before this change.
         count += 1;
         return { [key]: entry };
       }
-      if (isValidContractEntry(entry, key)) return entry;
+      if (hasEntryKey(entry, key)) return entry;
       const reason =
         typeof entry === "object" && entry !== null && !Array.isArray(entry)
-          ? `${describeEntry(entry)} has no "${key}" string`
+          ? `${describeEntry(entry)} has no "${key}" key`
           : `the entry is ${describeEntry(entry)}`;
       throw new Error(`invalid contract: ${field}[${index}] cannot be normalised: ${reason}; expected ${example} or a plain string`);
     });
