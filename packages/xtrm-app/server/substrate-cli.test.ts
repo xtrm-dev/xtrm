@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { downgradeNotice, interpretFeedProbe, interpretJournalProbe, interpretRemoteStatus, readArgv, resolveSbBin, shadowedBinHint, writeArgv } from "./substrate-cli.ts";
+import { downgradeNotice, interpretFeedProbe, interpretJournalProbe, interpretRemoteStatus, journalPagingHeader, readArgv, resolveSbBin, shadowedBinHint, writeArgv } from "./substrate-cli.ts";
 
 const q = (s: string) => new URLSearchParams(s);
 
@@ -95,6 +95,18 @@ describe("substrate CLI bridge reads", () => {
     // The binary never ran, so the probe proves nothing and must not be cached.
     expect(interpretJournalProbe('{"ok":false,"error":"sb failed (bin=/missing/sb): spawn ENOENT"}')).toBeNull();
     expect(interpretJournalProbe("not json at all")).toBeNull();
+  });
+
+  it("never reports an unproven paging capability as cursor", () => {
+    // Proven: the probe accepted --tail and the read was served as asked.
+    expect(journalPagingHeader({ rewritten: false, probed: true, paged: true })).toBe("cursor");
+    // Downgraded: the argv was rewritten to the legacy ascending read.
+    expect(journalPagingHeader({ rewritten: true, probed: false, paged: true })).toBe("legacy");
+    // Inconclusive probe (null): the argv passed through untouched, so the read
+    // worked, but nothing proved the binary pages. Not cursor, not legacy.
+    expect(journalPagingHeader({ rewritten: false, probed: null, paged: true })).toBe("unknown");
+    // An unpaged read needs no capability claim at all.
+    expect(journalPagingHeader({ rewritten: false, probed: null, paged: false })).toBe("cursor");
   });
 
   it("reads the board transport, and a refusal is never reported as local", () => {

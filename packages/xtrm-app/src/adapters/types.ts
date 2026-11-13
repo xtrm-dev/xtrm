@@ -381,8 +381,13 @@ export interface JournalIdentity {
   runId: string | null;
 }
 
-/** Which journal read the backend actually served: paged, or one legacy ascending read. */
-export type JournalPaging = "cursor" | "legacy";
+/**
+ * Which journal read the backend actually served: paged, one legacy ascending
+ * read, or `unknown` when the paging probe could not decide. `unknown` is not a
+ * downgrade — the request was served as asked — but it is also not proof, so the
+ * reader must not treat it as either.
+ */
+export type JournalPaging = "cursor" | "legacy" | "unknown";
 
 export interface JournalEntry {
   id: string;

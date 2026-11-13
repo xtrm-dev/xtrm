@@ -57,6 +57,20 @@ describe("journal paging", () => {
     expect(screen.queryByRole("button", { name: /Load \d+ older/ })).toBeNull();
   });
 
+  it("makes no capability claim when the probe could not prove paging", () => {
+    // `unknown`: the read was served as asked but nothing proved the binary pages,
+    // so the tab must neither claim a cursor nor warn about a legacy downgrade.
+    renderTab({ ...issue(page(1, 100), 900), journalPaging: "unknown" } as IssueDetail, () => Promise.resolve([]));
+    // No legacy warning (that is role="status" and only renders for a downgrade)...
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText(/paging needs a substrate CLI/)).toBeNull();
+    // ...and the neutral count line is still there.
+    expect(screen.getByText(/Showing 50 of 900 entries/)).toBeTruthy();
+    // The read was still served as asked, so paging stays offered; only the
+    // capability CLAIM is withheld.
+    expect(screen.getByRole("button", { name: /Load \d+ older/ })).toBeTruthy();
+  });
+
   it("reports a failed journal read instead of looking empty", () => {
     renderTab({ ...issue([], 12), journalError: "substrate bridge returned 500" } as IssueDetail);
     const status = screen.getByRole("status");

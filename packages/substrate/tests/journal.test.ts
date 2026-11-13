@@ -360,8 +360,15 @@ describe("sb journal verbs + issue resume", () => {
       assert.equal(cp.degraded, false);
       const shown = cli(["journal", "show", created.humanRef]) as Array<{ sequence: number }>;
       assert.equal(shown.length, 2);
-      const tail = cli(["journal", "show", created.humanRef, "--tail", "1"]) as Array<{ sequence: number }>;
+      const tail = cli(["journal", "show", created.humanRef, "--tail", "1"]) as Array<{
+        sequence: number;
+        semantic: { summary?: string } | null;
+      }>;
       assert.deepEqual(tail.map((e) => e.sequence), [2]);
+      // A tailed page must carry the entry BODY, not just its sequence: asserting
+      // sequences alone stays green if `--tail` returns rows whose semantic payload
+      // was dropped, which is exactly the failure the console would render as blank.
+      assert.equal(tail[0]?.semantic?.summary, "cli checkpoint");
       const before = cli(["journal", "show", created.humanRef, "--before", "2", "--limit", "1"]) as Array<{ sequence: number }>;
       assert.deepEqual(before.map((e) => e.sequence), [1]);
       assert.throws(() => cli(["journal", "show", created.humanRef, "--tail", "1", "--limit", "1"]), /cannot be combined/);
