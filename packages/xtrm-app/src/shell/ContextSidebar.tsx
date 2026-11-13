@@ -130,7 +130,7 @@ function SourceFooter() {
         {/* Inset from the panel edges, one compact line: it is a status strip, not a header. */}
         <Popover.Trigger
           aria-label="Data sources"
-          className="flex h-7 w-full items-center gap-2 rounded-md border border-border-muted bg-raised px-2 text-xs text-ink-muted shadow-[0_1px_2px_rgb(15_15_20/0.08),0_2px_6px_-2px_rgb(15_15_20/0.12)] outline-none hover:border-border-strong hover:bg-control hover:text-ink focus-visible:border-border-strong data-[popup-open]:border-border-strong data-[popup-open]:bg-control data-[popup-open]:text-ink"
+          className="flex h-7 w-full items-center gap-2 rounded-md bg-strip px-2 text-xs text-strip-ink shadow-[0_3px_6px_rgb(15_15_20/0.2),0_14px_30px_-6px_rgb(15_15_20/0.34)] outline-none hover:bg-strip-open hover:text-strip-ink-strong focus-visible:bg-strip-open data-[popup-open]:bg-strip-open data-[popup-open]:text-strip-ink-strong"
         >
           <StatusDot tone={live === items.length ? "done" : "muted"} label={`${live} of ${items.length} live`} />
           <span className="truncate">{live === items.length ? "All sources live" : `${live} of ${items.length} live`}</span>
@@ -140,32 +140,32 @@ function SourceFooter() {
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Positioner side="top" align="start" sideOffset={6} className="z-50">
-            <Popover.Popup className="flex w-[var(--anchor-width)] flex-col gap-0.5 rounded-lg border border-border-muted bg-raised p-1.5 text-xs text-ink-muted shadow-[0_18px_44px_-14px_rgb(15_15_20/0.5),0_4px_12px_-4px_rgb(15_15_20/0.16)] outline-none">
+            <Popover.Popup className="flex w-[var(--anchor-width)] flex-col gap-0.5 rounded-lg bg-strip p-1.5 text-xs text-strip-ink shadow-[0_24px_56px_-16px_rgb(15_15_20/0.62),0_6px_16px_-4px_rgb(15_15_20/0.28)] outline-none">
               <div className="flex items-baseline gap-2 px-1.5 pt-0.5 pb-1">
-                <span className="text-xs text-ink-faint">Data sources</span>
-                <span className="ml-auto text-[0.68rem] tabular-nums text-ink-faint">
+                <span className="text-xs text-strip-ink-faint">Data sources</span>
+                <span className="ml-auto text-[0.68rem] tabular-nums text-strip-ink-faint">
                   {live}/{items.length} live
                 </span>
               </div>
               {conn && (
-                <div className="flex h-7 items-center gap-2 rounded-md px-1.5" data-testid="board-connection" title={remote ? `${remote.host ?? "ssh"} · ${remote.latencyMs ?? "?"} ms` : undefined}>
+                <div className="flex h-7 items-center gap-2 rounded-md px-1.5 text-strip-ink-strong" data-testid="board-connection" title={remote ? `${remote.host ?? "ssh"} · ${remote.latencyMs ?? "?"} ms` : undefined}>
                   <StatusDot tone={tone} label={conn.ok ? "board reachable" : "board unreachable"} />
                   <span className="truncate">Board</span>
-                  <Badge className="ml-auto" tone={conn.ok ? (remote ? "active" : "neutral") : "danger"} size="xs">
+                  <Badge className="ml-auto" tone={conn.ok ? "inverse" : "danger"} size="xs">
                     {conn.ok ? (remote ? `server · ${remote.latencyMs ?? "–"} ms` : "local db") : "offline"}
                   </Badge>
                 </div>
               )}
               {items.map(([label, source]) => (
-                <div key={label} className="flex h-7 items-center gap-2 rounded-md px-1.5">
+                <div key={label} className="flex h-7 items-center gap-2 rounded-md px-1.5 text-strip-ink-strong">
                   <StatusDot tone={source === "live" ? "done" : "muted"} label={source} />
                   <span className="truncate">{label}</span>
-                  <Badge className="ml-auto" tone={source === "live" ? "active" : "neutral"} size="xs">
+                  <Badge className="ml-auto" tone="inverse" size="xs">
                     {source}
                   </Badge>
                 </div>
               ))}
-              <div className="mt-1 border-t border-border-muted px-1.5 pt-1.5 pb-0.5 text-[0.68rem] text-ink-faint" data-testid="board-transport">
+              <div className="mt-1 border-t border-strip-rule px-1.5 pt-1.5 pb-0.5 text-[0.68rem] text-strip-ink-faint" data-testid="board-transport">
                 {state === "remote" ? "ssh" : state === "local" ? "local db" : state === "offline" ? "unreachable" : "unknown"}
                 {remote?.host ? ` · ${remote.host}` : ""}
                 {conn?.serverVersion ? ` · sb ${conn.serverVersion}` : ""}
