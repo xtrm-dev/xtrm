@@ -19,12 +19,24 @@
 //                   current [Unreleased] entries, leaving an empty [Unreleased]
 //                   on top. Used by the npm `version` hook to promote entries.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 
 const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 process.chdir(REPO_ROOT);
-const CHANGELOG = 'packages/substrate/CHANGELOG.md';
-const CONFIG = 'packages/substrate/changelog/cliff.toml';
+// Overridable so a test can run against a fixture file and a stub binary: the
+// real defaults are what `npm version` uses.
+const flagValue = (name) => {
+  const index = process.argv.indexOf(name);
+  if (index === -1) return null;
+  const value = process.argv[index + 1];
+  if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`);
+  return value;
+};
+const CHANGELOG = flagValue('--changelog') ?? 'packages/substrate/CHANGELOG.md';
+const CONFIG = flagValue('--config') ?? 'packages/substrate/changelog/cliff.toml';
+const CLIFF = flagValue('--cliff') ?? process.env.GIT_CLIFF ?? 'git-cliff';
+// The floor this script's flags need (`--include-path`, postprocessors).
+const MIN_CLIFF = '2.10';
 const UNRELEASED = '## [Unreleased]';
 const check = process.argv.includes('--check');
 const tagIndex = process.argv.indexOf('--tag');
@@ -56,17 +68,40 @@ if (!/^# /m.test(header)) {
 const cliffArgs = ['--config', CONFIG, '--unreleased', '--include-path', 'packages/substrate/**'];
 if (tag) cliffArgs.push('--tag', tag);
 
-const generated = execFileSync('git-cliff', cliffArgs, {
-  encoding: 'utf8',
-  maxBuffer: 32 * 1024 * 1024,
-}).trim();
+const generated = (() => {
+  try {
+    return execFileSync(CLIFF, cliffArgs, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }).trim();
+  } catch (error) {
+    if (error && (error.code === 'ENOENT' || String(error.message).includes('ENOENT'))) {
+      throw new Error(
+        `${CHANGELOG}: git-cliff >= ${MIN_CLIFF} is required and was not found on PATH.\n` +
+        `Install it (https://git-cliff.org/docs/installation), then re-run: node scripts/changelog-update.mjs\n` +
+        `Nothing was written.`,
+      );
+    }
+    throw error;
+  }
+})();
 
 // Released sections = everything from the first "## [" that is NOT [Unreleased].
 // Dropping any existing [Unreleased] block is what makes this idempotent.
 const sections = current.slice(firstSection).split(/^(?=## \[)/m);
 const released = sections.filter((s) => !s.startsWith(UNRELEASED)).join('').trimEnd();
 
-const hasEntries = /^- /m.test(generated);
+// This package has no per-release git tag, so `--unreleased` renders the whole
+// package history and would re-promote entries that are already released. The
+// released sections are the record of what shipped: drop any rendered entry whose
+// line already appears there. Deterministic, needs no tag, and a wrongly promoted
+// entry is still visible in the released history the operator reads.
+const releasedEntryLines = new Set(
+  released.split('\n').filter((line) => line.startsWith('- ')).map((line) => line.trim()),
+);
+const keptLines = generated
+  .split('\n')
+  .filter((line) => !(line.startsWith('- ') && releasedEntryLines.has(line.trim())));
+const unreleased = keptLines.join('\n').trimEnd();
+
+const hasEntries = /^- /m.test(unreleased);
 
 // Assemble the next file body.
 //   --tag mode: keep an empty [Unreleased] on top, then the versioned block below,
@@ -84,13 +119,13 @@ if (tag) {
       `[Unreleased] was already promoted. Inspect the file and re-run without --tag if that's expected.`,
     );
   }
-  const versioned = generated.startsWith(UNRELEASED)
-    ? generated.slice(UNRELEASED.length).trimStart()
-    : generated;
+  const versioned = unreleased.startsWith(UNRELEASED)
+    ? unreleased.slice(UNRELEASED.length).trimStart()
+    : unreleased;
   next = `${header}\n\n${UNRELEASED}\n\n${versioned}\n\n${released}\n`;
 } else {
   // git-cliff emits its own "## [Unreleased]" heading; keep exactly one.
-  const body = generated.startsWith(UNRELEASED) ? generated : `${UNRELEASED}\n\n${generated}`;
+  const body = unreleased.startsWith(UNRELEASED) ? unreleased : `${UNRELEASED}\n\n${unreleased}`;
   next = `${header}\n\n${hasEntries ? body : UNRELEASED}\n\n${released}\n`;
 }
 
@@ -109,8 +144,10 @@ for (const heading of current.match(/^## \[[^\]]+\].*$/gm) ?? []) {
   if (!next.includes(heading)) throw new Error(`refusing to write: would drop released section ${heading}`);
 }
 
-writeFileSync(CHANGELOG, next);
-const entries = (generated.match(/^- /gm) ?? []).length;
+const tmp = `${CHANGELOG}.tmp-${process.pid}`;
+writeFileSync(tmp, next);
+renameSync(tmp, CHANGELOG);
+const entries = (unreleased.match(/^- /gm) ?? []).length;
 console.log(
   tag
     ? `${CHANGELOG}: cut ${tag} section (${entries} entries)`
