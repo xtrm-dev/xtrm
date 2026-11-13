@@ -36,6 +36,19 @@ export function interpretJournalProbe(body: string): boolean | null {
   return null;
 }
 
+/**
+ * `sb journal feed` support (XTRM-764). Unlike the paging probe, an old binary
+ * answers with a valid envelope too: it fails on the VERB, not on the shape. So
+ * the refusal text decides, and anything else with the envelope means the verb
+ * exists (a bad probe project is still an answer from a binary that has it).
+ */
+export function interpretFeedProbe(body: string): boolean | null {
+  if (/unknown journal verb: feed/.test(body)) return false;
+  if (/unknown flag --limit/.test(body)) return false;
+  if (/"schema"\s*:\s*"substrate-cli\/v1"/.test(body)) return true;
+  return null;
+}
+
 /** A downgrade is re-probed after this long, so an sb upgrade needs no restart. */
 export const JOURNAL_PROBE_MS = 10 * 60_000;
 
@@ -126,6 +139,35 @@ export function readArgv(pathname: string, params: URLSearchParams): string[] | 
       return r ? ["issue", "resume", r] : null;
     case "/trace":
       return r ? ["provenance", "trace", r] : null;
+    case "/journal-feed": {
+      // Project-wide feed (substrate >= 0.3.3): one page per call, newest
+      // first. `cursor` is opaque and goes back as `--before` (older) or
+      // `--since` (poll for newer); `since` also carries a time bound.
+      const prj = params.get("project");
+      if (!prj) return null;
+      const feedLimit = Number(params.get("limit") ?? "50");
+      if (!Number.isInteger(feedLimit) || feedLimit <= 0 || feedLimit > JOURNAL_PAGE_MAX) return null;
+      const argv = ["journal", "feed", "--project", prj, "--limit", String(feedLimit)];
+      const kindRaw = params.get("kind");
+      if (kindRaw !== null) {
+        const kinds = kindRaw.split(",").map((k) => str(k.trim(), 40)).filter((k): k is string => k !== null);
+        if (kinds.length === 0 || kinds.length > 20) return null;
+        argv.push("--kind", kinds.join(","));
+      }
+      const cursorRaw = params.get("cursor");
+      if (cursorRaw !== null) {
+        const cursor = str(cursorRaw);
+        if (!cursor) return null;
+        argv.push("--before", cursor);
+      }
+      const sinceRaw = params.get("since");
+      if (sinceRaw !== null) {
+        const since = str(sinceRaw);
+        if (!since) return null;
+        argv.push("--since", since);
+      }
+      return argv;
+    }
     case "/journal": {
       if (!r) return null;
       // Paged reads (substrate >= 0.3.1): `tail` is the newest window, `before`
@@ -323,6 +365,22 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
     }
     return value;
   };
+  // XTRM-764: the project-wide feed. Kept beside journalPaging because a caller
+  // that wants the mixed Activity feed needs both (a feed page, then bodies).
+  let feedSupport: { value: boolean; at: number } | null = null;
+  const journalFeed = async (): Promise<boolean | null> => {
+    if (feedSupport && Date.now() - feedSupport.at < JOURNAL_PROBE_MS) return feedSupport.value;
+    // The probe project does not exist on purpose: a binary that HAS the verb
+    // answers with a project error, and the interpreter reads only the refusal
+    // shape, so the probe neither reads nor writes real board state.
+    const { body } = await runSb(bin, db, ["journal", "feed", "--project", "__probe__", "--limit", "1"]);
+    const value = interpretFeedProbe(body);
+    if (value !== null) {
+      if (value === false && feedSupport?.value !== false) console.warn(downgradeNotice(bin, await readBinVersion()));
+      feedSupport = { value, at: Date.now() };
+    }
+    return value;
+  };
   // Where the board actually lives. Without this the footer cannot tell a canonical
   // ssh read from a local one, which is how a shadowed binary looked like a regression.
   let connection: { value: BridgeConnection; at: number } | null = null;
@@ -351,6 +409,7 @@ export function substrateCliApi(opts: { bin?: string; prefix?: string } = {}): P
             writes,
             db: db ? "custom" : "default",
             journalPaging: await journalPaging(),
+            journalFeed: await journalFeed(),
             sb: bin,
             sbVersion: await readBinVersion(),
             connection: await readConnection(),

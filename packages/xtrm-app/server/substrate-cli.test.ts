@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { downgradeNotice, interpretJournalProbe, interpretRemoteStatus, readArgv, resolveSbBin, shadowedBinHint, writeArgv } from "./substrate-cli.ts";
+import { downgradeNotice, interpretFeedProbe, interpretJournalProbe, interpretRemoteStatus, readArgv, resolveSbBin, shadowedBinHint, writeArgv } from "./substrate-cli.ts";
 
 const q = (s: string) => new URLSearchParams(s);
 
@@ -53,6 +53,32 @@ describe("substrate CLI bridge reads", () => {
     expect(readArgv("/journal", q("ref=XTRM-1&limit=20"))).toEqual(["journal", "show", "XTRM-1", "--limit", "20"]);
     expect(readArgv("/journal", q("ref=XTRM-1&tail=200"))).toEqual(["journal", "show", "XTRM-1", "--tail", "200"]);
     expect(readArgv("/journal", q("ref=XTRM-1&before=900&limit=200"))).toEqual(["journal", "show", "XTRM-1", "--before", "900", "--limit", "200"]);
+    // XTRM-764: one page of the whole project, cursor and kind passed through.
+    expect(readArgv("/journal-feed", q("project=prj_xtrm"))).toEqual(["journal", "feed", "--project", "prj_xtrm", "--limit", "50"]);
+    expect(readArgv("/journal-feed", q("project=prj_xtrm&limit=20&cursor=cur123"))).toEqual([
+      "journal", "feed", "--project", "prj_xtrm", "--limit", "20", "--before", "cur123",
+    ]);
+    expect(readArgv("/journal-feed", q("project=prj_xtrm&since=cur123&kind=note,finding"))).toEqual([
+      "journal", "feed", "--project", "prj_xtrm", "--limit", "50", "--kind", "note,finding", "--since", "cur123",
+    ]);
+    // A missing project, an out-of-range page and an empty kind list are refused.
+    expect(readArgv("/journal-feed", q("limit=20"))).toBeNull();
+    expect(readArgv("/journal-feed", q("project=prj_xtrm&limit=0"))).toBeNull();
+    expect(readArgv("/journal-feed", q("project=prj_xtrm&kind=,"))).toBeNull();
+    expect(readArgv("/journal-feed", q("project=prj_xtrm&cursor=-x"))).toBeNull();
+  });
+
+  it("detects the project-wide feed by its refusal, not by the envelope (XTRM-764)", () => {
+    const envelope = (extra: string) => `{"schema":"substrate-cli/v1","command":"journal.feed","ok":false${extra}}`;
+    // An older binary does not know the verb at all.
+    expect(interpretFeedProbe(envelope(',"error":"unknown journal verb: feed (want append|checkpoint|show|since|latest|timeline|render)"'))).toBe(false);
+    // Nor does it accept the flags the feed needs.
+    expect(interpretFeedProbe(envelope(',"error":"unknown flag --limit for `journal.feed` (see usage)"'))).toBe(false);
+    // A binary that HAS the verb answers the probe project with a project error.
+    expect(interpretFeedProbe(envelope(',"error":"unknown project: __probe__"'))).toBe(true);
+    expect(interpretFeedProbe('{"schema":"substrate-cli/v1","command":"journal.feed","ok":true,"data":{"entries":[]}}')).toBe(true);
+    // The binary never ran: nothing to conclude, so nothing is cached.
+    expect(interpretFeedProbe('{"ok":false,"error":"sb failed (bin=/missing/sb): spawn ENOENT"}')).toBeNull();
   });
 
   it("downgrades only on an unknown-flag failure, never on another error", () => {

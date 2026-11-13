@@ -8,6 +8,7 @@
 
 import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
 import { withTransaction } from "../store/transactions.ts";
+import { formatHumanRef } from "../domain/issue.ts";
 import type { IssueService } from "./issue-service.ts";
 import {
   assertResultPayload,
@@ -42,6 +43,75 @@ import {
 
 interface Row {
   [key: string]: unknown;
+}
+
+// -- project-wide feed (XTRM-764) -------------------------------------------
+
+/** Rows a feed page may carry. The bridge pages; a huge page defeats that. */
+export const DEFAULT_FEED_LIMIT = 50;
+export const MAX_FEED_LIMIT = 500;
+
+/** `(created_at, id)`, opaque to callers: they pass it back, never parse it. */
+export interface FeedCursor {
+  time: number;
+  id: string;
+}
+
+export interface JournalFeedEntry {
+  /** The Issue's human ref (`XTRM-764`) — the feed is read across Issues. */
+  issueRef: string;
+  issueId: string;
+  entry: JournalEntry;
+}
+
+export interface JournalFeedPage {
+  projectId: string;
+  entries: JournalFeedEntry[];
+  /** Pass back with the same flag: `--before` after a page, `--since` after a poll. */
+  nextCursor: string | null;
+  limit: number;
+}
+
+export interface JournalFeedInput {
+  projectId: string;
+  limit?: number;
+  kinds?: JournalKind[] | null;
+  cursor?: FeedCursor;
+  /** The flag the cursor came from: `before` pages downwards, `newer` polls. */
+  direction?: "before" | "newer";
+  /** A `--since` time bound (epoch ms), exclusive of nothing: `>=`. */
+  sinceTime?: number | null;
+}
+
+interface FeedRow extends Row {
+  issue_id: string;
+  human_number: number;
+  prefix: string;
+  created_at: number;
+  id: string;
+}
+
+/**
+ * Cursor encoding: base64url of `{t, id}`. Opaque on purpose — a caller that
+ * parses it would depend on the ordering key, which is the schema's business.
+ */
+export function encodeFeedCursor(row: { created_at: number; id: string }): string {
+  return Buffer.from(JSON.stringify({ t: row.created_at, id: row.id }), "utf8").toString("base64url");
+}
+
+/** Fail closed on a malformed cursor: a wrong page is worse than a refusal. */
+export function decodeFeedCursor(value: string): FeedCursor {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+  } catch {
+    throw new Error("invalid cursor: pass nextCursor from a previous feed page");
+  }
+  const record = parsed as { t?: unknown; id?: unknown };
+  if (typeof record.t !== "number" || !Number.isInteger(record.t) || record.t < 0 || typeof record.id !== "string" || record.id === "") {
+    throw new Error("invalid cursor: pass nextCursor from a previous feed page");
+  }
+  return { time: record.t, id: record.id };
 }
 
 function row<T>(db: DatabaseSync, sql: string, ...params: SQLInputValue[]): T | undefined {
@@ -331,6 +401,89 @@ export class JournalService {
       params.push(opts.limit);
     }
     return rows<Row>(this.db, sql, ...params).map((r) => this.toEntry(r));
+  }
+
+  // -- project-wide feed (XTRM-764) -----------------------------------------
+  //
+  // One page across every Issue of a project, newest first, ordered by
+  // `(created_at, id)`. The cursor is that pair, opaque to the caller, so a
+  // page is a range scan and an append between pages can never shift an entry
+  // across the boundary: a new row is always newer than the cursor, and pages
+  // walk downwards.
+  feed(input: JournalFeedInput): JournalFeedPage {
+    const project = this.issues.getProject(input.projectId);
+    const limit = input.limit ?? DEFAULT_FEED_LIMIT;
+    if (!Number.isInteger(limit) || limit <= 0 || limit > MAX_FEED_LIMIT) {
+      throw new Error(`limit must be an integer between 1 and ${MAX_FEED_LIMIT}`);
+    }
+    const kinds = input.kinds ?? null;
+    for (const kind of kinds ?? []) {
+      if (!isJournalKind(kind)) throw new Error(unknownJournalKindMessage(kind));
+    }
+    // Order is fixed: newest first. `since` (a cursor) walks a poll forwards,
+    // so its SELECT is ascending and only the presentation flips.
+    const select = (where: string, params: SQLInputValue[], order: "DESC" | "ASC"): FeedRow[] =>
+      rows<FeedRow>(
+        this.db,
+        `SELECT j.id, j.issue_id, j.issue_revision, j.sequence, j.run_id, j.participant_id,
+                j.activation_id, j.session_id, j.kind, j.mechanical_json, j.semantic_json,
+                j.result_json, j.refs_json, j.created_at, j.execution_context_json,
+                i.human_number, p.prefix
+           FROM issue_journal j
+           JOIN issues i ON i.id = j.issue_id
+           JOIN projects p ON p.id = i.project_id
+          WHERE i.project_id = ?${where}
+          ORDER BY j.created_at ${order}, j.id ${order}
+          LIMIT ?`,
+        input.projectId,
+        ...params,
+        limit,
+      );
+
+    const kindClause = (): string => (kinds === null || kinds.length === 0 ? "" : ` AND j.kind IN (${kinds.map(() => "?").join(",")})`);
+    const kindParams = (): string[] => kinds ?? [];
+
+    let page: FeedRow[];
+    let nextCursor: string | null;
+    if (input.cursor !== undefined && input.direction === "newer") {
+      const { time, id } = input.cursor;
+      // A poll takes the OLDEST n rows above the cursor, then presents them
+      // newest first. Selecting the newest n instead would skip everything in
+      // between when a burst is larger than one page.
+      const forward = select(` AND (j.created_at, j.id) > (?, ?)${kindClause()}`, [time, id, ...kindParams()], "ASC");
+      page = forward.reverse();
+      // The newest row of this page is the cursor the next poll continues from;
+      // no row means the caller already holds the newest entry.
+      nextCursor = page.length === 0 ? null : encodeFeedCursor(page[0]!);
+    } else {
+      const bounds: SQLInputValue[] = [];
+      let where = "";
+      if (input.cursor !== undefined) {
+        where += ` AND (j.created_at, j.id) < (?, ?)`;
+        bounds.push(input.cursor.time ?? 0, input.cursor.id ?? "");
+      }
+      if (input.sinceTime !== undefined && input.sinceTime !== null) {
+        where += ` AND j.created_at >= ?`;
+        bounds.push(input.sinceTime);
+      }
+      where += kindClause();
+      bounds.push(...kindParams());
+      // Newest first: the SELECT already orders that way, so the page is the
+      // result as read and the cursor is its OLDEST row (the last one) — the
+      // row the next `--before` page must start below. `reverse()` here would
+      // hand back the newest row and repeat a whole page.
+      page = select(where, bounds, "DESC");
+      // A short page is the end of the feed: emitting a cursor there would make
+      // every drain loop issue one more empty request.
+      nextCursor = page.length < limit ? null : encodeFeedCursor(page[page.length - 1]!);
+    }
+
+    const entries: JournalFeedEntry[] = page.map((r) => ({
+      issueRef: formatHumanRef(project.prefix, r.human_number),
+      issueId: r.issue_id,
+      entry: this.toEntry(r),
+    }));
+    return { projectId: project.id, entries, nextCursor, limit };
   }
 
   // Cursor read (§20.5): only entries after the supplied sequence cursor.

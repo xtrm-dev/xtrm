@@ -177,6 +177,11 @@ onboarding workflow. New repositories start with `sb init`.
 - `journal latest <ref> [--kind <k>]` — the newest entry, optionally of one kind.
 - `journal timeline <ref> [--limit <n>] [--kind <k>]` — bounded chronological entries.
 - `journal render <ref> [--sequence <n>]` — render a checkpoint as text.
+- `journal feed --project <id> [--since <time|cursor>] [--before <cursor>] [--kind <k,...>] [--limit <n>]` —
+  one page across every Issue of the project, newest first, each entry carrying its Issue ref.
+  `--limit` is 1..500 (default 50). Pass `nextCursor` back with `--before` for older entries, or with
+  `--since` to poll for newer ones; `--since` also accepts an ISO timestamp or epoch milliseconds.
+  The console bridge reads it as `journalFeed` in `/capabilities`.
 
 Kind doctrine and examples: [`journal.md`](./journal.md).
 

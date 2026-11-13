@@ -184,6 +184,24 @@ oversized summary to 2,000 characters with no marker, and it has no
 `summaryFile` equivalent. Aligning MCP to the same bound is step-12 work on
 the shared tool surface (XTRM-724 part B). Do not assume the CLI bound there.
 
+## Project-wide reads
+
+`sb journal feed --project <id>` returns one page across every Issue of the
+project, newest first, ordered by `(created_at, entry id)`. Each entry carries
+its Issue ref, so a caller does not fan out over Issues to build a stream.
+
+- `--limit <n>` is 1..500 (default 50); a page that returns fewer rows has no
+  cursor, so a drain loop ends without an extra request.
+- `nextCursor` is opaque. Pass it back with `--before` for the next older page,
+  or with `--since` to poll for entries appended after it. A poll returns the
+  oldest rows above the cursor and presents them newest first, so a burst
+  larger than one page is walked without skipping an entry.
+- `--since` also accepts an ISO timestamp or epoch milliseconds, which bounds
+  the page by time instead of by cursor.
+- The read is read-only, uses `ix_journal_created` (migration 017), and keeps
+  the same remote-mode semantics as every other `sb` read: it runs on the
+  server when remote mode is configured.
+
 ## Coordinator methodology
 
 Periodically inspect children, claims, pending asks, new results,
