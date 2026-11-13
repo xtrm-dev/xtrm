@@ -39,7 +39,7 @@ import { clearRemoteConfig, remoteConfigPath } from "../src/remote/config.ts";
 export { discoverGitRoot, discoverRepository };
 export type { RepositoryDiscovery };
 import { PlanningService } from "../src/service/planning-service.ts";
-import { JournalService } from "../src/service/journal-service.ts";
+import { JournalService, decodeFeedCursor } from "../src/service/journal-service.ts";
 import type { JournalOperationalContext } from "../src/service/journal-service.ts";
 import { ClosureService } from "../src/service/closure-service.ts";
 import { CLOSURE_OUTCOMES, isClosureOutcome } from "../src/domain/closure.ts";
@@ -769,6 +769,7 @@ Project deliberately.`,
 
   append <ref> --kind <checkpoint|handoff|milestone|decision|finding|blocker|result|compaction|note> [--mechanical <file|json>] [--semantic <file|json>] [--result <file|json>] [--refs <file|json>] [--run/--participant/--activation/--session <id>]
   checkpoint <ref> [same flags except --result, plus --workspace/--branch/--base-commit/--head-commit]
+  feed --project <id> [--since <time|cursor>] [--before <cursor>] [--kind <k,...>] [--limit <n>]
   show <ref> [--kind <k>] [--limit <n>]
   since <ref> <cursor>
   latest <ref> [--kind <k>]
@@ -784,7 +785,8 @@ bounded outcome with a versioned payload, checkpoint a resumability
 boundary, compaction a conversation checkpoint. Checkpoint and compaction
 require a mechanical row; result requires the bounded payload and must not
 be appended as a plain note. Reads are bounded: show for bodies, since for
-the delta after a cursor, latest/timeline for windows.
+the delta after a cursor, latest/timeline for windows, feed for one page
+across every Issue of a project.
 
 Every verb runs over one JournalService; latest/timeline are bounded reads.`,
   "journal.append": `usage: sb journal append <ref> --kind <k> [--mechanical <file|json>] [--semantic <file|json>] [--summary-file <path|->] [--result <file|json>] [--refs <file|json>] [--project <id>]
@@ -807,6 +809,14 @@ from a full dump.`,
   "journal.show": `usage: sb journal show <ref> [--kind <k>] [--limit <n> | --before <seq> --limit <n> | --tail <n>]
 
 returns full entry bodies (human prints semantic text; since stays compact).`,
+  "journal.feed": `usage: sb journal feed --project <id> [--since <time|cursor>] [--before <cursor>] [--kind <k,...>] [--limit <n>]
+
+Project-wide, newest first, one page per call: every journal entry of every
+Issue of the project, each carrying its Issue ref. --limit is 1..500 (default
+50). The response carries nextCursor: pass it back with --before to read older
+entries, or with --since to poll for newer ones. --since also accepts an ISO
+timestamp or an epoch-millisecond value; --before and --since cannot be
+combined. --kind takes a comma-separated list of journal kinds.`,
   "journal.since": `usage: sb journal since <ref> <cursor>
 
 cursor read: only entries after the sequence cursor (0 reads all).`,
@@ -1404,6 +1414,7 @@ export const FLAG_ALLOWLIST: Record<string, string[]> = {
   "journal.append": ["project", "kind", "run", "participant", "activation", "session", "mechanical", "semantic", "summary-file", "result", "refs"],
   "journal.checkpoint": ["project", "run", "participant", "activation", "session", "mechanical", "semantic", "refs", "workspace", "branch", "base-commit", "head-commit"],
   "journal.show": ["kind", "limit", "before", "tail"],
+  "journal.feed": ["project", "since", "before", "limit", "kind"],
   "journal.since": [],
   "journal.latest": ["kind"],
   "journal.timeline": ["kind", "limit"],
@@ -2485,6 +2496,74 @@ function runJournal(
       const lines = entries.flatMap((e) => [journalLine(svc, e), ...journalBody(e)]);
       return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : "(no journal entries)") + "\n", stderr: "" };
     }
+    case "feed": {
+      // Project-wide page, newest first (XTRM-764). The cursor is opaque: the
+      // caller passes nextCursor back with the same flag it came from.
+      const sinceRaw = flag(flags, "since");
+      const beforeRaw = flag(flags, "before");
+      if (sinceRaw !== undefined && beforeRaw !== undefined) {
+        throw new Error("--since and --before cannot be combined");
+      }
+      const limitRaw = flag(flags, "limit");
+      const limit = limitRaw !== undefined ? Number(limitRaw) : undefined;
+      if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) throw new Error("--limit must be a positive integer");
+      const kindRaw = flag(flags, "kind");
+      const kinds = kindRaw === undefined ? null : kindRaw.split(",").map((k) => k.trim()).filter((k) => k !== "");
+      for (const kind of kinds ?? []) {
+        if (!isJournalKind(kind)) throw new Error(`unknown journal kind: ${kind}`);
+      }
+      const repoDisc = discoverRepository();
+      const resolvedProject = svc.resolveProject({
+        explicit: flag(flags, "project") ?? undefined,
+        env: process.env["SUBSTRATE_PROJECT"],
+        gitRoot: repoDisc.gitRoot,
+        repositoryKey: repoDisc.identity?.repositoryKey ?? null,
+      });
+      let cursor: { time: number; id: string } | undefined;
+      let direction: "before" | "newer" | undefined;
+      let sinceTime: number | null = null;
+      if (beforeRaw !== undefined) {
+        cursor = decodeFeedCursor(beforeRaw);
+        direction = "before";
+      } else if (sinceRaw !== undefined) {
+        // A cursor or a time: a cursor polls forwards, a time bounds the page.
+        let parsedCursor: { time: number; id: string } | null = null;
+        try {
+          parsedCursor = decodeFeedCursor(sinceRaw);
+        } catch {
+          parsedCursor = null;
+        }
+        if (parsedCursor !== null) {
+          cursor = parsedCursor;
+          direction = "newer";
+        } else {
+          const asNumber = Number(sinceRaw);
+          const ms = Number.isFinite(asNumber) && Number.isInteger(asNumber) ? asNumber : Date.parse(sinceRaw);
+          if (!Number.isFinite(ms)) throw new Error("--since must be an ISO timestamp, an epoch-millisecond value or a feed cursor");
+          sinceTime = ms;
+        }
+      }
+      const page = journal.feed({ projectId: resolvedProject.projectId, limit, kinds: kinds as never, cursor, direction, sinceTime });
+      const data = {
+        projectId: page.projectId,
+        limit: page.limit,
+        nextCursor: page.nextCursor,
+        entries: page.entries.map((e) => ({ issueRef: e.issueRef, issueId: e.issueId, ...journalSummary(e.entry), semantic: e.entry.semantic, result: e.entry.result })),
+      };
+      if (ctx.json) return emit(ctx, command, data);
+      // One line per entry plus its short text: the feed is read as a stream, so
+      // the summary is the payload that makes a page useful without a follow-up
+      // `journal show` per row.
+      const lines = page.entries.flatMap((e) => {
+        // journalLine already starts with the Issue label, which is unique per
+        // project, so the ref is not repeated here.
+        const head = journalLine(svc, e.entry);
+        const summary = e.entry.semantic?.summary ?? e.entry.result?.summary ?? null;
+        return summary === null ? [head] : [head, `    ${summary.split("\n")[0]!.slice(0, 200)}`];
+      });
+      const tail = page.nextCursor === null ? "" : `\nnext: sb journal feed --project ${page.projectId} --before ${page.nextCursor}`;
+      return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : "(no journal entries in this project)") + tail + "\n", stderr: "" };
+    }
     case "since": {
       // Cursor read (§20.5): only entries after the sequence cursor.
       const ref = needRef(rest);
@@ -2558,7 +2637,7 @@ function runJournal(
       return { code: 0, stdout: text + "\n", stderr: "" };
     }
     default:
-      throw new Error(`unknown journal verb: ${verb} (want append|checkpoint|show|since|latest|timeline|render)`);
+      throw new Error(`unknown journal verb: ${verb} (want append|checkpoint|feed|show|since|latest|timeline|render)`);
   }
 }
 
