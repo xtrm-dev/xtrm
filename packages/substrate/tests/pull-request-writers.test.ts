@@ -112,12 +112,36 @@ describe("pull-request writers", () => {
   it("b3 falls back to the latest receipt and refuses when there is none", () => {
     assert.throws(
       () => w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w" }, PR),
-      (err: Error) => /no_receipt/.test(err.message) && /dispatch/.test(err.message) && /allocate/.test(err.message),
+      (err: Error) => /no_receipt/.test(err.message) && /dispatch/.test(err.message) && !/allocate/.test(err.message),
     );
     const { receipt } = dispatchWithClaim(w);
     const view = w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w" }, PR);
     assert.equal(view.relation, "created_from");
     assert.equal(w.prov.listArtifacts(receipt.id).length, 1);
+  });
+
+  // XTRM-750: dispatch makes the binding, allocate makes the receipt. With a
+  // binding already present the only missing step is allocate, and the refusal
+  // must say so instead of sending the operator through dispatch again.
+  it("names allocate, not dispatch, when a binding exists without a receipt", () => {
+    const claim = w.svc.claimIssue(w.issue.id, "w", { ttlMs: 60_000 });
+    const binding = w.prov.dispatch(w.issue.id, { workspace: "/tmp/ws", participantId: "w", claimId: claim.id });
+    assert.equal(w.prov.listReceipts(w.issue.id).length, 0, "dispatch alone allocates no receipt");
+    const message = (() => {
+      try {
+        w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w" }, PR);
+        return "";
+      } catch (error) {
+        return (error as Error).message;
+      }
+    })();
+    assert.match(message, /^no_receipt:/, "the code stays stable for machine consumers");
+    assert.match(message, /allocate/, "the refusal names the step that mints the receipt");
+    assert.doesNotMatch(message, /dispatch/, "dispatch already ran; it is not the missing step");
+    // The advice works: allocate on the existing binding clears the refusal.
+    w.prov.allocateReceipt(binding.id);
+    const view = w.links.attachCreatedFrom({ issueId: w.issue.id, ambientRepo: null, actor: "w" }, PR);
+    assert.equal(view.relation, "created_from");
   });
 
   it("a foreign receipt is a hard refusal with nothing written", () => {
