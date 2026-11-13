@@ -147,6 +147,31 @@ operator surface — `sb links check`, `sb links sync`, `sb provenance attach` a
 the Journal summary limit: `sb <group> <verb> --help`, and the Pi half of this skill in the
 package (`packages/substrate/skills/using-substrate/SKILL.md`).
 
+## The routine
+
+The CLI is strict and versioned, so look before you guess:
+
+- **Help first.** Before a verb you have not used this session: `sb help <group>` or `sb <group> <verb> --help`. `sb help contract`
+  prints the exact contract JSON (`problem` and `success` strings; `scope`, `nonGoals`, `constraints` lists; `validation` and
+  `output` lists of objects; `scrutiny`). `sb --version`: a CLI older than the database refuses it (fail-closed migration check),
+  which looks like an outage, not a version skew, unless you read the message.
+- **Start.** `sb issue ready` (dispatchable work), `sb issue show <ref>` (contract, readiness, claim), `sb issue resume <ref>` (the
+  Resume Capsule), then only the delta: `sb journal since <ref> <cursor>` and `sb journal latest <ref> --kind handoff`.
+- **Create.** `sb issue create --project <id> --title ... --kind ... --contract <file> [--parent <epic>]`, then
+  `sb issue attest <ref> --outcome ready --policy default --attested-by <you>`. Link work with
+  `sb issue relate --from <a> --to <b> --kind blocks|relates_to|discovered_from|supersedes|duplicates`; see the shape with
+  `sb issue tree --root <epic>`.
+- **Own.** Claim once (`sb issue claim <ref>`, holder from `SUBSTRATE_HOLDER`) with a TTL that covers your next checkpoint, and
+  `sb issue renew <ref>` at every checkpoint: a second claim renews nothing. Release before you commit.
+- **Record.** `sb journal append <ref> --kind <k> --semantic '{"summary":"..."}'` (or `--summary-file <path>`), one fact per entry.
+  Read bodies with `sb journal show <ref> --tail <n>` (newest) and page older with `--before <seq> --limit <n>`.
+- **Bind documents.** A document that defines the work goes into the contract with `sb issue edit <ref> --context-refs <file>`
+  (a new revision: do it at planning time); a decision cites `path@sha` in a journal entry; deliverables go to `--artifact` at close.
+- **Deliver.** Before the PR, give the issue a receipt (`sb provenance dispatch <ref>`, then `sb provenance allocate <ref>`), or
+  the shim cannot link it. Open the PR with the issue marker (the `gh` shim links it), check `sb links check --issue <ref>`, then
+  `sb issue close <ref> --outcome completed --reason ... --result <entry> --validation ... --artifact ...`, and audit with
+  `sb provenance trace <ref>`.
+
 ## Where to read more
 
 - `packages/substrate/docs/claude.md` — exact provider lifecycle and tool map

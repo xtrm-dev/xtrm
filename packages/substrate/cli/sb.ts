@@ -770,7 +770,7 @@ Project deliberately.`,
   append <ref> --kind <checkpoint|handoff|milestone|decision|finding|blocker|result|compaction|note> [--mechanical <file|json>] [--semantic <file|json>] [--result <file|json>] [--refs <file|json>] [--run/--participant/--activation/--session <id>]
   checkpoint <ref> [same flags except --result, plus --workspace/--branch/--base-commit/--head-commit]
   feed --project <id> [--since <time|cursor>] [--before <cursor>] [--kind <k,...>] [--limit <n>]
-  show <ref> [--kind <k>] [--limit <n>]
+  show <ref> [--kind <k>] [--limit <n> | --before <seq> --limit <n> | --tail <n>]
   since <ref> <cursor>
   latest <ref> [--kind <k>]
   timeline <ref> [--kind <k>] [--limit <n>]
