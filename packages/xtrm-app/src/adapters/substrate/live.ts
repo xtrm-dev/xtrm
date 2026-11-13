@@ -329,6 +329,8 @@ export function mapIssueCore(d: WireIssueDetail, ctx: IssueDetailCtx): IssueDeta
       createdAt: Number(p.createdAt ?? p.created_at ?? 0),
       commits: Array.isArray(p.commits) ? (p.commits as IssueDetail["pullRequests"][number]["commits"]) : [],
       state: (p.state as string | null) ?? null,
+      // 'assumed' until a reconciler read confirms it (XTRM-754 wire field).
+      stateSource: (p.stateSource as string | null) ?? (p.state_source as string | null) ?? null,
       title: (p.title as string | null) ?? null,
       mergedAt: (p.mergedAt ?? p.merged_at) != null ? Number(p.mergedAt ?? p.merged_at) : null,
     })),

@@ -287,6 +287,8 @@ export interface PullLink {
   commits: Array<{ sha: string; landedSha: string | null }>;
   /** Live PR state from the pull_requests store; null => "state unknown". */
   state: string | null;
+  /** 'assumed' when only the opener wrote the row, 'observed' after a reconciler read. */
+  stateSource: string | null;
   /** PR title from the pull_requests store; null when unknown. */
   title: string | null;
   /** Merge timestamp (epoch ms) when merged; null otherwise. */
