@@ -125,57 +125,56 @@ function SourceFooter() {
   const state = conn == null ? "unverified" : conn.ok ? (remote ? "remote" : "local") : "offline";
   const tone = conn == null ? "neutral" : conn.ok ? "done" : "danger";
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      {/* Same two-line block as the repository selector: an eyebrow, then the state line. */}
-      <Popover.Trigger
-        aria-label="Data sources"
-        className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left text-ink-faint outline-none hover:bg-hover hover:text-ink-muted focus-visible:bg-hover data-[popup-open]:bg-hover"
-      >
-        <span className="text-[0.65rem] font-medium tracking-wide uppercase">Sources</span>
-        <span className="flex w-full min-w-0 items-center gap-2">
+    <div className="mt-auto px-2 pb-2">
+      <Popover.Root open={open} onOpenChange={setOpen}>
+        {/* Inset from the panel edges, one compact line: it is a status strip, not a header. */}
+        <Popover.Trigger
+          aria-label="Data sources"
+          className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-xs text-ink-faint outline-none hover:bg-hover hover:text-ink-muted focus-visible:bg-hover data-[popup-open]:bg-hover"
+        >
           <StatusDot tone={live === items.length ? "done" : "muted"} label={`${live} of ${items.length} live`} />
-          <span className="truncate text-xs">{live === items.length ? "All live" : `${live} of ${items.length} live`}</span>
-          {remote?.latencyMs != null && <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums">{remote.latencyMs} ms</span>}
+          <span className="truncate">{live === items.length ? "All sources live" : `${live} of ${items.length} live`}</span>
+          {remote?.latencyMs != null && <span className="ml-auto shrink-0 tabular-nums">{remote.latencyMs} ms</span>}
           {/* It opens upward, so the resting chevron points up and flips down when the panel is open. */}
           <Icon name={open ? "chevronDown" : "chevronUp"} size="xs" className={cx("shrink-0", remote?.latencyMs != null ? "ml-1" : "ml-auto")} />
-        </span>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner side="top" align="start" sideOffset={4} className="z-50">
-          <Popover.Popup className="flex w-[var(--anchor-width)] flex-col gap-0.5 rounded-lg bg-raised p-1.5 text-xs text-ink-muted shadow-float outline-none">
-            <div className="flex items-baseline gap-2 px-1.5 pt-0.5 pb-1">
-              <span className="text-[0.65rem] font-medium tracking-wide text-ink-faint uppercase">Data sources</span>
-              <span className="ml-auto font-mono text-[10px] tabular-nums text-ink-faint">
-                {live}/{items.length} live
-              </span>
-            </div>
-            {conn && (
-              <div className="flex h-8 items-center gap-2 rounded-md px-1.5" data-testid="board-connection" title={remote ? `${remote.host ?? "ssh"} · ${remote.latencyMs ?? "?"} ms` : undefined}>
-                <StatusDot tone={tone} label={conn.ok ? "board reachable" : "board unreachable"} />
-                <span className="truncate">Board</span>
-                <Badge className="ml-auto" tone={conn.ok ? (remote ? "active" : "neutral") : "danger"} size="xs" mono={remote != null}>
-                  {conn.ok ? (remote ? `server · ${remote.latencyMs ?? "–"} ms` : "local db") : "offline"}
-                </Badge>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Positioner side="top" align="start" sideOffset={6} className="z-50">
+            <Popover.Popup className="flex w-[var(--anchor-width)] flex-col gap-0.5 rounded-lg bg-raised p-1.5 text-xs text-ink-muted shadow-[0_10px_24px_-16px_rgb(15_15_20/0.35),0_0_0_1px_rgb(15_15_20/0.05)] outline-none">
+              <div className="flex items-baseline gap-2 px-1.5 pt-0.5 pb-1">
+                <span className="text-xs text-ink-faint">Data sources</span>
+                <span className="ml-auto text-[0.68rem] tabular-nums text-ink-faint">
+                  {live}/{items.length} live
+                </span>
               </div>
-            )}
-            {items.map(([label, source]) => (
-              <div key={label} className="flex h-8 items-center gap-2 rounded-md px-1.5">
-                <StatusDot tone={source === "live" ? "done" : "muted"} label={source} />
-                <span className="truncate">{label}</span>
-                <Badge className="ml-auto" tone={source === "live" ? "active" : "neutral"} size="xs">
-                  {source}
-                </Badge>
+              {conn && (
+                <div className="flex h-7 items-center gap-2 rounded-md px-1.5" data-testid="board-connection" title={remote ? `${remote.host ?? "ssh"} · ${remote.latencyMs ?? "?"} ms` : undefined}>
+                  <StatusDot tone={tone} label={conn.ok ? "board reachable" : "board unreachable"} />
+                  <span className="truncate">Board</span>
+                  <Badge className="ml-auto" tone={conn.ok ? (remote ? "active" : "neutral") : "danger"} size="xs">
+                    {conn.ok ? (remote ? `server · ${remote.latencyMs ?? "–"} ms` : "local db") : "offline"}
+                  </Badge>
+                </div>
+              )}
+              {items.map(([label, source]) => (
+                <div key={label} className="flex h-7 items-center gap-2 rounded-md px-1.5">
+                  <StatusDot tone={source === "live" ? "done" : "muted"} label={source} />
+                  <span className="truncate">{label}</span>
+                  <Badge className="ml-auto" tone={source === "live" ? "active" : "neutral"} size="xs">
+                    {source}
+                  </Badge>
+                </div>
+              ))}
+              <div className="mt-1 border-t border-border-muted px-1.5 pt-1.5 pb-0.5 text-[0.68rem] text-ink-faint" data-testid="board-transport">
+                {state === "remote" ? "ssh" : state === "local" ? "local db" : state === "offline" ? "unreachable" : "unknown"}
+                {remote?.host ? ` · ${remote.host}` : ""}
+                {conn?.serverVersion ? ` · sb ${conn.serverVersion}` : ""}
               </div>
-            ))}
-            <div className="mt-0.5 border-t border-border-muted px-1.5 pt-1.5 pb-0.5 font-mono text-[10px] text-ink-faint" data-testid="board-transport">
-              {state === "remote" ? "ssh" : state === "local" ? "local db" : state === "offline" ? "unreachable" : "unknown"}
-              {remote?.host ? ` · ${remote.host}` : ""}
-              {conn?.serverVersion ? ` · sb ${conn.serverVersion}` : ""}
-            </div>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
+            </Popover.Popup>
+          </Popover.Positioner>
+        </Popover.Portal>
+      </Popover.Root>
+    </div>
   );
 }
 
