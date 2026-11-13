@@ -69,9 +69,11 @@ export function assertContractShape(contract: unknown): asserts contract is Work
 // -- normalisation (XTRM-786) -------------------------------------------------
 // A prose entry where {check}/{artifact} belongs is a slight shape error, not a
 // reason to lose the contract: the create/edit write path repairs it and says
-// so. The verdict on what counts as a well-shaped entry lives in one predicate
-// (isValidContractEntry), shared with validateContractStructure, so the write
-// path and readiness cannot disagree about the entries normalisation owns.
+// so. The repair only rewrites a plain string; whether a stored entry is
+// ACCEPTABLE is readiness's verdict alone (validateContractStructure), so an
+// object that already carries the key — including {check: ""} — is stored as
+// written and judged there. The two deliberately differ: the write path owns
+// shape, readiness owns the draft verdict.
 
 export interface ContractRepair {
   field: "validation" | "output";

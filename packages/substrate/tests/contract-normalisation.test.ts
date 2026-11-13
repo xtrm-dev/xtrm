@@ -315,6 +315,29 @@ describe("XTRM-786 contract normalisation on create/edit", () => {
     assert.deepEqual(storedContract("NORM-1").validation, [{ check: "" }]);
   });
 
+  it("reports the edit repair in the real human CLI output, not only the renderer", async () => {
+    // The review's NIT: asserting feedbackForCommand with a hand-built payload
+    // never proves the CLI actually emits the note. This drives the shipped UX
+    // entry point end to end.
+    assert.equal(create(prose()).code, 0);
+    const held = process.env["SUBSTRATE_PROJECT"];
+    process.env["SUBSTRATE_PROJECT"] = "prj_norm";
+    try {
+      const { runUxCli } = await import("../cli/sb-ux.ts");
+      const res = await runUxCli(
+        ["--db", dbPath, "--plain", "issue", "edit", "NORM-1", "--contract", JSON.stringify(prose({ validation: ["cli notice check"] }))],
+        { isTTY: false },
+      );
+      assert.equal(res.code, 0, res.stderr);
+      assert.match(res.stdout, /Updated NORM-1/);
+      assert.match(res.stdout, /validation: 1 entry normalised to \{check\}/, `got: ${res.stdout}`);
+      assert.match(res.stdout, /output: 1 entry normalised to \{artifact\}/, `got: ${res.stdout}`);
+    } finally {
+      if (held === undefined) delete process.env["SUBSTRATE_PROJECT"];
+      else process.env["SUBSTRATE_PROJECT"] = held;
+    }
+  });
+
   it("normalises idempotently and reports no repair the second time", () => {
     const once = normaliseContract(prose());
     assert.deepEqual(once.repairs, [
