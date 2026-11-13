@@ -11,7 +11,7 @@ publication). This private workflow is the only place where a public
 Specialists commit meets the real substrate package: it checks out the
 public repo at an exact pinned SHA, injects `packages/substrate` through
 the neutral `WorkItemStore` seam (`XTRM_SUBSTRATE_DIR`), and runs the
-Bun 1.3.14 integration/parity suite. The durable run URL plus the two
+Bun 1.4.4 integration/parity suite. The durable run URL plus the two
 immutable SHAs gate the Specialists merge.
 
 ## SHA policy (fail closed)
@@ -73,7 +73,7 @@ run URLs being recorded.
   fails closed with `work_item_store_unavailable` unless every expected
   export is present. It also validates `package.json` name identity
   (`@jaggerxtrm/substrate`) before deep imports.
-- Parity command (Bun 1.3.14):
+- Parity command (Bun 1.4.4):
   `XTRM_SUBSTRATE_DIR=<abs path to the source checkout / package directory> bun --bun vitest run tests/integration/substrate-parity.test.ts`
   covering migration → create → view/check/bind revision+hash stability,
   A-claim/B-dispatch holder refusal, and journal. The suite skips without
@@ -106,7 +106,7 @@ All required, all in one run:
       anywhere in substrate `src`/`cli`/`integrations`; lazy conditional
       `require()` only in `src/store/sqlite.ts` (mirrors
       `tests/sqlite-runtime.test.ts`).
-- [ ] Parity suite green under Bun 1.3.14 with `XTRM_SUBSTRATE_DIR` set.
+- [ ] Parity suite green under Bun 1.4.4 with `XTRM_SUBSTRATE_DIR` set.
 - [ ] Full Specialists suite green (provider parity, no regressions).
 - [ ] Typecheck/build green; `bun install --frozen-lockfile` clean.
 - [ ] Clean tree in both checkouts.
