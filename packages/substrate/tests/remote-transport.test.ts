@@ -8,7 +8,7 @@ import { tempDir } from "./helpers.ts";
 import { RemoteError, buildRemoteCommand } from "../src/remote/spec.ts";
 import { clientRepositoryKey, openRemoteSession, resolveMapping, runRemote } from "../src/remote/session.ts";
 import { MAX_DOCUMENT_BYTES, forwardCli, hookSession } from "../src/remote/executor.ts";
-import { HOOK_BUDGET_MS } from "../hooks/remote.ts";
+import { HOOK_BUDGET_MS, resolveIssueRef } from "../hooks/remote.ts";
 import { remoteSetup } from "../src/remote/setup.ts";
 import { mappingKey, selectRemote } from "../src/remote/config.ts";
 import { DEFAULT_TIMEOUT_MS } from "../src/remote/ssh.ts";
@@ -35,7 +35,14 @@ interface FakeConfig {
   receive?: string;
   envelope?: string;
   receipt?: { id: string; issueId: string; issueRevision: number };
-  trace?: { receipts: Array<{ id: string; executionBindingId: string; commitSha?: string | null; finalizedAt?: number | null }>; bindings: Array<{ id: string; workspace: string }> };
+  trace?: {
+    receipts?: Array<{ id: string; executionBindingId: string; commitSha?: string | null; finalizedAt?: number | null }>;
+    bindings?: Array<{ id: string; workspace: string }>;
+    // XTRM-684: the trailer path reads the Issue, its revision and its bindings.
+    issueId?: string;
+    revision?: number;
+    externalBindings?: Array<{ provider: string; remoteKey?: string | null; remoteId?: string | null }>;
+  };
 }
 
 interface Fake {
@@ -798,6 +805,17 @@ function hookEnv(fake: Fake, extra: Record<string, string | undefined> = {}): No
   return { ...env, ...extra };
 }
 
+// A checkout outside the package directory, carrying the same origin as this
+// repository so the client key (and therefore the cached mapping) resolves.
+function scratchCheckout(fake: Fake): string {
+  const dir = join(fake.dir, "checkout");
+  mkdirSync(dir, { recursive: true });
+  spawnSync("git", ["init", "-q", "-b", "main"], { cwd: dir, encoding: "utf8" });
+  const url = spawnSync("git", ["-C", process.cwd(), "remote", "get-url", "origin"], { encoding: "utf8" }).stdout?.trim();
+  if (url) spawnSync("git", ["-C", dir, "remote", "add", "origin", url], { encoding: "utf8" });
+  return dir;
+}
+
 function hookPath(name: string): string {
   return fileURLToPath(new URL(`../hooks/${name}`, import.meta.url));
 }
@@ -857,20 +875,50 @@ describe("remote hooks", () => {
     assert.match(message, /XTRM-Receipt: wr_probe/);
   });
 
-  it("opens no ssh session for a commit with no receipt", () => {
+  it("resolves no Issue in a checkout whose branch names none, so nothing reaches the server", () => {
     const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
     assert.ok(CLIENT_KEY);
     writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
-    const messageFile = join(fake.dir, "COMMIT_EDITMSG");
+    const checkout = scratchCheckout(fake);
+    const messageFile = join(checkout, "COMMIT_EDITMSG");
     writeFileSync(messageFile, "feat: untracked\n");
+    // The resolution is the decision the hook acts on; assert it directly, so the
+    // case fails if a reader ever starts inventing a ref for this checkout.
+    assert.equal(resolveIssueRef(checkout), null, "a 'main' checkout names no Issue");
     const res = spawnSync(process.execPath, [hookPath("prepare-commit-msg.ts"), messageFile], {
       encoding: "utf8",
-      cwd: process.cwd(),
-      env: hookEnv(fake, { XTRM_RECEIPT_ID: undefined }),
+      cwd: checkout,
+      env: hookEnv(fake, { XTRM_RECEIPT_ID: undefined, SUBSTRATE_ISSUE_REF: undefined, SUBSTRATE_ISSUE: undefined, XTRM_REPO_ROOT: checkout }),
     });
     assert.equal(res.status, 0, res.stderr);
     assert.equal(readFileSync(messageFile, "utf8"), "feat: untracked\n");
-    assert.equal(fake.calls().length, 0);
+    assert.equal(fake.calls().length, 0, "no resolved Issue means no remote read");
+  });
+
+  it("attaches the Issue trailers from the server trace without a receipt (XTRM-684)", () => {
+    const fake = makeFake({
+      mode: "echo",
+      version: "sb 0.2.2\n",
+      trace: { receipts: [], bindings: [], issueId: "iss_remote", revision: 7, externalBindings: [{ provider: "jira", remoteKey: "PRG-7", remoteId: "10042" }] },
+    });
+    assert.ok(CLIENT_KEY);
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, { [CLIENT_KEY!]: { root: fake.dir, projectId: "prj_x" } });
+    const checkout = scratchCheckout(fake);
+    const messageFile = join(checkout, "COMMIT_EDITMSG");
+    writeFileSync(messageFile, "feat: probe\n");
+    const res = spawnSync(process.execPath, [hookPath("prepare-commit-msg.ts"), messageFile], {
+      encoding: "utf8",
+      cwd: checkout,
+      env: hookEnv(fake, { XTRM_RECEIPT_ID: undefined, SUBSTRATE_ISSUE_REF: "XTRM-684", SUBSTRATE_HOLDER: "worker-x", XTRM_REPO_ROOT: checkout }),
+    });
+    assert.equal(res.status, 0, res.stderr);
+    const message = readFileSync(messageFile, "utf8");
+    assert.match(message, /XTRM-Issue: iss_remote/, "the server's issue id, not the ref the branch named");
+    assert.match(message, /XTRM-Issue-Revision: 7/);
+    assert.match(message, /Jira: PRG-7/, "the key, never the numeric remote id");
+    assert.match(message, /Agent: worker-x/);
+    const trace = fake.calls().find((call) => call.argv[0] === "provenance" && call.argv[1] === "trace");
+    assert.deepEqual(trace?.argv, ["provenance", "trace", "XTRM-684", "--json"]);
   });
 
   it("never ssh's when the hook names a local store", () => {

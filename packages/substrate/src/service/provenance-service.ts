@@ -28,6 +28,8 @@ import {
 import {
   ARTIFACT_KINDS,
   attachTrailers,
+  attachIssueTrailers,
+  formatIssueTrailers,
   formatTrailers,
   isArtifactKind,
   isValidReceiptId,
@@ -93,7 +95,7 @@ export interface ProvenanceTrace {
   checkpoints: CheckpointSummary[];
   commits: string[];
   prs: Array<{ value: string; provider: string | null }>;
-  externalBindings: Array<{ provider: string; scope: string; remoteId: string; url?: string | null }>;
+  externalBindings: Array<{ provider: string; scope: string; remoteId: string; remoteKey?: string | null; url?: string | null }>;
   // Every Closure row in outcome order, with its evidence refs (ADR §96). A
   // reopened and re-closed Issue carries one row per settlement.
   closures: Closure[];
@@ -766,6 +768,28 @@ export class ProvenanceService {
     }));
   }
 
+  // XTRM-684: trailers derived from an Issue without a receipt. Resolves the
+  // Issue, reads its current revision and any Jira binding, and formats the
+  // host-owned trailer block. Throws when the ref cannot be resolved; the hook
+  // turns that into a stderr note and leaves the message untouched.
+  trailersForIssue(issueRef: string, message: string, agent?: string | null): string {
+    const issue = this.issues.resolveRef(issueRef);
+    const jiraKey = this.jiraKeyForIssue(issue.id);
+    return attachIssueTrailers(message, formatIssueTrailers({
+      issueId: issue.id,
+      issueRevision: issue.currentRevision,
+      jiraKey,
+      agent: agent ?? null,
+    }));
+  }
+
+  // One definition of "the Jira binding": the same ordered read the trace uses,
+  // so a trailer can never name a different key than `sb provenance trace` shows.
+  private jiraKeyForIssue(issueId: string): string | null {
+    const binding = this.listExternal(issueId).find((b) => b.provider === "jira");
+    return binding ? (binding.remoteKey ?? binding.remoteId) : null;
+  }
+
   private buildBundle(issueId: string, now: number): ProvenanceBundle {
     const issue = this.issues.getIssue(issueId);
     const bindings = this.listBindings(issueId);
@@ -814,13 +838,14 @@ export class ProvenanceService {
       }));
   }
 
-  private listExternal(issueId: string): Array<{ provider: string; scope: string; remoteId: string; url?: string | null }> {
+  private listExternal(issueId: string): Array<{ provider: string; scope: string; remoteId: string; remoteKey?: string | null; url?: string | null }> {
     try {
-      return rows<Row>(this.db, "SELECT provider, remote_scope, remote_id, url FROM external_bindings WHERE issue_id = ? ORDER BY provider, remote_scope, remote_id", issueId)
+      return rows<Row>(this.db, "SELECT provider, remote_scope, remote_id, remote_key, url FROM external_bindings WHERE issue_id = ? ORDER BY provider, remote_scope, remote_id", issueId)
         .map((r) => ({
           provider: r["provider"] as string,
           scope: r["remote_scope"] as string,
           remoteId: r["remote_id"] as string,
+          remoteKey: (r["remote_key"] as string | null) ?? null,
           url: (r["url"] as string | null) ?? null,
         }));
     } catch {

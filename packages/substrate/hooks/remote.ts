@@ -16,7 +16,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { normalizeWorkspace } from "../src/domain/claim.ts";
-import { attachTrailers, formatTrailers } from "../src/domain/provenance.ts";
+import { attachIssueTrailers, formatIssueTrailers, attachTrailers, formatTrailers } from "../src/domain/provenance.ts";
 import { selectRemote } from "../src/remote/config.ts";
 import { ambientEnv, hookMapping, hookSession, localStoreRequested } from "../src/remote/executor.ts";
 import { clientRepositoryKey, runRemote, runRemoteJson, type RemoteSession } from "../src/remote/session.ts";
@@ -100,6 +100,55 @@ function discoverIssueRef(repoRoot: string): string | null {
   if (isTracked(repoRoot, ".substrate-issue")) return null;
   try {
     return readFileSync(file, "utf8").trim().split("\n")[0]?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Where the commit-trailer Issue ref came from; it decides how loud a miss is. */
+export type IssueRefSource = "env" | "config" | "branch";
+
+export interface IssueRefResolution {
+  ref: string;
+  source: IssueRefSource;
+}
+
+/**
+ * The Issue this checkout is working on, for the commit trailer (XTRM-684).
+ *
+ * Order: `SUBSTRATE_ISSUE_REF`/`SUBSTRATE_ISSUE`, then `xtrm.issue` from the
+ * repository config, then a ref-shaped branch name.
+ *
+ * The config read is `git config --get xtrm.issue`, NOT `--worktree`: the
+ * worktree scope is fatal in a repository with more than one working tree
+ * unless `extensions.worktreeConfig` is enabled, and this project always has
+ * several. `--get` returns a worktree-scoped value too when that extension is
+ * on, so one read covers both, and `git config xtrm.issue <ref>` — the form a
+ * person types — is the producer.
+ *
+ * Deliberately WITHOUT the operator-state `.substrate-issue` file that
+ * `discoverIssueRef` above honours: the trailer path stamps an Issue onto every
+ * commit in the checkout, so it takes only the sources the host or the operator
+ * set for this run, not a file that can outlive the work it named. post-commit
+ * still resolves that file, because it binds an existing receipt rather than
+ * inventing evidence.
+ */
+export function resolveIssueRef(repoRoot: string): IssueRefResolution | null {
+  const env = process.env["SUBSTRATE_ISSUE_REF"]?.trim() || process.env["SUBSTRATE_ISSUE"]?.trim();
+  if (env) return { ref: env, source: "env" };
+  const config = gitConfig(repoRoot, ["config", "--get", "xtrm.issue"]);
+  if (config) return { ref: config, source: "config" };
+  const branch = gitConfig(repoRoot, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (branch && branch !== "HEAD") {
+    const match = branch.match(/(?<![A-Za-z0-9])([A-Z][A-Z0-9]*)-(\d+(?:\.\d+)*)(?![A-Za-z0-9])/);
+    if (match) return { ref: match[0], source: "branch" };
+  }
+  return null;
+}
+
+function gitConfig(cwd: string, args: string[]): string | null {
+  try {
+    return execFileSync("git", args, { cwd, encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] }).trim() || null;
   } catch {
     return null;
   }
@@ -208,26 +257,43 @@ export function remotePostCommit(repoRoot: string): void {
   }
 }
 
-export function remotePrepareCommitMsg(messageFile: string): void {
+export function remotePrepareCommitMsg(messageFile: string, resolution?: IssueRefResolution | null): void {
   try {
     const session = openSession();
     if (session === null) return;
     const receiptId = validReceiptId(process.env["XTRM_RECEIPT_ID"]);
-    if (receiptId === null) return;
     const root = cachedRoot(session);
     if (root === null) return;
-    // --json is not decoration: without it the server answers with a rendered
-    // line, the parse found no `receipt`, and the trailer was silently skipped
-    // while the commit looked healthy (review H3).
-    const data = (runRemoteJson(session, ["provenance", "receipt", receiptId, "--json"], { cwd: root, env: ambientEnv() })) as {
-      receipt?: { id?: string; issueId?: string; issueRevision?: number };
-    };
-    const receipt = data.receipt;
-    if (!receipt || typeof receipt.issueId !== "string" || typeof receipt.issueRevision !== "number") return;
     const message = readFileSync(messageFile, "utf8");
+    if (receiptId !== null) {
+      // --json is not decoration: without it the server answers with a rendered
+      // line, the parse found no `receipt`, and the trailer was silently skipped
+      // while the commit looked healthy (review H3).
+      const data = (runRemoteJson(session, ["provenance", "receipt", receiptId, "--json"], { cwd: root, env: ambientEnv() })) as {
+        receipt?: { id?: string; issueId?: string; issueRevision?: number };
+      };
+      const receipt = data.receipt;
+      if (!receipt || typeof receipt.issueId !== "string" || typeof receipt.issueRevision !== "number") return;
+      writeFileSync(
+        messageFile,
+        attachTrailers(message, formatTrailers({ issueId: receipt.issueId, issueRevision: receipt.issueRevision, receiptId: receipt.id ?? receiptId })),
+      );
+      return;
+    }
+    const resolved = validIssueRef((resolution ?? resolveIssueRef(process.cwd()))?.ref ?? null);
+    if (resolved === null) return;
+    const data = (runRemoteJson(session, ["provenance", "trace", resolved, "--json"], { cwd: root, env: ambientEnv() })) as {
+      issueId?: string;
+      revision?: number;
+      externalBindings?: Array<{ provider?: string; remoteKey?: string | null; remoteId?: string | null }>;
+    };
+    if (typeof data.issueId !== "string" || typeof data.revision !== "number") return;
+    const jira = (data.externalBindings ?? []).find((binding) => binding.provider === "jira");
+    const jiraKey = jira?.remoteKey ?? jira?.remoteId ?? null;
+    const agent = process.env["SUBSTRATE_HOLDER"] ?? null;
     writeFileSync(
       messageFile,
-      attachTrailers(message, formatTrailers({ issueId: receipt.issueId, issueRevision: receipt.issueRevision, receiptId: receipt.id ?? receiptId })),
+      attachIssueTrailers(message, formatIssueTrailers({ issueId: data.issueId, issueRevision: data.revision, jiraKey, agent })),
     );
   } catch (err) {
     warn(err);
