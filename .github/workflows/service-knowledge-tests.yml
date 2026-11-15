@@ -5,11 +5,11 @@ name: service-knowledge tests
 # regenerating the extension's `tool-definitions.json` merges silently, and the two hosts drift
 # apart in the exact way this work exists to prevent.
 #
-# Three checks, one job:
-#   - pytest over the package (MCP JSON-RPC surface, plugin packaging, parity against the JSON)
-#   - pytest over the extension's committed definitions (the same assertion from the other side)
-#   - bun test over the extension (it registers exactly the committed set, and the zero-surface
-#     path still registers nothing)
+# Two runs, one job, both sides of the parity assertion:
+#   - pytest over the package: the MCP JSON-RPC surface, plugin packaging, and the assertion that
+#     `tool_specs()` equals the extension's committed `tool-definitions.json`
+#   - bun test over the extension: it registers exactly that committed set, and the zero-surface
+#     path still registers nothing
 #
 # `service-knowledge` must be installed so `test_cli_index.py` can find the console script. The
 # editable install is the documented developer path (install.sh does the same thing with pipx).
@@ -41,10 +41,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # 3.13, not 3.12: `Path.glob("source/**")` only recurses into the pattern's
+      # subdirectories from 3.13. On 3.11/3.12 the same glob matches nothing, so the verifier
+      # fixtures load an EMPTY source corpus and every claim degrades to UNKNOWN with the
+      # advisory "no source_ref meets required authority 7". Measured on this repo:
+      #   3.11.14 -> []; 3.12.12 -> []; 3.13.3 -> ['source/config/redaction.py', 'source/metrics.py']
+      # The verifier suite is therefore 3.13-only in practice, which pyproject's
+      # `requires-python = ">=3.10"` does not reflect (follow-up candidate, CORE-2714).
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
