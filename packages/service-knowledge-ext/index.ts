@@ -1,5 +1,5 @@
 /**
- * service-knowledge ext v1 (xtrm-6z6.1)
+ * service-knowledge ext v1.1 (CORE-2714)
  *
  * Replaces the stale `service-skills` extension. Self-gating registration:
  * at init it scans the session cwd for a service registry using the exact
@@ -21,7 +21,17 @@
  *       legacy .service-skills-drift-pending marker; canonical wins)
  *   (b) /service-knowledge:status — services, last_sync_ref vs git HEAD,
  *       drift marker presence, suggested action
- *   (c) guidance pointing at /updating-service-knowledge (NOT -skills)
+ *   (c) FIVE registered tools at parity with the Python MCP server (v1.1,
+ *       CORE-2714): knowledge_search, knowledge_get, knowledge_evidence_for_files,
+ *       knowledge_status, knowledge_drift
+ *
+ * Tool parity mechanism: `tool-definitions.json` is generated from the Python
+ * single source of truth (`service-knowledge mcp specs --json`) and pinned by a
+ * parity test on both sides. This file never hand-writes a description or a
+ * schema — it renders whatever the JSON carries. Each call executes
+ * `service-knowledge mcp call <tool>`, so both hosts run the same code, and the
+ * host adapter always sets SERVICE_KNOWLEDGE_ROOT explicitly, so an inherited
+ * CLAUDE_PROJECT_DIR cannot silently retarget a pi worker to its parent's repo.
  *
  * NON_GOALS (v1): no auto-update execution, no index rebuild trigger.
  */
@@ -40,6 +50,11 @@ const DRIFT_MARKER_REL = join(".xtrm", ".service-knowledge-drift-pending");
 const LEGACY_DRIFT_MARKER_REL = join(".xtrm", ".service-skills-drift-pending");
 const RECONCILE_COMMAND = "/updating-service-knowledge";
 
+/** Executable that serves the shared tool implementations (the Python CLI). */
+const CLI_BIN = "service-knowledge";
+/** Per-call wall-clock budget: the freshness gate has its own 90s internal budget. */
+const CALL_TIMEOUT_MS = 120_000;
+
 export interface ServiceRegistryPack {
 	/** Absolute pack dir (e.g. <cwd>/.xtrm/skills/infra). */
 	packDir: string;
@@ -49,6 +64,23 @@ export interface ServiceRegistryPack {
 	umbrellaName: string;
 	/** Absolute path to service-registry.json. */
 	registryPath: string;
+}
+
+/** One tool definition, exactly as the Python package projects it. */
+export interface ToolSpec {
+	name: string;
+	description: string;
+	parameters: Record<string, unknown>;
+}
+
+/** Shape of the committed tool-definitions.json (generated, never hand-edited). */
+export interface ToolDefinitions {
+	server: string;
+	version: string;
+	protocol_versions?: string[];
+	instructions?: string;
+	tools: ToolSpec[];
+	deferred?: string[];
 }
 
 /** cwd plus ancestors (bounded) — xt/pi worktrees live under <repo>/.xtrm/worktrees/<name>
@@ -172,14 +204,43 @@ function buildContextNote(cwd: string, packs: ServiceRegistryPack[]): string {
 		driftMarkerPath(cwd)
 			? `drift: PENDING marker present (${driftMarkerPath(cwd)}) — reconcile with ${RECONCILE_COMMAND}`
 			: "drift: none detected",
+		"tools: knowledge_search · knowledge_get · knowledge_evidence_for_files · knowledge_status · knowledge_drift",
 		"</service_knowledge_context>",
 	];
 	return lines.join("\n");
 }
 
+/**
+ * The git toplevel for a session, used as the tool's SERVICE_KNOWLEDGE_ROOT.
+ *
+ * An explicit root beats cwd-relative resolution: `_root` in the Python package trusts
+ * $CLAUDE_PROJECT_DIR before git, and a pi worker launched from a Claude session inherits
+ * that variable. Exporting the value per call is the only mechanism that cannot silently
+ * resolve a parent repo.
+ */
+export function resolveSessionRoot(cwd: string): string {
+	try {
+		const toplevel = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+			cwd,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim();
+		return toplevel || cwd;
+	} catch {
+		return cwd;
+	}
+}
+
+/** TypeBox-compatible schema: the Python JSON Schema is already what pi validates. */
+function toToolParameters(spec: ToolSpec): Record<string, unknown> {
+	return { type: "object", ...spec.parameters };
+}
+
 export interface ServiceKnowledgeExtensionOptions {
 	/** Override the init cwd scan (tests inject a fixture dir). Defaults to process.cwd(). */
 	cwd?: string;
+	/** Override the committed tool definitions (tests inject a fixture). */
+	definitions?: ToolDefinitions;
 }
 
 export default function serviceKnowledgeExtension(pi: ExtensionAPI, opts: ServiceKnowledgeExtensionOptions = {}) {
@@ -236,4 +297,140 @@ export default function serviceKnowledgeExtension(pi: ExtensionAPI, opts: Servic
 			ctx.ui.notify(lines.join("\n"), "info");
 		},
 	});
+
+	// (c) the five knowledge tools, at parity with the Python MCP server.
+	// Definitions come from the generated JSON; this block renders, never authors.
+	registerKnowledgeTools(pi, getCwd, opts.definitions);
+}
+
+/**
+ * Register one tool per entry in the generated definitions.
+ *
+ * The names are BARE (`knowledge_search`, not `service_knowledge_search`) because the issue
+ * contract asks for the same tool names on both hosts, and Claude adds its own host prefix on
+ * its side. A flat pi namespace could collide with another extension, so a name already taken
+ * is skipped with a notice instead of throwing: fail open, never break the session.
+ */
+function registerKnowledgeTools(
+	pi: ExtensionAPI,
+	getCwd: (ctx: any) => string,
+	definitions?: ToolDefinitions,
+): void {
+	if (typeof (pi as any).registerTool !== "function") return; // host without tool registration
+	const specs = definitions ?? loadCommittedDefinitions();
+	if (!specs) return; // a missing definitions file must not break the session
+
+	const taken = new Set<string>(toolNamesInUse(pi));
+	for (const spec of specs.tools) {
+		if (taken.has(spec.name)) {
+			notifyOnce(
+				pi,
+				`service-knowledge: tool name '${spec.name}' is already registered by another extension; ` +
+					`skipping the service-knowledge copy. Knowledge tools stay available through ` +
+					`\`service-knowledge mcp call ${spec.name}\`.`,
+			);
+			continue;
+		}
+		taken.add(spec.name);
+		pi.registerTool({
+			name: spec.name,
+			label: `Service knowledge: ${spec.name.replace(/^knowledge_/, "")}`,
+			description: spec.description,
+			parameters: toToolParameters(spec) as never,
+			annotations: { readOnlyHint: true },
+			async execute(
+				_toolCallId: string,
+				params: Record<string, unknown>,
+				signal: AbortSignal,
+				_onUpdate: unknown,
+				ctx?: any,
+			) {
+				const root = resolveSessionRoot(getCwd(ctx));
+				const args = { ...(params ?? {}) };
+				// Never let a caller redirect the read to an arbitrary checkout: the host decides.
+				delete (args as Record<string, unknown>).consumer_root;
+				return callTool(spec.name, args, root, signal);
+			},
+		});
+	}
+}
+
+/** Read the committed definitions that ship beside this file. */
+function loadCommittedDefinitions(): ToolDefinitions | null {
+	const here = dirname(new URL(import.meta.url).pathname);
+	for (const candidate of [join(here, "tool-definitions.json"), join(process.cwd(), "tool-definitions.json")]) {
+		try {
+			return JSON.parse(readFileSync(candidate, "utf8")) as ToolDefinitions;
+		} catch {
+			continue;
+		}
+	}
+	return null;
+}
+
+/** Names another extension already registered, when the host exposes them. */
+function toolNamesInUse(pi: ExtensionAPI): string[] {
+	try {
+		const all = (pi as any).getAllTools?.();
+		if (Array.isArray(all)) {
+			return all.map((tool: any) => String(tool?.name ?? "")).filter(Boolean);
+		}
+	} catch {
+		/* a host without getAllTools simply has no collision information */
+	}
+	return [];
+}
+
+const notified = new Set<string>();
+function notifyOnce(pi: ExtensionAPI, message: string): void {
+	if (notified.has(message)) return;
+	notified.add(message);
+	try {
+		(pi as any).ui?.notify?.(message, "warning");
+	} catch {
+		/* notification is best-effort */
+	}
+}
+
+/**
+ * Run one tool through the shared Python implementation.
+ *
+ * Every call passes SERVICE_KNOWLEDGE_ROOT explicitly (see resolveSessionRoot). A CLI failure is
+ * returned as an error result, never thrown: a missing or old `service-knowledge` binary must
+ * leave the session working with a named reason.
+ */
+export function callTool(
+	name: string,
+	args: Record<string, unknown>,
+	root: string,
+	signal?: AbortSignal,
+): { content: Array<{ type: "text"; text: string }>; structuredContent?: unknown; isError?: boolean } {
+	let stdout: string;
+	try {
+		stdout = execFileSync(CLI_BIN, ["mcp", "call", name, "--args-json", JSON.stringify(args)], {
+			cwd: root,
+			encoding: "utf8",
+			timeout: CALL_TIMEOUT_MS,
+			maxBuffer: 32 * 1024 * 1024,
+			env: { ...process.env, SERVICE_KNOWLEDGE_ROOT: root },
+			...(signal ? { signal } : {}),
+		});
+	} catch (error: any) {
+		const detail = String(error?.stderr || error?.message || error).trim().slice(0, 2000);
+		const hint =
+			error?.code === "ENOENT"
+				? `the '${CLI_BIN}' CLI is not on PATH; install it with \`pipx install service-knowledge\` (>= 0.9.0 for the mcp subcommand).`
+				: "the service-knowledge CLI failed.";
+		return { content: [{ type: "text", text: `${name}: ${hint} ${detail}` }], isError: true };
+	}
+	try {
+		const payload = JSON.parse(stdout);
+		return {
+			content: [{ type: "text", text: stdout.trim() }],
+			structuredContent: payload,
+			isError: Boolean(payload && typeof payload === "object" && "error" in payload && Object.keys(payload).length === 1),
+		};
+	} catch {
+		return { content: [{ type: "text", text: stdout.trim() }] };
+	}
 }

@@ -80,15 +80,51 @@ rebuild any time with `service-knowledge index build`). Ranking:
 `0.40·T + 0.30·L + 0.15·I + 0.10·A + 0.05·F` (territory · BM25 lexical · intent · authority · freshness).
 Sub-10ms on the reference corpus.
 
-Two surfaces read the same index:
+Three surfaces read the same index:
 
 - **CLI**: `service-knowledge index query "<text>"` — quick shell probe (add `--paths` to bias by
   territory, `--service-id` to restrict, `--bundle` for the §3.2 evidence-bundle shape).
-- **MCP tools** (read-only, exposed by the shipped MCP server):
-  - `knowledge_search` — ranked evidence bundle from free text
-  - `knowledge_get` — single item by `item_id` or `skill_path`
-  - `knowledge_evidence_for_files` — evidence for a list of touched paths (what the PreToolUse
-    activator calls internally)
+- **MCP tools** — five read-only tools, served over stdio MCP by `service-knowledge mcp serve`.
+  They reach an agent through two hosts, at tool-definition parity (same names, schemas and
+  descriptions, generated from `service_knowledge.mcp.TOOL_MODULES`):
+
+  | Surface | Install |
+  |---|---|
+  | Claude Code plugin | `claude plugin install service-knowledge@xtrm` (needs CLI >= 0.9.0) |
+  | pi extension | `@jaggerxtrm/pi-service-knowledge` >= 1.1.0 |
+
+  Both are self-gating or project-scoped: with no service registry in the repo, no tool appears.
+
+### Which tool to call
+
+| Call | When |
+|---|---|
+| `knowledge_search` | A free-text symptom, alert name, metric or concept. Returns a §3.2 evidence bundle. |
+| `knowledge_get` | You have a specific `item_id` from a bundle, or a `skill_path` for the whole SKILL.md. |
+| `knowledge_evidence_for_files` | You are about to read or change service source. Routes by territory ownership and is the cheapest first call when paths are already known. |
+| `knowledge_status` | Results look empty or stale, or you need to know whether the index exists and is current in THIS checkout. |
+| `knowledge_drift` | You are about to trust knowledge about recently changed code, or deciding whether to reconcile. |
+
+**Call a tool before grep and before reading service source.** The whole point of the index is
+that a keyword search over files cannot tell you which service owns a path or which claims are
+verified. Concretely:
+
+1. Paths known (`git diff --name-only`, a stack trace, a file list) → `knowledge_evidence_for_files`.
+2. Only a symptom or an alert → `knowledge_search`.
+3. A bundle item you need in full → `knowledge_get` with its `id`; a whole expert → `knowledge_get`
+   with its `skill_path`.
+
+Notes that change how you read the output:
+
+- **Evidence, not conclusions.** A bundle carries citations, verification verdicts and freshness
+  signals. Check a load-bearing claim against the tree before you act on it.
+- **`knowledge_drift` is advisory.** It reports the pending marker and services whose
+  `last_sync_ref` trails HEAD. It never blocks work and never writes.
+- **Both tools are read-only.** `knowledge_status` and `knowledge_drift` never write the marker
+  and never rebuild. Reconcile with `/updating-service-knowledge`, which stamps `last_sync_ref`.
+- **A read may refresh the derived cache.** The index gate rebuilds
+  `.xtrm/cache/service-knowledge.sqlite` when the indexed skill inputs changed. That is a derived
+  cache, not consumer data.
 
 Reach for the index/tools **before** grep whenever the symptom → service mapping is unclear, when
 proposing a new SKILL that might overlap existing territory, or when routing an incident. Use the

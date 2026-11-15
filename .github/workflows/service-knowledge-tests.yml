@@ -1,0 +1,78 @@
+name: service-knowledge tests
+
+# CORE-2714 — the gate that keeps the plugin and the pi extension at parity with the Python tool
+# definitions. Without it, editing a description in `service_knowledge/mcp/*.py` without
+# regenerating the extension's `tool-definitions.json` merges silently, and the two hosts drift
+# apart in the exact way this work exists to prevent.
+#
+# Three checks, one job:
+#   - pytest over the package (MCP JSON-RPC surface, plugin packaging, parity against the JSON)
+#   - pytest over the extension's committed definitions (the same assertion from the other side)
+#   - bun test over the extension (it registers exactly the committed set, and the zero-surface
+#     path still registers nothing)
+#
+# `service-knowledge` must be installed so `test_cli_index.py` can find the console script. The
+# editable install is the documented developer path (install.sh does the same thing with pipx).
+#
+# Required-check setup (repo settings → branches → require status checks):
+#   mark `service-knowledge tests` required so a parity break blocks merge.
+
+on:
+  push:
+    paths:
+      - "packages/service-knowledge/**"
+      - "packages/service-knowledge-ext/**"
+      - ".github/workflows/service-knowledge-tests.yml"
+  pull_request:
+    paths:
+      - "packages/service-knowledge/**"
+      - "packages/service-knowledge-ext/**"
+      - ".github/workflows/service-knowledge-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: service-knowledge tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: "1.4.4"
+
+      - name: Install pytest
+        run: python3 -m pip install --upgrade pytest
+
+      # The CLI's index path imports vaultctl, which lives in a sibling repo and is not published.
+      # A clone beside the checkout matches install.sh's documented layout; without it the suite
+      # cannot import the package at all.
+      - name: Provide the vaultctl dependency
+        run: |
+          git clone --depth 1 https://github.com/xtrm-dev/vaultctl.git ../vaultctl
+          python3 -m pip install -e ../vaultctl
+
+      - name: Install service-knowledge (editable, console script on PATH)
+        run: python3 -m pip install -e packages/service-knowledge
+
+      - name: Python tests (MCP surface, plugin packaging, parity)
+        run: python3 -m pytest packages/service-knowledge/src -q
+
+      - name: Extension dependency check
+        working-directory: packages/service-knowledge-ext
+        run: bun test tests/

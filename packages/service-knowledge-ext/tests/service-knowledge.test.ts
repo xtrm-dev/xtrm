@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // The Pi host provides typebox at runtime; unused by this extension but kept for
@@ -298,6 +298,173 @@ describe("service-knowledge ext v1 (xtrm-6z6.1)", () => {
       const out = notifications.join("\n");
       expect(out).toContain(`db-expert: last_sync_ref ${head}`);
       expect(out).toContain("suggested action: none — registry is in sync with HEAD");
+    } finally {
+      fx.cleanup();
+    }
+  });
+});
+
+/**
+ * CORE-2714 — tool surface at parity with the Python MCP server.
+ *
+ * The definitions are generated from the Python single source of truth
+ * (`service-knowledge mcp specs --json`) and pinned by a pytest on the Python side. These tests
+ * assert the extension renders exactly that set — bare names, unchanged schemas, unchanged
+ * descriptions — and that a hostile environment cannot redirect a read.
+ */
+const COMMITTED = JSON.parse(readFileSync(join(import.meta.dir, "..", "tool-definitions.json"), "utf8"));
+
+function toolsPi() {
+  const base = fakePi();
+  const tools: any[] = [];
+  return {
+    ...base,
+    registerTool(tool: any) {
+      tools.push(tool);
+    },
+    tools,
+  };
+}
+
+describe("service-knowledge ext v1.1 tool surface (CORE-2714)", () => {
+  test("registers exactly the committed tool names, in order", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), { "db-expert": { description: "db" } });
+      const pi = toolsPi();
+      extension.default(pi as any, { cwd: fx.dir });
+      expect(pi.tools.map((t: any) => t.name)).toEqual(COMMITTED.tools.map((s: any) => s.name));
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("every registered schema and description equals the committed definition", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), { "db-expert": { description: "db" } });
+      const pi = toolsPi();
+      extension.default(pi as any, { cwd: fx.dir });
+      for (const spec of COMMITTED.tools) {
+        const tool = pi.tools.find((t: any) => t.name === spec.name);
+        expect(tool, spec.name).toBeDefined();
+        expect(tool.description, spec.name).toBe(spec.description);
+        expect({ type: "object", ...tool.parameters }, spec.name).toEqual({
+          type: "object",
+          ...spec.parameters,
+        });
+      }
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("zero surface still means zero tools when no registry exists", () => {
+    const fx = tmpBase();
+    try {
+      const pi = toolsPi();
+      extension.default(pi as any, { cwd: fx.dir });
+      expect(pi.tools).toHaveLength(0);
+      expect(pi.commands).toHaveLength(0);
+      expect(pi.listeners.size).toBe(0);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("tools carry the read-only annotation", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), { "db-expert": { description: "db" } });
+      const pi = toolsPi();
+      extension.default(pi as any, { cwd: fx.dir });
+      for (const tool of pi.tools) {
+        expect(tool.annotations.readOnlyHint, tool.name).toBe(true);
+      }
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("a tool name another extension already holds is skipped, never thrown", () => {
+    // A flat pi namespace is shared; colliding must fail open (advisor ruling, CORE-2714).
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), { "db-expert": { description: "db" } });
+      const pi = toolsPi();
+      (pi as any).getAllTools = () => [{ name: "knowledge_search" }];
+      const notices: string[] = [];
+      (pi as any).ui = { notify: (m: string) => notices.push(m) };
+      expect(() => extension.default(pi as any, { cwd: fx.dir })).not.toThrow();
+      const names = pi.tools.map((t: any) => t.name);
+      expect(names).not.toContain("knowledge_search");
+      expect(names).toEqual(
+        COMMITTED.tools.map((s: any) => s.name).filter((n: string) => n !== "knowledge_search"),
+      );
+      expect(notices.join("\n")).toContain("knowledge_search");
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("a host without registerTool still gets command + context note", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), { "db-expert": { description: "db" } });
+      const pi = fakePi(); // pre-1.4 host shape: no registerTool
+      expect(() => extension.default(pi as any, { cwd: fx.dir })).not.toThrow();
+      expect(pi.commands).toHaveLength(1);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("the context note names the five tools", async () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), { "db-expert": { description: "db" } });
+      const pi = toolsPi();
+      extension.default(pi as any, { cwd: fx.dir });
+      const handler = pi.listeners.get("before_agent_start")![0];
+      const result = await handler({}, { cwd: fx.dir });
+      for (const name of COMMITTED.tools.map((s: any) => s.name)) {
+        expect(result?.message?.content).toContain(name);
+      }
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("resolveSessionRoot returns the git toplevel, not the worktree", () => {
+    const fx = tmpBase();
+    try {
+      const repo = join(fx.dir, "repo");
+      mkdirSync(join(repo, ".xtrm", "worktrees", "feature"), { recursive: true });
+      execFileSync("git", ["init", "-q"], { cwd: repo });
+      const worktree = join(repo, ".xtrm", "worktrees", "feature");
+      expect(extension.resolveSessionRoot(worktree)).toBe(
+        execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: repo, encoding: "utf8" }).trim(),
+      );
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("resolveSessionRoot falls back to the cwd outside a git repo", () => {
+    const fx = tmpBase();
+    try {
+      expect(extension.resolveSessionRoot(fx.dir)).toBe(fx.dir);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("callTool reports a missing CLI as a named error result, never a throw", () => {
+    const fx = tmpBase();
+    try {
+      const result = extension.callTool("knowledge_search", { query: "x" }, fx.dir);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("knowledge_search");
     } finally {
       fx.cleanup();
     }
