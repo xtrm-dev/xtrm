@@ -23,7 +23,7 @@ classifiers = [
   "Topic :: Software Development :: Documentation",
 ]
 # vaultctl is the ONLY cross-package dependency. It lives in its own sibling
-# repo (github.com/xtrm-dev/vaultctl) and is NOT published to PyPI, so it is
+# repo (github.com/Jaggerxtrm/vaultctl) and is NOT published to PyPI, so it is
 # NOT listed here — declaring it would break `pipx install --editable .`.
 # Consumers get it via `install.sh` (pipx inject --editable), which is the
 # supported installer path. Manual pipx users: `pipx inject --editable

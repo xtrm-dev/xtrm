@@ -59,12 +59,13 @@ jobs:
       - name: Install pytest
         run: python3 -m pip install --upgrade pytest
 
-      # The CLI's index path imports vaultctl, which lives in a sibling repo and is not published.
-      # A clone beside the checkout matches install.sh's documented layout; without it the suite
-      # cannot import the package at all.
+      # The CLI's index path imports vaultctl (the ONE cross-package dependency), which lives in a
+      # separate repo and is not published to PyPI. A clone beside the checkout matches
+      # install.sh's documented layout; without it the suite cannot import the package at all.
+      # The repository is public, so the default workflow token can clone it unauthenticated.
       - name: Provide the vaultctl dependency
         run: |
-          git clone --depth 1 https://github.com/xtrm-dev/vaultctl.git ../vaultctl
+          git clone --depth 1 https://github.com/Jaggerxtrm/vaultctl.git ../vaultctl
           python3 -m pip install -e ../vaultctl
 
       - name: Install service-knowledge (editable, console script on PATH)
