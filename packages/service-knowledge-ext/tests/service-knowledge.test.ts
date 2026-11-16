@@ -498,6 +498,10 @@ describe("service-knowledge ext v1.1 tool surface (CORE-2714)", () => {
       const elapsed = Date.now() - started;
       expect(result.isError).toBe(true);
       expect(elapsed).toBeLessThan(3000); // would be ~10000 ms if the signal were ignored
+      // Name the CAUSE, not just the timing. Without this, a stub whose /bin/sleep is missing
+      // exits 127 at once, isError is true, and the test passes without ever exercising the
+      // signal (verified against the reviewer's mutation).
+      expect(result.content[0].text).toMatch(/abort/i);
     } finally {
       process.env.PATH = originalPath;
       fx.cleanup();

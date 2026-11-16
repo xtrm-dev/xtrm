@@ -226,12 +226,21 @@ def test_launcher_reports_a_child_killed_by_an_unforwarded_signal(tmp_path):
 @pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
 def test_launcher_treats_a_forwarded_signal_as_a_clean_shutdown(tmp_path):
     """SIGTERM sent BY the host is a shutdown, not a crash: exit stays 0."""
-    bin_dir, _ = _launcher_stub(tmp_path, "/bin/sleep 5")
+    # The stub marks itself as running, and the test waits for the mark instead of sleeping: a
+    # fixed sleep on a slow host would deliver SIGTERM before node installed its handler, and
+    # node's default SIGTERM death (-15) would read as a false failure of the launcher's logic.
+    marker = tmp_path / "child-running"
+    bin_dir, _ = _launcher_stub(
+        tmp_path, f'touch "{marker}"' + "\n/bin/sleep 5"
+    )
     proc = subprocess.Popen(
         [NODE, str(LAUNCHER)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
         env={"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path)}, cwd=str(tmp_path),
     )
-    time.sleep(0.7)  # let the launcher get past the version probe and spawn the stub
+    deadline = time.monotonic() + 30
+    while not marker.exists() and proc.poll() is None and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert marker.exists(), "the stub never started; the launcher did not reach spawn"
     proc.terminate()
     _, stderr = proc.communicate(timeout=30)
     assert proc.returncode == 0, stderr

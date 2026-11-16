@@ -155,7 +155,6 @@ function main() {
     });
   }
   process.on("exit", () => {
-    forwarded.add("SIGTERM");
     child.kill("SIGTERM");
   });
 }
