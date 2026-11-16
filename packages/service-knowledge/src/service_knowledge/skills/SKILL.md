@@ -93,7 +93,19 @@ Three surfaces read the same index:
   | Claude Code plugin | `claude plugin install service-knowledge@xtrm` (needs CLI >= 0.9.0) |
   | pi extension | `@jaggerxtrm/pi-service-knowledge` >= 1.1.0 |
 
-  Both are self-gating or project-scoped: with no service registry in the repo, no tool appears.
+  A `service-knowledge` repository is one whose `.xtrm/skills/<pack>/service-knowledge/`
+  holds a `service-registry.json`. The two hosts gate differently, and the difference matters:
+
+  - **pi extension**: self-gating. With no registry in the session cwd or its six ancestors it
+    registers NOTHING — not the tools, not the `/service-knowledge:status` command.
+  - **Claude Code plugin**: project-scoped by root, not by absence. The plugin installs at user
+    scope, so its five tools are ALWAYS listed; a call outside a `service-knowledge` repository
+    returns an `isError` result that names the root and says the repository has not adopted
+    service-knowledge. It does not return an empty success, and it does not create `.xtrm/` in
+    that checkout.
+
+  So on Claude the tools exist everywhere and refuse outside a consumer repo; on pi they exist
+  only inside one. Either way, an empty success never means "the knowledge base says no".
 
 ### Which tool to call
 

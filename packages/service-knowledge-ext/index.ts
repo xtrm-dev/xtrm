@@ -39,7 +39,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 
 const NEW_UMBRELLA = "service-knowledge";
 const LEGACY_UMBRELLA = "service-skills";
@@ -392,29 +392,49 @@ function notifyOnce(pi: ExtensionAPI, message: string): void {
 	}
 }
 
+/** Run the CLI asynchronously so a slow index rebuild cannot freeze the session. */
+function runCli(
+	argv: string[],
+	root: string,
+	signal?: AbortSignal,
+): Promise<{ stdout: string }> {
+	return new Promise((resolve, reject) => {
+		execFile(
+			CLI_BIN,
+			argv,
+			{
+				cwd: root,
+				encoding: "utf8",
+				timeout: CALL_TIMEOUT_MS,
+				maxBuffer: 32 * 1024 * 1024,
+				env: { ...process.env, SERVICE_KNOWLEDGE_ROOT: root },
+				...(signal ? { signal } : {}),
+			},
+			(error, stdout) => (error ? reject(error) : resolve({ stdout: String(stdout ?? "") })),
+		);
+	});
+}
+
 /**
  * Run one tool through the shared Python implementation.
  *
  * Every call passes SERVICE_KNOWLEDGE_ROOT explicitly (see resolveSessionRoot). A CLI failure is
  * returned as an error result, never thrown: a missing or old `service-knowledge` binary must
  * leave the session working with a named reason.
+ *
+ * Async on purpose. `execFileSync` blocks the whole event loop for as long as the CLI runs, and
+ * the freshness gate's budget is 90 s: an index rebuild would freeze the session with no way to
+ * press Esc. Only the async form honours the abort signal the tool API hands us.
  */
-export function callTool(
+export async function callTool(
 	name: string,
 	args: Record<string, unknown>,
 	root: string,
 	signal?: AbortSignal,
-): { content: Array<{ type: "text"; text: string }>; structuredContent?: unknown; isError?: boolean } {
+): Promise<{ content: Array<{ type: "text"; text: string }>; structuredContent?: unknown; isError?: boolean }> {
 	let stdout: string;
 	try {
-		stdout = execFileSync(CLI_BIN, ["mcp", "call", name, "--args-json", JSON.stringify(args)], {
-			cwd: root,
-			encoding: "utf8",
-			timeout: CALL_TIMEOUT_MS,
-			maxBuffer: 32 * 1024 * 1024,
-			env: { ...process.env, SERVICE_KNOWLEDGE_ROOT: root },
-			...(signal ? { signal } : {}),
-		});
+		({ stdout } = await runCli(["mcp", "call", name, "--args-json", JSON.stringify(args)], root, signal));
 	} catch (error: any) {
 		const detail = String(error?.stderr || error?.message || error).trim().slice(0, 2000);
 		const hint =

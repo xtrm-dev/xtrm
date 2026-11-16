@@ -14,9 +14,15 @@
 //  1. SERVICE_KNOWLEDGE_ROOT. The Python resolver trusts $SERVICE_KNOWLEDGE_ROOT, then
 //     $CLAUDE_PROJECT_DIR, then the git toplevel of its cwd. A plugin MCP process does not
 //     reliably receive CLAUDE_PROJECT_DIR, and its cwd is not guaranteed to be the project. This
-//     launcher sets the variable explicitly from the first of: an inherited
-//     SERVICE_KNOWLEDGE_ROOT, $CLAUDE_PROJECT_DIR, the git toplevel of the launch cwd. The child
-//     then resolves that exact checkout, and every tool result echoes the root it used.
+//     launcher sets the variable explicitly from $CLAUDE_PROJECT_DIR, else the git toplevel of the
+//     launch cwd, else the cwd. The child then resolves that exact checkout, and every tool result
+//     echoes the root it used.
+//
+//     An INHERITED SERVICE_KNOWLEDGE_ROOT is deliberately NOT honoured (CORE-2714 review). The pi
+//     adapter always passes the git toplevel of the session cwd, and an xt pi worker can inherit
+//     the variable from a Claude parent session: honouring it would let a parent point the child at
+//     a different checkout, which is the cross-repo read the pi side already refuses. The host
+//     decides, once, from its own cwd.
 //
 //  2. A NAMED failure. A plugin that installs while the host still runs service-knowledge 0.8.0
 //     (no `mcp` subcommand) must say so on stderr, not present an empty tool list. Exit code 78
@@ -57,12 +63,14 @@ function runCapture(command, args, options = {}) {
 
 /** The consumer root this session should read, resolved once and passed down explicitly. */
 function resolveRoot() {
-  const inherited = process.env.SERVICE_KNOWLEDGE_ROOT;
-  if (inherited) return inherited;
+  // Not process.env.SERVICE_KNOWLEDGE_ROOT: see the header. The host resolves the root itself.
   const projectDir = process.env.CLAUDE_PROJECT_DIR;
   if (projectDir) return projectDir;
   try {
-    const toplevel = runCapture("git", ["rev-parse", "--show-toplevel"], { cwd: process.cwd() });
+    const toplevel = runCapture("git", ["rev-parse", "--show-toplevel"], {
+      cwd: process.cwd(),
+      timeout: 5000,
+    });
     if (toplevel) return toplevel;
   } catch {
     /* not a git checkout: fall through to cwd */
@@ -73,7 +81,8 @@ function resolveRoot() {
 function cliVersion() {
   try {
     // `service-knowledge --version` prints "service-knowledge X.Y.Z".
-    const raw = runCapture(CLI, ["--version"]);
+    // Bounded: a wedged binary must not hang the MCP handshake for the whole session.
+    const raw = runCapture(CLI, ["--version"], { timeout: 10000 });
     const match = raw.match(/(\d+\.\d+\.\d+)/);
     return match ? match[1] : null;
   } catch (error) {
@@ -110,13 +119,25 @@ function main() {
     env: { ...process.env, SERVICE_KNOWLEDGE_ROOT: root },
   });
 
+  // Signals the launcher forwarded to the child. A child that dies from one of these is a
+  // shutdown the host asked for, not a crash.
+  const forwarded = new Set();
+
   child.on("error", (error) => {
     fail("spawn-failed", `could not start '${CLI} mcp serve': ${error.message}`);
   });
   child.on("exit", (code, signal) => {
     if (failed) return;
     if (signal) {
-      process.exitCode = 0;
+      if (forwarded.has(signal)) return; // the host asked for it: clean shutdown
+      // The child died from a signal the launcher did NOT send (SIGTERM and SIGINT are forwarded
+      // below, so those settle as the child's own exit). An OOM kill or an external SIGKILL lands
+      // here. Reporting 0 would present a crash as a clean shutdown, which hides the crash from
+      // the client and from every reader of the exit code.
+      process.stderr.write(
+        `service-knowledge-mcp: server-killed: ${CLI} mcp serve was terminated by ${signal}\n`,
+      );
+      process.exitCode = 1;
       return;
     }
     // A clean MCP shutdown ends when the client closes stdin.
@@ -129,10 +150,12 @@ function main() {
   // Closing stdin must stop the child: the MCP client signals shutdown that way.
   for (const signal of ["SIGINT", "SIGTERM"]) {
     process.on(signal, () => {
+      forwarded.add(signal);
       child.kill(signal);
     });
   }
   process.on("exit", () => {
+    forwarded.add("SIGTERM");
     child.kill("SIGTERM");
   });
 }

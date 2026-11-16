@@ -92,3 +92,39 @@ def resolve_consumer_root(explicit: str | None = None) -> Path:
         if _has_registry(candidate):
             return candidate
     return roots[0]
+
+
+class NoRegistry(LookupError):
+    """Raised when no service registry exists at or above the resolved root.
+
+    ``root`` is the base the walk started from, so the message can name a real directory.
+    """
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        super().__init__(
+            f"no service registry under {root} — this repository has not adopted "
+            "service-knowledge. Run the service-knowledge install flow, or call this tool "
+            "from a repository that has .xtrm/skills/<pack>/service-knowledge/"
+            "service-registry.json."
+        )
+
+
+def resolve_registry_root(explicit: str | None = None) -> Path:
+    """Return the consumer root that OWNS a registry, or raise :class:`NoRegistry`.
+
+    ``resolve_consumer_root`` returns the base root even when nothing was found, which is the
+    right answer for the diagnostic tools: ``knowledge_status`` must be able to say "this is
+    not a consumer repo". The retrieval tools are different. The Claude plugin installs at
+    user scope, so its five tools appear in EVERY repository; a retrieval call outside a
+    consumer repo used to answer "nothing found" as a success AND leave an ``.xtrm/`` tree
+    behind, because the freshness gate creates its cache before the caller learns there is no
+    registry. An agent reads that success as "the knowledge base says no" and falls back to
+    grep — the behaviour this whole surface exists to remove. Refuse instead, and refuse
+    before the gate touches the filesystem.
+    """
+    base = _base_root()
+    root = resolve_consumer_root(explicit)
+    if _has_registry(root):
+        return root
+    raise NoRegistry(base)

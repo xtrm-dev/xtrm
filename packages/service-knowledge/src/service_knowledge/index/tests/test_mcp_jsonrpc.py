@@ -276,3 +276,76 @@ def test_pi_extension_tool_definitions_carry_the_server_metadata():
     assert committed["server"] == jsonrpc.SERVER_NAME
     assert committed["instructions"] == jsonrpc.SERVER_INSTRUCTIONS
     assert committed["deferred"] == ["knowledge_probes", "knowledge_conflicts"]
+
+
+# --------------------------------------------------------------------------- #
+# No-registry refusal (CORE-2714 review finding 1)
+# --------------------------------------------------------------------------- #
+
+def _empty_repo(tmp_path: Path) -> Path:
+    """A git repo with no service registry: the shape of every unrelated checkout."""
+    root = tmp_path / "unrelated"
+    root.mkdir()
+    (root / ".git").mkdir()  # enough for `git rev-parse --show-toplevel` to still fail cleanly
+    return root
+
+
+def test_retrieval_tools_refuse_when_the_repo_has_no_registry(tmp_path, monkeypatch):
+    # The Claude plugin installs at user scope, so its three retrieval tools are present in EVERY
+    # repository. Returning an empty bundle as a success reads to an agent as "the knowledge base
+    # says no", which is the grep fallback this surface exists to remove.
+    root = _empty_repo(tmp_path)
+    monkeypatch.setenv("SERVICE_KNOWLEDGE_ROOT", str(root))
+    for name, args in (
+        ("knowledge_search", {"query": "anything"}),
+        ("knowledge_evidence_for_files", {"paths": ["src/app.py"]}),
+        ("knowledge_get", {"item_id": "anything"}),
+    ):
+        result = jsonrpc._call_tool(name, args)
+        assert result["isError"] is True, name
+        text = result["content"][0]["text"]
+        assert "no service registry" in text, name
+        assert str(root) in text, f"{name} must name the root it looked at"
+        assert "structuredContent" not in result, f"{name} must not return a payload"
+
+
+def test_retrieval_refusal_creates_no_xtrm_state(tmp_path, monkeypatch):
+    # The freshness gate creates its cache before the caller learns there is no registry. Refusing
+    # first is the difference between "no knowledge here" and "this repo now has .xtrm/ in it".
+    root = _empty_repo(tmp_path)
+    monkeypatch.setenv("SERVICE_KNOWLEDGE_ROOT", str(root))
+    jsonrpc._call_tool("knowledge_search", {"query": "anything"})
+    jsonrpc._call_tool("knowledge_evidence_for_files", {"paths": ["src/app.py"]})
+    assert not (root / ".xtrm").exists(), "a refused read must not write consumer state"
+
+
+def test_status_still_answers_in_a_repo_with_no_registry(tmp_path, monkeypatch):
+    # status is the diagnostic that TELLS you a repo has not adopted service-knowledge. It must
+    # not refuse, or the one tool that can explain the situation is unavailable in the situation.
+    root = _empty_repo(tmp_path)
+    monkeypatch.setenv("SERVICE_KNOWLEDGE_ROOT", str(root))
+    result = jsonrpc._call_tool("knowledge_status", {})
+    assert result["isError"] is False
+    assert result["structuredContent"]["registry_present"] is False
+    assert result["structuredContent"]["usable"] is False
+
+
+def test_notifications_are_never_answered_even_with_malformed_params():
+    # A notification has no id, so a reply to it cannot be correlated. Dropping it is the spec
+    # behaviour; answering with an error is noise the client never asked for.
+    replies = _drive([
+        {"jsonrpc": "2.0", "method": "notifications/initialized", "params": "not-an-object"},
+        {"jsonrpc": "2.0", "method": "tools/call", "params": "not-an-object"},
+        {"jsonrpc": "2.0", "id": 9, "method": "ping"},
+    ])
+    assert [r["id"] for r in replies] == [9]
+
+
+def test_a_crashing_notification_gets_no_reply(monkeypatch):
+    def _boom(**_):
+        raise RuntimeError("tool exploded")
+
+    monkeypatch.setitem(jsonrpc.tool_registry(), "knowledge_search", _boom)
+    replies = _drive([{"jsonrpc": "2.0", "method": "tools/call",
+                       "params": {"name": "knowledge_search", "arguments": {}}}])
+    assert replies == []

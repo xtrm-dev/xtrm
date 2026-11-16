@@ -128,14 +128,17 @@ def handle(request: Any) -> dict[str, Any] | None:
 
     method = request.get("method")
     request_id = request.get("id")
+    # A notification (no id) is never answered, whatever the method and whatever its params.
+    # Deciding this before validation matters: a notification with malformed params must be
+    # dropped, not answered with an error the client never asked for and cannot correlate.
+    is_notification = request_id is None
     params = request.get("params")
     if params is None:
         params = {}
     if not isinstance(params, dict):
+        if is_notification:
+            return None
         return _jsonrpc_error(request_id, JSONRPC_INVALID_PARAMS, "params must be an object")
-
-    # A notification (no id) is never answered, whatever the method.
-    is_notification = request_id is None
 
     if method == "initialize":
         result = {
@@ -188,10 +191,9 @@ def serve_stdio(stdin: TextIO | None = None, stdout: TextIO | None = None) -> No
         try:
             response = handle(request)
         except Exception as exc:  # a tool crash must not take the server down
-            response = _jsonrpc_error(
-                request.get("id") if isinstance(request, dict) else None,
-                JSONRPC_INTERNAL_ERROR,
-                f"internal error: {exc}",
+            request_id = request.get("id") if isinstance(request, dict) else None
+            response = None if request_id is None else _jsonrpc_error(
+                request_id, JSONRPC_INTERNAL_ERROR, f"internal error: {exc}"
             )
         if response is not None:
             out_stream.write(json.dumps(response, ensure_ascii=False) + "\n")

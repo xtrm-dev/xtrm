@@ -459,7 +459,7 @@ describe("service-knowledge ext v1.1 tool surface (CORE-2714)", () => {
     }
   });
 
-  test("callTool reports a missing CLI as a named error result, never a throw", () => {
+  test("callTool reports a missing CLI as a named error result, never a throw", async () => {
     // PATH must be genuinely empty of the CLI: CI installs service-knowledge so the suite can
     // exercise parity, which would otherwise make this test pass or fail on the host's PATH
     // rather than on the behaviour it names.
@@ -467,7 +467,7 @@ describe("service-knowledge ext v1.1 tool surface (CORE-2714)", () => {
     const originalPath = process.env.PATH;
     try {
       process.env.PATH = fx.dir; // an empty directory: nothing resolves there
-      const result = extension.callTool("knowledge_search", { query: "x" }, fx.dir);
+      const result = await extension.callTool("knowledge_search", { query: "x" }, fx.dir);
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("knowledge_search");
       expect(result.content[0].text).toContain("pipx install service-knowledge");
@@ -477,7 +477,34 @@ describe("service-knowledge ext v1.1 tool surface (CORE-2714)", () => {
     }
   });
 
-  test("callTool names a CLI that rejects the mcp subcommand", () => {
+  test("callTool honours the abort signal (sync execFileSync silently ignored it)", async () => {
+    // A stale index rebuild holds the CLI for up to the 90 s gate budget. With execFileSync the
+    // signal was a no-op: the session froze and Esc did nothing. Assert the call rejects quickly.
+    const fx = tmpBase();
+    const originalPath = process.env.PATH;
+    try {
+      const bin = join(fx.dir, "bin");
+      mkdirSync(bin, { recursive: true });
+      const stub = join(bin, "service-knowledge");
+      // Absolute /bin/sleep: PATH is stubbed to `bin`, so a bare `sleep` would not resolve and
+      // the stub would exit at once -- the test would then pass without exercising the signal.
+      writeFileSync(stub, "#!/bin/sh\n/bin/sleep 10\n");
+      execFileSync("chmod", ["+x", stub]);
+      process.env.PATH = bin;
+      const controller = new AbortController();
+      const started = Date.now();
+      setTimeout(() => controller.abort(), 100);
+      const result = await extension.callTool("knowledge_search", { query: "x" }, fx.dir, controller.signal);
+      const elapsed = Date.now() - started;
+      expect(result.isError).toBe(true);
+      expect(elapsed).toBeLessThan(3000); // would be ~10000 ms if the signal were ignored
+    } finally {
+      process.env.PATH = originalPath;
+      fx.cleanup();
+    }
+  });
+
+  test("callTool names a CLI that rejects the mcp subcommand", async () => {
     // The 0.8.0 CLI has no `mcp` verb. That must read as an actionable error, not as empty tools.
     const fx = tmpBase();
     const originalPath = process.env.PATH;
@@ -488,7 +515,7 @@ describe("service-knowledge ext v1.1 tool surface (CORE-2714)", () => {
       writeFileSync(stub, "#!/bin/sh\necho \"invalid choice: 'mcp'\" >&2\nexit 2\n");
       execFileSync("chmod", ["+x", stub]);
       process.env.PATH = bin;
-      const result = extension.callTool("knowledge_search", { query: "x" }, fx.dir);
+      const result = await extension.callTool("knowledge_search", { query: "x" }, fx.dir);
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("invalid choice");
     } finally {

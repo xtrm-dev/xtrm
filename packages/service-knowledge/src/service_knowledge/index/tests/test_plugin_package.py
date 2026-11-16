@@ -17,6 +17,7 @@ import json
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -64,18 +65,13 @@ def test_mcp_config_launches_only_code_that_travels_in_the_plugin_folder():
     assert (PLUGIN_ROOT / relative).exists(), f"missing launcher {relative}"
 
 
-def test_launcher_exists_and_is_the_documented_entry():
-    assert LAUNCHER.exists()
-    source = LAUNCHER.read_text(encoding="utf-8")
-    # The two responsibilities the launcher owns, asserted as source facts: an explicit root and a
-    # named-reason failure. Behaviour is covered by the node tests below.
-    assert "SERVICE_KNOWLEDGE_ROOT" in source
-    assert "mcp" in source and "serve" in source
-    assert "EX_CONFIG" in source or "78" in source
+def test_launcher_gate_version_is_not_ahead_of_the_package():
+    """The minimum the launcher demands must be a version this package actually ships.
 
-
-def test_launcher_gate_versions_are_ordered():
-    """The minimum version must match the release that introduced `mcp`."""
+    A gate naming a version newer than ``__version__`` would refuse the very release that
+    contains it. This is the one property of the constant a test can check without restating the
+    implementation; the rest is covered by the real-launcher tests below.
+    """
     source = LAUNCHER.read_text(encoding="utf-8")
     minimum = re.search(r"const MINIMUM_VERSION = \[([^\]]+)\]", source)
     assert minimum is not None
@@ -155,3 +151,88 @@ def test_launcher_pins_the_consumer_root_and_starts_the_server(tmp_path):
     root, _, args = recorded_text.partition("|")
     assert root == str(project), f"launcher must pin the project root, got {root!r}"
     assert args == "mcp serve"
+
+
+def _launcher_stub(tmp_path: Path, body: str) -> tuple[Path, Path]:
+    """Write a `service-knowledge` stub on PATH that answers ``--version`` then runs ``body``."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    stub = bin_dir / "service-knowledge"
+    stub.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "--version" ]; then echo "service-knowledge 0.9.0"; exit 0; fi\n'
+        f"{body}\n",
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    return bin_dir, stub
+
+
+@pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
+def test_launcher_ignores_an_inherited_root_and_uses_the_project(tmp_path):
+    """A parent session must not be able to point the plugin at another checkout.
+
+    The pi adapter always passes the git toplevel of the session cwd, and an xt pi worker can
+    inherit SERVICE_KNOWLEDGE_ROOT from a Claude parent. Honouring it would be the cross-repo read
+    the pi side already refuses, so the launcher resolves the root from its own cwd.
+    """
+    recorded = tmp_path / "recorded.txt"
+    bin_dir, _ = _launcher_stub(tmp_path, f'printf "%s\\n" "$SERVICE_KNOWLEDGE_ROOT" > "{recorded}"')
+    project = tmp_path / "consumer"
+    project.mkdir()
+    stranger = tmp_path / "another-checkout"
+    stranger.mkdir()
+    subprocess.run(
+        [NODE, str(LAUNCHER)],
+        capture_output=True, text=True, timeout=60,
+        env={
+            "PATH": str(bin_dir),
+            "HOME": str(tmp_path),
+            "CLAUDE_PROJECT_DIR": str(project),
+            "SERVICE_KNOWLEDGE_ROOT": str(stranger),
+        },
+        cwd=str(project),
+    )
+    assert recorded.read_text(encoding="utf-8").strip() == str(project)
+
+
+@pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
+def test_launcher_falls_back_to_the_git_toplevel_when_the_project_dir_is_unset(tmp_path):
+    """A plugin MCP process does not reliably receive CLAUDE_PROJECT_DIR."""
+    recorded = tmp_path / "recorded.txt"
+    bin_dir, _ = _launcher_stub(tmp_path, f'printf "%s\\n" "$SERVICE_KNOWLEDGE_ROOT" > "{recorded}"')
+    repo = tmp_path / "repo"
+    nested = repo / "packages" / "svc"
+    nested.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path)}
+    subprocess.run([NODE, str(LAUNCHER)], capture_output=True, text=True, timeout=60,
+                   env=env, cwd=str(nested))
+    assert Path(recorded.read_text(encoding="utf-8").strip()).resolve() == repo.resolve()
+
+
+@pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
+def test_launcher_reports_a_child_killed_by_an_unforwarded_signal(tmp_path):
+    """An OOM kill must not read as a clean shutdown."""
+    bin_dir, _ = _launcher_stub(tmp_path, "kill -SEGV $$")
+    result = subprocess.run(
+        [NODE, str(LAUNCHER)], capture_output=True, text=True, timeout=60,
+        env={"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path)}, cwd=str(tmp_path),
+    )
+    assert result.returncode == 1
+    assert "server-killed" in result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
+def test_launcher_treats_a_forwarded_signal_as_a_clean_shutdown(tmp_path):
+    """SIGTERM sent BY the host is a shutdown, not a crash: exit stays 0."""
+    bin_dir, _ = _launcher_stub(tmp_path, "/bin/sleep 5")
+    proc = subprocess.Popen(
+        [NODE, str(LAUNCHER)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+        env={"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path)}, cwd=str(tmp_path),
+    )
+    time.sleep(0.7)  # let the launcher get past the version probe and spawn the stub
+    proc.terminate()
+    _, stderr = proc.communicate(timeout=30)
+    assert proc.returncode == 0, stderr
+    assert "server-killed" not in stderr

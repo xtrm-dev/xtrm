@@ -63,16 +63,24 @@ jobs:
         with:
           bun-version: "1.4.4"
 
+      # Pinned: an unpinned `--upgrade` makes the gate non-reproducible and lets a new pytest
+      # release turn a green PR red with no code change.
       - name: Install pytest
-        run: python3 -m pip install --upgrade pytest
+        run: python3 -m pip install "pytest==8.4.2"
 
       # The CLI's index path imports vaultctl (the ONE cross-package dependency), which lives in a
       # separate repo and is not published to PyPI. A clone beside the checkout matches
       # install.sh's documented layout; without it the suite cannot import the package at all.
       # The repository is public, so the default workflow token can clone it unauthenticated.
+      # Pinned to a commit, not a branch tip: this gate must not execute whatever three-party
+      # default-branch code happens to be landed on the morning CI runs. Bump the SHA deliberately.
       - name: Provide the vaultctl dependency
+        env:
+          VAULTCTL_SHA: c4ac78dde7fc9ec2f033cbe51f37650e5d8050e2
         run: |
-          git clone --depth 1 https://github.com/Jaggerxtrm/vaultctl.git ../vaultctl
+          git clone https://github.com/Jaggerxtrm/vaultctl.git ../vaultctl
+          git -C ../vaultctl checkout --detach "$VAULTCTL_SHA"
+          test "$(git -C ../vaultctl rev-parse HEAD)" = "$VAULTCTL_SHA"
           python3 -m pip install -e ../vaultctl
 
       - name: Install service-knowledge (editable, console script on PATH)
