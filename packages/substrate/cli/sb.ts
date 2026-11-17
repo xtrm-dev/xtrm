@@ -393,6 +393,7 @@ groups:
   journal     append|checkpoint|show|since|latest|timeline|render
   provenance  dispatch|allocate|bind|trace|commit|receipt|pr|session|activation|bundle
   links       check|sync
+  external    bind|list
   remote      setup|status|disable
   import      beads
   export      project
@@ -415,6 +416,18 @@ const COMMAND_HELP: Record<string, string> = {
   "issue.unlink": `usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>] [--actor <name>]
 
   Sets superseded_at on the matching live row(s). The evidence row stays.`,
+  external: `usage: sb external <bind|list> [options]
+
+  bind <ref> --provider jira --scope <site:KEY> --id <n> --key <KEY-123> --url <browse-url> [--state pending|in_sync]
+  list [--provider <p>] [--scope <s>] [--limit <n>] [--project <id>]
+
+  Durable Jira identity of an Issue, stored in external_bindings. Neither verb contacts Jira.`,
+  "external.bind": `usage: sb external bind <ref> --provider jira --scope <site:KEY> --id <n> --key <KEY-123> --url <browse-url> [--state pending|in_sync] [--project <id>] [--holder <name>]
+
+  Records that an existing Issue is known in Jira by one key (mode=mirror_read). Intent and identity only: no Jira call is made and no remote read is claimed. --scope is <site>:<projectKey>, --id the numeric Jira issue id, --key KEY-123 in that project, --url the browse URL ending /browse/<key>. --state defaults to pending (in_sync on request; a re-bind that omits it keeps the row's state). Binding the same identity again changes nothing (status noop); a changed --url or --state updates the row (status updated); a key or id bound to another Issue is refused naming that Issue, and nothing is written. --holder defaults to SUBSTRATE_HOLDER and is the actor recorded on the event.`,
+  "external.list": `usage: sb external list [--provider <github|jira>] [--scope <remote-scope>] [--limit <n>] [--project <id>]
+
+  Bounded read of the external bindings of one Project, ordered by provider, scope and remote id, each row with the owning Issue's durable ref. --limit defaults to 100 (maximum 500); truncated=true says more rows matched. Opens no network connection.`,
   "provenance.attach": `usage: sb provenance attach <ref> pr <github:org/repo#n|org/repo#n|url|#n> [--receipt <id>] [--holder <name>]
 
   T1: the PR is the outcome of the issue's work. Resolves the receipt b1 --receipt, b2 the holder's live claim, b3 the latest receipt, then attaches the artifact and the created_from row in one transaction.`,
@@ -1235,6 +1248,76 @@ function primaryPrFor(db: ReturnType<typeof openSubstrate>, issueId: string): Re
   };
 }
 
+// Jira identity of an Issue (XTRM-814). Both verbs read and write
+// external_bindings only; neither opens a network connection.
+function runExternal(
+  db: ReturnType<typeof openSubstrate>,
+  svc: IssueService,
+  ctx: Ctx,
+  command: string,
+  verb: string | undefined,
+  flags: Flags,
+  rest: string[],
+): CliResult {
+  const integration = new IntegrationService(db, svc);
+  if (verb === "bind") {
+    const ref = needRef(rest);
+    const provider = flag(flags, "provider");
+    if (provider !== "jira") throw new Error("usage: sb external bind <ref> --provider jira --scope <site:KEY> --id <n> --key <KEY-123> --url <browse-url> (only jira can be bound)");
+    const need = (name: string): string => flag(flags, name) ?? (() => { throw new Error(`--${name} is required (sb external bind --help)`); })();
+    const state = flag(flags, "state");
+    if (state !== undefined && state !== "pending" && state !== "in_sync") throw new Error(`--state must be pending or in_sync (got ${state})`);
+    const resolved = refInContext(svc, flags, ref);
+    const result = integration.bindExternalKey(resolved.id, {
+      provider: "jira",
+      remoteScope: need("scope"),
+      remoteId: need("id"),
+      remoteKey: need("key"),
+      url: need("url"),
+      syncState: state,
+      actor: tryHolder(flags) ?? "sb-cli",
+    });
+    const b = result.binding;
+    return emit(ctx, command, {
+      status: result.status,
+      issue: result.issueRef,
+      provider: b.provider,
+      remoteScope: b.remoteScope,
+      remoteId: b.remoteId,
+      remoteKey: b.remoteKey,
+      url: b.url,
+      mode: b.mode,
+      syncState: b.syncState,
+    });
+  }
+  if (verb === "list") {
+    const provider = flag(flags, "provider");
+    if (provider !== undefined && provider !== "github" && provider !== "jira") throw new Error(`--provider must be github or jira (got ${provider})`);
+    const limitRaw = flag(flags, "limit");
+    const page = integration.listProjectBindings({
+      projectId: projectOf(svc, flags),
+      provider,
+      remoteScope: flag(flags, "scope"),
+      limit: limitRaw !== undefined ? Number(limitRaw) : undefined,
+    });
+    return emit(ctx, command, {
+      bindings: page.bindings.map((b) => ({
+        issue: b.issueRef,
+        provider: b.provider,
+        remoteScope: b.remoteScope,
+        remoteId: b.remoteId,
+        remoteKey: b.remoteKey,
+        url: b.url,
+        mode: b.mode,
+        syncState: b.syncState,
+      })),
+      limit: page.limit,
+      truncated: page.truncated,
+    });
+  }
+  throw new Error("usage: sb external <bind|list> [options]");
+}
+
 function runLinks(
   db: ReturnType<typeof openSubstrate>,
   svc: IssueService,
@@ -1445,6 +1528,8 @@ export const FLAG_ALLOWLIST: Record<string, string[]> = {
   "journal.timeline": ["kind", "limit"],
   "journal.render": ["sequence"],
   "provenance.attach": ["project", "receipt", "holder"],
+  "external.bind": ["project", "provider", "scope", "id", "key", "url", "state", "holder"],
+  "external.list": ["project", "provider", "scope", "limit"],
   "provenance.dispatch": ["project", "claim-id", "workspace", "participant", "activation", "attempt", "session", "base-commit"],
   "provenance.allocate": ["project", "checkpoint"],
   "provenance.bind": [],
@@ -1467,7 +1552,7 @@ export const FLAG_ALLOWLIST: Record<string, string[]> = {
   "export.project": ["project", "file"],
 };
 
-const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "links", "import", "export", "remote", "serve"]);
+const KNOWN_GROUPS = new Set(["init", "issue", "project", "plan", "journal", "provenance", "links", "external", "import", "export", "remote", "serve"]);
 
 function assertKnownFlags(flags: Flags, command: string): void {
   const allowed = new Set([...GLOBAL_FLAGS, ...(FLAG_ALLOWLIST[command] ?? [])]);
@@ -1504,6 +1589,7 @@ const MAX_POSITIONALS: Record<string, number> = {
   "issue.link": 3,
   "issue.unlink": 3,
   "journal.since": 2,
+  "external.list": 0,
   "provenance.attach": 3,
   "provenance.bind": 2,
   "remote.setup": 2,
@@ -1588,7 +1674,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
       );
       return { code: 0, stdout: "", stderr: "" };
     }
-    if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|links|import|export|remote|serve> <verb> [args...]");
+    if (!group || (!verb && group !== "export" && group !== "init")) throw new Error("usage: sb [--db PATH] [--json] <init|issue|project|plan|journal|provenance|links|external|import|export|remote|serve> <verb> [args...]");
     if (group && KNOWN_GROUPS.has(group)) {
       const declared = `${group}.${verb ?? ""}`;
       assertKnownFlags(flags, declared);
@@ -1604,6 +1690,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
     if (group === "project") return runProject(db, svc, ctx, command, verb, flags);
     if (group === "plan") return runPlan(db, svc, ctx, command, verb, flags);
     if (group === "links") return runLinks(db, svc, ctx, command, verb, flags, rest);
+    if (group === "external") return runExternal(db, svc, ctx, command, verb, flags, rest);
     if (group === "journal" || group === "provenance") {
       const result = group === "journal"
         ? runJournal(db, svc, ctx, command, verb, flags, rest)
@@ -1618,7 +1705,7 @@ export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.Pr
     }
     if (group === "import") return runImport(db, svc, ctx, command, verb, flags);
     if (group === "export") return runExport(db, svc, ctx, command, verb, flags);
-    throw new Error(`unknown group: ${group} (want issue|project|plan|journal|provenance|links|import|export|remote)`);
+    throw new Error(`unknown group: ${group} (want issue|project|plan|journal|provenance|links|external|import|export|remote)`);
   } catch (err) {
     return fail(ctx, command, err);
   } finally {
