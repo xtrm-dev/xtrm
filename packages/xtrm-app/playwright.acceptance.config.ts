@@ -22,7 +22,7 @@ const app = (port: number, env: Record<string, string>) => ({
   command: `npx vite --host 127.0.0.1 --port ${port} --strictPort`,
   url: `http://127.0.0.1:${port}`,
   reuseExistingServer: false,
-  env: { VITE_XTRM_AGENT: "live", VITE_XTRM_AGENT_HOST: "live", VITE_XTRM_GITHUB: "fixture", VITE_XTRM_RESEARCH: "fixture", ...env },
+  env: { VITE_XTRM_AGENT: "live", VITE_XTRM_AGENT_HOST: "live", VITE_XTRM_GITHUB: "fixture", VITE_XTRM_JIRA: "fixture", VITE_XTRM_RESEARCH: "fixture", ...env },
 });
 const desktop = { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } };
 

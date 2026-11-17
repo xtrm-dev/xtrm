@@ -5,6 +5,7 @@ import type { AgentAdapter } from "./agent/types.ts";
 
 import type { ResearchAdapter } from "./research/types.ts";
 import type { StatusBoardAdapter } from "./status-board/types.ts";
+import type { JiraAdapter } from "./jira/types.ts";
 
 export type DataSource = "live" | "fixture";
 
@@ -623,5 +624,6 @@ export interface Adapters {
   githubAuth: GithubAuthAdapter;
   substrate: SubstrateAdapter;
   statusBoard: StatusBoardAdapter;
+  jira: JiraAdapter;
   research: ResearchAdapter;
 }

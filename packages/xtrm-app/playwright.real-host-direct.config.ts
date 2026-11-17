@@ -43,7 +43,7 @@ export default defineConfig({
       VITE_XTRM_GITHUB: "fixture",
       VITE_XTRM_SUBSTRATE: "fixture",
       
-      VITE_XTRM_RESEARCH: "fixture",
+      VITE_XTRM_JIRA: "fixture", VITE_XTRM_RESEARCH: "fixture",
     },
   },
 });
