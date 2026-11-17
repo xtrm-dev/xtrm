@@ -76,7 +76,7 @@ XTRM-owned. Conar supplies **no precedent** — `console-v2-audit-conar-ui.md` �
 | Hover / focus | Hover = surface elevation only; focus-visible = shared `focus-ring` utility (`ring-3` at 50% accent) |
 | Toggle buttons | `aria-pressed` (e.g. theme, dock) |
 | Accessibility | Every icon-only control carries an explicit `aria-label`; the rail is a `nav` with an accessible name |
-| Keyboard | Sequential tab order through modes; `Mod+<n>` selects `MODES[n-1]` in the rail (`AppShell.tsx`) — six modes today (Work, Agent, Agents, Program, Research, Observability), so `Mod+1…Mod+6`; `Mod+K` search palette, `Mod+Shift+K` command palette (§4.4) |
+| Keyboard | Sequential tab order through modes; `Mod+<n>` selects `MODES[n-1]` (`AppShell.tsx`) — four numbered modes today (Work, Agents, Research, Observability), so `Mod+1…Mod+4`; the Agent half is reached with `Mod+.`; `Mod+K` search palette, `Mod+Shift+K` command palette (§4.4) |
 | Scope | Application-level only. The rail must never reflect repository-specific state; repository context lives in §4 |
 | z-index | Rail is shell chrome. It must not rely on z-index to stay visible — see §7.2 for the geometric guarantee |
 
@@ -127,7 +127,7 @@ Rules:
 
 | affordance | placement | behaviour |
 |---|---|---|
-| Inline search | full-width field at the top of the expanded contextual sidebar (§4.1) | searches all entity kinds (XTRM Issues, pull requests, GitHub Issues, releases, repositories, Program items, later Agents/Frames). The default scope is the selected repository; one control widens the scope to the workspace. Results open on the primary surface or in the drawer. |
+| Inline search | full-width field at the top of the expanded contextual sidebar (§4.1) | searches all entity kinds (XTRM Issues, pull requests, GitHub Issues, releases, repositories, Project destinations, later Agents/Frames). The default scope is the selected repository; one control widens the scope to the workspace. Results open on the primary surface or in the drawer. |
 | Search palette | `Mod+K`, and a Search entry in the global rail utilities | the same search index and result rows as the inline field, in a `cmdk` dialog. It works when the contextual sidebar is collapsed. |
 | Command palette | `Mod+Shift+K` or `>` prefix inside the palette | commands and navigation (go to destination, toggle sidebar, pin drawer, switch theme). Commands respect authority exactly like drawer actions (§7.4). |
 | Options menu | `⋯` icon button in the primary surface header and in the drawer header | surface- or entity-scoped actions (view options, sort/group, copy link, open on GitHub). It is a Base UI menu, not a toolbar. |
@@ -161,7 +161,7 @@ The right-edge mirror of the contextual sidebar's collapsed treatment.
 | v1 shell | evidence | disposition |
 |---|---|---|
 | `BeadSideDrawer` (portal side drawer) | `apps/console/src/dashboard/pages/console/BeadSideDrawer.tsx:28` | `ADAPT` → the canonical drawer |
-| `ProgrammeEntityDrawer` (portal drawer, own z-band 900/901) | `apps/console/src/dashboard/pages/console/programme/ProgrammeEntityDrawer.tsx:25` | `REPLACE` shell, `ADAPT` content |
+| `ProgrammeEntityDrawer` (portal drawer, own z-band 900/901) — **retired** with Console v1's programme projection (ADR-002 D1) | `apps/console/src/dashboard/pages/console/programme/ProgrammeEntityDrawer.tsx:25` | `REPLACE` shell; content has no Console v2 surface |
 | `OperationsDrawer` (no resize, no Escape, `z-index: 55`) | `apps/console/src/dashboard/pages/console/Operations.tsx:200` | `REPLACE` |
 | `RightSidebar` (dead: `openSidebar()` has zero production callers, yet mounted) | `apps/console/src/dashboard/components/shell/RightSidebar.tsx:9`; `apps/console/src/dashboard/App.tsx:57` | `DELETE_AFTER_CUTOVER` |
 | `IssueOverlay` (modal, `z-index: 1000`) | `apps/console/src/dashboard/components/beads/IssueOverlay.tsx:19` | `REPLACE`; extract its focus trap first |
@@ -217,7 +217,7 @@ The action list is computed from the entity's authority, never a generic toolbar
 
 - Substrate issue — actions only where the current holder/lease/readiness permits; `claim`, `release`, `state`, `dispatch` appear according to `ReadinessReport` and the active claim (`console-v2-audit-substrate-issues-contract.md` §4.1).
 - GitHub entity — mutations only through the existing same-origin/admin write gate (`console-v2-audit-console-v1-preservation.md` §4 write-gate row).
-- Program item — governance actions only; never executable-work mutation (§10).
+- Project record — read-only in the first tranche (status board, Jira link, follow-up) and never an executable-work mutation (§10, ADR-002 D1/§10 item 3).
 - Agent — `Open session` promotion is deferred (wave H); the drawer may show agent identity and lineage read-only.
 
 ### 7.5 FOLLOW_LIVE
@@ -244,7 +244,6 @@ Agent              first-class even while deferred
 Work               cross-repository work queue
 Repositories       repository discovery / selection
 Agents             fleet presence (read-only until wave H)
-Program            portfolio governance
 Observability      fleet-level analysis
 --- utilities ---
 Search             search palette (Mod+K), §4.4
@@ -255,11 +254,16 @@ Settings/Profile
 
 `Repositories` opens the repository directory on the primary surface. Day-to-day repository switching uses the repository selector in the contextual sidebar (§4.1).
 
+`ACCEPTED` (2026-11-17, `adr/ADR-002-project-surface-status-board-and-jira.md` D1) — **Project is not a rail destination.** It is a repository-scoped section in the contextual sidebar (§8.2) at `/rep/:owner/:repo/project` (§9.1). Cross-repository governance is retired from navigation and has no destination.
+
 ### 8.2 Repository-context hierarchy (contextual sidebar)
 
 ```text
 Work
   XTRM Issues                    Substrate-backed
+  Project                        repository-scoped section (ADR-002 D1/D2):
+                                   Overview, Timeline, Questions, Workers,
+                                   Follow-ups, Jira, Integration
   Agent                          deferred (wave H)
   Agents                         deferred (wave H)
 Code
@@ -271,11 +275,9 @@ Code
 System
   Graph
   Observability
-Governance
-  Program
 ```
 
-`PROPOSAL` addition over the dispatch: explicit `System` and `Governance` group labels. Without them, `Program` and `Observability` read as peers of `XTRM Issues` in the same list and the Program/executable-work boundary (§10) becomes a visual ambiguity rather than an architectural one.
+`ACCEPTED` (2026-11-17, `adr/ADR-002-project-surface-status-board-and-jira.md` D1/D2) — **Project is one repository-scoped section with its own sub-routes**, not a peer of `XTRM Issues` and not a top-level group. Its sub-routes nest under the Project row, so the Project/executable-work boundary (§10) stays a visual hierarchy rather than a peer list. The earlier `Governance` group proposal is withdrawn with the retired cross-repository surface: the implemented groups are `Workspace`, `GitHub` and `System` (`ContextSidebar.tsx`).
 
 ### 8.3 Recommendation
 
@@ -436,7 +438,7 @@ Ordered by dependency. Each wave names a gate that must pass before the next beg
 | **C. Repository tracking + GitHub surfaces** | repo discovery/selection/activity ordering, Activity, PRs, GitHub Issues, Releases, repository content, one query layer, WS subscription | every Console v1 GitHub capability in `console-v2-audit-console-v1-preservation.md` §3b behaves identically; the v1 defect register is explicitly resolved or carried |
 | **D. Inspector Drawer + inspector rail** | states, typed stack, authority-scoped actions, geometric rail protection, FOLLOW_LIVE, dock adaptation | drawer cannot overlap the rail (DOM containment test); maximize auto-collapse/restore is exact; no second inspector shell exists |
 | **E. Substrate Issues** | typed-service adapter, `IssueContract` projection, Beads read-only compatibility, no dual-write | `console-v2-audit-substrate-issues-contract.md` §4.1 seam is used; no direct SQL from UI/backend; parity test against the v1 issue feed |
-| **F. Program/governance projection** | Program surface as a read model that references, never duplicates | a Program item shows no executable-work state that it does not read from the issue authority |
+| **F. Program/governance projection** (retired — ADR-002 D1/R2; Project is the repository-scoped surface) | Program surface as a read model that references, never duplicates | a programme item shows no executable-work state that it does not read from the issue authority |
 | **G. Graph/Observability shell integration** | graph node → drawer, observability placement, source-health surfacing | existing read models reused; no new telemetry authority |
 | **H. Agent/Frames tranche (separate)** | everything in §12, under its own contract | NOT started because the shell exposes an Agent route |
 
@@ -451,7 +453,7 @@ Ordered by dependency. Each wave names a gate that must pass before the next beg
 | C | Activity surface (`/rep/:owner/:repo/code/activity`) through `adapters/github`; other Code routes may be placeholders |
 | D | full state machine: `CLOSED` / `CONTEXTUAL` / `PINNED` / `MAXIMIZED` + `FOLLOW_LIVE` flag, typed stack, geometric rail protection; dock mode may be deferred |
 | E | Issues surface through `adapters/substrate` (live for a bounded project or typed fixture, §9.3) |
-| F | Program surface through `adapters/program` |
+| F | ~~Program surface through `adapters/program`~~ retired — the adapter is deleted (ADR-002 D1/R2); Project is repository-scoped |
 | G, H | explicit placeholder routes only |
 
 Acceptance for the vertical: routes above resolve; shell/route/drawer behaviour has automated tests (collapse/restore, maximize auto-collapse/restore, drawer containment, deep-link restore of `?inspect=`); screenshots or a runnable receipt exist; the delivery lists which surfaces are live and which are fixture-backed.
@@ -525,7 +527,7 @@ Feature surfaces compose these primitives. A feature-local variant of a primitiv
 | `IconButton` | icon-only button with required `aria-label` and tooltip |
 | `Search` | inline search field bound to the global search system (§4.4) |
 | `CommandMenu` | `cmdk` dialog for search and command modes (§4.4) |
-| `SidebarSection` | collapsible labelled group (`Work` / `Code` / `System` / `Governance`) |
+| `SidebarSection` | collapsible labelled group (`Workspace` / `GitHub` / `System`) |
 | `SidebarRow` | `Row` preset for the contextual sidebar: icon, label, count, status dot, hover actions |
 | `StatusDot` | ink/shape status indicator with accessible text |
 | `ContentPanel` | bounded scroll container for code, diff, output, and long fields |
@@ -544,8 +546,8 @@ Operator review of the first vertical against the v13/v15 mocks (`docs/mocks/` i
 ### 16.1 Navigation model
 
 - **Top bar** — full-width application header. The global search entry (§4.4) lives here, centred, not in the contextual sidebar. Command and theme affordances sit at its right edge.
-- **Rail = modes.** The rail selects a workspace mode: Work, Agent, Agents, Program, Observability. `Repositories` is no longer a rail destination; the repository selector lists all repositories and links to the directory.
-- **Sidebar = the active mode's context only.** Work mode shows the repository selector and `Work` / `Code` / `System` groups. Program mode shows Program sections. Deferred modes show a one-line deferral. No destination appears in both the rail and the sidebar.
+- **Rail = modes.** The rail selects a workspace mode: Work, Agent, Agents, Research, Observability. `Repositories` is no longer a rail destination; the repository selector lists all repositories and links to the directory. **Project is not a mode**: it is a repository-scoped section (§8.2, §9.1; ADR-002 D1/D2).
+- **Sidebar = the active mode's context only.** Work mode shows the repository selector and the repository groups (§8.2); Project is a group item whose sub-routes nest under it. Deferred modes show a one-line deferral. No destination appears in both the rail and the sidebar.
 
 ### 16.2 Inspector rail, drawer, and sidebar geometry (v15 + Supernova)
 
