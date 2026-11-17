@@ -18,6 +18,14 @@ const SQLITE_WARNING = /^\(node:\d+\) ExperimentalWarning: SQLite is an experime
 const TRACE_HINT = /^\(Use `node --trace-warnings \.\.\.` to show where the warning was created\)$/;
 
 /** Remove the node:sqlite startup warning pair, leaving every other byte of stderr intact. */
+/**
+ * Why skipping the full suite is safe for a change here: this function is
+ * subtractive only. It removes a fixed pair of lines and never adds, reorders or
+ * rewrites anything, so a test that does not compare stderr cannot change
+ * behaviour, and a test that does is in the files that were run. If the matching
+ * ever becomes semantic (normalising PIDs, collapsing whitespace, reordering),
+ * that argument stops holding and the suite must be run in full.
+ */
 export function withoutNodeSqliteWarning(stderr: string): string {
   if (!stderr.includes("ExperimentalWarning: SQLite is an experimental feature")) return stderr;
   const lines = stderr.split("\n");

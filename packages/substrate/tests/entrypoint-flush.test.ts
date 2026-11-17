@@ -216,7 +216,13 @@ describe("XTRM-335 exit-code matrix", () => {
     assert.ok(fail.stderr.includes("xtrm post-commit"));
     const pipedErr = shell(`${node(join(HOOKS, "post-commit.ts"), [])} 2>&1 >/dev/null | ${SLOW_CAT}`, failEnv);
     // XTRM-824: each child prints its own node:sqlite warning with its own PID,
-    // so compare the diagnostics, not the PIDs inside the runtime notice.
+    // so compare the diagnostics, not the PIDs inside the runtime notice. The
+    // exemption strips a known line, so assert the assumption it rests on: the
+    // notice appears at most once per process, or two would compare equal to one.
+    assert.ok(
+      (pipedErr.match(/ExperimentalWarning: SQLite/g) ?? []).length <= 1,
+      "the runtime notice must appear at most once; the exemption would hide a second one",
+    );
     assert.equal(withoutNodeSqliteWarning(pipedErr), withoutNodeSqliteWarning(fail.stderr), "diagnostic must cross the pipe whole");
   });
 
