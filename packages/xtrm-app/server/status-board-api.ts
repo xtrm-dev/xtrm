@@ -45,6 +45,8 @@ export type BoardBinding = {
   configured: boolean;
   /** False when the deployment has no project-management.json at all. */
   configPresent: boolean;
+  /** The file this binding was resolved from, so an error names the file actually read. */
+  configPath: string;
   resolvedBy: "explicit" | "env" | "repo_slug" | "repo_name" | "none";
   pmProject: string | null;
   substrateProjectId: string | null;
@@ -92,15 +94,17 @@ export function normaliseRepo(raw: string | null): string | null {
 export function resolveBinding(
   config: PmConfig | null,
   repository: string,
-  opts: { explicit?: string | null; env?: NodeJS.ProcessEnv } = {},
+  opts: { explicit?: string | null; env?: NodeJS.ProcessEnv; configPath?: string } = {},
 ): BoardBinding {
   const env = opts.env ?? process.env;
+  const configPath = opts.configPath ?? defaultConfigPath(env);
   const defaults = config?.defaults ?? {};
   const projects = config?.projects ?? {};
   const base = (pmProject: string | null, resolvedBy: BoardBinding["resolvedBy"]): BoardBinding => ({
     repository,
     configured: pmProject !== null,
     configPresent: config !== null,
+    configPath,
     resolvedBy,
     pmProject,
     substrateProjectId: pmProject ? str(projects[pmProject]?.sb_project_id) : null,
@@ -164,26 +168,48 @@ function toRecord(wire: WireRecord): BoardRecord | null {
   };
 }
 
+export type BoardRecordLookup =
+  | { outcome: "found"; record: BoardRecord }
+  | { outcome: "absent" }
+  | { outcome: "incomplete" };
+
 export type BoardClient = {
   list(prefix: string, opts: { limit: number }): Promise<{ records: BoardRecord[]; truncated: boolean }>;
-  record(path: string): Promise<BoardRecord | null>;
+  record(path: string): Promise<BoardRecordLookup>;
 };
 
 /**
  * Minimal client over the documented Owner API. No URL is built from user input:
  * the host is fixed and every path is validated before it reaches the query.
  */
+export const UPSTREAM_TIMEOUT_MS = 8_000;
+
 export function createBoardClient(deps: {
   site: string;
   key: () => string;
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
 }): BoardClient {
   const doFetch = deps.fetchImpl ?? fetch;
+  const timeoutMs = deps.timeoutMs ?? UPSTREAM_TIMEOUT_MS;
   const page = async (cursor: string | null): Promise<{ records: BoardRecord[]; next: string | null }> => {
     const url = new URL(`${UPSTREAM}/publishes/${encodeURIComponent(deps.site)}/data/docs`);
     url.searchParams.set("limit", String(UPSTREAM_PAGE));
     if (cursor) url.searchParams.set("cursor", cursor);
-    const res = await doFetch(url, { headers: { authorization: `Bearer ${deps.key()}` } });
+    let res: Response;
+    try {
+      // A deadline is not optional here: the middleware holds the request open,
+      // and the paging loop multiplies one slow answer by MAX_PAGES.
+      res = await doFetch(url, {
+        headers: { authorization: `Bearer ${deps.key()}` },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+        throw new Error(`status board read timed out after ${timeoutMs} ms`);
+      }
+      throw new Error("status board read failed");
+    }
     if (!res.ok) throw new Error(`status board read failed (${res.status})`);
     const body = (await res.json()) as { data?: unknown; records?: unknown; nextCursor?: unknown };
     const raw = Array.isArray(body.records) ? body.records : Array.isArray(body.data) ? body.data : [];
@@ -206,20 +232,22 @@ export function createBoardClient(deps: {
         cursor = next;
         pages += 1;
       } while (cursor && pages < MAX_PAGES);
-      return { records: out, truncated: false };
+      // Exiting with a cursor still set means "I stopped looking", not "that is all".
+      return { records: out, truncated: cursor !== null };
     },
     async record(path) {
-      if (!allowedPath(path)) return null;
+      if (!allowedPath(path)) return { outcome: "absent" };
       let cursor: string | null = null;
       let pages = 0;
       do {
         const { records, next } = await page(cursor);
         const hit = records.find((r) => r.path === path);
-        if (hit) return hit;
+        if (hit) return { outcome: "found", record: hit };
         cursor = next;
         pages += 1;
       } while (cursor && pages < MAX_PAGES);
-      return null;
+      // Exhausting the page budget is inconclusive, never a definite "not found".
+      return cursor ? { outcome: "incomplete" } : { outcome: "absent" };
     },
   };
 }
@@ -232,7 +260,7 @@ export function unboundBody(binding: BoardBinding) {
     reason: (binding.configPresent ? "repo_not_bound" : "config_absent") as UnboundReason,
     repository: binding.repository,
     resolvedBy: binding.resolvedBy,
-    configPath: binding.configPresent ? undefined : defaultConfigPath(),
+    configPath: binding.configPresent ? undefined : binding.configPath,
   };
 }
 
@@ -373,7 +401,7 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
     const path = url.pathname.slice(prefix.length);
     const repository = normaliseRepo(url.searchParams.get("repo"));
     if (!repository) return json(res, 400, { ok: false, error: "expected ?repo=<owner>/<name>" });
-    const binding = resolveBinding(config, repository, { explicit: url.searchParams.get("project") });
+    const binding = resolveBinding(config, repository, { explicit: url.searchParams.get("project"), configPath });
     if (!binding.configured) return json(res, 404, unboundBody(binding));
 
     if (path === "/binding") return json(res, 200, { ok: true, binding: publicBinding(binding, clientFor(binding).keyPresent) });
@@ -407,9 +435,13 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
         return json(res, 200, { ok: true, ...result, cachedAt: new Date().toISOString() });
       }
       const recordPath = url.searchParams.get("path") ?? "";
-      const record = await cached(`record:${binding.site}:${recordPath}`, () => client.record(recordPath));
-      if (!record) return json(res, 404, { ok: false, error: "record not found" });
-      return json(res, 200, { ok: true, record, cachedAt: new Date().toISOString() });
+      const lookup = await cached(`record:${binding.site}:${recordPath}`, () => client.record(recordPath));
+      if (lookup.outcome === "absent") return json(res, 404, { ok: false, error: "record not found" });
+      if (lookup.outcome === "incomplete") {
+        // The page budget ran out before the path could be ruled out: say so, never 404.
+        return json(res, 502, { ok: false, error: "status board record lookup was inconclusive" });
+      }
+      return json(res, 200, { ok: true, record: lookup.record, cachedAt: new Date().toISOString() });
     } catch (error) {
       // Generic upstream failure: never echo the credential, the URL, or the body.
       return json(res, 502, { ok: false, error: error instanceof Error ? error.message : "status board read failed" });

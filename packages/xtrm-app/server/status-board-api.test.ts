@@ -108,6 +108,17 @@ describe("binding resolution", () => {
     expect(defaultConfigPath({ XTRM_PM_CONFIG: good })).toBe(good);
   });
 
+  it("names the config file it actually read, not the default path", () => {
+    const explicit = unboundBody(
+      resolveBinding(null, "mercuryintelligence/market-data", { env: {}, configPath: "/srv/xtrm/pm.json" }),
+    );
+    expect(explicit.configPath).toBe("/srv/xtrm/pm.json");
+    const fromEnv = unboundBody(
+      resolveBinding(null, "mercuryintelligence/market-data", { env: { XTRM_PM_CONFIG: "/srv/env.json" } }),
+    );
+    expect(fromEnv.configPath).toBe("/srv/env.json");
+  });
+
   it("gives the client two distinct unbound reasons, with the resolved config path", () => {
     const noConfig = unboundBody(resolveBinding(null, "mercuryintelligence/market-data", { env: {} }));
     expect(noConfig.reason).toBe("config_absent");
@@ -187,11 +198,49 @@ describe("board client", () => {
     expect(result.truncated).toBe(true);
   });
 
-  it("finds one record by exact path and returns null when absent", async () => {
+  it("finds one record by exact path and reports absence separately from incompleteness", async () => {
     const fetchImpl = (async () => page([record("workers/a"), record("workers/b")])) as unknown as typeof fetch;
     const client = createBoardClient({ site: "site-a", key: () => "k", fetchImpl });
-    expect((await client.record("workers/b"))?.path).toBe("workers/b");
-    expect(await client.record("workers/zzz")).toBeNull();
+    const found = await client.record("workers/b");
+    expect(found.outcome).toBe("found");
+    expect(found.outcome === "found" && found.record.path).toBe("workers/b");
+    expect(await client.record("workers/zzz")).toEqual({ outcome: "absent" });
+  });
+
+  it("says truncated when the page budget runs out with a cursor still set", async () => {
+    // Every page offers a next cursor and no matching record: the loop stops on
+    // MAX_PAGES, which is "I stopped looking", never "that is the whole board".
+    const fetchImpl = (async () => page([record("followups/f-1")], "cursor-again")) as unknown as typeof fetch;
+    const client = createBoardClient({ site: "site-a", key: () => "k", fetchImpl });
+    expect(await client.list("workers/", { limit: 200 })).toEqual({ records: [], truncated: true });
+  });
+
+  it("reports an inconclusive record lookup instead of a definite absence", async () => {
+    const fetchImpl = (async () => page([record("followups/f-1")], "cursor-again")) as unknown as typeof fetch;
+    const client = createBoardClient({ site: "site-a", key: () => "k", fetchImpl });
+    expect(await client.record("workers/never-seen")).toEqual({ outcome: "incomplete" });
+  });
+
+  it("puts a deadline on every upstream call and never lets an abort surface raw", async () => {
+    let seen: RequestInit | undefined;
+    const fetchImpl = (async (_url: URL, init?: RequestInit) => {
+      seen = init;
+      return page([record("workers/a")]);
+    }) as unknown as typeof fetch;
+    await createBoardClient({ site: "site-a", key: () => "k", fetchImpl }).list("workers/", { limit: 10 });
+    expect(seen?.signal).toBeInstanceOf(AbortSignal);
+    expect((seen?.signal as AbortSignal).aborted).toBe(false);
+
+    const timeout = Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+    const aborting = (async () => {
+      throw timeout;
+    }) as unknown as typeof fetch;
+    await expect(
+      createBoardClient({ site: "site-a", key: () => "k", fetchImpl: aborting, timeoutMs: 50 }).list("workers/", { limit: 10 }),
+    ).rejects.toThrow("status board read timed out after 50 ms");
+    await expect(
+      createBoardClient({ site: "site-a", key: () => "k", fetchImpl: aborting, timeoutMs: 50 }).list("workers/", { limit: 10 }),
+    ).rejects.not.toThrow("secret-value");
   });
 
   it("never echoes the credential on an upstream failure", async () => {
