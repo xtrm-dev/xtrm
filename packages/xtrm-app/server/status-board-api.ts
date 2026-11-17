@@ -284,8 +284,36 @@ export type UnitProbe = {
   reason: UnitProbeReason | null;
 };
 
-/** No probe was run, so the state is unverified rather than inactive. */
-export const NOT_PROBED: UnitProbe = { active: null, reason: "probe_failed" };
+/**
+ * The sync is a `Type=oneshot` service started by a timer, so `unitActive` alone cannot
+ * answer "is the sync alive": between ticks the service is `inactive`, during a run it is
+ * `activating`. Health therefore reports the two facts separately and derives `unitActive`
+ * from both. Every `null` carries a named reason; none of them means "down".
+ */
+export type SyncProbe = {
+  /** The timer unit that was probed (`<unit>.timer`); null when no unit was configured. */
+  timerUnit: string | null;
+  /** true = the schedule is armed, false = the timer is inactive or failed, null = unverified. */
+  scheduleActive: boolean | null;
+  scheduleActiveReason: UnitProbeReason | null;
+  /** true = a run is in progress now (a starting oneshot counts), false = not running, null = unverified. */
+  runInProgress: boolean | null;
+  runInProgressReason: UnitProbeReason | null;
+  /** true = armed or running; false = only when the timer is not armed AND no run is in progress. */
+  unitActive: boolean | null;
+  unitActiveReason: UnitProbeReason | null;
+};
+
+/** No probe was run, so every fact is unverified rather than inactive. */
+export const NOT_PROBED: SyncProbe = {
+  timerUnit: null,
+  scheduleActive: null,
+  scheduleActiveReason: "probe_failed",
+  runInProgress: null,
+  runInProgressReason: "probe_failed",
+  unitActive: null,
+  unitActiveReason: "probe_failed",
+};
 
 export type BoardHealth = {
   configured: boolean;
@@ -293,6 +321,17 @@ export type BoardHealth = {
   reason: UnboundReason | null;
   site: string | null;
   stateDir: string | null;
+  /** The schedule (timer) is armed. For a timer-driven sync this, not the service, is the signal. */
+  scheduleActive: boolean | null;
+  /** Set only when `scheduleActive` is null: never "down", just not verified. */
+  scheduleActiveReason: UnitProbeReason | null;
+  /** A run of the oneshot service is in progress now; `activating` counts as running. */
+  runInProgress: boolean | null;
+  /** Set only when `runInProgress` is null: never "down", just not verified. */
+  runInProgressReason: UnitProbeReason | null;
+  /** The timer unit the schedule fact was read from, so a reader can see what was probed. */
+  timerUnit: string | null;
+  /** Armed or running; `false` only when the timer is not armed AND no run is in progress. */
   unitActive: boolean | null;
   /** Set only when `unitActive` is null: never "down", just not verified. */
   unitActiveReason: UnitProbeReason | null;
@@ -307,7 +346,7 @@ export type BoardHealth = {
  * successful sync marker the sync itself writes; `drift.jsonl` line count is the
  * open drift set. Missing files mean "unknown", not "zero".
  */
-export function readHealth(binding: BoardBinding, now = Date.now(), unit: UnitProbe = NOT_PROBED): BoardHealth {
+export function readHealth(binding: BoardBinding, now = Date.now(), probe: SyncProbe = NOT_PROBED): BoardHealth {
   let lastSyncOkAt: string | null = null;
   let driftCount: number | null = null;
   if (binding.stateDir) {
@@ -329,8 +368,13 @@ export function readHealth(binding: BoardBinding, now = Date.now(), unit: UnitPr
     reason: binding.configured ? null : binding.configPresent ? "repo_not_bound" : "config_absent",
     site: binding.site,
     stateDir: binding.stateDir,
-    unitActive: unit.active,
-    unitActiveReason: unit.active === null ? (unit.reason ?? "probe_failed") : null,
+    scheduleActive: probe.scheduleActive,
+    scheduleActiveReason: probe.scheduleActive === null ? (probe.scheduleActiveReason ?? "probe_failed") : null,
+    runInProgress: probe.runInProgress,
+    runInProgressReason: probe.runInProgress === null ? (probe.runInProgressReason ?? "probe_failed") : null,
+    timerUnit: probe.timerUnit,
+    unitActive: probe.unitActive,
+    unitActiveReason: probe.unitActive === null ? (probe.unitActiveReason ?? "probe_failed") : null,
     lastSyncOkAt,
     driftCount,
     stale: binding.configured ? ageMs > 60 * 60_000 : false,
@@ -382,35 +426,101 @@ export type UnitProbeRun = (
   callback: (error: (Error & { killed?: boolean }) | null, stdout: string, stderr: string) => void,
 ) => unknown;
 
+/** The systemd `is-active` answer kept raw: `activating` and `inactive` are different facts. */
+type UnitState = { state: string | null; reason: UnitProbeReason | null };
+
 /**
- * The sync is a systemd user unit on the host that runs the app. A missing
- * systemctl, a non-user session, a timeout, or a state that does not name a
- * running unit means "unverified" (`active: null` plus a reason), never
- * `false`: a workstation dev server must not report production as down.
+ * One `systemctl --user is-active` call. A missing systemctl, a non-user session, a timeout,
+ * or a state we cannot read means "unverified" (a reason, no state), never "not running":
+ * a workstation dev server must not report production as down.
  */
-export function probeUnit(unit: string | null, run: UnitProbeRun = execFile): Promise<UnitProbe> {
-  if (!unit) return Promise.resolve({ active: null, reason: "unit_not_found" });
+function probeState(unit: string | null, run: UnitProbeRun): Promise<UnitState> {
+  if (!unit) return Promise.resolve({ state: null, reason: "unit_not_found" });
   return new Promise((resolve) => {
     run("systemctl", ["--user", "is-active", unit], { timeout: 2_000 }, (error, stdout, stderr) => {
       const state = stdout.trim();
-      // A reloading unit is still running; the remaining states are not.
-      if (state === "active" || state === "reloading") return resolve({ active: true, reason: null });
-      if (state === "inactive" || state === "failed" || state === "activating" || state === "deactivating") {
-        return resolve({ active: false, reason: null });
+      // `is-active` prints `inactive` and exits 4 for a unit that does not exist, with nothing on
+      // stderr (verified: systemd 257 on the canonical host). Read the exit code before the state,
+      // or a unit nobody installed answers "not armed" instead of "not verified".
+      if ((error as { code?: number | string } | null)?.code === 4 || /could not be found|no such unit/i.test(stderr)) {
+        return resolve({ state: null, reason: "unit_not_found" });
       }
-      if (error?.killed) return resolve({ active: null, reason: "probe_timeout" });
+      if (state === "active" || state === "reloading" || state === "activating" || state === "deactivating") {
+        return resolve({ state, reason: null });
+      }
+      if (state === "inactive" || state === "failed") return resolve({ state, reason: null });
+      if (error?.killed) return resolve({ state: null, reason: "probe_timeout" });
       const detail = `${stderr}\n${error?.message ?? ""}`;
       if (/not been booted with systemd|failed to connect to bus|no medium found/i.test(detail)) {
-        return resolve({ active: null, reason: "non_user_session" });
+        return resolve({ state: null, reason: "non_user_session" });
       }
       if (/could not be found|no such file|not found/i.test(detail)) {
-        return resolve({ active: null, reason: "unit_not_found" });
+        return resolve({ state: null, reason: "unit_not_found" });
       }
       // An answer we cannot read as a run state ("unknown", "maintenance"): the
       // unit does not resolve, so it is not evidence that the sync is down.
-      if (state) return resolve({ active: null, reason: "unit_not_found" });
-      resolve({ active: null, reason: "probe_failed" });
+      if (state) return resolve({ state: null, reason: "unit_not_found" });
+      resolve({ state: null, reason: "probe_failed" });
     });
+  });
+}
+
+/**
+ * The service unit's own answer (XTRM-830): true only when systemd reports it running.
+ * A starting or stopping unit is `false` here; ask `probeSync` for the run question.
+ */
+export function probeUnit(unit: string | null, run: UnitProbeRun = execFile): Promise<UnitProbe> {
+  return probeState(unit, run).then(({ state, reason }) => {
+    if (state === "active" || state === "reloading") return { active: true, reason: null };
+    if (state) return { active: false, reason: null };
+    return { active: null, reason };
+  });
+}
+
+/** `status-board-sync.service` → `status-board-sync.timer`: same unit, timer instance. */
+export function timerUnitFor(unit: string | null): string | null {
+  return unit ? `${unit.replace(/\.[^.]+$/, "")}.timer` : null;
+}
+
+/**
+ * Ask both questions the timer-driven sync needs: is the schedule armed, and is a run in
+ * progress now. They are read separately because a healthy idle oneshot is `inactive` — the
+ * state a dead sync also sits in.
+ */
+export function probeSync(unit: string | null, run: UnitProbeRun = execFile): Promise<SyncProbe> {
+  const timerUnit = timerUnitFor(unit);
+  return Promise.all([probeState(unit, run), probeState(timerUnit, run)]).then(([service, timer]) => {
+    // A timer that is armed, starting or stopping is still scheduled; only inactive/failed is not.
+    const scheduleActive = timer.state === null ? null : timer.state !== "inactive" && timer.state !== "failed";
+    // `activating` is the oneshot mid-run — the live case where `/health` used to say false.
+    const runInProgress =
+      service.state === null
+        ? null
+        : service.state !== "inactive" && service.state !== "failed" && service.state !== "deactivating";
+    const unitActive =
+      scheduleActive === true || runInProgress === true
+        ? true
+        : scheduleActive === false && runInProgress === false
+          ? false
+          : null;
+    // Name the fact that made the aggregate unverified: the schedule first, because a timer that
+    // could not be read is what the old service-only probe could not tell from a dead sync.
+    let unitActiveReason: UnitProbeReason | null = null;
+    if (unitActive === null) {
+      unitActiveReason =
+        scheduleActive === null
+          ? (timer.reason ?? service.reason ?? "probe_failed")
+          : (service.reason ?? "probe_failed");
+    }
+    return {
+      timerUnit,
+      scheduleActive,
+      scheduleActiveReason: scheduleActive === null ? (timer.reason ?? "probe_failed") : null,
+      runInProgress,
+      runInProgressReason: runInProgress === null ? (service.reason ?? "probe_failed") : null,
+      unitActive,
+      unitActiveReason,
+    };
   });
 }
 
@@ -464,7 +574,7 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
 
     if (path === "/binding") return json(res, 200, { ok: true, binding: publicBinding(binding, clientFor(binding).keyPresent) });
     if (path === "/health") {
-      return json(res, 200, { ok: true, health: readHealth(binding, Date.now(), await probeUnit(binding.unit)) });
+      return json(res, 200, { ok: true, health: readHealth(binding, Date.now(), await probeSync(binding.unit)) });
     }
 
     // Validate the request shape before the credential check: a malformed path

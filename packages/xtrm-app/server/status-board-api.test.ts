@@ -9,13 +9,16 @@ import {
   loadPmConfig,
   normaliseDoc,
   normaliseRepo,
+  probeSync,
   probeUnit,
   publicBinding,
   readHealth,
   resolveBinding,
   statusBoardApi,
+  timerUnitFor,
   unboundBody,
   type PmConfig,
+  type SyncProbe,
   type UnitProbeRun,
 } from "./status-board-api.ts";
 
@@ -39,6 +42,18 @@ const CONFIG: PmConfig = {
     },
   },
 };
+
+/** A probe fixture: every fact unverified unless the test says otherwise. */
+const syncProbe = (over: Partial<SyncProbe> = {}): SyncProbe => ({
+  timerUnit: null,
+  scheduleActive: null,
+  scheduleActiveReason: "unit_not_found",
+  runInProgress: null,
+  runInProgressReason: "unit_not_found",
+  unitActive: null,
+  unitActiveReason: "unit_not_found",
+  ...over,
+});
 
 describe("binding resolution", () => {
   it("matches the repository by repo_slug, which is the file the sync reads", () => {
@@ -270,7 +285,7 @@ describe("health", () => {
     const old = new Date("2026-11-17T06:00:00Z");
     utimesSync(join(dir, "state.json"), old, old);
     const binding = resolveBinding(CONFIG, "mercuryintelligence/market-data", { env: {} });
-    const health = readHealth({ ...binding, stateDir: dir }, Date.parse("2026-11-17T09:00:00Z"), { active: true, reason: null });
+    const health = readHealth({ ...binding, stateDir: dir }, Date.parse("2026-11-17T09:00:00Z"), syncProbe({ unitActive: true }));
     expect(health.lastSyncOkAt).toBe("2026-11-17T06:00:00.000Z");
     expect(health.driftCount).toBe(2);
     expect(health.stale).toBe(true);
@@ -281,7 +296,7 @@ describe("health", () => {
 
   it("reports unknown, not zero, when the state files are absent", () => {
     const binding = resolveBinding(CONFIG, "mercuryintelligence/market-data", { env: {} });
-    const probe = { active: null, reason: "probe_timeout" } as const;
+    const probe = syncProbe({ unitActive: null, unitActiveReason: "probe_timeout" });
     const health = readHealth({ ...binding, stateDir: join(tmpdir(), "definitely-absent-dir-xyz") }, Date.now(), probe);
     expect(health.lastSyncOkAt).toBeNull();
     expect(health.driftCount).toBeNull();
@@ -328,6 +343,9 @@ describe("unit probe", () => {
       active: null,
       reason: "unit_not_found",
     });
+    // What systemd actually prints for an uninstalled unit: `inactive`, exit 4, empty stderr.
+    const absent = Object.assign(new Error("Command failed: systemctl"), { killed: false, code: 4 });
+    expect(await probeUnit("sync.service", run("inactive", absent))).toEqual({ active: null, reason: "unit_not_found" });
   });
 
   it("names why the probe could not answer", async () => {
@@ -341,6 +359,122 @@ describe("unit probe", () => {
       active: null,
       reason: "probe_failed",
     });
+  });
+});
+
+describe("timer-driven sync health", () => {
+  const SERVICE = "status-board-sync.service";
+  const TIMER = "status-board-sync.timer";
+  type Canned = { stdout: string; error?: (Error & { killed?: boolean; code?: number | string }) | null; stderr?: string };
+
+  /**
+   * One canned `is-active` answer per unit. An unlisted unit answers the way systemd really does
+   * for a unit nobody installed: `inactive` on stdout, exit code 4, empty stderr.
+   */
+  const runUnits = (states: Record<string, Canned>): UnitProbeRun =>
+    (_command, args, _options, callback) => {
+      const unit = String(args[args.length - 1]);
+      const hit = states[unit];
+      if (!hit) {
+        const missing = Object.assign(new Error(`Command failed: systemctl --user is-active ${unit}`), { killed: false, code: 4 });
+        return callback(missing, "inactive\n", "");
+      }
+      callback(hit.error ?? null, hit.stdout, hit.stderr ?? "");
+    };
+  const probe = (states: Record<string, Canned>) => probeSync(SERVICE, runUnits(states));
+  const binding = resolveBinding(CONFIG, "mercuryintelligence/market-data", { env: {} });
+
+  it("derives the timer instance from the configured service unit", () => {
+    expect(timerUnitFor(SERVICE)).toBe(TIMER);
+    expect(timerUnitFor("sync")).toBe("sync.timer");
+    expect(timerUnitFor(null)).toBeNull();
+  });
+
+  it("does not report a healthy idle sync as down (timer active, service inactive)", async () => {
+    // The bug: between ticks the oneshot is `inactive`, and that was published as `false`.
+    const state = await probe({ [TIMER]: { stdout: "active" }, [SERVICE]: { stdout: "inactive" } });
+    expect(state).toMatchObject({
+      timerUnit: TIMER,
+      scheduleActive: true,
+      scheduleActiveReason: null,
+      runInProgress: false,
+      unitActive: true,
+      unitActiveReason: null,
+    });
+    const health = readHealth(binding, Date.now(), state);
+    expect(health.unitActive).toBe(true);
+    expect(health.unitActiveReason).toBeNull();
+    expect(health.scheduleActive).toBe(true);
+    expect(health.runInProgress).toBe(false);
+  });
+
+  it("does not report a run in progress as not running (timer active, service activating)", async () => {
+    // The live observation 2026-11-17 13:44: `is-active` answered `activating`, /health said false.
+    const state = await probe({ [TIMER]: { stdout: "active" }, [SERVICE]: { stdout: "activating" } });
+    expect(state.runInProgress).toBe(true);
+    expect(state.runInProgressReason).toBeNull();
+    expect(state.unitActive).toBe(true);
+    const health = readHealth(binding, Date.now(), state);
+    expect(health.runInProgress).toBe(true);
+    expect(health.unitActive).toBe(true);
+  });
+
+  it("reports a genuinely dead schedule as inactive (timer inactive or failed, service inactive)", async () => {
+    for (const timerState of ["inactive", "failed"]) {
+      const state = await probe({ [TIMER]: { stdout: timerState }, [SERVICE]: { stdout: "inactive" } });
+      expect(state.scheduleActive).toBe(false);
+      expect(state.scheduleActiveReason).toBeNull();
+      expect(state.runInProgress).toBe(false);
+      expect(state.unitActive).toBe(false);
+      expect(state.unitActiveReason).toBeNull();
+      expect(readHealth(binding, Date.now(), state).unitActive).toBe(false);
+    }
+  });
+
+  it("reports an unprobeable timer as unverified, never as down", async () => {
+    // No timer unit for this service: absence is not evidence that the sync is down.
+    const state = await probe({ [SERVICE]: { stdout: "inactive" } });
+    expect(state.timerUnit).toBe(TIMER);
+    expect(state.scheduleActive).toBeNull();
+    expect(state.scheduleActiveReason).toBe("unit_not_found");
+    expect(state.runInProgress).toBe(false);
+    expect(state.unitActive).toBeNull();
+    expect(state.unitActiveReason).toBe("unit_not_found");
+    const health = readHealth(binding, Date.now(), state);
+    expect(health.unitActive).toBeNull();
+    expect(health.unitActiveReason).toBe("unit_not_found");
+    expect(health.scheduleActiveReason).toBe("unit_not_found");
+  });
+
+  it("does not read systemd's `inactive` + exit 4 as not-armed", async () => {
+    // Verified on the canonical host: `systemctl --user is-active <missing>.timer` prints
+    // `inactive`, exits 4, and writes nothing to stderr. Reading stdout alone says "dead".
+    const missing = Object.assign(new Error("Command failed: systemctl"), { killed: false, code: 4 });
+    const state = await probe({ [SERVICE]: { stdout: "inactive" }, [TIMER]: { stdout: "inactive", error: missing } });
+    expect(state.scheduleActive).toBeNull();
+    expect(state.scheduleActiveReason).toBe("unit_not_found");
+    expect(state.unitActive).toBeNull();
+    expect(readHealth(binding, Date.now(), state).unitActive).toBeNull();
+  });
+
+  it("keeps each fact's own reason when only one probe failed", async () => {
+    const killed = Object.assign(new Error("The operation was killed"), { killed: true });
+    const noTimer = await probe({ [TIMER]: { stdout: "", error: killed }, [SERVICE]: { stdout: "inactive" } });
+    expect(noTimer.scheduleActive).toBeNull();
+    expect(noTimer.scheduleActiveReason).toBe("probe_timeout");
+    expect(noTimer.runInProgress).toBe(false);
+    expect(noTimer.unitActiveReason).toBe("probe_timeout");
+    const noService = await probe({ [TIMER]: { stdout: "active" }, [SERVICE]: { stdout: "", error: killed } });
+    expect(noService.runInProgress).toBeNull();
+    expect(noService.runInProgressReason).toBe("probe_timeout");
+    expect(noService.unitActive).toBe(true);
+  });
+
+  it("publishes both facts as unverified when there is no unit at all", async () => {
+    const state = await probeSync(null, runUnits({}));
+    expect(state).toEqual({ ...syncProbe() });
+    const health = readHealth(binding, Date.now(), state);
+    expect(health).toMatchObject({ unitActive: null, timerUnit: null, scheduleActive: null, runInProgress: null });
   });
 });
 
@@ -539,6 +673,14 @@ describe("status-board middleware", () => {
     const res = await send(middleware, "GET", `/xtrm-api/status-board/health?repo=${repo}`);
     expect(res.status).toBe(200);
     expect(res.body.health).toMatchObject({ unitActive: null, unitActiveReason: "unit_not_found" });
+    // Neither fact is guessed: the schedule and the run are unverified in their own right.
+    expect(res.body.health).toMatchObject({
+      timerUnit: null,
+      scheduleActive: null,
+      scheduleActiveReason: "unit_not_found",
+      runInProgress: null,
+      runInProgressReason: "unit_not_found",
+    });
     expect(res.body.health.lastSyncOkAt).toBeNull();
   });
 

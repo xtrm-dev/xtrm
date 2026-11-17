@@ -240,11 +240,35 @@ the app, so the board the app reads and the board the sync writes cannot diverge
 
 The app never reads the state directory (`state.json`, `drift.jsonl`, `sync.log` contents) through the
 browser. Health is served by the bridge as a small typed object: `configured`, `site`, `stateDir`,
-`lastSyncOkAt`, `driftCount`, `unitActive`, `unitActiveReason` — derived server-side, cached briefly.
-`unitActive` is tri-state: `true`/`false` come from `systemctl --user is-active`, and `false` is
-published only for a unit systemd reports as not running. `null` means the bridge did not verify the
-unit, and it carries a named reason in `unitActiveReason` (`unit_not_found`, `probe_timeout`,
-`non_user_session`, `probe_failed`): an unverified unit is never rendered as "the sync is down".
+`lastSyncOkAt`, `driftCount`, `unitActive`, `unitActiveReason`, `timerUnit`, `scheduleActive`,
+`scheduleActiveReason`, `runInProgress`, `runInProgressReason` — derived server-side, cached briefly.
+
+`unitActive` used to conflate two questions a timer-driven sync answers differently, so the bridge now
+asks both. `status-board-sync.service` is a `Type=oneshot` unit started by `status-board-sync.timer`
+(every five minutes): between runs it is `inactive`, during a run it is `activating`. A service-only
+probe therefore published "the sync is down" on every tick — observed 2026-11-17, 13:44,
+`systemctl --user is-active status-board-sync.service` answered `activating` while `/health` reported
+`unitActive: false`.
+
+The probe reads the service unit and its `<unit>.timer` (the timer instance of the same unit name):
+
+| field | `true` | `false` | `null` |
+|---|---|---|---|
+| `scheduleActive` | timer `active`/`reloading`/`activating`/`deactivating` | timer `inactive`/`failed` | the timer could not be read |
+| `runInProgress` | service `active`/`reloading`/`activating` (a starting oneshot is a run) | `inactive`/`failed`/`deactivating` | the service could not be read |
+| `unitActive` | `scheduleActive` **or** `runInProgress` is `true` | both are `false` | otherwise |
+
+`false` is published only for positive evidence of a dead sync: the timer is not armed *and* no run is
+in progress. `true` needs only one of the two, so a healthy idle sync (armed, between runs) reads
+`true`, not `false`. `unitActive` keeps its XTRM-830 tri-state meaning: `true` is a live sync, `false`
+is a verified dead one, `null` is "not verified". Every unverified fact carries a named reason
+(`unit_not_found`, `probe_timeout`, `non_user_session`, `probe_failed`) in its own `…Reason` field, and
+an unverified fact is never rendered as "the sync is down". A unit with no timer instance (the timer
+probe answers `unit_not_found`) is reported as `scheduleActive: null` with that reason: a missing timer
+is not evidence that the sync is down, and the bridge never guesses a timer name it cannot probe. The
+probe reads `is-active`'s exit code before its stdout, because systemd answers `inactive` for a unit
+that does not exist at all (exit 4, empty stderr) — the state that a missing timer and a timer that was
+stopped share.
 
 ### D8 — Write ownership and conflict behaviour (deferred tranche)
 
@@ -305,7 +329,7 @@ daemon, or websocket is introduced now.
 
 ```text
 ProjectBinding   { repository, substrateProject, statusBoard?: { site, stateDir }, jira?: { site, projectKey } }
-ProjectHealth    { configured, lastSyncOkAt, driftCount, unitActive, unitActiveReason, stale }
+ProjectHealth    { configured, lastSyncOkAt, driftCount, unitActive, unitActiveReason, timerUnit, scheduleActive, scheduleActiveReason, runInProgress, runInProgressReason, stale }
 BoardRecord<T>   { path, id, createdAt, updatedAt, doc: T }
 Worker           { name, kind, where, runtime, issue, task, status, milestone, milestoneAt, ctxPct, claimUntil, reportsTo, note }
 ScheduleEvent    { id, at, end?, ref, label, status, note, noteSrc?, url?, kind: "window"|"pr"|"handover"|"incident"|"report", createdBy }
@@ -326,14 +350,16 @@ render neutrally and are logged as a contract gap, never coerced.
 | binding absent | `IntegrationState` "not integrated", no data calls |
 | last sync ok < 15 min | normal, no badge |
 | 15–60 min | quiet "last synced 34 min ago" in the toolbar |
-| > 60 min, unit inactive (`unitActive: false`), or read error | read-only banner; writes disabled |
-| unit unverified (`unitActive: null` + reason) | quiet "sync status unverified" beside the last sync; never the banner, never "down" |
+| run in progress (`runInProgress: true`) | quiet "syncing now" beside the last sync; writes stay enabled |
+| > 60 min, dead schedule (`unitActive: false`: timer not armed **and** no run in progress), or read error | read-only banner; writes disabled |
+| schedule or run unverified (`scheduleActive`/`runInProgress` null + reason, hence `unitActive: null`) | quiet "sync status unverified" beside the last sync; never the banner, never "down" |
 | drift count > 0 | Overview attention row; link to the drift file summary (server-rendered counts only) |
 
 The app never claims freshness it did not verify: the health object is server-derived and carries its
 own timestamp (`checkedAt`), and every cached read carries `cachedAt`, the time the upstream data was
 fetched rather than the time it was served, so a read can state its own age. An unverified unit state
-is `null` with a reason, never `false`.
+is `null` with a reason, never `false`. A timer-driven sync has two of them — the schedule and the run
+— and the banner keys off `unitActive`, which is `false` only when both verified not-live.
 
 ## 5. Security and privacy
 
@@ -441,7 +467,7 @@ Epic **XTRM-811**; children below. `blocked by` names the sibling in this table.
 | XTRM-821 | **Deferred:** answer writing with conflict + audit | .6 |
 | XTRM-822 | **Deferred:** Activity notifications | .6 |
 
-XTRM-812 closes on local evidence. The deployed-console verification its contract defers is **XTRM-823** (discovered-from XTRM-812), so the last unproven item has its own owner instead of keeping the bridge open in progress.
+XTRM-812 closes on local evidence. The deployed-console verification its contract defers is **XTRM-823** (discovered-from XTRM-812), so the last unproven item has its own owner instead of keeping the bridge open in progress. The health field set was amended twice on live evidence: XTRM-830 made an unverified unit `null` with a reason, and XTRM-834 split the schedule (timer) from the run (oneshot service) — §D7 and §4 describe the current contract.
 
 XTRM-811 relates to the earlier, narrower XTRM-753 draft (Artifacts surface with two-way here.now
 sync), which this scope supersedes in direction without closing it.
