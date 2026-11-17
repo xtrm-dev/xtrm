@@ -176,8 +176,11 @@ def _scan(root: Path) -> list[dict]:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
         from drift_detector import scan_drift  # type: ignore[import-not-found]
         return scan_drift(project_root=str(scan_root), use_gitnexus=False)
-    except (ImportError, OSError, RuntimeError, ValueError, TypeError, KeyError):
+    except (ImportError, OSError, ValueError, TypeError, KeyError):
         return []
+    # RuntimeError is deliberately NOT swallowed: scan_drift raises it when sync
+    # history is unknown (fail closed). _cmd_drift turns it into a non-zero exit
+    # that keeps the pending marker; treating it as "no drift" would erase the signal.
 
 
 def _cmd_drift(args: argparse.Namespace) -> int:
@@ -187,7 +190,14 @@ def _cmd_drift(args: argparse.Namespace) -> int:
         print("service-knowledge drift: no service registry found — nothing to scan.")
         return 0
 
-    drift = _scan(root)
+    try:
+        drift = _scan(root)
+    except RuntimeError as exc:
+        # Fail closed: drift cannot be determined, so it is NOT reported clean and
+        # any pending marker is kept for the operator.
+        print(f"service-knowledge drift: cannot determine drift — {exc}", file=sys.stderr)
+        print("   Pending marker(s) kept. Reconcile (/updating-service-knowledge) to record a verified last_sync_ref.", file=sys.stderr)
+        return 2
     if not drift:
         # No drift: clear any stale pending marker (a previous run may have left one).
         for marker in marker_paths(root):
