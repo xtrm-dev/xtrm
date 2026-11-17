@@ -177,7 +177,9 @@ browser cannot hold the credentials and the upstreams are private or CORS-hostil
   error string, or included in a build artifact;
 - read endpoints are an explicit allowlist; unknown paths are 404, not proxied;
 - bounded caching: the board changes on a 5-minute mechanical cadence, so reads may cache for at most
-  60 s and must send a freshness marker; Jira reads cache for 30 s per issue;
+  60 s and must send a freshness marker — `cachedAt`, the timestamp at which the upstream data was
+  fetched (the cache entry's `at`), so a read served from the cache does not advance it; Jira reads
+  cache for 30 s per issue;
 - the only write is `PATCH answers/<qid>`, gated by a per-request check that the target path starts
   with `answers/`; every other write verb is refused at the route;
 - the bridge is the only component that talks to here.now or Jira. No token, site key, or Jira
@@ -238,7 +240,11 @@ the app, so the board the app reads and the board the sync writes cannot diverge
 
 The app never reads the state directory (`state.json`, `drift.jsonl`, `sync.log` contents) through the
 browser. Health is served by the bridge as a small typed object: `configured`, `site`, `stateDir`,
-`lastSyncOkAt`, `driftCount`, `unitActive` — derived server-side, cached briefly.
+`lastSyncOkAt`, `driftCount`, `unitActive`, `unitActiveReason` — derived server-side, cached briefly.
+`unitActive` is tri-state: `true`/`false` come from `systemctl --user is-active`, and `false` is
+published only for a unit systemd reports as not running. `null` means the bridge did not verify the
+unit, and it carries a named reason in `unitActiveReason` (`unit_not_found`, `probe_timeout`,
+`non_user_session`, `probe_failed`): an unverified unit is never rendered as "the sync is down".
 
 ### D8 — Write ownership and conflict behaviour (deferred tranche)
 
@@ -299,7 +305,7 @@ daemon, or websocket is introduced now.
 
 ```text
 ProjectBinding   { repository, substrateProject, statusBoard?: { site, stateDir }, jira?: { site, projectKey } }
-ProjectHealth    { configured, lastSyncOkAt, driftCount, unitActive, stale }
+ProjectHealth    { configured, lastSyncOkAt, driftCount, unitActive, unitActiveReason, stale }
 BoardRecord<T>   { path, id, createdAt, updatedAt, doc: T }
 Worker           { name, kind, where, runtime, issue, task, status, milestone, milestoneAt, ctxPct, claimUntil, reportsTo, note }
 ScheduleEvent    { id, at, end?, ref, label, status, note, noteSrc?, url?, kind: "window"|"pr"|"handover"|"incident"|"report", createdBy }
@@ -320,11 +326,14 @@ render neutrally and are logged as a contract gap, never coerced.
 | binding absent | `IntegrationState` "not integrated", no data calls |
 | last sync ok < 15 min | normal, no badge |
 | 15–60 min | quiet "last synced 34 min ago" in the toolbar |
-| > 60 min, unit inactive, or read error | read-only banner; writes disabled |
+| > 60 min, unit inactive (`unitActive: false`), or read error | read-only banner; writes disabled |
+| unit unverified (`unitActive: null` + reason) | quiet "sync status unverified" beside the last sync; never the banner, never "down" |
 | drift count > 0 | Overview attention row; link to the drift file summary (server-rendered counts only) |
 
 The app never claims freshness it did not verify: the health object is server-derived and carries its
-own timestamp.
+own timestamp (`checkedAt`), and every cached read carries `cachedAt`, the time the upstream data was
+fetched rather than the time it was served, so a read can state its own age. An unverified unit state
+is `null` with a reason, never `false`.
 
 ## 5. Security and privacy
 

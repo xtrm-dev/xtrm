@@ -272,6 +272,21 @@ export function unboundBody(binding: BoardBinding) {
 
 export type UnboundReason = "config_absent" | "repo_not_bound";
 
+/**
+ * Why the unit state is unknown. A tri-state `unitActive: null` is "not verified",
+ * and publishing it as `false` beside a fresh `lastSyncOkAt` reads as "the sync is down".
+ */
+export type UnitProbeReason = "unit_not_found" | "probe_timeout" | "non_user_session" | "probe_failed";
+
+export type UnitProbe = {
+  /** true = running, false = not running, null = could not determine (see `reason`). */
+  active: boolean | null;
+  reason: UnitProbeReason | null;
+};
+
+/** No probe was run, so the state is unverified rather than inactive. */
+export const NOT_PROBED: UnitProbe = { active: null, reason: "probe_failed" };
+
 export type BoardHealth = {
   configured: boolean;
   /** Why the surface has no data: the deployment, or this repository. */
@@ -279,6 +294,8 @@ export type BoardHealth = {
   site: string | null;
   stateDir: string | null;
   unitActive: boolean | null;
+  /** Set only when `unitActive` is null: never "down", just not verified. */
+  unitActiveReason: UnitProbeReason | null;
   lastSyncOkAt: string | null;
   driftCount: number | null;
   stale: boolean;
@@ -290,7 +307,7 @@ export type BoardHealth = {
  * successful sync marker the sync itself writes; `drift.jsonl` line count is the
  * open drift set. Missing files mean "unknown", not "zero".
  */
-export function readHealth(binding: BoardBinding, now = Date.now(), unitActive: boolean | null = null): BoardHealth {
+export function readHealth(binding: BoardBinding, now = Date.now(), unit: UnitProbe = NOT_PROBED): BoardHealth {
   let lastSyncOkAt: string | null = null;
   let driftCount: number | null = null;
   if (binding.stateDir) {
@@ -312,7 +329,8 @@ export function readHealth(binding: BoardBinding, now = Date.now(), unitActive: 
     reason: binding.configured ? null : binding.configPresent ? "repo_not_bound" : "config_absent",
     site: binding.site,
     stateDir: binding.stateDir,
-    unitActive,
+    unitActive: unit.active,
+    unitActiveReason: unit.active === null ? (unit.reason ?? "probe_failed") : null,
     lastSyncOkAt,
     driftCount,
     stale: binding.configured ? ageMs > 60 * 60_000 : false,
@@ -356,19 +374,42 @@ const json = (res: ServerResponse, status: number, body: unknown): void => {
   res.end(JSON.stringify(body));
 };
 
+/** Injectable so the probe is testable without a live systemd user session. */
+export type UnitProbeRun = (
+  command: string,
+  args: string[],
+  options: { timeout: number },
+  callback: (error: (Error & { killed?: boolean }) | null, stdout: string, stderr: string) => void,
+) => unknown;
+
 /**
  * The sync is a systemd user unit on the host that runs the app. A missing
- * systemctl, a non-user session, or a timeout means "unknown" (null), never
- * "inactive": a workstation dev server must not report production as down.
+ * systemctl, a non-user session, a timeout, or a state that does not name a
+ * running unit means "unverified" (`active: null` plus a reason), never
+ * `false`: a workstation dev server must not report production as down.
  */
-export function probeUnit(unit: string | null): Promise<boolean | null> {
-  if (!unit) return Promise.resolve(null);
+export function probeUnit(unit: string | null, run: UnitProbeRun = execFile): Promise<UnitProbe> {
+  if (!unit) return Promise.resolve({ active: null, reason: "unit_not_found" });
   return new Promise((resolve) => {
-    execFile("systemctl", ["--user", "is-active", unit], { timeout: 2_000 }, (error, stdout) => {
+    run("systemctl", ["--user", "is-active", unit], { timeout: 2_000 }, (error, stdout, stderr) => {
       const state = stdout.trim();
-      if (state === "active") return resolve(true);
-      if (state === "inactive" || state === "failed" || state === "activating") return resolve(false);
-      resolve(error && !state ? null : state ? false : null);
+      // A reloading unit is still running; the remaining states are not.
+      if (state === "active" || state === "reloading") return resolve({ active: true, reason: null });
+      if (state === "inactive" || state === "failed" || state === "activating" || state === "deactivating") {
+        return resolve({ active: false, reason: null });
+      }
+      if (error?.killed) return resolve({ active: null, reason: "probe_timeout" });
+      const detail = `${stderr}\n${error?.message ?? ""}`;
+      if (/not been booted with systemd|failed to connect to bus|no medium found/i.test(detail)) {
+        return resolve({ active: null, reason: "non_user_session" });
+      }
+      if (/could not be found|no such file|not found/i.test(detail)) {
+        return resolve({ active: null, reason: "unit_not_found" });
+      }
+      // An answer we cannot read as a run state ("unknown", "maintenance"): the
+      // unit does not resolve, so it is not evidence that the sync is down.
+      if (state) return resolve({ active: null, reason: "unit_not_found" });
+      resolve({ active: null, reason: "probe_failed" });
     });
   });
 }
@@ -398,12 +439,17 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
    * can still look absent); an *inconclusive* read is not an answer and must not
    * be cached, or a 502 would outlive the condition that caused it.
    */
-  const cached = async <T>(key: string, load: () => Promise<T>, cacheable: (value: T) => boolean = () => true): Promise<T> => {
+  const cached = async <T>(
+    key: string,
+    load: () => Promise<T>,
+    cacheable: (value: T) => boolean = () => true,
+  ): Promise<{ value: T; at: number }> => {
     const hit = cache.get(key);
-    if (hit && Date.now() - hit.at < CACHE_MS) return hit.value as T;
+    if (hit && Date.now() - hit.at < CACHE_MS) return { value: hit.value as T, at: hit.at };
     const value = await load();
-    if (cacheable(value)) cache.set(key, { at: Date.now(), value });
-    return value;
+    const at = Date.now();
+    if (cacheable(value)) cache.set(key, { at, value });
+    return { value, at };
   };
 
   const handle = async (req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> => {
@@ -443,11 +489,11 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
         const collection = (url.searchParams.get("prefix") ?? "").replace(/\/$/, "");
         const limit = Number(url.searchParams.get("limit") ?? 200);
         const key = `list:${binding.site}:${collection}:${limit}`;
-        const result = await cached(key, () => client.list(`${collection}/`, { limit }));
-        return json(res, 200, { ok: true, ...result, cachedAt: new Date().toISOString() });
+        const { value: result, at } = await cached(key, () => client.list(`${collection}/`, { limit }));
+        return json(res, 200, { ok: true, ...result, cachedAt: new Date(at).toISOString() });
       }
       const recordPath = url.searchParams.get("path") ?? "";
-      const lookup = await cached(
+      const { value: lookup, at } = await cached(
         `record:${binding.site}:${recordPath}`,
         () => client.record(recordPath),
         (value) => value.outcome !== "incomplete",
@@ -461,7 +507,7 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
           error: "status board record lookup was inconclusive",
         });
       }
-      return json(res, 200, { ok: true, record: lookup.record, cachedAt: new Date().toISOString() });
+      return json(res, 200, { ok: true, record: lookup.record, cachedAt: new Date(at).toISOString() });
     } catch (error) {
       // Generic upstream failure: never echo the credential, the URL, or the body.
       return json(res, 502, { ok: false, error: error instanceof Error ? error.message : "status board read failed" });
