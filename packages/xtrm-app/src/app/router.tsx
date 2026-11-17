@@ -52,14 +52,10 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     getParentRoute: () => rootRoute,
     path: "/",
     beforeLoad: () => {
-      let stored: string | null = null;
-      try {
-        stored = localStorage.getItem("xtrm.console.repo.v1");
-      } catch {
-        // storage unavailable
-      }
-      const [owner, name] = stored?.split("/") ?? [DEFAULT_REPO.owner, DEFAULT_REPO.name];
-      throw redirect({ to: `/rep/${owner}/${name}/work/issues` } as never);
+      // The stored repository is read once, by the same helper the retired-route redirects use;
+      // this route alone keeps the default repository when nothing is stored yet.
+      const stored = selectedRepo();
+      throw redirect({ to: `/rep/${stored?.owner ?? DEFAULT_REPO.owner}/${stored?.name ?? DEFAULT_REPO.name}/work/issues` } as never);
     },
   });
 
