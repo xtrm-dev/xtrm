@@ -9,12 +9,14 @@ import {
   loadPmConfig,
   normaliseDoc,
   normaliseRepo,
+  probeUnit,
   publicBinding,
   readHealth,
   resolveBinding,
   statusBoardApi,
   unboundBody,
   type PmConfig,
+  type UnitProbeRun,
 } from "./status-board-api.ts";
 
 const CONFIG: PmConfig = {
@@ -268,20 +270,24 @@ describe("health", () => {
     const old = new Date("2026-11-17T06:00:00Z");
     utimesSync(join(dir, "state.json"), old, old);
     const binding = resolveBinding(CONFIG, "mercuryintelligence/market-data", { env: {} });
-    const health = readHealth({ ...binding, stateDir: dir }, Date.parse("2026-11-17T09:00:00Z"), true);
+    const health = readHealth({ ...binding, stateDir: dir }, Date.parse("2026-11-17T09:00:00Z"), { active: true, reason: null });
     expect(health.lastSyncOkAt).toBe("2026-11-17T06:00:00.000Z");
     expect(health.driftCount).toBe(2);
     expect(health.stale).toBe(true);
     expect(health.unitActive).toBe(true);
+    expect(health.unitActiveReason).toBeNull();
     expect(health.configured).toBe(true);
   });
 
   it("reports unknown, not zero, when the state files are absent", () => {
     const binding = resolveBinding(CONFIG, "mercuryintelligence/market-data", { env: {} });
-    const health = readHealth({ ...binding, stateDir: join(tmpdir(), "definitely-absent-dir-xyz") }, Date.now(), null);
+    const probe = { active: null, reason: "probe_timeout" } as const;
+    const health = readHealth({ ...binding, stateDir: join(tmpdir(), "definitely-absent-dir-xyz") }, Date.now(), probe);
     expect(health.lastSyncOkAt).toBeNull();
     expect(health.driftCount).toBeNull();
     expect(health.unitActive).toBeNull();
+    // null is "not verified", and it says why: it is never published beside an alarm.
+    expect(health.unitActiveReason).toBe("probe_timeout");
     expect(health.stale).toBe(true);
   });
 
@@ -290,6 +296,51 @@ describe("health", () => {
     expect(readHealth(binding).stale).toBe(false);
     const bound = resolveBinding(CONFIG, "mercuryintelligence/market-data", { env: {} });
     expect(readHealth(bound).reason).toBeNull();
+  });
+});
+
+describe("unit probe", () => {
+  const run = (
+    stdout: string,
+    error: (Error & { killed?: boolean }) | null = null,
+    stderr = "",
+  ): UnitProbeRun =>
+    (_command, _args, _options, callback) => {
+      callback(error, stdout, stderr);
+    };
+
+  it("is true only when systemd reports the unit running", async () => {
+    expect(await probeUnit("sync.service", run("active"))).toEqual({ active: true, reason: null });
+    expect(await probeUnit("sync.service", run("reloading"))).toEqual({ active: true, reason: null });
+  });
+
+  it("is false for a unit that is not running, and only then", async () => {
+    expect(await probeUnit("sync.service", run("inactive"))).toEqual({ active: false, reason: null });
+    expect(await probeUnit("sync.service", run("failed"))).toEqual({ active: false, reason: null });
+  });
+
+  it("is unverified, never down, when the state does not name a known unit", async () => {
+    // The live bug (XTRM-823): these answered `false` beside a fresh lastSyncOkAt.
+    expect(await probeUnit("sync.service", run("unknown"))).toEqual({ active: null, reason: "unit_not_found" });
+    expect(await probeUnit(null, run("active"))).toEqual({ active: null, reason: "unit_not_found" });
+    const missing = Object.assign(new Error("Command failed: systemctl"), { killed: false });
+    expect(await probeUnit("sync.service", run("", missing, "Unit sync.service could not be found."))).toEqual({
+      active: null,
+      reason: "unit_not_found",
+    });
+  });
+
+  it("names why the probe could not answer", async () => {
+    const killed = Object.assign(new Error("The operation was killed"), { killed: true });
+    expect(await probeUnit("sync.service", run("", killed))).toEqual({ active: null, reason: "probe_timeout" });
+    expect(await probeUnit("sync.service", run("", new Error("Failed to connect to bus: No medium found")))).toEqual({
+      active: null,
+      reason: "non_user_session",
+    });
+    expect(await probeUnit("sync.service", run("", new Error("spawn systemctl ENOENT")))).toEqual({
+      active: null,
+      reason: "probe_failed",
+    });
   });
 });
 
@@ -459,6 +510,36 @@ describe("status-board middleware", () => {
     const second = await send(middleware, "GET", url);
     expect(second.status).toBe(200);
     expect(calls).toBe(afterFirst);
+  });
+
+  it("stamps a cached read with the upstream fetch time, not the time it was served", async () => {
+    // The read is served from the 60 s cache, so the second response must report
+    // how old the data is — the entry's `at` — and not "now".
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls += 1;
+      return page([wire("workers/alice")]);
+    }) as unknown as typeof fetch;
+    const middleware = mount(statusBoardApi({ configPath, fetchImpl }));
+    const url = `/xtrm-api/status-board/list?repo=${repo}&prefix=workers`;
+    const first = await send(middleware, "GET", url);
+    expect(first.status).toBe(200);
+    expect(Number.isNaN(Date.parse(first.body.cachedAt))).toBe(false);
+    // A real gap between the two reads: a wall-clock stamp at response time would advance.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const second = await send(middleware, "GET", url);
+    expect(second.status).toBe(200);
+    expect(calls).toBe(1);
+    expect(second.body.cachedAt).toBe(first.body.cachedAt);
+  });
+
+  it("publishes unitActive null with a reason when there is no unit to probe", async () => {
+    // The binding has no status_board_unit, so nothing was verified: null, never false.
+    const middleware = mount(statusBoardApi({ configPath }));
+    const res = await send(middleware, "GET", `/xtrm-api/status-board/health?repo=${repo}`);
+    expect(res.status).toBe(200);
+    expect(res.body.health).toMatchObject({ unitActive: null, unitActiveReason: "unit_not_found" });
+    expect(res.body.health.lastSyncOkAt).toBeNull();
   });
 
   it("answers 503 when the credential file is missing, without calling upstream", async () => {
