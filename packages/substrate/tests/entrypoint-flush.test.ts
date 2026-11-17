@@ -15,6 +15,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { withoutNodeSqliteWarning } from "./hermetic-env.ts";
+
+// XTRM-824: these hooks import node:sqlite, so Node v25 announces an
+// ExperimentalWarning on stderr. The assertions below are about what the hook
+// wrote, not about what the runtime announced.
+const quietStderr = (s: string | null): string => withoutNodeSqliteWarning(s ?? "");
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -178,23 +184,23 @@ describe("XTRM-335 exit-code matrix", () => {
     const q1 = spawnSync(process.execPath, [join(HOOKS, "post-commit.ts")], { encoding: "utf8", env: envNoReceipt });
     assert.equal(q1.status, 0);
     assert.equal(q1.stdout, "", "quiet no-receipt path must emit zero bytes");
-    assert.equal(q1.stderr, "");
+    assert.equal(quietStderr(q1.stderr), "");
     const q2 = spawnSync(process.execPath, [join(HOOKS, "prepare-commit-msg.ts")], { encoding: "utf8" });
     assert.equal(q2.status, 0);
     assert.equal(q2.stdout, "", "quiet no-arg path must emit zero bytes");
-    assert.equal(q2.stderr, "", "quiet no-arg path must emit zero bytes on stderr");
+    assert.equal(quietStderr(q2.stderr), "", "quiet no-arg path must emit zero bytes on stderr");
     const msgDir = tempDir("x335-msg-");
     const msgFile = join(msgDir, "COMMIT_EDITMSG");
     writeFileSync(msgFile, "subject\n\nbody\n");
     const q2b = spawnSync(process.execPath, [join(HOOKS, "prepare-commit-msg.ts"), msgFile], { encoding: "utf8", env: envNoReceipt });
     assert.equal(q2b.status, 0);
     assert.equal(q2b.stdout, "", "quiet with-arg/no-receipt path must emit zero bytes");
-    assert.equal(q2b.stderr, "", "quiet with-arg/no-receipt path must emit zero bytes on stderr");
+    assert.equal(quietStderr(q2b.stderr), "", "quiet with-arg/no-receipt path must emit zero bytes on stderr");
     assert.equal(readFileSync(msgFile, "utf8"), "subject\n\nbody\n", "quiet path must leave the message file untouched");
     const q3 = spawnSync(process.execPath, [join(HOOKS, "post-rewrite.ts")], { input: "\n", encoding: "utf8" });
     assert.equal(q3.status, 0);
     assert.equal(q3.stdout, "", "quiet no-pairs path must emit zero bytes");
-    assert.equal(q3.stderr, "", "quiet no-pairs path must emit zero bytes on stderr");
+    assert.equal(quietStderr(q3.stderr), "", "quiet no-pairs path must emit zero bytes on stderr");
     // Failure path against an explicit temp store (never the live DB).
     const dbPath = `/var/tmp/x335-t335-hook-${process.pid}.db`;
     const failEnv = {
@@ -209,7 +215,15 @@ describe("XTRM-335 exit-code matrix", () => {
     assert.equal(fail.status, 1, "corrupt state must fail closed with exit 1");
     assert.ok(fail.stderr.includes("xtrm post-commit"));
     const pipedErr = shell(`${node(join(HOOKS, "post-commit.ts"), [])} 2>&1 >/dev/null | ${SLOW_CAT}`, failEnv);
-    assert.equal(pipedErr, fail.stderr, "diagnostic must cross the pipe whole");
+    // XTRM-824: each child prints its own node:sqlite warning with its own PID,
+    // so compare the diagnostics, not the PIDs inside the runtime notice. The
+    // exemption strips a known line, so assert the assumption it rests on: the
+    // notice appears at most once per process, or two would compare equal to one.
+    assert.ok(
+      (pipedErr.match(/ExperimentalWarning: SQLite/g) ?? []).length <= 1,
+      "the runtime notice must appear at most once; the exemption would hide a second one",
+    );
+    assert.equal(withoutNodeSqliteWarning(pipedErr), withoutNodeSqliteWarning(fail.stderr), "diagnostic must cross the pipe whole");
   });
 
   it("claude-code adapters: exit 0 with byte-identical output over a pipe, quiet paths zero-byte", () => {

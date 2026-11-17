@@ -12,6 +12,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { withoutNodeSqliteWarning } from "./hermetic-env.ts";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -107,11 +108,22 @@ describe("sb piped stdout is not truncated (XTRM-331)", () => {
     const argv = ["--db", bigFixture().dbPath, "issue", "list", "--project", "x".repeat(70_000)];
     const inProc = runCli(argv);
     assert.notEqual(inProc.code, 0);
-    assert.ok(inProc.stderr.length > PIPE_BUFFER, `fixture must exceed the pipe buffer, got ${inProc.stderr.length}`);
+    // XTRM-824: the child imports node:sqlite, so Node v25 adds a runtime
+    // ExperimentalWarning before the payload. Counting bytes would compare the
+    // two runtimes' PIDs, not the payload; compare the payload itself.
+    const expected = withoutNodeSqliteWarning(inProc.stderr);
+    assert.ok(expected.length > PIPE_BUFFER, `fixture must exceed the pipe buffer, got ${expected.length}`);
     const direct = spawnSync(process.execPath, [SB, ...argv], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
     assert.equal(direct.status, inProc.code, "exit code must be preserved exactly");
-    const pipedErr = execFileSync("/bin/sh", ["-c", `${cli(argv)} 2>&1 >/dev/null | { sleep 1; wc -c; }`], { encoding: "utf8" });
-    assert.equal(Number(pipedErr.trim()), inProc.stderr.length, "the full stderr payload must cross the pipe");
+    const pipedErr = execFileSync("/bin/sh", ["-c", `${cli(argv)} 2>&1 >/dev/null | cat`], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    // The exemption strips a known line, so two occurrences would compare equal
+    // to one. Assert the assumption the helper depends on: the runtime notice
+    // appears at most once per process (XTRM-824 review).
+    assert.ok(
+      (pipedErr.match(/ExperimentalWarning: SQLite/g) ?? []).length <= 1,
+      "the runtime notice must appear at most once; the exemption would hide a second one",
+    );
+    assert.equal(withoutNodeSqliteWarning(pipedErr), expected, "the full stderr payload must cross the pipe");
   });
 
   it("an early-closing consumer does not crash the CLI or change its exit code", () => {
