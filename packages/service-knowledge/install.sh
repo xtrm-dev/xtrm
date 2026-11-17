@@ -20,7 +20,7 @@ for arg in "$@"; do
   case "$arg" in
     --system-pipx) INSTALL_PIPX=1 ;;
     -h|--help)
-      sed -n '3,12p' "$0"
+      sed -n '3,11p' "$0"
       exit 0 ;;
   esac
 done
@@ -50,7 +50,7 @@ fi
 if [ -z "${VAULTCTL_DIR:-}" ] || [ ! -f "$VAULTCTL_DIR/pyproject.toml" ]; then
   DEFAULT_VAULTCTL="$(cd "$PKG_DIR/../../.." 2>/dev/null && pwd || true)/vaultctl"
   info "vaultctl source not found at $DEFAULT_VAULTCTL — cloning it"
-  if ! git clone $VAULTCTL_REPO "$DEFAULT_VAULTCTL"; then
+  if ! git clone "$VAULTCTL_REPO" "$DEFAULT_VAULTCTL"; then
     die "git clone $VAULTCTL_REPO failed (override with VAULTCTL_REPO=<url>).
     Clone it manually and either place it at $DEFAULT_VAULTCTL
     or set VAULTCTL_DIR=/your/path and re-run."
@@ -77,7 +77,10 @@ fi
 
 # 5. verify
 if command -v service-knowledge >/dev/null; then
-  VER="$(service-knowledge --version 2>&1)"
+  if ! VER="$(service-knowledge --version 2>&1)"; then
+    die "service-knowledge is on PATH but fails to run:
+    $VER"
+  fi
   info "installed: $VER"
   info "next: cd <your-repo> && service-knowledge install"
 else

@@ -282,3 +282,38 @@ def test_cli_without_vaultctl_exits_with_an_actionable_message(tmp_path):
     assert result.returncode != 0
     assert "vaultctl" in result.stderr and "install.sh" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
+def test_launcher_reports_unparseable_version_output_as_broken(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "service-knowledge"
+    stub.write_text("#!/bin/sh\necho 'no version here'\n", encoding="utf-8")
+    stub.chmod(0o755)
+    result = subprocess.run(
+        [NODE, str(LAUNCHER)],
+        capture_output=True, text=True, timeout=60,
+        env={"PATH": str(bin_dir), "HOME": str(tmp_path)},
+        cwd=str(tmp_path),
+    )
+    assert result.returncode == 78
+    assert "cli-broken" in result.stderr and "unparseable --version output" in result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
+def test_launcher_keeps_the_tail_of_a_long_traceback(tmp_path):
+    """The exception line is last in a Python traceback; truncating the head would drop it."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "service-knowledge"
+    frames = "echo '  File \"x.py\", line 1, in f' >&2\n" * 40
+    stub.write_text(f"#!/bin/sh\n{frames}echo 'ModuleNotFoundError: No module named vaultctl' >&2\nexit 1\n", encoding="utf-8")
+    stub.chmod(0o755)
+    result = subprocess.run(
+        [NODE, str(LAUNCHER)],
+        capture_output=True, text=True, timeout=60,
+        env={"PATH": str(bin_dir), "HOME": str(tmp_path)},
+        cwd=str(tmp_path),
+    )
+    assert "ModuleNotFoundError: No module named vaultctl" in result.stderr

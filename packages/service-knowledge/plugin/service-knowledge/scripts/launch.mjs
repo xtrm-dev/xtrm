@@ -89,7 +89,7 @@ function cliVersion() {
     if (error && error.code === "ENOENT") return { missing: true };
     // The binary exists but did not answer: most often a broken install (for example the
     // vaultctl dependency absent). Surface its own stderr instead of calling it "missing".
-    const detail = String((error && (error.stderr || error.message)) || error).trim().slice(0, 400);
+    const detail = String((error && (error.stderr || error.message)) || error).trim().slice(-400); // the tail: a traceback's exception line comes last
     return { broken: detail };
   }
 }
@@ -113,7 +113,7 @@ function main() {
   if (probe.broken) {
     fail(
       "cli-broken",
-      `'${CLI} --version' failed: ${probe.broken} ${INSTALL_HINT} The knowledge tools are ` +
+      `'${CLI} --version' failed: ${probe.broken}${probe.broken.includes("install.sh") ? "" : " " + INSTALL_HINT} The knowledge tools are ` +
         `unavailable until it runs; nothing else in this session is affected.`,
     );
     return;

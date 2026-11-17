@@ -15,7 +15,7 @@ except ImportError as _exc:  # pragma: no cover - exercised via subprocess in te
     raise SystemExit(
         "service-knowledge: the 'vaultctl' dependency is not installed in this environment "
         f"({_exc}). Reinstall with packages/service-knowledge/install.sh from an xtrm-dev/xtrm "
-        "checkout, or `pipx inject --editable service-knowledge /path/to/vaultctl`."
+        "checkout (it installs vaultctl into the same environment)."
     ) from _exc
 
 from service_knowledge import __version__
