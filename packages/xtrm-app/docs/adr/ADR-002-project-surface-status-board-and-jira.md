@@ -432,5 +432,7 @@ Epic **XTRM-811**; children below. `blocked by` names the sibling in this table.
 | XTRM-821 | **Deferred:** answer writing with conflict + audit | .6 |
 | XTRM-822 | **Deferred:** Activity notifications | .6 |
 
+XTRM-812 closes on local evidence. The deployed-console verification its contract defers is **XTRM-823** (discovered-from XTRM-812), so the last unproven item has its own owner instead of keeping the bridge open in progress.
+
 XTRM-811 relates to the earlier, narrower XTRM-753 draft (Artifacts surface with two-way here.now
 sync), which this scope supersedes in direction without closing it.
