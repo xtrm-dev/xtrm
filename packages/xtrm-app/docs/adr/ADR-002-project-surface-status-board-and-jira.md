@@ -1,10 +1,11 @@
 # ADR-002 — Repository Project surface: status board, Jira links, and the Program rename
 
-> Status: PROPOSED — scoping, no product code yet. Defaults are recorded in §10 as assumptions; one
-> operator reply amends a record instead of stalling a tranche.
+> Status: ACCEPTED with amendments (2026-11-17, workstream lead `xtrm-xt-claude-e9rd`; rulings in §12).
+> The bridge (XTRM-812) is shipped; the surfaces are not. Defaults in §10 stay in force; one operator
+> reply amends a record instead of stalling a tranche.
 > Date: 2026-11-17
-> Deciders: operator; recorded by the `xtrm-xt-pi-poxc` coordinator
-> Work: new Substrate issues, proposed in §11 (not yet created)
+> Deciders: operator; recorded by the `xtrm-xt-pi-poxc` coordinator, amended by the workstream lead
+> Work: epic XTRM-811 and its children (§11)
 > Numbering: xtrm-app ADR series (`packages/xtrm-app/docs/adr/`), separate from `docs/runtime/adr/`
 > Related: XTRM-753 (earlier, narrower "Artifacts surface" draft — superseded by this scope), XTRM-394 (Console v2 GitHub surfaces)
 > Amends: PRD §9, §34.7, §34.9; shell architecture §9.1, §9.3, §10
@@ -157,8 +158,9 @@ Rules for the tree:
 - **`statusBoard`** (new) — the here.now document store for one binding, read-mostly.
 - **`jira`** (new) — Jira Cloud reads for one bound site/project, plus Substrate binding reads.
 - **`substrate`** (existing) — issue, readiness, claim, journal, provenance for linked issues.
-- **`portfolio`** (renamed from `program`) — the retired cross-repository snapshot. Kept only as a
-  typed fixture and a module with no route while D1 stands; deleted when no code references it.
+- **`program`** (existing, retired) — the cross-repository snapshot. It is **not renamed**: a rename
+  would introduce a third name for a concern this ADR removes (§12, R2). It stays as an unrouted module
+  only until its last reference is gone, then it is deleted, with `ProgramSurface.tsx`.
 
 Each new adapter ships an interface, a **live** implementation, and a **typed fixture**, selected by
 `VITE_XTRM_*` configuration (`src/adapters/index.tsx`). Components never learn the data source.
@@ -462,23 +464,44 @@ them.
 
 ## 11. Work decomposition (created)
 
-Epic **XTRM-811**; children below. `blocked by` names the sibling in this table. `blocks` edges run blocker → blocked.
+Epic **XTRM-811**; children below. `blocked by` names the blocking issue; Substrate `blocks` edges are the
+authority, this table mirrors them.
 
 | issue | work | blocked by |
 |---|---|---|
-| XTRM-812 | Bridge `status-board-api.ts` — allowlisted reads, health, no writes | — |
-| XTRM-813 | Adapter `statusBoard` (live + fixture) | .1 |
+| XTRM-812 | Bridge `status-board-api.ts` — allowlisted reads, health, no writes (done) | — |
+| XTRM-813 | Adapter `statusBoard` (live + fixture) | XTRM-812 |
 | XTRM-814 | Substrate bounded external-binding read + Jira bind verb | — |
-| XTRM-815 | Jira read path — bridge + typed adapter | .3 |
+| XTRM-815 | Jira read path — bridge + typed adapter | XTRM-814 |
 | XTRM-816 | Route/nav rename, Program label retired, doc amendments | — |
-| XTRM-817 | Project Overview + attention list + integration health | .2, .4, .5 |
-| XTRM-818 | Project Timeline (day-grouped agenda) | .6 |
-| XTRM-819 | Project Workers + Follow-ups | .6 |
-| XTRM-820 | Project Jira surface + chips + `@jira:` refs | .6 (and .4) |
-| XTRM-821 | **Deferred:** answer writing with conflict + audit | .6 |
-| XTRM-822 | **Deferred:** Activity notifications | .6 |
+| XTRM-817 | Project Overview + attention list + integration health | XTRM-813, XTRM-816 (not XTRM-815: §12, R3) |
+| XTRM-818 | Project Timeline (day-grouped agenda) | XTRM-817 |
+| XTRM-819 | Project Workers + Follow-ups | XTRM-817 |
+| XTRM-820 | Project Jira surface + chips + `@jira:` refs | XTRM-817, XTRM-815 |
+| XTRM-821 | **Deferred:** answer writing with conflict + audit | XTRM-817 |
+| XTRM-822 | **Deferred:** Activity notifications | XTRM-817 |
 
 XTRM-812 closes on local evidence. The deployed-console verification its contract defers is **XTRM-823** (discovered-from XTRM-812), so the last unproven item has its own owner instead of keeping the bridge open in progress. The health field set was amended twice on live evidence: XTRM-830 made an unverified unit `null` with a reason, and XTRM-834 split the schedule (timer) from the run (oneshot service) — §D7 and §4 describe the current contract.
 
 XTRM-811 relates to the earlier, narrower XTRM-753 draft (Artifacts surface with two-way here.now
 sync), which this scope supersedes in direction without closing it.
+
+## 12. Rulings of 2026-11-17 (workstream lead)
+
+Each ruling is also a `decision` entry on the issue it affects.
+
+- **R1 — Naming.** The surface is **Project**, repository-scoped. "Product", "Program"/"Programme" and
+  "Portfolio" are not names for it; a surviving user-visible use is a defect, not a synonym.
+- **R2 — No rename of the retired adapter.** §D3 used to rename `program` to `portfolio`. That would add
+  the third name R1 forbids. The `program` adapter and `ProgramSurface` stay unrouted until their last
+  reference is gone and are then deleted (XTRM-816). The cross-repository projection does not survive in
+  any form: it has no live data path, and if cross-repository governance becomes real it returns as a new
+  decision with its own contract and name.
+- **R3 — XTRM-817 does not wait for Jira.** Overview shows attention (questions, workers, follow-ups,
+  `board/next`) and integration health; none of it reads Jira. The `XTRM-815 → XTRM-817` edge is removed.
+  The Jira surface and chips (XTRM-820) need the Jira read path, so `XTRM-815 → XTRM-820` is added.
+- **R4 — Surface first.** The next PRs deliver something the operator can see: XTRM-816 (route) and
+  XTRM-813 (adapter, fixture first) unblock XTRM-817 (Overview). The Substrate binding work (XTRM-814) runs
+  in parallel because it shares no files with them.
+- **R5 — Read-only first holds.** Nothing learned since the scope changes the risk balance of §10 items
+  3 and 4. The four §10 defaults stay as written.
