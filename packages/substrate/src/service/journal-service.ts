@@ -787,7 +787,19 @@ export class JournalService {
     }
     const s = entry.semantic;
     if (!s) {
-      lines.push("SEMANTIC: (mechanical-only; summarizer pending or degraded)");
+      // Say only what the row holds. A result entry normally has no semantic
+      // summary but does carry bounded evidence, so render that evidence rather
+      // than claiming (or denying) a mechanical payload it may not have.
+      const r = entry.result;
+      if (r) {
+        lines.push(`RESULT: ${trunc(r.summary)}${r.outcome ? ` (${r.outcome})` : ""}`);
+      } else {
+        lines.push(
+          m
+            ? "SEMANTIC: (mechanical-only; summarizer pending or degraded)"
+            : "SEMANTIC: (none; this entry carries no summary and no mechanical state)",
+        );
+      }
       return lines.join("\n");
     }
     lines.push(`SUMMARY: ${trunc(s.summary)}`);

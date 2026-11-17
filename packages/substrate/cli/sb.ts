@@ -2365,7 +2365,16 @@ function journalLine(svc: IssueService, e: JournalEntry): string {
   // XTRM-449: explicit absence, matching the journal-family convention in
   // journalIdentity — never a blank that is indistinguishable from a capture gap.
   const actor = e.participantId ? ` · by ${e.participantId}` : " · by (none recorded)";
-  return `${issue.locator} · ${issue.humanRef} · seq${e.sequence} ${e.kind} rev${e.issueRevision}${e.semantic ? "" : " (mechanical-only)"}${actor}`;
+  // XTRM-420: "(mechanical-only)" is a claim about stored evidence. Say it only
+  // when a mechanical payload exists; a row with neither payload is evidence-less.
+  const payload = e.semantic
+    ? ""
+    : e.result
+      ? ` (result ${e.result.outcome ?? "recorded"})`
+      : e.mechanical
+        ? " (mechanical-only)"
+        : " (no payload)";
+  return `${issue.locator} · ${issue.humanRef} · seq${e.sequence} ${e.kind} rev${e.issueRevision}${payload}${actor}`;
 }
 
 // Stored execution identity for `journal show` (XTRM-410): names the actor
