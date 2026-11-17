@@ -13,14 +13,27 @@ import { ContentSurface } from "../github/ContentSurface.tsx";
 import { GithubIssuesSurface } from "../github/IssuesSurface.tsx";
 import { ReleasesSurface } from "../github/ReleasesSurface.tsx";
 import { PullsSurface } from "../github/PullsSurface.tsx";
-import { ProgramSurface } from "../surfaces/ProgramSurface.tsx";
 import { ExperimentDetailSurface, ExperimentListSurface, RunAnalysisSurface, RunComparisonSurface, RunListSurface } from "../surfaces/ResearchSurface.tsx";
 import { DeferredSurface, RepositoriesSurface } from "../surfaces/other.tsx";
 import { SettingsSurface } from "../settings/SettingsSurface.tsx";
-import { MODES, REPO_SECTIONS, RESEARCH_SECTIONS, type Destination } from "./destinations.ts";
+import { MODES, PROJECT_ROOT, PROJECT_SECTIONS, REPO_SECTIONS, RESEARCH_SECTIONS, type Destination } from "./destinations.ts";
 import { validateCompareSearch } from "./research-compare-search.ts";
 
 // URL contract: docs/console-v2-shell-architecture.md §9.1.
+
+const REPO_STORAGE_KEY = "xtrm.console.repo.v1";
+
+/** The last selected repository (the shell's context rule), or null when none is selected yet. */
+function selectedRepo(): { owner: string; name: string } | null {
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(REPO_STORAGE_KEY);
+  } catch {
+    // storage unavailable
+  }
+  const [owner, name] = stored?.split("/") ?? [];
+  return owner && name ? { owner, name } : null;
+}
 
 export function createAppRouter({ adapters, history, queryClient = new QueryClient() }: { adapters: Adapters; history?: RouterHistory; queryClient?: QueryClient }) {
   const rootRoute = createRootRoute({
@@ -68,7 +81,16 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     component: () => <DeferredSurface title="Work" icon="work" reason="Cross-repository work queue; use repository Issues in this vertical." />,
   });
   const repositoriesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/repositories", component: RepositoriesSurface });
-  const programRoute = createRoute({ getParentRoute: () => rootRoute, path: "/program", component: () => <ProgramSurface /> });
+  // Retired cross-repository governance endpoint (ADR-002 D1): redirects to the selected
+  // repository's Project root, or to the picker when no repository is selected — never a dead route.
+  const programRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/program",
+    beforeLoad: () => {
+      const repo = selectedRepo();
+      throw redirect({ to: repo ? `/rep/${repo.owner}/${repo.name}${PROJECT_ROOT}` : "/repositories" } as never);
+    },
+  });
   const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsSurface });
 
   // Research (XTRM-433 slice 2): `/research` redirects to its first section, mirroring the
@@ -113,7 +135,24 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     createRoute({ getParentRoute: () => repoRoute, path: "/code/issues", component: GithubIssuesSurface }),
     createRoute({ getParentRoute: () => repoRoute, path: "/code/releases", component: ReleasesSurface }),
     createRoute({ getParentRoute: () => repoRoute, path: "/code/content", component: ContentSurface }),
-    createRoute({ getParentRoute: () => repoRoute, path: "/governance/program", component: () => <ProgramSurface repoScoped /> }),
+    // Retired repository governance route (ADR-002 D1): the same repository's Project root.
+    createRoute({
+      getParentRoute: () => repoRoute,
+      path: "/governance/program",
+      beforeLoad: ({ params }) => {
+        const { owner, repo } = params as { owner: string; repo: string };
+        throw redirect({ to: `/rep/${owner}/${repo}${PROJECT_ROOT}` } as never);
+      },
+    }),
+    // Project subtree (ADR-002 D2): the root is Overview; every section is URL-addressable and a
+    // typed coming-state until its own issue lands, never invented UI.
+    ...PROJECT_SECTIONS.map((s) =>
+      createRoute({
+        getParentRoute: () => repoRoute,
+        path: s.repoPath,
+        component: () => <DeferredSurface title={s.label} icon={s.icon} reason={s.deferred ?? `${s.label} is not implemented yet`} />,
+      }),
+    ),
     ...REPO_SECTIONS.flatMap((s) => s.items)
       .filter((i): i is Destination & { repoPath: string; deferred: string } => !!i.deferred && !!i.repoPath)
       .map((i) => createRoute({ getParentRoute: () => repoRoute, path: i.repoPath, component: () => <DeferredSurface title={i.label} icon={i.icon} reason={i.deferred} /> })),

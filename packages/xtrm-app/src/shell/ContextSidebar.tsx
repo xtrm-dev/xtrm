@@ -4,9 +4,9 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useAdapters } from "../adapters/index.tsx";
 import { AgentSidebar } from "../agent/AgentSidebar.tsx";
 import { useAgentStore } from "../agent/workspace.tsx";
-import { AGENT_MODE, MODES, REPO_SECTIONS, RESEARCH_SECTIONS, destinationHref, halfForPath, modeForPath, repoHref, type Half } from "../app/destinations.ts";
+import { AGENT_MODE, MODES, PROJECT_SECTIONS, REPO_SECTIONS, RESEARCH_SECTIONS, destinationHref, halfForPath, modeForPath, repoHref, type Half } from "../app/destinations.ts";
 import { isInvalidManifestRow } from "../adapters/research/types.ts";
-import { projectForRepo, useConnection, useIssues, useProgram, useProjects, useRepoStats, useRepos, useResearchRuns } from "../app/queries.ts";
+import { projectForRepo, useConnection, useIssues, useProjects, useRepoStats, useRepos, useResearchRuns } from "../app/queries.ts";
 import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, Tip, cx, relativeTime } from "../ui/primitives.tsx";
@@ -115,7 +115,6 @@ function SourceFooter() {
     ["Agent host", adapters.agent.source],
     ["GitHub", adapters.github.source],
     ["Substrate", adapters.substrate.source],
-    ["Program", adapters.program.source],
     ["Research", adapters.research.source],
   ] as const;
   const live = items.filter(([, source]) => source === "live").length;
@@ -178,19 +177,16 @@ function SourceFooter() {
   );
 }
 
-/** Project's own rows: in-page sections of the Project surface, nested under its sidebar row. */
-function ProjectRows() {
-  const program = useProgram();
-  const counts = (kind: string) => program.data?.items.filter((i) => i.kind === kind).length ?? null;
-  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "smooth" });
-  return (
-    <>
-      <SidebarRow indent icon="target" label="Workstreams" count={counts("workstream")} onActivate={() => jump("program-workstream")} />
-      <SidebarRow indent icon="assignment" label="Assignments" count={counts("assignment")} onActivate={() => jump("program-assignment")} />
-      <SidebarRow indent icon="decision" label="Decisions" count={counts("decision")} onActivate={() => jump("program-decision")} />
-      <SidebarRow indent icon="changes" label="Recent changes" onActivate={() => jump("program-activity")} />
-    </>
-  );
+/** Project's own rows: its repository-scoped sub-routes (ADR-002 D2), nested under the Project row. */
+function ProjectRows({ pathname }: { pathname: string }) {
+  const { repo } = useShell();
+  const go = useGo();
+  return PROJECT_SECTIONS.map((section) => {
+    const href = repoHref(repo, section.repoPath);
+    // The root section is not selected by its own children; every other section is.
+    const selected = pathname === href || (section.repoPath !== "/project" && pathname.startsWith(`${href}/`));
+    return <SidebarRow key={section.id} indent icon={section.icon} label={section.label} selected={selected} deferred={!!section.deferred} onActivate={() => go(href)} />;
+  });
 }
 
 /** Experiments and Recent Runs are counted from `listRuns()`; Saved Comparisons and Workloads have no listing source yet and render deferred. */
@@ -246,7 +242,7 @@ function WorkSidebar({ pathname }: { pathname: string }) {
                     onToggle={nested ? () => setProjectOpen((v) => !v) : undefined}
                     onActivate={href ? () => go(href) : undefined}
                   />
-                  {nested && projectOpen && <ProjectRows />}
+                  {nested && projectOpen && <ProjectRows pathname={pathname} />}
                   {item.id === "research" && active === "research" && <ResearchRows pathname={pathname} />}
                 </Fragment>
               );

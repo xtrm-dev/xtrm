@@ -29,7 +29,7 @@ function TopBar() {
         className="mx-auto flex h-8 w-full max-w-xl items-center gap-2 rounded-md bg-hover px-3 text-left text-sm text-ink-faint outline-none hover:bg-pressed hover:text-ink-muted focus-visible:bg-pressed"
       >
         <Icon name="search" size="xs" />
-        <span className="flex-1 truncate">Search issues, repositories, Program in {repo.name} or the workspace…</span>
+        <span className="flex-1 truncate">Search issues and repositories in {repo.name} or the workspace…</span>
         <Kbd>Ctrl K</Kbd>
       </button>
       <div className="flex shrink-0 items-center gap-0.5">

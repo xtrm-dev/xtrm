@@ -301,8 +301,9 @@ Console v1 has no client router and cannot address repositories (`console-v2-aud
 /work                                    cross-repository work queue
 /repositories                            repository directory
 /agents                                  fleet presence (deferred placeholder until wave H)
-/program                                 Program — cross-repository governance (global)
 /observability                           fleet-level analysis (placeholder in the first vertical)
+/program                                 retired — redirects to the selected repository's Project root
+                                         (the repository picker when no repository is selected)
 
 /rep/:owner/:repo/work/issues            XTRM Issues (Substrate)
 /rep/:owner/:repo/code/activity          repository activity (GitHub)
@@ -312,11 +313,20 @@ Console v1 has no client router and cannot address repositories (`console-v2-aud
 /rep/:owner/:repo/code/content
 /rep/:owner/:repo/system/graph           placeholder in the first vertical
 /rep/:owner/:repo/system/observability   placeholder in the first vertical
-/rep/:owner/:repo/governance/program     Program filtered to this repository
+/rep/:owner/:repo/project                Project — Overview (repository-scoped section)
+/rep/:owner/:repo/project/timeline       Timeline
+/rep/:owner/:repo/project/questions      Questions (read-only in the first tranche)
+/rep/:owner/:repo/project/workers        Workers
+/rep/:owner/:repo/project/followups      Follow-ups
+/rep/:owner/:repo/project/jira           Jira links for this repository
+/rep/:owner/:repo/project/settings       Integration health and resolved binding
+/rep/:owner/:repo/governance/program     retired — redirects to the same repository's Project root
 /rep/:owner/:repo/agent/:sessionId       reserved for wave H
 ```
 
-Shorthand used in planning notes (`/work/issues`, `/program`, `/code/activity`) refers to these routes with the selected repository applied.
+`ACCEPTED` (2026-11-17, `adr/ADR-002-project-surface-status-board-and-jira.md` D1/D2) — **Project is a repository section, not a rail mode**, and it is the only name for it. The two retired routes redirect rather than 404: `/program` uses the selected repository (the shell's stored repository context) and falls back to `/repositories` when none is selected, so a stale link never lands on a dead route; `/rep/:owner/:repo/governance/program` keeps its own repository. Drawers stay search parameters on every Project route, so a board record opens in the Inspector instead of a new page.
+
+Shorthand used in planning notes (`/work/issues`, `/project`, `/code/activity`) refers to these routes with the selected repository applied.
 
 Drawer state is not a route. It is encoded as search parameters (`?inspect=<kind>:<ref>&drawer=contextual|pinned|maximized`) so a shared link restores the inspected entity.
 
@@ -340,23 +350,27 @@ Freeze, do not redesign, the server DTO/route contract in this tranche (`console
 
 ### 9.3 Typed data adapters
 
-`ACCEPTED` — UI components never know where data comes from. All data reaches the UI through three typed adapters:
+`ACCEPTED` — UI components never know where data comes from. All data reaches the UI through typed adapters:
 
 ```text
 UI components / routes / search
         │  (typed view models only)
         ▼
-adapters/github      adapters/substrate      adapters/program
-        │                    │                       │
-Console v1 backend   Substrate typed service   Program read model
-(/api/*, realtime)   + projections              (commit-pinned source)
+adapters/github   adapters/substrate   adapters/statusBoard + adapters/jira
+        │                  │                        │
+Console v1 backend  Substrate typed service   status-board and Jira bridge
+(/api/*, realtime)  + projections              (that repository's Project)
 ```
+
+`ACCEPTED` (2026-11-17, `adr/ADR-002-project-surface-status-board-and-jira.md` D3) — Project has no single upstream: it is composed of `statusBoard`, `jira`, and the existing `substrate` adapter, each with an interface, a live implementation, and a typed fixture (XTRM-813/XTRM-815). The retired cross-repository `adapters/program` keeps its interface and fixture with no route, and is deleted when its last reference is gone (D1). No component learns the data source from the route.
 
 | adapter | source | rules |
 |---|---|---|
 | `adapters/github` | Console v1 backend routes and realtime channel | Preserve the proven fetch, cache, and backend behaviour (`console-v2-audit-console-v1-preservation.md` §3b, §4). One query layer; no module-singleton caches. Mutations only through the existing same-origin/admin write gate. |
 | `adapters/substrate` | `@jaggerxtrm/substrate` typed service (`IssueService`, readiness, claims, journal, provenance) and projections | Call the typed service only. Writing SQL against `~/.xtrm/state.db`, or reading its tables directly, is forbidden (`console-v2-audit-substrate-issues-contract.md` §4.2). No dual-write. New code uses neutral `Issue` / `IssueContract` terms, not `Bead`. |
-| `adapters/program` | Program read model (commit-pinned, `fresh | stale | degraded` snapshot) | Governance projection only (§10). It may emit typed references to Substrate Issues. It never returns issue lifecycle, claim, or readiness state. |
+| `adapters/statusBoard` | here.now status-board document store through the server bridge (XTRM-812/813) | Read-mostly, per repository binding. Normalises `doc` objects and JSON strings once; unknown kinds/statuses render neutrally and are logged as a contract gap, never coerced. Answers are the only write path, in the deferred tranche only. |
+| `adapters/jira` | Jira reads through the server bridge plus Substrate `external_bindings` (XTRM-814/815) | Read-only links and "open in Jira" in this scope; Substrate `external_bindings` is the link authority, never an app-local mapping table. `syncState` is displayed, never inferred. |
+| `adapters/program` (retired) | Cross-repository programme snapshot (commit-pinned, `fresh | stale | degraded`) | No route and no navigation reference after XTRM-816 (ADR-002 D1). Kept as a typed fixture until no code references it; it never returns issue lifecycle, claim, or readiness state. |
 
 Each adapter exposes an interface plus at least two implementations: the live implementation and a typed development fixture. The fixture satisfies the same interface and is selected by configuration, never by a component.
 
@@ -370,13 +384,15 @@ Each adapter exposes an interface plus at least two implementations: the live im
 
 ---
 
-## 10. Program / governance boundary
+## 10. Project / governance boundary
 
-Program owns cross-repository intent and governance: workstreams, assignments, portfolio authority, decisions, evidence, reconciliation. Executable work stays in Substrate Issues.
+`ACCEPTED` (2026-11-17, `adr/ADR-002-project-surface-status-board-and-jira.md` D1/D2) — **Project is a repository-scoped section**, at `/rep/:owner/:repo/project`, not a global-rail destination. It projects one repository's own records: the status board's workers, schedule, questions and follow-ups, that repository's Substrate Issues, and its Jira links. Executable work stays in Substrate Issues.
 
-`PROPOSAL` shell consequence: `Program` is a global-rail destination and a `Governance` group item, never a leaf under `Work`. A Program item in the Inspector Drawer may reference an issue by typed reference; it must not display issue lifecycle, claim, or readiness state as if Program owned it. If a Program surface needs to show that a referenced issue is blocked, it renders a link and the authority is the Substrate projection, not a Program copy.
+Shell consequence: Project is a `Workspace` group item whose sub-routes nest under it (§9.1). A Project item in the Inspector Drawer may reference an issue by typed reference; it must not display issue lifecycle, claim, or readiness state as if Project owned it. If a Project surface needs to show that a referenced issue is blocked, it renders a link and the authority is the Substrate projection, not a Project copy.
 
-`VERIFIED` — the current Console Program already satisfies this boundary and must be preserved: it is a commit-pinned, read-only projection of an external GitHub repository (`mercuryintelligence/program@master`), and every snapshot carries an explicit refusal to infer executable-work state (`apps/console/src/server/programme/read-model.ts:1003`, `.../source.ts:11-13`). Disposition: `PRESERVE_AS_IS` for the model and boundary; `REPLACE` for its drawer shell and `ADAPT` for its 1 043-line regex parser. Reusable governance primitives from it are the commit-pinned source contract (`ProgrammeSource`), the `fresh|stale|degraded` snapshot cache, the build-integrity gate (`assertNoDanglingEdges`), and the evidence-class / precedence doctrine (`read-model.ts:949-967,1019-1025`). See `console-v2-audit-console-program-graph-drawer.md` §4, §9.
+Cross-repository intent and governance — workstreams, assignments, portfolio authority, decisions, evidence, reconciliation across repositories — is a separate concern with no surface today. The former global **Program** route is retired; if that concern returns, it returns as its own decision and route (`adr/ADR-002-project-surface-status-board-and-jira.md` D1) and the boundary above still applies to it: a governance projection is a read model, so it may show governance and executable work together without duplicating the executable records.
+
+`VERIFIED` (retained as the boundary's provenance) — the retired Console v1 programme projection satisfied this boundary and that refusal is preserved wherever the projection still exists: it is a commit-pinned, read-only projection of an external GitHub repository (`mercuryintelligence/program@master`), and every snapshot carries an explicit refusal to infer executable-work state (`apps/console/src/server/programme/read-model.ts:1003`, `.../source.ts:11-13`). Disposition after XTRM-816: the surface has no route, and the adapter survives only as a typed fixture (D3); the commit-pinned source contract (`ProgrammeSource`), the `fresh|stale|degraded` snapshot cache, the build-integrity gate (`assertNoDanglingEdges`), and the evidence-class / precedence doctrine (`read-model.ts:949-967,1019-1025`) remain the reference if cross-repository governance returns. See `console-v2-audit-console-program-graph-drawer.md` §4, §9.
 
 ---
 

@@ -4,7 +4,7 @@ import type { IconName } from "../ui/icon.tsx";
 // destination in one sidebar: repository rows plus the workspace MODES, and the active mode's own
 // sub-rows nest under it. The Agent half has one sidebar: sessions.
 
-export type ModeId = "work" | "agent" | "agents" | "program" | "research" | "observability";
+export type ModeId = "work" | "agent" | "agents" | "research" | "observability";
 
 export interface Mode {
   id: ModeId;
@@ -12,13 +12,15 @@ export interface Mode {
   icon: IconName;
   /** Where selecting the mode navigates; `null` means the current repository's default surface. */
   path: string | null;
+  /** Repository-relative route, resolved against the selected repository by `modeHref`. */
+  repoPath?: string;
   deferred?: string;
 }
 
+// Project is not a mode: it is a repository-scoped section (ADR-002 D1/D2), listed in REPO_SECTIONS.
 export const MODES: Mode[] = [
-  { id: "work", label: "Work", icon: "work", path: null },
+  { id: "work", label: "Work", icon: "work", path: null, repoPath: "/work/issues" },
   { id: "agents", label: "Agents", icon: "agents", path: "/agents", deferred: "Fleet presence arrives with the Agent/Frames tranche (wave H)" },
-  { id: "program", label: "Project", icon: "program", path: "/program" },
   { id: "research", label: "Research", icon: "research", path: "/research" },
   { id: "observability", label: "Observability", icon: "observability", path: "/observability", deferred: "Fleet-level analysis (wave G)" },
 ];
@@ -31,7 +33,6 @@ export const halfForPath = (pathname: string): Half => (pathname === "/agent" ||
 export const AGENT_MODE: Mode = { id: "agent", label: "Agent", icon: "agent", path: "/agent" };
 
 export function modeForPath(pathname: string): ModeId {
-  if (pathname.startsWith("/program")) return "program";
   if (pathname.startsWith("/research")) return "research";
   if (pathname.startsWith("/agents")) return "agents";
   if (pathname.startsWith("/agent")) return "agent";
@@ -59,6 +60,31 @@ export const RESEARCH_SECTIONS: ResearchSection[] = [
   { id: "workloads", label: "Workloads", icon: "repositories", path: "/research/workloads", deferred: "Workload browsing is a later XTRM-433 slice" },
 ];
 
+/**
+ * Project sub-sections (ADR-002 D2): every route lives under `/rep/:owner/:repo/project`.
+ * `repoPath` includes the `/project` root so the list is directly usable with `repoHref`.
+ * Overview is first; each section is a stub behind its own issue until that issue lands.
+ */
+export interface ProjectSection {
+  id: string;
+  label: string;
+  icon: IconName;
+  repoPath: string;
+  deferred?: string;
+}
+
+export const PROJECT_ROOT = "/project";
+
+export const PROJECT_SECTIONS: ProjectSection[] = [
+  { id: "overview", label: "Overview", icon: "program", repoPath: PROJECT_ROOT, deferred: "Project Overview arrives with the composed read-only surface (XTRM-817)" },
+  { id: "timeline", label: "Timeline", icon: "activity", repoPath: "/project/timeline", deferred: "Project Timeline arrives with XTRM-818" },
+  { id: "questions", label: "Questions", icon: "comment", repoPath: "/project/questions", deferred: "Project Questions arrive read-only with XTRM-817–XTRM-820; answering is deferred to XTRM-821" },
+  { id: "workers", label: "Workers", icon: "specialists", repoPath: "/project/workers", deferred: "Project Workers arrive with XTRM-819" },
+  { id: "followups", label: "Follow-ups", icon: "issues", repoPath: "/project/followups", deferred: "Project Follow-ups arrive with XTRM-819" },
+  { id: "jira", label: "Jira", icon: "link", repoPath: "/project/jira", deferred: "The Jira surface and issue chips arrive with XTRM-820" },
+  { id: "settings", label: "Integration", icon: "settings", repoPath: "/project/settings", deferred: "Integration health arrives with the Overview surface (XTRM-817)" },
+];
+
 export interface Destination {
   id: string;
   label: string;
@@ -82,7 +108,7 @@ export const REPO_SECTIONS: RepoSection[] = [
     items: [
       { id: "activity", label: "Activity", icon: "activity", repoPath: "/code/activity" },
       { id: "issues", label: "Issues", icon: "issues", repoPath: "/work/issues" },
-      { id: "project", label: "Project", icon: "program", path: "/program" },
+      { id: "project", label: "Project", icon: "program", repoPath: PROJECT_ROOT },
       { id: "agents", label: "Agents", icon: "agents", path: "/agents", deferred: "Fleet presence arrives with the Agent/Frames tranche (wave H)" },
       { id: "observability", label: "Observability", icon: "observability", path: "/observability", deferred: "Fleet-level analysis (wave G)" },
       { id: "research", label: "Research", icon: "research", path: "/research" },
@@ -109,7 +135,8 @@ export const REPO_SECTIONS: RepoSection[] = [
 
 export const repoHref = (repo: { owner: string; name: string }, repoPath: string) => `/rep/${repo.owner}/${repo.name}${repoPath}`;
 
-export const modeHref = (mode: Mode, repo: { owner: string; name: string }) => mode.path ?? repoHref(repo, "/work/issues");
+export const modeHref = (mode: Mode, repo: { owner: string; name: string }) =>
+  mode.path ?? (mode.repoPath ? repoHref(repo, mode.repoPath) : repoHref(repo, "/work/issues"));
 
 /** Absolute route for a destination: repository-scoped first, then mode-level, else none. */
 export const destinationHref = (repo: { owner: string; name: string }, item: Destination): string | null =>

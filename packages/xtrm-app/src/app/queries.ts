@@ -305,11 +305,6 @@ export function useIssue(ref: string, follow = false, projectId?: string | null)
   });
 }
 
-export function useProgram(follow = false) {
-  const { program } = useAdapters();
-  return useQuery({ queryKey: ["program", "snapshot"], queryFn: () => program.snapshot(), staleTime: 60_000, refetchInterval: follow ? LIVE_MS : false, retry: false });
-}
-
 /** Backs the Recent Runs list. The Experiments surface is registry-sourced through
  * `useResearchExperiments`, so a definition with zero runs still appears. */
 export function useResearchRuns() {

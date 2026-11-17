@@ -535,42 +535,33 @@ execution
 evidence
 ```
 
-## 9. Program is not a second task tracker
+## 9. Project is the repository-scoped surface, not a second task tracker
 
-Program provides cross-repository intent, governance, portfolio state, and reconciliation.
+> Amended 2026-11-17 by `adr/ADR-002-project-surface-status-board-and-jira.md` D1/D2: the cross-repository
+> **Program** endpoint is retired, and **Project** is the repository-scoped product surface. No third name
+> is introduced.
 
-Program may own or project concepts such as:
-
-```text
-workstreams
-assignments
-authority
-portfolio state
-decisions
-evidence
-reconciliation
-cross-repository lineage
-```
-
+Project is reached at `/rep/:owner/:repo/project` and is composed of the repository's own records: the
+status board (workers, schedule, questions, follow-ups), its Substrate Issues, and its Jira bindings.
 Executable repository work remains authoritative in Issues / Beads / step contracts.
 
-Program must not duplicate executable work descriptions, statuses, subtasks, or acceptance state as a parallel tracker.
+Project must not duplicate executable work descriptions, statuses, subtasks, or acceptance state as a parallel tracker. It may reference an issue by typed reference and read its state from Substrate when opened; it never copies that state.
 
-The Console may project Program and executable work together because it is a read model, not because the underlying records are duplicated.
+Cross-repository intent, governance, portfolio state, reconciliation, and cross-repository lineage are a separate concern, and that concern has no surface today. When a cross-repository governance surface returns, it returns as its own route with its own contract (ADR-002 D1) and follows the same boundary: it may project governance and executable work together because it is a read model, not because the underlying records are duplicated.
 
-Example:
+Example of the lineage a governance projection may show without owning executable state:
 
 ```text
 WS-003
   ↓
 EXP-023
-  ↓ executable implementation
+  ↓ executable implementation (authority: Substrate Issues)
 market-data:b73q
 market-data:b73q.4
 infra:xxx
 ```
 
-The Program drawer should emphasize traversal to executable work and evidence rather than recreate an Issue drawer with copied fields.
+A reference to executable work stays a traversal to the authority and its evidence, never a recreated Issue drawer with copied fields.
 
 ## 10. Typed references and first-class composer commands
 
@@ -1640,9 +1631,10 @@ Versions, licences, the full dependency list, and open adoption items: `adoption
 
 - Substrate Issues are executable-work authority, read through the Substrate typed service and projections.
 - The app never reads or writes `~/.xtrm/state.db` with SQL. No dual-write.
-- UI components never know data origin. Data arrives through typed adapters: `adapters/github`, `adapters/substrate`, `adapters/program` (`console-v2-shell-architecture.md` §9.3).
+- UI components never know data origin. Data arrives through typed adapters: `adapters/github`, `adapters/substrate`, and — for Project — `adapters/statusBoard` and `adapters/jira` (`console-v2-shell-architecture.md` §9.3, `adr/ADR-002-project-surface-status-board-and-jira.md` D3).
 - If the typed service lacks a required bounded or batched read, the UI is built against a typed fixture behind the adapter and the missing API is reported. The gap is never bypassed through SQLite.
-- Program remains a governance and reference projection. It never duplicates executable Issue state (§9).
+- Project is a repository-scoped composition of those adapters, not a cross-repository mode. It never duplicates executable Issue state (§9).
+- The retired cross-repository programme adapter stays a typed fixture with no route until its last reference is gone (ADR-002 D1/D3).
 
 ### 34.8 Frame
 

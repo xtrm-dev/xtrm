@@ -9,7 +9,7 @@ import { isInvalidManifestRow, type Metric, type ResearchAdapter, type RunListRo
 import { MODES, modeForPath } from "./destinations.ts";
 import { createAppRouter } from "./router.tsx";
 
-// Research is registered as a sixth mode, following the Program pattern (XTRM-433 slice 2):
+// Research is registered as a workspace mode, following the established mode pattern (XTRM-433 slice 2):
 // reachable from the global rail, its own shortcut, a sidebar with four groups, and two
 // list-only work-surface views built on the fixture research adapter.
 

@@ -49,7 +49,7 @@ await shot("07-edit-scope-list", `${issues}/XTRM-393`, () => page.getByRole("but
 await shot("08-status-select", `${issues}/XTRM-393`, () => page.getByRole("button", { name: /^Status:/ }).click());
 await shot("09-new-issue", issues, () => page.getByRole("button", { name: "New issue" }).click());
 await shot("10-issue-activity-page-scrolled", `${issues}/XTRM-252`, () => page.mouse.wheel(0, 2400));
-await shot("11-program-mode", "/program?inspect=program:WS-003");
+await shot("11-program-mode", `/rep/${repo}/project`);
 await shot("12-search", issues, async () => {
   await page.keyboard.press("Control+k");
   await page.keyboard.type("substrate");

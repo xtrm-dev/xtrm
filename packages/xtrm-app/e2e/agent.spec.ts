@@ -7,7 +7,7 @@ const composer = (page: Page, session: string) => page.getByRole("textbox", { na
 const sessionRow = (page: Page, name: string) => page.getByTestId("session-row").filter({ hasText: name });
 
 test("the Console/Agent switch is always visible and returns each half to its last route", async ({ page }) => {
-  await page.goto("/program");
+  await page.goto("/rep/xtrm-dev/xtrm/project");
   const sw = page.getByTestId("half-switch");
   await expect(sw).toBeVisible();
   await expect(page.getByRole("radio", { name: "Work" })).toHaveAttribute("aria-checked", "true");
@@ -18,15 +18,15 @@ test("the Console/Agent switch is always visible and returns each half to its la
   await expect(page).toHaveURL(/\/agent\/test-engineer$/);
 
   await page.keyboard.press(`${MOD}+.`);
-  await expect(page).toHaveURL(/\/program$/);
+  await expect(page).toHaveURL(/\/rep\/xtrm-dev\/xtrm\/project$/);
   await expect(sw).toBeVisible();
 
   await page.keyboard.press(`${MOD}+.`);
   await expect(page).toHaveURL(/\/agent\/test-engineer$/);
 
-  // Console modes keep numbered shortcuts and leave the Agent half.
+  // Console modes keep numbered shortcuts and leave the Agent half; Mod+3 is the third mode (Research).
   await page.keyboard.press(`${MOD}+3`);
-  await expect(page).toHaveURL(/\/program/);
+  await expect(page).toHaveURL(/\/research/);
 });
 
 test("session rows show live state, role, work item, model, context, and last activity", async ({ page }) => {
