@@ -279,17 +279,10 @@ def test_directory_territory_working_tree_fallback(tmp_path: Path, monkeypatch) 
 
 def _assert_unknown_history_blocks(repo: Path, capsys) -> None:
     capsys.readouterr()
-    try:
-        drifted = scan_drift(str(repo), use_gitnexus=False)
-    except RuntimeError as exc:
-        assert "history" in str(exc).lower()
-        assert "db" in str(exc)
-    else:
-        assert any(
-            item["service_id"] == "db" and item["reason"] == "range-unknown"
-            for item in drifted
-        ), "unknown required history must stay actionable"
-        assert all(item["file_path"] != "db/cache/generated.sql" for item in drifted)
+    # scan_drift must refuse outright: a returned list (e.g. an mtime guess) is the regression.
+    with pytest.raises(RuntimeError, match="history") as raised:
+        scan_drift(str(repo), use_gitnexus=False)
+    assert "db" in str(raised.value)
     assert ci_main(["--path", str(repo)]) != 0
     output = capsys.readouterr()
     assert "clean" not in output.out.lower()
@@ -362,3 +355,46 @@ def test_unknown_history_error_names_every_affected_service(tmp_path: Path) -> N
     assert "2 service(s)" in str(exc.value)
     assert "'db'" in str(exc.value) and "'cache'" in str(exc.value)
     assert "drift_detector.py sync" in str(exc.value)
+
+
+def test_reconcile_handles_a_committed_deletion(tmp_path: Path, monkeypatch) -> None:
+    """A deleted territory file is reported as drift, so reconcile must be able to process it
+    (it used to die with FileNotFoundError and leave CI red with no way out)."""
+    import reconcile as reconcile_mod  # type: ignore[import-not-found]
+
+    repo, _ = _make_repo(tmp_path)
+    (repo / "db/schema.sql").unlink()
+    _git(["add", "-A"], repo)
+    _git(["commit", "-qm", "drop schema"], repo)
+    assert [d["file_path"] for d in scan_drift(str(repo), use_gitnexus=False)] == ["db/schema.sql"]
+
+    prompts: list[str] = []
+
+    def fake_llm(prompt: str, api_key: str):  # noqa: ARG001
+        prompts.append(prompt)
+        return reconcile_mod.LlmResult(content="# DB\n", tokens=1)
+
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(reconcile_mod, "call_nano_gpt", fake_llm)
+    result = reconcile_mod.reconcile(reconcile_mod.ReconcileOptions(True, None, "k", None))
+
+    assert result["failed"] == []
+    assert result["reconciled_count"] == 1
+    assert "no longer exists at HEAD" in prompts[0]
+
+
+def test_scan_cli_reports_unknown_history_without_a_traceback(tmp_path: Path, monkeypatch, capsys) -> None:
+    import drift_detector  # type: ignore[import-not-found]
+
+    repo, reg_path = _make_repo(tmp_path)
+    data = json.loads(reg_path.read_text(encoding="utf-8"))
+    data["services"]["db"]["last_sync"] = "2000-01-01T00:00:00Z"
+    data["services"]["db"].pop("last_sync_ref", None)
+    _write_convergent_registry(repo, reg_path, data)
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(sys, "argv", ["drift_detector.py", "scan"])
+    with pytest.raises(SystemExit) as raised:
+        drift_detector.main()
+    assert raised.value.code == 2
+    err = capsys.readouterr().err
+    assert "cannot determine drift" in err and "'db'" in err

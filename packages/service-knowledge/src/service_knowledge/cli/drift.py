@@ -196,7 +196,7 @@ def _cmd_drift(args: argparse.Namespace) -> int:
         # Fail closed: drift cannot be determined, so it is NOT reported clean and
         # any pending marker is kept for the operator.
         print(f"service-knowledge drift: cannot determine drift — {exc}", file=sys.stderr)
-        print("   Pending marker(s) kept. Reconcile (/updating-service-knowledge) to record a verified last_sync_ref.", file=sys.stderr)
+        print("   Pending marker(s) kept. After verifying each listed service, record a ref with `drift_detector.py sync <service_id>`.", file=sys.stderr)
         return 2
     if not drift:
         # No drift: clear any stale pending marker (a previous run may have left one).
