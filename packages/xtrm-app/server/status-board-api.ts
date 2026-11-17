@@ -126,12 +126,18 @@ export function resolveBinding(
   const fromEnv = str(env.XTRM_PM_PROJECT);
   if (fromEnv && projects[fromEnv]) return base(fromEnv, "env");
 
+  // A `projects` entry can be `null` or a non-object in a hand-edited file. Such an
+  // entry must degrade its own repository, never throw: this runs inside a preview
+  // middleware whose rejection would exit the process (see `serve`).
+  const entries = Object.entries(projects as Record<string, Record<string, unknown> | null | undefined>).filter(
+    (entry): entry is [string, Record<string, unknown>] => Boolean(entry[1]) && typeof entry[1] === "object",
+  );
   const wanted = repository.toLowerCase();
-  for (const [name, project] of Object.entries(projects)) {
+  for (const [name, project] of entries) {
     const slug = str(project.repo_slug);
     if (slug && slug.toLowerCase() === wanted) return base(name, "repo_slug");
   }
-  for (const [name, project] of Object.entries(projects)) {
+  for (const [name, project] of entries) {
     const nameOnly = str(project.repo_name);
     if (nameOnly && `${repository.split("/")[0]}/${nameOnly}`.toLowerCase() === wanted) return base(name, "repo_name");
   }
@@ -462,9 +468,25 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
     }
   };
 
+  /**
+   * Vite registers a middleware synchronously and cannot observe the handler's
+   * promise, so a rejection here has no handler. Node's default policy
+   * (`--unhandled-rejections=throw`) turns that into a process exit, which a
+   * preview server presents as a restart loop. Every rejection is answered.
+   */
+  const serve = (req: IncomingMessage, res: ServerResponse, next: () => void): void => {
+    handle(req, res, next).catch((error: unknown) => {
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+      json(res, 500, { ok: false, error: error instanceof Error ? error.message : "status board bridge failed" });
+    });
+  };
+
   return {
     name: "xtrm-status-board",
-    configureServer: (server) => void server.middlewares.use((req, res, next) => void handle(req, res, next)),
-    configurePreviewServer: (server) => void server.middlewares.use((req, res, next) => void handle(req, res, next)),
+    configureServer: (server) => void server.middlewares.use(serve),
+    configurePreviewServer: (server) => void server.middlewares.use(serve),
   };
 }

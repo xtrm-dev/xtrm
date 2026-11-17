@@ -62,6 +62,15 @@ describe("binding resolution", () => {
     expect(byName.resolvedBy).toBe("repo_name");
   });
 
+  it("ignores a project entry that is not an object instead of throwing", () => {
+    // A hand-edited config can hold `null`. resolveBinding read `project.repo_slug`
+    // off it unguarded, inside a middleware whose rejection has no handler.
+    const broken = { projects: { bad: null, alias: { repo_name: "market-data" } } } as unknown as PmConfig;
+    expect(() => resolveBinding(broken, "mercuryintelligence/market-data", { env: {} })).not.toThrow();
+    expect(resolveBinding(broken, "mercuryintelligence/market-data", { env: {} }).resolvedBy).toBe("repo_name");
+    expect(resolveBinding(broken, "xtrm-dev/xtrm", { env: {} }).configured).toBe(false);
+  });
+
   it("reports an unconfigured repository instead of guessing", () => {
     const b = resolveBinding(CONFIG, "xtrm-dev/xtrm", { env: {} });
     expect(b.configured).toBe(false);
@@ -299,12 +308,15 @@ describe("public binding", () => {
 type Middleware = (req: unknown, res: unknown, next: () => void) => void;
 
 /** Mount the plugin's real middleware the way Vite does, so routes are exercised end to end. */
-function mount(plugin: ReturnType<typeof statusBoardApi>): Middleware {
+function mount(
+  plugin: ReturnType<typeof statusBoardApi>,
+  hook: "configureServer" | "configurePreviewServer" = "configureServer",
+): Middleware {
   let middleware: Middleware = () => {
     throw new Error("middleware was never registered");
   };
   const server = { middlewares: { use: (fn: Middleware) => (middleware = fn) } };
-  (plugin.configureServer as unknown as (s: unknown) => void)(server);
+  (plugin[hook] as unknown as (s: unknown) => void)(server);
   return middleware;
 }
 
@@ -371,6 +383,32 @@ describe("status-board middleware", () => {
     const res = await send(middleware, "GET", "/xtrm-api/status-board/binding?repo=xtrm-dev/xtrm");
     expect(res.status).toBe(404);
     expect(res.body).toMatchObject({ ok: false, reason: "repo_not_bound" });
+  });
+
+  it("registers the same handler on the preview hook, which is the production path", async () => {
+    // `npm run research:serve` is `vite preview`, not `vite dev`: a bridge that only
+    // works under configureServer is untested in the mode production runs.
+    const middleware = mount(statusBoardApi({ configPath, fetchImpl: (async () => page([wire("workers/alice")])) as unknown as typeof fetch }), "configurePreviewServer");
+    const res = await send(middleware, "GET", `/xtrm-api/status-board/list?repo=${repo}&prefix=workers`);
+    expect(res.status).toBe(200);
+    expect(res.body.records).toHaveLength(1);
+  });
+
+  it("answers instead of exiting when a projects entry is not an object", async () => {
+    // The failure this guards: `{"projects":{"bad":null}}` made resolveBinding throw
+    // inside `(req,res,next) => void handle(...)`, so the rejection had no handler and
+    // Node's default policy exited the preview process — the console restart loop.
+    const brokenPath = join(dir, "pm-broken.json");
+    writeFileSync(brokenPath, JSON.stringify({ defaults: { timezone: "UTC" }, projects: { bad: null, mercury: config.projects!.mercury } }));
+    const middleware = mount(statusBoardApi({ configPath: brokenPath, fetchImpl: (async () => page([wire("workers/alice")])) as unknown as typeof fetch }));
+    const bound = await send(middleware, "GET", `/xtrm-api/status-board/binding?repo=${repo}`);
+    expect(bound.status).toBe(200);
+    expect(bound.body.binding.resolvedBy).toBe("repo_slug");
+    const health = await send(middleware, "GET", "/xtrm-api/status-board/health?repo=xtrm-dev/xtrm");
+    expect(health.status).toBe(404);
+    expect(health.body).toMatchObject({ ok: false, reason: "repo_not_bound" });
+    const list = await send(middleware, "GET", `/xtrm-api/status-board/list?repo=${repo}&prefix=workers`);
+    expect(list.status).toBe(200);
   });
 
   it("answers 200 with a record, and 404 for a completed scan that finds nothing", async () => {
