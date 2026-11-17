@@ -52,7 +52,7 @@ import { GhCliPullRequestSource, PullRequestSyncService, syncReportText } from "
 import { canonicalPullReference, pullUrl, type IssuePullRequestView } from "../src/domain/pull-request.ts";
 import { parseAllTrailers } from "../src/domain/provenance.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
-import { assessJournalEntry, assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
+import { RESULT_FIELDS, assessJournalEntry, assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
 import { renderProvenanceTrace } from "../src/presentation/terminal.ts";
 import { assertContractShape, contractShapeHints, isValidScrutiny, normaliseContract, SCRUTINY_LEVELS, type ContractRepair } from "../src/domain/contract.ts";
 import { enrichExecutionContext } from "../src/domain/execution-context.ts";
@@ -2018,13 +2018,21 @@ function runIssue(
       const journal = new JournalService(db, svc);
       const resultRaw = flag(flags, "result");
       let result: ResultPayload | undefined;
+      let interpretedEnvelope = false;
       if (resultRaw !== undefined) {
         const parsed = readJsonArg(resultRaw) as ResultPayload;
         assertResultPayload(parsed);
         result = parsed;
       } else if (kindRaw === "result") {
-        // Text is the bounded result summary; structured fields stay optional.
-        result = { summary: text };
+        // Text is the bounded result summary; structured fields stay optional. A file holding
+        // the envelope is stored as structure, not as escaped JSON in the summary (XTRM-835).
+        const envelope = resultEnvelopeFromText(text);
+        if (envelope) {
+          result = envelope;
+          interpretedEnvelope = true;
+        } else {
+          result = { summary: text };
+        }
       }
       if (kindRaw !== "result" && result !== undefined) {
         throw new Error("--result is only meaningful with --kind result");
@@ -2035,7 +2043,13 @@ function runIssue(
         result,
       });
       if (ctx.json) return emit(ctx, command, { ...journalSummary(entry), result: entry.result });
-      return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: "" };
+      // Say what the text was taken to be: a file that holds the envelope is structure, and
+      // the caller should learn that rather than discover it in `journal show` (XTRM-835).
+      const note =
+        interpretedEnvelope
+          ? `note: stored the result envelope as structured fields (summary, ${RESULT_FIELDS.filter((f) => f !== "summary").join("|")} when present)\n`
+          : "";
+      return { code: 0, stdout: journalLine(svc, entry) + "\n", stderr: note };
     }
     case "validate": {
       const ref = needRef(rest);
@@ -2391,6 +2405,35 @@ function journalLine(svc: IssueService, e: JournalEntry): string {
 // for a row that carries one, and says so explicitly for a row that does
 // not — never a blank that is indistinguishable from a capture gap, and
 // never an invented actor.
+/**
+ * A result payload that arrived as file text (`issue note --kind result --file`) rather
+ * than through `--result`. Callers write the structured envelope to a file, and storing
+ * it verbatim made `result.summary` escaped JSON, which human `journal show` then
+ * rendered as a brace-and-quote blob (XTRM-835). Accept the envelope as structure;
+ * anything that is not one stays prose, so a summary that merely starts with `{` is safe.
+ */
+function resultEnvelopeFromText(text: string): ResultPayload | null {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{")) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const record = parsed as Record<string, unknown>;
+  if (!Object.prototype.hasOwnProperty.call(record, "summary")) return null;
+  for (const key of Object.keys(record)) {
+    if (key === "resultVersion") continue;
+    if (!(RESULT_FIELDS as readonly string[]).includes(key)) return null;
+  }
+  const summary = record.summary;
+  if (typeof summary !== "string" || summary.trim() === "") return null;
+  assertResultPayload(record);
+  return record as unknown as ResultPayload;
+}
+
 function journalIdentity(e: JournalEntry): string {
   const facets: string[] = [];
   if (e.participantId) facets.push(e.participantId);
