@@ -529,6 +529,16 @@ export function probeSync(unit: string | null, run: UnitProbeRun = execFile): Pr
   });
 }
 
+/**
+ * Drop every cache entry whose TTL has run out. The cache is keyed partly from
+ * caller input (`record:` paths), so without this it would keep a stale entry
+ * per distinct path for the lifetime of the preview process. Exported so the
+ * eviction itself, not just the re-read it enables, is testable.
+ */
+export function evictExpired<T>(cache: Map<string, { at: number; value: T }>, now = Date.now()): void {
+  for (const [key, entry] of cache) if (now - entry.at >= CACHE_MS) cache.delete(key);
+}
+
 export function statusBoardApi(opts: { configPath?: string; prefix?: string; fetchImpl?: typeof fetch } = {}): Plugin {
   const prefix = opts.prefix ?? PREFIX;
   const configPath = opts.configPath ?? defaultConfigPath();
@@ -561,9 +571,15 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
   ): Promise<{ value: T; at: number }> => {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < CACHE_MS) return { value: hit.value as T, at: hit.at };
+    if (hit) cache.delete(key);
     const value = await load();
     const at = Date.now();
-    if (cacheable(value)) cache.set(key, { at, value });
+    if (cacheable(value)) {
+      // Evict on write: an expired entry that is never asked for again would
+      // otherwise sit in the map forever (XTRM-832).
+      evictExpired(cache, at);
+      cache.set(key, { at, value });
+    }
     return { value, at };
   };
 

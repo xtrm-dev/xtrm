@@ -1,11 +1,12 @@
 import { mkdtempSync, mkdirSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   allowedPath,
   createBoardClient,
   defaultConfigPath,
+  evictExpired,
   loadPmConfig,
   normaliseDoc,
   normaliseRepo,
@@ -531,7 +532,7 @@ type Middleware = (req: unknown, res: unknown, next: () => void) => void;
 /** Mount the plugin's real middleware the way Vite does, so routes are exercised end to end. */
 function mount(
   plugin: ReturnType<typeof statusBoardApi>,
-  hook: "configureServer" | "configurePreviewServer" = "configureServer",
+  hook: "configureServer" | "configurePreviewServer",
 ): Middleware {
   let middleware: Middleware = () => {
     throw new Error("middleware was never registered");
@@ -564,7 +565,13 @@ async function send(middleware: Middleware, method: string, url: string) {
   return { status: res.statusCode, next: res.next, body: payload ? JSON.parse(payload) : null, headers };
 }
 
-describe("status-board middleware", () => {
+// `npm run research:serve` is `vite preview`, not `vite dev`: every middleware
+// case runs under both hooks, so a bridge that only works under configureServer
+// cannot pass while production runs preview (XTRM-832).
+const HOOKS: Array<"configureServer" | "configurePreviewServer"> = ["configureServer", "configurePreviewServer"];
+
+describe.each(HOOKS)("status-board middleware (%s)", (hook) => {
+  const mountHere = (plugin: ReturnType<typeof statusBoardApi>) => mount(plugin, hook);
   const dir = mkdtempSync(join(tmpdir(), "board-mw-"));
   const keyFile = join(dir, "credentials");
   writeFileSync(keyFile, "secret-value");
@@ -592,33 +599,24 @@ describe("status-board middleware", () => {
   const repo = "mercuryintelligence/market-data";
 
   it("refuses everything that is not a GET, before touching config or credential", async () => {
-    const middleware = mount(statusBoardApi({ configPath, fetchImpl: (async () => page([])) as unknown as typeof fetch }));
+    const middleware = mountHere(statusBoardApi({ configPath, fetchImpl: (async () => page([])) as unknown as typeof fetch }));
     const res = await send(middleware, "POST", `/xtrm-api/status-board/list?repo=${repo}`);
     expect(res.status).toBe(405);
     expect(res.body.error).toContain("read-only");
   });
 
   it("passes unrelated paths to the next middleware instead of answering them", async () => {
-    const middleware = mount(statusBoardApi({ configPath }));
+    const middleware = mountHere(statusBoardApi({ configPath }));
     const res = await send(middleware, "GET", "/api/other");
     expect(res.next).toBe(true);
     expect(res.status).toBe(0);
   });
 
   it("answers 404 with repo_not_bound for a repository the config does not mention", async () => {
-    const middleware = mount(statusBoardApi({ configPath }));
+    const middleware = mountHere(statusBoardApi({ configPath }));
     const res = await send(middleware, "GET", "/xtrm-api/status-board/binding?repo=xtrm-dev/xtrm");
     expect(res.status).toBe(404);
     expect(res.body).toMatchObject({ ok: false, reason: "repo_not_bound" });
-  });
-
-  it("registers the same handler on the preview hook, which is the production path", async () => {
-    // `npm run research:serve` is `vite preview`, not `vite dev`: a bridge that only
-    // works under configureServer is untested in the mode production runs.
-    const middleware = mount(statusBoardApi({ configPath, fetchImpl: (async () => page([wire("workers/alice")])) as unknown as typeof fetch }), "configurePreviewServer");
-    const res = await send(middleware, "GET", `/xtrm-api/status-board/list?repo=${repo}&prefix=workers`);
-    expect(res.status).toBe(200);
-    expect(res.body.records).toHaveLength(1);
   });
 
   it("answers instead of exiting when a projects entry is not an object", async () => {
@@ -627,7 +625,7 @@ describe("status-board middleware", () => {
     // Node's default policy exited the preview process — the console restart loop.
     const brokenPath = join(dir, "pm-broken.json");
     writeFileSync(brokenPath, JSON.stringify({ defaults: { timezone: "UTC" }, projects: { bad: null, mercury: config.projects!.mercury } }));
-    const middleware = mount(statusBoardApi({ configPath: brokenPath, fetchImpl: (async () => page([wire("workers/alice")])) as unknown as typeof fetch }));
+    const middleware = mountHere(statusBoardApi({ configPath: brokenPath, fetchImpl: (async () => page([wire("workers/alice")])) as unknown as typeof fetch }));
     const bound = await send(middleware, "GET", `/xtrm-api/status-board/binding?repo=${repo}`);
     expect(bound.status).toBe(200);
     expect(bound.body.binding.resolvedBy).toBe("repo_slug");
@@ -639,7 +637,7 @@ describe("status-board middleware", () => {
   });
 
   it("answers 200 with a record, and 404 for a completed scan that finds nothing", async () => {
-    const middleware = mount(
+    const middleware = mountHere(
       statusBoardApi({
         configPath,
         fetchImpl: (async () => page([wire("workers/alice"), wire("workers/bob")])) as unknown as typeof fetch,
@@ -659,7 +657,7 @@ describe("status-board middleware", () => {
       calls += 1;
       return page([wire("followups/f-1")], "cursor-again");
     }) as unknown as typeof fetch;
-    const middleware = mount(statusBoardApi({ configPath, fetchImpl }));
+    const middleware = mountHere(statusBoardApi({ configPath, fetchImpl }));
     const url = `/xtrm-api/status-board/record?repo=${repo}&path=workers/never-seen`;
     const first = await send(middleware, "GET", url);
     expect(first.status).toBe(502);
@@ -677,7 +675,7 @@ describe("status-board middleware", () => {
       calls += 1;
       return page([wire("followups/f-1")], "cursor-again");
     }) as unknown as typeof fetch;
-    const middleware = mount(statusBoardApi({ configPath, fetchImpl }));
+    const middleware = mountHere(statusBoardApi({ configPath, fetchImpl }));
     const url = `/xtrm-api/status-board/list?repo=${repo}&prefix=workers&limit=50`;
     const first = await send(middleware, "GET", url);
     expect(first.status).toBe(200);
@@ -696,7 +694,7 @@ describe("status-board middleware", () => {
       calls += 1;
       return page([wire("workers/alice")]);
     }) as unknown as typeof fetch;
-    const middleware = mount(statusBoardApi({ configPath, fetchImpl }));
+    const middleware = mountHere(statusBoardApi({ configPath, fetchImpl }));
     const url = `/xtrm-api/status-board/list?repo=${repo}&prefix=workers`;
     const first = await send(middleware, "GET", url);
     expect(first.status).toBe(200);
@@ -709,9 +707,42 @@ describe("status-board middleware", () => {
     expect(second.body.cachedAt).toBe(first.body.cachedAt);
   });
 
+  it("re-reads an expired entry instead of serving it forever", async () => {
+    // Only Date is faked: the handler's polling in `send` needs real timers.
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls += 1;
+      return page([wire("workers/alice")]);
+    }) as unknown as typeof fetch;
+    const middleware = mountHere(statusBoardApi({ configPath, fetchImpl }));
+    const url = `/xtrm-api/status-board/list?repo=${repo}&prefix=workers`;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-11-17T08:00:00Z"));
+      const first = await send(middleware, "GET", url);
+      expect(first.status).toBe(200);
+      vi.setSystemTime(new Date("2026-11-17T08:01:01Z"));
+      const second = await send(middleware, "GET", url);
+      expect(second.status).toBe(200);
+      expect(calls).toBe(2);
+      expect(second.body.cachedAt).not.toBe(first.body.cachedAt);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops cache entries whose TTL has run out", () => {
+    const cache = new Map([
+      ["record:site:workers/stale", { at: 0, value: 1 }],
+      ["record:site:workers/fresh", { at: 30_000, value: 2 }],
+    ]);
+    evictExpired(cache, 60_000);
+    expect([...cache.keys()]).toEqual(["record:site:workers/fresh"]);
+  });
+
   it("publishes unitActive null with a reason when there is no unit to probe", async () => {
     // The binding has no status_board_unit, so nothing was verified: null, never false.
-    const middleware = mount(statusBoardApi({ configPath }));
+    const middleware = mountHere(statusBoardApi({ configPath }));
     const res = await send(middleware, "GET", `/xtrm-api/status-board/health?repo=${repo}`);
     expect(res.status).toBe(200);
     expect(res.body.health).toMatchObject({ unitActive: null, unitActiveReason: "unit_not_found" });
@@ -727,7 +758,7 @@ describe("status-board middleware", () => {
   });
 
   it("answers 404 for an unknown subpath, and 400 only for a malformed query", async () => {
-    const middleware = mount(statusBoardApi({ configPath }));
+    const middleware = mountHere(statusBoardApi({ configPath }));
     const unknown = await send(middleware, "GET", `/xtrm-api/status-board/unknown?repo=${repo}`);
     expect(unknown.status).toBe(404);
     expect(unknown.body).toMatchObject({ ok: false, error: "unsupported status board read" });
@@ -741,7 +772,7 @@ describe("status-board middleware", () => {
       // Name the board that was actually read, so a retarget cannot hide behind a 200.
       return page([{ ...wire("workers/alice"), id: url.pathname.includes("site-other") ? "other" : "mercury" }]);
     }) as unknown as typeof fetch;
-    const middleware = mount(statusBoardApi({ configPath, fetchImpl }));
+    const middleware = mountHere(statusBoardApi({ configPath, fetchImpl }));
 
     const explicit = await send(middleware, "GET", `/xtrm-api/status-board/binding?repo=${repo}&project=other`);
     expect(explicit.status).toBe(200);
@@ -771,7 +802,7 @@ describe("status-board middleware", () => {
     const missingKeyPath = join(dir, "pm-nokey.json");
     writeFileSync(missingKeyPath, JSON.stringify(withoutKey));
     let calls = 0;
-    const middleware = mount(
+    const middleware = mountHere(
       statusBoardApi({
         configPath: missingKeyPath,
         fetchImpl: (async () => {

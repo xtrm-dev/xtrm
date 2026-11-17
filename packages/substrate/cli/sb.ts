@@ -2401,14 +2401,31 @@ function journalIdentity(e: JournalEntry): string {
 }
 
 // Full-body human rendering for `journal show` (xtrm-7wc.6.2): the header
-// line plus the entry-scoped semantic text. `since` stays compact by
-// contract; mechanical payloads ride JSON only, presence-only here.
+// line plus the entry-scoped semantic text, or the bounded result evidence a
+// result row carries instead of a semantic summary (XTRM-832). `since` stays
+// compact by contract; mechanical payloads ride JSON only, presence-only here.
 function journalBody(e: JournalEntry): string[] {
   // A marker stands alone: the row has no payload to describe.
   if ((e as JournalEntry & { unreadable?: string }).unreadable) return [];
   const lines: string[] = [journalIdentity(e)];
   const sem = e.semantic;
-  if (!sem) return lines;
+  if (!sem) {
+    // A result row has no semantic summary; the header only names the outcome,
+    // so the evidence must be rendered here or human show hides it.
+    const r = e.result;
+    if (!r) return lines;
+    // A legacy row can hold an empty summary (the writer used to accept it).
+    const summary = typeof r.summary === "string" ? r.summary.trim() : "";
+    const outcome = r.outcome ? ` (${r.outcome})` : "";
+    lines.push(summary ? `  result: ${summary}${outcome}` : `  result: (no summary recorded)${outcome}`);
+    for (const [label, values] of [
+      ["completed", r.completed],
+      ["findings", r.findings],
+    ] as const) {
+      if (values && values.length > 0) lines.push(`  ${label}: ${values.join("; ")}`);
+    }
+    return lines;
+  }
   lines.push(`  summary: ${sem.summary}`);
   if (sem.current) lines.push(`  current: ${sem.current}`);
   for (const [label, values] of [
