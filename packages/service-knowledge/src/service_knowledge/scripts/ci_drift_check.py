@@ -171,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         drifted = scan_drift(str(root), use_gitnexus=False)
     except Exception as exc:
-        print(f"::error::ci-drift-check: scan_drift raised {type(exc).__name__}: {str(exc)[:300]}", file=sys.stderr)
+        print(f"::error::ci-drift-check: scan_drift raised {type(exc).__name__}: {str(exc)[:2000]}", file=sys.stderr)
         return 2
     scan_ms = (time.monotonic() - t0) * 1000.0
 

@@ -485,7 +485,11 @@ def main() -> None:
         print("Tip: narrow recursive globs (e.g. 'dir/**/*' -> 'dir/**/*.py') so the territory "
               "tracks only real source.")
     elif cmd == "scan":
-        d = scan_drift(enrich_with_gitnexus=enrich, use_gitnexus=not no_gitnexus)
+        try:
+            d = scan_drift(enrich_with_gitnexus=enrich, use_gitnexus=not no_gitnexus)
+        except RuntimeError as exc:  # fail closed on unknown history: a message, not a traceback
+            print(f"drift_detector: cannot determine drift: {exc}", file=sys.stderr)
+            sys.exit(2)
         if not d:
             print("No drift detected.")
             return
