@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from service_knowledge import index
-from service_knowledge.mcp._root import resolve_consumer_root
+from service_knowledge.mcp._root import NoRegistry, resolve_registry_root
 
 TOOL_NAME = "knowledge_get"
 DESCRIPTION = (
@@ -28,8 +28,8 @@ PARAMETERS = {
 def run(item_id: str | None = None, skill_path: str | None = None,
         consumer_root: str | None = None, **_: Any) -> dict[str, Any]:
     try:
-        root = resolve_consumer_root(consumer_root)
-    except ValueError as exc:
+        root = resolve_registry_root(consumer_root)
+    except (NoRegistry, ValueError) as exc:
         return {"error": str(exc)}
     if item_id:
         item = index.get_item(root, item_id)

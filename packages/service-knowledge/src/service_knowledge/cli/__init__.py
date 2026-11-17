@@ -2,7 +2,7 @@
 
 Entry point ``service-knowledge = service_knowledge.cli:main`` (pyproject.toml).
 Stdlib-only; does NOT depend on xtrm/sp/xt/xtmux. Subcommands: install · update ·
-status · migrate · remove · index · canary · help.
+status · migrate · remove · index · canary · drift · mcp · help.
 """
 from __future__ import annotations
 
@@ -10,7 +10,18 @@ import argparse
 import sys
 
 from service_knowledge import __version__
-from service_knowledge.cli import _help, canary_cmd, drift, index_cmd, install, migrate, remove, status, update
+from service_knowledge.cli import (
+    _help,
+    canary_cmd,
+    drift,
+    index_cmd,
+    install,
+    mcp_cmd,
+    migrate,
+    remove,
+    status,
+    update,
+)
 
 _SUBCOMMANDS = {
     "install": (install.run, "Install service-knowledge into a consumer repo (vendor + migrate + wire hooks)."),
@@ -21,6 +32,7 @@ _SUBCOMMANDS = {
     "index": (index_cmd.run, "Build / query / inspect the per-repo FTS5 evidence index."),
     "canary": (canary_cmd.run, "Manage the per-repo auto-merge canary (status | enable | disable)."),
     "drift": (drift.run, "Detect / clear service-knowledge drift (writes a pending marker)."),
+    "mcp": (mcp_cmd.run, "Serve the read-only knowledge tools over MCP (JSON-RPC stdio), and inspect them."),
 }
 
 
@@ -49,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"service-knowledge {__version__}")
     sub = parser.add_subparsers(dest="command", metavar="<command>")
     for name, (_fn, help_text) in _SUBCOMMANDS.items():
-        if name in ("index", "canary", "drift"):
+        if name in ("index", "canary", "drift", "mcp"):
             continue  # registered below with nested actions
         sp = sub.add_parser(
             name,
@@ -69,6 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     index_cmd.register(sub)
     canary_cmd.register(sub)
     drift.register(sub)
+    mcp_cmd.register(sub)
 
     # `help <topic>` — concept-level explainers (workflow / verifier / mcp / …).
     help_p = sub.add_parser(
