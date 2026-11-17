@@ -42,7 +42,7 @@ export default defineConfig({
       XTRM_AGENT_CONNECTION_FILE: join(process.env.XTRM_REAL_HOST_DEVICE_DIR, "no-connection.json"),
       VITE_XTRM_GITHUB: "fixture",
       VITE_XTRM_SUBSTRATE: "fixture",
-      VITE_XTRM_PROGRAM: "fixture",
+      
       VITE_XTRM_RESEARCH: "fixture",
     },
   },

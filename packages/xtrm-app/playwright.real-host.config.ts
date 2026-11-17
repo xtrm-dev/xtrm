@@ -34,7 +34,7 @@ export default defineConfig({
       // refuses every write route with XTRM_SUBSTRATE_WRITES=0.
       VITE_XTRM_SUBSTRATE: "live",
       XTRM_SUBSTRATE_WRITES: "0",
-      VITE_XTRM_PROGRAM: "fixture",
+      
       VITE_XTRM_RESEARCH: "fixture",
       VITE_XTRM_AGENT_HOST: "live",
       // No saved SSH connection: the bridge reads the loopback host.

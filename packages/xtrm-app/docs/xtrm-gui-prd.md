@@ -61,7 +61,7 @@ Epic / parent work contract
 Frame
 Agent
 Chain / ChainRun
-Program workstream / assignment
+Cross-repository workstream / assignment
 Artifact
 Pull request / commit
 Evidence item
@@ -245,7 +245,6 @@ Graph
 Agent
 Agents
 Specialists / Chains
-Program
 Observability
 Explore
 ```
@@ -274,8 +273,8 @@ Agent
 Agents
   primary work = live fleet / execution presence
 
-Program
-  primary work = cross-repository intent and governance
+Project
+  primary work = the repository's project records (not a global surface)
 
 Graph
   primary work = relationship topology
@@ -289,7 +288,7 @@ The drawer is the global secondary interaction surface.
 
 Its purpose is to understand, control, and traverse related work without losing the current primary workspace.
 
-The same canonical drawer shell must be used across Issues, Agents, Program, Graph, Agent activity, and other surfaces. Do not create parallel entity-specific drawer implementations.
+The same canonical drawer shell must be used across Issues, Agents, Project, Graph, Agent activity, and other surfaces. Do not create parallel entity-specific drawer implementations.
 
 ### 7.1 Drawer states
 
@@ -703,7 +702,7 @@ Clicking an agent opens its drawer.
 
 `Open session` promotes that agent into the main Agent surface.
 
-Clicking its work item opens the Issue / Program entity in the drawer.
+Clicking its work item opens the Issue (or the referenced Project record) in the drawer.
 
 Clicking its chain opens ChainRun inspection.
 
@@ -786,7 +785,7 @@ Useful actions:
 Open issue
 Attach issue to composer
 Open parent epic
-Open Program assignment
+Open linked issue
 ```
 
 ### Coordination
@@ -1469,7 +1468,7 @@ The first accepted vertical does not require:
 - destructive branch compression;
 - exact visual parity for arbitrary Pi TUI extension components;
 - one custom provider adapter per agent without evidence it is needed;
-- a second Program task tracker;
+- a second Project task tracker;
 - a second GUI-native telemetry authority;
 - building a complete IDE before the Frame model is proven;
 - implementing every planned slash command before the typed-reference substrate exists.
@@ -1634,7 +1633,7 @@ Versions, licences, the full dependency list, and open adoption items: `adoption
 - UI components never know data origin. Data arrives through typed adapters: `adapters/github`, `adapters/substrate`, and — for Project — `adapters/statusBoard` and `adapters/jira` (`console-v2-shell-architecture.md` §9.3, `adr/ADR-002-project-surface-status-board-and-jira.md` D3).
 - If the typed service lacks a required bounded or batched read, the UI is built against a typed fixture behind the adapter and the missing API is reported. The gap is never bypassed through SQLite.
 - Project is a repository-scoped composition of those adapters, not a cross-repository mode. It never duplicates executable Issue state (§9).
-- The retired cross-repository programme adapter stays a typed fixture with no route until its last reference is gone (ADR-002 D1/D3).
+- The retired cross-repository programme adapter was deleted with its surface and types once its last reference was gone (ADR-002 D1 and §12 R2: not renamed, not kept as a fixture).
 
 ### 34.8 Frame
 
@@ -1852,7 +1851,7 @@ Status: **accepted** (2026-10-02, XTRM-558; decisions in §36.12). This section 
 The Agent mode is a first-class half of the application, not one rail destination among several.
 
 - **Switch.** The top of the global rail carries a two-state switch: `Console` / `Agent`. The switch is always visible. It has a keyboard binding (§36.12).
-- **Console half.** Keeps the existing rail modes: Work, Agents (fleet presence, §12), Program, Research, Observability.
+- **Console half.** Keeps the existing rail modes: Work, Agents (fleet presence, §12), Research, Observability. **Project is not a rail mode**: it is a repository-scoped section at `/rep/:owner/:repo/project` (§9, ADR-002 D1/D2).
 - **Agent half.** Uses this layout:
 
 ```text
@@ -2045,7 +2044,7 @@ These criteria add to §31. Each criterion must pass against a real agent host a
 
 ### 36.12 Decisions (formerly open items, decided 2026-10-02 under XTRM-558)
 
-1. **Switch binding.** `Mod+.` toggles between the halves. The Console modes keep `Mod+1…5` (Work, Agents, Program, Research, Observability); pressed in the Agent half, they switch to the Console half and open that mode. The Agent mode leaves the numbered mode list.
+1. **Switch binding.** `Mod+.` toggles between the halves. The Console modes keep `Mod+1…4` (Work, Agents, Research, Observability); pressed in the Agent half, they switch to the Console half and open that mode. The Agent mode leaves the numbered mode list. Project is not a mode: it is a repository section (ADR-002 D1/D2).
 2. **`@session` payload and budgets.** `@session` attaches identity, bound work item, live state, and the last settled response truncated to its budget. Budgets are UTF-8 bytes of rendered context:
 
    | kind | budget | above budget |
