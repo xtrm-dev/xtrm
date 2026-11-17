@@ -34,7 +34,12 @@ function setupIssue(dbPath: string): { id: string; humanRef: string } {
   return { id: issue.id, humanRef: issue.humanRef };
 }
 
-function runHook(repo: string, dbPath: string, env: Record<string, string>, message: string): { code: number; stderr: string; message: string } {
+function runHook(
+  repo: string,
+  dbPath: string,
+  env: Record<string, string>,
+  message: string,
+): { code: number; stderr: string; rawStderr: string; message: string } {
   const file = join(repo, "msg.txt");
   writeFileSync(file, message);
   // Tests/hermetic-env.ts does not clear XTRM_RECEIPT_ID: every xt activation
@@ -43,7 +48,12 @@ function runHook(repo: string, dbPath: string, env: Record<string, string>, mess
   delete base["XTRM_RECEIPT_ID"];
   const res = spawnSync(process.execPath, [HOOK, file], { cwd: repo, encoding: "utf8", env: { ...base, ...env } });
   // XTRM-824: the hook imports node:sqlite; Node v25 warns on the first import.
-  return { code: res.status ?? 1, stderr: withoutNodeSqliteWarning(res.stderr ?? ""), message: readFileSync(file, "utf8") };
+  // The filer applies to every assertion in this file, which is deliberate: the
+  // hook path opens a local database, so Node v25 prints the sqlite notice on any
+  // invocation. `rawStderr` stays available for a test that must see the whole
+  // stream, so the convenience does not become a blind spot (XTRM-824 review).
+  const rawStderr = res.stderr ?? "";
+  return { code: res.status ?? 1, stderr: withoutNodeSqliteWarning(rawStderr), rawStderr, message: readFileSync(file, "utf8") };
 }
 
 describe("prepare-commit-msg issue trailers (XTRM-684)", () => {

@@ -116,6 +116,13 @@ describe("sb piped stdout is not truncated (XTRM-331)", () => {
     const direct = spawnSync(process.execPath, [SB, ...argv], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
     assert.equal(direct.status, inProc.code, "exit code must be preserved exactly");
     const pipedErr = execFileSync("/bin/sh", ["-c", `${cli(argv)} 2>&1 >/dev/null | cat`], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    // The exemption strips a known line, so two occurrences would compare equal
+    // to one. Assert the assumption the helper depends on: the runtime notice
+    // appears at most once per process (XTRM-824 review).
+    assert.ok(
+      (pipedErr.match(/ExperimentalWarning: SQLite/g) ?? []).length <= 1,
+      "the runtime notice must appear at most once; the exemption would hide a second one",
+    );
     assert.equal(withoutNodeSqliteWarning(pipedErr), expected, "the full stderr payload must cross the pipe");
   });
 
