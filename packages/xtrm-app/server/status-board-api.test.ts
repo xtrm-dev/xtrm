@@ -294,3 +294,153 @@ describe("public binding", () => {
     expect(Object.keys(view)).not.toContain("key");
   });
 });
+
+
+type Middleware = (req: unknown, res: unknown, next: () => void) => void;
+
+/** Mount the plugin's real middleware the way Vite does, so routes are exercised end to end. */
+function mount(plugin: ReturnType<typeof statusBoardApi>): Middleware {
+  let middleware: Middleware = () => {
+    throw new Error("middleware was never registered");
+  };
+  const server = { middlewares: { use: (fn: Middleware) => (middleware = fn) } };
+  (plugin.configureServer as unknown as (s: unknown) => void)(server);
+  return middleware;
+}
+
+async function send(middleware: Middleware, method: string, url: string) {
+  const headers: Record<string, unknown> = {};
+  let payload = "";
+  const res = {
+    statusCode: 0,
+    next: false,
+    setHeader(key: string, value: unknown) {
+      headers[key] = value;
+    },
+    end(body: string) {
+      payload = body;
+    },
+  };
+  middleware({ method, url }, res, () => {
+    res.next = true;
+  });
+  // the handler is async and its promise is intentionally not returned by the hook
+  for (let i = 0; i < 200 && res.statusCode === 0 && !res.next; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  return { status: res.statusCode, next: res.next, body: payload ? JSON.parse(payload) : null, headers };
+}
+
+describe("status-board middleware", () => {
+  const dir = mkdtempSync(join(tmpdir(), "board-mw-"));
+  const keyFile = join(dir, "credentials");
+  writeFileSync(keyFile, "secret-value");
+  const configPath = join(dir, "pm.json");
+  const config: PmConfig = {
+    defaults: { timezone: "Europe/Berlin" },
+    projects: {
+      mercury: {
+        repo_slug: "mercuryintelligence/market-data",
+        status_board_site: "site-a",
+        status_board_key_file: keyFile,
+        status_board_state_dir: join(dir, "tabellone"),
+      },
+    },
+  };
+  writeFileSync(configPath, JSON.stringify(config));
+  const page = (records: unknown[], next?: string) => ({ ok: true, json: async () => ({ records, nextCursor: next }) });
+  const wire = (path: string) => ({ id: `rec_${path}`, updatedAt: "2026-11-17T08:00:00Z", data: { path, doc: { status: "active" } } });
+  const repo = "mercuryintelligence/market-data";
+
+  it("refuses everything that is not a GET, before touching config or credential", async () => {
+    const middleware = mount(statusBoardApi({ configPath, fetchImpl: (async () => page([])) as unknown as typeof fetch }));
+    const res = await send(middleware, "POST", `/xtrm-api/status-board/list?repo=${repo}`);
+    expect(res.status).toBe(405);
+    expect(res.body.error).toContain("read-only");
+  });
+
+  it("passes unrelated paths to the next middleware instead of answering them", async () => {
+    const middleware = mount(statusBoardApi({ configPath }));
+    const res = await send(middleware, "GET", "/api/other");
+    expect(res.next).toBe(true);
+    expect(res.status).toBe(0);
+  });
+
+  it("answers 404 with repo_not_bound for a repository the config does not mention", async () => {
+    const middleware = mount(statusBoardApi({ configPath }));
+    const res = await send(middleware, "GET", "/xtrm-api/status-board/binding?repo=xtrm-dev/xtrm");
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ ok: false, reason: "repo_not_bound" });
+  });
+
+  it("answers 200 with a record, and 404 for a completed scan that finds nothing", async () => {
+    const middleware = mount(
+      statusBoardApi({
+        configPath,
+        fetchImpl: (async () => page([wire("workers/alice"), wire("workers/bob")])) as unknown as typeof fetch,
+      }),
+    );
+    const hit = await send(middleware, "GET", `/xtrm-api/status-board/record?repo=${repo}&path=workers/bob`);
+    expect(hit.status).toBe(200);
+    expect(hit.body.record.path).toBe("workers/bob");
+    const miss = await send(middleware, "GET", `/xtrm-api/status-board/record?repo=${repo}&path=workers/zzz`);
+    expect(miss.status).toBe(404);
+    expect(miss.body.error).toContain("not found");
+  });
+
+  it("answers 502 reason:inconclusive, and does not cache it", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls += 1;
+      return page([wire("followups/f-1")], "cursor-again");
+    }) as unknown as typeof fetch;
+    const middleware = mount(statusBoardApi({ configPath, fetchImpl }));
+    const url = `/xtrm-api/status-board/record?repo=${repo}&path=workers/never-seen`;
+    const first = await send(middleware, "GET", url);
+    expect(first.status).toBe(502);
+    expect(first.body).toMatchObject({ ok: false, reason: "inconclusive" });
+    const afterFirst = calls;
+    const second = await send(middleware, "GET", url);
+    expect(second.status).toBe(502);
+    // a failed read is not an answer: the second request must reach upstream again
+    expect(calls).toBeGreaterThan(afterFirst);
+  });
+
+  it("reports truncation at the route, and serves a repeat read from cache", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls += 1;
+      return page([wire("followups/f-1")], "cursor-again");
+    }) as unknown as typeof fetch;
+    const middleware = mount(statusBoardApi({ configPath, fetchImpl }));
+    const url = `/xtrm-api/status-board/list?repo=${repo}&prefix=workers&limit=50`;
+    const first = await send(middleware, "GET", url);
+    expect(first.status).toBe(200);
+    expect(first.body.truncated).toBe(true);
+    const afterFirst = calls;
+    const second = await send(middleware, "GET", url);
+    expect(second.status).toBe(200);
+    expect(calls).toBe(afterFirst);
+  });
+
+  it("answers 503 when the credential file is missing, without calling upstream", async () => {
+    const withoutKey = { ...config, projects: { mercury: { ...config.projects!.mercury, status_board_key_file: join(dir, "absent-key") } } };
+    const missingKeyPath = join(dir, "pm-nokey.json");
+    writeFileSync(missingKeyPath, JSON.stringify(withoutKey));
+    let calls = 0;
+    const middleware = mount(
+      statusBoardApi({
+        configPath: missingKeyPath,
+        fetchImpl: (async () => {
+          calls += 1;
+          return page([]);
+        }) as unknown as typeof fetch,
+      }),
+    );
+    const res = await send(middleware, "GET", `/xtrm-api/status-board/list?repo=${repo}&prefix=workers`);
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ ok: false, error: "status board credential unavailable" });
+    expect(calls).toBe(0);
+    expect(JSON.stringify(res.body)).not.toContain("secret-value");
+  });
+});

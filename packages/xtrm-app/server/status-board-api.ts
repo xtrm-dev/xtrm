@@ -386,11 +386,17 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
     return { client, keyPresent: true };
   };
 
-  const cached = async <T>(key: string, load: () => Promise<T>): Promise<T> => {
+  /**
+   * Reads are cached for CACHE_MS so a page of surfaces cannot multiply the
+   * upstream load. A definite answer ages by up to 60 s (a just-created record
+   * can still look absent); an *inconclusive* read is not an answer and must not
+   * be cached, or a 502 would outlive the condition that caused it.
+   */
+  const cached = async <T>(key: string, load: () => Promise<T>, cacheable: (value: T) => boolean = () => true): Promise<T> => {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < CACHE_MS) return hit.value as T;
     const value = await load();
-    cache.set(key, { at: Date.now(), value });
+    if (cacheable(value)) cache.set(key, { at: Date.now(), value });
     return value;
   };
 
@@ -435,11 +441,19 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
         return json(res, 200, { ok: true, ...result, cachedAt: new Date().toISOString() });
       }
       const recordPath = url.searchParams.get("path") ?? "";
-      const lookup = await cached(`record:${binding.site}:${recordPath}`, () => client.record(recordPath));
+      const lookup = await cached(
+        `record:${binding.site}:${recordPath}`,
+        () => client.record(recordPath),
+        (value) => value.outcome !== "incomplete",
+      );
       if (lookup.outcome === "absent") return json(res, 404, { ok: false, error: "record not found" });
       if (lookup.outcome === "incomplete") {
         // The page budget ran out before the path could be ruled out: say so, never 404.
-        return json(res, 502, { ok: false, error: "status board record lookup was inconclusive" });
+        return json(res, 502, {
+          ok: false,
+          reason: "inconclusive",
+          error: "status board record lookup was inconclusive",
+        });
       }
       return json(res, 200, { ok: true, record: lookup.record, cachedAt: new Date().toISOString() });
     } catch (error) {
