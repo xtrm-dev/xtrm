@@ -108,10 +108,42 @@ describe("journal render labels (XTRM-420)", () => {
     });
     assert.match(show(), /\(result completed\)/, "a result row names its outcome");
 
-    ctx.db.exec("UPDATE issue_journal SET result_json = NULL, semantic_json = NULL, mechanical_json = NULL");
+    ctx.db.exec(`UPDATE issue_journal SET result_json = NULL, semantic_json = NULL, mechanical_json = NULL WHERE issue_id = '${target.id}'`);
     const legacy = show();
     assert.match(legacy, /\(no payload\)/, "an evidence-less row says so");
     assert.doesNotMatch(legacy, /mechanical-only/, "and never claims a mechanical payload it lacks");
+    assert.doesNotMatch(legacy, /result:/, "and never renders a result body it does not hold");
+  });
+
+  it("renders a result entry's summary and outcome in human show (XTRM-832)", () => {
+    // The header line only says "(result completed)"; the summary and its lists
+    // are the evidence, and `--json` was the only surface that showed them.
+    const journal = new JournalService(ctx.db, ctx.svc);
+    const target = issue();
+    journal.appendEntry(target.id, {
+      kind: "result",
+      sessionId: "01a0ac95-8370-74c5-9081-4490653e7109",
+      result: {
+        summary: "bridge verified",
+        outcome: "completed",
+        completed: ["merged PR #414"],
+        findings: ["cache never evicts"],
+      },
+    });
+    // A result that carries neither list must not print an empty label.
+    journal.appendEntry(target.id, {
+      kind: "result",
+      sessionId: "01a0ac95-8370-74c5-9081-4490653e7109",
+      result: { summary: "no lists here" },
+    });
+    const show = runCli(["--db", join(ctx.dir, "state.db"), "journal", "show", target.humanRef]);
+    assert.equal(show.code, 0, show.stderr);
+    assert.match(show.stdout, /result: bridge verified \(completed\)/);
+    assert.match(show.stdout, /completed: merged PR #414/);
+    assert.match(show.stdout, /findings: cache never evicts/);
+    assert.match(show.stdout, /result: no lists here/);
+    assert.equal((show.stdout.match(/completed: /g) ?? []).length, 1, "only the entry that holds the list renders it");
+    assert.equal((show.stdout.match(/findings: /g) ?? []).length, 1, "only the entry that holds the list renders it");
   });
 
   it("rejects the wrong flag for a result, naming the right one", () => {

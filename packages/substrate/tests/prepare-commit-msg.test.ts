@@ -134,6 +134,9 @@ describe("prepare-commit-msg issue trailers (XTRM-684)", () => {
     const r = runHook(repo, dbPath, {}, "work\n");
     assert.equal(r.code, 0);
     assert.equal(r.message, "work\n");
+    // The quiet path is the one that must stay quiet: read the raw stream, so the
+    // sqlite-warning filer is not hiding hook output along with the notice.
+    assert.equal(withoutNodeSqliteWarning(r.rawStderr).trim(), "", "no binding writes nothing but the Node sqlite notice");
   });
 
   it("leaves the message unchanged and exits 0 for an unknown ref", () => {
