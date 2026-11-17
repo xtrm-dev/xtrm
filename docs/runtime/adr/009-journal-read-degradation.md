@@ -3,11 +3,11 @@
 > Status: PROPOSED 2026-11-17 · decision recorded in **XTRM-826** · implementation gated on acceptance, **XTRM-827**
 > Date: 2026-11-17 · Issues: **XTRM-826** (this decision), **XTRM-827** (implementation, depends on XTRM-826), **XTRM-420** (the render defect that exposed it)
 > Scope: what `JournalService` does when one persisted entry cannot be validated while the rest of the issue's journal is readable.
-> Evidence: `packages/substrate/src/service/journal-service.ts:374` (`listEntries`), `:393-394` (its `.map((r) => this.toEntry(r))`), `:853` (result-payload throw); `packages/substrate/src/domain/journal.ts:158` (`validateResultPayload`), `:172-186` (field and summary rules); measurement on the canonical store, 2026-11-17, below.
+> Evidence: symbols, not line numbers — `JournalService.listEntries` and its `.map((r) => this.toEntry(r))`, `toEntry`'s result-payload throw, and `validateResultPayload` with its field and summary rules, in `packages/substrate/src/service/journal-service.ts` and `packages/substrate/src/domain/journal.ts`. Line numbers quoted anywhere below were read at `7d1b057`; they drift with every refactor, so grep the symbol. Measurement on the canonical store, 2026-11-17, below.
 
 ## Context
 
-Every journal read validates every row. `listEntries` selects the rows for one issue and maps each through `toEntry`, and `toEntry` fails closed on an invalid payload — a result with a key outside `RESULT_FIELDS`, an empty or whitespace `summary`, an over-long field, or an unparsable `result_json`:
+Every journal read validates every row. `listEntries` selects the rows for one issue and maps each through `toEntry`, and `toEntry` fails closed on an invalid payload — a result with a key outside `RESULT_FIELDS`, an empty or whitespace `summary`, an over-long field, or an unparsable `result_json` (all in `packages/substrate/src/service/journal-service.ts`, validating through `validateResultPayload` in `packages/substrate/src/domain/journal.ts`):
 
 ```ts
 if (problems.length > 0) throw new Error(`fail-closed: invalid result payload on ${r["id"]}: ${problems[0]}`);
@@ -33,6 +33,19 @@ The class was measured before deciding. On the canonical store (`node:sqlite`, `
 | unparsable `result_json` | 0 | — |
 
 **That is "no evidence of the class today", not "the class is closed".** The class is closed for new writes by the validator; it is not closed for writers that bypass it. The decision below therefore governs future data, not a present defect, and no bug is filed while the count is zero.
+
+
+## Where the code is, without a line number
+
+The three functions this record names live in two files and have all moved at least once while this decision was being written — the result-payload throw alone moved within a day, because a guard commit inserted lines above it. Cite them by symbol:
+
+| Symbol | File |
+|---|---|
+| `JournalService.listEntries`, and the `.map((r) => this.toEntry(r))` inside it | `packages/substrate/src/service/journal-service.ts` |
+| `JournalService.toEntry` — the `fail-closed: invalid result payload` throw | `packages/substrate/src/service/journal-service.ts` |
+| `validateResultPayload` and `RESULT_FIELDS` | `packages/substrate/src/domain/journal.ts` |
+
+If a future change makes a symbol unfindable, that is the finding: the policy in this record referenced a function that no longer exists, and the record needs an amendment rather than a corrected offset.
 
 ## Options
 
