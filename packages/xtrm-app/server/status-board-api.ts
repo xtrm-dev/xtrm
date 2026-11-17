@@ -88,8 +88,10 @@ export function normaliseRepo(raw: string | null): string | null {
 
 /**
  * Which `projects.<name>` entry describes this repository. The entry is the
- * authority the sync timer reads, so a match here is a match everywhere.
- * Order: explicit request parameter, env override, `repo_slug`, `repo_name`.
+ * authority the sync timer reads, so a match here is a match everywhere and a
+ * request parameter must not retarget a bound repository to another board.
+ * Order: `repo_slug`, `repo_name`, then - only when this repository has no
+ * entry - the explicit request parameter and the env override.
  */
 export function resolveBinding(
   config: PmConfig | null,
@@ -121,11 +123,6 @@ export function resolveBinding(
     },
   });
 
-  const explicit = str(opts.explicit);
-  if (explicit && projects[explicit]) return base(explicit, "explicit");
-  const fromEnv = str(env.XTRM_PM_PROJECT);
-  if (fromEnv && projects[fromEnv]) return base(fromEnv, "env");
-
   // A `projects` entry can be `null` or a non-object in a hand-edited file. Such an
   // entry must degrade its own repository, never throw: this runs inside a preview
   // middleware whose rejection would exit the process (see `serve`).
@@ -141,6 +138,13 @@ export function resolveBinding(
     const nameOnly = str(project.repo_name);
     if (nameOnly && `${repository.split("/")[0]}/${nameOnly}`.toLowerCase() === wanted) return base(name, "repo_name");
   }
+
+  // Explicit selection stays available for an unbound repository (a site that hosts
+  // several boards), but never overrides the entry this repository itself resolves to.
+  const explicit = str(opts.explicit);
+  if (explicit && projects[explicit]) return base(explicit, "explicit");
+  const fromEnv = str(env.XTRM_PM_PROJECT);
+  if (fromEnv && projects[fromEnv]) return base(fromEnv, "env");
   return base(null, "none");
 }
 
@@ -588,7 +592,8 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
       const recordPath = url.searchParams.get("path") ?? "";
       if (!allowedPath(recordPath)) return json(res, 400, { ok: false, error: "unsupported record path" });
     } else {
-      return json(res, 400, { ok: false, error: "unsupported status board read" });
+      // An unknown subpath is not a malformed request: the route does not exist.
+      return json(res, 404, { ok: false, error: "unsupported status board read" });
     }
 
     const { client } = clientFor(binding);

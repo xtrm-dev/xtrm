@@ -40,6 +40,11 @@ const CONFIG: PmConfig = {
       jira_project: "ISSUE",
       jira_board_id: "1",
     },
+    // Deliberately carries no repo_slug/repo_name: only explicit selection reaches it.
+    other: {
+      status_board_site: "other-site",
+      status_board_key_file: "/home/dawid/.herenow/other-credentials",
+    },
   },
 };
 
@@ -69,6 +74,36 @@ describe("binding resolution", () => {
       boardId: "1",
       tokenFile: "/home/dawid/.secrets/atlassian-api-token.txt",
     });
+  });
+
+  it("pins a repository-bound read to its own board, ignoring ?project= and XTRM_PM_PROJECT", () => {
+    // Retargeting a repo-bound read to another project's board was the divergence from
+    // ADR-002: the repository entry is the authority the sync timer reads, so it wins.
+    for (const opts of [
+      { explicit: "other" },
+      { env: { XTRM_PM_PROJECT: "other" } },
+      { explicit: "other", env: { XTRM_PM_PROJECT: "other" } },
+    ]) {
+      const b = resolveBinding(CONFIG, "mercuryintelligence/market-data", opts);
+      expect(b.pmProject).toBe("mercury");
+      expect(b.resolvedBy).toBe("repo_slug");
+      expect(b.site).toBe("velvet-breeze-fbm8");
+    }
+    // The repo_name fallback is just as binding as repo_slug.
+    const byName = resolveBinding(
+      { projects: { alias: { repo_name: "market-data", status_board_site: "alias-site" }, other: { status_board_site: "other-site" } } },
+      "mercuryintelligence/market-data",
+      { explicit: "other", env: { XTRM_PM_PROJECT: "other" } },
+    );
+    expect(byName.resolvedBy).toBe("repo_name");
+    expect(byName.site).toBe("alias-site");
+  });
+
+  it("honours explicit selection for an unbound site, reporting the source that resolved", () => {
+    expect(resolveBinding(CONFIG, "someone/other", { explicit: "other", env: {} }).resolvedBy).toBe("explicit");
+    expect(resolveBinding(CONFIG, "someone/other", { explicit: "other", env: {} }).site).toBe("other-site");
+    expect(resolveBinding(CONFIG, "someone/other", { env: { XTRM_PM_PROJECT: "other" } }).resolvedBy).toBe("env");
+    expect(resolveBinding(CONFIG, "someone/other", { env: { XTRM_PM_PROJECT: "other" } }).site).toBe("other-site");
   });
 
   it("prefers an explicit project, then the environment, then repo_name", () => {
@@ -542,6 +577,12 @@ describe("status-board middleware", () => {
         status_board_key_file: keyFile,
         status_board_state_dir: join(dir, "tabellone"),
       },
+      // A second board the request could try to reach with ?project=other.
+      other: {
+        repo_slug: "someone/other",
+        status_board_site: "site-other",
+        status_board_key_file: keyFile,
+      },
     },
   };
   writeFileSync(configPath, JSON.stringify(config));
@@ -682,6 +723,46 @@ describe("status-board middleware", () => {
       runInProgressReason: "unit_not_found",
     });
     expect(res.body.health.lastSyncOkAt).toBeNull();
+  });
+
+  it("answers 404 for an unknown subpath, and 400 only for a malformed query", async () => {
+    const middleware = mount(statusBoardApi({ configPath }));
+    const unknown = await send(middleware, "GET", `/xtrm-api/status-board/unknown?repo=${repo}`);
+    expect(unknown.status).toBe(404);
+    expect(unknown.body).toMatchObject({ ok: false, error: "unsupported status board read" });
+    const malformed = await send(middleware, "GET", `/xtrm-api/status-board/list?repo=${repo}&prefix=bogus`);
+    expect(malformed.status).toBe(400);
+    expect(malformed.body.error).toBe("unknown collection");
+  });
+
+  it("never lets a repo-bound read be retargeted by ?project= or XTRM_PM_PROJECT", async () => {
+    const fetchImpl = (async (url: URL) => {
+      // Name the board that was actually read, so a retarget cannot hide behind a 200.
+      return page([{ ...wire("workers/alice"), id: url.pathname.includes("site-other") ? "other" : "mercury" }]);
+    }) as unknown as typeof fetch;
+    const middleware = mount(statusBoardApi({ configPath, fetchImpl }));
+
+    const explicit = await send(middleware, "GET", `/xtrm-api/status-board/binding?repo=${repo}&project=other`);
+    expect(explicit.status).toBe(200);
+    expect(explicit.body.binding).toMatchObject({ pmProject: "mercury", site: "site-a", resolvedBy: "repo_slug" });
+
+    // The reverse direction: a request for the other repo cannot be pointed at mercury either.
+    const other = await send(middleware, "GET", `/xtrm-api/status-board/binding?repo=someone/other&project=mercury`);
+    expect(other.body.binding).toMatchObject({ pmProject: "other", site: "site-other", resolvedBy: "repo_slug" });
+
+    const previous = process.env.XTRM_PM_PROJECT;
+    process.env.XTRM_PM_PROJECT = "other";
+    try {
+      const viaEnv = await send(middleware, "GET", `/xtrm-api/status-board/binding?repo=${repo}`);
+      expect(viaEnv.body.binding).toMatchObject({ pmProject: "mercury", site: "site-a", resolvedBy: "repo_slug" });
+    } finally {
+      if (previous === undefined) delete process.env.XTRM_PM_PROJECT;
+      else process.env.XTRM_PM_PROJECT = previous;
+    }
+
+    // Explicit selection still works when the repository itself is not bound.
+    const unbound = await send(middleware, "GET", "/xtrm-api/status-board/binding?repo=xtrm-dev/xtrm&project=other");
+    expect(unbound.body.binding).toMatchObject({ pmProject: "other", resolvedBy: "explicit" });
   });
 
   it("answers 503 when the credential file is missing, without calling upstream", async () => {
