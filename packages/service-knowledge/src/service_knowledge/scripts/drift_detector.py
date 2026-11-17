@@ -343,6 +343,7 @@ def scan_drift(project_root: str | None = None, enrich_with_gitnexus: bool = Fal
         return []
     registry = load_registry(project_root)
     drifted = []
+    unverifiable: list[tuple[str, Any]] = []
     for service_id, service in registry.get("services", {}).items():
         last_sync_str = service.get("last_sync", "")
         try:
@@ -399,9 +400,15 @@ def scan_drift(project_root: str | None = None, enrich_with_gitnexus: bool = Fal
                         if datetime.fromtimestamp(fp.stat().st_mtime, tz=timezone.utc) > floor:
                             drifted.append({"service_id": service_id, "service_name": service.get("name", service_id), "file_path": rel, "last_sync": last_sync_str, "last_sync_ref": ref, "never_synced": False, "reason": REASON_MTIME})
                 continue
+        # Fail closed, but keep scanning so ONE error names every affected service
+        # (a legacy registry usually has several) instead of one per retry.
+        unverifiable.append((service_id, ref))
+    if unverifiable:
+        listed = ", ".join(f"'{sid}' (last_sync_ref={r!r})" for sid, r in unverifiable)
         raise RuntimeError(
-            f"Cannot verify required history for service '{service_id}' "
-            f"(last_sync_ref={ref!r}); restore history or reconcile to record a verified ref."
+            f"Cannot verify required history for {len(unverifiable)} service(s): {listed}. "
+            "Legacy registry (last_sync without last_sync_ref)? After verifying each service, "
+            "record a ref once with `drift_detector.py sync <service_id>`; otherwise restore the missing git history."
         )
     if not drifted:
         return []

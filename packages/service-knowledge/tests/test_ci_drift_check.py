@@ -346,3 +346,19 @@ def test_unknown_history_failed_required_diff_blocks(
     monkeypatch.setattr(subprocess, "run", fail_required_diff)
     _assert_unknown_history_blocks(repo, capsys)
     assert len(failures) >= 2, "scan and CI must both attempt required history"
+
+
+def test_unknown_history_error_names_every_affected_service(tmp_path: Path) -> None:
+    """One refusal lists all unverifiable services, not just the first (#334 finding 2)."""
+    repo, reg_path = _make_repo(tmp_path)
+    data = json.loads(reg_path.read_text(encoding="utf-8"))
+    for sid in ("db", "cache"):
+        data["services"][sid] = {**data["services"]["db"], "name": sid}
+        data["services"][sid]["last_sync"] = "2000-01-01T00:00:00Z"
+        data["services"][sid].pop("last_sync_ref", None)
+    _write_convergent_registry(repo, reg_path, data)
+    with pytest.raises(RuntimeError) as exc:
+        scan_drift(str(repo), use_gitnexus=False)
+    assert "2 service(s)" in str(exc.value)
+    assert "'db'" in str(exc.value) and "'cache'" in str(exc.value)
+    assert "drift_detector.py sync" in str(exc.value)
