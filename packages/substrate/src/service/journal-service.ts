@@ -792,7 +792,12 @@ export class JournalService {
       // than claiming (or denying) a mechanical payload it may not have.
       const r = entry.result;
       if (r) {
-        lines.push(`RESULT: ${trunc(r.summary)}${r.outcome ? ` (${r.outcome})` : ""}`);
+        // A legacy row can hold an empty summary (the writer used to accept it).
+        // Printing a bare "RESULT:" would look like content that failed to
+        // render, so say the summary is missing instead of showing nothing.
+        const summary = typeof r.summary === "string" ? r.summary.trim() : "";
+        const outcome = r.outcome ? ` (${r.outcome})` : "";
+        lines.push(summary ? `RESULT: ${trunc(summary)}${outcome}` : `RESULT: (no summary recorded)${outcome}`);
       } else {
         lines.push(
           m

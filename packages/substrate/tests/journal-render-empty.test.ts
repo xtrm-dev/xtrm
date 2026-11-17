@@ -125,4 +125,29 @@ describe("journal render labels (XTRM-420)", () => {
     assert.match(text, /requires a bounded result payload/);
     assert.match(text, /--result/, "the error names the correct flag");
   });
+
+  it("cannot be handed an empty result summary: the read path refuses first", () => {
+    const journal = new JournalService(ctx.db, ctx.svc);
+    const created = journal.appendEntry(issue().id, {
+      kind: "result",
+      sessionId: "01a0ac95-8370-74c5-9081-4490653e7109",
+      result: { summary: "placeholder", outcome: "completed" },
+    });
+    ctx.db.exec(`UPDATE issue_journal SET result_json = '{"summary":"","outcome":"completed"}' WHERE id = '${created.id}'`);
+    // Fail-closed on read: a stored result with no summary never reaches a renderer.
+    assert.throws(() => journal.getEntry(created.id), /result\.summary must be a non-empty string/);
+  });
+
+  it("still renders a missing summary as missing if a renderer is handed one directly", () => {
+    const journal = new JournalService(ctx.db, ctx.svc);
+    const entry = journal.appendEntry(issue().id, {
+      kind: "result",
+      sessionId: "01a0ac95-8370-74c5-9081-4490653e7109",
+      result: { summary: "placeholder", outcome: "completed" },
+    });
+    const legacy = { ...entry, result: { ...entry.result!, summary: "   " } };
+    const rendered = journal.renderCheckpoint(legacy);
+    assert.match(rendered, /RESULT: \(no summary recorded\) \(completed\)/);
+    assert.doesNotMatch(rendered, /RESULT:\s*$/m, "never a bare RESULT: that looks like failed rendering");
+  });
 });
