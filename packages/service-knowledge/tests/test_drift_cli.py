@@ -156,3 +156,22 @@ def test_drift_help_epilog_lists_reconcile_flow(capsys) -> None:
     out = capsys.readouterr().out
     assert "/updating-service-knowledge" in out
     assert "drift clear" in out
+
+
+def test_unknown_sync_history_fails_closed_and_keeps_marker(drift_repo: Path, capsys) -> None:
+    """scan_drift refuses when last_sync_ref is unknown; the CLI must not call that
+    "none detected" nor delete the pending marker (PR #334 review, finding 1)."""
+    reg = drift_repo / ".xtrm/skills/acme/service-knowledge/service-registry.json"
+    data = json.loads(reg.read_text(encoding="utf-8"))
+    data["services"]["db"]["last_sync"] = "2000-01-01T00:00:00Z"  # synced, but no last_sync_ref
+    reg.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    marker = drift_repo / CANONICAL_MARKER_REL
+    marker.write_text("pending\n", encoding="utf-8")
+
+    rc = main(["drift", "--path", str(drift_repo)])
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "none detected" not in captured.out.lower()
+    assert "cannot determine drift" in captured.err
+    assert marker.exists()
