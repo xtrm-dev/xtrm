@@ -263,7 +263,10 @@ in progress. `true` needs only one of the two, so a healthy idle sync (armed, be
 `true`, not `false`. `unitActive` keeps its XTRM-830 tri-state meaning: `true` is a live sync, `false`
 is a verified dead one, `null` is "not verified". Every unverified fact carries a named reason
 (`unit_not_found`, `probe_timeout`, `non_user_session`, `probe_failed`) in its own `…Reason` field, and
-an unverified fact is never rendered as "the sync is down". A unit with no timer instance (the timer
+an unverified fact is never rendered as "the sync is down". `unit_not_found` carries evidence of
+absence (a null unit, `is-active` exiting 4, or stderr naming a unit that could not be found); a state
+the probe cannot classify (`unknown`, `maintenance`) reports `probe_failed`, because systemd answered
+about a unit it knows and the bridge must not turn an unreadable answer into "does not exist". A unit with no timer instance (the timer
 probe answers `unit_not_found`) is reported as `scheduleActive: null` with that reason: a missing timer
 is not evidence that the sync is down, and the bridge never guesses a timer name it cannot probe. The
 probe reads `is-active`'s exit code before its stdout, because systemd answers `inactive` for a unit

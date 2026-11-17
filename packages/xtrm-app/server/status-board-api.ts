@@ -461,9 +461,10 @@ function probeState(unit: string | null, run: UnitProbeRun): Promise<UnitState> 
       if (/could not be found|no such file|not found/i.test(detail)) {
         return resolve({ state: null, reason: "unit_not_found" });
       }
-      // An answer we cannot read as a run state ("unknown", "maintenance"): the
-      // unit does not resolve, so it is not evidence that the sync is down.
-      if (state) return resolve({ state: null, reason: "unit_not_found" });
+      // An answer we cannot classify as a run state ("unknown", "maintenance") is not evidence
+      // that the unit is absent — systemd answered about a unit it knows. Report the reason as
+      // unverified; `unit_not_found` stays reserved for the branches above, which carry evidence
+      // of absence (a null unit, exit 4, or stderr naming a unit that could not be found).
       resolve({ state: null, reason: "probe_failed" });
     });
   });

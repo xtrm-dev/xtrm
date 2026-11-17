@@ -371,7 +371,8 @@ describe("unit probe", () => {
 
   it("is unverified, never down, when the state does not name a known unit", async () => {
     // The live bug (XTRM-823): these answered `false` beside a fresh lastSyncOkAt.
-    expect(await probeUnit("sync.service", run("unknown"))).toEqual({ active: null, reason: "unit_not_found" });
+    expect(await probeUnit("sync.service", run("unknown"))).toEqual({ active: null, reason: "probe_failed" });
+    expect(await probeUnit("sync.service", run("maintenance"))).toEqual({ active: null, reason: "probe_failed" });
     expect(await probeUnit(null, run("active"))).toEqual({ active: null, reason: "unit_not_found" });
     const missing = Object.assign(new Error("Command failed: systemctl"), { killed: false });
     expect(await probeUnit("sync.service", run("", missing, "Unit sync.service could not be found."))).toEqual({
