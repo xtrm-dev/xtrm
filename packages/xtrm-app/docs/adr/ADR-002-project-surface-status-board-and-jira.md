@@ -51,7 +51,7 @@ directory for that repository, and the per-project integration settings live in
 - `ProgramSurface.tsx` renders a cross-repository, read-only governance snapshot: workstreams,
   assignments, decisions, recent commits, freshness badge.
 - `src/adapters/program/live.ts` reads Console v1's `/api/programme`. The route is not missing: it is
-  **gated off by a Console v1 feature flag**. Verified 2026-11-17: `vite.config.ts:9` defaults the proxy
+  **gated off by a Console v1 feature flag**. Verified 2026-11-17: `vite.config.ts:10` defaults the proxy
   target to `127.0.0.1:3030`, production overrides it with `XTRM_CONSOLE_URL` from
   `~/.config/xtrm/xtrm-console-v2.sh:20`, and Console v1 (`bun`, bound to the tailscale IP
   `100.113.49.52:3030`) answers `GET /api/programme` with `404 {"error":"programme_dashboard_disabled"}`
@@ -223,15 +223,15 @@ invents a status from a record field.
 
 No new configuration format and no dual configuration. The bridge resolves, in order:
 
-1. environment override (`PM_PROJECT`/`PM_*` for the sync; `XTRM_PROJECT_<NAME>_*` for the app if needed);
-2. `~/.config/xtrm/project-management.json` → `projects.<name>` (already holds `status_board_site`,
-   `jira_site`, `status_board_state_dir`, `answers_inbox`, `jira_token_file` defaults);
-3. built-in defaults;
-4. absent → the surface renders the "not integrated" state.
+1. `projects.<name>.repo_slug`, then `repo_name` — the repository entry is the authority the sync
+   timer reads, so a match here governs and cannot be retargeted;
+2. only when this repository has no entry: an explicit `?project=<name>`, then `XTRM_PM_PROJECT`;
+3. absent → the surface renders the "not integrated" state.
 
-The repository is mapped to a project name by `projects.<name>.repo_slug` (for example
-`mercuryintelligence/market-data`), then `repo_name`, then an explicit request parameter or `PM_PROJECT`
-override. Verified on the canonical host: each project entry already carries `repo_slug`, `repo_name`,
+`resolvedBy` reports the source that won (`repo_slug`, `repo_name`, `explicit`, `env`, or `none`), so
+a caller can tell a repository binding from an explicit one. An explicit parameter or env override
+is for a site that hosts several boards, never a way to point a bound repository at another board.
+Verified on the canonical host: each project entry already carries `repo_slug`, `repo_name`,
 `sb_project_id`, `sb_prefix`, `status_board_site`, `status_board_state_dir`, `status_board_key_file`,
 `status_board_unit`, `status_board_status_overrides` and `jira_project`/`jira_board_id`, and `defaults`
 carries `jira_site`, `jira_token_file`, `timezone`, `operator_handle`. No `sb` call and no heuristic is
@@ -364,13 +364,21 @@ is `null` with a reason, never `false`. A timer-driven sync has two of them — 
 ## 5. Security and privacy
 
 - Bearer values exist only in the bridge process, read from files at request time.
-- The bridge returns `401`/`502` with a generic message; it never echoes the upstream body or the key.
-- A test asserts that built assets contain neither `here.now` API keys nor the Jira token, and that no
-  client module imports the credential reader.
+- The bridge answers `503` when the resolved binding names no readable credential file, and `502` for
+  any upstream failure, always with a generic message that never echoes the upstream body or the key.
+  `503` is the honest status for a missing credential: the deployment is misconfigured server-side and
+  the caller's request was well formed. `401` would blame the client for a credential it never holds,
+  and `502` would claim an upstream was reached when it was not.
+- A test (`server/credential-containment.test.ts`) builds the client, scans every emitted asset for the
+  here.now key and the Jira token named by the binding, and fails if either appears. Its negative control
+  injects a credential string into a built asset and asserts the scan catches it, and the same test
+  asserts no `src/` module imports the server bridge — so the reader stays server-only and the key is
+  read per request. A failure names the asset and the credential's file, never the value.
 - Write routes are POST/PATCH only, require a same-origin `Origin`/`Sec-Fetch-Site` check, and refuse
   any path not under `answers/`.
-- Read routes accept only the documented record paths; no arbitrary upstream URL is joined from input
-  (SSRF guard).
+- Read routes accept only the documented record paths; an unknown record path or collection is `400`,
+  an unknown subpath is `404` (the route does not exist, so it is not a malformed request), and no
+  arbitrary upstream URL is joined from input (SSRF guard).
 
 ## 6. Alternatives considered
 
