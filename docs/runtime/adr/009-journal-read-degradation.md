@@ -3,7 +3,7 @@
 > Status: PROPOSED 2026-11-17 · decision recorded in **XTRM-826** · implementation gated on acceptance, **XTRM-827**
 > Date: 2026-11-17 · Issues: **XTRM-826** (this decision), **XTRM-827** (implementation, depends on XTRM-826), **XTRM-420** (the render defect that exposed it)
 > Scope: what `JournalService` does when one persisted entry cannot be validated while the rest of the issue's journal is readable.
-> Evidence: symbols, not line numbers — `JournalService.listEntries` and its `.map((r) => this.toEntry(r))`, `toEntry`'s result-payload throw, and `validateResultPayload` with its field and summary rules, in `packages/substrate/src/service/journal-service.ts` and `packages/substrate/src/domain/journal.ts`. Line numbers quoted anywhere below were read at `7d1b057`; they drift with every refactor, so grep the symbol. Measurement on the canonical store, 2026-11-17, below.
+> Evidence: symbols, not line numbers — `JournalService.listEntries` and its `.map((r) => this.toEntry(r))`, `toEntry`'s result-payload throw, and `validateResultPayload` with its field and summary rules, in `packages/substrate/src/service/journal-service.ts` and `packages/substrate/src/domain/journal.ts`. No line number is quoted in this record: they drift with every refactor — the result-payload throw moved twice in a day while this decision was being written — so grep the symbol. Measurement on the canonical store, 2026-11-17, below.
 
 ## Context
 
