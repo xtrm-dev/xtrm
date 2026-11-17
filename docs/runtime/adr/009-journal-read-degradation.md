@@ -13,7 +13,7 @@ Every journal read validates every row. `listEntries` selects the rows for one i
 if (problems.length > 0) throw new Error(`fail-closed: invalid result payload on ${r["id"]}: ${problems[0]}`);
 ```
 
-Fail-closed is the right policy at the **write** seam: an invalid payload must never enter the store. It has an undecided consequence at the **read** seam, because the throw escapes `listEntries` rather than skipping the row. One unreadable entry therefore takes the whole issue's history with it — `sb journal show <ref>`, `journal tail`, and the console journal panel all degrade from one bad line to an error state for the entire issue.
+Fail-closed is the right policy at the **write** seam: an invalid payload must never enter the store. It has an undecided consequence at the **read** seam, because the throw escapes both read seams (`listEntries` and `timeline`) rather than skipping the row. One unreadable entry therefore takes the whole issue's history with it — `sb journal show <ref>`, `journal tail`, and the console journal panel all degrade from one bad line to an error state for the entire issue.
 
 This is not hypothetical equipment. Rows can reach the store without passing the write seam:
 
@@ -65,7 +65,7 @@ If a future change makes a symbol unfindable, that is the finding: the policy in
    ```
 
    The marker carries the entry id and the validator's own message. It is never a summary, never an empty value, and never a status pill.
-3. **Every reader of the list inherits it.** `listEntries` is the single seam: `journal show`, `journal tail`, the resume capsule's journal section and the console journal panel all consume it, so the degradation is implemented once, at the service, and tested once.
+3. **Every reader of a journal window inherits it, and there are two seams.** `listEntries` serves `journal show` (oldest-first page), the resume capsule's journal section and the console journal panel; `timeline` serves `journal show --tail <ref>` (newest window). Both seams must degrade, because a fix applied to `listEntries` alone leaves `journal show --tail` failing closed on the row the decision says it renders as a marker. The degradation is implemented once per seam, at the service, and tested on both.
 
 ### Marker contract
 
