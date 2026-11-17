@@ -3,7 +3,7 @@
 > Status: PROPOSED 2026-11-17 · decision recorded in **XTRM-826** · implementation gated on acceptance, **XTRM-827**
 > Date: 2026-11-17 · Issues: **XTRM-826** (this decision), **XTRM-827** (implementation, depends on XTRM-826), **XTRM-420** (the render defect that exposed it)
 > Scope: what `JournalService` does when one persisted entry cannot be validated while the rest of the issue's journal is readable.
-> Evidence: symbols, not line numbers — `JournalService.listEntries` and its `.map((r) => this.toEntry(r))`, `toEntry`'s result-payload throw, and `validateResultPayload` with its field and summary rules, in `packages/substrate/src/service/journal-service.ts` and `packages/substrate/src/domain/journal.ts`. No line number is quoted in this record: they drift with every refactor — the result-payload throw moved twice in a day while this decision was being written — so grep the symbol. Measurement on the canonical store, 2026-11-17, below.
+> Evidence: symbols, not line numbers — `JournalService.listEntries`, `timeline`, `feed`, `latest`, `since` and `latestCheckpoint`, each mapped through `toEntry`; `toEntry`'s result-payload throw; and `validateResultPayload` with its field and summary rules, in `packages/substrate/src/service/journal-service.ts` and `packages/substrate/src/domain/journal.ts`. No line number is quoted in this record: they drift with every refactor — the result-payload throw moved twice in a day while this decision was being written — so grep the symbol. Measurement on the canonical store, 2026-11-17, below.
 
 ## Context
 
@@ -13,7 +13,7 @@ Every journal read validates every row. `listEntries` selects the rows for one i
 if (problems.length > 0) throw new Error(`fail-closed: invalid result payload on ${r["id"]}: ${problems[0]}`);
 ```
 
-Fail-closed is the right policy at the **write** seam: an invalid payload must never enter the store. It has an undecided consequence at the **read** seam, because the throw escapes both read seams (`listEntries` and `timeline`) rather than skipping the row. One unreadable entry therefore takes the whole issue's history with it — `sb journal show <ref>`, `journal tail`, and the console journal panel all degrade from one bad line to an error state for the entire issue.
+Fail-closed is the right policy at the **write** seam: an invalid payload must never enter the store. It has an undecided consequence at the **read** seam, because the throw escapes every read that maps rows to entries rather than skipping the row. One unreadable entry therefore takes the whole read with it — `sb journal show <ref>`, `journal tail`, the resume capsule, and the console journal panel all degrade from one bad line to an error state. Through `feed` the damage is wider than one issue: a single bad row fails an entire project's feed page.
 
 This is not hypothetical equipment. Rows can reach the store without passing the write seam:
 
@@ -65,7 +65,16 @@ If a future change makes a symbol unfindable, that is the finding: the policy in
    ```
 
    The marker carries the entry id and the validator's own message. It is never a summary, never an empty value, and never a status pill.
-3. **Every reader of a journal window inherits it, and there are two seams.** `listEntries` serves `journal show` (oldest-first page), the resume capsule's journal section and the console journal panel; `timeline` serves `journal show --tail <ref>` (newest window). Both seams must degrade, because a fix applied to `listEntries` alone leaves `journal show --tail` failing closed on the row the decision says it renders as a marker. The degradation is implemented once per seam, at the service, and tested on both.
+3. **Every read that maps rows to entries inherits it, and there are four call families.** The seam is the row→entry step (`toEntry` through `validateResultPayload`), not one query. Four read families reach it and each must degrade per row:
+
+   | Read | Serves | Reach |
+   |---|---|---|
+   | `listEntries` | `sb journal show <ref>` (oldest-first page) | one issue |
+   | `timeline` | `sb journal show <ref> --tail` (newest window) | one issue |
+   | `feed` | the console journal panel, `sb journal feed` | **project-wide** |
+   | `latest`, `since`, `latestCheckpoint` | the resume capsule's journal section | one issue |
+
+   A fix applied to `listEntries` alone leaves the other three failing closed on the row the decision says it renders as a marker — a partial fix that looks complete. The degradation is implemented once, at the row→entry step, and tested at each family, because a shared helper that no caller uses is not a fix. `feed` is project-wide, so its case carries the widest blast radius and must be tested with two issues in the fixture.
 
 ### Marker contract
 
@@ -84,8 +93,8 @@ If a future change makes a symbol unfindable, that is the finding: the policy in
 ## Consequences
 
 - A legacy or imported bad row becomes a visible, named defect on one line rather than an unreadable issue.
-- `toEntry` keeps its throw; the degradation lives in the list path, so a single-entry read still fails closed. That asymmetry is deliberate: asking for one entry and receiving a marker would hide a broken row behind a successful-looking call.
-- The console panel no longer needs a whole-issue error state for a per-row condition, which removes a class of "journal is broken" reports that are really "row jrn_… is broken".
+- `toEntry` keeps its throw; the degradation lives in the four read families that map *rows*, so a single-entry read (`getEntry`) still fails closed. That asymmetry is deliberate: asking for one entry and receiving a marker would hide a broken row behind a successful-looking call.
+- The console panel no longer needs a whole-issue error state for a per-row condition once `feed` degrades per row; that removes a class of "journal is broken" reports that are really "row jrn_… is broken".
 - No migration, no schema change, no write-path change.
 
 ## Open questions
