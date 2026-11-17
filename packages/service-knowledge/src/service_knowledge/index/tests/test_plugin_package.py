@@ -95,7 +95,28 @@ def test_launcher_reports_a_missing_cli_with_a_named_reason(tmp_path):
     )
     assert result.returncode == 78
     assert "cli-missing" in result.stderr
-    assert "pipx install service-knowledge" in result.stderr
+    assert "install.sh" in result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
+def test_launcher_reports_a_broken_cli_with_its_own_stderr(tmp_path):
+    """A CLI that exists but crashes (e.g. vaultctl absent) is `cli-broken`, not `cli-missing`."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "service-knowledge"
+    stub.write_text("#!/bin/sh\necho 'the vaultctl dependency is missing' >&2\nexit 1\n", encoding="utf-8")
+    stub.chmod(0o755)
+    result = subprocess.run(
+        [NODE, str(LAUNCHER)],
+        capture_output=True, text=True, timeout=60,
+        env={"PATH": str(bin_dir), "HOME": str(tmp_path)},
+        cwd=str(tmp_path),
+    )
+    assert result.returncode == 78
+    assert "cli-broken" in result.stderr
+    assert "cli-missing" not in result.stderr
+    assert "vaultctl dependency is missing" in result.stderr
+    assert "install.sh" in result.stderr
 
 
 @pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
@@ -115,7 +136,7 @@ def test_launcher_reports_a_too_old_cli_and_names_the_version(tmp_path):
     assert result.returncode == 78
     assert "cli-too-old" in result.stderr
     assert "0.8.0" in result.stderr
-    assert "pipx upgrade service-knowledge" in result.stderr
+    assert "install.sh" in result.stderr
 
 
 @pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
@@ -245,3 +266,54 @@ def test_launcher_treats_a_forwarded_signal_as_a_clean_shutdown(tmp_path):
     _, stderr = proc.communicate(timeout=30)
     assert proc.returncode == 0, stderr
     assert "server-killed" not in stderr
+
+
+def test_cli_without_vaultctl_exits_with_an_actionable_message(tmp_path):
+    """`vaultctl` is installed out-of-band; its absence must read as an install problem, not a traceback."""
+    import sys
+    stub = tmp_path / "vaultctl.py"  # shadows the real one with an import failure
+    stub.write_text("raise ImportError('simulated: vaultctl not installed')\n", encoding="utf-8")
+    src = Path(__file__).resolve().parents[3]
+    result = subprocess.run(
+        [sys.executable, "-c", "import service_knowledge.cli"],
+        capture_output=True, text=True, timeout=60,
+        env={"PYTHONPATH": f"{tmp_path}:{src}", "PATH": "/usr/bin:/bin"},
+    )
+    assert result.returncode != 0
+    assert "vaultctl" in result.stderr and "install.sh" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
+def test_launcher_reports_unparseable_version_output_as_broken(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "service-knowledge"
+    stub.write_text("#!/bin/sh\necho 'no version here'\n", encoding="utf-8")
+    stub.chmod(0o755)
+    result = subprocess.run(
+        [NODE, str(LAUNCHER)],
+        capture_output=True, text=True, timeout=60,
+        env={"PATH": str(bin_dir), "HOME": str(tmp_path)},
+        cwd=str(tmp_path),
+    )
+    assert result.returncode == 78
+    assert "cli-broken" in result.stderr and "unparseable --version output" in result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="node is required to run the plugin launcher")
+def test_launcher_keeps_the_tail_of_a_long_traceback(tmp_path):
+    """The exception line is last in a Python traceback; truncating the head would drop it."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "service-knowledge"
+    frames = "echo '  File \"x.py\", line 1, in f' >&2\n" * 40
+    stub.write_text(f"#!/bin/sh\n{frames}echo 'ModuleNotFoundError: No module named vaultctl' >&2\nexit 1\n", encoding="utf-8")
+    stub.chmod(0o755)
+    result = subprocess.run(
+        [NODE, str(LAUNCHER)],
+        capture_output=True, text=True, timeout=60,
+        env={"PATH": str(bin_dir), "HOME": str(tmp_path)},
+        cwd=str(tmp_path),
+    )
+    assert "ModuleNotFoundError: No module named vaultctl" in result.stderr

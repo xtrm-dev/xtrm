@@ -16,14 +16,14 @@ checkout, and runs `service-knowledge mcp serve` (stdio MCP JSON-RPC).
 
 ## Requirement
 
-`service-knowledge` **>= 0.9.0** on `PATH` (`pipx install service-knowledge`). The `mcp`
+`service-knowledge` **>= 0.9.0** on `PATH` (from an xtrm checkout: `packages/service-knowledge/install.sh`, which also installs the `vaultctl` dependency). The `mcp`
 subcommand ships in 0.9.0. On an older CLI the launcher exits 78 with a named reason
 (`cli-too-old`) on stderr instead of presenting an empty tool list.
 
 Deploy order: upgrade the CLI first, then install the plugin.
 
 ```bash
-pipx upgrade service-knowledge      # >= 0.9.0
+./install.sh                        # from packages/service-knowledge; or `git pull` (editable install)
 service-knowledge --version
 claude plugin install service-knowledge@xtrm
 ```

@@ -9,6 +9,15 @@ from __future__ import annotations
 import argparse
 import sys
 
+try:
+    import vaultctl  # noqa: F401  (declared out-of-band by design; see pyproject.toml)
+except ImportError as _exc:  # pragma: no cover - exercised via subprocess in tests
+    raise SystemExit(
+        "service-knowledge: the 'vaultctl' dependency is not installed in this environment "
+        f"({_exc}). Reinstall with packages/service-knowledge/install.sh from an xtrm-dev/xtrm "
+        "checkout (it installs vaultctl into the same environment)."
+    ) from _exc
+
 from service_knowledge import __version__
 from service_knowledge.cli import (
     _help,

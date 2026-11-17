@@ -82,33 +82,50 @@ function cliVersion() {
   try {
     // `service-knowledge --version` prints "service-knowledge X.Y.Z".
     // Bounded: a wedged binary must not hang the MCP handshake for the whole session.
-    const raw = runCapture(CLI, ["--version"], { timeout: 10000 });
+    const raw = runCapture(CLI, ["--version"], { timeout: 10000, stdio: ["ignore", "pipe", "pipe"] });
     const match = raw.match(/(\d+\.\d+\.\d+)/);
-    return match ? match[1] : null;
+    return match ? { version: match[1] } : { broken: `unparseable --version output: ${raw.slice(0, 200)}` };
   } catch (error) {
-    if (error && error.code === "ENOENT") return null;
-    return null;
+    if (error && error.code === "ENOENT") return { missing: true };
+    // The binary exists but did not answer: most often a broken install (for example the
+    // vaultctl dependency absent). Surface its own stderr instead of calling it "missing".
+    const detail = String((error && (error.stderr || error.message)) || error).trim().slice(-400); // the tail: a traceback's exception line comes last
+    return { broken: detail };
   }
 }
 
+const INSTALL_HINT =
+  "Install it with packages/service-knowledge/install.sh from an xtrm-dev/xtrm checkout " +
+  "(it also installs the vaultctl dependency).";
+
 function main() {
   const root = resolveRoot();
-  const version = cliVersion();
-  if (version === null) {
+  const probe = cliVersion();
+  if (probe.missing) {
     fail(
       "cli-missing",
-      `the '${CLI}' CLI is not on PATH. Install it with 'pipx install service-knowledge' ` +
+      `the '${CLI}' CLI is not on PATH. ${INSTALL_HINT} ` +
         `(needs >= ${MINIMUM_VERSION.join(".")} for the 'mcp' subcommand). The knowledge tools are ` +
         `unavailable until then; nothing else in this session is affected.`,
     );
     return;
   }
+  if (probe.broken) {
+    fail(
+      "cli-broken",
+      `'${CLI} --version' failed: ${probe.broken}${probe.broken.includes("install.sh") ? "" : " " + INSTALL_HINT} The knowledge tools are ` +
+        `unavailable until it runs; nothing else in this session is affected.`,
+    );
+    return;
+  }
+  const version = probe.version;
   if (!atLeast(version, MINIMUM_VERSION)) {
     fail(
       "cli-too-old",
       `found ${CLI} ${version}, but the knowledge MCP server needs >= ` +
-        `${MINIMUM_VERSION.join(".")} (the 'mcp' subcommand). Upgrade with ` +
-        `'pipx upgrade service-knowledge'.`,
+        `${MINIMUM_VERSION.join(".")} (the 'mcp' subcommand). Update the ` +
+        `xtrm-dev/xtrm checkout the CLI was installed from (editable install) or re-run ` +
+        `packages/service-knowledge/install.sh.`,
     );
     return;
   }

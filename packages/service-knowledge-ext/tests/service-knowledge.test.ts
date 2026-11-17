@@ -470,7 +470,7 @@ describe("service-knowledge ext v1.1 tool surface (CORE-2714)", () => {
       const result = await extension.callTool("knowledge_search", { query: "x" }, fx.dir);
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("knowledge_search");
-      expect(result.content[0].text).toContain("pipx install service-knowledge");
+      expect(result.content[0].text).toContain("install.sh");
     } finally {
       process.env.PATH = originalPath;
       fx.cleanup();

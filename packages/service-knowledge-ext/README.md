@@ -138,7 +138,7 @@ the index only after that.
 
 ## Requirements
 
-`service-knowledge` **>= 0.9.0** on `PATH` (`pipx install service-knowledge`). The `mcp`
+`service-knowledge` **>= 0.9.0** on `PATH` (from an xtrm checkout: `packages/service-knowledge/install.sh`, which also installs the `vaultctl` dependency). The `mcp`
 subcommand, which every tool call uses, ships in 0.9.0. Without it each call returns a named error
 result and the rest of the session is unaffected.
 
