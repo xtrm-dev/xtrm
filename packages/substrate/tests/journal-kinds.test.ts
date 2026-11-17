@@ -161,8 +161,12 @@ describe("Journal identity and ordering (ADR §32)", () => {
       .run("jrn_future", issue.id, Date.now());
     const raw = ctx.db.prepare("SELECT kind FROM issue_journal WHERE id = 'jrn_future'").get() as { kind: string };
     assert.equal(raw.kind, "future_kind", "no CHECK constraint on kind");
-    // ...but a reader that does not know the kind fails closed.
-    assert.throws(() => journal.listEntries(issue.id), /fail-closed: corrupt journal kind/);
+    // ...a list read degrades that row to a marker (ADR-009) instead of
+    // failing the whole page, while a single-entry read still fails closed.
+    const entries = journal.listEntries(issue.id);
+    assert.equal(entries.find((e) => e.id === "jrn_future")?.unreadable, "unreadable: jrn_future: corrupt journal kind");
+    assert.equal(entries.degraded, 1);
+    assert.throws(() => journal.getEntry("jrn_future"), /fail-closed: corrupt journal kind/);
   });
 });
 

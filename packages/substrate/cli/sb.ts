@@ -2357,10 +2357,20 @@ function journalSummary(e: JournalEntry): Record<string, unknown> {
     sessionId: e.sessionId,
     runId: e.runId,
     executionContext: e.executionContext,
+    // ADR-009: present on a degraded row, null on a clean one. The marker is
+    // the whole rendering: it is never collapsed into a summary field.
+    unreadable: (e as JournalEntry & { unreadable?: string }).unreadable ?? null,
   };
 }
 
+// ADR-009 count line: a read that degraded must not look clean.
+function degradedLine(n: number): string {
+  return `degraded: ${n} unreadable journal ${n === 1 ? "entry" : "entries"}`;
+}
+
 function journalLine(svc: IssueService, e: JournalEntry): string {
+  const marker = (e as JournalEntry & { unreadable?: string }).unreadable;
+  if (marker) return marker;
   const issue = svc.getIssue(e.issueId);
   // XTRM-449: explicit absence, matching the journal-family convention in
   // journalIdentity — never a blank that is indistinguishable from a capture gap.
@@ -2394,6 +2404,8 @@ function journalIdentity(e: JournalEntry): string {
 // line plus the entry-scoped semantic text. `since` stays compact by
 // contract; mechanical payloads ride JSON only, presence-only here.
 function journalBody(e: JournalEntry): string[] {
+  // A marker stands alone: the row has no payload to describe.
+  if ((e as JournalEntry & { unreadable?: string }).unreadable) return [];
   const lines: string[] = [journalIdentity(e)];
   const sem = e.semantic;
   if (!sem) return lines;
@@ -2549,6 +2561,7 @@ function runJournal(
       // compact: deltas carry journalSummary only.
       if (ctx.json) return emit(ctx, command, entries.map((e) => ({ ...journalSummary(e), semantic: e.semantic, mechanical: e.mechanical, result: e.result })));
       const lines = entries.flatMap((e) => [journalLine(svc, e), ...journalBody(e)]);
+      if (entries.degraded > 0) lines.push(degradedLine(entries.degraded));
       return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : "(no journal entries)") + "\n", stderr: "" };
     }
     case "feed": {
@@ -2603,6 +2616,7 @@ function runJournal(
         projectId: page.projectId,
         limit: page.limit,
         nextCursor: page.nextCursor,
+        degraded: page.degraded,
         entries: page.entries.map((e) => ({ issueRef: e.issueRef, issueId: e.issueId, ...journalSummary(e.entry), semantic: e.entry.semantic, result: e.entry.result })),
       };
       if (ctx.json) return emit(ctx, command, data);
@@ -2616,8 +2630,9 @@ function runJournal(
         const summary = e.entry.semantic?.summary ?? e.entry.result?.summary ?? null;
         return summary === null ? [head] : [head, `    ${summary.split("\n")[0]!.slice(0, 200)}`];
       });
+      const degraded = page.degraded > 0 ? `\n${degradedLine(page.degraded)}` : "";
       const tail = page.nextCursor === null ? "" : `\nnext: sb journal feed --project ${page.projectId} --before ${page.nextCursor}`;
-      return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : "(no journal entries in this project)") + tail + "\n", stderr: "" };
+      return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : "(no journal entries in this project)") + degraded + tail + "\n", stderr: "" };
     }
     case "since": {
       // Cursor read (§20.5): only entries after the sequence cursor.
@@ -2630,10 +2645,12 @@ function runJournal(
       const data = {
         afterSequence: delta.afterSequence,
         nextCursor: delta.nextCursor,
+        degraded: delta.degraded,
         entries: delta.entries.map(journalSummary),
       };
       if (ctx.json) return emit(ctx, command, data);
       const lines = delta.entries.map((e) => journalLine(svc, e));
+      if (delta.degraded > 0) lines.push(degradedLine(delta.degraded));
       return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : `(no entries since ${cursor})`) + "\n", stderr: "" };
     }
     case "latest": {
@@ -2664,9 +2681,10 @@ function runJournal(
         limit,
       });
       if (ctx.json) {
-        return emit(ctx, command, { count: entries.length, entries: entries.map(journalSummary) });
+        return emit(ctx, command, { count: entries.length, degraded: entries.degraded, entries: entries.map(journalSummary) });
       }
       const lines = entries.map((e) => journalLine(svc, e));
+      if (entries.degraded > 0) lines.push(degradedLine(entries.degraded));
       return { code: 0, stdout: (lines.length > 0 ? lines.join("\n") : "(no journal entries)") + "\n", stderr: "" };
     }
     case "render": {
