@@ -43,6 +43,8 @@ export type PmConfig = {
 export type BoardBinding = {
   repository: string;
   configured: boolean;
+  /** False when the deployment has no project-management.json at all. */
+  configPresent: boolean;
   resolvedBy: "explicit" | "env" | "repo_slug" | "repo_name" | "none";
   pmProject: string | null;
   substrateProjectId: string | null;
@@ -98,6 +100,7 @@ export function resolveBinding(
   const base = (pmProject: string | null, resolvedBy: BoardBinding["resolvedBy"]): BoardBinding => ({
     repository,
     configured: pmProject !== null,
+    configPresent: config !== null,
     resolvedBy,
     pmProject,
     substrateProjectId: pmProject ? str(projects[pmProject]?.sb_project_id) : null,
@@ -221,8 +224,24 @@ export function createBoardClient(deps: {
   };
 }
 
+/** The 404 body. `reason` separates a deployment with no config from a repo with no entry. */
+export function unboundBody(binding: BoardBinding) {
+  return {
+    ok: false,
+    configured: false,
+    reason: (binding.configPresent ? "repo_not_bound" : "config_absent") as UnboundReason,
+    repository: binding.repository,
+    resolvedBy: binding.resolvedBy,
+    configPath: binding.configPresent ? undefined : defaultConfigPath(),
+  };
+}
+
+export type UnboundReason = "config_absent" | "repo_not_bound";
+
 export type BoardHealth = {
   configured: boolean;
+  /** Why the surface has no data: the deployment, or this repository. */
+  reason: UnboundReason | null;
   site: string | null;
   stateDir: string | null;
   unitActive: boolean | null;
@@ -256,6 +275,7 @@ export function readHealth(binding: BoardBinding, now = Date.now(), unitActive: 
   const ageMs = lastSyncOkAt ? now - Date.parse(lastSyncOkAt) : Number.POSITIVE_INFINITY;
   return {
     configured: binding.configured,
+    reason: binding.configured ? null : binding.configPresent ? "repo_not_bound" : "config_absent",
     site: binding.site,
     stateDir: binding.stateDir,
     unitActive,
@@ -284,6 +304,7 @@ export function publicBinding(binding: BoardBinding, keyPresent: boolean) {
     resolvedBy: binding.resolvedBy,
     pmProject: binding.pmProject,
     substrateProjectId: binding.substrateProjectId,
+    configPresent: binding.configPresent,
     site: binding.site,
     stateDir: binding.stateDir,
     keyFile: binding.keyFile,
@@ -353,7 +374,7 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
     const repository = normaliseRepo(url.searchParams.get("repo"));
     if (!repository) return json(res, 400, { ok: false, error: "expected ?repo=<owner>/<name>" });
     const binding = resolveBinding(config, repository, { explicit: url.searchParams.get("project") });
-    if (!binding.configured) return json(res, 404, { ok: false, configured: false, repository, resolvedBy: "none" });
+    if (!binding.configured) return json(res, 404, unboundBody(binding));
 
     if (path === "/binding") return json(res, 200, { ok: true, binding: publicBinding(binding, clientFor(binding).keyPresent) });
     if (path === "/health") {

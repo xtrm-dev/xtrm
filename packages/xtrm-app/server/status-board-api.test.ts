@@ -13,6 +13,7 @@ import {
   readHealth,
   resolveBinding,
   statusBoardApi,
+  unboundBody,
   type PmConfig,
 } from "./status-board-api.ts";
 
@@ -64,9 +65,12 @@ describe("binding resolution", () => {
   it("reports an unconfigured repository instead of guessing", () => {
     const b = resolveBinding(CONFIG, "xtrm-dev/xtrm", { env: {} });
     expect(b.configured).toBe(false);
+    expect(b.configPresent).toBe(true);
     expect(b.resolvedBy).toBe("none");
     expect(b.site).toBeNull();
     expect(b.timezone).toBe("Europe/Berlin");
+    expect(readHealth(b).reason).toBe("repo_not_bound");
+    expect(readHealth(b).stale).toBe(false);
   });
 
   it("survives an absent or unreadable config at plugin init, so a build cannot fail on it", () => {
@@ -82,9 +86,14 @@ describe("binding resolution", () => {
     }
     const unconfigured = resolveBinding(null, "mercuryintelligence/market-data", { env: {} });
     expect(unconfigured.configured).toBe(false);
+    expect(unconfigured.configPresent).toBe(false);
     expect(unconfigured.site).toBeNull();
     expect(readHealth(unconfigured).configured).toBe(false);
+    expect(readHealth(unconfigured).reason).toBe("config_absent");
     expect(readHealth(unconfigured).stale).toBe(false);
+    // The distinct sentences: "not configured on this deployment" vs "this repository is not bound".
+    expect(unboundBody(unconfigured)).toMatchObject({ reason: "config_absent", configPath: defaultConfigPath() });
+    expect(unboundBody(resolveBinding(CONFIG, "xtrm-dev/xtrm", { env: {} }))).toMatchObject({ reason: "repo_not_bound" });
   });
 
   it("treats a missing or malformed config as no bindings", () => {
@@ -97,6 +106,15 @@ describe("binding resolution", () => {
     writeFileSync(good, JSON.stringify(CONFIG));
     expect(loadPmConfig(good)?.projects?.mercury).toBeTruthy();
     expect(defaultConfigPath({ XTRM_PM_CONFIG: good })).toBe(good);
+  });
+
+  it("gives the client two distinct unbound reasons, with the resolved config path", () => {
+    const noConfig = unboundBody(resolveBinding(null, "mercuryintelligence/market-data", { env: {} }));
+    expect(noConfig.reason).toBe("config_absent");
+    expect(noConfig.configPath).toBe(defaultConfigPath());
+    const noEntry = unboundBody(resolveBinding(CONFIG, "xtrm-dev/xtrm", { env: {} }));
+    expect(noEntry.reason).toBe("repo_not_bound");
+    expect(noEntry.configPath).toBeUndefined();
   });
 
   it("rejects anything that is not a plain owner/name slug", () => {
@@ -209,9 +227,11 @@ describe("health", () => {
     expect(health.stale).toBe(true);
   });
 
-  it("is not stale for an unconfigured repository", () => {
+  it("is not stale for an unconfigured repository, and carries a null reason when configured", () => {
     const binding = resolveBinding(CONFIG, "xtrm-dev/xtrm", { env: {} });
     expect(readHealth(binding).stale).toBe(false);
+    const bound = resolveBinding(CONFIG, "mercuryintelligence/market-data", { env: {} });
+    expect(readHealth(bound).reason).toBeNull();
   });
 });
 
