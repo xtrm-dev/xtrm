@@ -71,6 +71,17 @@ describe("journal paging", () => {
     expect(screen.getByRole("button", { name: /Load \d+ older/ })).toBeTruthy();
   });
 
+  it("renders an unreadable entry as its marker instead of claiming no summary (ADR-009)", () => {
+    const marker = "unreadable: jrn_9: result.summary must be a non-empty string";
+    const bad: JournalEntry = { ...entry(9), summary: "", unreadable: marker };
+    renderTab(issue([bad, entry(10), entry(8)], 3));
+    expect(screen.getByTestId("journal-unreadable").textContent).toBe(marker);
+    expect(screen.queryByText("No summary recorded")).toBeNull();
+    // The rows on either side still render.
+    expect(screen.getByText("Entry 10")).toBeTruthy();
+    expect(screen.getByText("Entry 8")).toBeTruthy();
+  });
+
   it("reports a failed journal read instead of looking empty", () => {
     renderTab({ ...issue([], 12), journalError: "substrate bridge returned 500" } as IssueDetail);
     const status = screen.getByRole("status");

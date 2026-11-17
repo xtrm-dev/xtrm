@@ -18,6 +18,8 @@ export interface JournalFeedWireRow {
   participantId?: string | null;
   semantic?: { summary?: string } | null;
   result?: { summary?: string } | null;
+  /** ADR-009 read marker; null/absent on a clean row. */
+  unreadable?: string | null;
 }
 
 export interface JournalFeedWire {
@@ -48,6 +50,28 @@ export function journalVerb(kind: string): string {
 export function journalRow(entry: JournalFeedWireRow): ActivityRow {
   const summary = entry.semantic?.summary ?? entry.result?.summary ?? null;
   const refs: ActivityRef[] = [{ kind: "issue", ref: entry.issueRef }];
+  // ADR-009: a per-row read failure is a marker row, not a source error and
+  // not a summary. The rest of the page renders normally around it.
+  if (entry.unreadable) {
+    return {
+      id: `substrate:${entry.id}`,
+      source: "substrate",
+      kind: `journal.${entry.kind}`,
+      actor: entry.participantId ?? null,
+      verb: "could not be read",
+      object: `${entry.issueRef} — ${entry.unreadable}`,
+      refs,
+      at: entry.createdAt,
+      meta: [
+        ["journal", entry.kind],
+        ["entry", entry.id],
+        ["rev", String(entry.issueRevision)],
+        ["seq", String(entry.sequence)],
+        ["unreadable", "true"],
+      ],
+      body: entry.unreadable,
+    };
+  }
   return {
     id: `substrate:${entry.id}`,
     source: "substrate",

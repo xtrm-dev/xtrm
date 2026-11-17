@@ -26,6 +26,21 @@ describe("substrate activity rows (XTRM-757)", () => {
     for (const row of rows) expect(row.object).toContain("XTRM-1");
   });
 
+  it("renders an unreadable row as an explicit marker and keeps the clean rows (ADR-009)", () => {
+    const marker = "unreadable: jrn_bad: result.summary must be a non-empty string";
+    const rows = journalFeedRows({
+      projectId: "prj",
+      nextCursor: null,
+      entries: [wire("note"), wire("result", { semantic: null, result: null, unreadable: marker })],
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.object).toContain("a note happened");
+    expect(rows[1]?.verb).toBe("could not be read");
+    expect(rows[1]?.object).toContain(marker);
+    expect(rows[1]?.body).toBe(marker);
+    expect(rows[1]?.meta).toContainEqual(["unreadable", "true"]);
+  });
+
   it("renders an unknown kind as a neutral row instead of dropping it", () => {
     const row = journalRow(wire("something_new") as never);
     expect(row.kind).toBe("journal.something_new");

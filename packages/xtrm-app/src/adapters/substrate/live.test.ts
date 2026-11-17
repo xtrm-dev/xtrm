@@ -168,6 +168,15 @@ describe("full Substrate journal, provenance, and closure mapping", () => {
     expect(journal[0]).toMatchObject({ summary: "settled", semantic: { next: ["merge"] } });
   });
 
+  it("carries an ADR-009 unreadable marker through mapping without inventing a summary", () => {
+    const marker = "unreadable: jrn_bad: result.summary must be a non-empty string";
+    const mapped = mapJournalEntry({ id: "jrn_bad", sequence: 4, kind: "result", issueRevision: 2, createdAt: 1, unreadable: marker });
+    expect(mapped.unreadable).toBe(marker);
+    expect(mapped.summary).toBe("");
+    expect(mapped.result).toBeNull();
+    expect(mapped.semantic).toBeNull();
+  });
+
   it("maps missing trace, closure, and attestation to explicit empty values", () => {
     expect(mapTrace(null, [])).toEqual({ attestation: null, claims: [], bindings: [], receipts: [], checkpoints: [], commits: [], prs: [], externalBindings: [] });
     expect(mapClosure({ closed: true, closedAt: 5, reason: null })).toMatchObject({ closed: true, outcome: null, actor: null, revision: null, contractHash: null });

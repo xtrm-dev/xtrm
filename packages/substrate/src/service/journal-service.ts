@@ -47,6 +47,19 @@ interface Row {
 
 // -- project-wide feed (XTRM-764) -------------------------------------------
 
+/**
+ * A stored row that failed read validation. ADR-009: single-entry reads keep
+ * throwing it (fail closed); list reads turn its `reason` into a marker.
+ */
+class JournalRowError extends Error {
+  readonly reason: string;
+
+  constructor(reason: string, message: string) {
+    super(message);
+    this.reason = reason;
+  }
+}
+
 /** Rows a feed page may carry. The bridge pages; a huge page defeats that. */
 export const DEFAULT_FEED_LIMIT = 50;
 export const MAX_FEED_LIMIT = 500;
@@ -57,11 +70,24 @@ export interface FeedCursor {
   id: string;
 }
 
+/**
+ * A journal entry returned by a degrading read (ADR-009). `unreadable` is set
+ * only when the stored row failed validation; it names the entry and quotes
+ * the validator verbatim (`unreadable: <id>: <reason>`). It is a marker, not
+ * a summary: payload fields are null so nothing invents content.
+ */
+export interface JournalReadEntry extends JournalEntry {
+  unreadable?: string;
+}
+
+/** A read list plus the count of entries that degraded. The array is unchanged. */
+export type JournalEntries = JournalReadEntry[] & { readonly degraded: number };
+
 export interface JournalFeedEntry {
   /** The Issue's human ref (`XTRM-764`) — the feed is read across Issues. */
   issueRef: string;
   issueId: string;
-  entry: JournalEntry;
+  entry: JournalReadEntry;
 }
 
 export interface JournalFeedPage {
@@ -70,6 +96,8 @@ export interface JournalFeedPage {
   /** Pass back with the same flag: `--before` after a page, `--since` after a poll. */
   nextCursor: string | null;
   limit: number;
+  /** ADR-009: entries in this page that could not be read; 0 means clean. */
+  degraded: number;
 }
 
 export interface JournalFeedInput {
@@ -186,8 +214,10 @@ export interface CompactionCheckpointResult {
 export interface JournalDelta {
   issueId: string;
   afterSequence: number;
-  entries: JournalEntry[];
+  entries: JournalReadEntry[];
   nextCursor: number;
+  /** ADR-009: entries in this delta that could not be read; 0 means clean. */
+  degraded: number;
 }
 
 // Bounded operational context for `sb issue show` (ADR §50): latest entry per
@@ -371,7 +401,7 @@ export class JournalService {
     return this.requireEntry(id);
   }
 
-  listEntries(issueId: string, opts?: { kind?: JournalKind; limit?: number; before?: number }): JournalEntry[] {
+  listEntries(issueId: string, opts?: { kind?: JournalKind; limit?: number; before?: number }): JournalEntries {
     this.issues.getIssue(issueId);
     let sql = "SELECT * FROM issue_journal WHERE issue_id = ?";
     const params: SQLInputValue[] = [issueId];
@@ -390,9 +420,7 @@ export class JournalService {
       if (!Number.isInteger(opts.limit) || opts.limit <= 0) throw new Error("limit must be a positive integer");
       sql += " AND sequence < ? ORDER BY sequence DESC LIMIT ?";
       params.push(opts.before, opts.limit);
-      return rows<Row>(this.db, sql, ...params)
-        .map((r) => this.toEntry(r))
-        .reverse();
+      return this.entriesFromRows(rows<Row>(this.db, sql, ...params).reverse());
     }
     sql += " ORDER BY sequence";
     if (opts?.limit !== undefined) {
@@ -400,7 +428,7 @@ export class JournalService {
       sql += " LIMIT ?";
       params.push(opts.limit);
     }
-    return rows<Row>(this.db, sql, ...params).map((r) => this.toEntry(r));
+    return this.entriesFromRows(rows<Row>(this.db, sql, ...params));
   }
 
   // -- project-wide feed (XTRM-764) -----------------------------------------
@@ -492,9 +520,9 @@ export class JournalService {
     const entries: JournalFeedEntry[] = page.map((r) => ({
       issueRef: formatHumanRef(project.prefix, r.human_number),
       issueId: r.issue_id,
-      entry: this.toEntry(r),
+      entry: this.entryFromRow(r),
     }));
-    return { projectId: project.id, entries, nextCursor, limit };
+    return { projectId: project.id, entries, nextCursor, limit, degraded: entries.filter((e) => e.entry.unreadable !== undefined).length };
   }
 
   // Cursor read (§20.5): only entries after the supplied sequence cursor.
@@ -502,28 +530,28 @@ export class JournalService {
   since(issueId: string, cursor: number): JournalDelta {
     if (!Number.isInteger(cursor) || cursor < 0) throw new Error("cursor must be a non-negative integer sequence");
     this.issues.getIssue(issueId);
-    const entries = rows<Row>(
+    const entries = this.entriesFromRows(rows<Row>(
       this.db,
       "SELECT * FROM issue_journal WHERE issue_id = ? AND sequence > ? ORDER BY sequence",
       issueId,
       cursor,
-    ).map((r) => this.toEntry(r));
+    ));
     const top = row<{ m: number | null }>(this.db, "SELECT MAX(sequence) AS m FROM issue_journal WHERE issue_id = ?", issueId);
-    return { issueId, afterSequence: cursor, entries, nextCursor: top?.m ?? cursor };
+    return { issueId, afterSequence: cursor, entries, nextCursor: top?.m ?? cursor, degraded: entries.degraded };
   }
 
-  latestCheckpoint(issueId: string): JournalEntry | null {
+  latestCheckpoint(issueId: string): JournalReadEntry | null {
     this.issues.getIssue(issueId);
     const r = row<Row>(
       this.db,
       "SELECT * FROM issue_journal WHERE issue_id = ? AND kind IN ('checkpoint', 'compaction') ORDER BY sequence DESC LIMIT 1",
       issueId,
     );
-    return r ? this.toEntry(r) : null;
+    return r ? this.entryFromRow(r) : null;
   }
 
   // Newest entry overall, or newest entry of one kind (ADR §49 `latest`).
-  latest(issueId: string, opts?: { kind?: JournalKind }): JournalEntry | null {
+  latest(issueId: string, opts?: { kind?: JournalKind }): JournalReadEntry | null {
     this.issues.getIssue(issueId);
     if (opts?.kind !== undefined && !isJournalKind(opts.kind)) {
       throw new Error(unknownJournalKindMessage(opts.kind));
@@ -537,13 +565,13 @@ export class JournalService {
             opts.kind,
           )
         : row<Row>(this.db, "SELECT * FROM issue_journal WHERE issue_id = ? ORDER BY sequence DESC LIMIT 1", issueId);
-    return r ? this.toEntry(r) : null;
+    return r ? this.entryFromRow(r) : null;
   }
 
   // Bounded reverse-chronological window returned in chronological order
   // (ADR §49 `timeline`). Unlike listEntries (oldest-first with LIMIT), this
   // selects the newest `limit` entries and then orders them forwards.
-  timeline(issueId: string, opts?: { kind?: JournalKind; limit?: number }): JournalEntry[] {
+  timeline(issueId: string, opts?: { kind?: JournalKind; limit?: number }): JournalEntries {
     this.issues.getIssue(issueId);
     if (opts?.kind !== undefined && !isJournalKind(opts.kind)) {
       throw new Error(unknownJournalKindMessage(opts.kind));
@@ -558,9 +586,7 @@ export class JournalService {
     }
     sql += " ORDER BY sequence DESC LIMIT ?";
     params.push(limit);
-    return rows<Row>(this.db, sql, ...params)
-      .map((r) => this.toEntry(r))
-      .reverse();
+    return this.entriesFromRows(rows<Row>(this.db, sql, ...params).reverse());
   }
 
   // Bounded operational context for `sb issue show` (ADR §50). Every read
@@ -824,21 +850,73 @@ export class JournalService {
     return this.toEntry(r);
   }
 
+  /**
+   * ADR-009 row→entry seam for list reads: one unreadable row degrades to a
+   * marker instead of failing the whole page. `getEntry` does not use this.
+   */
+  private entryFromRow(r: Row): JournalReadEntry {
+    try {
+      return this.toEntry(r);
+    } catch (err) {
+      const reason = err instanceof JournalRowError ? err.reason : err instanceof Error ? err.message : String(err);
+      return this.markerEntry(r, reason);
+    }
+  }
+
+  private entriesFromRows(rs: Row[]): JournalEntries {
+    const entries: JournalReadEntry[] = rs.map((r) => this.entryFromRow(r));
+    Object.defineProperty(entries, "degraded", {
+      value: entries.filter((e) => e.unreadable !== undefined).length,
+      enumerable: false,
+    });
+    return entries as JournalEntries;
+  }
+
+  /** The ADR-009 marker: names the entry, quotes the validator verbatim. */
+  private markerEntry(r: Row, reason: string): JournalReadEntry {
+    const id = r["id"] as string;
+    return {
+      id,
+      issueId: r["issue_id"] as string,
+      issueRevision: r["issue_revision"] as number,
+      sequence: r["sequence"] as number,
+      runId: (r["run_id"] as string | null) ?? null,
+      participantId: (r["participant_id"] as string | null) ?? null,
+      activationId: (r["activation_id"] as string | null) ?? null,
+      sessionId: (r["session_id"] as string | null) ?? null,
+      kind: r["kind"] as JournalKind,
+      mechanical: null,
+      semantic: null,
+      result: null,
+      refs: [],
+      createdAt: r["created_at"] as number,
+      executionContext: null,
+      unreadable: `unreadable: ${id}: ${reason}`,
+    };
+  }
+
+  private fail(r: Row, what: string, problem?: string): never {
+    throw new JournalRowError(
+      problem ?? what,
+      `fail-closed: ${what} on ${r["id"]}${problem === undefined ? "" : `: ${problem}`}`,
+    );
+  }
+
   // Semantic is validated on read (§20.4 contract): a corrupt row fails
   // closed rather than resuming an agent from a malformed summary.
   private toEntry(r: Row): JournalEntry {
     const kind = r["kind"] as string;
-    if (!isJournalKind(kind)) throw new Error(`fail-closed: corrupt journal kind on ${r["id"]}`);
+    if (!isJournalKind(kind)) this.fail(r, "corrupt journal kind");
     let semantic: SemanticCheckpoint | null = null;
     if (r["semantic_json"] != null) {
       let parsed: unknown;
       try {
         parsed = JSON.parse(r["semantic_json"] as string);
       } catch {
-        throw new Error(`fail-closed: corrupt semantic checkpoint on ${r["id"]}`);
+        this.fail(r, "corrupt semantic checkpoint");
       }
       const problems = validateSemanticCheckpoint(parsed);
-      if (problems.length > 0) throw new Error(`fail-closed: invalid semantic checkpoint on ${r["id"]}: ${problems[0]}`);
+      if (problems.length > 0) this.fail(r, "invalid semantic checkpoint", problems[0]);
       semantic = parsed as SemanticCheckpoint;
     }
     let result: ResultPayload | null = null;
@@ -847,10 +925,10 @@ export class JournalService {
       try {
         parsed = JSON.parse(r["result_json"] as string);
       } catch {
-        throw new Error(`fail-closed: corrupt result payload on ${r["id"]}`);
+        this.fail(r, "corrupt result payload");
       }
       const problems = validateResultPayload(parsed);
-      if (problems.length > 0) throw new Error(`fail-closed: invalid result payload on ${r["id"]}: ${problems[0]}`);
+      if (problems.length > 0) this.fail(r, "invalid result payload", problems[0]);
       // Pre-change rows carry no version: default to 1 so they stay readable.
       const raw = parsed as Record<string, unknown>;
       result = { resultVersion: RESULT_VERSION, ...raw } as ResultPayload;
@@ -860,14 +938,14 @@ export class JournalService {
       try {
         mechanical = JSON.parse(r["mechanical_json"] as string) as MechanicalCheckpoint;
       } catch {
-        throw new Error(`fail-closed: corrupt mechanical checkpoint on ${r["id"]}`);
+        this.fail(r, "corrupt mechanical checkpoint");
       }
     }
     let refs: EvidenceRef[] = [];
     try {
       refs = JSON.parse((r["refs_json"] as string) ?? "[]") as EvidenceRef[];
     } catch {
-      throw new Error(`fail-closed: corrupt journal refs on ${r["id"]}`);
+      this.fail(r, "corrupt journal refs");
     }
     // Stored envelope wins; legacy rows project flat columns to v1, or
     // absent when nothing is known (§98). Corrupt JSON fails closed.
@@ -878,10 +956,10 @@ export class JournalService {
       try {
         parsed = JSON.parse(rawCtx);
       } catch {
-        throw new Error(`fail-closed: corrupt execution context on ${r["id"]}`);
+        this.fail(r, "corrupt execution context");
       }
       const problems = validateExecutionContext(parsed);
-      if (problems.length > 0) throw new Error(`fail-closed: invalid execution context on ${r["id"]}: ${problems[0]}`);
+      if (problems.length > 0) this.fail(r, "invalid execution context", problems[0]);
       executionContext = normalizeExecutionContext(parsed);
     } else {
       executionContext = executionContextFromLegacy({

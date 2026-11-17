@@ -126,11 +126,12 @@ function JournalBody({ text }: { text: string }) {
 
 function JournalItem({ entry, highlighted }: { entry: JournalEntry; highlighted: boolean }) {
   const checkpoint = CHECKPOINT_KINDS.has(entry.kind);
+  const unreadable = entry.unreadable != null;
   const { summary: _s, ...resultRest } = entry.result ?? {};
   return (
     <li id={journalAnchor(entry.sequence)} data-testid="journal-entry" data-kind={entry.kind} className="relative flex scroll-mt-4 gap-3 pb-5 last:pb-0">
       <span aria-hidden className="absolute top-5 bottom-0 left-[5px] w-px bg-border-muted" />
-      <span className={cx("mt-1.5 size-[11px] shrink-0 rounded-full border", checkpoint ? "border-accent bg-accent" : "border-border-strong bg-surface")} />
+      <span className={cx("mt-1.5 size-[11px] shrink-0 rounded-full border", unreadable ? "border-dashed border-border-strong bg-surface" : checkpoint ? "border-accent bg-accent" : "border-border-strong bg-surface")} />
       <div className={cx("-mx-2 flex min-w-0 flex-1 flex-col gap-1.5 rounded-md px-2 transition-colors motion-reduce:transition-none", highlighted && "bg-hover")}>
         <div className="flex items-center gap-2 text-xs text-ink-faint">
           <span className={cx("rounded-sm px-1.5 py-px", checkpoint ? "bg-accent/15 text-accent-ink" : "bg-control text-ink-muted")}>{entry.kind}</span>
@@ -139,7 +140,15 @@ function JournalItem({ entry, highlighted }: { entry: JournalEntry; highlighted:
           <Timestamp at={entry.createdAt} className="ml-auto" />
         </div>
         <IdentityLine identity={entry.identity} />
-        {entry.summary ? <JournalBody text={entry.summary} /> : <span className="text-sm text-ink-faint">No summary recorded</span>}
+        {entry.unreadable ? (
+          <span data-testid="journal-unreadable" className="text-sm text-ink-muted">
+            {entry.unreadable}
+          </span>
+        ) : entry.summary ? (
+          <JournalBody text={entry.summary} />
+        ) : (
+          <span className="text-sm text-ink-faint">No summary recorded</span>
+        )}
         {(entry.result || entry.semantic || entry.mechanical || entry.executionContext) && (
           <div className="flex flex-col gap-1">
             {entry.result && Object.keys(resultRest).length > 0 && <DataBlock title="Result" data={resultRest} />}

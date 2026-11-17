@@ -6,8 +6,7 @@
 
 import type { DatabaseSync } from "../store/database.ts";
 import type { IssueService } from "./issue-service.ts";
-import type { JournalService } from "./journal-service.ts";
-import type { JournalEntry } from "../domain/journal.ts";
+import type { JournalService, JournalReadEntry } from "./journal-service.ts";
 import type { IssueClaim } from "../domain/claim.ts";
 
 export interface ChildCapsuleSummary {
@@ -33,12 +32,16 @@ export interface ResultRef {
   outcome: string | null;
   artifactRefs: string[];
   receiptRefs: string[];
+  /** ADR-009 marker when the row could not be read; `summary` stays empty. */
+  unreadable: string | null;
 }
 
 export interface DecisionRef {
   entryId: string;
   sequence: number;
   summary: string;
+  /** ADR-009 marker when the row could not be read; `summary` stays empty. */
+  unreadable: string | null;
 }
 
 // Derived release view (ADR §51 programme/release state). Closure persistence
@@ -63,8 +66,8 @@ export interface ResumeCapsule {
   contract: unknown;
   readiness: { state: string; dispatchable: boolean; reasons: string[] };
   resolvedContext: { hash: string; entryCount: number };
-  latestCheckpoint: JournalEntry | null;
-  delta: { afterSequence: number; entries: JournalEntry[]; nextCursor: number };
+  latestCheckpoint: JournalReadEntry | null;
+  delta: { afterSequence: number; entries: JournalReadEntry[]; nextCursor: number; degraded: number };
   children: ChildCapsuleSummary[];
   results: ResultRef[];
   criticalDecisions: DecisionRef[];
@@ -151,10 +154,11 @@ export class ResumeService {
       outcome: e.result?.outcome ?? null,
       artifactRefs: e.result?.artifactRefs ?? [],
       receiptRefs: e.result?.receiptRefs ?? [],
+      unreadable: e.unreadable ?? null,
     }));
     const criticalDecisions: DecisionRef[] = this.journal
       .timeline(issueId, { kind: "decision", limit: CAPSULE_DECISION_LIMIT })
-      .map((e) => ({ entryId: e.id, sequence: e.sequence, summary: e.semantic?.summary ?? "" }));
+      .map((e) => ({ entryId: e.id, sequence: e.sequence, summary: e.semantic?.summary ?? "", unreadable: e.unreadable ?? null }));
     const blockers = this.issues.unsatisfiedBlockers(issueId);
     const childrenDone = children.filter((c) => c.lifecycleState === "done").length;
     const release: ReleaseState = {
@@ -183,7 +187,7 @@ export class ResumeService {
       readiness: { state: readiness.state, dispatchable: readiness.dispatchable, reasons: readiness.reasons },
       resolvedContext: { hash: resolved.hash, entryCount: resolved.entries.length },
       latestCheckpoint,
-      delta: { afterSequence: delta.afterSequence, entries: delta.entries, nextCursor: delta.nextCursor },
+      delta: { afterSequence: delta.afterSequence, entries: delta.entries, nextCursor: delta.nextCursor, degraded: delta.degraded },
       children,
       results,
       criticalDecisions,
@@ -222,7 +226,9 @@ export class ResumeService {
       String(contract.success ?? "(no success)"),
       "",
       "LATEST CHECKPOINT",
-      c.latestCheckpoint ? `${c.latestCheckpoint.id} seq${c.latestCheckpoint.sequence} ${c.latestCheckpoint.kind}` : "(none yet)",
+      c.latestCheckpoint
+        ? (c.latestCheckpoint.unreadable ?? `${c.latestCheckpoint.id} seq${c.latestCheckpoint.sequence} ${c.latestCheckpoint.kind}`)
+        : "(none yet)",
     ];
     const s = c.latestCheckpoint?.semantic;
     if (s?.summary) lines.push("", "SUMMARY", s.summary);
@@ -245,13 +251,13 @@ export class ResumeService {
     lines.push("", "RESULTS");
     lines.push(
       ...(c.results.length > 0
-        ? c.results.map((r) => `- seq${r.sequence}${r.outcome ? ` ${r.outcome}` : ""}: ${truncate(r.summary, 500)}`)
+        ? c.results.map((r) => (r.unreadable ? `- ${r.unreadable}` : `- seq${r.sequence}${r.outcome ? ` ${r.outcome}` : ""}: ${truncate(r.summary, 500)}`))
         : ["(none)"]),
     );
     lines.push("", "CRITICAL DECISIONS");
     lines.push(
       ...(c.criticalDecisions.length > 0
-        ? c.criticalDecisions.map((d) => `- seq${d.sequence}: ${truncate(d.summary, 500)}`)
+        ? c.criticalDecisions.map((d) => (d.unreadable ? `- ${d.unreadable}` : `- seq${d.sequence}: ${truncate(d.summary, 500)}`))
         : ["(none)"]),
     );
     lines.push("", "RELEASE");
@@ -262,6 +268,12 @@ export class ResumeService {
       "",
       "CHANGES SINCE CHECKPOINT",
       `${c.delta.entries.length} journal entries, ${c.provenance.eventCount} events total`,
+      ...(c.delta.degraded > 0
+        ? [
+            `degraded: ${c.delta.degraded} unreadable journal ${c.delta.degraded === 1 ? "entry" : "entries"}`,
+            ...c.delta.entries.flatMap((e) => (e.unreadable ? [e.unreadable] : [])),
+          ]
+        : []),
       ...(c.claim ? [`claim held by ${c.claim.holder}`] : ["no active claim"]),
     );
     lines.push("", "EXTERNAL");

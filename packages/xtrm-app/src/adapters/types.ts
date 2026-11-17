@@ -397,6 +397,8 @@ export interface JournalEntry {
   createdAt: number;
   /** Semantic summary, else the result summary; empty when the entry has neither. */
   summary: string;
+  /** ADR-009: the row failed read validation; render this marker, not `summary`. */
+  unreadable?: string | null;
   identity: JournalIdentity;
   /** Semantic checkpoint fields other than the summary (completed, next, keyDecisions, …). */
   semantic: Record<string, unknown> | null;
@@ -563,6 +565,8 @@ export interface JournalFeedEntryWire {
   participantId?: string | null;
   semantic?: { summary?: string } | null;
   result?: { summary?: string } | null;
+  /** ADR-009 read marker; null/absent on a clean row. */
+  unreadable?: string | null;
 }
 
 export interface SubstrateAdapter {

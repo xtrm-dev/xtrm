@@ -105,7 +105,7 @@ export interface WireTrace {
   prs?: Array<Obj | string>;
   externalBindings?: Obj[];
 }
-export type WireJournalEntry = Obj & { id: string; sequence: number; kind: string; issueRevision: number; createdAt: number };
+export type WireJournalEntry = Obj & { id: string; sequence: number; kind: string; issueRevision: number; createdAt: number; unreadable?: string | null };
 
 export class SubstrateReadError extends Error {}
 
@@ -181,6 +181,7 @@ export function mapJournalEntry(j: WireJournalEntry): JournalEntry {
     revision: j.issueRevision,
     createdAt: j.createdAt,
     summary: strOrNull(semanticSummary) ?? strOrNull(result?.summary) ?? "",
+    unreadable: strOrNull(j.unreadable),
     identity: { participantId: strOrNull(j.participantId), sessionId: strOrNull(j.sessionId), activationId: strOrNull(j.activationId), runId: strOrNull(j.runId) },
     semantic: semantic && Object.keys(semanticRest).length ? semanticRest : null,
     result,
