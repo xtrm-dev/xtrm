@@ -9,6 +9,7 @@ import { rmSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
+import { withoutNodeSqliteWarning } from "./hermetic-env.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { JournalService } from "../src/service/journal-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
@@ -406,7 +407,7 @@ describe("XTRM-415/416: receipt commit and checkpoint links", () => {
     const ambiguous = spawnSync(process.execPath, [POST_COMMIT_HOOK], { encoding: "utf8", env });
     assert.equal(ambiguous.status, 0);
     assert.equal(ambiguous.stdout, "");
-    assert.equal(ambiguous.stderr, "");
+    assert.equal(withoutNodeSqliteWarning(ambiguous.stderr), "", "two open receipts must keep the hook quiet");
     assert.deepEqual(prov.findByCommit(SHA_C), [], "two open receipts stay unlinked rather than guessed");
 
     delete env["SUBSTRATE_ISSUE_REF"];

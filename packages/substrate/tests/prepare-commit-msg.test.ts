@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSubstrate } from "../src/store/sqlite.ts";
+import { withoutNodeSqliteWarning } from "./hermetic-env.ts";
 import { IssueService } from "../src/service/issue-service.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { contract } from "./helpers.ts";
@@ -41,7 +42,8 @@ function runHook(repo: string, dbPath: string, env: Record<string, string>, mess
   const base: NodeJS.ProcessEnv = { ...process.env, SUBSTRATE_DB: dbPath };
   delete base["XTRM_RECEIPT_ID"];
   const res = spawnSync(process.execPath, [HOOK, file], { cwd: repo, encoding: "utf8", env: { ...base, ...env } });
-  return { code: res.status ?? 1, stderr: res.stderr ?? "", message: readFileSync(file, "utf8") };
+  // XTRM-824: the hook imports node:sqlite; Node v25 warns on the first import.
+  return { code: res.status ?? 1, stderr: withoutNodeSqliteWarning(res.stderr ?? ""), message: readFileSync(file, "utf8") };
 }
 
 describe("prepare-commit-msg issue trailers (XTRM-684)", () => {
