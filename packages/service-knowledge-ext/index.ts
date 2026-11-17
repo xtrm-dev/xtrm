@@ -439,7 +439,7 @@ export async function callTool(
 		const detail = String(error?.stderr || error?.message || error).trim().slice(0, 2000);
 		const hint =
 			error?.code === "ENOENT"
-				? `the '${CLI_BIN}' CLI is not on PATH; install it with \`pipx install service-knowledge\` (>= 0.9.0 for the mcp subcommand).`
+				? `the '${CLI_BIN}' CLI is not on PATH; install it with packages/service-knowledge/install.sh from an xtrm-dev/xtrm checkout (>= 0.9.0 for the mcp subcommand; it also installs vaultctl).`
 				: "the service-knowledge CLI failed.";
 		return { content: [{ type: "text", text: `${name}: ${hint} ${detail}` }], isError: true };
 	}
