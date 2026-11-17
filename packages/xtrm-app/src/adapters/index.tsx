@@ -7,6 +7,8 @@ import { fixtureGithubAuth, liveGithubAuth } from "./github/auth.ts";
 import { liveGithub } from "./github/live.ts";
 import { fixtureResearch } from "./research/fixture.ts";
 import { liveResearch } from "./research/live.ts";
+import { fixtureStatusBoard } from "./status-board/fixture.ts";
+import { liveStatusBoard } from "./status-board/live.ts";
 import { liveGitActivity } from "./git/live.ts";
 import { fixtureGitActivity } from "./git/fixture.ts";
 import { fixtureSubstrate } from "./substrate/fixture.ts";
@@ -20,6 +22,7 @@ export type * from "./agent/host-connection.ts";
 /**
  * Source selection is configuration, never a component decision (§9.3).
  * Defaults: GitHub live (Console v1 backend), Substrate live (sb CLI bridge),
+ * Status board fixture (the here.now board is per-repository and needs a server-side binding),
  * Research live (the xtrm-research CLI bridge, server/research-cli.ts),
  * Agent fixture unless VITE_XTRM_AGENT=live (the agent host through the dev bridge, XTRM-572),
  * agent host SSH connection live (server/agent-host-ssh.ts).
@@ -33,6 +36,7 @@ export function adaptersFromEnv(env: Record<string, string | undefined> = import
     github: githubLive ? liveGithub : fixtureGithub,
     githubAuth: githubLive ? liveGithubAuth : fixtureGithubAuth,
     substrate: pick("VITE_XTRM_SUBSTRATE", "live") === "live" ? liveSubstrate : fixtureSubstrate,
+    statusBoard: pick("VITE_XTRM_STATUS_BOARD", "fixture") === "live" ? liveStatusBoard : fixtureStatusBoard,
     research: pick("VITE_XTRM_RESEARCH", "live") === "live" ? liveResearch : fixtureResearch,
     // The git source rides the same bridge as the board: one deployment decision.
     gitActivity: pick("VITE_XTRM_SUBSTRATE", "live") === "live" ? liveGitActivity : fixtureGitActivity,
@@ -45,6 +49,7 @@ export const fixtureAdapters: Adapters = {
   github: fixtureGithub,
   githubAuth: fixtureGithubAuth,
   substrate: fixtureSubstrate,
+  statusBoard: fixtureStatusBoard,
   research: fixtureResearch,
   gitActivity: fixtureGitActivity,
 };
