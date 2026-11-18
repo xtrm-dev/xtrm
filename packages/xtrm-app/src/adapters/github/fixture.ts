@@ -1,4 +1,4 @@
-import type { GithubAdapter, GithubIssueSummary, PullListState, PullRequestDetail, PullRequestSummary, Release, Repo, RepoEvent } from "../types.ts";
+import type { GithubAdapter, GithubIssueSummary, PullDetailSection, PullListState, PullRequestDetail, PullRequestSummary, Release, Repo, RepoEvent } from "../types.ts";
 
 // Development fixture. Shapes follow the Console v1 GitHub DTOs; content is illustrative.
 
@@ -45,6 +45,7 @@ const pullSeed: Array<
     ageMin: number;
     /** Omit to derive from `reviews`; null models a source that carries no review data. */
     reviewCount?: number | null;
+    unavailableSections?: PullDetailSection[];
   }
 > = [
   {
@@ -140,6 +141,7 @@ const pullSeed: Array<
     state: "open", draft: false, checks: null, review: null, reviewCount: null, additions: null, deletions: null, changedFiles: null, comments: null,
     body: null, mergeable: null, mergeableState: null, commits: 0,
     reviews: [], conversationComments: [], reviewComments: [], files: [],
+    unavailableSections: ["files", "comments"],
     ageMin: 40,
   },
   {
@@ -245,7 +247,17 @@ export const fixturePullDetail = (repo: string, number: number): PullRequestDeta
   const base = fixturePulls(repo).find((p) => p.number === number);
   if (!base) return null;
   const seedRow = pullSeed.find((p) => p.number === number)!;
-  return { ...base, mergeable: seedRow.mergeable, mergeableState: seedRow.mergeableState, commits: seedRow.commits, reviews: seedRow.reviews, conversationComments: seedRow.conversationComments, reviewComments: seedRow.reviewComments, files: seedRow.files };
+  return {
+    ...base,
+    mergeable: seedRow.mergeable,
+    mergeableState: seedRow.mergeableState,
+    commits: seedRow.commits,
+    reviews: seedRow.reviews,
+    conversationComments: seedRow.conversationComments,
+    reviewComments: seedRow.reviewComments,
+    files: seedRow.files,
+    unavailableSections: seedRow.unavailableSections ?? [],
+  };
 };
 
 const issueSeed: Array<{ number: number; title: string; state: "open" | "closed"; author: string; labels: string[]; comments: number; ageMin: number; body: string | null }> = [

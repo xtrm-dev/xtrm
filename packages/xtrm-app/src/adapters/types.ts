@@ -122,6 +122,9 @@ export interface PullFileSummary {
   status: string;
 }
 
+/** Detail sections the backend can fail independently; a failed one is unavailable, never empty (XTRM-857). */
+export type PullDetailSection = "pr" | "comments" | "reviews" | "review_comments" | "commits" | "files" | "timeline";
+
 export interface PullRequestDetail extends PullRequestSummary {
   mergeable: boolean | null;
   mergeableState: string | null;
@@ -132,6 +135,8 @@ export interface PullRequestDetail extends PullRequestSummary {
   /** Code-anchored review comments; grouped into threads by the UI. */
   reviewComments: PullRequestReviewComment[];
   files: PullFileSummary[];
+  /** Sections the backend named in `errors`; their view says unavailable, never "empty" (XTRM-857). */
+  unavailableSections: PullDetailSection[];
 }
 
 export type GithubIssueState = "open" | "closed";

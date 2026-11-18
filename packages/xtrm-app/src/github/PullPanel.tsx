@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { usePull } from "../app/queries.ts";
-import { checkLabel, checkTone, extractIssueKeys, parsePullRef, pullStateLabel, pullStateTone, reviewLabel } from "./pr.ts";
+import { checkLabel, checkTone, extractIssueKeys, mergeableText, parsePullRef, pullStateLabel, pullStateTone, reviewLabel } from "./pr.ts";
 import { ReferenceActionsProvider, ReferenceChip, useIssueIndex } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Markdown } from "../ui/markdown.tsx";
@@ -85,10 +85,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
               </span>,
             ],
             ["Review", reviewLabel(p.review)],
-            [
-              "Mergeable",
-              p.mergeableState ? `${p.mergeable === false ? "conflicts" : p.mergeable === true ? "mergeable" : "unknown"} · ${p.mergeableState}` : <span className="text-ink-faint">—</span>,
-            ],
+            ["Mergeable", mergeableText(p.mergeable, p.mergeableState) ?? <span className="text-ink-faint">—</span>],
             [
               "Change",
               <span className="tabular" key="change">
@@ -150,11 +147,17 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
       </InspectorSection>
 
       <InspectorSection title="Conversation">
-        <PullConversation comments={p.conversationComments} reviews={p.reviews} reviewComments={p.reviewComments} />
+        {p.unavailableSections.includes("comments") ? (
+          <p className="text-sm text-ink-faint">Conversation unavailable from the source.</p>
+        ) : (
+          <PullConversation comments={p.conversationComments} reviews={p.reviews} reviewComments={p.reviewComments} />
+        )}
       </InspectorSection>
 
       <InspectorSection title={`Files changed${p.files.length ? ` · ${p.files.length}` : ""}`} aside={<span className="text-xs text-ink-faint tabular">summary only</span>}>
-        {p.files.length ? (
+        {p.unavailableSections.includes("files") ? (
+          <p className="text-sm text-ink-faint">File summary unavailable from the source.</p>
+        ) : p.files.length ? (
           <ul className="flex flex-col">
             {p.files.slice(0, 30).map((f) => (
               <li key={f.filename} className="flex min-w-0 items-center gap-2 py-0.5 text-sm">

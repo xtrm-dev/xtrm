@@ -160,6 +160,30 @@ describe("mapPullDetail (XTRM-857)", () => {
     expect(pull.reviews).toEqual([]);
   });
 
+  it("names failed sections so the drawer says unavailable, not empty (F1)", () => {
+    const pull = mapPullDetail("xtrm-dev/xtrm", row(), detail({ pr: row({ head_ref: "xt/identity-drop-fix", base_ref: "main" }), errors: { files: "500 upstream", comments: "403 forbidden" } }), null);
+    expect(pull.unavailableSections).toEqual(["comments", "files"]);
+    expect(pull.comments).toBeNull();
+    expect(pull.changedFiles).toBeNull();
+  });
+
+  it("keeps a known row value when the detail copy omits it (F3)", () => {
+    const detailPr = row({ head_ref: "xt/identity-drop-fix", base_ref: "main", body: null, url: null, draft: null });
+    // The backend copy can omit the author key entirely; the spread must not erase it.
+    delete (detailPr as Partial<Row>).author;
+    const pull = mapPullDetail(
+      "xtrm-dev/xtrm",
+      row({ body: "row body", author: "row-author", url: "https://example.test/pull/212", draft: true }),
+      detail({ pr: detailPr }),
+      null,
+    );
+    expect(pull.body).toBe("row body");
+    expect(pull.author).toBe("row-author");
+    expect(pull.url).toBe("https://example.test/pull/212");
+    expect(pull.draft).toBe(true);
+    expect(pull.unavailableSections).toEqual([]);
+  });
+
   it("keeps zero for a section that is present and genuinely empty", () => {
     const pull = mapPullDetail("xtrm-dev/xtrm", row(), detail({ pr: row({ head_ref: "xt/identity-drop-fix", base_ref: "main" }), comments: [], reviews: [], files: [] }), null);
     expect(pull.additions).toBe(0);

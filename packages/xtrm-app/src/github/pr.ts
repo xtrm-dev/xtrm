@@ -120,6 +120,21 @@ export function checkTone(state: CheckState | null): Tone {
   }
 }
 
+/** Compact checks cell text: unknown stays a word, a missing aggregate stays an em dash (XTRM-857). */
+export function checkShortLabel(state: CheckState | null): string {
+  if (state === null) return "unknown";
+  if (state === "none") return "—";
+  return checkLabel(state).replace("checks ", "");
+}
+
+/** Mergeable row text; null means the row renders "—" (XTRM-857, F2). */
+export function mergeableText(mergeable: boolean | null, mergeableState: string | null): string | null {
+  if (!mergeableState) return null;
+  if (mergeable === false) return `conflicts · ${mergeableState}`;
+  if (mergeable === true) return `mergeable · ${mergeableState}`;
+  return `unknown · ${mergeableState}`;
+}
+
 export function checkLabel(state: CheckState | null): string {
   switch (state) {
     case null:

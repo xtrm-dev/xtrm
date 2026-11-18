@@ -1,6 +1,7 @@
 import type {
   CheckState,
   GithubAdapter,
+  PullDetailSection,
   GithubIssueSummary,
   Release,
   RepoDocument,
@@ -364,6 +365,9 @@ export function mapPullReviewComments(raw: WireDetail["review_comments"]): PullR
   }));
 }
 
+/** Sections the backend reports failures for, in the order the drawer checks them. */
+const DETAIL_SECTIONS: PullDetailSection[] = ["pr", "comments", "reviews", "review_comments", "commits", "files", "timeline"];
+
 export function mapPullDetail(repo: string, row: WirePr, detail: WireDetail, checks: WireChecks | null): PullRequestDetail {
   // The detail payload merges mapLivePr into `pr`, so the flat branch refs and
   // the draft flag exist only there. Merge it over the plain row, but let a
@@ -379,11 +383,17 @@ export function mapPullDetail(repo: string, row: WirePr, detail: WireDetail, che
     base_ref: detail.pr.base_ref ?? row.base_ref,
     head_branch: detail.pr.head_branch ?? row.head_branch,
     base_branch: detail.pr.base_branch ?? row.base_branch,
+    // A detail copy that omits these must not blank the row's known values (F3).
+    draft: detail.pr.draft ?? row.draft,
+    body: detail.pr.body ?? row.body,
+    author: detail.pr.author ?? row.author,
+    url: detail.pr.url ?? row.url,
   };
   const base = mapPull(repo, merged);
   // The backend names every failed section in `errors`; a failed section is
   // unknown (null), never an empty list that would read as zero (XTRM-857).
   const errors = detail.errors ?? {};
+  const unavailableSections = DETAIL_SECTIONS.filter((section) => errors[section] !== undefined);
   const filesKnown = errors.files === undefined && Array.isArray(detail.files);
   const reviewsKnown = errors.reviews === undefined && Array.isArray(detail.reviews);
   const commentsKnown = errors.comments === undefined && Array.isArray(detail.comments);
@@ -412,6 +422,7 @@ export function mapPullDetail(repo: string, row: WirePr, detail: WireDetail, che
     mergeable: checks?.mergeable ?? null,
     mergeableState: checks?.mergeable_state ?? null,
     checks: asCheckState(checks?.state),
+    unavailableSections,
   };
 }
 

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { PullRequestSummary } from "../adapters/index.tsx";
 import { usePulls } from "../app/queries.ts";
-import { extractIssueKeys, filterPulls, pullStateLabel, pullStateTone, checkLabel, checkTone, reviewLabel, sortPulls, type PullSort, type PullView } from "./pr.ts";
+import { extractIssueKeys, filterPulls, pullStateLabel, pullStateTone, checkLabel, checkShortLabel, checkTone, reviewLabel, sortPulls, type PullSort, type PullView } from "./pr.ts";
 import { ReferenceActionsProvider, ReferenceChip, useIssueIndex } from "../refs/references.tsx";
 import { GithubNotice } from "./auth.tsx";
 import { useShell } from "../shell/context.tsx";
@@ -96,7 +96,7 @@ function PullRow({ pull, selected, onOpen }: { pull: PullRequestSummary; selecte
         <div className={cx(CELL, "gap-1.5 text-xs text-ink-faint")} title={checkLabel(pull.checks)}>
           <StatusDot tone={checkTone(pull.checks)} label={checkLabel(pull.checks)} />
           <span className="truncate">
-            {pull.checks === null ? "unknown" : pull.checks === "none" ? "—" : checkLabel(pull.checks).replace("checks ", "")}
+            {checkShortLabel(pull.checks)}
           </span>
         </div>
         <div
