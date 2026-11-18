@@ -7,7 +7,7 @@ describe("Badge", () => {
     render(<Badge tone="success">Open</Badge>);
     const badge = screen.getByText("Open");
     expect(badge.className).toContain("bg-success/12");
-    expect(badge.className).toContain("text-success");
+    expect(badge.className).toContain("text-success-ink");
     expect(badge.className).not.toContain("accent-soft");
     // The word is the state; the tone only reinforces it.
     expect(badge.textContent).toBe("Open");

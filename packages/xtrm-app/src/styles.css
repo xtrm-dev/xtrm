@@ -37,7 +37,11 @@
   --x-accent-soft: rgb(79 70 229 / 0.1);
   --x-danger: #c42b2b;
   --x-success: #1b7f46;
-  --x-diff-add: #1f8a4c;
+  /* The badge ink: --x-success on its own 12% tint is 4.30:1 on white and 3.93:1 on the
+     canvas, below the 4.5:1 text minimum. Same hue, darker: 5.85:1 and 5.34:1 (§3.2). */
+  --x-success-ink: #146839;
+  /* One datum, one green: diff counts follow success (lead ruling on the UI-1 review). */
+  --x-diff-add: #1b7f46;
   --x-diff-del: #c42b2b;
   --x-shadow-float: 0 10px 30px -12px rgb(15 15 20 / 0.22), 0 0 0 1px rgb(15 15 20 / 0.06);
   /* Panel elevation without a hairline: the inspector carries no border (no-borders policy), so the
@@ -82,6 +86,7 @@
   --x-accent-soft: rgb(129 140 248 / 0.12);
   --x-danger: #f07171;
   --x-success: #5ccb8a;
+  --x-success-ink: #5ccb8a;
   --x-diff-add: #5ccb8a;
   --x-diff-del: #f07171;
   --x-shadow-float: 0 18px 44px -12px rgb(0 0 0 / 0.72), 0 0 0 1px rgb(255 255 255 / 0.08);
@@ -122,6 +127,7 @@
   --color-accent-soft: var(--x-accent-soft);
   --color-danger: var(--x-danger);
   --color-success: var(--x-success);
+  --color-success-ink: var(--x-success-ink);
   --color-diff-add: var(--x-diff-add);
   --color-diff-del: var(--x-diff-del);
 

@@ -13,7 +13,7 @@ const TONE: Record<BadgeTone, string> = {
   active: "bg-accent-soft text-ink",
   danger: "bg-danger/12 text-danger",
   /** GitHub-style Open chip: the word is the state, the tone reinforces it (§3.2). */
-  success: "bg-success/12 text-success",
+  success: "bg-success/12 text-success-ink",
   neutral: "bg-pressed text-ink-muted",
   muted: "bg-hover text-ink-faint",
   /** On the sidebar strip and its drop-up: follows that surface through the --x-strip-* tokens. */

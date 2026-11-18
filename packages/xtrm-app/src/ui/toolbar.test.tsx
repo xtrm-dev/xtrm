@@ -147,7 +147,54 @@ describe("ToolbarButton", () => {
   });
 });
 
+function TabsHarness() {
+  const [value, setValue] = useState("open");
+  return (
+    <ToolbarTabs
+      label="Pull request views"
+      value={value}
+      onChange={setValue}
+      tabs={[
+        { id: "open", label: "Open" },
+        { id: "merged", label: "Merged" },
+        { id: "closed", label: "Closed" },
+      ]}
+    />
+  );
+}
+
 describe("ToolbarTabs", () => {
+  it("moves selection with Arrow keys, Home and End, with one tab stop", () => {
+    render(<TabsHarness />);
+    const open = screen.getByRole("tab", { name: "Open" });
+    const merged = screen.getByRole("tab", { name: "Merged" });
+    const closed = screen.getByRole("tab", { name: "Closed" });
+    expect(open.getAttribute("tabindex")).toBe("0");
+    expect(merged.getAttribute("tabindex")).toBe("-1");
+
+    act(() => open.focus());
+    fireEvent.keyDown(open, { key: "ArrowRight" });
+    expect(merged.getAttribute("aria-selected")).toBe("true");
+    expect(merged.getAttribute("tabindex")).toBe("0");
+    expect(open.getAttribute("tabindex")).toBe("-1");
+    expect(document.activeElement).toBe(merged);
+
+    fireEvent.keyDown(merged, { key: "ArrowLeft" });
+    expect(open.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(open);
+
+    fireEvent.keyDown(open, { key: "End" });
+    expect(closed.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(closed);
+
+    fireEvent.keyDown(closed, { key: "ArrowRight" });
+    expect(open.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(open);
+
+    fireEvent.keyDown(open, { key: "Home" });
+    expect(open.getAttribute("aria-selected")).toBe("true");
+  });
+
   it("marks the selected tab with ink text and a 2px ink bar, not a fill", () => {
     const onChange = vi.fn();
     render(

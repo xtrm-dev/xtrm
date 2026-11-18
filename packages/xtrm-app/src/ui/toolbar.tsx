@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon, type IconName } from "./icon.tsx";
 import { OptionsMenu, type OptionItem } from "./menu.tsx";
 import { IconButton, TOOLBAR_CONTROL, TOOLBAR_GHOST, cx } from "./primitives.tsx";
@@ -63,11 +63,44 @@ export function ToolbarFilter({ label, value, options, onChange }: { label: stri
   );
 }
 
-/** Tabs for one surface. Selected is ink text plus a 2px ink bottom bar; there is no fill (R5). */
+/**
+ * Tabs for one surface. Selected is ink text plus a 2px ink bottom bar; there is no fill (R5).
+ * Keyboard follows WAI-ARIA tabs: a roving `tabIndex` keeps one stop in the tablist, Left/Right
+ * wrap, Home/End jump, and selection follows focus (automatic activation suits a local view switch).
+ */
 export function ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id: string; label: string; count?: number }>; value: string; onChange: (id: string) => void; label: string }) {
+  const buttons = useRef<Array<HTMLButtonElement | null>>([]);
+  const select = (index: number) => {
+    const tab = tabs[index];
+    if (!tab) return;
+    if (tab.id !== value) onChange(tab.id);
+    buttons.current[index]?.focus();
+  };
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const last = tabs.length - 1;
+    const index = tabs.findIndex((tab) => tab.id === value);
+    if (index === -1) return;
+    const next =
+      event.key === "ArrowRight"
+        ? index === last
+          ? 0
+          : index + 1
+        : event.key === "ArrowLeft"
+          ? index === 0
+            ? last
+            : index - 1
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? last
+              : null;
+    if (next === null) return;
+    event.preventDefault();
+    select(next);
+  };
   return (
-    <div role="tablist" aria-label={label} className="flex items-center gap-1">
-      {tabs.map((tab) => {
+    <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="flex items-center gap-1">
+      {tabs.map((tab, index) => {
         const on = tab.id === value;
         return (
           <button
@@ -75,6 +108,10 @@ export function ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id
             type="button"
             role="tab"
             aria-selected={on}
+            tabIndex={on ? 0 : -1}
+            ref={(element) => {
+              buttons.current[index] = element;
+            }}
             onClick={() => onChange(tab.id)}
             className={cx(
               "relative flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs outline-none transition-colors",
