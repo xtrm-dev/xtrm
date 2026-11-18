@@ -70,6 +70,12 @@ export function registerScrutinyPolicy(policy: ScrutinyPolicy): void {
   SCRUTINY_POLICIES.set(policy.ref, policy);
 }
 
+// The refs a policy can currently be attested under, in registration order.
+// Read-only: the CLI names them in help and in the unknown-policy error.
+export function scrutinyPolicyRefs(): string[] {
+  return [...SCRUTINY_POLICIES.keys()];
+}
+
 export function scrutinyPolicyFor(ref: string): ScrutinyPolicy {
   const found = SCRUTINY_POLICIES.get(ref);
   if (!found) throw new Error(`fail-closed: unknown scrutiny policy: ${ref}`);

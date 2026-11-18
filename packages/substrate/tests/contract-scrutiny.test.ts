@@ -152,3 +152,33 @@ describe("sb issue attest confirmation names the ref and the outcome (XTRM-391)"
     assert.match(text, /next: sb help issue attest/);
   });
 });
+
+describe("sb issue attest names the valid --policy values (XTRM-836)", () => {
+  it("verb help lists default and says where the set is defined", () => {
+    const res = runCli(["help", "issue", "attest"]);
+    assert.equal(res.code, 0);
+    assert.match(res.stdout, /--policy <p>.*Valid values: default/s);
+    assert.match(res.stdout, /DEFAULT_SCRUTINY_POLICY_REF in src\/domain\/readiness\.ts/);
+  });
+
+  it("an unknown --policy fails listing the valid values and stores no attestation", () => {
+    const { dir, dbPath } = setupDb();
+    const c = contractFile(dir, "c.json", { scrutiny: "MEDIUM" });
+    const created = jsonCall(dbPath, ["issue", "create", "--project", "prj_demo", "--title", "T", "--kind", "task", "--contract", c]);
+    assert.equal(created.code, 0, created.error);
+    const ref = (created.data as { humanRef: string }).humanRef;
+
+    const bad = jsonCall(dbPath, ["issue", "attest", ref, "--outcome", "ready", "--policy", "__bad__", "--attested-by", "x", "--project", "prj_demo"]);
+    assert.equal(bad.code, 1);
+    assert.equal(bad.ok, false);
+    assert.match(bad.error ?? "", /unknown --policy "__bad__"; valid values: default\b/);
+    assert.match(bad.error ?? "", /DEFAULT_SCRUTINY_POLICY_REF in src\/domain\/readiness\.ts/);
+
+    const shown = jsonCall(dbPath, ["issue", "validate", ref]);
+    assert.equal(shown.code, 0);
+    assert.equal((shown.data as { attestationCurrent: boolean }).attestationCurrent, false, "a refused attest must leave the issue unattested");
+
+    const good = jsonCall(dbPath, ["issue", "attest", ref, "--outcome", "ready", "--policy", "default", "--attested-by", "x", "--project", "prj_demo"]);
+    assert.equal(good.code, 0, good.error);
+  });
+});
