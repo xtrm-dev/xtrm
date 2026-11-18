@@ -436,3 +436,48 @@ describe("statusBoard review fixes (#419)", () => {
     expect(JSON.stringify(page)).not.toContain("Program");
   });
 });
+
+describe("statusBoard delta review fixes (#419 delta)", () => {
+  it("keeps the board/next field gaps the mapper reports, in both sources", async () => {
+    // One wrong-typed declared field: the live adapter used to return the record's parse gap only,
+    // so `gaps: []` read like a document that never carried a title.
+    const odd = wire("board/next", { title: 5, owner: "board-worker" });
+    const { fetchImpl } = responder(() => ({ status: 200, body: { ok: true, record: odd } }));
+
+    const next = await createStatusBoardLiveAdapter({ fetchImpl }).boardNext(REPO);
+    expect(next?.doc).toEqual({ owner: "board-worker" });
+    expect(gapsFor(next?.gaps ?? [], "title")).toEqual([{ path: "board/next", field: "title", value: "5" }]);
+
+    // The fixture source maps the same document through the same mapper (parity, not a second rule).
+    const fromFixture = await createStatusBoardFixtureAdapter({ repository: REPO, records: [odd] }).boardNext(REPO);
+    expect(fromFixture?.doc).toEqual(next?.doc);
+    expect(fromFixture?.gaps).toEqual(next?.gaps);
+  });
+
+  it("rejects a health reply whose checkedAt is missing or is not an ISO instant", async () => {
+    const base: Record<string, unknown> = {
+      configured: true,
+      reason: null,
+      scheduleActive: true,
+      scheduleActiveReason: null,
+      runInProgress: false,
+      runInProgressReason: null,
+      timerUnit: "status-board-sync.timer",
+      unitActive: true,
+      unitActiveReason: null,
+      lastSyncOkAt: "2026-11-17T21:56:00.000Z",
+      driftCount: 0,
+      stale: false,
+    };
+
+    for (const checkedAt of [undefined, "yesterday", 1_730_000_000, "2026-13-45T00:00:00.000Z"]) {
+      const health = checkedAt === undefined ? { ...base } : { ...base, checkedAt };
+      const { fetchImpl } = responder(() => ({ status: 200, body: { ok: true, health } }));
+      await expect(createStatusBoardLiveAdapter({ fetchImpl }).health(REPO)).rejects.toMatchObject({ kind: "malformed", status: 200 });
+    }
+
+    // A real instant with an offset is an ISO instant too: the check is not "must end in Z".
+    const { fetchImpl } = responder(() => ({ status: 200, body: { ok: true, health: { ...base, checkedAt: "2026-11-17T23:00:00+01:00" } } }));
+    expect((await createStatusBoardLiveAdapter({ fetchImpl }).health(REPO)).checkedAt).toBe("2026-11-17T23:00:00+01:00");
+  });
+});

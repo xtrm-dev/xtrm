@@ -141,12 +141,17 @@ export interface FixtureStatusBoardOptions {
   /** The integrated repository. Defaults to `FIXTURE_BOARD_REPO`. */
   repository?: string;
   now?: () => number;
+  /**
+   * Test seam: replace the fixture documents wholesale, so a test can prove both sources map the
+   * very same odd document the same way (the fixture is otherwise fixed content).
+   */
+  records?: WireRecord[];
 }
 
 export function createStatusBoardFixtureAdapter(opts: FixtureStatusBoardOptions = {}): StatusBoardAdapter {
   const integrated = (opts.repository ?? FIXTURE_BOARD_REPO).toLowerCase();
   const now = opts.now ?? Date.now;
-  const docs = (): WireRecord[] => documents(now);
+  const docs = (): WireRecord[] => opts.records ?? documents(now);
   const boundFor = (repository: string): boolean => repository.toLowerCase() === integrated;
 
   const binding = (repository: string): ProjectBinding => {
