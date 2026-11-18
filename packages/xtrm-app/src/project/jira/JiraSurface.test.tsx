@@ -14,7 +14,7 @@ function renderJira(repo: string) {
 }
 
 describe("jira surface", () => {
-  it("lists the bound project with remote status, assignee, link state and a browse link", async () => {
+  it("lists the bound project with remote status, assignee, link state and the open-in-Jira row action", async () => {
     renderJira("mercury/market-data");
     await screen.findByRole("region", { name: "Jira" });
 
@@ -25,12 +25,19 @@ describe("jira surface", () => {
     expect(within(row).getByText("Console lead")).toBeTruthy();
     expect(within(row).getByText("in sync")).toBeTruthy();
 
-    const browse = within(row).getByRole("link", { name: /MMD-551/ });
-    expect(browse.getAttribute("href")).toBe("https://example.atlassian.net/browse/MMD-551");
-    expect(browse.getAttribute("target")).toBe("_blank");
-    expect(browse.getAttribute("rel")).toBe("noreferrer");
+    // Restraint: the key is ink text (row identity), not a second accent link.
+    expect(within(row).queryByRole("link", { name: /MMD-551/ })).toBeNull();
+    const browse = within(row).getByRole("button", { name: "Open MMD-551 in Jira" });
+    expect(browse.className).toContain("size-5");
 
     expect(within(row).getByRole("button", { name: "XTRM-816" })).toBeTruthy();
+
+    // Restraint: one coloured reference per row and a neutral status dot (§D9).
+    const key = row.querySelector<HTMLElement>("span.font-mono");
+    expect(key?.className).toContain("text-ink");
+    expect(key?.className).not.toContain("accent");
+    expect(row.querySelector<HTMLElement>(".size-2")?.className).toContain("border-ink-muted");
+    expect(within(row).getByRole("button", { name: "XTRM-816" }).className).toContain("text-accent-ink");
     expect(screen.getByTestId("jira-binding").textContent).toContain("MMD");
   });
 
@@ -39,13 +46,14 @@ describe("jira surface", () => {
     const row = await screen.findByTestId("jira-row-MMD-612");
     expect(within(row).getByText("unlinked")).toBeTruthy();
     expect(within(row).getByText("—")).toBeTruthy();
-    expect(within(row).queryByRole("button")).toBeNull();
+    // The only button left is the row action; no dead Substrate link is offered.
+    expect(within(row).queryByRole("button", { name: /^XTRM-/ })).toBeNull();
   });
 
   it("says the repository is not linked instead of listing an empty project", async () => {
-    renderJira("xtrm-dev/xtrm");
+    renderJira("xtrm-dev/core");
     const reason = await screen.findByTestId("jira-unbound-reason");
-    expect(reason.textContent).toContain("xtrm-dev/xtrm has no Jira binding");
+    expect(reason.textContent).toContain("xtrm-dev/core has no Jira binding");
     expect(screen.getByText("This repository is not linked to Jira")).toBeTruthy();
     expect(screen.queryByRole("list", { name: "Jira issues in the bound project" })).toBeNull();
   });

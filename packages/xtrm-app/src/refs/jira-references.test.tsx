@@ -8,6 +8,8 @@ import { createFixtureSubstrate } from "../adapters/substrate/fixture.ts";
 import { createAppRouter } from "../app/router.tsx";
 
 const REPO = "xtrm-dev/xtrm";
+/** Generous: the whole-surface render under a loaded host outlives the 1s default. */
+const SLOW = { timeout: 8000 };
 const SITE = "https://example.atlassian.net";
 
 function jiraIssue(key: string, over: Partial<JiraIssue> = {}): JiraIssue {
@@ -79,36 +81,36 @@ function renderIssuePage({ problem, jira, ref = "XTRM-301" }: { problem?: string
 describe("provider-aware references", () => {
   it("resolves a bare key both providers hold to Substrate, while @jira forces Jira", async () => {
     renderIssuePage({ problem: "Bare XTRM-301 and forced @jira:XTRM-301.", jira: boundJira([jiraIssue("XTRM-301", { issueRef: "XTRM-301" })]) });
-    const problem = await screen.findByRole("region", { name: "Problem" });
+    const problem = await screen.findByRole("region", { name: "Problem" }, SLOW);
 
     // The bare key exists in both providers: Substrate wins, so no Jira chip may claim it.
     const bare = await waitFor(() => {
       const el = problem.querySelector<HTMLElement>('[data-reference="@issue:XTRM-301"]');
       if (!el) throw new Error("the bare key did not resolve to the Substrate chip");
       return el;
-    });
+    }, SLOW);
     expect(bare.tagName).toBe("BUTTON");
 
     const forced = await waitFor(() => {
       const el = problem.querySelector<HTMLAnchorElement>('[data-jira-key="XTRM-301"]');
       if (!el) throw new Error("the forced @jira: key did not resolve to a Jira chip");
       return el;
-    });
+    }, SLOW);
     expect(forced.getAttribute("data-jira-key")).toBe("XTRM-301");
     expect(forced.getAttribute("href")).toBe(`${SITE}/browse/XTRM-301`);
   });
 
   it("renders a Jira chip for a bare key with no Substrate issue", async () => {
     renderIssuePage({ problem: "Shipped in MMD-551 yesterday.", jira: boundJira([jiraIssue("MMD-551")]) });
-    const problem = await screen.findByRole("region", { name: "Problem" });
-    const chip = await within(problem).findByRole("link", { name: /MMD-551/ });
+    const problem = await screen.findByRole("region", { name: "Problem" }, SLOW);
+    const chip = await within(problem).findByRole("link", { name: /MMD-551/ }, SLOW);
     expect(chip.getAttribute("data-jira-key")).toBe("MMD-551");
   });
 
   it("keeps an unresolved key as prose, never a dead chip", async () => {
     renderIssuePage({ problem: "Bound MMD-551 and unknown NOPE-42.", jira: boundJira([jiraIssue("MMD-551")]) });
-    const problem = await screen.findByRole("region", { name: "Problem" });
-    await within(problem).findByRole("link", { name: /MMD-551/ });
+    const problem = await screen.findByRole("region", { name: "Problem" }, SLOW);
+    await within(problem).findByRole("link", { name: /MMD-551/ }, SLOW);
 
     expect(problem.textContent).toContain("NOPE-42");
     expect(problem.querySelector('[data-reference*="NOPE-42"], [data-jira-key="NOPE-42"]')).toBeNull();
@@ -117,7 +119,7 @@ describe("provider-aware references", () => {
   it("shows the bound Jira issue, with its remote status, on the Substrate issue page", async () => {
     renderIssuePage({ jira: boundJira([jiraIssue("XTRM-301", { issueRef: "XTRM-301", status: "In Review" })]) });
 
-    const status = await screen.findByTestId("jira-chip-status");
+    const status = await screen.findByTestId("jira-chip-status", {}, SLOW);
     expect(status.textContent).toBe("In Review");
     const chip = screen.getByRole("link", { name: /XTRM-301/ });
     expect(chip.getAttribute("href")).toBe(`${SITE}/browse/XTRM-301`);

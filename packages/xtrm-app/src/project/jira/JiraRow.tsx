@@ -2,18 +2,23 @@ import { useNavigate } from "@tanstack/react-router";
 import type { JiraIssue } from "../../adapters/jira/types.ts";
 import { useShell } from "../../shell/context.tsx";
 import { Badge, type BadgeTone } from "../../ui/badge.tsx";
-import { Icon } from "../../ui/icon.tsx";
 import { Row, StatusDot, cx } from "../../ui/primitives.tsx";
-import { jiraStatusTone, jiraSyncLabel } from "./JiraChip.tsx";
+import { RowAction } from "../../ui/row-action.tsx";
+import { jiraSyncLabel } from "./JiraChip.tsx";
 
 /**
  * One Jira issue in the repository's bound project (ADR-002 §D2/D9): key,
- * summary, remote status, assignee, Substrate link state and the browse link.
- * The table is read-only; the only writes in the app stay in Substrate.
+ * summary, remote status, assignee, Substrate link state, and the row action
+ * that opens the issue in Jira.
+ *
+ * Restraint (§D9, one coloured element per row): the key is row identity and
+ * stays ink mono, the status dot is neutral with the status as text, and the
+ * Substrate ref is the row's only accent reference. The status travels from the
+ * fetched remote issue; the link state comes from the Substrate bindings.
  */
 
-/** Shared column grid for the surface's header and every row. */
-export const JIRA_GRID = "grid w-full grid-cols-[7.5rem_minmax(0,1fr)_7rem_7rem_6.5rem_7rem] items-center gap-3";
+/** Shared column grid for the surface's header and every row; the last column is the row action. */
+export const JIRA_GRID = "grid grid-cols-[7.5rem_minmax(0,1fr)_7rem_7rem_6.5rem_7rem_1.25rem] items-center gap-3";
 
 const CELL = "min-w-0 truncate text-sm";
 
@@ -28,19 +33,9 @@ export function JiraRow({ issue }: { issue: JiraIssue }) {
   const { repo } = useShell();
   return (
     <Row density="list" role="listitem" data-testid={`jira-row-${issue.key}`} data-jira-key={issue.key} className="h-9 gap-0">
-      <div className={JIRA_GRID}>
-        <span className="min-w-0">
-          <a
-            href={issue.url}
-            target="_blank"
-            rel="noreferrer"
-            title={`Open ${issue.key} in Jira`}
-            className="inline-flex min-w-0 items-center gap-1 font-mono text-xs text-accent-ink hover:underline"
-          >
-            <span className="truncate">{issue.key}</span>
-            <Icon name="external" size="text" className="shrink-0" />
-            <span className="sr-only">(opens in a new tab)</span>
-          </a>
+      <div className={cx(JIRA_GRID, "w-full")}>
+        <span className={cx(CELL, "font-mono text-xs text-ink")} title={issue.key}>
+          {issue.key}
         </span>
         <span className={cx(CELL, "text-ink")} title={issue.summary ?? undefined}>
           {issue.summary ?? <span className="text-ink-faint">No summary</span>}
@@ -50,7 +45,7 @@ export function JiraRow({ issue }: { issue: JiraIssue }) {
             <span className="text-ink-faint">No status</span>
           ) : (
             <>
-              <StatusDot tone={jiraStatusTone(issue.status)} label={issue.status} />
+              <StatusDot tone="neutral" label={issue.status} />
               <span className="truncate">{issue.status}</span>
             </>
           )}
@@ -76,6 +71,16 @@ export function JiraRow({ issue }: { issue: JiraIssue }) {
               {issue.issueRef}
             </button>
           )}
+        </span>
+        {/* Same reveal contract as `Row`'s actions wrapper (§4.3, XTRM-883): hidden means unclickable. */}
+        <span className="pointer-events-none flex justify-end opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100">
+          <RowAction
+            icon="external"
+            label={`Open ${issue.key} in Jira`}
+            onAct={() => {
+              window.open(issue.url, "_blank", "noopener");
+            }}
+          />
         </span>
       </div>
     </Row>

@@ -7,6 +7,17 @@ import { JiraError, type JiraAdapter, type JiraBinding, type JiraIssue, type Jir
 
 /** The repository the fixture treats as Jira-integrated. */
 export const FIXTURE_JIRA_REPO = "mercury/market-data";
+
+/**
+ * Every repository the fixture treats as Jira-integrated, with the Substrate project the link join
+ * reports. `xtrm-dev/xtrm` is bound as well because the substrate fixture only carries XTRM-300..359:
+ * an app-level issue page can show a Jira chip only on a repository that also resolves a Substrate
+ * project (XTRM-820). Test data only.
+ */
+export const FIXTURE_JIRA_BINDINGS: Record<string, string> = {
+  [FIXTURE_JIRA_REPO]: "market-data",
+  "xtrm-dev/xtrm": "prj_xtrm",
+};
 export const FIXTURE_JIRA_PROJECT = "MMD";
 export const FIXTURE_JIRA_SITE = "https://example.atlassian.net";
 
@@ -35,13 +46,14 @@ const ISSUES: JiraIssue[] = [
     bindingsAvailable: true,
   },
   {
+    // Bound to an issue the substrate fixture carries, so an issue page renders the chip (XTRM-820).
     key: "MMD-700",
     summary: "Jira chips on issue pages",
     status: "Done",
     assignee: "Quant reviewer",
     url: `${FIXTURE_JIRA_SITE}/browse/MMD-700`,
     syncState: "pending",
-    issueRef: "XTRM-820",
+    issueRef: "XTRM-301",
     bindingsAvailable: true,
   },
 ];
@@ -49,8 +61,15 @@ const ISSUES: JiraIssue[] = [
 const keyProject = (key: string): string => key.slice(0, key.lastIndexOf("-"));
 
 export function createJiraFixtureAdapter(opts: { repository?: string } = {}): JiraAdapter {
-  const integrated = (opts.repository ?? FIXTURE_JIRA_REPO).toLowerCase();
-  const bound = (repository: string): boolean => repository.toLowerCase() === integrated;
+  /** The bound substrate project for a repository, or null when the fixture does not bind it. */
+  const projectFor = (repository: string): string | null => {
+    const key = repository.toLowerCase();
+    if (opts.repository !== undefined) {
+      return key === opts.repository.toLowerCase() ? (FIXTURE_JIRA_BINDINGS[FIXTURE_JIRA_REPO] ?? "market-data") : null;
+    }
+    return FIXTURE_JIRA_BINDINGS[key] ?? null;
+  };
+  const bound = (repository: string): boolean => projectFor(repository) !== null;
 
   const binding = (repository: string): JiraBinding => {
     const configured = bound(repository);
@@ -59,8 +78,8 @@ export function createJiraFixtureAdapter(opts: { repository?: string } = {}): Ji
       configured,
       reason: configured ? null : ("repo_not_bound" as JiraMissingReason),
       resolvedBy: configured ? "repo_slug" : "none",
-      pmProject: configured ? "market-data" : null,
-      substrateProject: configured ? "market-data" : null,
+      pmProject: projectFor(repository),
+      substrateProject: projectFor(repository),
       site: configured ? FIXTURE_JIRA_SITE : null,
       project: configured ? FIXTURE_JIRA_PROJECT : null,
       boardId: configured ? "7" : null,

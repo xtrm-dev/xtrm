@@ -74,6 +74,10 @@ export function JiraSurface() {
               {label}
             </span>
           ))}
+          {/* The last column carries the row action (open in Jira); it has no visible heading. */}
+          <span role="columnheader" className="sr-only">
+            Actions
+          </span>
         </div>
       </div>
       {page.issues.length === 0 ? (
