@@ -23,6 +23,11 @@ export interface ExecutionBinding {
   activationId: string | null;
   attemptId: string | null;
   sessionId: string | null;
+  // Who dispatched this execution and from which xtrm session (XTRM-839).
+  // Null for every binding that never recorded one, including all bindings
+  // written before migration 017: absent is not a placeholder.
+  dispatcherParticipantId: string | null;
+  dispatcherSessionId: string | null;
   workspace: string;
   baseCommit: string | null;
   createdAt: number;
@@ -37,6 +42,8 @@ export interface DispatchInput {
   activationId?: string | null;
   attemptId?: string | null;
   sessionId?: string | null;
+  dispatcherParticipantId?: string | null;
+  dispatcherSessionId?: string | null;
   workspace: string | WorkspaceIdentity;
   baseCommit?: string | null;
   // Authoritative optional runtime input (ADR §57): replaces manual
@@ -73,7 +80,7 @@ export function validateDispatchInput(input: unknown): string[] {
   } else if (typeof ws === "string" && ws.trim() === "") {
     problems.push("workspace must be a non-empty path or WorkspaceIdentity");
   }
-  for (const f of ["participantId", "activationId", "attemptId", "sessionId", "baseCommit"] as const) {
+  for (const f of ["participantId", "activationId", "attemptId", "sessionId", "dispatcherParticipantId", "dispatcherSessionId", "baseCommit"] as const) {
     if (d[f] !== undefined && d[f] !== null && (typeof d[f] !== "string" || (d[f] as string).trim() === "")) {
       problems.push(`${f} must be a non-empty string when present`);
     }
