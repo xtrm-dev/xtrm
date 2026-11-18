@@ -4,6 +4,7 @@ import type { AgentHostConnectionAdapter } from "./agent/host-connection.ts";
 import type { AgentAdapter } from "./agent/types.ts";
 
 import type { ResearchAdapter } from "./research/types.ts";
+import type { ProjectDispatchGraph } from "./substrate/graph.ts";
 import type { StatusBoardAdapter } from "./status-board/types.ts";
 import type { JiraAdapter } from "./jira/types.ts";
 
@@ -615,6 +616,12 @@ export interface SubstrateAdapter {
     projectId: string,
     opts?: { limit?: number; cursor?: string | null },
   ): Promise<{ entries: JournalFeedEntryWire[]; nextCursor: string | null }>;
+  /**
+   * Project dispatch graph (XTRM-868 `sb provenance graph`): participants,
+   * activations, sessions, issues and PR links, plus the durable edges between
+   * them. Read-only and bounded; an unknown dispatcher is `null`, never guessed.
+   */
+  dispatchGraph(projectId: string, opts?: { since?: number; limit?: number }): Promise<ProjectDispatchGraph>;
   editIssue(projectId: string, ref: string, expectedRevision: number, edit: IssueEdit): Promise<void>;
   setLifecycle(projectId: string, ref: string, state: Lifecycle): Promise<void>;
   addNote(projectId: string, ref: string, text: string, kind: string): Promise<void>;

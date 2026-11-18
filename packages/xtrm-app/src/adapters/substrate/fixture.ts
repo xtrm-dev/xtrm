@@ -137,7 +137,12 @@ export function createFixtureSubstrate(): SubstrateAdapter {
       return null;
     },
     async listProjects() {
-      return [{ id: "prj_xtrm", prefix: "XTRM", name: "xtrm", gitRoots: ["/home/dev/xtrm"] }];
+      // Two bindings so the console's own repository section (the status-board fixture's
+      // mercury/market-data) resolves a project too, and the Workers tree has a graph to draw.
+      return [
+        { id: "prj_xtrm", prefix: "XTRM", name: "xtrm", gitRoots: ["/home/dev/xtrm"] },
+        { id: "prj_console", prefix: "XTRM", name: "market-data", gitRoots: ["/home/dev/market-data"] },
+      ];
     },
     async listIssues() {
       return [...rows.values()].map((r) => r.summary);
@@ -209,6 +214,64 @@ export function createFixtureSubstrate(): SubstrateAdapter {
       const limit = opts?.limit ?? 200;
       const window = opts?.before !== undefined ? all.filter((e) => e.sequence < opts.before!) : all;
       return structuredClone(window.slice(0, limit));
+    },
+    async dispatchGraph(projectId, opts) {
+      // A three-level chain (lead -> worker -> activation), one binding that
+      // predates the dispatcher write path (core #963) and therefore has no
+      // dispatcher, and one PR delivery. Bounded like the real read.
+      const base = Date.parse("2026-11-18T09:00:00Z");
+      const limit = opts?.limit ?? 200;
+      const bindings = [
+        // The lead is a dispatcher with no binding of its own: the graph attests who
+        // dispatched whom, and the board names the worker. Chain root, no issue trail.
+        { binding: "exb_fx_worker", activation: "act_fx_board_worker", participant: "board-worker", dispatcher: "console-lead", dispatcherSession: "session-console-lead", issueId: "iss_fixture_817", ref: "XTRM-817", at: base },
+        { binding: "exb_fx_engineer", activation: "act_fx_test_engineer", participant: "test-engineer", dispatcher: "board-worker", dispatcherSession: "session-board-worker", issueId: "iss_fixture_813", ref: "XTRM-813", at: base + 60_000 },
+        { binding: "exb_fx_quant", activation: "act_fx_quant_reviewer", participant: "quant-reviewer", dispatcher: "console-lead", dispatcherSession: "session-console-lead", issueId: "iss_fixture_820", ref: "XTRM-820", at: base + 120_000 },
+        // A launch that predates the dispatcher write path (core #963): no dispatcher.
+        { binding: "exb_fx_reviewer", activation: "act_fx_pr_reviewer", participant: "pr-reviewer", dispatcher: null, dispatcherSession: null, issueId: "iss_fixture_816", ref: "XTRM-816", at: base + 180_000 },
+      ].filter((b) => opts?.since === undefined || b.at >= opts.since);
+      const shown = bindings.slice(0, limit);
+      const nodes = new Map<string, { id: string; kind: "participant" | "activation" | "issue" | "pull_request"; label: string; participantId: string | null }>();
+      const edges: Array<{ kind: "works_on" | "dispatched_by" | "delivers"; from: string | null; to: string; issueId: string; issueRef: string | null; at: number; bindingId: string | null; dispatcherSessionId: string | null }> = [];
+      for (const b of shown) {
+        const executor = `activation:${b.activation}`;
+        nodes.set(executor, { id: executor, kind: "activation", label: b.activation, participantId: b.participant });
+        const issueNode = `issue:${b.issueId}`;
+        nodes.set(issueNode, { id: issueNode, kind: "issue", label: b.ref, participantId: null });
+        edges.push({ kind: "works_on", from: executor, to: issueNode, issueId: b.issueId, issueRef: b.ref, at: b.at, bindingId: b.binding, dispatcherSessionId: null });
+        if (b.dispatcher) {
+          const participant = `participant:${b.dispatcher}`;
+          nodes.set(participant, { id: participant, kind: "participant", label: b.dispatcher, participantId: b.dispatcher });
+        }
+        // The dispatcher may be absent: the edge keeps `from: null` so the UI
+        // groups the executor under "unknown dispatcher" instead of guessing.
+        edges.push({
+          kind: "dispatched_by",
+          from: b.dispatcher ? `participant:${b.dispatcher}` : null,
+          to: executor,
+          issueId: b.issueId,
+          issueRef: b.ref,
+          at: b.at,
+          bindingId: b.binding,
+          dispatcherSessionId: b.dispatcherSession,
+        });
+      }
+      const pr = { issueId: "iss_fixture_816", repo: "mercury/market-data", number: 912, at: base + 240_000 };
+      if (shown.some((b) => b.issueId === pr.issueId) && (opts?.since === undefined || pr.at >= opts.since)) {
+        const node = `pull_request:${pr.repo}#${pr.number}`;
+        nodes.set(node, { id: node, kind: "pull_request", label: `${pr.repo}#${pr.number}`, participantId: null });
+        edges.push({ kind: "delivers", from: `issue:${pr.issueId}`, to: node, issueId: pr.issueId, issueRef: "XTRM-816", at: pr.at, bindingId: null, dispatcherSessionId: null });
+      }
+      return {
+        projectId,
+        since: opts?.since ?? null,
+        limit,
+        nodes: [...nodes.values()].sort((a, b) => (a.kind === b.kind ? a.id.localeCompare(b.id) : a.kind.localeCompare(b.kind))),
+        edges: edges.sort((a, b) => a.at - b.at || a.kind.localeCompare(b.kind)),
+        matchedBindings: bindings.length,
+        omittedBindings: bindings.length - shown.length,
+        truncated: bindings.length > shown.length,
+      };
     },
     async editIssue(_project, ref, expectedRevision, edit) {
       const r = get(ref);
