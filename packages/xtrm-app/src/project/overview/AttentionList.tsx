@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import type { Answer, BoardRecord, FollowUp, ProjectHealth, Proposal, Question, Worker } from "../../adapters/status-board/types.ts";
 import { Badge, type BadgeTone } from "../../ui/badge.tsx";
-import { Row, ago } from "../../ui/primitives.tsx";
+import { Row, ago, cx } from "../../ui/primitives.tsx";
 
 /**
  * The attention list (§5 Project): one ranked list of things that need the
@@ -252,7 +252,26 @@ export function attentionCounts(items: ReadonlyArray<AttentionItem>): AttentionC
   return counts;
 }
 
-/** The ranked rows. `Row` carries the navigation; the right column names where the row goes. */
+/**
+ * Trailing destination hint. It reserves its column and appears on row hover or keyboard focus
+ * (§4.3: hover-revealed secondary affordances); the row itself is already the link, so the hint is
+ * decorative and stays out of the accessible name.
+ */
+export function RowHint({ section, className }: { section: string; className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cx(
+        "shrink-0 text-right text-xs text-ink-faint opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100",
+        className ?? "w-28",
+      )}
+    >
+      → {section}
+    </span>
+  );
+}
+
+/** The ranked rows. `Row` carries the navigation; the trailing hint names where the row goes. */
 export function AttentionList({ items }: { items: ReadonlyArray<AttentionItem> }) {
   const navigate = useNavigate();
   if (items.length === 0) {
@@ -274,7 +293,7 @@ export function AttentionList({ items }: { items: ReadonlyArray<AttentionItem> }
             {item.detail && <span className="hidden max-w-[36%] min-w-0 truncate text-xs text-ink-faint lg:block">{item.detail}</span>}
             {item.refs.length > 0 && <span className="shrink-0 font-mono text-xs text-ink-faint">{item.refs.join(" ")}</span>}
             <span className="w-24 shrink-0 text-right text-xs text-ink-faint tabular">{item.ageLabel}</span>
-            <span className="w-28 shrink-0 text-right text-xs text-ink-faint">→ {item.section}</span>
+            <RowHint section={item.section} />
           </Row>
         </li>
       ))}

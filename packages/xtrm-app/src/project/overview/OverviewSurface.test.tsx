@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { fixtureAdapters } from "../../adapters/index.tsx";
 import { FIXTURE_BOARD_REPO, createStatusBoardFixtureAdapter } from "../../adapters/status-board/fixture.ts";
@@ -111,6 +111,18 @@ describe("Project Overview", () => {
     const row = await screen.findByRole("button", { name: /Is the board sync healthy\?/ });
     fireEvent.click(row);
     await waitFor(() => expect(router.state.location.pathname).toBe(`/rep/${FIXTURE_BOARD_REPO}/project/questions`));
+  });
+
+  it("keeps the destination hint out of the row name and reveals it on hover", async () => {
+    renderOverview();
+    const row = await screen.findByRole("button", { name: /Is the board sync healthy\?/ });
+    expect(screen.queryByRole("button", { name: /→/ })).toBeNull();
+    expect(row.getAttribute("title")).toContain("Is the board sync healthy?");
+    const hint = within(row).getByText("→ Questions");
+    expect(hint.getAttribute("aria-hidden")).toBe("true");
+    expect(hint.className).toContain("opacity-0");
+    expect(hint.className).toContain("group-hover/row:opacity-100");
+    expect(hint.className).toContain("group-focus-within/row:opacity-100");
   });
 
   it("links a blocked worker row to the Workers surface", async () => {

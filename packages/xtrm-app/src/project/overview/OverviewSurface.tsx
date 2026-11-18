@@ -7,7 +7,7 @@ import { useShell } from "../../shell/context.tsx";
 import { ErrorState, LoadingState, Row, ago } from "../../ui/primitives.tsx";
 import { IntegrationState } from "../IntegrationState.tsx";
 import { ProjectShell } from "../ProjectShell.tsx";
-import { AttentionList, attentionCounts, buildAttention, type AttentionReason } from "./AttentionList.tsx";
+import { AttentionList, RowHint, attentionCounts, buildAttention, type AttentionReason } from "./AttentionList.tsx";
 
 /**
  * Overview (§5): the operator's first question — what needs attention in this
@@ -114,7 +114,7 @@ function NowNext({ record, base }: { record: BoardRecord<BoardNext> | null; base
               {record.doc.owner && <span className="shrink-0 text-xs text-ink-faint">{record.doc.owner}</span>}
               {ref && <span className="shrink-0 font-mono text-xs text-ink-faint">{ref}</span>}
               <span className="w-24 shrink-0 text-right text-xs text-ink-faint tabular">{record.doc.at ? ago(record.doc.at) : ""}</span>
-              {href && <span className="w-20 shrink-0 text-right text-xs text-ink-faint">→ Issue</span>}
+              {href && <RowHint section="Issue" className="w-20" />}
             </Row>
           </li>
         </ul>
