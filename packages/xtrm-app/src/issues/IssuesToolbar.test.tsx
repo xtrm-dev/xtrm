@@ -22,13 +22,31 @@ describe("Issues toolbar (XTRM-855)", () => {
     // The primary action appears once the write capability resolves; it keeps ink text.
     const primary = await screen.findByRole("button", { name: "New issue" }, { timeout: 5000 });
     expect(primary.className.split(/\s+/)).toContain("font-medium");
+    // A ghost control may carry `hover:bg-hover`; the chip it replaced carried the `bg-pressed` fill.
     for (const label of ["Status", "Priority", "Type"]) {
       const trigger = screen.getByRole("button", { name: `${label} filter` });
       const tokens = trigger.className.split(/\s+/);
       expect(tokens).toContain("text-ink-muted");
-      expect(tokens).not.toContain("bg-hover");
+      expect(tokens).not.toContain("bg-pressed");
     }
-    expect(screen.getByRole("button", { name: /Order by/ }).className.split(/\s+/)).not.toContain("bg-hover");
+    expect(screen.getByRole("button", { name: /Order by/ }).className.split(/\s+/)).not.toContain("bg-pressed");
+  });
+
+  it("counts the filter against the same population the facets leave visible", async () => {
+    renderIssues();
+    await screen.findByRole("button", { name: "New issue" }, { timeout: 5000 });
+    fireEvent.click(screen.getByRole("button", { name: "Filter this list" }));
+    fireEvent.change(screen.getByLabelText("Filter issues"), { target: { value: "XTRM-359" } });
+    // Unfaceted, the population is every loaded issue.
+    expect(await screen.findByText("1 of 60")).toBeTruthy();
+
+    // A Status facet narrows the population, so the denominator must narrow with it instead of
+    // mixing a post-facet numerator with the all-loaded denominator ("1 of 60" for one done issue).
+    fireEvent.click(screen.getByRole("button", { name: "Status filter" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "done" }));
+    const narrowed = await screen.findByText(/^\d+ of \d+$/);
+    const total = Number(narrowed.textContent!.split(" of ")[1]);
+    expect(total).toBeLessThan(60);
   });
 
   it("names a chosen value in the trigger and clears it from the menu", async () => {
@@ -37,7 +55,7 @@ describe("Issues toolbar (XTRM-855)", () => {
     fireEvent.click(await screen.findByRole("menuitem", { name: "P1" }));
     const chosen = await screen.findByRole("button", { name: "Priority filter: P1" });
     // A chosen value is ink text, not a filled chip.
-    expect(chosen.className.split(/\s+/)).not.toContain("bg-hover");
+    expect(chosen.className.split(/\s+/)).not.toContain("bg-pressed");
     expect(chosen.textContent).toContain("P1");
     fireEvent.click(chosen);
     fireEvent.click(await screen.findByRole("menuitem", { name: "Clear" }));
