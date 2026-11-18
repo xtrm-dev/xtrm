@@ -197,9 +197,10 @@ describe("statusBoard live adapter: binding and health", () => {
 });
 
 describe("statusBoard live adapter: error mapping", () => {
+  // An unbound repository is not in this table: binding()/health() report it and the data reads
+  // answer an empty page / null (MEDIUM 3), so it is covered by the review-fix tests instead.
   const cases: Array<{ name: string; status: number; body: unknown; kind: string }> = [
     { name: "bad request", status: 400, body: { ok: false, error: "unknown collection" }, kind: "bad_request" },
-    { name: "unbound", status: 404, body: { ok: false, configured: false, reason: "config_absent" }, kind: "unbound" },
     { name: "credential", status: 503, body: { ok: false, error: "status board credential unavailable" }, kind: "credential" },
     { name: "upstream", status: 502, body: { ok: false, error: "status board read failed" }, kind: "upstream" },
     { name: "inconclusive read", status: 502, body: { ok: false, reason: "inconclusive" }, kind: "upstream" },
@@ -313,5 +314,125 @@ describe("statusBoard registration", () => {
     expect(adaptersFromEnv({}).statusBoard.source).toBe("fixture");
     expect(adaptersFromEnv({ VITE_XTRM_STATUS_BOARD: "live" }).statusBoard.source).toBe("live");
     expect(fixtureAdapters.statusBoard.source).toBe("fixture");
+  });
+});
+
+describe("statusBoard review fixes (#419)", () => {
+  it("surfaces an unparseable record document as a gap instead of an empty doc (MEDIUM 1)", async () => {
+    const { fetchImpl } = responder(() => ({ status: 200, body: { ok: true, record: wire("board/next", "}{") } }));
+    const adapter = createStatusBoardLiveAdapter({ fetchImpl });
+
+    const record = await adapter.record(REPO, "board/next");
+    expect(record?.doc).toEqual({});
+    expect(record?.gaps).toEqual([{ path: "board/next", field: "doc", value: "unparseable json" }]);
+
+    // boardNext maps the same document and must keep carrying that gap.
+    const next = await adapter.boardNext(REPO);
+    expect(next?.gaps).toEqual([{ path: "board/next", field: "doc", value: "unparseable json" }]);
+  });
+
+  it("flags every declared field carried in the wrong type (MEDIUM 2)", async () => {
+    const { fetchImpl } = responder(() => okPage([wire("workers/odd", { claimUntil: 1_730_000_000, milestoneAt: 1_730_000_001, ctxPct: "42" })]));
+    const page = await createStatusBoardLiveAdapter({ fetchImpl }).listWorkers(REPO);
+
+    expect(page.records[0]!.doc.claimUntil).toBeUndefined();
+    expect(page.records[0]!.doc.milestoneAt).toBeUndefined();
+    expect(page.records[0]!.doc.ctxPct).toBeUndefined();
+    expect(gapsFor(page.gaps, "claimUntil")).toHaveLength(1);
+    expect(gapsFor(page.gaps, "milestoneAt")).toHaveLength(1);
+    expect(gapsFor(page.gaps, "ctxPct")[0]!.value).toBe("42");
+
+    const schedule = responder(() => okPage([wire("schedule/2026-11-17", { events: [{ id: "e", kind: "pr", at: 1_730_000_000, end: null }] })]));
+    const events = await createStatusBoardLiveAdapter({ fetchImpl: schedule.fetchImpl }).listSchedule(REPO);
+    expect(gapsFor(events.gaps, "at")).toHaveLength(1);
+    expect(events.records[0]!.doc.at).toBeUndefined();
+  });
+
+  it("live and fixture agree for an unbound repository, with no network call (MEDIUM 3)", async () => {
+    const unbound = { status: 404, body: { ok: false, configured: false, reason: "repo_not_bound", repository: "xtrm-dev/xtrm", resolvedBy: "none" } };
+    const { fetchImpl } = responder(() => unbound);
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const adapters = [createStatusBoardLiveAdapter({ fetchImpl }), createStatusBoardFixtureAdapter()];
+    const repo = "xtrm-dev/xtrm";
+
+    for (const adapter of adapters) {
+      const binding = await adapter.binding(repo);
+      expect(binding.configured).toBe(false);
+      expect(binding.reason).toBe("repo_not_bound");
+      expect(await adapter.health(repo)).toMatchObject({ configured: false, stale: null, lastSyncOkAt: null });
+      expect(await adapter.listWorkers(repo)).toEqual({ records: [], truncated: false, gaps: [], cachedAt: null });
+      expect((await adapter.listSchedule(repo)).records).toEqual([]);
+      expect(await adapter.record(repo, "workers/board-worker")).toBeNull();
+      expect(await adapter.boardNext(repo)).toBeNull();
+    }
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("caps the record cache and evicts the oldest entry (MEDIUM 4)", async () => {
+    let clock = 1_000;
+    const { fetchImpl, calls } = responder((url) => ({ status: 200, body: { ok: true, record: wire(new URL(url, "http://local").searchParams.get("path")!, { title: "x" }) } }));
+    const adapter = createStatusBoardLiveAdapter({ fetchImpl, cacheMs: 1_000_000, now: () => clock });
+
+    for (let i = 0; i < 501; i += 1) await adapter.record(REPO, `workers/w${i}`);
+    expect(calls).toHaveLength(501);
+
+    // The first path was evicted; the newest is still cached.
+    await adapter.record(REPO, "workers/w0");
+    expect(calls).toHaveLength(502);
+    await adapter.record(REPO, "workers/w500");
+    expect(calls).toHaveLength(502);
+    clock += 1;
+  });
+
+  it("turns a binding or health reply without its payload into a typed error (LOW 6)", async () => {
+    const binding = responder(() => ({ status: 200, body: { ok: true } }));
+    await expect(createStatusBoardLiveAdapter({ fetchImpl: binding.fetchImpl }).binding(REPO)).rejects.toMatchObject({ kind: "malformed" });
+
+    const health = responder(() => ({ status: 200, body: { ok: true } }));
+    await expect(createStatusBoardLiveAdapter({ fetchImpl: health.fetchImpl }).health(REPO)).rejects.toMatchObject({ kind: "malformed" });
+  });
+
+  it("does not read a missing stale flag as fresh (LOW 7)", async () => {
+    const { fetchImpl } = responder(() => ({
+      status: 200,
+      body: {
+        ok: true,
+        health: {
+          configured: true,
+          reason: null,
+          site: "board.here.now",
+          stateDir: null,
+          scheduleActive: true,
+          scheduleActiveReason: null,
+          runInProgress: false,
+          runInProgressReason: null,
+          timerUnit: null,
+          unitActive: true,
+          unitActiveReason: null,
+          lastSyncOkAt: null,
+          driftCount: 0,
+          checkedAt: "2026-11-17T22:00:00.000Z",
+        },
+      },
+    }));
+    const health = await createStatusBoardLiveAdapter({ fetchImpl }).health(REPO);
+    expect(health.stale).toBeNull();
+  });
+
+  it("treats only the bridge's record_not_found as absent (LOW 8)", async () => {
+    let reply: Reply = { status: 404, body: { ok: false, error: "record not found" } };
+    const { fetchImpl } = responder(() => reply);
+    const adapter = createStatusBoardLiveAdapter({ fetchImpl });
+
+    expect(await adapter.record(REPO, "workers/x")).toBeNull();
+
+    reply = { status: 404, body: { ok: false, error: "some other failure" } };
+    await expect(adapter.record(REPO, "workers/y")).rejects.toMatchObject({ kind: "upstream" });
+  });
+
+  it("keeps the fixture free of the retired vocabulary (LOW 5)", async () => {
+    const page = await fixtureStatusBoard.listSchedule(FIXTURE_BOARD_REPO);
+    expect(JSON.stringify(page)).not.toContain("Program");
   });
 });

@@ -54,7 +54,7 @@ export interface WireHealth {
   unitActiveReason: string | null;
   lastSyncOkAt: string | null;
   driftCount: number | null;
-  stale: boolean;
+  stale?: boolean | null;
   checkedAt: string;
 }
 
@@ -93,15 +93,34 @@ const stringList = (value: unknown): string[] | undefined => {
 const boolean = (value: unknown): boolean | null => (typeof value === "boolean" ? value : null);
 
 /**
- * A declared field the board carried in an unusable type (a number where a status belongs). The
- * value is preserved nowhere it would be coerced into text, and the gap says so instead of the
- * field silently disappearing as "absent".
+ * A declared field the board carried in an unusable type (an epoch number where a timestamp
+ * belongs, a string where `ctxPct` is a number). Every declared field of a record is checked —
+ * not only the enum-ish ones — because a wrong-typed field would otherwise vanish as "absent"
+ * and read like a record that never carried it.
  */
-const flagUnusable = (gaps: BoardGap[], path: string, source: Record<string, unknown> | null, fields: readonly string[]): void => {
-  for (const field of fields) {
+const flagUnusable = (
+  gaps: BoardGap[],
+  path: string,
+  source: Record<string, unknown> | null,
+  fields: { strings?: readonly string[]; numbers?: readonly string[]; stringLists?: readonly string[] },
+): void => {
+  const report = (field: string, raw: unknown): void => {
+    gaps.push({ path, field, value: typeof raw === "object" ? JSON.stringify(raw) : String(raw) });
+  };
+  for (const field of fields.strings ?? []) {
     const raw = source?.[field];
     if (raw === undefined || raw === null || typeof raw === "string") continue;
-    gaps.push({ path, field, value: typeof raw === "object" ? JSON.stringify(raw) : String(raw) });
+    report(field, raw);
+  }
+  for (const field of fields.numbers ?? []) {
+    const raw = source?.[field];
+    if (raw === undefined || raw === null || (typeof raw === "number" && Number.isFinite(raw))) continue;
+    report(field, raw);
+  }
+  for (const field of fields.stringLists ?? []) {
+    const raw = source?.[field];
+    if (raw === undefined || raw === null || (Array.isArray(raw) && raw.every((item) => typeof item === "string"))) continue;
+    report(field, raw);
   }
 };
 
@@ -168,18 +187,19 @@ export function mapHealth(wire: WireHealth): ProjectHealth {
     scheduleActiveReason: wire.scheduleActive === null ? probeReasonOf(wire.scheduleActiveReason) : null,
     runInProgress: boolean(wire.runInProgress),
     runInProgressReason: wire.runInProgress === null ? probeReasonOf(wire.runInProgressReason) : null,
-    stale: wire.stale === true,
+    stale: typeof wire.stale === "boolean" ? wire.stale : null,
     checkedAt: wire.checkedAt,
   };
 }
 
-export const recordOf = <T>(wire: WireRecord, doc: T): BoardRecord<T> => ({
+export const recordOf = <T>(wire: WireRecord, doc: T, gaps: BoardGap[] = []): BoardRecord<T> => ({
   path: wire.path,
   id: text(wire.id) ?? null,
   // The bridge does not return the store's created time; it is never invented.
   createdAt: null,
   updatedAt: text(wire.updatedAt) ?? null,
   doc,
+  gaps,
 });
 
 /** `workers/<name>`: the name is the record's path segment when the document omits it. */
@@ -188,8 +208,11 @@ export function mapWorker(wire: WireRecord): Mapped<Worker> {
   const source = objectOf(doc);
   const gaps: BoardGap[] = gap ? [gap] : [];
   // The contract declares no closed worker status vocabulary, so a status string is preserved and
-  // never flagged; only a value that is not a string is a gap.
-  flagUnusable(gaps, wire.path, source, ["name", "kind", "status"]);
+  // never flagged; only a value whose type is not the declared one is a gap.
+  flagUnusable(gaps, wire.path, source, {
+    strings: ["name", "kind", "where", "runtime", "issue", "task", "status", "milestone", "milestoneAt", "claimUntil", "reportsTo", "note"],
+    numbers: ["ctxPct"],
+  });
   const worker: Worker = { name: text(source?.["name"]) ?? segment(wire.path) };
   const kind = text(source?.["kind"]);
   if (kind) worker.kind = kind;
@@ -229,6 +252,7 @@ export function mapScheduleDay(wire: WireRecord): Mapped<ScheduleEvent[]> {
     } else if (!(SCHEDULE_EVENT_KINDS as readonly string[]).includes(kind)) {
       gaps.push({ path: wire.path, field: "kind", value: kind });
     }
+    flagUnusable(gaps, wire.path, event, { strings: ["id", "at", "end", "ref", "label", "status", "note", "noteSrc", "url", "createdBy"] });
     const assembled: ScheduleEvent = { id: text(event["id"]) ?? `${day}#${index}`, day };
     if (kind !== undefined) assembled.kind = kind;
     for (const field of ["at", "end", "ref", "label", "status", "note", "noteSrc", "url", "createdBy"] as const) {
@@ -250,12 +274,11 @@ function mapDoc<T extends object>(
   build: () => T,
   textFields: readonly string[],
   listFields: readonly string[] = [],
-  enumFields: readonly string[] = [],
 ): Mapped<T> {
   const { doc, gap } = normaliseDoc(wire.path, wire.doc);
   const source = objectOf(doc);
   const gaps: BoardGap[] = gap ? [gap] : [];
-  flagUnusable(gaps, wire.path, source, enumFields);
+  flagUnusable(gaps, wire.path, source, { strings: textFields, stringLists: listFields });
   const value = build();
   const bag = value as Record<string, unknown>;
   for (const field of textFields) {
@@ -278,15 +301,15 @@ export function mapAnswer(wire: WireRecord): Mapped<Answer> {
 }
 
 export function mapFollowUp(wire: WireRecord): Mapped<FollowUp> {
-  return mapDoc(wire, () => ({ ref: segment(wire.path) }), ["title", "plain", "status", "priority", "area", "owner", "when"], ["refs"], ["status", "priority"]);
+  return mapDoc(wire, () => ({ ref: segment(wire.path) }), ["title", "plain", "status", "priority", "area", "owner", "when"], ["refs"]);
 }
 
 export function mapStatusRow(wire: WireRecord): Mapped<StatusRow> {
-  return mapDoc(wire, () => ({ session: segment(wire.path) }), ["at", "state", "status", "note", "issue"], [], ["state", "status"]);
+  return mapDoc(wire, () => ({ session: segment(wire.path) }), ["at", "state", "status", "note", "issue"]);
 }
 
 export function mapProposal(wire: WireRecord): Mapped<Proposal> {
-  return mapDoc(wire, () => ({ id: segment(wire.path) }), ["at", "title", "status", "owner", "note"], ["refs"], ["status"]);
+  return mapDoc(wire, () => ({ id: segment(wire.path) }), ["at", "title", "status", "owner", "note"], ["refs"]);
 }
 
 export function mapBoardNext(wire: WireRecord): Mapped<BoardNext> {
@@ -303,7 +326,7 @@ export function assemblePage<T>(wire: WireListBody, map: (record: WireRecord) =>
       continue;
     }
     const mapped = map(raw);
-    records.push(recordOf(raw, mapped.value));
+    records.push(recordOf(raw, mapped.value, mapped.gaps));
     gaps.push(...mapped.gaps);
   }
   return { records, truncated: wire.truncated === true, gaps, cachedAt: text(wire.cachedAt) ?? null };
@@ -319,7 +342,7 @@ export function assembleSchedulePage(wire: WireListBody): BoardPage<ScheduleEven
       continue;
     }
     const mapped = mapScheduleDay(raw);
-    for (const event of mapped.value) records.push(recordOf(raw, event));
+    for (const event of mapped.value) records.push(recordOf(raw, event, mapped.gaps));
     gaps.push(...mapped.gaps);
   }
   return { records, truncated: wire.truncated === true, gaps, cachedAt: text(wire.cachedAt) ?? null };
@@ -330,6 +353,8 @@ export const STATUS_BOARD_BASE = "/xtrm-api/status-board";
 export const RECORD_CACHE_MS = 30_000;
 /** The bridge serves at most 200 records per request and reports `truncated` rather than paging. */
 export const MAX_PAGE = 200;
+/** At most this many record paths are cached; the oldest entry is dropped when the cap is reached. */
+export const RECORD_CACHE_MAX = 500;
 
 const clampLimit = (limit: number | undefined): number => {
   if (typeof limit !== "number" || !Number.isFinite(limit)) return MAX_PAGE;
@@ -389,8 +414,16 @@ export function createStatusBoardLiveAdapter(opts: LiveStatusBoardOptions = {}):
     return new StatusBoardError("upstream", "status board read failed", status);
   };
 
+  const emptyPage = <T>(): BoardPage<T> => ({ records: [], truncated: false, gaps: [], cachedAt: null });
+
+  /**
+   * MEDIUM 3: the live and fixture sources agree for an unbound repository — the binding reports
+   * unbound, and the data reads answer "nothing here" instead of raising. The bridge refuses an
+   * unbound repository before it reaches the board, so an empty page costs no upstream read.
+   */
   const list = async <T>(repository: string, collection: string, limit: number | undefined, map: (record: WireRecord) => Mapped<T>): Promise<BoardPage<T>> => {
     const { status, body } = await get("/list", { repo: repository, prefix: collection, limit: clampLimit(limit) });
+    if (status === 404 && body["configured"] === false) return emptyPage();
     if (status !== 200) throw fail(status, body);
     return assemblePage(body as unknown as WireListBody, map);
   };
@@ -407,30 +440,52 @@ export function createStatusBoardLiveAdapter(opts: LiveStatusBoardOptions = {}):
     scheduleActiveReason: null,
     runInProgress: null,
     runInProgressReason: null,
-    stale: false,
+    // Nothing was synced, so freshness is unknown rather than "not stale".
+    stale: null,
     checkedAt,
   });
+
+  /** Cache write with a hard cap: the oldest entry goes when a new path would exceed it. */
+  const remember = (key: string, value: BoardRecord<unknown> | null): void => {
+    if (recordCache.has(key)) {
+      recordCache.delete(key);
+    } else if (recordCache.size >= RECORD_CACHE_MAX) {
+      const oldest = recordCache.keys().next();
+      if (!oldest.done) recordCache.delete(oldest.value);
+    }
+    recordCache.set(key, { at: now(), value });
+  };
 
   const readRecord = async <T = unknown>(repository: string, path: string): Promise<BoardRecord<T> | null> => {
     const key = `${repository}:${path}`;
     const hit = recordCache.get(key);
-    if (hit && now() - hit.at < cacheMs) return hit.value as BoardRecord<T> | null;
-    if (hit) recordCache.delete(key);
+    if (hit) {
+      // Keep the entry's fetch time (the TTL must not slide) but refresh its LRU position.
+      recordCache.delete(key);
+      if (now() - hit.at < cacheMs) {
+        recordCache.set(key, hit);
+        return hit.value as BoardRecord<T> | null;
+      }
+    }
     const { status, body } = await get("/record", { repo: repository, path });
     let value: BoardRecord<T> | null;
     if (status === 200) {
       const wire = body["record"] as WireRecord;
       if (!wire || typeof wire.path !== "string") throw new StatusBoardError("malformed", "status board bridge returned an unexpected record", status);
-      const { doc } = normaliseDoc(wire.path, wire.doc);
-      value = recordOf(wire, doc as T);
-    } else if (status === 404 && body["configured"] !== false) {
-      // The record is absent; the repository is not unbound.
+      const { doc, gap } = normaliseDoc(wire.path, wire.doc);
+      // MEDIUM 1: an unparseable document is a record *with a gap*, never a silent empty doc.
+      value = recordOf(wire, doc as T, gap ? [gap] : []);
+    } else if (status === 404 && body["configured"] === false) {
+      // MEDIUM 3: unbound repository reads like the fixture — no record, no error, no cache.
+      return null;
+    } else if (status === 404 && body["error"] === "record not found") {
+      // LOW 8: absent only when the bridge says the record is absent.
       value = null;
     } else {
       throw fail(status, body);
     }
     evictExpired(recordCache, now(), cacheMs);
-    recordCache.set(key, { at: now(), value: value as BoardRecord<unknown> | null });
+    remember(key, value as BoardRecord<unknown> | null);
     return value;
   };
 
@@ -439,7 +494,10 @@ export function createStatusBoardLiveAdapter(opts: LiveStatusBoardOptions = {}):
 
     async binding(repository) {
       const { status, body } = await get("/binding", { repo: repository });
-      if (status === 200) return mapBinding(body["binding"] as WireBinding);
+      if (status === 200) {
+        if (!body["binding"] || typeof body["binding"] !== "object") throw new StatusBoardError("malformed", "status board bridge returned no binding", status);
+        return mapBinding(body["binding"] as WireBinding);
+      }
       if (status === 404 && body["configured"] === false) {
         return {
           repository,
@@ -457,7 +515,10 @@ export function createStatusBoardLiveAdapter(opts: LiveStatusBoardOptions = {}):
 
     async health(repository) {
       const { status, body } = await get("/health", { repo: repository });
-      if (status === 200) return mapHealth(body["health"] as WireHealth);
+      if (status === 200) {
+        if (!body["health"] || typeof body["health"] !== "object") throw new StatusBoardError("malformed", "status board bridge returned no health", status);
+        return mapHealth(body["health"] as WireHealth);
+      }
       if (status === 404 && body["configured"] === false) return unboundHealth(unboundReasonOf(body["reason"]), new Date(now()).toISOString());
       throw fail(status, body);
     },
@@ -468,6 +529,7 @@ export function createStatusBoardLiveAdapter(opts: LiveStatusBoardOptions = {}):
 
     async listSchedule(repository, opts) {
       const { status, body } = await get("/list", { repo: repository, prefix: "schedule", limit: clampLimit(opts?.limit) });
+      if (status === 404 && body["configured"] === false) return emptyPage();
       if (status !== 200) throw fail(status, body);
       return assembleSchedulePage(body as unknown as WireListBody);
     },
