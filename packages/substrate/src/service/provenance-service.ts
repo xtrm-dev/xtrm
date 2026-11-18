@@ -44,6 +44,7 @@ import {
   type ProvenanceBundle,
   type WorkReceipt,
 } from "../domain/provenance.ts";
+import { formatHumanRef } from "../domain/issue.ts";
 import type { IssueService } from "./issue-service.ts";
 import type { JournalService } from "./journal-service.ts";
 import type { JournalEntry } from "../domain/journal.ts";
@@ -54,6 +55,11 @@ import {
 } from "../domain/closure.ts";
 
 export const BUNDLE_DIR = ".xtrm/provenance/bundles";
+
+/** Default binding bound of a project dispatch graph read (XTRM-868). */
+export const DISPATCH_GRAPH_LIMIT = 200;
+/** Largest binding bound the dispatch graph read accepts. */
+export const DISPATCH_GRAPH_MAX_LIMIT = 1000;
 
 interface Row {
   [key: string]: unknown;
@@ -116,6 +122,76 @@ function dispatcherView(b: ExecutionBinding): DispatcherView {
     dispatcherParticipantId: b.dispatcherParticipantId,
     dispatcherSessionId: b.dispatcherSessionId,
   };
+}
+
+/** Vertex kinds of a project dispatch graph. */
+export type DispatchGraphNodeKind = "participant" | "activation" | "issue" | "pull_request";
+
+/** One vertex; `id` is the durable key an edge names. */
+export interface DispatchGraphNode {
+  /** `participant:<holder>` | `activation:<id>` | `issue:<issueId>` | `pull_request:<repo>#<n>`. */
+  id: string;
+  kind: DispatchGraphNodeKind;
+  /** Human label: the holder, the activation id, the human ref, or `repo#n`. */
+  label: string;
+  /**
+   * The execution identity the binding recorded for this node, or null for an
+   * Issue and a PR (they carry no executor). An activation keeps its holder
+   * here, so a held activation never reads as an anonymous process.
+   */
+  participantId: string | null;
+}
+
+/**
+ * Edge kinds. `works_on` and `dispatched_by` project one execution binding;
+ * `delivers` projects a live `created_from` PR link and no binding.
+ */
+export type DispatchGraphEdgeKind = "works_on" | "dispatched_by" | "delivers";
+
+/** One edge. A missing identity is absent (`null`), never a placeholder. */
+export interface DispatchGraphEdge {
+  kind: DispatchGraphEdgeKind;
+  /**
+   * Source node. `null` on a `dispatched_by` edge whose binding records no
+   * dispatcher participant: the binding predates migration 017, or it was
+   * written without one.
+   */
+  from: string | null;
+  to: string;
+  issueId: string;
+  /** When the projecting row was written: the binding's or the PR link's time. */
+  at: number;
+  /** The execution binding behind the edge; `null` on `delivers`, which is a PR link. */
+  bindingId: string | null;
+  /** `dispatched_by` only: the recorded dispatcher session, or null when absent. */
+  dispatcherSessionId: string | null;
+}
+
+/** A project's dispatch graph, bounded by `limit` bindings. */
+export interface DispatchGraph {
+  projectId: string;
+  /** Lower bound on binding time (ms since epoch), or null when unbounded. */
+  since: number | null;
+  /** The binding bound the read applied. */
+  limit: number;
+  nodes: DispatchGraphNode[];
+  edges: DispatchGraphEdge[];
+  /** Bindings the project and `since` filter matched, before the limit. */
+  matchedBindings: number;
+  /** Bindings the limit left out; `truncated` is true exactly when this is above zero. */
+  omittedBindings: number;
+  truncated: boolean;
+}
+
+interface DispatchBindingRow {
+  id: string;
+  issue_id: string;
+  activation_id: string | null;
+  participant_id: string | null;
+  dispatcher_participant_id: string | null;
+  dispatcher_session_id: string | null;
+  created_at: number;
+  human_number: number;
 }
 
 /**
@@ -629,6 +705,176 @@ export class ProvenanceService {
       }
     }
     return { activationId, issueIds, bindingIds: bindings.map((b) => b.id), receiptIds, artifacts, dispatchers: bindings.map(dispatcherView) };
+  }
+
+  /**
+   * Project dispatch graph (XTRM-868): a project's execution bindings as graph
+   * edges, so a Console reads the whole dispatch tree in one bounded call
+   * instead of joining per-Issue traces.
+   *
+   * Vertices are participants, activations, Issues and pull requests. Edges are
+   * `works_on` (binding executor -> Issue), `dispatched_by` (recorded dispatcher
+   * -> executor) and `delivers` (Issue -> PR, live `created_from` links only).
+   * A binding with neither an activation nor a participant contributes no edge,
+   * because there is no executor vertex to anchor it; a `dispatched_by` edge
+   * whose binding records no dispatcher participant keeps its executor and
+   * carries `from: null`. Nothing is defaulted from the environment, so an
+   * unrecorded identity reads as absent rather than as a guess.
+   *
+   * Bounded by bindings: the read returns at most `limit` of the newest
+   * bindings inside the filter and reports how many it left out. Read-only; no
+   * row is written and no revision moves.
+   */
+  dispatchGraph(projectId: string, opts?: { since?: number | null; limit?: number }): DispatchGraph {
+    const project = this.issues.getProject(projectId);
+    const since = opts?.since ?? null;
+    if (since !== null && (!Number.isSafeInteger(since) || since < 0)) {
+      throw new Error("since must be a non-negative integer (ms since epoch)");
+    }
+    const limit = opts?.limit ?? DISPATCH_GRAPH_LIMIT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > DISPATCH_GRAPH_MAX_LIMIT) {
+      throw new Error(`limit must be an integer between 1 and ${DISPATCH_GRAPH_MAX_LIMIT}`);
+    }
+    const sinceClause = since === null ? "" : " AND b.created_at >= ?";
+    const filter: SQLInputValue[] = since === null ? [project.id] : [project.id, since];
+
+    const matched = row<{ n: number }>(
+      this.db,
+      `SELECT COUNT(*) AS n FROM execution_bindings b JOIN issues i ON i.id = b.issue_id
+        WHERE i.project_id = ?${sinceClause}`,
+      ...filter,
+    );
+    const matchedBindings = matched?.n ?? 0;
+
+    const bindings = rows<DispatchBindingRow>(
+      this.db,
+      `SELECT b.id, b.issue_id, b.activation_id, b.participant_id, b.dispatcher_participant_id,
+              b.dispatcher_session_id, b.created_at, i.human_number
+         FROM execution_bindings b JOIN issues i ON i.id = b.issue_id
+        WHERE i.project_id = ?${sinceClause}
+        ORDER BY b.created_at DESC, b.id DESC
+        LIMIT ?`,
+      ...filter,
+      limit,
+    );
+
+    const nodes = new Map<string, DispatchGraphNode>();
+    const addNode = (node: DispatchGraphNode): string => {
+      const known = nodes.get(node.id);
+      if (known === undefined) nodes.set(node.id, node);
+      return node.id;
+    };
+    const edges: DispatchGraphEdge[] = [];
+
+    for (const b of bindings) {
+      const executor =
+        b.activation_id !== null && b.activation_id !== ""
+          ? addNode({
+              id: `activation:${b.activation_id}`,
+              kind: "activation",
+              label: b.activation_id,
+              participantId: b.participant_id,
+            })
+          : b.participant_id !== null && b.participant_id !== ""
+            ? addNode({
+                id: `participant:${b.participant_id}`,
+                kind: "participant",
+                label: b.participant_id,
+                participantId: b.participant_id,
+              })
+            : null;
+      // No executor vertex means no edge to anchor: the binding stays out of
+      // the graph rather than inventing an unattributed node.
+      if (executor === null) continue;
+      const issueNode = addNode({
+        id: `issue:${b.issue_id}`,
+        kind: "issue",
+        label: formatHumanRef(project.prefix, b.human_number),
+        participantId: null,
+      });
+      edges.push({
+        kind: "works_on",
+        from: executor,
+        to: issueNode,
+        issueId: b.issue_id,
+        at: b.created_at,
+        bindingId: b.id,
+        dispatcherSessionId: null,
+      });
+      const dispatcher =
+        b.dispatcher_participant_id !== null && b.dispatcher_participant_id !== ""
+          ? addNode({
+              id: `participant:${b.dispatcher_participant_id}`,
+              kind: "participant",
+              label: b.dispatcher_participant_id,
+              participantId: b.dispatcher_participant_id,
+            })
+          : null;
+      edges.push({
+        kind: "dispatched_by",
+        from: dispatcher,
+        to: executor,
+        issueId: b.issue_id,
+        at: b.created_at,
+        bindingId: b.id,
+        dispatcherSessionId: b.dispatcher_session_id,
+      });
+    }
+
+    const issueIds = [...new Set(bindings.map((b) => b.issue_id))];
+    if (issueIds.length > 0) {
+      const marks = issueIds.map(() => "?").join(", ");
+      const links = rows<{ issue_id: string; repository: string; number: number; created_at: number }>(
+        this.db,
+        `SELECT issue_id, repository, number, created_at FROM issue_pull_requests
+          WHERE superseded_at IS NULL AND relation = 'created_from' AND issue_id IN (${marks})
+          ORDER BY created_at, repository, number`,
+        ...issueIds,
+      );
+      // One link row per evidence source: the earliest row is the delivery time.
+      const delivered = new Set<string>();
+      for (const link of links) {
+        const key = `${link.issue_id}|${link.repository}|${link.number}`;
+        if (delivered.has(key)) continue;
+        delivered.add(key);
+        edges.push({
+          kind: "delivers",
+          from: `issue:${link.issue_id}`,
+          to: addNode({
+            id: `pull_request:${link.repository}#${link.number}`,
+            kind: "pull_request",
+            label: `${link.repository}#${link.number}`,
+            participantId: null,
+          }),
+          issueId: link.issue_id,
+          at: link.created_at,
+          bindingId: null,
+          dispatcherSessionId: null,
+        });
+      }
+    }
+
+    const orderedNodes = [...nodes.values()].sort((a, b) =>
+      a.kind === b.kind ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.kind < b.kind ? -1 : 1,
+    );
+    edges.sort(
+      (a, b) =>
+        a.at - b.at ||
+        (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0) ||
+        (a.from ?? "").localeCompare(b.from ?? "") ||
+        a.to.localeCompare(b.to),
+    );
+    const omittedBindings = Math.max(0, matchedBindings - bindings.length);
+    return {
+      projectId: project.id,
+      since,
+      limit,
+      nodes: orderedNodes,
+      edges,
+      matchedBindings,
+      omittedBindings,
+      truncated: omittedBindings > 0,
+    };
   }
 
   /** Closure rows for an Issue in outcome order (ADR §80 `closure outcomes`). */

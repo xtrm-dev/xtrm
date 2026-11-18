@@ -391,7 +391,7 @@ groups:
   project     create|link|unlink|list|show|links|repair
   plan        check|apply
   journal     append|checkpoint|show|since|latest|timeline|render
-  provenance  dispatch|allocate|bind|trace|commit|receipt|pr|session|activation|bundle
+  provenance  dispatch|allocate|bind|trace|graph|commit|receipt|pr|session|activation|bundle
   links       check|sync
   external    bind|list
   remote      setup|status|disable
@@ -856,7 +856,7 @@ renders the latest (or selected) checkpoint as text.`,
            [--dispatcher-participant <holder>] [--dispatcher-session <id>]
   allocate <binding-id|ref> [--checkpoint <entry-id>]
   bind <receipt-id> <40-char-sha>
-  trace <ref> | commit <sha> | receipt <id> | pr <ref>
+  trace <ref> | graph --project <id> | commit <sha> | receipt <id> | pr <ref>
   session <session-id> | activation <activation-id>
   bundle <ref> [--repo-root <dir>]
 
@@ -867,7 +867,8 @@ creates the host-owned receipt for that binding (optionally pinned to the
 journal checkpoint that settles it); bind links it to the commit carrying
 the work, idempotently and never re-pointing. Trace reads
 the spine (bindings, receipts with artifacts, attestation, claims,
-closure); commit/receipt/pr walk it backwards from an external id; session
+closure); graph reads a whole project's dispatch tree in one bounded
+call; commit/receipt/pr walk it backwards from an external id; session
 and activation answer what one session touched or one activation produced.
 Record what happened in the Journal and close with cited refs; never edit
 the contract to narrate history.`,
@@ -902,6 +903,19 @@ dispatcherParticipantId and dispatcherSessionId null where none was recorded.
 Read-model only: nothing is created, and the revision never moves.
 Methodology: trace to verify before dispatch and to audit after close; the
 spine shows evidence, the Journal tells the story.`,
+  "provenance.graph": `usage: sb provenance graph [--project <id>] [--since <ms|iso>] [--limit <n>]
+
+the dispatch tree of one project as a bounded graph: nodes are
+participants, activations, Issues (human refs) and pull requests; edges are
+works_on (an execution binding's executor -> Issue), dispatched_by (the
+binding's recorded dispatcher -> executor) and delivers (Issue -> PR, live
+created_from links only). A binding with no recorded dispatcher keeps its
+edge with a null source, so a binding written before migration 017 reads as
+unknown rather than as a guess. The default bound is 200 bindings
+(max 1000), newest first; truncated is true exactly when omittedBindings is
+above zero. --project resolves from --project, then SUBSTRATE_PROJECT, then
+the checkout's binding. Read-model only: nothing is created, no revision
+moves and no identity is defaulted from the environment.`,
   "provenance.commit": `usage: sb provenance commit <40-char-sha>`,
   "provenance.receipt": `usage: sb provenance receipt <id>`,
   "provenance.allocate": `usage: sb provenance allocate <binding-id|ref> [--checkpoint <entry-id>] [--project <id>]
@@ -1557,6 +1571,7 @@ export const FLAG_ALLOWLIST: Record<string, string[]> = {
   "provenance.session": [],
   "provenance.activation": [],
   "provenance.bundle": ["project", "repo-root"],
+  "provenance.graph": ["project", "since", "limit"],
   "init.": [],
   "doctor": [],
   "remote.setup": ["server-root", "refresh"],
@@ -1607,6 +1622,7 @@ const MAX_POSITIONALS: Record<string, number> = {
   "external.list": 0,
   "provenance.attach": 3,
   "provenance.bind": 2,
+  "provenance.graph": 0,
   "remote.setup": 2,
 };
 
@@ -3003,6 +3019,47 @@ function runProvenance(
       if (ctx.json) return emit(ctx, command, t);
       return { code: 0, stdout: renderProvenanceTrace(t, { color: false }), stderr: "" };
     }
+    case "graph": {
+      const sinceRaw = flag(flags, "since");
+      let since: number | null = null;
+      if (sinceRaw !== undefined) {
+        const raw = sinceRaw.trim();
+        const asNumber = Number(raw);
+        const ms = raw !== "" && Number.isInteger(asNumber) ? asNumber : Date.parse(raw);
+        if (!Number.isFinite(ms) || ms < 0) throw new Error("--since must be an epoch-millisecond timestamp or an ISO timestamp");
+        since = ms;
+      }
+      const limitRaw = flag(flags, "limit");
+      let limit: number | undefined;
+      if (limitRaw !== undefined) {
+        limit = Number(limitRaw);
+        if (!Number.isInteger(limit) || limit <= 0) throw new Error("--limit must be a positive integer");
+      }
+      const graph = provenance.dispatchGraph(projectOf(svc, flags), { since, limit });
+      if (ctx.json) return emit(ctx, command, graph);
+      const label = new Map(graph.nodes.map((n) => [n.id, n.label]));
+      const name = (id: string | null): string => (id === null ? "(unknown)" : (label.get(id) ?? id));
+      const lines = [
+        `project ${graph.projectId}: ${graph.nodes.length} nodes, ${graph.edges.length} edges, bindings ${graph.matchedBindings - graph.omittedBindings}/${graph.matchedBindings}${graph.truncated ? " (truncated)" : ""}`,
+      ];
+      if (graph.edges.length === 0) {
+        lines.push("(no execution bindings in this project)");
+      }
+      for (const e of graph.edges) {
+        if (e.kind === "dispatched_by") {
+          const session = e.dispatcherSessionId === null ? "" : ` (sess ${e.dispatcherSessionId})`;
+          lines.push(`${name(e.from)}${session} dispatched ${name(e.to)} on ${label.get(`issue:${e.issueId}`) ?? e.issueId}`);
+        } else if (e.kind === "delivers") {
+          lines.push(`${name(e.from)} delivers ${name(e.to)}`);
+        } else {
+          lines.push(`${name(e.from)} works on ${name(e.to)}`);
+        }
+      }
+      if (graph.truncated) {
+        lines.push(`omitted ${graph.omittedBindings} older binding(s): raise --limit or narrow --since`);
+      }
+      return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
+    }
     case "commit": {
       const sha = rest[0] ?? (() => { throw new Error("a 40-char commit SHA is required"); })();
       const hits = provenance.findByCommit(sha).map(({ receipt, binding }) => ({
@@ -3067,7 +3124,7 @@ function runProvenance(
       return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
     }
     default:
-      throw new Error(`unknown provenance verb: ${verb} (want dispatch|allocate|bind|trace|commit|receipt|pr|session|activation|bundle)`);
+      throw new Error(`unknown provenance verb: ${verb} (want dispatch|allocate|bind|trace|graph|commit|receipt|pr|session|activation|bundle)`);
   }
 }
 

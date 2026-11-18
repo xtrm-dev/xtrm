@@ -248,6 +248,7 @@ const FIXTURES: Record<string, (ctx: Ctx) => Record<string, unknown>> = {
   "provenance.findByPr": () => ({ ref: "https://github.com/xtrm-dev/ops/pull/1" }),
   "provenance.listArtifacts": (c) => ({ receiptId: c.receiptId, liveOnly: true }),
   "provenance.sessionDetail": () => ({ sessionId: "session-x" }),
+  "provenance.dispatchGraph": (c) => ({ projectId: c.projectId }),
   "provenance.activationDetail": () => ({ activationId: "act-x" }),
   "resume.buildCapsule": (c) => ({ issueId: c.issueId }),
   "resume.renderCapsule": (c) => ({ capsule: c.capsule }),

@@ -123,6 +123,26 @@ bindings, receipts or identity. `sb provenance session <id>` and
 `dispatched by …` line per binding, or `dispatchers: (none recorded)`; their
 `--json` carries a `dispatchers` array with `null` for an absent field.
 
+```bash
+sb provenance graph --project prj_xtrm --since 1763000000000 --limit 200
+```
+
+`sb provenance graph` reads one project's dispatch tree in a single bounded
+call instead of joining per-Issue traces. Nodes are participants, activations,
+Issues (human refs) and pull requests; edges are `works_on` (a binding's
+executor to its Issue), `dispatched_by` (the binding's recorded dispatcher to
+the executor) and `delivers` (an Issue to a live `created_from` PR link). An
+activation node carries its holder in `participantId`, so a leaf worker that
+dispatched nothing still has an identity. `--since` bounds the binding window
+by millisecond timestamp or ISO timestamp; `--limit` defaults to 200 and is
+capped at 1000 newest bindings. `matchedBindings`, `omittedBindings` and
+`truncated` state exactly what the bound cut, so a truncated answer is never
+mistaken for a complete one. A binding with no recorded dispatcher keeps its
+`dispatched_by` edge with a `null` source, and a binding with no execution
+identity contributes no edge; nothing is defaulted from the environment. The
+same read is available to the typed service as `provenance.dispatchGraph`
+(`projectId`, optional `since` and `limit`).
+
 Sources: [`execution-context.ts`](../src/domain/execution-context.ts),
 [`provenance-service.ts`](../src/service/provenance-service.ts),
 [`closure-service.ts`](../src/service/closure-service.ts).
