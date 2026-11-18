@@ -58,8 +58,9 @@ describe("Issues list rows (XTRM-856)", () => {
     await firstRow();
     const rows = Array.from(document.querySelectorAll('[role="button"]')).filter((el) => /XTRM-\d/.test(el.textContent ?? ""));
     const top = rows[0] as HTMLElement;
-    // A child row is the one whose key carries a `/ ref` or dotted locator.
-    const child = rows.find((el) => /XTRM-\d+\.\d+/.test(el.textContent ?? "")) as HTMLElement | undefined;
+    // The child row is XTRM-301 — a fixture issue whose parent is XTRM-300 — selected by its own
+    // reference through the row action label, not by the shape of the rendered locator.
+    const child = rows.find((el) => el.querySelector('button[aria-label="Copy XTRM-301"]')) as HTMLElement | undefined;
     expect(child, "the fixture renders at least one child row").toBeTruthy();
 
     // jsdom has no layout, so the guard is the mechanism: one gutter width for the list, and the

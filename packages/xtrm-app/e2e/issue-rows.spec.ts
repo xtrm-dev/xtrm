@@ -42,7 +42,7 @@ test("the title fills its cell and the one action sits at the row end", async ({
   const row = rows.first();
 
   const titleBox = (await row.locator("span.truncate").first().boundingBox())!;
-  const childrenHeader = (await page.getByTestId("issues-table-head").locator('[role="columnheader"]').nth(1).boundingBox())!;
+  const childrenHeader = (await page.getByTestId("issues-table-head").getByRole("columnheader", { name: "Children" }).boundingBox())!;
   // The title cell ends where the Children column begins, so the text may only stop within the
   // cell's own gap (8px edge padding plus the 6px flex gap) — not 100px short of it.
   const titleRight = titleBox.x + titleBox.width;
@@ -55,4 +55,12 @@ test("the title fills its cell and the one action sits at the row end", async ({
   expect(rowBox.x + rowBox.width - copyRight, "the action hugs the row end").toBeLessThanOrEqual(12);
   // And it is not floating after the title: the measured columns sit between them.
   expect(copy.x).toBeGreaterThan(titleRight + 100);
+
+  // At rest the invisible action takes no pointer events, so a click there belongs to the row.
+  const reveal = row.getByRole("button", { name: /^Copy / }).locator("..");
+  const restPointer = await reveal.evaluate((el) => getComputedStyle(el).pointerEvents);
+  expect(restPointer, "the hidden action is not clickable at rest").toBe("none");
+  await row.hover();
+  const hoverPointer = await reveal.evaluate((el) => getComputedStyle(el).pointerEvents);
+  expect(hoverPointer, "hover gives the action its clicks back").toBe("auto");
 });
