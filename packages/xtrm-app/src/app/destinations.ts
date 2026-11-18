@@ -81,7 +81,7 @@ export const PROJECT_SECTIONS: ProjectSection[] = [
   { id: "questions", label: "Questions", icon: "comment", repoPath: "/project/questions", deferred: "Project Questions arrive read-only with XTRM-817–XTRM-820; answering is deferred to XTRM-821" },
   { id: "workers", label: "Workers", icon: "specialists", repoPath: "/project/workers", deferred: "Project Workers arrive with XTRM-819" },
   { id: "followups", label: "Follow-ups", icon: "issues", repoPath: "/project/followups", deferred: "Project Follow-ups arrive with XTRM-819" },
-  { id: "jira", label: "Jira", icon: "link", repoPath: "/project/jira", deferred: "The Jira surface and issue chips arrive with XTRM-820" },
+  { id: "jira", label: "Jira", icon: "link", repoPath: "/project/jira" },
   { id: "settings", label: "Integration", icon: "settings", repoPath: "/project/settings", deferred: "Binding configuration and drift detail arrive with a later Project surface" },
 ];
 

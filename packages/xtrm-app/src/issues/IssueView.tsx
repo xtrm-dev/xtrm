@@ -13,6 +13,9 @@ import { PullRequestsBlock } from "./PullRequestsBlock.tsx";
 import { ClosureCard, ProvenanceTab } from "./IssueProvenance.tsx";
 import { useIssueActions } from "./actions.ts";
 import { useAdapters } from "../adapters/index.tsx";
+import { useJiraBinding } from "../app/queries.ts";
+import { JiraChip, useJiraIssueIndex } from "../project/jira/JiraChip.tsx";
+import { useShell } from "../shell/context.tsx";
 import {
   LIFECYCLES,
   TERMINAL,
@@ -164,6 +167,25 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/**
+ * The bound Jira issue for this Substrate issue (ADR-002 D6): rendered only when the repository
+ * has a Jira binding and the bridge reports a link, so an unbound repository shows no row at all
+ * and a page never promises a Jira issue that does not exist.
+ */
+function JiraDetail({ issueRef }: { issueRef: string }) {
+  const { repo } = useShell();
+  const binding = useJiraBinding(repo.fullName);
+  const bound = binding.data?.configured === true;
+  const index = useJiraIssueIndex(repo.fullName, bound);
+  const jira = index.byIssueRef.get(issueRef);
+  if (!bound || jira === undefined) return null;
+  return (
+    <Detail label="Jira">
+      <JiraChip issue={jira} showStatusText />
+    </Detail>
+  );
+}
+
 function IssueChip({ link }: { link: IssueLink }) {
   return <ReferenceChip reference={{ kind: "issue", ref: link.ref }} showTitle fallback={`${link.locator ?? link.ref} ${link.title}`} className="-mx-1" />;
 }
@@ -202,6 +224,7 @@ function DetailsGrid({ issue, canWrite, nav, compact }: { issue: IssueDetail; ca
         <SelectField label="Scrutiny" value={(issue.scrutiny as "LOW" | null) ?? ((issue.contract.raw.scrutiny as "LOW" | undefined) ?? null)} options={scrutinyOptions} canEdit={canWrite} onChange={actions.setScrutiny} />
       </Detail>
       <Detail label="Parent">{issue.parent ? <IssueChip link={issue.parent} /> : <span className="text-ink-faint">None</span>}</Detail>
+      <JiraDetail issueRef={issue.ref} />
       {progress && (
         <Detail label="Children">
           <div className="flex items-center gap-2">

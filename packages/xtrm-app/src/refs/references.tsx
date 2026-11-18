@@ -5,6 +5,7 @@ import { pullStateLabel, pullUrl, resolvePullReference } from "../github/pr.ts";
 import { PrKey } from "../ui/pr-key.tsx";
 import { githubIssueUrl, issueStateLabel, issueStateTone, parseGithubIssueRef } from "../github/issues.ts";
 import { IssueKey, lifecycleLabel, lifecycleTone } from "../issues/meta.tsx";
+import { JiraChip, JiraKeyReference, useJiraIssueIndex } from "../project/jira/JiraChip.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { StatusDot, Tip, cx } from "../ui/primitives.tsx";
@@ -12,12 +13,19 @@ import { StatusDot, Tip, cx } from "../ui/primitives.tsx";
 /**
  * Typed context reference (PRD §10). One vocabulary for drawer traversal, rendered prose,
  * and — when the Agent surface lands — composer `@` mentions.
- * `issue` resolves against the Substrate index; `pr` is `owner/repo#N`, or a bare `#N` that
- * resolves against the repository of the reading surface, and opens the PR drawer.
+ * `issue` resolves against the Substrate index; `jira` is an explicit `@jira:KEY-123` in the
+ * repository's bound Jira project; `key` is a bare key whose provider is still unknown, so it
+ * resolves Substrate first, then the bound Jira project, then prose (ADR-002 D6). `pr` is
+ * `owner/repo#N`, or a bare `#N` that resolves against the repository of the reading surface.
  */
-export type ContextReference = { kind: "issue"; ref: string } | { kind: "pr"; ref: string } | { kind: "gh-issue"; ref: string };
+export type ContextReference =
+  | { kind: "issue"; ref: string }
+  | { kind: "pr"; ref: string }
+  | { kind: "gh-issue"; ref: string }
+  | { kind: "jira"; ref: string }
+  | { kind: "key"; ref: string };
 
-/** `@issue:XTRM-3` / `@pr:owner/repo#N` — the serialized form a composer mention will emit. */
+/** `@issue:XTRM-3` / `@pr:owner/repo#N` / `@jira:KEY-123` — the serialized form a composer mention emits. */
 export const formatReference = (r: ContextReference) => `@${r.kind}:${r.ref}`;
 
 const ISSUE_REF = "[A-Za-z][A-Za-z0-9]*-\\d+(?:\\.\\d+)*";
@@ -26,15 +34,21 @@ const ISSUE_REF = "[A-Za-z][A-Za-z0-9]*-\\d+(?:\\.\\d+)*";
 const REPO_SEGMENT = "[A-Za-z0-9_-][A-Za-z0-9_.-]*";
 const REPO_REF = `${REPO_SEGMENT}/${REPO_SEGMENT}`;
 const PR_REF = `${REPO_REF}#\\d+`;
+// The bridge's own key shape (ADR-002 §3). An explicit `@jira:` form outside it stays prose:
+// the bridge would refuse the key as a bad request, so no chip may promise it resolves.
+const JIRA_KEY = "[A-Z][A-Z0-9_]+-\\d+";
 
 /**
- * Explicit `@issue:REF`, explicit `@pr:owner/repo#N`, a canonical `owner/repo#N`, a bare issue
- * key (`XTRM-3`, `XTRM-252.13.1`), or a bare `#N` pull request scoped to the reading surface.
- * Bare keys and bare numbers only render as chips when they resolve. The canonical PR form is
- * tried before the bare issue key so a repository named like an issue key stays one reference.
+ * Explicit `@issue:REF`, explicit `@jira:KEY`, explicit `@pr:owner/repo#N`, a canonical
+ * `owner/repo#N`, a bare key (`XTRM-3`, `MMD-551`, `XTRM-252.13.1`), or a bare `#N` pull request
+ * scoped to the reading surface. A bare key is provider-unknown: it resolves Substrate first,
+ * then the repository's bound Jira project, then prose. Bare keys and bare numbers only render
+ * as chips when they resolve. The canonical PR form is tried before the bare key so a repository
+ * named like an issue key stays one reference, and `@jira:` is tried before the bare key so the
+ * forced provider is never re-read as a Substrate key.
  */
 export const REFERENCE_PATTERN = new RegExp(
-  `@issue:(?<issue>${ISSUE_REF})|@pr:(?<pr>${PR_REF})|(?<![\\w/.])(?<canonicalPr>${PR_REF})(?![0-9A-Za-z])|\\b(?<bareIssue>${ISSUE_REF})\\b|(?<![\\w/.])(?<barePr>#\\d+)(?![0-9A-Za-z])`,
+  `@jira:(?<jira>${JIRA_KEY})|@issue:(?<issue>${ISSUE_REF})|@pr:(?<pr>${PR_REF})|(?<![\\w/.])(?<canonicalPr>${PR_REF})(?![0-9A-Za-z])|\\b(?<bareIssue>${ISSUE_REF})\\b|(?<![\\w/.])(?<barePr>#\\d+)(?![0-9A-Za-z])`,
   "g",
 );
 
@@ -44,6 +58,8 @@ export function parseReference(text: string): ContextReference | null {
   if (gh) return { kind: "gh-issue", ref: gh[1]! };
   let m = /^@issue:([A-Za-z][A-Za-z0-9]*-\d+(?:\.\d+)*)$/.exec(clean);
   if (m) return { kind: "issue", ref: m[1]! };
+  m = /^@jira:([A-Z][A-Z0-9_]+-\d+)$/.exec(clean);
+  if (m) return { kind: "jira", ref: m[1]! };
   m = /^@pr:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+)$/.exec(clean);
   if (m) return { kind: "pr", ref: m[1]! };
   return null;
@@ -51,6 +67,8 @@ export function parseReference(text: string): ContextReference | null {
 
 const HREF_ISSUE_PREFIX = "xtrm-ref:issue:";
 const HREF_PR_PREFIX = "xtrm-ref:pr:";
+const HREF_JIRA_PREFIX = "xtrm-ref:jira:";
+const HREF_KEY_PREFIX = "xtrm-ref:key:";
 
 type MdNode = { type: string; value?: string; url?: string; children?: MdNode[] };
 
@@ -65,10 +83,18 @@ export function remarkReferences() {
     REFERENCE_PATTERN.lastIndex = 0;
     for (const m of value.matchAll(REFERENCE_PATTERN)) {
       const g = m.groups ?? {};
-      const isPr = g.pr !== undefined || g.canonicalPr !== undefined || g.barePr !== undefined;
-      const ref = (g.pr ?? g.canonicalPr ?? g.barePr ?? g.issue ?? g.bareIssue)!;
+      const ref = (g.jira ?? g.pr ?? g.canonicalPr ?? g.barePr ?? g.issue ?? g.bareIssue)!;
+      // The href carries the provider the text named: an explicit namespace keeps its provider,
+      // a bare key stays `key` until the chip resolves it (Substrate, then Jira, then prose).
+      const prefix = g.jira !== undefined
+        ? HREF_JIRA_PREFIX
+        : g.pr !== undefined || g.canonicalPr !== undefined || g.barePr !== undefined
+          ? HREF_PR_PREFIX
+          : g.bareIssue !== undefined
+            ? HREF_KEY_PREFIX
+            : HREF_ISSUE_PREFIX;
       if (m.index! > last) out.push({ type: "text", value: value.slice(last, m.index) });
-      out.push({ type: "link", url: (isPr ? HREF_PR_PREFIX : HREF_ISSUE_PREFIX) + ref, children: [{ type: "text", value: m[0] }] });
+      out.push({ type: "link", url: prefix + ref, children: [{ type: "text", value: m[0] }] });
       last = m.index! + m[0].length;
     }
     if (last < value.length) out.push({ type: "text", value: value.slice(last) });
@@ -86,10 +112,19 @@ export function referenceFromHref(href: string | undefined): ContextReference | 
   if (!href) return null;
   if (href.startsWith(HREF_ISSUE_PREFIX)) return { kind: "issue", ref: href.slice(HREF_ISSUE_PREFIX.length) };
   if (href.startsWith(HREF_PR_PREFIX)) return { kind: "pr", ref: href.slice(HREF_PR_PREFIX.length) };
+  if (href.startsWith(HREF_JIRA_PREFIX)) return { kind: "jira", ref: href.slice(HREF_JIRA_PREFIX.length) };
+  if (href.startsWith(HREF_KEY_PREFIX)) return { kind: "key", ref: href.slice(HREF_KEY_PREFIX.length) };
   return null;
 }
 
-const OpenReference = createContext<((r: ContextReference) => void) | null>(null);
+/**
+ * The reference kinds a host can hand to the drawer. A Jira issue opens at its browse URL and a
+ * bare key has no drawer view of its own, so neither crosses this channel: the drawer vocabulary
+ * stays the Substrate and GitHub entities it can actually render.
+ */
+export type DrawerableReference = Exclude<ContextReference, { kind: "jira" } | { kind: "key" }>;
+
+const OpenReference = createContext<((r: DrawerableReference) => void) | null>(null);
 const ReferenceRepo = createContext<string | null>(null);
 
 /**
@@ -107,7 +142,7 @@ export function useReferenceRepo(): string {
  * Lets a host decide what activating a reference does (drawer traversal, page navigation) and
  * which repository bare `#N` references belong to. Defaults: inspect in the drawer, shell repo.
  */
-export function ReferenceActionsProvider({ open, repo, children }: { open: (r: ContextReference) => void; repo?: string; children: ReactNode }) {
+export function ReferenceActionsProvider({ open, repo, children }: { open: (r: DrawerableReference) => void; repo?: string; children: ReactNode }) {
   return (
     <ReferenceRepo.Provider value={repo ?? null}>
       <OpenReference.Provider value={open}>{children}</OpenReference.Provider>
@@ -154,6 +189,10 @@ export function ReferenceChip({
 }) {
   if (reference.kind === "gh-issue") return <GithubIssueReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} className={className} />;
   if (reference.kind === "pr") return <PullReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} className={className} />;
+  if (reference.kind === "jira") return <JiraReferenceChip reference={reference} fallback={fallback} />;
+  if (reference.kind === "key") {
+    return <KeyReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} unresolved={unresolved} showAlias={showAlias} className={className} />;
+  }
   return <IssueReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} unresolved={unresolved} showAlias={showAlias} className={className} />;
 }
 
@@ -337,4 +376,55 @@ function IssueReferenceChip({
   // The alias a compact cell cannot show still travels in the tooltip, so nothing is lost.
   const alias = !showAlias && issue.locator && issue.locator !== issue.ref ? ` · ${issue.ref}` : "";
   return showTitle ? chip : <Tip label={`${issue.title} · ${lifecycleLabel(issue.lifecycle)}${alias}`}>{chip}</Tip>;
+}
+
+/**
+ * A forced `@jira:KEY-123` reference (ADR-002 D6). The explicit provider is final: this never
+ * falls back to the Substrate index, and a key that does not resolve inside the bound project
+ * stays the author's prose instead of becoming a chip.
+ */
+function JiraReferenceChip({ reference, fallback }: { reference: { kind: "jira"; ref: string }; fallback?: string }) {
+  const repo = useReferenceRepo();
+  return <JiraKeyReference repo={repo} jiraKey={reference.ref} fallback={fallback ?? formatReference(reference)} />;
+}
+
+/**
+ * A bare key in prose: Substrate first, then the repository's bound Jira project, then prose.
+ * The Substrate read is the authority, so a key that exists there never borrows the Jira chip,
+ * and the Jira page is read only after Substrate came back empty.
+ */
+function KeyReferenceChip({
+  reference,
+  showTitle,
+  fallback,
+  unresolved,
+  showAlias = true,
+  className,
+}: {
+  reference: { kind: "key"; ref: string };
+  showTitle?: boolean;
+  fallback?: string;
+  unresolved?: ReactNode;
+  showAlias?: boolean;
+  className?: string;
+}) {
+  const index = useIssueIndex();
+  const repo = useReferenceRepo();
+  const issue = index.get(reference.ref);
+  const jira = useJiraIssueIndex(repo, issue === undefined);
+  if (issue) {
+    return (
+      <IssueReferenceChip
+        reference={{ kind: "issue", ref: issue.ref }}
+        showTitle={showTitle}
+        fallback={fallback}
+        showAlias={showAlias}
+        className={className}
+      />
+    );
+  }
+  const bound = jira.byKey.get(reference.ref);
+  if (bound !== undefined) return <JiraChip issue={bound} />;
+  if (unresolved !== undefined) return <>{unresolved}</>;
+  return <span className={cx("font-mono text-xs text-ink-muted", className)}>{fallback ?? reference.ref}</span>;
 }
