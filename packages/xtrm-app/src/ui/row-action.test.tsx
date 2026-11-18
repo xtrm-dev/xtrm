@@ -27,6 +27,19 @@ describe("RowAction", () => {
     expect(document.activeElement).toBe(button);
   });
 
+  it("reveals its actions without leaving them clickable while invisible", () => {
+    render(
+      <Row actions={<RowAction icon="copy" label="Copy XTRM-1" onAct={() => {}} />}>XTRM-1 title</Row>,
+    );
+    const wrapper = screen.getByRole("button", { name: "Copy XTRM-1" }).parentElement!;
+    const tokens = wrapper.className.split(/\s+/);
+    // XTRM-883: the shared wrapper hides its actions with opacity, so it must also take them out
+    // of hit testing until the row hands them back on hover or keyboard focus.
+    expect(tokens).toContain("pointer-events-none");
+    expect(tokens).toContain("group-hover/row:pointer-events-auto");
+    expect(tokens).toContain("group-focus-within/row:pointer-events-auto");
+  });
+
   it("is a 20px button with a text-size glyph", () => {
     render(<RowAction icon="copy" label="Copy XTRM-1" onAct={() => {}} />);
     const button = screen.getByRole("button", { name: "Copy XTRM-1" });
