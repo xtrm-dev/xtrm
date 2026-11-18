@@ -906,10 +906,11 @@ spine shows evidence, the Journal tells the story.`,
   "provenance.graph": `usage: sb provenance graph [--project <id>] [--since <ms|iso>] [--limit <n>]
 
 the dispatch tree of one project as a bounded graph: nodes are
-participants, activations, Issues (human refs) and pull requests; edges are
-works_on (an execution binding's executor -> Issue), dispatched_by (the
-binding's recorded dispatcher -> executor) and delivers (Issue -> PR, live
-created_from links only). A binding with no recorded dispatcher keeps its
+participants, activations, sessions, Issues (human refs) and pull requests;
+edges are works_on (an execution binding's executor -> Issue), dispatched_by
+(the binding's recorded dispatcher -> executor) and delivers (Issue -> PR,
+live created_from links only). The executor is the binding's activation, else
+its participant, else its session. A binding with no recorded dispatcher keeps its
 edge with a null source, so a binding written before migration 017 reads as
 unknown rather than as a guess. The default bound is 200 bindings
 (max 1000), newest first; truncated is true exactly when omittedBindings is

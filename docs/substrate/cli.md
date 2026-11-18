@@ -221,7 +221,7 @@ Kind doctrine and examples: [`journal.md`](./journal.md).
   session-centric queries (what a session touched / what an activation produced).
 - `provenance graph [--project <id>] [--since <ms|iso>] [--limit <n>]` — the
   project's dispatch tree in one bounded read: nodes are participants,
-  activations, Issues and pull requests; edges are `works_on`,
+  activations, sessions, Issues and pull requests; edges are `works_on`,
   `dispatched_by` and `delivers`. Newest 200 bindings by default, 1000 at
   most; `matchedBindings`, `omittedBindings` and `truncated` state what the
   bound cut. An unrecorded dispatcher stays `null`, never a guess.

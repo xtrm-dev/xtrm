@@ -199,9 +199,12 @@ milliseconds or an ISO timestamp; `--limit` bounds the binding scan (default
 
 The JSON envelope carries `projectId`, `since`, `limit`, `nodes`, `edges`,
 `matchedBindings`, `omittedBindings` and `truncated`. Node ids are namespaced
-(`participant:<holder>`, `activation:<id>`, `issue:<issueId>`,
+(`participant:<holder>`, `activation:<id>`, `session:<id>`, `issue:<issueId>`,
 `pull_request:<repo>#<n>`); node labels are the human names a Console renders
-(the holder, the activation id, `XTRM-123`, `repo#7`). Edges name their
+(the holder, the activation id, the session id, `XTRM-123`, `repo#7`). The
+executor of a binding is its activation, else its participant, else its
+session, because an `xt` launch records the session and leaves the holder to
+the claim. Edges name their
 `issueId`, their binding (`null` for a `delivers` edge) and the dispatcher
 session when the binding recorded one.
 

@@ -160,6 +160,29 @@ describe("XTRM-868 project dispatch graph", () => {
     assert.equal(graph.nodes.length, 0);
   });
 
+  // The live xt launch shape: the dispatcher and the session are recorded and
+  // the holder is left to the claim, so the session is the executor.
+  it("a binding with only a session falls back to a session executor", () => {
+    const issue = readyIssue(s.svc, "session executor");
+    s.prov.dispatch(issue.id, {
+      workspace: s.dir,
+      sessionId: "01a1eee0-4ded-72d6-adf2-a25093b735a1",
+      dispatcherParticipantId: "lead",
+      dispatcherSessionId: "$1",
+    });
+
+    const graph = s.prov.dispatchGraph("prj_xtrm");
+    const session = graph.nodes.find((n) => n.kind === "session");
+    assert.equal(session?.id, "session:01a1eee0-4ded-72d6-adf2-a25093b735a1");
+    assert.equal(session?.label, "01a1eee0-4ded-72d6-adf2-a25093b735a1");
+    assert.equal(session?.participantId, null);
+    // Same binding time, so the tie-break is the edge kind: dispatched_by first.
+    assert.deepEqual(graph.edges.map((e) => [e.kind, e.from, e.to]), [
+      ["dispatched_by", "participant:lead", "session:01a1eee0-4ded-72d6-adf2-a25093b735a1"],
+      ["works_on", "session:01a1eee0-4ded-72d6-adf2-a25093b735a1", `issue:${issue.id}`],
+    ]);
+  });
+
   it("truncation reports the bindings the bound left out", () => {
     const first = readyIssue(s.svc, "first");
     const second = readyIssue(s.svc, "second");

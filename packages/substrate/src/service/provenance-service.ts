@@ -125,14 +125,14 @@ function dispatcherView(b: ExecutionBinding): DispatcherView {
 }
 
 /** Vertex kinds of a project dispatch graph. */
-export type DispatchGraphNodeKind = "participant" | "activation" | "issue" | "pull_request";
+export type DispatchGraphNodeKind = "participant" | "activation" | "session" | "issue" | "pull_request";
 
 /** One vertex; `id` is the durable key an edge names. */
 export interface DispatchGraphNode {
-  /** `participant:<holder>` | `activation:<id>` | `issue:<issueId>` | `pull_request:<repo>#<n>`. */
+  /** `participant:<holder>` | `activation:<id>` | `session:<id>` | `issue:<issueId>` | `pull_request:<repo>#<n>`. */
   id: string;
   kind: DispatchGraphNodeKind;
-  /** Human label: the holder, the activation id, the human ref, or `repo#n`. */
+  /** Human label: the holder, the activation id, the session id, the human ref, or `repo#n`. */
   label: string;
   /**
    * The execution identity the binding recorded for this node, or null for an
@@ -188,6 +188,7 @@ interface DispatchBindingRow {
   issue_id: string;
   activation_id: string | null;
   participant_id: string | null;
+  session_id: string | null;
   dispatcher_participant_id: string | null;
   dispatcher_session_id: string | null;
   created_at: number;
@@ -712,11 +713,14 @@ export class ProvenanceService {
    * edges, so a Console reads the whole dispatch tree in one bounded call
    * instead of joining per-Issue traces.
    *
-   * Vertices are participants, activations, Issues and pull requests. Edges are
-   * `works_on` (binding executor -> Issue), `dispatched_by` (recorded dispatcher
-   * -> executor) and `delivers` (Issue -> PR, live `created_from` links only).
-   * A binding with neither an activation nor a participant contributes no edge,
-   * because there is no executor vertex to anchor it; a `dispatched_by` edge
+   * Vertices are participants, activations, sessions, Issues and pull requests.
+   * Edges are `works_on` (binding executor -> Issue), `dispatched_by` (recorded
+   * dispatcher -> executor) and `delivers` (Issue -> PR, live `created_from`
+   * links only). The executor is the activation the binding records, else its
+   * participant, else its session, because an xt launch records the session but
+   * may leave the holder to the claim; a binding with none of the three
+   * contributes no edge, because there is no executor vertex to anchor it; a
+   * `dispatched_by` edge
    * whose binding records no dispatcher participant keeps its executor and
    * carries `from: null`. Nothing is defaulted from the environment, so an
    * unrecorded identity reads as absent rather than as a guess.
@@ -748,8 +752,8 @@ export class ProvenanceService {
 
     const bindings = rows<DispatchBindingRow>(
       this.db,
-      `SELECT b.id, b.issue_id, b.activation_id, b.participant_id, b.dispatcher_participant_id,
-              b.dispatcher_session_id, b.created_at, i.human_number
+      `SELECT b.id, b.issue_id, b.activation_id, b.participant_id, b.session_id,
+              b.dispatcher_participant_id, b.dispatcher_session_id, b.created_at, i.human_number
          FROM execution_bindings b JOIN issues i ON i.id = b.issue_id
         WHERE i.project_id = ?${sinceClause}
         ORDER BY b.created_at DESC, b.id DESC
@@ -782,7 +786,9 @@ export class ProvenanceService {
                 label: b.participant_id,
                 participantId: b.participant_id,
               })
-            : null;
+            : b.session_id !== null && b.session_id !== ""
+              ? addNode({ id: `session:${b.session_id}`, kind: "session", label: b.session_id, participantId: null })
+              : null;
       // No executor vertex means no edge to anchor: the binding stays out of
       // the graph rather than inventing an unattributed node.
       if (executor === null) continue;

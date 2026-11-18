@@ -129,9 +129,12 @@ sb provenance graph --project prj_xtrm --since 1763000000000 --limit 200
 
 `sb provenance graph` reads one project's dispatch tree in a single bounded
 call instead of joining per-Issue traces. Nodes are participants, activations,
-Issues (human refs) and pull requests; edges are `works_on` (a binding's
-executor to its Issue), `dispatched_by` (the binding's recorded dispatcher to
-the executor) and `delivers` (an Issue to a live `created_from` PR link). An
+sessions, Issues (human refs) and pull requests; edges are `works_on` (a
+binding's executor to its Issue), `dispatched_by` (the binding's recorded
+dispatcher to the executor) and `delivers` (an Issue to a live `created_from`
+PR link). The executor is the binding's activation, else its participant, else
+its session: an `xt` launch records the dispatcher and the session and leaves
+the holder to the claim, so a session executor is the honest read. An
 activation node carries its holder in `participantId`, so a leaf worker that
 dispatched nothing still has an identity. `--since` bounds the binding window
 by millisecond timestamp or ISO timestamp; `--limit` defaults to 200 and is
