@@ -28,6 +28,17 @@ REASON_REF_RANGE = "ref-range"
 REASON_MTIME = "mtime-heuristic"
 REASON_RANGE_UNKNOWN = "range-unknown"
 
+
+class UnverifiableHistory(RuntimeError):
+    """scan_drift refuses because sync history is unknown for these services (fail closed).
+
+    ``service_ids`` lets callers (CI, CLI) list EVERY affected service structurally instead of
+    relying on the human message, which any log line may truncate."""
+
+    def __init__(self, message: str, service_ids: list[str]) -> None:
+        super().__init__(message)
+        self.service_ids = list(service_ids)
+
 def check_drift(file_path: str, project_root: str | None = None) -> dict:
     if project_root is None:
         try: project_root = get_project_root()
@@ -70,6 +81,7 @@ def update_sync_time(service_id: str, project_root: str | None = None) -> bool:
     if "services" not in registry or service_id not in registry["services"]:
         return False
     registry["services"][service_id]["last_sync"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    registry["services"][service_id].pop("last_sync_ref_derived", None)  # a real stamp supersedes a derived ref
     try:
         # Resolve the root the same way load_registry does. On the CLI path
         # (`drift_detector.py sync <id>`) project_root is None; passing that straight to
@@ -229,6 +241,111 @@ def _is_valid_ref(ref: str, project_root: str) -> bool:
     except Exception:
         return False
     return result.returncode == 0
+
+
+def _git_out(project_root: str, *args: str) -> str | None:
+    """stdout of ``git -C root args`` (stripped), or None on any failure."""
+    import subprocess
+
+    try:
+        result = subprocess.run(["git", "-C", project_root, *args], capture_output=True, text=True, check=False, timeout=15)
+    except Exception:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _is_ancestor(project_root: str, older: str, newer: str) -> bool:
+    import subprocess
+
+    try:
+        return subprocess.run(["git", "-C", project_root, "merge-base", "--is-ancestor", older, newer],
+                              capture_output=True, check=False, timeout=15).returncode == 0
+    except Exception:
+        return False
+
+
+def _older_commit(project_root: str, a: str, b: str) -> str | None:
+    """The more conservative (older) of two commits: the ancestor, else their merge base."""
+    if a == b or _is_ancestor(project_root, a, b):
+        return a
+    if _is_ancestor(project_root, b, a):
+        return b
+    return _git_out(project_root, "merge-base", a, b)
+
+
+def migrate_legacy_refs(project_root: str | None = None, apply: bool = False) -> list[dict[str, Any]]:
+    """Derive a CONSERVATIVE ``last_sync_ref`` for services that have ``last_sync`` but no usable ref.
+
+    ``scan_drift`` fails closed on those (legacy registries predate refs). The derivation is an
+    estimate, so it errs towards an OLDER commit (a ref that is too old over-reports drift; one
+    that is too new would hide it). Two independent candidates, the older one wins:
+
+      * ``rev-list-before``: ``git rev-list -1 --before=<last_sync> HEAD`` (breaks under clock
+        skew, which is why it is never used alone);
+      * ``registry-stamp-parent``: the parent of the commit that landed this exact ``last_sync``
+        string in the registry file (pickaxe), i.e. the tree the stamp was written against.
+
+    Refuses (per service, with a named reason) on a shallow clone, a ``last_sync`` in the future,
+    no resolvable candidate, or diverged candidates. Dry-run unless ``apply``; ``apply`` writes
+    ``last_sync_ref`` and ``last_sync_ref_derived: true`` (cleared by any real sync/reconcile stamp).
+    Never-synced services are skipped: they need an initial verified sync, not a migration."""
+    root = project_root if project_root is not None else get_project_root()
+    registry = load_registry(root)
+    registry_rel = os.path.relpath(get_registry_path(root), root)
+    shallow = _git_out(root, "rev-parse", "--is-shallow-repository") == "true"
+    now = datetime.now(timezone.utc)
+    results: list[dict[str, Any]] = []
+    changed = False
+    for service_id, service in registry.get("services", {}).items():
+        raw = service.get("last_sync", "")
+        try:
+            sync_time = datetime.fromisoformat(raw.replace("Z", "+00:00")) if raw else None
+        except ValueError:
+            sync_time = None
+        if sync_time is None:
+            continue
+        if sync_time.tzinfo is None:
+            sync_time = sync_time.replace(tzinfo=timezone.utc)
+        ref = _service_last_sync_ref(service)
+        if ref and _is_valid_ref(ref, root):
+            continue  # already verifiable
+        item: dict[str, Any] = {"service_id": service_id, "last_sync": raw, "previous_ref": ref, "candidates": {}}
+        results.append(item)
+        if shallow:
+            item.update(status="refused", reason="shallow clone: history is incomplete (git fetch --unshallow first)")
+            continue
+        if sync_time > now:
+            item.update(status="refused", reason="last_sync is in the future")
+            continue
+        candidates: dict[str, str] = {}
+        before = _git_out(root, "rev-list", "-1", f"--before={sync_time.isoformat()}", "HEAD")
+        if before:
+            candidates["rev-list-before"] = before
+        stamp = _git_out(root, "log", "-1", "--format=%H", "-S", f'"last_sync": "{raw}"', "--", registry_rel)
+        parent = _git_out(root, "rev-parse", f"{stamp}^") if stamp else None
+        if parent:
+            candidates["registry-stamp-parent"] = parent
+        candidates = {name: sha for name, sha in candidates.items() if _is_valid_ref(sha, root)}
+        item["candidates"] = candidates
+        if not candidates:
+            item.update(status="refused", reason="no commit found at or before last_sync")
+            continue
+        chosen: str | None = None
+        for sha in candidates.values():
+            chosen = sha if chosen is None else _older_commit(root, chosen, sha)
+            if chosen is None:
+                break
+        if not chosen or not _is_valid_ref(chosen, root):
+            item.update(status="refused", reason="candidate commits diverged and share no usable ancestor")
+            continue
+        item.update(status="derived", ref=chosen)
+        if apply:
+            service["last_sync_ref"] = chosen
+            service["last_sync_ref_derived"] = True
+            changed = True
+    if apply and changed:
+        save_registry(registry, root)
+    return results
 
 
 def _ref_changed_in_territory(project_root: str, ref: str, territory: list[str]) -> list[str] | None:
@@ -405,10 +522,13 @@ def scan_drift(project_root: str | None = None, enrich_with_gitnexus: bool = Fal
         unverifiable.append((service_id, ref))
     if unverifiable:
         listed = ", ".join(f"'{sid}' (last_sync_ref={r!r})" for sid, r in unverifiable)
-        raise RuntimeError(
+        raise UnverifiableHistory(
             f"Cannot verify required history for {len(unverifiable)} service(s): {listed}. "
-            "Legacy registry (last_sync without last_sync_ref)? After verifying each service, "
-            "record a ref once with `drift_detector.py sync <service_id>`; otherwise restore the missing git history."
+            "Legacy registry (last_sync without last_sync_ref)? Run `service-knowledge drift migrate` "
+            "(dry-run; add --apply) to derive a conservative ref from each last_sync, or after verifying "
+            "a service record a ref once with `drift_detector.py sync <service_id>`; "
+            "otherwise restore the missing git history.",
+            [sid for sid, _ in unverifiable],
         )
     if not drifted:
         return []
@@ -475,6 +595,18 @@ def main() -> None:
         print(r["message"] if r.get("drift") else f"No drift: {r.get('reason', 'OK')}")
     elif cmd == "sync" and len(args) > 1:
         sys.exit(0 if update_sync_time(args[1]) else 1)
+    elif cmd == "migrate":
+        apply = "--apply" in args
+        results = migrate_legacy_refs(apply=apply)
+        if not results:
+            print("Nothing to migrate: every synced service already has a resolvable last_sync_ref.")
+            return
+        for r in results:
+            print(f"  {r['service_id']}: {r['status']}"
+                  + (f" -> {r['ref'][:12]}  (candidates: {', '.join(f'{k}={v[:12]}' for k, v in r['candidates'].items())})" if r["status"] == "derived" else f"  ({r['reason']})"))
+        if any(r["status"] == "refused" for r in results):
+            sys.exit(1)
+        print("Applied." if apply else "Dry run: nothing written. Re-run with --apply to record the derived refs.")
     elif cmd == "validate-territories":
         report = territory_gitignore_report()
         if not report:

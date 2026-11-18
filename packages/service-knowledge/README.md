@@ -30,8 +30,11 @@ The script:
 4. Injects the vaultctl checkout into the same venv, editable.
 5. Runs `pipx ensurepath` so `~/.local/bin` lands on `$PATH` for future shells.
 
-Any push to this repo (or to `vaultctl`) updates the installed CLI automatically —
-no reinstall.
+The install is **by clone** (editable); there is no PyPI package. To update, `git pull`
+in both checkouts (`~/dev/xtrm` and `~/dev/vaultctl`); the installed CLI follows them with no
+reinstall (re-run `install.sh` only when packaging changes, e.g. a new dependency).
+`service-knowledge --version` prints the package version plus where the CLI and `vaultctl`
+were loaded from, which is the first thing to check on a second machine.
 
 Manual install if you already run pipx everywhere:
 

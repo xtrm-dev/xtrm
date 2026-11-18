@@ -9,9 +9,23 @@ All notable changes to the `service-knowledge` package.
   `last_sync_ref` — the pre-ref registry shape — no longer takes the mtime
   fallback. `scan_drift`, `ci_drift_check` and `service-knowledge drift` now
   refuse (exit non-zero, marker kept) with one error naming **every** such
-  service. Verify each service, then record a ref once:
-  `drift_detector.py sync <service_id>`. `reconcile` calls `scan_drift`
-  unguarded, so it refuses too until the refs are recorded.
+  service. `reconcile` calls `scan_drift` unguarded, so it refuses too until
+  the refs are recorded. Either run `service-knowledge drift migrate` (dry-run;
+  add `--apply`) or verify a service and run `drift_detector.py sync <service_id>`.
+
+### Added — `service-knowledge drift migrate`
+- Derives a conservative `last_sync_ref` for legacy registries: the older of
+  `git rev-list --before=<last_sync>` and the parent of the commit that landed
+  that `last_sync` in the registry. Refuses (per service, with a reason) on a
+  shallow clone, a future `last_sync`, or no commit at/before it. Dry-run by
+  default; `--apply` also writes `last_sync_ref_derived: true`, which any real
+  sync/reconcile stamp clears. `scan_drift` itself stays fail-closed.
+- `scan_drift` raises `UnverifiableHistory` (a `RuntimeError`) with `.service_ids`;
+  `ci_drift_check` prints one `unverifiable: <id>` line per service and a
+  `$GITHUB_STEP_SUMMARY` list, so a long list is never cut off by log limits.
+- Git hooks: `ls-tree` path lists are chunked (500/call) so a large deletion
+  cannot overflow the argv limit; the three hook copies are pinned identical.
+- `service-knowledge --version` also reports where the CLI and vaultctl were loaded from.
 
 ## [0.8.0] - 2026-10-19
 

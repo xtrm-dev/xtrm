@@ -60,6 +60,22 @@ def _help_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _version_text() -> str:
+    """``service-knowledge X.Y.Z`` first (launchers parse the first x.y.z), then where the CLI and
+    its vaultctl dependency were loaded from, so a clone install can be diagnosed at a glance."""
+    from pathlib import Path
+
+    lines = [f"service-knowledge {__version__}  ({Path(__file__).resolve().parents[1]})"]
+    try:
+        import vaultctl
+
+        vc_version = getattr(vaultctl, "__version__", None) or "unknown version"
+        lines.append(f"vaultctl {vc_version}  ({Path(vaultctl.__file__).resolve().parent})")
+    except ImportError:  # unreachable via the CLI (import-time guard) but harmless here
+        lines.append("vaultctl NOT INSTALLED")
+    return "\n".join(lines)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="service-knowledge",
@@ -67,7 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=_help.TOP_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--version", action="version", version=f"service-knowledge {__version__}")
+    parser.add_argument("--version", action="version", version=_version_text())
     sub = parser.add_subparsers(dest="command", metavar="<command>")
     for name, (_fn, help_text) in _SUBCOMMANDS.items():
         if name in ("index", "canary", "drift", "mcp"):

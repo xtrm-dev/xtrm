@@ -367,6 +367,7 @@ def bump_last_sync_ref(project_root: Path, new_ref: str, dry_run: bool) -> str |
         if isinstance(service, dict):
             service["last_sync_ref"] = new_ref
             service["last_sync"] = now_iso
+            service.pop("last_sync_ref_derived", None)  # a real stamp supersedes a derived ref
     if not dry_run:
         save_registry(registry, str(project_root))
         update_yaml_registry(project_root, new_ref, now_iso)
