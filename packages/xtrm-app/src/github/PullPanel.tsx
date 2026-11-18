@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { usePull } from "../app/queries.ts";
-import { checkLabel, checkTone, extractIssueKeys, parsePullRef, pullStateLabel, pullStateTone, reviewLabel } from "./pr.ts";
+import { checkLabel, checkTone, conversationUnavailable, extractIssueKeys, mergeableText, parsePullRef, pullStateLabel, pullStateTone, reviewLabel } from "./pr.ts";
 import { ReferenceActionsProvider, ReferenceChip, useIssueIndex } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Markdown } from "../ui/markdown.tsx";
@@ -11,7 +11,7 @@ import { Icon } from "../ui/icon.tsx";
 import { AuthorInline } from "./identity.tsx";
 import { PullConversation } from "./PullConversation.tsx";
 
-function LinkedIssues({ title, branch, body }: { title: string; branch: string; body: string | null }) {
+function LinkedIssues({ title, branch, body }: { title: string; branch: string | null; body: string | null }) {
   const index = useIssueIndex();
   const keys = useMemo(() => {
     const seen = new Set<string>();
@@ -68,7 +68,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
         </div>
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
           <AuthorInline login={p.author} />
-          <span className="truncate">· {p.headBranch} → {p.baseBranch}</span>
+          <span className="truncate">· {p.headBranch ?? "unknown"} → {p.baseBranch ?? "unknown"}</span>
         </p>
       </div>
 
@@ -76,7 +76,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
         <Fields
           rows={[
             ["Author", <AuthorInline key="author" login={p.author} />],
-            ["Branch", `${p.headBranch} → ${p.baseBranch}`],
+            ["Branch", `${p.headBranch ?? "unknown"} → ${p.baseBranch ?? "unknown"}`],
             [
               "Checks",
               <span className="inline-flex items-center gap-1.5" key="checks">
@@ -85,15 +85,21 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
               </span>,
             ],
             ["Review", reviewLabel(p.review)],
-            [
-              "Mergeable",
-              p.mergeableState ? `${p.mergeable === false ? "conflicts" : p.mergeable === true ? "mergeable" : "unknown"} · ${p.mergeableState}` : <span className="text-ink-faint">—</span>,
-            ],
+            ["Mergeable", mergeableText(p.mergeable, p.mergeableState) ?? <span className="text-ink-faint">—</span>],
             [
               "Change",
               <span className="tabular" key="change">
-                <span className="text-diff-add">+{p.additions}</span> <span className="text-diff-del">−{p.deletions}</span>
-                <span className="text-ink-faint"> · {p.changedFiles} files · {p.commits} commits</span>
+                {p.additions === null && p.deletions === null ? (
+                  <span className="text-ink-faint" title="Diff counts unavailable from the source">unknown</span>
+                ) : (
+                  <>
+                    <span className="text-diff-add">+{p.additions ?? "?"}</span> <span className="text-diff-del">−{p.deletions ?? "?"}</span>
+                  </>
+                )}
+                <span className="text-ink-faint">
+                  {p.changedFiles === null ? " · files unknown" : ` · ${p.changedFiles} files`} ·{" "}
+                  {p.commits === null ? "commits unknown" : `${p.commits} commits`}
+                </span>
               </span>,
             ],
             ["Updated", ago(p.updatedAt)],
@@ -113,7 +119,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
         </InspectorSection>
       )}
 
-      <InspectorSection title={`Reviews${p.reviews.length ? ` · ${p.reviews.length}` : ""}`}>
+      <InspectorSection title={`Reviews${p.reviewCount === null ? " · unknown" : p.reviewCount ? ` · ${p.reviewCount}` : ""}`}>
         {p.reviews.length ? (
           <ul className="flex flex-col gap-3">
             {p.reviews.map((r) => (
@@ -137,16 +143,22 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-ink-faint">No reviews yet.</p>
+          <p className="text-sm text-ink-faint">{p.review === null ? "Review data unavailable from the source." : "No reviews yet."}</p>
         )}
       </InspectorSection>
 
       <InspectorSection title="Conversation">
-        <PullConversation comments={p.conversationComments} reviews={p.reviews} reviewComments={p.reviewComments} />
+        {conversationUnavailable(p.unavailableSections) ? (
+          <p className="text-sm text-ink-faint">Conversation unavailable from the source.</p>
+        ) : (
+          <PullConversation comments={p.conversationComments} reviews={p.reviews} reviewComments={p.reviewComments} />
+        )}
       </InspectorSection>
 
       <InspectorSection title={`Files changed${p.files.length ? ` · ${p.files.length}` : ""}`} aside={<span className="text-xs text-ink-faint tabular">summary only</span>}>
-        {p.files.length ? (
+        {p.unavailableSections.includes("files") ? (
+          <p className="text-sm text-ink-faint">File summary unavailable from the source.</p>
+        ) : p.files.length ? (
           <ul className="flex flex-col">
             {p.files.slice(0, 30).map((f) => (
               <li key={f.filename} className="flex min-w-0 items-center gap-2 py-0.5 text-sm">

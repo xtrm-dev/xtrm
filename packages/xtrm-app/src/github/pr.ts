@@ -1,5 +1,5 @@
 import type { ContextReference } from "../refs/references.tsx";
-import type { CheckState, PullRequestSummary, PullState, ReviewState } from "../adapters/types.ts";
+import type { CheckState, PullDetailSection, PullRequestSummary, PullState, ReviewState } from "../adapters/types.ts";
 import type { Tone } from "../ui/primitives.tsx";
 
 /** Canonical PR ref: `owner/repo#N`. Serialized as `@pr:owner/repo#N`. */
@@ -105,8 +105,10 @@ export function pullStateLabel(state: PullState, draft: boolean): string {
   return state;
 }
 
-export function checkTone(state: CheckState): Tone {
+export function checkTone(state: CheckState | null): Tone {
   switch (state) {
+    case null:
+      return "muted";
     case "passing":
       return "done";
     case "failing":
@@ -118,8 +120,34 @@ export function checkTone(state: CheckState): Tone {
   }
 }
 
-export function checkLabel(state: CheckState): string {
+/** Compact checks cell text: unknown stays a word, a missing aggregate stays an em dash (XTRM-857). */
+export function checkShortLabel(state: CheckState | null): string {
+  if (state === null) return "unknown";
+  if (state === "none") return "—";
+  return checkLabel(state).replace("checks ", "");
+}
+
+/** Mergeable row text; null means the row renders "—" (XTRM-857, F2). */
+export function mergeableText(mergeable: boolean | null, mergeableState: string | null): string | null {
+  if (!mergeableState) return null;
+  if (mergeable === false) return `conflicts · ${mergeableState}`;
+  if (mergeable === true) return `mergeable · ${mergeableState}`;
+  return `unknown · ${mergeableState}`;
+}
+
+/**
+ * The conversation merges issue comments, reviews and review comments, so a
+ * failed fetch of any of the three leaves it incomplete: the drawer says
+ * unavailable rather than "No conversation yet." (XTRM-857, F1).
+ */
+export function conversationUnavailable(sections: readonly PullDetailSection[]): boolean {
+  return sections.some((section) => section === "comments" || section === "reviews" || section === "review_comments");
+}
+
+export function checkLabel(state: CheckState | null): string {
   switch (state) {
+    case null:
+      return "checks unknown";
     case "passing":
       return "checks passing";
     case "failing":
@@ -131,8 +159,10 @@ export function checkLabel(state: CheckState): string {
   }
 }
 
-export function reviewLabel(state: ReviewState): string {
+export function reviewLabel(state: ReviewState | null): string {
   switch (state) {
+    case null:
+      return "unknown";
     case "approved":
       return "approved";
     case "changes_requested":
@@ -164,7 +194,7 @@ export function filterPulls(
     return (
       p.title.toLowerCase().includes(q) ||
       p.author.toLowerCase().includes(q) ||
-      p.headBranch.toLowerCase().includes(q) ||
+      (p.headBranch ?? "").toLowerCase().includes(q) ||
       String(p.number).includes(q)
     );
   });
@@ -179,7 +209,8 @@ export function sortPulls(pulls: PullRequestSummary[], sort: PullSort): PullRequ
       rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       break;
     case "comments":
-      rows.sort((a, b) => b.comments - a.comments || b.updatedAt.localeCompare(a.updatedAt));
+      // An unknown comment count sorts last instead of pretending to be 0.
+      rows.sort((a, b) => (b.comments ?? -1) - (a.comments ?? -1) || b.updatedAt.localeCompare(a.updatedAt));
       break;
     case "updated":
     default:

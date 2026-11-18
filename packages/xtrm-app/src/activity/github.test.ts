@@ -12,6 +12,7 @@ const pr = (over: Partial<PullRequestSummary> = {}): PullRequestSummary => ({
   draft: false,
   checks: "passing",
   review: "approved",
+  reviewCount: 1,
   additions: 1,
   deletions: 1,
   changedFiles: 1,

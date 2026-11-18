@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { PullRequestSummary } from "../adapters/index.tsx";
 import { usePulls } from "../app/queries.ts";
-import { extractIssueKeys, filterPulls, pullStateLabel, pullStateTone, checkLabel, checkTone, reviewLabel, sortPulls, type PullSort, type PullView } from "./pr.ts";
+import { extractIssueKeys, filterPulls, pullStateLabel, pullStateTone, checkLabel, checkShortLabel, checkTone, reviewLabel, sortPulls, type PullSort, type PullView } from "./pr.ts";
 import { ReferenceActionsProvider, ReferenceChip, useIssueIndex } from "../refs/references.tsx";
 import { GithubNotice } from "./auth.tsx";
 import { useShell } from "../shell/context.tsx";
@@ -72,7 +72,7 @@ function PullRow({ pull, selected, onOpen }: { pull: PullRequestSummary; selecte
         </div>
         <div className={cx(CELL, "gap-2")}>
           <span className="shrink-0 font-mono text-xs text-ink-faint">#{pull.number}</span>
-          <span className="truncate text-ink" title={`${pull.headBranch} → ${pull.baseBranch}`}>
+          <span className="truncate text-ink" title={`${pull.headBranch ?? "unknown"} → ${pull.baseBranch ?? "unknown"}`}>
             {pull.title}
           </span>
           <IssueChips pull={pull} />
@@ -80,20 +80,44 @@ function PullRow({ pull, selected, onOpen }: { pull: PullRequestSummary; selecte
         <div className={cx(CELL, "text-xs text-ink-faint")}>
           <span className="truncate">{pull.author}</span>
         </div>
-        <div className={cx(CELL, "justify-end gap-1.5 text-xs tabular")}>
-          <span className="text-success">+{pull.additions}</span>
-          <span className="text-danger">−{pull.deletions}</span>
+        <div
+          className={cx(CELL, "justify-end gap-1.5 text-xs tabular")}
+          title={pull.additions === null || pull.deletions === null ? "Diff counts unknown" : `${pull.additions} added, ${pull.deletions} removed`}
+        >
+          {pull.additions === null || pull.deletions === null ? (
+            <span className="text-ink-faint">unknown</span>
+          ) : (
+            <>
+              <span className="text-success">+{pull.additions}</span>
+              <span className="text-danger">−{pull.deletions}</span>
+            </>
+          )}
         </div>
         <div className={cx(CELL, "gap-1.5 text-xs text-ink-faint")} title={checkLabel(pull.checks)}>
           <StatusDot tone={checkTone(pull.checks)} label={checkLabel(pull.checks)} />
-          <span className="truncate">{pull.checks === "none" ? "—" : checkLabel(pull.checks).replace("checks ", "")}</span>
+          <span className="truncate">
+            {checkShortLabel(pull.checks)}
+          </span>
         </div>
-        <div className={cx(CELL, "text-xs text-ink-faint")} title={reviewLabel(pull.review)}>
-          <span className="truncate">{reviewLabel(pull.review)}</span>
+        <div
+          className={cx(CELL, "text-xs text-ink-faint")}
+          title={pull.reviewCount === null ? `Review state: ${reviewLabel(pull.review)}` : `${reviewLabel(pull.review)} · ${pull.reviewCount} reviews`}
+        >
+          <span className="truncate">
+            {reviewLabel(pull.review)}
+            {pull.reviewCount !== null && pull.reviewCount > 0 && <span className="tabular"> · {pull.reviewCount}</span>}
+          </span>
         </div>
-        <div className={cx(CELL, "justify-end gap-1 text-xs text-ink-faint tabular")} title={`${pull.comments} comments`}>
+        <div
+          className={cx(CELL, "justify-end gap-1 text-xs text-ink-faint tabular")}
+          title={
+            pull.comments === null
+              ? "Conversation comment count unknown"
+              : `${pull.comments} conversation comments · review comments excluded`
+          }
+        >
           <Icon name="comment" size="xs" />
-          {pull.comments}
+          {pull.comments ?? "unknown"}
         </div>
         <div className={cx(CELL, "justify-end text-xs text-ink-faint tabular")} title={new Date(pull.updatedAt).toLocaleString()}>
           {ago(pull.updatedAt)}

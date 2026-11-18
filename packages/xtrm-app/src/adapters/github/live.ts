@@ -1,6 +1,7 @@
 import type {
   CheckState,
   GithubAdapter,
+  PullDetailSection,
   GithubIssueSummary,
   Release,
   RepoDocument,
@@ -111,9 +112,11 @@ async function getData<T>(path: string): Promise<T> {
 //       -> { state, checks, head_sha, mergeable, mergeable_state }
 //       (separate backend issue; 404 until it lands — detail degrades to
 //       checks none / mergeable null rather than failing the drawer)
-// Row shape: packages/core/src/github/store.ts GithubPr (snake_case). Rows
-// carry no branches, draft flag, or check/review state; those map to neutral
-// fallbacks below instead of guessed fields.
+// Row shape: packages/core/src/github/store.ts GithubPr (snake_case). List
+// rows carry no branch refs, no review aggregate, and null diff counters until
+// the backend persists them (XTRM-857), so every unknown maps to null and the
+// UI renders unknown, never 0. The detail payload merges mapLivePr's flat
+// head_ref/base_ref/draft into `pr`, which is the only branch source today.
 
 /** Poller-cache PR row (store.ts GithubPr). */
 interface WirePr {
@@ -135,11 +138,23 @@ interface WirePr {
   merged_at: string | null;
   closed_at: string | null;
   // Tolerated for forward compatibility if the backend ever enriches rows;
-  // absent today (verified against the live /prs response).
+  // absent on list rows today (verified against the live /prs response).
   head?: { ref?: string } | null;
   head_branch?: string | null;
   base?: { ref?: string } | null;
   base_branch?: string | null;
+  // Flat refs the detail payload adds through mapLivePr (route-runtime.ts).
+  head_ref?: string | null;
+  head_sha?: string | null;
+  base_ref?: string | null;
+  base_sha?: string | null;
+  draft?: boolean | null;
+  /** Review aggregate; the backend serves none in the list today (XTRM-857). */
+  review_state?: string | null;
+  review_count?: number | null;
+  reviews_count?: number | null;
+  /** Check aggregate; the list serves none today (XTRM-857). */
+  check_state?: string | null;
 }
 
 /** Detail payload sections used here (route-runtime.ts PrDetailPayload). */
@@ -182,6 +197,10 @@ interface WireDetail {
   review_comments?: WireReviewComment[];
   commits: Array<{ sha: string }>;
   files: Array<{ filename: string; status: string; additions: number; deletions: number }>;
+  /** Per-section backend failure; a failed section is unknown, never empty. */
+  errors?: Record<string, string>;
+  /** Backend cache stamp; informational, never rendered as freshness. */
+  cached_at?: string | null;
 }
 
 interface WireChecks {
@@ -209,7 +228,8 @@ async function tryRaw<T>(path: string): Promise<T | null> {
   }
 }
 
-function asCheckState(raw: string | null | undefined): CheckState {
+/** A state the backend sent; an absent or unrecognised value is unknown (null). */
+function asCheckState(raw: string | null | undefined): CheckState | null {
   switch ((raw ?? "").toLowerCase()) {
     case "success":
     case "passing":
@@ -222,8 +242,10 @@ function asCheckState(raw: string | null | undefined): CheckState {
     case "in_progress":
     case "queued":
       return "pending";
-    default:
+    case "none":
       return "none";
+    default:
+      return null;
   }
 }
 
@@ -256,23 +278,45 @@ function asPullState(raw: WirePr): PullState {
   }
 }
 
+/** A state the backend sent; an absent or unrecognised value is unknown (null). */
+function reviewStateOrNull(raw: string | null | undefined): ReviewState | null {
+  switch ((raw ?? "").toLowerCase()) {
+    case "approved":
+      return "approved";
+    case "changes_requested":
+      return "changes_requested";
+    case "commented":
+    case "dismissed":
+      return "commented";
+    case "pending":
+    case "review_required":
+      return "pending";
+    case "none":
+      return "none";
+    default:
+      return null;
+  }
+}
+
 export function mapPull(repo: string, raw: WirePr): PullRequestSummary {
   return {
     number: raw.number,
     title: raw.title,
     author: raw.author ?? "—",
-    // Rows carry no branch refs; tolerated fields map if the backend adds them.
-    headBranch: raw.head?.ref ?? raw.head_branch ?? "—",
-    baseBranch: raw.base?.ref ?? raw.base_branch ?? "—",
+    // List rows carry no branch refs; the detail payload carries flat ones.
+    headBranch: raw.head?.ref ?? raw.head_branch ?? raw.head_ref ?? null,
+    baseBranch: raw.base?.ref ?? raw.base_branch ?? raw.base_ref ?? null,
     state: asPullState(raw),
-    draft: false,
-    // List rows carry no check/review state; the drawer resolves both.
-    checks: "none",
-    review: "none",
-    additions: raw.additions ?? 0,
-    deletions: raw.deletions ?? 0,
-    changedFiles: raw.changed_files ?? 0,
-    comments: raw.comment_count ?? 0,
+    draft: raw.draft === true,
+    // List rows carry no check state, so the list says unknown, not "no checks".
+    checks: asCheckState(raw.check_state),
+    // ...and no review aggregate, so the list says unknown, not "no reviews".
+    review: reviewStateOrNull(raw.review_state),
+    reviewCount: raw.review_count ?? raw.reviews_count ?? null,
+    additions: raw.additions ?? null,
+    deletions: raw.deletions ?? null,
+    changedFiles: raw.changed_files ?? null,
+    comments: raw.comment_count ?? null,
     updatedAt: raw.updated_at ?? raw.created_at,
     createdAt: raw.created_at,
     url: raw.url ?? `https://github.com/${repo}/pull/${raw.number}`,
@@ -321,31 +365,65 @@ export function mapPullReviewComments(raw: WireDetail["review_comments"]): PullR
   }));
 }
 
+/** Sections the backend reports failures for, in the order the drawer checks them. */
+const DETAIL_SECTIONS: PullDetailSection[] = ["pr", "comments", "reviews", "review_comments", "commits", "files", "timeline"];
+
 export function mapPullDetail(repo: string, row: WirePr, detail: WireDetail, checks: WireChecks | null): PullRequestDetail {
-  const base = mapPull(repo, row);
+  // The detail payload merges mapLivePr into `pr`, so the flat branch refs and
+  // the draft flag exist only there. Merge it over the plain row, but let a
+  // known row value survive a null: null means unknown, never "erase".
+  const merged: WirePr = {
+    ...row,
+    ...detail.pr,
+    additions: detail.pr.additions ?? row.additions,
+    deletions: detail.pr.deletions ?? row.deletions,
+    changed_files: detail.pr.changed_files ?? row.changed_files,
+    comment_count: detail.pr.comment_count ?? row.comment_count,
+    head_ref: detail.pr.head_ref ?? row.head_ref,
+    base_ref: detail.pr.base_ref ?? row.base_ref,
+    head_branch: detail.pr.head_branch ?? row.head_branch,
+    base_branch: detail.pr.base_branch ?? row.base_branch,
+    // A detail copy that omits these must not blank the row's known values (F3).
+    draft: detail.pr.draft ?? row.draft,
+    body: detail.pr.body ?? row.body,
+    author: detail.pr.author ?? row.author,
+    url: detail.pr.url ?? row.url,
+  };
+  const base = mapPull(repo, merged);
+  // The backend names every failed section in `errors`; a failed section is
+  // unknown (null), never an empty list that would read as zero (XTRM-857).
+  const errors = detail.errors ?? {};
+  const unavailableSections = DETAIL_SECTIONS.filter((section) => errors[section] !== undefined);
+  const filesKnown = errors.files === undefined && Array.isArray(detail.files);
+  const reviewsKnown = errors.reviews === undefined && Array.isArray(detail.reviews);
+  const commentsKnown = errors.comments === undefined && Array.isArray(detail.comments);
+  const commitsKnown = errors.commits === undefined && Array.isArray(detail.commits);
   const files = (detail.files ?? []).map((f) => ({
     filename: f.filename ?? "—",
     additions: f.additions ?? 0,
     deletions: f.deletions ?? 0,
     status: f.status ?? "modified",
   }));
-  const { review, rows } = summarizeReviews(detail.reviews ?? []);
+  const { review, rows } = reviewsKnown ? summarizeReviews(detail.reviews!) : { review: null, rows: [] };
   return {
     ...base,
-    // Row counters are null until enriched; fall back to the file summary.
-    additions: row.additions ?? files.reduce((n, f) => n + f.additions, 0),
-    deletions: row.deletions ?? files.reduce((n, f) => n + f.deletions, 0),
-    changedFiles: row.changed_files ?? files.length,
-    comments: row.comment_count ?? base.comments,
+    // Row counters are null until the backend persists them; the file summary
+    // is the fallback only while the files section is present.
+    additions: merged.additions ?? (filesKnown ? files.reduce((n, f) => n + f.additions, 0) : null),
+    deletions: merged.deletions ?? (filesKnown ? files.reduce((n, f) => n + f.deletions, 0) : null),
+    changedFiles: merged.changed_files ?? (filesKnown ? files.length : null),
+    comments: merged.comment_count ?? (commentsKnown ? (detail.comments?.length ?? 0) : null),
     review,
+    reviewCount: reviewsKnown ? rows.length : base.reviewCount,
     reviews: rows,
     conversationComments: mapPullComments(detail.comments),
     reviewComments: mapPullReviewComments(detail.review_comments),
     files,
-    commits: detail.commits?.length ?? 0,
+    commits: commitsKnown ? (detail.commits?.length ?? 0) : null,
     mergeable: checks?.mergeable ?? null,
     mergeableState: checks?.mergeable_state ?? null,
     checks: asCheckState(checks?.state),
+    unavailableSections,
   };
 }
 
