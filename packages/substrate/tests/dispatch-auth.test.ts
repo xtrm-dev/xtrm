@@ -342,3 +342,86 @@ describe("A7-auth TOCTOU revision: contract edit between check and dispatch bind
     assert.equal(dispatchedCount(issue.id), 0, "rejected dispatch appends no dispatched event");
   });
 });
+
+describe("XTRM-891 dispatchToSpecialist forwards the dispatcher identity", () => {
+  let s: ReturnType<typeof scratch>;
+  beforeEach(() => { s = scratch(); });
+  afterEach(() => { try { s.db.close(); } catch { /* closed */ } rmSync(s.dir, { recursive: true, force: true }); });
+
+  const request = (ref: string, extra: Record<string, unknown> = {}) => ({
+    ref, specialist: "executor", holder: "holder-A", activationId: "act-1", workspace: "/tmp/w", ...extra,
+  });
+  const dispatchedCount = (issueId: string): number =>
+    s.svc.listEvents(issueId).filter((e) => e.type === "provenance.dispatched").length;
+
+  it("writes both dispatcher fields on the binding", () => {
+    const issue = readyIssue(s.svc, "fwd-both");
+    s.svc.claimIssue(issue.id, "holder-A", { activationId: "act-1" });
+    const { binding } = dispatchToSpecialist(s.svc, s.prov, request(issue.id, {
+      dispatcherParticipantId: "lead-g04z",
+      dispatcherSessionId: "0f7b9e34-6a1e-4b8e-9d95-0d1e6f2f0a11",
+    }));
+    assert.equal(binding.dispatcherParticipantId, "lead-g04z");
+    assert.equal(binding.dispatcherSessionId, "0f7b9e34-6a1e-4b8e-9d95-0d1e6f2f0a11");
+    const stored = s.prov.listBindings(issue.id).find((b) => b.id === binding.id);
+    assert.equal(stored?.dispatcherParticipantId, "lead-g04z");
+    assert.equal(stored?.dispatcherSessionId, "0f7b9e34-6a1e-4b8e-9d95-0d1e6f2f0a11");
+  });
+
+  it("accepts a tmux session id as the dispatcher session", () => {
+    const issue = readyIssue(s.svc, "fwd-tmux");
+    const { binding } = dispatchToSpecialist(s.svc, s.prov, request(issue.id, {
+      holder: "anyone", activationId: undefined, dispatcherSessionId: "$7",
+    }));
+    assert.equal(binding.dispatcherSessionId, "$7");
+    assert.equal(binding.dispatcherParticipantId, null);
+  });
+
+  it("keeps absent dispatcher fields null and never defaults them from the environment", () => {
+    const issue = readyIssue(s.svc, "fwd-absent");
+    const saved = { holder: process.env["SUBSTRATE_HOLDER"], session: process.env["XTRM_SESSION_ID"] };
+    process.env["SUBSTRATE_HOLDER"] = "env-holder";
+    process.env["XTRM_SESSION_ID"] = "0f7b9e34-6a1e-4b8e-9d95-0d1e6f2f0a11";
+    try {
+      const { binding } = dispatchToSpecialist(s.svc, s.prov, request(issue.id, { holder: "anyone", activationId: undefined }));
+      assert.equal(binding.dispatcherParticipantId, null);
+      assert.equal(binding.dispatcherSessionId, null);
+      const explicit = dispatchToSpecialist(s.svc, s.prov, request(issue.id, {
+        holder: "anyone", activationId: undefined, dispatcherParticipantId: null, dispatcherSessionId: null,
+      }));
+      assert.equal(explicit.binding.dispatcherParticipantId, null);
+      assert.equal(explicit.binding.dispatcherSessionId, null);
+    } finally {
+      for (const [key, value] of [["SUBSTRATE_HOLDER", saved.holder], ["XTRM_SESSION_ID", saved.session]] as const) {
+        if (value === undefined) delete process.env[key]; else process.env[key] = value;
+      }
+    }
+  });
+
+  it("refuses malformed dispatcher values with the provenance dispatch error and writes nothing", () => {
+    const issue = readyIssue(s.svc, "fwd-bad");
+    for (const bad of [
+      { dispatcherSessionId: "not-a-session", field: "dispatcherSessionId" },
+      { dispatcherSessionId: "$", field: "dispatcherSessionId" },
+      { dispatcherSessionId: "0F7B9E34-6A1E-4B8E-9D95-0D1E6F2F0A11X", field: "dispatcherSessionId" },
+      { dispatcherParticipantId: "lead 1", field: "dispatcherParticipantId" },
+      { dispatcherParticipantId: "lead;rm -rf /", field: "dispatcherParticipantId" },
+      { dispatcherParticipantId: "x".repeat(129), field: "dispatcherParticipantId" },
+    ]) {
+      const { field, ...fields } = bad;
+      const viaGate = (() => {
+        try { dispatchToSpecialist(s.svc, s.prov, request(issue.id, { holder: "anyone", activationId: undefined, ...fields })); } catch (e) { return e as Error; }
+        return null;
+      })();
+      const viaProvenance = (() => {
+        try { s.prov.dispatch(issue.id, { workspace: "/tmp/w", participantId: "anyone", ...fields }); } catch (e) { return e as Error; }
+        return null;
+      })();
+      assert.ok(viaGate, `${JSON.stringify(fields)} must be refused by the gate`);
+      assert.match(viaGate.message, new RegExp(field));
+      assert.equal(viaGate.message, viaProvenance?.message, "the gate refuses with the same error as provenance.dispatch");
+      assert.equal(s.prov.listBindings(issue.id).length, 0, "a refused dispatch writes no binding");
+      assert.equal(dispatchedCount(issue.id), 0, "a refused dispatch appends no event");
+    }
+  });
+});

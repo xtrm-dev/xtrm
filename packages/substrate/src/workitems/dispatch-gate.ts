@@ -31,6 +31,12 @@ export interface SpecialistDispatchRequest {
   baseCommit?: string;
   claimId?: number;
   requestedScope?: string[];
+  // Who dispatched this execution (XTRM-839, XTRM-891): the dispatcher's
+  // holder label and xtrm session. Forwarded verbatim to provenance.dispatch,
+  // which validates them with the grammar `sb provenance dispatch` uses.
+  // Absent stays absent: never defaulted from the environment.
+  dispatcherParticipantId?: string | null;
+  dispatcherSessionId?: string | null;
   // Coordinator-supplied envelope (X1, ADR §37): parent/coordinator lineage
   // in, specialist child identity out. Trusted typed input only.
   executionContext?: ExecutionContext | null;
@@ -175,6 +181,8 @@ export function dispatchToSpecialist(
     sessionId: req.sessionId ?? null,
     workspace: req.workspace,
     baseCommit: req.baseCommit ?? null,
+    dispatcherParticipantId: req.dispatcherParticipantId ?? null,
+    dispatcherSessionId: req.dispatcherSessionId ?? null,
     executionContext,
   }, { expectedClaim: check.expectedClaim, expectedRevision: check.revision, expectedContractHash: check.contractHash });
   if (binding.issueRevision !== check.revision || binding.contractHash !== check.contractHash) {

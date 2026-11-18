@@ -1390,3 +1390,95 @@ it("does not read a host called server as an sb without the verb (MEDIUM code)",
     }
   });
 });
+
+describe("gate.dispatch carries the dispatcher identity end to end (XTRM-891)", () => {
+  const SESSION = "0f7b9e34-6a1e-4b8e-9d95-0d1e6f2f0a11";
+
+  /** Dispatches once through the given service and returns the stored binding row's dispatcher columns. */
+  async function dispatchVia(
+    service: SubstrateService,
+    ctx: Ctx,
+    extra: Record<string, unknown>,
+  ): Promise<{ participant: string | null; session: string | null }> {
+    const { binding } = await service.call<{ binding: { id: string } }>("gate.dispatch", {
+      request: { ref: ctx.ref, specialist: "worker", holder: "holder-a", workspace: ctx.gitRoot, ...extra },
+    });
+    const rows = await service.call<Array<{ id: string; dispatcherParticipantId: string | null; dispatcherSessionId: string | null }>>(
+      "provenance.listBindings",
+      { issueId: ctx.issueId },
+    );
+    const stored = rows.find((row) => row.id === binding.id);
+    assert.ok(stored, "the new binding is listed");
+    return { participant: stored.dispatcherParticipantId, session: stored.dispatcherSessionId };
+  }
+
+  async function prepared(label: string): Promise<{ db: string; ctx: Ctx }> {
+    const repo = makeRepo(label);
+    const db = makeStore(repo, label);
+    const seeder = createLocalService(db, "test");
+    try {
+      const ctx = await seed(seeder, repo, makeRepo(`${label}-other`));
+      await seeder.call("issue.claimIssue", { issueId: ctx.issueId, holder: "holder-a", ttlMs: 60_000 });
+      return { db, ctx };
+    } finally {
+      await seeder.close();
+    }
+  }
+
+  it("stores both fields through the wire exactly as in process", async () => {
+    const { db, ctx } = await prepared("dispatcher-parity");
+    const wireDb = copyStore(db, "dispatcher-wire");
+    const localDb = copyStore(db, "dispatcher-local");
+    const wire = remoteService(wireDb);
+    const local = createLocalService(localDb, "test");
+    try {
+      const fields = { dispatcherParticipantId: "lead-g04z", dispatcherSessionId: SESSION };
+      const sent = await dispatchVia(wire, ctx, fields);
+      const stored = await dispatchVia(local, ctx, fields);
+      assert.deepEqual(sent, { participant: "lead-g04z", session: SESSION });
+      assert.deepEqual(sent, stored, "the wire and the in-process path record the same dispatcher");
+    } finally {
+      await wire.close();
+      await local.close();
+    }
+  });
+
+  it("keeps absent fields null on the wire and refuses malformed ones with the same error code", async () => {
+    const { db, ctx } = await prepared("dispatcher-refusal");
+    const wireDb = copyStore(db, "dispatcher-refusal-wire");
+    const localDb = copyStore(db, "dispatcher-refusal-local");
+    const wire = remoteService(wireDb);
+    const local = createLocalService(localDb, "test");
+    const saved = { holder: process.env["SUBSTRATE_HOLDER"], session: process.env["XTRM_SESSION_ID"] };
+    try {
+      process.env["SUBSTRATE_HOLDER"] = "env-holder";
+      process.env["XTRM_SESSION_ID"] = SESSION;
+      assert.deepEqual(await dispatchVia(wire, ctx, {}), { participant: null, session: null });
+
+      for (const bad of [
+        { dispatcherSessionId: "not-a-session" },
+        { dispatcherParticipantId: "lead;rm -rf /" },
+        { dispatcherParticipantId: "x".repeat(129) },
+      ]) {
+        const request = { ref: ctx.ref, specialist: "worker", holder: "holder-a", workspace: ctx.gitRoot, ...bad };
+        const remote = await attempt(wire, "gate.dispatch", { request });
+        const inProcess = await attempt(local, "gate.dispatch", { request });
+        assert.equal(remote.ok, false, `${JSON.stringify(bad)} must be refused over the wire`);
+        assert.deepEqual(remote, inProcess, "the wire refuses with the same outcome as in process");
+        const direct = await attempt(wire, "provenance.dispatch", {
+          issueId: ctx.issueId,
+          input: { workspace: ctx.gitRoot, participantId: "holder-a", ...bad },
+        });
+        assert.equal(direct.ok, false);
+        assert.equal(remote.code, direct.code, "the gate refuses with the code provenance.dispatch gives the same value");
+      }
+    } finally {
+      for (const [key, value] of [["SUBSTRATE_HOLDER", saved.holder], ["XTRM_SESSION_ID", saved.session]] as const) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      await wire.close();
+      await local.close();
+    }
+  });
+});
