@@ -202,9 +202,8 @@ export function SurfaceToolbar({ children }: { children?: ReactNode }) {
   return <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1.5 px-1.5 py-1.5">{children}</div>;
 }
 
-/** 28px toolbar control. `TOOLBAR_REST` carries a resting surface; `TOOLBAR_GHOST` is for tabs. */
+/** 28px toolbar control. `TOOLBAR_GHOST` is the only resting style: chrome is quiet (§2.2, §4.2). */
 export const TOOLBAR_CONTROL = "flex h-7 items-center gap-1 rounded-md px-1.5 text-xs outline-none transition-colors";
-export const TOOLBAR_REST = "bg-pressed text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
 export const TOOLBAR_GHOST = "text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-hover";
 
 /** "just now" / "4d ago"; absolute dates stay as-is. */

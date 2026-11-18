@@ -6,7 +6,7 @@ import { useShell } from "../shell/context.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_REST, cx, relativeTime } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_GHOST, cx, relativeTime } from "../ui/primitives.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
@@ -46,7 +46,7 @@ const CELL = `${CELL_EDGE} px-2`;
 
 function filterTrigger(value: string | null, label: string) {
   return (
-    <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_REST, value !== null && "bg-hover text-ink")}>
+    <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST, value !== null && "bg-hover text-ink")}>
       {value ?? label} <Icon name="chevronDown" size="xs" className="text-ink-faint" />
     </button>
   );

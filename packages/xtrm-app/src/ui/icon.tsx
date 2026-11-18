@@ -23,11 +23,15 @@ import {
   GitCommit,
   GitMerge,
   GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
   History,
   Kanban,
   Layers,
   Link,
   List,
+  ListFilter,
+  Lock,
   Maximize,
   Maximize2,
   Minimize2,
@@ -87,9 +91,13 @@ const registry = {
   commit: GitCommit,
   merge: GitMerge,
   pull: GitPullRequest,
+  pullDraft: GitPullRequestDraft,
+  pullClosed: GitPullRequestClosed,
   work: Layers,
   link: Link,
   live: Radio,
+  filter: ListFilter,
+  lock: Lock,
   maximize: Maximize,
   restore: Minimize2,
   moon: Moon,
@@ -116,13 +124,19 @@ const registry = {
 
 export type IconName = keyof typeof registry;
 
-const SIZES = { xs: 14, sm: 16, nav: 16, md: 18, lg: 20 } as const;
+const SIZES = { micro: 12, text: 13, xs: 14, sm: 16, nav: 16, md: 18, lg: 20 } as const;
+
+/**
+ * Lucide ships 2; the sidebar and the tables read better at 2.25
+ * (docs/mocks/sidebar-weight-connection-activity.html A1). At 12–13px the smaller weight closes the
+ * counters of `git-pull-request` and its siblings (docs/design/console-ui-system.md §3.2).
+ */
+const defaultStroke = (size: keyof typeof SIZES) => (size === "text" || size === "micro" ? 2 : 2.25);
 
 export function Icon({
   name,
   size = "sm",
-  /** Lucide ships 2; the sidebar and the tables read better at 2.25 (docs/mocks/sidebar-weight-connection-activity.html A1). */
-  strokeWidth = 2.25,
+  strokeWidth,
   className,
 }: {
   name: IconName;
@@ -131,5 +145,5 @@ export function Icon({
   className?: string;
 }) {
   const Comp = registry[name];
-  return <Comp size={SIZES[size]} strokeWidth={strokeWidth} className={className} aria-hidden />;
+  return <Comp size={SIZES[size]} strokeWidth={strokeWidth ?? defaultStroke(size)} className={className} aria-hidden />;
 }

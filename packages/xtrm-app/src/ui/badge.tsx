@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { cx } from "./primitives.tsx";
 
 /** Semantic weight, same five values the issue table already uses for status chips. */
-export type BadgeTone = "accent" | "active" | "danger" | "neutral" | "muted" | "inverse";
+export type BadgeTone = "accent" | "active" | "danger" | "success" | "neutral" | "muted" | "inverse";
 
 /**
  * Ink and soft fills only: the surface stays monochrome and a badge borrows colour from the tone
@@ -12,6 +12,8 @@ const TONE: Record<BadgeTone, string> = {
   accent: "bg-accent-soft text-accent-ink",
   active: "bg-accent-soft text-ink",
   danger: "bg-danger/12 text-danger",
+  /** GitHub-style Open chip: the word is the state, the tone reinforces it (§3.2). */
+  success: "bg-success/12 text-success",
   neutral: "bg-pressed text-ink-muted",
   muted: "bg-hover text-ink-faint",
   /** On the sidebar strip and its drop-up: follows that surface through the --x-strip-* tokens. */
