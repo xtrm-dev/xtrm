@@ -169,8 +169,8 @@ describe("migrations 008-009 on the live prj_xtrm store shape (§90)", () => {
     // below, and X1 lands 010 plus C1 lands 011 on top without touching
     // existing rows. XTRM-414 lands 012 (workspace-leases withdrawal);
     // XTRM-728 lands 015 (pull_requests live state); XTRM-754 lands 016
-    // (pull_requests.state_source).
-    assert.equal(version.v, 16);
+    // (pull_requests.state_source); XTRM-839 lands 017 (dispatcher identity).
+    assert.equal(version.v, 17);
     const applied = db.prepare("SELECT name FROM schema_migrations WHERE version = 8").get() as { name: string };
     assert.equal(applied.name, "repository-bindings");
     const head9 = db.prepare("SELECT name FROM schema_migrations WHERE version = 9").get() as { name: string };

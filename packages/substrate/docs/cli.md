@@ -171,7 +171,11 @@ sb journal checkpoint XTRM-123 --session '$2'
 sb provenance dispatch XTRM-123 --participant coordinator --session '$2'
 ```
 
-Quote tmux IDs so the shell does not expand `$2`. `provenance allocate` does
+Quote tmux IDs so the shell does not expand `$2`. `provenance dispatch` also
+accepts `--dispatcher-participant <holder>` and `--dispatcher-session <id>` to
+record who dispatched the execution; they are never taken from
+`XTRM_SESSION_ID` (see [Provenance and Closure](provenance-and-closure.md)).
+`provenance allocate` does
 not accept `--session`: it inherits the execution binding. Receipt allocation,
 checkpoint links and commit binding are documented in
 [Provenance and Closure](provenance-and-closure.md#allocate-and-link-a-receipt).

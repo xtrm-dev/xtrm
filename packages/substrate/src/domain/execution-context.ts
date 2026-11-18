@@ -633,6 +633,22 @@ export function canonicalizeWriteIdentity(input: WriteIdentityInput): WriteIdent
   };
 }
 
+// Canonicalise the dispatcher identity of a binding (XTRM-839). Same
+// grammar as the executor identity beside it: the participant is a
+// shell-safe label and the session is a canonical lowercase UUID or tmux id.
+// Absent stays null; an offending value throws IdentityFormatError before
+// any row is written.
+export function canonicalizeDispatcherIdentity(input: {
+  participantId?: string | null;
+  sessionId?: string | null;
+}): { participantId: string | null; sessionId: string | null } {
+  return {
+    participantId:
+      input.participantId != null ? canonicalLabel(input.participantId, "dispatcherParticipantId") : null,
+    sessionId: input.sessionId != null ? canonicalSession(input.sessionId, "dispatcherSessionId") : null,
+  };
+}
+
 // The execution context the current process runs inside, derived only from
 // the runtime env contract (R4 session + host-adapter holder/activation).
 // Returns null when nothing is known: absence is a first-class state, never
