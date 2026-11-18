@@ -54,7 +54,16 @@ export const PR_STATE_UNKNOWN: PrStateMeta = {
 
 export function prStateMeta(state: string | null, draft?: boolean | null): PrStateMeta {
   const key = prStateOf(state, draft);
-  return key === "unknown" ? PR_STATE_UNKNOWN : PR_STATES[key];
+  if (key !== "unknown") return PR_STATES[key];
+  // A state the source reported but this module does not know keeps its own word: the cell says
+  // "Queued", not "Unknown", because the data is present and only the rendering is new (§4.4).
+  const reported = typeof state === "string" ? state.trim() : "";
+  if (!reported) return PR_STATE_UNKNOWN;
+  return {
+    ...PR_STATE_UNKNOWN,
+    word: reported.charAt(0).toUpperCase() + reported.slice(1),
+    hint: `State reported by the source: ${reported}`,
+  };
 }
 
 export interface PrKeyProps {

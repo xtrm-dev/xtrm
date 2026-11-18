@@ -194,8 +194,9 @@ describe("PR identity (§4.4-4.5)", () => {
     const key = within(row).getByLabelText("Pull request #212, open");
     expect(key.className).toContain("text-success");
     expect(key.querySelector("svg")).not.toBeNull();
-    // The state is no longer a separate dot column, and the word never repeats beside the key.
-    expect(row.querySelector("[data-slot='dot']")).toBeNull();
+    // Restraint rule 1: the key is the row's only coloured element, and the state word never repeats.
+    expect(row.querySelectorAll("[class*='text-success']")).toHaveLength(1);
+    expect(row.querySelector("[title='checks accepted']")).toBeNull();
     expect(within(row).queryByText("open")).toBeNull();
     expect(within(row).getByLabelText("Copy xtrm-dev/xtrm#212")).toBeTruthy();
   });
@@ -213,6 +214,18 @@ describe("PR identity (§4.4-4.5)", () => {
     fireEvent.click(more);
     const chips = await screen.findAllByRole("button", { name: /XTRM-\d+/ });
     expect(chips.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("opens the +N popover on Enter without opening the inspector", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls");
+    const title = await screen.findByText("fix(XTRM-305): silence virtual-bead spam");
+    const row = title.closest("[data-testid='pull-row']") as HTMLElement;
+    const more = within(row).getByLabelText("1 more linked issues");
+    // Enter must not bubble into the row's own activation; the trigger opens its own popover.
+    fireEvent.keyDown(more, { key: "Enter" });
+    expect(screen.queryByTestId("inspector-drawer")).toBeNull();
+    fireEvent.click(more);
+    expect(await screen.findByRole("button", { name: /XTRM-94/ })).toBeTruthy();
   });
 
   it("renders the §4.5 inspector header: key, state chip, branch, diff, files, author, dates", async () => {

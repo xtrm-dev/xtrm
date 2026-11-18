@@ -41,10 +41,11 @@ describe("board PR column", () => {
     render(<RouterProvider router={router} />);
     const header = await screen.findByRole("columnheader", { name: /PR/ });
     expect(header).toBeTruthy();
-    // The column shows the key alone: the state lives in the colour, the glyph and the aria-label.
+    // The column shows the key alone. The row's lifecycle badge already carries the colour, so the
+    // key stays quiet (§4.4 Restraint rule 1) and the state travels in the glyph and the aria-label.
     const key = await screen.findByLabelText("Pull request #211, merged");
     expect(key.textContent).toContain("#211");
-    expect(key.className).toContain("text-accent-ink");
+    expect(key.className).toContain("text-ink-muted");
     expect(key.querySelector("svg")).not.toBeNull();
     fireEvent.click(within(header).getByRole("button"));
     expect(header.getAttribute("aria-sort")).not.toBe("none");

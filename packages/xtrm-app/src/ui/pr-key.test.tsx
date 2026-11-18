@@ -74,6 +74,13 @@ describe("PrStateChip", () => {
     const badge = screen.getByText("Unknown").closest("[data-slot='badge']") as HTMLElement;
     expect(badge.getAttribute("title")).toContain("no pull_requests row");
   });
+
+  it("keeps a reported state it does not know in its own words", () => {
+    render(<PrStateChip state="queued" />);
+    const badge = screen.getByText("Queued").closest("[data-slot='badge']") as HTMLElement;
+    expect(badge.getAttribute("title")).toContain("State reported by the source: queued");
+    expect(screen.queryByText("Unknown")).toBeNull();
+  });
 });
 
 describe("PR_STATES", () => {

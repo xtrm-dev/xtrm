@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { usePull } from "../app/queries.ts";
 import { checkLabel, checkTone, conversationUnavailable, mergeableText, parsePullRef, reviewLabel, usePrLinkedRefs } from "./pr.ts";
 import { ReferenceActionsProvider, ReferenceChip } from "../refs/references.tsx";
@@ -42,7 +41,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
       <div data-testid="pull-header" className="flex flex-col gap-1.5 px-5 pt-4 pb-3">
         <div className="flex items-start gap-3">
           <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-2">
-            <PrKey number={p.number} state={p.state} draft={p.draft} className="shrink-0" />
+            <PrKey number={p.number} state={p.state} draft={p.draft} quiet className="shrink-0" />
             <h2 className="min-w-0 text-base leading-snug font-medium text-pretty text-ink">{p.title}</h2>
           </span>
           <GithubPill href={p.url} size="sm" variant="ghost" />

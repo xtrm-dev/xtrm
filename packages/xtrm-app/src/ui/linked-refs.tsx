@@ -37,6 +37,10 @@ export function LinkedRefs({ refs, max = 1, onOpen }: { refs: string[]; max?: nu
             aria-label={`${extra} more linked issues`}
             onClick={stop}
             onDoubleClick={stop}
+            onKeyDown={(event) => {
+              // The trigger sits inside a Row: its own Enter/Space must not also open the inspector.
+              if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+            }}
             className="shrink-0 text-xs tabular text-ink-faint outline-none hover:text-ink focus-visible:text-ink"
           >
             +{extra}

@@ -279,7 +279,7 @@ function IssueRow({ row, selected, onToggle, onInspect, onOpen }: { row: TreeRow
         <div className={cx(CELL, "justify-end")}>
           {issue.primaryPr && (
             <span title={issue.primaryPr.relation} className="flex min-w-0 items-center justify-end">
-              <PrKey number={issue.primaryPr.number} state={issue.primaryPr.state} className="min-w-0" />
+              <PrKey number={issue.primaryPr.number} state={issue.primaryPr.state} quiet className="min-w-0" />
             </span>
           )}
         </div>

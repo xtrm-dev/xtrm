@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useIssueIndex, type ContextReference } from "../refs/references.tsx";
 import { PR_STATES, prStateOf } from "../ui/pr-key.tsx";
-import type { CheckState, PullDetailSection, PullRequestSummary, PullState, ReviewState } from "../adapters/types.ts";
+import type { CheckState, PullDetailSection, PullRequestSummary, ReviewState } from "../adapters/types.ts";
 import type { Tone } from "../ui/primitives.tsx";
 
 /** Canonical PR ref: `owner/repo#N`. Serialized as `@pr:owner/repo#N`. */
