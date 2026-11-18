@@ -26,6 +26,7 @@ from enum import Enum
 from pathlib import Path
 
 from .manifest import ClaimManifest, content_hash
+from .structural_validator import CURATED_REMOVED_ADVISORY_CODE
 from .taxonomy import Risk, Verdict
 
 # Structural-issue severities that hard-fail the gate (see structural_validator.py).
@@ -130,7 +131,9 @@ def compute_gate(manifest: ClaimManifest, *, evidence_race: bool = False) -> Gat
     conflict_claims = [c for c in manifest.claims if c.verdict is Verdict.CONFLICT]
     unknown_claims = [c for c in manifest.claims if c.verdict is Verdict.UNKNOWN]
     high_risk_unknown = [c for c in unknown_claims if c.risk is Risk.HIGH]
-    advisory_count = sum(len(c.advisories) for c in manifest.claims)
+    advisory_count = sum(len(c.advisories) for c in manifest.claims) + sum(
+        1 for issue in manifest.structural_issues if issue.get("code") == CURATED_REMOVED_ADVISORY_CODE
+    )
 
     conflict_count = len(conflict_claims)
     unknown_count = len(unknown_claims)

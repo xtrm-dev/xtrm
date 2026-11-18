@@ -71,7 +71,7 @@ def test_clean_fixture_writes_exactly_once(service_dir, monkeypatch):
         skill, candidate, service_id="runners", territory=["source/**"], source_root=root, state_root=root
     )
 
-    assert result["verdict"] == GateVerdict.PASS.value
+    assert result["verdict"] == GateVerdict.PASS_WITH_ADVISORIES.value
     assert result["written"] is True
     assert len(calls) == 1  # atomic_write called EXACTLY once
     assert calls[0][0] == skill
@@ -93,7 +93,7 @@ def test_dry_run_never_writes_even_on_pass(service_dir, monkeypatch):
     result = reconcile.gated_write(
         skill, candidate, service_id="runners", territory=["source/**"], source_root=root, state_root=root, dry_run=True
     )
-    assert result["verdict"] == GateVerdict.PASS.value
+    assert result["verdict"] == GateVerdict.PASS_WITH_ADVISORIES.value
     assert result["written"] is False
     assert calls == []
 
@@ -109,7 +109,7 @@ def test_evidence_race_retries_then_completes(service_dir, monkeypatch):
     result = reconcile.gated_write(
         skill, candidate, service_id="runners", territory=["source/**"], source_root=root, state_root=root
     )
-    assert result["verdict"] == GateVerdict.PASS.value
+    assert result["verdict"] == GateVerdict.PASS_WITH_ADVISORIES.value
     assert result["written"] is True
     assert len(calls) == 1
 
@@ -202,7 +202,7 @@ def test_gate_mode_pass_exits_zero():
     proc = _run_gate_cli("runners")
     assert proc.returncode == 0
     payload = json.loads(proc.stdout)
-    assert payload["gate"]["verdict"] == "PASS"
+    assert payload["gate"]["verdict"] == "PASS_WITH_ADVISORIES"
     assert payload["gate"]["is_writable"] is True
 
 
@@ -255,7 +255,7 @@ def test_semantic_preservation_deletion_blocks_real_gated_write(service_dir):
 
 def test_semantic_preservation_identical_interior_allows_real_outside_write(service_dir):
     root, skill, candidate, current = service_dir("runners")
-    candidate = current.replace("# Runners\n", "# Updated Runners\n")
+    candidate = current.replace("# Runners\n", "# Runners\n\nAdded intro.\n")
     result = reconcile.gated_write(
         skill, candidate, service_id="runners", territory=["source/**"], source_root=root, state_root=root
     )
@@ -269,7 +269,7 @@ def test_semantic_preservation_identical_interior_allows_real_outside_write(serv
 @pytest.mark.parametrize("delete_interior", [True, False], ids=["deletion", "identical"])
 def test_semantic_preservation_cli_checks_current_and_candidate(service_dir, delete_interior):
     root, skill, candidate, current = service_dir("runners")
-    candidate = current.replace("# Runners\n", "# Updated Runners\n")
+    candidate = current.replace("# Runners\n", "# Runners\n\nAdded intro.\n")
     if delete_interior:
         candidate = candidate.replace("Curatorial notes preserved verbatim across regeneration.\n", "")
     candidate_path = root / "candidate.md"
@@ -297,4 +297,42 @@ def test_semantic_preservation_cli_checks_current_and_candidate(service_dir, del
     ]
     assert bool(preservation_issues) is delete_interior
     assert all(issue["severity"] == "error" for issue in preservation_issues)
+    assert skill.read_bytes() == original_bytes
+
+
+def _runners_with_prose(service_dir, notes: int):
+    root, skill, _, current = service_dir("runners")
+    prose = "".join(f"Runbook note {i}.\n\n" for i in range(notes))
+    current = current.replace("# Runners\n\n", f"# Runners\n\n{prose}")
+    skill.write_text(current, encoding="utf-8")
+    return root, skill, current
+
+
+def test_few_removed_curated_lines_still_write_with_advisory(service_dir):
+    root, skill, current = _runners_with_prose(service_dir, 40)
+    candidate = current.replace("Runbook note 2.\n\n", "")
+    result = reconcile.gated_write(
+        skill, candidate, service_id="runners", territory=["source/**"], source_root=root, state_root=root
+    )
+    assert result["verdict"] == GateVerdict.PASS_WITH_ADVISORIES.value
+    assert result["written"] is True
+    assert any(i["code"] == "curated_text_removed" for i in result["manifest"]["structural_issues"])
+    assert skill.read_bytes() == candidate.encode("utf-8")
+
+
+def test_wholesale_curated_deletion_blocks_real_gated_write(service_dir):
+    root, skill, current = _runners_with_prose(service_dir, 40)
+    candidate = current
+    for i in range(40):
+        candidate = candidate.replace(f"Runbook note {i}.\n\n", "")
+    original_bytes = skill.read_bytes()
+    result = reconcile.gated_write(
+        skill, candidate, service_id="runners", territory=["source/**"], source_root=root, state_root=root
+    )
+    assert result["verdict"] == GateVerdict.INVALID.value
+    assert result["written"] is False
+    assert any(
+        i["code"] == "curated_text_removed_excessive" and i["severity"] == "error"
+        for i in result["manifest"]["structural_issues"]
+    )
     assert skill.read_bytes() == original_bytes
