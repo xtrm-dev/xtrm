@@ -53,6 +53,44 @@ describe("Issues list rows (XTRM-856)", () => {
     expect(widths.every((w) => w === "13")).toBe(true);
   });
 
+  it("indents in a fixed gutter, so key, chip and title share one column", async () => {
+    renderIssues();
+    await firstRow();
+    const rows = Array.from(document.querySelectorAll('[role="button"]')).filter((el) => /XTRM-\d/.test(el.textContent ?? ""));
+    const top = rows[0] as HTMLElement;
+    // A child row is the one whose key carries a `/ ref` or dotted locator.
+    const child = rows.find((el) => /XTRM-\d+\.\d+/.test(el.textContent ?? "")) as HTMLElement | undefined;
+    expect(child, "the fixture renders at least one child row").toBeTruthy();
+
+    // jsdom has no layout, so the guard is the mechanism: one gutter width for the list, and the
+    // indent carried only by that gutter's padding. The pixel check lives in e2e/issue-rows.spec.ts.
+    for (const row of [top, child!]) {
+      const gutter = row.querySelector("span[style*='--indent-col']") as HTMLElement | null;
+      expect(gutter, "the leading gutter is a constant-width span").not.toBeNull();
+      expect(gutter!.style.width).toBe("calc(var(--indent-col) + 1.25rem)");
+      const titleCell = row.firstElementChild!.firstElementChild as HTMLElement;
+      expect(titleCell.style.paddingLeft, "no depth-dependent padding on the title cell").toBe("");
+    }
+    const depthOf = (row: HTMLElement) => (row.querySelector("span[style*='--indent-col']") as HTMLElement).style.paddingLeft;
+    expect(depthOf(child!)).not.toBe(depthOf(top));
+  });
+
+  it("keeps the title flexible and the one action in the trailing slot", async () => {
+    renderIssues();
+    const { row, key } = await firstRow();
+    const titleCell = row.firstElementChild!.firstElementChild as HTMLElement;
+    const title = titleCell.querySelector("span.truncate") as HTMLElement;
+    expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "truncate"]));
+    // The action must not live inside the title cell: it would sit right after the truncated title.
+    expect(within(titleCell).queryAllByRole("button", { name: `Copy ${key.textContent}` })).toHaveLength(0);
+
+    const grid = titleCell.parentElement as HTMLElement;
+    const trailing = grid.lastElementChild as HTMLElement;
+    const copy = within(trailing).getByRole("button", { name: `Copy ${key.textContent}` });
+    expect(copy).toBeTruthy();
+    expect(trailing.className).toContain("justify-end");
+  });
+
   it("carries one copy action at the row end and no expand action", async () => {
     renderIssues();
     const { row, key } = await firstRow();

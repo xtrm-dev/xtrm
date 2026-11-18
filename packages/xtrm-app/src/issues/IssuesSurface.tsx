@@ -42,7 +42,9 @@ const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "righ
   { key: "created", label: "Created", width: "5rem", align: "right" },
   { key: "updated", label: "Updated", width: "5.5rem", align: "right" },
 ];
-const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
+// The trailing slot is not a sortable column: it reserves the row-action width so the action can
+// never overlap a measured cell (design §4.3, "at the row end").
+const GRID = { gridTemplateColumns: [...COLUMNS.map((c) => c.width), "2rem"].join(" ") };
 const CELL_EDGE = "flex h-full min-w-0 items-center";
 const CELL = `${CELL_EDGE} px-2`;
 
@@ -96,7 +98,10 @@ export function IssuesSurface() {
       return next;
     });
   const keyCol = `${keyColumnRem(visible)}rem`;
-  const tableVars = { "--key-col": keyCol } as CSSProperties;
+  // The indent gutter is one width for the whole list, sized for its deepest row, so a child row
+  // indents its chevron instead of pushing its key, chip and title sideways.
+  const indentCol = `${Math.max(0, ...tree.map((r) => r.depth)) * 1.25}rem`;
+  const tableVars = { "--key-col": keyCol, "--indent-col": indentCol } as CSSProperties;
 
   let body;
   if (projects.isPending || (project && issues.isPending)) body = <LoadingState label="Loading issues" />;
@@ -145,12 +150,13 @@ export function IssuesSurface() {
                 </button>
               </div>
             ))}
+            <div className={CELL_EDGE} aria-hidden />
           </div>
         }
         renderRow={(r) => (
           <IssueRow
             row={r}
-            keyCol={keyCol}
+            vars={tableVars}
             selected={inspected?.kind === "issue" && inspected.ref === r.issue.ref}
             onToggle={() => toggle(r.issue.ref)}
             onInspect={() => inspect({ kind: "issue", ref: r.issue.ref })}
@@ -210,7 +216,7 @@ export function IssuesSurface() {
 
 const NUMBER = "text-xs text-ink-muted tabular";
 
-function IssueRow({ row, keyCol, selected, onToggle, onInspect, onOpen }: { row: TreeRow; keyCol: string; selected: boolean; onToggle: () => void; onInspect: () => void; onOpen: () => void }) {
+function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: TreeRow; vars: CSSProperties; selected: boolean; onToggle: () => void; onInspect: () => void; onOpen: () => void }) {
   const { issue, depth, rollup, hasChildren, collapsed, detached } = row;
   const terminal = TERMINAL.has(issue.lifecycle);
   const status = issueStatus(issue);
@@ -233,8 +239,9 @@ function IssueRow({ row, keyCol, selected, onToggle, onInspect, onOpen }: { row:
         }
       }}
     >
-      <div className="grid h-full w-full items-center overflow-hidden" style={{ ...GRID, "--key-col": keyCol } as CSSProperties}>
-        <div className={cx(CELL, "relative gap-1.5")} style={{ paddingLeft: `${0.5 + depth * 1.25}rem` }}>
+      <div className="grid h-full w-full items-center overflow-hidden" style={{ ...GRID, ...vars }}>
+        <div className={cx(CELL, "gap-1.5")}>
+          <span className="flex shrink-0 items-center" style={{ width: "calc(var(--indent-col) + 1.25rem)", paddingLeft: `${depth * 1.25}rem` }}>
           {hasChildren ? (
             <button
               type="button"
@@ -251,6 +258,7 @@ function IssueRow({ row, keyCol, selected, onToggle, onInspect, onOpen }: { row:
           ) : (
             <span className="w-5 shrink-0" />
           )}
+          </span>
           <span title={issue.kind} className="flex shrink-0">
             <Icon name={kindIcon(issue.kind)} size="text" className="text-ink-faint" />
           </span>
@@ -261,7 +269,7 @@ function IssueRow({ row, keyCol, selected, onToggle, onInspect, onOpen }: { row:
           <Badge tone={status.tone} size="xs" title={status.hint} className="w-[4.25rem] justify-center">
             {status.label}
           </Badge>
-          <span className="min-w-0 truncate">
+          <span className="min-w-0 flex-1 truncate">
             <span title={issue.title} className={cx(terminal ? "text-ink-muted" : issue.kind === "epic" ? "font-medium text-ink" : "text-ink")}>
               {issue.title}
             </span>
@@ -270,9 +278,6 @@ function IssueRow({ row, keyCol, selected, onToggle, onInspect, onOpen }: { row:
                 ↑<ReferenceChip reference={{ kind: "issue", ref: issue.parentRef }} fallback={issue.parentLocator ?? issue.parentRef} />
               </span>
             )}
-          </span>
-          <span className="pointer-events-none absolute inset-y-0 right-1 flex items-center bg-surface pl-1 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100" onClick={(e) => e.stopPropagation()}>
-            <RowAction icon="copy" label={`Copy ${issue.ref}`} onAct={() => copy(issue.ref)} doneLabel="Copied" />
           </span>
         </div>
         <div className={cx(CELL, "justify-end")}>
@@ -297,6 +302,11 @@ function IssueRow({ row, keyCol, selected, onToggle, onInspect, onOpen }: { row:
         </div>
         <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")} title={`Created ${relativeTime(issue.createdAt)} · Updated ${relativeTime(rollup.activityAt)}`}>
           {relativeTime(rollup.activityAt)}
+        </div>
+        <div className={cx(CELL_EDGE, "justify-end")} onClick={(e) => e.stopPropagation()}>
+          <span className="flex size-5 items-center justify-center opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+            <RowAction icon="copy" label={`Copy ${issue.ref}`} onAct={() => copy(issue.ref)} doneLabel="Copied" />
+          </span>
         </div>
       </div>
     </Row>
