@@ -161,7 +161,7 @@ describe("XTRM-839 dispatcher identity on the binding", () => {
     assert.equal(s.prov.listBindings(issue.id).length, 0);
   });
 
-  it("cli: trace prints the dispatcher in json and human output; a legacy-shaped binding reads absent", () => {
+  it("cli: trace prints the dispatcher in json and human output, and a binding without one reads absent", () => {
     const issue = readyIssue(s.svc);
     cliJson(s.dbPath, ["provenance", "dispatch", issue.humanRef, "--workspace", s.dir]);
     cliJson(s.dbPath, [

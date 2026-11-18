@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-18
+
+### Operator notes
+- **Migration 17 (`dispatcher-identity`) is forward-only for older clients.** `sb` 0.3.3 and earlier refuse a store at migration 17 (`fail-closed: unknown migration version 17 in database`). Upgrade every `sb` that opens the store before the first 0.4.0 binary opens it.
+- **Rollback is the pre-upgrade backup.** Before the first 0.4.0 `sb` opens the canonical store, take a consistent copy (`VACUUM INTO '<backup>.db'` on a read-only connection) and record its path and size. To roll back, stop every `sb` user, restore that file as the store, and reinstall `sb` 0.3.3. Bindings written after the upgrade are not in the backup. Do not delete migration rows or edit the ledger by hand.
+
+### Added
+- Bounded external-binding read and Jira bind verb (XTRM-814) (#418) ([a7920ab](https://github.com/xtrm-dev/xtrm/commit/a7920ab953618c87954b8d0e1bdff906d07385a5))
+- Dispatcher participant and session on the provenance dispatch binding (XTRM-839) ([98e92cc](https://github.com/xtrm-dev/xtrm/commit/98e92ccc96c345c98f5c6d191f83493db51dec10))
+
+### Fixed
+- Journal paging header never claims an unproven capability (XTRM-798) (#399) ([4eab32a](https://github.com/xtrm-dev/xtrm/commit/4eab32a9e63735f61fbd77652c0b6a9e49577d32))
+- Normalise prose validation/output on create/edit (XTRM-786) (#398) ([ac45004](https://github.com/xtrm-dev/xtrm/commit/ac4500466e7cfbb7b92bbd7c134c5fc06181eb03))
+- Correct the sqlite neutral-import rationale comment (XTRM-789) (#401) ([ed4fe5a](https://github.com/xtrm-dev/xtrm/commit/ed4fe5a517d7e4092190c17bae0e33bb4d66e17d))
+- Render journal evidence from what the row holds (XTRM-420) (#404) ([b84e8ec](https://github.com/xtrm-dev/xtrm/commit/b84e8ec996cd6158acfdc56c956b55ace1b5b0aa))
+- Degrade per row at the row→entry seam (ADR-009) (#410) ([7b7afd3](https://github.com/xtrm-dev/xtrm/commit/7b7afd38b679532748c59773a5e6ace3304027f6))
+- Human journal show renders result evidence; test and cache hygiene (XTRM-832) (#415) ([8da35e7](https://github.com/xtrm-dev/xtrm/commit/8da35e75bf60c2256e6a109d6f774f64c363e901))
+- Store a result envelope from a file as fields, not as escaped JSON (XTRM-835) (#416) ([59984f5](https://github.com/xtrm-dev/xtrm/commit/59984f53eecffed35a110f060f9920686d99d217))
+
+### Other changes
+- Teach the sb routine (XTRM-799) (#400) ([aa2b607](https://github.com/xtrm-dev/xtrm/commit/aa2b607df54ccb8f318234e39341e61176cadc3b))
+
+### Performance
+
+### Project maintenance
+- Strip only the node:sqlite startup warning on Node 25 (XTRM-824) (#406) ([018e46a](https://github.com/xtrm-dev/xtrm/commit/018e46a672b64a6e196ed26faae6c01ec19e5669))
+
 ## [0.3.3] - 2026-11-13
 
 ### Added

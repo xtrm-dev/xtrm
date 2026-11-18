@@ -103,18 +103,6 @@ export interface ProvenanceTrace {
   closureRevision: number | null;
 }
 
-/**
- * Authority for the lineage spine: execution bindings, work receipts with
- * artifacts, attestation currency, claims and the closure view, read from the
- * WAL store that stays the durable authority. Trace and reverse lookups are
- * read-only with no side effects; dispatch and receipt writes are
- * transactional rows that pin the Issue revision and contract hash, so a later
- * contract edit binds anew instead of silently re-authorizing. Reads never
- * move the revision and never stale readiness. Automatic metadata: bindings
- * and receipts stamp actor, session, execution envelope and timestamps at
- * write time. Reads are idempotent; dispatch against a stale revision,
- * unknown commits and missing receipts fail closed.
- */
 /** Who dispatched one execution binding; both fields are null when never recorded (XTRM-839). */
 export interface DispatcherView {
   bindingId: string;
@@ -130,6 +118,18 @@ function dispatcherView(b: ExecutionBinding): DispatcherView {
   };
 }
 
+/**
+ * Authority for the lineage spine: execution bindings, work receipts with
+ * artifacts, attestation currency, claims and the closure view, read from the
+ * WAL store that stays the durable authority. Trace and reverse lookups are
+ * read-only with no side effects; dispatch and receipt writes are
+ * transactional rows that pin the Issue revision and contract hash, so a later
+ * contract edit binds anew instead of silently re-authorizing. Reads never
+ * move the revision and never stale readiness. Automatic metadata: bindings
+ * and receipts stamp actor, session, execution envelope and timestamps at
+ * write time. Reads are idempotent; dispatch against a stale revision,
+ * unknown commits and missing receipts fail closed.
+ */
 export class ProvenanceService {
   private readonly db: DatabaseSync;
   private readonly issues: IssueService;
