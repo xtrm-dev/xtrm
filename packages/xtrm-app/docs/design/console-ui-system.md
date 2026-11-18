@@ -93,7 +93,7 @@ No new colour token and no new surface level. Four additions, all derived from e
 | Badge tone `success` | `src/ui/badge.tsx` `TONE` | `success: "bg-success/12 text-success-ink"` (same pattern as `danger: "bg-danger/12 text-danger"`, with the ink token of §3.1 so the tint stays readable: 5.85:1 on white, 5.34:1 on the canvas) | GitHub-style Open chip. The only way to express it today is `active`, which is accent-soft and reads as "reference". |
 | PR state map | `src/ui/pr-key.tsx` (new) | `PR_STATES` (§4.4) | One table for the key colour, the chip tone, the glyph, the word and the tooltip, so list, inspector, chips and prose cannot drift. |
 
-`--x-success` in light is `#1f8a4c`: 4.38:1 on `#ffffff` and 3.98:1 on `#f4f4f5`, below the 4.5:1 text minimum at 11.5–13px. It becomes the `PrKey` open colour, so ruling R1 asks to darken it to `#1b7f46` (5.04:1 on white, 4.58:1 on `#f4f4f5`; verified by computation). Dark values pass (9.0:1 on `#151515`).
+`--x-success` in light is `#1b7f46`: 5.04:1 on `#ffffff` and 4.58:1 on `#f4f4f5`. R1 darkened it from `#1f8a4c`, which read 4.38:1 and 3.98:1, below the 4.5:1 text minimum at 11.5–13px; it is the `PrKey` open colour. Dark is unchanged (`#5ccb8a`, 9.0:1 on `#151515`).
 
 `--x-diff-add` follows `--x-success` in both themes: one datum, one green. It was `#1f8a4c` (4.38:1 on white) while `--x-success` moved, so the PR header and the PR list showed a second, lighter green next to the key colour. Lead ruling on the UI-1 review (XTRM-860).
 
@@ -140,12 +140,13 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
   //   An active filter shows its value in the label; aria-label = "Status filter: open".
   ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id: string; label: string; count?: number }>; value: string; onChange: (id: string) => void; label: string })
   //   role="tablist". Selected = text-ink + 2px bottom bar in --x-ink; unselected = ghost. Counts tabular, faint. (Replaces the bg-pressed selected tab in PullsSurface.)
-  ListFilter({ value, onChange, placeholder?, count? }: { value: string; onChange: (v: string) => void; placeholder?: string; count?: number })
+  ListFilter({ value, onChange, placeholder?, count?, total? }: { value: string; onChange: (v: string) => void; placeholder?: string; count?: number; total?: number })
   ```
 - **`ListFilter` behaviour (the local filter, distinct from Ctrl+K):**
   - Resting: a 28px `IconButton` with the `filter` icon (`ListFilter` from lucide, a new key `filter` in `icon.tsx`), label `Filter this list`, shortcut `/`. It is deliberately not the `search` magnifier, which belongs to global search (Ctrl+K, `GlobalSearch.tsx`).
   - Focused (click, `/`, or keyboard focus): widens from 28px to `w-48` (192px) over 150ms (instant under `prefers-reduced-motion`), shows an input with `placeholder="Filter this list"`, `bg-hover` fill, `focus-within:ring` from the global focus style. The widen is the only moving part.
-  - With a value: stays expanded after blur, shows the match count (`12 of 41`, `aria-live="polite"`) and a `close` action that clears; Esc clears and collapses.
+  - With a value: stays expanded after blur and collapses on Esc (which clears).
+  - The count (`aria-live="polite"`, at 28px it reads as `12`): `count` is the matched rows, the optional `total` the loaded rows, so a consumer that knows both renders `12 of 41` and one that does not renders `12 matching` for the screen reader. The current surface passes `count` only; later slices pass `total` on surfaces that load a page.
   - Scope: it filters the rows already loaded in the current surface by title, key and author. It never navigates and never queries other surfaces; Ctrl+K searches across surfaces and opens results.
 - **Consumers:** `src/issues/IssuesSurface.tsx`, `src/github/PullsSurface.tsx`, `src/github/IssuesSurface.tsx`, `src/github/ReleasesSurface.tsx`, `src/github/ContentSurface.tsx`, `src/surfaces/ActivitySurface.tsx`, `src/surfaces/ResearchSurface.tsx`, `src/surfaces/other.tsx`, `src/settings/SettingsSurface.tsx` (every file that imports `SurfaceToolbar`/`TOOLBAR_*`, from `git grep`). The Inspector header's two bordered buttons (`Attach to composer`, `Open` in `src/shell/Inspector.tsx`) switch to `ToolbarButton` so the drawer and the toolbar share one look.
 - **Order inside the toolbar:** `[SourceBadge] [primary action] [tabs or filters] [ListFilter] … [layout radio] [options menu]`. The layout radio and options menu stay at the end.
@@ -190,7 +191,7 @@ PR_STATES: Record<PrState, { word: string; keyClass: string; chipTone: BadgeTone
 
 | state | word | key colour (utility) | contrast (light on `#fff` / dark on `#151515`) | chip tone | glyph (lucide) | tooltip text |
 |---|---|---|---|---|---|---|
-| open | Open | `text-success` | 4.38 (5.04 after R1) / 9.01 | `success` (new) | `git-pull-request` | `Open — ready for review` |
+| open | Open | `text-success` | 5.04 / 9.01 | `success` (new) | `git-pull-request` | `Open — ready for review` |
 | draft | Draft | `text-ink-muted` | 6.32 / 7.03 | `neutral` | `git-pull-request-draft` | `Draft — not ready for review` |
 | merged | Merged | `text-accent-ink` | 7.90 / 9.16 | `accent` | `git-merge` | `Merged` (+ `merged_at` when known) |
 | closed | Closed | `text-danger` | 5.63 / 6.35 | `danger` | `git-pull-request-closed` | `Closed without merging` |

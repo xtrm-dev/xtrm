@@ -77,6 +77,8 @@ export function ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id
     buttons.current[index]?.focus();
   };
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    // Alt+Arrow is browser history and Cmd/Ctrl+Home/End is the document; a tablist must not eat them.
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
     const last = tabs.length - 1;
     const index = tabs.findIndex((tab) => tab.id === value);
     if (index === -1) return;
@@ -98,6 +100,8 @@ export function ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id
     event.preventDefault();
     select(next);
   };
+  // With no tab matching `value` there is no selected tab, so the first tab keeps the single stop.
+  const selected = tabs.findIndex((tab) => tab.id === value);
   return (
     <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="flex items-center gap-1">
       {tabs.map((tab, index) => {
@@ -108,7 +112,7 @@ export function ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id
             type="button"
             role="tab"
             aria-selected={on}
-            tabIndex={on ? 0 : -1}
+            tabIndex={on || (selected === -1 && index === 0) ? 0 : -1}
             ref={(element) => {
               buttons.current[index] = element;
             }}
@@ -142,13 +146,23 @@ export function ListFilter({ value, onChange, placeholder = "Filter this list", 
   const [open, setOpen] = useState(() => value !== "");
   const wantsFocus = useRef(false);
   const input = useRef<HTMLInputElement>(null);
+  // Opening and focusing are separate asks: pressing `/` on a filter that is open but blurred
+  // (reachable since a value mounts it expanded) must take the caret without re-opening anything.
   const openIt = () => {
+    if (open) {
+      input.current?.focus();
+      return;
+    }
     wantsFocus.current = true;
     setOpen(true);
   };
 
   useEffect(() => {
-    if (!open || !wantsFocus.current) return;
+    if (!open) {
+      wantsFocus.current = false;
+      return;
+    }
+    if (!wantsFocus.current) return;
     wantsFocus.current = false;
     input.current?.focus();
   }, [open]);

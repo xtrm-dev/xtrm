@@ -68,6 +68,15 @@ describe("ListFilter", () => {
     expect(filterInput().value).toBe("");
   });
 
+  it("'/' focuses an already-open filter instead of being swallowed", () => {
+    render(<ListFilter value="blocked" onChange={() => {}} />);
+    const input = filterInput();
+    expect(document.activeElement).not.toBe(input);
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    fireEvent.keyDown(document, { key: "/" });
+    expect(document.activeElement).toBe(input);
+  });
+
   it("mounts expanded when it starts with a value, without taking the caret", () => {
     render(<ListFilter value="blocked" onChange={() => {}} />);
     expect(filterInput().value).toBe("blocked");
@@ -108,6 +117,24 @@ describe("ToolbarFilter", () => {
     fireEvent.click(screen.getByRole("button", { name: "Status filter" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Merged" }));
     expect(await screen.findByRole("button", { name: "Status filter: Merged" })).toBeTruthy();
+  });
+
+  it("does not collide with an option that is itself called Clear", async () => {
+    render(
+      <ToolbarFilter
+        label="State"
+        value="open"
+        onChange={() => {}}
+        options={[{ label: "Clear" }, { label: "Merged" }]}
+      />,
+    );
+    // A duplicate React key only warns, so the muted console is what proves the items are distinct.
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "State filter: open" }));
+    const clears = await screen.findAllByRole("menuitem", { name: "Clear" });
+    expect(clears).toHaveLength(2);
+    expect(errors.mock.calls.filter((args) => String(args[0]).includes("same key"))).toHaveLength(0);
+    errors.mockRestore();
   });
 
   it("clears through the Clear item, and offers none without a value", async () => {
@@ -191,8 +218,36 @@ describe("ToolbarTabs", () => {
     expect(open.getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(open);
 
-    fireEvent.keyDown(open, { key: "Home" });
+    // Home from a non-first tab, so the assertion cannot pass just because the first tab was selected.
+    fireEvent.keyDown(open, { key: "End" });
+    expect(screen.getByRole("tab", { name: "Closed" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Closed" }), { key: "Home" });
+    expect(screen.getByRole("tab", { name: "Open" }).getAttribute("aria-selected")).toBe("true");
+
+    // Wrap to the left: from the first tab back to the last.
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Open" }), { key: "ArrowLeft" });
+    expect(screen.getByRole("tab", { name: "Closed" }).getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(screen.getByRole("tab", { name: "Closed" }));
+  });
+
+  it("leaves browser and document shortcuts alone", () => {
+    render(<TabsHarness />);
+    const open = screen.getByRole("tab", { name: "Open" });
+    const event = new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true, cancelable: true });
+    act(() => open.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(false);
     expect(open.getAttribute("aria-selected")).toBe("true");
+
+    const cmdEnd = new KeyboardEvent("keydown", { key: "End", metaKey: true, bubbles: true, cancelable: true });
+    act(() => open.dispatchEvent(cmdEnd));
+    expect(cmdEnd.defaultPrevented).toBe(false);
+    expect(open.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("keeps one tab stop when no tab matches the value", () => {
+    render(<ToolbarTabs label="Views" value="missing" onChange={() => {}} tabs={[{ id: "open", label: "Open" }, { id: "closed", label: "Closed" }]} />);
+    expect(screen.getByRole("tab", { name: "Open" }).getAttribute("tabindex")).toBe("0");
+    expect(screen.getByRole("tab", { name: "Closed" }).getAttribute("tabindex")).toBe("-1");
   });
 
   it("marks the selected tab with ink text and a 2px ink bar, not a fill", () => {
