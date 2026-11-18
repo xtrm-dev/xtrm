@@ -6,7 +6,7 @@ import { useShell } from "../../shell/context.tsx";
 import { ErrorState, LoadingState } from "../../ui/primitives.tsx";
 import { IntegrationState } from "../IntegrationState.tsx";
 import { ProjectShell } from "../ProjectShell.tsx";
-import { FollowUpRow } from "./FollowUpRow.tsx";
+import { FOLLOWUP_COLUMNS, FollowUpRow } from "./FollowUpRow.tsx";
 import { logContractGap } from "../workers/model.ts";
 
 /**
@@ -78,6 +78,17 @@ export function FollowUpsSurface() {
   return shell(
     <div data-testid="followups-list">
       {groups.length === 0 && <p className="px-1.5 py-2 text-xs text-ink-faint">No follow-ups on this board.</p>}
+      {/* Column labels share the row grid, so the reading order is stable down the list. */}
+      <div className="px-1.5 pt-2 pb-1 text-xs text-ink-faint" data-testid="followups-columns" aria-hidden>
+        <div className={FOLLOWUP_COLUMNS}>
+          <span>follow-up</span>
+          <span className="text-right">pri</span>
+          <span>state</span>
+          <span>owner</span>
+          <span>when</span>
+          <span>refs</span>
+        </div>
+      </div>
       {groups.map((group) => (
         <section key={group.status ?? "no-status"} aria-label={`Follow-ups ${group.status ?? "without a status"}`}>
           <h3 className="px-1.5 pt-2 pb-1 text-xs font-medium text-ink-muted">{group.status ?? "no status"}</h3>

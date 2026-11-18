@@ -34,10 +34,10 @@ export function WorkersTree({ model, now }: { model: WorkersTreeModel; now: numb
       ))}
 
       {(model.unknown.length > 0 || model.orphans.length > 0) && (
-        <section aria-label="Unknown dispatcher" className="mt-3 border-t border-line pt-2">
+        <section aria-label="Unknown dispatcher" className="mt-3 border-t border-border-muted pt-2">
           <h3 className="px-1.5 text-xs font-medium text-ink-muted">unknown dispatcher</h3>
           <p className="px-1.5 pb-1 text-xs text-ink-faint">
-            Bindings that record no dispatcher (before core #963) and board workers the graph does not mention. The tree does not guess a parent.
+            Workers whose launch did not record who dispatched them, and board workers the graph does not mention. The tree does not guess a parent.
           </p>
           {model.unknown.map((node) => (
             <WorkerRow key={node.id} node={node} depth={0} expanded={expanded} onToggle={toggle} now={now} />
