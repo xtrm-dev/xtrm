@@ -19,6 +19,8 @@ describe("RowAction", () => {
     expect(wrapper.className).toContain("opacity-0");
     expect(wrapper.className).toContain("group-hover/row:opacity-100");
     expect(wrapper.className).toContain("group-focus-within/row:opacity-100");
+    // The reveal is anchored to the row itself; without `group/row` on the Row it would never fire.
+    expect(button.closest(".group\\/row")).not.toBeNull();
 
     // Keyboard focus reaches the button, so `focus-within` reveals it.
     button.focus();

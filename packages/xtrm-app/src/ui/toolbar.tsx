@@ -31,16 +31,15 @@ export function ToolbarButton({ icon, primary, className, children, ...button }:
 /**
  * A named filter whose value lives in the label: `Status ▾`, then `Status: open` with the value in
  * ink. The menu is `OptionsMenu`; selecting an option reports its label to `onChange`. With a value
- * set, a `Clear` item reports `null`. Option `onSelect` hooks are not used: the label is the value.
+ * set, a `Clear` item reports `null`. Options therefore take `Omit<OptionItem, "onSelect">`:
+ * the label is the value, and a caller's own `onSelect` would be silently dropped.
  */
-export function ToolbarFilter({ label, value, options, onChange }: { label: string; value: string | null; options: OptionItem[]; onChange: (v: string | null) => void }) {
-  const items: OptionItem[] =
-    value === null
-      ? options.map((item) => ({ ...item, onSelect: () => onChange(item.label) }))
-      : [
-          ...options.map((item) => ({ ...item, onSelect: () => onChange(item.label) })),
-          { label: "Clear", icon: "close", onSelect: () => onChange(null) },
-        ];
+export function ToolbarFilter({ label, value, options, onChange }: { label: string; value: string | null; options: Array<Omit<OptionItem, "onSelect">>; onChange: (v: string | null) => void }) {
+  const clear: OptionItem = { label: "Clear", icon: "close", onSelect: () => onChange(null) };
+  const items: OptionItem[] = [
+    ...options.map((item) => ({ ...item, onSelect: () => onChange(item.label) })),
+    ...(value === null ? [] : [clear]),
+  ];
   return (
     <OptionsMenu
       label={`${label} filter`}
@@ -80,7 +79,7 @@ export function ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id
             className={cx(
               "relative flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs outline-none transition-colors",
               on
-                ? "font-medium text-ink after:absolute after:inset-x-1.5 after:-bottom-px after:h-0.5 after:rounded-full after:bg-ink"
+                ? "font-medium text-ink after:absolute after:inset-x-1.5 after:-bottom-px after:h-0.5 after:rounded-full after:bg-ink hover:bg-hover focus-visible:bg-hover"
                 : TOOLBAR_GHOST,
             )}
           >
@@ -101,12 +100,26 @@ export function ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id
  * when the consumer passes both, `12` when it has no total yet.
  */
 export function ListFilter({ value, onChange, placeholder = "Filter this list", count, total }: { value: string; onChange: (v: string) => void; placeholder?: string; count?: number; total?: number }) {
-  const [open, setOpen] = useState(false);
+  // A filter that mounts with a value is already filtering rows, so it mounts expanded (§4.2); it
+  // still does not steal the caret, only a user-initiated open does.
+  const [open, setOpen] = useState(() => value !== "");
+  const wantsFocus = useRef(false);
   const input = useRef<HTMLInputElement>(null);
+  const openIt = () => {
+    wantsFocus.current = true;
+    setOpen(true);
+  };
 
   useEffect(() => {
-    if (open) input.current?.focus();
+    if (!open || !wantsFocus.current) return;
+    wantsFocus.current = false;
+    input.current?.focus();
   }, [open]);
+
+  // A value set from outside (a saved view, a keyboard command) expands the filter too.
+  useEffect(() => {
+    if (value !== "") setOpen(true);
+  }, [value]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -114,7 +127,7 @@ export function ListFilter({ value, onChange, placeholder = "Filter this list", 
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       event.preventDefault();
-      setOpen(true);
+      openIt();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -122,6 +135,7 @@ export function ListFilter({ value, onChange, placeholder = "Filter this list", 
 
   return (
     <div
+      onFocus={open ? undefined : openIt}
       className={cx(
         "flex h-7 shrink-0 items-center rounded-md transition-[width] duration-150 motion-reduce:transition-none",
         open ? "w-48 gap-1 bg-hover px-1.5" : "w-7",
@@ -150,6 +164,7 @@ export function ListFilter({ value, onChange, placeholder = "Filter this list", 
           {value !== "" && count !== undefined && (
             <span aria-live="polite" title="Rows matching this filter" className="shrink-0 text-xs tabular text-ink-faint">
               {total === undefined ? count : `${count} of ${total}`}
+              {total === undefined && <span className="sr-only"> matching</span>}
             </span>
           )}
           {value !== "" && (
@@ -165,7 +180,7 @@ export function ListFilter({ value, onChange, placeholder = "Filter this list", 
           )}
         </>
       ) : (
-        <IconButton icon="filter" label="Filter this list" shortcut="/" onClick={() => setOpen(true)} />
+        <IconButton icon="filter" label="Filter this list" shortcut="/" onClick={openIt} />
       )}
     </div>
   );

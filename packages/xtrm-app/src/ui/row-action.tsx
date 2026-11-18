@@ -46,7 +46,7 @@ export function RowAction({
             event.stopPropagation();
             act();
           }}
-          className="inline-flex size-5 shrink-0 items-center justify-center rounded text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:bg-hover disabled:pointer-events-none disabled:opacity-40"
+          className="inline-flex size-5 shrink-0 items-center justify-center rounded text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:bg-hover"
         >
           <Icon name={done ? "check" : icon} size="text" />
         </button>

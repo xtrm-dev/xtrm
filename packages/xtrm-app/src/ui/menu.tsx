@@ -20,9 +20,9 @@ export function OptionsMenu({ label = "Options", items, header, trigger }: { lab
         <Menu.Positioner align="end" sideOffset={4} className="z-50">
           <Menu.Popup className="min-w-48 rounded-lg bg-raised p-1 text-sm shadow-float outline-none">
             {header && <div className="px-2 pt-1 pb-1.5 text-xs text-ink-faint">{header}</div>}
-            {items.map((item) => (
+            {items.map((item, index) => (
               <Menu.Item
-                key={item.label}
+                key={`${index}:${item.label}`}
                 disabled={item.disabled}
                 onClick={item.onSelect}
                 className="flex h-8 cursor-default items-center gap-2 rounded-md px-2 text-ink-muted outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-hover data-[highlighted]:text-ink"

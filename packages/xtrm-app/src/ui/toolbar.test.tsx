@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { ListFilter, ToolbarButton, ToolbarTabs } from "./toolbar.tsx";
+import { ListFilter, ToolbarButton, ToolbarFilter, ToolbarTabs } from "./toolbar.tsx";
 
 function FilterHarness({ count, total }: { count?: number; total?: number }) {
   const [value, setValue] = useState("");
@@ -62,10 +62,24 @@ describe("ListFilter", () => {
     fireEvent.keyDown(document, { key: "/" });
     fireEvent.change(filterInput(), { target: { value: "open" } });
     const live = document.querySelector('[aria-live="polite"]')!;
-    expect(live.textContent).toBe("12");
+    expect(live.textContent).toBe("12 matching");
 
     fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
     expect(filterInput().value).toBe("");
+  });
+
+  it("mounts expanded when it starts with a value, without taking the caret", () => {
+    render(<ListFilter value="blocked" onChange={() => {}} />);
+    expect(filterInput().value).toBe("blocked");
+    expect(document.activeElement).not.toBe(filterInput());
+  });
+
+  it("widens on keyboard focus of the resting button", () => {
+    const { container } = render(<FilterHarness />);
+    const button = screen.getByRole("button", { name: "Filter this list" });
+    act(() => button.focus());
+    expect(document.activeElement).toBe(filterInput());
+    expect((container.firstElementChild as HTMLElement).className).toContain("w-48");
   });
 
   it("renders `matched of total` when the consumer passes a total", () => {
@@ -73,6 +87,39 @@ describe("ListFilter", () => {
     fireEvent.keyDown(document, { key: "/" });
     fireEvent.change(filterInput(), { target: { value: "open" } });
     expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe("12 of 41");
+  });
+});
+
+function FilterMenuHarness() {
+  const [value, setValue] = useState<string | null>(null);
+  return <ToolbarFilter label="Status" value={value} onChange={setValue} options={[{ label: "Open" }, { label: "Merged" }]} />;
+}
+
+describe("ToolbarFilter", () => {
+  it("names the value in the trigger", () => {
+    render(<ToolbarFilter label="Status" value="open" onChange={() => {}} options={[]} />);
+    const trigger = screen.getByRole("button", { name: "Status filter: open" });
+    expect(trigger.textContent).toContain("Status:");
+    expect(trigger.textContent).toContain("open");
+  });
+
+  it("reports the chosen option's label", async () => {
+    render(<FilterMenuHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Status filter" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Merged" }));
+    expect(await screen.findByRole("button", { name: "Status filter: Merged" })).toBeTruthy();
+  });
+
+  it("clears through the Clear item, and offers none without a value", async () => {
+    render(<FilterMenuHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Status filter" }));
+    await screen.findByRole("menuitem", { name: "Open" });
+    expect(screen.queryByRole("menuitem", { name: "Clear" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Status filter: Open" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Clear" }));
+    expect(await screen.findByRole("button", { name: "Status filter" })).toBeTruthy();
   });
 });
 
@@ -121,6 +168,8 @@ describe("ToolbarTabs", () => {
     expect(open.getAttribute("aria-selected")).toBe("true");
     expect(open.className).toContain("text-ink");
     expect(open.className).toContain("after:bg-ink");
+    // The selected fill is also its focus state, so keyboard focus stays visible (§2.2).
+    expect(open.className).toContain("focus-visible:bg-hover");
     expect(within(open).getByText("3")).toBeTruthy();
     expect(closed.getAttribute("aria-selected")).toBe("false");
     expect(closed.className).not.toContain("after:bg-ink");
