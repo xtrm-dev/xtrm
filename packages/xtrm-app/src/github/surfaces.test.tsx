@@ -72,11 +72,23 @@ describe("GitHub Issues surface", () => {
     expect(router.state.location.search).toMatchObject({ inspect: "gh-issue:xtrm-dev/xtrm#41" });
   });
 
-  it("switches to closed and filters", async () => {
+  it("switches to closed and filters through the local filter", async () => {
     renderAt(`${repo}/code/issues`);
     fireEvent.click(await screen.findByRole("tab", { name: /Closed/ }));
     expect(await screen.findByText("Flaky release smoke on slow disks")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Filter GitHub issues"), { target: { value: "zzz" } });
+    // §4.2: the state tabs carry ink and a bar, never a chip fill.
+    const closed = screen.getByRole("tab", { name: /Closed/ });
+    expect(closed.getAttribute("aria-selected")).toBe("true");
+    expect(closed.className).not.toContain("bg-pressed");
+    // The local filter is a 28px icon until it is opened, then a readable input.
+    const resting = screen.getByRole("button", { name: "Filter this list" });
+    expect((resting.parentElement as HTMLElement).className).toContain("w-7");
+    expect(screen.queryByLabelText("Filter GitHub issues")).toBeNull();
+    fireEvent.click(resting);
+    const input = screen.getByLabelText("Filter GitHub issues");
+    expect((input.parentElement as HTMLElement).className).toContain("w-48");
+    expect(document.activeElement).toBe(input);
+    fireEvent.change(input, { target: { value: "zzz" } });
     expect(await screen.findByText(/No closed GitHub issues matching/)).toBeTruthy();
   });
 });

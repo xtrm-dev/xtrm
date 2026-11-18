@@ -129,7 +129,8 @@ describe("Console v2 shell", () => {
     const sidebar = await screen.findByTestId("context-sidebar");
     fireEvent.click(within(sidebar).getByRole("button", { name: "Timeline" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/rep/mercury/market-data/project/timeline"));
-    expect((await screen.findByRole("region", { name: "Timeline" })).textContent).toContain("Project Timeline arrives with XTRM-818");
+    expect((await screen.findByRole("region", { name: "Timeline" })).textContent).toContain("mercury/market-data");
+    expect(await screen.findByTestId("timeline-timezone")).toBeTruthy();
     // The Overview row is the section root only, so it is not selected on a child route.
     expect(within(sidebar).getByRole("button", { name: "Timeline" }).getAttribute("aria-current")).toBe("page");
     expect(within(sidebar).getByRole("button", { name: "Overview" }).getAttribute("aria-current")).toBeNull();

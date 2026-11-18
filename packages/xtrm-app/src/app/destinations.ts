@@ -77,7 +77,7 @@ export const PROJECT_ROOT = "/project";
 
 export const PROJECT_SECTIONS: ProjectSection[] = [
   { id: "overview", label: "Overview", icon: "program", repoPath: PROJECT_ROOT },
-  { id: "timeline", label: "Timeline", icon: "activity", repoPath: "/project/timeline", deferred: "Project Timeline arrives with XTRM-818" },
+  { id: "timeline", label: "Timeline", icon: "activity", repoPath: "/project/timeline" },
   { id: "questions", label: "Questions", icon: "comment", repoPath: "/project/questions", deferred: "Project Questions arrive read-only with XTRM-817–XTRM-820; answering is deferred to XTRM-821" },
   { id: "workers", label: "Workers", icon: "specialists", repoPath: "/project/workers", deferred: "Project Workers arrive with XTRM-819" },
   { id: "followups", label: "Follow-ups", icon: "issues", repoPath: "/project/followups", deferred: "Project Follow-ups arrive with XTRM-819" },

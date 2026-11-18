@@ -6,7 +6,8 @@ import { useShell } from "../shell/context.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_GHOST, cx, relativeTime } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, IconButton, LoadingState, Row, SourceBadge, SurfaceToolbar, cx, relativeTime } from "../ui/primitives.tsx";
+import { ListFilter, ToolbarButton, ToolbarFilter } from "../ui/toolbar.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
@@ -43,14 +44,6 @@ const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "righ
 const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
 const CELL_EDGE = "flex h-full min-w-0 items-center";
 const CELL = `${CELL_EDGE} px-2`;
-
-function filterTrigger(value: string | null, label: string) {
-  return (
-    <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST, value !== null && "bg-hover text-ink")}>
-      {value ?? label} <Icon name="chevronDown" size="xs" className="text-ink-faint" />
-    </button>
-  );
-}
 
 export function IssuesSurface() {
   const { repo, inspect, inspected } = useShell();
@@ -164,54 +157,28 @@ export function IssuesSurface() {
       <SurfaceToolbar>
         <SourceBadge source={substrate.source} />
         {canWrite && project && (
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className="flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-ink outline-none transition-colors hover:bg-hover focus-visible:bg-hover"
-          >
-            <Icon name="plus" size="xs" /> New issue
-          </button>
+          <ToolbarButton primary icon="plus" onClick={() => setCreating(true)}>
+            New issue
+          </ToolbarButton>
         )}
-        <OptionsMenu
-          label={statusFilter === null ? "Status" : statusFilter}
-          trigger={filterTrigger(statusFilter, "Status")}
-          items={[
-            { label: "All statuses", onSelect: () => setStatusFilter(null) },
-            { label: "open", onSelect: () => setStatusFilter("open") },
-            { label: "claimed", onSelect: () => setStatusFilter("claimed") },
-            { label: "deferred", onSelect: () => setStatusFilter("deferred") },
-            { label: "done", onSelect: () => setStatusFilter("done") },
-          ]}
+        <ToolbarFilter label="Status" value={statusFilter} options={["open", "claimed", "deferred", "done"].map((s) => ({ label: s }))} onChange={setStatusFilter} />
+        <ToolbarFilter
+          label="Priority"
+          value={priorityFilter === null ? null : `P${priorityFilter}`}
+          options={[0, 1, 2, 3, 4].map((p) => ({ label: `P${p}` }))}
+          onChange={(v) => setPriorityFilter(v === null ? null : Number(v.slice(1)))}
         />
-        <OptionsMenu
-          label={priorityFilter === null ? "Priority" : `P${priorityFilter}`}
-          trigger={filterTrigger(priorityFilter === null ? null : `P${priorityFilter}`, "Priority")}
-          items={[
-            { label: "All priorities", onSelect: () => setPriorityFilter(null) },
-            ...[0, 1, 2, 3, 4].map((p) => ({ label: `P${p}`, onSelect: () => setPriorityFilter(p) })),
-          ]}
-        />
-        <OptionsMenu
-          label={typeFilter === null ? "Type" : typeFilter}
-          trigger={filterTrigger(typeFilter, "Type")}
-          items={[
-            { label: "All types", onSelect: () => setTypeFilter(null) },
-            ...["task", "bug", "feature", "epic", "chore", "decision"].map((t) => ({ label: t, onSelect: () => setTypeFilter(t) })),
-          ]}
-        />
+        <ToolbarFilter label="Type" value={typeFilter} options={["task", "bug", "feature", "epic", "chore", "decision"].map((t) => ({ label: t }))} onChange={setTypeFilter} />
         <OptionsMenu
           label="Order by"
-          trigger={filterTrigger(null, "Order by")}
+          trigger={<ToolbarButton>Order by</ToolbarButton>}
           items={[
-            { label: "Updated", icon: "chevronDown", onSelect: () => setSort({ key: "updated", desc: true }) },
-            { label: "Priority", icon: "chevronDown", onSelect: () => setSort({ key: "priority", desc: false }) },
-            { label: "Key", icon: "chevronDown", onSelect: () => setSort({ key: "key", desc: false }) },
+            { label: "Updated", onSelect: () => setSort({ key: "updated", desc: true }) },
+            { label: "Priority", onSelect: () => setSort({ key: "priority", desc: false }) },
+            { label: "Key", onSelect: () => setSort({ key: "key", desc: false }) },
           ]}
         />
-        <div className="flex h-7 items-center gap-1.5 rounded-md bg-pressed px-1.5 text-ink-faint transition-colors focus-within:bg-hover">
-          <Icon name="search" size="xs" className="text-ink-faint" />
-          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search" aria-label="Search issues" className="w-36 bg-transparent text-xs text-ink outline-none placeholder:text-ink-faint" />
-        </div>
+        <ListFilter value={filter} onChange={setFilter} placeholder="Filter issues" count={matching.length} total={issues.data?.length} />
         <div role="radiogroup" aria-label="Layout" className="ml-auto flex h-7 items-center rounded-sm p-0.5">
           {(["list", "board"] as const).map((l) => (
             <IconButton key={l} icon={l} label={l === "list" ? "List" : "Board"} role="radio" aria-checked={layout === l} active={layout === l} onClick={() => setLayout(l)} className="size-6" />
