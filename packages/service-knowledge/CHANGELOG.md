@@ -36,11 +36,14 @@ All notable changes to the `service-knowledge` package.
 - The reconcile gate now also guards hand-written text **outside** the
   `SEMANTIC_START`/`SEMANTIC_END` blocks (runbook prose, failure-mode rows,
   notes). Current non-blank lines removed or rewritten in the candidate
-  (whitespace-trimmed; moved lines do not count) raise the advisory
+  (whitespace-trimmed; a moved line consumes one identical line outside
+  the candidate's semantic blocks, so duplicates are counted) raise the advisory
   `curated_text_removed` (up to 10 lines listed, verdict
   `PASS_WITH_ADVISORIES`, still writable). Removing more than
-  `CURATED_REMOVAL_ERROR_RATIO` (25%) raises the error
-  `curated_text_removed_excessive` and the gate blocks the write (`INVALID`).
+  `CURATED_REMOVAL_ERROR_RATIO` (25%) of them **and** at least
+  `CURATED_REMOVAL_ERROR_MIN_LINES` (8) lines raises the error
+  `curated_text_removed_excessive` and the gate blocks the write (`INVALID`);
+  smaller files stay advisory-only.
   Creation and pure additions never trigger it.
 - `reconcile.build_prompt` now tells the model to keep text unaffected by the
   drift evidence byte-for-byte and return the complete file.

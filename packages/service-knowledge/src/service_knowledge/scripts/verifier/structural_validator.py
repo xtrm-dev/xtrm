@@ -10,7 +10,7 @@ that is the regression this validator exists to catch.
 Hand-written text OUTSIDE the semantic blocks is guarded too: removed/rewritten
 lines raise the ``curated_text_removed`` advisory (a ``warning`` the gate counts
 as ``PASS_WITH_ADVISORIES``), and removing more than ``CURATED_REMOVAL_ERROR_RATIO``
-of it raises the blocking ``curated_text_removed_excessive`` error.
+of it (and at least ``CURATED_REMOVAL_ERROR_MIN_LINES`` lines) raises the blocking ``curated_text_removed_excessive`` error.
 
 Decoupled from I/O: callers pass the canonical heading list (loaded from the
 service-skill contract) rather than this module reaching for it.
@@ -30,6 +30,8 @@ SEMANTIC_END = "<!-- SEMANTIC_END -->"
 _SEMANTIC_BLOCK_RE = re.compile(re.escape(SEMANTIC_START) + r"(.*?)" + re.escape(SEMANTIC_END), re.DOTALL)
 # Share of current non-blank curated lines (outside semantic blocks) whose removal blocks the write.
 CURATED_REMOVAL_ERROR_RATIO = 0.25
+# ...but only once at least this many lines are gone, so a legit drift fix in a small file stays advisory.
+CURATED_REMOVAL_ERROR_MIN_LINES = 8
 CURATED_REMOVED_ADVISORY_CODE = "curated_text_removed"
 CURATED_REMOVED_ERROR_CODE = "curated_text_removed_excessive"
 _CURATED_LISTING_LIMIT = 10
@@ -117,31 +119,39 @@ def _semantic_line_indexes(text: str) -> set[int]:
     return covered
 
 
-def _removed_curated_lines(text: str, current_text: str) -> tuple[list[str], int]:
-    """(removed lines, total) for current non-blank lines outside semantic blocks.
+def _removed_curated_lines(text: str, current_text: str) -> tuple[list[tuple[int, str]], int]:
+    """(removed (zero-based index, line) pairs, total) for current curated lines.
 
-    Lines compare whitespace-trimmed; a line that still exists anywhere in the
-    candidate (moved or reformatted) is not removed.
+    Curated = non-blank lines outside SEMANTIC blocks, compared whitespace-trimmed.
+    Multiset semantics: lines matched in ``equal`` opcodes are taken out of the
+    candidate pool first; a removed line only counts as moved when it can consume
+    one remaining pool entry. The pool holds candidate lines outside SEMANTIC blocks.
     """
-    current_lines = current_text.splitlines()
-    candidate_lines = text.splitlines()
-    in_semantic = _semantic_line_indexes(current_text)
-    trimmed_current = [line.strip() for line in current_lines]
-    matcher = difflib.SequenceMatcher(a=trimmed_current, b=[line.strip() for line in candidate_lines], autojunk=False)
-    remaining = Counter(line.strip() for line in candidate_lines)
-    removed: list[str] = []
-    for tag, i1, i2, _, _ in matcher.get_opcodes():
+    current_lines = [line.strip() for line in current_text.splitlines()]
+    candidate_lines = [line.strip() for line in text.splitlines()]
+    current_semantic = _semantic_line_indexes(current_text)
+    candidate_semantic = _semantic_line_indexes(text)
+    pool = Counter(line for j, line in enumerate(candidate_lines) if j not in candidate_semantic)
+    opcodes = difflib.SequenceMatcher(a=current_lines, b=candidate_lines, autojunk=False).get_opcodes()
+    for tag, i1, i2, j1, j2 in opcodes:
+        if tag != "equal":
+            continue
+        for j in range(j1, j2):
+            if j not in candidate_semantic:
+                pool[candidate_lines[j]] -= 1
+    removed: list[tuple[int, str]] = []
+    for tag, i1, i2, _, _ in opcodes:
         if tag not in ("delete", "replace"):
             continue
         for index in range(i1, i2):
-            line = trimmed_current[index]
-            if not line or index in in_semantic:
+            line = current_lines[index]
+            if not line or index in current_semantic:
                 continue
-            if remaining[line] > 0:
-                remaining[line] -= 1
+            if pool[line] > 0:
+                pool[line] -= 1
                 continue
-            removed.append(line)
-    total = sum(1 for i, line in enumerate(trimmed_current) if line and i not in in_semantic)
+            removed.append((index, line))
+    total = sum(1 for i, line in enumerate(current_lines) if line and i not in current_semantic)
     return removed, total
 
 
@@ -149,18 +159,19 @@ def _check_curated_preservation(text: str, current_text: str) -> list[Structural
     removed, total = _removed_curated_lines(text, current_text)
     if not removed:
         return []
-    line = _line_of(current_text, removed[0]) or 1
-    if len(removed) / total > CURATED_REMOVAL_ERROR_RATIO:
+    line = removed[0][0] + 1
+    if len(removed) >= CURATED_REMOVAL_ERROR_MIN_LINES and len(removed) / total > CURATED_REMOVAL_ERROR_RATIO:
         return [
             StructuralIssue(
                 "error",
                 CURATED_REMOVED_ERROR_CODE,
                 f"{len(removed)} of {total} curated lines outside semantic blocks were removed or rewritten "
-                f"(limit {CURATED_REMOVAL_ERROR_RATIO:.0%}); the candidate must keep unaffected text verbatim.",
+                f"(limit {CURATED_REMOVAL_ERROR_RATIO:.0%} and {CURATED_REMOVAL_ERROR_MIN_LINES} lines); "
+                "the candidate must keep unaffected text verbatim.",
                 line,
             )
         ]
-    shown = "; ".join(repr(r) for r in removed[:_CURATED_LISTING_LIMIT])
+    shown = "; ".join(repr(r) for _, r in removed[:_CURATED_LISTING_LIMIT])
     more = len(removed) - _CURATED_LISTING_LIMIT
     suffix = f" (+{more} more)" if more > 0 else ""
     return [

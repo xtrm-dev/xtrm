@@ -273,3 +273,66 @@ def test_removal_inside_semantic_block_is_only_the_semantic_error():
     codes = {i["code"] for i in manifest.structural_issues}
     assert "semantic_block_modified" in codes
     assert not any(code.startswith("curated_text_removed") for code in codes)
+
+
+def _plain_curated_issues(candidate: str, current: str) -> list:
+    issues = validate_structure(candidate, require_semantic_block=False, current_text=current)
+    return [i for i in issues if i.code.startswith("curated_text_removed")]
+
+
+def _numbered(count: int, rewritten: int = 0) -> str:
+    return "\n".join(
+        f"Line {i} rewritten." if i < rewritten else f"Line {i}." for i in range(count)
+    ) + "\n"
+
+
+# regression: reviewer finding 1 (duplicate-line multiplicity)
+def test_deleting_one_of_two_identical_lines_is_a_removal():
+    filler = "\n".join(f"Filler {i}." for i in range(20))
+    current = f"- foo\nA\n- foo\nB\n{filler}\n"
+    candidate = f"- foo\nA\nB\n{filler}\n"
+    (issue,) = _plain_curated_issues(candidate, current)
+    assert issue.code == "curated_text_removed"
+    assert issue.message.startswith("1 curated line(s)")
+
+
+def test_moved_line_consumes_exactly_one_pool_entry():
+    filler = "\n".join(f"Filler {i}." for i in range(20))
+    current = f"Moved.\nA\nB\n{filler}\n"
+    candidate = f"A\nB\n{filler}\nMoved.\n"
+    assert _plain_curated_issues(candidate, current) == []
+
+
+# regression: reviewer finding 2 (same text inside a candidate SEMANTIC block is not "kept")
+def test_identical_text_inside_candidate_semantic_block_does_not_hide_deletion():
+    filler = "\n".join(f"Filler {i}." for i in range(20))
+    block = f"{SEMANTIC_START}\nRunbook step.\n{SEMANTIC_END}\n"
+    current = f"Runbook step.\n{filler}\n{block}"
+    candidate = f"{filler}\n{block}"
+    (issue,) = _plain_curated_issues(candidate, current)
+    assert issue.code == "curated_text_removed"
+    assert "Runbook step." in issue.message
+
+
+# regression: reviewer finding 4 (line number must point at the removed line, not an earlier substring)
+def test_advisory_line_points_at_the_removed_line():
+    filler = "\n".join(f"Filler {i}." for i in range(20))
+    current = f"foo bar baz\n{filler}\nbar\n"
+    candidate = f"foo bar baz\n{filler}\n"
+    (issue,) = _plain_curated_issues(candidate, current)
+    assert issue.line == 22
+
+
+@pytest.mark.parametrize(
+    ("total", "rewritten", "expected_code", "expected_severity"),
+    [
+        (12, 4, "curated_text_removed", "warning"),
+        (12, 7, "curated_text_removed", "warning"),
+        (20, 8, "curated_text_removed_excessive", "error"),
+        (40, 8, "curated_text_removed", "warning"),
+    ],
+    ids=["small-file-4-of-12", "7-of-12-below-min", "8-of-20-error", "8-of-40-under-ratio"],
+)
+def test_excessive_removal_needs_both_ratio_and_minimum_count(total, rewritten, expected_code, expected_severity):
+    issues = _plain_curated_issues(_numbered(total, rewritten), _numbered(total))
+    assert [(i.code, i.severity) for i in issues] == [(expected_code, expected_severity)]
