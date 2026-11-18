@@ -47,6 +47,9 @@ __pycache__/
 .beads/
 .pi/
 .gitnexus/
+.agents/
+.claude/
+.pi/
 
 # Syncthing
 *.sync-conflict-*
