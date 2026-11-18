@@ -285,10 +285,15 @@ def migrate_legacy_refs(project_root: str | None = None, apply: bool = False) ->
         bare value, over every path the registry has had, so formatting and a moved registry do not
         matter). The stamp was written after the verified state, so its parent is topologically
         at or after it, and nothing the derivation returns is ever newer than it.
-      * ``rev-list-before`` (``git rev-list -1 --before=<last_sync> HEAD``) is selected by commit
-        DATE, not topology (a branch commit dated before the sync but merged after it fools it), so
-        it can only LOWER the anchor: the result is the older of the two, or their merge base when
+      * ``rev-list-before`` (``git rev-list -1 --first-parent --before=<last_sync> HEAD``) is
+        selected by commit DATE along the main line only (a branch commit dated before the sync but
+        merged after it is not on the first-parent chain, so it cannot be returned), and it can only
+        LOWER the anchor: the result is the older of the two, or their merge base when
         they diverge. Every outcome is an ancestor of the anchor.
+
+    Known limit (git cannot distinguish them): a MAIN-LINE commit dated before ``last_sync`` whose
+    stamp was committed only later looks the same as a commit made during the sync; such a change
+    is treated as already verified. Review ``drift migrate`` output (dry-run) before ``--apply``.
 
     Refuses (per service, with a named reason) on a shallow clone, a ``last_sync`` in the future,
     a ``last_sync`` that no committed registry history contains (nothing to anchor on), or a
@@ -337,7 +342,7 @@ def migrate_legacy_refs(project_root: str | None = None, apply: bool = False) ->
             item.update(status="refused", reason="the commit that introduced this last_sync has no parent commit")
             continue
         candidates["registry-stamp-parent"] = parent
-        before = _git_out(root, "rev-list", "-1", f"--before={sync_time.isoformat()}", "HEAD")
+        before = _git_out(root, "rev-list", "-1", "--first-parent", f"--before={sync_time.isoformat()}", "HEAD")
         if before and _is_valid_ref(before, root):
             candidates["rev-list-before"] = before
         item["candidates"] = candidates

@@ -41,8 +41,9 @@ class Legacy:
     """c1 init (T-10d) -> c2 schema change (T-5d) -> c3 registry stamp (T) -> c4 new file (T+5d)."""
 
     def __init__(self, root: Path, c4_date: datetime | None = None, stamp_delay: timedelta = timedelta(0),
-                 compact: bool = False) -> None:
+                 compact: bool = False, late_stamp: bool = False, moved_registry: bool = False) -> None:
         self.compact = compact
+        self.late_stamp = late_stamp
         self.repo = root / "repo"
         umb = self.repo / ".xtrm" / "skills" / "acme" / "service-knowledge"
         svc = umb / "services" / "db"
@@ -62,10 +63,22 @@ class Legacy:
         (self.repo / "db" / "schema.sql").write_text("CREATE TABLE t (id int, n text);\n", encoding="utf-8")
         self.c2 = _commit(self.repo, "schema change", STAMP - timedelta(days=5))
         self.registry["services"]["db"]["last_sync"] = _iso(STAMP)  # legacy: timestamp only, no ref
-        self._write()
+        if late_stamp:  # the stamp stays uncommitted; the test commits it later
+            self._write()
+            self.c3 = self.c4 = None
+            return
+        if moved_registry:  # stamped while the registry lived at another path; moved into place later
+            alt = self.repo / "legacy-layout" / "service-registry.json"
+            alt.parent.mkdir()
+            alt.write_text(json.dumps(self.registry, indent=2) + "\n", encoding="utf-8")
+        else:
+            self._write()
         self.c3 = _commit(self.repo, "stamp registry", STAMP + stamp_delay)
         (self.repo / "db" / "new.sql").write_text("-- new\n", encoding="utf-8")
         self.c4 = _commit(self.repo, "add file", c4_date or STAMP + timedelta(days=5))
+        if moved_registry:
+            _git(["mv", "-f", str(alt), str(self.reg_path)], self.repo)
+            _commit(self.repo, "move registry into place", STAMP + timedelta(days=9))
 
     def _write(self) -> None:
         text = json.dumps(self.registry, separators=(",", ":")) if self.compact else json.dumps(self.registry, indent=2)
@@ -228,7 +241,9 @@ def _merge_late_branch_commit(legacy: Legacy) -> str:
     """F: a branch commit cut from c2 and DATED before last_sync, merged into main AFTER the sync."""
     _git(["checkout", "-q", "-b", "feature", legacy.c2], legacy.repo)
     (legacy.repo / "db" / "feature.sql").write_text("-- feature\n", encoding="utf-8")
-    f = _commit(legacy.repo, "feature", STAMP - timedelta(hours=1))
+    _git(["add", "db/feature.sql"], legacy.repo)  # not -A: a deferred registry stamp must stay uncommitted
+    _git(["commit", "-qm", "feature"], legacy.repo, STAMP - timedelta(hours=1))
+    f = _git(["rev-parse", "HEAD"], legacy.repo)
     _git(["checkout", "-q", "-"], legacy.repo)
     _git(["merge", "--no-ff", "-q", "-m", "merge feature", "feature"], legacy.repo, STAMP + timedelta(days=7))
     return f
@@ -240,7 +255,7 @@ def test_a_branch_commit_dated_before_the_sync_but_merged_after_it_is_never_hidd
     legacy = Legacy(tmp_path, stamp_delay=timedelta(seconds=30), compact=True)
     f = _merge_late_branch_commit(legacy)
     results = drift_detector.migrate_legacy_refs(str(legacy.repo), apply=True)
-    assert results[0]["candidates"]["rev-list-before"] == f  # the date-based pick really is the trap
+    assert results[0]["candidates"].get("rev-list-before") != f  # first-parent keeps the date pick off the branch
     assert results[0]["ref"] != f
     files = {d["file_path"] for d in drift_detector.scan_drift(str(legacy.repo), use_gitnexus=False)}
     assert "db/feature.sql" in files and "db/new.sql" in files
@@ -291,3 +306,26 @@ def test_a_stamp_in_the_root_commit_is_refused(tmp_path: Path) -> None:
     _commit(repo, "everything at once", STAMP)
     results = drift_detector.migrate_legacy_refs(str(repo), apply=False)
     assert results[0]["status"] == "refused" and "no parent" in results[0]["reason"]
+
+
+def test_a_late_committed_stamp_cannot_hide_a_branch_commit_merged_before_it(tmp_path: Path) -> None:
+    """Regression (re-review of #427): the stamp is committed only after F merged, so the anchor is
+    the merge commit; the date candidate must not return F (it is off the first-parent chain)."""
+    legacy = Legacy(tmp_path, late_stamp=True)
+    f = _merge_late_branch_commit(legacy)
+    _commit(legacy.repo, "late stamp", STAMP + timedelta(days=8))
+    results = drift_detector.migrate_legacy_refs(str(legacy.repo), apply=True)
+    assert results[0]["status"] == "derived" and results[0]["ref"] != f
+    assert "rev-list-before" not in results[0]["candidates"] or results[0]["candidates"]["rev-list-before"] != f
+    files = {d["file_path"] for d in drift_detector.scan_drift(str(legacy.repo), use_gitnexus=False)}
+    assert "db/feature.sql" in files
+
+
+def test_a_registry_moved_into_place_after_the_sync_still_anchors_on_the_original_stamp(tmp_path: Path) -> None:
+    """The stamp was introduced at another registry path (pre-umbrella layout). Searching only the
+    current path finds the move commit, whose parent is after db/new.sql; the glob finds the stamp."""
+    legacy = Legacy(tmp_path, moved_registry=True)
+    results = drift_detector.migrate_legacy_refs(str(legacy.repo), apply=True)
+    assert results[0]["status"] == "derived" and results[0]["candidates"]["registry-stamp-parent"] == legacy.c2
+    files = {d["file_path"] for d in drift_detector.scan_drift(str(legacy.repo), use_gitnexus=False)}
+    assert "db/new.sql" in files

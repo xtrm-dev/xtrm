@@ -22,7 +22,9 @@ All notable changes to the `service-knowledge` package.
   reason) on a shallow clone, a future `last_sync`, a stamp no committed history
   contains, or a root-commit stamp. Dry-run by default; `--apply` also writes
   `last_sync_ref_derived: true`, which any real sync/reconcile stamp clears.
-  `scan_drift` itself stays fail-closed.
+  `scan_drift` itself stays fail-closed. Known limit: git cannot tell a main-line
+  commit dated before `last_sync` (stamp committed later) from one made during the
+  sync, so such a change is treated as verified; review the dry-run first.
 - `scan_drift` raises `UnverifiableHistory` (a `RuntimeError`) with `.service_ids`;
   `ci_drift_check` prints one `unverifiable: <id>` line per service and a
   `$GITHUB_STEP_SUMMARY` list, so a long list is never cut off by log limits.
