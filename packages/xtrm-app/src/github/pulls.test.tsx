@@ -126,6 +126,7 @@ describe("Pull requests surface", () => {
     expect(within(el).getByText("Review data unavailable from the source.")).toBeTruthy();
     expect(within(el).getByText("File summary unavailable from the source.")).toBeTruthy();
     expect(within(el).getByText("Conversation unavailable from the source.")).toBeTruthy();
+    expect(within(el).getByText(/commits unknown/)).toBeTruthy();
   });
 
   it("opens the PR drawer from a row with overview, checks, reviews, files, and linked issues", async () => {

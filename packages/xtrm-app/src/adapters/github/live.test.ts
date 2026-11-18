@@ -167,10 +167,17 @@ describe("mapPullDetail (XTRM-857)", () => {
     expect(pull.changedFiles).toBeNull();
   });
 
-  it("keeps a known row value when the detail copy omits it (F3)", () => {
-    const detailPr = row({ head_ref: "xt/identity-drop-fix", base_ref: "main", body: null, url: null, draft: null });
-    // The backend copy can omit the author key entirely; the spread must not erase it.
-    delete (detailPr as Partial<Row>).author;
+  it("keeps a known row value when the detail copy sends null (F3)", () => {
+    // The backend can send null for a field the row already knows. Null means
+    // unknown, so the merge must keep the row value instead of blanking it.
+    const detailPr = row({
+      head_ref: "xt/identity-drop-fix",
+      base_ref: "main",
+      body: null,
+      url: null,
+      draft: null,
+      author: null as unknown as string,
+    });
     const pull = mapPullDetail(
       "xtrm-dev/xtrm",
       row({ body: "row body", author: "row-author", url: "https://example.test/pull/212", draft: true }),
@@ -192,5 +199,11 @@ describe("mapPullDetail (XTRM-857)", () => {
     expect(pull.comments).toBe(0);
     expect(pull.review).toBe("none");
     expect(pull.reviewCount).toBe(0);
+  });
+
+  it("leaves the commit count unknown when its section failed (F2)", () => {
+    const pull = mapPullDetail("xtrm-dev/xtrm", row(), detail({ pr: row(), commits: [], errors: { commits: "502 upstream" } }), null);
+    expect(pull.commits).toBeNull();
+    expect(pull.unavailableSections).toEqual(["commits"]);
   });
 });

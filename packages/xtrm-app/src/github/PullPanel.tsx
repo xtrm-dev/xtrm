@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { usePull } from "../app/queries.ts";
-import { checkLabel, checkTone, extractIssueKeys, mergeableText, parsePullRef, pullStateLabel, pullStateTone, reviewLabel } from "./pr.ts";
+import { checkLabel, checkTone, conversationUnavailable, extractIssueKeys, mergeableText, parsePullRef, pullStateLabel, pullStateTone, reviewLabel } from "./pr.ts";
 import { ReferenceActionsProvider, ReferenceChip, useIssueIndex } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Markdown } from "../ui/markdown.tsx";
@@ -97,7 +97,8 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
                   </>
                 )}
                 <span className="text-ink-faint">
-                  {p.changedFiles === null ? " · files unknown" : ` · ${p.changedFiles} files`} · {p.commits} commits
+                  {p.changedFiles === null ? " · files unknown" : ` · ${p.changedFiles} files`} ·{" "}
+                  {p.commits === null ? "commits unknown" : `${p.commits} commits`}
                 </span>
               </span>,
             ],
@@ -147,7 +148,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
       </InspectorSection>
 
       <InspectorSection title="Conversation">
-        {p.unavailableSections.includes("comments") ? (
+        {conversationUnavailable(p.unavailableSections) ? (
           <p className="text-sm text-ink-faint">Conversation unavailable from the source.</p>
         ) : (
           <PullConversation comments={p.conversationComments} reviews={p.reviews} reviewComments={p.reviewComments} />

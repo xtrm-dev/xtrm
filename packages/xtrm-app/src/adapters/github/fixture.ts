@@ -33,7 +33,7 @@ export const fixtureEvents = (repo: string): RepoEvent[] =>
 interface FixturePull extends PullRequestSummary {
   mergeable: boolean | null;
   mergeableState: string | null;
-  commits: number;
+  commits: number | null;
   reviews: PullRequestDetail["reviews"];
   conversationComments: PullRequestDetail["conversationComments"];
   reviewComments: PullRequestDetail["reviewComments"];
@@ -139,9 +139,9 @@ const pullSeed: Array<
     // or branch refs, so every metric is unknown (XTRM-857). Never render 0.
     number: 241, title: "chore(XTRM-857): unknown metrics sample", author: "hubot", headBranch: null, baseBranch: null,
     state: "open", draft: false, checks: null, review: null, reviewCount: null, additions: null, deletions: null, changedFiles: null, comments: null,
-    body: null, mergeable: null, mergeableState: null, commits: 0,
+    body: null, mergeable: null, mergeableState: null, commits: null,
     reviews: [], conversationComments: [], reviewComments: [], files: [],
-    unavailableSections: ["files", "comments"],
+    unavailableSections: ["files", "comments", "reviews", "review_comments", "commits"],
     ageMin: 40,
   },
   {

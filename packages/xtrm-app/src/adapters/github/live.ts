@@ -397,6 +397,7 @@ export function mapPullDetail(repo: string, row: WirePr, detail: WireDetail, che
   const filesKnown = errors.files === undefined && Array.isArray(detail.files);
   const reviewsKnown = errors.reviews === undefined && Array.isArray(detail.reviews);
   const commentsKnown = errors.comments === undefined && Array.isArray(detail.comments);
+  const commitsKnown = errors.commits === undefined && Array.isArray(detail.commits);
   const files = (detail.files ?? []).map((f) => ({
     filename: f.filename ?? "—",
     additions: f.additions ?? 0,
@@ -418,7 +419,7 @@ export function mapPullDetail(repo: string, row: WirePr, detail: WireDetail, che
     conversationComments: mapPullComments(detail.comments),
     reviewComments: mapPullReviewComments(detail.review_comments),
     files,
-    commits: detail.commits?.length ?? 0,
+    commits: commitsKnown ? (detail.commits?.length ?? 0) : null,
     mergeable: checks?.mergeable ?? null,
     mergeableState: checks?.mergeable_state ?? null,
     checks: asCheckState(checks?.state),

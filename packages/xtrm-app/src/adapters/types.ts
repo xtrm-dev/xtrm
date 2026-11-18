@@ -128,7 +128,8 @@ export type PullDetailSection = "pr" | "comments" | "reviews" | "review_comments
 export interface PullRequestDetail extends PullRequestSummary {
   mergeable: boolean | null;
   mergeableState: string | null;
-  commits: number;
+  /** Null when the commits section failed: unknown, never 0 (XTRM-857). */
+  commits: number | null;
   reviews: PullRequestReview[];
   /** Issue/PR conversation comments (chronological). Count stays on `comments`. */
   conversationComments: PullRequestComment[];

@@ -1,5 +1,5 @@
 import type { ContextReference } from "../refs/references.tsx";
-import type { CheckState, PullRequestSummary, PullState, ReviewState } from "../adapters/types.ts";
+import type { CheckState, PullDetailSection, PullRequestSummary, PullState, ReviewState } from "../adapters/types.ts";
 import type { Tone } from "../ui/primitives.tsx";
 
 /** Canonical PR ref: `owner/repo#N`. Serialized as `@pr:owner/repo#N`. */
@@ -133,6 +133,15 @@ export function mergeableText(mergeable: boolean | null, mergeableState: string 
   if (mergeable === false) return `conflicts · ${mergeableState}`;
   if (mergeable === true) return `mergeable · ${mergeableState}`;
   return `unknown · ${mergeableState}`;
+}
+
+/**
+ * The conversation merges issue comments, reviews and review comments, so a
+ * failed fetch of any of the three leaves it incomplete: the drawer says
+ * unavailable rather than "No conversation yet." (XTRM-857, F1).
+ */
+export function conversationUnavailable(sections: readonly PullDetailSection[]): boolean {
+  return sections.some((section) => section === "comments" || section === "reviews" || section === "review_comments");
 }
 
 export function checkLabel(state: CheckState | null): string {
