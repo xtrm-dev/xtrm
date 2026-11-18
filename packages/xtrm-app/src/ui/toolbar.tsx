@@ -80,15 +80,16 @@ export function ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id
     // Alt+Arrow is browser history and Cmd/Ctrl+Home/End is the document; a tablist must not eat them.
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const last = tabs.length - 1;
+    // `-1` means no tab matches `value`. The first tab holds the single stop, so forward keys land
+    // there and backward keys wrap to the last tab, instead of the tablist going inert.
     const index = tabs.findIndex((tab) => tab.id === value);
-    if (index === -1) return;
     const next =
       event.key === "ArrowRight"
         ? index === last
           ? 0
           : index + 1
         : event.key === "ArrowLeft"
-          ? index === 0
+          ? index <= 0
             ? last
             : index - 1
           : event.key === "Home"
@@ -182,7 +183,11 @@ export function ListFilter({ value, onChange, placeholder = "Filter this list", 
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+    // `open` is a dependency on purpose: the handler must see the current open state, or `/`
+    // dead-ends in two states. Open but blurred (a value mounted it expanded, then the user typed
+    // and blurred): a stale `open=false` sets `wantsFocus` and calls `setOpen(true)`, which is a
+    // no-op, so nothing takes the caret. Closed after Escape: a stale `open=true` focuses a null ref.
+  }, [open]);
 
   return (
     <div
