@@ -47,6 +47,11 @@ npm run build
 npm run test:e2e   # Playwright: Agent half on fixtures (first run: npx playwright install chromium)
 ```
 
+The e2e run starts its own dev server on `127.0.0.1:5199`. Set `XTRM_APP_PORT` to move it when
+another worktree holds that port. A server already listening there is not reused: the run fails
+with a port-in-use error instead of testing another branch's code. Set
+`XTRM_PLAYWRIGHT_REUSE_SERVER=1` to attach to a server you started deliberately.
+
 ### Agent half (PRD §36)
 
 The rail's `Console` / `Agent` switch (`Ctrl .`) opens the Agent half at `/agent`:
