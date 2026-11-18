@@ -77,6 +77,30 @@ describe("ListFilter", () => {
     expect(document.activeElement).toBe(input);
   });
 
+  it("'/' takes the caret after typing and blurring, while the filter stays expanded", () => {
+    // The state a stale listener gets wrong: `open` is already true, so re-opening is a no-op.
+    render(<FilterHarness />);
+    fireEvent.keyDown(document, { key: "/" });
+    fireEvent.change(filterInput(), { target: { value: "x" } });
+    // `input.blur()` moves focus in jsdom, unlike a bare blur event.
+    act(() => filterInput().blur());
+    expect(screen.queryByPlaceholderText("Filter this list")).not.toBeNull();
+    expect(document.activeElement).not.toBe(filterInput());
+
+    fireEvent.keyDown(document, { key: "/" });
+    expect(document.activeElement).toBe(filterInput());
+  });
+
+  it("'/' works again after Escape cleared and collapsed the filter", () => {
+    // The other stale state: the listener saw `open=true` and focused a ref that is now null.
+    render(<ListFilter value="blocked" onChange={() => {}} />);
+    fireEvent.keyDown(filterInput(), { key: "Escape" });
+    expect(screen.queryByPlaceholderText("Filter this list")).toBeNull();
+
+    fireEvent.keyDown(document, { key: "/" });
+    expect(document.activeElement).toBe(filterInput());
+  });
+
   it("mounts expanded when it starts with a value, without taking the caret", () => {
     render(<ListFilter value="blocked" onChange={() => {}} />);
     expect(filterInput().value).toBe("blocked");
@@ -244,10 +268,28 @@ describe("ToolbarTabs", () => {
     expect(open.getAttribute("aria-selected")).toBe("true");
   });
 
-  it("keeps one tab stop when no tab matches the value", () => {
-    render(<ToolbarTabs label="Views" value="missing" onChange={() => {}} tabs={[{ id: "open", label: "Open" }, { id: "closed", label: "Closed" }]} />);
+  it("keeps one tab stop when no tab matches the value, and still moves from it", () => {
+    const onChange = vi.fn();
+    render(
+      <ToolbarTabs
+        label="Views"
+        value="missing"
+        onChange={onChange}
+        tabs={[
+          { id: "open", label: "Open" },
+          { id: "closed", label: "Closed" },
+        ]}
+      />,
+    );
     expect(screen.getByRole("tab", { name: "Open" }).getAttribute("tabindex")).toBe("0");
     expect(screen.getByRole("tab", { name: "Closed" }).getAttribute("tabindex")).toBe("-1");
+
+    // With nothing selected the tablist must not go inert: forward lands on the first tab,
+    // backward wraps to the last.
+    fireEvent.keyDown(screen.getByRole("tablist"), { key: "ArrowRight" });
+    expect(onChange).toHaveBeenLastCalledWith("open");
+    fireEvent.keyDown(screen.getByRole("tablist"), { key: "ArrowLeft" });
+    expect(onChange).toHaveBeenLastCalledWith("closed");
   });
 
   it("marks the selected tab with ink text and a 2px ink bar, not a fill", () => {

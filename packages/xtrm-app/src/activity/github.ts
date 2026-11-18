@@ -32,9 +32,9 @@ export function pullRow(pr: PullRequestSummary, repo: string): ActivityRow | nul
       // A merged/closed PR is dated by its last update, not by a merge time the
       // summary does not carry: say which clock the row uses.
       ...(pr.state === "open" ? [] : [["dated by", "last update"] as [string, string]]),
-      ["branch", `${pr.headBranch} → ${pr.baseBranch}`],
-      ["review", pr.review],
-      ["checks", pr.checks],
+      ["branch", `${pr.headBranch ?? "unknown"} → ${pr.baseBranch ?? "unknown"}`],
+      ["review", pr.review ?? "unknown"],
+      ["checks", pr.checks ?? "unknown"],
     ],
     body: pr.body,
   };

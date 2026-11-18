@@ -35,7 +35,7 @@ export default defineConfig({
       VITE_XTRM_SUBSTRATE: "live",
       XTRM_SUBSTRATE_WRITES: "0",
       
-      VITE_XTRM_RESEARCH: "fixture",
+      VITE_XTRM_JIRA: "fixture", VITE_XTRM_RESEARCH: "fixture",
       VITE_XTRM_AGENT_HOST: "live",
       // No saved SSH connection: the bridge reads the loopback host.
       XTRM_AGENT_CONNECTION_FILE: "e2e/.results/real-host-no-connection.json",

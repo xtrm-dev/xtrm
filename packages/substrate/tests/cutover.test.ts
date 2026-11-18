@@ -25,13 +25,13 @@ const SWEPT = [
   "docs/runtime/prd/native-chain-runtime.md",
   "docs/specialists/PRD—Native-Specialist-Subagents-for-Pi.md",
   "docs/specialists/PRD-Native-Specialists-Subagents-for-Pi-amendment-2026-09-08.md",
-  ".agents/skills/beads/SKILL.md",
   "packages/substrate/skills/using-substrate/SKILL.md",
 ];
 
-// Authority claims apply everywhere swept. Workflow-command patterns apply
-// everywhere except the compat skill itself, which legitimately documents
-// bd commands under its compatibility notice.
+// Authority claims and workflow-command patterns apply everywhere swept. The
+// bd-compat skill (.agents/skills/beads/SKILL.md) that once needed the
+// workflow-command exemption is gone: commit 699b6f5 gitignored and deleted
+// .agents, so no swept file carries that compatibility notice any more.
 const AUTHORITY_CLAIMS: RegExp[] = [
   /beads?\s+owns\s+durable/i,
   /beads?\s+is\s+authoritative/i,
@@ -58,7 +58,6 @@ const REQUIRED: Array<{ file: string; pattern: RegExp }> = [
   { file: "docs/runtime/README.md", pattern: /substrate issues \+ evidence/i },
   { file: "docs/runtime/prd/native-chain-runtime.md", pattern: /substrate issues are the authoritative/i },
   { file: "docs/specialists/PRD—Native-Specialist-Subagents-for-Pi.md", pattern: /substrate issue revision is the authoritative/i },
-  { file: ".agents/skills/beads/SKILL.md", pattern: /compatibility only/i },
   { file: "packages/substrate/skills/using-substrate/SKILL.md", pattern: /substrate owns durable work/i },
 ];
 
@@ -66,7 +65,7 @@ describe("G48: no normative Beads-authority statement in cutover instructions", 
   for (const file of SWEPT) {
     it(file, () => {
       const text = readFileSync(join(ROOT, file), "utf8");
-      const patterns = file.endsWith("beads/SKILL.md") ? AUTHORITY_CLAIMS : [...AUTHORITY_CLAIMS, ...WORKFLOW_COMMANDS];
+      const patterns = [...AUTHORITY_CLAIMS, ...WORKFLOW_COMMANDS];
       for (const pattern of patterns) {
         assert.ok(!pattern.test(text), `${file} still states Beads authority: ${pattern}`);
       }

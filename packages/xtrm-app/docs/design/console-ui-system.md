@@ -10,6 +10,7 @@ Binding authority: ADR-002 §D9 (visual contract) and §12 (rulings of 2026-11-1
 - "Consumers" lists the surfaces that render the component. A consumer not listed must not import it without a spec amendment.
 - Every status is a word plus a shape; colour is never the only carrier (ADR-002 §D9, XTRM-853 CONSTRAINTS). Each component section states its text carrier.
 - **Decisions followed, not reopened** (lead, 2026-11-18): status chip after the issue key; PR key coloured by state with the state in tooltip and `aria-label`; the row expand action is removed (the Inspector opens on click); a local list filter stays separate from Ctrl+K; linked Substrate refs go in a Linked column with `+N` and a popover.
+- **Restraint** (the section after §2) binds every slice; read it before the component sections.
 - **Rulings requested** (§9) are the only places where this spec asks the lead to decide. Each has a default that the implementation issues use unless the lead rules otherwise.
 
 ## 1. Evidence: what was read, what was searched
@@ -49,6 +50,18 @@ Consequence: no registry install is proposed. Every new component composes `Row`
 5. **One component per concept.** One PR key, one PR state chip, one linked-refs cell, one row copy action, one rail. Surfaces compose them; they do not re-draw them.
 6. **Light and dark are the same layout.** Only token values change. The design page shows each specimen in both themes.
 
+## Restraint (binding for every slice)
+
+Operator, 2026-11-18, on accepting this design ("ok-ish, we will see; tokens are quick to change"): the app must not become too colourful and must not fill the viewport with pills. These five rules bind every implementation slice and every later surface. A slice that needs an exception asks the lead before it builds.
+
+1. **At most one coloured element per row.** In a row that carries both a PR key and a status, one of them is coloured and the other is plain. The status chip keeps its tone; the `PrKey` then renders with `quiet` (`text-ink-muted`; the state stays in the glyph, tooltip and `aria-label`). In a row with no status chip (the PR list) the `PrKey` is the coloured element.
+2. **Chips only for state, never for metadata.** Counts, branches, refs, roles, layers, categories, sources, bindings and sync labels are plain text, or mono for keys and paths. A chip names a state: an issue status, a PR state, a dispatch verdict, a finding.
+3. **No chip backgrounds in toolbars or headers.** Toolbar and drawer-header controls are ghost controls (§4.2). The one state indicator allowed in a header is the PR state chip in the PR inspector header (lead decision, 2026-11-18); the `PrKey` on that line is then plain ink (rule 1).
+4. **Colour only through the existing tokens** (§3.1). No new colour, no new tint level; the derived `success` badge tone and the `color-mix` tints already in `badge.tsx` are the only derived fills.
+5. **A surface may not add a pill row.** A set of more than one tag-like value becomes a count plus a popover (`LinkedRefs`, §4.5), never a second line of chips.
+
+Applied in this spec: `LinkedRefs` shows `+N` as plain text, not a badge (§4.5); role, layer, category and source are plain labels, so `LayerLabel` is now `LayerLabel` (§7); the Factory catalog shows a dispatch chip only when a specialist cannot be dispatched (§7); the Project binding, Jira key and sync labels are plain text (§5); the Workers role word is plain and the `PrKey` in a Workers row is `quiet` (§6). `GithubPill` in the PR inspector header becomes a ghost `ToolbarButton` with the GitHub mark, because a filled pill is a chip background in a header (flagged for the lead; the component itself is unchanged until a slice does it). The design page follows the same rules.
+
 ## 3. Tokens
 
 ### 3.1 Existing tokens (unchanged)
@@ -67,7 +80,7 @@ Source: `src/styles.css` (`:root`, `:root[data-theme="dark"]`, `@theme inline`).
 | `--x-ink` / `-muted` / `-faint` | `text-ink*` | `#18181b` / `#5f5f68` / `#94949c` | `#ececef` / `#a0a0a8` / `#6a6a72` | text ladder | all |
 | `--x-border-muted` | `border-border-muted` | ink @ 7% | white @ 8% | rail, section rules | NavRail rail, drawer sections |
 | `--x-border-subtle` | `border-border-subtle` | ink @ 4% | white @ 6% | table grid only | row separators |
-| `--x-border` / `-strong` | `border-border*` | ink @ 11% / 20% | white @ 12% / 18% | inputs, dashed provenance | `LayerChip` dashed |
+| `--x-border` / `-strong` | `border-border*` | ink @ 11% / 20% | white @ 12% / 18% | inputs, dashed provenance | `LayerLabel` dashed |
 | `--x-accent` | `bg-accent`, `ring-accent` | `#4f46e5` | `#818cf8` | selection marker, focus | NavRail active marker |
 | `--x-accent-ink` | `text-accent-ink` | `#4338ca` | `#a5b4fc` | references, merged | `PrKey` merged, `ReferenceChip` |
 | `--x-accent-soft` | `bg-accent-soft` | accent @ 10% | accent @ 12% | soft fill | `accent` badge |
@@ -146,7 +159,7 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
   - Resting: a 28px `IconButton` with the `filter` icon (`ListFilter` from lucide, a new key `filter` in `icon.tsx`), label `Filter this list`, shortcut `/`. It is deliberately not the `search` magnifier, which belongs to global search (Ctrl+K, `GlobalSearch.tsx`).
   - Focused (click, `/`, or keyboard focus): widens from 28px to `w-48` (192px) over 150ms (instant under `prefers-reduced-motion`), shows an input with `placeholder="Filter this list"`, `bg-hover` fill, `focus-within:ring` from the global focus style. The widen is the only moving part.
   - With a value: stays expanded after blur and collapses on Esc (which clears).
-  - The count (`aria-live="polite"`, at 28px it reads as `12`): `count` is the matched rows, the optional `total` the loaded rows, so a consumer that knows both renders `12 of 41` and one that does not renders `12 matching` for the screen reader. The current surface passes `count` only; later slices pass `total` on surfaces that load a page.
+  - The count (`aria-live="polite"`, shown inside the expanded 192px control): `count` is the matched rows, the optional `total` the loaded rows, so a consumer that knows both renders `12 of 41` and one that does not renders `12` plus a hidden ` matching` for the screen reader. The current surface passes `count` only; later slices pass `total` on surfaces that load a page.
   - Scope: it filters the rows already loaded in the current surface by title, key and author. It never navigates and never queries other surfaces; Ctrl+K searches across surfaces and opens results.
 - **Consumers:** `src/issues/IssuesSurface.tsx`, `src/github/PullsSurface.tsx`, `src/github/IssuesSurface.tsx`, `src/github/ReleasesSurface.tsx`, `src/github/ContentSurface.tsx`, `src/surfaces/ActivitySurface.tsx`, `src/surfaces/ResearchSurface.tsx`, `src/surfaces/other.tsx`, `src/settings/SettingsSurface.tsx` (every file that imports `SurfaceToolbar`/`TOOLBAR_*`, from `git grep`). The Inspector header's two bordered buttons (`Attach to composer`, `Open` in `src/shell/Inspector.tsx`) switch to `ToolbarButton` so the drawer and the toolbar share one look.
 - **Order inside the toolbar:** `[SourceBadge] [primary action] [tabs or filters] [ListFilter] … [layout radio] [options menu]`. The layout radio and options menu stay at the end.
@@ -167,7 +180,7 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
   | 6 | title | title (unchanged); detached parent chip `↑` stays |
   | end | `open` + `copy` `IconButton size-5` on hover | one `RowAction` (copy), `Icon text`, `size-5` |
 
-  The status chip text is the state carrier (`Blocked`, `In progress`, `Ready`, …); the tone only reinforces it.
+  The status chip text is the state carrier (`Blocked`, `In progress`, `Ready`, …); the tone only reinforces it. The chip is the coloured element of the row: the PR key in the PR column renders `quiet` (Restraint rule 1).
 - **`RowAction`:**
   ```ts
   RowAction({ icon, label, onAct, doneLabel? }: { icon: IconName; label: string; onAct: () => void; doneLabel?: string })
@@ -201,15 +214,16 @@ The existing `PrStateBadge` maps `open → active`, `closed → muted`. The new 
 **`PrKey`** — the key, coloured by state, used everywhere a PR key renders:
 
 ```ts
-PrKey({ number, state, draft?, repo?, glyph = true, className }: {
+PrKey({ number, state, draft?, repo?, glyph = true, quiet = false, className }: {
   number: number; state: string | null; draft?: boolean | null; repo?: string;   // repo shows "owner/name" faint after #N when set
   glyph?: boolean;                                                               // text-size state glyph before #N
+  quiet?: boolean;                                                               // text-ink-muted instead of the state colour: the row already has a coloured status (Restraint rule 1)
   className?: string })
 ```
 
 - Render: `<span class="inline-flex items-center gap-1 font-mono text-xs {keyClass}" title="{tooltip}" aria-label="Pull request #{number}, {word}">[glyph]#{number}[repo]</span>`. Mono is allowed for keys (ADR-002 §D9).
 - The state is carried by: the colour, the glyph shape (`git-pull-request` vs `-draft` vs `git-merge` vs `-closed`), the tooltip and the `aria-label`. Within a `button` (chip), the button `aria-label` includes the state word.
-- Default `glyph` is `true`. It replaces the state dot column in the PR list, so the key cell is `[glyph]#142`. `glyph={false}` is allowed only in running prose where the surrounding sentence names the state.
+- Default `glyph` is `true`. It replaces the state dot column in the PR list, so the key cell is `[glyph]#142`. `glyph={false}` is allowed only in running prose where the surrounding sentence names the state. `quiet` is set by any row that also shows a coloured status chip (issue table, Workers trail, PR inspector header); the glyph, tooltip and `aria-label` keep carrying the state.
 - **Used by (every site that renders a PR key today, from `git grep`):**
 
   | site | file | change |
@@ -225,7 +239,7 @@ PrKey({ number, state, draft?, repo?, glyph = true, className }: {
   | Project Timeline `pr` events | `src/project/timeline/EventRow.tsx` (New) | `PrKey` |
   | Project Workers trail | `src/project/workers/WorkerNode.tsx` (New) | `PrKey` |
 
-**`PrStateChip`** — the small state chip, GitHub-style, for headers:
+**`PrStateChip`** — the small state chip, GitHub-style. It appears only in the PR inspector header (Restraint rule 3); everywhere else the `PrKey` alone carries the state:
 
 ```ts
 PrStateChip({ state, draft, stateSource?, size = "sm" }: { state: string | null; draft?: boolean | null; stateSource?: string | null; size?: "xs" | "sm" })
@@ -240,7 +254,7 @@ A `Badge` with the glyph (`Icon micro`) and the word, tone from `PR_STATES`. Thi
   ```ts
   LinkedRefs({ refs, max = 1, onOpen }: { refs: string[]; max?: number; onOpen?: (ref: string) => void })
   ```
-- Behaviour: renders the first `max` refs as compact chips and, when `refs.length > max`, a `Badge xs neutral` `+N` that is a `Popover` trigger (`aria-label="N more linked issues"`). The popover (`bg-raised shadow-float`, `max-h-72 overflow-y-auto thin-scrollbar`) lists every ref as `ReferenceChip showTitle` in full. The cell is `flex min-w-0 flex-nowrap overflow-hidden whitespace-nowrap`; the first chip truncates (`min-w-0 truncate`) before `+N` is pushed out. `+N` has `shrink-0`.
+- Behaviour: renders the first `max` refs as compact chips and, when `refs.length > max`, a plain-text `+N` (`text-xs text-ink-faint tabular`, hover `text-ink`; not a `Badge`, Restraint rule 2) that is a `Popover` trigger (`aria-label="N more linked issues"`). The popover (`bg-raised shadow-float`, `max-h-72 overflow-y-auto thin-scrollbar`) lists every ref as `ReferenceChip showTitle` in full. The cell is `flex min-w-0 flex-nowrap overflow-hidden whitespace-nowrap`; the first chip truncates (`min-w-0 truncate`) before `+N` is pushed out. `+N` has `shrink-0`.
 - Dedupe by resolved issue (the existing `IssueChips` logic: a locator and its flat ref are one row) moves into a shared hook `usePrLinkedRefs(pull)` in `src/github/pr.ts`, used by the list cell and the inspector.
 - Zero refs: the cell renders an em dash in `text-ink-faint`, not an empty cell.
 
@@ -289,11 +303,11 @@ ADR-002 §D9 names the components and puts them in `src/project/`; this section 
 
 | surface | component (file) | anatomy | text carrier for status |
 |---|---|---|---|
-| Overview `/project` | `ProjectShell` (`src/project/ProjectShell.tsx`), `AttentionList`, `AttentionRow` (`src/project/overview/AttentionList.tsx`), `IntegrationState` (`src/project/IntegrationState.tsx`) | header: repository, binding `Badge`, freshness (`synced 2m ago`); a now/next block from `board/next`; then **ranked attention rows**. A row is `[reason chip] [subject] [refs] … [age] [→ section]`. Reasons in rank order: `Question`, `Blocked`, `Claim expiring`, `Follow-up due`, then awareness. The reason chip is a `Badge xs` with the word; `Blocked` uses `danger`, `Claim expiring` uses `neutral` plus the countdown. | chip word; countdown text |
+| Overview `/project` | `ProjectShell` (`src/project/ProjectShell.tsx`), `AttentionList`, `AttentionRow` (`src/project/overview/AttentionList.tsx`), `IntegrationState` (`src/project/IntegrationState.tsx`) | header: repository, binding as plain text, freshness (`synced 2m ago`); a now/next block from `board/next`; then **ranked attention rows**. A row is `[reason chip] [subject] [refs] … [age] [→ section]`. Reasons in rank order: `Question`, `Blocked`, `Claim expiring`, `Follow-up due`, then awareness. The reason is a state chip with the word and is `neutral`, except `Blocked`, which uses `danger`; `Claim expiring` shows the countdown as plain text. Refs are mono `text-ink-muted` (hover `text-accent-ink`), not coloured chips. | chip word; countdown text |
 | Timeline `/project/timeline` | `DayGroup`, `EventRow`, `NowMarker` (`src/project/timeline/`) | day heading (`bg-control`, mono caps `text-xs`), event rows `[time] [kind glyph + word] [label] [refs]`, a horizontal now marker (`border-danger` hairline plus the word `now`). Kinds: `window`, `pr`, `handover`, `incident`, `report`; the kind word is rendered (`text-xs text-ink-muted`). `pr` events render `PrKey`. A "next" window is `text-ink`, past rows `text-ink-muted`. **Agenda only, no lanes** (ADR-002 §D9). | kind word + time |
 | Workers `/project/workers` | `WorkersTree`, `WorkerNode` (`src/project/workers/`) | the tree in §6. Grouping and the include-archived control from XTRM-819 stay as toolbar controls (`ToolbarFilter`, `ToolbarButton`). | state word per node |
 | Follow-ups `/project/followups` | `FollowUpRow` (`src/project/followups/FollowUpRow.tsx`) | `[priority glyph] [title] [status chip] [owner] [when] [typed refs]`, grouped by status as `DayGroup`-style headings. Refs resolve through `useIssueIndex`; an unresolved ref is plain text (existing rule). | status chip word |
-| Jira `/project/jira` | `JiraRow`, `JiraChip` (`src/project/jira/`) | `JiraChip` = `Badge`-sized mono key + status word + external glyph; `JiraRow` = key, summary, status, assignee, sync state. The same chip appears in the Inspector header of an issue and in issue rows when a binding exists. A `syncState` other than `ok` is a word (`stale`, `unbound`), never colour alone. | key + status word |
+| Jira `/project/jira` | `JiraRow`, `JiraChip` (`src/project/jira/`) | `JiraChip` = mono key + status word + external glyph as plain text as plain text (a link, not a pill); `JiraRow` = key, summary, status, assignee, sync state. The same chip appears in the Inspector header of an issue and in issue rows when a binding exists. A `syncState` other than `ok` is a word (`stale`, `unbound`), never colour alone. | key + status word |
 
 All Project rows are `Row density="list"` with one `RowAction` at most. No card wraps a list.
 
@@ -301,7 +315,7 @@ All Project rows are `Row density="list"` with one `RowAction` at most. No card 
 
 **Form: a tree, not a free graph.** Lead → worker → specialist activation form a strict parent chain (`reportsTo` / `@agent_parent_session`), so a tree with the NavRail rail (one hairline, label column aligned) is the right form and stays keyboard navigable and virtualisable. Issue and PR are the leaves of each chain; they render as the node's **trail** (`XTRM-853 [In progress] → #431 [Open]`) in columns, not as extra tree levels, because an issue has many activations and a PR many issues and a tree level per entity would duplicate rows. The design page also draws the data lineage as an SVG so the joins are explicit.
 
-**Node anatomy** (`WorkerNode`, one `Row density="list"`): `[disclosure] [kind glyph] [name] [role word chip] | [state word] | [issue key + status chip] | [PrKey] | [ctx %] | [claim / age]`. Glyphs use existing registry icons: panes `agent`, activations `specialists`; the **role word** (`lead`, `worker`, `activation`) and the state word are always rendered.
+**Node anatomy** (`WorkerNode`, one `Row density="list"`): `[disclosure] [kind glyph] [name] [role word] | [state word] | [issue key + status chip] | [PrKey] | [ctx %] | [claim / age]`. Glyphs use existing registry icons: panes `agent`, activations `specialists`; the **role word** (`lead`, `worker`, `activation`; plain `text-ink-faint`, not a chip) and the state word (plain text) are always rendered. The issue status chip is the row's coloured element; the `PrKey` is `quiet`.
 
 **Sources.** Three real sources exist. No field is invented.
 
@@ -343,14 +357,14 @@ All Project rows are `Row density="list"` with one `RowAction` at most. No card 
 
 **Direction: one list, one drawer, three sections.** The Factory is a regular list surface under `System → Specialists`; everything about one specialist is the Inspector Drawer content for `inspect({ kind: "specialist", ref: name })`. The Drawer already owns back/forward, pin, maximize, follow, copy reference and Esc (`InspectorDrawer`); the Factory adds no drawer of its own (XTRM-455 SUCCESS: "the Inspector Drawer is used for inspection rather than a competing drawer").
 
-1. **Catalog (list):** `Row`s: `[name] [category chip] [source layer chip] [dispatch chip] … [model] [RowAction copy]`. Toolbar: `ToolbarTabs` (category), `ListFilter`. The dispatch chip is a word (`Dispatchable`, `Blocked`, `Unavailable`) with the reason as a tooltip; it reuses `specialist_list` verdicts through the XTRM-454 adapter.
-2. **Drawer header:** name, `LayerChip` of the winning layer, a `Customize` `ToolbarButton` menu (`Override in this repo`, `Fork as new specialist`), `Copy context for agent` as an `IconButton` (XTRM-459). Writes need the capabilities endpoint of XTRM-454; without it the menu is absent, not disabled.
-3. **Section "Effective"** (XTRM-455, 456): `Fields` grouped in schema order. Each field row: label, effective value, **`LayerChip`** (`default`, `user`, `repo`, `locked`), and an inline explanation on focus. Inherited values are `text-ink-muted`; overridden values are `text-ink` with the inherited value beneath it. A locked field shows a lock glyph and the word `locked` plus the layer where it can change; it has no edit control. Editing is a per-field `Popover` (`FieldEditor`): the schema-aware control, the units, the inherited value, `Reset to inherit`, and the **CLI-equivalent preview** line before `Save`. Long values (system prompt) are a collapsible `ContentPanel` with a copy action.
-4. **Section "Skills and rules"** (XTRM-458): resolved skills (pack, path, pinned SHA, an `ambiguous`/`fallback` word chip when applicable) and the mandatory-rules pipeline, each contribution with its `LayerChip`; full text is a collapsible `ContentPanel`. Drift uses the existing status vocabulary through `Badge`.
-5. **Section "Diagnostics and launch preview"** (XTRM-459): findings first, as banners (the existing banner pattern, `border-l-2` plus word); then the activation preview as `Fields` with a `LayerChip` per value and the word `unavailable` where a value cannot be resolved.
+1. **Catalog (list):** `Row`s: `[name] [category] [source layer] [dispatch] … [model] [RowAction copy]`. Toolbar: `ToolbarTabs` (category), `ListFilter`. Category and source layer are plain text. Dispatch is plain text (`Dispatchable`) and becomes a chip only for `Blocked` or `Unavailable`, with the reason as a tooltip; it reuses `specialist_list` verdicts through the XTRM-454 adapter.
+2. **Drawer header:** name, `LayerLabel` of the winning layer, a `Customize` `ToolbarButton` menu (`Override in this repo`, `Fork as new specialist`), `Copy context for agent` as an `IconButton` (XTRM-459). Writes need the capabilities endpoint of XTRM-454; without it the menu is absent, not disabled.
+3. **Section "Effective"** (XTRM-455, 456): `Fields` grouped in schema order. Each field row: label, effective value, **`LayerLabel`** (`default`, `user`, `repo`, `locked`), and an inline explanation on focus. Inherited values are `text-ink-muted`; overridden values are `text-ink` with the inherited value beneath it. A locked field shows a lock glyph and the word `locked` plus the layer where it can change; it has no edit control. Editing is a per-field `Popover` (`FieldEditor`): the schema-aware control, the units, the inherited value, `Reset to inherit`, and the **CLI-equivalent preview** line before `Save`. Long values (system prompt) are a collapsible `ContentPanel` with a copy action.
+4. **Section "Skills and rules"** (XTRM-458): resolved skills (pack, path, pinned SHA, an `ambiguous`/`fallback` word chip when applicable) and the mandatory-rules pipeline, each contribution with its `LayerLabel`; full text is a collapsible `ContentPanel`. Drift uses the existing status vocabulary through `Badge`.
+5. **Section "Diagnostics and launch preview"** (XTRM-459): findings first, as banners (the existing banner pattern, `border-l-2` plus word); then the activation preview as `Fields` with a `LayerLabel` per value and the word `unavailable` where a value cannot be resolved.
 6. **Fork / override dialog** (XTRM-457): one `Dialog` (`src/ui/dialog.tsx`) showing the delta against the base before save, with warned fields marked by a word.
 
-**`LayerChip`** (New, `src/ui/layer-chip.tsx`): `LayerChip({ layer }: { layer: "default" | "user" | "repo" | "locked" })`; a `Badge xs`; `default` = `muted`, `user` = `neutral`, `repo` = `accent`, `locked` = `neutral` with the `lock` glyph and dashed `border-border-strong`. The word is always rendered.
+**`LayerLabel`** (New, `src/ui/layer-label.tsx`): `LayerLabel({ layer }: { layer: "default" | "user" | "repo" | "locked" })`; plain `text-xs` text, no fill (Restraint rule 2): `default` and `user` in `text-ink-faint`, `repo` in `text-ink-muted`, `locked` in `text-ink-muted` with the `lock` glyph. The word is always rendered.
 
 Mapping to the existing issues (no issue is dropped; the surfaces merge):
 
@@ -376,7 +390,7 @@ The amendments to those contracts belong to the lead; they are listed in §10 as
 | `PrKey`, `PrStateChip` | ✓ (PR col) | ✓ | ✓ | ✓ (timeline, workers) | | | ✓ |
 | `LinkedRefs` | | ✓ | ✓ | | | | |
 | `AttentionList`, `DayGroup`/`EventRow`/`NowMarker`, `WorkersTree`/`WorkerNode`, `FollowUpRow`, `JiraChip`/`JiraRow`, `ProjectShell`, `IntegrationState` | | | | ✓ | | | |
-| `LayerChip`, `FieldEditor` | | | | | ✓ | | ✓ (specialist) |
+| `LayerLabel`, `FieldEditor` | | | | | ✓ | | ✓ (specialist) |
 
 ## 9. Rulings requested from the lead
 

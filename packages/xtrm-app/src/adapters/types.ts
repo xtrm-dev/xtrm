@@ -5,6 +5,7 @@ import type { AgentAdapter } from "./agent/types.ts";
 
 import type { ResearchAdapter } from "./research/types.ts";
 import type { StatusBoardAdapter } from "./status-board/types.ts";
+import type { JiraAdapter } from "./jira/types.ts";
 
 export type DataSource = "live" | "fixture";
 
@@ -52,20 +53,29 @@ export type PullListState = "open" | "closed" | "all";
 export type CheckState = "passing" | "failing" | "pending" | "none";
 export type ReviewState = "approved" | "changes_requested" | "commented" | "pending" | "none";
 
+/**
+ * One pull request row. Every metric the source may not carry is nullable:
+ * a null means "unknown" and must render as unknown, never as 0 (XTRM-857).
+ */
 export interface PullRequestSummary {
   number: number;
   title: string;
   author: string;
-  headBranch: string;
-  baseBranch: string;
+  /** null when the row carries no branch ref (the poller row today). */
+  headBranch: string | null;
+  baseBranch: string | null;
   state: PullState;
   draft: boolean;
-  checks: CheckState;
-  review: ReviewState;
-  additions: number;
-  deletions: number;
-  changedFiles: number;
-  comments: number;
+  /** null = check state unknown for this row (the list payload carries none). */
+  checks: CheckState | null;
+  /** null = review state unknown for this row (the list payload carries none). */
+  review: ReviewState | null;
+  /** Number of reviews; null when the source carries no review data. */
+  reviewCount: number | null;
+  additions: number | null;
+  deletions: number | null;
+  changedFiles: number | null;
+  comments: number | null;
   updatedAt: string;
   createdAt: string;
   url: string;
@@ -114,16 +124,22 @@ export interface PullFileSummary {
   status: string;
 }
 
+/** Detail sections the backend can fail independently; a failed one is unavailable, never empty (XTRM-857). */
+export type PullDetailSection = "pr" | "comments" | "reviews" | "review_comments" | "commits" | "files" | "timeline";
+
 export interface PullRequestDetail extends PullRequestSummary {
   mergeable: boolean | null;
   mergeableState: string | null;
-  commits: number;
+  /** Null when the commits section failed: unknown, never 0 (XTRM-857). */
+  commits: number | null;
   reviews: PullRequestReview[];
   /** Issue/PR conversation comments (chronological). Count stays on `comments`. */
   conversationComments: PullRequestComment[];
   /** Code-anchored review comments; grouped into threads by the UI. */
   reviewComments: PullRequestReviewComment[];
   files: PullFileSummary[];
+  /** Sections the backend named in `errors`; their view says unavailable, never "empty" (XTRM-857). */
+  unavailableSections: PullDetailSection[];
 }
 
 export type GithubIssueState = "open" | "closed";
@@ -623,5 +639,6 @@ export interface Adapters {
   githubAuth: GithubAuthAdapter;
   substrate: SubstrateAdapter;
   statusBoard: StatusBoardAdapter;
+  jira: JiraAdapter;
   research: ResearchAdapter;
 }

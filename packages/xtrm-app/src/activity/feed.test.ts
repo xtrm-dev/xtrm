@@ -44,8 +44,8 @@ describe("activity loaders (XTRM-757)", () => {
   it("returns one row per github object and skips a row with no readable date", async () => {
     const github = {
       listPulls: async () => [
-        { number: 1, title: "t", author: "a", headBranch: "h", baseBranch: "main", state: "open", draft: false, checks: "none", review: "none", additions: 0, deletions: 0, changedFiles: 0, comments: 0, updatedAt: "2026-11-12T00:00:00Z", createdAt: "2026-11-11T00:00:00Z", url: "u", body: null },
-        { number: 2, title: "bad", author: "a", headBranch: "h", baseBranch: "main", state: "open", draft: false, checks: "none", review: "none", additions: 0, deletions: 0, changedFiles: 0, comments: 0, updatedAt: "2026-11-12T00:00:00Z", createdAt: "not-a-date", url: "u", body: null },
+        { number: 1, title: "t", author: "a", headBranch: "h", baseBranch: "main", state: "open", draft: false, checks: "none", review: "none", reviewCount: 0, additions: 0, deletions: 0, changedFiles: 0, comments: 0, updatedAt: "2026-11-12T00:00:00Z", createdAt: "2026-11-11T00:00:00Z", url: "u", body: null },
+        { number: 2, title: "bad", author: "a", headBranch: "h", baseBranch: "main", state: "open", draft: false, checks: "none", review: "none", reviewCount: 0, additions: 0, deletions: 0, changedFiles: 0, comments: 0, updatedAt: "2026-11-12T00:00:00Z", createdAt: "not-a-date", url: "u", body: null },
       ],
       listIssues: async () => [],
       getPull: async () => ({ reviews: [], conversationComments: [] }) as unknown as PullRequestDetail,
