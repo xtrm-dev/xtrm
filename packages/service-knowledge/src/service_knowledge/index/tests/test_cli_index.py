@@ -2,22 +2,13 @@
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
-import sys
 from pathlib import Path
+
+from service_knowledge.testing import run_cli
 
 
 def _run_cli(root: Path, *args: str) -> dict:
-    executable = shutil.which("service-knowledge", path=str(Path(sys.executable).parent))
-    assert executable is not None
-    result = subprocess.run(
-        [executable, *args],
-        cwd=root,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    result = run_cli(list(args), cwd=root, check=True, capture_output=True, text=True)
     return json.loads(result.stdout)
 
 

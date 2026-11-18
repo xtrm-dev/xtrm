@@ -13,10 +13,10 @@ Behavior contract (from mercury/infra spike infra-223r.1):
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 from service_knowledge.cli import main
+from service_knowledge.testing import run_cli
 
 def _umbrella(repo: Path) -> Path:
     """Fixture writes its registry under the migrated umbrella; find it."""
@@ -88,8 +88,8 @@ def test_index_build_indexes_sre_triage_runs(consumer_repo: Path) -> None:
     assert main(["index", "build", "--path", str(consumer_repo)]) == 0
 
     stats = json.loads(
-        subprocess.run(
-            ["service-knowledge", "index", "stats", "--path", str(consumer_repo)],
+        run_cli(
+            ["index", "stats", "--path", str(consumer_repo)],
             capture_output=True, text=True, check=True,
         ).stdout
     )
@@ -103,8 +103,8 @@ def test_index_query_finds_seeded_keyword(consumer_repo: Path) -> None:
     assert main(["index", "build", "--path", str(consumer_repo)]) == 0
 
     result = json.loads(
-        subprocess.run(
-            ["service-knowledge", "index", "query", "questdb", "--path", str(consumer_repo)],
+        run_cli(
+            ["index", "query", "questdb", "--path", str(consumer_repo)],
             capture_output=True, text=True, check=True,
         ).stdout
     )
@@ -121,16 +121,16 @@ def test_index_query_hyphen_token_is_separator(consumer_repo: Path) -> None:
     assert main(["index", "build", "--path", str(consumer_repo)]) == 0
 
     result = json.loads(
-        subprocess.run(
-            ["service-knowledge", "index", "query", "NQ=F", "--path", str(consumer_repo)],
+        run_cli(
+            ["index", "query", "NQ=F", "--path", str(consumer_repo)],
             capture_output=True, text=True, check=True,
         ).stdout
     )
     # Plain-token behavior is the documented contract; the compound verbatim
     # query may or may not hit, but the plain token MUST. Assert plain works:
     plain = json.loads(
-        subprocess.run(
-            ["service-knowledge", "index", "query", "candle", "--path", str(consumer_repo)],
+        run_cli(
+            ["index", "query", "candle", "--path", str(consumer_repo)],
             capture_output=True, text=True, check=True,
         ).stdout
     )
@@ -149,8 +149,8 @@ def test_index_rebuild_is_refresh_path(consumer_repo: Path) -> None:
     )
     assert main(["index", "rebuild", "--path", str(consumer_repo)]) == 0
     result = json.loads(
-        subprocess.run(
-            ["service-knowledge", "index", "query", "memory", "--path", str(consumer_repo)],
+        run_cli(
+            ["index", "query", "memory", "--path", str(consumer_repo)],
             capture_output=True, text=True, check=True,
         ).stdout
     )
