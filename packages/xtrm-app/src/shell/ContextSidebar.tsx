@@ -1,6 +1,6 @@
 import { Popover } from "../ui/popover.tsx";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAdapters } from "../adapters/index.tsx";
 import { AgentSidebar } from "../agent/AgentSidebar.tsx";
 import { useAgentStore } from "../agent/workspace.tsx";
@@ -10,7 +10,7 @@ import { projectForRepo, useConnection, useIssues, useProjects, useRepoStats, us
 import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, Tip, cx, relativeTime } from "../ui/primitives.tsx";
-import { SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
+import { NavRailItem, SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
 import { useShell } from "./context.tsx";
 import { modShortcut } from "./layout.ts";
 
@@ -177,7 +177,7 @@ function SourceFooter() {
   );
 }
 
-/** Project's own rows: its repository-scoped sub-routes (ADR-002 D2), nested under the Project row. */
+/** Project's own rows: its repository-scoped sub-routes (ADR-002 D2), on the rail under the Project row. */
 function ProjectRows({ pathname }: { pathname: string }) {
   const { repo } = useShell();
   const go = useGo();
@@ -185,7 +185,7 @@ function ProjectRows({ pathname }: { pathname: string }) {
     const href = repoHref(repo, section.repoPath);
     // The root section is not selected by its own children; every other section is.
     const selected = pathname === href || (section.repoPath !== "/project" && pathname.startsWith(`${href}/`));
-    return <SidebarRow key={section.id} indent icon={section.icon} label={section.label} selected={selected} deferred={!!section.deferred} onActivate={() => go(href)} />;
+    return <NavRailItem key={section.id} label={section.label} selected={selected} deferred={!!section.deferred} onActivate={() => go(href)} />;
   });
 }
 
@@ -196,10 +196,8 @@ function ResearchRows({ pathname }: { pathname: string }) {
   const experimentCount = runs.data ? new Set(runs.data.filter((r) => !isInvalidManifestRow(r)).map((r) => r.experiment)).size : null;
   const countFor = (id: string) => (id === "experiments" ? experimentCount : id === "runs" ? (runs.data?.length ?? null) : null);
   return RESEARCH_SECTIONS.map((section) => (
-    <SidebarRow
+    <NavRailItem
       key={section.id}
-      indent
-      icon={section.icon}
       label={section.label}
       selected={pathname === section.path}
       deferred={!!section.deferred}
@@ -231,20 +229,20 @@ function WorkSidebar({ pathname }: { pathname: string }) {
               const href = destinationHref(repo, item);
               const nested = item.id === "project";
               return (
-                <Fragment key={item.id}>
-                  <SidebarRow
-                    icon={item.icon}
-                    label={item.label}
-                    selected={href != null && (pathname === href || pathname.startsWith(`${href}/`))}
-                    deferred={!!item.deferred}
-                    count={item.id === "issues" ? (openCount ?? null) : null}
-                    expanded={nested ? projectOpen : undefined}
-                    onToggle={nested ? () => setProjectOpen((v) => !v) : undefined}
-                    onActivate={href ? () => go(href) : undefined}
-                  />
+                <SidebarRow
+                  key={item.id}
+                  icon={item.icon}
+                  label={item.label}
+                  selected={href != null && (pathname === href || pathname.startsWith(`${href}/`))}
+                  deferred={!!item.deferred}
+                  count={item.id === "issues" ? (openCount ?? null) : null}
+                  expanded={nested ? projectOpen : undefined}
+                  onToggle={nested ? () => setProjectOpen((v) => !v) : undefined}
+                  onActivate={href ? () => go(href) : undefined}
+                >
                   {nested && projectOpen && <ProjectRows pathname={pathname} />}
                   {item.id === "research" && active === "research" && <ResearchRows pathname={pathname} />}
-                </Fragment>
+                </SidebarRow>
               );
             })}
           </SidebarSection>

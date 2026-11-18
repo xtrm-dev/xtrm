@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { NavRail, NavRailItem } from "./nav-rail.tsx";
 import { SidebarRow, SidebarSection } from "./sidebar.tsx";
 
 describe("SidebarSection", () => {
@@ -24,12 +25,11 @@ describe("SidebarSection", () => {
 });
 
 describe("SidebarRow", () => {
-  it("renders the 30px sidebar geometry: 16px icon at stroke 2, 600 label, 20px indent", () => {
+  it("renders the 30px sidebar geometry: 16px icon at stroke 2, 600 label", () => {
     const onActivate = vi.fn();
-    const { container } = render(<SidebarRow icon="program" label="Project" indent onActivate={onActivate} />);
+    const { container } = render(<SidebarRow icon="program" label="Project" onActivate={onActivate} />);
     const row = container.firstElementChild as HTMLElement;
     expect(row.className).toContain("h-[30px]");
-    expect(row.style.paddingLeft).toBe("1.25rem");
 
     const icon = row.querySelector("svg")!;
     expect(icon.getAttribute("width")).toBe("16");
@@ -62,10 +62,105 @@ describe("SidebarRow", () => {
     expect(container.querySelector("svg.lucide-chevron-down")).toBeTruthy();
   });
 
-  it("dims deferred rows without changing their weight", () => {
+  it("expands on ArrowRight and collapses on ArrowLeft, and only when a disclosure exists", () => {
+    const onToggle = vi.fn();
+    const { container, rerender } = render(<SidebarRow icon="program" label="Project" expanded={false} onToggle={onToggle} onActivate={() => {}} />);
+    const row = container.firstElementChild as HTMLElement;
+    expect(row.getAttribute("role")).toBe("button");
+
+    // Collapsed: ArrowRight opens, ArrowLeft does nothing.
+    fireEvent.keyDown(row, { key: "ArrowRight" });
+    expect(onToggle).toHaveBeenCalledOnce();
+    const afterOpen = fireEvent.keyDown(row, { key: "ArrowLeft" });
+    expect(onToggle).toHaveBeenCalledOnce();
+    expect(afterOpen).toBe(true); // not prevented: there was nothing to collapse
+
+    rerender(<SidebarRow icon="program" label="Project" expanded onToggle={onToggle} onActivate={() => {}} />);
+    fireEvent.keyDown(container.firstElementChild as HTMLElement, { key: "ArrowLeft" });
+    expect(onToggle).toHaveBeenCalledTimes(2);
+    fireEvent.keyDown(container.firstElementChild as HTMLElement, { key: "ArrowRight" });
+    expect(onToggle).toHaveBeenCalledTimes(2); // already open: no toggle
+
+    // A row without a disclosure keeps its plain Enter/Space activation: no toggle, nothing prevented.
+    rerender(<SidebarRow icon="program" label="Project" onActivate={() => {}} />);
+    const plain = container.firstElementChild as HTMLElement;
+    expect(fireEvent.keyDown(plain, { key: "ArrowLeft" })).toBe(true);
+    expect(onToggle).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps deferred rows at readable ink and marks them with data-deferred", () => {
     render(<SidebarRow icon="ci" label="CI/CD" deferred onActivate={() => {}} />);
     const label = screen.getByText("CI/CD");
-    expect(label.className).toContain("text-ink-faint");
+    // ink-faint is 2.74:1 light / 2.93:1 dark on the sidebar: below 4.5:1 for 13px text (lead ruling).
+    expect(label.className).not.toContain("text-ink-faint");
     expect(label.className).toContain("font-semibold");
+    expect(label.closest("[role='button']")?.getAttribute("data-deferred")).toBe("true");
+  });
+});
+
+describe("NavRail", () => {
+  it("hangs children on a hairline rail aligned to the parent icon, with no child icons", () => {
+    const onActivate = vi.fn();
+    render(
+      <SidebarRow icon="program" label="Project" expanded onToggle={() => {}}>
+        <NavRailItem label="Overview" onActivate={onActivate} />
+        <NavRailItem label="Timeline" count={4} onActivate={onActivate} />
+      </SidebarRow>,
+    );
+    const rail = screen.getByRole("group", { name: "Project" });
+    // The rail x is the centre of the 16px parent icon (8px padding + 8px) and it is one hairline.
+    expect(rail.className).toContain("ml-[var(--x-rail-indent)]");
+    expect(rail.className).toContain("border-l");
+    expect(rail.className).toContain("border-border-muted");
+
+    const overview = screen.getByText("Overview").closest("[role='button']") as HTMLElement;
+    // No icon on a child row, and the label sits at the parent label's x (the aligned column).
+    expect(overview.querySelector("svg")).toBeNull();
+    expect(overview.className).toContain("pl-[var(--x-rail-gutter)]");
+    expect(overview.className).toContain("text-ink-muted");
+
+    fireEvent.click(screen.getByText("Overview"));
+    expect(onActivate).toHaveBeenCalledOnce();
+  });
+
+  it("marks the active child on the rail and keeps the marker decorative", () => {
+    render(
+      <NavRail label="Project">
+        <NavRailItem label="Overview" selected onActivate={() => {}} />
+        <NavRailItem label="Timeline" deferred onActivate={() => {}} />
+      </NavRail>,
+    );
+    const overview = screen.getByText("Overview").closest("[role='button']") as HTMLElement;
+    // A 2px accent bar at -left-px covers the hairline on this row only.
+    expect(overview.className).toContain("before:-left-px");
+    expect(overview.className).toContain("before:w-[var(--x-rail-marker)]");
+    expect(overview.className).toContain("before:bg-accent");
+    expect(overview.className).toContain("bg-hover");
+    // The state is also carried without colour: weight, ink and aria-current.
+    expect(overview.className).toContain("font-semibold");
+    expect(overview.className).toContain("text-ink");
+    expect(overview.getAttribute("aria-current")).toBe("page");
+
+    const deferred = screen.getByText("Timeline").closest("[role='button']") as HTMLElement;
+    // Inactive children keep ink-muted in both themes (5.75:1 light, 6.05:1 dark on --x-sidebar);
+    // deferred is a data fact, not ink-faint, which is 2.74:1 / 2.93:1 and fails for 13px text.
+    expect(deferred.className).toContain("text-ink-muted");
+    expect(deferred.className).not.toContain("text-ink-faint");
+    expect(deferred.getAttribute("data-deferred")).toBe("true");
+    expect(deferred.className).not.toContain("before:bg-accent");
+    expect(deferred.getAttribute("aria-current")).toBeNull();
+  });
+
+  it("renders the count right-aligned at text-xs and no rail of its own", () => {
+    render(
+      <NavRail label="Research">
+        <NavRailItem label="Experiments" count={12} onActivate={() => {}} />
+      </NavRail>,
+    );
+    const count = screen.getByText("12");
+    expect(count.className).toContain("ml-auto");
+    expect(count.className).toContain("text-xs");
+    expect(count.className).toContain("tabular");
+    expect(screen.getByRole("group", { name: "Research" }).querySelector("[role='group']")).toBeNull();
   });
 });
