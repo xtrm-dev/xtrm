@@ -62,6 +62,8 @@ export function SidebarRow({
       selected={selected}
       onActivate={onActivate}
       actions={actions}
+      // Deferred is a fact for the surface, not a fainter ink: ink-faint fails 4.5:1 at 13px on the sidebar.
+      data-deferred={deferred || undefined}
       // ArrowRight expands and ArrowLeft collapses, the same keys as the issue-tree rows (§4.1).
       onKeyDown={
         onToggle
@@ -79,7 +81,7 @@ export function SidebarRow({
       className={cx("h-[30px]", selected ? "bg-pressed text-ink" : "text-ink-muted")}
     >
       <Icon name={icon} size="nav" className={selected ? "text-ink" : "text-ink-faint"} />
-      <span className={cx("truncate font-semibold", deferred && "text-ink-faint")}>{label}</span>
+      <span className="truncate font-semibold">{label}</span>
       {status && <StatusDot tone={status.tone} label={status.label} />}
       {count != null && <span className={cx("text-xs text-ink-faint tabular group-hover/row:hidden group-focus-within/row:hidden", !onToggle && "ml-auto")}>{count}</span>}
       {onToggle && (

@@ -88,11 +88,13 @@ describe("SidebarRow", () => {
     expect(onToggle).toHaveBeenCalledTimes(2);
   });
 
-  it("dims deferred rows without changing their weight", () => {
+  it("keeps deferred rows at readable ink and marks them with data-deferred", () => {
     render(<SidebarRow icon="ci" label="CI/CD" deferred onActivate={() => {}} />);
     const label = screen.getByText("CI/CD");
-    expect(label.className).toContain("text-ink-faint");
+    // ink-faint is 2.74:1 light / 2.93:1 dark on the sidebar: below 4.5:1 for 13px text (lead ruling).
+    expect(label.className).not.toContain("text-ink-faint");
     expect(label.className).toContain("font-semibold");
+    expect(label.closest("[role='button']")?.getAttribute("data-deferred")).toBe("true");
   });
 });
 
