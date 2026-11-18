@@ -81,6 +81,9 @@ describe("Pull requests surface", () => {
     expect(screen.queryByText("feat(XTRM-301): rail keyboard model v2")).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: /^Open/ }));
+    // The sort control is a ghost button: a menu affordance, not a chip.
+    expect(screen.getByRole("button", { name: /Recently updated/ }).className.split(/\s+/)).not.toContain("bg-hover");
+    fireEvent.click(screen.getByRole("button", { name: "Filter this list" }));
     fireEvent.change(screen.getByLabelText("Filter pull requests"), { target: { value: "XTRM-305" } });
     expect(await screen.findByText("fix(XTRM-305): silence virtual-bead spam")).toBeTruthy();
     expect(screen.queryByText("feat(XTRM-301): rail keyboard model v2")).toBeNull();

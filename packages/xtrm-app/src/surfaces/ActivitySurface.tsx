@@ -5,6 +5,7 @@ import { useShell } from "../shell/context.tsx";
 import { Badge, type BadgeTone } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { EmptyState, ErrorState, LoadingState, Row, TOOLBAR_CONTROL, TOOLBAR_GHOST, SurfaceToolbar, cx, relativeTime } from "../ui/primitives.tsx";
+import { ToolbarButton } from "../ui/toolbar.tsx";
 import { activityCounts, filterActivity, mergeActivity } from "../activity/merge.ts";
 import type { ActivityRow, ActivitySource } from "../activity/types.ts";
 
@@ -37,18 +38,12 @@ function Filters({ total, bySource, active, failedSources, onPick }: { total: nu
       {chips.map((chip) => {
         const on = active === chip.source;
         return (
-          <button
-            key={chip.label}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onPick(chip.source)}
-            className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST, on && "bg-pressed", "gap-1.5")}
-          >
+          <ToolbarButton key={chip.label} aria-pressed={on} onClick={() => onPick(chip.source)} className={cx(on && "font-medium text-ink", "gap-1.5")}>
             <span>{chip.label}</span>
             <span className="tabular text-ink-faint">
               {chip.source !== null && failedSources.has(chip.source) ? "—" : chip.count}
             </span>
-          </button>
+          </ToolbarButton>
         );
       })}
     </SurfaceToolbar>
@@ -154,9 +149,9 @@ export function ActivitySurface() {
     <div className="flex min-h-0 flex-1 flex-col">
       <SurfaceToolbar>
         <Filters total={counts.all} bySource={counts.bySource} active={active} failedSources={failedSources} onPick={setActive} />
-        <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST, "ml-auto")} onClick={() => refetch()}>
-          <Icon name="live" size="xs" /> Refresh
-        </button>
+        <ToolbarButton icon="live" className="ml-auto" onClick={() => refetch()}>
+          Refresh
+        </ToolbarButton>
       </SurfaceToolbar>
       <div className="min-h-0 flex-1 overflow-auto">
         {olderFailures.map((s) => (

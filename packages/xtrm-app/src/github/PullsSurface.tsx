@@ -8,7 +8,8 @@ import { useShell } from "../shell/context.tsx";
 import { useAdapters } from "../adapters/index.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_GHOST, ago, cx } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, ago, cx } from "../ui/primitives.tsx";
+import { ListFilter, ToolbarButton, ToolbarTabs } from "../ui/toolbar.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 
 const VIEWS: Array<{ id: PullView; label: string }> = [
@@ -208,37 +209,14 @@ export function PullsSurface() {
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Pull requests">
       <SurfaceToolbar>
         <SourceBadge source={github.source} />
-        <div role="tablist" aria-label="Pull request state" className="flex items-center gap-0.5">
-          {VIEWS.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              role="tab"
-              aria-selected={view === v.id}
-              onClick={() => setView(v.id)}
-              className={cx(TOOLBAR_CONTROL, view === v.id ? "bg-pressed text-ink" : TOOLBAR_GHOST)}
-            >
-              {v.label}
-              <span className="text-ink-faint tabular">{visibleCounts[v.id]}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex h-7 items-center gap-1.5 rounded-md bg-pressed px-1.5 text-ink-faint transition-colors focus-within:bg-hover">
-          <Icon name="search" size="xs" className="text-ink-faint" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter by title, author, branch…"
-            aria-label="Filter pull requests"
-            className="w-52 bg-transparent text-xs text-ink outline-none placeholder:text-ink-faint"
-          />
-        </div>
+        <ToolbarTabs label="Pull request state" value={view} onChange={(id) => setView(id as PullView)} tabs={VIEWS.map((v) => ({ id: v.id, label: v.label, count: visibleCounts[v.id] }))} />
+        <ListFilter value={query} onChange={setQuery} placeholder="Filter pull requests" count={rows.length} total={pulls.data?.length} />
         <OptionsMenu
           label="Sort pull requests"
           trigger={
-            <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)}>
-              {sortLabel} <Icon name="chevronDown" size="xs" className="text-ink-faint" />
-            </button>
+            <ToolbarButton>
+              {sortLabel} <Icon name="chevronDown" size="micro" className="text-ink-faint" />
+            </ToolbarButton>
           }
           items={SORTS.map((s) => ({ label: s.label, onSelect: () => setSort(s.id) }))}
         />
