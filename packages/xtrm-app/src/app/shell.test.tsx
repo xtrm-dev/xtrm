@@ -46,6 +46,14 @@ describe("Console v2 shell", () => {
     for (const label of ["Overview", "Timeline", "Questions", "Workers", "Follow-ups", "Jira", "Integration"]) {
       expect(within(sidebar).getAllByText(label).length).toBeGreaterThan(0);
     }
+    // XTRM-854: Project's own rows hang on one NavRail group under the parent row, and carry no icons.
+    const rail = within(sidebar).getByRole("group", { name: "Project" });
+    expect(rail.className).toContain("border-l");
+    for (const label of ["Overview", "Timeline", "Integration"]) {
+      const child = within(rail).getByText(label).closest("[role='button']") as HTMLElement;
+      expect(child.querySelector("svg")).toBeNull();
+      expect(child.className).toContain("pl-[var(--x-rail-gutter)]");
+    }
     // No user-visible string says "Program" (ADR-002 D1).
     expect(within(sidebar).queryByText(/Program/)).toBeNull();
 

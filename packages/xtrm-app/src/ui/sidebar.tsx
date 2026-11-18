@@ -1,6 +1,9 @@
 import { useState, type ReactNode } from "react";
 import { Icon, type IconName } from "./icon.tsx";
+import { NavRail } from "./nav-rail.tsx";
 import { Row, StatusDot, cx, type Tone } from "./primitives.tsx";
+
+export { NavRail, NavRailItem } from "./nav-rail.tsx";
 
 /** Collapsible labelled group: Workspace / GitHub / System. */
 export function SidebarSection({ label, children, defaultOpen = true }: { label: string; children: ReactNode; defaultOpen?: boolean }) {
@@ -33,7 +36,7 @@ export function SidebarRow({
   status,
   selected,
   deferred,
-  indent,
+  children,
   expanded,
   onToggle,
   onActivate,
@@ -45,21 +48,34 @@ export function SidebarRow({
   status?: { tone: Tone; label: string };
   selected?: boolean;
   deferred?: boolean;
-  /** Sub-row under the destination it belongs to. */
-  indent?: boolean;
-  /** Nested rows shown below this one; pass with `onToggle` to render the disclosure chevron. */
+  /** Nested rows, rendered on a NavRail below this one (§4.1). */
+  children?: ReactNode;
+  /** Nested rows are shown below this one; pass with `onToggle` to render the disclosure chevron. */
   expanded?: boolean;
   onToggle?: () => void;
   onActivate?: () => void;
   actions?: ReactNode;
 }) {
-  return (
+  const row = (
     <Row
       density="sidebar"
       selected={selected}
       onActivate={onActivate}
       actions={actions}
-      style={indent ? { paddingLeft: "1.25rem" } : undefined}
+      // ArrowRight expands and ArrowLeft collapses, the same keys as the issue-tree rows (§4.1).
+      onKeyDown={
+        onToggle
+          ? (event) => {
+              if (event.key === "ArrowRight" && !expanded) {
+                event.preventDefault();
+                onToggle();
+              } else if (event.key === "ArrowLeft" && expanded) {
+                event.preventDefault();
+                onToggle();
+              }
+            }
+          : undefined
+      }
       className={cx("h-[30px]", selected ? "bg-pressed text-ink" : "text-ink-muted")}
     >
       <Icon name={icon} size="nav" className={selected ? "text-ink" : "text-ink-faint"} />
@@ -81,5 +97,12 @@ export function SidebarRow({
         </button>
       )}
     </Row>
+  );
+  if (!children) return row;
+  return (
+    <>
+      {row}
+      <NavRail label={label}>{children}</NavRail>
+    </>
   );
 }

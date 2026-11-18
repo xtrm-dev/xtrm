@@ -43,6 +43,11 @@
   /* One datum, one green: diff counts follow success (lead ruling on the UI-1 review). */
   --x-diff-add: #1b7f46;
   --x-diff-del: #c42b2b;
+  /* NavRail geometry (§4.1). Geometry only: the rail's hairline is --x-border-muted and its active
+     marker is --x-accent, so Restraint rule 4 (no new colour, no new tint) holds in both themes. */
+  --x-rail-indent: 15px; /* rail x = centre of the parent icon: 8px padding + half a 16px icon */
+  --x-rail-gutter: 18px; /* child text inset from the rail, so the label x is 34px, as the parent's */
+  --x-rail-marker: 2px; /* active marker width */
   --x-shadow-float: 0 10px 30px -12px rgb(15 15 20 / 0.22), 0 0 0 1px rgb(15 15 20 / 0.06);
   /* Panel elevation without a hairline: the inspector carries no border (no-borders policy), so the
      ring inside --x-shadow-float would outline it in a colour that is not its background. */

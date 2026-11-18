@@ -139,6 +139,13 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
 - **Accessibility:** parent toggle keeps `aria-expanded` and the label `Expand|Collapse <label>`; the active child carries `aria-current="page"` (already set by `Row` when `selected`); ArrowRight expands and ArrowLeft collapses on the parent row (same keys as issue-tree rows, `sidebar-restyle.md` §12); the marker is decorative, the active state is also carried by weight and ink.
 - **Consumers:** `ContextSidebar.tsx` → `WorkSidebar` (Project: Overview, Timeline, Questions, Workers, Follow-ups, Jira, Integration; Research: Experiments, Recent Runs, Saved Comparisons, Workloads). `src/agent/AgentSidebar.tsx` does not use nested rows today and is not changed.
 - **Tests that change:** `src/ui/sidebar.test.tsx` (nested rows no longer pass `indent`), `src/app/shell.test.tsx` (Project and Research nesting assertions).
+- **Usage (UI-2):** `src/ui/nav-rail.tsx` exports `NavRail` and `NavRailItem`; `src/ui/sidebar.tsx` re-exports both, so a surface keeps one import. `SidebarRow` takes the nested rows as `children` and wraps them in a `NavRail` under its own label, and the parent keeps the disclosure state:
+  ```tsx
+  <SidebarRow icon="program" label="Project" expanded={open} onToggle={() => setOpen((v) => !v)}>
+    <NavRailItem label="Overview" selected={pathname === href} onActivate={() => go(href)} />
+  </SidebarRow>
+  ```
+  Geometry is tokenised in `src/styles.css`: `--x-rail-indent: 15px` (rail x), `--x-rail-gutter: 18px` (child text inset, so the label x is 34px) and `--x-rail-marker: 2px` (active marker width). No colour token is added: the hairline is `--x-border-muted` and the marker `--x-accent` (Restraint rule 4).
 
 ### 4.2 Toolbar — ghost controls and the local list filter (item 2)
 
