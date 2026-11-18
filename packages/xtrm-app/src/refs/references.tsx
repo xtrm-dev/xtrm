@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type MouseEvent, type ReactNode } f
 import type { IssueSummary } from "../adapters/index.tsx";
 import { projectForRepo, useGithubIssue, useIssues, useProjects, usePull } from "../app/queries.ts";
 import { pullStateLabel, pullUrl, resolvePullReference } from "../github/pr.ts";
+import { PrKey } from "../ui/pr-key.tsx";
 import { githubIssueUrl, issueStateLabel, issueStateTone, parseGithubIssueRef } from "../github/issues.ts";
 import { IssueKey, lifecycleLabel, lifecycleTone } from "../issues/meta.tsx";
 import { useShell } from "../shell/context.tsx";
@@ -252,7 +253,6 @@ function PullReferenceChip({ reference, showTitle, fallback, className }: { refe
     else shell.inspect(target);
   };
 
-  const short = `#${parsed.number}`;
   const title = pull.data?.title;
   const state = pull.data?.state;
   const chip = (
@@ -260,7 +260,7 @@ function PullReferenceChip({ reference, showTitle, fallback, className }: { refe
       <button
         type="button"
         data-reference={formatReference({ kind: "pr", ref: `${parsed.fullName}#${parsed.number}` })}
-        aria-label={`${parsed.fullName}#${parsed.number}${title ? ` ${title}` : ""}`}
+        aria-label={`${parsed.fullName}#${parsed.number}${state ? ` ${pullStateLabel(state, pull.data.draft)}` : ""}${title ? ` ${title}` : ""}`}
         onClick={open}
         onAuxClick={(e) => {
           if (e.button !== 1) return;
@@ -270,10 +270,8 @@ function PullReferenceChip({ reference, showTitle, fallback, className }: { refe
         onDoubleClick={(e) => e.stopPropagation()}
         className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm px-1 align-baseline leading-5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/40"
       >
-        <span className="truncate font-mono text-xs text-accent-ink">
-          {short}
-          <span className="text-ink-faint"> {parsed.fullName}</span>
-        </span>
+        <PrKey number={parsed.number} state={state ?? null} draft={pull.data.draft} glyph={false} className="min-w-0" />
+        <span className="truncate font-mono text-xs text-ink-faint">{parsed.fullName}</span>
         {title && (
           <span className={cx("text-ink", showTitle ? "text-sm" : "text-xs text-ink-muted")} data-testid="pr-chip-title">
             {title}

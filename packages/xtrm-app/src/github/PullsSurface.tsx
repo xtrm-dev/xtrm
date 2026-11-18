@@ -1,14 +1,17 @@
 import { useMemo, useState } from "react";
 import type { PullRequestSummary } from "../adapters/index.tsx";
 import { usePulls } from "../app/queries.ts";
-import { extractIssueKeys, filterPulls, pullStateLabel, pullStateTone, checkLabel, checkShortLabel, checkTone, reviewLabel, sortPulls, type PullSort, type PullView } from "./pr.ts";
-import { ReferenceActionsProvider, ReferenceChip, useIssueIndex } from "../refs/references.tsx";
+import { filterPulls, usePrLinkedRefs, checkLabel, checkShortLabel, checkTone, reviewLabel, sortPulls, type PullSort, type PullView } from "./pr.ts";
+import { ReferenceActionsProvider } from "../refs/references.tsx";
 import { GithubNotice } from "./auth.tsx";
 import { useShell } from "../shell/context.tsx";
 import { useAdapters } from "../adapters/index.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_GHOST, ago, cx } from "../ui/primitives.tsx";
+import { LinkedRefs } from "../ui/linked-refs.tsx";
+import { PrKey } from "../ui/pr-key.tsx";
+import { RowAction } from "../ui/row-action.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 
 const VIEWS: Array<{ id: PullView; label: string }> = [
@@ -25,8 +28,8 @@ const SORTS: Array<{ id: PullSort; label: string }> = [
 
 /** The row grid: one line per PR, same column rhythm as the issues table. */
 const COLUMNS: Array<{ key: string; label: string; width: string; align?: "right"; sort?: PullSort }> = [
-  { key: "state", label: "", width: "1.75rem" },
   { key: "pull", label: "Pull request", width: "minmax(0,1fr)" },
+  { key: "linked", label: "Linked", width: "9.5rem" },
   { key: "author", label: "Author", width: "6.5rem" },
   { key: "diff", label: "Diff", width: "5.5rem", align: "right" },
   { key: "checks", label: "Checks", width: "6.5rem" },
@@ -37,45 +40,32 @@ const COLUMNS: Array<{ key: string; label: string; width: string; align?: "right
 const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
 const CELL = "flex h-full min-w-0 items-center px-2";
 
-function IssueChips({ pull }: { pull: PullRequestSummary }) {
-  const index = useIssueIndex();
-  const keys = useMemo(() => {
-    // Dedupe by resolved issue: a locator and its flat ref (XTRM-300.1 / XTRM-301)
-    // point at the same row and must not render twice.
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const key of extractIssueKeys(pull.title, pull.headBranch, pull.body)) {
-      const resolved = index.get(key)?.ref ?? key;
-      if (!seen.has(resolved)) {
-        seen.add(resolved);
-        out.push(key);
+function PullRow({ pull, fullName, selected, onOpen }: { pull: PullRequestSummary; fullName: string; selected: boolean; onOpen: () => void }) {
+  const refs = usePrLinkedRefs(pull);
+  return (
+    <Row
+      density="table"
+      data-testid="pull-row"
+      selected={selected}
+      onActivate={onOpen}
+      actions={
+        <RowAction
+          icon="copy"
+          label={`Copy ${fullName}#${pull.number}`}
+          doneLabel="Copied"
+          onAct={() => void navigator.clipboard?.writeText(`${fullName}#${pull.number}`)}
+        />
       }
-    }
-    return out;
-  }, [pull.title, pull.headBranch, pull.body, index]);
-  if (!keys.length) return null;
-  return (
-    <span className="flex min-w-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-      {keys.slice(0, 3).map((key) => (
-        <ReferenceChip key={key} reference={{ kind: "issue", ref: key }} />
-      ))}
-    </span>
-  );
-}
-
-function PullRow({ pull, selected, onOpen }: { pull: PullRequestSummary; selected: boolean; onOpen: () => void }) {
-  return (
-    <Row density="table" data-testid="pull-row" selected={selected} onActivate={onOpen}>
+    >
       <div className="grid h-full w-full items-center overflow-hidden" style={GRID}>
-        <div className={CELL}>
-          <StatusDot tone={pullStateTone(pull.state)} label={pullStateLabel(pull.state, pull.draft)} />
-        </div>
         <div className={cx(CELL, "gap-2")}>
-          <span className="shrink-0 font-mono text-xs text-ink-faint">#{pull.number}</span>
+          <PrKey number={pull.number} state={pull.state} draft={pull.draft} />
           <span className="truncate text-ink" title={`${pull.headBranch ?? "unknown"} → ${pull.baseBranch ?? "unknown"}`}>
             {pull.title}
           </span>
-          <IssueChips pull={pull} />
+        </div>
+        <div className={cx(CELL, "text-xs")}>
+          <LinkedRefs refs={refs} max={1} />
         </div>
         <div className={cx(CELL, "text-xs text-ink-faint")}>
           <span className="truncate">{pull.author}</span>
@@ -196,6 +186,7 @@ export function PullsSurface() {
           renderRow={(p) => (
             <PullRow
               pull={p}
+              fullName={repo.fullName}
               selected={inspected?.kind === "pr" && inspected.ref === `${repo.fullName}#${p.number}`}
               onOpen={() => inspect({ kind: "pr", ref: `${repo.fullName}#${p.number}` })}
             />

@@ -1,4 +1,6 @@
-import type { ContextReference } from "../refs/references.tsx";
+import { useMemo } from "react";
+import { useIssueIndex, type ContextReference } from "../refs/references.tsx";
+import { PR_STATES, prStateOf } from "../ui/pr-key.tsx";
 import type { CheckState, PullDetailSection, PullRequestSummary, PullState, ReviewState } from "../adapters/types.ts";
 import type { Tone } from "../ui/primitives.tsx";
 
@@ -89,20 +91,46 @@ export function parseProvenancePr(value: string, currentRepo: string): ContextRe
   return null;
 }
 
-export function pullStateTone(state: PullState): Tone {
-  switch (state) {
-    case "open":
-      return "active";
-    case "merged":
-      return "accent";
-    case "closed":
-      return "done";
-  }
+/**
+ * Thin wrappers over the one state model in `src/ui/pr-key.tsx` (§4.4): the dot is gone from the
+ * list, but a few surfaces still render a dot and a word for the same resolved state.
+ */
+const STATE_TONE: Record<ReturnType<typeof prStateOf>, Tone> = {
+  open: "active",
+  draft: "neutral",
+  merged: "accent",
+  closed: "done",
+  unknown: "muted",
+};
+
+export function pullStateTone(state: string | null, draft?: boolean | null): Tone {
+  return STATE_TONE[prStateOf(state, draft)];
 }
 
-export function pullStateLabel(state: PullState, draft: boolean): string {
-  if (state === "open" && draft) return "draft";
-  return state;
+export function pullStateLabel(state: string | null, draft?: boolean | null): string {
+  const key = prStateOf(state, draft);
+  return key === "unknown" ? (state ?? "unknown") : PR_STATES[key].word.toLowerCase();
+}
+
+/**
+ * Substrate refs for a pull request (§4.5), deduped by resolved issue: a locator and its flat ref
+ * (`XTRM-300.1` / `XTRM-301`) point at the same row and must not render twice. Shared by the list
+ * cell and the inspector, which is why it lives beside the other PR reads.
+ */
+export function usePrLinkedRefs(pull: { title: string | null; headBranch: string | null; body: string | null } | null): string[] {
+  const index = useIssueIndex();
+  return useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const key of extractIssueKeys(pull?.title, pull?.headBranch, pull?.body)) {
+      const resolved = index.get(key)?.ref ?? key;
+      if (!seen.has(resolved)) {
+        seen.add(resolved);
+        out.push(key);
+      }
+    }
+    return out;
+  }, [pull?.title, pull?.headBranch, pull?.body, index]);
 }
 
 export function checkTone(state: CheckState | null): Tone {

@@ -113,7 +113,9 @@ describe("Pull requests surface", () => {
     expect(await within(el).findByText("Reviews \u00b7 2")).toBeTruthy();
     // The header and the Overview field both state the branch.
     expect(within(el).getAllByText(/xt\/x857-counts \u2192 main/).length).toBeGreaterThan(0);
-    expect(within(el).getByText(/\u00b7 2 files \u00b7 2 commits/)).toBeTruthy();
+    // The header carries the diff and the file count; commits keep an Overview row.
+    expect(within(el).getByText("2 files")).toBeTruthy();
+    expect(within(el).getByText("2 commits")).toBeTruthy();
   });
 
   it("renders the drawer's unknown branch, diff and review state as unknown", async () => {
@@ -172,5 +174,48 @@ describe("Pull requests surface", () => {
     expect(within(chip).getByText("fix(XTRM-305): silence virtual-bead spam")).toBeTruthy();
     expect(within(el).getByRole("link", { name: /Open Jaggerxtrm\/console#211 on GitHub/ }).getAttribute("href"))
       .toBe("https://github.com/Jaggerxtrm/console/pull/211");
+  });
+});
+
+describe("PR identity (§4.4-4.5)", () => {
+  it("shows the key, the linked column and the copy action, and no state dot, in the list", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls");
+    const title = await screen.findByText("feat(XTRM-301): rail keyboard model v2");
+    const row = title.closest("[data-testid='pull-row']") as HTMLElement;
+    const key = within(row).getByLabelText("Pull request #212, open");
+    expect(key.className).toContain("text-success");
+    expect(key.querySelector("svg")).not.toBeNull();
+    // The state is no longer a separate dot column, and the word never repeats beside the key.
+    expect(row.querySelector("[data-slot='dot']")).toBeNull();
+    expect(within(row).queryByText("open")).toBeNull();
+    expect(within(row).getByLabelText("Copy xtrm-dev/xtrm#212")).toBeTruthy();
+  });
+
+  it("collapses surplus linked refs into +N instead of overflowing the cell", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls");
+    const title = await screen.findByText("fix(XTRM-305): silence virtual-bead spam");
+    const row = title.closest("[data-testid='pull-row']") as HTMLElement;
+    expect(within(row).getAllByRole("button").filter((b) => b.getAttribute("data-reference")?.startsWith("@issue:"))).toHaveLength(1);
+    const more = within(row).getByLabelText("1 more linked issues");
+    expect(more.textContent).toBe("+1");
+    fireEvent.click(more);
+    const chips = await screen.findAllByRole("button", { name: /XTRM-\d+/ });
+    expect(chips.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("renders the §4.5 inspector header: key, state chip, branch, diff, files, author, dates", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls?inspect=pr:xtrm-dev/xtrm%23212");
+    const el = await screen.findByTestId("inspector-drawer");
+    const header = await within(el).findByTestId("pull-header");
+    expect(within(header).getByLabelText("Pull request #212, open")).toBeTruthy();
+    const chip = within(header).getByText("Open").closest("[data-slot='badge']") as HTMLElement;
+    expect(chip.className).toContain("bg-success");
+    expect(within(header).getByText(/xt\/o8h2 → main/)).toBeTruthy();
+    expect(within(header).getByText("+412")).toBeTruthy();
+    expect(within(header).getByText("−88")).toBeTruthy();
+    expect(within(header).getByText("3 files")).toBeTruthy();
+    expect(within(header).getByText(/opened/)).toBeTruthy();
+    // Author, Branch and Change left the Overview: the header is their only home now.
+    expect(within(el).queryByText("Change")).toBeNull();
   });
 });
