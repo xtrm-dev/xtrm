@@ -4,7 +4,7 @@ import { ReferenceChip } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Badge, type BadgeTone } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, TOOLBAR_CONTROL, TOOLBAR_GHOST, TOOLBAR_REST, SurfaceToolbar, cx, relativeTime } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, TOOLBAR_CONTROL, TOOLBAR_GHOST, SurfaceToolbar, cx, relativeTime } from "../ui/primitives.tsx";
 import { activityCounts, filterActivity, mergeActivity } from "../activity/merge.ts";
 import type { ActivityRow, ActivitySource } from "../activity/types.ts";
 
@@ -42,7 +42,7 @@ function Filters({ total, bySource, active, failedSources, onPick }: { total: nu
             type="button"
             aria-pressed={on}
             onClick={() => onPick(chip.source)}
-            className={cx(TOOLBAR_CONTROL, on ? TOOLBAR_REST : TOOLBAR_GHOST, "gap-1.5")}
+            className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST, on && "bg-pressed", "gap-1.5")}
           >
             <span>{chip.label}</span>
             <span className="tabular text-ink-faint">
@@ -190,7 +190,7 @@ export function ActivitySurface() {
                   <button
                     key={s.source}
                     type="button"
-                    className={cx(TOOLBAR_CONTROL, TOOLBAR_REST)}
+                    className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)}
                     onClick={() => void loadOlder(s.source as Exclude<ActivitySource, "jira">)}
                   >
                     Load older {s.source} activity

@@ -9,7 +9,7 @@ import { useResearchCompare, useResearchExperiment, useResearchExperiments, useR
 import { useShell } from "../shell/context.tsx";
 import { Breadcrumbs } from "../ui/breadcrumbs.tsx";
 import { Icon } from "../ui/icon.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_REST, cx, type Tone } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_GHOST, cx, type Tone } from "../ui/primitives.tsx";
 import { MetricFields, UsageFields } from "./research-format.tsx";
 import { ResearchCharts, chartSpecs } from "./research-charts.tsx";
 import { DecisionCriteriaSection, GlossaryMetricRow, MethodSection, ResearchQuestionSection, ResultSummarySection } from "./research-semantic.tsx";
@@ -320,7 +320,7 @@ export function RunListSurface() {
         <SourceBadge source={research.source} />
         <div className="ml-auto" />
         {selected.length >= 2 && (
-          <button type="button" onClick={compare} className={cx(TOOLBAR_CONTROL, TOOLBAR_REST)}>
+          <button type="button" onClick={compare} className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)}>
             Compare {selected.length} runs
           </button>
         )}

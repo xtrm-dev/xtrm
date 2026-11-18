@@ -8,7 +8,7 @@ import { useShell } from "../shell/context.tsx";
 import { useAdapters } from "../adapters/index.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_GHOST, TOOLBAR_REST, ago, cx } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_GHOST, ago, cx } from "../ui/primitives.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 
 const VIEWS: Array<{ id: PullView; label: string }> = [
@@ -236,7 +236,7 @@ export function PullsSurface() {
         <OptionsMenu
           label="Sort pull requests"
           trigger={
-            <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_REST)}>
+            <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)}>
               {sortLabel} <Icon name="chevronDown" size="xs" className="text-ink-faint" />
             </button>
           }
