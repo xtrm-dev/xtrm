@@ -56,7 +56,9 @@ describe("Console v2 shell", () => {
     // The Project row resolves to the selected repository, never the retired global route.
     fireEvent.click(within(sidebar).getByRole("button", { name: /^Project/ }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/rep/xtrm-dev/xtrm/project"));
-    expect((await screen.findByRole("region", { name: "Overview" })).textContent).toContain("Overview is not part of this vertical");
+    // Overview is live; this repository has no binding, so the honest unintegrated state renders.
+    expect((await screen.findByRole("region", { name: "Overview" })).textContent).toContain("not integrated");
+    expect(screen.getByTestId("integration-unbound")).toBeTruthy();
   });
 
   it("renders deferred modes as explicit placeholders, not broken routes", async () => {
