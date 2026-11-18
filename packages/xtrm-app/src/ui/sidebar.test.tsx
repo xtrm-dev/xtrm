@@ -137,7 +137,7 @@ describe("NavRail", () => {
     // The state is also carried without colour: weight, ink and aria-current.
     expect(overview.className).toContain("font-semibold");
     expect(overview.className).toContain("text-ink");
-    expect(overview.getAttribute("aria-current")).toBe("true");
+    expect(overview.getAttribute("aria-current")).toBe("page");
 
     const deferred = screen.getByText("Timeline").closest("[role='button']") as HTMLElement;
     // Inactive children keep ink-muted in both themes (5.75:1 light, 6.05:1 dark on --x-sidebar);

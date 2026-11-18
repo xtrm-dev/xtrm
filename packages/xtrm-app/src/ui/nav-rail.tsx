@@ -36,6 +36,8 @@ export function NavRailItem({
       // Deferred is a fact for the surface, not a colour: ink-faint is 2.74:1 on the light sidebar
       // and 2.93:1 on the dark one, below the 4.5:1 minimum for 13px text (lead ruling, 2026-11-18).
       data-deferred={deferred || undefined}
+      // A nav child is a destination, so it names the page; Row's own default is aria-current="true".
+      aria-current={selected ? "page" : undefined}
       onActivate={onActivate}
       className={cx(
         "h-7 pl-[var(--x-rail-gutter)] text-[13px] font-medium",

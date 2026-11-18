@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Children, useState, type ReactNode } from "react";
 import { Icon, type IconName } from "./icon.tsx";
 import { NavRail } from "./nav-rail.tsx";
 import { Row, StatusDot, cx, type Tone } from "./primitives.tsx";
@@ -98,7 +98,9 @@ export function SidebarRow({
       )}
     </Row>
   );
-  if (!children) return row;
+  // Expression children such as `{flag && <Rows/>}` arrive as `[false, false]`, which is truthy:
+  // count rendered children instead, so a section never shows an empty rail group (review finding 1).
+  if (Children.toArray(children).length === 0) return row;
   return (
     <>
       {row}

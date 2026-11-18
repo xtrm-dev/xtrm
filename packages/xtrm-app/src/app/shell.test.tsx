@@ -129,8 +129,24 @@ describe("Console v2 shell", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/rep/mercury/market-data/project/timeline"));
     expect((await screen.findByRole("region", { name: "Timeline" })).textContent).toContain("Project Timeline arrives with XTRM-818");
     // The Overview row is the section root only, so it is not selected on a child route.
-    expect(within(sidebar).getByRole("button", { name: "Timeline" }).getAttribute("aria-current")).toBe("true");
+    expect(within(sidebar).getByRole("button", { name: "Timeline" }).getAttribute("aria-current")).toBe("page");
     expect(within(sidebar).getByRole("button", { name: "Overview" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("lists Research sections on their own rail", async () => {
+    renderAt("/research/experiments");
+    const sidebar = await screen.findByTestId("context-sidebar");
+    const rail = await within(sidebar).findByRole("group", { name: "Research" });
+    expect(rail.className).toContain("border-l");
+    expect(rail.className).toContain("border-border-muted");
+    const runs = within(rail).getByRole("button", { name: /^Recent Runs/ });
+    expect(runs.className).toContain("pl-[var(--x-rail-gutter)]");
+    expect(runs.querySelector("svg")).toBeNull();
+    // A section whose children expressions are all false must not render an empty rail (review finding 1).
+    // Project is expanded by default, so it does have a rail even off-project: that is the existing state.
+    const groups = within(sidebar).getAllByRole("group").map((node) => node.getAttribute("aria-label"));
+    expect(groups).not.toContain("Agents");
+    expect(groups.every((label) => label !== null && label !== "")).toBe(true);
   });
 
   it("Ctrl+B toggles the contextual sidebar and Escape closes the drawer", async () => {
