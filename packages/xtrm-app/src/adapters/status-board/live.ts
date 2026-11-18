@@ -93,6 +93,15 @@ const stringList = (value: unknown): string[] | undefined => {
 const boolean = (value: unknown): boolean | null => (typeof value === "boolean" ? value : null);
 
 /**
+ * An ISO 8601 instant (`2026-11-17T22:00:00.000Z`, an offset allowed). A freshness stamp is only
+ * usable as the `string` the type promises when it is one; anything else is reported, never passed on.
+ */
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+const isoStamp = (value: unknown): string | undefined =>
+  typeof value === "string" && ISO_INSTANT.test(value) && !Number.isNaN(Date.parse(value)) ? value : undefined;
+
+/**
  * A declared field the board carried in an unusable type (an epoch number where a timestamp
  * belongs, a string where `ctxPct` is a number). Every declared field of a record is checked —
  * not only the enum-ish ones — because a wrong-typed field would otherwise vanish as "absent"
@@ -174,7 +183,17 @@ export function mapBinding(wire: WireBinding): ProjectBinding {
   };
 }
 
-export function mapHealth(wire: WireHealth): ProjectHealth {
+/**
+ * `checkedAt` is the one fact a health reply cannot be read without (every other unverified fact is
+ * `null` with its reason, but "when was this checked" has no null form on the type). A reply whose
+ * stamp is missing or is not an ISO instant is a typed `malformed` error, never a `string` the UI
+ * would read as a real check time.
+ */
+export function mapHealth(wire: WireHealth, status: number | null = null): ProjectHealth {
+  const checkedAt = isoStamp(wire.checkedAt);
+  if (checkedAt === undefined) {
+    throw new StatusBoardError("malformed", "status board health reply carried no ISO checkedAt", status);
+  }
   return {
     configured: wire.configured,
     reason: wire.configured ? null : unboundReasonOf(wire.reason),
@@ -188,7 +207,7 @@ export function mapHealth(wire: WireHealth): ProjectHealth {
     runInProgress: boolean(wire.runInProgress),
     runInProgressReason: wire.runInProgress === null ? probeReasonOf(wire.runInProgressReason) : null,
     stale: typeof wire.stale === "boolean" ? wire.stale : null,
-    checkedAt: wire.checkedAt,
+    checkedAt,
   };
 }
 
@@ -517,7 +536,7 @@ export function createStatusBoardLiveAdapter(opts: LiveStatusBoardOptions = {}):
       const { status, body } = await get("/health", { repo: repository });
       if (status === 200) {
         if (!body["health"] || typeof body["health"] !== "object") throw new StatusBoardError("malformed", "status board bridge returned no health", status);
-        return mapHealth(body["health"] as WireHealth);
+        return mapHealth(body["health"] as WireHealth, status);
       }
       if (status === 404 && body["configured"] === false) return unboundHealth(unboundReasonOf(body["reason"]), new Date(now()).toISOString());
       throw fail(status, body);
@@ -544,7 +563,9 @@ export function createStatusBoardLiveAdapter(opts: LiveStatusBoardOptions = {}):
       const record = await readRecord<unknown>(repository, "board/next");
       if (!record) return null;
       const mapped = mapBoardNext({ path: record.path, id: record.id, updatedAt: record.updatedAt, doc: record.doc });
-      return { ...record, doc: mapped.value };
+      // Both the parse gap the record already carries and the field gaps the mapper reports belong
+      // to this document: dropping either makes a wrong-typed field read like an absent one.
+      return { ...record, doc: mapped.value, gaps: [...record.gaps, ...mapped.gaps] };
     },
   };
   return adapter;
