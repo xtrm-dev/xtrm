@@ -32,6 +32,21 @@ All notable changes to the `service-knowledge` package.
   cannot overflow the argv limit; the three hook copies are pinned identical.
 - `service-knowledge --version` also reports where the CLI and vaultctl were loaded from.
 
+### Changed — curated text guard
+- The reconcile gate now also guards hand-written text **outside** the
+  `SEMANTIC_START`/`SEMANTIC_END` blocks (runbook prose, failure-mode rows,
+  notes). Current non-blank lines removed or rewritten in the candidate
+  (whitespace-trimmed; moved lines do not count) raise the advisory
+  `curated_text_removed` (up to 10 lines listed, verdict
+  `PASS_WITH_ADVISORIES`, still writable). Removing more than
+  `CURATED_REMOVAL_ERROR_RATIO` (25%) raises the error
+  `curated_text_removed_excessive` and the gate blocks the write (`INVALID`).
+  Creation and pure additions never trigger it.
+- `reconcile.build_prompt` now tells the model to keep text unaffected by the
+  drift evidence byte-for-byte and return the complete file.
+- Behaviour note: reconcile candidates that rewrite existing prose lines now
+  verdict `PASS_WITH_ADVISORIES` instead of `PASS`.
+
 ## [0.8.0] - 2026-10-19
 
 ### Changed — post-merge freshness epic (XTRM-641 decision, B0–B7 board)

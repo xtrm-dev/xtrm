@@ -93,6 +93,7 @@ def build_prompt(drift: dict[str, Any], current_skill: str, source_evidence: str
         [
             "You reconcile service skill documentation with implementation drift.",
             "Return only the complete updated SKILL.md content. No markdown fences. No commentary.",
+            "Keep all text not affected by the drift evidence byte-for-byte, and return the complete file, not an excerpt.",
             f"Service: {drift.get('service_id', 'unknown')} ({drift.get('service_name', 'unknown')})",
             f"Drifted source file: {drift.get('file_path', 'unknown')}",
             f"Drift evidence: {json.dumps(citations, sort_keys=True)}",
