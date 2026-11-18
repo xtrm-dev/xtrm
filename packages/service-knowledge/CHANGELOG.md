@@ -2,6 +2,17 @@
 
 All notable changes to the `service-knowledge` package.
 
+## [Unreleased]
+
+### Changed — drift fails closed on unknown sync history (#334, #408)
+- **Migration:** a service with `last_sync` but no (or an unresolvable)
+  `last_sync_ref` — the pre-ref registry shape — no longer takes the mtime
+  fallback. `scan_drift`, `ci_drift_check` and `service-knowledge drift` now
+  refuse (exit non-zero, marker kept) with one error naming **every** such
+  service. Verify each service, then record a ref once:
+  `drift_detector.py sync <service_id>`. `reconcile` calls `scan_drift`
+  unguarded, so it refuses too until the refs are recorded.
+
 ## [0.8.0] - 2026-10-19
 
 ### Changed — post-merge freshness epic (XTRM-641 decision, B0–B7 board)

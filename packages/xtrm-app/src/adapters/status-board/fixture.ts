@@ -95,7 +95,7 @@ function documents(now: () => number): WireRecord[] {
         date: today,
         events: [
           { id: "evt-3", at: iso(now, -60 * MINUTE), kind: "handover", label: "Shift handover", status: "done", createdBy: "manager" },
-          { id: "evt-4", at: iso(now, 45 * MINUTE), end: iso(now, 75 * MINUTE), kind: "pr", label: "Retire the Program route", status: "ready", ref: "XTRM-816", url: "https://github.com/xtrm-dev/xtrm/pull/417", createdBy: "console-lead" },
+          { id: "evt-4", at: iso(now, 45 * MINUTE), end: iso(now, 75 * MINUTE), kind: "pr", label: "Project is a repository section", status: "ready", ref: "XTRM-816", url: "https://github.com/xtrm-dev/xtrm/pull/417", createdBy: "console-lead" },
         ],
       }),
     ),
@@ -185,7 +185,8 @@ export function createStatusBoardFixtureAdapter(opts: FixtureStatusBoardOptions 
         scheduleActiveReason: null,
         runInProgress: null,
         runInProgressReason: null,
-        stale: false,
+        // Unbound: no sync was read, so freshness is unknown rather than "not stale".
+        stale: null,
         checkedAt: iso(now, 0),
       };
     }
@@ -215,7 +216,9 @@ export function createStatusBoardFixtureAdapter(opts: FixtureStatusBoardOptions 
 
   const record = <T>(repository: string, path: string): Promise<BoardRecord<T> | null> => {
     const wire = lookup(repository, path);
-    return Promise.resolve(wire ? recordOf(wire, wire.doc as T) : null);
+    if (!wire) return Promise.resolve(null);
+    const { doc, gap } = normaliseDoc(wire.path, wire.doc);
+    return Promise.resolve(recordOf(wire, doc as T, gap ? [gap] : []));
   };
 
   const list = <T>(repository: string, collection: string, map: (wire: WireRecord) => { value: T; gaps: BoardGap[] }) => {
@@ -242,7 +245,7 @@ export function createStatusBoardFixtureAdapter(opts: FixtureStatusBoardOptions 
       const wire = lookup(repository, "board/next");
       if (!wire) return null;
       const mapped: BoardNext = mapBoardNext(wire).value;
-      return recordOf(wire, mapped);
+      return recordOf(wire, mapped, mapBoardNext(wire).gaps);
     },
   };
 }

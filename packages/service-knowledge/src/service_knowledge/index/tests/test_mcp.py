@@ -1,4 +1,4 @@
-"""MCP surface: 3 read-only tools registered; list_tools advertises them + deferred roadmap."""
+"""MCP surface: 5 read-only tools registered; list_tools advertises them + deferred roadmap."""
 from __future__ import annotations
 
 import io
@@ -10,10 +10,19 @@ from service_knowledge.mcp import DEFERRED_TOOLS, tool_registry, tool_specs
 from service_knowledge.mcp import server as mcp_server
 
 
-def test_three_tools_registered():
+READ_ONLY_TOOLS = {
+    "knowledge_search",
+    "knowledge_get",
+    "knowledge_evidence_for_files",
+    "knowledge_status",
+    "knowledge_drift",
+}
+
+
+def test_five_tools_registered():
     registry = tool_registry()
-    assert set(registry) == {"knowledge_search", "knowledge_get", "knowledge_evidence_for_files"}
-    assert len(tool_specs()) == 3
+    assert set(registry) == READ_ONLY_TOOLS
+    assert len(tool_specs()) == 5
 
 
 def test_deferred_tools_documented():
@@ -23,7 +32,7 @@ def test_deferred_tools_documented():
 def test_list_tools(alertmanager_consumer):
     index.build(alertmanager_consumer)
     response = mcp_server.handle({"tool": "list_tools"})
-    assert set(response["tools"]) == {"knowledge_search", "knowledge_get", "knowledge_evidence_for_files"}
+    assert set(response["tools"]) == READ_ONLY_TOOLS
     assert "knowledge_probes" in response["deferred"]
 
 

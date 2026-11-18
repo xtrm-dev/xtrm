@@ -62,7 +62,8 @@ export interface ProjectHealth {
   scheduleActiveReason: UnitProbeReason | null;
   runInProgress: boolean | null;
   runInProgressReason: UnitProbeReason | null;
-  stale: boolean;
+  /** `null` when the bridge did not report it: a missing freshness fact is unknown, never fresh. */
+  stale: boolean | null;
   checkedAt: string;
 }
 
@@ -76,6 +77,8 @@ export interface BoardRecord<T> {
   createdAt: string | null;
   updatedAt: string | null;
   doc: T;
+  /** Parsing gaps for this document (an unparseable `doc` is reported here, never silently `{}`). */
+  gaps: BoardGap[];
 }
 
 /** An unknown enum value or an unusable document, kept as data instead of being coerced. */

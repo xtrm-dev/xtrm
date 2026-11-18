@@ -16,6 +16,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import reconcile  # noqa: E402
+from verifier import load_canonical_headings
 from verifier.gate import GateVerdict  # noqa: E402
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -231,3 +232,69 @@ def test_advisory_mode_without_gate_flag_still_exits_zero():
         check=False,
     )
     assert proc.returncode == 0
+
+
+def test_semantic_preservation_deletion_blocks_real_gated_write(service_dir):
+    root, skill, candidate, current = service_dir("runners")
+    candidate = current.replace("Curatorial notes preserved verbatim across regeneration.\n", "")
+    assert len(load_canonical_headings()) == 12
+    assert all(f"## {heading}\n" in candidate for heading in load_canonical_headings())
+    original_bytes = skill.read_bytes()
+    result = reconcile.gated_write(
+        skill, candidate, service_id="runners", territory=["source/**"], source_root=root, state_root=root
+    )
+    assert result["verdict"] == GateVerdict.INVALID.value
+    assert result["gate"]["is_writable"] is False
+    assert result["written"] is False
+    assert any(
+        issue["code"] == "semantic_block_modified" and issue["severity"] == "error"
+        for issue in result["manifest"]["structural_issues"]
+    )
+    assert skill.read_bytes() == original_bytes
+
+
+def test_semantic_preservation_identical_interior_allows_real_outside_write(service_dir):
+    root, skill, candidate, current = service_dir("runners")
+    candidate = current.replace("# Runners\n", "# Updated Runners\n")
+    result = reconcile.gated_write(
+        skill, candidate, service_id="runners", territory=["source/**"], source_root=root, state_root=root
+    )
+    assert result["verdict"] == GateVerdict.PASS.value
+    assert result["gate"]["is_writable"] is True
+    assert result["written"] is True
+    assert not any(issue["code"] == "semantic_block_modified" for issue in result["manifest"]["structural_issues"])
+    assert skill.read_bytes() == candidate.encode("utf-8")
+
+
+@pytest.mark.parametrize("delete_interior", [True, False], ids=["deletion", "identical"])
+def test_semantic_preservation_cli_checks_current_and_candidate(service_dir, delete_interior):
+    root, skill, candidate, current = service_dir("runners")
+    candidate = current.replace("# Runners\n", "# Updated Runners\n")
+    if delete_interior:
+        candidate = candidate.replace("Curatorial notes preserved verbatim across regeneration.\n", "")
+    candidate_path = root / "candidate.md"
+    candidate_path.write_text(candidate, encoding="utf-8")
+    original_bytes = skill.read_bytes()
+    proc = subprocess.run(
+        [
+            sys.executable, "-m", "verifier",
+            "--candidate", str(candidate_path),
+            "--current", str(skill),
+            "--source-root", str(root),
+            "--territory", "source/**",
+            "--service-id", "runners",
+            "--gate-mode", "--no-telemetry",
+        ],
+        cwd=str(SCRIPTS_DIR), capture_output=True, text=True, check=False,
+    )
+    assert proc.returncode == (1 if delete_interior else 0), proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["gate"]["verdict"] == ("INVALID" if delete_interior else "PASS")
+    assert payload["gate"]["is_writable"] is (not delete_interior)
+    preservation_issues = [
+        issue for issue in payload["manifest"]["structural_issues"]
+        if issue["code"] == "semantic_block_modified"
+    ]
+    assert bool(preservation_issues) is delete_interior
+    assert all(issue["severity"] == "error" for issue in preservation_issues)
+    assert skill.read_bytes() == original_bytes

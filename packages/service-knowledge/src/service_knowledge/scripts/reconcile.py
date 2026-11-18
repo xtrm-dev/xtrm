@@ -135,8 +135,8 @@ def validate_nano_gpt_url(url: str) -> str:
     return url
 
 
-def redact_exception(exc: Exception, api_key: str | None = None) -> str:
-    message = f"{type(exc).__name__}: {str(exc)[:200]}"
+def redact_exception(exc: Exception, api_key: str | None = None, limit: int = 200) -> str:
+    message = f"{type(exc).__name__}: {str(exc)[:limit]}"
     message = re.sub(r"Bearer\s+\S+", "Bearer [REDACTED]", message)
     if api_key:
         message = message.replace(api_key, "[REDACTED]")
@@ -467,7 +467,14 @@ def reconcile(options: ReconcileOptions) -> dict[str, Any]:
             skill_path = project_root / skill_path_value
             source_path = project_root / str(drift["file_path"])
             current_skill = skill_path.read_text(encoding="utf-8")
-            prompt = build_prompt(drift, current_skill, source_path.read_text(encoding="utf-8", errors="ignore"))
+            # A committed deletion / rename-out is reported as drift (fail closed), so the
+            # source can legitimately be gone: tell the model, do not fail the whole run.
+            source_text = (
+                source_path.read_text(encoding="utf-8", errors="ignore")
+                if source_path.is_file()
+                else "[this source file no longer exists at HEAD: it was deleted or renamed away in the drifted range]"
+            )
+            prompt = build_prompt(drift, current_skill, source_text)
             projected_tokens = result["cost_tokens"] + estimate_tokens(prompt)
             if options.cost_limit_tokens is not None and projected_tokens > options.cost_limit_tokens:
                 result["status"] = "partial"
@@ -578,7 +585,7 @@ def main(argv: list[str] | None = None) -> int:
         options = ReconcileOptions(args.dry_run, args.max_files, api_key, parse_cost_limit(os.environ.get("XTRM_AUTO_RECONCILE_COST_LIMIT_TOKENS")))
         output = reconcile(options)
     except Exception as exc:
-        output = {"status": "failed", "drift_count": 0, "reconciled_count": 0, "failed": [{"file_path": None, "error": redact_exception(exc, api_key)}], "cost_tokens": 0, "last_sync_ref_old": None, "last_sync_ref_new": ""}
+        output = {"status": "failed", "drift_count": 0, "reconciled_count": 0, "failed": [{"file_path": None, "error": redact_exception(exc, api_key, limit=2000)}], "cost_tokens": 0, "last_sync_ref_old": None, "last_sync_ref_new": ""}
     print(json.dumps(output, sort_keys=True) if args.json else json.dumps(output, indent=2, sort_keys=True))
     # Exit 0 when the program achieved useful work (full or partial reconcile).
     # status field in the JSON carries the quality signal. Workflow gates on

@@ -9,7 +9,7 @@ from typing import Any
 
 from service_knowledge import index
 from service_knowledge.index import query as query_mod
-from service_knowledge.mcp._root import resolve_consumer_root
+from service_knowledge.mcp._root import NoRegistry, resolve_registry_root
 
 TOOL_NAME = "knowledge_search"
 DESCRIPTION = (
@@ -33,7 +33,13 @@ PARAMETERS = {
 
 def run(query: str, service_id: str | None = None, paths: list[str] | None = None,
         limit: int = 7, consumer_root: str | None = None, **_: Any) -> dict[str, Any]:
-    root = resolve_consumer_root(consumer_root)
+    try:
+        root = resolve_registry_root(consumer_root)
+    except (NoRegistry, ValueError) as exc:
+        # Refuse before the freshness gate runs: it would create .xtrm/cache and .xtrm/state in
+        # a repository that never adopted service-knowledge, and answer "nothing found" as a
+        # success that an agent reads as "the knowledge base says no".
+        return {"error": str(exc)}
     ctx = query_mod.QueryContext(query=query, paths=tuple(paths or ()), service_id=service_id, limit=limit)
     result = query_mod.search(root, ctx)
     return index.build_bundle(result, root)

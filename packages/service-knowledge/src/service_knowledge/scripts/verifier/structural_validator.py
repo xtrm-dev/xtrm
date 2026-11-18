@@ -20,6 +20,7 @@ from markdown_it import MarkdownIt
 SEMANTIC_START = "<!-- SEMANTIC_START -->"
 SEMANTIC_END = "<!-- SEMANTIC_END -->"
 
+_SEMANTIC_BLOCK_RE = re.compile(re.escape(SEMANTIC_START) + r"(.*?)" + re.escape(SEMANTIC_END), re.DOTALL)
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 # Inline link with a broken/empty target: [text]( ) or [text]( or a dangling [text]
 _BROKEN_LINK_RE = re.compile(r"\[[^\]]*\]\(\s*\)|\[[^\]]*\]\([^)]*$", re.MULTILINE)
@@ -77,6 +78,20 @@ def _check_semantic_block(text: str) -> list[StructuralIssue]:
             )
         )
     return issues
+
+
+def _check_semantic_preservation(text: str, current_text: str) -> list[StructuralIssue]:
+    current_blocks = _SEMANTIC_BLOCK_RE.findall(current_text)
+    if not current_blocks or current_blocks == _SEMANTIC_BLOCK_RE.findall(text):
+        return []
+    return [
+        StructuralIssue(
+            "error",
+            "semantic_block_modified",
+            "Semantic block interiors must be preserved verbatim and in order from the current document.",
+            _line_of(text, SEMANTIC_START) or 1,
+        )
+    ]
 
 
 def _line_of(text: str, needle: str) -> int | None:
@@ -142,12 +157,14 @@ def validate_structure(
     *,
     canonical_headings: list[str] | None = None,
     require_semantic_block: bool = True,
+    current_text: str = "",
 ) -> list[StructuralIssue]:
     """Run all structural checks; returns every issue found (empty == valid)."""
     issues: list[StructuralIssue] = []
     issues += _check_frontmatter(text)
     if require_semantic_block:
         issues += _check_semantic_block(text)
+    issues += _check_semantic_preservation(text, current_text)
     issues += _check_headings(text, canonical_headings)
     issues += _check_markdown_ast(text)
     issues += _check_links(text)
