@@ -11,7 +11,7 @@ import { Icon } from "../ui/icon.tsx";
 import { AuthorInline } from "./identity.tsx";
 import { PullConversation } from "./PullConversation.tsx";
 
-function LinkedIssues({ title, branch, body }: { title: string; branch: string; body: string | null }) {
+function LinkedIssues({ title, branch, body }: { title: string; branch: string | null; body: string | null }) {
   const index = useIssueIndex();
   const keys = useMemo(() => {
     const seen = new Set<string>();
@@ -68,7 +68,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
         </div>
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
           <AuthorInline login={p.author} />
-          <span className="truncate">· {p.headBranch} → {p.baseBranch}</span>
+          <span className="truncate">· {p.headBranch ?? "unknown"} → {p.baseBranch ?? "unknown"}</span>
         </p>
       </div>
 
@@ -76,7 +76,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
         <Fields
           rows={[
             ["Author", <AuthorInline key="author" login={p.author} />],
-            ["Branch", `${p.headBranch} → ${p.baseBranch}`],
+            ["Branch", `${p.headBranch ?? "unknown"} → ${p.baseBranch ?? "unknown"}`],
             [
               "Checks",
               <span className="inline-flex items-center gap-1.5" key="checks">
@@ -92,8 +92,16 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
             [
               "Change",
               <span className="tabular" key="change">
-                <span className="text-diff-add">+{p.additions}</span> <span className="text-diff-del">−{p.deletions}</span>
-                <span className="text-ink-faint"> · {p.changedFiles} files · {p.commits} commits</span>
+                {p.additions === null && p.deletions === null ? (
+                  <span className="text-ink-faint" title="Diff counts unavailable from the source">unknown</span>
+                ) : (
+                  <>
+                    <span className="text-diff-add">+{p.additions ?? "?"}</span> <span className="text-diff-del">−{p.deletions ?? "?"}</span>
+                  </>
+                )}
+                <span className="text-ink-faint">
+                  {p.changedFiles === null ? " · files unknown" : ` · ${p.changedFiles} files`} · {p.commits} commits
+                </span>
               </span>,
             ],
             ["Updated", ago(p.updatedAt)],
@@ -113,7 +121,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
         </InspectorSection>
       )}
 
-      <InspectorSection title={`Reviews${p.reviews.length ? ` · ${p.reviews.length}` : ""}`}>
+      <InspectorSection title={`Reviews${p.reviewCount === null ? " · unknown" : p.reviewCount ? ` · ${p.reviewCount}` : ""}`}>
         {p.reviews.length ? (
           <ul className="flex flex-col gap-3">
             {p.reviews.map((r) => (
@@ -137,7 +145,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-ink-faint">No reviews yet.</p>
+          <p className="text-sm text-ink-faint">{p.review === null ? "Review data unavailable from the source." : "No reviews yet."}</p>
         )}
       </InspectorSection>
 

@@ -40,7 +40,13 @@ interface FixturePull extends PullRequestSummary {
   files: PullRequestDetail["files"];
 }
 
-const pullSeed: Array<Omit<FixturePull, "url" | "createdAt" | "updatedAt"> & { ageMin: number }> = [
+const pullSeed: Array<
+  Omit<FixturePull, "url" | "createdAt" | "updatedAt" | "reviewCount"> & {
+    ageMin: number;
+    /** Omit to derive from `reviews`; null models a source that carries no review data. */
+    reviewCount?: number | null;
+  }
+> = [
   {
     number: 212, title: "feat(XTRM-301): rail keyboard model v2", author: "Jaggerxtrm", headBranch: "xt/o8h2", baseBranch: "main",
     state: "open", draft: false, checks: "passing", review: "approved", additions: 412, deletions: 88, changedFiles: 3, comments: 6,
@@ -106,6 +112,35 @@ const pullSeed: Array<Omit<FixturePull, "url" | "createdAt" | "updatedAt"> & { a
       { filename: "packages/xtrm-app/src/github/PullsSurface.tsx", additions: 82, deletions: 18, status: "added" },
     ],
     ageMin: 45,
+  },
+  {
+    number: 240, title: "chore(XTRM-857): two reviews, three comments", author: "reviewer-xtrm", headBranch: "xt/x857-counts", baseBranch: "main",
+    state: "open", draft: false, checks: "passing", review: "approved", additions: 24, deletions: 7, changedFiles: 2, comments: 3,
+    body: null, mergeable: true, mergeableState: "clean", commits: 2,
+    reviews: [
+      { id: "r240-1", author: "reviewer-xtrm", state: "changes_requested", submittedAt: ago(50), body: "Count the columns once.", url: null },
+      { id: "r240-2", author: "Jaggerxtrm", state: "approved", submittedAt: ago(20), body: null, url: null },
+    ],
+    conversationComments: [
+      { id: "c240-1", author: "Jaggerxtrm", body: "First pass.", url: null, createdAt: ago(70), updatedAt: null },
+      { id: "c240-2", author: "reviewer-xtrm", body: "Fixed the column width.", url: null, createdAt: ago(60), updatedAt: null },
+      { id: "c240-3", author: "hubot", body: "Rebased onto main.", url: null, createdAt: ago(30), updatedAt: null },
+    ],
+    reviewComments: [],
+    files: [
+      { filename: "src/github/PullsSurface.tsx", additions: 18, deletions: 6, status: "modified" },
+      { filename: "src/github/pr.ts", additions: 6, deletions: 1, status: "modified" },
+    ],
+    ageMin: 20,
+  },
+  {
+    // The live list row: the poller carries no diff counters, review aggregate,
+    // or branch refs, so every metric is unknown (XTRM-857). Never render 0.
+    number: 241, title: "chore(XTRM-857): unknown metrics sample", author: "hubot", headBranch: null, baseBranch: null,
+    state: "open", draft: false, checks: null, review: null, reviewCount: null, additions: null, deletions: null, changedFiles: null, comments: null,
+    body: null, mergeable: null, mergeableState: null, commits: 0,
+    reviews: [], conversationComments: [], reviewComments: [], files: [],
+    ageMin: 40,
   },
   {
     number: 211, title: "fix(XTRM-305): silence virtual-bead spam", author: "Jaggerxtrm", headBranch: "fix/XTRM-305-bead-spam", baseBranch: "main",
@@ -199,6 +234,7 @@ export const fixturePulls = (repo: string): PullRequestSummary[] => {
   return pullSeed.map((p) => ({
     ...p,
     title: p.title,
+    reviewCount: p.reviewCount === undefined ? p.reviews.length : p.reviewCount,
     url: `https://github.com/${owner}/${name}/pull/${p.number}`,
     createdAt: ago(p.ageMin + 60),
     updatedAt: ago(p.ageMin),

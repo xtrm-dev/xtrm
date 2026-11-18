@@ -113,8 +113,8 @@ export function pullReference(ref: AgentRef, pull: PullRequestDetail): ContextRe
   const pointer = `gh pr diff ${gh.number} --repo ${gh.repo}`;
   const head = [
     `${ref.ref} · ${pull.title}`,
-    `state ${pull.state}${pull.draft ? " (draft)" : ""} · ${pull.headBranch} → ${pull.baseBranch} · author ${pull.author}`,
-    `checks ${pull.checks} · review ${pull.review} · ${pull.changedFiles} files +${pull.additions} −${pull.deletions}`,
+    `state ${pull.state}${pull.draft ? " (draft)" : ""} · ${pull.headBranch ?? "unknown"} → ${pull.baseBranch ?? "unknown"} · author ${pull.author}`,
+    `checks ${pull.checks ?? "unknown"} · review ${pull.review ?? "unknown"} · ${pull.changedFiles ?? "unknown"} files +${pull.additions ?? "unknown"} −${pull.deletions ?? "unknown"}`,
     pull.url,
     `diff: ${pointer}`,
   ].join("\n");

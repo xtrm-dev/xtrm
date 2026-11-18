@@ -86,6 +86,46 @@ describe("Pull requests surface", () => {
     expect(screen.queryByText("feat(XTRM-301): rail keyboard model v2")).toBeNull();
   });
 
+  it("renders diff, review and comment counts from the row, and unknown where the row carries none", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls");
+
+    const counted = await screen.findByText("chore(XTRM-857): two reviews, three comments");
+    const countedRow = counted.closest('[data-testid="pull-row"]') as HTMLElement;
+    expect(within(countedRow).getByText("+24")).toBeTruthy();
+    expect(within(countedRow).getByText("\u22127")).toBeTruthy();
+    expect(within(countedRow).getByTitle(/3 conversation comments/)).toBeTruthy();
+    expect(within(countedRow).getByTitle("24 added, 7 removed")).toBeTruthy();
+    expect(within(countedRow).getByTitle("approved \u00b7 2 reviews")).toBeTruthy();
+
+    const unknown = await screen.findByText("chore(XTRM-857): unknown metrics sample");
+    const unknownRow = unknown.closest('[data-testid="pull-row"]') as HTMLElement;
+    expect(within(unknownRow).getByTitle("Diff counts unknown")).toBeTruthy();
+    expect(within(unknownRow).getByTitle("Conversation comment count unknown")).toBeTruthy();
+    expect(within(unknownRow).getByTitle("Review state: unknown")).toBeTruthy();
+    expect(within(unknownRow).getAllByTitle("checks unknown").length).toBeGreaterThan(0);
+    expect(within(unknownRow).getAllByText("unknown").length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("shows the head -> base branch and the review count in the drawer", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls");
+    fireEvent.click(await screen.findByText("chore(XTRM-857): two reviews, three comments"));
+    const el = await screen.findByTestId("inspector-drawer");
+    expect(await within(el).findByText("Reviews \u00b7 2")).toBeTruthy();
+    // The header and the Overview field both state the branch.
+    expect(within(el).getAllByText(/xt\/x857-counts \u2192 main/).length).toBeGreaterThan(0);
+    expect(within(el).getByText(/\u00b7 2 files \u00b7 2 commits/)).toBeTruthy();
+  });
+
+  it("renders the drawer's unknown branch, diff and review state as unknown", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls");
+    fireEvent.click(await screen.findByText("chore(XTRM-857): unknown metrics sample"));
+    const el = await screen.findByTestId("inspector-drawer");
+    expect(await within(el).findByText("Reviews \u00b7 unknown")).toBeTruthy();
+    expect(within(el).getAllByText(/unknown \u2192 unknown/).length).toBeGreaterThan(0);
+    expect(within(el).getByTitle("Diff counts unavailable from the source")).toBeTruthy();
+    expect(within(el).getByText("Review data unavailable from the source.")).toBeTruthy();
+  });
+
   it("opens the PR drawer from a row with overview, checks, reviews, files, and linked issues", async () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/code/pulls");
     fireEvent.click(await screen.findByText("feat(XTRM-301): rail keyboard model v2"));

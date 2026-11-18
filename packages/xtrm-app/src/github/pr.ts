@@ -105,8 +105,10 @@ export function pullStateLabel(state: PullState, draft: boolean): string {
   return state;
 }
 
-export function checkTone(state: CheckState): Tone {
+export function checkTone(state: CheckState | null): Tone {
   switch (state) {
+    case null:
+      return "muted";
     case "passing":
       return "done";
     case "failing":
@@ -118,8 +120,10 @@ export function checkTone(state: CheckState): Tone {
   }
 }
 
-export function checkLabel(state: CheckState): string {
+export function checkLabel(state: CheckState | null): string {
   switch (state) {
+    case null:
+      return "checks unknown";
     case "passing":
       return "checks passing";
     case "failing":
@@ -131,8 +135,10 @@ export function checkLabel(state: CheckState): string {
   }
 }
 
-export function reviewLabel(state: ReviewState): string {
+export function reviewLabel(state: ReviewState | null): string {
   switch (state) {
+    case null:
+      return "unknown";
     case "approved":
       return "approved";
     case "changes_requested":
@@ -164,7 +170,7 @@ export function filterPulls(
     return (
       p.title.toLowerCase().includes(q) ||
       p.author.toLowerCase().includes(q) ||
-      p.headBranch.toLowerCase().includes(q) ||
+      (p.headBranch ?? "").toLowerCase().includes(q) ||
       String(p.number).includes(q)
     );
   });
@@ -179,7 +185,8 @@ export function sortPulls(pulls: PullRequestSummary[], sort: PullSort): PullRequ
       rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       break;
     case "comments":
-      rows.sort((a, b) => b.comments - a.comments || b.updatedAt.localeCompare(a.updatedAt));
+      // An unknown comment count sorts last instead of pretending to be 0.
+      rows.sort((a, b) => (b.comments ?? -1) - (a.comments ?? -1) || b.updatedAt.localeCompare(a.updatedAt));
       break;
     case "updated":
     default:

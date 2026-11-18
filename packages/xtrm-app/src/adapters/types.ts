@@ -51,20 +51,29 @@ export type PullListState = "open" | "closed" | "all";
 export type CheckState = "passing" | "failing" | "pending" | "none";
 export type ReviewState = "approved" | "changes_requested" | "commented" | "pending" | "none";
 
+/**
+ * One pull request row. Every metric the source may not carry is nullable:
+ * a null means "unknown" and must render as unknown, never as 0 (XTRM-857).
+ */
 export interface PullRequestSummary {
   number: number;
   title: string;
   author: string;
-  headBranch: string;
-  baseBranch: string;
+  /** null when the row carries no branch ref (the poller row today). */
+  headBranch: string | null;
+  baseBranch: string | null;
   state: PullState;
   draft: boolean;
-  checks: CheckState;
-  review: ReviewState;
-  additions: number;
-  deletions: number;
-  changedFiles: number;
-  comments: number;
+  /** null = check state unknown for this row (the list payload carries none). */
+  checks: CheckState | null;
+  /** null = review state unknown for this row (the list payload carries none). */
+  review: ReviewState | null;
+  /** Number of reviews; null when the source carries no review data. */
+  reviewCount: number | null;
+  additions: number | null;
+  deletions: number | null;
+  changedFiles: number | null;
+  comments: number | null;
   updatedAt: string;
   createdAt: string;
   url: string;
