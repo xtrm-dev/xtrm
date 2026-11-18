@@ -168,7 +168,9 @@ describe("pi-ai Type import guard (XTRM-745)", () => {
       ),
     );
     expect(violations, "import Type from typebox, not from @earendil-works/pi-ai").toEqual([]);
-  });
+    // The scan parses every source file in the monorepo; on a loaded CI runner it
+    // measured 16 s against the 5 s default and failed the gate at random (XTRM-863).
+  }, 30_000);
 
   it("scans the real-host probe extension that XTRM-745 fixed", () => {
     const probe = join(REPO_ROOT, "packages", "xtrm-app", "e2e", "real-host", "probe-extension.ts");
