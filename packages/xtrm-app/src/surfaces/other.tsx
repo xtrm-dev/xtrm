@@ -14,7 +14,7 @@ export function DeferredSurface({ title, icon, reason }: { title: string; icon: 
     <section className="flex min-h-0 flex-1 flex-col" aria-label={title}>
       <SurfaceToolbar>
         <span className="text-[11px] text-ink-faint">{title}</span>
-        <span className="rounded-sm bg-control px-1.5 text-xs text-ink-faint">deferred</span>
+        <span className="text-xs text-ink-faint">deferred</span>
       </SurfaceToolbar>
       <EmptyState icon={icon} title={`${title} is not part of this vertical`} className="flex-1">
         {reason}

@@ -72,6 +72,20 @@ describe("Activity surface (XTRM-757)", () => {
     expect(chips).not.toMatch(/Jira/);
   });
 
+  it("marks the selected source with ink text, and never a chip fill", async () => {
+    renderActivity();
+    await feed();
+    const all = screen.getByRole("button", { name: /^All/ });
+    expect(all.getAttribute("aria-pressed")).toBe("true");
+    expect(all.className).toContain("font-medium");
+    expect(all.className).not.toContain("bg-pressed");
+    // The sidebar also has a section button named GitHub; the filter is the one carrying aria-pressed.
+    const github = screen.getAllByRole("button", { name: /^GitHub/ }).find((b) => b.hasAttribute("aria-pressed"))!;
+    expect(github.getAttribute("aria-pressed")).toBe("false");
+    expect(github.className).toContain("text-ink-muted");
+    expect(github.className).not.toContain("bg-pressed");
+  });
+
   it("shows an em dash, not a zero, for a source whose read failed", async () => {
     const broken = createFixtureSubstrate();
     broken.journalFeed = async () => {

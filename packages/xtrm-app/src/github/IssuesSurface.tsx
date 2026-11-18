@@ -7,7 +7,8 @@ import { filterIssues, githubIssueRef, issueStateLabel, issueStateTone, type Iss
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_GHOST, ago, cx } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, ago, cx } from "../ui/primitives.tsx";
+import { ListFilter, ToolbarTabs } from "../ui/toolbar.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 
 const VIEWS: Array<{ id: IssueView; label: string }> = [
@@ -152,31 +153,8 @@ export function GithubIssuesSurface() {
     <section className="flex min-h-0 flex-1 flex-col" aria-label="GitHub Issues">
       <SurfaceToolbar>
         <SourceBadge source={github.source} />
-        <div role="tablist" aria-label="GitHub issue state" className="flex items-center gap-0.5">
-          {VIEWS.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              role="tab"
-              aria-selected={view === v.id}
-              onClick={() => setView(v.id)}
-              className={cx(TOOLBAR_CONTROL, view === v.id ? "bg-pressed text-ink" : TOOLBAR_GHOST)}
-            >
-              {v.label}
-              <span className="text-ink-faint tabular">{counts[v.id]}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex h-7 items-center gap-1.5 rounded-md bg-pressed px-1.5 text-ink-faint transition-colors focus-within:bg-hover">
-          <Icon name="search" size="xs" className="text-ink-faint" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter by title, author, label…"
-            aria-label="Filter GitHub issues"
-            className="w-52 bg-transparent text-xs text-ink outline-none placeholder:text-ink-faint"
-          />
-        </div>
+        <ToolbarTabs label="GitHub issue state" value={view} onChange={(id) => setView(id as IssueView)} tabs={VIEWS.map((v) => ({ id: v.id, label: v.label, count: counts[v.id] }))} />
+        <ListFilter value={query} onChange={setQuery} placeholder="Filter GitHub issues" count={rows.length} total={issues.data?.length} />
         <span className="ml-auto hidden truncate text-[11px] text-ink-faint xl:inline">GitHub tracker, not XTRM Issues</span>
         <OptionsMenu
           label="GitHub issue options"
